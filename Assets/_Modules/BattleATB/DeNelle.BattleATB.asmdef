@@ -1,0 +1,19 @@
+{
+    "name": "DeNelle.BattleATB",
+    "rootNamespace": "DeNelle.BattleATB",
+    "references": [
+        "DeNelle.Core",
+        "DeNelle.Data",
+        "Unity.Localization",
+        "UniTask"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

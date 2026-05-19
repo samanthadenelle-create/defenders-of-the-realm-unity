@@ -1,0 +1,23 @@
+{
+    "name": "DeNelle.Dungeons",
+    "rootNamespace": "DeNelle.Dungeons",
+    "references": [
+        "DeNelle.Core",
+        "DeNelle.Data",
+        "Unity.Localization",
+        "UniTask",
+        "Unity.Cinemachine",
+        "Unity.InputSystem",
+        "Unity.Addressables",
+        "Unity.ResourceManager"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

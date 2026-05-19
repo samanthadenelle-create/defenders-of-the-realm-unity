@@ -1,0 +1,75 @@
+/* ===========================================================================
+ * Theme.uss — UI Toolkit theme tokens (the baked `midnight-luxe` theme)
+ * ---------------------------------------------------------------------------
+ * Port of the CSS custom properties src/lib/themes.ts feeds into globals.css.
+ * Declares all 38 colour tokens of the DEFAULT theme (`midnight-luxe`) as USS
+ * custom properties on :root, so UI Toolkit documents reference var(--primary)
+ * exactly as React components reference hsl(var(--primary)).
+ *
+ * USS has no hsl() function — each HSL triple from themes.ts is converted to
+ * hex here. The HSL triple remains the source of truth in
+ * Assets/Data/Canonical/themes.json; this file is its midnight-luxe projection.
+ *
+ * Multi-theme runtime switching (the React useTheme behaviour) is deferred —
+ * Week 1 ships midnight-luxe as the single baked theme; the other six live in
+ * themes.json and are reachable via Theme.Apply(key) in C#. A future Editor
+ * codegen step can regenerate this file (or per-theme USS) from themes.json.
+ * =========================================================================== */
+
+:root {
+    /* ── Surfaces ─────────────────────────────────────────────────────── */
+    --background: #0A0E1A;
+    --foreground: #EAE4D4;
+    --card: #0F1421;
+    --card-foreground: #EAE4D4;
+    --popover: #0F1421;
+    --popover-foreground: #EAE4D4;
+
+    /* ── Brand / accent ──────────────────────────────────────────────── */
+    --primary: #D9A726;
+    --primary-foreground: #0A0E1A;
+    --secondary: #1A2030;
+    --secondary-foreground: #D6D1C2;
+    --muted: #1A1F2C;
+    --muted-foreground: #7A8499;
+    --accent: #D9A726;
+    --accent-foreground: #0A0E1A;
+    --destructive: #DC2828;
+    --destructive-foreground: #FFFFFF;
+
+    /* ── Lines / focus ───────────────────────────────────────────────── */
+    --border: #252C3B;
+    --input: #252C3B;
+    --ring: #D9A726;
+    --link: #D9B459;
+    --link-hover: #E6CB7A;
+
+    /* ── Buttons ─────────────────────────────────────────────────────── */
+    --button: #1A2030;
+    --button-foreground: #EAE4D4;
+    --button-border: #2D3443;
+    --button-hover: #242D42;
+    --button-hover-foreground: #F6F4EE;
+    --button-hover-border: #998033;
+    --button-ring: #D9A726;
+
+    /* ── Charts ──────────────────────────────────────────────────────── */
+    --chart-1: #D9A726;
+    --chart-2: #3399CC;
+    --chart-3: #39AC86;
+    --chart-4: #9F53C6;
+    --chart-5: #D17547;
+
+    /* ── Sidebar ─────────────────────────────────────────────────────── */
+    --sidebar-background: #070A13;
+    --sidebar-foreground: #D6D1C2;
+    --sidebar-primary: #D9A726;
+    --sidebar-primary-foreground: #0A0E1A;
+    --sidebar-accent: #151B28;
+    --sidebar-accent-foreground: #D6D1C2;
+    --sidebar-border: #1F232E;
+    --sidebar-ring: #D9A726;
+
+    /* ── Geometry ────────────────────────────────────────────────────── */
+    --radius: 8px;   /* 0.5rem */
+}

@@ -1,0 +1,91 @@
+{
+  "_comment": "Canonical proper nouns for Defenders of the Realm. Copied VERBATIM from narrative-bible.md and src/content/story.ts. Do not paraphrase. These names are shared by the React v1 engine and the Unity v2 port.",
+  "_sources": {
+    "narrativeBible": "defenders-unity/docs/narrative-bible.md",
+    "storyTs": "defenders-of-the-realm/src/content/story.ts"
+  },
+
+  "avalon": "Avalon",
+  "avalonEpithet": "the last green sanctuary",
+  "elarion": "Elarion",
+  "elarionAlias": "the Heart-Grove",
+  "elarionAlsoCalled": "the Heart",
+  "theHeart": "The Heart",
+  "theHeartTree": "The Heart-Tree",
+  "theHeartTagline": "The living core of Avalon — if it falls, the village falls.",
+  "worldTree": "the World Tree",
+
+  "blaise": "Blaise",
+  "blaiseEpithet": "apprentice of the missing Warden",
+  "blaiseMentor": "Warden Aelwyn",
+  "theKeeper": "the Keeper",
+  "guardianTitle": "Realm Guardian",
+  "guardianOfTheLantern": "Guardian of the Lantern",
+
+  "alduin": "Alduin the Mournful",
+  "alduinTitle": "the Necromancer",
+
+  "heartWing": "The Heart-Wing",
+  "heartWingDescription": "Elarion's airborne aspect; Elarion sometimes walks the sky and the Folk call it the Heart-Wing.",
+
+  "lantern": "the Lantern of Avalon",
+  "lanternShort": "the Lantern",
+
+  "tagline": "By lantern. By oath. By Heart.",
+  "titleTagline": "Tend the Lantern. Hold the dark.",
+  "bibleTitleTagline": "Tend the Heart. Hold the dark.",
+  "publisher": "DeNelle Studios",
+  "gameTitle": "Defenders of the Realm",
+  "gameSubtitle": "Defenders of the Realm: The Lantern of Avalon",
+
+  "hollowOnes": "the Hollow Ones",
+  "hollowed": "the Hollowed",
+  "wardens": "the Wardens",
+  "theFolk": "the Folk",
+  "firstLight": "the First Light",
+  "theKeepersSong": "the Heart's song",
+
+  "wardenAelwyn": "Warden Aelwyn",
+  "sirBram": "Sir Bram",
+  "selaThornquiver": "Sela Thornquiver",
+  "garran": "Garran",
+  "garranMentor": "Sir Bram",
+  "wrenThornquiver": "Wren Thornquiver",
+  "wrenMentor": "Sela Thornquiver",
+
+  "bryn": "Bryn",
+  "mara": "Mara",
+  "tovin": "Tovin",
+  "eira": "Eira",
+  "aelf": "Aelf",
+  "mira": "Mira",
+  "_namesNotInSources": "Bryn, Mara, Tovin, Eira, Aelf, Mira were requested by the task brief but do NOT appear in narrative-bible.md or story.ts. Placeholder values mirror the requested spelling; verify against canon before shipping. See canon-data.md.",
+
+  "theWound": "the Wound",
+  "theWithering": "the Withering",
+  "firstLightEvent": "First Light",
+  "_firstLightNote": "narrative-bible.md uses 'the First Light' as the planter(s) of Elarion. No standalone 'First Light' event term was found in the sources; value here matches the requested wording but is unverified. See canon-data.md.",
+
+  "aetherSprite": "Aether Sprite",
+  "aetherSpriteEpithet": "the Light's Child",
+  "flamePup": "Flame Pup",
+  "flamePupEpithet": "the Hearth-Heir",
+  "iceWolf": "Ice Wolf",
+  "iceWolfEpithet": "the Cold-Wandered",
+
+  "theKeeperKeyword": "the Keeper",
+  "keeper": "Keeper",
+
+  "crystalMines": "The Crystal Mines",
+  "crystalMine": "Crystal Mine",
+  "petHouse": "Pet House",
+  "arcaneTower": "Arcane Tower",
+  "workshop": "Workshop",
+  "farm": "Farm",
+
+  "zoneHearth": "The Hearth",
+  "zoneWintermere": "Wintermere",
+  "zoneEmberfall": "The Emberfall",
+  "zoneSkyloom": "The Skyloom",
+  "zoneGreenrows": "The Greenrows"
+}

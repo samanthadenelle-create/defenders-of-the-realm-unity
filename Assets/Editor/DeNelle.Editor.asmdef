@@ -1,0 +1,19 @@
+{
+    "name": "DeNelle.Editor",
+    "rootNamespace": "DeNelle.Editor",
+    "references": [
+        "DeNelle.Core",
+        "DeNelle.Data"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

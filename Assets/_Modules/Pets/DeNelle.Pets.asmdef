@@ -1,0 +1,19 @@
+{
+    "name": "DeNelle.Pets",
+    "rootNamespace": "DeNelle.Pets",
+    "references": [
+        "DeNelle.Core",
+        "DeNelle.Data",
+        "Unity.Localization",
+        "UniTask"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
