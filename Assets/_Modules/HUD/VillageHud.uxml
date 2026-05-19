@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   VillageHud.uxml — UI Toolkit village HUD overlay (Week 4 "playable Wave 1").
-  ------------------------------------------------------------------------
+  ========================================================================
   The in-game HUD for the Avalon village scene: the glanceable readout the
   player watches while the wave loop runs. Architecture review item ARC-003
   ("DeNelle.HUD module is an empty asmdef") — this fills it in.
@@ -17,12 +17,15 @@
     village-hud-root
     heart-hp-fill / heart-hp-label / heart-hp-track
     crystal-count
-    wave-number / wave-countdown
+    wave-number / wave-countdown / wave-countdown-timer
     ability-bar
     ability-slot-0 .. ability-slot-3   (one per Q/W/E/R)
       ability-key / ability-icon / ability-cooldown-fill / ability-cooldown-label
     mana-fill / mana-label
     build-button
+    repair-prompt / repair-prompt-title / repair-prompt-subtitle
+      repair-prompt-cost / repair-prompt-confirm / repair-prompt-cancel
+    repair-toast (Workstream B — player wall-repair mechanic)
 
   Ability slots are built once at runtime by the controller into
   "ability-bar" — this UXML supplies the chrome (corner panels + the bar
@@ -34,6 +37,18 @@
     <!-- Full-screen, transparent, pass-through root: gameplay input flows
          through everywhere except the interactive panels below. -->
     <ui:VisualElement name="village-hud-root" class="village-hud-root" picking-mode="Ignore">
+
+        <!-- ── Between-wave countdown — a compact top-centre timer pill.
+             Absolutely positioned so it floats above the corner panels and
+             stays dead-centre at the top of the screen. The controller keeps
+             driving the inner "wave-countdown" label by name; it is hidden
+             (display:none) while a wave is active. ─────────────────────── -->
+        <ui:VisualElement name="wave-countdown-timer" class="wave-countdown-timer" picking-mode="Ignore">
+            <ui:VisualElement name="wave-countdown-pill" class="wave-countdown-pill" picking-mode="Ignore">
+                <ui:Label name="wave-countdown-icon" text="⏳" class="wave-countdown-icon" />
+                <ui:Label name="wave-countdown" text="" class="wave-countdown" />
+            </ui:VisualElement>
+        </ui:VisualElement>
 
         <!-- ── Top strip — resources + wave readout ───────────────────── -->
         <ui:VisualElement name="hud-top" class="hud-top" picking-mode="Ignore">
@@ -53,10 +68,10 @@
                 <ui:Label name="crystal-count" text="0" class="crystal-count" />
             </ui:VisualElement>
 
-            <!-- Wave indicator — wave number + between-wave countdown. -->
+            <!-- Wave indicator — wave number only. The between-wave countdown
+                 moved to the top-centre "wave-countdown-timer" pill above. -->
             <ui:VisualElement name="wave-panel" class="hud-panel wave-panel">
                 <ui:Label name="wave-number" text="Wave 1" class="wave-number" />
-                <ui:Label name="wave-countdown" text="" class="wave-countdown" />
             </ui:VisualElement>
 
         </ui:VisualElement>
@@ -81,6 +96,36 @@
                  integrator hooks that to BuildMenu.Open(). -->
             <ui:Button name="build-button" text="Build" class="build-button" />
 
+        </ui:VisualElement>
+
+        <!-- ── Repair prompt — Workstream B (player wall-repair mechanic).
+             A small centred confirm card. Hidden (display:none) until the
+             WallRepairController selects a damaged structure; the controller
+             pushes the structure name + crystal cost in through
+             VillageHudController.ShowRepairPrompt(). Confirm / Cancel raise
+             RepairConfirmRequested / RepairCancelRequested — the scene-setup
+             editor file wires those to WallRepairController. ──────────────── -->
+        <ui:VisualElement name="repair-prompt" class="repair-prompt" picking-mode="Ignore">
+            <ui:VisualElement name="repair-prompt-card" class="repair-prompt-card">
+                <ui:Label name="repair-prompt-title" text="Repair Structure" class="repair-prompt-title" />
+                <ui:Label name="repair-prompt-subtitle" text="" class="repair-prompt-subtitle" />
+                <ui:VisualElement name="repair-prompt-cost-row" class="repair-prompt-cost-row">
+                    <ui:Label name="repair-prompt-cost-glyph" text="◆" class="repair-prompt-cost-glyph" />
+                    <ui:Label name="repair-prompt-cost" text="0" class="repair-prompt-cost" />
+                </ui:VisualElement>
+                <ui:VisualElement name="repair-prompt-buttons" class="repair-prompt-buttons">
+                    <ui:Button name="repair-prompt-cancel" text="Cancel" class="repair-prompt-btn repair-prompt-btn--cancel" />
+                    <ui:Button name="repair-prompt-confirm" text="Repair" class="repair-prompt-btn repair-prompt-btn--confirm" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- ── Repair feedback toast — a brief success / error message banner
+             near the top-centre, below the countdown. The outer row centres
+             the self-sized toast pill. Driven by
+             VillageHudController.ShowRepairFeedback(); auto-fades. ─────────── -->
+        <ui:VisualElement name="repair-toast-row" class="repair-toast-row" picking-mode="Ignore">
+            <ui:Label name="repair-toast" text="" class="repair-toast" picking-mode="Ignore" />
         </ui:VisualElement>
 
     </ui:VisualElement>

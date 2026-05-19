@@ -181,11 +181,22 @@ namespace DeNelle.Editor
             var camera = cameraGo.AddComponent<Camera>();
             camera.clearFlags = CameraClearFlags.SolidColor;
             camera.backgroundColor = new Color(0.06f, 0.05f, 0.09f);
-            camera.fieldOfView = 55f;
             cameraGo.tag = "MainCamera";
-            // Slightly elevated, pulled back, looking down on the two capsules.
-            cameraGo.transform.position = new Vector3(0f, 3.4f, -7.5f);
-            cameraGo.transform.rotation = Quaternion.Euler(18f, 0f, 0f);
+
+            // ── Camera-angle tune pass (Workstream D, 2026-05-19) ────────────
+            // The ATB duel stages two combatants at X=+/-2.4, Y~1. The previous
+            // frame (0,3.4,-7.5 @ 18deg, 55deg FOV) sat low and slightly wide —
+            // the two capsules read small and the dark ground filled the lower
+            // half. The tune for a better-composed grant-demo duel:
+            //   • a touch higher + closer — (0,4.1,-6.6): the pair sits larger,
+            //     centred, with a clean read of the staging ground between them;
+            //   • a 22deg pitch — a gentle hero's-eye downward look that still
+            //     keeps both combatants' full height in frame;
+            //   • a 46deg FOV — a slightly longer lens that flatters the
+            //     characters and tightens the duel without clipping either side.
+            camera.fieldOfView = 46f;
+            cameraGo.transform.position = new Vector3(0f, 4.1f, -6.6f);
+            cameraGo.transform.rotation = Quaternion.Euler(22f, 0f, 0f);
 
             cameraGo.AddComponent<AudioListener>();
         }

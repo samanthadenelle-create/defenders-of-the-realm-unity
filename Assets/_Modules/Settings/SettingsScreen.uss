@@ -135,6 +135,48 @@
     border-color: rgb(252, 224, 156);
 }
 
+/* ── Gameplay difficulty selector ───────────────────────────────────── */
+.settings-difficulty-row {
+    flex-direction: row;
+    margin-top: 8px;
+    justify-content: space-between;
+}
+
+/* One difficulty button — built at runtime by SettingsController. */
+.difficulty-button {
+    flex-grow: 1;
+    height: 44px;
+    margin-left: 4px;
+    margin-right: 4px;
+    font-size: 13px;
+    -unity-font-style: bold;
+    border-radius: 10px;
+    border-width: 1px;
+    border-color: rgba(124, 58, 237, 0.4);
+    color: rgb(196, 181, 253);
+    background-color: rgba(28, 24, 42, 0.92);
+    white-space: normal;
+}
+
+.difficulty-button:hover {
+    border-color: rgba(196, 181, 253, 0.7);
+}
+
+.difficulty-button--active {
+    color: rgb(28, 22, 10);
+    background-color: rgb(245, 196, 90);
+    border-color: rgb(252, 224, 156);
+}
+
+/* The line under the difficulty row explaining what the choice changes. */
+.settings-difficulty-blurb {
+    margin-top: 8px;
+    font-size: 12px;
+    -unity-font-style: italic;
+    color: rgb(150, 142, 170);
+    white-space: normal;
+}
+
 /* ── Audio-mixer seam note ──────────────────────────────────────────── */
 .settings-seam-note {
     margin-top: 4px;

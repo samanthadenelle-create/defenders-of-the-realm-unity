@@ -6,6 +6,16 @@
 // Dungeon_HealersCottage and ATBBattle. Week 1 ships Title and Village; the
 // dungeon/battle entry points are stubbed for Weeks 2+.
 //
+// INTRO FLOW (owner-acceptance-checklist "Intro & first-run flow"): the path
+// from the Title scene into the world runs through two onboarding select
+// screens —
+//   Title (studio bumper) -> HeroSelect -> PetSelect -> Village
+// HeroSelect and PetSelect are their own scenes (DeNelle.Onboarding). The
+// Title "Start" button calls GoHeroSelect; HeroSelect's confirm calls
+// GoPetSelect; PetSelect's confirm calls GoVillage. A returning player whose
+// save already has a hero + starter pet may skip straight to the village —
+// each select controller checks GameState and self-skips (see those files).
+//
 //   LoadScene          — thin synchronous SceneManager.LoadScene wrapper.
 //   LoadSceneWithFade  — async UniTask: fade a black overlay → LoadSceneAsync →
 //                        fade back. Never `async void` (Part-3 mandate).
@@ -51,6 +61,17 @@ namespace DeNelle.Core
         // ── Canonical scene names (v2 port-spec Part 3) ──────────────────────
         /// <summary>The landing / onboarding scene (React `/`).</summary>
         public const string Title = "Title";
+        /// <summary>
+        /// The hero-select screen — pick Mage / Knight / Ranger. Shown once,
+        /// between the Title scene's studio bumper and the Village, on the
+        /// first-run intro path. See <see cref="GoHeroSelect"/>.
+        /// </summary>
+        public const string HeroSelect = "HeroSelect";
+        /// <summary>
+        /// The pet-select screen — pick one of the three starter Wardens.
+        /// Shown right after <see cref="HeroSelect"/> on the intro path.
+        /// </summary>
+        public const string PetSelect = "PetSelect";
         /// <summary>The village tower-defense scene (React `/village`).</summary>
         public const string Village = "Village";
         /// <summary>The ATB Last-Stand battle scene (React global AtbBattleHost).</summary>
@@ -131,6 +152,18 @@ namespace DeNelle.Core
 
         /// <summary>Go to the Title scene (React `/`).</summary>
         public static void GoTitle() => LoadScene(Title);
+
+        /// <summary>
+        /// Go to the hero-select screen — the first step of the intro flow after
+        /// the Title scene's studio bumper. The Title "Start" button routes here.
+        /// </summary>
+        public static void GoHeroSelect() => LoadScene(HeroSelect);
+
+        /// <summary>
+        /// Go to the pet-select screen — the second intro-flow step, entered from
+        /// hero-select once the player confirms a hero.
+        /// </summary>
+        public static void GoPetSelect() => LoadScene(PetSelect);
 
         /// <summary>Go to the Village scene (React `/village`).</summary>
         public static void GoVillage() => LoadScene(Village);

@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  DungeonHud.uxml — UI Toolkit dungeon HUD overlay (Workstream C).
+  ========================================================================
+  The in-game HUD for the Healer's Cottage dungeon scene. The dungeon had no
+  HUD before this — the village HUD (DeNelle.HUD) is a separate scene's
+  overlay and is owned by another agent. This HUD lives inside DeNelle.Dungeons
+  and ships the lantern oil / duration readout (owner acceptance checklist:
+  "torch / lantern duration mechanic — make the duration legible").
+
+  The lantern oil meter sits top-left: a caption, a horizontal fill bar
+  driven 0..100% each frame from Lantern.OilFraction, a remaining-burn-time
+  readout, and a low-oil warning pill. The HUD is a PASSIVE display —
+  DungeonHudController polls the Lantern's public API each frame; it never
+  mutates the lantern.
+
+  This UXML also hosts the crafting panel sub-tree (CraftingPanel.uxml is
+  added as a child UIDocument / template at scene-build time, or the crafting
+  panel uses its own UIDocument — see DungeonSceneBuilder). The HUD root is
+  transparent + pass-through; only the oil panel paints a backdrop.
+
+  DungeonHudController.cs queries these elements by name (the "name" attribute
+  is the binding contract — do not rename without updating the controller):
+    dungeon-hud-root
+    oil-panel
+    oil-caption
+    oil-bar-track / oil-bar-fill
+    oil-time-label
+    oil-low-warning
+-->
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <Style src="DungeonHud.uss" />
+
+    <!-- Full-screen, transparent, pass-through root. -->
+    <ui:VisualElement name="dungeon-hud-root" class="dungeon-hud-root" picking-mode="Ignore">
+
+        <!-- ── Top-left — lantern oil / duration readout ──────────────── -->
+        <ui:VisualElement name="oil-panel" class="oil-panel">
+
+            <ui:Label name="oil-caption" text="Lantern Oil" class="oil-caption" />
+
+            <!-- Oil bar — fill width driven 0..100% from Lantern.OilFraction. -->
+            <ui:VisualElement name="oil-bar-track" class="oil-bar-track">
+                <ui:VisualElement name="oil-bar-fill" class="oil-bar-fill" />
+            </ui:VisualElement>
+
+            <!-- Remaining burn time — "Light: 1m 12s" / how long until empty. -->
+            <ui:Label name="oil-time-label" text="Light: --" class="oil-time-label" />
+
+            <!-- Low-oil warning — shown only while the lantern reads low. -->
+            <ui:Label name="oil-low-warning" text="LOW OIL — find an oil stone"
+                      class="oil-low-warning" />
+
+        </ui:VisualElement>
+
+    </ui:VisualElement>
+</ui:UXML>

@@ -36,6 +36,7 @@
 using System.Collections.Generic;
 using Cysharp.Threading.Tasks;
 using DeNelle.Core;
+using DeNelle.Core.State;
 using UnityEngine;
 using UnityEngine.Events;
 
@@ -254,9 +255,30 @@ namespace DeNelle.Village
             }
 
             _currentWaveId = waveId;
-            _countdownRemaining = Mathf.Max(0f, wave.CountdownSeconds);
+            // The between-wave build window scales with the player's chosen
+            // difficulty: the canonical WaveDef.CountdownSeconds (45 s first
+            // wave, 300 s later) is multiplied by the DifficultyTuning factor so
+            // the owner targets land — Easy ~10 min, Normal ~5 min, Hard ~3 min
+            // between waves. The multiplier is derived from the base seconds,
+            // never hard-coded (see DifficultyTuning).
+            _countdownRemaining = Mathf.Max(0f, ScaledCountdown(wave.CountdownSeconds));
             _phase = WavePhase.Countdown;
             OnCountdownTick.Invoke(_countdownRemaining);
+        }
+
+        /// <summary>
+        /// Scales a wave's authored <paramref name="baseCountdown"/> by the
+        /// difficulty the save records. Reads <see cref="GameState.Difficulty"/>
+        /// through <see cref="GameStateService"/>; if Core is not bootstrapped
+        /// (no service) it falls back to Normal so the loop is never blocked.
+        /// </summary>
+        private static float ScaledCountdown(float baseCountdown)
+        {
+            var svc = GameStateService.Instance;
+            Difficulty difficulty = (svc != null && svc.State != null)
+                ? svc.State.Difficulty
+                : Difficulty.Normal;
+            return baseCountdown * DifficultyTuning.CountdownMultiplier(difficulty);
         }
 
         private void TickCountdown()

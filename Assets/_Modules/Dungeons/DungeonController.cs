@@ -77,6 +77,29 @@ namespace DeNelle.Dungeons
         [Tooltip("Bryn the Wanderer — placed + configured from the layout's bryn block.")]
         [SerializeField] private Bryn _bryn;
 
+        [Header("Crafting (Workstream C)")]
+        [Tooltip("The shared crafting-ingredient inventory ScriptableObject — wired " +
+                 "to the ingredient pickups + the crafting pedestal on load.")]
+        [SerializeField] private DungeonInventory _dungeonInventory;
+
+        [Tooltip("The crafting-pedestal interactable — configured from " +
+                 "crafting-recipes.json's pedestal block. Replaces the §5.4 " +
+                 "placeholder shard pedestal in the Hidden Vault.")]
+        [SerializeField] private CraftingPedestal _craftingPedestal;
+
+        [Tooltip("Parent for the spawned ingredient-pickup motes — one child per " +
+                 "crafting-recipes.json ingredientPlacements[] entry, in order.")]
+        [SerializeField] private Transform _ingredientRoot;
+
+        [Tooltip("The UI Toolkit crafting panel controller — subscribed to the " +
+                 "crafting pedestal's open/close events on load.")]
+        [SerializeField] private CraftingPanelController _craftingPanel;
+
+        [Header("Dungeon HUD (Workstream C)")]
+        [Tooltip("The dungeon HUD controller — fed the Lantern reference so its " +
+                 "oil meter reads the lantern's public API each frame.")]
+        [SerializeField] private DungeonHudController _dungeonHud;
+
         [Header("Interactable parents (wired by the scene builder)")]
         [Tooltip("Parent for the spawned lore-stone interactables.")]
         [SerializeField] private Transform _loreStoneRoot;
@@ -145,6 +168,13 @@ namespace DeNelle.Dungeons
         /// <summary>The hydrated scripted/boss encounter triggers, in layout order.</summary>
         private readonly List<EncounterTrigger> _encounterTriggers = new List<EncounterTrigger>();
 
+        /// <summary>
+        /// The canonical crafting data set (crafting-recipes.json) — feeds the
+        /// ingredient pickups, the crafting pedestal and the crafting UI. Null
+        /// when the file could not be loaded; the crafting layer then stays inert.
+        /// </summary>
+        private CraftingDataSet _craftingData;
+
         // ── Lifecycle ────────────────────────────────────────────────────────
 
         private void Start()
@@ -199,6 +229,11 @@ namespace DeNelle.Dungeons
             // interactables fall back to the layout JSON's inline copy.
             _loreFragments = await LoreFragmentsLoader.LoadAsync();
 
+            // Load the canonical crafting data (Workstream C) — feeds the
+            // ingredient pickups, the crafting pedestal and the crafting UI. A
+            // null set is non-fatal: the crafting layer simply stays inert.
+            _craftingData = await CraftingDataLoader.LoadAsync();
+
             // An encounter battle just resolved if the run state still carries a
             // pending handoff — this scene LOAD is the ATB round-trip return.
             bool resuming = _runtimeState != null && _runtimeState.HasPendingEncounter;
@@ -232,6 +267,8 @@ namespace DeNelle.Dungeons
             HydrateLoreStones();
             HydrateCheckpoints();
             HydrateEncounters();
+            ConfigureCrafting();
+            ConfigureDungeonHud();
             StartAmbientAudio();
 
             // Settle any in-flight ATB encounter — the dungeon module's side of
@@ -257,6 +294,10 @@ namespace DeNelle.Dungeons
         {
             if (_runtimeState != null && _runtimeState.RunActive)
                 _runtimeState.EndRun();
+            // The crafting inventory is per-run — clear it on a real exit so a
+            // stale run's ingredients never leak into the next dungeon run.
+            if (_dungeonInventory != null)
+                _dungeonInventory.Clear();
             StopAmbientAudio();
             return SceneRouter.LoadSceneWithFade(SceneRouter.Village);
         }
@@ -410,6 +451,60 @@ namespace DeNelle.Dungeons
             _bryn.SetHero(_hero);
             if (_loreFragments != null)
                 _bryn.SetLoreFragments(_loreFragments);
+        }
+
+        /// <summary>
+        /// Wires the crafting system (Workstream C) — the ingredient pickups,
+        /// the crafting pedestal and the crafting UI panel — from the canonical
+        /// crafting-recipes.json. Each ingredient pickup under
+        /// <see cref="_ingredientRoot"/> pairs with one
+        /// <c>ingredientPlacements[]</c> entry in file order; the pedestal takes
+        /// the file's <c>pedestal</c> block. A null crafting data set leaves the
+        /// whole layer inert (the file may not be imported yet).
+        /// </summary>
+        private void ConfigureCrafting()
+        {
+            if (_craftingData == null) return;
+
+            // ── Ingredient pickups — child[i] pairs with placement[i]. ───────
+            if (_ingredientRoot != null && _craftingData.IngredientPlacements != null)
+            {
+                var pickups = _ingredientRoot.GetComponentsInChildren<IngredientPickup>(true);
+                int total = _craftingData.IngredientPlacements.Count;
+                int n = Mathf.Min(pickups.Length, total);
+                if (pickups.Length != total)
+                {
+                    Debug.LogWarning(
+                        $"[DungeonController] Ingredient-pickup count mismatch — {pickups.Length} " +
+                        $"in scene, {total} in crafting data. Hydrating the first {n}.");
+                }
+                for (int i = 0; i < n; i++)
+                    pickups[i].Configure(
+                        _craftingData.IngredientPlacements[i], _dungeonInventory, _hero);
+            }
+
+            // ── Crafting pedestal + its UI panel. ────────────────────────────
+            if (_craftingPedestal != null && _craftingData.Pedestal != null)
+            {
+                _craftingPedestal.Configure(
+                    _craftingData.Pedestal, _craftingData, _dungeonInventory, _hero);
+
+                // Subscribe the UI panel to the pedestal's open/close events —
+                // keeps the pedestal a pure scene actor and the panel a pure view.
+                if (_craftingPanel != null)
+                    _craftingPanel.BindPedestal(_craftingPedestal);
+            }
+        }
+
+        /// <summary>
+        /// Feeds the dungeon HUD (Workstream C) its Lantern reference so the oil
+        /// meter polls the lantern's public API each frame. The HUD is a passive
+        /// display — it never mutates the lantern.
+        /// </summary>
+        private void ConfigureDungeonHud()
+        {
+            if (_dungeonHud != null && _lantern != null)
+                _dungeonHud.SetLantern(_lantern);
         }
 
         /// <summary>

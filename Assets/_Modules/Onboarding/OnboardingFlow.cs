@@ -7,14 +7,16 @@
 // open re-plays on every launch (the explicit bug in §2.5 / P0-11).
 //
 // This component is the missing tutorial. It drives TutorialOverlay.uxml: a
-// short, SKIPPABLE five-beat coach-mark sequence taught the first time the
+// short, SKIPPABLE six-beat coach-mark sequence taught the first time the
 // player reaches the village —
 //
 //   1. Welcome      — you are the Keeper; the realm is yours to hold.
 //   2. The Heart    — Elarion, the Heart, is what you defend.
-//   3. Build        — open the Build menu and raise a tower.
-//   4. Place a pet  — station a starter Warden at a slot.
-//   5. Wave 1       — begin the first wave.
+//   3. Force-field  — the Heart-light field on the walls/gates turns enemies
+//                     back; a damaged wall thins it — keep the walls mended.
+//   4. Build        — open the Build menu and raise a tower.
+//   5. Place a pet  — station a starter Warden at a slot.
+//   6. Wave 1       — begin the first wave.
 //
 // THE Onboarded GATE (audit P0-11, the headline fix):
 //   - On enable, the flow reads GameStateService.Instance.State.Onboarded.
@@ -74,7 +76,7 @@ namespace DeNelle.Onboarding
 
     /// <summary>
     /// Drives the first-run guided tutorial overlay — a short, skippable
-    /// five-beat coach-mark sequence shown only when
+    /// six-beat coach-mark sequence shown only when
     /// <see cref="GameState.Onboarded"/> is false. Marks onboarding complete
     /// (which stops the cold open re-playing — audit P0-11) on completion or
     /// skip. A passive display: gameplay is reached through Core seams and
@@ -143,10 +145,11 @@ namespace DeNelle.Onboarding
         public bool HasFinished { get; private set; }
 
         // =====================================================================
-        //  The five tutorial beats
+        //  The six tutorial beats
         // -----------------------------------------------------------------------
-        //  Deliverable beats: welcome -> the Heart -> open Build menu / build a
-        //  tower -> place a starter pet -> Wave 1 begins. Each beat's narration
+        //  Deliverable beats: welcome -> the Heart -> the force-field -> open
+        //  Build menu / build a tower -> place a starter pet -> Wave 1 begins.
+        //  Each beat's narration
         //  is a CANON STRING resolved at runtime from en.json (tutorial.steps.*
         //  — already present in StreamingAssets/Data/Canonical/en.json) — never
         //  typed inline (v2 port-spec Part 4). The kicker captions are short UI
@@ -174,18 +177,23 @@ namespace DeNelle.Onboarding
             }
         }
 
-        // tutorial.steps.1 — "Welcome home, Guardian. The Heart is the Lantern…"
-        // tutorial.steps.2 — "The Hollowed come from the dark beyond the walls…"
-        // tutorial.steps.3 — "Build your defenses with what you have…"
-        // tutorial.steps.6 — "Your Wardens fight beside you. Tap one to give…"
-        // tutorial.steps.5 — "When you are ready, begin a wave…"
+        // tutorial.steps.1         — "Welcome home, Guardian. The Heart is the Lantern…"
+        // tutorial.steps.2         — "The Hollowed come from the dark beyond the walls…"
+        // tutorial.steps.forceField— "The walls hold a force-field of the Heart's own light…"
+        // tutorial.steps.3         — "Build your defenses with what you have…"
+        // tutorial.steps.6         — "Your Wardens fight beside you. Tap one to give…"
+        // tutorial.steps.5         — "When you are ready, begin a wave…"
         private static readonly Beat[] Beats =
         {
-            new Beat("WELCOME, KEEPER", "tutorial.steps.1", TutorialGate.None,       "Next"),
-            new Beat("THE HEART",       "tutorial.steps.2", TutorialGate.None,       "Next"),
-            new Beat("RAISE A TOWER",   "tutorial.steps.3", TutorialGate.BuildTower, "Open Build menu"),
-            new Beat("YOUR WARDENS",    "tutorial.steps.6", TutorialGate.PlacePet,   "Next"),
-            new Beat("HOLD THE LINE",   "tutorial.steps.5", TutorialGate.None,       "Begin Wave 1"),
+            new Beat("WELCOME, KEEPER", "tutorial.steps.1",          TutorialGate.None,       "Next"),
+            new Beat("THE HEART",       "tutorial.steps.2",          TutorialGate.None,       "Next"),
+            // Force-field beat — explains the Heart-light field on the walls /
+            // gates that turns enemies back, and that a damaged wall thins it,
+            // leading into the wall-repair mechanic another workstream builds.
+            new Beat("THE FORCE-FIELD", "tutorial.steps.forceField", TutorialGate.None,       "Next"),
+            new Beat("RAISE A TOWER",   "tutorial.steps.3",          TutorialGate.BuildTower, "Open Build menu"),
+            new Beat("YOUR WARDENS",    "tutorial.steps.6",          TutorialGate.PlacePet,   "Next"),
+            new Beat("HOLD THE LINE",   "tutorial.steps.5",          TutorialGate.None,       "Begin Wave 1"),
         };
 
         /// <summary>Number of beats in the tutorial sequence.</summary>

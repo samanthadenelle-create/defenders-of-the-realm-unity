@@ -6,6 +6,10 @@
 //
 // WHAT IT OFFERS:
 //   * Audio    — Master / Music / SFX volume sliders + a global mute toggle.
+//   * Gameplay — a three-way difficulty selector (Easy / Normal / Hard),
+//                buttons built at runtime from Difficulty. Difficulty scales
+//                the WaveManager between-wave countdown (DifficultyTuning):
+//                Easy ~10 min, Normal ~5 min, Hard ~3 min between waves.
 //   * Graphics — a three-tier quality selector (Seeker_Low / Seeker_High /
 //                Desktop), buttons built at runtime from QualityTier.
 //   * Comfort  — a screen-shake on/off toggle (accessibility — audit §2.7).
@@ -27,6 +31,7 @@
 // =============================================================================
 
 using System;
+using DeNelle.Core.State;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.UIElements;
@@ -73,6 +78,8 @@ namespace DeNelle.Settings
         private const string SfxValueName = "settings-sfx-value";
         private const string MuteToggleName = "settings-mute-toggle";
         private const string QualityRowName = "settings-quality-row";
+        private const string DifficultyRowName = "settings-difficulty-row";
+        private const string DifficultyBlurbName = "settings-difficulty-blurb";
         private const string ShakeToggleName = "settings-shake-toggle";
         private const string AudioSeamName = "settings-audio-seam";
         private const string ResetButtonName = "settings-reset-button";
@@ -81,6 +88,8 @@ namespace DeNelle.Settings
         // ── USS class names — styled by SettingsScreen.uss ───────────────────
         private const string TierButtonClass = "quality-tier-button";
         private const string TierButtonActiveClass = "quality-tier-button--active";
+        private const string DifficultyButtonClass = "difficulty-button";
+        private const string DifficultyButtonActiveClass = "difficulty-button--active";
 
         // ── Bound UI elements ────────────────────────────────────────────────
         private VisualElement _root;
@@ -92,6 +101,8 @@ namespace DeNelle.Settings
         private Label _sfxValue;
         private Toggle _muteToggle;
         private VisualElement _qualityRow;
+        private VisualElement _difficultyRow;
+        private Label _difficultyBlurb;
         private Toggle _shakeToggle;
         private Label _audioSeam;
         private Button _resetButton;
@@ -102,6 +113,13 @@ namespace DeNelle.Settings
         private static readonly QualityTier[] Tiers =
         {
             QualityTier.SeekerLow, QualityTier.SeekerHigh, QualityTier.Desktop,
+        };
+
+        // One difficulty button paired with the difficulty it selects.
+        private readonly Button[] _difficultyButtons = new Button[3];
+        private static readonly Difficulty[] Difficulties =
+        {
+            Difficulty.Easy, Difficulty.Normal, Difficulty.Hard,
         };
 
         private bool _bound;
@@ -158,12 +176,15 @@ namespace DeNelle.Settings
             _sfxValue = _root.Q<Label>(SfxValueName);
             _muteToggle = _root.Q<Toggle>(MuteToggleName);
             _qualityRow = _root.Q<VisualElement>(QualityRowName);
+            _difficultyRow = _root.Q<VisualElement>(DifficultyRowName);
+            _difficultyBlurb = _root.Q<Label>(DifficultyBlurbName);
             _shakeToggle = _root.Q<Toggle>(ShakeToggleName);
             _audioSeam = _root.Q<Label>(AudioSeamName);
             _resetButton = _root.Q<Button>(ResetButtonName);
             _backButton = _root.Q<Button>(BackButtonName);
 
             BuildQualityButtons();
+            BuildDifficultyButtons();
             RegisterCallbacks();
             RefreshFromModel();
             _bound = true;
@@ -185,6 +206,32 @@ namespace DeNelle.Settings
                 button.clicked += () => OnQualityTierClicked(captured);
                 _qualityRow.Add(button);
                 _tierButtons[i] = button;
+            }
+        }
+
+        /// <summary>
+        /// Builds the three difficulty buttons (Easy / Normal / Hard) into the
+        /// difficulty row once. Mirrors <see cref="BuildQualityButtons"/>.
+        /// </summary>
+        private void BuildDifficultyButtons()
+        {
+            if (_difficultyRow == null) return;
+            _difficultyRow.Clear();
+
+            for (int i = 0; i < Difficulties.Length; i++)
+            {
+                Difficulty difficulty = Difficulties[i];
+                var button = new Button
+                {
+                    name = $"difficulty-{i}",
+                    text = DifficultyTuning.Label(difficulty),
+                };
+                button.AddToClassList(DifficultyButtonClass);
+                // Capture the difficulty in a local so the closure binds right.
+                Difficulty captured = difficulty;
+                button.clicked += () => OnDifficultyClicked(captured);
+                _difficultyRow.Add(button);
+                _difficultyButtons[i] = button;
             }
         }
 
@@ -259,6 +306,7 @@ namespace DeNelle.Settings
 
                 UpdateVolumeLabels();
                 UpdateQualityHighlight(SettingsModel.Quality);
+                UpdateDifficultyHighlight(SettingsModel.Difficulty);
                 UpdateAudioSeamNotice();
             }
             finally
@@ -288,6 +336,22 @@ namespace DeNelle.Settings
                 if (_tierButtons[i] == null) continue;
                 _tierButtons[i].EnableInClassList(TierButtonActiveClass, Tiers[i] == active);
             }
+        }
+
+        /// <summary>
+        /// Marks the active difficulty button, clears the others, and refreshes
+        /// the blurb under the row so the player sees what the choice changes.
+        /// </summary>
+        private void UpdateDifficultyHighlight(Difficulty active)
+        {
+            for (int i = 0; i < _difficultyButtons.Length; i++)
+            {
+                if (_difficultyButtons[i] == null) continue;
+                _difficultyButtons[i].EnableInClassList(
+                    DifficultyButtonActiveClass, Difficulties[i] == active);
+            }
+            if (_difficultyBlurb != null)
+                _difficultyBlurb.text = DifficultyTuning.Blurb(active);
         }
 
         /// <summary>
@@ -348,6 +412,19 @@ namespace DeNelle.Settings
             SettingsModel.Quality = tier;
             SettingsModel.ApplyQuality();
             UpdateQualityHighlight(tier);
+        }
+
+        /// <summary>
+        /// A difficulty button was tapped. Persists the choice through
+        /// <see cref="SettingsModel.Difficulty"/> (which routes to the save layer)
+        /// and re-highlights the row. The WaveManager reads the persisted value
+        /// when it next enters a countdown, so a mid-session change takes effect
+        /// from the following wave's build window — no extra apply step needed.
+        /// </summary>
+        private void OnDifficultyClicked(Difficulty difficulty)
+        {
+            SettingsModel.Difficulty = difficulty;
+            UpdateDifficultyHighlight(difficulty);
         }
 
         private void OnResetClicked()

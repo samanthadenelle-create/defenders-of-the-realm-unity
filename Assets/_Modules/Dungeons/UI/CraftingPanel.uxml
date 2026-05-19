@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  CraftingPanel.uxml — UI Toolkit crafting panel for the dungeon crafting
+  pedestal (Workstream C — the craft-a-torch loop).
+  ========================================================================
+  Shown when the Keeper opens the crafting pedestal. It is a centred modal
+  card over a dimmed scrim: the recipe header, a row of ingredient cells
+  (each shows have / need + a tick when satisfied), a result line, and a
+  Craft / Close button pair.
+
+  CraftingPanelController.cs queries these elements by name (the "name"
+  attribute is the binding contract — do not rename without updating the
+  controller). The ingredient cells are built ONCE at runtime by the
+  controller into "crafting-ingredient-list" — this UXML supplies the card
+  chrome only.
+
+  Element name contract:
+    crafting-panel-root         — full-screen scrim + modal host
+    crafting-card               — the centred modal card
+    crafting-recipe-name        — recipe display name
+    crafting-recipe-desc        — recipe one-line description
+    crafting-ingredient-list    — runtime-built ingredient cells go here
+    crafting-result-glyph       — large glyph of the crafted item
+    crafting-result-label       — "Ready to craft" / "Gather the ingredients"
+    crafting-craft-button       — the Craft action (disabled until craftable)
+    crafting-close-button       — dismiss the panel
+-->
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <Style src="CraftingPanel.uss" />
+
+    <!-- Full-screen scrim — dims the dungeon behind the modal. -->
+    <ui:VisualElement name="crafting-panel-root" class="crafting-panel-root">
+
+        <!-- The centred modal card. -->
+        <ui:VisualElement name="crafting-card" class="crafting-card">
+
+            <!-- Header — eyebrow + recipe name + description. -->
+            <ui:Label name="crafting-eyebrow" text="CRAFTING PEDESTAL" class="crafting-eyebrow" />
+            <ui:Label name="crafting-recipe-name" text="Torch" class="crafting-recipe-name" />
+            <ui:Label name="crafting-recipe-desc" text="" class="crafting-recipe-desc" />
+
+            <!-- Ingredients heading. -->
+            <ui:Label name="crafting-ingredients-heading" text="Ingredients" class="crafting-section-heading" />
+
+            <!-- Ingredient cells — built at runtime by the controller. -->
+            <ui:VisualElement name="crafting-ingredient-list" class="crafting-ingredient-list" />
+
+            <!-- Result row — glyph + ready/not-ready line. -->
+            <ui:VisualElement name="crafting-result-row" class="crafting-result-row">
+                <ui:Label name="crafting-result-glyph" text="T" class="crafting-result-glyph" />
+                <ui:Label name="crafting-result-label" text="Gather the ingredients" class="crafting-result-label" />
+            </ui:VisualElement>
+
+            <!-- Action buttons. -->
+            <ui:VisualElement name="crafting-button-row" class="crafting-button-row">
+                <ui:Button name="crafting-close-button" text="Close" class="crafting-button crafting-button--ghost" />
+                <ui:Button name="crafting-craft-button" text="Craft" class="crafting-button crafting-button--primary" />
+            </ui:VisualElement>
+
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

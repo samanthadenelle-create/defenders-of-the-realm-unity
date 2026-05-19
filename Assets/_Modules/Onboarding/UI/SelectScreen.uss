@@ -1,0 +1,158 @@
+/*
+ * SelectScreen.uss — shared styling for the hero-select + pet-select screens.
+ * ----------------------------------------------------------------------
+ * Both intro-flow select screens (HeroSelectScreen.uxml / PetSelectScreen.uxml)
+ * share this stylesheet — same backdrop, header, card row and confirm CTA.
+ *
+ * Matches the project's UI Toolkit visual language (SettingsScreen.uss /
+ * TitleScreen.uss): a dark Heart-Forest palette, violet for the Heart accent,
+ * amber for the primary call-to-action. Values are inline — the project Theme
+ * is C#-driven, not USS variables — the established convention.
+ *
+ * The three selection cards are built at runtime by the controllers; the USS
+ * class names they apply:
+ *   select-card / select-card--active   (the card root + chosen highlight)
+ *   select-card__portrait               (the portrait / preview block)
+ *   select-card__accent                 (a thin element-coloured strip)
+ *   select-card__name / __role / __blurb (the card's three text rows)
+ */
+
+/* ── Root — full-screen backdrop ────────────────────────────────────── */
+.select-root {
+    flex-grow: 1;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgb(10, 8, 18);
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+}
+
+/* ── Header ─────────────────────────────────────────────────────────── */
+.select-header {
+    align-items: center;
+    margin-bottom: 28px;
+}
+
+.select-title {
+    font-size: 34px;
+    -unity-font-style: bold;
+    color: rgb(237, 233, 250);
+    -unity-text-align: middle-center;
+}
+
+.select-subtitle {
+    margin-top: 8px;
+    font-size: 15px;
+    -unity-font-style: italic;
+    color: rgb(168, 160, 188);
+    -unity-text-align: middle-center;
+    white-space: normal;
+    max-width: 720px;
+}
+
+/* ── The row of selection cards ─────────────────────────────────────── */
+.select-card-row {
+    flex-direction: row;
+    justify-content: center;
+    align-items: stretch;
+}
+
+/* One selection card — built at runtime by the controller. */
+.select-card {
+    width: 280px;
+    margin-left: 14px;
+    margin-right: 14px;
+    padding: 0;
+    border-radius: 16px;
+    border-width: 2px;
+    border-color: rgba(124, 58, 237, 0.35);
+    background-color: rgba(20, 16, 32, 0.96);
+    overflow: hidden;
+}
+
+.select-card:hover {
+    border-color: rgba(196, 181, 253, 0.7);
+}
+
+/* The chosen card — amber ring + lift. */
+.select-card--active {
+    border-color: rgb(245, 196, 90);
+    background-color: rgba(32, 26, 44, 0.98);
+}
+
+/* Portrait / preview block at the top of the card. */
+.select-card__portrait {
+    height: 200px;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(124, 58, 237, 0.12);
+}
+
+/* The big glyph / initial shown in the portrait block. */
+.select-card__glyph {
+    font-size: 96px;
+    -unity-font-style: bold;
+    color: rgb(196, 181, 253);
+}
+
+/* A thin element-coloured strip between the portrait and the text. */
+.select-card__accent {
+    height: 5px;
+    background-color: rgb(124, 58, 237);
+}
+
+/* Card text region. */
+.select-card__body {
+    padding: 16px 18px 20px 18px;
+}
+
+.select-card__name {
+    font-size: 22px;
+    -unity-font-style: bold;
+    color: rgb(237, 233, 250);
+}
+
+.select-card__role {
+    margin-top: 2px;
+    font-size: 12px;
+    -unity-font-style: bold;
+    color: rgb(245, 196, 90);
+}
+
+.select-card__blurb {
+    margin-top: 10px;
+    font-size: 13px;
+    color: rgb(186, 178, 204);
+    white-space: normal;
+}
+
+/* ── Footer — the confirm CTA ───────────────────────────────────────── */
+.select-footer {
+    margin-top: 30px;
+    align-items: center;
+}
+
+.select-confirm {
+    min-width: 280px;
+    height: 56px;
+    font-size: 17px;
+    -unity-font-style: bold;
+    border-radius: 14px;
+    border-width: 0;
+    color: rgb(28, 22, 10);
+    background-color: rgb(245, 196, 90);
+}
+
+.select-confirm:hover {
+    background-color: rgb(255, 212, 120);
+}
+
+/* Confirm button before a card is chosen — dimmed + inert-looking. */
+.select-confirm--disabled {
+    color: rgba(237, 233, 250, 0.4);
+    background-color: rgba(255, 255, 255, 0.07);
+}

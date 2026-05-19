@@ -61,10 +61,23 @@ namespace DeNelle.HUD
         [Tooltip("Seconds remaining at or below which the countdown text turns amber + bold.")]
         [SerializeField, Min(0f)] private float _countdownUrgentSeconds = 3f;
 
+        [Header("Repair prompt")]
+        [Tooltip("Seconds the repair-feedback toast stays on screen before it auto-hides.")]
+        [SerializeField, Min(0.5f)] private float _repairToastSeconds = 2.5f;
+
         [Header("Events")]
         [Tooltip("Raised when the player taps the Build button. The integrator hooks this " +
                  "to the village BuildMenu.Open() — the HUD cannot reference BuildMenu itself.")]
         public UnityEvent BuildRequested = new UnityEvent();
+
+        [Tooltip("Raised when the player taps the repair prompt's Repair button. The integrator " +
+                 "hooks this to WallRepairController.ConfirmRepair() (cross-module — see " +
+                 "WallRepairSceneSetup.cs). The HUD cannot reference WallRepairController itself.")]
+        public UnityEvent RepairConfirmRequested = new UnityEvent();
+
+        [Tooltip("Raised when the player taps the repair prompt's Cancel button (or the prompt " +
+                 "is dismissed). The integrator hooks this to WallRepairController.CancelRepair().")]
+        public UnityEvent RepairCancelRequested = new UnityEvent();
 
         // ── UXML element names — the binding contract with VillageHud.uxml ───
         private const string RootName = "village-hud-root";
@@ -73,15 +86,29 @@ namespace DeNelle.HUD
         private const string CrystalCountName = "crystal-count";
         private const string WaveNumberName = "wave-number";
         private const string WaveCountdownName = "wave-countdown";
+        private const string WaveCountdownTimerName = "wave-countdown-timer";
+        private const string WaveCountdownIconName = "wave-countdown-icon";
         private const string AbilityBarName = "ability-bar";
         private const string ManaFillName = "mana-fill";
         private const string ManaLabelName = "mana-label";
         private const string BuildButtonName = "build-button";
 
+        // Repair-prompt elements (Workstream B — player wall-repair mechanic).
+        private const string RepairPromptName = "repair-prompt";
+        private const string RepairPromptSubtitleName = "repair-prompt-subtitle";
+        private const string RepairPromptCostName = "repair-prompt-cost";
+        private const string RepairPromptConfirmName = "repair-prompt-confirm";
+        private const string RepairPromptCancelName = "repair-prompt-cancel";
+        private const string RepairToastName = "repair-toast";
+
         // ── USS class names — styled by VillageHud.uss ───────────────────────
         private const string HeartWarningClass = "bar-fill--heart-warning";
         private const string HeartCriticalClass = "bar-fill--heart-critical";
         private const string CountdownUrgentClass = "wave-countdown--urgent";
+        private const string CountdownTimerUrgentClass = "wave-countdown-timer--urgent";
+        private const string CountdownIconUrgentClass = "wave-countdown-icon--urgent";
+        private const string RepairCostUnaffordableClass = "repair-prompt-cost--unaffordable";
+        private const string RepairToastErrorClass = "repair-toast--error";
         private const string AbilitySlotClass = "ability-slot";
         private const string AbilitySlotReadyClass = "ability-slot--ready";
         private const string AbilitySlotCoolingClass = "ability-slot--cooling";
@@ -102,10 +129,23 @@ namespace DeNelle.HUD
         private Label _crystalCount;
         private Label _waveNumber;
         private Label _waveCountdown;
+        private VisualElement _waveCountdownTimer;
+        private Label _waveCountdownIcon;
         private VisualElement _abilityBar;
         private VisualElement _manaFill;
         private Label _manaLabel;
         private Button _buildButton;
+
+        // Repair-prompt elements (Workstream B — player wall-repair mechanic).
+        private VisualElement _repairPrompt;
+        private Label _repairPromptSubtitle;
+        private Label _repairPromptCost;
+        private Button _repairPromptConfirm;
+        private Button _repairPromptCancel;
+        private Label _repairToast;
+
+        // Auto-hide bookkeeping for the repair-feedback toast.
+        private float _repairToastHideAt = -1f;
 
         /// <summary>One built ability cell — the cooldown sweep + numeral handles.</summary>
         private struct AbilityCell
@@ -135,7 +175,23 @@ namespace DeNelle.HUD
         private void OnDisable()
         {
             if (_buildButton != null) _buildButton.clicked -= OnBuildClicked;
+            if (_repairPromptConfirm != null) _repairPromptConfirm.clicked -= OnRepairConfirmClicked;
+            if (_repairPromptCancel != null) _repairPromptCancel.clicked -= OnRepairCancelClicked;
             _bound = false;
+        }
+
+        private void Update()
+        {
+            // Auto-hide the repair-feedback toast once its dwell time elapses.
+            if (_repairToastHideAt >= 0f && Time.unscaledTime >= _repairToastHideAt)
+            {
+                _repairToastHideAt = -1f;
+                if (_repairToast != null)
+                {
+                    _repairToast.text = string.Empty;
+                    _repairToast.style.display = DisplayStyle.None;
+                }
+            }
         }
 
         // =====================================================================
@@ -156,15 +212,44 @@ namespace DeNelle.HUD
             _crystalCount = _root.Q<Label>(CrystalCountName);
             _waveNumber = _root.Q<Label>(WaveNumberName);
             _waveCountdown = _root.Q<Label>(WaveCountdownName);
+            _waveCountdownTimer = _root.Q<VisualElement>(WaveCountdownTimerName);
+            _waveCountdownIcon = _root.Q<Label>(WaveCountdownIconName);
             _abilityBar = _root.Q<VisualElement>(AbilityBarName);
             _manaFill = _root.Q<VisualElement>(ManaFillName);
             _manaLabel = _root.Q<Label>(ManaLabelName);
             _buildButton = _root.Q<Button>(BuildButtonName);
 
+            // Repair-prompt elements (Workstream B).
+            _repairPrompt = _root.Q<VisualElement>(RepairPromptName);
+            _repairPromptSubtitle = _root.Q<Label>(RepairPromptSubtitleName);
+            _repairPromptCost = _root.Q<Label>(RepairPromptCostName);
+            _repairPromptConfirm = _root.Q<Button>(RepairPromptConfirmName);
+            _repairPromptCancel = _root.Q<Button>(RepairPromptCancelName);
+            _repairToast = _root.Q<Label>(RepairToastName);
+
             if (_buildButton != null)
             {
                 _buildButton.clicked -= OnBuildClicked; // guard against a double OnEnable
                 _buildButton.clicked += OnBuildClicked;
+            }
+
+            if (_repairPromptConfirm != null)
+            {
+                _repairPromptConfirm.clicked -= OnRepairConfirmClicked;
+                _repairPromptConfirm.clicked += OnRepairConfirmClicked;
+            }
+            if (_repairPromptCancel != null)
+            {
+                _repairPromptCancel.clicked -= OnRepairCancelClicked;
+                _repairPromptCancel.clicked += OnRepairCancelClicked;
+            }
+
+            // The repair prompt + toast start hidden until the repair flow runs.
+            HideRepairPrompt();
+            if (_repairToast != null)
+            {
+                _repairToast.text = string.Empty;
+                _repairToast.style.display = DisplayStyle.None;
             }
 
             BuildAbilityCells();
@@ -269,18 +354,49 @@ namespace DeNelle.HUD
 
             if (_waveCountdown == null) return;
 
-            if (countdown > 0f)
+            bool counting = countdown > 0f;
+            bool urgent = counting && countdown <= _countdownUrgentSeconds;
+
+            if (counting)
             {
+                // Compact "M:SS" / "Ns" timer text — small enough for the
+                // top-centre pill (owner ask: a small timer at the top).
                 int seconds = Mathf.CeilToInt(countdown);
-                _waveCountdown.text = $"Next wave in {seconds}s";
-                _waveCountdown.EnableInClassList(
-                    CountdownUrgentClass, countdown <= _countdownUrgentSeconds);
+                _waveCountdown.text = FormatCountdown(seconds);
             }
             else
             {
                 _waveCountdown.text = string.Empty;
-                _waveCountdown.EnableInClassList(CountdownUrgentClass, false);
             }
+
+            // Toggle the whole top-centre pill — it only shows during the
+            // between-wave Prepare Phase, then collapses while a wave is active.
+            if (_waveCountdownTimer != null)
+            {
+                _waveCountdownTimer.style.display =
+                    counting ? DisplayStyle.Flex : DisplayStyle.None;
+                _waveCountdownTimer.EnableInClassList(CountdownTimerUrgentClass, urgent);
+            }
+            _waveCountdown.EnableInClassList(CountdownUrgentClass, urgent);
+            if (_waveCountdownIcon != null)
+                _waveCountdownIcon.EnableInClassList(CountdownIconUrgentClass, urgent);
+        }
+
+        /// <summary>
+        /// Formats a between-wave countdown into a compact timer string —
+        /// <c>M:SS</c> when a minute or more remains, plain <c>Ns</c> below a
+        /// minute. Kept short so the top-centre pill stays small.
+        /// </summary>
+        private static string FormatCountdown(int totalSeconds)
+        {
+            totalSeconds = Mathf.Max(0, totalSeconds);
+            if (totalSeconds >= 60)
+            {
+                int m = totalSeconds / 60;
+                int s = totalSeconds % 60;
+                return $"{m}:{s:00}";
+            }
+            return $"{totalSeconds}s";
         }
 
         /// <summary>
@@ -340,6 +456,77 @@ namespace DeNelle.HUD
         public bool IsBound => _bound;
 
         // =====================================================================
+        //  Repair prompt — Workstream B (player wall-repair mechanic).
+        //  A passive display, exactly like the rest of this HUD: the village
+        //  WallRepairController pushes the prompt data in through these setters
+        //  and listens to RepairConfirmRequested / RepairCancelRequested. The
+        //  cross-module wiring is done by WallRepairSceneSetup.cs (the HUD asmdef
+        //  cannot reference DeNelle.Village).
+        // =====================================================================
+
+        /// <summary>
+        /// Shows the repair-confirm prompt for a selected structure.
+        /// <paramref name="subtitle"/> is the prompt's sub-line (already composed
+        /// + localized by the caller — the HUD displays it verbatim),
+        /// <paramref name="crystalCost"/> is the crystal price, and
+        /// <paramref name="affordable"/> greys the Repair button + reddens the
+        /// cost when the player cannot pay.
+        /// </summary>
+        public void ShowRepairPrompt(string subtitle, int crystalCost, bool affordable)
+        {
+            if (_repairPrompt == null) return;
+
+            if (_repairPromptSubtitle != null)
+                _repairPromptSubtitle.text = subtitle ?? string.Empty;
+
+            if (_repairPromptCost != null)
+            {
+                _repairPromptCost.text = Mathf.Max(0, crystalCost).ToString();
+                _repairPromptCost.EnableInClassList(RepairCostUnaffordableClass, !affordable);
+            }
+
+            if (_repairPromptConfirm != null)
+                _repairPromptConfirm.SetEnabled(affordable);
+
+            _repairPrompt.style.display = DisplayStyle.Flex;
+        }
+
+        /// <summary>Hides the repair-confirm prompt.</summary>
+        public void HideRepairPrompt()
+        {
+            if (_repairPrompt != null)
+                _repairPrompt.style.display = DisplayStyle.None;
+        }
+
+        /// <summary>True while the repair-confirm prompt is on screen.</summary>
+        public bool IsRepairPromptVisible =>
+            _repairPrompt != null && _repairPrompt.style.display == DisplayStyle.Flex;
+
+        /// <summary>
+        /// Shows a brief repair-feedback toast (success or insufficient-funds).
+        /// <paramref name="isError"/> flips the toast to the red error look. The
+        /// toast auto-hides after <c>_repairToastSeconds</c>. An empty / null
+        /// message hides the toast immediately.
+        /// </summary>
+        public void ShowRepairFeedback(string message, bool isError)
+        {
+            if (_repairToast == null) return;
+
+            if (string.IsNullOrEmpty(message))
+            {
+                _repairToast.text = string.Empty;
+                _repairToast.style.display = DisplayStyle.None;
+                _repairToastHideAt = -1f;
+                return;
+            }
+
+            _repairToast.text = message;
+            _repairToast.EnableInClassList(RepairToastErrorClass, isError);
+            _repairToast.style.display = DisplayStyle.Flex;
+            _repairToastHideAt = Time.unscaledTime + _repairToastSeconds;
+        }
+
+        // =====================================================================
         //  Internals
         // =====================================================================
 
@@ -347,6 +534,19 @@ namespace DeNelle.HUD
         private void OnBuildClicked()
         {
             BuildRequested?.Invoke();
+        }
+
+        /// <summary>Forwards the repair-prompt Repair button to RepairConfirmRequested.</summary>
+        private void OnRepairConfirmClicked()
+        {
+            RepairConfirmRequested?.Invoke();
+        }
+
+        /// <summary>Forwards the repair-prompt Cancel button to RepairCancelRequested.</summary>
+        private void OnRepairCancelClicked()
+        {
+            HideRepairPrompt();
+            RepairCancelRequested?.Invoke();
         }
 
         /// <summary>Sets a bar fill's width as a percentage (0..1) of its track.</summary>
@@ -382,6 +582,15 @@ namespace DeNelle.HUD
 //                                (int)slot, hero.CooldownRemaining(slot), <ability cooldown>);
 //                            and hud.SetMana(hero.Mana, hero.MaxMana);
 //
-// The HUD holds no timers — the integrator drives it. See docs/port-notes/
-// hud-module.md.
+//   4. Wall-repair prompt (Workstream B):
+//        - WallRepairController raises PromptShown / PromptHidden / FeedbackShown;
+//          wire those to hud.ShowRepairPrompt / hud.HideRepairPrompt /
+//          hud.ShowRepairFeedback.
+//        - hud.RepairConfirmRequested -> WallRepairController.ConfirmRepair();
+//          hud.RepairCancelRequested  -> WallRepairController.CancelRepair().
+//        The cross-module wiring is done by Assets/Editor/WallRepairSceneSetup.cs
+//        (the HUD asmdef cannot reference DeNelle.Village).
+//
+// The HUD holds one short timer for the repair-feedback toast auto-hide; every
+// other readout is integrator-driven. See docs/port-notes/hud-module.md.
 // =============================================================================

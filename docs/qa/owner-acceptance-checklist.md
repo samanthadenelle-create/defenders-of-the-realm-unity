@@ -5,31 +5,27 @@ spec Part 9 gates. State: **DONE / PARTIAL / GAP / IN PROGRESS**.
 
 ---
 
-## Prioritization (recommended — owner to confirm)
+## Prioritization — owner decision (2026-05-19)
 
-The 8-week spec (Part 9) targets a viable v2 **foundation**, not a
-feature-complete game. Recommended split of everything below:
+The owner confirmed these features were **always part of the design** — they
+are in scope for the polished Solana Foundation grant submission, not deferred.
+Effort runs on the autonomous-agent timescale (code + regression + QA per
+feature, ~1 hr ceiling each), not calendar days — see `grant-submission-goal`.
 
-**WEEK 8 — finish the foundation (critical path):**
-- Scene-wire the new modules (HUD, audio, settings/pause, onboarding, dev panel)
-- The 7 High bugs + the regression-suite repair
-- The APK / exe build + the 48-step UAT playthrough
-- Small fold-ins if time: force-field tutorial beat, camera-angle tune,
-  countdown styling, lantern oil readout
+**IN SCOPE — building now, 4 parallel workstreams:**
+- **A** — Intro flow (hero-select + pet-select screens), difficulty system
+  (Easy/Normal/Hard), force-field tutorial beat
+- **B** — Player wall-repair mechanic, between-wave countdown styling
+- **C** — Dungeon crafting system, lantern oil/duration HUD readout
+- **D** — Ambient townsfolk NPCs + dialogue, camera-angle tune
 
-**v2.1 — post-foundation features (the recent requests):**
-- Hero-select + pet-select screens
-- Difficulty system (Easy / Normal / Hard)
-- Player wall-repair mechanic
-- Townsfolk NPCs + dialogue
-- Dungeon crafting system
-- Weapon selection + upgrades
-- Voiced tutorial
-- Live-ops / admin backend; real Solana SDK integration
-- Unique boss models; exterior-wilderness polish
-
-The recent requests are real and good — but they are v2.1 *features*, not
-foundation work. Cramming them into Week 8 risks the acceptance gate.
+**Still v2.1 / next-build (genuine external blockers, not scope cuts):**
+- Weapon selection + upgrades — owner-scoped to v2.1 earlier; a multi-hour
+  per-weapon-animation content effort (`docs/roadmap/next-build.md`).
+- Voiced tutorial — hard-blocked on VO audio assets (none in project; cannot
+  be produced autonomously). The text tutorial ships complete.
+- Live-ops / admin backend; real Solana SDK; unique boss models;
+  exterior-wilderness polish.
 
 ---
 

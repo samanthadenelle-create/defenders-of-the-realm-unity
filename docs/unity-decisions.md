@@ -92,3 +92,33 @@ Built in parallel by scoped agents; slice detail in `docs/port-notes/week5-*.md`
 | Date | Decision | Reason | Reversible? |
 |------|----------|--------|-------------|
 | 2026-05-19 | The owner-supplied Black Dragon (a `.unitypackage`) is added as an apex flying boss — `DragonBoss.cs` + `Boss_Dragon.prefab` + `Dragon.controller`. Owner-ratified name: **"Syndrath the Devourer"** (overrides the agent's placeholder "Vael, the Ash-Wing"). Placement = a special apex village wave-boss above the Necromancer. | The owner pulled the asset in and wants a flying dragon boss; the enemy codex flagged the bestiary as having no true monster. The dragon's `.blend` sibling (BGE Dragon) was rejected — its export carried a 34k-unit environment plane and no animations. | Yes — the name is one display string; the boss is self-contained. |
+
+## Grant-polish feature pass — 2026-05-19
+
+Four scoped agents built, in parallel, the owner-confirmed feature set for the
+Solana Foundation grant submission (`docs/qa/owner-acceptance-checklist.md` —
+"owner decision 2026-05-19"): **A** intro flow + difficulty, **B** wall-repair +
+countdown, **C** dungeon crafting + oil HUD, **D** townsfolk + camera. File
+ownership was partitioned across the agents so they did not collide; all four
+workstreams compile clean together (0 errors) and the five scene builders
+(village / wall-repair / intro / dungeon / battle) re-ran via `GrantPolishBuilder`.
+
+| Date | Decision | Reason | Reversible? |
+|------|----------|--------|-------------|
+| 2026-05-19 | Difficulty (Easy/Normal/Hard) scales the between-wave countdown by a multiplier (2.0× / 1.0× / 0.6×) over `WaveDef.CountdownSeconds`; reference base 300 s → Easy 10 / Normal 5 / Hard 3 min | Owner spec; a multiplier keeps per-wave values authored once with difficulty a single setting | Yes — tune in `DifficultyTuning` |
+| 2026-05-19 | Hero presentation data lives in C# (`HeroCatalog`), not a `heroes.json` | Heroes are a code enum (`HeroClass`) with no content file; only display copy is externalised to en.json | Yes |
+| 2026-05-19 | `PetSelectController` writes `GameState.StarterPetId` directly + `Save()` (no `ChooseStarterPet` mutator — hero has `ChooseHero`, pet had none) | Functionally equivalent; optional follow-up = add a mutator that raises `PetsChanged` | Yes |
+| 2026-05-19 | Hero/pet-select screens self-skip to the Village when the save already records that choice | A returning player is never re-shown the intro flow | Yes |
+| 2026-05-19 | The wall-repair confirm prompt is **modal** (taps route only to Confirm/Cancel while open) rather than plain tap-to-confirm | UI-Toolkit-vs-`Update` event ordering is non-deterministic; a modal is deterministic | Yes |
+| 2026-05-19 | The wall-repair → HUD link uses a reflection bridge (`WallRepairHudBridge`) | The `RepairPromptInfo` struct payload is not a valid persistent-UnityEvent arg; matches the project's established reflection-based cross-module wiring | Yes |
+| 2026-05-19 | `TownsfolkBubble` is a NEW class — a verbatim behaviour copy of `WandererBubble` (which lives in `DeNelle.Dungeons`) | Module isolation forbids `DeNelle.Village` referencing `DeNelle.Dungeons` | Yes — fold into a shared Core util later |
+| 2026-05-19 | The dungeon crafting pedestal sits in the Hidden Vault (where the placeholder primitive was), not the spec's Crypt light-puzzle vault; ingredients auto-collect on walk-over | Keeps all other dungeon content in place; auto-collect aids legibility (the pedestal still needs an explicit interact) | Yes |
+| 2026-05-19 | Village camera retuned to pos (0,51,-37) / pitch 55° / FOV 48; battle camera to (0,4.1,-6.6) / pitch 22° / FOV 46 | Tighter, better-composed framing for the grant demo | Yes — a values pass |
+
+### Flags raised — grant-polish pass
+
+- **2026-05-19 — Six UXML header comments had invalid XML (`--` dash rows) — FIXED.** The build agents wrote decorative `------` divider rows inside `<!-- … -->` header comments; XML forbids `--` inside a comment, so Unity rejected all six `.uxml` files on import (the C# still compiled). The dash rows were replaced with `=` rows and the import re-verified clean. Lesson for future agent UI work: no `--` inside XML/UXML comments.
+- **2026-05-19 — Localization strings pending consolidation.** Workstreams B (wall-repair) and C (crafting) kept new user-facing strings as `// LOCALIZE:`-marked constants / in `crafting-recipes.json` rather than editing the shared `en.json` (avoiding a parallel-edit collision). They display correctly in English; a consolidation pass should fold them into `en.json` for multi-language. Keys are in `WallRepairStrings.cs` and `crafting-recipes.json`. **Follow-up, not a defect.**
+- **2026-05-19 — `DungeonSceneBuilder` mirrors `crafting-recipes.json` ingredient placements as a literal editor table** (the Editor asmdef cannot read the typed runtime JSON shape — the same constraint the lore-stone / checkpoint builders work under). The JSON stays the runtime source of truth; the builder table only sets editor placement and must be kept in sync.
+- **2026-05-19 — "Player" tag absent.** The townsfolk NPC hero-fallback is name-based ("Hero…"), not `FindGameObjectWithTag("Player")` (which would throw — the tag is undefined in `TagManager.asset`). Primary path is the explicit `SetHero` wire from the builder.
+- **2026-05-19 — Grant-polish features built + compile-verified, not yet play-tested.** All four workstreams compile and the scenes build; runtime QA (the checklist's per-feature QA steps) is the next pass.

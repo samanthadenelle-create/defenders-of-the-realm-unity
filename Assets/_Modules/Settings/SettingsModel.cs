@@ -153,6 +153,26 @@ namespace DeNelle.Settings
         }
 
         // =====================================================================
+        //  Difficulty — routed through GameState (#23, settingsSlice)
+        // =====================================================================
+
+        /// <summary>
+        /// Gameplay difficulty (Easy / Normal / Hard). Backed by the first-class
+        /// <see cref="GameState.Difficulty"/> save field (#23) — the setter routes
+        /// through <see cref="GameStateService.SetDifficulty"/> so the choice lands
+        /// in the canonical <c>dotr-save</c> blob and survives a relaunch.
+        ///
+        /// Difficulty currently controls the WaveManager between-wave countdown
+        /// (see <see cref="DifficultyTuning"/>): Easy ~10 min, Normal ~5 min,
+        /// Hard ~3 min between waves. Fresh-save default = Normal.
+        /// </summary>
+        public static Difficulty Difficulty
+        {
+            get => GameStateService.Instance?.State.Difficulty ?? Difficulty.Normal;
+            set => GameStateService.Instance?.SetDifficulty(value);
+        }
+
+        // =====================================================================
         //  Quality tier — PlayerPrefs (no GameState field)
         // =====================================================================
 
@@ -263,6 +283,10 @@ namespace DeNelle.Settings
             Muted = false;
             Quality = TierFromName(SeekerBootstrap.SelectedTier);
             ScreenShake = DefaultScreenShake;
+            // Difficulty resets to the fresh-save default (Normal). Unlike a New
+            // Game (GameStateService.Reset keeps Difficulty as a preference),
+            // an explicit "Reset to defaults" on the options screen restores it.
+            Difficulty = Difficulty.Normal;
             ApplyAll();
         }
 

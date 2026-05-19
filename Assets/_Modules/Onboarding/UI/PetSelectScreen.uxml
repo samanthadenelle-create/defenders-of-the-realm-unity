@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  PetSelectScreen.uxml — the pet-select screen (intro flow).
+  ========================================================================
+  A sibling screen right after hero-select: the player picks one of the
+  three starter Wardens (Aether Sprite / Flame Pup / Ice Wolf). The pet
+  definitions are read from the canonical pets.json. On confirm the choice
+  is written to GameState (StarterPetId) and the flow routes to the Village.
+
+  Reuses the hero-select scaffold — same SelectScreen.uss, same element
+  layout. PetSelectController queries these elements by name:
+    pet-select-root      (VisualElement — the full-screen backdrop)
+    pet-select-title     (Label — filled from en.json petSelect.title)
+    pet-select-subtitle  (Label — filled from en.json petSelect.subtitle)
+    pet-card-row         (VisualElement — the three pet cards built at runtime)
+    pet-select-confirm   (Button — disabled until a pet is picked)
+
+  Text nodes are empty; PetSelectController fills the copy from en.json at
+  runtime (port-spec Part 4). The pet cards are built once at runtime by the
+  controller into "pet-card-row" — this UXML supplies only the row shell.
+-->
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <Style src="SelectScreen.uss" />
+
+    <ui:VisualElement name="pet-select-root" class="select-root">
+
+        <!-- Header — title + subtitle, filled from en.json at runtime. -->
+        <ui:VisualElement name="select-header" class="select-header">
+            <ui:Label name="pet-select-title" text="" class="select-title" />
+            <ui:Label name="pet-select-subtitle" text="" class="select-subtitle" />
+        </ui:VisualElement>
+
+        <!-- The three pet cards — built at runtime by PetSelectController. -->
+        <ui:VisualElement name="pet-card-row" class="select-card-row" />
+
+        <!-- Footer — the confirm CTA, disabled until a pet is chosen. -->
+        <ui:VisualElement name="select-footer" class="select-footer">
+            <ui:Button name="pet-select-confirm" text="" class="select-confirm" />
+        </ui:VisualElement>
+
+    </ui:VisualElement>
+</ui:UXML>

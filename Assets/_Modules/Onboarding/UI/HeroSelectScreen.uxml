@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  HeroSelectScreen.uxml — the hero-select screen (intro flow).
+  ========================================================================
+  Shown between the Title scene's studio bumper and the Village: the player
+  picks one of three heroes — Mage / Knight / Ranger. On confirm the choice
+  is written to GameState (HeroClass) and the flow routes to pet-select.
+
+  HeroSelectController queries these elements by name (the "name" attribute
+  is the binding contract — do not rename without updating the controller):
+    hero-select-root      (VisualElement — the full-screen backdrop)
+    hero-select-title     (Label — filled from en.json heroSelect.title)
+    hero-select-subtitle  (Label — filled from en.json heroSelect.subtitle)
+    hero-card-row         (VisualElement — the three hero cards built at runtime)
+    hero-select-confirm   (Button — disabled until a hero is picked)
+
+  Every text node is intentionally empty; HeroSelectController fills the copy
+  from en.json at runtime so no canon string is baked into a serialized asset
+  (port-spec Part 4). The three hero cards are built once at runtime by the
+  controller into "hero-card-row" — this UXML supplies only the row shell.
+-->
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <Style src="SelectScreen.uss" />
+
+    <ui:VisualElement name="hero-select-root" class="select-root">
+
+        <!-- Header — title + subtitle, filled from en.json at runtime. -->
+        <ui:VisualElement name="select-header" class="select-header">
+            <ui:Label name="hero-select-title" text="" class="select-title" />
+            <ui:Label name="hero-select-subtitle" text="" class="select-subtitle" />
+        </ui:VisualElement>
+
+        <!-- The three hero cards — built at runtime by HeroSelectController. -->
+        <ui:VisualElement name="hero-card-row" class="select-card-row" />
+
+        <!-- Footer — the confirm CTA, disabled until a hero is chosen. -->
+        <ui:VisualElement name="select-footer" class="select-footer">
+            <ui:Button name="hero-select-confirm" text="" class="select-confirm" />
+        </ui:VisualElement>
+
+    </ui:VisualElement>
+</ui:UXML>

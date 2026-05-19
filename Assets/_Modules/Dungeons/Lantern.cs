@@ -133,6 +133,22 @@ namespace DeNelle.Dungeons
         /// <summary>True when oil has dropped into the warning band.</summary>
         public bool IsLowOil => OilFraction <= _lowOilFraction;
 
+        /// <summary>
+        /// The oil fraction at or below which the lantern reads as "low oil" —
+        /// the warning band the HUD oil meter tints amber/red against.
+        /// </summary>
+        public float LowOilFraction => _lowOilFraction;
+
+        /// <summary>
+        /// Estimated seconds of light left before the flask runs dry, at the
+        /// current drain rate (a Tincture does not change the drain rate, only
+        /// reach). Returns <see cref="float.PositiveInfinity"/> when the lantern
+        /// is not draining — e.g. before a run starts. The HUD reads this for the
+        /// duration readout (owner acceptance checklist: make the duration legible).
+        /// </summary>
+        public float EstimatedSecondsRemaining =>
+            _oilDrainPerSec > 0f ? _oil / _oilDrainPerSec : float.PositiveInfinity;
+
         /// <summary>True while the Apothecary boss's Tincture is shrinking the reach.</summary>
         public bool IsTinctureActive => _tinctureRemaining > 0f;
 

@@ -1,0 +1,224 @@
+/*
+ * CraftingPanel.uss — styling for the dungeon crafting panel.
+ * ----------------------------------------------------------------------
+ * Matches the project's UI Toolkit visual language (VillageHud.uss /
+ * BattleHUD.uss): a dark Heart-Forest palette, violet for the crafting
+ * accent (the shard tone), amber for the call-to-action, mint-green for a
+ * satisfied ingredient, muted greys for body copy. Values are inline — the
+ * project Theme is C#-driven, not USS variables — the established
+ * VillageHud / BattleHUD convention.
+ *
+ * USS class names the controller toggles at runtime:
+ *   crafting-ingredient-cell--have   (ingredient count satisfied — green)
+ *   crafting-ingredient-cell--need   (ingredient still short — amber)
+ *   crafting-craft-button--ready     (recipe craftable — primary glows)
+ *   crafting-result-label--ready     (ready-to-craft line — green)
+ *   crafting-result-label--done      (crafted line — gold)
+ */
+
+/* ── Root — full-screen dimming scrim, modal centred ────────────────── */
+.crafting-panel-root {
+    flex-grow: 1;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(8, 6, 14, 0.72);
+}
+
+/* ── The modal card ─────────────────────────────────────────────────── */
+.crafting-card {
+    width: 460px;
+    padding: 24px 26px;
+    border-radius: 16px;
+    background-color: rgba(18, 14, 28, 0.98);
+    border-width: 1px;
+    border-color: rgba(155, 108, 255, 0.55);
+}
+
+/* ── Header ─────────────────────────────────────────────────────────── */
+.crafting-eyebrow {
+    font-size: 11px;
+    -unity-font-style: bold;
+    letter-spacing: 2px;
+    color: rgb(155, 108, 255);
+    margin-bottom: 4px;
+}
+
+.crafting-recipe-name {
+    font-size: 26px;
+    -unity-font-style: bold;
+    color: rgb(244, 240, 252);
+    margin-bottom: 4px;
+}
+
+.crafting-recipe-desc {
+    font-size: 13px;
+    color: rgb(168, 160, 188);
+    white-space: normal;
+    margin-bottom: 16px;
+}
+
+.crafting-section-heading {
+    font-size: 12px;
+    -unity-font-style: bold;
+    letter-spacing: 1px;
+    color: rgb(150, 142, 170);
+    margin-bottom: 8px;
+}
+
+/* ── Ingredient list + cells ────────────────────────────────────────── */
+.crafting-ingredient-list {
+    flex-direction: column;
+    margin-bottom: 16px;
+}
+
+.crafting-ingredient-cell {
+    flex-direction: row;
+    align-items: center;
+    padding: 8px 10px;
+    margin-bottom: 6px;
+    border-radius: 10px;
+    background-color: rgba(30, 24, 44, 0.95);
+    border-width: 1px;
+    border-color: rgba(80, 70, 104, 0.6);
+}
+
+/* Satisfied — a calm mint-green edge + tick. */
+.crafting-ingredient-cell--have {
+    border-color: rgba(74, 200, 140, 0.85);
+    background-color: rgba(26, 40, 32, 0.95);
+}
+
+/* Still short — an amber edge nudging the player to gather more. */
+.crafting-ingredient-cell--need {
+    border-color: rgba(224, 158, 74, 0.7);
+}
+
+.crafting-ingredient-glyph {
+    width: 34px;
+    height: 34px;
+    -unity-text-align: middle-center;
+    font-size: 20px;
+    -unity-font-style: bold;
+    border-radius: 8px;
+    color: rgb(20, 16, 28);
+    background-color: rgb(201, 168, 106);
+    margin-right: 10px;
+}
+
+.crafting-ingredient-name {
+    flex-grow: 1;
+    font-size: 14px;
+    color: rgb(228, 222, 240);
+}
+
+.crafting-ingredient-count {
+    font-size: 15px;
+    -unity-font-style: bold;
+    color: rgb(168, 160, 188);
+    margin-right: 8px;
+}
+
+/* Count text turns green once the held amount meets the need. */
+.crafting-ingredient-count--met {
+    color: rgb(96, 214, 152);
+}
+
+.crafting-ingredient-tick {
+    width: 22px;
+    font-size: 16px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+    color: rgb(96, 214, 152);
+}
+
+/* ── Result row ─────────────────────────────────────────────────────── */
+.crafting-result-row {
+    flex-direction: row;
+    align-items: center;
+    padding: 10px 12px;
+    margin-bottom: 18px;
+    border-radius: 12px;
+    background-color: rgba(30, 24, 44, 0.95);
+}
+
+.crafting-result-glyph {
+    width: 46px;
+    height: 46px;
+    -unity-text-align: middle-center;
+    font-size: 26px;
+    -unity-font-style: bold;
+    border-radius: 10px;
+    color: rgb(20, 16, 28);
+    background-color: rgb(120, 104, 150);
+    margin-right: 12px;
+}
+
+.crafting-result-label {
+    flex-grow: 1;
+    font-size: 14px;
+    -unity-font-style: bold;
+    color: rgb(168, 160, 188);
+    white-space: normal;
+}
+
+/* Ready to craft — the line + the result glyph go warm amber. */
+.crafting-result-label--ready {
+    color: rgb(247, 201, 122);
+}
+
+/* Crafted — the line + result glyph settle to gold. */
+.crafting-result-label--done {
+    color: rgb(255, 207, 107);
+}
+
+/* ── Buttons ────────────────────────────────────────────────────────── */
+.crafting-button-row {
+    flex-direction: row;
+    justify-content: flex-end;
+}
+
+.crafting-button {
+    height: 40px;
+    min-width: 110px;
+    padding: 0 18px;
+    margin-left: 10px;
+    border-radius: 10px;
+    font-size: 14px;
+    -unity-font-style: bold;
+    border-width: 0;
+}
+
+.crafting-button--ghost {
+    background-color: rgba(60, 52, 78, 0.95);
+    color: rgb(206, 200, 220);
+}
+
+.crafting-button--ghost:hover {
+    background-color: rgba(76, 66, 98, 0.95);
+}
+
+/* Primary Craft button — muted while not craftable, glows amber when ready. */
+.crafting-button--primary {
+    background-color: rgba(70, 58, 96, 0.95);
+    color: rgb(150, 142, 170);
+}
+
+.crafting-button--primary:disabled {
+    background-color: rgba(50, 44, 66, 0.85);
+    color: rgb(110, 104, 128);
+    opacity: 0.9;
+}
+
+.crafting-craft-button--ready {
+    background-color: rgb(232, 168, 74);
+    color: rgb(28, 20, 10);
+}
+
+.crafting-craft-button--ready:hover {
+    background-color: rgb(244, 182, 92);
+}

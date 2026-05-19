@@ -21,7 +21,8 @@
 //
 //   Connect Wallet button — Week-1 stub: logs and no-ops (the real Solana flow
 //                            is the Week-7 Wallet module).
-//   Start button          — loads the Village scene via SceneRouter.
+//   Start button          — enters the intro flow via SceneRouter.GoHeroSelect
+//                            (Title -> HeroSelect -> PetSelect -> Village).
 //
 // async UniTask for the arrival flow — never async void (port-spec Part 3).
 // =============================================================================
@@ -151,10 +152,14 @@ namespace DeNelle.Onboarding
             if (_connectWalletButton != null) _connectWalletButton.clicked -= OnConnectWalletClicked;
         }
 
-        // ── Start — go to the Village scene ──────────────────────────────────
+        // ── Start — enter the intro flow (hero-select -> pet-select -> village) ─
         private void OnStartClicked()
         {
-            SceneRouter.GoVillage();
+            // The intro flow runs Title -> HeroSelect -> PetSelect -> Village.
+            // HeroSelectController self-skips to the village for a returning
+            // player whose save already records a hero + starter pet, so it is
+            // always safe to route here.
+            SceneRouter.GoHeroSelect();
         }
 
         // ── Connect Wallet — Week-1 stub (the real flow is the Week-7 module) ─

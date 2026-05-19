@@ -9,6 +9,12 @@ EditorBuildSettings:
     path: Assets/Scenes/Title.unity
     guid: ad59cee2683d47449934f2eebf67519d
   - enabled: 1
+    path: Assets/Scenes/HeroSelect.unity
+    guid: 6d72b18d58b52b540b723a87795d7b2e
+  - enabled: 1
+    path: Assets/Scenes/PetSelect.unity
+    guid: 9be1f8e3bcdf63b43b3c23fd1c357fd9
+  - enabled: 1
     path: Assets/Scenes/Village.unity
     guid: b1e088b2594ac9745983dd1508b3913d
   - enabled: 1

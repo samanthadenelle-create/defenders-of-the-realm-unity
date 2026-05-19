@@ -144,6 +144,25 @@ namespace DeNelle.Editor
         private const string NsPets = "DeNelle.Pets";
         private const string TypePetDeployer = NsPets + ".PetDeployer";
 
+        // ── Ambient-townsfolk type names (Workstream D, resolved by reflection) ─
+        private const string TypeAmbientNpc = NsVillage + ".AmbientNPC";
+        private const string TypeTownsfolkBubble = NsVillage + ".TownsfolkBubble";
+        private const string TypeTownsfolkController = NsVillage + ".TownsfolkController";
+
+        // ── KayKit civilian-character model paths (ambient townsfolk) ────────
+        // Mystery Monthly Series 5 — the catalog's named civilian stand-ins.
+        // These packs keep their FBX directly under characters/ (no fbx(unity)
+        // subfolder); LoadModel resolves the .fbx path directly.
+        private const string MysterySeries5Root =
+            "Assets/Models/KayKit/KayKit Mystery Monthly Series 5/";
+        private static readonly string[] TownsfolkModelPaths =
+        {
+            MysterySeries5Root + "10 - April 2025 - Protagonists/characters/Protagonist_A.fbx",
+            MysterySeries5Root + "10 - April 2025 - Protagonists/characters/Protagonist_B.fbx",
+            MysterySeries5Root + "6 - December 2024 - Helpers/characters/Helper_A.fbx",
+            MysterySeries5Root + "6 - December 2024 - Helpers/characters/Helper_B.fbx",
+        };
+
         // ── Week-4 asset paths ───────────────────────────────────────────────
         /// <summary>KayKit Hollow-Walker skeleton mesh (the Week-4 wave enemy).</summary>
         private const string SkeletonMinionPath =
@@ -1291,9 +1310,27 @@ namespace DeNelle.Editor
             camera.backgroundColor = new Color(0.74f, 0.66f, 0.72f);
             camera.farClipPlane = 600f;
             cameraGo.tag = "MainCamera";
-            // Lifted, pitched-down framing taking in the whole shaped town.
-            cameraGo.transform.position = new Vector3(0f, 46f, -58f);
-            cameraGo.transform.rotation = Quaternion.Euler(38f, 0f, 0f);
+
+            // ── Camera-angle tune pass (Workstream D, 2026-05-19) ────────────
+            // Goal: a tower-defense "overhead-ish" framing that takes in the
+            // whole walled town (interior ±28 X / ±21 Z) AND reads the new
+            // ambient townsfolk on the plaza as recognisable little people.
+            //
+            // The previous frame (0,46,-58 @ 38deg, default 60deg FOV) sat far
+            // back and shallow — the town read flat and the south wall ate the
+            // bottom third of the screen as empty foreground. The tune (values
+            // worked against the interior extents):
+            //   • steeper pitch — 55deg, a cleaner top-down tower-defense read
+            //     of the wall ring + the four gates the waves attack;
+            //   • lower + closer — (0,51,-37): the frame centre lands on the
+            //     Heart/plaza (ground hit ~Z=-1) so the lively town core fills
+            //     the frame and townsfolk are large enough to register;
+            //   • 48deg FOV — the bottom edge sits right on the south wall
+            //     (~Z=-27) so no foreground is wasted; the dawn pink-violet sky
+            //     fills the strip above the north wall, an intentional backdrop.
+            camera.fieldOfView = 48f;
+            cameraGo.transform.position = new Vector3(0f, 51f, -37f);
+            cameraGo.transform.rotation = Quaternion.Euler(55f, 0f, 0f);
             cameraGo.AddComponent<AudioListener>();
         }
 
@@ -1837,7 +1874,7 @@ namespace DeNelle.Editor
             BuildWaveManager(systemsRoot, heart, enemyPrefab);
 
             // 5) HeroAbilities — on a hero rig stood near the Heart.
-            BuildHero(systemsRoot, heart, heartPos);
+            GameObject hero = BuildHero(systemsRoot, heart, heartPos);
 
             // 6) PetDeployer — auto-deploys the three starter pets on Start().
             BuildPetDeployer(systemsRoot, heartPos);
@@ -1845,8 +1882,14 @@ namespace DeNelle.Editor
             // 7) BuildMenu — a UIDocument GameObject with the build-menu UI.
             BuildBuildMenu(systemsRoot, buildingPrefabs);
 
+            // 8) Ambient townsfolk — wandering / idle KayKit villagers with
+            //    engage-on-approach word bubbles. They watch the hero rig built
+            //    in step 5 for the proximity check (Workstream D).
+            int townsfolk = BuildTownsfolk(root.transform, heartPos, hero);
+
             Debug.Log("[VillageSceneBuilder] Week-4 gameplay systems wired -- " +
                       "WaveManager + HeroAbilities + PetDeployer + BuildMenu, " +
+                      $"{townsfolk} ambient townsfolk, " +
                       $"enemy prefab {(enemyPrefab != null ? "OK" : "MISSING")}, " +
                       $"force-field material {(forceFieldMat != null ? "OK" : "MISSING")}.");
         }
@@ -2227,9 +2270,10 @@ namespace DeNelle.Editor
         /// <c>HeroAbilities</c> component, wires the Heart ref (so Healing
         /// Beacon can heal) and sets the enemy LayerMask (week4-hero-pets-gate.md
         /// item 3 + item 2). A capsule visual stands in until the KayKit hero
-        /// mesh is imported.
+        /// mesh is imported. Returns the hero GameObject so the townsfolk
+        /// system can watch its transform for proximity dialogue.
         /// </summary>
-        private static void BuildHero(Transform parent, Component heart, Vector3 heartPos)
+        private static GameObject BuildHero(Transform parent, Component heart, Vector3 heartPos)
         {
             var go = new GameObject("Hero (Blaise)");
             go.transform.SetParent(parent, false);
@@ -2245,7 +2289,7 @@ namespace DeNelle.Editor
             ApplyColor(body, HexColor("9d6fff"));
 
             var comp = AddVillageComponent(go, TypeHeroAbilities);
-            if (comp == null) return;
+            if (comp == null) return go;
 
             var so = new SerializedObject(comp);
             // _heart — Healing Beacon (E) restores Heart HP.
@@ -2253,6 +2297,199 @@ namespace DeNelle.Editor
             // _enemyMask — the ability hit-tests sweep only the Enemy layer.
             SetLayerMaskField(so, "_enemyMask", 1 << EnemyLayer);
             so.ApplyModifiedPropertiesWithoutUndo();
+            return go;
+        }
+
+        // =====================================================================
+        //  Ambient townsfolk (Workstream D) — wandering / idle KayKit villagers
+        // =====================================================================
+
+        /// <summary>
+        /// One townsperson placement: a world spot, an archetype, whether it
+        /// wanders, and a facing yaw for idlers.
+        /// </summary>
+        private struct TownsfolkSpot
+        {
+            public Vector3 Pos;
+            public int Archetype;   // TownsfolkDialogue.Archetype ordinal
+            public bool Wander;
+            public float FacingY;
+        }
+
+        /// <summary>
+        /// Populates the village with ambient townsfolk — KayKit civilian models
+        /// carrying an <see cref="TypeAmbientNpc"/> component and a self-building
+        /// <see cref="TypeTownsfolkBubble"/> word bubble. Some wander the baked
+        /// NavMesh, some stand idle at authored spots. A <see cref="TypeTownsfolkController"/>
+        /// hands every villager the Keeper transform for the proximity dialogue.
+        ///
+        /// <para>All townsfolk types live in DeNelle.Village and are wired by
+        /// full-name reflection — the Editor asmdef cannot reference that module.
+        /// Returns the count placed.</para>
+        /// </summary>
+        /// <param name="root">The VillageRoot transform.</param>
+        /// <param name="heartPos">The Heart's world position — the plaza centre.</param>
+        /// <param name="hero">The hero rig the townsfolk watch (may be null).</param>
+        private static int BuildTownsfolk(Transform root, Vector3 heartPos, GameObject hero)
+        {
+            var npcType = FindType(TypeAmbientNpc);
+            var bubbleType = FindType(TypeTownsfolkBubble);
+            var controllerType = FindType(TypeTownsfolkController);
+            if (npcType == null || bubbleType == null)
+            {
+                Debug.LogError("[VillageSceneBuilder] DeNelle.Village.AmbientNPC / TownsfolkBubble " +
+                               "not found -- is the DeNelle.Village assembly compiled? " +
+                               "Ambient townsfolk skipped.");
+                return 0;
+            }
+
+            var townsfolkRoot = NewChild(root, "Townsfolk");
+
+            // The TownsfolkController coordinator — distributes the hero ref.
+            Component controller = null;
+            if (controllerType != null)
+                controller = townsfolkRoot.gameObject.AddComponent(controllerType);
+            else
+                Debug.LogWarning("[VillageSceneBuilder] TownsfolkController type not found -- " +
+                                 "townsfolk fall back to self-resolving the hero.");
+
+            // ── Authored placements ──────────────────────────────────────────
+            // Spots sit on the plaza / road network (on the baked NavMesh) and
+            // around the named building quarters, so the village reads alive
+            // from the camera. Archetype ordinals follow TownsfolkDialogue:
+            //   0 Trader · 1 Villager · 2 Guard · 3 Child · 4 Elder
+            // X grows east, Z grows north; the plaza is centred on the Heart.
+            var spots = new[]
+            {
+                // Plaza — the lively heart of the town.
+                new TownsfolkSpot { Pos = heartPos + new Vector3( 4f, 0f,  5f), Archetype = 1, Wander = true,  FacingY = 200f },
+                new TownsfolkSpot { Pos = heartPos + new Vector3(-5f, 0f,  4f), Archetype = 3, Wander = true,  FacingY =  20f },
+                new TownsfolkSpot { Pos = heartPos + new Vector3( 2f, 0f, -6f), Archetype = 4, Wander = false, FacingY =   0f },
+                // Market quarter (the church / market / tavern cluster, ~S-SW).
+                new TownsfolkSpot { Pos = new Vector3(-10f, 0f, -7f), Archetype = 0, Wander = false, FacingY =  90f },
+                new TownsfolkSpot { Pos = new Vector3( -7f, 0f, -9f), Archetype = 1, Wander = true,  FacingY = 135f },
+                // Residential cluster (SW) — everyday village life.
+                new TownsfolkSpot { Pos = new Vector3(-14f, 0f,  6f), Archetype = 1, Wander = true,  FacingY = 300f },
+                new TownsfolkSpot { Pos = new Vector3(-12f, 0f,  9f), Archetype = 3, Wander = true,  FacingY = 250f },
+                // Workshop quarter (NE) — a trader near the blacksmith.
+                new TownsfolkSpot { Pos = new Vector3( 12f, 0f, 10f), Archetype = 0, Wander = false, FacingY = 225f },
+                // Off-duty guards near the N-S spine toward the gates.
+                new TownsfolkSpot { Pos = new Vector3(  1f, 0f, 14f), Archetype = 2, Wander = true,  FacingY = 180f },
+                new TownsfolkSpot { Pos = new Vector3( -2f, 0f,-14f), Archetype = 2, Wander = false, FacingY =   0f },
+            };
+
+            int placed = 0;
+            for (int i = 0; i < spots.Length; i++)
+            {
+                if (BuildOneTownsperson(townsfolkRoot, spots[i], i, npcType, bubbleType))
+                    placed++;
+            }
+
+            // Hand the hero transform to the controller (it broadcasts to every
+            // NPC on Start); the NPCs also self-resolve as a fallback.
+            if (controller != null && hero != null)
+                InvokeConfigure(controller, "SetHero", hero.transform);
+
+            Debug.Log($"[VillageSceneBuilder] Ambient townsfolk placed -- {placed}/{spots.Length} " +
+                      "villagers (wanderers + idlers) with engage-on-approach word bubbles.");
+            return placed;
+        }
+
+        /// <summary>
+        /// Builds a single ambient townsperson at <paramref name="spot"/>: a
+        /// KayKit civilian model (round-robin over the four catalog civilians),
+        /// an <c>AmbientNPC</c>, a <c>TownsfolkBubble</c> and — for a wanderer —
+        /// a NavMeshAgent. Returns true on success.
+        /// </summary>
+        private static bool BuildOneTownsperson(Transform parent, TownsfolkSpot spot,
+            int index, Type npcType, Type bubbleType)
+        {
+            var go = new GameObject($"Townsperson_{index:00}");
+            go.transform.SetParent(parent, false);
+            go.transform.position = spot.Pos;
+            go.transform.rotation = Quaternion.Euler(0f, spot.FacingY, 0f);
+
+            // KayKit civilian model — round-robin over Protagonist A/B + Helper
+            // A/B (the catalog's named townsfolk stand-ins). Placeholder capsule
+            // on a miss, matching the rest of the builder's fallback discipline.
+            //
+            // NOTE — InstantiateModel() force-assigns the shared MEDIEVAL HEX
+            // ATLAS material (correct for the Hexagon-pack buildings, wrong for
+            // a character). Townsfolk are instantiated directly here so the FBX
+            // importer's own character materials/textures are kept intact.
+            string modelPath = TownsfolkModelPaths[index % TownsfolkModelPaths.Length];
+            var model = LoadModel(modelPath);
+            GameObject visual;
+            if (model != null)
+            {
+                visual = (GameObject)PrefabUtility.InstantiatePrefab(model);
+                if (visual == null)
+                {
+                    visual = MakePlaceholderCube(
+                        $"{Path.GetFileName(modelPath)} -> ambient townsperson");
+                    model = null;   // fall through to the placeholder styling
+                }
+                else
+                {
+                    visual.name = model.name;
+                }
+            }
+            else
+            {
+                visual = MakePlaceholderCube(
+                    $"{Path.GetFileName(modelPath)} -> ambient townsperson");
+            }
+            visual.transform.SetParent(go.transform, false);
+            visual.transform.localPosition = Vector3.zero;
+            if (model == null)
+            {
+                // Placeholder body — a warm capsule so a missing model still
+                // reads as a person standing in the town.
+                visual.transform.localScale = new Vector3(0.55f, 0.95f, 0.55f);
+                visual.transform.localPosition = new Vector3(0f, 0.95f, 0f);
+                ApplyColor(visual, new Color(0.72f, 0.60f, 0.46f));
+            }
+            else
+            {
+                NormalizeProp(visual, 1.8f);   // size every civilian to ~human height
+            }
+            // The civilian mesh is decoration — its colliders must not block the
+            // hero's tap-to-move raycast or shadow a structure ahead.
+            StripColliders(visual);
+
+            // AmbientNPC — the wander / idle + proximity-dialogue behaviour.
+            var npc = go.AddComponent(npcType);
+
+            // A NavMeshAgent for wanderers so they roam the baked village mesh.
+            if (spot.Wander)
+            {
+                var agent = go.AddComponent<UnityEngine.AI.NavMeshAgent>();
+                agent.radius = 0.34f;
+                agent.height = 1.8f;
+                agent.baseOffset = 0f;
+                agent.speed = 1.6f;
+                agent.angularSpeed = 240f;
+                agent.acceleration = 12f;
+                agent.stoppingDistance = 0.2f;
+                agent.autoBraking = true;
+                agent.obstacleAvoidanceType =
+                    UnityEngine.AI.ObstacleAvoidanceType.LowQualityObstacleAvoidance;
+            }
+
+            // TownsfolkBubble — the self-building, billboarded word bubble.
+            var bubble = go.AddComponent(bubbleType);
+
+            // Wire the AmbientNPC's serialized fields + configure it.
+            var so = new SerializedObject(npc);
+            SetObjectField(so, "_bubble", bubble);
+            so.ApplyModifiedPropertiesWithoutUndo();
+
+            // Configure(archetype, wander, homeAnchor) — homeAnchor is the spot.
+            InvokeConfigure(npc, "Configure", spot.Archetype, spot.Wander, spot.Pos);
+            // SetBubble is belt-and-braces in case the serialized wire is skipped.
+            InvokeConfigure(npc, "SetBubble", bubble);
+
+            return true;
         }
 
         // =====================================================================

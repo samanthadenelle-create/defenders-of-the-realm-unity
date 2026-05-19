@@ -32,6 +32,7 @@
   "tutorial.steps.5": "When you are ready, begin a wave. Use Q to cast — your magic comes back when the Lantern allows.",
   "tutorial.steps.6": "Your Wardens fight beside you. Tap one to give them a station.",
   "tutorial.steps.7": "The Lantern remembers your kindness. Tend it well, Guardian.",
+  "tutorial.steps.forceField": "The walls hold a force-field of the Heart's own light — see it shimmer in the gates. It turns the Hollowed back while it shines. But every blow thins it, and a thinned field lets the dark slip through. Keep the walls and gates mended, and the light keeps its strength.",
 
   "gate.firstSeen": "The Heart's light parts for those it knows. Walk through, Keeper — but the Hollow Ones will press against it. Mend the gate as you mend the walls.",
   "gate.firstDestroyed": "The gate has fallen. They come through unhindered. Hold the inner ring and repair the field before the next dark.",
@@ -134,6 +135,23 @@
   "milestone.streak7Days": "Seven mornings tending the song. The old Keepers would have called you 'one of ours' by now.",
 
   "returningPlayer": "Avalon kept your hearth warm. Welcome back, Guardian.",
+
+  "heroSelect.title": "Choose Your Keeper",
+  "heroSelect.subtitle": "Three answer the Heart's call. Which hand will hold the lantern?",
+  "heroSelect.confirm": "Take Up the Watch",
+  "hero.mage.name": "The Mage",
+  "hero.mage.role": "Arcane Keeper",
+  "hero.mage.blurb": "Channels the Heart's own light into bolt and beacon. Frail of frame, but the dark fears nothing more than a lantern raised high.",
+  "hero.knight.name": "The Knight",
+  "hero.knight.role": "Shield of Avalon",
+  "hero.knight.blurb": "Plain steel and an unbroken vow. Where the Knight sets a shield, the Hollowed do not pass — and the walls hold a little longer.",
+  "hero.ranger.name": "The Ranger",
+  "hero.ranger.role": "Warden of the Wood",
+  "hero.ranger.blurb": "Looses a clean arrow long before the dark draws near. Reads the lanes, snares the swift, and turns a tide back arrow by arrow.",
+
+  "petSelect.title": "Choose Your First Warden",
+  "petSelect.subtitle": "A spirit will walk the watch beside you. Bond with one — it will know your kindness, and your battles.",
+  "petSelect.confirm": "Bond With This Warden",
 
   "elementBlurb.aether": "Aether. The Heart's own light, shared and reshared. Mends what the dark has frayed.",
   "elementBlurb.flame": "Flame. The hearth's old defiance. Burns what would creep into the warm places.",

@@ -89,7 +89,7 @@
 .wave-panel {
     flex-direction: column;
     align-items: flex-end;
-    min-width: 140px;
+    min-width: 90px;
 }
 
 .wave-number {
@@ -98,17 +98,68 @@
     color: rgb(237, 233, 250);
 }
 
-.wave-countdown {
-    margin-top: 2px;
-    font-size: 14px;
-    -unity-font-style: italic;
+/* ── Between-wave countdown — compact top-centre timer pill ──────────────
+ * Owner ask: "a small timer at the top of the screen." The outer
+ * .wave-countdown-timer is a transparent, full-width strip pinned to the top
+ * of the HUD root that simply centres the pill horizontally. The visible
+ * chrome lives on the inner .wave-countdown-pill so the backdrop reads as a
+ * small self-sized pill, not a full-width bar. The controller toggles the
+ * strip's display in SetWave() — shown during the between-wave Prepare Phase,
+ * hidden while a wave is active — and adds .wave-countdown-timer--urgent in
+ * the last few seconds for the low-time alarm look. */
+.wave-countdown-timer {
+    position: absolute;
+    top: 12px;
+    left: 0;
+    right: 0;
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: center;
+}
+
+/* The visible pill — self-sized, carries the backdrop + border. */
+.wave-countdown-pill {
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    padding: 5px 14px 5px 12px;
+    border-radius: 999px;
+    background-color: rgba(15, 12, 24, 0.94);
+    border-width: 1px;
+    border-color: rgba(124, 58, 237, 0.55);
+}
+
+.wave-countdown-icon {
+    font-size: 13px;
     color: rgb(196, 181, 253);
-    min-height: 18px;
+    margin-right: 6px;
+}
+
+.wave-countdown {
+    font-size: 15px;
+    -unity-font-style: bold;
+    color: rgb(224, 216, 248);
+    -unity-text-align: middle-center;
+    letter-spacing: 0.5px;
+}
+
+/* Urgent state — the last few seconds. The pill flips to an amber alarm look
+ * and grows slightly so the player feels the wave bearing down. The controller
+ * sets --urgent on the outer timer; these descendant rules restyle the pill /
+ * label / icon inside it. */
+.wave-countdown-timer--urgent .wave-countdown-pill {
+    background-color: rgba(58, 30, 12, 0.96);
+    border-color: rgb(245, 196, 90);
+    scale: 1.1 1.1;
 }
 
 .wave-countdown--urgent {
-    color: rgb(245, 196, 90);
-    -unity-font-style: bold;
+    color: rgb(255, 214, 120);
+    font-size: 16px;
+}
+
+.wave-countdown-icon--urgent {
+    color: rgb(255, 214, 120);
 }
 
 /* ── Bars (Heart HP, mana) ──────────────────────────────────────────── */
@@ -251,4 +302,148 @@
 .build-button:disabled {
     background-color: rgba(90, 84, 70, 0.6);
     color: rgba(200, 196, 188, 0.5);
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+ * Repair prompt — Workstream B (player wall-repair mechanic).
+ * A centred confirm card shown when WallRepairController selects a damaged
+ * structure. The outer .repair-prompt is a full-screen centring layer; the
+ * controller toggles its display none/flex. picking-mode on the outer layer
+ * is Ignore so it never eats world taps when hidden — the inner card opts
+ * back into picking so its buttons receive clicks.
+ * ───────────────────────────────────────────────────────────────────── */
+.repair-prompt {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    align-items: center;
+    justify-content: center;
+    display: none;
+}
+
+.repair-prompt-card {
+    width: 300px;
+    padding: 18px 20px 16px 20px;
+    border-radius: 16px;
+    background-color: rgba(15, 12, 24, 0.97);
+    border-width: 1px;
+    border-color: rgba(124, 58, 237, 0.6);
+    align-items: stretch;
+}
+
+.repair-prompt-title {
+    font-size: 18px;
+    -unity-font-style: bold;
+    color: rgb(237, 233, 250);
+    -unity-text-align: middle-center;
+}
+
+.repair-prompt-subtitle {
+    margin-top: 4px;
+    font-size: 13px;
+    color: rgb(180, 172, 200);
+    -unity-text-align: middle-center;
+    white-space: normal;
+}
+
+.repair-prompt-cost-row {
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    margin-top: 12px;
+    margin-bottom: 14px;
+}
+
+.repair-prompt-cost-glyph {
+    font-size: 20px;
+    color: rgb(125, 211, 252);
+    margin-right: 6px;
+}
+
+.repair-prompt-cost {
+    font-size: 22px;
+    -unity-font-style: bold;
+    color: rgb(237, 233, 250);
+}
+
+/* Unaffordable — the cost reads red when the player cannot pay. */
+.repair-prompt-cost--unaffordable {
+    color: rgb(245, 130, 130);
+}
+
+.repair-prompt-buttons {
+    flex-direction: row;
+    justify-content: space-between;
+}
+
+.repair-prompt-btn {
+    flex-grow: 1;
+    height: 48px;
+    font-size: 15px;
+    -unity-font-style: bold;
+    border-radius: 12px;
+    border-width: 0;
+}
+
+.repair-prompt-btn--cancel {
+    margin-right: 6px;
+    color: rgb(214, 208, 226);
+    background-color: rgba(70, 64, 90, 0.9);
+}
+
+.repair-prompt-btn--cancel:hover {
+    background-color: rgba(92, 84, 116, 0.95);
+}
+
+.repair-prompt-btn--confirm {
+    margin-left: 6px;
+    color: rgb(18, 14, 28);
+    background-color: rgb(124, 192, 132);
+}
+
+.repair-prompt-btn--confirm:hover {
+    background-color: rgb(148, 214, 156);
+}
+
+.repair-prompt-btn--confirm:disabled {
+    background-color: rgba(90, 84, 70, 0.55);
+    color: rgba(200, 196, 188, 0.5);
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+ * Repair feedback toast — a brief success / error banner under the
+ * countdown pill. The outer .repair-toast-row is a transparent, full-width
+ * absolutely-positioned strip that centres the self-sized toast pill; the
+ * inner .repair-toast Label carries the backdrop. The controller sets the
+ * Label's text, toggles its display none/flex and the --error class; an
+ * empty string hides it.
+ * ───────────────────────────────────────────────────────────────────── */
+.repair-toast-row {
+    position: absolute;
+    top: 52px;
+    left: 0;
+    right: 0;
+    flex-direction: row;
+    justify-content: center;
+    align-items: flex-start;
+}
+
+.repair-toast {
+    -unity-text-align: middle-center;
+    white-space: normal;
+    max-width: 360px;
+    padding: 6px 16px;
+    border-radius: 999px;
+    font-size: 13px;
+    -unity-font-style: bold;
+    color: rgb(20, 28, 18);
+    background-color: rgb(124, 192, 132);
+    display: none;
+}
+
+.repair-toast--error {
+    color: rgb(28, 14, 14);
+    background-color: rgb(238, 138, 138);
 }

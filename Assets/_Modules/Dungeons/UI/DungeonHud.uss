@@ -1,0 +1,101 @@
+/*
+ * DungeonHud.uss — styling for the dungeon HUD overlay.
+ * ----------------------------------------------------------------------
+ * Matches the project's UI Toolkit visual language (VillageHud.uss /
+ * BattleHUD.uss): a dark Heart-Forest palette, warm lantern-amber for the
+ * oil readout (the lantern's own tone — #f6c97a), red for the low-oil
+ * warning. Values are inline — the project Theme is C#-driven, not USS
+ * variables — the established VillageHud / BattleHUD convention.
+ *
+ * The root is transparent + pass-through; only the oil panel paints a
+ * backdrop, so the 3D dungeon stays fully visible.
+ *
+ * USS class names the controller toggles at runtime:
+ *   oil-bar-fill--warning   (oil in the low band — bar goes amber/red)
+ *   oil-bar-fill--empty     (oil critically low — bar pulses red)
+ *   oil-low-warning--shown  (low-oil warning pill visible)
+ */
+
+/* ── Root — full-screen, transparent, pass-through ──────────────────── */
+.dungeon-hud-root {
+    flex-grow: 1;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+}
+
+/* ── Oil panel — top-left corner ────────────────────────────────────── */
+.oil-panel {
+    position: absolute;
+    top: 16px;
+    left: 16px;
+    width: 232px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    background-color: rgba(15, 12, 24, 0.92);
+    border-width: 1px;
+    border-color: rgba(246, 201, 122, 0.42);
+}
+
+.oil-caption {
+    font-size: 11px;
+    -unity-font-style: bold;
+    letter-spacing: 1px;
+    color: rgb(246, 201, 122);
+    margin-bottom: 6px;
+}
+
+/* ── Oil bar ────────────────────────────────────────────────────────── */
+.oil-bar-track {
+    height: 16px;
+    border-radius: 8px;
+    background-color: rgba(40, 32, 22, 0.95);
+    border-width: 1px;
+    border-color: rgba(90, 76, 50, 0.7);
+    overflow: hidden;
+}
+
+.oil-bar-fill {
+    height: 100%;
+    width: 100%;
+    border-radius: 7px;
+    /* Full-oil tone — the warm lantern amber. */
+    background-color: rgb(246, 201, 122);
+}
+
+/* Low-oil band — the bar warms to a hot orange. */
+.oil-bar-fill--warning {
+    background-color: rgb(232, 132, 58);
+}
+
+/* Critically low — the bar goes a hard warning red. */
+.oil-bar-fill--empty {
+    background-color: rgb(214, 74, 62);
+}
+
+/* ── Burn-time readout ──────────────────────────────────────────────── */
+.oil-time-label {
+    font-size: 12px;
+    color: rgb(198, 188, 168);
+    margin-top: 6px;
+}
+
+/* ── Low-oil warning pill ───────────────────────────────────────────── */
+.oil-low-warning {
+    margin-top: 8px;
+    padding: 4px 8px;
+    border-radius: 8px;
+    font-size: 11px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+    color: rgb(255, 226, 220);
+    background-color: rgba(214, 74, 62, 0.92);
+    /* Hidden by default — the controller toggles oil-low-warning--shown. */
+    display: none;
+}
+
+.oil-low-warning--shown {
+    display: flex;
+}

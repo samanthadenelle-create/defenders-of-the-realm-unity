@@ -56,6 +56,7 @@ using System.Reflection;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.UIElements;
 
 namespace DeNelle.Editor
 {
@@ -99,6 +100,23 @@ namespace DeNelle.Editor
         private const string TypeBryn = NsDungeons + ".Bryn";
         private const string TypeWandererBubble = NsDungeons + ".WandererBubble";
         private const string TypeRuntimeState = NsDungeons + ".DungeonRuntimeState";
+        // Workstream C — dungeon crafting system + oil HUD.
+        private const string TypeDungeonInventory = NsDungeons + ".DungeonInventory";
+        private const string TypeIngredientPickup = NsDungeons + ".IngredientPickup";
+        private const string TypeCraftingPedestal = NsDungeons + ".CraftingPedestal";
+        private const string TypeCraftingPanelController = NsDungeons + ".CraftingPanelController";
+        private const string TypeDungeonHudController = NsDungeons + ".DungeonHudController";
+
+        // ── Workstream C — crafting / HUD asset paths ────────────────────────
+        private const string InventoryAssetPath =
+            RuntimeStateDir + "/HealersCottageInventory.asset";
+        private const string CraftingPanelUxmlPath =
+            "Assets/_Modules/Dungeons/UI/CraftingPanel.uxml";
+        private const string DungeonHudUxmlPath =
+            "Assets/_Modules/Dungeons/UI/DungeonHud.uxml";
+        private const string DungeonGeneratedDir = "Assets/_Modules/Dungeons/Generated";
+        private const string DungeonPanelSettingsPath =
+            DungeonGeneratedDir + "/DungeonPanelSettings.asset";
 
         // ── Cinemachine type names (resolved by reflection — the DeNelle.Editor
         //    asmdef does NOT reference Unity.Cinemachine; the package assembly is
@@ -249,6 +267,27 @@ namespace DeNelle.Editor
             Component bryn = BuildBryn(actorRoot, runtimeState);
             BuildMiniBoss(actorRoot);
 
+            // =================================================================
+            //  Workstream C — dungeon crafting system + lantern oil HUD
+            // =================================================================
+            // The shared crafting inventory ScriptableObject (reflection — the
+            // type lives in DeNelle.Dungeons).
+            UnityEngine.Object dungeonInventory = EnsureInventoryAsset();
+
+            // Ingredient pickups — one mote per crafting-recipes.json placement.
+            var ingredientRoot = NewChild(root.transform, "IngredientPickups");
+            BuildIngredientPickups(ingredientRoot, dungeonInventory, heroGo.transform);
+
+            // The crafting pedestal — replaces the §5.4 placeholder shard
+            // pedestal primitive in the Hidden Vault with the real interactable.
+            Component craftingPedestal =
+                BuildCraftingPedestal(actorRoot, dungeonInventory, heroGo.transform);
+
+            // The dungeon HUD (oil meter) + crafting-panel UIDocuments.
+            UnityEngine.UIElements.PanelSettings dungeonPanel = EnsureDungeonPanelSettings();
+            Component dungeonHud = BuildDungeonHud(root.transform, dungeonPanel);
+            Component craftingPanel = BuildCraftingPanel(root.transform, dungeonPanel);
+
             // ── Ambient BGM source (echoes-beneath-elarion — stub, §11) ──────
             // The clip is left unassigned — echoes-beneath-elarion.mp3 is not in
             // the project. DungeonController.StartAmbientAudio() guards a null
@@ -273,7 +312,9 @@ namespace DeNelle.Editor
             WireController(
                 controller, runtimeState, heroGo.transform, heroController,
                 followCamera, cameraRig, lantern, bryn,
-                loreRoot, checkpointRoot, encounterRoot, bgm);
+                loreRoot, checkpointRoot, encounterRoot, bgm,
+                dungeonInventory, craftingPedestal, ingredientRoot,
+                craftingPanel, dungeonHud);
 
             // ── Save + register in Build Settings ────────────────────────────
             EditorSceneManager.MarkSceneDirty(scene);
@@ -719,13 +760,14 @@ namespace DeNelle.Editor
                     break;
 
                 case "hidden-vault":
-                    // §5.4 / §6.4 cave accents — the deepest secret. Crafting shard.
+                    // §5.4 / §6.4 cave accents — the deepest secret. The crafting
+                    // shard pedestal is no longer a labelled placeholder primitive:
+                    // Workstream C builds the real CraftingPedestal interactable
+                    // here via BuildCraftingPedestal() (called from the entry
+                    // point), hydrated from crafting-recipes.json.
                     Prop(dress, "rocks_decorated.fbx", r.MinX + 3f, y, r.MaxZ - 3f, 0f);
                     Prop(dress, "rocks.fbx", r.MaxX - 3f, y, r.MinZ + 3f, 50f);
                     Prop(dress, "coin_stack_large.fbx", cx + 2f, y, cz - 2f, 0f);
-                    Placeholder(dress, "rare crafting shard pedestal (no KayKit mesh)",
-                        new Vector3(cx, y + 0.5f, cz), HexColor("9b6cff"),
-                        new Vector3(1f, 1f, 1f));
                     LitFixture(lightRoot, "VaultGlow",
                         new Vector3(cx, y + 1.5f, cz), HexColor("b59cff"), 1.6f, 5f);
                     break;
@@ -1258,6 +1300,265 @@ namespace DeNelle.Editor
         }
 
         // =====================================================================
+        //  Workstream C — dungeon crafting system (ingredient pickups +
+        //  crafting pedestal) + the lantern oil HUD.
+        // =====================================================================
+
+        /// <summary>
+        /// Ensures the shared DungeonInventory ScriptableObject asset exists on
+        /// disk and returns it. The type lives in DeNelle.Dungeons (not
+        /// referenced by the Editor asmdef), so it is created by reflection — the
+        /// same pattern as <see cref="EnsureRuntimeStateAsset"/>.
+        /// </summary>
+        private static UnityEngine.Object EnsureInventoryAsset()
+        {
+            var existing = AssetDatabase.LoadAssetAtPath<ScriptableObject>(InventoryAssetPath);
+            if (existing != null) return existing;
+
+            var type = FindType(TypeDungeonInventory);
+            if (type == null)
+            {
+                Debug.LogError($"[DungeonSceneBuilder] Type '{TypeDungeonInventory}' not found — " +
+                               "is the DeNelle.Dungeons assembly compiled? Inventory skipped.");
+                return null;
+            }
+
+            EnsureFolder(RuntimeStateDir);
+            var so = ScriptableObject.CreateInstance(type);
+            so.name = "HealersCottageInventory";
+            AssetDatabase.CreateAsset(so, InventoryAssetPath);
+            AssetDatabase.SaveAssets();
+            return so;
+        }
+
+        /// <summary>
+        /// Builds the collectible ingredient-pickup motes. The placements live in
+        /// crafting-recipes.json (DeNelle.Dungeons hydrates each pickup from the
+        /// strongly-typed IngredientPlacement at run time) — the Editor asmdef
+        /// cannot read that JSON's typed shape, so the placements are mirrored
+        /// here as a small literal table. The COUNT + ORDER must match
+        /// crafting-recipes.json's ingredientPlacements[] so DungeonController
+        /// can pair child[i] -> placement[i]. Keep the two in sync.
+        /// </summary>
+        private static void BuildIngredientPickups(
+            Transform parent, UnityEngine.Object inventory, Transform hero)
+        {
+            // MIRROR of crafting-recipes.json ingredientPlacements[] (same order).
+            var defs = new[]
+            {
+                new IngredientSpec {
+                    PickupId = "reed-garden", IngredientId = "dry-reed",
+                    RoomId = "garden-approach", Pos = new Vector3(-24f, 0f, 5f),
+                    Tint = "c9a86a",
+                },
+                new IngredientSpec {
+                    PickupId = "cloth-entrance", IngredientId = "oil-soaked-cloth",
+                    RoomId = "entrance-room", Pos = new Vector3(-8f, 0f, -5f),
+                    Tint = "d8b15a",
+                },
+                new IngredientSpec {
+                    PickupId = "resin-main", IngredientId = "ember-resin",
+                    RoomId = "main-room", Pos = new Vector3(11f, 0f, 6f),
+                    Tint = "e2683a",
+                },
+            };
+
+            foreach (var d in defs)
+            {
+                var room = FindRoom(d.RoomId);
+                float y = room != null ? LevelY(room.Level) : YGround;
+
+                var pickupGo = new GameObject($"IngredientPickup_{d.PickupId}");
+                pickupGo.transform.SetParent(parent, false);
+                pickupGo.transform.position = new Vector3(d.Pos.x, y, d.Pos.z);
+
+                // The visual mote — a small emissive octahedron-ish cube floating
+                // at chest height. The IngredientPickup bobs / spins it.
+                var moteVisual = new GameObject("Mote");
+                moteVisual.transform.SetParent(pickupGo.transform, false);
+
+                var mote = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                mote.name = "MoteMesh";
+                mote.transform.SetParent(moteVisual.transform, false);
+                mote.transform.localPosition = new Vector3(0f, 1.1f, 0f);
+                mote.transform.localScale = new Vector3(0.32f, 0.32f, 0.32f);
+                mote.transform.localRotation = Quaternion.Euler(45f, 45f, 0f);
+                StripColliders(mote);
+                ApplyEmissive(mote, HexColor(d.Tint), 2.0f);
+
+                // A faint glow so the ingredient reads from across a dark room.
+                var glow = new GameObject("MoteGlow").AddComponent<Light>();
+                glow.transform.SetParent(moteVisual.transform, false);
+                glow.transform.localPosition = new Vector3(0f, 1.1f, 0f);
+                glow.type = LightType.Point;
+                glow.color = HexColor(d.Tint);
+                glow.range = 2.6f;
+                glow.intensity = 1.4f;
+                glow.shadows = LightShadows.None;
+                _lightCount++;
+
+                Component comp = AddDungeonComponent(pickupGo, TypeIngredientPickup);
+                SetSerializedObjectRef(comp, "_inventory", inventory);
+                SetSerializedObjectRef(comp, "_moteVisual", moteVisual);
+                // _moteSpin is the spin/bob transform — the inner mote mesh.
+                SetSerializedObjectRef(comp, "_moteSpin", mote.transform);
+            }
+        }
+
+        private sealed class IngredientSpec
+        {
+            public string PickupId, IngredientId, RoomId, Tint;
+            public Vector3 Pos;
+        }
+
+        /// <summary>
+        /// Builds the real crafting pedestal in the Hidden Vault — REPLACES the
+        /// §5.4 placeholder shard-pedestal primitive. A KayKit pillar topped with
+        /// a floating violet shard (the same violet -> gold settle language as
+        /// the checkpoint shrine). The CraftingPedestal component (DeNelle.Dungeons,
+        /// added by reflection) hydrates from crafting-recipes.json at run time.
+        /// </summary>
+        private static Component BuildCraftingPedestal(
+            Transform parent, UnityEngine.Object inventory, Transform hero)
+        {
+            // Position MIRRORS crafting-recipes.json pedestal.position.
+            var vault = FindRoom("hidden-vault");
+            float y = vault != null ? LevelY(vault.Level) : YUnder;
+            var pos = new Vector3(18f, y, 18f);
+
+            var craftRoot = NewChild(parent, "CraftingPedestal");
+            var pedestalGo = craftRoot.gameObject;
+            pedestalGo.transform.position = pos;
+
+            // Stone pedestal — a KayKit pillar piece (same as the shrine pedestal).
+            var pedModel = LoadModel(PackRoot + "pillar_decorated.fbx");
+            var pedestal = InstantiateModel(pedModel, "pillar_decorated.fbx",
+                "crafting pedestal base");
+            pedestal.transform.SetParent(pedestalGo.transform, false);
+            pedestal.transform.localPosition = Vector3.zero;
+            EnsureCollider(pedestal);
+            if (pedModel != null) _modelCount++;
+
+            // The floating crafting shard — violet while uncrafted, settles gold.
+            var shard = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            shard.name = "Shard";
+            shard.transform.SetParent(pedestalGo.transform, false);
+            shard.transform.localPosition = new Vector3(0f, 2.6f, 0f);
+            shard.transform.localScale = new Vector3(0.45f, 0.75f, 0.45f);
+            shard.transform.localRotation = Quaternion.Euler(45f, 45f, 0f);
+            StripColliders(shard);
+            ApplyEmissive(shard, HexColor("9b6cff"), 2.2f);
+
+            // The shard's point light — a 'follow the light' cue from afar.
+            var shardLight = new GameObject("ShardGlow").AddComponent<Light>();
+            shardLight.transform.SetParent(pedestalGo.transform, false);
+            shardLight.transform.localPosition = new Vector3(0f, 2.6f, 0f);
+            shardLight.type = LightType.Point;
+            shardLight.color = HexColor("9b6cff");
+            shardLight.range = 4f;
+            shardLight.intensity = 2.4f;
+            shardLight.shadows = LightShadows.None;
+            _lightCount++;
+
+            // A small world-space interact prompt — a thin pill above the shard.
+            var prompt = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            prompt.name = "InteractPrompt";
+            prompt.transform.SetParent(pedestalGo.transform, false);
+            prompt.transform.localPosition = new Vector3(0f, 3.6f, 0f);
+            prompt.transform.localScale = new Vector3(1.2f, 0.28f, 0.08f);
+            StripColliders(prompt);
+            ApplyEmissive(prompt, HexColor("f6c97a"), 1.4f);
+            prompt.SetActive(false); // toggled on by CraftingPedestal on proximity
+
+            Component comp = AddDungeonComponent(pedestalGo, TypeCraftingPedestal);
+            SetSerializedObjectRef(comp, "_inventory", inventory);
+            SetSerializedObjectRef(comp, "_shardRenderer", shard.GetComponent<Renderer>());
+            SetSerializedObjectRef(comp, "_shardLight", shardLight);
+            SetSerializedObjectRef(comp, "_shard", shard.transform);
+            SetSerializedObjectRef(comp, "_interactPrompt", prompt);
+            return comp;
+        }
+
+        /// <summary>
+        /// Ensures a PanelSettings asset for the dungeon's UI Toolkit documents
+        /// (the oil HUD + the crafting panel). Mirrors the BattleSceneBuilder
+        /// pattern — ScaleWithScreenSize at 1920×1080.
+        /// </summary>
+        private static UnityEngine.UIElements.PanelSettings EnsureDungeonPanelSettings()
+        {
+            var existing = AssetDatabase.LoadAssetAtPath<UnityEngine.UIElements.PanelSettings>(
+                DungeonPanelSettingsPath);
+            if (existing != null) return existing;
+
+            EnsureFolder(DungeonGeneratedDir);
+            var settings = ScriptableObject.CreateInstance<UnityEngine.UIElements.PanelSettings>();
+            settings.scaleMode = UnityEngine.UIElements.PanelScaleMode.ScaleWithScreenSize;
+            settings.referenceResolution = new Vector2Int(1920, 1080);
+            settings.match = 0.5f;
+
+            var theme = AssetDatabase.LoadAssetAtPath<UnityEngine.UIElements.ThemeStyleSheet>(
+                "Packages/com.unity.modules.uielements/PackageResources/StyleSheets/" +
+                "Generated/DefaultRuntimeTheme.tss");
+            if (theme != null) settings.themeStyleSheet = theme;
+
+            AssetDatabase.CreateAsset(settings, DungeonPanelSettingsPath);
+            AssetDatabase.SaveAssets();
+            return settings;
+        }
+
+        /// <summary>
+        /// Builds the dungeon HUD UIDocument — DungeonHud.uxml + the
+        /// DungeonHudController (DeNelle.Dungeons, reflection). The oil meter is
+        /// fed the Lantern reference by DungeonController on load.
+        /// </summary>
+        private static Component BuildDungeonHud(
+            Transform parent, UnityEngine.UIElements.PanelSettings panel)
+        {
+            var hudGo = new GameObject("DungeonHUD UIDocument");
+            hudGo.transform.SetParent(parent, false);
+
+            var doc = hudGo.AddComponent<UIDocument>();
+            doc.panelSettings = panel;
+            var uxml = AssetDatabase.LoadAssetAtPath<UnityEngine.UIElements.VisualTreeAsset>(
+                DungeonHudUxmlPath);
+            if (uxml != null)
+                doc.visualTreeAsset = uxml;
+            else
+                Debug.LogWarning($"[DungeonSceneBuilder] DungeonHud.uxml not found at " +
+                                 $"'{DungeonHudUxmlPath}' — assign the UIDocument source in the inspector.");
+
+            // The controller [RequireComponent]s UIDocument — same GameObject.
+            return AddDungeonComponent(hudGo, TypeDungeonHudController);
+        }
+
+        /// <summary>
+        /// Builds the crafting-panel UIDocument — CraftingPanel.uxml + the
+        /// CraftingPanelController (DeNelle.Dungeons, reflection). The panel hides
+        /// itself until the crafting pedestal raises its open event; the
+        /// DungeonController binds the two on load.
+        /// </summary>
+        private static Component BuildCraftingPanel(
+            Transform parent, UnityEngine.UIElements.PanelSettings panel)
+        {
+            var panelGo = new GameObject("CraftingPanel UIDocument");
+            panelGo.transform.SetParent(parent, false);
+
+            var doc = panelGo.AddComponent<UIDocument>();
+            doc.panelSettings = panel;
+            // A higher sort order so the modal paints above the oil HUD.
+            doc.sortingOrder = 10f;
+            var uxml = AssetDatabase.LoadAssetAtPath<UnityEngine.UIElements.VisualTreeAsset>(
+                CraftingPanelUxmlPath);
+            if (uxml != null)
+                doc.visualTreeAsset = uxml;
+            else
+                Debug.LogWarning($"[DungeonSceneBuilder] CraftingPanel.uxml not found at " +
+                                 $"'{CraftingPanelUxmlPath}' — assign the UIDocument source in the inspector.");
+
+            return AddDungeonComponent(panelGo, TypeCraftingPanelController);
+        }
+
+        // =====================================================================
         //  DungeonController wiring (SerializedObject — no compile dependency)
         // =====================================================================
 
@@ -1266,7 +1567,9 @@ namespace DeNelle.Editor
             Component heroController, Component followCamera, Component cameraRig,
             Component lantern, Component bryn,
             Transform loreRoot, Transform checkpointRoot, Transform encounterRoot,
-            AudioSource bgm)
+            AudioSource bgm,
+            UnityEngine.Object dungeonInventory, Component craftingPedestal,
+            Transform ingredientRoot, Component craftingPanel, Component dungeonHud)
         {
             if (controller == null) return;
             var so = new SerializedObject(controller);
@@ -1286,6 +1589,12 @@ namespace DeNelle.Editor
             SetObjectField(so, "_checkpointRoot", checkpointRoot);
             SetObjectField(so, "_encounterRoot", encounterRoot);
             SetObjectField(so, "_ambientBgm", bgm);
+            // Workstream C — crafting system + dungeon oil HUD.
+            SetObjectField(so, "_dungeonInventory", dungeonInventory);
+            SetObjectField(so, "_craftingPedestal", craftingPedestal);
+            SetObjectField(so, "_ingredientRoot", ingredientRoot);
+            SetObjectField(so, "_craftingPanel", craftingPanel);
+            SetObjectField(so, "_dungeonHud", dungeonHud);
             so.ApplyModifiedPropertiesWithoutUndo();
         }
 
