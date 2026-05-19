@@ -152,5 +152,31 @@ namespace DeNelle.Dungeons
 
         /// <summary>Picks an ambient idle line. Port of <c>pickIdleLine</c>.</summary>
         public static string PickIdleLine(int seed) => PickFrom(Idle, seed);
+
+        // ── Data-file resolution (Week-6 port-table row) ─────────────────────
+
+        /// <summary>
+        /// The canonical id of Bryn's Healer's Cottage entry dialogue fragment in
+        /// <c>lore-fragments.json</c>. Mirrors <c>DungeonBrynDef.loreFragmentId</c>
+        /// authored in the layout JSON.
+        /// </summary>
+        public const string CottageEntryFragmentId = "bryn-cottage-entry";
+
+        /// <summary>
+        /// Resolves Bryn's entrance line from a loaded lore-fragment set, keyed by
+        /// <paramref name="fragmentId"/> (e.g. <c>bryn-cottage-entry</c>). Falls
+        /// back to the inlined canon <see cref="HealersCottageLine"/> when the set
+        /// is null or the fragment is missing — the canon prose is the same
+        /// string in both places, so a missing data file never drops Bryn's voice.
+        /// Port-table Week-6: "dialogue from data/lore-fragments.json#bryn-cottage-entry".
+        /// </summary>
+        public static string ResolveCottageEntryLine(LoreFragmentSet fragmentSet, string fragmentId)
+        {
+            string id = string.IsNullOrEmpty(fragmentId) ? CottageEntryFragmentId : fragmentId;
+            LoreFragment fragment = fragmentSet?.Find(id);
+            if (fragment != null && fragment.Body != null && fragment.Body.Length > 0)
+                return fragment.OneLine;
+            return HealersCottageLine;
+        }
     }
 }

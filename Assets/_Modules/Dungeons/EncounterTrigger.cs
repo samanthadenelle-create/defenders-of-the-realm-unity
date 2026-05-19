@@ -85,8 +85,14 @@ namespace DeNelle.Dungeons
         /// <summary>True once this scripted trigger has fired (it only fires once).</summary>
         private bool _hasFired;
 
+        /// <summary>True when this trigger represents the dungeon's mini-boss fight.</summary>
+        private bool _isBossTrigger;
+
         /// <summary>True while the Keeper stands inside this trigger's proximity zone.</summary>
         public bool HeroInside { get; private set; }
+
+        /// <summary>The id of the encounter this trigger fires (scripted-encounter / boss id).</summary>
+        public string EncounterId => _scriptedDef?.id ?? string.Empty;
 
         // ── Configuration ────────────────────────────────────────────────────
 
@@ -105,11 +111,51 @@ namespace DeNelle.Dungeons
             _scriptedDef = def;
             _runtimeState = runtimeState;
             _hero = hero;
+            _isBossTrigger = false;
             if (def != null)
                 transform.position = def.triggerPosition.ToWorld();
             // A scripted encounter already cleared on a resumed run does not re-fire.
             _hasFired = def != null && runtimeState != null
                 && runtimeState.HasFiredScriptedEncounter(def.id);
+        }
+
+        /// <summary>
+        /// Configures this trigger as the dungeon's MINI-BOSS encounter — the
+        /// climax fight (design §4 Beat 6, the Apprentice of the Apothecary). A
+        /// boss trigger is a scripted trigger whose victory marks the boss
+        /// defeated and unlocks the dungeon exit. The <paramref name="boss"/>
+        /// def's <c>position</c> doubles as the proximity-trigger centre.
+        /// </summary>
+        public void ConfigureBoss(
+            DungeonController controller,
+            DungeonMiniBoss boss,
+            float triggerRadius,
+            DungeonRuntimeState runtimeState,
+            Transform hero)
+        {
+            _kind = EncounterKind.Scripted;
+            _controller = controller;
+            _runtimeState = runtimeState;
+            _hero = hero;
+            _isBossTrigger = true;
+
+            // Adapt the mini-boss def into the scripted-encounter shape so the
+            // one TickScripted path drives both. The boss is a single enemy.
+            _scriptedDef = boss == null ? null : new DungeonScriptedEncounter
+            {
+                id = boss.id,
+                roomId = boss.roomId,
+                triggerPosition = boss.position,
+                triggerRadius = triggerRadius > 0f ? triggerRadius : 4f,
+                enemyTypes = string.IsNullOrEmpty(boss.enemyType)
+                    ? System.Array.Empty<string>()
+                    : new[] { boss.enemyType },
+                waveLabel = boss.displayName,
+            };
+            if (_scriptedDef != null)
+                transform.position = _scriptedDef.triggerPosition.ToWorld();
+            _hasFired = _scriptedDef != null && runtimeState != null
+                && runtimeState.HasFiredScriptedEncounter(_scriptedDef.id);
         }
 
         /// <summary>
@@ -129,6 +175,7 @@ namespace DeNelle.Dungeons
             _pool = pool;
             _runtimeState = runtimeState;
             _hero = hero;
+            _isBossTrigger = false;
             _table = new RandomEncounterTable(dungeonTier);
         }
 
@@ -174,7 +221,12 @@ namespace DeNelle.Dungeons
             if (!HeroInside) return;
 
             _hasFired = true;
+            // RegisterScriptedEncounter resets the cooldown clock + locks combat;
+            // BeginEncounterHandoff stashes the encounter id + resume position so
+            // they survive the ATB scene round-trip and the dungeon can resume.
             _runtimeState.RegisterScriptedEncounter(_scriptedDef.id);
+            _runtimeState.BeginEncounterHandoff(
+                _scriptedDef.id, _isBossTrigger, _hero.position);
             EncounterFired.Invoke(_scriptedDef.id);
             LaunchBattle(_scriptedDef.enemyTypes, _scriptedDef.waveLabel).Forget();
         }
@@ -201,8 +253,35 @@ namespace DeNelle.Dungeons
 
             string[] roster = _table.RollEnemies(_pool);
             _runtimeState.RegisterRandomEncounter();
+            _runtimeState.BeginEncounterHandoff(
+                "random-encounter", false, _hero.position);
             EncounterFired.Invoke("random-encounter");
             LaunchBattle(roster, "Ambush in the dark").Forget();
+        }
+
+        // ── Resume — called by DungeonController on dungeon re-entry ─────────
+
+        /// <summary>
+        /// Resolves a pending encounter when the dungeon scene reloads after the
+        /// ATB battle. Clears the run's combat lock, marks the mini-boss defeated
+        /// on a boss-fight victory, and re-arms <see cref="_hasFired"/> so the
+        /// cleared encounter never re-triggers. Idempotent — a no-op when this
+        /// trigger is not the one that started the in-flight battle.
+        ///
+        /// <paramref name="victory"/> comes from the battle result the dungeon
+        /// scene reads off the ATB runtime state on return. The hero's HP / mana
+        /// were already round-tripped through <see cref="DungeonRuntimeState"/>
+        /// (and, in v1, fully restored by the ATB engine's post-fight reset).
+        /// </summary>
+        public bool ResumePendingEncounter(bool victory)
+        {
+            if (_runtimeState == null || _scriptedDef == null) return false;
+            if (_runtimeState.PendingEncounterId != _scriptedDef.id) return false;
+
+            // This trigger owns the in-flight battle — settle it.
+            _hasFired = true;
+            bool resumed = _runtimeState.ResumeAfterEncounter(victory);
+            return resumed;
         }
 
         // ── ATB battle handoff ───────────────────────────────────────────────
@@ -213,6 +292,12 @@ namespace DeNelle.Dungeons
         /// DeNelle.Core (not DeNelle.BattleATB), so the battle is reached by the
         /// canonical route; the battle scene reads <see cref="SceneRouter.PendingBattle"/>.
         /// Returns a <see cref="UniTask"/> — never <c>async void</c>.
+        ///
+        /// <c>BattleParams.Wave == 0</c> is the dungeon marker — a village breach
+        /// always carries a wave &gt; 0. The battle scene returns to the dungeon
+        /// (rather than the village) off that distinction. The Keeper's vitals
+        /// were snapshotted into <see cref="DungeonRuntimeState"/> by the trigger
+        /// before this call, so they survive the scene round-trip.
         /// </summary>
         private async UniTask LaunchBattle(string[] enemyTypes, string waveLabel)
         {

@@ -86,6 +86,13 @@ namespace DeNelle.Dungeons
         private Transform _hero;
         private IWandererBubble _bubble;
 
+        /// <summary>
+        /// The loaded lore-fragment set — supplies Bryn's entrance line from
+        /// <c>lore-fragments.json</c> when present. Null until the controller
+        /// hands it over; Bryn then falls back to the layout JSON / canon inline.
+        /// </summary>
+        private LoreFragmentSet _loreFragments;
+
         /// <summary>The hero's death count in this dungeon (from the persisted save).</summary>
         private int _deaths;
 
@@ -138,6 +145,18 @@ namespace DeNelle.Dungeons
         public void SetHero(Transform hero)
         {
             _hero = hero;
+        }
+
+        /// <summary>
+        /// Hands Bryn the loaded lore-fragment set so her entrance line is sourced
+        /// from <c>lore-fragments.json#bryn-cottage-entry</c> (port-table Week-6).
+        /// Optional — when never called Bryn falls back to the layout JSON's
+        /// <c>firstEncounterLine</c> and then the inlined canon string, all of
+        /// which carry the same verbatim canon prose.
+        /// </summary>
+        public void SetLoreFragments(LoreFragmentSet loreFragments)
+        {
+            _loreFragments = loreFragments;
         }
 
         /// <summary>
@@ -217,18 +236,32 @@ namespace DeNelle.Dungeons
 
         /// <summary>
         /// Chooses the line for the CURRENT bubble appearance.
-        ///  - fresh visit (no deaths, no clears) + an authored first-encounter
-        ///    line → the exact scripted line, verbatim;
+        ///  - fresh visit (no deaths, no clears) → the exact scripted
+        ///    Healer's Cottage entry line, sourced (in priority order) from
+        ///    lore-fragments.json, then the layout JSON's firstEncounterLine,
+        ///    then the inlined canon string — all the same verbatim canon prose;
         ///  - otherwise → the tier / died-before / cleared pick.
         /// Port of the <c>DungeonBryn3D</c> line-derivation.
         /// </summary>
         private string ChooseLine()
         {
             bool freshVisit = _deaths == 0 && _clears == 0;
-            string authored = _def?.firstEncounterLine;
 
-            if (freshVisit && !string.IsNullOrEmpty(authored))
-                return authored;
+            if (freshVisit)
+            {
+                // 1) lore-fragments.json (the Week-6 canonical data source).
+                if (_loreFragments != null)
+                {
+                    string fromData = WandererDialogue.ResolveCottageEntryLine(
+                        _loreFragments, _def?.loreFragmentId);
+                    if (!string.IsNullOrEmpty(fromData)) return fromData;
+                }
+                // 2) the layout JSON's authored firstEncounterLine.
+                string authored = _def?.firstEncounterLine;
+                if (!string.IsNullOrEmpty(authored)) return authored;
+                // 3) the inlined canon string — never drops Bryn's voice.
+                return WandererDialogue.HealersCottageLine;
+            }
 
             return WandererDialogue.PickLine(_recommendedLevel, _deaths, _clears, _showCount);
         }

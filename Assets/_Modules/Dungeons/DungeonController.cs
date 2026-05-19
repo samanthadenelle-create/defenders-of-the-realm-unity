@@ -58,8 +58,18 @@ namespace DeNelle.Dungeons
         [Tooltip("The Keeper's hero rig — moved to the layout's spawn point on load.")]
         [SerializeField] private Transform _hero;
 
+        [Tooltip("The Keeper's dungeon-walk controller — input is held off across " +
+                 "the spawn teleport, then enabled once the run is live. Optional: " +
+                 "auto-found on the hero rig when left unset.")]
+        [SerializeField] private DungeonHero _heroController;
+
         [Tooltip("Cinemachine camera that follows the Keeper (top-down isometric tilt).")]
         [SerializeField] private CinemachineCamera _followCamera;
+
+        [Tooltip("Optional isometric camera rig component. When set, it owns the " +
+                 "framing maths; when null the controller applies the framing " +
+                 "inline from the offset/pitch fields below.")]
+        [SerializeField] private DungeonCameraRig _cameraRig;
 
         [Tooltip("Hero-attached lantern — handed the layout's oil stones on load.")]
         [SerializeField] private Lantern _lantern;
@@ -89,6 +99,17 @@ namespace DeNelle.Dungeons
         [Tooltip("Looping dungeon ambient BGM source — echoes-beneath-elarion.mp3 " +
                  "at the mix-spec volume (port spec Part 5 Week 5).")]
         [SerializeField] private AudioSource _ambientBgm;
+
+        [Tooltip("The dungeon ambient clip (echoes-beneath-elarion). MAY BE NULL " +
+                 "until the audio file is imported under Assets/Audio/ — the code " +
+                 "path is guarded and logs a warning rather than erroring. The " +
+                 "AudioSource's own clip is used as a fallback when this is unset.")]
+        [SerializeField] private AudioClip _ambientBgmClip;
+
+        [Tooltip("Dungeon BGM volume — audio-mix-spec.md §2 fixes the 'dungeon' " +
+                 "track at 0.25 (very soft, ambient only). Master volume scales " +
+                 "this multiplicatively once the MusicDirector lands.")]
+        [SerializeField, Range(0f, 1f)] private float _ambientBgmVolume = 0.25f;
 
         // ── Runtime ──────────────────────────────────────────────────────────
 
@@ -127,6 +148,14 @@ namespace DeNelle.Dungeons
         {
             Ready = false;
 
+            // Resolve the hero's walk controller up-front so input can be held
+            // off across the spawn teleport (the Keeper must not drift while the
+            // layout loads / the camera snaps into frame).
+            if (_heroController == null && _hero != null)
+                _heroController = _hero.GetComponent<DungeonHero>();
+            if (_heroController != null)
+                _heroController.SetInputEnabled(false);
+
             Layout = await DungeonLayoutLoader.LoadAsync(_dungeonId);
             if (Layout == null)
             {
@@ -150,6 +179,10 @@ namespace DeNelle.Dungeons
 
             _lastRoomId = entryRoomId;
             Ready = true;
+
+            // The run is live and the Keeper is framed — hand movement back.
+            if (_heroController != null)
+                _heroController.SetInputEnabled(true);
         }
 
         /// <summary>
@@ -210,13 +243,22 @@ namespace DeNelle.Dungeons
         {
             if (_hero == null) return;
 
-            // The hero rig is a CharacterController (port spec Part 2) — disable
-            // it across the teleport so the controller does not fight the move.
+            float facingY = Layout?.spawn?.facingY ?? 0f;
+
+            // The DungeonHero owns the safe teleport (it disables its own
+            // CharacterController across the move and clears any tap target).
+            if (_heroController != null)
+            {
+                _heroController.Teleport(spawnPos, facingY);
+                return;
+            }
+
+            // No DungeonHero present — fall back to a raw transform move,
+            // disabling any CharacterController so it does not fight the teleport.
             var cc = _hero.GetComponent<CharacterController>();
             if (cc != null) cc.enabled = false;
 
             _hero.position = spawnPos;
-            float facingY = Layout?.spawn?.facingY ?? 0f;
             _hero.rotation = Quaternion.Euler(0f, facingY, 0f);
 
             if (cc != null) cc.enabled = true;
@@ -226,31 +268,60 @@ namespace DeNelle.Dungeons
 
         /// <summary>
         /// Aims the Cinemachine follow camera at the Keeper with the spec's
-        /// top-down isometric tilt. Uses a position composer + the offset/pitch
-        /// tuning fields; the camera follows the hero for the whole run.
+        /// top-down isometric tilt. Prefers the dedicated <see cref="DungeonCameraRig"/>
+        /// (it owns the framing maths); falls back to an inline offset/pitch
+        /// setup for a hand-wired camera. The camera follows the hero — and feeds
+        /// the hero its yaw so WASD stays screen-relative under the tilt.
         /// </summary>
         private void ConfigureCamera()
         {
-            if (_followCamera == null || _hero == null) return;
+            if (_hero == null) return;
 
-            _followCamera.Follow = _hero;
-            _followCamera.LookAt = _hero;
-
-            // Seat the camera at the authored isometric offset behind + above
-            // the hero, tilted down. The Cinemachine follow component eases it
-            // along as the Keeper walks.
-            var camTransform = _followCamera.transform;
-            camTransform.position = _hero.position + _cameraOffset;
-            camTransform.rotation = Quaternion.Euler(_cameraPitch, 0f, 0f);
-
-            // A hard-locked follow offset gives the steady top-down framing the
-            // spec asks for (no orbit, no free-look — that is the village rig).
-            var follow = _followCamera.GetComponent<CinemachineFollow>();
-            if (follow != null)
+            // Preferred path: the camera rig component self-configures.
+            if (_cameraRig != null)
             {
-                follow.FollowOffset = _cameraOffset;
-                follow.TrackerSettings.PositionDamping = new Vector3(1.4f, 1.4f, 1.4f);
+                _cameraRig.Bind(_hero);
             }
+            else if (_followCamera != null)
+            {
+                _followCamera.Follow = _hero;
+                // LookAt is left unset: with no Aim component the rig keeps the
+                // authored fixed pitch — the steady isometric tilt the spec asks
+                // for (no orbit, no free-look — that is the village rig).
+                _followCamera.LookAt = null;
+
+                // Seat the camera at the authored isometric offset behind + above
+                // the hero, tilted down. CinemachineFollow eases it along.
+                var camTransform = _followCamera.transform;
+                camTransform.position = _hero.position + _cameraOffset;
+                camTransform.rotation = Quaternion.Euler(_cameraPitch, 0f, 0f);
+
+                var follow = _followCamera.GetComponent<CinemachineFollow>();
+                if (follow != null)
+                {
+                    follow.FollowOffset = _cameraOffset;
+                    var settings = follow.TrackerSettings;
+                    settings.PositionDamping = new Vector3(1.4f, 1.4f, 1.4f);
+                    follow.TrackerSettings = settings;
+                }
+            }
+
+            // Tell the hero which camera its WASD vector is relative to so
+            // screen-up always maps to the camera's forward under the tilt.
+            if (_heroController != null)
+            {
+                Camera unityCam = ResolveUnityCamera();
+                if (unityCam != null) _heroController.SetCamera(unityCam);
+            }
+        }
+
+        /// <summary>The Unity camera the Cinemachine brain drives — for hero input framing.</summary>
+        private Camera ResolveUnityCamera()
+        {
+            // The CinemachineCamera is a controller, not a renderer — the real
+            // Camera is the one with the CinemachineBrain (usually Camera.main).
+            if (Camera.main != null) return Camera.main;
+            return Object.FindFirstObjectByType<Camera>();
         }
 
         // ── Interactable + actor wiring ──────────────────────────────────────
@@ -271,11 +342,35 @@ namespace DeNelle.Dungeons
 
         // ── Audio ────────────────────────────────────────────────────────────
 
-        /// <summary>Starts the looping dungeon ambient BGM (echoes-beneath-elarion).</summary>
+        /// <summary>
+        /// Starts the looping dungeon ambient BGM (echoes-beneath-elarion) at the
+        /// audio-mix-spec §2 volume (0.25). Guards a missing clip: the MP3 may not
+        /// be imported yet — when no clip is present this logs a warning and the
+        /// dungeon plays silently rather than erroring (port spec Week 5 note).
+        /// </summary>
         private void StartAmbientAudio()
         {
             if (_ambientBgm == null) return;
+
             _ambientBgm.loop = true;
+            _ambientBgm.playOnAwake = false;
+            _ambientBgm.volume = _ambientBgmVolume;
+
+            // Prefer the explicitly-assigned clip; otherwise fall back to any
+            // clip already on the AudioSource (the scene builder may wire it
+            // there directly once the MP3 is imported).
+            if (_ambientBgmClip != null)
+                _ambientBgm.clip = _ambientBgmClip;
+
+            if (_ambientBgm.clip == null)
+            {
+                Debug.LogWarning(
+                    "[DungeonController] Dungeon ambient clip 'echoes-beneath-elarion' " +
+                    "is not assigned — the MP3 is not yet imported under Assets/Audio/. " +
+                    "Dungeon will play silently; wire the clip when the file lands.");
+                return;
+            }
+
             if (!_ambientBgm.isPlaying) _ambientBgm.Play();
         }
 

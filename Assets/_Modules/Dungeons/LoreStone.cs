@@ -71,6 +71,24 @@ namespace DeNelle.Dungeons
         private Transform _hero;
         private int _totalLoreCount;
 
+        /// <summary>
+        /// The loaded lore-fragment set — supplies the canon body/title from
+        /// <c>lore-fragments.json</c> keyed by this stone's id (port-table
+        /// Week-6: "each lore-stone ID maps to a fragment"). Null until handed
+        /// over; the stone then falls back to the layout JSON's inline copy.
+        /// </summary>
+        private LoreFragmentSet _loreFragments;
+
+        /// <summary>True when the resolved fragment is an unreviewed placeholder.</summary>
+        public bool IsPlaceholderFragment
+        {
+            get
+            {
+                LoreFragment f = _loreFragments?.Find(LoreStoneId);
+                return f != null && f.Placeholder;
+            }
+        }
+
         /// <summary>True while the Keeper is within reach of this stone.</summary>
         public bool InRange { get; private set; }
 
@@ -103,6 +121,27 @@ namespace DeNelle.Dungeons
                 transform.position = _def.position.ToWorld();
 
             if (_interactPrompt != null) _interactPrompt.SetActive(false);
+        }
+
+        /// <summary>
+        /// Hands the stone the loaded lore-fragment set so its reading text is
+        /// sourced from <c>lore-fragments.json</c>, keyed by this stone's id
+        /// (port-table Week-6). Optional — when never called the stone uses the
+        /// layout JSON's inline <c>title</c> / <c>body</c>, which carry the same
+        /// verbatim canon prose. A mismatch logs a warning so cross-stream drift
+        /// between the layout JSON and lore-fragments.json is caught early.
+        /// </summary>
+        public void SetLoreFragments(LoreFragmentSet loreFragments)
+        {
+            _loreFragments = loreFragments;
+
+            if (_loreFragments != null && _def != null
+                && _loreFragments.Find(_def.id) == null)
+            {
+                Debug.LogWarning(
+                    $"[LoreStone] Lore stone '{_def.id}' has no matching fragment in " +
+                    "lore-fragments.json — falling back to the layout JSON's inline copy.");
+            }
         }
 
         // ── Per-frame proximity ──────────────────────────────────────────────
@@ -138,11 +177,24 @@ namespace DeNelle.Dungeons
         {
             if (_def == null || !InRange) return;
 
+            // Source the reading text from lore-fragments.json when the set is
+            // present (Week-6 canonical data source); otherwise fall back to the
+            // layout JSON's inline copy. Both carry the same verbatim canon prose.
+            string title = _def.title;
+            string[] body = _def.body;
+
+            LoreFragment fragment = _loreFragments?.Find(_def.id);
+            if (fragment != null && fragment.Body != null && fragment.Body.Length > 0)
+            {
+                if (!string.IsNullOrEmpty(fragment.Title)) title = fragment.Title;
+                body = fragment.Body;
+            }
+
             ReadRequested.Invoke(new LoreReadRequest
             {
                 LoreStoneId = _def.id,
-                Title = _def.title,
-                Body = _def.body,
+                Title = title,
+                Body = body,
             });
 
             // Record the read — drives the questline-beat completion check.

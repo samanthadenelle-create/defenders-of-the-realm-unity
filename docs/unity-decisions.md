@@ -70,4 +70,19 @@ slice-level detail lives in `docs/port-notes/week4-*.md`. Key calls:
 ### Flags raised — Week 4
 
 - **2026-05-19 — Village NavMesh bake required.** `Enemy` uses `NavMeshAgent`; only the legacy `com.unity.modules.ai` is in the manifest, so the village scene needs a NavMesh baked (legacy Navigation panel) before enemies path. Enemies hold position + log one warning until then. **Integration item, not a code defect.**
-- **2026-05-19 — Week-4 scene wiring outstanding.** WaveManager / HeroAbilities / PetDeployer / BuildMenu `UIDocument` / the `ForceFieldGate` material / enemy + building prefabs / enemy layer mask must be added to `Village.unity` (or its builder) for Wave 1 to play. The C# is in place and compiles; see the `week4-*.md` notes for the precise wiring checklist.
+- **2026-05-19 — Week-4 scene wiring outstanding.** WaveManager / HeroAbilities / PetDeployer / BuildMenu `UIDocument` / the `ForceFieldGate` material / enemy + building prefabs / enemy layer mask must be added to `Village.unity` (or its builder) for Wave 1 to play. The C# is in place and compiles; see the `week4-*.md` notes for the precise wiring checklist. **Resolved 2026-05-19** by the Week-4 scene-integration pass (`VillageSceneBuilder.BuildGameplaySystems` + `BakeVillageNavMesh`).
+
+## Weeks 5-7 — Dungeon foundation, dungeon systems, wallet
+
+Built in parallel by scoped agents; slice detail in `docs/port-notes/week5-*.md`, `week6-*.md`, `week7-*.md`. All Week 5-7 C# compiles clean (0 errors).
+
+| Date | Decision | Reason | Reversible? |
+|------|----------|--------|-------------|
+| 2026-05-19 | **Solana Unity SDK deferred — Wallet ships on the stub provider for now.** The `magicblock-labs` SDK was added to `manifest.json` as a git-URL and DID resolve, but it bundles its own copy of UniTask, producing dozens of GUID conflicts with the project's existing UniTask package. The manifest entry was reverted. | The bundled-UniTask collision actively breaks the build. The Wallet code is fully written behind `#if SOLANA_SDK` guards, so with the package absent it compiles clean on `StubWalletProvider` (full UI/devnet-flow testing still works). Real-SDK integration is a follow-up that must de-dupe UniTask — likely via the OpenUPM `com.solana.unity-sdk` (resolves deps separately) and pinned to a tag (security finding SEC-001). | Yes — re-add via OpenUPM once the UniTask collision is resolved. |
+| 2026-05-19 | `DungeonCameraRig` uses a fixed-tilt **perspective** Cinemachine rig; the WorldSpace binding-mode override and the orthographic option were dropped. | `LensSettings.Orthographic` is read-only and the `TargetTracking.BindingMode` enum did not resolve in Cinemachine 3.1.6 — rather than guess version-specific API, the rig was simplified to the stable subset (a perspective follow rig is exactly right for a top-down dungeon). | Yes — both are CM-API finetune items. |
+
+### Flags raised — Weeks 5-7
+
+- **2026-05-19 — Dungeon scene wiring outstanding.** Week 5/6 C# (DungeonController, DungeonHero, DungeonCameraRig, Lantern, Bryn, LoreStone, EncounterTrigger, Checkpoint) compiles but is not yet wired into `Dungeon_HealersCottage.unity` — the dungeon-scene integration pass is the next step. See the `week5/6` port-notes for the checklist.
+- **2026-05-19 — Breach→ATB return-scene bug (BUG-008 / CODE-001).** `BattleController` hard-codes the post-battle return to the Village; a dungeon ATB encounter must return to the dungeon. `WaveManager` also always restarts at the start wave on return. To be fixed in the integration pass.
+- **2026-05-19 — Dungeon audio missing.** `echoes-beneath-elarion.mp3` and `lantern-flicker.mp3` are not in the project; the AudioSources are wired and guarded, silent until the owner supplies the tracks.

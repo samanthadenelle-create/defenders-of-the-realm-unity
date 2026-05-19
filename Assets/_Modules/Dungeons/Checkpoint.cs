@@ -153,6 +153,18 @@ namespace DeNelle.Dungeons
             if (!firstReach && _runtimeState != null) return;
 
             Visited = true;
+
+            // The shrine's two jobs (port spec Part 5 Week 6: "certain rooms heal
+            // hero + save progress"):
+            //   1. HEAL — restore the Keeper to full HP/MP. HealHeroToFull works
+            //      off the vitals snapshot the scene loop keeps on the run state.
+            //      v1's ATB engine also fully resets party HP/MP after every
+            //      fight, so the heal is belt-and-braces in v1 — it becomes
+            //      load-bearing the moment a non-reset combat build ships.
+            //   2. SAVE — ReachCheckpoint above already recorded this shrine on
+            //      the run state as the run's respawn point.
+            _runtimeState?.HealHeroToFull();
+
             Activated.Invoke(_def.id);
             if (!string.IsNullOrEmpty(_def.toast))
                 ToastRequested.Invoke(_def.toast);

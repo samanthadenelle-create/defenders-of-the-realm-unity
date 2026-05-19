@@ -85,6 +85,35 @@ namespace DeNelle.Dungeons
         [Tooltip("True once a run has been started (StartRun called).")]
         [SerializeField] private bool _runActive;
 
+        [Header("Encounter handoff (survives the ATB scene round-trip)")]
+        [Tooltip("Id of the encounter that launched the in-flight ATB battle, or " +
+                 "empty. A ScriptableObject survives SceneManager.LoadScene, so this " +
+                 "carries the encounter id across into the ATBBattle scene and back.")]
+        [SerializeField] private string _pendingEncounterId = string.Empty;
+
+        [Tooltip("True for a mini-boss handoff — on a victory resume the run marks " +
+                 "the boss defeated and unlocks the Apothecary exit.")]
+        [SerializeField] private bool _pendingEncounterIsBoss;
+
+        [Tooltip("The Keeper's floor position when the encounter fired — the resume " +
+                 "point the hero is replaced at when the dungeon scene reloads.")]
+        [SerializeField] private Vector3 _encounterResumePosition;
+
+        [Header("Hero vitals (preserved across the ATB round-trip)")]
+        [Tooltip("The Keeper's HP carried into / out of an encounter. v1's ATB " +
+                 "engine fully restores party HP/MP after every fight, so a clean " +
+                 "resume reads full; a future non-reset build still round-trips here.")]
+        [SerializeField] private float _heroHp = -1f;
+
+        [Tooltip("The Keeper's max HP — the ceiling a checkpoint heal restores to.")]
+        [SerializeField] private float _heroMaxHp = -1f;
+
+        [Tooltip("The Keeper's mana, carried across the ATB round-trip.")]
+        [SerializeField] private float _heroMana = -1f;
+
+        [Tooltip("The Keeper's max mana — the ceiling a checkpoint heal restores to.")]
+        [SerializeField] private float _heroMaxMana = -1f;
+
         // ── Mutation events (Zustand 'subscribe' parallel) ───────────────────
 
         /// <summary>Fired whenever any field of the run state changes.</summary>
@@ -144,6 +173,37 @@ namespace DeNelle.Dungeons
         /// <summary>True once a run has been started and not yet ended.</summary>
         public bool RunActive => _runActive;
 
+        /// <summary>
+        /// The id of the encounter whose ATB battle is in flight, or empty. Set
+        /// when an encounter launches the battle scene; read on dungeon re-entry
+        /// to resume — the carrying SO survives the scene round-trip.
+        /// </summary>
+        public string PendingEncounterId => _pendingEncounterId;
+
+        /// <summary>True while an encounter battle is pending its resume.</summary>
+        public bool HasPendingEncounter => !string.IsNullOrEmpty(_pendingEncounterId);
+
+        /// <summary>True when the in-flight encounter is the dungeon's mini-boss.</summary>
+        public bool PendingEncounterIsBoss => _pendingEncounterIsBoss;
+
+        /// <summary>The floor position the Keeper resumes at after an encounter.</summary>
+        public Vector3 EncounterResumePosition => _encounterResumePosition;
+
+        /// <summary>The Keeper's last-snapshotted HP, or &lt; 0 when never set.</summary>
+        public float HeroHp => _heroHp;
+
+        /// <summary>The Keeper's max HP, or &lt; 0 when never set.</summary>
+        public float HeroMaxHp => _heroMaxHp;
+
+        /// <summary>The Keeper's last-snapshotted mana, or &lt; 0 when never set.</summary>
+        public float HeroMana => _heroMana;
+
+        /// <summary>The Keeper's max mana, or &lt; 0 when never set.</summary>
+        public float HeroMaxMana => _heroMaxMana;
+
+        /// <summary>True once the hero's vitals have been snapshotted at least once.</summary>
+        public bool HasHeroVitals => _heroMaxHp > 0f;
+
         /// <summary>True when a lore stone with the given id has been read.</summary>
         public bool HasReadLore(string loreStoneId) => _loreStonesRead.Contains(loreStoneId);
 
@@ -181,6 +241,11 @@ namespace DeNelle.Dungeons
             _inCombat = false;
             _bossDefeated = false;
             _runActive = true;
+            // NOTE: StartRun deliberately does NOT touch the encounter handoff or
+            // the hero-vitals snapshot. Both must survive the ATB scene
+            // round-trip — when the dungeon scene reloads after a battle, the
+            // controller inspects HasPendingEncounter to decide resume-vs-fresh.
+            // EndRun and ClearPendingEncounter own those resets.
             RunStateChanged.Invoke();
         }
 
@@ -204,6 +269,13 @@ namespace DeNelle.Dungeons
             _inCombat = false;
             _bossDefeated = false;
             _runActive = false;
+            _pendingEncounterId = string.Empty;
+            _pendingEncounterIsBoss = false;
+            _encounterResumePosition = Vector3.zero;
+            _heroHp = -1f;
+            _heroMaxHp = -1f;
+            _heroMana = -1f;
+            _heroMaxMana = -1f;
             RunStateChanged.Invoke();
         }
 
@@ -275,6 +347,89 @@ namespace DeNelle.Dungeons
             _secondsSinceLastEncounter = 0f;
             _inCombat = true;
             RunStateChanged.Invoke();
+        }
+
+        // ── ATB encounter handoff (survives the battle-scene round-trip) ─────
+
+        /// <summary>
+        /// Record an encounter as the in-flight ATB battle just before the scene
+        /// routes to <c>ATBBattle</c>. This SO survives <c>SceneManager.LoadScene</c>,
+        /// so the encounter id, the boss flag and the Keeper's resume position
+        /// cross into the battle scene and back. <paramref name="resumePosition"/>
+        /// is where the dungeon places the hero when its scene reloads.
+        /// </summary>
+        public void BeginEncounterHandoff(string encounterId, bool isBoss, Vector3 resumePosition)
+        {
+            _pendingEncounterId = encounterId ?? string.Empty;
+            _pendingEncounterIsBoss = isBoss;
+            _encounterResumePosition = resumePosition;
+            _inCombat = true;
+            RunStateChanged.Invoke();
+        }
+
+        /// <summary>
+        /// Resolve the in-flight encounter on dungeon re-entry. Clears the combat
+        /// lock + the cooldown clock, marks the boss defeated on a boss-encounter
+        /// <paramref name="victory"/>, and clears the pending handoff. Idempotent
+        /// — a no-op when there is no pending encounter. Returns true when an
+        /// encounter was actually resumed.
+        /// </summary>
+        public bool ResumeAfterEncounter(bool victory)
+        {
+            if (!HasPendingEncounter) return false;
+            if (victory && _pendingEncounterIsBoss && _runActive && !_bossDefeated)
+            {
+                _bossDefeated = true;
+            }
+            _pendingEncounterId = string.Empty;
+            _pendingEncounterIsBoss = false;
+            _encounterResumePosition = Vector3.zero;
+            _secondsSinceLastEncounter = 0f;
+            _inCombat = false;
+            RunStateChanged.Invoke();
+            return true;
+        }
+
+        /// <summary>Clears the pending encounter handoff without resolving it (teardown).</summary>
+        public void ClearPendingEncounter()
+        {
+            if (!HasPendingEncounter) return;
+            _pendingEncounterId = string.Empty;
+            _pendingEncounterIsBoss = false;
+            _encounterResumePosition = Vector3.zero;
+            RunStateChanged.Invoke();
+        }
+
+        // ── Hero vitals (preserved across the ATB round-trip + checkpoint heal) ─
+
+        /// <summary>
+        /// Snapshot the Keeper's HP / mana into the run state. Called by the
+        /// encounter trigger just before the battle scene loads (so the vitals
+        /// survive the round-trip) and by the scene loop so a checkpoint heal
+        /// always works from current numbers.
+        /// </summary>
+        public void SetHeroVitals(float hp, float maxHp, float mana, float maxMana)
+        {
+            _heroHp = hp;
+            _heroMaxHp = Mathf.Max(0f, maxHp);
+            _heroMana = mana;
+            _heroMaxMana = Mathf.Max(0f, maxMana);
+            // High-frequency-safe — no RunStateChanged churn (mirrors SetHeroPosition).
+        }
+
+        /// <summary>
+        /// Restore the Keeper to full HP and mana — the checkpoint-shrine heal.
+        /// Returns true when vitals were available to heal. The actual hero
+        /// component re-reads <see cref="HeroHp"/> / <see cref="HeroMana"/> after
+        /// this call (the dungeon module owns no hero-stat type).
+        /// </summary>
+        public bool HealHeroToFull()
+        {
+            if (!HasHeroVitals) return false;
+            _heroHp = _heroMaxHp;
+            _heroMana = _heroMaxMana;
+            RunStateChanged.Invoke();
+            return true;
         }
 
         /// <summary>
@@ -365,6 +520,13 @@ namespace DeNelle.Dungeons
             _runActive = false;
             _inCombat = false;
             _bossDefeated = false;
+            _pendingEncounterId = string.Empty;
+            _pendingEncounterIsBoss = false;
+            _encounterResumePosition = Vector3.zero;
+            _heroHp = -1f;
+            _heroMaxHp = -1f;
+            _heroMana = -1f;
+            _heroMaxMana = -1f;
         }
     }
 }

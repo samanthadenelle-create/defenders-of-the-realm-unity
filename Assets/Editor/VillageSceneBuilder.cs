@@ -404,16 +404,16 @@ namespace DeNelle.Editor
 
                 if (model != null && !corner)
                 {
-                    // KayKit wall_straight is a fixed-length module; scale its
-                    // long (local X) axis so the section fills its computed run
-                    // length. (Corner pieces stay at native scale.)
-                    float baseLen = MeasureLocalLength(visual);
-                    if (baseLen > 0.01f)
-                    {
-                        var s = visual.transform.localScale;
-                        s.x *= length / baseLen;
-                        visual.transform.localScale = s;
-                    }
+                    // KayKit wall_straight is a fixed-length module; stretch its
+                    // long horizontal axis so the section fills its computed run
+                    // length EXACTLY (WallLayout already insets the run ends off
+                    // the corner blocks, so a flush fit leaves no gap/overlap).
+                    // Corner pieces stay at native scale. FitWallVisualToRun
+                    // measures in the visual's own local space, so the result is
+                    // immune to both WallStraightYawFix and the segment rotation
+                    // on `go` -- the old world-AABB measure read thickness, not
+                    // length, which is what produced the gaps/overlaps.
+                    FitWallVisualToRun(visual, length);
                 }
                 else if (model == null)
                 {
@@ -793,7 +793,12 @@ namespace DeNelle.Editor
             banner.transform.SetParent(go.transform, false);
             banner.transform.localPosition = new Vector3(-2.6f, 0f, 1.6f);
             if (flag != null)
+            {
+                // Normalise to a ~3.2m banner so it reads consistently against
+                // the Keep regardless of the flag mesh's native size.
+                NormalizeProp(banner, 3.2f);
                 ApplyEmissive(banner, HexColor("9d6fff"), 0.25f); // tint toward violet
+            }
             else
             {
                 banner.transform.localScale = new Vector3(0.3f, 3.2f, 0.3f);
@@ -913,13 +918,10 @@ namespace DeNelle.Editor
                 StripColliders(f);
                 if (fenceModel != null)
                 {
-                    float baseLen = MeasureLocalLength(f);
-                    if (baseLen > 0.01f)
-                    {
-                        var s = f.transform.localScale;
-                        s.x *= span / baseLen;
-                        f.transform.localScale = s;
-                    }
+                    // Same fixed-length-module fit as the curtain wall: stretch
+                    // the fence piece's long horizontal axis to span the plot
+                    // side. Local-space measure -> immune to the side's yaw.
+                    FitWallVisualToRun(f, span);
                 }
                 else
                 {
@@ -1049,15 +1051,17 @@ namespace DeNelle.Editor
             yard.transform.position = centre;
             BuildPlotFence(yard.transform, 2.6f, 2.4f, "wood");
 
-            // Props — KayKit decoration/props.
+            // Props — KayKit decoration/props. Each is normalised to a believable
+            // largest-dimension target (metres) so the yard dressing reads at a
+            // consistent scale despite the meshes' differing native sizes.
             PlaceProp(yard.transform, HexDecoProps + "resource_lumber.fbx",
-                new Vector3(-1.2f, 0f, 0.8f), 20f, "lumber");
+                new Vector3(-1.2f, 0f, 0.8f), 20f, "lumber", 1.3f);
             PlaceProp(yard.transform, HexDecoProps + "resource_stone.fbx",
-                new Vector3(1.3f, 0f, -0.7f), -35f, "stone");
+                new Vector3(1.3f, 0f, -0.7f), -35f, "stone", 1.2f);
             PlaceProp(yard.transform, HexDecoProps + "barrel.fbx",
-                new Vector3(0.9f, 0f, 1.1f), 0f, "barrel");
+                new Vector3(0.9f, 0f, 1.1f), 0f, "barrel", 1.0f);
             PlaceProp(yard.transform, HexDecoProps + "weaponrack.fbx",
-                new Vector3(-1.0f, 0f, -1.2f), 90f, "weaponrack");
+                new Vector3(-1.0f, 0f, -1.2f), 90f, "weaponrack", 1.6f);
         }
 
         /// <summary>
@@ -1084,7 +1088,10 @@ namespace DeNelle.Editor
                     t.transform.localPosition = new Vector3(c * 2.4f, 0f, r * 3.0f - 6f);
                     t.transform.localRotation = Quaternion.Euler(0f, (c + r) * 47f, 0f);
                     if (treeModel != null)
-                        t.transform.localScale = Vector3.one * 1.2f;
+                        // Normalise to a consistent ~3.5m fruit tree -- the raw
+                        // mesh size varies, so a flat *1.2 multiplier left the
+                        // orchard reading unevenly.
+                        NormalizeProp(t, 3.5f);
                     else
                     {
                         t.transform.localScale = new Vector3(1.4f, 2.6f, 1.4f);
@@ -1094,11 +1101,11 @@ namespace DeNelle.Editor
                     _propCount++;
                 }
             }
-            // Haybales at the orchard edge.
+            // Haybales at the orchard edge — normalised to a ~1.4m bale.
             PlaceProp(orchardRoot.transform, HexDecoProps + "haybale.fbx",
-                new Vector3(4.5f, 0f, -7f), 25f, "haybale");
+                new Vector3(4.5f, 0f, -7f), 25f, "haybale", 1.4f);
             PlaceProp(orchardRoot.transform, HexDecoProps + "haybale.fbx",
-                new Vector3(-5f, 0f, -8.5f), -40f, "haybale");
+                new Vector3(-5f, 0f, -8.5f), -40f, "haybale", 1.4f);
         }
 
         /// <summary>Scatters single trees at the given world positions (foliage dressing).</summary>
@@ -1115,7 +1122,11 @@ namespace DeNelle.Editor
                 t.transform.localPosition = p;
                 t.transform.localRotation = Quaternion.Euler(0f, i * 63f, 0f);
                 if (treeModel != null)
-                    t.transform.localScale = Vector3.one * Mathf.Lerp(0.9f, 1.3f, (i % 3) / 3f);
+                    // Normalise to a consistent ~5m tree, then apply a small
+                    // per-tree size variation on top so the scatter still reads
+                    // natural (the variation is now relative to a known base,
+                    // not a raw mesh size that differs per import).
+                    NormalizeProp(t, 5f * Mathf.Lerp(0.9f, 1.3f, (i % 3) / 3f));
                 else
                 {
                     t.transform.localScale = new Vector3(1.3f, 2.6f, 1.3f);
@@ -1126,9 +1137,14 @@ namespace DeNelle.Editor
             }
         }
 
-        /// <summary>Instantiates one KayKit prop at a local position; placeholder on miss.</summary>
+        /// <summary>
+        /// Instantiates one KayKit prop at a local position; placeholder on miss.
+        /// <paramref name="targetSize"/> is the prop's largest world dimension in
+        /// metres — every prop is normalised to it via <see cref="NormalizeProp"/>
+        /// so props from different KayKit folders read at a consistent scale.
+        /// </summary>
         private static void PlaceProp(Transform parent, string assetPath, Vector3 localPos,
-            float yaw, string label)
+            float yaw, string label, float targetSize = 1.0f)
         {
             var model = LoadModel(assetPath);
             var prop = InstantiateModel(model, Path.GetFileName(assetPath), label);
@@ -1140,6 +1156,12 @@ namespace DeNelle.Editor
                 prop.transform.localScale = new Vector3(0.7f, 0.7f, 0.7f);
                 prop.transform.localPosition = localPos + Vector3.up * 0.35f;
                 ApplyColor(prop, C("9a8a6a"));
+            }
+            else
+            {
+                // KayKit props have inconsistent native mesh sizes -- normalise
+                // each to a common yardstick so the dressing reads coherently.
+                NormalizeProp(prop, targetSize);
             }
             _propCount++;
         }
@@ -1204,7 +1226,9 @@ namespace DeNelle.Editor
                     rR.transform.SetParent(laneRoot.transform, false);
                     rR.transform.position = along - lateral * 3.4f;
                     if (foliageModel == null) { ApplyColor(tL, C("3f6e34")); tL.transform.position += Vector3.up; }
+                    else NormalizeProp(tL, 4.5f);  // consistent ~4.5m lane tree
                     if (rockModel == null) { ApplyColor(rR, C("8a8780")); rR.transform.position += Vector3.up * 0.4f; }
+                    else NormalizeProp(rR, 1.3f);  // consistent ~1.3m lane boulder
                     _propCount += 2;
                 }
 
@@ -1353,20 +1377,120 @@ namespace DeNelle.Editor
             return MakePlaceholderCube($"{assetLabel} -> {placeholderLabel}");
         }
 
-        /// <summary>Renderer-bounds length along local X of a model instance (for run-fit scaling).</summary>
-        private static float MeasureLocalLength(GameObject go)
+        /// <summary>
+        /// Axis-aligned bounds of every mesh under <paramref name="go"/>, expressed
+        /// in <paramref name="go"/>'s OWN local space — independent of any rotation
+        /// on <paramref name="go"/> itself OR on its parents.
+        ///
+        /// <para>Why this exists. The naive measure used <c>Renderer.bounds.size</c>,
+        /// which is a WORLD-space AABB: once the piece (or a parent) is rotated, that
+        /// AABB no longer maps to the mesh's own X/Y/Z extents, so a "length along
+        /// local X" reading was actually returning the piece's depth/thickness. We
+        /// instead take each child MeshFilter's <c>sharedMesh.bounds</c> (true mesh
+        /// space) and push its 8 corners through
+        /// <c>go.worldToLocalMatrix * meshFilter.transform.localToWorldMatrix</c>.
+        /// That round-trip cancels every rotation between the mesh and
+        /// <paramref name="go"/>, leaving extents measured along
+        /// <paramref name="go"/>'s local axes — exactly the axes <c>localScale</c>
+        /// stretches.</para>
+        /// </summary>
+        private static bool TryMeasureLocalBounds(GameObject go, out Bounds local)
         {
-            var renderers = go.GetComponentsInChildren<Renderer>();
-            if (renderers == null || renderers.Length == 0) return 0f;
+            local = default;
+            if (go == null) return false;
             bool any = false;
-            Bounds b = default;
-            foreach (var r in renderers)
+            foreach (var mf in go.GetComponentsInChildren<MeshFilter>())
             {
-                if (r == null) continue;
-                if (!any) { b = r.bounds; any = true; }
-                else b.Encapsulate(r.bounds);
+                if (mf == null || mf.sharedMesh == null) continue;
+                Bounds mb = mf.sharedMesh.bounds;
+                Matrix4x4 m = go.transform.worldToLocalMatrix *
+                              mf.transform.localToWorldMatrix;
+                Vector3 c = mb.center, e = mb.extents;
+                for (int sx = -1; sx <= 1; sx += 2)
+                for (int sy = -1; sy <= 1; sy += 2)
+                for (int sz = -1; sz <= 1; sz += 2)
+                {
+                    Vector3 corner = m.MultiplyPoint3x4(
+                        c + new Vector3(sx * e.x, sy * e.y, sz * e.z));
+                    if (!any) { local = new Bounds(corner, Vector3.zero); any = true; }
+                    else local.Encapsulate(corner);
+                }
             }
-            return any ? b.size.x : 0f;
+            // Skinned meshes (rare for static dressing) — fall back to renderer
+            // localBounds, which is already mesh-space for a SkinnedMeshRenderer.
+            if (!any)
+            {
+                foreach (var smr in go.GetComponentsInChildren<SkinnedMeshRenderer>())
+                {
+                    if (smr == null) continue;
+                    Bounds lb = smr.localBounds;
+                    if (!any) { local = lb; any = true; }
+                    else local.Encapsulate(lb);
+                }
+            }
+            return any;
+        }
+
+        /// <summary>
+        /// Scales a wall/fence visual so it spans exactly <paramref name="runLength"/>
+        /// along the run direction. The KayKit straight modules are a fixed length;
+        /// this stretches whichever of the visual's HORIZONTAL local axes is the long
+        /// one (the run axis) up to <paramref name="runLength"/>, leaving height and
+        /// thickness untouched. Auto-detecting the long axis makes the fit correct
+        /// regardless of the piece's native orientation or its yaw-fix rotation —
+        /// so straights tile flush against the native-scale corner pieces.
+        /// </summary>
+        private static void FitWallVisualToRun(GameObject visual, float runLength)
+        {
+            if (visual == null || runLength <= 0.01f) return;
+            if (!TryMeasureLocalBounds(visual, out var lb)) return;
+
+            var s = visual.transform.localScale;
+            // The run axis is the longer of the two horizontal mesh extents.
+            if (lb.size.x >= lb.size.z)
+            {
+                if (lb.size.x > 0.01f) s.x *= runLength / lb.size.x;
+            }
+            else
+            {
+                if (lb.size.z > 0.01f) s.z *= runLength / lb.size.z;
+            }
+            visual.transform.localScale = s;
+        }
+
+        /// <summary>
+        /// Normalises a KayKit prop / dressing instance to a consistent, believable
+        /// size. KayKit props are authored across several folders/packs at wildly
+        /// different native mesh scales — a barrel, a haybale and a weapon rack do
+        /// NOT share a unit, so dropping them all in at <c>localScale = 1</c> makes
+        /// some read far too big and others too small next to each other and the
+        /// buildings.
+        ///
+        /// <para>The fix: measure the instance's true mesh bounds (rotation-immune,
+        /// via <see cref="TryMeasureLocalBounds"/>) and apply a UNIFORM scale that
+        /// brings its largest extent — horizontal footprint or height, whichever
+        /// dominates — to <paramref name="targetSize"/> world units. Every prop type
+        /// is then sized to the same yardstick, so the village dressing reads
+        /// coherently. The scale is clamped to a sane band so a freak mesh (or a
+        /// placeholder cube) can't explode or vanish.</para>
+        /// </summary>
+        /// <param name="go">The prop instance to rescale (multiplies its current localScale).</param>
+        /// <param name="targetSize">Desired largest world-space dimension, in metres.</param>
+        private static void NormalizeProp(GameObject go, float targetSize)
+        {
+            if (go == null || targetSize <= 0.001f) return;
+            if (!TryMeasureLocalBounds(go, out var lb)) return;
+
+            // Largest of the three native extents under the prop's current scale.
+            Vector3 cur = go.transform.localScale;
+            float nativeMax = Mathf.Max(
+                lb.size.x * Mathf.Abs(cur.x),
+                Mathf.Max(lb.size.y * Mathf.Abs(cur.y), lb.size.z * Mathf.Abs(cur.z)));
+            if (nativeMax < 0.0001f) return;
+
+            float factor = targetSize / nativeMax;
+            factor = Mathf.Clamp(factor, 0.05f, 40f); // guard freak meshes / placeholders
+            go.transform.localScale = cur * factor;
         }
 
         // =====================================================================

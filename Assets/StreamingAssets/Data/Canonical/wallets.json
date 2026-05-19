@@ -1,0 +1,32 @@
+{
+  "_comment": "Canonical wallet-address registry for Defenders of the Realm — PUBLIC on-chain addresses ONLY. Extracted VERBATIM from docs/wallets-of-record.md. NO private keys, seed phrases, or signer keypairs are stored here or anywhere in this repo (v2-unity-port-spec.md Part 10). These addresses power the v2 wallet module's transparency display and the devnet pack-purchase smoke test. Devnet-only economy in the v2 Unity foundation.",
+  "_sources": {
+    "walletsOfRecord": "defenders-of-the-realm/docs/wallets-of-record.md (§2 Rewards Distributor, §3 Dev/Staging wallet)",
+    "portSpec": "defenders-unity/docs/v2-unity-port-spec.md (Week 7 — Rewards Distributor display; Part 10 — devnet-only, no secrets)"
+  },
+  "_schemaNotes": {
+    "rewardsDistributor": "The hardware-backed Seeker Seed Vault wallet that pays SKR rewards to players (Streams A/B/C). PUBLIC, Solscan-lookup-safe. Shown verbatim in the v2 store/settings transparency line — it is NOT a payment recipient. Pack revenue never lands here (wallets-of-record §2).",
+    "devnetPurchaseRecipient": "The devnet pack-purchase test transfers land here in the v2 foundation. wallets-of-record §4 SOL/USDC/SKR revenue-treasury wallets are NOT yet provisioned (blocked on Squads multisig setup), so the documented Dev/Staging wallet (§3 — used for 'pre-mainnet smoke tests verifying pack-purchase flow end-to-end on devnet') is the safe devnet sink until the real treasuries exist. This is a PUBLIC address; no key is held by the game.",
+    "mainnetGate": "When the §4 Squads multisig revenue treasuries are provisioned, the integrator adds them here under a 'mainnetTreasuries' block and the owner flips WalletService.ActiveNetwork to Mainnet. The agent does NOT do this (Part 10)."
+  },
+  "version": 1,
+  "rewardsDistributor": {
+    "label": "Rewards Distributor",
+    "address": "2JRmEmrqUbhTiHX3u5bes5kHYZeZkJ2V1cMWubxwnmNi",
+    "provider": "Solana Seeker — Seed Vault (hardware secure element)",
+    "holder": "Samantha Denelle / DeNelle Studios",
+    "purpose": "SKR rewards distribution to players (Streams A/B/C).",
+    "public": true,
+    "explorerNote": "Public on-chain — Solscan-lookup-safe. Shown for transparency only; never a payment destination."
+  },
+  "devnetPurchaseRecipient": {
+    "label": "Devnet Pack-Purchase Recipient (Dev / Staging wallet)",
+    "address": "3Eeww2hyBUhiLi7AS2xsjZbfZQ2fmPFq8yh53vNzgaHe",
+    "provider": "Solflare (desktop software wallet)",
+    "holder": "Samantha Denelle / DeNelle Studios",
+    "purpose": "Devnet pack-purchase smoke-test recipient. Stands in until the §4 Squads multisig revenue treasuries are provisioned.",
+    "public": true,
+    "network": "devnet",
+    "explorerNote": "Public on-chain. The v2 foundation routes devnet pack-purchase transfers here. Holds gas-only balances; no production assets."
+  }
+}
