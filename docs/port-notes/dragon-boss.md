@@ -11,13 +11,13 @@ build, run the script, or verify rendering).
 signature mechanic, telegraph) — applied to a NEW apex encounter the codex's
 roster does not cover.
 
-> **⚠ OWNER RATIFICATION REQUIRED (spec Part 1, review-and-approve rule).**
+> **✔ OWNER-RATIFIED 2026-05-19.**
 > The Black Dragon is **not** in `enemy-codex.md` — the codex is a humanoid /
-> quadruped KayKit slate of 19 entities. This boss is **agent-authored**. Two
-> calls below are flagged for the owner to ratify or override:
-> 1. **The name** — proposed **"Vael, the Ash-Wing"** (placeholder; see §1).
-> 2. **The placement** — proposed as a **special apex village wave-boss**,
->    above the canon Necromancer of the Wound (see §2).
+> quadruped KayKit slate of 19 entities. This boss is agent-authored content
+> the owner pulled in:
+> 1. **The name** — **"Syndrath the Devourer"** — ratified by the owner.
+> 2. **The placement** — a **special apex village wave-boss**, above the canon
+>    Necromancer of the Wound (see §2) — the working design.
 > Nothing here renames or contradicts a canon-locked item.
 
 ---
@@ -31,12 +31,12 @@ explicitly leaves room for content the owner pulls in; the Black Dragon is the
 first true *aerial* boss and sits **above** the eight named bosses as a rare,
 realm-scale event.
 
-**Proposed name — "Vael, the Ash-Wing"** *(agent-authored — owner to ratify).*
+**Name — "Syndrath the Devourer"** *(owner-ratified 2026-05-19).*
 A black dragon drawn to Avalon by the Withering's spreading rot — it does not
-serve Alduin, it simply hunts where the realm is weakest. The "Ash-Wing" reads
-the black hide; "Vael" is a short, speakable boss-name. If the owner prefers the
-dragon to be a *hand of the Wound* (a corrupted great-beast, thematically tied
-to Alduin) the lore can be re-pointed without touching code — only the displayed
+serve Alduin, it simply hunts where the realm is weakest, devouring what the
+Withering has already weakened. "The Devourer" names that hunger; "Syndrath" is
+its old, speakable name. The lore can still be re-pointed (e.g. a *hand of the
+Wound*, thematically tied to Alduin) without touching code — only the displayed
 name string changes.
 
 **Tone note:** the codex's register is "these are mourning stories, not twitch
@@ -267,8 +267,8 @@ overwrites the `.controller` / `.prefab` in place.
 - **`ApplyStatus` is inert.** A flying boss has no ground-slow; `DragonBoss`
   accepts the `IDamageable` status call but does nothing. A future pass could let
   `Freeze` interrupt a swoop (a fair, readable counter-play beat).
-- **Name + placement unratified** (§1, §2) — the owner must confirm or override
-  "Vael, the Ash-Wing" and the apex-village-wave placement before this is canon.
+- **Name owner-ratified 2026-05-19** — "Syndrath the Devourer" (§1). The
+  apex-village-wave placement (§2) stands as the working design.
 - **Fire-breath VFX** — `DragonBoss` fires the damage + the `StruckHeart` event
   on a breath pass, but the breath cone / throat-glow VFX is a separate art pass.
 - **ATB cross-over** — if the owner ever wants the dragon to *also* appear as an

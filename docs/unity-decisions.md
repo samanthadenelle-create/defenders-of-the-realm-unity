@@ -86,3 +86,9 @@ Built in parallel by scoped agents; slice detail in `docs/port-notes/week5-*.md`
 - **2026-05-19 — Dungeon scene wiring outstanding.** Week 5/6 C# (DungeonController, DungeonHero, DungeonCameraRig, Lantern, Bryn, LoreStone, EncounterTrigger, Checkpoint) compiles but is not yet wired into `Dungeon_HealersCottage.unity` — the dungeon-scene integration pass is the next step. See the `week5/6` port-notes for the checklist.
 - **2026-05-19 — Breach→ATB return-scene bug (BUG-008 / CODE-001).** `BattleController` hard-codes the post-battle return to the Village; a dungeon ATB encounter must return to the dungeon. `WaveManager` also always restarts at the start wave on return. To be fixed in the integration pass.
 - **2026-05-19 — Dungeon audio missing.** `echoes-beneath-elarion.mp3` and `lantern-flicker.mp3` are not in the project; the AudioSources are wired and guarded, silent until the owner supplies the tracks.
+
+## Content additions (owner-supplied assets)
+
+| Date | Decision | Reason | Reversible? |
+|------|----------|--------|-------------|
+| 2026-05-19 | The owner-supplied Black Dragon (a `.unitypackage`) is added as an apex flying boss — `DragonBoss.cs` + `Boss_Dragon.prefab` + `Dragon.controller`. Owner-ratified name: **"Syndrath the Devourer"** (overrides the agent's placeholder "Vael, the Ash-Wing"). Placement = a special apex village wave-boss above the Necromancer. | The owner pulled the asset in and wants a flying dragon boss; the enemy codex flagged the bestiary as having no true monster. The dragon's `.blend` sibling (BGE Dragon) was rejected — its export carried a 34k-unit environment plane and no animations. | Yes — the name is one display string; the boss is self-contained. |

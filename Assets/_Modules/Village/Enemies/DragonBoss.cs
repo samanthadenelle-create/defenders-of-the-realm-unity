@@ -9,11 +9,11 @@
 // + VFX beats rather than dedicated clips (see docs/port-notes/dragon-boss.md).
 //
 // WHERE IT FITS. The Black Dragon is NOT in docs/enemy-codex.md's roster — the
-// codex is a humanoid/quadruped KayKit slate. This boss is an AGENT-AUTHORED
-// apex encounter: "Vael, the Ash-Wing" — a sky-boss that circles Avalon and
-// dives on the Heart, a set-piece above the eight-boss slate. The name and the
-// placement (a special apex village wave, above the Necromancer) are FLAGGED
-// FOR OWNER RATIFICATION per the spec Part 1 review-and-approve rule.
+// codex is a humanoid/quadruped KayKit slate. This boss is an apex encounter:
+// "Syndrath the Devourer" — a sky-boss that circles Avalon and dives on the
+// Heart, a set-piece above the eight-boss slate. The name was owner-ratified
+// (2026-05-19); the placement — a special apex village wave, above the
+// Necromancer — is the working design.
 //
 // MODULE ISOLATION. Lives in DeNelle.Village (it threatens the village Heart,
 // like Enemy). It implements the cross-module DeNelle.Core.Combat.IDamageable
@@ -68,8 +68,8 @@ namespace DeNelle.Village
     /// pets module can damage it through the Core seam.
     /// </summary>
     /// <remarks>
-    /// AGENT-AUTHORED encounter — name "Vael, the Ash-Wing" and the apex-wave
-    /// placement are flagged for owner ratification (see the port note).
+    /// Boss name "Syndrath the Devourer" — owner-ratified 2026-05-19. The
+    /// apex-wave placement is the working design (see docs/port-notes/dragon-boss.md).
     /// </remarks>
     [DisallowMultipleComponent]
     public sealed class DragonBoss : MonoBehaviour, IDamageable
