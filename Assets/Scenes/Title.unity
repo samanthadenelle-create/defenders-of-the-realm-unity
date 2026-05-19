@@ -310,7 +310,7 @@ MonoBehaviour:
   m_Script: {fileID: 19102, guid: 0000000000000000e000000000000000, type: 0}
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.dll::UnityEngine.UIElements.UIDocument
-  m_PanelSettings: {fileID: 0}
+  m_PanelSettings: {fileID: 11400000, guid: 62eb597cbdb9b3e44a219c12b452ca10, type: 2}
   m_ParentUI: {fileID: 0}
   sourceAsset: {fileID: 9197481963319205126, guid: c15fc22e79d84664da58eb6e6129e353, type: 3}
   m_SortingOrder: 0
@@ -382,7 +382,7 @@ MonoBehaviour:
   m_Script: {fileID: 19102, guid: 0000000000000000e000000000000000, type: 0}
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.dll::UnityEngine.UIElements.UIDocument
-  m_PanelSettings: {fileID: 0}
+  m_PanelSettings: {fileID: 11400000, guid: 62eb597cbdb9b3e44a219c12b452ca10, type: 2}
   m_ParentUI: {fileID: 0}
   sourceAsset: {fileID: 0}
   m_SortingOrder: 0
@@ -453,7 +453,7 @@ MonoBehaviour:
   m_Script: {fileID: 19102, guid: 0000000000000000e000000000000000, type: 0}
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.dll::UnityEngine.UIElements.UIDocument
-  m_PanelSettings: {fileID: 0}
+  m_PanelSettings: {fileID: 11400000, guid: 62eb597cbdb9b3e44a219c12b452ca10, type: 2}
   m_ParentUI: {fileID: 0}
   sourceAsset: {fileID: 0}
   m_SortingOrder: 15
@@ -579,6 +579,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: DeNelle.Onboarding::DeNelle.Onboarding.SplashLoading
   _videoPlayer: {fileID: 1804462327}
   _videoTexture: {fileID: 8400000, guid: 638463dbeabf46442a730c50dcb16649, type: 2}
+  _playBumperVideo: 0
   _maxBumperSeconds: 3.5
   _videoStartTimeoutSeconds: 1
   _staticHoldSeconds: 1.5
@@ -595,7 +596,7 @@ MonoBehaviour:
   m_Script: {fileID: 19102, guid: 0000000000000000e000000000000000, type: 0}
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.dll::UnityEngine.UIElements.UIDocument
-  m_PanelSettings: {fileID: 0}
+  m_PanelSettings: {fileID: 11400000, guid: 62eb597cbdb9b3e44a219c12b452ca10, type: 2}
   m_ParentUI: {fileID: 0}
   sourceAsset: {fileID: 0}
   m_SortingOrder: 20

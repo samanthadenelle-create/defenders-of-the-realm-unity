@@ -60,6 +60,10 @@ namespace DeNelle.Onboarding
         private Button _startButton;
         private Button _connectWalletButton;
 
+        // Panel-render diagnostic (temporary).
+        private bool _titleBuilt;
+        private int _diagFrames;
+
         private void OnEnable()
         {
             // Hide the title screen until the arrival sequence has finished, so
@@ -74,6 +78,23 @@ namespace DeNelle.Onboarding
             // async void); Forget() is the sanctioned way to launch a top-level
             // UniTask from a Unity lifecycle hook.
             RunArrival().Forget();
+        }
+
+        // Temporary panel-render diagnostic — logs the title panel's state a
+        // beat after it is built, from a plain Update so it runs regardless of
+        // any UI Toolkit layout/scheduler issue.
+        private void Update()
+        {
+            if (!_titleBuilt || _diagFrames < 0) return;
+            if (++_diagFrames < 120) return;
+            _diagFrames = -1;
+            var rt = _titleDocument != null ? _titleDocument.rootVisualElement : null;
+            Debug.Log($"[TitleController] PANELDIAG docEnabled=" +
+                      $"{_titleDocument != null && _titleDocument.isActiveAndEnabled} " +
+                      $"panelSettings={_titleDocument != null && _titleDocument.panelSettings != null} " +
+                      $"rootPanel={rt != null && rt.panel != null} " +
+                      $"worldBound={(rt != null ? rt.worldBound.ToString() : "n/a")} " +
+                      $"screen={Screen.width}x{Screen.height}");
         }
 
         /// <summary>
@@ -167,6 +188,8 @@ namespace DeNelle.Onboarding
             if (titleRoot != null)
                 titleRoot.RegisterCallback<GeometryChangedEvent>(_ => Debug.Log(
                     $"[TitleController] DIAG: title-root resolved bg = {titleRoot.resolvedStyle.backgroundColor}"));
+
+            _titleBuilt = true;
         }
 
         private void OnDisable()
