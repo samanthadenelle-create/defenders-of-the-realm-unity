@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- TutorialOverlay.uxml — the first-run guided-tutorial overlay (audit P0-11).
+     A dimmed full-screen scrim with a single coach-mark card pinned to the
+     bottom of the screen: a step caption, the narrated step copy, a progress
+     readout, a Skip control and a Next / Begin Wave control.
+
+     The overlay is a PASSIVE display — OnboardingFlow drives it. Every text
+     node is intentionally left empty; OnboardingFlow fills the step copy from
+     en.json (tutorial.steps.*) at runtime so no canon string is baked into a
+     serialized asset (v2 port-spec Part 4). The card is one shell reused for
+     all five steps; only its text changes between steps. -->
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <Style src="TutorialOverlay.uss" />
+    <ui:VisualElement name="tutorial-root" class="tutorial-root">
+
+        <!-- Dimming scrim — sits behind the card so the live village stays
+             faintly visible. Pass-through is OFF: the scrim swallows world
+             taps while the tutorial is up, so a coach-mark step is read
+             before the player can act. -->
+        <ui:VisualElement name="tutorial-scrim" class="tutorial-scrim" />
+
+        <!-- The coach-mark card, pinned bottom-centre. -->
+        <ui:VisualElement name="tutorial-card" class="tutorial-card">
+
+            <!-- Caption row — step kicker + progress dots readout. -->
+            <ui:VisualElement name="tutorial-card-head" class="tutorial-card-head">
+                <ui:Label name="tutorial-caption" class="tutorial-caption" text="" />
+                <ui:Label name="tutorial-progress" class="tutorial-progress" text="" />
+            </ui:VisualElement>
+
+            <!-- The narrated step copy — filled from en.json tutorial.steps.*. -->
+            <ui:Label name="tutorial-body" class="tutorial-body" text="" />
+
+            <!-- Controls — Skip (left) and Next / Begin (right). -->
+            <ui:VisualElement name="tutorial-card-foot" class="tutorial-card-foot">
+                <ui:Button name="tutorial-skip" class="tutorial-skip" text="Skip tutorial" />
+                <ui:Button name="tutorial-next" class="tutorial-next" text="Next" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

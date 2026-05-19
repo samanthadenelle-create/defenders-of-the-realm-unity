@@ -1,0 +1,139 @@
+/* =============================================================================
+ * TutorialOverlay.uss — styling for the first-run guided tutorial (audit P0-11).
+ * -----------------------------------------------------------------------------
+ * Matches the project's UI Toolkit visual language (VillageHud.uss /
+ * BuildMenu.uss): a dark Heart-Forest palette, violet (#7C3AED-ish) for the
+ * Heart accent, amber for the call-to-action, muted greys for body copy.
+ * Values are inline — the project Theme is C#-driven, not USS variables —
+ * kept in sync by hand, the established HUD / BuildMenu convention.
+ *
+ * USS class names OnboardingFlow toggles at runtime:
+ *   tutorial-root--hidden        — whole overlay collapsed (display:none)
+ *   tutorial-next--begin         — final-step Next restyled as the amber CTA
+ * ============================================================================= */
+
+/* ── Root — full-screen, sits above the HUD ─────────────────────────────── */
+.tutorial-root {
+    flex-grow: 1;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    justify-content: flex-end;
+    align-items: center;
+}
+
+/* The whole overlay collapsed — set while the tutorial is not running. */
+.tutorial-root--hidden {
+    display: none;
+}
+
+/* ── Dimming scrim — faint, so the live village reads through ───────────── */
+.tutorial-scrim {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(7, 4, 15, 0.55);
+}
+
+/* ── The coach-mark card, pinned bottom-centre ──────────────────────────── */
+.tutorial-card {
+    width: 560px;
+    max-width: 92%;
+    flex-direction: column;
+    padding: 16px 18px 14px 18px;
+    margin-bottom: 28px;
+    border-radius: 16px;
+    background-color: rgba(15, 12, 24, 0.98);
+    border-width: 1px;
+    border-color: rgba(124, 58, 237, 0.55);
+}
+
+/* ── Caption row — kicker + progress readout ────────────────────────────── */
+.tutorial-card-head {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.tutorial-caption {
+    font-size: 12px;
+    -unity-font-style: bold;
+    letter-spacing: 3px;
+    color: rgb(196, 181, 253);
+}
+
+.tutorial-progress {
+    font-size: 12px;
+    -unity-font-style: bold;
+    color: rgb(150, 142, 170);
+}
+
+/* ── The narrated step copy ─────────────────────────────────────────────── */
+.tutorial-body {
+    font-size: 17px;
+    color: rgb(237, 233, 250);
+    white-space: normal;
+    margin-bottom: 16px;
+    -unity-font-style: italic;
+}
+
+/* ── Controls row ───────────────────────────────────────────────────────── */
+.tutorial-card-foot {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+}
+
+/* Skip — a quiet ghost button; always available (the tutorial is skippable). */
+.tutorial-skip {
+    min-width: 130px;
+    height: 40px;
+    font-size: 13px;
+    color: rgb(168, 160, 188);
+    background-color: rgba(36, 30, 52, 0.9);
+    border-width: 1px;
+    border-color: rgba(90, 84, 110, 0.7);
+    border-radius: 20px;
+}
+
+.tutorial-skip:hover {
+    color: rgb(220, 214, 236);
+    border-color: rgba(124, 58, 237, 0.55);
+}
+
+/* Next — the violet primary advance control. */
+.tutorial-next {
+    min-width: 150px;
+    height: 44px;
+    font-size: 15px;
+    -unity-font-style: bold;
+    color: rgb(245, 240, 255);
+    background-color: rgb(124, 58, 237);
+    border-width: 0;
+    border-radius: 22px;
+    transition-property: scale;
+    transition-duration: 0.12s;
+}
+
+.tutorial-next:hover {
+    scale: 1.04 1.04;
+}
+
+.tutorial-next:active {
+    scale: 0.96 0.96;
+}
+
+/* Final step — Next becomes the amber "Begin Wave 1" call-to-action. */
+.tutorial-next--begin {
+    color: rgb(28, 22, 10);
+    background-color: rgb(245, 196, 90);
+}
+
+.tutorial-next--begin:hover {
+    background-color: rgb(255, 212, 120);
+}

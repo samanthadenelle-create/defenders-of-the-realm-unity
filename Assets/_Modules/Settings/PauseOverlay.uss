@@ -1,0 +1,100 @@
+/*
+ * PauseOverlay.uss — styling for the pause menu (audit P0-10 §2.3).
+ * ----------------------------------------------------------------------
+ * Matches the project's UI Toolkit visual language (SettingsScreen.uss /
+ * VillageHud.uss / BuildMenu.uss): a dark Heart-Forest palette, violet for
+ * the Heart accent, amber for the primary call-to-action, a muted red for
+ * the destructive Quit action. Values are inline — the project Theme is
+ * C#-driven, not USS variables — kept in sync by hand, the established
+ * BattleHUD / BuildMenu convention.
+ *
+ * The root paints a full-screen dimming scrim; the panel is centred and
+ * modal — while the overlay is up the game is frozen (Time.timeScale = 0)
+ * and the scrim captures all input.
+ */
+
+/* ── Root — full-screen modal scrim ─────────────────────────────────── */
+.pause-root {
+    flex-grow: 1;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(8, 6, 14, 0.78);
+    align-items: center;
+    justify-content: center;
+}
+
+/* ── The pause panel ────────────────────────────────────────────────── */
+.pause-panel {
+    width: 360px;
+    flex-direction: column;
+    align-items: center;
+    padding: 28px 24px;
+    border-radius: 18px;
+    background-color: rgba(15, 12, 24, 0.98);
+    border-width: 1px;
+    border-color: rgba(124, 58, 237, 0.5);
+}
+
+.pause-title {
+    font-size: 30px;
+    -unity-font-style: bold;
+    color: rgb(237, 233, 250);
+    -unity-text-align: middle-center;
+}
+
+.pause-subtitle {
+    margin-top: 4px;
+    margin-bottom: 18px;
+    font-size: 13px;
+    -unity-font-style: italic;
+    color: rgb(160, 152, 178);
+    white-space: normal;
+    -unity-text-align: middle-center;
+}
+
+/* ── Button column ──────────────────────────────────────────────────── */
+.pause-buttons {
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+}
+
+.pause-button {
+    height: 52px;
+    margin-top: 8px;
+    margin-bottom: 8px;
+    font-size: 16px;
+    -unity-font-style: bold;
+    border-radius: 12px;
+    border-width: 0;
+}
+
+.pause-button--primary {
+    color: rgb(28, 22, 10);
+    background-color: rgb(245, 196, 90);
+}
+
+.pause-button--primary:hover {
+    background-color: rgb(255, 212, 120);
+}
+
+.pause-button--ghost {
+    color: rgb(206, 200, 222);
+    background-color: rgba(255, 255, 255, 0.07);
+}
+
+.pause-button--ghost:hover {
+    background-color: rgba(255, 255, 255, 0.14);
+}
+
+.pause-button--danger {
+    color: rgb(245, 224, 224);
+    background-color: rgba(140, 38, 48, 0.85);
+}
+
+.pause-button--danger:hover {
+    background-color: rgba(176, 48, 60, 0.95);
+}
