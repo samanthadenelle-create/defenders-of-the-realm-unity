@@ -40,6 +40,14 @@ namespace DeNelle.Onboarding
         [Tooltip("The RenderTexture the VideoPlayer renders into; shown on the overlay.")]
         [SerializeField] private RenderTexture _videoTexture;
 
+        [Tooltip("Play the studio-bumper.mp4 video. OFF: the shipped studio-bumper.mp4 " +
+                 "is a non-baseline-profile H.264 that deadlocks the Windows VideoPlayer " +
+                 "(Media Foundation) and freezes the game on launch — so the bumper shows " +
+                 "the static 'DeNelle Studios presents' card instead. Turn ON only once " +
+                 "the clip is re-encoded clean (H.264 baseline / yuv420p / bt709) or " +
+                 "re-imported with VideoClip transcoding enabled.")]
+        [SerializeField] private bool _playBumperVideo = false;
+
         [Header("Timing")]
         [Tooltip("Hard cap on bumper duration — if the clip runs long or stalls, finish anyway.")]
         [SerializeField] private float _maxBumperSeconds = 3.5f;
@@ -119,7 +127,10 @@ namespace DeNelle.Onboarding
         private async UniTask<bool> TryPlayVideo(
             VisualElement videoElement, VisualElement fallbackCard, CancellationToken token)
         {
-            if (_videoPlayer == null || _videoPlayer.clip == null)
+            // Video disabled (see _playBumperVideo) or no clip — go straight to
+            // the static "DeNelle Studios presents" card. This guard is what
+            // keeps a malformed clip from deadlocking the native video decoder.
+            if (!_playBumperVideo || _videoPlayer == null || _videoPlayer.clip == null)
             {
                 ShowFallback(videoElement, fallbackCard);
                 return false;
