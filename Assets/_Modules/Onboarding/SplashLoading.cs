@@ -40,12 +40,13 @@ namespace DeNelle.Onboarding
         [Tooltip("The RenderTexture the VideoPlayer renders into; shown on the overlay.")]
         [SerializeField] private RenderTexture _videoTexture;
 
-        [Tooltip("Play the studio-bumper.mp4 video. ON: the clip is imported with " +
-                 "VideoClip transcoding enabled (see BumperVideoImport), so Unity " +
-                 "re-encodes it to a decoder-safe format and it no longer hangs the " +
-                 "Windows video decoder. Turn OFF to fall back to the static " +
-                 "'DeNelle Studios presents' card if a clip ever misbehaves.")]
-        [SerializeField] private bool _playBumperVideo = true;
+        [Tooltip("Play the studio-bumper.mp4 video. OFF: the studio-bumper clip — " +
+                 "tried raw AND with VideoClip transcoding — reliably crashes the " +
+                 "Windows player's video decoder at the splash; the build only runs " +
+                 "with the video off, showing the static 'DeNelle Studios presents' " +
+                 "card. Needs a verified clean offline re-encode (H.264 baseline / " +
+                 "yuv420p / explicit bt709 color) before this can be turned back ON.")]
+        [SerializeField] private bool _playBumperVideo = false;
 
         [Header("Timing")]
         [Tooltip("Hard cap on bumper duration — if the clip runs long or stalls, finish anyway.")]
