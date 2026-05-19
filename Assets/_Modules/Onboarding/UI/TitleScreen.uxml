@@ -8,6 +8,10 @@
      fills the tagline and studio credit from canon-strings.json at runtime
      so no canon string is baked into a serialized asset (port-spec Part 4). -->
 <ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <!-- Theme.uss FIRST: it defines the design tokens (on :root) that
+         TitleScreen.uss reads via the var() function. Without it the colours
+         resolve to nothing and the screen renders black. -->
+    <Style src="../../Core/Theme/Theme.uss" />
     <Style src="TitleScreen.uss" />
     <ui:VisualElement name="title-root" class="title-root">
 

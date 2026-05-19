@@ -83,18 +83,29 @@ namespace DeNelle.Onboarding
         /// </summary>
         private async UniTask RunArrival()
         {
+            Debug.Log("[TitleController] Arrival: start.");
+
             // Stage 1 — studio bumper.
             if (_splash != null)
+            {
+                Debug.Log("[TitleController] Arrival: awaiting splash.Play() ...");
                 await _splash.Play();
+            }
+            Debug.Log("[TitleController] Arrival: splash stage done.");
 
             // Stage 2 — cold open (the controller's own gate decides whether
             // it actually plays or returns immediately for a returning save).
             if (_storyIntro != null)
+            {
+                Debug.Log("[TitleController] Arrival: awaiting storyIntro.Play() ...");
                 await _storyIntro.Play();
+            }
+            Debug.Log("[TitleController] Arrival: storyIntro stage done.");
 
             // Stage 3 — the title screen.
             BuildTitleScreen();
             SetTitleVisible(true);
+            Debug.Log("[TitleController] Arrival: title screen built + visible.");
         }
 
         // =====================================================================
@@ -144,6 +155,18 @@ namespace DeNelle.Onboarding
             _connectWalletButton = _root.Q<Button>("connect-wallet-button");
             if (_connectWalletButton != null)
                 _connectWalletButton.clicked += OnConnectWalletClicked;
+
+            // Diagnostic: confirm the title document loaded and its theme tokens
+            // resolved. childCount + the title-root lookup show the UXML loaded;
+            // the GeometryChangedEvent fires after layout (when resolvedStyle is
+            // valid) — a dark backgroundColor means the Theme.uss tokens
+            // resolved, a transparent one means they did not.
+            var titleRoot = _root.Q("title-root");
+            Debug.Log($"[TitleController] DIAG: rootChildren={_root.childCount} " +
+                      $"sheets={_root.styleSheets.count} titleRootFound={titleRoot != null}");
+            if (titleRoot != null)
+                titleRoot.RegisterCallback<GeometryChangedEvent>(_ => Debug.Log(
+                    $"[TitleController] DIAG: title-root resolved bg = {titleRoot.resolvedStyle.backgroundColor}"));
         }
 
         private void OnDisable()
