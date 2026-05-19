@@ -91,7 +91,7 @@ namespace DeNelle.Village
 
         private NavMeshAgent _agent;
         private Transform _hero;
-        private Vector3 _homeAnchor;
+        [SerializeField] private Vector3 _homeAnchor;   // builder-set; serialized so it survives the scene save
         private float _baseY;
         private float _pauseTimer;
         private bool _hasNavMesh;
@@ -289,9 +289,11 @@ namespace DeNelle.Village
         /// </summary>
         private void UpdateIdleMotion()
         {
-            // A villager the agent is actively driving owns its own transform.
-            if (_hasNavMesh && _agent != null && _agent.enabled &&
-                !_agent.isStopped && _agent.velocity.sqrMagnitude > 0.02f)
+            // A villager with a live NavMeshAgent lets the agent own its
+            // transform — writing position here (even while the agent is paused
+            // between roam legs) fights the agent and jitters. Only true idlers
+            // (no agent, or a disabled one) get the sway.
+            if (_agent != null && _agent.enabled)
             {
                 _baseY = transform.position.y;
                 return;

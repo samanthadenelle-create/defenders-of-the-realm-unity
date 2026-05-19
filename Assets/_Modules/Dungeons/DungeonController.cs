@@ -238,6 +238,11 @@ namespace DeNelle.Dungeons
             // pending handoff — this scene LOAD is the ATB round-trip return.
             bool resuming = _runtimeState != null && _runtimeState.HasPendingEncounter;
 
+            // A fresh run starts with an empty larder; a resume (the ATB
+            // round-trip return) keeps whatever ingredients were gathered.
+            if (!resuming && _dungeonInventory != null)
+                _dungeonInventory.Clear();
+
             int seed = MakeRunSeed();
             Vector3 spawnPos = resuming
                 ? _runtimeState.EncounterResumePosition

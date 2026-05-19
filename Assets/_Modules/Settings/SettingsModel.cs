@@ -168,7 +168,7 @@ namespace DeNelle.Settings
         /// </summary>
         public static Difficulty Difficulty
         {
-            get => GameStateService.Instance?.State.Difficulty ?? Difficulty.Normal;
+            get => GameStateService.Instance?.State?.Difficulty ?? Difficulty.Normal;
             set => GameStateService.Instance?.SetDifficulty(value);
         }
 

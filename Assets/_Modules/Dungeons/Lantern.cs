@@ -170,6 +170,17 @@ namespace DeNelle.Dungeons
         }
 
         /// <summary>
+        /// Stops the looped flicker SFX if the lantern is disabled or torn down
+        /// mid-run while oil is low — otherwise the loop plays on after the run
+        /// ends (the flicker is started/stopped only inside <see cref="Update"/>).
+        /// </summary>
+        private void OnDisable()
+        {
+            if (_flickerAudio != null && _flickerAudio.isPlaying)
+                _flickerAudio.Stop();
+        }
+
+        /// <summary>
         /// Wires the lantern to the dungeon: the controller (for run state), the
         /// hero transform it follows, and the layout's oil-stone refill points.
         /// Called by <see cref="DungeonController"/> on dungeon load.

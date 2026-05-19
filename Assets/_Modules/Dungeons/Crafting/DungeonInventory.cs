@@ -15,10 +15,10 @@
 // A dungeon run is meant to be finished in one sitting — NOTHING here is
 // serialised to PlayerPrefs. The SO carries [CreateAssetMenu] only so the
 // dungeon scene builder can drop a shared instance into the crafting
-// interactables in the inspector. Like DungeonRuntimeState it resets itself on
-// enable so a stale run never leaks into a fresh editor session, and it
-// deliberately survives SceneManager.LoadScene so the inventory rides the ATB
-// battle-scene round-trip with the run.
+// interactables in the inspector. It is pinned in memory with
+// HideFlags.DontUnloadUnusedAsset so the inventory rides the ATB battle-scene
+// round-trip with the run; a FRESH run is emptied explicitly by
+// DungeonController.EnterDungeon, and a real dungeon exit calls Clear().
 // =============================================================================
 
 using System;
@@ -184,14 +184,16 @@ namespace DeNelle.Dungeons
             InventoryChanged.Invoke();
         }
 
-        // A runtime-only SO must reset itself on enable so a stale run never
-        // leaks into a fresh editor session (mirrors DungeonRuntimeState).
+        // The larder must ride the ATB battle-scene round-trip with the run — a
+        // Keeper who hits an encounter mid-gather keeps their ingredients.
+        // DontUnloadUnusedAsset keeps this SO instance alive across the
+        // dungeon -> ATBBattle -> dungeon scene loads; without it the asset is
+        // unloaded between scenes and reloads empty from disk. A FRESH run is
+        // emptied explicitly by DungeonController.EnterDungeon (and a real
+        // dungeon exit calls Clear()), so OnEnable must NOT wipe the larder.
         private void OnEnable()
         {
-            _ingredientIds.Clear();
-            _ingredientCounts.Clear();
-            _collectedPickupIds.Clear();
-            _craftedRecipeIds.Clear();
+            hideFlags = HideFlags.DontUnloadUnusedAsset;
         }
     }
 }
