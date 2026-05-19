@@ -5,6 +5,34 @@ spec Part 9 gates. State: **DONE / PARTIAL / GAP / IN PROGRESS**.
 
 ---
 
+## Prioritization (recommended — owner to confirm)
+
+The 8-week spec (Part 9) targets a viable v2 **foundation**, not a
+feature-complete game. Recommended split of everything below:
+
+**WEEK 8 — finish the foundation (critical path):**
+- Scene-wire the new modules (HUD, audio, settings/pause, onboarding, dev panel)
+- The 7 High bugs + the regression-suite repair
+- The APK / exe build + the 48-step UAT playthrough
+- Small fold-ins if time: force-field tutorial beat, camera-angle tune,
+  countdown styling, lantern oil readout
+
+**v2.1 — post-foundation features (the recent requests):**
+- Hero-select + pet-select screens
+- Difficulty system (Easy / Normal / Hard)
+- Player wall-repair mechanic
+- Townsfolk NPCs + dialogue
+- Dungeon crafting system
+- Weapon selection + upgrades
+- Voiced tutorial
+- Live-ops / admin backend; real Solana SDK integration
+- Unique boss models; exterior-wilderness polish
+
+The recent requests are real and good — but they are v2.1 *features*, not
+foundation work. Cramming them into Week 8 risks the acceptance gate.
+
+---
+
 ## Intro & first-run flow
 Intended flow: **intro music (first screen) → DeNelle Studios bumper →
 hero select → pet select → launch into the world.**
