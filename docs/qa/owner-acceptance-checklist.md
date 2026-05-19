@@ -12,7 +12,11 @@ are in scope for the polished Solana Foundation grant submission, not deferred.
 Effort runs on the autonomous-agent timescale (code + regression + QA per
 feature, ~1 hr ceiling each), not calendar days — see `grant-submission-goal`.
 
-**IN SCOPE — building now, 4 parallel workstreams:**
+**IN SCOPE — BUILT & committed 2026-05-19 (commit `376bbb6`), compiles clean;
+play-test QA pending.** (The detailed per-feature rows further below predate the
+build and still read GAP/PARTIAL — they are superseded by this commit.)
+
+Four parallel workstreams:
 - **A** — Intro flow (hero-select + pet-select screens), difficulty system
   (Easy/Normal/Hard), force-field tutorial beat
 - **B** — Player wall-repair mechanic, between-wave countdown styling
