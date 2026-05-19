@@ -41,7 +41,7 @@ namespace DeNelle.Village
     /// <see cref="VillageController"/>.
     /// </summary>
     [DisallowMultipleComponent]
-    public sealed class Gate : MonoBehaviour
+    public sealed class Gate : MonoBehaviour, IDamageableStructure
     {
         [Header("Identity")]
         [Tooltip("Stable damage id -- gate-0 (N) .. gate-3 (W). From WallLayout.Gates.")]
@@ -116,6 +116,15 @@ namespace DeNelle.Village
         public bool IsForceFieldUp => HpFraction > CollapseThreshold;
 
         /// <summary>
+        /// <see cref="IDamageableStructure"/> — true while the gate still has HP
+        /// for an enemy to attack. Once HP hits zero the field is fully torn and
+        /// enemies stop attacking and path through the opening. (The force field
+        /// stops *blocking* earlier, at the 25% collapse threshold — see
+        /// <see cref="IsForceFieldUp"/>.)
+        /// </summary>
+        public bool IsAlive => _hp > 0f;
+
+        /// <summary>
         /// Wires this gate from a <see cref="GateGap"/> layout record. Called by
         /// <see cref="VillageController"/> right after instantiation.
         /// </summary>
@@ -173,6 +182,15 @@ namespace DeNelle.Village
             ApplyForceFieldState();
             HpChanged?.Invoke(this);
         }
+
+        /// <summary>
+        /// <see cref="IDamageableStructure"/> contact-attack entry point — a
+        /// Hollow One in melee contact with the force field routes its hit here.
+        /// A thin adapter onto the existing <see cref="TakeDamage"/>, which drives
+        /// the shader collapse + blocker toggle. Once the field collapses below
+        /// 25% the blocker drops and enemies pour through (port spec Week 4).
+        /// </summary>
+        public void ApplyContactDamage(float amount) => TakeDamage(amount);
 
         private void Awake()
         {

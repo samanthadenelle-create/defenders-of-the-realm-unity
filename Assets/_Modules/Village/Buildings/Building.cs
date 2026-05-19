@@ -45,7 +45,7 @@ namespace DeNelle.Village
     /// the docs/village-layout.md placement table.
     /// </summary>
     [DisallowMultipleComponent]
-    public sealed class Building : MonoBehaviour
+    public sealed class Building : MonoBehaviour, IDamageableStructure
     {
         [Header("Identity")]
         [Tooltip("Which of the five canonical buildings this is.")]
@@ -111,6 +111,12 @@ namespace DeNelle.Village
 
         /// <summary>True once the building's HP has reached zero.</summary>
         public bool IsDestroyed => _hp <= 0f;
+
+        /// <summary>
+        /// <see cref="IDamageableStructure"/> — true while the building still
+        /// stands and an enemy can contact-attack it.
+        /// </summary>
+        public bool IsAlive => _hp > 0f;
 
         /// <summary>Raised whenever HP changes -- carries (current, max). HUD / damage flash subscribe.</summary>
         public event Action<float, float> HpChanged;
@@ -205,6 +211,14 @@ namespace DeNelle.Village
             _hp = Mathf.Min(_maxHp, _hp + amount);
             HpChanged?.Invoke(_hp, _maxHp);
         }
+
+        /// <summary>
+        /// <see cref="IDamageableStructure"/> contact-attack entry point — an
+        /// enemy in melee contact routes its hit here. A thin adapter onto the
+        /// existing <see cref="ApplyDamage"/> so enemies can wear a building
+        /// down (port spec Week 4; closes week4-waves.md integration item 5).
+        /// </summary>
+        public void ApplyContactDamage(float amount) => ApplyDamage(amount);
 
         private void Awake()
         {

@@ -54,6 +54,7 @@ using System.Reflection;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.UIElements;
 
 namespace DeNelle.Editor
 {
@@ -129,6 +130,41 @@ namespace DeNelle.Editor
         private const string TypeBuilding = NsVillage + ".Building";
         private const string TypeWaveSpawnPoint = NsVillage + ".WaveSpawnPoint";
         private const string TypeWallLayout = NsVillage + ".WallLayout";
+
+        // ── Week-4 gameplay-system type names (resolved by reflection) ───────
+        // DeNelle.Editor.asmdef does NOT reference DeNelle.Village / DeNelle.Pets,
+        // so every Week-4 gameplay type is touched by full-name reflection only —
+        // never a direct type reference (that would break the Editor build).
+        private const string TypeWaveManager = NsVillage + ".WaveManager";
+        private const string TypeEnemy = NsVillage + ".Enemy";
+        private const string TypeEnemyDamageable = NsVillage + ".EnemyDamageable";
+        private const string TypeHeroAbilities = NsVillage + ".HeroAbilities";
+        private const string TypeBuildMenu = NsVillage + ".BuildMenu";
+        private const string NsPets = "DeNelle.Pets";
+        private const string TypePetDeployer = NsPets + ".PetDeployer";
+
+        // ── Week-4 asset paths ───────────────────────────────────────────────
+        /// <summary>KayKit Hollow-Walker skeleton mesh (the Week-4 wave enemy).</summary>
+        private const string SkeletonMinionPath =
+            "Assets/Models/KayKit/KayKit Skeletons 1.1/assets/fbx(unity)/Skeleton_Blade.fbx";
+        /// <summary>BuildMenu UI Toolkit document the build menu UIDocument hosts.</summary>
+        private const string BuildMenuUxmlPath =
+            "Assets/_Modules/Village/Buildings/UI/BuildMenu.uxml";
+        /// <summary>ForceFieldGate shader the gate force-field material runs.</summary>
+        private const string ForceFieldShaderPath =
+            "Assets/Shaders/ForceFieldGate.shader";
+        /// <summary>Generated force-field material asset (created at build time).</summary>
+        private const string ForceFieldMaterialPath =
+            "Assets/Shaders/ForceFieldGate.mat";
+        /// <summary>Folder generated Week-4 prefabs are written to.</summary>
+        private const string GeneratedPrefabDir = "Assets/Prefabs/Village/Generated";
+
+        /// <summary>
+        /// User-layer index for wave enemies — see ProjectSettings/TagManager.asset
+        /// slot 8 ("Enemy"). HeroAbilities / Pet / PetDeployer enemy-mask fields
+        /// are set to <c>1 &lt;&lt; EnemyLayer</c>; enemy GameObjects are put on it.
+        /// </summary>
+        private const int EnemyLayer = 8;
 
         // Running tallies for the summary log.
         private static int _placeholderCount;
@@ -231,9 +267,30 @@ namespace DeNelle.Editor
             // ── Wire the controller's serialized fields ──────────────────────
             WireController(controller, wallRoot, gateRoot, buildingRoot, heart);
 
+            // ── Week-4 gameplay systems (waves / hero / pets / build menu) ───
+            // WaveManager + HeroAbilities + PetDeployer + BuildMenu, all the
+            // enemy / building prefabs, the gate force-field material — every
+            // item from the three week4-*.md integration checklists.
+            BuildGameplaySystems(root, gateRoot, heart);
+
             // ── Build Settings ───────────────────────────────────────────────
             EnsureBuildSettings();
 
+            // ── Save the scene BEFORE the NavMesh bake ───────────────────────
+            // The legacy UnityEditor.AI bake associates the generated NavMesh
+            // asset with the scene FILE on disk, so the scene must already be
+            // saved (a freshly-created Village.unity otherwise has no path).
+            EditorSceneManager.MarkSceneDirty(scene);
+            EditorSceneManager.SaveScene(scene, VillageScenePath);
+
+            // ── NavMesh — mark ground/walls navigation-static + bake ─────────
+            // REQUIRED for the wave loop: enemies use NavMeshAgents and cannot
+            // move without a baked NavMesh (week4-waves.md item 1). Done after
+            // all geometry is placed + the scene is on disk, via the legacy
+            // UnityEditor.AI API.
+            BakeVillageNavMesh(root);
+
+            // ── Re-save so the baked-NavMesh scene reference is persisted ────
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene, VillageScenePath);
             AssetDatabase.SaveAssets();
@@ -244,7 +301,8 @@ namespace DeNelle.Editor
                       $"{gateCount} cardinal gates, {_roadCount} plaza/road tiles, " +
                       $"{buildingCount} gameplay buildings, {_dressingCount} dressing buildings, " +
                       $"{_propCount} props/fences, {spawnCount} wave spawn points, " +
-                      $"1 Elarion + 1 Keep. " +
+                      $"1 Elarion + 1 Keep. Week-4 gameplay systems (WaveManager / " +
+                      $"HeroAbilities / PetDeployer / BuildMenu) + NavMesh wired. " +
                       $"{_placeholderCount} placeholder primitive(s)" +
                       (_placeholderCount > 0 ? ": " + string.Join(", ", _placeholders) : "."));
         }
@@ -1595,6 +1653,649 @@ namespace DeNelle.Editor
             if (string.IsNullOrEmpty(parent) || string.IsNullOrEmpty(leaf)) return;
             if (!AssetDatabase.IsValidFolder(parent)) EnsureFolder(parent);
             AssetDatabase.CreateFolder(parent, leaf);
+        }
+
+        // #####################################################################
+        // ##  WEEK 4 — village gameplay-system integration                  ##
+        // ##  ------------------------------------------------------------   ##
+        // ##  Wires every item from the three week4-*.md integration         ##
+        // ##  checklists into the Village scene:                             ##
+        // ##    - WaveManager wired to the Heart + spawn points              ##
+        // ##    - HeroAbilities on a hero rig near the Heart                 ##
+        // ##    - PetDeployer (auto-deploys the three starter pets)          ##
+        // ##    - BuildMenu UIDocument with the 5 building prefabs           ##
+        // ##    - the KayKit Skeleton enemy prefab (Enemy + EnemyDamageable) ##
+        // ##    - the ForceFieldGate material wired onto every Gate          ##
+        // ##  Every gameplay TYPE is touched by full-name reflection — the   ##
+        // ##  DeNelle.Editor asmdef cannot reference DeNelle.Village/.Pets.  ##
+        // #####################################################################
+
+        /// <summary>
+        /// Builds + wires the Week-4 village gameplay systems. Idempotent — the
+        /// generated GameObjects all live under <c>VillageRoot</c> (cleared at
+        /// the top of <see cref="BuildVillage"/>); the prefab + material assets
+        /// are overwritten in place on a re-run.
+        /// </summary>
+        /// <param name="root">The VillageRoot transform.</param>
+        /// <param name="gateRoot">The Gates sub-root — every Gate gets the force-field material.</param>
+        /// <param name="heart">The HeartController component (may be null if the type was missing).</param>
+        private static void BuildGameplaySystems(GameObject root, Transform gateRoot, Component heart)
+        {
+            EnsureFolder(GeneratedPrefabDir);
+
+            var systemsRoot = NewChild(root.transform, "GameplaySystems");
+
+            // 1) Assets — the force-field material, the enemy prefab, the five
+            //    building prefabs. Built first so the scene components can wire
+            //    against them.
+            Material forceFieldMat = EnsureForceFieldMaterial();
+            GameObject enemyPrefab = EnsureEnemyPrefab();
+            var buildingPrefabs = EnsureBuildingPrefabs();
+
+            // 2) Wire the force-field material onto every Gate's renderer.
+            WireGateForceFields(gateRoot, forceFieldMat);
+
+            // 3) The Heart's world position — the centre of the pet ring + the
+            //    hero's spawn anchor. Falls back to origin when the Heart type
+            //    was not found.
+            Vector3 heartPos = heart != null ? heart.transform.position : Vector3.zero;
+
+            // 4) WaveManager — its own sub-system GameObject.
+            BuildWaveManager(systemsRoot, heart, enemyPrefab);
+
+            // 5) HeroAbilities — on a hero rig stood near the Heart.
+            BuildHero(systemsRoot, heart, heartPos);
+
+            // 6) PetDeployer — auto-deploys the three starter pets on Start().
+            BuildPetDeployer(systemsRoot, heartPos);
+
+            // 7) BuildMenu — a UIDocument GameObject with the build-menu UI.
+            BuildBuildMenu(systemsRoot, buildingPrefabs);
+
+            Debug.Log("[VillageSceneBuilder] Week-4 gameplay systems wired -- " +
+                      "WaveManager + HeroAbilities + PetDeployer + BuildMenu, " +
+                      $"enemy prefab {(enemyPrefab != null ? "OK" : "MISSING")}, " +
+                      $"force-field material {(forceFieldMat != null ? "OK" : "MISSING")}.");
+        }
+
+        // =====================================================================
+        //  Force-field gate material
+        // =====================================================================
+
+        /// <summary>
+        /// Creates (or refreshes) the <c>ForceFieldGate.mat</c> material asset
+        /// from <c>Assets/Shaders/ForceFieldGate.shader</c> and returns it. The
+        /// material carries no per-instance overrides — <c>Gate.cs</c> drives the
+        /// <c>_Collapse</c> property at runtime via a MaterialPropertyBlock.
+        /// </summary>
+        private static Material EnsureForceFieldMaterial()
+        {
+            var shader = AssetDatabase.LoadAssetAtPath<Shader>(ForceFieldShaderPath);
+            if (shader == null)
+            {
+                Debug.LogError("[VillageSceneBuilder] ForceFieldGate.shader not found at " +
+                               $"'{ForceFieldShaderPath}' -- gate force-field material skipped.");
+                return null;
+            }
+
+            var existing = AssetDatabase.LoadAssetAtPath<Material>(ForceFieldMaterialPath);
+            if (existing != null)
+            {
+                // Keep the asset; just make sure it still runs the right shader.
+                if (existing.shader != shader) existing.shader = shader;
+                EditorUtility.SetDirty(existing);
+                return existing;
+            }
+
+            var mat = new Material(shader) { name = "ForceFieldGate" };
+            AssetDatabase.CreateAsset(mat, ForceFieldMaterialPath);
+            return mat;
+        }
+
+        /// <summary>
+        /// Assigns the force-field material to each Gate's force-field renderer
+        /// and wires that renderer into <c>Gate._forceFieldRenderer</c>. The
+        /// Week-3 builder placed a <c>ForceFieldShimmer</c> cube child per gate —
+        /// that cube's MeshRenderer becomes the shader-driven sheet.
+        /// </summary>
+        private static void WireGateForceFields(Transform gateRoot, Material forceFieldMat)
+        {
+            if (gateRoot == null) return;
+            int wired = 0;
+            var gateType = FindType(TypeGate);
+
+            foreach (Transform gateGo in gateRoot)
+            {
+                // The Week-3 builder names the violet sheet "ForceFieldShimmer".
+                Transform shimmer = gateGo.Find("ForceFieldShimmer");
+                Renderer fieldRenderer = shimmer != null
+                    ? shimmer.GetComponent<Renderer>()
+                    : gateGo.GetComponentInChildren<Renderer>();
+
+                if (fieldRenderer != null && forceFieldMat != null)
+                    fieldRenderer.sharedMaterial = forceFieldMat;
+
+                // Wire Gate._forceFieldRenderer so Gate.cs can drive _Collapse.
+                if (gateType != null)
+                {
+                    var gateComp = gateGo.GetComponent(gateType);
+                    if (gateComp != null && fieldRenderer != null)
+                    {
+                        var so = new SerializedObject(gateComp);
+                        SetObjectField(so, "_forceFieldRenderer", fieldRenderer);
+                        so.ApplyModifiedPropertiesWithoutUndo();
+                    }
+                }
+                wired++;
+            }
+            Debug.Log($"[VillageSceneBuilder] Force-field material wired onto {wired} gate(s).");
+        }
+
+        // =====================================================================
+        //  Enemy prefab — KayKit Skeleton_Minion + Enemy + EnemyDamageable
+        // =====================================================================
+
+        /// <summary>
+        /// Builds (or refreshes) the wave-enemy prefab — the KayKit Hollow Walker
+        /// skeleton with an <c>Enemy</c> (RequireComponent pulls in a
+        /// <c>NavMeshAgent</c>) + an <c>EnemyDamageable</c> adapter + a capsule
+        /// collider, all on the <see cref="EnemyLayer"/>. Saved as a prefab asset
+        /// so <c>WaveManager._enemyPrefab</c> can reference it. Returns the prefab
+        /// asset GameObject, or null when a required type / mesh is missing.
+        /// </summary>
+        private static GameObject EnsureEnemyPrefab()
+        {
+            string prefabPath = GeneratedPrefabDir + "/Enemy_HollowWalker.prefab";
+
+            var enemyType = FindType(TypeEnemy);
+            var enemyDamageableType = FindType(TypeEnemyDamageable);
+            if (enemyType == null)
+            {
+                Debug.LogError("[VillageSceneBuilder] DeNelle.Village.Enemy not found -- " +
+                               "enemy prefab skipped; WaveManager will spawn placeholders.");
+                return null;
+            }
+
+            // Build the prefab content in a temp scene object.
+            var go = new GameObject("Enemy_HollowWalker");
+            try
+            {
+                go.layer = EnemyLayer;
+
+                // KayKit skeleton mesh as the visual child (placeholder capsule
+                // on a miss — same fallback discipline as the rest of the builder).
+                var skeleton = LoadModel(SkeletonMinionPath);
+                GameObject visual = InstantiateModel(skeleton, "Skeleton_Blade.fbx",
+                    "Hollow Walker enemy");
+                visual.transform.SetParent(go.transform, false);
+                if (skeleton == null)
+                {
+                    visual.transform.localScale = new Vector3(0.6f, 1.0f, 0.6f);
+                    visual.transform.localPosition = new Vector3(0f, 1.0f, 0f);
+                    ApplyColor(visual, new Color(0.78f, 0.80f, 0.74f)); // bone
+                }
+                // The skeleton mesh + children should not collide / block — the
+                // Enemy's own capsule collider is the single physics body.
+                StripColliders(visual);
+                SetLayerRecursive(go, EnemyLayer);
+
+                // Capsule collider — the body hero abilities + pets sweep for
+                // (Physics.OverlapSphere with QueryTriggerInteraction.Collide
+                // still finds a trigger). It is a TRIGGER for the same reason
+                // WaveManager's placeholder capsule is: Enemy.ProbeForStructure
+                // forward-SphereCasts with QueryTriggerInteraction.Ignore, so a
+                // trigger body is skipped and never shadows the real structure
+                // ahead. A trigger body also keeps enemies from physically
+                // jostling each other / the navmesh agents.
+                var capsule = go.AddComponent<CapsuleCollider>();
+                capsule.height = 2.0f;
+                capsule.radius = 0.45f;
+                capsule.center = new Vector3(0f, 1.0f, 0f);
+                capsule.isTrigger = true;
+
+                // Enemy — [RequireComponent(typeof(NavMeshAgent))] adds the agent.
+                go.AddComponent(enemyType);
+                // EnemyDamageable adapter — hero abilities + pets find IDamageable
+                // through it (week4-hero-pets-gate.md item 1).
+                if (enemyDamageableType != null)
+                {
+                    if (go.GetComponent(enemyDamageableType) == null)
+                        go.AddComponent(enemyDamageableType);
+                }
+                else
+                {
+                    Debug.LogWarning("[VillageSceneBuilder] EnemyDamageable type not found -- " +
+                                     "hero abilities + pets will not be able to hit enemies.");
+                }
+
+                // Tune the NavMeshAgent so it sits cleanly on the baked mesh.
+                var agent = go.GetComponent<UnityEngine.AI.NavMeshAgent>();
+                if (agent != null)
+                {
+                    agent.radius = 0.4f;
+                    agent.height = 2.0f;
+                    agent.baseOffset = 0f;
+                    agent.speed = 2.5f;            // EnemyDef overrides at Configure
+                    agent.angularSpeed = 360f;
+                    agent.acceleration = 24f;
+                }
+
+                var prefab = PrefabUtility.SaveAsPrefabAsset(go, prefabPath);
+                if (prefab == null)
+                    Debug.LogError($"[VillageSceneBuilder] Failed to save enemy prefab at '{prefabPath}'.");
+                return prefab;
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(go);
+            }
+        }
+
+        // =====================================================================
+        //  Building prefabs — one per BuildingType, each with a Building
+        // =====================================================================
+
+        /// <summary>
+        /// One built building prefab paired with its BuildingType ordinal — fed
+        /// to BuildMenu's <c>_buildingPrefabs</c> list.
+        /// </summary>
+        private struct BuiltBuildingPrefab
+        {
+            public int TypeOrdinal;     // BuildingType enum ordinal
+            public GameObject Prefab;
+        }
+
+        /// <summary>
+        /// Builds (or refreshes) one placeable prefab per BuildingType, each
+        /// carrying a <c>Building</c> component + the KayKit building mesh, and
+        /// returns them. Fed into <c>BuildMenu._buildingPrefabs</c> so the build
+        /// menu can place player-built buildings (week4-buildings.md item 5).
+        /// Reuses the <see cref="Buildings"/> placement table for the mesh names.
+        /// </summary>
+        private static List<BuiltBuildingPrefab> EnsureBuildingPrefabs()
+        {
+            var result = new List<BuiltBuildingPrefab>();
+            var buildingType = FindType(TypeBuilding);
+            if (buildingType == null)
+            {
+                Debug.LogError("[VillageSceneBuilder] DeNelle.Village.Building not found -- " +
+                               "building prefabs skipped; the build menu will have no prefabs.");
+                return result;
+            }
+
+            foreach (var b in Buildings)
+            {
+                string prefabPath = $"{GeneratedPrefabDir}/Building_{b.Id}.prefab";
+                var go = new GameObject($"Building_{b.Id}");
+                try
+                {
+                    var model = LoadModel(Building(b.Fbx));
+                    GameObject visual = InstantiateModel(model,
+                        b.Fbx + "_" + BuildingColor + ".fbx", $"{b.Fbx} -> {b.Label}");
+                    visual.transform.SetParent(go.transform, false);
+                    if (model == null)
+                    {
+                        visual.transform.localScale = new Vector3(3f, 3f, 3f);
+                        visual.transform.localPosition = new Vector3(0f, 1.5f, 0f);
+                        ApplyColor(visual, b.PlaceholderColor);
+                    }
+
+                    // Building.EnsureBlocker() adds a BoxCollider at runtime; add
+                    // one now so the saved prefab carries the footprint blocker.
+                    var blocker = go.AddComponent<BoxCollider>();
+                    blocker.size = new Vector3(3.2f, 3f, 3.2f);
+                    blocker.center = new Vector3(0f, 1.5f, 0f);
+
+                    // Building component — Configure(BuildingDef) is called at
+                    // runtime by BuildMenu after the prefab is instantiated.
+                    var comp = go.AddComponent(buildingType);
+                    InvokeConfigure(comp, "Configure", b.Type, b.Id, b.Label);
+                    // Pull HP / cost / display-name key from buildings.json so the
+                    // saved prefab is data-correct even before BuildMenu re-Configures.
+                    InvokeConfigure(comp, "ConfigureFromCatalog", b.Id);
+
+                    var prefab = PrefabUtility.SaveAsPrefabAsset(go, prefabPath);
+                    if (prefab != null)
+                        result.Add(new BuiltBuildingPrefab { TypeOrdinal = b.Type, Prefab = prefab });
+                    else
+                        Debug.LogError($"[VillageSceneBuilder] Failed to save building prefab '{prefabPath}'.");
+                }
+                finally
+                {
+                    UnityEngine.Object.DestroyImmediate(go);
+                }
+            }
+
+            Debug.Log($"[VillageSceneBuilder] Built {result.Count}/5 building prefabs for the build menu.");
+            return result;
+        }
+
+        // =====================================================================
+        //  WaveManager
+        // =====================================================================
+
+        /// <summary>
+        /// Adds the <c>WaveManager</c> sub-system GameObject and wires it to the
+        /// Heart, the scene's WaveSpawnPoints and the enemy prefab. WaveManager
+        /// also auto-finds the Heart + spawn points at Start, but wiring them
+        /// here makes the scene self-describing (week4-waves.md item 2).
+        /// </summary>
+        private static void BuildWaveManager(Transform parent, Component heart, GameObject enemyPrefab)
+        {
+            var go = new GameObject("WaveManager");
+            go.transform.SetParent(parent, false);
+
+            var comp = AddVillageComponent(go, TypeWaveManager);
+            if (comp == null) return;
+
+            var so = new SerializedObject(comp);
+
+            // _heart — the HeartController the enemies march toward.
+            if (heart != null) SetObjectField(so, "_heart", heart);
+
+            // _enemyRoot — a tidy parent for spawned enemies.
+            var enemyRoot = NewChild(parent, "WaveEnemies");
+            SetObjectField(so, "_enemyRoot", enemyRoot);
+
+            // _enemyPrefab — typed `Enemy`; assign the prefab's Enemy component.
+            if (enemyPrefab != null)
+            {
+                var enemyType = FindType(TypeEnemy);
+                var enemyComp = enemyType != null ? enemyPrefab.GetComponent(enemyType) : null;
+                if (enemyComp != null) SetObjectField(so, "_enemyPrefab", enemyComp);
+            }
+
+            // _spawnPoints — the list of WaveSpawnPoints already placed by the
+            // approach-lane builder. Populate the serialized List<WaveSpawnPoint>.
+            WireSpawnPointList(so, "_spawnPoints");
+
+            so.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        /// <summary>
+        /// Fills a serialized <c>List&lt;WaveSpawnPoint&gt;</c> field with every
+        /// WaveSpawnPoint component in the open scene.
+        /// </summary>
+        private static void WireSpawnPointList(SerializedObject so, string field)
+        {
+            var prop = so.FindProperty(field);
+            if (prop == null || !prop.isArray)
+            {
+                Debug.LogWarning($"[VillageSceneBuilder] Serialized list '{field}' not found / not an array " +
+                                 $"on {so.targetObject.GetType().Name} -- spawn points left for auto-find.");
+                return;
+            }
+
+            var spawnType = FindType(TypeWaveSpawnPoint);
+            if (spawnType == null) return;
+
+            var spawns = UnityEngine.Object.FindObjectsByType(
+                spawnType, FindObjectsSortMode.None);
+            prop.arraySize = spawns.Length;
+            for (int i = 0; i < spawns.Length; i++)
+                prop.GetArrayElementAtIndex(i).objectReferenceValue = spawns[i];
+        }
+
+        // =====================================================================
+        //  Hero rig + HeroAbilities
+        // =====================================================================
+
+        /// <summary>
+        /// Builds a simple hero rig (Blaise) near the Heart, gives it a
+        /// <c>HeroAbilities</c> component, wires the Heart ref (so Healing
+        /// Beacon can heal) and sets the enemy LayerMask (week4-hero-pets-gate.md
+        /// item 3 + item 2). A capsule visual stands in until the KayKit hero
+        /// mesh is imported.
+        /// </summary>
+        private static void BuildHero(Transform parent, Component heart, Vector3 heartPos)
+        {
+            var go = new GameObject("Hero (Blaise)");
+            go.transform.SetParent(parent, false);
+            // Stand the hero a few units in front of the Heart, on the plaza.
+            go.transform.position = heartPos + new Vector3(2.5f, 0f, 2.5f);
+
+            // Placeholder hero body — a violet-tinted capsule (KayKit hero mesh
+            // imports later, port spec Part 7).
+            var body = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            body.name = "HeroBody";
+            body.transform.SetParent(go.transform, false);
+            body.transform.localPosition = new Vector3(0f, 1f, 0f);
+            ApplyColor(body, HexColor("9d6fff"));
+
+            var comp = AddVillageComponent(go, TypeHeroAbilities);
+            if (comp == null) return;
+
+            var so = new SerializedObject(comp);
+            // _heart — Healing Beacon (E) restores Heart HP.
+            if (heart != null) SetObjectField(so, "_heart", heart);
+            // _enemyMask — the ability hit-tests sweep only the Enemy layer.
+            SetLayerMaskField(so, "_enemyMask", 1 << EnemyLayer);
+            so.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        // =====================================================================
+        //  PetDeployer
+        // =====================================================================
+
+        /// <summary>
+        /// Adds the <c>PetDeployer</c> GameObject, sets its Heart position +
+        /// enemy LayerMask, and flips on its <c>_autoDeployOnStart</c> flag so it
+        /// deploys the three starter pets itself on Start() — no separate runtime
+        /// caller needed (week4-hero-pets-gate.md item 4).
+        /// </summary>
+        private static void BuildPetDeployer(Transform parent, Vector3 heartPos)
+        {
+            var go = new GameObject("PetDeployer");
+            go.transform.SetParent(parent, false);
+
+            var type = FindType(TypePetDeployer);
+            if (type == null)
+            {
+                Debug.LogError("[VillageSceneBuilder] DeNelle.Pets.PetDeployer not found -- " +
+                               "is the DeNelle.Pets assembly compiled? Pet deployer skipped.");
+                return;
+            }
+            var comp = go.AddComponent(type);
+
+            var so = new SerializedObject(comp);
+            // _heartPosition — the centre of the pet deploy ring (a plain Vector3
+            // so DeNelle.Pets never references DeNelle.Village).
+            var heartProp = so.FindProperty("_heartPosition");
+            if (heartProp != null) heartProp.vector3Value = heartPos;
+            // _enemyMask — pets hunt only the Enemy layer.
+            SetLayerMaskField(so, "_enemyMask", 1 << EnemyLayer);
+            // _autoDeployOnStart — the deployer runs DeployStarterPets() itself.
+            var autoProp = so.FindProperty("_autoDeployOnStart");
+            if (autoProp != null) autoProp.boolValue = true;
+            else Debug.LogWarning("[VillageSceneBuilder] PetDeployer._autoDeployOnStart not found -- " +
+                                  "pets will not auto-deploy; call DeployStarterPets() at runtime.");
+            so.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        // =====================================================================
+        //  BuildMenu UIDocument
+        // =====================================================================
+
+        /// <summary>
+        /// Builds the build-menu <c>UIDocument</c> GameObject: a UIDocument whose
+        /// source asset is <c>BuildMenu.uxml</c> plus the <c>BuildMenu</c>
+        /// component, with the build camera, ground LayerMask and the five
+        /// building prefabs wired (week4-buildings.md items 1, 3, 4, 5). The
+        /// panel hides itself in OnEnable until the HUD's Build button calls
+        /// Open() (item 2 — the HUD button wire — is left to the HUD pass).
+        /// </summary>
+        private static void BuildBuildMenu(Transform parent, List<BuiltBuildingPrefab> buildingPrefabs)
+        {
+            var go = new GameObject("BuildMenu");
+            go.transform.SetParent(parent, false);
+
+            // UIDocument needs a PanelSettings asset; reuse the project's if one
+            // exists. Without it the document still serializes — the integrator
+            // can assign PanelSettings in the inspector.
+            var uiDoc = go.AddComponent<UIDocument>();
+            var uxml = AssetDatabase.LoadAssetAtPath<UnityEngine.UIElements.VisualTreeAsset>(BuildMenuUxmlPath);
+            if (uxml != null)
+            {
+                uiDoc.visualTreeAsset = uxml;
+            }
+            else
+            {
+                Debug.LogWarning($"[VillageSceneBuilder] BuildMenu.uxml not found at '{BuildMenuUxmlPath}' -- " +
+                                 "assign the UIDocument source asset in the inspector.");
+            }
+            WirePanelSettings(uiDoc);
+
+            // BuildMenu component — [RequireComponent(typeof(UIDocument))] is
+            // already satisfied.
+            var comp = AddVillageComponent(go, TypeBuildMenu);
+            if (comp == null) return;
+
+            var so = new SerializedObject(comp);
+            // _document — the UIDocument on this GameObject.
+            SetObjectField(so, "_document", uiDoc);
+            // _buildCamera — leave blank: BuildMenu.Awake() defaults to Camera.main
+            //   (the village Main Camera). Explicitly wiring it would need a
+            //   FindObjectOfType<Camera>; the default is the documented behaviour.
+            // _groundMask — the placement raycast must hit only the ground. The
+            //   village ground tiles are on the Default layer (layer 0); restrict
+            //   the mask to Default so the raycast does not snag on buildings.
+            SetLayerMaskField(so, "_groundMask", 1 << 0);
+
+            // _buildingPrefabs — the serialized List<BuildingPrefabEntry>. Each
+            // entry is a struct { BuildingType Type; GameObject Prefab; }.
+            WireBuildingPrefabList(so, "_buildingPrefabs", buildingPrefabs);
+
+            so.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        /// <summary>
+        /// Assigns a PanelSettings asset to a UIDocument — finds the first one in
+        /// the project. UI Toolkit needs PanelSettings to render; without it the
+        /// menu is invisible. No-op (with a warning) when none exists.
+        /// </summary>
+        private static void WirePanelSettings(UIDocument uiDoc)
+        {
+            if (uiDoc == null || uiDoc.panelSettings != null) return;
+            var guids = AssetDatabase.FindAssets("t:PanelSettings");
+            if (guids != null && guids.Length > 0)
+            {
+                var path = AssetDatabase.GUIDToAssetPath(guids[0]);
+                var panel = AssetDatabase.LoadAssetAtPath<UnityEngine.UIElements.PanelSettings>(path);
+                if (panel != null) { uiDoc.panelSettings = panel; return; }
+            }
+            Debug.LogWarning("[VillageSceneBuilder] No PanelSettings asset found -- assign one to the " +
+                             "BuildMenu UIDocument in the inspector or the build menu will not render.");
+        }
+
+        /// <summary>
+        /// Fills the serialized <c>List&lt;BuildingPrefabEntry&gt;</c> on BuildMenu
+        /// — one entry per built building prefab, each with its BuildingType
+        /// ordinal + the prefab reference.
+        /// </summary>
+        private static void WireBuildingPrefabList(SerializedObject so, string field,
+            List<BuiltBuildingPrefab> prefabs)
+        {
+            var prop = so.FindProperty(field);
+            if (prop == null || !prop.isArray)
+            {
+                Debug.LogWarning($"[VillageSceneBuilder] Serialized list '{field}' not found / not an array " +
+                                 $"on {so.targetObject.GetType().Name} -- building prefabs not wired.");
+                return;
+            }
+
+            prop.arraySize = prefabs.Count;
+            for (int i = 0; i < prefabs.Count; i++)
+            {
+                var element = prop.GetArrayElementAtIndex(i);
+                // BuildingPrefabEntry struct fields: `Type` (enum) + `Prefab` (GO).
+                var typeProp = element.FindPropertyRelative("Type");
+                var prefabProp = element.FindPropertyRelative("Prefab");
+                if (typeProp != null) typeProp.enumValueIndex = prefabs[i].TypeOrdinal;
+                if (prefabProp != null) prefabProp.objectReferenceValue = prefabs[i].Prefab;
+            }
+        }
+
+        // =====================================================================
+        //  NavMesh bake — legacy UnityEditor.AI API (com.unity.modules.ai)
+        // =====================================================================
+
+        /// <summary>
+        /// Marks the village ground + wall + building geometry navigation-static
+        /// and bakes a NavMesh for the open Village scene. Uses the legacy
+        /// <c>UnityEditor.AI.NavMeshBuilder</c> API — the manifest carries
+        /// <c>com.unity.modules.ai</c>, NOT the high-level
+        /// <c>com.unity.ai.navigation</c> package (week4-waves.md item 1).
+        ///
+        /// REQUIRED for the wave loop: <c>Enemy</c> uses a NavMeshAgent and
+        /// cannot move without a baked NavMesh.
+        /// </summary>
+        private static void BakeVillageNavMesh(GameObject root)
+        {
+            int marked = 0;
+
+            // Mark the walkable / obstacle geometry navigation-static. Renderers
+            // under Ground / Roads / Approaches are the walkable floor; Walls /
+            // Gates / Buildings are obstacles the agents path around. Marking by
+            // GameObjectUtility static flags is what NavMeshBuilder reads.
+            string[] navStaticRoots =
+            {
+                "Ground", "Roads", "Approaches", "Walls", "Gates", "Buildings",
+            };
+            foreach (var rootName in navStaticRoots)
+            {
+                var sub = root.transform.Find(rootName);
+                if (sub == null) continue;
+                foreach (var r in sub.GetComponentsInChildren<Renderer>())
+                {
+                    if (r == null) continue;
+                    var flags = GameObjectUtility.GetStaticEditorFlags(r.gameObject);
+                    GameObjectUtility.SetStaticEditorFlags(r.gameObject,
+                        flags | StaticEditorFlags.NavigationStatic);
+                    marked++;
+                }
+            }
+
+            // Bake the open Village scene. The legacy UnityEditor.AI.NavMeshBuilder
+            // bakes the ACTIVE scene synchronously using the project's default
+            // agent settings (Window > AI > Navigation > Agents). ClearAllNavMeshes
+            // first keeps a re-run idempotent. The skeleton enemy's NavMeshAgent
+            // (radius 0.4, height 2.0) sits inside the Unity default Humanoid
+            // agent (radius 0.5, height 2.0) — the bake is valid for it.
+            UnityEditor.AI.NavMeshBuilder.ClearAllNavMeshes();
+            UnityEditor.AI.NavMeshBuilder.BuildNavMesh();
+
+            Debug.Log($"[VillageSceneBuilder] NavMesh baked -- {marked} renderer object(s) " +
+                      "marked Navigation Static (Ground/Roads/Approaches walkable, " +
+                      "Walls/Gates/Buildings obstacles). Legacy UnityEditor.AI synchronous bake.");
+        }
+
+        // =====================================================================
+        //  Week-4 reflection / wiring helpers
+        // =====================================================================
+
+        /// <summary>
+        /// Sets a serialized <c>LayerMask</c> field. A LayerMask SerializedProperty
+        /// is backed by an int — <c>intValue</c> carries the mask bits.
+        /// </summary>
+        private static void SetLayerMaskField(SerializedObject so, string field, int mask)
+        {
+            var prop = so.FindProperty(field);
+            if (prop == null)
+            {
+                Debug.LogWarning($"[VillageSceneBuilder] LayerMask field '{field}' not found on " +
+                                 $"{so.targetObject.GetType().Name} -- mask not set.");
+                return;
+            }
+            prop.intValue = mask;
+        }
+
+        /// <summary>Recursively sets the layer on a GameObject and all its descendants.</summary>
+        private static void SetLayerRecursive(GameObject go, int layer)
+        {
+            if (go == null) return;
+            go.layer = layer;
+            foreach (Transform child in go.transform)
+                SetLayerRecursive(child.gameObject, layer);
         }
     }
 }

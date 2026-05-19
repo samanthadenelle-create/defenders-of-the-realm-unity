@@ -13,6 +13,7 @@
 // builder; this component just owns the section's data + collider sizing.
 // =============================================================================
 
+using System;
 using UnityEngine;
 
 namespace DeNelle.Village
@@ -23,7 +24,7 @@ namespace DeNelle.Village
     /// damage HP. Instantiated by <see cref="VillageController"/>.
     /// </summary>
     [DisallowMultipleComponent]
-    public sealed class WallSegment : MonoBehaviour
+    public sealed class WallSegment : MonoBehaviour, IDamageableStructure
     {
         [Header("Identity")]
         [Tooltip("Stable damage id from WallLayout -- wall-<index>.")]
@@ -74,6 +75,21 @@ namespace DeNelle.Village
         public bool IsDestroyed => _damage >= 100f;
 
         /// <summary>
+        /// <see cref="IDamageableStructure"/> — true while the section still
+        /// stands and an enemy can contact-attack it. False once it is rubble.
+        /// </summary>
+        public bool IsAlive => _damage < 100f;
+
+        /// <summary>
+        /// Raised whenever the section's accumulated damage changes — carries
+        /// the new 0-100 damage value. HUD / rubble swap subscribe.
+        /// </summary>
+        public event Action<float> DamageChanged;
+
+        /// <summary>Raised once when the section's damage reaches 100 (collapsed to rubble).</summary>
+        public event Action<WallSegment> Collapsed;
+
+        /// <summary>
         /// Wires this section from a <see cref="WallSegmentData"/> layout record.
         /// Called by <see cref="VillageController"/> right after instantiation.
         /// Sizes the box collider to the section footprint.
@@ -89,6 +105,35 @@ namespace DeNelle.Village
             _thickness = WallLayout.WallThickness;
             _height = height;
             RebuildCollider();
+        }
+
+        /// <summary>
+        /// <see cref="IDamageableStructure"/> contact-attack entry point — an
+        /// enemy in melee contact with this section routes its hit here.
+        /// Accumulates onto <see cref="Damage"/> (clamped 0-100); at 100 the
+        /// section is rubble and <see cref="Collapsed"/> fires. Closes
+        /// week4-waves.md integration item 5 — enemies can wear walls down
+        /// instead of pathing straight through (port spec Week 4).
+        /// </summary>
+        /// <param name="amount">Damage to accumulate. Non-positive values are ignored.</param>
+        public void ApplyContactDamage(float amount)
+        {
+            if (amount <= 0f || IsDestroyed) return;
+            _damage = Mathf.Clamp(_damage + amount, 0f, 100f);
+            DamageChanged?.Invoke(_damage);
+            if (_damage >= 100f) Collapsed?.Invoke(this);
+        }
+
+        /// <summary>
+        /// Repairs the section, reducing accumulated damage (the village repair
+        /// flow). Clamped at 0.
+        /// </summary>
+        /// <param name="amount">Damage to remove. Non-positive values are ignored.</param>
+        public void Repair(float amount)
+        {
+            if (amount <= 0f) return;
+            _damage = Mathf.Clamp(_damage - amount, 0f, 100f);
+            DamageChanged?.Invoke(_damage);
         }
 
         private void Awake()

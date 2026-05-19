@@ -47,6 +47,14 @@ namespace DeNelle.Pets
         [Tooltip("Deploy mode for the starter pets — Defend = hunt the nearest enemy.")]
         [SerializeField] private PetMode _deployMode = PetMode.Defend;
 
+        [Header("Auto-deploy")]
+        [Tooltip("When true, the deployer runs DeployStarterPets() itself on Start() " +
+                 "using the serialized Heart position / enemy mask / bond ranks above. " +
+                 "The village scene builder sets this so a fresh scene deploys its " +
+                 "pets without needing a separate runtime caller. Off: the integrator " +
+                 "calls DeployStarterPets() by hand once the scene context is ready.")]
+        [SerializeField] private bool _autoDeployOnStart;
+
         private readonly List<Pet> _deployed = new List<Pet>();
 
         /// <summary>The pets currently deployed in the scene.</summary>
@@ -68,6 +76,17 @@ namespace DeNelle.Pets
         public void SetBondRanks(int aether, int flame, int ice)
         {
             _bondRanks = new[] { aether, flame, ice };
+        }
+
+        /// <summary>
+        /// When <see cref="_autoDeployOnStart"/> is set (the village scene
+        /// builder enables it), deploys the starter pets from the serialized
+        /// config. Otherwise the integrator calls <see cref="DeployStarterPets"/>
+        /// by hand once the scene context is ready.
+        /// </summary>
+        private void Start()
+        {
+            if (_autoDeployOnStart) DeployStarterPets();
         }
 
         /// <summary>
