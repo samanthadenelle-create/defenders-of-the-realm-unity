@@ -1,0 +1,132 @@
+/* =============================================================================
+ * TitleScreen.uss — styling for the Title scene document (Week 1)
+ * -----------------------------------------------------------------------------
+ * Port of the LandingPage.tsx visual language into USS. Colour values reference
+ * the midnight-luxe tokens from Theme.uss (var(--primary) etc.) so the title
+ * screen stays in lock-step with the rest of the UI when the theme is themed.
+ *
+ * USS has no radial-gradient and no @keyframes-on-load equivalent of the React
+ * cinematic staged reveal; Week 1 ships the final static layout (the staged
+ * splash reveal was a polish item, deferred). The Heart-Wing banner image is
+ * applied to #heart-wing-banner from C# (a serialized sprite reference).
+ * ============================================================================= */
+
+.title-root {
+    flex-grow: 1;
+    background-color: var(--background);
+    align-items: center;
+    justify-content: center;
+}
+
+/* ── Heart-Wing banner — fills the screen behind the title block ─────────── */
+.heart-wing-banner {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    -unity-background-scale-mode: scale-and-crop;
+    opacity: 0.55;
+}
+
+/* ── Centered title block ────────────────────────────────────────────────── */
+.title-block {
+    align-items: center;
+    justify-content: center;
+    padding-left: 24px;
+    padding-right: 24px;
+}
+
+/* ── Overline — "By lantern. By oath. By Heart." three-beat vow ──────────── */
+.overline {
+    color: var(--primary);
+    font-size: 13px;
+    letter-spacing: 4px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+    white-space: normal;
+    margin-bottom: 10px;
+}
+
+/* ── Game title ──────────────────────────────────────────────────────────── */
+.game-title {
+    color: var(--foreground);
+    font-size: 56px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+    white-space: normal;
+    text-shadow: 0 0 24px rgba(217, 167, 38, 0.55);
+}
+
+/* ── Golden rule ─────────────────────────────────────────────────────────── */
+.title-rule {
+    width: 88px;
+    height: 2px;
+    background-color: var(--primary);
+    margin-top: 14px;
+    margin-bottom: 14px;
+}
+
+/* ── Tagline ─────────────────────────────────────────────────────────────── */
+.tagline {
+    color: var(--secondary-foreground);
+    font-size: 18px;
+    -unity-font-style: italic;
+    -unity-text-align: middle-center;
+    white-space: normal;
+    margin-bottom: 32px;
+}
+
+/* ── Primary CTA — Start ─────────────────────────────────────────────────── */
+.cta-button {
+    min-width: 220px;
+    height: 52px;
+    font-size: 18px;
+    -unity-font-style: bold;
+    color: var(--primary-foreground);
+    background-color: var(--primary);
+    border-width: 1px;
+    border-color: var(--ring);
+    border-radius: 26px;
+    margin-bottom: 14px;
+    transition-property: scale;
+    transition-duration: 0.12s;
+}
+
+.cta-button:hover {
+    scale: 1.04 1.04;
+}
+
+.cta-button:active {
+    scale: 0.96 0.96;
+}
+
+/* ── Ghost button — Connect Wallet (Week-1 stub) ─────────────────────────── */
+.ghost-button {
+    min-width: 220px;
+    height: 44px;
+    font-size: 14px;
+    color: var(--foreground);
+    background-color: var(--button);
+    border-width: 1px;
+    border-color: var(--button-border);
+    border-radius: 22px;
+}
+
+.ghost-button:hover {
+    background-color: var(--button-hover);
+    color: var(--button-hover-foreground);
+    border-color: var(--button-hover-border);
+}
+
+/* ── Studio credit, bottom of screen ─────────────────────────────────────── */
+.studio-credit {
+    position: absolute;
+    bottom: 14px;
+    left: 0;
+    right: 0;
+    color: var(--muted-foreground);
+    font-size: 11px;
+    letter-spacing: 3px;
+    -unity-text-align: middle-center;
+}

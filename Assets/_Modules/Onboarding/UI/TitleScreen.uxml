@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- TitleScreen.uxml - the Title scene's UI Toolkit document (Week 1).
+     Port of src/modules/onboarding/LandingPage.tsx, reduced to the Week-1
+     deliverable: the Heart-Wing banner, the canon tagline, the Connect Wallet
+     stub button, and the Start button. The story-intro and studio-bumper
+     cinematics are separate GameObjects driven from C#, not part of this
+     document. Every text node is intentionally left empty; TitleController
+     fills the tagline and studio credit from canon-strings.json at runtime
+     so no canon string is baked into a serialized asset (port-spec Part 4). -->
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <Style src="TitleScreen.uss" />
+    <ui:VisualElement name="title-root" class="title-root">
+
+        <!-- Heart-Wing banner — Elarion's airborne aspect, behind the title.
+             The background-image is assigned by TitleController from the
+             serialized heart-wing.jpg sprite. -->
+        <ui:VisualElement name="heart-wing-banner" class="heart-wing-banner" />
+
+        <!-- Centered title block. -->
+        <ui:VisualElement name="title-block" class="title-block">
+
+            <!-- Overline — the three-beat vow. Filled from canon "tagline". -->
+            <ui:Label name="overline" class="overline" text="" />
+
+            <!-- Game title — filled from canon "gameTitle". -->
+            <ui:Label name="game-title" class="game-title" text="" />
+
+            <!-- Golden rule under the title. -->
+            <ui:VisualElement name="title-rule" class="title-rule" />
+
+            <!-- Tagline — filled from canon "tagline". -->
+            <ui:Label name="tagline" class="tagline" text="" />
+
+            <!-- Primary CTA — loads the Village scene. -->
+            <ui:Button name="start-button" class="cta-button" text="Start" />
+
+            <!-- Wallet connect — Week-1 stub (logs + no-op). -->
+            <ui:Button name="connect-wallet-button" class="ghost-button" text="Connect Wallet" />
+        </ui:VisualElement>
+
+        <!-- Studio credit, bottom of screen. Filled from canon "publisher". -->
+        <ui:Label name="studio-credit" class="studio-credit" text="" />
+    </ui:VisualElement>
+</ui:UXML>

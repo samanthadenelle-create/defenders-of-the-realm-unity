@@ -4,5 +4,17 @@
 EditorBuildSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 2
-  m_Scenes: []
+  m_Scenes:
+  - enabled: 1
+    path: Assets/Scenes/Title.unity
+    guid: ad59cee2683d47449934f2eebf67519d
+  - enabled: 1
+    path: Assets/Scenes/Village.unity
+    guid: b1e088b2594ac9745983dd1508b3913d
+  - enabled: 1
+    path: Assets/Scenes/Dungeon_HealersCottage.unity
+    guid: df4571b800d8461488b79150f3cc5b1d
+  - enabled: 1
+    path: Assets/Scenes/ATBBattle.unity
+    guid: 750cbbf0386ec794d965f3337fb9e8a7
   m_configObjects: {}
