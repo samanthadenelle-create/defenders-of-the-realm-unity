@@ -52,6 +52,11 @@ namespace DeNelle.Editor
             // 4. Exterior view — high + wide, showing the wilderness biomes.
             Capture(new Vector3(0f, 215f, -265f), Quaternion.Euler(38f, 0f, 0f), 60f,
                     "screenshot-village-week3-exterior.png");
+
+            // 5. Elarion close-up — the Heart centerpiece (tree + standing-stone
+            //    ring + mound), for verifying the centerpiece renders textured.
+            Capture(new Vector3(-6f, 10f, -16f), Quaternion.Euler(20f, 0f, 0f), 52f,
+                    "screenshot-village-elarion.png");
         }
 
         /// <summary>Builds the Healer's Cottage dungeon and captures a review PNG.</summary>

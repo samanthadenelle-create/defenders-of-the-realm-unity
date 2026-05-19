@@ -592,9 +592,14 @@ namespace DeNelle.Editor
                 tree.transform.SetParent(go.transform, false);
                 tree.transform.localPosition = new Vector3(0f, 0.7f, 0f);
                 tree.transform.localScale = Vector3.one * 3.0f; // ~3× normal (§3.1)
+                // The hex atlas will not resolve onto trees_A_large (renders
+                // white even force-assigned — same mesh/UV quirk as the standing
+                // stones). Flat-tint it a deep canopy green so the centerpiece
+                // reads as a world-tree; the violet veins still glow over it.
+                ApplyColorAll(tree, new Color(0.24f, 0.42f, 0.22f));
                 Debug.Log("[VillageSceneBuilder] Elarion uses KayKit Hexagon-pack " +
-                          "decoration/nature/trees_A_large.fbx scaled 3x -- no separate " +
-                          "Forest/Nature pack is imported (logged decision, spec §3.1/§13).");
+                          "decoration/nature/trees_A_large.fbx scaled 3x, flat-tinted " +
+                          "(atlas does not resolve onto this mesh) -- spec §3.1/§13.");
             }
             else
             {
@@ -654,7 +659,15 @@ namespace DeNelle.Editor
                 stone.transform.localPosition = sp;
                 stone.transform.localRotation = Quaternion.Euler(0f, ang, 0f);
                 if (stoneModel != null)
+                {
                     stone.transform.localScale = new Vector3(1.1f, 2.0f, 1.1f);
+                    // The KayKit hex rock atlas does not resolve onto these
+                    // meshes (they render white even when the shared material
+                    // is force-assigned). Tint the ring a pale violet-grey so it
+                    // reads as standing stone and ties to Elarion's crystalline
+                    // veins (spec §3.1) — see unity-decisions.md 2026-05-19.
+                    ApplyColorAll(stone, new Color(0.62f, 0.60f, 0.66f));
+                }
                 else
                 {
                     stone.transform.localScale = new Vector3(0.7f, 2.2f, 0.7f);
@@ -706,6 +719,13 @@ namespace DeNelle.Editor
                 visual.transform.localScale = new Vector3(4f, 4f, 4f);
                 visual.transform.localPosition = new Vector3(0f, 2f, 0f);
                 ApplyColor(visual, new Color(0.55f, 0.52f, 0.48f));
+            }
+            else
+            {
+                // building_castle renders untextured (white) — the hex atlas
+                // does not resolve onto this mesh. Flat-tint it a warm keep-stone
+                // so the Keeper's Keep reads as built stone (see decisions log).
+                ApplyColorAll(visual, new Color(0.60f, 0.57f, 0.50f));
             }
 
             // Violet banner beside the Keep (§3.2 -- recolour a KayKit flag).
@@ -1264,6 +1284,11 @@ namespace DeNelle.Editor
                 if (instance != null)
                 {
                     instance.name = model.name;
+                    // The whole Hexagon pack shares one atlas — force the shared
+                    // URP material on so instances render textured even when the
+                    // FBX importer's material remap fails to resolve (the
+                    // decoration/nature meshes; see unity-decisions.md 2026-05-19).
+                    ForceHexMaterial(instance);
                     return instance;
                 }
             }
@@ -1421,25 +1446,114 @@ namespace DeNelle.Editor
                 UnityEngine.Object.DestroyImmediate(c);
         }
 
+        /// <summary>
+        /// Builds a flat-colour URP material. A bare
+        /// <c>new Material(Shader.Find("Universal Render Pipeline/Lit"))</c>
+        /// renders WHITE in batchmode regardless of <c>_BaseColor</c> — it never
+        /// goes through URP's material import/validation, so its shader keywords
+        /// are not set up. The fix: COPY a known-good URP/Lit asset material (the
+        /// KayKit atlas <c>.mat</c>, proven to render — the buildings use it) so
+        /// the copy inherits the full keyword/property setup, then drop its
+        /// texture and recolour it.
+        /// </summary>
+        private static Material MakeFlatMaterial(Color color)
+        {
+            Material mat;
+            var baseMat = HexMaterial();
+            if (baseMat != null)
+            {
+                mat = new Material(baseMat);          // inherits proper URP setup
+                mat.SetTexture("_BaseMap", null);     // drop the atlas → flat colour
+                if (mat.HasProperty("_MainTex")) mat.SetTexture("_MainTex", null);
+            }
+            else
+            {
+                var shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+                mat = new Material(shader);
+            }
+            if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", color);
+            if (mat.HasProperty("_Color")) mat.SetColor("_Color", color);
+            mat.color = color;
+            return mat;
+        }
+
         private static void ApplyColor(GameObject go, Color color)
         {
             var renderer = go.GetComponent<Renderer>();
             if (renderer == null) return;
-            var shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
-            var mat = new Material(shader) { color = color };
-            renderer.sharedMaterial = mat;
+            renderer.sharedMaterial = MakeFlatMaterial(color);
+        }
+
+        /// <summary>
+        /// Flat-colour URP material on EVERY renderer of an instance (root +
+        /// children, all submesh slots). Used where a KayKit model's atlas
+        /// material does not resolve and a clean solid tint is wanted instead.
+        /// </summary>
+        private static void ApplyColorAll(GameObject go, Color color)
+        {
+            if (go == null) return;
+            var mat = MakeFlatMaterial(color);
+            foreach (var r in go.GetComponentsInChildren<Renderer>())
+            {
+                if (r == null) continue;
+                int slots = Mathf.Max(1, r.sharedMaterials.Length);
+                var mats = new Material[slots];
+                for (int i = 0; i < slots; i++) mats[i] = mat;
+                r.sharedMaterials = mats;
+            }
         }
 
         private static void ApplyEmissive(GameObject go, Color color, float intensity)
         {
             var renderer = go.GetComponent<Renderer>();
             if (renderer == null) return;
-            var shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
-            var mat = new Material(shader) { color = color };
+            var mat = MakeFlatMaterial(color);
             mat.EnableKeyword("_EMISSION");
             mat.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
             mat.SetColor("_EmissionColor", color * Mathf.Max(0f, intensity));
             renderer.sharedMaterial = mat;
+        }
+
+        // ── Shared hex-atlas material (importer-remap fallback) ──────────────
+        // The whole Medieval Hexagon Pack UV-maps onto ONE shared atlas
+        // (hexagons_medieval.png), so a single URP material renders every model
+        // in it correctly. Most instances resolve their material through the
+        // FBX importer's external-material remap — but the decoration/nature
+        // meshes (the Elarion tree + standing stones) render white because that
+        // remap does not resolve at runtime (see unity-decisions.md 2026-05-19).
+        // ForceHexMaterial side-steps the importer entirely by assigning the
+        // shared .mat straight onto the scene renderers.
+        private static Material _hexMaterial;
+
+        private static Material HexMaterial()
+        {
+            if (_hexMaterial != null) return _hexMaterial;
+            _hexMaterial = AssetDatabase.LoadAssetAtPath<Material>(
+                HexDecoNature + "hexagons_medieval_URP.mat");
+            if (_hexMaterial == null)
+                Debug.LogWarning("[VillageSceneBuilder] hexagons_medieval_URP.mat not found -- " +
+                                 "run KayKitMaterials.FixAllMaterials first; nature meshes may " +
+                                 "render untextured.");
+            return _hexMaterial;
+        }
+
+        /// <summary>
+        /// Force-assigns the shared hex-atlas URP material to every renderer of a
+        /// model instance. No-op when the material can't be loaded (the instance
+        /// then keeps whatever the importer gave it).
+        /// </summary>
+        private static void ForceHexMaterial(GameObject instance)
+        {
+            var mat = HexMaterial();
+            if (mat == null || instance == null) return;
+            foreach (var r in instance.GetComponentsInChildren<Renderer>())
+            {
+                if (r == null) continue;
+                int slots = Mathf.Max(1, r.sharedMaterials.Length);
+                var mats = new Material[slots];
+                for (int i = 0; i < slots; i++) mats[i] = mat;
+                r.sharedMaterials = mats;
+            }
         }
 
         /// <summary>Parses a 6-digit hex string into a Color.</summary>
