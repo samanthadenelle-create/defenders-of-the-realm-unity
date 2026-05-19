@@ -13,7 +13,8 @@
     "type": "Keys into enemies.json 'id'. Wave 1 uses 'hollow-walker' exclusively.",
     "delay": "Seconds after countdown-zero before the batch starts releasing enemies. 0 = release immediately on wave start.",
     "interval": "Seconds between successive enemy spawns within the batch. Staggers a march rather than dumping the batch in one frame.",
-    "boss": "Optional. When present, names a boss enemy (enemies.json id) released alongside the wave. Boss waves recur every 6 waves (React BOSS_EVERY) — none of waves 1-3 are boss waves."
+    "boss": "Optional. When present, names a boss enemy (enemies.json id) released alongside the wave. Boss waves recur every 6 waves (React BOSS_EVERY) — none of waves 1-3 are boss waves.",
+    "apexBoss": "Optional object — declares the APEX flying boss for the wave (the Black Dragon, 'Syndrath the Devourer'). DISTINCT from 'boss' above: 'boss' names a ground NavMesh enemy from enemies.json, whereas apexBoss is the kinematic-flight DragonBoss prefab (Boss_Dragon.prefab) — it is NOT in enemies.json and does not path a NavMesh. Fields: { id (stable per-instance boss id), hp (max HP override; <=0 keeps the prefab's 4200 default), nameKey (canon-strings.json key for the display name) }. The apex wave sits ABOVE the canon Necromancer cadence — see docs/port-notes/dragon-boss.md §2 + dragon-wave-wiring.md."
   },
   "version": 1,
   "waves": [
@@ -79,6 +80,18 @@
           "interval": 1.3
         }
       ]
+    },
+    {
+      "_comment": "APEX WAVE — the Black Dragon, 'Syndrath the Devourer'. The terminal wave of the schedule and the realm's register breaking under the Withering (dragon-boss.md §2): a rare set-piece sky-boss ABOVE the canon Necromancer of the Wound. No ground enemy batches — the dragon IS the wave; it circles the Heart on its own kinematic flight and dives to strike. 'enemies' is left empty intentionally; WaveManager spawns the Boss_Dragon prefab from the 'apexBoss' block and calls DragonBoss.Configure(id, Heart, hp). hp 4200 mirrors the DragonBoss inspector default (well above the Necromancer's 1700). countdownSeconds 300 = the React LATER_PREPARE_SECONDS build window.",
+      "waveId": 4,
+      "name": "The Last Wing",
+      "countdownSeconds": 300,
+      "enemies": [],
+      "apexBoss": {
+        "id": "boss-dragon-syndrath",
+        "hp": 4200,
+        "nameKey": "bossSyndrath"
+      }
     }
   ]
 }

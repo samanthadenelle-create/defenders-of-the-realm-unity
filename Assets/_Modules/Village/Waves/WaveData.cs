@@ -136,6 +136,34 @@ namespace DeNelle.Village
     }
 
     /// <summary>
+    /// The apex flying-boss declaration on a wave — the deserialised shape of a
+    /// <c>waves.json</c> <c>apexBoss</c> object. This is DISTINCT from
+    /// <see cref="WaveDef.Boss"/>: <see cref="WaveDef.Boss"/> names a ground
+    /// <see cref="EnemyDef"/> released as a normal NavMesh enemy, whereas the
+    /// apex boss is the kinematic-flight <c>DragonBoss</c> prefab — it does not
+    /// path a NavMesh and is not in <c>enemies.json</c>. WaveManager spawns the
+    /// Boss_Dragon prefab and calls <c>DragonBoss.Configure</c> for an apex wave.
+    /// See docs/port-notes/dragon-boss.md §2 + dragon-wave-wiring.md.
+    /// </summary>
+    [Serializable]
+    public sealed class ApexBossDef
+    {
+        /// <summary>Stable per-instance boss id — e.g. "boss-dragon-syndrath".</summary>
+        [JsonProperty("id")] public string Id = "boss-dragon";
+        /// <summary>
+        /// Max hit points for the apex boss. ≤0 keeps the prefab's inspector HP
+        /// (the DragonBoss default is 4200 — well above the Necromancer's 1700).
+        /// </summary>
+        [JsonProperty("hp")] public float Hp;
+        /// <summary>
+        /// canon-strings.json key for the boss display name (the proper noun —
+        /// e.g. "bossSyndrath" -> "Syndrath the Devourer"). Resolved via
+        /// <see cref="VillageStrings.Canon"/> by the HUD / boss bar.
+        /// </summary>
+        [JsonProperty("nameKey")] public string NameKey;
+    }
+
+    /// <summary>
     /// One wave — a Prepare-Phase countdown followed by a set of spawn batches.
     /// The deserialised shape of a <c>waves.json</c> <c>waves[]</c> entry.
     /// </summary>
@@ -152,6 +180,15 @@ namespace DeNelle.Village
         [JsonProperty("enemies")] public List<WaveBatch> Enemies = new List<WaveBatch>();
         /// <summary>Optional boss enemy id released alongside the wave (null = no boss).</summary>
         [JsonProperty("boss")] public string Boss;
+        /// <summary>
+        /// Optional apex flying-boss declaration (null = not an apex wave). When
+        /// present this wave spawns the kinematic <c>DragonBoss</c> prefab instead
+        /// of — or alongside — the normal enemy batches. See <see cref="ApexBossDef"/>.
+        /// </summary>
+        [JsonProperty("apexBoss")] public ApexBossDef ApexBoss;
+
+        /// <summary>True when this wave fields the apex flying boss (the dragon).</summary>
+        public bool IsApexBossWave => ApexBoss != null;
 
         /// <summary>Total enemy count across every batch (boss excluded).</summary>
         public int TotalEnemyCount

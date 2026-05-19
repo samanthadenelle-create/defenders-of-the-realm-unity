@@ -138,6 +138,7 @@ namespace DeNelle.Editor
         private const string TypeWaveManager = NsVillage + ".WaveManager";
         private const string TypeEnemy = NsVillage + ".Enemy";
         private const string TypeEnemyDamageable = NsVillage + ".EnemyDamageable";
+        private const string TypeDragonBoss = NsVillage + ".DragonBoss";
         private const string TypeHeroAbilities = NsVillage + ".HeroAbilities";
         private const string TypeBuildMenu = NsVillage + ".BuildMenu";
         private const string NsPets = "DeNelle.Pets";
@@ -158,6 +159,14 @@ namespace DeNelle.Editor
             "Assets/Shaders/ForceFieldGate.mat";
         /// <summary>Folder generated Week-4 prefabs are written to.</summary>
         private const string GeneratedPrefabDir = "Assets/Prefabs/Village/Generated";
+
+        /// <summary>
+        /// The apex flying-boss prefab (the Black Dragon). Built by
+        /// DragonAnimatorSetup.BuildDragonBossPrefab — carries a DragonBoss.
+        /// Wired into <c>WaveManager._apexBossPrefab</c> for the apex wave.
+        /// </summary>
+        private const string BossDragonPrefabPath =
+            GeneratedPrefabDir + "/Boss_Dragon.prefab";
 
         /// <summary>
         /// User-layer index for wave enemies — see ProjectSettings/TagManager.asset
@@ -2129,11 +2138,60 @@ namespace DeNelle.Editor
                 if (enemyComp != null) SetObjectField(so, "_enemyPrefab", enemyComp);
             }
 
+            // _apexBossPrefab — typed `DragonBoss`; assign the Boss_Dragon
+            // prefab's DragonBoss component so the apex wave (waves.json wave 4,
+            // "The Last Wing") can release the flying boss. The prefab is built
+            // by DragonAnimatorSetup; a miss is non-fatal — the apex wave then
+            // logs an error at runtime and clears (the loop never stalls).
+            WireApexBossPrefab(so);
+
             // _spawnPoints — the list of WaveSpawnPoints already placed by the
             // approach-lane builder. Populate the serialized List<WaveSpawnPoint>.
             WireSpawnPointList(so, "_spawnPoints");
 
             so.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        /// <summary>
+        /// Loads the Boss_Dragon prefab and wires its <c>DragonBoss</c> component
+        /// into <c>WaveManager._apexBossPrefab</c> (the field is typed
+        /// <c>DragonBoss</c>). The prefab is produced by
+        /// <c>DragonAnimatorSetup.BuildDragonBossPrefab</c> — if it has not been
+        /// built yet the wiring is skipped with a warning; the apex wave then
+        /// logs its own error at runtime rather than the loop stalling.
+        /// </summary>
+        private static void WireApexBossPrefab(SerializedObject so)
+        {
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(BossDragonPrefabPath);
+            if (prefab == null)
+            {
+                Debug.LogWarning(
+                    "[VillageSceneBuilder] Boss_Dragon prefab not found at " +
+                    $"'{BossDragonPrefabPath}' -- apex-boss wave will have no dragon. " +
+                    "Run Defenders > Animation > Build Dragon Boss first.");
+                return;
+            }
+
+            var dragonType = FindType(TypeDragonBoss);
+            if (dragonType == null)
+            {
+                Debug.LogError("[VillageSceneBuilder] DeNelle.Village.DragonBoss not found -- " +
+                               "is the DeNelle.Village assembly compiled? Apex-boss prefab not wired.");
+                return;
+            }
+
+            var dragonComp = prefab.GetComponent(dragonType);
+            if (dragonComp == null)
+            {
+                Debug.LogError(
+                    $"[VillageSceneBuilder] Boss_Dragon prefab at '{BossDragonPrefabPath}' " +
+                    "carries no DragonBoss component -- apex-boss prefab not wired.");
+                return;
+            }
+
+            SetObjectField(so, "_apexBossPrefab", dragonComp);
+            Debug.Log("[VillageSceneBuilder] WaveManager._apexBossPrefab wired to Boss_Dragon " +
+                      "(apex wave 'The Last Wing' will release Syndrath the Devourer).");
         }
 
         /// <summary>

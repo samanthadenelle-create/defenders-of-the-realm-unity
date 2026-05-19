@@ -64,6 +64,10 @@ namespace DeNelle.Village
     [System.Serializable]
     public sealed class WaveNumberEvent : UnityEvent<int> { }
 
+    /// <summary>A UnityEvent carrying the apex flying boss that just spawned.</summary>
+    [System.Serializable]
+    public sealed class WaveBossEvent : UnityEvent<DragonBoss> { }
+
     /// <summary>
     /// Drives the village wave loop: countdown, spawn, breach detection, ATB
     /// hand-off. A self-contained sub-system MonoBehaviour for the Village scene.
@@ -90,6 +94,11 @@ namespace DeNelle.Village
                  "Left blank: WaveManager builds a primitive-capsule placeholder so the loop " +
                  "still runs before the KayKit skeleton prefab exists.")]
         [SerializeField] private Enemy _enemyPrefab;
+
+        [Tooltip("Apex flying-boss prefab (Boss_Dragon — carries a DragonBoss). Spawned for a " +
+                 "wave whose waves.json entry declares an 'apexBoss'. Left blank: an apex wave " +
+                 "logs an error and is treated as cleared (the loop never stalls).")]
+        [SerializeField] private DragonBoss _apexBossPrefab;
 
         [Header("Breach detection")]
         [Tooltip("Radius (world units) of the inner wall ring around the Heart. An enemy that " +
@@ -123,12 +132,19 @@ namespace DeNelle.Village
         [Tooltip("Fires when one or more enemies breach the inner ring. Arg = the wave id.")]
         public WaveNumberEvent OnBreach = new WaveNumberEvent();
 
+        [Tooltip("Fires when an apex wave releases its flying boss. Arg = the spawned DragonBoss " +
+                 "— bind the boss HP bar / camera framing / Heart threat state to it.")]
+        public WaveBossEvent OnApexBossSpawned = new WaveBossEvent();
+
         // ── Runtime state ─────────────────────────────────────────────────────
 
         private WaveSchedule _schedule;
         private EnemyCatalog _enemyCatalog;
         private readonly List<Enemy> _liveEnemies = new List<Enemy>();
         private readonly List<Enemy> _breachRoster = new List<Enemy>();
+
+        /// <summary>The apex flying boss for the current wave (null when not an apex wave / dead).</summary>
+        private DragonBoss _liveApexBoss;
 
         private WavePhase _phase = WavePhase.Idle;
         private int _currentWaveId;
@@ -148,6 +164,9 @@ namespace DeNelle.Village
 
         /// <summary>Live enemies currently on the field.</summary>
         public IReadOnlyList<Enemy> LiveEnemies => _liveEnemies;
+
+        /// <summary>The apex flying boss on the field, or null when no apex wave is live.</summary>
+        public DragonBoss LiveApexBoss => _liveApexBoss;
 
         // =====================================================================
         //  Lifecycle
@@ -269,9 +288,13 @@ namespace DeNelle.Village
             _breachArmed = false;
             _breachArmTimer = 0f;
             _breachRoster.Clear();
+            _liveApexBoss = null;
             OnWaveStarted.Invoke(waveId);
 
-            if (_heart != null) _heart.SetState(HeartState.Vigilant);
+            // An apex (flying-boss) wave drives the Heart's Boss threat state;
+            // a normal wave only raises it to Vigilant.
+            if (_heart != null)
+                _heart.SetState(wave.IsApexBossWave ? HeartState.Boss : HeartState.Vigilant);
 
             // Each batch spawns on its own delayed coroutine-equivalent UniTask.
             if (wave.Enemies != null)
@@ -290,6 +313,55 @@ namespace DeNelle.Village
                     Type = wave.Boss, Count = 1, SpawnPoint = "spawn-0", Delay = 0f, Interval = 0f,
                 }).Forget();
             }
+
+            // An APEX wave fields the kinematic flying boss (the dragon). Unlike
+            // wave.Boss above, this is NOT a NavMesh enemy from enemies.json — it
+            // is the Boss_Dragon prefab driven by DragonBoss. Released at once so
+            // the dragon is aloft the moment the apex wave begins.
+            if (wave.IsApexBossWave)
+                SpawnApexBoss(wave.ApexBoss);
+        }
+
+        /// <summary>
+        /// Spawns the apex flying boss for an apex wave: instantiates the
+        /// <see cref="_apexBossPrefab"/> over the Heart and calls
+        /// <see cref="DragonBoss.Configure"/> with the Heart anchor + the wave's
+        /// HP. The dragon owns its own kinematic flight — no NavMesh, no spawn
+        /// point. A missing prefab logs an error; the wave then clears normally
+        /// (its enemy batches, if any) so the loop never stalls.
+        /// </summary>
+        private void SpawnApexBoss(ApexBossDef boss)
+        {
+            if (boss == null) return;
+
+            if (_apexBossPrefab == null)
+            {
+                Debug.LogError(
+                    "[WaveManager] Wave declares an apex boss but no _apexBossPrefab is wired — " +
+                    "the Boss_Dragon prefab must be assigned (see docs/port-notes/dragon-wave-wiring.md).");
+                return;
+            }
+
+            // Spawn the dragon at cruise height above the Heart so it begins its
+            // orbit immediately; DragonBoss.Configure re-seeds its anchor + HP.
+            Transform heartT = _heart != null ? _heart.transform : null;
+            Vector3 spawnPos = (heartT != null ? heartT.position : transform.position)
+                               + new Vector3(0f, 22f, 0f);
+
+            DragonBoss dragon = Instantiate(_apexBossPrefab, spawnPos, Quaternion.identity, _enemyRoot);
+
+            string bossId = !string.IsNullOrEmpty(boss.Id)
+                ? boss.Id
+                : $"wave{_currentWaveId}-apex-boss";
+            dragon.Configure(bossId, heartT, boss.Hp);
+
+            dragon.Died += HandleApexBossDied;
+            _liveApexBoss = dragon;
+            OnApexBossSpawned.Invoke(dragon);
+
+            Debug.Log(
+                $"[WaveManager] Apex wave {_currentWaveId} — released flying boss '{bossId}' " +
+                $"(maxHp {(boss.Hp > 0f ? boss.Hp.ToString() : "prefab default")}).");
         }
 
         /// <summary>
@@ -408,8 +480,12 @@ namespace DeNelle.Village
                 }
             }
 
-            // Wave is cleared when no enemies remain on the field.
-            if (_liveEnemies.Count == 0)
+            // Wave is cleared when no enemies remain on the field. An apex wave
+            // additionally holds open until the flying boss is down — the dragon
+            // is not in _liveEnemies (it owns kinematic flight, not a NavMesh
+            // agent), so its life is tracked separately via _liveApexBoss.
+            bool apexBossStillUp = _liveApexBoss != null && !_liveApexBoss.IsDead;
+            if (_liveEnemies.Count == 0 && !apexBossStillUp)
             {
                 CompleteWave();
             }
@@ -470,6 +546,17 @@ namespace DeNelle.Village
             _liveEnemies.Clear();
             _breachRoster.Clear();
 
+            // If an apex wave also fielded the flying boss, it leaves the 3D
+            // layer with the rest of the wave — destroy it so it does not orbit
+            // an empty village while the ATB scene is up. The dragon is its own
+            // encounter; ground enemies breaching abandons the apex wave too.
+            if (_liveApexBoss != null)
+            {
+                _liveApexBoss.Died -= HandleApexBossDied;
+                Destroy(_liveApexBoss.gameObject);
+                _liveApexBoss = null;
+            }
+
             Debug.Log(
                 $"[WaveManager] Wave {_currentWaveId} breached with " +
                 $"{battleParams.BreachedIds.Length} enemies — handing off to ATBBattle.");
@@ -493,6 +580,17 @@ namespace DeNelle.Village
                 enemy.ReachedHeart -= HandleEnemyReachedHeart;
             }
             _liveEnemies.Remove(enemy);
+        }
+
+        /// <summary>
+        /// The apex flying boss died. Unsubscribes and drops the reference — the
+        /// dragon destroys its own GameObject after the death-fall, and
+        /// <see cref="TickActiveWave"/> then sees the wave as clear.
+        /// </summary>
+        private void HandleApexBossDied(DragonBoss boss)
+        {
+            if (boss != null) boss.Died -= HandleApexBossDied;
+            if (_liveApexBoss == boss) _liveApexBoss = null;
         }
 
         /// <summary>

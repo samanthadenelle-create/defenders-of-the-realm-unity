@@ -25,6 +25,10 @@
   "alduin": "Alduin the Mournful",
   "alduinTitle": "the Necromancer",
 
+  "bossSyndrath": "Syndrath the Devourer",
+  "bossSyndrathEpithet": "the Devourer",
+  "_bossSyndrathNote": "Apex village wave-boss (the Black Dragon). NOT from narrative-bible.md / story.ts — agent-authored content the owner pulled in and ratified 2026-05-19 (see docs/port-notes/dragon-boss.md §1). Keyed here as a proper noun so the HUD / boss bar never hardcodes it; the displayed name can be re-pointed without touching code.",
+
   "heartWing": "The Heart-Wing",
   "heartWingDescription": "Elarion's airborne aspect; Elarion sometimes walks the sky and the Folk call it the Heart-Wing.",
 
