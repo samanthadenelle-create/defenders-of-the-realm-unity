@@ -1,0 +1,160 @@
+/*
+ * BuildMenu.uss — styling for the village build menu (Week 4).
+ * ----------------------------------------------------------------------
+ * Matches the project's UI Toolkit visual language (BattleHUD.uss /
+ * PackStore.uss): a dark Heart-Forest backdrop, violet for the Heart
+ * accent, amber for the call-to-action, muted greys for body copy,
+ * mint-green for affordable / red for unaffordable. Values are inline —
+ * the project Theme is C#-driven, not USS variables — kept in sync by
+ * hand, the established BattleHUD / PackStore convention.
+ *
+ * USS class names are the styling contract BuildMenu.cs builds cards with:
+ *   build-card / build-card--selected / build-card--unaffordable
+ *   build-card__name / build-card__desc / build-card__footer
+ *   build-card__cost / build-card__cost--unaffordable / build-card__hp
+ */
+
+/* ── Root — full-screen, transparent, pass-through ──────────────────── */
+.build-menu-root {
+    flex-grow: 1;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+}
+
+/* ── Floating panel ─────────────────────────────────────────────────── */
+.build-menu-panel {
+    position: absolute;
+    width: 264px;
+    flex-direction: column;
+    padding: 12px;
+    border-radius: 14px;
+    background-color: rgba(15, 12, 24, 0.97);
+    border-width: 1px;
+    border-color: rgba(124, 58, 237, 0.42);
+}
+
+/* ── Header ─────────────────────────────────────────────────────────── */
+.build-menu-header {
+    flex-direction: row;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.build-menu-title {
+    flex-grow: 1;
+    font-size: 18px;
+    -unity-font-style: bold;
+    color: rgb(237, 233, 250);
+}
+
+.build-menu-balance {
+    margin-right: 8px;
+    font-size: 14px;
+    -unity-font-style: bold;
+    color: rgb(125, 211, 252);
+}
+
+.build-menu-close {
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border-radius: 11px;
+    font-size: 12px;
+    -unity-font-style: bold;
+    color: rgb(206, 200, 222);
+    background-color: rgba(255, 255, 255, 0.07);
+    border-width: 0;
+}
+
+.build-menu-close:hover {
+    background-color: rgba(220, 38, 38, 0.5);
+    color: rgb(255, 255, 255);
+}
+
+/* ── Building list ──────────────────────────────────────────────────── */
+.build-menu-scroll {
+    max-height: 280px;
+}
+
+.build-menu-list {
+    flex-direction: column;
+    align-items: stretch;
+}
+
+/* ── Building card ──────────────────────────────────────────────────── */
+.build-card {
+    flex-direction: column;
+    margin-bottom: 8px;
+    padding: 10px;
+    border-radius: 10px;
+    background-color: rgba(28, 24, 42, 0.92);
+    border-width: 1px;
+    border-color: rgba(124, 58, 237, 0.22);
+}
+
+.build-card:hover {
+    border-color: rgba(196, 181, 253, 0.6);
+}
+
+.build-card--selected {
+    border-color: rgb(252, 224, 156);
+    background-color: rgba(44, 38, 58, 0.96);
+}
+
+.build-card--unaffordable {
+    opacity: 0.55;
+}
+
+.build-card__name {
+    font-size: 15px;
+    -unity-font-style: bold;
+    color: rgb(237, 233, 250);
+}
+
+.build-card__desc {
+    margin-top: 2px;
+    font-size: 11px;
+    -unity-font-style: italic;
+    color: rgb(160, 152, 178);
+    white-space: normal;
+}
+
+.build-card__footer {
+    flex-direction: row;
+    align-items: center;
+    margin-top: 6px;
+}
+
+.build-card__cost {
+    flex-grow: 1;
+    font-size: 13px;
+    -unity-font-style: bold;
+    color: rgb(125, 211, 252);
+}
+
+.build-card__cost--unaffordable {
+    color: rgb(248, 113, 113);
+}
+
+.build-card__hp {
+    font-size: 11px;
+    color: rgb(140, 132, 158);
+}
+
+/* ── Status / placement-hint banner ─────────────────────────────────── */
+.build-menu-status {
+    margin-top: 6px;
+    min-height: 18px;
+    font-size: 11px;
+    -unity-font-style: italic;
+    color: rgb(196, 181, 253);
+    white-space: normal;
+    -unity-text-align: middle-center;
+}
+
+.build-menu-status--error {
+    color: rgb(248, 113, 113);
+}

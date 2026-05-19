@@ -1,0 +1,84 @@
+{
+  "_comment": "Canonical wave-spawn schedule for the Avalon village defense loop (Defenders of the Realm v2 Unity port). Each wave is preceded by a calm Prepare Phase countdown; when the countdown hits zero the WaveManager spawns the wave's enemy batches at the named WaveSpawnPoints. Wave 1 is the v2-foundation acceptance wave: 8 Hollow Walkers entering from the NORTH gate (port spec Week 4 'Wave 1 = 8 Hollow Walkers from the north gate'). The countdown timings are sourced VERBATIM from the React v1 stream (src/modules/village/waves/waveConfig.ts — PREPARE_SECONDS=45 for the first wave, LATER_PREPARE_SECONDS=300 after). Per-wave enemy counts follow React src/data/battleScaling.ts waveScaling().enemyCount (wave 1 = 8, then 8 + steps*2 capped at 12). Waves 2-3 are AUTHORED here as a defensible continuation so the WaveManager has a multi-wave schedule to drive — the React stream only parameterises waves procedurally, it has no literal wave-2/3 table; flagged in docs/port-notes/week4-waves.md.",
+  "_sources": {
+    "reactWaveConfig": "defenders-of-the-realm/src/modules/village/waves/waveConfig.ts (PREPARE_SECONDS=45, LATER_PREPARE_SECONDS=300, prepSecondsForWave)",
+    "reactScaling": "defenders-of-the-realm/src/data/battleScaling.ts (waveScaling().enemyCount: wave1=8, then min(8+steps*2,12))",
+    "reactWaveManager": "defenders-of-the-realm/src/modules/village/waves/EnemyWaves.tsx (boss every BOSS_EVERY=6 waves)",
+    "portSpec": "defenders-unity/docs/v2-unity-port-spec.md (Part 4 waves.json schema, Week 4 Wave 1 spec)"
+  },
+  "_schemaNotes": {
+    "countdownSeconds": "Seconds of calm Prepare Phase BEFORE this wave spawns. Wave 1 = 45s (React PREPARE_SECONDS) so a new player isn't staring at a multi-minute timer; later waves = 300s (React LATER_PREPARE_SECONDS) build window.",
+    "spawnPoint": "WaveSpawnPoint.SpawnId the batch materialises at — 'spawn-0' N, 'spawn-1' E, 'spawn-2' S, 'spawn-3' W. Parallels the four cardinal gates (gate-0..gate-3). Wave 1 uses spawn-0 (north) only.",
+    "enemies": "Ordered list of spawn batches. Each batch: { type (enemies.json id), count, spawnPoint, delay (seconds after the wave starts before THIS batch begins spawning), interval (seconds between each enemy in the batch) }.",
+    "type": "Keys into enemies.json 'id'. Wave 1 uses 'hollow-walker' exclusively.",
+    "delay": "Seconds after countdown-zero before the batch starts releasing enemies. 0 = release immediately on wave start.",
+    "interval": "Seconds between successive enemy spawns within the batch. Staggers a march rather than dumping the batch in one frame.",
+    "boss": "Optional. When present, names a boss enemy (enemies.json id) released alongside the wave. Boss waves recur every 6 waves (React BOSS_EVERY) — none of waves 1-3 are boss waves."
+  },
+  "version": 1,
+  "waves": [
+    {
+      "waveId": 1,
+      "name": "First Light",
+      "countdownSeconds": 45,
+      "enemies": [
+        {
+          "type": "hollow-walker",
+          "count": 8,
+          "spawnPoint": "spawn-0",
+          "delay": 0,
+          "interval": 1.1
+        }
+      ]
+    },
+    {
+      "waveId": 2,
+      "name": "The Tide Widens",
+      "countdownSeconds": 300,
+      "enemies": [
+        {
+          "type": "hollow-walker",
+          "count": 7,
+          "spawnPoint": "spawn-0",
+          "delay": 0,
+          "interval": 1.0
+        },
+        {
+          "type": "hollow-rogue",
+          "count": 3,
+          "spawnPoint": "spawn-1",
+          "delay": 6,
+          "interval": 1.4
+        }
+      ]
+    },
+    {
+      "waveId": 3,
+      "name": "Bone and Bough",
+      "countdownSeconds": 300,
+      "enemies": [
+        {
+          "type": "hollow-walker",
+          "count": 6,
+          "spawnPoint": "spawn-0",
+          "delay": 0,
+          "interval": 1.0
+        },
+        {
+          "type": "hollow-warrior",
+          "count": 3,
+          "spawnPoint": "spawn-2",
+          "delay": 4,
+          "interval": 1.8
+        },
+        {
+          "type": "hollow-rogue",
+          "count": 3,
+          "spawnPoint": "spawn-3",
+          "delay": 9,
+          "interval": 1.3
+        }
+      ]
+    }
+  ]
+}

@@ -1,19 +1,21 @@
 // =============================================================================
-// Building — one village building MonoBehaviour (Week-3 skeleton).
+// Building — one village building MonoBehaviour (Week-4: data-driven).
 // -----------------------------------------------------------------------------
 // Port spec Part 3 row: src/modules/village/buildings/ -> Building.cs.
 //
-// One Building MonoBehaviour, configured by a BuildingDef (the ScriptableObject
-// the port table calls for lands with data/buildings.json in Week 4). Week-3
-// depth: structure + serialized fields + the BuildingType enum for the five
-// canonical buildings. HP, cost, upgrade costs, harvest-yield gameplay all land
-// Week 4 (port spec Part 5).
+// One Building MonoBehaviour, configured by a BuildingDef hydrated from the
+// canonical data/buildings.json (Week 4). The Week-3 skeleton held structure +
+// the BuildingType enum; Week 4 wires the data: a Configure(BuildingDef)
+// overload pulls HP / max-HP / display-name key / crystal cost from the
+// catalogue, and ApplyDamage / Repair drive the building's HP in waves.
 //
 // The five buildings (port spec Part 3 / docs/village-layout.md section 4):
 //   Crystal Mine, Pet House, Arcane Tower, Workshop, Farm.
-// VillageController instantiates one per building and calls Configure().
+// VillageController instantiates one per building and calls Configure(); the
+// build menu (BuildMenu.cs) does the same for a player-placed building.
 // =============================================================================
 
+using System;
 using UnityEngine;
 
 namespace DeNelle.Village
@@ -55,7 +57,14 @@ namespace DeNelle.Village
         [Tooltip("Display label -- e.g. \"Crystal Mine\". Week 4+ this flows through data/buildings.json.")]
         [SerializeField] private string _displayLabel;
 
-        [Header("State (Week 4+)")]
+        [Tooltip("canon-strings.json key for the display name (e.g. crystalMine). " +
+                 "Loaded from data/buildings.json. NOT a literal -- resolved through CanonStrings.")]
+        [SerializeField] private string _displayNameKey;
+
+        [Tooltip("Crystal cost to raise this building. Loaded from data/buildings.json.")]
+        [SerializeField] private int _crystalCost;
+
+        [Header("State (Week 4)")]
         [Tooltip("Building HP. Loaded from data/buildings.json in Week 4.")]
         [SerializeField] private float _hp = 100f;
 
@@ -78,6 +87,16 @@ namespace DeNelle.Village
         /// <summary>Display label -- e.g. "Crystal Mine".</summary>
         public string DisplayLabel => _displayLabel;
 
+        /// <summary>
+        /// canon-strings.json key for the display name (e.g. <c>crystalMine</c>).
+        /// NOT a literal -- callers resolve it through CanonStrings (port spec
+        /// Part 4: canon strings are never typed inline).
+        /// </summary>
+        public string DisplayNameKey => _displayNameKey;
+
+        /// <summary>Crystal cost to raise this building (from data/buildings.json).</summary>
+        public int CrystalCost => _crystalCost;
+
         /// <summary>Building HP (Week 4+).</summary>
         public float Hp => _hp;
 
@@ -86,6 +105,18 @@ namespace DeNelle.Village
 
         /// <summary>Upgrade level (Week 4+).</summary>
         public int Level => _level;
+
+        /// <summary>HP as a 0-1 fraction of max HP.</summary>
+        public float HpFraction => _maxHp > 0f ? Mathf.Clamp01(_hp / _maxHp) : 0f;
+
+        /// <summary>True once the building's HP has reached zero.</summary>
+        public bool IsDestroyed => _hp <= 0f;
+
+        /// <summary>Raised whenever HP changes -- carries (current, max). HUD / damage flash subscribe.</summary>
+        public event Action<float, float> HpChanged;
+
+        /// <summary>Raised once when the building's HP reaches zero.</summary>
+        public event Action<Building> Destroyed;
 
         /// <summary>
         /// Wires this building's identity. Called by <see cref="VillageController"/>
@@ -101,6 +132,78 @@ namespace DeNelle.Village
             _buildingId = buildingId;
             _displayLabel = displayLabel;
             EnsureBlocker();
+        }
+
+        /// <summary>
+        /// Configures this building from its canonical <see cref="BuildingDef"/>
+        /// (hydrated from <c>data/buildings.json</c> by <see cref="BuildingCatalog"/>).
+        /// This is the Week-4 data-driven path: it sets identity AND pulls HP /
+        /// max-HP / crystal cost / the display-name key from the catalogue, so
+        /// no gameplay numbers are typed inline (port spec Part 4).
+        /// Called by <see cref="VillageController"/> for the fixed buildings and
+        /// by the build menu for a player-placed one.
+        /// </summary>
+        /// <param name="def">The canonical building definition. A null def is a no-op.</param>
+        public void Configure(BuildingDef def)
+        {
+            if (def == null)
+            {
+                Debug.LogWarning("[Building] Configure(BuildingDef) called with a null def.");
+                return;
+            }
+
+            _type = def.ResolvedType;
+            _buildingId = def.Id;
+            _displayNameKey = def.DisplayName;
+            _crystalCost = def.CrystalCost;
+            // _displayLabel stays a designer-facing fallback; the canon display
+            // name flows through _displayNameKey -> CanonStrings at the UI layer.
+            _maxHp = Mathf.Max(1f, def.MaxHp);
+            _hp = Mathf.Clamp(def.Hp, 0f, _maxHp);
+            EnsureBlocker();
+            HpChanged?.Invoke(_hp, _maxHp);
+        }
+
+        /// <summary>
+        /// Convenience overload — looks the <see cref="BuildingDef"/> up in the
+        /// <see cref="BuildingCatalog"/> by id and configures from it.
+        /// </summary>
+        public bool ConfigureFromCatalog(string buildingId)
+        {
+            var def = BuildingCatalog.Find(buildingId);
+            if (def == null)
+            {
+                Debug.LogWarning($"[Building] No catalogue entry for id '{buildingId}'.");
+                return false;
+            }
+            Configure(def);
+            return true;
+        }
+
+        /// <summary>
+        /// Applies wave damage to the building, clamps HP at zero and raises
+        /// <see cref="HpChanged"/> / <see cref="Destroyed"/>. Enemies call this
+        /// on contact (port spec Week 4 -- "attacks buildings/walls on contact").
+        /// </summary>
+        /// <param name="amount">Damage to apply. Non-positive values are ignored.</param>
+        public void ApplyDamage(float amount)
+        {
+            if (amount <= 0f || IsDestroyed) return;
+            _hp = Mathf.Max(0f, _hp - amount);
+            HpChanged?.Invoke(_hp, _maxHp);
+            if (_hp <= 0f) Destroyed?.Invoke(this);
+        }
+
+        /// <summary>
+        /// Repairs the building, clamped at <see cref="MaxHp"/>. A repair on a
+        /// destroyed building brings it back online.
+        /// </summary>
+        /// <param name="amount">HP to restore. Non-positive values are ignored.</param>
+        public void Repair(float amount)
+        {
+            if (amount <= 0f) return;
+            _hp = Mathf.Min(_maxHp, _hp + amount);
+            HpChanged?.Invoke(_hp, _maxHp);
         }
 
         private void Awake()

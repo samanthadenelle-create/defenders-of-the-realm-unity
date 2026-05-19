@@ -1,0 +1,79 @@
+{
+  "_comment": "Canonical village-enemy stat blocks for Defenders of the Realm v2 (Unity port). These are the Hollow Ones that march on Avalon during the wave loop — NOT the ~400-row Heartforge codex registry (data/enemies.json full set lands later). This file holds only the in-village wave roster: the KayKit skeleton archetypes the React v1 stream already tunes. Stats are sourced VERBATIM from the React v1 project src/modules/village/enemies/enemyArchetypes.ts (KAY_ENEMIES + NECROMANCER + ENEMY_DMG_TO_HEART / ENEMY_ATTACK_INTERVAL). The React values already bake in the global ENEMY_HP_BUFF (x2) and ENEMY_DAMAGE_BUFF (+40%), so the numbers here are the final resolved per-enemy stats. moveSpeed is the NavMeshAgent speed (world units/sec). contactDamage is the per-hit damage dealt to a building/wall/gate; attackInterval is the seconds between melee hits.",
+  "_sources": {
+    "reactArchetypes": "defenders-of-the-realm/src/modules/village/enemies/enemyArchetypes.ts (KAY_ENEMIES, NECROMANCER, ENEMY_DMG_TO_HEART=6, ENEMY_ATTACK_INTERVAL=1.3, BOSS_DMG_TO_HEART=17)",
+    "reactWaves": "defenders-of-the-realm/src/modules/village/waves/EnemyWaves.tsx + src/data/battleScaling.ts (wave-1 enemyCount=8)",
+    "portSpec": "defenders-unity/docs/v2-unity-port-spec.md (Part 3 enemies row, Part 4 enemies.json schema, Week 4 'Wave 1 = 8 Hollow Walkers')",
+    "kaykitMeshes": "defenders-unity/Assets/Models/KayKit/enemies/*.glb (Skeleton_Minion / Skeleton_Warrior / Skeleton_Rogue / Necromancer)"
+  },
+  "_schemaNotes": {
+    "id": "Stable enemy id — the wave-data 'type' field keys into this. Also the ENEMY_DEFS bridge key the breach trigger maps to the ATB engine.",
+    "ai": "'walker' (default — straight march toward the Heart, melee on contact), 'charger' (faster, ignores buildings), 'skirmisher' (fast, picks weakest wall). v2 foundation Wave 1 ships 'walker' only; the others are authored for later waves per port spec Part 3.",
+    "modelKey": "StreamingAssets-independent KayKit mesh key. The Enemy MonoBehaviour / a future Addressables group resolves it to Assets/Models/KayKit/enemies/<key>.glb.",
+    "hp": "Resolved max hit points — includes the React global ENEMY_HP_BUFF (x2). Base minion 26 -> 52, warrior 78 -> 156, rogue 44 -> 88, necromancer 850 -> 1700.",
+    "moveSpeed": "NavMeshAgent.speed in world units/sec. Verbatim from KAY_ENEMIES.speed.",
+    "contactDamage": "Damage one melee hit deals to a building / wall / gate. Regular enemies use the React ENEMY_DMG_TO_HEART value (6); the Necromancer boss uses BOSS_DMG_TO_HEART (17).",
+    "attackInterval": "Seconds between melee hits while in contact. Verbatim from React ENEMY_ATTACK_INTERVAL (1.3).",
+    "height": "Approximate mesh height (world units) — used to size the NavMeshAgent capsule + the floating HP bar offset.",
+    "boss": "true for the Necromancer — leads boss waves (React BOSS_EVERY=6). Carried for catalogue completeness; Wave 1 is non-boss."
+  },
+  "version": 1,
+  "enemies": [
+    {
+      "id": "hollow-walker",
+      "name": "Hollow Walker",
+      "displayName": "Hollow Walker",
+      "modelKey": "Skeleton_Minion",
+      "ai": "walker",
+      "hp": 52,
+      "moveSpeed": 2.5,
+      "contactDamage": 6,
+      "attackInterval": 1.3,
+      "height": 1.7,
+      "boss": false,
+      "flavor": "A risen villager of the Hollow Ones — slow, certain, and without memory of the home it marches on."
+    },
+    {
+      "id": "hollow-warrior",
+      "name": "Hollow Warrior",
+      "displayName": "Hollow Warrior",
+      "modelKey": "Skeleton_Warrior",
+      "ai": "walker",
+      "hp": 156,
+      "moveSpeed": 2.2,
+      "contactDamage": 6,
+      "attackInterval": 1.3,
+      "height": 1.88,
+      "boss": false,
+      "flavor": "Heavier bone, slower stride. A wall of the dead that the lantern-light barely slows."
+    },
+    {
+      "id": "hollow-rogue",
+      "name": "Hollow Rogue",
+      "displayName": "Hollow Rogue",
+      "modelKey": "Skeleton_Rogue",
+      "ai": "skirmisher",
+      "hp": 88,
+      "moveSpeed": 3.1,
+      "contactDamage": 6,
+      "attackInterval": 1.3,
+      "height": 1.78,
+      "boss": false,
+      "flavor": "Quick and low to the ground — it slips the line and goes for the weakest ward."
+    },
+    {
+      "id": "necromancer",
+      "name": "Alduin's Necromancer",
+      "displayName": "Necromancer of the Wound",
+      "modelKey": "Necromancer",
+      "ai": "walker",
+      "hp": 1700,
+      "moveSpeed": 1.5,
+      "contactDamage": 17,
+      "attackInterval": 1.3,
+      "height": 2.7,
+      "boss": true,
+      "flavor": "A hand of Alduin the Mournful. Where it walks, the Hollowed rise to walk beside it."
+    }
+  ]
+}

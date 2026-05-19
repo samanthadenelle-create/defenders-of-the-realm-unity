@@ -1,0 +1,351 @@
+// =============================================================================
+// Enemy — one Hollow One marching on Avalon (Week-4 wave-loop slice).
+// -----------------------------------------------------------------------------
+// Port spec Part 3 row: src/modules/village/enemies/ -> Enemy.cs.
+// Port spec Part 5 Week 4: "KayKit skeleton mesh, NavMeshAgent, walks toward the
+// Heart, attacks buildings/walls on contact, dies on HP zero."
+//
+// One Enemy MonoBehaviour drives the nav, HP and on-contact attack of a single
+// wave enemy. It is configured from an EnemyDef (the deserialised enemies.json
+// stat block) by the WaveManager right after instantiation.
+//
+// NAVMESH: the enemy uses a UnityEngine.AI.NavMeshAgent (the legacy AI module —
+// com.unity.modules.ai, already in the manifest). The agent walks toward the
+// Heart's world position. ** The village scene MUST have a baked NavMesh for
+// this to move ** — see docs/port-notes/week4-waves.md. This script assumes one
+// exists and degrades gracefully (logs once, holds position) if it does not.
+//
+// CONTACT ATTACK: the enemy raycasts/overlaps for an IDamageableStructure ahead
+// of it (a building / wall / gate). On contact it stops and deals contactDamage
+// every attackInterval seconds. IDamageableStructure is defined here so Enemy
+// has NO compile dependency on a specific Building/Gate damage API — the
+// integrator adds the interface to those MonoBehaviours when their HP gameplay
+// lands. Until then enemies simply path to the Heart.
+//
+// BREACH: the WaveManager owns inner-ring breach detection (it knows the ring
+// radius). Enemy just exposes its EnemyId / EnemyDefId / EngineDefId so the
+// breach trigger can hand the breaching roster to the ATB scene.
+// =============================================================================
+
+using System;
+using UnityEngine;
+using UnityEngine.AI;
+
+namespace DeNelle.Village
+{
+    /// <summary>
+    /// A village structure that can take contact damage from an <see cref="Enemy"/>
+    /// — a building, wall section or gate. Defined here so <see cref="Enemy"/>
+    /// stays free of any Building/Gate API dependency. The integrator implements
+    /// this on <c>Building</c> / <c>WallSegment</c> / <c>Gate</c> when their HP
+    /// gameplay lands (port spec Week 4).
+    /// </summary>
+    public interface IDamageableStructure
+    {
+        /// <summary>True while the structure still stands and can be attacked.</summary>
+        bool IsAlive { get; }
+
+        /// <summary>Applies <paramref name="amount"/> contact damage from an enemy hit.</summary>
+        void ApplyContactDamage(float amount);
+    }
+
+    /// <summary>
+    /// One Hollow One in the village wave loop. Drives a <see cref="NavMeshAgent"/>
+    /// toward the Heart, takes HP damage, attacks the structure in front of it on
+    /// contact, and dies at zero HP. Configured by <see cref="WaveManager"/> from
+    /// an <see cref="EnemyDef"/>. Instantiated per spawn; pooling is a later pass.
+    /// </summary>
+    [DisallowMultipleComponent]
+    [RequireComponent(typeof(NavMeshAgent))]
+    public sealed class Enemy : MonoBehaviour
+    {
+        // ── Inspector tuning (overridden by Configure from the EnemyDef) ──────
+
+        [Header("Identity")]
+        [Tooltip("Stable per-instance id — e.g. 'wave1-hollow-walker-3'. The breach roster key.")]
+        [SerializeField] private string _enemyId;
+
+        [Tooltip("enemies.json def id this enemy was spawned from — e.g. 'hollow-walker'.")]
+        [SerializeField] private string _enemyDefId;
+
+        [Header("Stats (set by Configure from enemies.json)")]
+        [Tooltip("Current hit points.")]
+        [SerializeField] private float _hp = 52f;
+
+        [Tooltip("Max hit points.")]
+        [SerializeField] private float _maxHp = 52f;
+
+        [Tooltip("NavMeshAgent speed — world units/sec.")]
+        [SerializeField] private float _moveSpeed = 2.5f;
+
+        [Tooltip("Damage dealt to a structure per melee hit.")]
+        [SerializeField] private float _contactDamage = 6f;
+
+        [Tooltip("Seconds between melee hits while in contact.")]
+        [SerializeField] private float _attackInterval = 1.3f;
+
+        [Tooltip("AI archetype — Walker marches straight; Charger / Skirmisher are later waves.")]
+        [SerializeField] private EnemyAiKind _ai = EnemyAiKind.Walker;
+
+        [Header("Contact attack tuning")]
+        [Tooltip("Distance ahead the enemy probes for an attackable structure (world units).")]
+        [SerializeField] private float _contactProbeDistance = 1.1f;
+
+        [Tooltip("Distance from the Heart at which the enemy considers itself 'arrived'.")]
+        [SerializeField] private float _heartArrivalRadius = 2.5f;
+
+        // ── Runtime refs / state ──────────────────────────────────────────────
+
+        private NavMeshAgent _agent;
+        private Transform _heart;
+        private float _attackCooldown;
+        private bool _dead;
+        private bool _navWarned;
+        private IDamageableStructure _currentTarget;
+
+        /// <summary>Raised when this enemy's HP reaches zero. Arg = this enemy.</summary>
+        public event Action<Enemy> Died;
+
+        /// <summary>
+        /// Raised when this enemy reaches the Heart without being killed. The
+        /// WaveManager listens to escalate the Heart's threat state.
+        /// </summary>
+        public event Action<Enemy> ReachedHeart;
+
+        /// <summary>Stable per-instance id — the breach-roster key.</summary>
+        public string EnemyId => _enemyId;
+
+        /// <summary>The <c>enemies.json</c> def id this enemy was spawned from.</summary>
+        public string EnemyDefId => _enemyDefId;
+
+        /// <summary>Current hit points.</summary>
+        public float Hp => _hp;
+
+        /// <summary>Max hit points.</summary>
+        public float MaxHp => _maxHp;
+
+        /// <summary>HP as a 0..1 fraction — drives the floating HP bar.</summary>
+        public float HpFraction => _maxHp > 0f ? Mathf.Clamp01(_hp / _maxHp) : 0f;
+
+        /// <summary>True once the enemy has died (HP hit zero).</summary>
+        public bool IsDead => _dead;
+
+        /// <summary>AI archetype this enemy runs.</summary>
+        public EnemyAiKind Ai => _ai;
+
+        /// <summary>
+        /// The engine def id the breach trigger maps this enemy to when handing
+        /// the ATB scene a battle. The KayKit village skeletons map onto the ATB
+        /// engine's <c>"skeleton"</c> combatant def (BattleController's fallback);
+        /// the Necromancer maps onto <c>"necromancer"</c> when that def exists.
+        /// </summary>
+        public string EngineDefId => _enemyDefId == "necromancer" ? "necromancer" : "skeleton";
+
+        // ---------------------------------------------------------------------
+        // Configuration — called by WaveManager right after Instantiate
+        // ---------------------------------------------------------------------
+
+        /// <summary>
+        /// Wires this enemy from its stat block and the scene context. Called by
+        /// <see cref="WaveManager"/> immediately after instantiation.
+        /// </summary>
+        /// <param name="enemyId">Stable per-instance id (the breach-roster key).</param>
+        /// <param name="def">The deserialised <c>enemies.json</c> stat block.</param>
+        /// <param name="heart">The Heart transform — the enemy's march goal.</param>
+        public void Configure(string enemyId, EnemyDef def, Transform heart)
+        {
+            _enemyId = enemyId;
+            _heart = heart;
+
+            if (def != null)
+            {
+                _enemyDefId = def.Id;
+                _maxHp = Mathf.Max(1f, def.Hp);
+                _hp = _maxHp;
+                _moveSpeed = Mathf.Max(0.1f, def.MoveSpeed);
+                _contactDamage = Mathf.Max(0f, def.ContactDamage);
+                _attackInterval = Mathf.Max(0.1f, def.AttackInterval);
+                _ai = def.AiKind;
+            }
+
+            EnsureAgent();
+            if (_agent != null)
+            {
+                _agent.speed = _moveSpeed;
+                _agent.stoppingDistance = _heartArrivalRadius;
+            }
+
+            _dead = false;
+            _attackCooldown = 0f;
+            _navWarned = false;
+        }
+
+        // ---------------------------------------------------------------------
+        // Lifecycle
+        // ---------------------------------------------------------------------
+
+        private void Awake()
+        {
+            EnsureAgent();
+        }
+
+        private void Update()
+        {
+            if (_dead) return;
+
+            TickContactAttack();
+            DriveNav();
+        }
+
+        // ---------------------------------------------------------------------
+        // Navigation — march toward the Heart
+        // ---------------------------------------------------------------------
+
+        /// <summary>
+        /// Steers the agent toward the Heart. While the enemy is locked onto a
+        /// structure (contact attack) the agent is held in place. Logs ONCE if
+        /// the agent is not on a baked NavMesh — the village scene needs baking.
+        /// </summary>
+        private void DriveNav()
+        {
+            if (_agent == null || _heart == null) return;
+
+            // Locked onto a structure — stand and fight, do not path past it.
+            if (_currentTarget != null && _currentTarget.IsAlive)
+            {
+                if (_agent.isOnNavMesh && !_agent.isStopped) _agent.isStopped = true;
+                return;
+            }
+
+            if (!_agent.isOnNavMesh)
+            {
+                if (!_navWarned)
+                {
+                    Debug.LogWarning(
+                        $"[Enemy:{_enemyId}] NavMeshAgent is not on a baked NavMesh — " +
+                        "the enemy cannot move. The village scene needs NavMesh baking " +
+                        "(see docs/port-notes/week4-waves.md).");
+                    _navWarned = true;
+                }
+                return;
+            }
+
+            if (_agent.isStopped) _agent.isStopped = false;
+            _agent.SetDestination(_heart.position);
+
+            // Arrived at the Heart without being repelled — report the breach.
+            float planarDist = Vector3.ProjectOnPlane(
+                _heart.position - transform.position, Vector3.up).magnitude;
+            if (planarDist <= _heartArrivalRadius)
+            {
+                ReachedHeart?.Invoke(this);
+            }
+        }
+
+        // ---------------------------------------------------------------------
+        // Contact attack — strike the structure directly ahead
+        // ---------------------------------------------------------------------
+
+        /// <summary>
+        /// Probes for an <see cref="IDamageableStructure"/> directly ahead; when
+        /// one is in reach the enemy stops and deals <see cref="_contactDamage"/>
+        /// every <see cref="_attackInterval"/> seconds until it falls.
+        /// </summary>
+        private void TickContactAttack()
+        {
+            // Drop a dead / destroyed target.
+            if (_currentTarget != null && !_currentTarget.IsAlive)
+                _currentTarget = null;
+
+            if (_currentTarget == null)
+                _currentTarget = ProbeForStructure();
+
+            if (_currentTarget == null)
+            {
+                _attackCooldown = 0f;
+                return;
+            }
+
+            _attackCooldown -= Time.deltaTime;
+            if (_attackCooldown <= 0f)
+            {
+                _currentTarget.ApplyContactDamage(_contactDamage);
+                _attackCooldown = _attackInterval;
+            }
+        }
+
+        /// <summary>
+        /// Casts a short sphere ahead of the enemy and returns the first
+        /// <see cref="IDamageableStructure"/> it hits, or null when the lane is
+        /// clear. Skirmishers probe slightly wider so they peel toward walls.
+        /// </summary>
+        private IDamageableStructure ProbeForStructure()
+        {
+            Vector3 origin = transform.position + Vector3.up * 0.5f;
+            Vector3 forward = transform.forward;
+            float radius = _ai == EnemyAiKind.Skirmisher ? 0.6f : 0.4f;
+
+            if (Physics.SphereCast(origin, radius, forward, out RaycastHit hit,
+                    _contactProbeDistance, ~0, QueryTriggerInteraction.Ignore))
+            {
+                // The structure may host the interface on the collider's object
+                // or a parent (the collider is often a child blocker).
+                var structure = hit.collider.GetComponentInParent<IDamageableStructure>();
+                if (structure != null && structure.IsAlive)
+                    return structure;
+            }
+            return null;
+        }
+
+        // ---------------------------------------------------------------------
+        // HP / death
+        // ---------------------------------------------------------------------
+
+        /// <summary>
+        /// Applies <paramref name="amount"/> damage. At zero HP the enemy dies,
+        /// raises <see cref="Died"/> and is destroyed. Hero abilities, pets and
+        /// towers route their damage through here.
+        /// </summary>
+        public void TakeDamage(float amount)
+        {
+            if (_dead || amount <= 0f) return;
+            _hp = Mathf.Max(0f, _hp - amount);
+            if (_hp <= 0f) Die();
+        }
+
+        /// <summary>Kills the enemy immediately (e.g. consumed into an ATB breach).</summary>
+        public void Kill()
+        {
+            if (!_dead) Die();
+        }
+
+        private void Die()
+        {
+            _dead = true;
+            if (_agent != null && _agent.isOnNavMesh) _agent.isStopped = true;
+            _currentTarget = null;
+            Died?.Invoke(this);
+            // Week-4 placeholder: destroy on death. A death animation + a brief
+            // fade / dissolve is a later polish pass.
+            Destroy(gameObject);
+        }
+
+        // ---------------------------------------------------------------------
+        // Helpers
+        // ---------------------------------------------------------------------
+
+        private void EnsureAgent()
+        {
+            if (_agent == null) _agent = GetComponent<NavMeshAgent>();
+        }
+
+#if UNITY_EDITOR
+        private void OnDrawGizmosSelected()
+        {
+            Gizmos.color = new Color(0.86f, 0.27f, 0.27f, 0.9f);
+            Gizmos.DrawRay(transform.position + Vector3.up * 0.5f,
+                transform.forward * _contactProbeDistance);
+        }
+#endif
+    }
+}

@@ -53,3 +53,21 @@ Per `docs/avalon-village-layout-spec.md`; creative decisions logged per spec §1
   - Result: the centerpiece is **immune to every material change** across ~12 rebuilds — strong evidence the white is NOT a material-assignment bug. Likely a batchmode shader-variant / lighting quirk on these specific meshes, or the meshes themselves. Needs the interactive Unity Editor (inspect the live renderer, not headless) to finish. **Deferred — owner-flagged "finetune later"; the village layout, walls, gates, buildings, crops all render correctly and the Week-3 deliverable stands.**
 - **2026-05-19 — Exterior wilderness still rough (Task #14 open).** The exterior review shot shows a black (unlit) Terrain, an orange-void sky (no skybox), and a few strays floating off the Terrain. Exterior polish is owner-flagged "finetune later" and Task #14 is still in progress; the interior village is the Week-3 deliverable that is complete. **Tracked, not blocking.**
 - **2026-05-19 — `ForceFieldShimmer` over-bright.** The gate force-field stand-in uses emissive intensity 1.4, which washes to white in the review shot rather than reading violet. Cosmetic; the real shimmer shader lands Week 4. **Finetune item.**
+
+## Week 4 — Village systems
+
+Built in parallel by three scoped agents (buildings / waves / hero-pets-gate); the
+slice-level detail lives in `docs/port-notes/week4-*.md`. Key calls:
+
+| Date | Decision | Reason | Reversible? |
+|------|----------|--------|-------------|
+| 2026-05-19 | Week-4 gameplay systems landed as compiling C# modules first; scene wiring (NavMesh bake, `VillageController` hookup, prefabs, HUD `UIDocument`, layers) is a separate integration pass | The C# compiles clean (0 errors) and is a reviewable unit; scene assembly is editor-scripting work that does not block the code review | Yes |
+| 2026-05-19 | Enemy stats / wave countdowns sourced verbatim from React v1 (`enemyArchetypes.ts`, `waveConfig.ts`); Mage abilities + all pet data sourced from `mage.ts` / `petData.ts` | Part 4 — React is the canonical data source where it exists | n/a — extraction |
+| 2026-05-19 | Per-building HP + crystal cost AUTHORED (React v1 has no such table — its 5 buildings are fixed map placements, not player-built) | Week 4 needs buildable structures with HP; values are JSON-tunable | Yes — rebalance via `buildings.json` |
+| 2026-05-19 | Waves 2-3 AUTHORED (React generates waves procedurally — no literal table); Knight/Ranger ability sets are placeholders (v1 ships Mage only) | A concrete 3-wave table is needed for Week-4; v1 parity is Mage-only | Yes |
+| 2026-05-19 | Cross-module pet/ability→enemy combat goes through a new `IDamageable` interface in `DeNelle.Core` (+ an `EnemyDamageable` adapter), not a direct type reference | Spec Part 2 forbids a module asmdef referencing another gameplay module's asmdef | Yes |
+
+### Flags raised — Week 4
+
+- **2026-05-19 — Village NavMesh bake required.** `Enemy` uses `NavMeshAgent`; only the legacy `com.unity.modules.ai` is in the manifest, so the village scene needs a NavMesh baked (legacy Navigation panel) before enemies path. Enemies hold position + log one warning until then. **Integration item, not a code defect.**
+- **2026-05-19 — Week-4 scene wiring outstanding.** WaveManager / HeroAbilities / PetDeployer / BuildMenu `UIDocument` / the `ForceFieldGate` material / enemy + building prefabs / enemy layer mask must be added to `Village.unity` (or its builder) for Wave 1 to play. The C# is in place and compiles; see the `week4-*.md` notes for the precise wiring checklist.

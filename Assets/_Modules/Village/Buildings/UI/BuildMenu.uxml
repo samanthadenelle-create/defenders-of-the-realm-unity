@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  BuildMenu.uxml — UI Toolkit document for the village build menu (Week 4).
+  ------------------------------------------------------------------------
+  Port spec Week 4 ("Village systems"): a floating menu near the build
+  cursor; tap-to-place at valid hex tiles; per-building crystal cost shown;
+  deducts from the crystal balance.
+
+  BuildMenu.cs builds one card per building at runtime into the
+  "build-menu-list" container from the canonical BuildingCatalog — this UXML
+  supplies the chrome: a header with the live crystal balance, the dynamic
+  building list, and a status / placement-hint banner.
+
+  The menu floats: BuildMenu.cs positions "build-menu-panel" in screen space
+  next to the build cursor each frame while the menu is open.
+
+  BuildMenu.cs queries these elements by name (the "name" attribute is the
+  binding contract — do not rename without updating the controller):
+    build-menu-panel  (VisualElement — the floating panel; repositioned)
+    build-menu-balance(Label — live crystal balance)
+    build-menu-list   (VisualElement — building cards appended here)
+    build-menu-status (Label — placement hint / "not enough crystals")
+    build-menu-close  (Button — dismisses the menu / cancels placement)
+-->
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <Style src="BuildMenu.uss" />
+
+    <!-- Full-screen transparent root so the panel can float anywhere. -->
+    <ui:VisualElement name="build-menu-root" class="build-menu-root" picking-mode="Ignore">
+
+        <!-- ── The floating panel (repositioned next to the cursor) ──── -->
+        <ui:VisualElement name="build-menu-panel" class="build-menu-panel">
+
+            <!-- ── Header — title + live crystal balance + close ─────── -->
+            <ui:VisualElement name="build-menu-header" class="build-menu-header">
+                <ui:Label name="build-menu-title" text="Build" class="build-menu-title" />
+                <ui:Label name="build-menu-balance" text="◆ 0" class="build-menu-balance" />
+                <ui:Button name="build-menu-close" text="✕" class="build-menu-close" />
+            </ui:VisualElement>
+
+            <!-- ── Building cards (built at runtime by BuildMenu.cs) ─── -->
+            <ui:ScrollView name="build-menu-scroll" class="build-menu-scroll"
+                           mode="Vertical" vertical-scroller-visibility="Auto">
+                <ui:VisualElement name="build-menu-list" class="build-menu-list" />
+            </ui:ScrollView>
+
+            <!-- ── Status / placement-hint banner ────────────────────── -->
+            <ui:Label name="build-menu-status"
+                      text="Pick a building, then tap a clear tile to raise it."
+                      class="build-menu-status" />
+
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

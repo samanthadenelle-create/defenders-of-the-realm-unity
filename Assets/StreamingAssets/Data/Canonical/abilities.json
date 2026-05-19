@@ -1,0 +1,80 @@
+{
+  "version": 1,
+  "_comment": "Hero ability defs — Q/W/E/R per class. v2 foundation reads Mage (Blaise) only; Knight/Ranger ship in v2.1 per port spec Part 3. Mage values sourced VERBATIM from the React v1 repo: src/modules/village/hero/abilities/mage.ts (MAGE_ABILITIES). Field map: cd -> cooldown, mana -> manaCost, power -> damage, reach -> radius/range (strike/snare = acquire range, aoe/cleave/meteor = blast radius). Knight + Ranger sets are authored defensible placeholders — NOT yet in the React repo — and must be re-synced when v1 publishes data/abilities.json (port spec Part 8).",
+  "classes": {
+    "mage": {
+      "displayName": "Mage",
+      "abilities": {
+        "q": {
+          "slot": "q",
+          "key": "Q",
+          "name": "Arcane Bolt",
+          "icon": "✦",
+          "color": "#b388ff",
+          "effect": "strike",
+          "cooldown": 0.5,
+          "manaCost": 0,
+          "damage": 16,
+          "range": 13
+        },
+        "w": {
+          "slot": "w",
+          "key": "F",
+          "name": "Frost Nova",
+          "icon": "❄",
+          "color": "#7dd3fc",
+          "effect": "aoe",
+          "cooldown": 12,
+          "manaCost": 3,
+          "damage": 26,
+          "range": 5.2,
+          "freeze": 1.4
+        },
+        "e": {
+          "slot": "e",
+          "key": "E",
+          "name": "Healing Beacon",
+          "icon": "✚",
+          "color": "#ffd27a",
+          "effect": "heal",
+          "cooldown": 16,
+          "manaCost": 4,
+          "damage": 48,
+          "range": 5
+        },
+        "r": {
+          "slot": "r",
+          "key": "R",
+          "name": "Meteor Strike",
+          "icon": "☄",
+          "color": "#ff7043",
+          "effect": "meteor",
+          "cooldown": 45,
+          "manaCost": 7,
+          "damage": 80,
+          "range": 6
+        }
+      }
+    },
+    "knight": {
+      "displayName": "Knight",
+      "_comment": "AUTHORED placeholder — not in React v1 yet. Re-sync on v1 data/abilities.json publish.",
+      "abilities": {
+        "q": { "slot": "q", "key": "Q", "name": "Shield Bash", "icon": "✦", "color": "#ffd27a", "effect": "strike", "cooldown": 0.6, "manaCost": 0, "damage": 14, "range": 3.4 },
+        "w": { "slot": "w", "key": "F", "name": "Bulwark Slam", "icon": "✦", "color": "#facc15", "effect": "cleave", "cooldown": 10, "manaCost": 3, "damage": 22, "range": 4.0 },
+        "e": { "slot": "e", "key": "E", "name": "Oath Ward", "icon": "✚", "color": "#ffd27a", "effect": "heal", "cooldown": 18, "manaCost": 4, "damage": 40, "range": 5 },
+        "r": { "slot": "r", "key": "R", "name": "Lantern Charge", "icon": "☄", "color": "#ff7043", "effect": "cleave", "cooldown": 40, "manaCost": 6, "damage": 70, "range": 6.5 }
+      }
+    },
+    "ranger": {
+      "displayName": "Ranger",
+      "_comment": "AUTHORED placeholder — not in React v1 yet. Re-sync on v1 data/abilities.json publish.",
+      "abilities": {
+        "q": { "slot": "q", "key": "Q", "name": "Quick Shot", "icon": "✦", "color": "#9ae6b4", "effect": "strike", "cooldown": 0.45, "manaCost": 0, "damage": 15, "range": 15 },
+        "w": { "slot": "w", "key": "F", "name": "Snare Trap", "icon": "✦", "color": "#7dd3fc", "effect": "snare", "cooldown": 11, "manaCost": 3, "damage": 18, "range": 12 },
+        "e": { "slot": "e", "key": "E", "name": "Mending Salve", "icon": "✚", "color": "#ffd27a", "effect": "heal", "cooldown": 15, "manaCost": 4, "damage": 44, "range": 5 },
+        "r": { "slot": "r", "key": "R", "name": "Storm of Arrows", "icon": "☄", "color": "#ff7043", "effect": "aoe", "cooldown": 42, "manaCost": 7, "damage": 72, "range": 6.5, "freeze": 0 }
+      }
+    }
+  }
+}
