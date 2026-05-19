@@ -40,13 +40,12 @@ namespace DeNelle.Onboarding
         [Tooltip("The RenderTexture the VideoPlayer renders into; shown on the overlay.")]
         [SerializeField] private RenderTexture _videoTexture;
 
-        [Tooltip("Play the studio-bumper.mp4 video. OFF: the shipped studio-bumper.mp4 " +
-                 "is a non-baseline-profile H.264 that deadlocks the Windows VideoPlayer " +
-                 "(Media Foundation) and freezes the game on launch — so the bumper shows " +
-                 "the static 'DeNelle Studios presents' card instead. Turn ON only once " +
-                 "the clip is re-encoded clean (H.264 baseline / yuv420p / bt709) or " +
-                 "re-imported with VideoClip transcoding enabled.")]
-        [SerializeField] private bool _playBumperVideo = false;
+        [Tooltip("Play the studio-bumper.mp4 video. ON: the clip is imported with " +
+                 "VideoClip transcoding enabled (see BumperVideoImport), so Unity " +
+                 "re-encodes it to a decoder-safe format and it no longer hangs the " +
+                 "Windows video decoder. Turn OFF to fall back to the static " +
+                 "'DeNelle Studios presents' card if a clip ever misbehaves.")]
+        [SerializeField] private bool _playBumperVideo = true;
 
         [Header("Timing")]
         [Tooltip("Hard cap on bumper duration — if the clip runs long or stalls, finish anyway.")]
@@ -166,9 +165,15 @@ namespace DeNelle.Onboarding
 
                 _videoPlayer.Play();
 
-                // Play until the clip ends, an error fires, or the cap is hit.
+                // Play until the clip ends, an error fires, or the safety cap is
+                // hit. The cap follows the clip's own length (+1s margin) so a
+                // longer bumper plays in full; _maxBumperSeconds is the floor for
+                // a very short clip.
+                float playCap = _videoPlayer.length > 0d
+                    ? Mathf.Max(_maxBumperSeconds, (float)_videoPlayer.length + 1f)
+                    : _maxBumperSeconds;
                 var elapsed = 0f;
-                while (_videoPlayer.isPlaying && !errored && elapsed < _maxBumperSeconds)
+                while (_videoPlayer.isPlaying && !errored && elapsed < playCap)
                 {
                     token.ThrowIfCancellationRequested();
                     await UniTask.Yield(PlayerLoopTiming.Update, token);
