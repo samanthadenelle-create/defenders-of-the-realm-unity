@@ -403,9 +403,16 @@ namespace DeNelle.BattleATB
         // ---------------------------------------------------------------------
 
         /// <summary>
-        /// Linger on the result, then return to the village. The settled outcome
-        /// already survives on <see cref="ATBRuntimeState.Result"/> for the caller
-        /// (the breach trigger) to read and apply Heart / building damage.
+        /// Linger on the result, then return to the scene the battle came from.
+        /// The settled outcome already survives on <see cref="ATBRuntimeState.Result"/>
+        /// for the caller (the breach trigger / dungeon controller) to read and
+        /// apply Heart / building damage or resume the dungeon encounter.
+        ///
+        /// BUG-008 fix: the destination is <see cref="BattleParams.ReturnScene"/>
+        /// off the handoff — a village breach returns to the village, a dungeon
+        /// encounter returns to <c>Dungeon_HealersCottage</c>. The hard-coded
+        /// village return is gone. A missing handoff (dev / direct play) and an
+        /// empty ReturnScene both fall back to the village.
         /// </summary>
         private async UniTask ReturnAfterResult(AtbBattleResult result)
         {
@@ -414,9 +421,20 @@ namespace DeNelle.BattleATB
                 System.TimeSpan.FromSeconds(delay),
                 ignoreTimeScale: true);
 
-            // Week-2 placeholder destination: the village. The dungeon return
-            // path (source == Dungeon) is wired with the Week-6 dungeon handoff.
-            await SceneRouter.LoadSceneWithFade(SceneRouter.Village);
+            await SceneRouter.LoadSceneWithFade(ResolveReturnScene());
+        }
+
+        /// <summary>
+        /// The scene to return to after the battle — the handoff's
+        /// <see cref="BattleParams.ReturnScene"/>, defaulting to the village when
+        /// no handoff was supplied or the field is blank.
+        /// </summary>
+        private static string ResolveReturnScene()
+        {
+            BattleParams handoff = SceneRouter.PendingBattle;
+            if (handoff != null && !string.IsNullOrEmpty(handoff.ReturnScene))
+                return handoff.ReturnScene;
+            return SceneRouter.Village;
         }
 
         // ---------------------------------------------------------------------

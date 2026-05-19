@@ -90,12 +90,24 @@ namespace DeNelle.Editor
         // ── Dungeon MonoBehaviour / SO type names (resolved by reflection) ───
         private const string NsDungeons = "DeNelle.Dungeons";
         private const string TypeDungeonController = NsDungeons + ".DungeonController";
+        private const string TypeDungeonHero = NsDungeons + ".DungeonHero";
+        private const string TypeDungeonCameraRig = NsDungeons + ".DungeonCameraRig";
         private const string TypeLantern = NsDungeons + ".Lantern";
         private const string TypeLoreStone = NsDungeons + ".LoreStone";
         private const string TypeCheckpoint = NsDungeons + ".Checkpoint";
         private const string TypeEncounterTrigger = NsDungeons + ".EncounterTrigger";
         private const string TypeBryn = NsDungeons + ".Bryn";
+        private const string TypeWandererBubble = NsDungeons + ".WandererBubble";
         private const string TypeRuntimeState = NsDungeons + ".DungeonRuntimeState";
+
+        // ── Cinemachine type names (resolved by reflection — the DeNelle.Editor
+        //    asmdef does NOT reference Unity.Cinemachine; the package assembly is
+        //    nonetheless always loaded in the editor, so FindType resolves it —
+        //    the same pattern BattleSceneBuilder uses for the Input System UI
+        //    module). Cinemachine 3.x type names.
+        private const string TypeCinemachineCamera = "Unity.Cinemachine.CinemachineCamera";
+        private const string TypeCinemachineBrain = "Unity.Cinemachine.CinemachineBrain";
+        private const string TypeCinemachineFollow = "Unity.Cinemachine.CinemachineFollow";
 
         // ── Level Y-planes (§4.1 Pattern A — Surface + Cellar + Loft) ────────
         private const float YGround = 0f;
@@ -212,14 +224,20 @@ namespace DeNelle.Editor
 
             // =================================================================
             //  The Keeper rig + hero-attached lantern (§7)
+            //  BuildHeroRig now also wires the Week-5 DungeonHero locomotion
+            //  controller onto the Keeper (reflection — DeNelle.Dungeons).
             // =================================================================
             var heroGo = BuildHeroRig(actorRoot);
+            Component heroController = GetComponentByName(heroGo, TypeDungeonHero);
             Component lantern = BuildLantern(heroGo);
 
             // =================================================================
-            //  Cinemachine follow camera placeholder for the controller
+            //  Cinemachine follow camera rig (Week 5) — a CinemachineCamera +
+            //  CinemachineFollow + DungeonCameraRig, all added by reflection.
             // =================================================================
             var camRig = BuildFollowCameraRig(actorRoot);
+            Component cameraRig = GetComponentByName(camRig, TypeDungeonCameraRig);
+            Component followCamera = GetComponentByName(camRig, TypeCinemachineCamera);
 
             // =================================================================
             //  Dungeon-module interactables — placed per §9, wired by reflection
@@ -232,12 +250,19 @@ namespace DeNelle.Editor
             BuildMiniBoss(actorRoot);
 
             // ── Ambient BGM source (echoes-beneath-elarion — stub, §11) ──────
+            // The clip is left unassigned — echoes-beneath-elarion.mp3 is not in
+            // the project. DungeonController.StartAmbientAudio() guards a null
+            // clip (logs a warning, plays silently). See dungeon-integration.md.
             var bgmGo = new GameObject("AmbientBGM");
             bgmGo.transform.SetParent(actorRoot, false);
             var bgm = bgmGo.AddComponent<AudioSource>();
             bgm.loop = true;
             bgm.playOnAwake = false;
-            bgm.volume = 0.25f; // audio-mix-spec §4 dungeon default
+            bgm.spatialBlend = 0f;        // 2D — an ambient bed, not a point source
+            bgm.volume = 0.25f;           // audio-mix-spec §2 dungeon default
+
+            // ── BUG-007 hardening — every wall/structure mesh carries a collider
+            VerifyWallColliders(root.transform);
 
             // =================================================================
             //  DungeonController orchestrator — wired by reflection
@@ -246,7 +271,8 @@ namespace DeNelle.Editor
             controllerGo.transform.SetParent(root.transform, false);
             Component controller = AddDungeonComponent(controllerGo, TypeDungeonController);
             WireController(
-                controller, runtimeState, heroGo.transform, camRig, lantern, bryn,
+                controller, runtimeState, heroGo.transform, heroController,
+                followCamera, cameraRig, lantern, bryn,
                 loreRoot, checkpointRoot, encounterRoot, bgm);
 
             // ── Save + register in Build Settings ────────────────────────────
@@ -751,24 +777,45 @@ namespace DeNelle.Editor
         {
             var heroGo = new GameObject("Keeper");
             heroGo.transform.SetParent(parent, false);
-            // Spawn at the Garden Approach centre (§9.1 — SW entry).
+            // Spawn at the layout's authored spawn point (Garden Approach, SW).
+            // DungeonController.ResolveSpawnPosition() re-places the hero at run
+            // time from the layout JSON; this is the in-editor placement so the
+            // scene reads correctly before play.
             var garden = FindRoom("garden-approach");
             float sx = (garden.MinX + garden.MaxX) * 0.5f;
             float sz = (garden.MinZ + garden.MaxZ) * 0.5f;
             heroGo.transform.position = new Vector3(sx, YGround, sz);
+            // Face east into the cottage — matches healers-cottage.json spawn.facingY.
+            heroGo.transform.rotation = Quaternion.Euler(0f, 90f, 0f);
 
-            // A simple visual stand-in capsule — the real hero prefab is wired by
-            // the playable build; the dungeon scene only needs a transform target.
+            // A simple visual stand-in capsule — the real hero prefab (the KayKit
+            // mage mesh) is wired by the playable build; the dungeon scene only
+            // needs a transform target. The capsule is sized to the mage mesh.
             var body = GameObject.CreatePrimitive(PrimitiveType.Capsule);
             body.name = "KeeperBody";
             body.transform.SetParent(heroGo.transform, false);
-            body.transform.localPosition = new Vector3(0f, 1f, 0f);
+            body.transform.localPosition = new Vector3(0f, 0.95f, 0f);
+            // The visual capsule must NOT collide — the CharacterController IS the
+            // collision body. A stray capsule collider would fight the controller.
+            StripColliders(body);
             ApplyTint(body, HexColor("e8d8b8"));
 
+            // CharacterController sized to the KayKit mage mesh (radius ~0.35,
+            // height ~1.9, centred) — DungeonHero [RequireComponent]s this and
+            // slides it along the wall mesh colliders (the BUG-007 guarantee).
             var cc = heroGo.AddComponent<CharacterController>();
             cc.height = 1.9f;
             cc.radius = 0.35f;
             cc.center = new Vector3(0f, 0.95f, 0f);
+            cc.slopeLimit = 50f;     // climbs the KayKit stair pieces
+            cc.stepOffset = 0.45f;   // steps the stair treads / floor seams
+            cc.skinWidth = 0.03f;
+
+            // Week-5 DungeonHero locomotion (WASD + tap-to-move, sliding wall
+            // collision). Added by reflection — the Editor asmdef cannot
+            // reference DeNelle.Dungeons. The controller auto-finds it on the
+            // hero rig; the explicit wire in WireController is belt-and-braces.
+            AddDungeonComponent(heroGo, TypeDungeonHero);
             return heroGo;
         }
 
@@ -790,14 +837,39 @@ namespace DeNelle.Editor
 
         private static GameObject BuildFollowCameraRig(Transform parent)
         {
-            // A plain GameObject placeholder for the Cinemachine follow camera —
-            // the controller's [SerializeField] _followCamera is typed to
-            // CinemachineCamera; the real component is added by the playable
-            // build. The builder wires the field only if assignable.
+            // The Week-5 dungeon follow camera: a CinemachineCamera carrying a
+            // CinemachineFollow (Body) and the DungeonCameraRig component. The
+            // rig deliberately has NO Aim component, so Cinemachine preserves the
+            // authored isometric pitch (DungeonCameraRig.ApplyFraming locks it).
+            //
+            // All three components are added by reflection — the DeNelle.Editor
+            // asmdef references neither Unity.Cinemachine nor DeNelle.Dungeons,
+            // but both assemblies are loaded in the editor so FindType resolves
+            // them (the BattleSceneBuilder InputSystemUIInputModule pattern).
             var rig = new GameObject("FollowCameraRig");
             rig.transform.SetParent(parent, false);
-            rig.transform.position = new Vector3(-28f, 13f, -12f);
+            // Seat at the authored isometric offset over the Garden Approach
+            // entry; DungeonCameraRig.Bind() re-seats it on the hero at run time.
+            var garden = FindRoom("garden-approach");
+            float cx = (garden.MinX + garden.MaxX) * 0.5f;
+            float cz = (garden.MinZ + garden.MaxZ) * 0.5f;
+            rig.transform.position = new Vector3(cx, YGround + 13f, cz - 9f);
             rig.transform.rotation = Quaternion.Euler(52f, 0f, 0f);
+
+            // CinemachineCamera (the virtual camera) + CinemachineFollow (Body).
+            Component vcam = AddComponentByName(rig, TypeCinemachineCamera);
+            AddComponentByName(rig, TypeCinemachineFollow);
+            if (vcam == null)
+            {
+                Debug.LogError(
+                    "[DungeonSceneBuilder] Could not add a CinemachineCamera — is the " +
+                    "Unity.Cinemachine package installed? The follow camera is incomplete.");
+            }
+
+            // The Week-5 DungeonCameraRig — self-configuring isometric rig. It
+            // [RequireComponent]s CinemachineCamera (added above) and owns the
+            // framing maths; DungeonController.Bind() drives it.
+            AddDungeonComponent(rig, TypeDungeonCameraRig);
             return rig;
         }
 
@@ -1009,8 +1081,9 @@ namespace DeNelle.Editor
 
         private static void BuildEncounters(Transform parent, UnityEngine.Object runtimeState)
         {
-            // §9.4 — 5 scripted combats: Garden, Main ×2 (one trigger, pair
-            // roster), Cellar, Storage. The mini-boss is a separate placement.
+            // §9.4 — 4 scripted combats: Garden, Main (pair roster), Cellar,
+            // Storage. Order MATCHES healers-cottage.json scriptedEncounters[] so
+            // DungeonController.HydrateEncounters can pair child[i] -> def[i].
             var defs = new[]
             {
                 new EncSpec { Id = "garden-hollow-one", RoomId = "garden-approach" },
@@ -1035,6 +1108,22 @@ namespace DeNelle.Editor
                 // ConfigureScripted at run time hydrates the roster from the
                 // layout JSON; the trigger transform is the authored anchor.
             }
+
+            // The mini-boss encounter trigger — built LAST so it is the final
+            // child of the Encounters root; DungeonController.HydrateEncounters
+            // configures the trailing child with Layout.miniBoss via ConfigureBoss.
+            // The visual boss stand-in is a separate placement (BuildMiniBoss).
+            var workshop = FindRoom("workshop");
+            float by = LevelY(workshop.Level);
+            float bx = workshop.MaxX - 6f;
+            float bz = (workshop.MinZ + workshop.MaxZ) * 0.5f;
+
+            var bossGo = new GameObject("Encounter_apprentice-of-the-apothecary");
+            bossGo.transform.SetParent(parent, false);
+            bossGo.transform.position = new Vector3(bx, by, bz);
+
+            Component bossComp = AddDungeonComponent(bossGo, TypeEncounterTrigger);
+            SetSerializedObjectRef(bossComp, "_runtimeState", runtimeState);
         }
 
         private sealed class EncSpec { public string Id, RoomId; }
@@ -1094,22 +1183,30 @@ namespace DeNelle.Editor
             StripColliders(body);
             ApplyTint(body, HexColor("6b7d8a"));
 
-            // World-space speech-bubble anchor carrying the HARD-LOCKED Tier-1
-            // line. The Bryn MonoBehaviour reads its line from the layout JSON's
-            // bryn.firstEncounterLine at run time; this object records the canon
-            // copy in-scene so the placement is self-documenting and verifiable.
-            // The line is baked into the GameObject name (no Editor-only
-            // component is attached — that would leave a missing-script ref in a
-            // player build). Bryn's Tier-1 line, verbatim (spec §12 / design §4
+            // World-space speech-bubble anchor. The WandererBubble component
+            // (DeNelle.Dungeons — added by reflection) IS the run-time bubble: a
+            // billboarded panel + 3D text implementing IWandererBubble. Bryn
+            // drives it through her _bubbleBehaviour seam (wired below). Bryn
+            // reads her line from lore-fragments.json / the layout JSON at run
+            // time; the canon Tier-1 line is also baked into a child GameObject
+            // name so the placement stays self-documenting and verifiable in the
+            // saved scene. Bryn's Tier-1 line, verbatim (spec §12 / design §4
             // Beat 1):
             var bubble = new GameObject("SpeechBubbleAnchor");
             bubble.transform.SetParent(brynGo.transform, false);
-            bubble.transform.localPosition = new Vector3(0f, 2.6f, 0f);
+            bubble.transform.localPosition = Vector3.zero;
             var brynLine = new GameObject($"BrynTier1Line: {BrynTier1Line}");
             brynLine.transform.SetParent(bubble.transform, false);
 
+            // The concrete IWandererBubble — self-builds its panel + text in
+            // Awake(). Lives on the anchor; assigned to Bryn._bubbleBehaviour.
+            Component bubbleComp = AddDungeonComponent(bubble, TypeWandererBubble);
+
             Component comp = AddDungeonComponent(brynGo, TypeBryn);
             SetSerializedObjectRef(comp, "_runtimeState", runtimeState);
+            // _bubbleBehaviour is typed MonoBehaviour; WandererBubble implements
+            // IWandererBubble and Bryn casts it on Configure().
+            SetSerializedObjectRef(comp, "_bubbleBehaviour", bubbleComp);
             return comp;
         }
 
@@ -1166,7 +1263,8 @@ namespace DeNelle.Editor
 
         private static void WireController(
             Component controller, UnityEngine.Object runtimeState, Transform hero,
-            GameObject followCamRig, Component lantern, Component bryn,
+            Component heroController, Component followCamera, Component cameraRig,
+            Component lantern, Component bryn,
             Transform loreRoot, Transform checkpointRoot, Transform encounterRoot,
             AudioSource bgm)
         {
@@ -1174,16 +1272,20 @@ namespace DeNelle.Editor
             var so = new SerializedObject(controller);
             SetObjectField(so, "_runtimeState", runtimeState);
             SetObjectField(so, "_hero", hero);
+            // Week-5: the DungeonHero locomotion controller — input is held off
+            // across the spawn teleport, then enabled once the run is live.
+            SetObjectField(so, "_heroController", heroController);
+            // Week-5: the Cinemachine follow camera + its self-configuring
+            // DungeonCameraRig. Both added by reflection in BuildFollowCameraRig;
+            // ConfigureCamera() prefers the rig and falls back to the bare camera.
+            SetObjectField(so, "_followCamera", followCamera);
+            SetObjectField(so, "_cameraRig", cameraRig);
             SetObjectField(so, "_lantern", lantern);
             SetObjectField(so, "_bryn", bryn);
             SetObjectField(so, "_loreStoneRoot", loreRoot);
             SetObjectField(so, "_checkpointRoot", checkpointRoot);
             SetObjectField(so, "_encounterRoot", encounterRoot);
             SetObjectField(so, "_ambientBgm", bgm);
-            // _followCamera is typed to Unity.Cinemachine.CinemachineCamera; the
-            // builder cannot add that component without a Cinemachine reference,
-            // so the field stays unset here — the playable build assigns it. The
-            // FollowCameraRig GameObject is left in the scene as the anchor.
             so.ApplyModifiedPropertiesWithoutUndo();
         }
 
@@ -1430,7 +1532,24 @@ namespace DeNelle.Editor
             cam.backgroundColor = HexColor("070709");
             cam.fieldOfView = 42f;
             go.AddComponent<AudioListener>();
-            // Top-down isometric framing over the Garden Approach (§9.1 entry).
+
+            // The CinemachineBrain — the real Camera is driven by the
+            // CinemachineCamera on the FollowCameraRig (Week 5). Added by
+            // reflection (the DeNelle.Editor asmdef does not reference
+            // Unity.Cinemachine; the package assembly is loaded in the editor).
+            // DungeonController.ResolveUnityCamera() finds this camera via
+            // Camera.main and feeds it to the hero for screen-relative WASD.
+            if (AddComponentByName(go, TypeCinemachineBrain) == null)
+            {
+                Debug.LogWarning(
+                    "[DungeonSceneBuilder] Could not add a CinemachineBrain to the Main " +
+                    "Camera — the Cinemachine follow rig will not drive the view. Is the " +
+                    "Unity.Cinemachine package installed?");
+            }
+
+            // Top-down isometric framing over the Garden Approach (§9.1 entry) —
+            // the static seat; CinemachineBrain hands control to the follow rig
+            // the moment play starts.
             var garden = FindRoom("garden-approach");
             float cx = (garden.MinX + garden.MaxX) * 0.5f;
             float cz = (garden.MinZ + garden.MaxZ) * 0.5f;
@@ -1488,6 +1607,73 @@ namespace DeNelle.Editor
                 UnityEngine.Object.DestroyImmediate(c);
         }
 
+        // =====================================================================
+        //  BUG-007 — every wall / structure mesh must carry a collider
+        // =====================================================================
+
+        /// <summary>
+        /// Final hardening pass for BUG-007 ("no walk-through-walls"). Walks every
+        /// object under "Walls" / "VerticalConnectors" and guarantees a collider,
+        /// EXCEPT the layout's illusory walls (named with the <c>[ILLUSORY]</c>
+        /// prefix per <see cref="BuildWallRun"/>) — those are deliberately
+        /// collider-free hidden passages (the Keeper walks through into the
+        /// secret room). <see cref="BuildWallRun"/> / <see cref="Prop"/> already
+        /// call <see cref="EnsureCollider"/> per piece; this pass catches any
+        /// wall/structure mesh whose FBX import stripped or never produced one,
+        /// so a single re-run hardens the whole scene. Idempotent — a mesh that
+        /// already has a collider is left untouched.
+        /// </summary>
+        private static void VerifyWallColliders(Transform root)
+        {
+            int hardened = 0;
+            int illusorySkipped = 0;
+
+            foreach (var t in root.GetComponentsInChildren<Transform>(true))
+            {
+                var go = t.gameObject;
+
+                // Only act on wall-run / vertical-connector pieces — floors,
+                // ceilings, props, lights and actors are out of scope here
+                // (floors/props get their colliders at build time; ceilings are
+                // deliberately collider-free).
+                if (!IsWallStructure(t)) continue;
+
+                // Illusory walls are intentionally non-colliding hidden passages.
+                if (go.name.StartsWith("[ILLUSORY]"))
+                {
+                    illusorySkipped++;
+                    continue;
+                }
+
+                if (go.GetComponentInChildren<Collider>() != null) continue;
+
+                EnsureCollider(go);
+                hardened++;
+            }
+
+            if (hardened > 0)
+                Debug.Log($"[DungeonSceneBuilder] BUG-007 pass — added a collider to " +
+                          $"{hardened} wall/structure mesh(es) that imported without one.");
+            Debug.Log($"[DungeonSceneBuilder] BUG-007 pass — {illusorySkipped} illusory wall(s) " +
+                      "left collider-free by design (hidden passages).");
+        }
+
+        /// <summary>
+        /// True when <paramref name="t"/> is a wall-run or vertical-connector
+        /// piece — i.e. it sits under a "Walls" group or the
+        /// "VerticalConnectors" root. These are the meshes the Keeper must not
+        /// be able to walk through.
+        /// </summary>
+        private static bool IsWallStructure(Transform t)
+        {
+            for (var p = t; p != null; p = p.parent)
+            {
+                if (p.name == "Walls" || p.name == "VerticalConnectors")
+                    return true;
+            }
+            return false;
+        }
+
         private static Transform NewChild(Transform parent, string name)
         {
             var go = new GameObject(name);
@@ -1538,6 +1724,41 @@ namespace DeNelle.Editor
                 return null;
             }
             return go.AddComponent(type);
+        }
+
+        /// <summary>
+        /// Adds a component resolved purely by full type name (e.g. a Cinemachine
+        /// type from the Unity.Cinemachine package). Like
+        /// <see cref="AddDungeonComponent"/> but worded for the package case —
+        /// the assembly is loaded in the editor even though the DeNelle.Editor
+        /// asmdef does not list it as a reference. Returns null (and warns) when
+        /// the type cannot be resolved.
+        /// </summary>
+        private static Component AddComponentByName(GameObject go, string fullTypeName)
+        {
+            var type = FindType(fullTypeName);
+            if (type == null)
+            {
+                Debug.LogWarning($"[DungeonSceneBuilder] Type '{fullTypeName}' not found — the " +
+                                 "owning package may not be installed. Component skipped.");
+                return null;
+            }
+            // Some components may already be present via [RequireComponent] when
+            // an earlier AddComponent pulled them in — reuse rather than double.
+            var existing = go.GetComponent(type);
+            return existing != null ? existing : go.AddComponent(type);
+        }
+
+        /// <summary>
+        /// Returns a component resolved by full type name, or null when the type
+        /// is unresolved or absent. Guards <see cref="GameObject.GetComponent(Type)"/>
+        /// against a null Type (which would throw).
+        /// </summary>
+        private static Component GetComponentByName(GameObject go, string fullTypeName)
+        {
+            if (go == null) return null;
+            var type = FindType(fullTypeName);
+            return type == null ? null : go.GetComponent(type);
         }
 
         private static Type FindType(string fullName)

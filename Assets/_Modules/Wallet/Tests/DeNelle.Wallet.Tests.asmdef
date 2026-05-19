@@ -1,0 +1,27 @@
+{
+    "name": "DeNelle.Wallet.Tests",
+    "rootNamespace": "DeNelle.Wallet.Tests",
+    "references": [
+        "DeNelle.Wallet",
+        "DeNelle.Core",
+        "DeNelle.Data",
+        "UniTask",
+        "UnityEngine.TestRunner",
+        "UnityEditor.TestRunner"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

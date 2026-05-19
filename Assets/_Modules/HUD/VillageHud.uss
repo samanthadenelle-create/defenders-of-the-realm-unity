@@ -1,0 +1,254 @@
+/*
+ * VillageHud.uss — styling for the in-game village HUD overlay.
+ * ----------------------------------------------------------------------
+ * Matches the project's UI Toolkit visual language (BattleHUD.uss /
+ * BuildMenu.uss): a dark Heart-Forest palette, violet (#7C3AED-ish) for
+ * the Heart accent, sky-blue for crystals, amber for the call-to-action,
+ * mint-green for HP, muted greys for body copy. Values are inline — the
+ * project Theme is C#-driven, not USS variables — kept in sync by hand,
+ * the established BattleHUD / BuildMenu convention.
+ *
+ * The root is transparent + pass-through; only the corner panels and the
+ * Build button paint a backdrop, so the 3D village stays fully visible.
+ *
+ * USS class names the controller toggles at runtime:
+ *   bar-fill--heart-warning / bar-fill--heart-critical (Heart HP tint)
+ *   ability-slot--ready / ability-slot--cooling (ability cell state)
+ *   wave-countdown--urgent (countdown < ~3s)
+ */
+
+/* ── Root — full-screen, transparent, pass-through ──────────────────── */
+.village-hud-root {
+    flex-grow: 1;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    justify-content: space-between;
+}
+
+/* ── Top / bottom strips ────────────────────────────────────────────── */
+.hud-top {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 16px;
+}
+
+.hud-bottom {
+    flex-direction: row;
+    justify-content: center;
+    align-items: flex-end;
+    padding: 16px;
+}
+
+/* ── Generic panel chrome ───────────────────────────────────────────── */
+.hud-panel {
+    padding: 10px 12px;
+    border-radius: 12px;
+    background-color: rgba(15, 12, 24, 0.92);
+    border-width: 1px;
+    border-color: rgba(124, 58, 237, 0.42);
+}
+
+.panel-caption {
+    font-size: 11px;
+    -unity-font-style: bold;
+    color: rgb(150, 142, 170);
+    margin-bottom: 4px;
+}
+
+/* ── Heart HP panel ─────────────────────────────────────────────────── */
+.heart-panel {
+    width: 240px;
+    flex-direction: column;
+}
+
+/* ── Crystal counter ────────────────────────────────────────────────── */
+.crystal-panel {
+    flex-direction: row;
+    align-items: center;
+}
+
+.crystal-glyph {
+    font-size: 20px;
+    color: rgb(125, 211, 252);
+    margin-right: 6px;
+}
+
+.crystal-count {
+    font-size: 22px;
+    -unity-font-style: bold;
+    color: rgb(237, 233, 250);
+    min-width: 36px;
+    -unity-text-align: middle-right;
+}
+
+/* ── Wave indicator ─────────────────────────────────────────────────── */
+.wave-panel {
+    flex-direction: column;
+    align-items: flex-end;
+    min-width: 140px;
+}
+
+.wave-number {
+    font-size: 20px;
+    -unity-font-style: bold;
+    color: rgb(237, 233, 250);
+}
+
+.wave-countdown {
+    margin-top: 2px;
+    font-size: 14px;
+    -unity-font-style: italic;
+    color: rgb(196, 181, 253);
+    min-height: 18px;
+}
+
+.wave-countdown--urgent {
+    color: rgb(245, 196, 90);
+    -unity-font-style: bold;
+}
+
+/* ── Bars (Heart HP, mana) ──────────────────────────────────────────── */
+.bar-track {
+    height: 16px;
+    border-radius: 8px;
+    background-color: rgba(10, 8, 16, 0.9);
+    overflow: hidden;
+}
+
+.bar-track--mana {
+    height: 12px;
+}
+
+.bar-fill {
+    height: 100%;
+    width: 100%;
+    border-radius: 8px;
+}
+
+.bar-fill--heart {
+    background-color: rgb(76, 187, 110);
+}
+
+.bar-fill--heart-warning {
+    background-color: rgb(245, 196, 90);
+}
+
+.bar-fill--heart-critical {
+    background-color: rgb(220, 96, 110);
+}
+
+.bar-fill--mana {
+    background-color: rgb(96, 165, 250);
+}
+
+.bar-value {
+    font-size: 11px;
+    color: rgb(168, 160, 188);
+    margin-top: 2px;
+    -unity-text-align: middle-center;
+}
+
+/* ── Mana panel ─────────────────────────────────────────────────────── */
+.mana-panel {
+    width: 200px;
+    flex-direction: column;
+    margin-right: 12px;
+}
+
+/* ── Hero ability bar ───────────────────────────────────────────────── */
+.ability-bar {
+    flex-direction: row;
+    align-items: flex-end;
+    justify-content: center;
+}
+
+/* One Q/W/E/R cell — built at runtime by VillageHudController. */
+.ability-slot {
+    width: 64px;
+    height: 64px;
+    margin-left: 6px;
+    margin-right: 6px;
+    border-radius: 12px;
+    background-color: rgba(15, 12, 24, 0.92);
+    border-width: 2px;
+    border-color: rgba(124, 58, 237, 0.55);
+    overflow: hidden;
+}
+
+.ability-slot--ready {
+    border-color: rgb(124, 58, 237);
+}
+
+.ability-slot--cooling {
+    border-color: rgba(90, 84, 110, 0.7);
+}
+
+/* The Q/W/E/R hotkey badge — top-left corner of the cell. */
+.ability-key {
+    position: absolute;
+    top: 2px;
+    left: 4px;
+    font-size: 12px;
+    -unity-font-style: bold;
+    color: rgb(196, 181, 253);
+}
+
+/* The ability glyph — centred in the cell (placeholder until icon art). */
+.ability-icon {
+    flex-grow: 1;
+    font-size: 26px;
+    -unity-font-style: bold;
+    color: rgb(237, 233, 250);
+    -unity-text-align: middle-center;
+}
+
+/* The cooldown sweep — a dark overlay anchored to the bottom of the cell
+   whose height shrinks from 100% (just cast) to 0% (ready). A vertical
+   wipe stands in for a radial sweep until icon art lands. */
+.ability-cooldown-fill {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 0;
+    background-color: rgba(8, 6, 14, 0.78);
+}
+
+/* The seconds-remaining numeral, centred over a cooling cell. */
+.ability-cooldown-label {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    font-size: 20px;
+    -unity-font-style: bold;
+    color: rgb(245, 196, 90);
+    -unity-text-align: middle-center;
+}
+
+/* ── Build button ───────────────────────────────────────────────────── */
+.build-button {
+    min-width: 120px;
+    height: 56px;
+    margin-left: 12px;
+    font-size: 18px;
+    -unity-font-style: bold;
+    border-radius: 12px;
+    border-width: 0;
+    color: rgb(28, 22, 10);
+    background-color: rgb(245, 196, 90);
+}
+
+.build-button:hover {
+    background-color: rgb(255, 212, 120);
+}
+
+.build-button:disabled {
+    background-color: rgba(90, 84, 70, 0.6);
+    color: rgba(200, 196, 188, 0.5);
+}

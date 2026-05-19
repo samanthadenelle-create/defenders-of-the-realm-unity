@@ -34,6 +34,15 @@ namespace DeNelle.Core
         public string[] BreachedIds = Array.Empty<string>();
         /// <summary>Engine unit-ids of the pets that fought (for the pity reward).</summary>
         public string[] ParticipatingPetIds = Array.Empty<string>();
+
+        /// <summary>
+        /// The scene the battle returns to once the result settles (BUG-008 fix).
+        /// A village breach leaves this at the default (<see cref="SceneRouter.Village"/>);
+        /// a dungeon encounter sets it to <see cref="SceneRouter.DungeonHealersCottage"/>
+        /// so the ATB round-trip lands back in the dungeon, not the village.
+        /// Empty / null also resolves to the village default.
+        /// </summary>
+        public string ReturnScene = SceneRouter.Village;
     }
 
     /// <summary>Static scene-navigation surface — the React route table's port.</summary>

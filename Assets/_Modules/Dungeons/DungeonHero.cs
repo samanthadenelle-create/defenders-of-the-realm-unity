@@ -91,6 +91,17 @@ namespace DeNelle.Dungeons
 
         private CharacterController _controller;
 
+        // ── Animation ─────────────────────────────────────────────────────────
+        // The KayKit Keeper rig carries an Animator (the AnimatorSetup editor
+        // script builds Hero.controller; the integrator assigns it to the hero
+        // prefab — see docs/port-notes/animation-setup.md). DungeonHero DRIVES it:
+        // the Speed float blends idle <-> walk from the planar move speed. The
+        // Animator ref is null-guarded so locomotion still runs without a rig.
+        private Animator _animator;
+
+        /// <summary>Animator <c>Speed</c> float hash — matches AnimatorSetup.cs.</summary>
+        private static readonly int AnimSpeed = Animator.StringToHash("Speed");
+
         /// <summary>The current horizontal velocity (XZ), eased toward the input.</summary>
         private Vector3 _planarVelocity;
 
@@ -123,6 +134,8 @@ namespace DeNelle.Dungeons
         {
             _controller = GetComponent<CharacterController>();
             if (_moveCamera == null) _moveCamera = Camera.main;
+            // The Animator sits on the KayKit Keeper mesh child of the hero rig.
+            _animator = GetComponentInChildren<Animator>();
         }
 
         /// <summary>
@@ -191,6 +204,11 @@ namespace DeNelle.Dungeons
             Vector3 motion = (_planarVelocity + Vector3.up * _verticalVelocity)
                              * Time.deltaTime;
             _controller.Move(motion);
+
+            // Feed the Animator's Speed float from the planar move speed so the
+            // Keeper rig blends idle <-> walk. Null-guarded — no-op without a rig.
+            if (_animator != null)
+                _animator.SetFloat(AnimSpeed, _planarVelocity.magnitude);
         }
 
         // ── Input resolution ─────────────────────────────────────────────────

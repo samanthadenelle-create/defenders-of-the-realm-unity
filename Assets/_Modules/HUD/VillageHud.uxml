@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  VillageHud.uxml — UI Toolkit village HUD overlay (Week 4 "playable Wave 1").
+  ------------------------------------------------------------------------
+  The in-game HUD for the Avalon village scene: the glanceable readout the
+  player watches while the wave loop runs. Architecture review item ARC-003
+  ("DeNelle.HUD module is an empty asmdef") — this fills it in.
+
+  MODULE ISOLATION (port spec Part 2): the HUD is a PASSIVE display. It owns
+  no gameplay state and never reaches into DeNelle.Village types. Data is
+  PUSHED IN by the integrator through VillageHudController's public setters
+  (SetHeartHp / SetCrystals / SetWave / SetAbilityCooldown / SetMana). The
+  "Build" button raises a UnityEvent the integrator hooks to BuildMenu.Open().
+
+  VillageHudController.cs queries these elements by name (the "name" attribute
+  is the binding contract — do not rename without updating the controller):
+    village-hud-root
+    heart-hp-fill / heart-hp-label / heart-hp-track
+    crystal-count
+    wave-number / wave-countdown
+    ability-bar
+    ability-slot-0 .. ability-slot-3   (one per Q/W/E/R)
+      ability-key / ability-icon / ability-cooldown-fill / ability-cooldown-label
+    mana-fill / mana-label
+    build-button
+
+  Ability slots are built once at runtime by the controller into
+  "ability-bar" — this UXML supplies the chrome (corner panels + the bar
+  shell) and the controller fills the four Q/W/E/R cells.
+-->
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <Style src="VillageHud.uss" />
+
+    <!-- Full-screen, transparent, pass-through root: gameplay input flows
+         through everywhere except the interactive panels below. -->
+    <ui:VisualElement name="village-hud-root" class="village-hud-root" picking-mode="Ignore">
+
+        <!-- ── Top strip — resources + wave readout ───────────────────── -->
+        <ui:VisualElement name="hud-top" class="hud-top" picking-mode="Ignore">
+
+            <!-- Heart HP — Elarion's vitals. -->
+            <ui:VisualElement name="heart-panel" class="hud-panel heart-panel">
+                <ui:Label name="heart-title" text="Elarion" class="panel-caption" />
+                <ui:VisualElement name="heart-hp-track" class="bar-track bar-track--heart">
+                    <ui:VisualElement name="heart-hp-fill" class="bar-fill bar-fill--heart" />
+                </ui:VisualElement>
+                <ui:Label name="heart-hp-label" text="100 / 100" class="bar-value" />
+            </ui:VisualElement>
+
+            <!-- Crystal counter — the village currency. -->
+            <ui:VisualElement name="crystal-panel" class="hud-panel crystal-panel">
+                <ui:Label name="crystal-glyph" text="◆" class="crystal-glyph" />
+                <ui:Label name="crystal-count" text="0" class="crystal-count" />
+            </ui:VisualElement>
+
+            <!-- Wave indicator — wave number + between-wave countdown. -->
+            <ui:VisualElement name="wave-panel" class="hud-panel wave-panel">
+                <ui:Label name="wave-number" text="Wave 1" class="wave-number" />
+                <ui:Label name="wave-countdown" text="" class="wave-countdown" />
+            </ui:VisualElement>
+
+        </ui:VisualElement>
+
+        <!-- ── Bottom strip — hero ability bar + Build button ─────────── -->
+        <ui:VisualElement name="hud-bottom" class="hud-bottom" picking-mode="Ignore">
+
+            <!-- Mana pool — sits above the ability bar. -->
+            <ui:VisualElement name="mana-panel" class="hud-panel mana-panel">
+                <ui:Label name="mana-caption" text="Mana" class="panel-caption" />
+                <ui:VisualElement name="mana-track" class="bar-track bar-track--mana">
+                    <ui:VisualElement name="mana-fill" class="bar-fill bar-fill--mana" />
+                </ui:VisualElement>
+                <ui:Label name="mana-label" text="10 / 10" class="bar-value" />
+            </ui:VisualElement>
+
+            <!-- Hero ability bar — Q/W/E/R cells built at runtime by the
+                 controller into this container. -->
+            <ui:VisualElement name="ability-bar" class="ability-bar" />
+
+            <!-- Build button — raises VillageHudController.BuildRequested; the
+                 integrator hooks that to BuildMenu.Open(). -->
+            <ui:Button name="build-button" text="Build" class="build-button" />
+
+        </ui:VisualElement>
+
+    </ui:VisualElement>
+</ui:UXML>

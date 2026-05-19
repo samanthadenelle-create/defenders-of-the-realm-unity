@@ -306,6 +306,10 @@ namespace DeNelle.Dungeons
                 Wave = 0, // a dungeon encounter is not a village wave
                 BreachedIds = enemyTypes ?? System.Array.Empty<string>(),
                 ParticipatingPetIds = System.Array.Empty<string>(),
+                // BUG-008 fix: the battle must return to the dungeon, not the
+                // village. ReturnScene carries the round-trip destination so
+                // BattleController hands control back into Dungeon_HealersCottage.
+                ReturnScene = SceneRouter.DungeonHealersCottage,
             };
             // waveLabel is the authored pre-fight banner; the battle scene reads
             // it off the params. (BattleParams gains a Label field when the

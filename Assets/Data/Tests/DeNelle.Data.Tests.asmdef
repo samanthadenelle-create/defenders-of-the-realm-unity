@@ -1,0 +1,30 @@
+{
+    "name": "DeNelle.Data.Tests",
+    "rootNamespace": "DeNelle.Data.Tests",
+    "references": [
+        "DeNelle.Core",
+        "DeNelle.Data",
+        "DeNelle.Village",
+        "DeNelle.Pets",
+        "DeNelle.Wallet",
+        "UniTask",
+        "UnityEngine.TestRunner",
+        "UnityEditor.TestRunner"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll",
+        "Newtonsoft.Json.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

@@ -87,6 +87,16 @@ namespace DeNelle.Dungeons
         [Tooltip("Parent for the spawned encounter triggers.")]
         [SerializeField] private Transform _encounterRoot;
 
+        [Header("Hero vitals (placeholder — no dungeon hero-stat type yet)")]
+        [Tooltip("Baseline hero HP seeded onto the run state at run start so the " +
+                 "checkpoint heal + the ATB round-trip have live numbers to work " +
+                 "from. The dungeon module owns no hero-stat type; when a real one " +
+                 "lands it should drive SetHeroVitals each frame instead.")]
+        [SerializeField] private float _heroBaselineHp = 120f;
+
+        [Tooltip("Baseline hero mana seeded onto the run state at run start.")]
+        [SerializeField] private float _heroBaselineMana = 60f;
+
         [Header("Camera framing (top-down isometric)")]
         [Tooltip("Camera offset from the hero, world units. The default gives the " +
                  "spec's top-down isometric tilt (high, pulled back, looking down).")]
@@ -125,6 +135,16 @@ namespace DeNelle.Dungeons
         /// <summary>The hero's last-known room id, cached to detect room crossings.</summary>
         private string _lastRoomId = string.Empty;
 
+        /// <summary>
+        /// The canonical lore-fragment set (lore-fragments.json) — feeds Bryn's
+        /// entrance line + each lore stone's reading text. Null when the file
+        /// could not be loaded; the interactables then fall back to inline copy.
+        /// </summary>
+        private LoreFragmentSet _loreFragments;
+
+        /// <summary>The hydrated scripted/boss encounter triggers, in layout order.</summary>
+        private readonly List<EncounterTrigger> _encounterTriggers = new List<EncounterTrigger>();
+
         // ── Lifecycle ────────────────────────────────────────────────────────
 
         private void Start()
@@ -134,9 +154,19 @@ namespace DeNelle.Dungeons
 
         private void OnDestroy()
         {
-            // Tear the run down so a stale run never leaks into the next scene.
-            if (_runtimeState != null && _runtimeState.RunActive)
-                _runtimeState.EndRun();
+            if (_runtimeState == null || !_runtimeState.RunActive) return;
+
+            // CRITICAL (BUG-008 round-trip): when an encounter battle is pending,
+            // this scene is being torn down to route into ATBBattle — NOT a
+            // genuine dungeon exit. EndRun() would wipe the encounter handoff +
+            // hero vitals the ScriptableObject is carrying across the round-trip,
+            // so the dungeon could never resume. Leave the run intact; the
+            // resume path on re-entry (or a real ExitToVillage) ends it.
+            if (_runtimeState.HasPendingEncounter) return;
+
+            // No battle pending — a real teardown. End the run so a stale run
+            // never leaks into the next scene.
+            _runtimeState.EndRun();
         }
 
         /// <summary>
@@ -164,20 +194,54 @@ namespace DeNelle.Dungeons
                 return;
             }
 
+            // Load the canonical lore-fragment set — feeds Bryn's entrance line
+            // and each lore stone's reading text. A null set is non-fatal: the
+            // interactables fall back to the layout JSON's inline copy.
+            _loreFragments = await LoreFragmentsLoader.LoadAsync();
+
+            // An encounter battle just resolved if the run state still carries a
+            // pending handoff — this scene LOAD is the ATB round-trip return.
+            bool resuming = _runtimeState != null && _runtimeState.HasPendingEncounter;
+
             int seed = MakeRunSeed();
-            Vector3 spawnPos = ResolveSpawnPosition();
+            Vector3 spawnPos = resuming
+                ? _runtimeState.EncounterResumePosition
+                : ResolveSpawnPosition();
             string entryRoomId = Layout.spawn?.roomId ?? Layout.entryRoomId;
 
-            if (_runtimeState != null)
+            // StartRun deliberately preserves the encounter handoff + hero
+            // vitals so they survive this reload (see DungeonRuntimeState).
+            if (_runtimeState != null && !resuming)
                 _runtimeState.StartRun(Layout.id, entryRoomId, spawnPos, seed);
+            else if (_runtimeState != null && !_runtimeState.RunActive)
+                // A resume after a process-fresh reload still needs a live run.
+                _runtimeState.StartRun(Layout.id, entryRoomId, spawnPos, seed);
+
+            // Seed the hero vitals on a fresh run so the checkpoint heal +
+            // the ATB round-trip have numbers (Week-6 checklist item 7). On a
+            // resume the vitals already rode the round-trip on the run state, so
+            // they are left untouched.
+            if (_runtimeState != null && !resuming && !_runtimeState.HasHeroVitals)
+                _runtimeState.SetHeroVitals(
+                    _heroBaselineHp, _heroBaselineHp, _heroBaselineMana, _heroBaselineMana);
 
             PlaceHero(spawnPos);
             ConfigureCamera();
             ConfigureLantern();
             ConfigureBryn();
+            HydrateLoreStones();
+            HydrateCheckpoints();
+            HydrateEncounters();
             StartAmbientAudio();
 
-            _lastRoomId = entryRoomId;
+            // Settle any in-flight ATB encounter — the dungeon module's side of
+            // the BUG-008 round-trip. The matching EncounterTrigger marks itself
+            // fired + (on a boss victory) flags the boss defeated.
+            if (resuming)
+                ResolvePendingEncounter();
+
+            DungeonRoom currentRoom = Layout.RoomAt(spawnPos);
+            _lastRoomId = currentRoom?.id ?? entryRoomId;
             Ready = true;
 
             // The run is live and the Keeper is framed — hand movement back.
@@ -333,11 +397,156 @@ namespace DeNelle.Dungeons
             _lantern.Configure(this, Layout.oilStones, _hero);
         }
 
-        /// <summary>Places + configures Bryn from the layout's <c>bryn</c> block.</summary>
+        /// <summary>
+        /// Places + configures Bryn from the layout's <c>bryn</c> block, hands
+        /// her the hero transform she watches for the proximity check, and the
+        /// lore-fragment set her entrance line is sourced from (Week-6 checklist
+        /// item 2).
+        /// </summary>
         private void ConfigureBryn()
         {
             if (_bryn == null || Layout?.bryn == null) return;
             _bryn.Configure(Layout.bryn, _runtimeState);
+            _bryn.SetHero(_hero);
+            if (_loreFragments != null)
+                _bryn.SetLoreFragments(_loreFragments);
+        }
+
+        /// <summary>
+        /// Hydrates the lore stones placed under <see cref="_loreStoneRoot"/> from
+        /// the layout's <c>loreStones</c> array (Week-6 checklist item 3). The
+        /// scene builder places one <see cref="LoreStone"/> per layout entry, in
+        /// layout order, so child[i] pairs with <c>loreStones[i]</c>. Each stone
+        /// is also handed the lore-fragment set for its canon reading text.
+        /// </summary>
+        private void HydrateLoreStones()
+        {
+            if (_loreStoneRoot == null || Layout?.loreStones == null) return;
+
+            var stones = _loreStoneRoot.GetComponentsInChildren<LoreStone>(true);
+            int total = Layout.loreStones.Length;
+            int n = Mathf.Min(stones.Length, total);
+            if (stones.Length != total)
+            {
+                Debug.LogWarning(
+                    $"[DungeonController] Lore-stone count mismatch — {stones.Length} in scene, " +
+                    $"{total} in layout. Hydrating the first {n}.");
+            }
+
+            for (int i = 0; i < n; i++)
+            {
+                stones[i].Configure(Layout.loreStones[i], _runtimeState, _hero, total);
+                if (_loreFragments != null)
+                    stones[i].SetLoreFragments(_loreFragments);
+            }
+        }
+
+        /// <summary>
+        /// Hydrates the checkpoint shrines under <see cref="_checkpointRoot"/>
+        /// from the layout's <c>checkpoints</c> array (Week-6 checklist item 4).
+        /// Child[i] pairs with <c>checkpoints[i]</c>.
+        /// </summary>
+        private void HydrateCheckpoints()
+        {
+            if (_checkpointRoot == null || Layout?.checkpoints == null) return;
+
+            var shrines = _checkpointRoot.GetComponentsInChildren<Checkpoint>(true);
+            int n = Mathf.Min(shrines.Length, Layout.checkpoints.Length);
+            if (shrines.Length != Layout.checkpoints.Length)
+            {
+                Debug.LogWarning(
+                    $"[DungeonController] Checkpoint count mismatch — {shrines.Length} in scene, " +
+                    $"{Layout.checkpoints.Length} in layout. Hydrating the first {n}.");
+            }
+
+            for (int i = 0; i < n; i++)
+                shrines[i].Configure(Layout.checkpoints[i], _runtimeState, _hero);
+        }
+
+        /// <summary>
+        /// Hydrates the encounter triggers under <see cref="_encounterRoot"/>
+        /// (Week-6 checklist item 5). The scene builder places one trigger per
+        /// scripted encounter in layout order, then the mini-boss trigger LAST.
+        /// So child[0..k-1] take <c>scriptedEncounters[i]</c> and the trailing
+        /// child takes <c>miniBoss</c>.
+        /// </summary>
+        private void HydrateEncounters()
+        {
+            _encounterTriggers.Clear();
+            if (_encounterRoot == null || Layout == null) return;
+
+            var triggers = _encounterRoot.GetComponentsInChildren<EncounterTrigger>(true);
+            DungeonScriptedEncounter[] scripted =
+                Layout.scriptedEncounters ?? System.Array.Empty<DungeonScriptedEncounter>();
+            bool hasBoss = Layout.miniBoss != null;
+            int expected = scripted.Length + (hasBoss ? 1 : 0);
+
+            if (triggers.Length != expected)
+            {
+                Debug.LogWarning(
+                    $"[DungeonController] Encounter-trigger count mismatch — {triggers.Length} " +
+                    $"in scene, {expected} expected ({scripted.Length} scripted + " +
+                    $"{(hasBoss ? 1 : 0)} boss). Hydrating what aligns.");
+            }
+
+            int scriptedCount = Mathf.Min(scripted.Length, triggers.Length);
+            for (int i = 0; i < scriptedCount; i++)
+            {
+                triggers[i].ConfigureScripted(this, scripted[i], _runtimeState, _hero);
+                _encounterTriggers.Add(triggers[i]);
+            }
+
+            // The trailing trigger is the mini-boss (the Apprentice of the
+            // Apothecary — design §4 Beat 6), configured via ConfigureBoss.
+            if (hasBoss && triggers.Length > scripted.Length)
+            {
+                EncounterTrigger bossTrigger = triggers[triggers.Length - 1];
+                bossTrigger.ConfigureBoss(this, Layout.miniBoss, 4f, _runtimeState, _hero);
+                _encounterTriggers.Add(bossTrigger);
+            }
+        }
+
+        /// <summary>
+        /// Settles the in-flight ATB encounter on dungeon re-entry — the dungeon
+        /// side of the BUG-008 round-trip (Week-6 checklist item 6). Reads the
+        /// pending encounter id off the run state and calls the matching
+        /// trigger's <see cref="EncounterTrigger.ResumePendingEncounter"/>; a
+        /// boss victory flags the boss defeated.
+        /// </summary>
+        private void ResolvePendingEncounter()
+        {
+            if (_runtimeState == null || !_runtimeState.HasPendingEncounter) return;
+
+            // v1's ATB engine fully restores HP/MP after every fight, so a clean
+            // resume is treated as a victory unless a battle-result carrier says
+            // otherwise. The ATB outcome lands on the battle runtime state; the
+            // dungeon module references DeNelle.Core only, so until a Core-level
+            // result carrier exists the resume assumes victory (the cleared
+            // encounter never re-fires either way — ResumePendingEncounter
+            // re-arms _hasFired).
+            bool victory = true;
+
+            string pendingId = _runtimeState.PendingEncounterId;
+            bool settled = false;
+            foreach (EncounterTrigger trigger in _encounterTriggers)
+            {
+                if (trigger == null) continue;
+                if (trigger.ResumePendingEncounter(victory))
+                {
+                    settled = true;
+                    break;
+                }
+            }
+
+            // No trigger owned the pending id (a layout/scene drift) — clear the
+            // handoff anyway so the run is not wedged in a permanent combat lock.
+            if (!settled)
+            {
+                Debug.LogWarning(
+                    $"[DungeonController] No encounter trigger matched pending id " +
+                    $"'{pendingId}' on resume — clearing the handoff to unwedge the run.");
+                _runtimeState.ResumeAfterEncounter(victory);
+            }
         }
 
         // ── Audio ────────────────────────────────────────────────────────────

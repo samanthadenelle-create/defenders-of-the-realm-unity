@@ -76,6 +76,17 @@ namespace DeNelle.Village
         // Reusable overlap buffer — avoids per-cast GC (Physics.OverlapSphereNonAlloc).
         private readonly Collider[] _overlap = new Collider[64];
 
+        // ── Animation ─────────────────────────────────────────────────────────
+        // The hero rig's Animator (Hero.controller, built by the AnimatorSetup
+        // editor script; assigned to the hero prefab by the integrator — see
+        // docs/port-notes/animation-setup.md) plays the Q/W/E/R cast animation.
+        // HeroAbilities fires the Cast trigger whenever an ability resolves.
+        // Null-guarded so the cast logic runs without a rig.
+        private Animator _animator;
+
+        /// <summary>Animator <c>Cast</c> trigger hash — matches AnimatorSetup.cs.</summary>
+        private static readonly int AnimCast = Animator.StringToHash("Cast");
+
         /// <summary>Current mana, 0..<see cref="MaxMana"/>.</summary>
         public float Mana => _mana;
 
@@ -117,6 +128,8 @@ namespace DeNelle.Village
         private void Awake()
         {
             _mana = _maxMana;
+            // The Animator sits on the KayKit hero mesh child of the hero rig.
+            _animator = GetComponentInChildren<Animator>();
         }
 
         private void Update()
@@ -150,6 +163,9 @@ namespace DeNelle.Village
 
             _cooldownRemaining[(int)slot] = def.Cooldown;
             _mana -= def.ManaCost;
+
+            // Play the hero's cast animation in sync with the ability resolving.
+            if (_animator != null) _animator.SetTrigger(AnimCast);
 
             Vector3 origin = transform.position;
             ResolveEffect(def, origin);

@@ -92,6 +92,23 @@ namespace DeNelle.Pets
         // Reusable overlap buffer — avoids per-frame GC (OverlapSphereNonAlloc).
         private readonly Collider[] _overlap = new Collider[48];
 
+        // ── Animation ─────────────────────────────────────────────────────────
+        // The KayKit pet rig carries an Animator (the AnimatorSetup editor script
+        // builds Pet.controller; the integrator assigns it to the pet prefab —
+        // see docs/port-notes/animation-setup.md). Pet DRIVES it: the Speed float
+        // blends idle <-> hunt-move, Attack fires on each strike, Hit on damage,
+        // Dead latches the down state. Every Animator call is null-guarded so a
+        // pet with no rig still fights. NOTE: the Ice Wolf is a QUADRUPED — codex
+        // GAP-PRIMARY — and needs its own rig + controller, not Pet.controller.
+        private Animator _animator;
+        private Vector3 _lastPosition;
+
+        // Animator parameter hashes — must match AnimatorSetup.cs's names.
+        private static readonly int AnimSpeed  = Animator.StringToHash("Speed");
+        private static readonly int AnimAttack = Animator.StringToHash("Attack");
+        private static readonly int AnimHit    = Animator.StringToHash("Hit");
+        private static readonly int AnimDead   = Animator.StringToHash("Dead");
+
         /// <summary>Stable pet id — e.g. <c>pet-aether-sprite</c>.</summary>
         public string PetId => _petId;
 
@@ -166,10 +183,27 @@ namespace DeNelle.Pets
             transform.position = _homePost;
         }
 
+        private void Awake()
+        {
+            // The Animator sits on the KayKit pet mesh child of the pet rig.
+            _animator = GetComponentInChildren<Animator>();
+            _lastPosition = transform.position;
+        }
+
         private void Update()
         {
             float dt = Time.deltaTime;
             _attackCdRemaining = Mathf.Max(0f, _attackCdRemaining - dt);
+
+            // Feed the Animator's Speed float from the actual per-frame
+            // displacement — Pet moves kinematically (no agent / rigidbody to
+            // read a velocity from). Null-guarded; no-op without a rig.
+            if (_animator != null && dt > 0f)
+            {
+                float moved = (transform.position - _lastPosition).magnitude / dt;
+                _animator.SetFloat(AnimSpeed, moved);
+            }
+            _lastPosition = transform.position;
 
             if (!IsAlive) return;
             // Idle / Fortify pets do not hunt — Idle trails the hero (the
@@ -211,6 +245,13 @@ namespace DeNelle.Pets
         {
             if (!IsAlive) return;
             _hp = Mathf.Max(0f, _hp - Mathf.Max(0f, amount));
+
+            if (_animator != null)
+            {
+                // Latch the down state at zero HP, else play the flinch.
+                if (_hp <= 0f) _animator.SetBool(AnimDead, true);
+                else _animator.SetTrigger(AnimHit);
+            }
         }
 
         /// <summary>Heals the pet, clamped to max HP (Aether Sprite's Healing Spark, repairs).</summary>
@@ -256,6 +297,9 @@ namespace DeNelle.Pets
         {
             _attackCdRemaining = _attackCooldown;
             foe.TakeDamage(_attackDamage, _element);
+
+            // Fire the strike animation in sync with the damage tick.
+            if (_animator != null) _animator.SetTrigger(AnimAttack);
 
             // Ice Wolf's Frostbite (bond rank 1+) — attacks briefly slow the foe.
             // The other species' rank perks (burn, novas) are deeper Week-4+

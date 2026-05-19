@@ -94,6 +94,13 @@ namespace DeNelle.Village
         [Tooltip("Distance from the Heart at which the enemy considers itself 'arrived'.")]
         [SerializeField] private float _heartArrivalRadius = 2.5f;
 
+        /// <summary>
+        /// Seconds the dead enemy GameObject lingers so its death animation can
+        /// play before <see cref="Die"/> destroys it. Only applied when the enemy
+        /// has an Animator; with none it is destroyed immediately.
+        /// </summary>
+        private const float DeathHoldSeconds = 1.6f;
+
         // ── Runtime refs / state ──────────────────────────────────────────────
 
         private NavMeshAgent _agent;
@@ -102,6 +109,22 @@ namespace DeNelle.Village
         private bool _dead;
         private bool _navWarned;
         private IDamageableStructure _currentTarget;
+
+        // ── Animation ─────────────────────────────────────────────────────────
+        // The KayKit skeleton mesh carries an Animator (the AnimatorSetup editor
+        // script builds HumanoidEnemy/LargeEnemy/Boss.controller; the integrator
+        // assigns one to the enemy prefab — see docs/port-notes/animation-setup.md).
+        // Enemy DRIVES it: Speed float from movement, Attack/Hit triggers on the
+        // contact strike + damage, Dead bool on death. All parameter sets are
+        // null-guarded so an enemy with no Animator still runs its gameplay.
+        private Animator _animator;
+
+        // Animator parameter hashes — must match AnimatorSetup.cs's parameter
+        // names ("Speed" / "Attack" / "Hit" / "Dead").
+        private static readonly int AnimSpeed  = Animator.StringToHash("Speed");
+        private static readonly int AnimAttack = Animator.StringToHash("Attack");
+        private static readonly int AnimHit    = Animator.StringToHash("Hit");
+        private static readonly int AnimDead   = Animator.StringToHash("Dead");
 
         /// <summary>Raised when this enemy's HP reaches zero. Arg = this enemy.</summary>
         public event Action<Enemy> Died;
@@ -187,6 +210,7 @@ namespace DeNelle.Village
         private void Awake()
         {
             EnsureAgent();
+            EnsureAnimator();
         }
 
         private void Update()
@@ -195,6 +219,25 @@ namespace DeNelle.Village
 
             TickContactAttack();
             DriveNav();
+            DriveAnimator();
+        }
+
+        // ---------------------------------------------------------------------
+        // Animation — push the locomotion speed to the Animator each frame
+        // ---------------------------------------------------------------------
+
+        /// <summary>
+        /// Feeds the Animator's <c>Speed</c> float from the agent's actual
+        /// velocity so the controller blends idle &lt;-&gt; move. No-op when the
+        /// enemy has no Animator (parameter sets are all null-guarded).
+        /// </summary>
+        private void DriveAnimator()
+        {
+            if (_animator == null) return;
+            float speed = (_agent != null && _agent.isOnNavMesh)
+                ? _agent.velocity.magnitude
+                : 0f;
+            _animator.SetFloat(AnimSpeed, speed);
         }
 
         // ---------------------------------------------------------------------
@@ -271,6 +314,8 @@ namespace DeNelle.Village
             {
                 _currentTarget.ApplyContactDamage(_contactDamage);
                 _attackCooldown = _attackInterval;
+                // Fire the melee-strike animation in sync with the damage tick.
+                if (_animator != null) _animator.SetTrigger(AnimAttack);
             }
         }
 
@@ -310,7 +355,15 @@ namespace DeNelle.Village
         {
             if (_dead || amount <= 0f) return;
             _hp = Mathf.Max(0f, _hp - amount);
-            if (_hp <= 0f) Die();
+            if (_hp <= 0f)
+            {
+                Die();
+            }
+            else if (_animator != null)
+            {
+                // Survived the hit — play the flinch / hit-react.
+                _animator.SetTrigger(AnimHit);
+            }
         }
 
         /// <summary>Kills the enemy immediately (e.g. consumed into an ATB breach).</summary>
@@ -325,9 +378,20 @@ namespace DeNelle.Village
             if (_agent != null && _agent.isOnNavMesh) _agent.isStopped = true;
             _currentTarget = null;
             Died?.Invoke(this);
-            // Week-4 placeholder: destroy on death. A death animation + a brief
-            // fade / dissolve is a later polish pass.
-            Destroy(gameObject);
+
+            // Play the death (collapse) animation, then destroy. The Dead bool
+            // latches the controller's Death state from anywhere; the GameObject
+            // is held DeathHoldSeconds so the collapse clip is visible before
+            // it is removed. With no Animator the enemy is destroyed at once.
+            if (_animator != null)
+            {
+                _animator.SetBool(AnimDead, true);
+                Destroy(gameObject, DeathHoldSeconds);
+            }
+            else
+            {
+                Destroy(gameObject);
+            }
         }
 
         // ---------------------------------------------------------------------
@@ -337,6 +401,17 @@ namespace DeNelle.Village
         private void EnsureAgent()
         {
             if (_agent == null) _agent = GetComponent<NavMeshAgent>();
+        }
+
+        /// <summary>
+        /// Resolves the Animator on the enemy rig (it sits on the KayKit skeleton
+        /// mesh child, so search children too). Null when the prefab has no rig /
+        /// no controller assigned — every Animator call is null-guarded.
+        /// </summary>
+        private void EnsureAnimator()
+        {
+            if (_animator == null)
+                _animator = GetComponentInChildren<Animator>();
         }
 
 #if UNITY_EDITOR
