@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  DevPanel.uxml — UI Toolkit DEV-ONLY debug / QA console overlay.
+  ------------------------------------------------------------------------
+  DEV-ONLY: this panel and its controller exist ONLY in Editor + Development
+  builds. The DeNelle.DevTools asmdef carries a "UNITY_EDITOR ||
+  DEVELOPMENT_BUILD" define constraint, and DevPanelController.cs wraps its
+  whole body in #if DEVELOPMENT_BUILD || UNITY_EDITOR. A shipped (release)
+  player build compiles NONE of it. See docs/port-notes/dev-panel.md.
+
+  An in-game console for QA: it loads resources and jumps game state so the
+  qa-test-plan / uat-script setup steps do not need a full playthrough.
+
+  MODULE NOTE (isolation exception): DevTools is TOOLING, not gameplay. It
+  intentionally references the gameplay modules (Core / Village / Wallet /
+  HUD) — allowed because it is dev-only and compiled out of release. It
+  drives systems through their existing public APIs / Core seams.
+
+  DevPanelController.cs queries these elements by name (the "name" attribute
+  is the binding contract — do not rename without updating the controller):
+    dev-panel-root
+    dev-corner-tap            (corner hit-target to toggle the panel)
+    dev-panel-window
+    dev-panel-close
+    dev-status                (status line — echoes the last action)
+    dev-group-list            (groups + their action buttons built at runtime)
+
+  The action groups + buttons are built ONCE at runtime by the controller
+  into "dev-group-list" — this UXML only supplies the overlay chrome.
+-->
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <Style src="DevPanel.uss" />
+
+    <!-- Full-screen, transparent, pass-through root. Only the corner tap
+         target and the panel window itself catch input; gameplay input
+         flows through everywhere else. -->
+    <ui:VisualElement name="dev-panel-root" class="dev-panel-root" picking-mode="Ignore">
+
+        <!-- Corner tap target — a small always-on hit-zone in the top-left
+             corner. Tapping it toggles the panel (the touch-friendly twin of
+             the F1 hotkey). Visible as a faint "DEV" chip. -->
+        <ui:VisualElement name="dev-corner-tap" class="dev-corner-tap">
+            <ui:Label name="dev-corner-label" text="DEV" class="dev-corner-label" />
+        </ui:VisualElement>
+
+        <!-- The panel window — hidden until toggled on. -->
+        <ui:VisualElement name="dev-panel-window" class="dev-panel-window">
+
+            <!-- Title bar -->
+            <ui:VisualElement name="dev-panel-titlebar" class="dev-panel-titlebar">
+                <ui:Label name="dev-panel-title" text="QA Dev Console" class="dev-panel-title" />
+                <ui:Label name="dev-panel-build-tag" text="DEV BUILD" class="dev-panel-build-tag" />
+                <ui:Button name="dev-panel-close" text="✕" class="dev-panel-close" />
+            </ui:VisualElement>
+
+            <!-- Scrollable action groups — built at runtime by the controller. -->
+            <ui:ScrollView name="dev-panel-scroll" class="dev-panel-scroll">
+                <ui:VisualElement name="dev-group-list" class="dev-group-list" />
+            </ui:ScrollView>
+
+            <!-- Status line — echoes the last action performed. -->
+            <ui:Label name="dev-status" text="Ready." class="dev-status" />
+
+        </ui:VisualElement>
+
+    </ui:VisualElement>
+</ui:UXML>

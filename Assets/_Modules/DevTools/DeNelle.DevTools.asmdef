@@ -1,0 +1,22 @@
+{
+    "name": "DeNelle.DevTools",
+    "rootNamespace": "DeNelle.DevTools",
+    "references": [
+        "DeNelle.Core",
+        "DeNelle.Village",
+        "DeNelle.Wallet",
+        "DeNelle.HUD",
+        "UniTask"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "UNITY_EDITOR || DEVELOPMENT_BUILD"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

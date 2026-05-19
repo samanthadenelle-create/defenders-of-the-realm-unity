@@ -1,0 +1,210 @@
+/*
+ * DevPanel.uss — styling for the DEV-ONLY QA debug console overlay.
+ * ----------------------------------------------------------------------
+ * Matches the project's UI Toolkit visual language (VillageHud.uss /
+ * BuildMenu.uss): a dark Heart-Forest palette, violet (#7C3AED-ish)
+ * accent, amber for call-to-action. Values are inline — the project
+ * Theme is C#-driven, not USS variables — the established convention.
+ *
+ * This is a developer tool, so it leans into a high-contrast "console"
+ * look: a slightly garish amber DEV chip + a red build tag so a tester
+ * can never mistake a dev build for a release build.
+ *
+ * USS class names the controller toggles at runtime:
+ *   dev-panel-window--open      (the window is visible)
+ *   dev-action-button--toggle-on / --toggle-off  (god-mode etc.)
+ */
+
+/* ── Root — full-screen, transparent, pass-through ──────────────────── */
+.dev-panel-root {
+    flex-grow: 1;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+}
+
+/* ── Corner tap target — top-left "DEV" chip ────────────────────────── */
+.dev-corner-tap {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 54px;
+    height: 30px;
+    background-color: rgba(245, 196, 90, 0.85);
+    border-bottom-right-radius: 10px;
+    align-items: center;
+    justify-content: center;
+}
+
+.dev-corner-tap:hover {
+    background-color: rgb(255, 212, 120);
+}
+
+.dev-corner-label {
+    font-size: 12px;
+    -unity-font-style: bold;
+    color: rgb(28, 22, 10);
+}
+
+/* ── The panel window ───────────────────────────────────────────────── */
+.dev-panel-window {
+    position: absolute;
+    top: 36px;
+    left: 12px;
+    width: 320px;
+    max-height: 78%;
+    background-color: rgba(15, 12, 24, 0.97);
+    border-width: 2px;
+    border-color: rgb(124, 58, 237);
+    border-radius: 12px;
+    /* Hidden by default — the controller toggles display to flex. */
+    display: none;
+}
+
+.dev-panel-window--open {
+    display: flex;
+}
+
+/* ── Title bar ──────────────────────────────────────────────────────── */
+.dev-panel-titlebar {
+    flex-direction: row;
+    align-items: center;
+    padding: 8px 10px;
+    background-color: rgba(124, 58, 237, 0.25);
+    border-top-left-radius: 10px;
+    border-top-right-radius: 10px;
+}
+
+.dev-panel-title {
+    flex-grow: 1;
+    font-size: 15px;
+    -unity-font-style: bold;
+    color: rgb(237, 233, 250);
+}
+
+.dev-panel-build-tag {
+    font-size: 10px;
+    -unity-font-style: bold;
+    color: rgb(255, 235, 235);
+    background-color: rgb(190, 60, 70);
+    padding: 2px 6px;
+    border-radius: 6px;
+    margin-right: 8px;
+}
+
+.dev-panel-close {
+    width: 26px;
+    height: 26px;
+    font-size: 14px;
+    -unity-font-style: bold;
+    border-width: 0;
+    border-radius: 6px;
+    color: rgb(237, 233, 250);
+    background-color: rgba(90, 84, 110, 0.6);
+}
+
+.dev-panel-close:hover {
+    background-color: rgb(190, 60, 70);
+}
+
+/* ── Scroll region ──────────────────────────────────────────────────── */
+.dev-panel-scroll {
+    flex-grow: 1;
+}
+
+.dev-group-list {
+    padding: 6px 8px;
+}
+
+/* ── One action group ───────────────────────────────────────────────── */
+.dev-group {
+    margin-bottom: 8px;
+    padding: 6px 6px 8px 6px;
+    background-color: rgba(10, 8, 16, 0.7);
+    border-radius: 8px;
+    border-width: 1px;
+    border-color: rgba(124, 58, 237, 0.35);
+}
+
+.dev-group__caption {
+    font-size: 11px;
+    -unity-font-style: bold;
+    color: rgb(150, 142, 170);
+    margin-bottom: 5px;
+    margin-left: 2px;
+}
+
+/* The row that holds an action group's buttons — wraps to multiple lines. */
+.dev-group__row {
+    flex-direction: row;
+    flex-wrap: wrap;
+}
+
+/* ── Action buttons ─────────────────────────────────────────────────── */
+.dev-action-button {
+    height: 30px;
+    margin: 3px;
+    padding: 0 10px;
+    font-size: 12px;
+    -unity-font-style: bold;
+    border-width: 0;
+    border-radius: 7px;
+    color: rgb(237, 233, 250);
+    background-color: rgb(124, 58, 237);
+}
+
+.dev-action-button:hover {
+    background-color: rgb(146, 84, 255);
+}
+
+.dev-action-button:active {
+    background-color: rgb(104, 44, 207);
+}
+
+/* A toggle action that is currently ON — amber. */
+.dev-action-button--toggle-on {
+    background-color: rgb(245, 196, 90);
+    color: rgb(28, 22, 10);
+}
+
+.dev-action-button--toggle-on:hover {
+    background-color: rgb(255, 212, 120);
+}
+
+/* A toggle action that is currently OFF — muted grey. */
+.dev-action-button--toggle-off {
+    background-color: rgba(90, 84, 110, 0.7);
+}
+
+.dev-action-button--toggle-off:hover {
+    background-color: rgba(120, 112, 140, 0.8);
+}
+
+/* ── Text-entry field (pack id / wave number / scene) ───────────────── */
+.dev-text-field {
+    margin: 3px;
+    min-width: 96px;
+    flex-grow: 1;
+}
+
+.dev-text-field > .unity-text-field__input {
+    background-color: rgba(8, 6, 14, 0.9);
+    border-color: rgba(124, 58, 237, 0.5);
+    border-width: 1px;
+    border-radius: 6px;
+    color: rgb(237, 233, 250);
+}
+
+/* ── Status line ────────────────────────────────────────────────────── */
+.dev-status {
+    padding: 6px 10px;
+    font-size: 11px;
+    -unity-font-style: italic;
+    color: rgb(196, 181, 253);
+    background-color: rgba(10, 8, 16, 0.85);
+    border-bottom-left-radius: 10px;
+    border-bottom-right-radius: 10px;
+    white-space: normal;
+}

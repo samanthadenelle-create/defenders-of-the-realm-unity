@@ -2446,9 +2446,122 @@ namespace DeNelle.Editor
             UnityEditor.AI.NavMeshBuilder.ClearAllNavMeshes();
             UnityEditor.AI.NavMeshBuilder.BuildNavMesh();
 
+            // ── Static-batching pass (mobile-perf audit P0-4 / §2.1) ─────────
+            // The NavMesh bake above flags only NavigationStatic — which leaves
+            // static batching OFF for all ~2,930 village instances. The audit's
+            // headline mobile risk is draw-call submission: 2,600+ ground tiles
+            // issuing 2,600+ draws per frame. Flagging BatchingStatic lets Unity
+            // merge identical static meshes at scene load, collapsing the draw
+            // count. Done AFTER the bake so NavigationStatic is already set; we
+            // OR the flag in so the existing NavigationStatic bit is preserved.
+            MarkStaticBatchingAndInstancing();
+
             Debug.Log($"[VillageSceneBuilder] NavMesh baked -- {marked} renderer object(s) " +
                       "marked Navigation Static (Ground/Roads/Approaches walkable, " +
                       "Walls/Gates/Buildings obstacles). Legacy UnityEditor.AI synchronous bake.");
+        }
+
+        // =====================================================================
+        //  Static batching + GPU instancing (mobile-perf audit P0-4 / §2.1)
+        // =====================================================================
+
+        /// <summary>
+        /// Flags the static village geometry <c>BatchingStatic</c> and enables
+        /// GPU instancing on the repeated-prop materials — the audit's P0-4
+        /// draw-call fix (recommendations 2 and 3 in §2.1).
+        ///
+        /// <para><b>BatchingStatic.</b> ORed onto every renderer under the
+        /// static-geometry roots (Ground / Walls / Gates / Roads / Buildings /
+        /// Centerpieces / CityDressing / Approaches). The OR preserves the
+        /// <c>NavigationStatic</c> bit <see cref="BakeVillageNavMesh"/> already
+        /// set. Static batching merges identical static meshes at scene load,
+        /// trading a little memory (duplicated vertex data) for a large drop in
+        /// draw-call count — acceptable for the flat tile grid.</para>
+        ///
+        /// <para><b>GPU instancing.</b> Enabled on the shared materials of the
+        /// CityDressing props/fences/trees. Instancing covers repeated
+        /// mesh+material draws that static batching does NOT merge (e.g. props
+        /// the batcher leaves separate), and is the §2.1-recommendation-3 path.
+        /// Instancing only kicks in when the per-instance data is uniform — the
+        /// builder's per-tile <c>ApplyColor</c> recolouring can break a batch,
+        /// so this is best-effort: it flips the material flag, and the audit
+        /// note in port-notes/mobile-settings.md flags the per-instance-colour
+        /// follow-up.</para>
+        /// </summary>
+        private static void MarkStaticBatchingAndInstancing()
+        {
+            var root = GameObject.Find(VillageRootName);
+            if (root == null)
+            {
+                Debug.LogWarning("[VillageSceneBuilder] BatchingStatic pass skipped -- " +
+                                 "VillageRoot not found.");
+                return;
+            }
+
+            // Every root that holds STATIC village geometry. Superset of the
+            // nav-static roots: also includes Centerpieces + CityDressing, which
+            // are static set-dressing the NavMesh bake did not touch.
+            string[] staticGeometryRoots =
+            {
+                "Ground", "Walls", "Gates", "Roads", "Buildings",
+                "Centerpieces", "CityDressing", "Approaches",
+            };
+
+            int batched = 0;
+            foreach (var rootName in staticGeometryRoots)
+            {
+                var sub = root.transform.Find(rootName);
+                if (sub == null) continue;
+                foreach (var r in sub.GetComponentsInChildren<Renderer>())
+                {
+                    if (r == null) continue;
+                    var flags = GameObjectUtility.GetStaticEditorFlags(r.gameObject);
+                    // OR the bit in — do NOT clobber NavigationStatic (set by
+                    // BakeVillageNavMesh) or any other flag already present.
+                    GameObjectUtility.SetStaticEditorFlags(r.gameObject,
+                        flags | StaticEditorFlags.BatchingStatic);
+                    batched++;
+                }
+            }
+
+            // GPU instancing on the repeated CityDressing prop/fence/tree
+            // materials (audit §2.1 recommendation 3). The dressing root holds
+            // the props/fences/trees that share mesh+material; flipping
+            // enableInstancing lets URP/Lit draw them instanced.
+            int instanced = EnableInstancingOnDressingMaterials(root);
+
+            Debug.Log($"[VillageSceneBuilder] Static-batching pass -- {batched} renderer object(s) " +
+                      "flagged BatchingStatic (OR-ed onto the existing NavigationStatic bit); " +
+                      $"GPU instancing enabled on {instanced} dressing material(s). " +
+                      "Mobile-perf audit P0-4 / §2.1.");
+        }
+
+        /// <summary>
+        /// Sets <c>Material.enableInstancing</c> on every distinct shared
+        /// material under the CityDressing root. Returns the count flipped.
+        /// </summary>
+        private static int EnableInstancingOnDressingMaterials(GameObject root)
+        {
+            var dressing = root.transform.Find("CityDressing");
+            if (dressing == null) return 0;
+
+            var seen = new HashSet<Material>();
+            int flipped = 0;
+            foreach (var r in dressing.GetComponentsInChildren<Renderer>())
+            {
+                if (r == null) continue;
+                foreach (var mat in r.sharedMaterials)
+                {
+                    if (mat == null || !seen.Add(mat)) continue;
+                    if (!mat.enableInstancing)
+                    {
+                        mat.enableInstancing = true;
+                        EditorUtility.SetDirty(mat);
+                        flipped++;
+                    }
+                }
+            }
+            return flipped;
         }
 
         // =====================================================================
