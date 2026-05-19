@@ -30,6 +30,7 @@ hero select → pet select → launch into the world.**
 |------|-------|------|
 | Battle system tested | **GAP** | Not runtime-tested — no playable build yet (Week 8). The ATB engine has 64 unit tests; the *scene* is unverified at play. |
 | Mobile-friendly screen real estate | PARTIAL | `BattleHUD` is UI Toolkit; the input-controls audit flagged HUD touch targets too small + no on-screen controls. Needs a mobile-layout pass. |
+| Combat animations tied to weapons | PARTIAL (by design) | This build uses **basic combat animations** (`AnimatorSetup` Attack/Hit/Death) with no weapon variety — owner-decided default. Weapon selection + per-weapon animation + upgrades → **v2.1** (see `docs/roadmap/next-build.md`). |
 
 ## Camera
 | Item | State | Note |
@@ -47,6 +48,12 @@ hero select → pet select → launch into the world.**
 |------|-------|------|
 | Ambient townsfolk — NPCs moving about / standing in town | **GAP** | The village has static "city dressing" (buildings, props) but no ambient-people system. Needs wandering/idle NPC agents (KayKit characters) populating the village. |
 | Engage dialogue with townsfolk via word bubbles (appear / disappear) | PARTIAL | The word-bubble tech exists — `WandererBubble` (Bryn's billboarded speech bubble, shows + hides). Reusable for townsfolk; the engage-on-approach interaction, the dialogue content, and the NPC system itself are the GAP. |
+
+## Dungeon — lantern & crafting
+| Item | State | Note |
+|------|-------|------|
+| Torch / lantern duration mechanic | PARTIAL | `Lantern.cs` has the oil mechanic — light falls over time, refill at oil stones. The mechanic exists; player-facing clarity (how to light it, a duration / oil readout in the HUD, a tutorial beat) is a GAP. |
+| Crafting a torch — recipe + items needed | **GAP** | No crafting system exists. The dungeon spec hints at a "crafting shard pedestal" (currently a placeholder primitive). A crafting system + item / recipe data must be built. |
 
 ## Related (already tracked in the audits)
 - Performance check → `docs/audit/mobile-performance.md` + the memory audit (in progress)

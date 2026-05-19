@@ -32,3 +32,17 @@ shared-rig scope. It is a content/budget line item for the next build.
 
 **Related:** the enemy-codex's flagged quadruped-wolf rig gap (the only
 non-humanoid in the current KayKit set) is an early case of exactly this need.
+
+## Combat & progression
+
+### Weapon selection + upgrades
+**Goal:** the village battle mechanics tie combat to weapons — the player
+selects a weapon and upgrades it; animations are weapon-specific.
+
+**Current build (owner-decided scope):** combat runs on **basic animations**
+(the `AnimatorSetup` Attack / Hit / Death states) with no weapon variety —
+this is the intended v2-foundation default.
+
+**Next build:** a weapon-selection screen, per-weapon animation sets, and a
+weapon-upgrade progression. Asset base: the **KayKit Fantasy Weapons Bits**
+pack (imported, currently untapped per `docs/kaykit-asset-catalog.md`).
