@@ -82,3 +82,11 @@ Thumbs.db
 # Unity batchmode build/test artifacts (regenerated; never committed).
 /unity-*.log
 /*-test-results.xml
+
+# Imported KayKit art packs (~1.5 GB). Owner copies these in locally; they are
+# not redistributable and far too bulky for the repo. The scene BUILDERS under
+# Assets/Editor/ are the source of truth — they reconstruct the scenes from
+# whatever KayKit models are present. (Owner instruction 2026-05-18:
+# "exclude not needed files from the assets during check in".)
+/Assets/Models/
+/Assets/Models.meta

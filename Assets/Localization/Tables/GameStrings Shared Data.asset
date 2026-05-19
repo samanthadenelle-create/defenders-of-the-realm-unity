@@ -1,0 +1,780 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5b11a58205ec3474ca216360e9fa74a8, type: 3}
+  m_Name: GameStrings Shared Data
+  m_EditorClassIdentifier: Unity.Localization::UnityEngine.Localization.Tables.SharedTableData
+  m_TableCollectionName: GameStrings
+  m_TableCollectionNameGuidString: a280628737193b24f9e44f409150a145
+  m_Entries:
+  - m_Id: 1013964800
+    m_Key: title.tagline.bible
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1076879360
+    m_Key: title.tagline.story
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1076879361
+    m_Key: intro.coldOpen.line1
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1076879362
+    m_Key: intro.coldOpen.line2
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1076879363
+    m_Key: intro.coldOpen.line3
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1076879364
+    m_Key: tutorial.firstVillageLoad
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1076879365
+    m_Key: tutorial.firstApproachHeart
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1076879366
+    m_Key: tutorial.firstCrystalClaim
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1076879367
+    m_Key: tutorial.firstBuildingUnlock
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1076879368
+    m_Key: tutorial.firstStoreVisit
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073664
+    m_Key: tutorial.firstDefenseRun
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073665
+    m_Key: tutorial.firstPetPlacement
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073666
+    m_Key: tutorial.firstAbilityCastQ
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073667
+    m_Key: tutorial.firstFrostNovaW
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073668
+    m_Key: tutorial.firstBeaconE
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073669
+    m_Key: tutorial.firstMeteorR
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073670
+    m_Key: tutorial.steps.1
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073671
+    m_Key: tutorial.steps.2
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073672
+    m_Key: tutorial.steps.3
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073673
+    m_Key: tutorial.steps.4
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073674
+    m_Key: tutorial.steps.5
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073675
+    m_Key: tutorial.steps.6
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073676
+    m_Key: tutorial.steps.7
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073677
+    m_Key: gate.firstSeen
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073678
+    m_Key: gate.firstDestroyed
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073679
+    m_Key: gate.firstRepaired
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073680
+    m_Key: wave.warning.ice.1
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073681
+    m_Key: wave.warning.ice.2
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073682
+    m_Key: wave.warning.fire.1
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073683
+    m_Key: wave.warning.fire.2
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073684
+    m_Key: wave.warning.aether.1
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073685
+    m_Key: wave.warning.aether.2
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073686
+    m_Key: wave.warning.mixed.1
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073687
+    m_Key: wave.warning.mixed.2
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073688
+    m_Key: wave.warning.boss.1
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073689
+    m_Key: wave.warning.boss.2
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073690
+    m_Key: heartVoice.serene.toVigilant
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073691
+    m_Key: heartVoice.vigilant.toWarning
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073692
+    m_Key: heartVoice.warning.toDanger
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073693
+    m_Key: heartVoice.danger.toCritical
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073694
+    m_Key: heartVoice.critical.toSerene
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073695
+    m_Key: heartVoice.boss
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073696
+    m_Key: heartVoice.victorious
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073697
+    m_Key: heartVoice.alt.vigilant.1
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073698
+    m_Key: heartVoice.alt.vigilant.2
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073699
+    m_Key: heartVoice.alt.warning.1
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073700
+    m_Key: heartVoice.alt.warning.2
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073701
+    m_Key: heartVoice.alt.danger.1
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073702
+    m_Key: heartVoice.alt.danger.2
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073703
+    m_Key: heartVoice.alt.critical.1
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073704
+    m_Key: heartVoice.alt.critical.2
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073705
+    m_Key: heartVoice.alt.boss.1
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073706
+    m_Key: heartVoice.alt.boss.2
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073707
+    m_Key: heartVoice.alt.victorious.1
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073708
+    m_Key: heartVoice.alt.victorious.2
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073709
+    m_Key: heartDamage.threshold75
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073710
+    m_Key: heartDamage.threshold50
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073711
+    m_Key: heartDamage.threshold25
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073712
+    m_Key: heartDamage.threshold10
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073713
+    m_Key: heartDamage.threshold0
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073714
+    m_Key: heartDamage.alt.threshold75
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073715
+    m_Key: heartDamage.alt.threshold50
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073716
+    m_Key: heartDamage.alt.threshold25
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073717
+    m_Key: heartDamage.alt.threshold10
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073718
+    m_Key: victory.wave.1
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073719
+    m_Key: victory.wave.2
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073720
+    m_Key: victory.wave.3
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073721
+    m_Key: victory.boss.1
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073722
+    m_Key: victory.boss.2
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073723
+    m_Key: victory.personalBest
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073724
+    m_Key: victory.waveCleared.1
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073725
+    m_Key: victory.waveCleared.2
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073726
+    m_Key: victory.waveCleared.3
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073727
+    m_Key: victory.waveCleared.4
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073728
+    m_Key: victory.waveCleared.5
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073729
+    m_Key: victory.waveCleared.6
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073730
+    m_Key: defeat.1
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073731
+    m_Key: defeat.2
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073732
+    m_Key: defeat.3
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073733
+    m_Key: defeat.alt.1
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073734
+    m_Key: defeat.alt.2
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073735
+    m_Key: petCaption.aetherSprite
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073736
+    m_Key: petCaption.flamePup
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073737
+    m_Key: petCaption.iceWolf
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073738
+    m_Key: petCaption.levelUp
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073739
+    m_Key: petAmbient.aetherSprite.1
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073740
+    m_Key: petAmbient.aetherSprite.2
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073741
+    m_Key: petAmbient.aetherSprite.3
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073742
+    m_Key: petAmbient.flamePup.1
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073743
+    m_Key: petAmbient.flamePup.2
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073744
+    m_Key: petAmbient.flamePup.3
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073745
+    m_Key: petAmbient.iceWolf.1
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073746
+    m_Key: petAmbient.iceWolf.2
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073747
+    m_Key: petAmbient.iceWolf.3
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073748
+    m_Key: keeperAmbient.1
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073749
+    m_Key: keeperAmbient.2
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073750
+    m_Key: keeperAmbient.3
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073751
+    m_Key: keeperAmbient.4
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073752
+    m_Key: keeperAmbient.5
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073753
+    m_Key: keeperAmbient.6
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073754
+    m_Key: keeperAmbient.7
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073755
+    m_Key: keeperAmbient.8
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073756
+    m_Key: milestone.firstPetLevelUp
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073757
+    m_Key: milestone.firstSkillUnlocked
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073758
+    m_Key: milestone.firstBossKill
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073759
+    m_Key: milestone.firstStorePurchase
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073760
+    m_Key: milestone.firstBuildingUpgrade
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073761
+    m_Key: milestone.streak7Days
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073762
+    m_Key: returningPlayer
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073763
+    m_Key: elementBlurb.aether
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073764
+    m_Key: elementBlurb.flame
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073765
+    m_Key: elementBlurb.ice
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073766
+    m_Key: resourceBlurb.crystals
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073767
+    m_Key: resourceBlurb.food
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073768
+    m_Key: resourceBlurb.coins
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073769
+    m_Key: buildingDesc.crystalMine
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073770
+    m_Key: buildingDesc.petHouse
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073771
+    m_Key: buildingDesc.arcaneTower
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073772
+    m_Key: buildingDesc.farm
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073773
+    m_Key: buildingDesc.workshop
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073774
+    m_Key: tooltip.resourceCrystals.title
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073775
+    m_Key: tooltip.resourceCrystals.body
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073776
+    m_Key: tooltip.resourceFood.title
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073777
+    m_Key: tooltip.resourceFood.body
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073778
+    m_Key: tooltip.resourceCoins.title
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073779
+    m_Key: tooltip.resourceCoins.body
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073780
+    m_Key: tooltip.resourceVoidshards.title
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073781
+    m_Key: tooltip.resourceVoidshards.body
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073782
+    m_Key: tooltip.resourceStone.title
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073783
+    m_Key: tooltip.resourceStone.body
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073784
+    m_Key: tooltip.resourceIron.title
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073785
+    m_Key: tooltip.resourceIron.body
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073786
+    m_Key: tooltip.resourceWood.title
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073787
+    m_Key: tooltip.resourceWood.body
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073788
+    m_Key: tooltip.buttonWalls.title
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073789
+    m_Key: tooltip.buttonWalls.body
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073790
+    m_Key: tooltip.buttonTowers.title
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073791
+    m_Key: tooltip.buttonTowers.body
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073792
+    m_Key: tooltip.buttonBuild.title
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073793
+    m_Key: tooltip.buttonBuild.body
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073794
+    m_Key: tooltip.buttonSettings.title
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073795
+    m_Key: tooltip.buttonSettings.body
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073796
+    m_Key: tooltip.buttonHelp.title
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073797
+    m_Key: tooltip.buttonHelp.body
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073798
+    m_Key: tooltip.buttonClan.title
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073799
+    m_Key: tooltip.buttonClan.body
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073800
+    m_Key: tooltip.buttonMailbox.title
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073801
+    m_Key: tooltip.buttonMailbox.body
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073802
+    m_Key: tooltip.buttonHouse.title
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073803
+    m_Key: tooltip.buttonHouse.body
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073804
+    m_Key: tooltip.waveTimerPill.title
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073805
+    m_Key: tooltip.waveTimerPill.body
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073806
+    m_Key: tooltip.waveBegin.title
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073807
+    m_Key: tooltip.waveBegin.body
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073808
+    m_Key: tooltip.ability.mage.q.title
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073809
+    m_Key: tooltip.ability.mage.q.body
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073810
+    m_Key: tooltip.ability.mage.w.title
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073811
+    m_Key: tooltip.ability.mage.w.body
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073812
+    m_Key: tooltip.ability.mage.e.title
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073813
+    m_Key: tooltip.ability.mage.e.body
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073814
+    m_Key: tooltip.ability.mage.r.title
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073815
+    m_Key: tooltip.ability.mage.r.body
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073816
+    m_Key: tooltip.ability.knight.q.title
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073817
+    m_Key: tooltip.ability.knight.q.body
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073818
+    m_Key: tooltip.ability.knight.w.title
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073819
+    m_Key: tooltip.ability.knight.w.body
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073820
+    m_Key: tooltip.ability.knight.e.title
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073821
+    m_Key: tooltip.ability.knight.e.body
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073822
+    m_Key: tooltip.ability.knight.r.title
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073823
+    m_Key: tooltip.ability.knight.r.body
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073824
+    m_Key: tooltip.ability.ranger.q.title
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073825
+    m_Key: tooltip.ability.ranger.q.body
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073826
+    m_Key: tooltip.ability.ranger.w.title
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073827
+    m_Key: tooltip.ability.ranger.w.body
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073828
+    m_Key: tooltip.ability.ranger.e.title
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073829
+    m_Key: tooltip.ability.ranger.e.body
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073830
+    m_Key: tooltip.ability.ranger.r.title
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073831
+    m_Key: tooltip.ability.ranger.r.body
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073832
+    m_Key: movementHint.joystick
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073833
+    m_Key: movementHint.tap
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073834
+    m_Key: movementHint.both
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073835
+    m_Key: realmMap.revealHint
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073836
+    m_Key: shopkeeperPanic.1
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073837
+    m_Key: shopkeeperPanic.2
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073838
+    m_Key: shopkeeperPanic.3
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073839
+    m_Key: shopkeeperPanic.4
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073840
+    m_Key: shopkeeperPanic.5
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073841
+    m_Key: shopkeeperPanic.6
+    m_Metadata:
+      m_Items: []
+  m_Metadata:
+    m_Items: []
+  m_KeyGenerator:
+    rid: 2553993319324319768
+  references:
+    version: 2
+    RefIds:
+    - rid: 2553993319324319768
+      type: {class: DistributedUIDGenerator, ns: UnityEngine.Localization.Tables, asm: Unity.Localization}
+      data:
+        m_CustomEpoch: 1779152580557

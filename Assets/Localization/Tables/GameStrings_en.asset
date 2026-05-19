@@ -1,0 +1,842 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e9620f8c34305754d8cc9a7e49e852d9, type: 3}
+  m_Name: GameStrings_en
+  m_EditorClassIdentifier: Unity.Localization::UnityEngine.Localization.Tables.StringTable
+  m_LocaleId:
+    m_Code: en
+  m_SharedData: {fileID: 11400000, guid: a280628737193b24f9e44f409150a145, type: 2}
+  m_Metadata:
+    m_Items: []
+  m_TableData:
+  - m_Id: 1013964800
+    m_Localized: Tend the Heart. Hold the dark.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1076879360
+    m_Localized: Tend the Lantern. Hold the dark.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1076879361
+    m_Localized: In an old valley, an old tree.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1076879362
+    m_Localized: In the dark beyond, a slow cold rot.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1076879363
+    m_Localized: You are the Keeper. The song is yours now.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1076879364
+    m_Localized: "Welcome home, Keeper. The Heart hums for you. Walk a while \u2014
+      the song will tell you what it needs."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1076879365
+    m_Localized: This is Elarion. Touch the dais. The crystal will remember you.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1076879366
+    m_Localized: "The Heart gives what it can spare. Hold these \u2014 you will need
+      them."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1076879367
+    m_Localized: The Folk built these long before you. Each one tends to the Heart
+      in its own way.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1076879368
+    m_Localized: What you cannot grow here, the wanderers bring. Spend wisely. Coins
+      are slow to earn.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073664
+    m_Localized: The dark has noticed us. Place your companions at the slots. They
+      will know what to do.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073665
+    m_Localized: A spirit at a slot defends. A spirit at a building tends. They cannot
+      do both at once.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073666
+    m_Localized: This is your magic, but it is the Heart's gift. Use what is given.
+      It returns when it can.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073667
+    m_Localized: For when a lane fails. The cold buys you a breath. Use the breath
+      well.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073668
+    m_Localized: Plant light where the dark gathers thickest. The towers within will
+      fight braver.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073669
+    m_Localized: This is the deep magic. Spend it only when the Heart calls for it.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073670
+    m_Localized: Welcome home, Guardian. The Heart is the Lantern itself. Protect
+      it.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073671
+    m_Localized: The Hollowed come from the dark beyond the walls. They want to extinguish
+      the Light.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073672
+    m_Localized: "Build your defenses with what you have. Walk to the Crystal Mine
+      \u2014 tap to gather."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073673
+    m_Localized: Good. Spend crystals at the Workshop to upgrade your defenses.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073674
+    m_Localized: "When you are ready, begin a wave. Use Q to cast \u2014 your magic
+      comes back when the Lantern allows."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073675
+    m_Localized: Your Wardens fight beside you. Tap one to give them a station.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073676
+    m_Localized: The Lantern remembers your kindness. Tend it well, Guardian.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073677
+    m_Localized: "The Heart's light parts for those it knows. Walk through, Keeper
+      \u2014 but the Hollow Ones will press against it. Mend the gate as you mend
+      the walls."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073678
+    m_Localized: The gate has fallen. They come through unhindered. Hold the inner
+      ring and repair the field before the next dark.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073679
+    m_Localized: The light remembers you. The gate holds again.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073680
+    m_Localized: They come from the cold places. They will move slowly, and bite
+      hard.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073681
+    m_Localized: The frost-marked are at the gates. Keep your fires lit.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073682
+    m_Localized: The ember-bound come, hungry for the green things. Hold the eastern
+      lanes.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073683
+    m_Localized: They burn as they march. Do not let them touch the Heart's roots.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073684
+    m_Localized: "Wisps of the unmade \u2014 quick, half-here. Aim true."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073685
+    m_Localized: The half-souls drift in. They feel the Heart's pull. Turn them back.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073686
+    m_Localized: A many-tongued tide. Read the lanes before you place.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073687
+    m_Localized: They come from every dark. Trust your Wardens.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073688
+    m_Localized: Alduin the Mournful walks at the head of this tide. He was a healer,
+      once. Greet him with steel.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073689
+    m_Localized: He returns when the Withering finds purchase. Send him back.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073690
+    m_Localized: The song shifts. The dark is at the gates.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073691
+    m_Localized: A lane wavers. The Heart felt it before you did.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073692
+    m_Localized: The walls are thinning. The Heart calls for you.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073693
+    m_Localized: "The song breaks. Defend, Keeper \u2014 defend now."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073694
+    m_Localized: The Heart settles. The folk breathe again.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073695
+    m_Localized: He stands within the gate. Time slows. The light dims.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073696
+    m_Localized: The song rises. The valley holds.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073697
+    m_Localized: The light shifts. The dark is at the gates.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073698
+    m_Localized: The Lantern stirs. The watch begins.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073699
+    m_Localized: A lane wavers. The Lantern felt it before you did.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073700
+    m_Localized: Something pushes harder than the rest. Look to it.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073701
+    m_Localized: The walls are thinning. Avalon calls for you.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073702
+    m_Localized: Two lanes at once. Keep your hands moving.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073703
+    m_Localized: "The light breaks. Defend, Guardian \u2014 defend now."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073704
+    m_Localized: The Lantern shudders. Hold the line at all costs.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073705
+    m_Localized: He stands within the gate. Time slows. The light dims.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073706
+    m_Localized: Alduin the Mournful walks the lane. Greet him with steel.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073707
+    m_Localized: The light returns. The village breathes again.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073708
+    m_Localized: The song rises. Avalon holds.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073709
+    m_Localized: The crystal flickers. The Heart has taken its first blow.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073710
+    m_Localized: Leaves fall in the wrong season. The song has gone thin.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073711
+    m_Localized: The bark is cracking. Hold, Keeper. Hold.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073712
+    m_Localized: The song is almost gone. Spend everything.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073713
+    m_Localized: "\u2026"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073714
+    m_Localized: The flame flickers. The Lantern has taken its first blow.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073715
+    m_Localized: Leaves fall in the wrong season. The warmth has gone thin.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073716
+    m_Localized: The bark is splitting. Hold, Guardian. Hold.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073717
+    m_Localized: The light is almost out. Spend everything.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073718
+    m_Localized: They fall back. The Heart steadies. A breath, then the next.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073719
+    m_Localized: The dark withdraws. Tend your companions. The song is not yet done.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073720
+    m_Localized: The lanes hold. The folk light a candle for you.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073721
+    m_Localized: Alduin breaks apart at the Heart's threshold. The Withering crawls
+      home.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073722
+    m_Localized: The valley sings. The folk weep. You are still the Keeper. The work
+      begins again tomorrow.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073723
+    m_Localized: None before you held so long. The old Keepers would have nodded.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073724
+    m_Localized: "The dark withdraws \u2014 for now."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073725
+    m_Localized: The Lantern holds. The watch breathes.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073726
+    m_Localized: The Folk light a candle for you.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073727
+    m_Localized: The lanes are quiet again. Tend your Wardens.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073728
+    m_Localized: A breath. A moment. The next tide will come.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073729
+    m_Localized: The wind cools. Avalon remembers your name.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073730
+    m_Localized: The song stops. The folk look up. The wind feels cold for the first
+      time.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073731
+    m_Localized: "The Heart breaks. But the bond does not. Begin again, Keeper \u2014
+      there is no other answer."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073732
+    m_Localized: Elarion will return where it is needed. You will too.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073733
+    m_Localized: The light stops. The folk look up. The wind feels cold for the first
+      time.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073734
+    m_Localized: The Lantern dims. But the bond does not. Begin again, Guardian.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073735
+    m_Localized: (a soft musical hum)
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073736
+    m_Localized: (a warm yip, like a small bell)
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073737
+    m_Localized: (a low, considered breath)
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073738
+    m_Localized: (a long, surprised note)
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073739
+    m_Localized: The Sprite watches you as you work. You do not know what it sees.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073740
+    m_Localized: It hums a single note, then forgets it.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073741
+    m_Localized: It glows brighter when you smile. You did not know that yet.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073742
+    m_Localized: The Pup is dreaming of fire again. Its tail twitches.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073743
+    m_Localized: It curled up on the warm stones at sunset. It has not moved since.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073744
+    m_Localized: It bared its teeth at a draft. The draft retreated.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073745
+    m_Localized: The Wolf came back from the orchard with frost on its muzzle. You
+      did not ask.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073746
+    m_Localized: It pads silently. When the Hollowed come, it bares its teeth and
+      does not look away.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073747
+    m_Localized: Its breath does not cloud. You wonder if it is breathing at all.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073748
+    m_Localized: The Pup is dreaming of fire again. Its tail twitches.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073749
+    m_Localized: The Mine is full. The Folk left a candle by the door this morning.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073750
+    m_Localized: There is a song in the wood, faint and old. The Heart is humming.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073751
+    m_Localized: The Sprite watches me as I work. I do not know what it sees.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073752
+    m_Localized: The Folk leave bread in the workshop when they do not see me. I
+      find it. I do not thank them yet.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073753
+    m_Localized: The Wolf came back from the orchard with a scrap of frost on its
+      muzzle. I asked. It did not say.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073754
+    m_Localized: The Tower's lamp has been lit for ten thousand mornings. It is my
+      turn to keep it.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073755
+    m_Localized: I think the Heart sang me to sleep last night. I cannot tell anymore
+      where its voice ends and mine begins.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073756
+    m_Localized: The Sprite glows brighter. Something it could not do yesterday,
+      it can do today.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073757
+    m_Localized: A new shape in the song. The Heart taught it while you slept.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073758
+    m_Localized: Alduin falls. The folk will sing about this evening for a hundred
+      years.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073759
+    m_Localized: The wanderer bows. The folk will know your name in three valleys.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073760
+    m_Localized: The Workshop bell is louder now. The Folk are pleased.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073761
+    m_Localized: Seven mornings tending the song. The old Keepers would have called
+      you 'one of ours' by now.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073762
+    m_Localized: Avalon kept your hearth warm. Welcome back, Guardian.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073763
+    m_Localized: Aether. The Heart's own light, shared and reshared. Mends what the
+      dark has frayed.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073764
+    m_Localized: Flame. The hearth's old defiance. Burns what would creep into the
+      warm places.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073765
+    m_Localized: Ice. The patient cold that holds the dark still until the song catches
+      up.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073766
+    m_Localized: Crystals. The Heart's slow gift. Mined where its overflow seeps
+      up through the stone.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073767
+    m_Localized: Food. What the Folk gather while you keep watch. It feeds the spirits
+      as it feeds the bond.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073768
+    m_Localized: Coins. Quiet currency, brought by the wanderers from valleys still
+      standing. Spend them on what cannot be grown here.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073769
+    m_Localized: Where the Heart's gem-sap seeps into stone. Pets here tend the seam.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073770
+    m_Localized: Warm beds. Small windows. A place spirits feel theirs.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073771
+    m_Localized: Built by the first Keepers. Holds the ward-stones that answer your
+      call.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073772
+    m_Localized: Wheat that grows because the Heart wills it. Apples taste like the
+      old summers.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073773
+    m_Localized: Hammer and forge. The Folk make what the Keeper needs and ask nothing.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073774
+    m_Localized: Crystals
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073775
+    m_Localized: The Heart's slow gift. Mined where its overflow seeps up through
+      the stone.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073776
+    m_Localized: Food
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073777
+    m_Localized: What the Folk gather while you keep watch. It feeds the spirits
+      as it feeds the bond.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073778
+    m_Localized: Coins
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073779
+    m_Localized: Quiet currency, brought by the wanderers from valleys still standing.
+      Spend it on what cannot be grown here.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073780
+    m_Localized: Voidshards
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073781
+    m_Localized: Splinters of the Withering, left where a great Hollow One fell.
+      The ward-stones drink them and grow strong.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073782
+    m_Localized: Stone
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073783
+    m_Localized: Drawn from the valley's old bones. The walls remember the shape
+      of it.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073784
+    m_Localized: Iron
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073785
+    m_Localized: Cold metal from the deep seams. The Folk forge it into walls the
+      dark cannot easily pass.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073786
+    m_Localized: Wood
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073787
+    m_Localized: Fallen timber from the green places the Heart still keeps. It braces
+      the highest walls.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073788
+    m_Localized: The Walls
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073789
+    m_Localized: Raise the perimeter the Folk built around the Heart. Stone, iron
+      and wood mend it higher.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073790
+    m_Localized: The Towers
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073791
+    m_Localized: Stone spires raised by the first Keepers. Their ward-stones answer
+      your call against the dark.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073792
+    m_Localized: Build
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073793
+    m_Localized: Touch a marked ground to raise a spire, or the wall to mend it higher.
+      The Folk do the rest.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073794
+    m_Localized: The Keeper's Ledger
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073795
+    m_Localized: Hear the old story again, keep a copy of your watch, or begin a
+      new one.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073796
+    m_Localized: The Old Lessons
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073797
+    m_Localized: "How to keep the watch \u2014 what the previous Keepers would have
+      told you."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073798
+    m_Localized: The Other Valleys
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073799
+    m_Localized: Join your watch to other Keepers, tend the roster, and trade word
+      across the realm.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073800
+    m_Localized: The Mailbox
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073801
+    m_Localized: Notes carried in by the wanderers. Send your own word with your
+      invite mark.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073802
+    m_Localized: Your Hall
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073803
+    m_Localized: "All you have gathered \u2014 every spirit bonded, every place raised."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073804
+    m_Localized: The Dark Stirs
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073805
+    m_Localized: A tide gathers beyond the walls. Gather what you can and ready your
+      defenses.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073806
+    m_Localized: Call the Wave
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073807
+    m_Localized: Do not wait for the dark. Meet it now, on your own watch.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073808
+    m_Localized: Arcane Bolt
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073809
+    m_Localized: "Your magic, but it is the Heart's gift. Use what is given \u2014
+      it returns when it can."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073810
+    m_Localized: Frost Nova
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073811
+    m_Localized: For when a lane fails. The cold buys you a breath. Use the breath
+      well.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073812
+    m_Localized: Healing Beacon
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073813
+    m_Localized: Plant light where the dark gathers thickest. The Heart and all who
+      stand near mend in it.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073814
+    m_Localized: Meteor Strike
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073815
+    m_Localized: This is the deep magic. Spend it only when the Heart calls for it.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073816
+    m_Localized: Sword Strike
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073817
+    m_Localized: Plain steel, close and sure. It asks nothing of the Heart and is
+      always ready.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073818
+    m_Localized: Shield Bash
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073819
+    m_Localized: Set your shield against the tide. The Hollow Ones falter, and you
+      keep the line.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073820
+    m_Localized: Banner of Valor
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073821
+    m_Localized: Raise the old colors. A whole rank of the dark is cut down where
+      it stands.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073822
+    m_Localized: Vow of Iron
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073823
+    m_Localized: A promise kept to the Heart. Its light floods back into the wound.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073824
+    m_Localized: Quick Shot
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073825
+    m_Localized: A clean arrow loosed long. It costs nothing and the string is never
+      still for long.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073826
+    m_Localized: Snare Arrow
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073827
+    m_Localized: Pin a Hollow One to the ground. It will not reach the Heart's roots
+      tonight.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073828
+    m_Localized: Hawk's Eye
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073829
+    m_Localized: Aim true and far. One shot carries the weight of the dark you turn
+      back.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073830
+    m_Localized: Volley
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073831
+    m_Localized: Loose every arrow to the sky at once. They come down like a hard
+      rain on the tide.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073832
+    m_Localized: Drag the joystick in the bottom-left corner to walk around the village.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073833
+    m_Localized: Tap anywhere on the ground and your hero will walk there.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073834
+    m_Localized: "Drag the joystick to move \u2014 or tap the ground to walk somewhere."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073835
+    m_Localized: "The realm beyond Avalon stirs. Visit the Wayshrine \u2014 the pale
+      standing stone \u2014 to set out across the Realm Map."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073836
+    m_Localized: "My lord \u2014 ENEMIES! The shop can wait!"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073837
+    m_Localized: Goods later, glory now! To arms!
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073838
+    m_Localized: You want to shop? NOW?! Help us, please!
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073839
+    m_Localized: "Coin won't save us from this lot \u2014 your magic will!"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073840
+    m_Localized: My lord, the till is barricaded! Get to the Heart!
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1081073841
+    m_Localized: Discounts after the wave, I swear it! Fight!
+    m_Metadata:
+      m_Items: []
+  references:
+    version: 2
+    RefIds: []

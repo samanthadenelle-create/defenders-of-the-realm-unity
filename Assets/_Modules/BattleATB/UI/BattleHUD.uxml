@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  BattleHUD.uxml — UI Toolkit battle HUD for the ATB "Last Stand" scene.
+  ------------------------------------------------------------------------
+  Port of src/modules/battle-atb/ — the runtime UI surface BattleController
+  binds. Week-2 placeholder scope (v2 port-spec Part 5): ATB bars for the
+  combatants, an "Attack" action button, and a scrolling battle log.
+
+  BattleController.cs queries these elements by name (the "name" attribute
+  is the binding contract — do not rename without updating the controller):
+    hero-card / hero-name / hero-hp-fill / hero-atb-fill
+    enemy-card / enemy-name / enemy-hp-fill / enemy-atb-fill
+    attack-button / status-banner
+    battle-log (ScrollView) / battle-log-content (its content container)
+-->
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <Style src="BattleHUD.uss" />
+
+    <ui:VisualElement name="battle-hud-root" class="battle-hud-root">
+
+        <!-- ── Header ──────────────────────────────────────────────── -->
+        <ui:VisualElement name="battle-header" class="battle-header">
+            <ui:Label name="battle-title" text="The Last Stand" class="battle-title" />
+            <ui:Label name="status-banner" text="" class="status-banner" />
+        </ui:VisualElement>
+
+        <!-- ── Combatant ATB bars ──────────────────────────────────── -->
+        <ui:VisualElement name="combatant-strip" class="combatant-strip">
+
+            <!-- Hero card -->
+            <ui:VisualElement name="hero-card" class="combatant-card combatant-card--hero">
+                <ui:Label name="hero-name" text="Blaise" class="combatant-name" />
+                <ui:VisualElement class="bar-track bar-track--hp">
+                    <ui:VisualElement name="hero-hp-fill" class="bar-fill bar-fill--hp" />
+                </ui:VisualElement>
+                <ui:Label name="hero-hp-label" text="HP" class="bar-label" />
+                <ui:VisualElement class="bar-track bar-track--atb">
+                    <ui:VisualElement name="hero-atb-fill" class="bar-fill bar-fill--atb" />
+                </ui:VisualElement>
+                <ui:Label name="hero-atb-label" text="ATB" class="bar-label" />
+            </ui:VisualElement>
+
+            <ui:Label name="versus-label" text="vs" class="versus-label" />
+
+            <!-- Enemy card -->
+            <ui:VisualElement name="enemy-card" class="combatant-card combatant-card--enemy">
+                <ui:Label name="enemy-name" text="Hollow Walker" class="combatant-name" />
+                <ui:VisualElement class="bar-track bar-track--hp">
+                    <ui:VisualElement name="enemy-hp-fill" class="bar-fill bar-fill--hp" />
+                </ui:VisualElement>
+                <ui:Label name="enemy-hp-label" text="HP" class="bar-label" />
+                <ui:VisualElement class="bar-track bar-track--atb">
+                    <ui:VisualElement name="enemy-atb-fill" class="bar-fill bar-fill--atb" />
+                </ui:VisualElement>
+                <ui:Label name="enemy-atb-label" text="ATB" class="bar-label" />
+            </ui:VisualElement>
+
+        </ui:VisualElement>
+
+        <!-- ── Scrolling battle log ────────────────────────────────── -->
+        <ui:VisualElement name="battle-log-panel" class="battle-log-panel">
+            <ui:Label text="Battle Log" class="panel-heading" />
+            <ui:ScrollView name="battle-log" class="battle-log"
+                           mode="Vertical" vertical-scroller-visibility="Auto">
+                <ui:VisualElement name="battle-log-content" class="battle-log-content" />
+            </ui:ScrollView>
+        </ui:VisualElement>
+
+        <!-- ── Command deck ────────────────────────────────────────── -->
+        <ui:VisualElement name="command-deck" class="command-deck">
+            <ui:Button name="attack-button" text="Attack" class="action-button action-button--attack" />
+        </ui:VisualElement>
+
+    </ui:VisualElement>
+</ui:UXML>

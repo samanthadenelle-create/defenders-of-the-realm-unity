@@ -81,11 +81,12 @@ namespace DeNelle.Core.State
         {
             if (_instance != null && _instance != this)
             {
-                Destroy(gameObject);
+                if (Application.isPlaying) Destroy(gameObject);
                 return;
             }
             _instance = this;
-            DontDestroyOnLoad(gameObject);
+            if (Application.isPlaying)
+                DontDestroyOnLoad(gameObject);
 
             if (_state == null)
                 _state = ScriptableObject.CreateInstance<GameState>();

@@ -1,0 +1,224 @@
+/*
+ * PackStore.uss — styling for the five-pack store.
+ * ----------------------------------------------------------------------
+ * Port of the StorePage.tsx visual language: a dark Heart-Forest backdrop,
+ * amber for the call-to-action ("a quiet thanks back to the Heart"), violet
+ * for the Heart accent, muted greys for body copy. Values are inline (the
+ * project Theme is C#-driven, not USS variables) — kept in sync by hand,
+ * matching the BattleHUD.uss / TitleScreen.uss convention.
+ *
+ * USS class names are the styling contract PackStore.cs builds cards with:
+ *   pack-card / pack-card__name / pack-card__tagline / pack-card__usd
+ *   pack-card__prices / pack-card__price-chip / pack-card__price-chip--selected
+ *   pack-card__contents / pack-card__buy / pack-card__owned
+ *   pack-card__founder-tag
+ */
+
+/* ── Root ───────────────────────────────────────────────────────────── */
+.pack-store-root {
+    flex-grow: 1;
+    flex-direction: column;
+    padding: 24px;
+    background-color: rgba(15, 12, 24, 0.96);
+}
+
+/* ── Header ─────────────────────────────────────────────────────────── */
+.store-header {
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.store-title {
+    font-size: 34px;
+    -unity-font-style: bold;
+    color: rgb(252, 224, 156);
+    -unity-text-align: middle-center;
+}
+
+.store-subtitle {
+    margin-top: 4px;
+    font-size: 14px;
+    color: rgb(160, 152, 178);
+    -unity-text-align: middle-center;
+}
+
+.store-status {
+    margin-top: 8px;
+    min-height: 20px;
+    font-size: 14px;
+    color: rgb(196, 181, 253);
+    -unity-text-align: middle-center;
+    -unity-font-style: italic;
+}
+
+/* ── Pack list ──────────────────────────────────────────────────────── */
+.pack-scroll {
+    flex-grow: 1;
+}
+
+.pack-list {
+    flex-direction: column;
+    align-items: stretch;
+}
+
+/* ── Pack card ──────────────────────────────────────────────────────── */
+.pack-card {
+    flex-direction: column;
+    margin-bottom: 14px;
+    padding: 16px;
+    border-radius: 14px;
+    background-color: rgba(28, 24, 42, 0.92);
+    border-width: 1px;
+    border-color: rgba(124, 58, 237, 0.34);
+}
+
+.pack-card__founder-tag {
+    align-self: flex-start;
+    margin-bottom: 6px;
+    padding-left: 8px;
+    padding-right: 8px;
+    padding-top: 2px;
+    padding-bottom: 2px;
+    border-radius: 8px;
+    font-size: 10px;
+    -unity-font-style: bold;
+    color: rgb(252, 224, 156);
+    background-color: rgba(245, 158, 11, 0.16);
+    border-width: 1px;
+    border-color: rgba(245, 158, 11, 0.5);
+}
+
+.pack-card__name {
+    font-size: 20px;
+    -unity-font-style: bold;
+    color: rgb(237, 233, 250);
+}
+
+.pack-card__tagline {
+    margin-top: 2px;
+    font-size: 13px;
+    -unity-font-style: italic;
+    color: rgb(176, 168, 196);
+    white-space: normal;
+}
+
+.pack-card__usd {
+    margin-top: 6px;
+    font-size: 12px;
+    color: rgb(140, 132, 158);
+}
+
+/* ── Currency rail chips — SOL / USDC / SKR ─────────────────────────── */
+.pack-card__prices {
+    flex-direction: row;
+    flex-wrap: wrap;
+    margin-top: 8px;
+}
+
+.pack-card__price-chip {
+    margin-right: 8px;
+    margin-top: 4px;
+    padding-left: 12px;
+    padding-right: 12px;
+    padding-top: 5px;
+    padding-bottom: 5px;
+    border-radius: 999px;
+    font-size: 12px;
+    -unity-font-style: bold;
+    color: rgb(206, 200, 222);
+    background-color: rgba(255, 255, 255, 0.06);
+    border-width: 1px;
+    border-color: rgba(255, 255, 255, 0.14);
+}
+
+.pack-card__price-chip:hover {
+    border-color: rgba(196, 181, 253, 0.7);
+}
+
+.pack-card__price-chip--selected {
+    color: rgb(34, 24, 12);
+    background-color: rgb(252, 224, 156);
+    border-color: rgb(252, 224, 156);
+}
+
+/* ── Contents summary ───────────────────────────────────────────────── */
+.pack-card__contents {
+    margin-top: 10px;
+    font-size: 12px;
+    color: rgb(160, 152, 178);
+    white-space: normal;
+}
+
+/* ── Buy / Owned ────────────────────────────────────────────────────── */
+.pack-card__buy {
+    align-self: flex-start;
+    margin-top: 12px;
+    padding-left: 18px;
+    padding-right: 18px;
+    padding-top: 8px;
+    padding-bottom: 8px;
+    border-radius: 999px;
+    font-size: 13px;
+    -unity-font-style: bold;
+    color: rgb(34, 24, 12);
+    background-color: rgb(245, 200, 122);
+    border-width: 0;
+}
+
+.pack-card__buy:hover {
+    background-color: rgb(252, 224, 156);
+}
+
+.pack-card__buy:disabled {
+    opacity: 0.45;
+}
+
+.pack-card__owned {
+    align-self: flex-start;
+    margin-top: 12px;
+    padding-left: 18px;
+    padding-right: 18px;
+    padding-top: 8px;
+    padding-bottom: 8px;
+    border-radius: 999px;
+    font-size: 13px;
+    -unity-font-style: bold;
+    color: rgb(110, 231, 183);
+    background-color: rgba(16, 185, 129, 0.16);
+    border-width: 1px;
+    border-color: rgba(16, 185, 129, 0.5);
+}
+
+/* ── Footer ─────────────────────────────────────────────────────────── */
+.store-footer {
+    flex-direction: column;
+    align-items: center;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top-width: 1px;
+    border-top-color: rgba(255, 255, 255, 0.08);
+}
+
+.store-treasury {
+    font-size: 11px;
+    color: rgb(120, 113, 140);
+    -unity-text-align: middle-center;
+    white-space: normal;
+}
+
+.store-disclaimer {
+    margin-top: 4px;
+    font-size: 11px;
+    -unity-font-style: italic;
+    color: rgb(120, 113, 140);
+    -unity-text-align: middle-center;
+}
+
+.store-covenant {
+    margin-top: 8px;
+    font-size: 12px;
+    -unity-font-style: italic;
+    color: rgb(160, 152, 178);
+    -unity-text-align: middle-center;
+}

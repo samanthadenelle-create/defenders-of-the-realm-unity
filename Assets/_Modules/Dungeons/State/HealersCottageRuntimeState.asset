@@ -1,0 +1,43 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cef87b35d5d80e345b494d8fa6553584, type: 3}
+  m_Name: HealersCottageRuntimeState
+  m_EditorClassIdentifier: DeNelle.Dungeons::DeNelle.Dungeons.DungeonRuntimeState
+  _dungeonId: 
+  _currentRoomId: 
+  _heroPosition: {x: 0, y: 0, z: 0}
+  _dungeonRunSeed: 0
+  _randomEncounterCount: 0
+  _secondsSinceLastEncounter: 0
+  _checkpointsReached: []
+  _loreStonesRead: []
+  _scriptedEncountersFired: []
+  _chestsOpened: []
+  _secretRoomsFound: []
+  _inCombat: 0
+  _bossDefeated: 0
+  _runActive: 0
+  RunStateChanged:
+    m_PersistentCalls:
+      m_Calls: []
+  RoomChanged:
+    m_PersistentCalls:
+      m_Calls: []
+  CheckpointReached:
+    m_PersistentCalls:
+      m_Calls: []
+  LoreStoneRead:
+    m_PersistentCalls:
+      m_Calls: []
+  QuestlineBeatComplete:
+    m_PersistentCalls:
+      m_Calls: []

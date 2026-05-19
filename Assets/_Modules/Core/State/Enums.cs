@@ -14,6 +14,7 @@
 // =============================================================================
 
 using System.Runtime.Serialization;
+using Newtonsoft.Json;
 
 namespace DeNelle.Core.State
 {
@@ -63,6 +64,7 @@ namespace DeNelle.Core.State
     /// serialize as raw numbers 1..7; <see cref="Done"/> serializes as the
     /// literal string "done" (see <c>TutorialStepConverter</c>).
     /// </summary>
+    [JsonConverter(typeof(TutorialStepConverter))]
     public enum TutorialStep
     {
         Step1 = 1,

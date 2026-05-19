@@ -1,0 +1,111 @@
+{
+  "_comment": "Canonical pack-store catalogue for Defenders of the Realm. The five purchasable packs, extracted VERBATIM from docs/monetization-v2-spec.md §4 (pricing ladder), §5.1 (cosmetic layer), §5.2 (economy layer), §5.3 (convenience layer) and §8.4 (PackDef schema). Pack names are canon — copy verbatim, never paraphrase. Mirrors the React v1 PackDef interface (src/content/packs.ts) so both engines read the same source of truth. Devnet-only economy in the v2 Unity foundation (v2-unity-port-spec.md Part 10).",
+  "_sources": {
+    "monetizationSpec": "defenders-unity/docs/monetization-v2-spec.md (§4 pricing, §5 contents, §8.4 PackDef schema)",
+    "portSpec": "defenders-unity/docs/v2-unity-port-spec.md (Part 3 store row, Part 4 packs.json schema)",
+    "reactCatalog": "defenders-of-the-realm/src/content/packs.ts (PackDef interface — §8.4)"
+  },
+  "_schemaNotes": {
+    "packDef": "Each entry mirrors React's PackDef: sku, tier, name, tagline, pricing { usd, usdc, sol, skr }, contents { cosmetics, economy, convenience }, founderOnly?, packExclusiveCosmetic. The Unity loader deserializes each entry straight into a PackDef record.",
+    "pricing": "usd is the Stripe/USD reference price; usdc/sol/skr are the per-currency wallet-rail amounts set ONCE at v1 launch and held until v1.1 review (the SKR-fixed pricing strategy, §4). The Unity wallet module reads sol/usdc/skr only — Stripe is web-only and out of scope for the Unity port.",
+    "convenience": "Convenience items are TIME-SAVING only, never combat-power (the bent covenant, §5.3). instant-build / instant-repair / harvest-auto-collect / xp-weekend. No permanent passives.",
+    "economy": "In-game currency top-ups (§5.2). The Unity port's GameState resource wallet tracks crystals/food/coins; glimmer is a cosmetic-shop currency not yet modelled in the v2 foundation GameState and is carried here for catalogue completeness.",
+    "founderOnly": "Founder's Vow (tier 5) is launch-window-only — gated by Date.now() < FOUNDER_WINDOW_END in React; the Unity port reads founderOnly and the owner gates the launch window."
+  },
+  "version": 1,
+  "currencyDisclaimer": "Token price moves with the market.",
+  "packs": [
+    {
+      "sku": "hearth-spark",
+      "tier": 1,
+      "name": "Hearth Spark",
+      "tagline": "A tiny welcome — the Heart kindles a spark for a new tender.",
+      "theme": "Tiny welcome — beginner cosmetic + small economy bump.",
+      "pricing": { "usd": 1.99, "usdc": 1.99, "sol": 0.018, "skr": 25 },
+      "contents": {
+        "cosmetics": ["cosmetic.hearth-spark.exclusive"],
+        "economy": { "glimmer": 25, "crystals": 200, "food": 50, "coins": 100 },
+        "convenience": [
+          { "kind": "instant-build", "count": 1, "description": "Skip the build animation for one building." }
+        ]
+      },
+      "packExclusiveCosmetic": "cosmetic.hearth-spark.exclusive"
+    },
+    {
+      "sku": "lanternlight",
+      "tier": 2,
+      "name": "Lanternlight",
+      "tagline": "Light carried forward — the value tier most tenders choose.",
+      "theme": "The \"value\" tier — what most players who buy something will buy.",
+      "pricing": { "usd": 4.99, "usdc": 4.99, "sol": 0.045, "skr": 60 },
+      "contents": {
+        "cosmetics": ["cosmetic.lanternlight.hero-outfit", "cosmetic.lanternlight.exclusive"],
+        "economy": { "glimmer": 75, "crystals": 700, "food": 200, "coins": 400 },
+        "convenience": [
+          { "kind": "instant-build", "count": 3, "description": "Skip the build animation for three buildings." },
+          { "kind": "harvest-auto-collect", "count": 1, "description": "Resources auto-tick into inventory for 1 hour." }
+        ]
+      },
+      "packExclusiveCosmetic": "cosmetic.lanternlight.exclusive"
+    },
+    {
+      "sku": "folks-thanks",
+      "tier": 3,
+      "name": "Folk's Thanks",
+      "tagline": "The Folk send a small thanks for tending the Heart.",
+      "theme": "The supporter-edition slot — themed cosmetic set + named seasonal recognition.",
+      "pricing": { "usd": 9.99, "usdc": 9.99, "sol": 0.09, "skr": 120 },
+      "contents": {
+        "cosmetics": ["cosmetic.folks-thanks.hero-outfit", "cosmetic.folks-thanks.pet-skin", "cosmetic.folks-thanks.exclusive"],
+        "economy": { "glimmer": 175, "crystals": 1800, "food": 500, "coins": 1000 },
+        "convenience": [
+          { "kind": "instant-build", "count": 5, "description": "Skip the build animation for five buildings." },
+          { "kind": "instant-repair", "count": 5, "description": "Skip the repair queue for five buildings." },
+          { "kind": "harvest-auto-collect", "count": 1, "description": "Resources auto-tick into inventory for 24 hours." }
+        ]
+      },
+      "packExclusiveCosmetic": "cosmetic.folks-thanks.exclusive"
+    },
+    {
+      "sku": "patron-of-elarion",
+      "tier": 4,
+      "name": "Patron of Elarion",
+      "tagline": "A patron's gift to Elarion — a meaningful headstart for the Heart.",
+      "theme": "Heavyweight cosmetic suite + meaningful economy headstart.",
+      "pricing": { "usd": 19.99, "usdc": 19.99, "sol": 0.18, "skr": 240 },
+      "contents": {
+        "cosmetics": ["cosmetic.patron-of-elarion.hero-outfit-a", "cosmetic.patron-of-elarion.hero-outfit-b", "cosmetic.patron-of-elarion.pet-skin", "cosmetic.patron-of-elarion.exclusive"],
+        "economy": { "glimmer": 400, "crystals": 5000, "food": 1500, "coins": 3000 },
+        "convenience": [
+          { "kind": "instant-build", "count": 10, "description": "Skip the build animation for ten buildings." },
+          { "kind": "instant-repair", "count": 10, "description": "Skip the repair queue for ten buildings." },
+          { "kind": "harvest-auto-collect", "count": 2, "description": "Resources auto-tick into inventory for 24 hours, twice." },
+          { "kind": "xp-weekend", "count": 1, "description": "A 24-hour 2x-XP buff." }
+        ]
+      },
+      "packExclusiveCosmetic": "cosmetic.patron-of-elarion.exclusive"
+    },
+    {
+      "sku": "founders-vow",
+      "tier": 5,
+      "name": "Founder's Vow",
+      "tagline": "A thank-you to early believers — a vow kept, not a flex.",
+      "theme": "One-time only, available v1 launch only — special founder cosmetic + permanent in-village banner.",
+      "founderOnly": true,
+      "pricing": { "usd": 49.99, "usdc": 49.99, "sol": 0.45, "skr": 600 },
+      "contents": {
+        "cosmetics": ["cosmetic.founders-vow.hero-outfit", "cosmetic.founders-vow.pet-skin", "cosmetic.founders-vow.building-palette", "cosmetic.founders-vow.exclusive", "cosmetic.founders-vow.permanent-banner"],
+        "economy": { "glimmer": 1000, "crystals": 15000, "food": 5000, "coins": 10000 },
+        "convenience": [
+          { "kind": "instant-build", "count": 25, "description": "Skip the build animation for twenty-five buildings." },
+          { "kind": "instant-repair", "count": 25, "description": "Skip the repair queue for twenty-five buildings." },
+          { "kind": "harvest-auto-collect", "count": 5, "description": "Resources auto-tick into inventory for 24 hours, five times." },
+          { "kind": "xp-weekend", "count": 3, "description": "Three 24-hour 2x-XP weekend buffs." }
+        ]
+      },
+      "packExclusiveCosmetic": "cosmetic.founders-vow.exclusive"
+    }
+  ]
+}
+</content>
+</invoke>

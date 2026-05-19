@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  PackStore.uxml — UI Toolkit document for the five-pack store (Week 7).
+  ------------------------------------------------------------------------
+  Port of src/modules/store/StorePage.tsx. PackStore.cs builds one card per
+  pack at runtime into the "pack-list" container; this UXML supplies the
+  page chrome — header, the dynamic pack-list, a status banner, the
+  Rewards-Distributor transparency line, the price-disclaimer, and the
+  cozy-covenant reassurance line (verbatim from StorePage.tsx).
+
+  PackStore.cs queries these elements by name (the "name" attribute is the
+  binding contract — do not rename without updating the controller):
+    pack-list (VisualElement — cards are appended here)
+    store-status (Label — purchase-flow status banner)
+    store-treasury (Label — public Rewards Distributor address)
+    store-disclaimer (Label — "Token price moves with the market.")
+-->
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <Style src="PackStore.uss" />
+
+    <ui:VisualElement name="pack-store-root" class="pack-store-root">
+
+        <!-- ── Header ──────────────────────────────────────────────── -->
+        <ui:VisualElement name="store-header" class="store-header">
+            <ui:Label name="store-title" text="The Realm Store" class="store-title" />
+            <ui:Label name="store-subtitle"
+                      text="Cosmetics, conveniences, and a quiet thanks back to the Heart."
+                      class="store-subtitle" />
+            <ui:Label name="store-status" text="" class="store-status" />
+        </ui:VisualElement>
+
+        <!-- ── Pack cards (built at runtime by PackStore.cs) ───────── -->
+        <ui:ScrollView name="pack-scroll" class="pack-scroll"
+                       mode="Vertical" vertical-scroller-visibility="Auto">
+            <ui:VisualElement name="pack-list" class="pack-list" />
+        </ui:ScrollView>
+
+        <!-- ── Footer — transparency + covenant ────────────────────── -->
+        <ui:VisualElement name="store-footer" class="store-footer">
+            <ui:Label name="store-treasury" text="" class="store-treasury" />
+            <ui:Label name="store-disclaimer" text="Token price moves with the market."
+                      class="store-disclaimer" />
+            <ui:Label name="store-covenant"
+                      text="You are never required to spend anything. Ever."
+                      class="store-covenant" />
+        </ui:VisualElement>
+
+    </ui:VisualElement>
+</ui:UXML>

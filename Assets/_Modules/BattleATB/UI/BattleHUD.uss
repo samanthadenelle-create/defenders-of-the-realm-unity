@@ -1,0 +1,210 @@
+/*
+ * BattleHUD.uss — styling for the ATB battle HUD.
+ * ----------------------------------------------------------------------
+ * Palette mirrors the React project's "Last Stand" screen: a dark Heart-
+ * Forest backdrop, violet (the Heart) for party / ATB accents, amber for
+ * the call-to-action, crimson for enemy / damage. Values are inline (the
+ * project Theme is C#-driven, not USS variables) — kept in sync by hand.
+ */
+
+/* ── Root ───────────────────────────────────────────────────────────── */
+.battle-hud-root {
+    flex-grow: 1;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 24px;
+    background-color: rgba(15, 12, 24, 0.92);
+}
+
+/* ── Header ─────────────────────────────────────────────────────────── */
+.battle-header {
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.battle-title {
+    font-size: 30px;
+    -unity-font-style: bold;
+    color: rgb(237, 233, 250);
+    -unity-text-align: middle-center;
+}
+
+.status-banner {
+    margin-top: 6px;
+    font-size: 16px;
+    color: rgb(196, 181, 253);
+    -unity-text-align: middle-center;
+    -unity-font-style: italic;
+    min-height: 20px;
+}
+
+/* ── Combatant strip ────────────────────────────────────────────────── */
+.combatant-strip {
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+}
+
+.combatant-card {
+    width: 38%;
+    min-width: 240px;
+    flex-direction: column;
+    padding: 14px;
+    border-radius: 10px;
+    border-width: 2px;
+    background-color: rgba(30, 25, 45, 0.95);
+}
+
+.combatant-card--hero {
+    border-color: rgb(124, 58, 237);
+}
+
+.combatant-card--enemy {
+    border-color: rgb(190, 49, 68);
+}
+
+.combatant-card--active {
+    border-color: rgb(245, 196, 90);
+    background-color: rgba(46, 38, 60, 0.98);
+}
+
+.combatant-name {
+    font-size: 19px;
+    -unity-font-style: bold;
+    color: rgb(237, 233, 250);
+    margin-bottom: 8px;
+}
+
+.versus-label {
+    width: 48px;
+    font-size: 18px;
+    color: rgb(150, 142, 170);
+    -unity-text-align: middle-center;
+    -unity-font-style: italic;
+}
+
+/* ── Bars ───────────────────────────────────────────────────────────── */
+.bar-track {
+    height: 16px;
+    border-radius: 8px;
+    background-color: rgba(10, 8, 16, 0.9);
+    overflow: hidden;
+    margin-top: 2px;
+}
+
+.bar-track--atb {
+    height: 12px;
+    margin-top: 4px;
+}
+
+.bar-fill {
+    height: 100%;
+    width: 100%;
+    border-radius: 8px;
+}
+
+.bar-fill--hp {
+    background-color: rgb(76, 187, 110);
+}
+
+.bar-fill--atb {
+    background-color: rgb(124, 58, 237);
+}
+
+.bar-fill--atb-ready {
+    background-color: rgb(245, 196, 90);
+}
+
+.bar-label {
+    font-size: 11px;
+    color: rgb(168, 160, 188);
+    margin-top: 1px;
+    margin-bottom: 4px;
+}
+
+/* ── Battle log ─────────────────────────────────────────────────────── */
+.battle-log-panel {
+    flex-grow: 1;
+    flex-direction: column;
+    margin-top: 14px;
+    margin-bottom: 14px;
+}
+
+.panel-heading {
+    font-size: 14px;
+    -unity-font-style: bold;
+    color: rgb(150, 142, 170);
+    margin-bottom: 4px;
+}
+
+.battle-log {
+    flex-grow: 1;
+    min-height: 140px;
+    border-radius: 8px;
+    border-width: 1px;
+    border-color: rgba(124, 58, 237, 0.4);
+    background-color: rgba(20, 16, 30, 0.95);
+    padding: 8px;
+}
+
+.battle-log-content {
+    flex-direction: column;
+}
+
+.log-entry {
+    font-size: 13px;
+    color: rgb(208, 202, 224);
+    margin-bottom: 3px;
+    white-space: normal;
+}
+
+.log-entry--start {
+    color: rgb(196, 181, 253);
+    -unity-font-style: italic;
+}
+
+.log-entry--victory {
+    color: rgb(245, 196, 90);
+    -unity-font-style: bold;
+}
+
+.log-entry--defeat {
+    color: rgb(220, 96, 110);
+    -unity-font-style: bold;
+}
+
+.log-entry--death {
+    color: rgb(190, 120, 130);
+}
+
+/* ── Command deck ───────────────────────────────────────────────────── */
+.command-deck {
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+    min-height: 64px;
+}
+
+.action-button {
+    min-width: 200px;
+    height: 52px;
+    font-size: 20px;
+    -unity-font-style: bold;
+    border-radius: 10px;
+    border-width: 0;
+    color: rgb(28, 22, 10);
+}
+
+.action-button--attack {
+    background-color: rgb(245, 196, 90);
+}
+
+.action-button--attack:hover {
+    background-color: rgb(255, 212, 120);
+}
+
+.action-button:disabled {
+    background-color: rgba(90, 84, 70, 0.6);
+    color: rgba(200, 196, 188, 0.5);
+}
