@@ -45,11 +45,17 @@ namespace DeNelle.Village
             var body = Instantiate(prefab, transform);
             body.name = "HeroBody";
             body.transform.localPosition = Vector3.zero;
-            body.transform.localRotation = Quaternion.identity;
+            // Tripo FBXs export with their forward along -Z (model faces the
+            // camera in the title pose). The hero root rotates to face the
+            // move direction, so without this 180° correction the wizard's
+            // BACK turns toward the press direction. Owner ask 2026-05-20:
+            // "can they turn left when going left?"
+            body.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
             NormalizeHeight(body, TargetHeightMeters);
 
             StripRigidbodies(body);
             StripColliders(body);
+            RetargetMaterialsToUrp(body);
             Debug.Log("[HeroBodySwapper] Swapped hero body to " + slug + ".fbx");
         }
 
@@ -59,6 +65,51 @@ namespace DeNelle.Village
             if (svc == null) return HeroClass.Mage;
             var opt = svc.State?.HeroClass.ToNullable();
             return opt ?? HeroClass.Mage;
+        }
+
+        /// <summary>
+        /// Tripo FBXs come in with Phong materials that URP can't render —
+        /// the mesh shows as a transparent magenta ghost. Walk the renderers,
+        /// pull each material's main texture if any, and wrap them in URP/Lit
+        /// so the body lands with its proper texture in the player build.
+        /// </summary>
+        private static void RetargetMaterialsToUrp(GameObject body)
+        {
+            Shader litShader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+            if (litShader == null) return;
+            foreach (var r in body.GetComponentsInChildren<Renderer>(true))
+            {
+                if (r == null) continue;
+                var mats = r.sharedMaterials;
+                if (mats == null) continue;
+                for (int i = 0; i < mats.Length; i++)
+                {
+                    var src = mats[i];
+                    if (src == null) continue;
+                    // Already URP-compatible? Skip.
+                    if (src.shader != null && src.shader.name != null &&
+                        src.shader.name.StartsWith("Universal Render Pipeline/", System.StringComparison.Ordinal))
+                        continue;
+                    Texture tex = null;
+                    if (src.HasProperty("_MainTex")) tex = src.GetTexture("_MainTex");
+                    if (tex == null && src.HasProperty("_BaseMap")) tex = src.GetTexture("_BaseMap");
+                    Color col = src.HasProperty("_Color") ? src.color : Color.white;
+
+                    var newMat = new Material(litShader);
+                    newMat.name = (src.name ?? "Tripo") + " (URP)";
+                    if (newMat.HasProperty("_BaseColor")) newMat.SetColor("_BaseColor", col);
+                    if (newMat.HasProperty("_Color"))     newMat.SetColor("_Color", col);
+                    if (tex != null)
+                    {
+                        if (newMat.HasProperty("_BaseMap")) newMat.SetTexture("_BaseMap", tex);
+                        if (newMat.HasProperty("_MainTex")) newMat.SetTexture("_MainTex", tex);
+                    }
+                    if (newMat.HasProperty("_Smoothness")) newMat.SetFloat("_Smoothness", 0.15f);
+                    if (newMat.HasProperty("_Metallic"))   newMat.SetFloat("_Metallic", 0f);
+                    mats[i] = newMat;
+                }
+                r.sharedMaterials = mats;
+            }
         }
 
         private static string SlugFor(HeroClass cls) => cls switch

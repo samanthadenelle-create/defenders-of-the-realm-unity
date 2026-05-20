@@ -150,6 +150,13 @@ namespace DeNelle.Onboarding
                         var tex = Resources.Load<Texture2D>($"Intro/intro-{beat.ImageId}");
                         if (tex != null)
                             _imagePanel.style.backgroundImage = new StyleBackground(tex);
+                        // Owner direction 2026-05-20: place images on the
+                        // perimeter so they don't crowd the text. Deterministic
+                        // per ImageId — same beat always lands in the same
+                        // corner so a re-skip plays the same composition.
+                        var pos = ImagePositionFor(beat.ImageId);
+                        _imagePanel.style.left = Length.Percent(pos.x);
+                        _imagePanel.style.top  = Length.Percent(pos.y);
                     }
                     var inFade = FadeLabel(0f, 1f, 0.45f, token);
                     var imageIn = beat.ImageId > 0 ? FadeImage(0f, 1f, 0.55f, token) : UniTask.CompletedTask;
@@ -191,17 +198,14 @@ namespace DeNelle.Onboarding
             _root.RegisterCallback<PointerDownEvent>(_ => _skipRequested = true);
 
             // Per-line scene icon — Resources/Intro/intro-N.jpg from the
-            // React asset pack. Owner direction 2026-05-20: small icon size
-            // above the text, NOT full-screen background. ~220×150 px centred
-            // horizontally, sits just above the line label. Scale-to-fit so
-            // the JPG isn't cropped; pickingMode ignore so it never eats taps.
+            // React asset pack. Owner direction 2026-05-20 (3rd pass): can use
+            // the full screen, just keep distance from the text band. Position
+            // is set per-beat in the cinematic loop (see ImagePositions table)
+            // so images dance corner-to-corner instead of stacking centrally.
             _imagePanel = new VisualElement();
             _imagePanel.style.position = Position.Absolute;
-            _imagePanel.style.width = 240;
-            _imagePanel.style.height = 168;
-            _imagePanel.style.left = Length.Percent(50);
-            _imagePanel.style.translate = new StyleTranslate(new Translate(-120, 0));
-            _imagePanel.style.top = Length.Percent(36);
+            _imagePanel.style.width = 260;
+            _imagePanel.style.height = 200;
             _imagePanel.style.unityBackgroundScaleMode = ScaleMode.ScaleToFit;
             _imagePanel.style.opacity = 0f;
             _imagePanel.pickingMode = PickingMode.Ignore;
@@ -293,6 +297,32 @@ namespace DeNelle.Onboarding
             new CinematicBeat("A young mage, barely an apprentice — yet the flame brightens at your step.", 5.8f, 6),
             new CinematicBeat("Welcome home, Guardian of the Lantern.", 5.4f, 4, true),
         };
+
+        /// <summary>
+        /// Perimeter placement table for the intro image panel. Owner direction
+        /// 2026-05-20: "move assets away from text, use entire screen, just
+        /// keep distance from text". Text band sits centred horizontally at
+        /// ~45% height, so the image always lands at one of the four corners
+        /// or the top/bottom centre, well outside that band. Deterministic by
+        /// ImageId so replays look the same.
+        /// </summary>
+        private static readonly Vector2[] ImagePositions =
+        {
+            new Vector2(  6f,   5f),   // 0 — top-left
+            new Vector2( 68f,   5f),   // 1 — top-right
+            new Vector2(  6f,  70f),   // 2 — bottom-left
+            new Vector2( 68f,  70f),   // 3 — bottom-right
+            new Vector2( 36f,   3f),   // 4 — top-centre
+            new Vector2( 36f,  72f),   // 5 — bottom-centre
+            new Vector2(  4f,  35f),   // 6 — mid-left
+            new Vector2( 72f,  35f),   // 7 — mid-right
+        };
+
+        private static Vector2 ImagePositionFor(int imageId)
+        {
+            int idx = Mathf.Abs(imageId) % ImagePositions.Length;
+            return ImagePositions[idx];
+        }
 
         private async UniTask WaitBeatOrSkip(float holdSeconds, CancellationToken token)
         {

@@ -148,9 +148,17 @@ namespace DeNelle.Pets
                 {
                     visual.transform.SetParent(go.transform, false);
                     visual.transform.localPosition = Vector3.zero;
-                    visual.transform.localRotation = Quaternion.identity;
+                    // Tripo FBXs export facing -Z (title-pose forward), so the
+                    // body needs a 180° yaw flip to align with Pet.FaceToward's
+                    // LookRotation (which assumes +Z forward). Owner ask
+                    // 2026-05-20: pets should "turn left when going left".
+                    visual.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
                     NormalizePetHeight(visual, 1.1f);
                     StripPetColliders(visual);
+                    // Tripo FBXs import with Phong materials URP can't render
+                    // (owner 2026-05-20). The fixer rebuilds them as URP/Lit
+                    // on Awake; idempotent and a no-op if textures already URP.
+                    visual.AddComponent<DeNelle.Core.TripoMaterialFixer>();
                 }
                 else
                 {
@@ -181,15 +189,64 @@ namespace DeNelle.Pets
 
         /// <summary>
         /// Tries to load a hand-imported FBX matching this pet's species from
-        /// Resources/Pets/&lt;species&gt;.fbx. Returns an instantiated GameObject
-        /// (parent-less) or null if no mesh exists for that species.
+        /// Resources/Pets/&lt;species&gt;.fbx — or, if the player has a cosmetic
+        /// pet skin equipped, Resources/Cosmetics/Pets/&lt;cosmetic-id&gt;.fbx.
+        /// Returns an instantiated GameObject (parent-less) or null if no mesh
+        /// exists for that species.
         /// </summary>
         private static GameObject TryLoadPetMesh(PetDef def)
         {
             if (def == null || string.IsNullOrEmpty(def.Species)) return null;
+
+            // Cosmetic pet skin (Glimmer shop) overrides the base mesh. The
+            // cosmetic service lives in DeNelle.Cosmetics which DeNelle.Pets
+            // cannot reference directly — resolve via reflection so the asmdef
+            // stays decoupled.
+            string equipped = TryGetEquippedCosmeticForCategory("pet");
+            if (!string.IsNullOrEmpty(equipped))
+            {
+                var skin = Resources.Load<GameObject>("Cosmetics/Pets/" + equipped);
+                if (skin != null) return Instantiate(skin);
+            }
+
             var prefab = Resources.Load<GameObject>("Pets/" + def.Species);
             if (prefab == null) return null;
             return Instantiate(prefab);
+        }
+
+        private static System.Type _glimmerType;
+        private static object _glimmerInstance;
+        private static System.Reflection.MethodInfo _equippedForMethod;
+
+        private static string TryGetEquippedCosmeticForCategory(string category)
+        {
+            try
+            {
+                if (_glimmerType == null)
+                {
+                    foreach (var asm in System.AppDomain.CurrentDomain.GetAssemblies())
+                    {
+                        var t = asm.GetType("DeNelle.Cosmetics.GlimmerCurrencyService", false);
+                        if (t != null) { _glimmerType = t; break; }
+                    }
+                }
+                if (_glimmerType == null) return null;
+                if (_glimmerInstance == null)
+                {
+                    var inst = _glimmerType.GetProperty("Instance",
+                        System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+                    _glimmerInstance = inst?.GetValue(null);
+                }
+                if (_glimmerInstance == null) return null;
+                if (_equippedForMethod == null)
+                    _equippedForMethod = _glimmerType.GetMethod("EquippedFor",
+                        new[] { typeof(string) });
+                return _equippedForMethod?.Invoke(_glimmerInstance, new object[] { category }) as string;
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         private static void NormalizePetHeight(GameObject go, float targetHeight)

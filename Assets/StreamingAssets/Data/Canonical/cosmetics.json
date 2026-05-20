@@ -46,11 +46,13 @@
       "id": "pet-aether-twilight",
       "category": "pet",
       "appliesTo": "aether-sprite",
-      "displayName": "Twilight Sprite",
-      "description": "Wreathed in violet aether and a slow drifting glow.",
+      "displayName": "Twilight Sprite (Glowing)",
+      "description": "A crystal-fairy aether sprite wreathed in slow drifting violet glow. Special-sale launch cosmetic.",
       "glimmerCost": 50,
       "unlockMethod": "buy",
-      "previewColor": "#7a4fcf"
+      "previewColor": "#7a4fcf",
+      "meshPath": "Cosmetics/Pets/pet-aether-twilight",
+      "specialSale": true
     },
     {
       "id": "pet-flame-emberkin",

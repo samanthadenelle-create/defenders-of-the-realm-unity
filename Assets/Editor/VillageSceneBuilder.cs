@@ -1585,6 +1585,19 @@ namespace DeNelle.Editor
             // colliders that read as the gate's solid bits).
             foreach (var c in arch.GetComponentsInChildren<Collider>(true))
                 if (c != null) UnityEngine.Object.DestroyImmediate(c);
+
+            // The Tripo FBX imports with Phong materials that URP can't render
+            // (owner 2026-05-20: arch read as transparent pink ghost). Mount
+            // the TripoMaterialFixer runtime component with a Resources-loaded
+            // fallback texture so the arch is properly rebuilt in URP/Lit when
+            // the player loads the scene.
+            var fixerType = FindType("DeNelle.Core.TripoMaterialFixer");
+            if (fixerType != null)
+            {
+                var fixer = arch.AddComponent(fixerType);
+                var setMethod = fixerType.GetMethod("SetFallbackTexture");
+                setMethod?.Invoke(fixer, new object[] { "Textures/CastleArch" });
+            }
         }
 
         private static void SpawnDungeonPortal()
