@@ -114,14 +114,20 @@ namespace DeNelle.Village
         {
             _loading = true;
             HidePrompt();
-            Debug.Log("[DungeonPortal] Entering dungeon " + _dungeonId);
+            string sceneName = "Dungeon_" + _dungeonId;
+            Debug.Log("[DungeonPortal] Entering dungeon scene: " + sceneName);
+            // Owner 2026-05-20 ("freezes on load dungeon"): the fade-based
+            // GoDungeon path nulls its Fader reference when the village scene
+            // unloads, then awaits a FadeIn on a destroyed object — appears
+            // as a frozen black screen. Use the plain synchronous LoadScene
+            // path to side-step the fader entirely.
             try
             {
-                SceneRouter.GoDungeon(_dungeonId).Forget();
+                UnityEngine.SceneManagement.SceneManager.LoadScene(sceneName);
             }
             catch (System.Exception ex)
             {
-                Debug.LogError("[DungeonPortal] GoDungeon threw: " + ex);
+                Debug.LogError("[DungeonPortal] LoadScene threw: " + ex);
                 _loading = false;
             }
         }
