@@ -1677,26 +1677,12 @@ namespace DeNelle.Editor
 
             const float archWidth = 4.5f;
             const float archHeight = 5.2f;
-            const float pillarWidth = 0.7f;
 
-            // Left + right stone uprights.
-            BuildPortalPillar(root.transform, new Vector3(-archWidth * 0.5f, archHeight * 0.5f, 0f),
-                              new Vector3(pillarWidth, archHeight, pillarWidth));
-            BuildPortalPillar(root.transform, new Vector3( archWidth * 0.5f, archHeight * 0.5f, 0f),
-                              new Vector3(pillarWidth, archHeight, pillarWidth));
-
-            // Lintel across the top.
-            var lintel = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            lintel.name = "Lintel";
-            lintel.transform.SetParent(root.transform, false);
-            lintel.transform.localPosition = new Vector3(0f, archHeight, 0f);
-            lintel.transform.localScale = new Vector3(archWidth + pillarWidth, pillarWidth, pillarWidth);
-            PaintMaterial(lintel.GetComponent<Renderer>(), new Color(0.36f, 0.32f, 0.28f), false);
-
-            // Footprint collider — pets / hero don't walk THROUGH it; they bump.
-            // (Shimmer sheet removed per owner 2026-05-20: rendered as solid
-            // purple squares that read as broken textures. Portal is now just
-            // the stone arch with a click-to-enter prompt.)
+            // Owner 2026-05-20: the cube pillar+lintel arch rendered as a
+            // translucent violet frame in the player build (URP shader-find
+            // edge case on primitive-painted materials). All decorative
+            // geometry stripped — the portal is now a pure proximity trigger
+            // with the F-key prompt bubble; no in-world arch to mis-render.
             var trigger = root.AddComponent<BoxCollider>();
             trigger.center = new Vector3(0f, archHeight * 0.5f, 0f);
             trigger.size = new Vector3(archWidth, archHeight, 0.6f);
