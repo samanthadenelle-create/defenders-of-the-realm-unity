@@ -851,7 +851,11 @@ namespace DeNelle.Editor
             }
 
             // ── Scattered boulders on slopes ─────────────────────────────────
-            int boulderTarget = 70;
+            // Owner direction 2026-05-20 ("rocks in front of door"): the
+            // wilderness boulder scatter landed several rocks right outside
+            // the cardinal gates, reading as obstacles. Disabled until we
+            // add a per-gate exclusion radius.
+            int boulderTarget = 0;
             int attempts = 0;
             while (_rockCount < boulderTarget && attempts < boulderTarget * 20)
             {

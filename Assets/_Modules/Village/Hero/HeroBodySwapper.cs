@@ -250,6 +250,16 @@ namespace DeNelle.Village
             if (b.size.y <= 0.01f) return;
             float scale = targetHeight / b.size.y;
             go.transform.localScale *= scale;
+
+            // Owner 2026-05-20 ("archer appears halfway under surface"): the
+            // Tripo Ranger FBX pivots near the mesh centre, so after scaling
+            // the lower half drops below the hero root's Y=0. Recompute the
+            // post-scale bounds and lift the body so the feet land at y=0.
+            Bounds b2 = renderers[0].bounds;
+            for (int i = 1; i < renderers.Length; i++) b2.Encapsulate(renderers[i].bounds);
+            float feetOffset = b2.min.y - go.transform.position.y;
+            if (feetOffset < 0f)
+                go.transform.localPosition -= new Vector3(0f, feetOffset, 0f);
         }
 
         private static void StripColliders(GameObject go)
