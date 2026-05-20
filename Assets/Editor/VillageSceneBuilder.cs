@@ -1053,6 +1053,12 @@ namespace DeNelle.Editor
         /// </summary>
         private static void BuildPlotFence(Transform parent, float halfX, float halfZ, string kind)
         {
+            // Owner direction 2026-05-20: "those wooden things in ground need
+            // to disappear" — the per-plot fences read as clutter around the
+            // bare yards and add nothing visually. Disabled entirely until a
+            // real reason to wrap a plot lands.
+            return;
+            #pragma warning disable CS0162 // unreachable code retained for re-enable
             string fbx = kind == "stone"
                 ? HexNeutral + "fence_stone_straight.fbx"
                 : HexNeutral + "fence_wood_straight.fbx";
@@ -1091,6 +1097,7 @@ namespace DeNelle.Editor
                 }
                 _propCount++;
             }
+            #pragma warning restore CS0162
         }
 
         // =====================================================================
