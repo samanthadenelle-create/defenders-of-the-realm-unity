@@ -15,7 +15,9 @@
 
 using System;
 using System.IO;
+using System.Text;
 using UnityEngine;
+using UnityEngine.Networking;
 using UnityEngine.SceneManagement;
 using UnityEngine.UIElements;
 
@@ -25,6 +27,7 @@ namespace DeNelle.HUD
     public sealed class HelpMenu : MonoBehaviour
     {
         public const string BugReportEmail = "samanthadenelle@gmail.com";
+        public const string BugReportEndpoint = "https://defenders-of-the-realm.vercel.app/api/bug-report";
 
         private UIDocument _document;
         private VisualElement _root;
@@ -178,8 +181,7 @@ namespace DeNelle.HUD
                 ScreenCapture.CaptureScreenshot(shot);
 
                 string scene = SceneManager.GetActiveScene().name;
-                string subject = Uri.EscapeDataString($"[DotR] Bug — {scene} @ {stamp}");
-                string body = Uri.EscapeDataString(
+                string textBody =
                     $"What happened:\n\n\n" +
                     $"Steps to reproduce:\n\n\n" +
                     $"--- auto-captured ---\n" +
@@ -188,10 +190,20 @@ namespace DeNelle.HUD
                     $"Build: {Application.version} ({Application.unityVersion})\n" +
                     $"Device: {SystemInfo.deviceModel} / {SystemInfo.operatingSystem}\n" +
                     $"Screen: {Screen.width}x{Screen.height}\n" +
-                    $"Screenshot: {shot}\n" +
-                    $"(Please attach the screenshot file above.)");
-                string mailto = $"mailto:{BugReportEmail}?subject={subject}&body={body}";
-                Application.OpenURL(mailto);
+                    $"Screenshot: {shot}";
+
+                // 1) POST the report to the live Vercel endpoint (lands in
+                //    Postgres alongside the React app's existing reports).
+                StartCoroutine(PostBugReport(textBody, scene));
+
+                // 2) Also open the user's default mail client so the
+                //    screenshot can be attached (the API endpoint accepts text
+                //    only and caps the description at 4 000 chars).
+                string subject = Uri.EscapeDataString($"[DotR] Bug — {scene} @ {stamp}");
+                string body = Uri.EscapeDataString(textBody +
+                    $"\n(Please attach the screenshot file above.)");
+                Application.OpenURL($"mailto:{BugReportEmail}?subject={subject}&body={body}");
+
                 ShowToast($"Screenshot saved to {shot}");
             }
             catch (Exception ex)
@@ -199,6 +211,55 @@ namespace DeNelle.HUD
                 Debug.LogWarning("[HelpMenu] Bug report failed: " + ex.Message);
                 ShowToast("Bug report failed — see log.");
             }
+        }
+
+        /// <summary>
+        /// POSTs the bug-report text to the live Vercel endpoint. Failure is
+        /// logged but does not break the mailto fallback that runs in parallel.
+        /// </summary>
+        private System.Collections.IEnumerator PostBugReport(string description, string scene)
+        {
+            string payload = "{\"description\":" + JsonEncode(description) +
+                             ",\"context\":{\"route\":" + JsonEncode(scene) +
+                             ",\"appVersion\":" + JsonEncode(Application.version) + "}}";
+            byte[] bytes = Encoding.UTF8.GetBytes(payload);
+            using (var req = new UnityWebRequest(BugReportEndpoint, "POST"))
+            {
+                req.uploadHandler = new UploadHandlerRaw(bytes);
+                req.downloadHandler = new DownloadHandlerBuffer();
+                req.SetRequestHeader("Content-Type", "application/json");
+                req.timeout = 10;
+                yield return req.SendWebRequest();
+
+                if (req.result == UnityWebRequest.Result.Success)
+                    Debug.Log("[HelpMenu] Bug report posted: " + req.downloadHandler.text);
+                else
+                    Debug.LogWarning("[HelpMenu] Bug report POST failed: " + req.error + " — mailto fallback still ran.");
+            }
+        }
+
+        /// <summary>Minimal JSON-string encoder for the bug-report payload.</summary>
+        private static string JsonEncode(string s)
+        {
+            var sb = new StringBuilder(s.Length + 16);
+            sb.Append('"');
+            foreach (var c in s)
+            {
+                switch (c)
+                {
+                    case '\\': sb.Append("\\\\"); break;
+                    case '"':  sb.Append("\\\""); break;
+                    case '\n': sb.Append("\\n"); break;
+                    case '\r': sb.Append("\\r"); break;
+                    case '\t': sb.Append("\\t"); break;
+                    default:
+                        if (c < 0x20) sb.AppendFormat("\\u{0:x4}", (int)c);
+                        else sb.Append(c);
+                        break;
+                }
+            }
+            sb.Append('"');
+            return sb.ToString();
         }
 
         private void OnShowControls()
