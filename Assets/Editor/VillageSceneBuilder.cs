@@ -603,6 +603,19 @@ namespace DeNelle.Editor
                 if (gateModel != null)
                     visual.transform.localScale *= BuildingScale;
 
+                // Owner 2026-05-20 ("purple frame on gate"): the KayKit gate
+                // mesh has a stone-arch submesh whose material falls through
+                // to URP's magenta fallback in the player build. Attach the
+                // TripoMaterialFixer with a stone-grey tint so the arch
+                // reads as proper stone instead of the broken-material pink.
+                var fixerType = FindType("DeNelle.Core.TripoMaterialFixer");
+                if (fixerType != null && gateModel != null)
+                {
+                    var fixer = visual.AddComponent(fixerType);
+                    var setTint = fixerType.GetMethod("SetFallbackTint");
+                    setTint?.Invoke(fixer, new object[] { new Color(0.52f, 0.50f, 0.46f) });
+                }
+
                 // Castle arch removed per owner direction 2026-05-20: the
                 // Tripo castle ballast Tower FBX rendered as a pink ghost in
                 // the player build even after the URP material fix, so the
