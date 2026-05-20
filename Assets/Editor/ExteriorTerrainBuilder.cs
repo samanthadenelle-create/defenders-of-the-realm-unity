@@ -116,11 +116,12 @@ namespace DeNelle.Editor
         // (§9.8). A falloff band blends the plateau edge into the biomes.
         private const float VillageHalfX = 150f;       // wall half-extent E-W
         private const float VillageHalfZ = 120f;       // wall half-extent N-S
-        // Widened from 55 (2026-05-19) — rocks were placed at the inner edge of
-        // the wilderness slope (~Y +30-+38) and read as "floating" from inside
-        // the village. Pushing rock placement further out where the terrain is
-        // flatter keeps boulders grounded relative to the village interior.
-        private const float SeamFalloff = 80f;         // blend band width beyond the wall
+        // Narrowed to 20 (2026-05-19 PO P0: "no exterior map outside the castle").
+        // The 80-u falloff covered nearly the entire 300-u terrain — the tree +
+        // rock scatter rejected almost every candidate position, leaving the
+        // view from inside the village empty. 20 u keeps the village interior
+        // flat but lets trees/rocks land within ~120 u of the walls.
+        private const float SeamFalloff = 20f;         // blend band width beyond the wall
 
         // ── Tree budget (§9.6) ───────────────────────────────────────────────
         private const int TreeTargetCount = 320;       // within the 200-400 budget

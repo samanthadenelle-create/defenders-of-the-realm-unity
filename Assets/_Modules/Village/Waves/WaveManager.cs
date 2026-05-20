@@ -432,6 +432,15 @@ namespace DeNelle.Village
             Quaternion rot = Quaternion.LookRotation(
                 point.HeadingToGate.sqrMagnitude > 0.0001f ? point.HeadingToGate : Vector3.forward);
 
+            // Snap the spawn position to the nearest NavMesh sample so a
+            // slightly-off-mesh spawn point doesn't strand the enemy off-mesh
+            // (NavMeshAgent.isOnNavMesh would stay false → enemy never moves).
+            // Sample within a generous 8 m radius; bail to the raw position if
+            // we somehow have no NavMesh nearby at all.
+            if (UnityEngine.AI.NavMesh.SamplePosition(
+                    pos, out var hit, 8f, UnityEngine.AI.NavMesh.AllAreas))
+                pos = hit.position;
+
             Enemy enemy = _enemyPrefab != null
                 ? Instantiate(_enemyPrefab, pos, rot, _enemyRoot)
                 : BuildPlaceholderEnemy(pos, rot);

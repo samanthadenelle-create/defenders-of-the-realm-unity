@@ -579,7 +579,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: DeNelle.Onboarding::DeNelle.Onboarding.SplashLoading
   _videoPlayer: {fileID: 1804462327}
   _videoTexture: {fileID: 8400000, guid: 638463dbeabf46442a730c50dcb16649, type: 2}
-  _playBumperVideo: 0
+  _playBumperVideo: 1
   _maxBumperSeconds: 3.5
   _videoStartTimeoutSeconds: 1
   _staticHoldSeconds: 1.5

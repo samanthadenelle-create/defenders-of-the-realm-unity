@@ -146,6 +146,7 @@ namespace DeNelle.Editor
         private const string TypeDragonBoss = NsVillage + ".DragonBoss";
         private const string TypeHeroAbilities = NsVillage + ".HeroAbilities";
         private const string TypeHeroLocomotion = NsVillage + ".HeroLocomotion";
+        private const string TypeHeroAbilityInput = NsVillage + ".HeroAbilityInput";
         private const string TypeVillageCamera = NsVillage + ".VillageCamera";
         private const string TypeWaveHudBridge = NsVillage + ".WaveHudBridge";
         private const string TypeVillageHudController = "DeNelle.HUD.VillageHudController";
@@ -568,6 +569,11 @@ namespace DeNelle.Editor
                 // gates sit ~90deg off.
                 visual.transform.localRotation = Quaternion.Euler(0f, WallStraightYawFix, 0f);
 
+                // Match the 4.5x wall scaling so the gate doesn't look like a
+                // pinhole between two giant wall sections (2026-05-19 PO P0).
+                if (gateModel != null)
+                    visual.transform.localScale *= BuildingScale;
+
                 // The violet shimmer plane — a thin emissive quad in the opening.
                 // (Week-3 visual stand-in; the shimmer shader lands Week 4.)
                 // Must take the SAME yaw correction as the gate model above, or
@@ -575,9 +581,9 @@ namespace DeNelle.Editor
                 var shimmer = GameObject.CreatePrimitive(PrimitiveType.Cube);
                 shimmer.name = "ForceFieldShimmer";
                 shimmer.transform.SetParent(go.transform, false);
-                shimmer.transform.localPosition = new Vector3(0f, 1.7f, 0f);
+                shimmer.transform.localPosition = new Vector3(0f, 1.7f * BuildingScale, 0f);
                 shimmer.transform.localRotation = Quaternion.Euler(0f, WallStraightYawFix, 0f);
-                shimmer.transform.localScale = new Vector3(GateHalfWidthConst * 2f, 3.0f, 0.08f);
+                shimmer.transform.localScale = new Vector3(GateHalfWidthConst * 2f * BuildingScale, 3.0f * BuildingScale, 0.08f);
                 UnityEngine.Object.DestroyImmediate(shimmer.GetComponent<Collider>());
                 ApplyEmissive(shimmer, new Color(0.61f, 0.44f, 1f), 1.4f);
 
@@ -2509,6 +2515,10 @@ namespace DeNelle.Editor
 
             var comp = AddVillageComponent(go, TypeHeroAbilities);
             if (comp == null) return go;
+
+            // Ability input — 1/2/3/4 + gamepad face buttons → TryCast (Q/W/E/R
+            // slots). 1-4 chosen over Q-W-E-R to avoid the W movement conflict.
+            AddVillageComponent(go, TypeHeroAbilityInput);
 
             var so = new SerializedObject(comp);
             // _heart — Healing Beacon (E) restores Heart HP.

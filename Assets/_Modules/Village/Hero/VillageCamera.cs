@@ -25,14 +25,15 @@ namespace DeNelle.Village
         [Tooltip("The hero transform to follow. Wired by VillageSceneBuilder.")]
         [SerializeField] private Transform _target;
 
-        [Tooltip("Position offset in the hero's local space. " +
-                 "Default: right shoulder, head-height, ~1.5 m back so adjacent " +
-                 "buildings don't fill the frame (owner: 2026-05-19).")]
-        [SerializeField] private Vector3 _followOffset = new Vector3(0.5f, 2.0f, -1.5f);
+        [Tooltip("Position offset in the hero's local space. Wider OTS framing " +
+                 "(2026-05-19 PO P0: 'camera should show enough of the screen' " +
+                 "for spatial awareness without a minimap). 4 m up + 4 m back " +
+                 "shows ~15 m around the hero at FOV 60.")]
+        [SerializeField] private Vector3 _followOffset = new Vector3(0.6f, 4.0f, -4.0f);
 
-        [Tooltip("Local pitch of the camera (degrees). Slightly down-tilted so " +
-                 "the hero's back fills the lower-third and the world reads ahead.")]
-        [SerializeField] private float _localPitchDegrees = 8f;
+        [Tooltip("Local pitch of the camera (degrees). 20° down so the hero's " +
+                 "head sits low-third and the world ahead reads to the horizon.")]
+        [SerializeField] private float _localPitchDegrees = 20f;
 
         [Tooltip("Smoothing time for the position chase (seconds). 0 = instant.")]
         [SerializeField] private float _positionSmoothTime = 0.08f;

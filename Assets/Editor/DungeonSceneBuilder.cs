@@ -219,6 +219,10 @@ namespace DeNelle.Editor
             // A faint key light so geometry is not pitch-black before play —
             // §7: real illumination is the Keeper's lantern at run time.
             CreateDirectionalLight();
+            // UI Toolkit button clicks need an EventSystem + InputSystemUIInputModule
+            // (2026-05-19 audit: dungeon scene shipped without one, HUD buttons
+            // were silent). Mirrors the village's EnsureEventSystem path.
+            EnsureEventSystem();
 
             // =================================================================
             //  Build the 12 rooms across 3 levels (§9.1 / §9.2 / §9.3)
@@ -1830,6 +1834,36 @@ namespace DeNelle.Editor
             light.intensity = 0.18f;
             light.shadows = LightShadows.Soft;
             go.transform.rotation = Quaternion.Euler(58f, 35f, 0f);
+        }
+
+        /// <summary>
+        /// Mirrors VillageSceneBuilder.EnsureEventSystem — adds an EventSystem
+        /// GameObject + InputSystemUIInputModule via reflection so UI Toolkit
+        /// button clicks route. Both types are resolved via Type.GetType to
+        /// avoid an asmdef reference (DeNelle.Editor doesn't link
+        /// UnityEngine.UI / Unity.InputSystem directly).
+        /// </summary>
+        private static void EnsureEventSystem()
+        {
+            var esType = System.Type.GetType(
+                "UnityEngine.EventSystems.EventSystem, UnityEngine.UI");
+            if (esType == null)
+            {
+                Debug.LogWarning("[DungeonSceneBuilder] EventSystem type not " +
+                                 "resolvable — dungeon HUD button clicks may not fire.");
+                return;
+            }
+            var existing = UnityEngine.Object.FindObjectOfType(esType);
+            if (existing != null) return;
+
+            var go = new GameObject("EventSystem");
+            go.AddComponent(esType);
+
+            var moduleType = System.Type.GetType(
+                "UnityEngine.InputSystem.UI.InputSystemUIInputModule, Unity.InputSystem");
+            if (moduleType != null) go.AddComponent(moduleType);
+            else Debug.LogWarning("[DungeonSceneBuilder] InputSystemUIInputModule type " +
+                                  "not resolvable — falling back to EventSystem-only routing.");
         }
 
         private static void CreateCamera()

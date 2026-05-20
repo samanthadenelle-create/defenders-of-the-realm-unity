@@ -52,8 +52,9 @@ namespace DeNelle.Onboarding
         [Tooltip("Hard cap on bumper duration — if the clip runs long or stalls, finish anyway.")]
         [SerializeField] private float _maxBumperSeconds = 3.5f;
 
-        [Tooltip("If the video has not started playing within this many seconds, use the static fallback card.")]
-        [SerializeField] private float _videoStartTimeoutSeconds = 1f;
+        [Tooltip("If the video has not finished preparing within this many seconds, use the static fallback card. " +
+                 "1 s was too tight on Windows Media Foundation; 5 s gives the decoder room to fully prep.")]
+        [SerializeField] private float _videoStartTimeoutSeconds = 5f;
 
         [Tooltip("How long the static fallback card holds before finishing.")]
         [SerializeField] private float _staticHoldSeconds = 1.5f;
@@ -147,6 +148,12 @@ namespace DeNelle.Onboarding
             try
             {
                 _videoPlayer.isLooping = false;
+                // Don't drop frames the decoder is slow on — this was making
+                // the bumper render its first frame, sit, then snap to the
+                // last few frames as the decoder skipped ahead.
+                _videoPlayer.skipOnDrop = false;
+                _videoPlayer.playOnAwake = false;
+                _videoPlayer.frame = 0;
                 _videoPlayer.Prepare();
 
                 // Wait for the clip to be ready, bounded by the start timeout.
@@ -166,6 +173,18 @@ namespace DeNelle.Onboarding
 
                 _videoPlayer.Play();
 
+                // Wait for actual frames to start incrementing before trusting
+                // isPlaying — WMF flips isPlaying=true while still buffering,
+                // which would let us exit the loop before any frames render.
+                long startFrame = _videoPlayer.frame;
+                float frameWait = 0f;
+                while (_videoPlayer.frame <= startFrame && !errored && frameWait < 1.5f)
+                {
+                    token.ThrowIfCancellationRequested();
+                    await UniTask.Yield(PlayerLoopTiming.Update, token);
+                    frameWait += Time.deltaTime;
+                }
+
                 // Play until the clip ends, an error fires, or the safety cap is
                 // hit. The cap follows the clip's own length (+1s margin) so a
                 // longer bumper plays in full; _maxBumperSeconds is the floor for
@@ -174,11 +193,24 @@ namespace DeNelle.Onboarding
                     ? Mathf.Max(_maxBumperSeconds, (float)_videoPlayer.length + 1f)
                     : _maxBumperSeconds;
                 var elapsed = 0f;
+                long lastFrame = _videoPlayer.frame;
+                int stalledFrames = 0;
                 while (_videoPlayer.isPlaying && !errored && elapsed < playCap)
                 {
                     token.ThrowIfCancellationRequested();
                     await UniTask.Yield(PlayerLoopTiming.Update, token);
                     elapsed += Time.deltaTime;
+
+                    // Watchdog: if the frame counter freezes for >0.5 s the
+                    // decoder has stalled — break and let the fallback card
+                    // show rather than holding the player on a still frame.
+                    if (_videoPlayer.frame == lastFrame) stalledFrames++;
+                    else { stalledFrames = 0; lastFrame = _videoPlayer.frame; }
+                    if (stalledFrames > 30) // ~0.5 s at 60 fps
+                    {
+                        Debug.LogWarning("[SplashLoading] Bumper video stalled — bailing to fallback.");
+                        break;
+                    }
                 }
 
                 if (errored)
