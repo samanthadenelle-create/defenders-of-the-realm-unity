@@ -874,11 +874,13 @@ namespace DeNelle.Editor
                     0.8f + (float)_rng.NextDouble() * 1.6f);
             }
 
-            // ── Two cliff faces: a denser rock cluster suggests a cave mouth ──
-            // Cliff 1: northern ridge (high north terrain).
-            SeedCliff(rockRoot.transform, rockMeshes, 40f, 118f, "NorthRidge");
-            // Cliff 2: western valley wall (above the river).
-            SeedCliff(rockRoot.transform, rockMeshes, -120f, -10f, "WestValleyWall");
+            // Cliff rock clusters disabled per owner direction 2026-05-20:
+            // "rocks in front of door" — even though SeedCliff placed
+            // clusters far north/west of the village, some rocks landed
+            // visible from the gate threshold. The two SeedCliff calls
+            // accounted for ~32 of the scene's rock refs.
+            // SeedCliff(rockRoot.transform, rockMeshes, 40f, 118f, "NorthRidge");
+            // SeedCliff(rockRoot.transform, rockMeshes, -120f, -10f, "WestValleyWall");
         }
 
         /// <summary>Spawns a tight cluster of rocks to read as a cliff face / cave mouth.</summary>
