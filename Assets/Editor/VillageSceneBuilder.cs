@@ -603,15 +603,12 @@ namespace DeNelle.Editor
                 if (gateModel != null)
                     visual.transform.localScale *= BuildingScale;
 
-                // Castle ballast tower arch — replaces the violet force-field
-                // shimmer per owner direction 2026-05-20: "get rid of force
-                // field, use the castle model for the entrance ways". The
-                // arch is purely decorative; the FBX's mesh sits ABOVE the
-                // gate's wall_straight_gate piece so the silhouette reads as
-                // a fortified entrance. All colliders stripped so hero / pets
-                // pass through naturally; enemy pathing is governed by the
-                // navmesh + wave spawn flow, not by the arch geometry.
-                AttachCastleArch(go.transform);
+                // Castle arch removed per owner direction 2026-05-20: the
+                // Tripo castle ballast Tower FBX rendered as a pink ghost in
+                // the player build even after the URP material fix, so the
+                // gate falls back to the bare wall_straight_gate piece. No
+                // force-field shimmer either — the gate reads as a simple
+                // open passage now.
 
                 var gateComp = AddVillageComponent(go, TypeGate);
                 if (gateComp != null)
