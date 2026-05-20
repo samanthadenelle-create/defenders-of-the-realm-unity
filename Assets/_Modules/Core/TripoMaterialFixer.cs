@@ -89,10 +89,13 @@ namespace DeNelle.Core
                         if (src.HasProperty("_Color")) col = src.color;
                     }
                     if (tex == null && fallbackTex != null) tex = fallbackTex;
-                    // Owner safety net: when nothing else gives a colour, paint
-                    // the material with a species/class tint so the mesh reads
-                    // properly instead of solid white.
-                    if (tex == null && _hasFallbackTint) col = _fallbackTint;
+                    // Owner 2026-05-20 ("still grey"): the fallback tint was
+                    // only applied when tex == null, but Tripo's source
+                    // material often has a _MainTex reference pointing at a
+                    // broken/embedded texture URP renders as white. Apply the
+                    // tint whenever it's been set — when a real texture also
+                    // resolves the tint just multiplies (mild colour push).
+                    if (_hasFallbackTint) col = _fallbackTint;
 
                     var newMat = new Material(lit);
                     newMat.name = (src != null && src.name != null ? src.name : "Tripo") + " (URP)";
