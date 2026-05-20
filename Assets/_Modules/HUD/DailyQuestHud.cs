@@ -67,8 +67,9 @@ namespace DeNelle.HUD
             _stack.Clear();
 
             var svc = DailyQuestService.Instance;
+            var today = svc?.Today;
+            Debug.Log($"[DailyQuestHud] Repaint — svc={svc != null}, today={today != null}");
             if (svc == null) return;
-            var today = svc.Today;
             if (today == null) return;
 
             var header = new Label("Daily Quests");

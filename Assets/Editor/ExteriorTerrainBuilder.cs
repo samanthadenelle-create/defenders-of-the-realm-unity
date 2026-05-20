@@ -952,15 +952,19 @@ namespace DeNelle.Editor
         /// </summary>
         private static void PlacePonds(Transform parent)
         {
+            // Owner direction 2026-05-20 ("leftover from heart pond" — blue
+            // discs read as a puddle around the cathedral spire). All
+            // wilderness ponds disabled until we re-balance placements.
+            return;
+            #pragma warning disable CS0162
             var pondRoot = new GameObject("Ponds");
             pondRoot.transform.SetParent(parent, false);
 
-            // Hand-picked low-spot world positions, spread across the quadrants.
             var spots = new[]
             {
-                V(72, 96),    V(-58, 84),     // north-ish
-                V(118, -36),  V(146, 58),     // east farmland hollows
-                V(-44, -132), V(-150, -40),   // south barren seep + west valley
+                V(72, 96),    V(-58, 84),
+                V(118, -36),  V(146, 58),
+                V(-44, -132), V(-150, -40),
             };
 
             foreach (var s in spots)
@@ -979,6 +983,7 @@ namespace DeNelle.Editor
                 ApplyWater(pond, new Color(0.28f, 0.46f, 0.58f, 0.78f));
                 _pondCount++;
             }
+            #pragma warning restore CS0162
         }
 
         // =====================================================================

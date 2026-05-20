@@ -90,3 +90,28 @@ Thumbs.db
 # "exclude not needed files from the assets during check in".)
 /Assets/Models/
 /Assets/Models.meta
+
+# === Session-noise / dev workflow (added 2026-05-20) ===
+# Stale build logs left behind by batch Unity invocations.
+build-*.log
+*.log
+arrival-diag.log
+verify*.log
+fix-mats.log
+knight-setup*.log
+ranger-*.log
+wizard-*.log
+real-diag.log
+portraits*.log
+
+# Local-only safety backups (Tripo originals etc.).
+/Backups/
+
+# Sub-agent transcript scratch.
+/.utmp/
+
+# Session log files written to repo root.
+/SESSION-*.md
+
+# Pre-push backup of .git — kept until first successful push, then deleted.
+/.git-pre-push-backup/

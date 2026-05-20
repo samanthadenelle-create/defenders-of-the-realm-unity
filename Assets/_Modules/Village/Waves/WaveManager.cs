@@ -218,6 +218,7 @@ namespace DeNelle.Village
             }
 
             EnterCountdown(_startWave);
+            Debug.Log($"[WaveManager] Loop armed — wave {_startWave}, countdown {_countdownRemaining:F1}s.");
         }
 
         /// <summary>

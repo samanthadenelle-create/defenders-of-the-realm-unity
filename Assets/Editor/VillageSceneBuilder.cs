@@ -777,6 +777,7 @@ namespace DeNelle.Editor
             // Owner 2026-05-20: skip the ElarionMound cylinder when the
             // cathedral loads — the green disk peeked out from under the
             // spire as an ugly leftover.
+            GameObject cathedralInstance = null;
             var cathedralModel = LoadModel("Assets/Models/Cathedral/Cathedral.fbx");
             if (cathedralModel == null)
             {
@@ -792,12 +793,21 @@ namespace DeNelle.Editor
                 var cathedral = (GameObject)PrefabUtility.InstantiatePrefab(cathedralModel);
                 cathedral.name = "CathedralSpire";
                 cathedral.transform.SetParent(go.transform, false);
-                cathedral.transform.localPosition = new Vector3(0f, 0.7f, 0f);
-                NormalizeProp(cathedral, 7.0f);    // owner 2026-05-20: halved from 14 m
+                cathedral.transform.localPosition = Vector3.zero;
+                NormalizeProp(cathedral, 8.05f);   // owner 2026-05-20: 7m → 8.05m (+15%)
                 StripColliders(cathedral);
-                // Attach the runtime URP-material fixer with a stone tint
-                // fallback so the cathedral doesn't render solid white if
-                // Tripo's embedded basecolor doesn't extract on import.
+                // Owner 2026-05-20 "spire sits off the ground a little":
+                // after NormalizeProp, the post-scale mesh bottom isn't
+                // necessarily at y=0 (Tripo FBX pivots vary). Measure the
+                // world-space bounds and lower the spire so feet land flush
+                // on the village floor.
+                SnapFeetToParent(cathedral);
+                cathedralInstance = cathedral;
+                // Attach the runtime URP-material fixer with a stone-grey tint
+                // fallback so the cathedral reads as stone even if Tripo's
+                // embedded basecolor extract didn't survive the build (owner
+                // 2026-05-20 "still not colored"). The texture is preferred
+                // when present; tint is the safety net.
                 var fixerType = FindType("DeNelle.Core.TripoMaterialFixer");
                 if (fixerType != null)
                 {
@@ -807,9 +817,12 @@ namespace DeNelle.Editor
                     // Resources/Textures/Cathedral.png (~26 MB).
                     setTex?.Invoke(fixer, new object[] { "Textures/Cathedral" });
                     var setTint = fixerType.GetMethod("SetFallbackTint");
-                    setTint?.Invoke(fixer, new object[] { Color.white }); // let texture's own colours show
+                    // Stone-grey with a faint warm bias — reads as cathedral
+                    // limestone if the texture doesn't load. NOT white anymore
+                    // (white = invisible against the sky / hard to read).
+                    setTint?.Invoke(fixer, new object[] { new Color(0.74f, 0.72f, 0.68f) });
                 }
-                Debug.Log("[VillageSceneBuilder] Cathedral spire mounted at heart, scaled to ~14m.");
+                Debug.Log("[VillageSceneBuilder] Cathedral spire mounted at heart, scaled to ~8m, feet snapped to ground.");
             }
             else
             {
@@ -937,6 +950,28 @@ namespace DeNelle.Editor
             // Re-stamp the authored transform AFTER the controller is wired.
             go.transform.position   = authoredPos;
             go.transform.localScale = authoredScale;
+
+            // Owner 2026-05-20: random cinematic dragon fly-bys across Elarion.
+            // Foreshadows the apex wave-boss without interrupting gameplay.
+            // Lives in DeNelle.Village (Cinematics) so the editor asmdef stays
+            // free of a runtime dependency — resolved by reflection here, same
+            // pattern as DragonBoss is wired through.
+            var flybyType = FindType("DeNelle.Village.Cinematics.DragonCinematicFlyby");
+            if (flybyType != null)
+            {
+                var flybyGo = new GameObject("DragonCinematicFlyby");
+                flybyGo.transform.SetParent(go.transform, false);
+                flybyGo.transform.localPosition = Vector3.zero; // village centre
+                flybyGo.AddComponent(flybyType);
+                Debug.Log("[VillageSceneBuilder] DragonCinematicFlyby attached at village centre " +
+                          "— random cinematic dragon fly-bys scheduled.");
+            }
+            else
+            {
+                Debug.LogWarning("[VillageSceneBuilder] DeNelle.Village.Cinematics.DragonCinematicFlyby " +
+                                 "not found — is the DeNelle.Village assembly compiled? Cameo fly-bys will not run.");
+            }
+
             return heartComp;
         }
 
@@ -1669,14 +1704,12 @@ namespace DeNelle.Editor
             // "Dungeon_". Passing the full scene name double-prefixed and
             // routed to a missing scene (owner 2026-05-20: prior connection
             // error). Strict short ids only.
-            // Owner direction 2026-05-20: route BOTH portals to Healer's
-            // Cottage temporarily — Folk's Granary stub is too empty.
-            // Agent is authoring Folk's Granary content; once it lands the
-            // east portal's dungeonId flips back to "FolksGranary".
+            // Folk's Granary authored by FolksGranaryBuilder — east portal
+            // routes back to its own dungeon now.
             BuildOneDungeonPortal(portalType, "DungeonPortal_HealersCottage",
                 new Vector3(-18f, 0f, 6f), "HealersCottage", "Healer's Cottage");
             BuildOneDungeonPortal(portalType, "DungeonPortal_FolksGranary",
-                new Vector3( 18f, 0f, 6f), "HealersCottage", "Healer's Cottage (E)");
+                new Vector3( 18f, 0f, 6f), "FolksGranary",   "Folk's Old Granary");
         }
 
         private static void BuildOneDungeonPortal(System.Type portalType, string objectName,
@@ -2042,6 +2075,26 @@ namespace DeNelle.Editor
             float factor = targetSize / nativeMax;
             factor = Mathf.Clamp(factor, 0.05f, 40f); // guard freak meshes / placeholders
             go.transform.localScale = cur * factor;
+        }
+
+        /// <summary>
+        /// Lifts/lowers <paramref name="go"/> on its local Y so the bottom of
+        /// its combined renderer bounds lands at the parent's y. Use after
+        /// <see cref="NormalizeProp"/> on any FBX whose pivot is off-floor
+        /// (most Tripo exports). World-space bounds are read, then the offset
+        /// is applied in local space so further parent transforms are respected.
+        /// </summary>
+        private static void SnapFeetToParent(GameObject go)
+        {
+            if (go == null) return;
+            var rs = go.GetComponentsInChildren<Renderer>();
+            if (rs == null || rs.Length == 0) return;
+            Bounds b = rs[0].bounds;
+            for (int i = 1; i < rs.Length; i++) b.Encapsulate(rs[i].bounds);
+            float parentY = go.transform.parent != null ? go.transform.parent.position.y : 0f;
+            float footOffset = b.min.y - parentY;
+            if (Mathf.Abs(footOffset) < 0.001f) return;
+            go.transform.localPosition -= new Vector3(0f, footOffset, 0f);
         }
 
         // =====================================================================

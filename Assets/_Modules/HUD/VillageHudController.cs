@@ -265,6 +265,7 @@ namespace DeNelle.HUD
             BuildTriggerWaveButton();
             MoveManaPanelToTopLeft();
             _bound = true;
+            Debug.Log($"[VillageHudController] Bound. root={_root != null}, heart={_heartHpFill != null}, mana={_manaFill != null}, abilityBar={_abilityBar != null}");
         }
 
         /// <summary>

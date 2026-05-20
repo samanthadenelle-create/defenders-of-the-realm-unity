@@ -4,6 +4,12 @@
 **Owner:** Samantha Denelle / DeNelle Studios
 **Derived from:** `docs/v2-unity-port-spec.md` Part 9 (Acceptance gates) and Part 5 Week 8
 **Audience:** the PM / tester executing the Week-8 acceptance review — **no engineering knowledge required**.
+**Refreshed 2026-05-20** for the Elarion-of-the-Spire / Stone-Choir pivot
+(`docs/DESIGN-DECISIONS.md`): village renamed Elarion, world-tree replaced by
+the Cathedral Spire, Keep / Avalon Banner removed, build menu reduced to Tower
++ Repair, three hero classes pick the hero from the title flanks. Stale
+assertions against the retired tree / "Avalon" / single-hero "Blaise" flow
+were patched in this revision.
 
 ---
 
@@ -40,19 +46,19 @@ This is the step-by-step playthrough a tester follows **once the Week-8 build ex
 
 | # | Step | What you should see | PASS | FAIL |
 |---|------|---------------------|------|------|
-| A1 | Launch the app fresh (first run, no save). | The DeNelle Studios studio bumper plays for ~3 seconds, then fades out. | ☐ | ☐ |
-| A2 | Wait. | The Title screen appears: the Heart-Wing banner artwork, and the tagline text **"By lantern. By oath. By Heart."** | ☐ | ☐ |
+| A1 | Launch the app fresh (first run, no save). | The DeNelle Studios studio bumper presents for ~3 seconds, then fades out. (The build currently ships with `SplashLoading._playBumperVideo = false` after the WMF decoder crashes — what you should see is the **static "DeNelle Studios presents" fallback card**, not a video. If a video plays without crashing the build, that is also a PASS and worth flagging — the bumper has been re-enabled.) | ☐ | ☐ |
+| A2 | Wait. | The Title screen appears: the Heart-Wing banner artwork, the game title, and a tagline. The current canon tagline string is **"By lantern. By oath. By Heart."** — but DESIGN-DECISIONS #18 dropped the lantern motif on 2026-05-20 and `canon-strings.json` now carries three tagline keys (`tagline`, `titleTagline`, `bibleTitleTagline`); confirm which one renders and note the literal text. | ☐ | ☐ |
 | A3 | On first launch only, watch for the story intro. | A short 3-line cold-open story sequence plays (~5 seconds). | ☐ | ☐ |
-| A4 | Read the Title screen carefully. | A **Connect Wallet** button and a **Start** button are both visible and tappable. | ☐ | ☐ |
-| A5 | Tap **Start**. | The screen fades; the Village scene ("Avalon") loads. Music crossfades — it does not cut abruptly. | ☐ | ☐ |
-| A6 | Look at the village. | You see a walled village with a glowing world-tree at the centre (this is **Elarion**, the Heart). The tree glows violet — it is **not** a flat white shape. | ☐ | ☐ |
-| A7 | Move the hero around (drag/tap to move, or WASD on desktop). | The hero (the mage, **Blaise**) walks smoothly. The camera follows. The hero does not slide oddly or freeze. | ☐ | ☐ |
-| A8 | Open the build menu and place one tower / building on a highlighted buildable tile. | The building appears where you placed it. Your crystal resource count drops by the cost shown. | ☐ | ☐ |
+| A4 | Read the Title screen carefully. | A **Connect Wallet** button (top-right) is visible and tappable. The three hero flanks — **Wizard** (left), **Knight** (centre), **Ranger** (right) — are each tappable and the amber call-to-action **"✦ Select your Hero to begin ✦"** sits below the title block. The Start button is **hidden** (`TitleController` sets `display = DisplayStyle.None`); flanks pick the hero and start the game. | ☐ | ☐ |
+| A5 | Tap one of the three hero flanks (or use **Start** as the keyboard fallback). | The screen fades; the Village scene loads. Music crossfades — it does not cut abruptly. | ☐ | ☐ |
+| A6 | Look at the village. | You see a walled village with a tall pale-stone **Cathedral Spire** at the centre (this is the Heart of **Elarion**, the v2 reliquary that replaced the world-tree on 2026-05-20). The spire should read as a sharp stone silhouette ~8m tall, **not** a flat white mass — if it renders as a featureless white shape, log BUG-001 against the new centerpiece. The old Keeper's Keep, the violet Avalon Banner pole, the heart pond and the wilderness boulder scatter are all gone by design. | ☐ | ☐ |
+| A7 | Move the hero around (drag/tap to move, or WASD on desktop). | The hero (the class you picked — Mage / Knight / Ranger) walks smoothly. The camera follows. The hero does not slide oddly or freeze. | ☐ | ☐ |
+| A8 | Open the build menu (HUD Build button or walk to a buildable tile) and place one tower / repair one wall. | The build menu shows **two cards only — "Build Tower" (Arcane Tower) and "Repair Wall"** (DESIGN-DECISIONS #10; the previous five-building grid is gone). Confirm the action: a placed tower appears with crystals deducted; a repair action restores wall HP via `WallRepairController`. | ☐ | ☐ |
 | A9 | Find the wave countdown on the HUD and let it run down (or trigger Wave 1 if a dev button exists). | A countdown reaches zero, then enemies (Hollow Walkers — skeletons) appear at the north gate and march toward the Heart. | ☐ | ☐ |
 | A10 | Fight the wave: use the hero's abilities (the Q/W/E/R hotbar) and let the pets and tower attack. | Abilities fire. Enemies take damage and die. The three starter pets (Aether Sprite, Flame Pup, Ice Wolf) attack on their own. | ☐ | ☐ |
 | A11 | Play out the wave to its end. | Either you defeat every enemy (**win**), OR an enemy crosses the inner wall and the screen cuts to a battle scene (**breach**). Either outcome is acceptable. | ☐ | ☐ |
 | A12 | **If a breach happened:** play the ATB battle. Tap **Attack** / use abilities each turn. | A turn-based battle plays out. The action log scrolls. The battle ends in a win or a loss. | ☐ | ☐ |
-| A13 | After the battle (or after winning the wave), confirm where you land. | Control returns to the Village scene. Any damage from the battle is reflected (e.g. Heart HP). The game is responsive — no frozen screen. | ☐ | ☐ |
+| A13 | After the battle (or after winning the wave), confirm where you land. | Control returns to the Village scene (the village handoff leaves `BattleParams.ReturnScene` at the default `SceneRouter.Village` per the BUG-008 fix). Any damage from the battle is reflected (e.g. Heart HP). The game is responsive — no frozen screen. | ☐ | ☐ |
 | A14 | Exit back to the Title screen (pause menu / exit). | The Title screen reappears. Music crossfades back. | ☐ | ☐ |
 | A15 | **Stop the stopwatch.** Record the elapsed time. | The full run above completed. Elapsed time: ____ min ____ sec. | ☐ | ☐ |
 | A16 | Think back over the whole run. | There were **no crashes** (the app never closed itself) and **no softlocks** (you were never stuck with no way to continue). | ☐ | ☐ |
@@ -69,7 +75,7 @@ Start a fresh run (or continue from Part A) and get into the Village.
 
 | # | Step | What you should see | PASS | FAIL |
 |---|------|---------------------|------|------|
-| B1 | In the village, find and enter the dungeon portal / entrance to the Healer's Cottage. | The screen fades; the Healer's Cottage dungeon scene loads. Music crossfades to a quieter ambient track. | ☐ | ☐ |
+| B1 | In the village, find and enter the dungeon portal / entrance to the Healer's Cottage. The portal is a **glowing violet ground disc** at the west side of the village (relocated off the N-S gate spine per DESIGN-DECISIONS #12) with a floating "▼ Healer's Cottage ▼" sign — walk onto the disc OR press F when in range. | The screen fades; the Healer's Cottage dungeon scene loads. Music crossfades to a quieter ambient track. (Note: dungeon BGM `echoes-beneath-elarion.mp3` is a missing asset — BUG-004 — so the ambient track may be silent; the AudioSource is wired and null-guarded. Silence is acceptable until the owner supplies the clip.) | ☐ | ☐ |
 | B2 | Look at the hero and the lighting. | The hero is lit by a lantern — a warm pool of light that follows the hero around the dark dungeon. | ☐ | ☐ |
 | B3 | At the entrance, find the NPC named **Bryn** (the Wanderer). Walk up to Bryn. | A speech bubble appears above Bryn with a line of dialogue. The wording is story prose, not placeholder text like "TODO" or "lorem ipsum". | ☐ | ☐ |
 | B4 | Walk the hero through the cottage rooms and corridors. | The hero moves smoothly room to room. The camera follows from a tilted top-down angle. | ☐ | ☐ |
@@ -79,10 +85,14 @@ Start a fresh run (or continue from Part A) and get into the Village.
 | B8 | Find a checkpoint shrine and walk into it. | The hero heals to full and a save/checkpoint confirmation appears (a toast or message). | ☐ | ☐ |
 | B9 | Walk into a scripted encounter zone (or reach the room where a fight triggers). | The screen cuts to an ATB battle. | ☐ | ☐ |
 | B10 | Play and win the ATB battle. | The battle resolves in your favour. | ☐ | ☐ |
-| B11 | Confirm where you land after the battle. | Control returns to the **Healer's Cottage dungeon** (NOT the village) — the hero resumes near where the encounter started, with HP/mana carried over. | ☐ | ☐ |
+| B11 | Confirm where you land after the battle. | Control returns to the **Healer's Cottage dungeon** (NOT the village) — the hero resumes near where the encounter started, with HP/mana carried over. The dungeon caller sets `BattleParams.ReturnScene = SceneRouter.DungeonHealersCottage` on the handoff per the BUG-008 fix; if the build instead drops you in the village, the handoff is not being set — log against BUG-008. | ☐ | ☐ |
 | B12 | Continue to the end-room, then return to the village. | The dungeon completes; control returns to the Village. | ☐ | ☐ |
 
-> **Known risk for B11:** the build may currently return you to the *Village* instead of the dungeon after a dungeon battle (a missing routing branch — see bug-log BUG-008). If that happens, mark B11 FAIL and reference BUG-008.
+> **B11 status (2026-05-20):** BUG-008 is `Fixed` in source — `BattleParams.ReturnScene`
+> exists at `SceneRouter.cs:55` and `BattleController.ResolveReturnScene` reads it.
+> This step is now a *Verified* check, not a known risk. Mark FAIL only if the
+> dungeon battle still lands in the village; if so, the dungeon caller is not
+> populating `ReturnScene` on the handoff.
 
 ---
 
@@ -141,15 +151,17 @@ Go back through the screens you visited and confirm each canon term appears **ex
 
 | # | Canon term — must appear exactly | Where to look | PASS | FAIL |
 |---|----------------------------------|---------------|------|------|
-| F1 | **DeNelle Studios** | Studio bumper | ☐ | ☐ |
-| F2 | **By lantern. By oath. By Heart.** | Title screen tagline | ☐ | ☐ |
-| F3 | **Avalon** | Village (town name in UI / loading) | ☐ | ☐ |
-| F4 | **Elarion** (also "the Heart") | Village (the world-tree, HUD, or tooltips) | ☐ | ☐ |
-| F5 | **Blaise** | Hero name (HUD portrait / character) | ☐ | ☐ |
+| F1 | **DeNelle Studios** | Studio bumper (static fallback card, per A1) | ☐ | ☐ |
+| F2 | The tagline string the title screen renders | Title screen tagline. **The lantern motif was dropped 2026-05-20** (DESIGN-DECISIONS #18); the canon `tagline` key still reads "By lantern. By oath. By Heart." but the Stone-Choir framing supersedes it. Record the exact text shown — owner ratifies whether the build needs to switch to a Stone-Choir tagline before ship. | ☐ | ☐ |
+| F3 | **Elarion** | Village (town name in UI / loading / story copy) | ☐ | ☐ |
+| F4 | **the Heart** (the spire) | Village HUD / tooltips — refers to the Cathedral Spire centerpiece, not a tree. Both `elarionAlias` ("the Heart-Grove") and `elarionAlsoCalled` ("the Heart") are still in `canon-strings.json`; "the Heart" is the v2 phrasing, "the Heart-Grove" is stale and should not appear in v2 UI. | ☐ | ☐ |
+| F5 | The hero's class name — **Mage / Wizard**, **Knight**, or **Ranger** | Hero portrait / HUD / character. v2 uses a class selection (DESIGN-DECISIONS #7); the named-hero canon "Blaise" still ships in `canon-strings.json` line 18 but the title flanks pick a class, not a named character. If "Blaise" appears as the displayed hero name, that's an integration miss — note it. | ☐ | ☐ |
 | F6 | **Alduin the Mournful** | Story intro / lore text (if shown) | ☐ | ☐ |
 | F7 | **the Heart-Wing** | Title banner / branding | ☐ | ☐ |
+| F8 | **Syndrath the Devourer** | Apex wave 4 boss bar / wave-warning toast (if you reached wave 4). Canon key `bossSyndrath` in `canon-strings.json`; owner-ratified 2026-05-19. | ☐ | ☐ |
 
 > Note: if **Bryn** appears in dungeon dialogue (Part B), confirm the spelling is "Bryn". Bryn and a few other names (Mara, Tovin, Eira, Aelf, Mira) are flagged as not-yet-canon-sourced (bug-log BUG-012) — if any of those names appear on screen, note exactly which and where.
+> 2026-05-20: the **village name "Avalon"** has been retired in favour of **Elarion**. If "Avalon" appears anywhere in shipped UI/loading copy, log it as a regression against DESIGN-DECISIONS #1 — the `avalon` canon key in `canon-strings.json` is kept only for historical reference and should not render.
 
 ---
 

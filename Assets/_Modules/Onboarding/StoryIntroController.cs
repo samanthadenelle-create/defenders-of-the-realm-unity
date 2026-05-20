@@ -223,7 +223,11 @@ namespace DeNelle.Onboarding
             _lineLabel.style.maxWidth = 620;
             _root.Add(_lineLabel);
 
-            var skip = new Button(() => _skipRequested = true) { text = "Skip" };
+            // Owner 2026-05-20: the Skip button must jump straight to hero
+            // selection, not just advance one beat (tap-anywhere already does
+            // that). Cancel the CTS — the foreach catches OperationCanceled
+            // and falls through to Complete(), which routes onward.
+            var skip = new Button(() => _cts?.Cancel()) { text = "Skip" };
             skip.style.position = Position.Absolute;
             skip.style.top = 18;
             skip.style.right = 18;

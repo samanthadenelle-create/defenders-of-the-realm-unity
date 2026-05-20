@@ -21,7 +21,7 @@
     {
       "waveId": 1,
       "name": "First Light",
-      "countdownSeconds": 45,
+      "countdownSeconds": 10,
       "enemies": [
         {
           "type": "hollow-walker",

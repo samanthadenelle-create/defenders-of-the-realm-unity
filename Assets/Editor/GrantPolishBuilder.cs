@@ -26,22 +26,28 @@ namespace DeNelle.Editor
         [MenuItem("Defenders/Build All (Grant-Polish Pass)")]
         public static void BuildAll()
         {
-            Debug.Log("[GrantPolish] 1/5 Village (townsfolk + camera) ...");
+            Debug.Log("[GrantPolish] 1/6 Village (townsfolk + camera) ...");
             VillageSceneBuilder.BuildVillage();
 
-            Debug.Log("[GrantPolish] 2/5 Wall-repair wiring ...");
+            Debug.Log("[GrantPolish] 2/6 Wall-repair wiring ...");
             WallRepairSceneSetup.AddWallRepairToVillage();
 
-            Debug.Log("[GrantPolish] 3/5 Intro flow (hero + pet select) ...");
+            Debug.Log("[GrantPolish] 3/6 Intro flow (hero + pet select) ...");
             IntroFlowSceneBuilder.BuildAll();
 
-            Debug.Log("[GrantPolish] 4/5 Dungeon (crafting + oil HUD) ...");
+            Debug.Log("[GrantPolish] 4/6 Dungeon: Healer's Cottage (D1) ...");
             DungeonSceneBuilder.BuildHealersCottage();
 
-            Debug.Log("[GrantPolish] 5/5 Battle (camera) ...");
+            // BUG-020: prior to 2026-05-20, this step was missing and the
+            // Folk's Granary scene kept whatever DungeonStubBuilder last
+            // wrote — visually a stub even though FolksGranaryBuilder exists.
+            Debug.Log("[GrantPolish] 5/6 Dungeon: Folk's Old Granary (D2) ...");
+            FolksGranaryBuilder.BuildFolksGranary();
+
+            Debug.Log("[GrantPolish] 6/6 Battle (camera) ...");
             BattleSceneBuilder.BuildBattleScene();
 
-            Debug.Log("[GrantPolish] DONE - all 5 builders complete.");
+            Debug.Log("[GrantPolish] DONE - all 6 builders complete.");
         }
     }
 }

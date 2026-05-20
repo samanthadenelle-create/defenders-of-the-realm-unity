@@ -56,11 +56,11 @@ namespace DeNelle.Village
             body.name = "HeroBody";
             body.transform.localPosition = Vector3.zero;
             // Tripo FBXs export with their forward along -Z (model faces the
-            // camera in the title pose). The hero root rotates to face the
-            // move direction, so without this 180° correction the wizard's
-            // BACK turns toward the press direction. Owner ask 2026-05-20:
-            // "can they turn left when going left?"
-            body.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
+            // camera in the title pose), so they need a 180° correction to
+            // align with the hero root's facing direction. KayKit FBXs ship
+            // with Unity-standard +Z forward and need no rotation.
+            float yaw = NeedsForwardFlip(cls) ? 180f : 0f;
+            body.transform.localRotation = Quaternion.Euler(0f, yaw, 0f);
             NormalizeHeight(body, TargetHeightMeters);
 
             StripRigidbodies(body);
@@ -162,8 +162,16 @@ namespace DeNelle.Village
         {
             HeroClass.Knight => "Knight",
             HeroClass.Ranger => "Ranger",
-            _ => null,    // Mage uses the scene-builder's Wizard placeholder
+            // Mage keeps the scene-builder's Wizard placeholder body — the
+            // placeholder IS the Tripo Wizard FBX, so no runtime swap needed.
+            _ => null,
         };
+
+        // All three heroes are Tripo AI exports (-Z forward) — they need a
+        // 180° yaw correction so they face the move direction instead of the
+        // camera. Owner direction 2026-05-20: use the paid-for Tripo models
+        // throughout; KayKit Adventurers swap was rolled back.
+        private static bool NeedsForwardFlip(HeroClass cls) => true;
 
         /// <summary>
         /// Loads a per-class basecolor PNG out of Resources/Textures/
@@ -178,7 +186,7 @@ namespace DeNelle.Village
             {
                 HeroClass.Knight => "Textures/Knight",
                 HeroClass.Ranger => "Textures/Ranger",
-                _ => null,
+                _ => null,    // Mage uses the scene Wizard placeholder body
             };
             if (string.IsNullOrEmpty(texPath)) return;
             var tex = Resources.Load<Texture2D>(texPath);

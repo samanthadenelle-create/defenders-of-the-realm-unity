@@ -66,6 +66,7 @@ namespace DeNelle.Core
             Texture2D fallbackTex = null;
             if (!string.IsNullOrEmpty(_fallbackTextureName))
                 fallbackTex = Resources.Load<Texture2D>(_fallbackTextureName);
+            Debug.Log($"[TripoMaterialFixer] {gameObject.name}: fallbackPath='{_fallbackTextureName}', loaded={fallbackTex != null}, tintActive={_hasFallbackTint}");
 
             foreach (var r in GetComponentsInChildren<Renderer>(true))
             {

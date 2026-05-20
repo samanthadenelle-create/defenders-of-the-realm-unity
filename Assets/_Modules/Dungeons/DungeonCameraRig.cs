@@ -100,6 +100,17 @@ namespace DeNelle.Dungeons
                 _follow = gameObject.AddComponent<CinemachineFollow>();
         }
 
+        // Auto-bind fallback for dungeon scenes that have no DungeonController
+        // to call Bind() explicitly (e.g. Folk's Granary, which is authored as a
+        // simpler scene without the controller orchestrator). One Start() lookup
+        // per scene load is cheap; the controller path still wins by running first.
+        private void Start()
+        {
+            if (_camera != null && _camera.Follow != null) return;
+            var hero = FindAnyObjectByType<DungeonHero>();
+            if (hero != null) Bind(hero.transform);
+        }
+
         // ── Public API ───────────────────────────────────────────────────────
 
         /// <summary>
