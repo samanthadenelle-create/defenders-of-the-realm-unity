@@ -1669,10 +1669,14 @@ namespace DeNelle.Editor
             // "Dungeon_". Passing the full scene name double-prefixed and
             // routed to a missing scene (owner 2026-05-20: prior connection
             // error). Strict short ids only.
+            // Owner direction 2026-05-20: route BOTH portals to Healer's
+            // Cottage temporarily — Folk's Granary stub is too empty.
+            // Agent is authoring Folk's Granary content; once it lands the
+            // east portal's dungeonId flips back to "FolksGranary".
             BuildOneDungeonPortal(portalType, "DungeonPortal_HealersCottage",
                 new Vector3(-18f, 0f, 6f), "HealersCottage", "Healer's Cottage");
             BuildOneDungeonPortal(portalType, "DungeonPortal_FolksGranary",
-                new Vector3( 18f, 0f, 6f), "FolksGranary",   "Folk's Old Granary");
+                new Vector3( 18f, 0f, 6f), "HealersCottage", "Healer's Cottage (E)");
         }
 
         private static void BuildOneDungeonPortal(System.Type portalType, string objectName,
