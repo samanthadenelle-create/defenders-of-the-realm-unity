@@ -263,7 +263,26 @@ namespace DeNelle.HUD
 
             BuildAbilityCells();
             BuildTriggerWaveButton();
+            MoveManaPanelToTopLeft();
             _bound = true;
+        }
+
+        /// <summary>
+        /// Owner direction 2026-05-20 ("HP bar top left, mana is bottom —
+        /// please move both to top left"): the UXML places mana in the
+        /// hud-bottom strip above the ability bar; this runtime override
+        /// reparents it to absolute-positioned top-left, just under the
+        /// heart-hp card.
+        /// </summary>
+        private void MoveManaPanelToTopLeft()
+        {
+            if (_root == null) return;
+            var manaPanel = _root.Q<VisualElement>("mana-panel");
+            if (manaPanel == null) return;
+            manaPanel.style.position = Position.Absolute;
+            manaPanel.style.top = 64;       // under heart-hp card
+            manaPanel.style.left = 16;
+            manaPanel.style.width = 220;
         }
 
         /// <summary>
