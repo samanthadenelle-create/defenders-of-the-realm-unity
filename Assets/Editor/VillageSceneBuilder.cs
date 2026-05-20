@@ -603,20 +603,15 @@ namespace DeNelle.Editor
                 if (gateModel != null)
                     visual.transform.localScale *= BuildingScale;
 
-                // The violet shimmer plane — a thin emissive quad in the opening.
-                // (Week-3 visual stand-in; the shimmer shader lands Week 4.)
-                // Must take the SAME yaw correction as the gate model above, or
-                // the shimmer sits 90deg across the opening instead of filling it.
-                var shimmer = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                shimmer.name = "ForceFieldShimmer";
-                shimmer.transform.SetParent(go.transform, false);
-                // Owner 2026-05-20 (2nd pass): cut to 0.8 × BuildingScale so
-                // the shimmer reads as a doorway veil, not a tower curtain.
-                shimmer.transform.localPosition = new Vector3(0f, 0.65f * BuildingScale, 0f);
-                shimmer.transform.localRotation = Quaternion.Euler(0f, WallStraightYawFix, 0f);
-                shimmer.transform.localScale = new Vector3(GateHalfWidthConst * 2f * BuildingScale, 0.8f * BuildingScale, 0.08f);
-                UnityEngine.Object.DestroyImmediate(shimmer.GetComponent<Collider>());
-                ApplyEmissive(shimmer, new Color(0.61f, 0.44f, 1f), 1.4f);
+                // Castle ballast tower arch — replaces the violet force-field
+                // shimmer per owner direction 2026-05-20: "get rid of force
+                // field, use the castle model for the entrance ways". The
+                // arch is purely decorative; the FBX's mesh sits ABOVE the
+                // gate's wall_straight_gate piece so the silhouette reads as
+                // a fortified entrance. All colliders stripped so hero / pets
+                // pass through naturally; enemy pathing is governed by the
+                // navmesh + wave spawn flow, not by the arch geometry.
+                AttachCastleArch(go.transform);
 
                 var gateComp = AddVillageComponent(go, TypeGate);
                 if (gateComp != null)
@@ -1542,6 +1537,56 @@ namespace DeNelle.Editor
         /// player into Dungeon_HealersCottage via DungeonPortal (DeNelle.Village).
         /// Idempotent — a prior "DungeonPortal" GO is destroyed first.
         /// </summary>
+        /// <summary>
+        /// Loads Assets/Models/CastleGate/castle+ballast+Tower.fbx and parents
+        /// a stripped-collider instance to <paramref name="gate"/>. Owner ask
+        /// 2026-05-20: replaces the violet force-field shimmer with a real
+        /// castle arch so the gate reads as a fortified entrance.
+        /// </summary>
+        private static void AttachCastleArch(Transform gate)
+        {
+            const string CastlePath = "Assets/Models/CastleGate/castle+ballast+Tower.fbx";
+            var model = LoadModel(CastlePath);
+            if (model == null)
+            {
+                Debug.LogWarning("[VillageSceneBuilder] castle+ballast+Tower.fbx not found at " +
+                                 $"'{CastlePath}' — skipping castle arch.");
+                return;
+            }
+            var arch = InstantiateModel(model, "castle+ballast+Tower.fbx", "CastleArch");
+            arch.transform.SetParent(gate, false);
+
+            // Align with the gate opening: the existing wall_straight_gate
+            // already takes WallStraightYawFix; the arch needs the same yaw so
+            // it sits flush rather than 90deg across the opening.
+            arch.transform.localPosition = Vector3.zero;
+            arch.transform.localRotation = Quaternion.Euler(0f, WallStraightYawFix, 0f);
+
+            // Normalise arch to the gate width so a single FBX serves all
+            // four cardinal gates regardless of native KayKit / Tripo scale.
+            // Target: ~2 × gate half-width on the wall axis, BuildingScale up.
+            float targetWidth = GateHalfWidthConst * 2f * BuildingScale;
+            var renderers = arch.GetComponentsInChildren<Renderer>();
+            if (renderers != null && renderers.Length > 0)
+            {
+                Bounds b = renderers[0].bounds;
+                for (int i = 1; i < renderers.Length; i++) b.Encapsulate(renderers[i].bounds);
+                float maxDim = Mathf.Max(b.size.x, b.size.z);
+                if (maxDim > 0.01f)
+                    arch.transform.localScale *= (targetWidth / maxDim);
+            }
+            else
+            {
+                arch.transform.localScale = Vector3.one * BuildingScale;
+            }
+
+            // Strip every collider so hero + pets walk through unobstructed
+            // (the wall_straight_gate piece already supplies the side-pillar
+            // colliders that read as the gate's solid bits).
+            foreach (var c in arch.GetComponentsInChildren<Collider>(true))
+                if (c != null) UnityEngine.Object.DestroyImmediate(c);
+        }
+
         private static void SpawnDungeonPortal()
         {
             var portalType = FindType(TypeDungeonPortal);
