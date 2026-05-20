@@ -23,7 +23,15 @@ namespace DeNelle.Village
     {
         private const float ActivateRadius = 5.5f;
         private const float PromptHeight = 4.4f;
-        private const string DungeonId = "Dungeon_HealersCottage";
+
+        [SerializeField] private string _dungeonId = "Dungeon_HealersCottage";
+        [SerializeField] private string _displayName = "Healer's Cottage";
+
+        public void Configure(string dungeonId, string displayName)
+        {
+            _dungeonId = dungeonId;
+            _displayName = string.IsNullOrEmpty(displayName) ? dungeonId : displayName;
+        }
 
         private Transform _hero;
         private GameObject _promptGo;
@@ -72,7 +80,7 @@ namespace DeNelle.Village
         private void ShowPrompt()
         {
             _promptGo = BuildBubble(
-                "〔 F 〕 Healer's Cottage",
+                "〔 F 〕 " + _displayName,
                 PromptHeight,
                 new Color(0.10f, 0.04f, 0.20f, 0.96f),
                 new Color(0.78f, 0.55f, 1f, 1f));
@@ -88,10 +96,10 @@ namespace DeNelle.Village
         {
             _loading = true;
             HidePrompt();
-            Debug.Log("[DungeonPortal] Entering dungeon " + DungeonId);
+            Debug.Log("[DungeonPortal] Entering dungeon " + _dungeonId);
             try
             {
-                SceneRouter.GoDungeon(DungeonId).Forget();
+                SceneRouter.GoDungeon(_dungeonId).Forget();
             }
             catch (System.Exception ex)
             {

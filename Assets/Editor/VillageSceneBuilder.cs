@@ -152,6 +152,7 @@ namespace DeNelle.Editor
         private const string TypeHeroCinemachineRig = NsVillage + ".HeroCinemachineRig";
         private const string TypeVillageCamera = NsVillage + ".VillageCamera";
         private const string TypeWaveHudBridge = NsVillage + ".WaveHudBridge";
+        private const string TypeDailyQuestCombatBridge = NsVillage + ".DailyQuestCombatBridge";
         private const string TypeBuildMenuHudBridge = NsVillage + ".BuildMenuHudBridge";
         private const string TypeBuildingInteractable = NsVillage + ".BuildingInteractable";
         private const string TypeDungeonPortal = NsVillage + ".DungeonPortal";
@@ -365,6 +366,9 @@ namespace DeNelle.Editor
             // Wire WaveManager → HUD so the wave-countdown timer actually
             // updates (the HUD shipped without a subscriber — 2026-05-19).
             WireWaveHudBridge();
+            // Pipe wave clears into the daily-quest service so the combat
+            // slot's "Clear N waves" template ticks during real play.
+            WireDailyQuestCombatBridge();
             // Wire HUD Build button → BuildMenu.Open (the click did nothing
             // before this bridge — 2026-05-20 PO observation).
             WireBuildMenuHudBridge();
@@ -1546,13 +1550,28 @@ namespace DeNelle.Editor
                 return;
             }
 
-            var existing = GameObject.Find("DungeonPortal");
-            if (existing != null) UnityEngine.Object.DestroyImmediate(existing);
+            // Clean any pre-existing portals from prior builds.
+            foreach (var name in new[] { "DungeonPortal", "DungeonPortal_HealersCottage",
+                                         "DungeonPortal_FolksGranary" })
+            {
+                var existing = GameObject.Find(name);
+                if (existing != null) UnityEngine.Object.DestroyImmediate(existing);
+            }
 
-            // Tuck the portal just inside the south gate so the player walks
-            // out, sees it framed by the gate arch, and approaches naturally.
-            var root = new GameObject("DungeonPortal");
-            root.transform.position = new Vector3(0f, 0f, -18f);
+            // One portal per shipped dungeon scene. Position offsets fan them
+            // around the south gate so the player meets them in sequence.
+            BuildOneDungeonPortal(portalType, "DungeonPortal_HealersCottage",
+                new Vector3(-6f, 0f, -18f), "Dungeon_HealersCottage", "Healer's Cottage");
+            BuildOneDungeonPortal(portalType, "DungeonPortal_FolksGranary",
+                new Vector3( 6f, 0f, -18f), "Dungeon_FolksGranary",   "Folk's Old Granary");
+        }
+
+        private static void BuildOneDungeonPortal(System.Type portalType, string objectName,
+                                                  Vector3 position, string dungeonId,
+                                                  string displayName)
+        {
+            var root = new GameObject(objectName);
+            root.transform.position = position;
             root.transform.rotation = Quaternion.Euler(0f, 180f, 0f);
 
             const float archWidth = 4.5f;
@@ -1592,6 +1611,8 @@ namespace DeNelle.Editor
             var portal = root.AddComponent(portalType);
             var bindMethod = portalType.GetMethod("BindShimmer");
             bindMethod?.Invoke(portal, new object[] { shimmer.GetComponent<Renderer>() });
+            var cfgMethod = portalType.GetMethod("Configure");
+            cfgMethod?.Invoke(portal, new object[] { dungeonId, displayName });
         }
 
         private static void BuildPortalPillar(Transform parent, Vector3 pos, Vector3 scale)
@@ -1646,6 +1667,22 @@ namespace DeNelle.Editor
             SetObjectField(so, "_wave", (UnityEngine.Object)wave);
             SetObjectField(so, "_hud", (UnityEngine.Object)hud);
             so.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        /// <summary>
+        /// Adds the DailyQuestCombatBridge to the WaveManager GameObject so
+        /// OnWaveCleared ticks the daily-quest service. Idempotent.
+        /// </summary>
+        private static void WireDailyQuestCombatBridge()
+        {
+            var waveType = FindType(TypeWaveManager);
+            var bridgeType = FindType(TypeDailyQuestCombatBridge);
+            if (waveType == null || bridgeType == null) return;
+            var wave = UnityEngine.Object.FindObjectOfType(waveType);
+            if (wave == null) return;
+            var waveGo = ((Component)wave).gameObject;
+            if (waveGo.GetComponent(bridgeType) == null)
+                waveGo.AddComponent(bridgeType);
         }
 
         /// <summary>

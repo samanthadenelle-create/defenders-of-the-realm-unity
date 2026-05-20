@@ -78,7 +78,13 @@ namespace DeNelle.Core
         public const string ATBBattle = "ATBBattle";
 
         /// <summary>The Week-1 starter dungeon scene name.</summary>
-        public const string DungeonHealersCottage = "Dungeon_HealersCottage";
+        public const string DungeonHealersCottage   = "Dungeon_HealersCottage";
+        public const string DungeonFolksGranary     = "Dungeon_FolksGranary";
+        public const string DungeonSunkenBellTower  = "Dungeon_SunkenBellTower";
+        public const string DungeonWolfwardensVigil = "Dungeon_WolfwardensVigil";
+        public const string DungeonFrostStair       = "Dungeon_FrostStair";
+        public const string DungeonGlassCathedral   = "Dungeon_GlassCathedral";
+        public const string DungeonApothecarysVault = "Dungeon_ApothecarysVault";
 
         /// <summary>The default fade duration, in seconds, for <see cref="LoadSceneWithFade"/>.</summary>
         public const float DefaultFadeSeconds = 0.4f;

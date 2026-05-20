@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "maxHp": 160,
+  "ringRadius": 4.4,
+  "regenPerSecondOutOfCombat": 0,
+  "phases": [
+    {
+      "id": "intact",
+      "hpThreshold": 1.0,
+      "label": "Steady",
+      "description": "The Heart pulses with full radiance."
+    },
+    {
+      "id": "wounded",
+      "hpThreshold": 0.6,
+      "label": "Wounded",
+      "description": "Fractures spider across the crystal core; the glow flickers."
+    },
+    {
+      "id": "critical",
+      "hpThreshold": 0.25,
+      "label": "Critical",
+      "description": "Cracks gape; the Heart sputters and dims toward failure."
+    }
+  ],
+  "notes": "Ported from React src/modules/village/combat/constants.ts (HEART_MAX_HP) and src/modules/village/constants.ts (HEART_R). Phase thresholds match the HUD low-HP swap in HeartController."
+}

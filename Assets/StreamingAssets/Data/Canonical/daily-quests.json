@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "slotCount": 3,
+  "resetAtLocalMidnight": true,
+  "rerollsFreePerDay": 1,
+  "rerollCostCrystals": 50,
+  "rerollsMaxPerDay": 3,
+  "noOneGotThisFloorDays": 14,
+  "noOneGotThisFloorWeightBoost": 0.30,
+  "slots": [
+    { "slot": "combat",      "rewardCrystals": 80, "rewardFood":  0, "rewardGlimmer": 1, "rewardWisdom": 1, "rewardRandomItem": false },
+    { "slot": "exploration", "rewardCrystals": 60, "rewardFood": 20, "rewardGlimmer": 1, "rewardWisdom": 0, "rewardRandomItem": false },
+    { "slot": "wildcard",    "rewardCrystals":  0, "rewardFood":  0, "rewardGlimmer": 1, "rewardWisdom": 1, "rewardRandomItem": true }
+  ],
+  "templates": [
+    { "id": "combat.clear-waves",            "slot": "combat",      "target":  3, "label": "Clear {target} waves",                                  "weight": 0.70, "requiresFeature": null },
+    { "id": "combat.clear-element-wave",     "slot": "combat",      "target":  1, "label": "Clear an {element} wave",                               "weight": 0.10, "requiresFeature": null },
+    { "id": "combat.frost-nova-kills",       "slot": "combat",      "target":  8, "label": "Defeat {target} enemies with Frost Nova",               "weight": 0.05, "requiresHero": "mage" },
+    { "id": "combat.sword-strike-kills",     "slot": "combat",      "target": 20, "label": "Defeat {target} enemies with Sword Strike",             "weight": 0.05, "requiresHero": "knight" },
+    { "id": "combat.hawks-eye-crits",        "slot": "combat",      "target":  5, "label": "Land {target} Hawk's Eye crits",                        "weight": 0.05, "requiresHero": "ranger" },
+    { "id": "combat.heart-below-30",         "slot": "combat",      "target":  1, "label": "Survive a wave with the Heart below 30% HP",            "weight": 0.025, "requiresFeature": null },
+    { "id": "combat.no-ultimate",            "slot": "combat",      "target":  1, "label": "Win a wave without casting your ultimate",              "weight": 0.025, "requiresFeature": null },
+    { "id": "explore.harvest-orbs",          "slot": "exploration", "target":  8, "label": "Harvest {target} resource orbs",                        "weight": 0.30, "requiresFeature": "harvesting" },
+    { "id": "explore.harvest-iron",          "slot": "exploration", "target":  3, "label": "Harvest {target} iron",                                 "weight": 0.10, "requiresFeature": "harvesting" },
+    { "id": "explore.walk-all-gates",        "slot": "exploration", "target":  4, "label": "Walk past all four village gates in one day",          "weight": 0.20, "requiresFeature": null },
+    { "id": "explore.tend-each-warden",      "slot": "exploration", "target":  3, "label": "Tend a building with each Warden once",                 "weight": 0.10, "requiresFeature": null },
+    { "id": "explore.talk-heroes",           "slot": "exploration", "target":  2, "label": "Talk to {target} village heroes",                       "weight": 0.20, "requiresFeature": null },
+    { "id": "explore.wintermere-time",       "slot": "exploration", "target": 60, "label": "Spend {target} seconds in the Wintermere zone",         "weight": 0.10, "requiresFeature": null },
+    { "id": "wildcard.awaken-warden",        "slot": "wildcard",    "target":  1, "label": "Awaken a new Warden species",                            "weight": 1.0, "requiresFeature": null },
+    { "id": "wildcard.increase-bond-rank",   "slot": "wildcard",    "target":  1, "label": "Increase a Bond Rank",                                  "weight": 1.0, "requiresFeature": null },
+    { "id": "wildcard.upgrade-tower",        "slot": "wildcard",    "target":  1, "label": "Build or upgrade a tower",                              "weight": 1.0, "requiresFeature": "tower-build" },
+    { "id": "wildcard.fortify-wall",         "slot": "wildcard",    "target":  1, "label": "Fortify a wall segment",                                 "weight": 1.0, "requiresFeature": "tower-build" },
+    { "id": "wildcard.equip-cosmetic",       "slot": "wildcard",    "target":  1, "label": "Equip a new cosmetic",                                   "weight": 1.0, "requiresFeature": "cosmetic-shop" },
+    { "id": "wildcard.learn-talent",         "slot": "wildcard",    "target":  1, "label": "Learn a talent",                                         "weight": 1.0, "requiresFeature": "hero-talents" },
+    { "id": "wildcard.watch-intro",          "slot": "wildcard",    "target":  1, "label": "Watch the intro once today",                             "weight": 1.0, "requiresFeature": null },
+    { "id": "wildcard.earn-glimmer",         "slot": "wildcard",    "target":  5, "label": "Earn {target} glimmer",                                  "weight": 1.0, "requiresFeature": null }
+  ],
+  "notes": "Ported from React docs/daily-quests-spec.md (agent worktree — not yet merged to main). Combat slot uses weighted random with 70% failsafe; wildcard rotates round-robin to maximize variety over a week. Templates whose requiresFeature is not yet shipped are auto-skipped at roll time."
+}

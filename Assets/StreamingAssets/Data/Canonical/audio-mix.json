@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "tracks": {
+    "title":   { "source": "title.mp3",   "defaultVolume": 0.60, "loop": true,  "fadeInMs": 1200, "fadeOutMs": 1000, "notes": "Title screen + opening cinematic. Moderate — supports the 14-line narrative without competing." },
+    "village": { "source": "village.mp3", "defaultVolume": 0.40, "loop": true,  "fadeInMs": 1200, "fadeOutMs": 1000, "notes": "Long-session exploration music. Soft so players aren't fatigued." },
+    "dungeon": { "source": "dungeon.mp3", "defaultVolume": 0.25, "loop": true,  "fadeInMs": 1200, "fadeOutMs": 1000, "notes": "Very soft — ambient only. Footsteps + NPC bubbles + sound design sit above it." },
+    "battle":  { "source": "battle.mp3",  "defaultVolume": 0.70, "loop": true,  "fadeInMs": 600,  "fadeOutMs": 600,  "notes": "ATB Last Stand combat. Drives tension. Quick crossfade — combat is a moment, not a state." },
+    "victory": { "source": "victory.mp3", "defaultVolume": 0.70, "loop": false, "fadeInMs": 200,  "fadeOutMs": 800,  "notes": "Plays once on battle win. Hard fade-in (celebratory beat), gentle fade-out into next state." },
+    "defeat":  { "source": "defeat.mp3",  "defaultVolume": 0.50, "loop": false, "fadeInMs": 1500, "fadeOutMs": 1500, "notes": "Plays once on battle loss. Softer than victory — let the loss land slowly." }
+  },
+  "transitions": [
+    { "from": "title",   "to": "village", "pattern": "crossfade", "ms": 1200, "rationale": "Soft transition into long-session music" },
+    { "from": "village", "to": "dungeon", "pattern": "crossfade", "ms": 1200, "rationale": "Mood shift — quieter, sets the dungeon's quiet-stakes register" },
+    { "from": "village", "to": "battle",  "pattern": "crossfade", "ms": 600,  "rationale": "Combat ramp-up; tension rising fast" },
+    { "from": "dungeon", "to": "battle",  "pattern": "crossfade", "ms": 600,  "rationale": "Same" },
+    { "from": "battle",  "to": "victory", "pattern": "hard-cut",  "ms": 200,  "rationale": "Celebratory beat needs the cut to land. No mush." },
+    { "from": "battle",  "to": "defeat",  "pattern": "crossfade", "ms": 1500, "rationale": "Slow grief beat. The loss should sink in, not slap." },
+    { "from": "victory", "to": "village", "pattern": "crossfade", "ms": 1000, "rationale": "Return to base; gentle" },
+    { "from": "victory", "to": "dungeon", "pattern": "crossfade", "ms": 1000, "rationale": "Return to dungeon if win was a scripted encounter inside" },
+    { "from": "defeat",  "to": "village", "pattern": "crossfade", "ms": 1500, "rationale": "Slow return; breathing room before village softness lands" },
+    { "from": "dungeon", "to": "village", "pattern": "crossfade", "ms": 1200, "rationale": "Dungeon exit; warm return" }
+  ],
+  "volumeNudges": [
+    { "event": "checkpoint-shrine-activated", "track": "dungeon", "to": 0.15, "durationSeconds": 4, "purpose": "Marks the deep-breath beat. Subtle." },
+    { "event": "watch-stop-fires",            "track": "village", "to": 0.28, "durationSeconds": 5, "purpose": "Lets the Mentor's line land without music competition" },
+    { "event": "lore-stone-read",             "track": "dungeon", "to": 0.12, "durationSeconds": 6, "purpose": "The journal entry IS the moment" },
+    { "event": "boss-intro",                  "track": "dungeon", "to": 0.00, "durationSeconds": -1, "purpose": "Total silence before boss reveal. Battle track then hard-cuts in." },
+    { "event": "dragon-banner-first-load",    "track": "title",   "to": 0.40, "durationSeconds": 8, "purpose": "Lets the player register Heart-Wing visually before music re-asserts" }
+  ],
+  "accessibility": {
+    "prefersReducedMotion": "All fades become hard cuts / snap to target volume instantly.",
+    "masterMute": "Cuts all music immediately, ignores fade durations.",
+    "firstTapUnlock": "Audio context unlocks on first user gesture; queued plays fire as hard cut on first gesture."
+  },
+  "notes": "Ported from docs/audio-mix-spec.md. Owner-locked mix direction 2026-05-18."
+}

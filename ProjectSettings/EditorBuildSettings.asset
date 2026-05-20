@@ -23,6 +23,9 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/ATBBattle.unity
     guid: 750cbbf0386ec794d965f3337fb9e8a7
+  - enabled: 1
+    path: Assets/Scenes/Dungeon_FolksGranary.unity
+    guid: 6f71f9f7476706d4fb7c9a43dddd8021
   m_configObjects:
     com.unity.addressableassets: {fileID: 11400000, guid: 16d06bc18dab1cd408b1472b0382cf8a, type: 2}
     com.unity.localization.settings: {fileID: 11400000, guid: 5c0e933b7e0cc6245829bac0db9201b3, type: 2}

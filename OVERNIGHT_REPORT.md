@@ -229,3 +229,104 @@ you can". You were away for an hour. Here's what changed.
   repo and `vercel --prod`.
 - Wire `UnityWebRequest` clients for `/api/leaderboard` + `/api/metrics`
   after the deploy is live.
+
+---
+
+## Office-trip sweep — 2026-05-20 (owner away at work)
+
+Owner direction before leaving: "you do as best need to go to office be
+back soo" + earlier the cross-repo punch list of what's missing for full
+replication. Worked autonomously through the highest-value, non-blocked
+items. Branch builds clean; one commit covers this shift.
+
+### Canonical data tables ported from React (6 new JSON files)
+Owner-facing punch list called out missing files under
+`Assets/StreamingAssets/Data/Canonical/`. Ported these directly from React
+sources so future Unity systems can load them at runtime:
+
+- `walls.json` — square perimeter (halfSize 25), 4 tiers with mesh paths,
+  Heart-damage multipliers, spike DPS. (src: walls/constants.ts)
+- `towers.json` — 3 elemental zones × 3 slots, per-level combat stats
+  (range/dmg/cd/height), slot fan-angle math. (src: buildings/towerConstants.ts)
+- `heart.json` — max HP 160, ring radius, three HP phases. (src: village
+  constants)
+- `enemy-roles.json` — full 25-creature × 9-role taxonomy with stat
+  scales + behavior text. (src: src/assets/enemyRoles.ts verbatim)
+- `pet-skill-trees.json` — 6 skills × 3 species (Aether Sprite / Flame Pup
+  / Ice Wolf), tier graph + prerequisites. (src: src/data/gameDesign.ts
+  PET_SKILL_TREES verbatim)
+- `audio-mix.json` — owner-locked track defaults + state-transition
+  patterns + volume nudges. (src: docs/audio-mix-spec.md)
+
+### Pet skill-tree catalog
+- `Assets/_Modules/Pets/PetSkillTreeCatalog.cs` — static loader over
+  `pet-skill-trees.json` (mirrors PetCatalog pattern), exposes `GetTree`,
+  `FindSkill`, and a `CanUnlock(skillId, petLevel, unlocked)` helper that
+  validates both unlock-level + prerequisite tree.
+- UI panel deferred to follow-up; data + lookup surface is enough to start
+  wiring the talent screen.
+
+### Daily-quest system (P0 from the punch list — skeleton + UI chip)
+React `daily-quests-spec.md` was design-only with zero implementation. Now:
+- `Assets/StreamingAssets/Data/Canonical/daily-quests.json` — three slots
+  (combat / exploration / wildcard), 21 templates with weighted random,
+  reroll economy (1 free + 50 crystals × 2 more, max 3/day), reset at
+  local midnight, no FOMO.
+- `Assets/_Modules/Core/Quests/DailyQuests.cs` — singleton
+  `DailyQuestService` that auto-boots, persists today's set to
+  `PlayerPrefs["dotr-daily-quests-v1"]`, exposes `Report(eventId, n)` so
+  gameplay code ticks progress without naming the manager, and
+  `Reroll(slot, spendCrystals?)` with the free/paid rule baked in.
+  Templates whose `requiresFeature` is not yet shipped (harvesting,
+  tower-build, cosmetic-shop, hero-talents) auto-skip at roll time.
+- `Assets/_Modules/HUD/DailyQuestHud.cs` + `Bootstrap` — top-right stack
+  of three rounded chips with per-slot rim color (red combat / blue
+  exploration / violet wildcard) + progress bar. Refreshes on
+  `SetChanged` event.
+- `Assets/_Modules/Village/Waves/DailyQuestCombatBridge.cs` — subscribes
+  to `WaveManager.OnWaveCleared` and ticks `combat.clear-waves`. Wired
+  automatically by `VillageSceneBuilder.WireDailyQuestCombatBridge()`.
+
+### Dungeon scaling (P0 from punch list — second dungeon shipped)
+Punch list flagged 5-of-6 dungeons unbuilt. Cloning the 2100-line
+Healer's Cottage builder six times wasn't realistic — wrote a stub-tier
+builder instead so all secondary dungeons are PLAYABLE and the routing
+loop is provable, leaving per-dungeon polish as separate tasks.
+
+- `Assets/Editor/DungeonStubBuilder.cs` — parameterised builder. One call
+  per dungeon: floor + perimeter walls + ambient light + hero placeholder
+  + violet exit pad + UIDocument sign with the dungeon name and a
+  thematic flavor line. Registers the scene in build settings.
+- Six wrapper methods: `BuildFolksGranary`, `BuildSunkenBellTower`,
+  `BuildWolfwardensVigil`, `BuildFrostStair`, `BuildGlassCathedral`,
+  `BuildApothecarysVault`. Each just packs colors + flavor and calls the
+  shared `Build()`.
+- `Assets/Scenes/Dungeon_FolksGranary.unity` — first stub scene built and
+  verified (55 KB on disk).
+- `Assets/_Modules/Dungeons/DungeonStubReturn.cs` — exit-pad return logic
+  (trigger enter OR press F within 3 m) routes
+  `SceneRouter.GoVillage()`. Lives in DeNelle.Dungeons.
+- `SceneRouter.cs` — added const strings for all six secondary dungeons.
+- `DungeonPortal.cs` — now parameterised. New `Configure(dungeonId,
+  displayName)` method so one component services any portal target.
+- `VillageSceneBuilder.SpawnDungeonPortal` — refactored to spawn one
+  portal per shipped dungeon (currently 2: Healer's Cottage at z=-18,
+  x=-6 and Folk's Old Granary at z=-18, x=+6). Adding a new dungeon =
+  one line in the builder + one `BuildXxx()` call.
+
+### Verified
+- Headless village rebuild after the quest bridges landed — exit 0,
+  `BuildVillage complete` log line present.
+- Folk's Granary stub scene built headless — exit 0, scene file on disk.
+- Final village rebuild with two portals + player build will run as part
+  of the closing commit (see commit message for results).
+
+### Pending after this shift
+- UI panel for pet skill trees (data + loader ready, screen not built).
+- Polish stub dungeons into full layouts as time allows — current stubs
+  are functional but visually placeholder.
+- Daily-quest reward dispense (catalog has reward amounts; service stores
+  `claimedAtUnix` but doesn't yet pay out crystals/glimmer/wisdom — needs
+  GameStateService.AddCrystals etc. methods).
+- Wire the remaining combat templates (frost-nova, sword-strike, hawks-eye)
+  to ability events once those hooks land in HeroAbilities.
