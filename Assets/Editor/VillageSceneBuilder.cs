@@ -603,6 +603,20 @@ namespace DeNelle.Editor
                 if (gateModel != null)
                     visual.transform.localScale *= BuildingScale;
 
+                // Owner 2026-05-20 ("hole where walls don't touch door"):
+                // WallLayout leaves a GAP of GateGapHalf*2 = 4 m, but the
+                // gate mesh's natural width matches only GateHalfWidth*2 =
+                // 2.8 m — so a 1.43× stretch on the gate's run-axis fills
+                // the gap so the wall sections meet the gate edge cleanly.
+                // After WallStraightYawFix (90°) the gate's local X is the
+                // run direction, so scale.x is what to stretch.
+                if (gateModel != null)
+                {
+                    Vector3 s = visual.transform.localScale;
+                    s.x *= (1.4f + 0.6f) / 1.4f;
+                    visual.transform.localScale = s;
+                }
+
                 // Owner 2026-05-20 ("purple frame on gate"): the KayKit gate
                 // mesh has a stone-arch submesh whose material falls through
                 // to URP's magenta fallback in the player build. Attach the
@@ -615,6 +629,15 @@ namespace DeNelle.Editor
                     var setTint = fixerType.GetMethod("SetFallbackTint");
                     setTint?.Invoke(fixer, new object[] { new Color(0.52f, 0.50f, 0.46f) });
                 }
+
+                // Owner 2026-05-20 ("still rocks in front of gate cannot
+                // access gate"): the KayKit gate FBX ships with a MeshCollider
+                // that follows the stone arch + wall geometry, which blocks
+                // the hero's CapsuleCast right in the gate threshold. Strip
+                // all colliders on the gate visual so the doorway is genuinely
+                // walk-through. The wall sections on either side keep their
+                // colliders so the perimeter remains solid.
+                StripColliders(visual);
 
                 // Castle arch removed per owner direction 2026-05-20: the
                 // Tripo castle ballast Tower FBX rendered as a pink ghost in
