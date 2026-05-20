@@ -29,6 +29,7 @@
 
 using Cysharp.Threading.Tasks;
 using DeNelle.Core;
+using DeNelle.Core.State;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -211,6 +212,14 @@ namespace DeNelle.Onboarding
             if (flankR != null && archerTex != null)
                 flankR.style.backgroundImage = new StyleBackground(archerTex);
 
+            // Owner ask 2026-05-20: "hero select screen cannot select hero" —
+            // make the three Title flanks themselves the hero pickers so the
+            // player can choose straight from the title. Each click writes the
+            // hero choice via GameStateService.ChooseHero and routes onward.
+            WireFlankAsHeroPicker(flankL, HeroClass.Mage);
+            WireFlankAsHeroPicker(flankC, HeroClass.Knight);
+            WireFlankAsHeroPicker(flankR, HeroClass.Ranger);
+
             // ── Buttons ──────────────────────────────────────────────────────
             _startButton = _root.Q<Button>("start-button");
             if (_startButton != null)
@@ -239,6 +248,34 @@ namespace DeNelle.Onboarding
         {
             if (_startButton != null) _startButton.clicked -= OnStartClicked;
             if (_connectWalletButton != null) _connectWalletButton.clicked -= OnConnectWalletClicked;
+        }
+
+        /// <summary>
+        /// Wires one of the three title flanks (wizard / knight / archer) to
+        /// act as a direct hero picker. Click → write the choice to
+        /// GameStateService.ChooseHero and route to PetSelect, skipping the
+        /// HeroSelect screen entirely. Visual cue (cursor + slight hover lift)
+        /// applied so the player can tell it's interactive.
+        /// </summary>
+        private static void WireFlankAsHeroPicker(VisualElement flank, HeroClass hero)
+        {
+            if (flank == null) return;
+            flank.pickingMode = PickingMode.Position;
+            flank.RegisterCallback<PointerEnterEvent>(_ =>
+            {
+                flank.style.scale = new StyleScale(new Scale(new Vector3(1.04f, 1.04f, 1f)));
+            });
+            flank.RegisterCallback<PointerLeaveEvent>(_ =>
+            {
+                flank.style.scale = new StyleScale(new Scale(Vector3.one));
+            });
+            flank.RegisterCallback<ClickEvent>(_ =>
+            {
+                Debug.Log("[TitleController] Flank-click picked hero: " + hero);
+                var svc = GameStateService.Instance;
+                if (svc != null) svc.ChooseHero(hero);
+                SceneRouter.GoPetSelect();
+            });
         }
 
         // ── Start — enter the intro flow (hero-select -> pet-select -> village) ─
