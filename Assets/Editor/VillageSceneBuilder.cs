@@ -1119,58 +1119,55 @@ namespace DeNelle.Editor
 
         private static void BuildCityDressing(Transform parent)
         {
+            // Owner direction 2026-05-20 ("spread out the town structures
+            // wider — the clustered ones prevent navigation"). Spaced each
+            // dressing building's footprint by ~1.5× from its prior
+            // position so the hero (+ pet pack) can walk between them
+            // freely. Quarter labels unchanged.
+
             // ── §6.1 Residential cluster (SW) — homes around a well ──────────
             var residential = NewChild(parent, "Residential-SW");
             var residentialDefs = new[]
             {
-                new DressDef { Name = "Home-A1", Fbx = "building_home_A", X = -22f, Z = -6f, Yaw = 70f, PlaceholderColor = C("d8c69a") },
-                new DressDef { Name = "Home-A2", Fbx = "building_home_A", X = -22f, Z = -12f, Yaw = 95f, PlaceholderColor = C("d8c69a") },
-                new DressDef { Name = "Home-A3", Fbx = "building_home_A", X = -10f, Z = -16f, Yaw = 160f, PlaceholderColor = C("d8c69a") },
-                new DressDef { Name = "Home-B1", Fbx = "building_home_B", X = -16f, Z = -16f, Yaw = 200f, PlaceholderColor = C("c9b48a") },
-                new DressDef { Name = "Home-B2", Fbx = "building_home_B", X = -23f, Z = -16f, Yaw = 25f, PlaceholderColor = C("c9b48a") },
-                new DressDef { Name = "Home-B3", Fbx = "building_home_B", X = -10.5f, Z = -10f, Yaw = 120f, PlaceholderColor = C("c9b48a") },
+                new DressDef { Name = "Home-A1", Fbx = "building_home_A", X = -30f, Z = -8f, Yaw = 70f, PlaceholderColor = C("d8c69a") },
+                new DressDef { Name = "Home-A2", Fbx = "building_home_A", X = -30f, Z = -18f, Yaw = 95f, PlaceholderColor = C("d8c69a") },
+                new DressDef { Name = "Home-A3", Fbx = "building_home_A", X = -14f, Z = -22f, Yaw = 160f, PlaceholderColor = C("d8c69a") },
+                new DressDef { Name = "Home-B1", Fbx = "building_home_B", X = -22f, Z = -23f, Yaw = 200f, PlaceholderColor = C("c9b48a") },
+                new DressDef { Name = "Home-B2", Fbx = "building_home_B", X = -32f, Z = -23f, Yaw = 25f, PlaceholderColor = C("c9b48a") },
+                new DressDef { Name = "Home-B3", Fbx = "building_home_B", X = -14f, Z = -14f, Yaw = 120f, PlaceholderColor = C("c9b48a") },
             };
             foreach (var d in residentialDefs) PlaceDressing(residential, d, false);
-            // The well at the cluster's centre (§6.1).
             PlaceDressing(residential,
-                new DressDef { Name = "Well", Fbx = "building_well", X = -16.5f, Z = -11.5f, Yaw = 0f, PlaceholderColor = C("8aa0b0") },
+                new DressDef { Name = "Well", Fbx = "building_well", X = -23f, Z = -16f, Yaw = 0f, PlaceholderColor = C("8aa0b0") },
                 false);
 
             // ── §6.2 Market quarter (around the plaza, south) ────────────────
             var market = NewChild(parent, "Market-S");
-            // Market on the plaza's south side.
             PlaceDressing(market,
-                new DressDef { Name = "Market", Fbx = "building_market", X = -3f, Z = -9f, Yaw = 10f, PlaceholderColor = C("c98f4a") },
+                new DressDef { Name = "Market", Fbx = "building_market", X = -4f, Z = -13f, Yaw = 10f, PlaceholderColor = C("c98f4a") },
                 false);
-            // Tavern on the plaza's SE corner.
             PlaceDressing(market,
-                new DressDef { Name = "Tavern", Fbx = "building_tavern", X = 11f, Z = -8.5f, Yaw = 250f, PlaceholderColor = C("b5793c") },
+                new DressDef { Name = "Tavern", Fbx = "building_tavern", X = 16f, Z = -12f, Yaw = 250f, PlaceholderColor = C("b5793c") },
                 false);
-            // Church on the plaza's north side — small, not competing (§6.2).
             PlaceDressing(market,
-                new DressDef { Name = "Church", Fbx = "building_church", X = -2f, Z = 9.5f, Yaw = 185f, PlaceholderColor = C("d7d2c4") },
+                new DressDef { Name = "Church", Fbx = "building_church", X = -3f, Z = 14f, Yaw = 185f, PlaceholderColor = C("d7d2c4") },
                 false);
 
             // ── §6.3 Workshop quarter (NE) — blacksmith + townhall ───────────
             var workshopQ = NewChild(parent, "Workshop-NE");
-            // Blacksmith adjacent to the Workshop building (Workshop is at +16,+12.5).
             PlaceDressing(workshopQ,
-                new DressDef { Name = "Blacksmith", Fbx = "building_blacksmith", X = 22.5f, Z = 9f, Yaw = 230f, PlaceholderColor = C("8a7d6a") },
+                new DressDef { Name = "Blacksmith", Fbx = "building_blacksmith", X = 30f, Z = 13f, Yaw = 230f, PlaceholderColor = C("8a7d6a") },
                 false);
-            // Townhall on the NE corner of the plaza (small civic building).
             PlaceDressing(workshopQ,
-                new DressDef { Name = "Townhall", Fbx = "building_townhall", X = 11f, Z = 8.5f, Yaw = 200f, PlaceholderColor = C("c2b79a") },
+                new DressDef { Name = "Townhall", Fbx = "building_townhall", X = 16f, Z = 12f, Yaw = 200f, PlaceholderColor = C("c2b79a") },
                 false);
-            // A small fenced workshop yard between Workshop + Blacksmith, with
-            // anvil / lumber / tool props (§6.3).
-            BuildWorkshopYard(workshopQ, new Vector3(19.5f, 0f, 9.5f));
+            BuildWorkshopYard(workshopQ, new Vector3(27f, 0f, 13f));
 
             // ── §6.4 Farm / orchard (E) — orchard tiles + farmer's hut ───────
             var orchard = NewChild(parent, "Orchard-E");
-            BuildOrchard(orchard, new Vector3(19f, 0f, -1f));
-            // Farmer's hut on the orchard's edge (§6.4 -- a building_home_A).
+            BuildOrchard(orchard, new Vector3(26f, 0f, -1f));
             PlaceDressing(orchard,
-                new DressDef { Name = "FarmersHut", Fbx = "building_home_A", X = 23f, Z = -10f, Yaw = 290f, PlaceholderColor = C("d8c69a") },
+                new DressDef { Name = "FarmersHut", Fbx = "building_home_A", X = 31f, Z = -14f, Yaw = 290f, PlaceholderColor = C("d8c69a") },
                 false);
 
             // ── §6.5 Northern open ground — a wayside shrine ─────────────────
