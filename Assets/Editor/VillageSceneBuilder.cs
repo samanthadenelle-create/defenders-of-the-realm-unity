@@ -757,7 +757,7 @@ namespace DeNelle.Editor
                 cathedral.name = "CathedralSpire";
                 cathedral.transform.SetParent(go.transform, false);
                 cathedral.transform.localPosition = new Vector3(0f, 0.7f, 0f);
-                NormalizeProp(cathedral, 14.0f);   // ~14 m tall — towers over walls
+                NormalizeProp(cathedral, 7.0f);    // owner 2026-05-20: halved from 14 m
                 StripColliders(cathedral);
                 // Attach the runtime URP-material fixer with a stone tint
                 // fallback so the cathedral doesn't render solid white if
@@ -1391,25 +1391,12 @@ namespace DeNelle.Editor
                     }
                 }
 
-                // Light foliage flanking the lane (§8.1) — a couple of trees /
-                // rocks per side.
-                var foliageModel = LoadModel(HexDecoNature + "tree_single_B.fbx");
-                var rockModel = LoadModel(HexDecoNature + "rock_single_A.fbx");
-                for (int i = 1; i <= 4; i += 2)
-                {
-                    Vector3 along = gatePos + outward * (i * step);
-                    var tL = InstantiateModel(foliageModel, "tree_single_B.fbx", "approach tree");
-                    tL.transform.SetParent(laneRoot.transform, false);
-                    tL.transform.position = along + lateral * 3.4f;
-                    var rR = InstantiateModel(rockModel, "rock_single_A.fbx", "approach rock");
-                    rR.transform.SetParent(laneRoot.transform, false);
-                    rR.transform.position = along - lateral * 3.4f;
-                    if (foliageModel == null) { ApplyColor(tL, C("3f6e34")); tL.transform.position += Vector3.up; }
-                    else NormalizeProp(tL, 4.5f);  // consistent ~4.5m lane tree
-                    if (rockModel == null) { ApplyColor(rR, C("8a8780")); rR.transform.position += Vector3.up * 0.4f; }
-                    else NormalizeProp(rR, 1.3f);  // consistent ~1.3m lane boulder
-                    _propCount += 2;
-                }
+                // Lane foliage / boulders removed per owner direction
+                // 2026-05-20 ("rocks in front of entrance"). The approach
+                // trees + rock_single_A boulders flanked each gate, but
+                // read as "rocks in front of the entrance" rather than
+                // wilderness dressing. The bare lane tiles + wave-spawn
+                // grass zone past the gate are kept.
 
                 // The wave-spawn zone — a 3×3 hex grass plot, 5 hexes out (§8.1 / §8.3).
                 Vector3 spawnCentre = gatePos + outward * (7f * step);
