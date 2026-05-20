@@ -100,10 +100,12 @@ namespace DeNelle.Editor
         // TerrainBaseDepth so heightmap value 0 sits below Y=0 and the village
         // baseline (Y=0) lands at a known normalised height.
         private const float TerrainHeight = 30f;       // total heightmap span (mountains ~30 m above village)
-        // Owner 2026-05-20 ("same level as village"): set TerrainBaseDepth
-        // to 0 so the exterior terrain's heightmap-zero is exactly Y=0,
-        // flush with the village hex floor. Enemies can now path the seam.
-        private const float TerrainBaseDepth = 0.0f;   // owner 2026-05-20: was 22 — terrain dropped out of
+        // Owner 2026-05-20 ("same level as village" + "map not showing"):
+        // a tiny TerrainBaseDepth gives the heightmap headroom in BOTH
+        // directions — values <0.05 dip into a slight valley, values >0.05
+        // climb up to mountains — while keeping the wall-seam flush with
+        // the village floor at Y=0 (the seam blend lerps to baseLevel01).
+        private const float TerrainBaseDepth = 1.5f;   // owner 2026-05-20: was 22 — terrain dropped out of
                                                        // hero sight from village ground. 0.5 m below village
                                                        // floor keeps a clean seam with the hex disc edge.
 
