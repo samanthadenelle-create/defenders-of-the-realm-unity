@@ -56,6 +56,12 @@ namespace DeNelle.Village
             StripRigidbodies(body);
             StripColliders(body);
             RetargetMaterialsToUrp(body);
+            // Owner 2026-05-20: Tripo's Send To Unity feature extracted the
+            // Knight basecolor PNG. Copied into Resources/Textures/Knight.png
+            // so the runtime can apply the real texture rather than the
+            // stale class tint. Same hook works for Ranger if/when its
+            // Send To Unity export lands.
+            ApplyExtractedTexture(body, cls);
             // Safety net: if Tripo's embedded textures didn't extract, paint
             // the body with a class tint so the mesh isn't solid white.
             ApplyClassTint(body, cls);
@@ -123,9 +129,50 @@ namespace DeNelle.Village
         };
 
         /// <summary>
+        /// Loads a per-class basecolor PNG out of Resources/Textures/
+        /// (extracted via Tripo's Send-To-Unity flow on the owner's side)
+        /// and assigns it to every URP material on the body. When this
+        /// returns true the subsequent <see cref="ApplyClassTint"/> is a
+        /// no-op for that material (it preserves textures).
+        /// </summary>
+        private static void ApplyExtractedTexture(GameObject body, HeroClass cls)
+        {
+            string texPath = cls switch
+            {
+                HeroClass.Knight => "Textures/Knight",
+                HeroClass.Ranger => "Textures/Ranger",
+                _ => null,
+            };
+            if (string.IsNullOrEmpty(texPath)) return;
+            var tex = Resources.Load<Texture2D>(texPath);
+            if (tex == null) return;
+            foreach (var r in body.GetComponentsInChildren<Renderer>(true))
+            {
+                if (r == null) continue;
+                var mats = r.sharedMaterials;
+                if (mats == null) continue;
+                for (int i = 0; i < mats.Length; i++)
+                {
+                    var m = mats[i];
+                    if (m == null) continue;
+                    if (m.HasProperty("_BaseMap")) m.SetTexture("_BaseMap", tex);
+                    if (m.HasProperty("_MainTex")) m.SetTexture("_MainTex", tex);
+                    // White base colour so the texture's actual colours show
+                    // through (otherwise the class tint would multiply on top
+                    // and dirty the basecolor).
+                    if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", Color.white);
+                    if (m.HasProperty("_Color"))     m.SetColor("_Color", Color.white);
+                }
+                r.sharedMaterials = mats;
+            }
+        }
+
+        /// <summary>
         /// If the URP material on the body still ended up white (Tripo's
         /// embedded textures sometimes don't survive import), paint each
         /// material with a class tint so the body reads coloured anyway.
+        /// Skipped when a real diffuse texture is already bound (e.g. the
+        /// extracted basecolor PNG from Tripo's Send-To-Unity flow).
         /// </summary>
         private static void ApplyClassTint(GameObject body, HeroClass cls)
         {
