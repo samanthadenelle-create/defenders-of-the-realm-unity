@@ -1186,6 +1186,19 @@ namespace DeNelle.Editor
             else
             {
                 visual.transform.localScale = new Vector3(BuildingScale, BuildingScale, BuildingScale);
+                // Owner 2026-05-20 (black blobs in screenshot): several
+                // KayKit dressing FBXes render as untextured dark shapes
+                // because the hex atlas doesn't resolve in URP. Attach the
+                // TripoMaterialFixer with the building's placeholder colour
+                // as a tint so the building reads as itself, not a black
+                // blob. Idempotent — a no-op when the atlas DID bind.
+                var fixerType = FindType("DeNelle.Core.TripoMaterialFixer");
+                if (fixerType != null)
+                {
+                    var fixer = visual.AddComponent(fixerType);
+                    var setTint = fixerType.GetMethod("SetFallbackTint");
+                    setTint?.Invoke(fixer, new object[] { d.PlaceholderColor });
+                }
             }
             // Owner 2026-05-20: hero could walk through dressing buildings —
             // add a footprint BoxCollider so HeroLocomotion's sweep cast blocks
