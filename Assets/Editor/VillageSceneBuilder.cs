@@ -928,51 +928,11 @@ namespace DeNelle.Editor
         /// </summary>
         private static void BuildKeep(Transform parent)
         {
-            Vector3 site = new Vector3(6f, 0f, -3f); // ~SE of Elarion (§3.2)
-
-            var go = new GameObject("KeepersKeep");
-            go.transform.SetParent(parent, false);
-            go.transform.position = site;
-            go.transform.rotation = Quaternion.Euler(0f, 200f, 0f); // face the plaza
-
-            var castle = LoadModel(Building("building_castle"));
-            GameObject visual = InstantiateModel(castle, "building_castle_green.fbx",
-                "Keeper's Keep");
-            visual.transform.SetParent(go.transform, false);
-            if (castle == null)
-            {
-                visual.transform.localScale = new Vector3(4f, 4f, 4f);
-                visual.transform.localPosition = new Vector3(0f, 2f, 0f);
-                ApplyColor(visual, new Color(0.55f, 0.52f, 0.48f));
-            }
-            else
-            {
-                // building_castle renders untextured (white) — the hex atlas
-                // does not resolve onto this mesh. Flat-tint it a warm keep-stone
-                // so the Keeper's Keep reads as built stone (see decisions log).
-                ApplyColorAll(visual, new Color(0.60f, 0.57f, 0.50f));
-            }
-
-            // Violet banner beside the Keep (§3.2 -- recolour a KayKit flag).
-            var flag = LoadModel(HexDecoProps + "flag_blue.fbx");
-            var banner = InstantiateModel(flag, "flag_blue.fbx", "Avalon Banner");
-            banner.name = "AvalonBanner";
-            banner.transform.SetParent(go.transform, false);
-            banner.transform.localPosition = new Vector3(-2.6f, 0f, 1.6f);
-            if (flag != null)
-            {
-                // Normalise to a ~3.2m banner so it reads consistently against
-                // the Keep regardless of the flag mesh's native size.
-                NormalizeProp(banner, 3.2f);
-                ApplyEmissive(banner, HexColor("9d6fff"), 0.25f); // tint toward violet
-            }
-            else
-            {
-                banner.transform.localScale = new Vector3(0.3f, 3.2f, 0.3f);
-                banner.transform.localPosition += Vector3.up * 1.6f;
-                ApplyColor(banner, HexColor("9d6fff"));
-            }
-            _propCount++;
+            // Owner direction 2026-05-20 ("THESE TWO THINGS NEED REMOVED"):
+            // the Keep building_castle + violet Avalon Banner both read as
+            // a flat-untextured block + a tall violet pole next to the
+            // cathedral spire — clutter, not centerpiece. Both removed.
+            // The plaza centre is now the cathedral alone.
         }
 
         // =====================================================================
