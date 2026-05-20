@@ -737,16 +737,20 @@ namespace DeNelle.Editor
             go.transform.SetParent(parent, false);
             go.transform.position = site;
 
-            // ── Raised mound (spec §3.1 -- a slight elevation) ───────────────
-            var mound = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-            mound.name = "ElarionMound";
-            mound.transform.SetParent(go.transform, false);
-            mound.transform.localPosition = new Vector3(0f, 0.35f, 0f);
-            mound.transform.localScale = new Vector3(5.0f, 0.35f, 5.0f);
-            ApplyColor(mound, new Color(0.34f, 0.42f, 0.24f)); // mossy grass mound
-
             // ── Cathedral spire (Tripo FBX) ─────────────────────────────────
+            // Owner 2026-05-20: skip the ElarionMound cylinder when the
+            // cathedral loads — the green disk peeked out from under the
+            // spire as an ugly leftover.
             var cathedralModel = LoadModel("Assets/Models/Cathedral/Cathedral.fbx");
+            if (cathedralModel == null)
+            {
+                var mound = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                mound.name = "ElarionMound";
+                mound.transform.SetParent(go.transform, false);
+                mound.transform.localPosition = new Vector3(0f, 0.35f, 0f);
+                mound.transform.localScale = new Vector3(5.0f, 0.35f, 5.0f);
+                ApplyColor(mound, new Color(0.34f, 0.42f, 0.24f));
+            }
             if (cathedralModel != null)
             {
                 var cathedral = (GameObject)PrefabUtility.InstantiatePrefab(cathedralModel);

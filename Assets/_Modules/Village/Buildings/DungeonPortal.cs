@@ -75,6 +75,24 @@ namespace DeNelle.Village
                 EnterDungeon();
         }
 
+        /// <summary>
+        /// Owner ask 2026-05-20 ("is trigger firing to go to healer
+        /// cottage?"): make the BoxCollider trigger DO something — walking
+        /// into the portal routes straight to the dungeon. Removes the F
+        /// step entirely for players who prefer movement-only interaction.
+        /// </summary>
+        private void OnTriggerEnter(Collider other)
+        {
+            if (_loading) return;
+            if (other == null) return;
+            // Only the hero triggers — pets are kinematic and would otherwise
+            // route the player to the dungeon while orbiting.
+            var hero = other.GetComponentInParent<HeroLocomotion>();
+            if (hero == null) return;
+            Debug.Log("[DungeonPortal] Trigger entered by hero — routing to " + _dungeonId);
+            EnterDungeon();
+        }
+
         public void BindShimmer(Renderer r) => _shimmer = r;
 
         private void ShowPrompt()
