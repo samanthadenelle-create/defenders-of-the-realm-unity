@@ -266,6 +266,16 @@ namespace DeNelle.Pets
             if (b.size.y <= 0.01f) return;
             float scale = targetHeight / b.size.y;
             go.transform.localScale *= scale;
+
+            // Owner 2026-05-20 ("pets appearing halfway under the surface"):
+            // Tripo pet FBXs pivot at the mesh centre. After the scale the
+            // feet sink below the parent's Y=0. Recompute bounds post-scale
+            // and lift the body so feet rest on the ground.
+            Bounds b2 = renderers[0].bounds;
+            for (int i = 1; i < renderers.Length; i++) b2.Encapsulate(renderers[i].bounds);
+            float feetOffset = b2.min.y - go.transform.position.y;
+            if (feetOffset < 0f)
+                go.transform.localPosition -= new Vector3(0f, feetOffset, 0f);
         }
 
         private static void StripPetColliders(GameObject go)

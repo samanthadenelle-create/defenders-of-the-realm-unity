@@ -979,9 +979,11 @@ namespace DeNelle.Editor
         // [-21..+21] Z (south bows to -25). Buildings sit on 2×2-hex plots.
         private static readonly BuildingPlacement[] Buildings =
         {
-            // Crystal Mine — Northwest rocky district (§5).
+            // Crystal Mine — moved outside the NW wall per owner direction
+            // 2026-05-20 ("move those mines outside the village for
+            // foraging"). Hero walks out the west or north gate to mine.
             new BuildingPlacement { Type = 0, Id = "crystal-mine", Label = "Crystal Mine",
-                X = -17f, Z = 12.5f, YawDeg = 135f, Fbx = "building_mine",
+                X = -38f, Z = 14f, YawDeg = 135f, Fbx = "building_mine",
                 PlaceholderColor = new Color(0.38f, 0.65f, 0.98f), FenceKind = "stone" },
             // Pet House — Southwest creek-side (§5).
             new BuildingPlacement { Type = 1, Id = "pet-house", Label = "Pet House",
@@ -1170,11 +1172,12 @@ namespace DeNelle.Editor
                 new DressDef { Name = "FarmersHut", Fbx = "building_home_A", X = 31f, Z = -14f, Yaw = 290f, PlaceholderColor = C("d8c69a") },
                 false);
 
-            // ── §6.5 Northern open ground — a wayside shrine ─────────────────
+            // ── §6.5 Northern open ground ────────────────────────────────────
+            // Owner direction 2026-05-20 ("rock still persists north gate"):
+            // the building_shrine was a low-poly stone marker that landed
+            // right inside the north gate threshold and read as a rock pile.
+            // Removed; the gate's interior approach is open ground now.
             var northern = NewChild(parent, "Northern-OpenGround");
-            PlaceDressing(northern,
-                new DressDef { Name = "Shrine", Fbx = "building_shrine", X = 0.5f, Z = 16.5f, Yaw = 180f, PlaceholderColor = C("b9b0a0") },
-                false);
             // A few scattered trees on the northern open ground (§6.5).
             ScatterTrees(northern, new[]
             {
