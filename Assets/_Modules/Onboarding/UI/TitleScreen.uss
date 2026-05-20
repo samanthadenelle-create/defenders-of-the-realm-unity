@@ -18,6 +18,35 @@
     justify-content: center;
 }
 
+/* ── Hero flanks ─ wizard left, knight centre, archer right, decorative ─ */
+.hero-flank {
+    position: absolute;
+    bottom: 16px;
+    -unity-background-scale-mode: scale-to-fit;
+    opacity: 0.96;
+}
+.hero-flank-left  {
+    left: 16px;
+    width: 420px;
+    height: 560px;
+}
+.hero-flank-right {
+    right: 16px;
+    width: 420px;
+    height: 560px;
+}
+/* Knight in the middle — sits behind the title block (which has z-index
+   stacking from the title-block at the centre of the screen). Slightly
+   larger than the flanks so the trio reads as a portrait gallery. */
+.hero-flank-center {
+    left: 50%;
+    bottom: 8px;
+    width: 460px;
+    height: 600px;
+    translate: -230px 0;
+    opacity: 0.88;
+}
+
 /* ── Heart-Wing banner — fills the screen behind the title block ─────────── */
 .heart-wing-banner {
     position: absolute;

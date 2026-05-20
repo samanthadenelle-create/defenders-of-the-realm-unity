@@ -136,18 +136,49 @@ namespace DeNelle.Pets
             else
             {
                 // Placeholder primitive — the KayKit pet meshes import later
-                // (port spec Part 7). A small capsule reads as "a pet" in-scene.
+                // (port spec Part 7). Owner direction 2026-05-20: pets were
+                // invisible because the 0.5x capsule sat 15m from the hero at
+                // the Heart slots. Bump to chest-height (~1.4 units) so they
+                // read as "a pet" from the new wider camera, and let the
+                // HeroLeash drag them to the hero each frame.
                 var go = GameObject.CreatePrimitive(PrimitiveType.Capsule);
                 go.transform.SetParent(transform, false);
-                go.transform.localScale = new Vector3(0.5f, 0.5f, 0.5f);
+                go.transform.localScale = new Vector3(0.8f, 0.9f, 0.8f);
                 var col = go.GetComponent<Collider>();
                 if (col != null) col.isTrigger = true; // pets do not block pathing
                 pet = go.AddComponent<Pet>();
                 TintPlaceholder(go, def);
+
+                // A small floating glyph (·species·) above the capsule so the
+                // owner can tell the trio apart even before the KayKit meshes
+                // drop in.
+                AddPetNameTag(go, def);
             }
+
+            // Attach the hero-leash so the pet trails the hero around the
+            // village instead of holding the Heart slot. Idle-mode pets just
+            // walk to it; Defend-mode pets snap back to it when no enemy.
+            pet.gameObject.AddComponent<PetHeroLeash>();
 
             pet.name = $"Pet_{def.Species}";
             return pet;
+        }
+
+        private static void AddPetNameTag(GameObject parent, PetDef def)
+        {
+            if (def == null) return;
+            var tag = new GameObject("NameTag");
+            tag.transform.SetParent(parent.transform, false);
+            tag.transform.localPosition = new Vector3(0f, 1.6f, 0f);
+            tag.transform.localScale = Vector3.one * 0.04f;
+            var tm = tag.AddComponent<TextMesh>();
+            tm.text = def.Species ?? def.Id ?? "Pet";
+            tm.characterSize = 0.5f;
+            tm.fontSize = 96;
+            tm.alignment = TextAlignment.Center;
+            tm.anchor = TextAnchor.LowerCenter;
+            tm.color = def.TintColor;
+            tag.AddComponent<PetNameTagBillboard>();
         }
 
         private int BondRankFor(int slotIndex)
@@ -161,13 +192,32 @@ namespace DeNelle.Pets
         {
             var renderer = go.GetComponent<Renderer>();
             if (renderer == null || def == null) return;
-            // URP/Lit uses _BaseColor; fall back to _Color for the built-in
-            // pipeline. A MaterialPropertyBlock keeps the shared material clean.
-            var mpb = new MaterialPropertyBlock();
-            renderer.GetPropertyBlock(mpb);
-            mpb.SetColor("_BaseColor", def.TintColor);
-            mpb.SetColor("_Color", def.TintColor);
-            renderer.SetPropertyBlock(mpb);
+            // Replace the GameObject.CreatePrimitive default material — it's a
+            // Standard-shader asset that URP can't render (→ magenta blob,
+            // owner 2026-05-20). Hand the renderer a fresh URP/Lit material
+            // tinted to the pet's species colour. Falls back to legacy shaders
+            // in non-URP builds.
+            Shader shader = Shader.Find("Universal Render Pipeline/Lit")
+                            ?? Shader.Find("Standard")
+                            ?? Shader.Find("Sprites/Default");
+            if (shader != null)
+            {
+                var mat = new Material(shader);
+                mat.name = $"Pet placeholder ({def.Species})";
+                if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", def.TintColor);
+                if (mat.HasProperty("_Color"))     mat.SetColor("_Color", def.TintColor);
+                if (mat.HasProperty("_Smoothness")) mat.SetFloat("_Smoothness", 0.1f);
+                if (mat.HasProperty("_Metallic"))   mat.SetFloat("_Metallic", 0f);
+                renderer.sharedMaterial = mat;
+            }
+            else
+            {
+                var mpb = new MaterialPropertyBlock();
+                renderer.GetPropertyBlock(mpb);
+                mpb.SetColor("_BaseColor", def.TintColor);
+                mpb.SetColor("_Color", def.TintColor);
+                renderer.SetPropertyBlock(mpb);
+            }
         }
     }
 }

@@ -132,10 +132,12 @@ namespace DeNelle.HUD
             title.style.marginBottom = 16;
             card.Add(title);
 
-            card.Add(MakeButton("Report a bug",   OnReportBug));
-            card.Add(MakeButton("Controls",       OnShowControls));
-            card.Add(MakeButton("Credits",        OnShowCredits));
-            card.Add(MakeButton("Close",          ToggleOverlay));
+            card.Add(MakeButton("Report a bug",        OnReportBug));
+            card.Add(MakeButton("Controls",            OnShowControls));
+            card.Add(MakeButton("Reset Hero & Pet",    OnResetProgress));
+            card.Add(MakeButton("Dev tools",           OnOpenDevTools));
+            card.Add(MakeButton("Credits",             OnShowCredits));
+            card.Add(MakeButton("Close",               ToggleOverlay));
 
             // Toast (status messages) — appears low-center, fades after 3 s.
             _toast = new Label(string.Empty);
@@ -264,12 +266,63 @@ namespace DeNelle.HUD
 
         private void OnShowControls()
         {
-            ShowToast("Controls — WASD/Arrows/dpad: move • 1/2/3/4 + face buttons: cast Q/W/E/R • Build button: tower placement • Esc: pause");
+            ShowToast("Controls — WASD/Arrows/dpad: move • 1/2/3/4 + face buttons: cast Q/W/E/R • Build button: tower placement • F: interact • Esc: pause");
         }
 
         private void OnShowCredits()
         {
             ShowToast("Defenders of the Realm v2 — DeNelle Studios. Models: KayKit + Tripo. Audio: original soundtrack.");
+        }
+
+        /// <summary>
+        /// Resets save state via reflection so the player can redo hero + pet
+        /// selection. GameStateService.Reset() is the carve-out helper that
+        /// wipes progression but keeps wallet binding (per its existing
+        /// contract). After reset, route back to HeroSelect.
+        /// </summary>
+        private void OnResetProgress()
+        {
+            try
+            {
+                var t = System.Type.GetType("DeNelle.Core.State.GameStateService, DeNelle.Core");
+                if (t == null) { ShowToast("Reset failed — GameStateService missing."); return; }
+                var instance = t.GetProperty("Instance",
+                    System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)?.GetValue(null);
+                if (instance == null) { ShowToast("Reset failed — service not alive."); return; }
+                var reset = t.GetMethod("Reset",
+                    System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+                reset?.Invoke(instance, null);
+
+                var router = System.Type.GetType("DeNelle.Core.SceneRouter, DeNelle.Core");
+                var goHero = router?.GetMethod("GoHeroSelect",
+                    System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+                if (goHero != null)
+                {
+                    ShowToast("Reset — heading back to Hero Select…");
+                    goHero.Invoke(null, null);
+                }
+                else
+                {
+                    ShowToast("Reset done — restart the game to redo selection.");
+                }
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogWarning("[HelpMenu] Reset failed: " + ex.Message);
+                ShowToast("Reset failed — see log.");
+            }
+        }
+
+        /// <summary>
+        /// Opens the AdminOverlay so the owner can trigger waves / give
+        /// crystals / mute / etc. without hunting for the Ctrl+Shift+A chord.
+        /// </summary>
+        private void OnOpenDevTools()
+        {
+            var admin = UnityEngine.Object.FindFirstObjectByType<AdminOverlay>();
+            if (admin != null) admin.Toggle();
+            else ShowToast("Admin overlay not in scene yet.");
+            ToggleOverlay(); // close the Help menu so the admin overlay is unobscured
         }
 
         private void ShowToast(string message)

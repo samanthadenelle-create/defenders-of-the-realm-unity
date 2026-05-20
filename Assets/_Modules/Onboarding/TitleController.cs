@@ -70,6 +70,12 @@ namespace DeNelle.Onboarding
             // the player does not see it flash behind the bumper / cold open.
             if (_titleDocument != null)
                 SetTitleVisible(false);
+
+            // Animated star/comet background — replaces the React build's
+            // landing-page parallax that owners said pulled players in during
+            // the 10-15 s decision window. Spawned once per Title scene load.
+            if (GameObject.Find("TitleStarfield") == null)
+                new GameObject("TitleStarfield").AddComponent<TitleStarfield>();
         }
 
         private void Start()
@@ -189,6 +195,21 @@ namespace DeNelle.Onboarding
             var banner = _root.Q<VisualElement>("heart-wing-banner");
             if (banner != null && _heartWingBanner != null)
                 banner.style.backgroundImage = new StyleBackground(_heartWingBanner);
+
+            // ── Hero trio — wizard left, knight centre, archer right (2026-05-20).
+            // Pulls the same Resources/HeroPortraits/ PNGs used on HeroSelect.
+            var flankL = _root.Q<VisualElement>("hero-flank-left");
+            var flankC = _root.Q<VisualElement>("hero-flank-center");
+            var flankR = _root.Q<VisualElement>("hero-flank-right");
+            var wizardTex = Resources.Load<Texture2D>("HeroPortraits/mage");
+            var knightTex = Resources.Load<Texture2D>("HeroPortraits/knight");
+            var archerTex = Resources.Load<Texture2D>("HeroPortraits/ranger");
+            if (flankL != null && wizardTex != null)
+                flankL.style.backgroundImage = new StyleBackground(wizardTex);
+            if (flankC != null && knightTex != null)
+                flankC.style.backgroundImage = new StyleBackground(knightTex);
+            if (flankR != null && archerTex != null)
+                flankR.style.backgroundImage = new StyleBackground(archerTex);
 
             // ── Buttons ──────────────────────────────────────────────────────
             _startButton = _root.Q<Button>("start-button");

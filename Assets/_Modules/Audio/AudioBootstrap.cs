@@ -104,6 +104,36 @@ namespace DeNelle.Audio
             TryAssignClip(service, MusicTrack.Victory, "victory");
             TryAssignClip(service, MusicTrack.Defeat,  "defeat");
             TryAssignClip(service, MusicTrack.Dungeon, "dungeon");
+
+            // One-time mute-migration. Pre-2026-05-20 the schema default for
+            // GameState.Muted was true, so saves persisted as muted even when
+            // the player never opened Settings. Now that music actually exists,
+            // flip Muted=false ONCE for each install, then never again.
+            UnmuteOnce();
+        }
+
+        private const string UnmuteMigrationKey = "dotr-unmute-migration-v1";
+
+        private static void UnmuteOnce()
+        {
+            if (PlayerPrefs.GetInt(UnmuteMigrationKey, 0) == 1) return;
+            try
+            {
+                var t = System.Type.GetType("DeNelle.Core.State.GameStateService, DeNelle.Core");
+                if (t == null) return;
+                var instance = t.GetProperty("Instance",
+                    System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)?.GetValue(null);
+                if (instance == null) return;
+                var setMuted = t.GetMethod("SetMuted",
+                    System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+                setMuted?.Invoke(instance, new object[] { false });
+            }
+            catch { /* best-effort; not fatal */ }
+            finally
+            {
+                PlayerPrefs.SetInt(UnmuteMigrationKey, 1);
+                PlayerPrefs.Save();
+            }
         }
 
         private static void TryAssignClip(AudioService service, MusicTrack track, string resourceName)

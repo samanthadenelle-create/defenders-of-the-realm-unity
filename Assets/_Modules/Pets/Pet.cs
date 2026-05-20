@@ -137,6 +137,13 @@ namespace DeNelle.Pets
         /// <summary>The pet's home post — its deploy slot ringing the Heart.</summary>
         public Vector3 HomePost => _homePost;
 
+        /// <summary>
+        /// Re-anchors the pet's home post. Used by the leash integrator so an
+        /// Idle / Defend pet trails the hero around the village instead of
+        /// drifting back to the Heart slot when the field is clear.
+        /// </summary>
+        public void SetHomePost(Vector3 worldPosition) => _homePost = worldPosition;
+
         /// <summary>The static def this pet was configured from (pets.json).</summary>
         public PetDef Def => _def;
 

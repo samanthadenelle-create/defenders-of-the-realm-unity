@@ -62,6 +62,7 @@ namespace DeNelle.Onboarding
 
         private UIDocument _document;
         private VisualElement _root;
+        private VisualElement _imagePanel;
         private Label _lineLabel;
         private bool _skipRequested;
         private CancellationTokenSource _cts;
@@ -125,11 +126,35 @@ namespace DeNelle.Onboarding
             {
                 await Fade(0f, 1f, _fadeSeconds, token);
 
-                var lines = CanonStrings.ColdOpenLines();
-                foreach (var line in lines)
+                // Ported verbatim from React src/content/story.ts
+                // OPENING_CINEMATIC (2026-05-20). 14 beats, image per beat
+                // pulls from Resources/Intro/intro-N.jpg; emphasis flag
+                // bumps font weight + size for landings ("That one is you.").
+                var cinematic = ReactOpeningCinematic;
+                foreach (var beat in cinematic)
                 {
-                    if (_lineLabel != null) _lineLabel.text = line;
-                    await WaitLineOrSkip(token);
+                    if (_lineLabel != null)
+                    {
+                        _lineLabel.text = beat.Text;
+                        _lineLabel.style.opacity = 0f;
+                        _lineLabel.style.unityFontStyleAndWeight = beat.Emphasis
+                            ? FontStyle.BoldAndItalic
+                            : FontStyle.Italic;
+                        _lineLabel.style.fontSize = beat.Emphasis ? 28 : 22;
+                    }
+                    if (_imagePanel != null && beat.ImageId > 0)
+                    {
+                        var tex = Resources.Load<Texture2D>($"Intro/intro-{beat.ImageId}");
+                        if (tex != null)
+                            _imagePanel.style.backgroundImage = new StyleBackground(tex);
+                    }
+                    var inFade = FadeLabel(0f, 1f, 0.45f, token);
+                    var imageIn = beat.ImageId > 0 ? FadeImage(0f, 1f, 0.55f, token) : UniTask.CompletedTask;
+                    await UniTask.WhenAll(inFade, imageIn);
+                    await WaitBeatOrSkip(beat.HoldSeconds, token);
+                    var outFade = FadeLabel(1f, 0f, 0.35f, token);
+                    var imageOut = beat.ImageId > 0 ? FadeImage(1f, 0f, 0.4f, token) : UniTask.CompletedTask;
+                    await UniTask.WhenAll(outFade, imageOut);
                     if (_skipRequested) break;
                 }
 
@@ -151,12 +176,33 @@ namespace DeNelle.Onboarding
             _root = _document.rootVisualElement;
             _root.Clear();
             _root.style.flexGrow = 1;
-            _root.style.backgroundColor = new Color(0.027f, 0.016f, 0.063f, 1f); // #07040F
+            // Semi-transparent backdrop — owner feedback 2026-05-20: the cold-
+            // open text used to wipe the intro background (starfield, heart-
+            // wing banner). Alpha 0.55 keeps the scene readable behind the
+            // text so the atmosphere persists across line changes.
+            _root.style.backgroundColor = new Color(0.027f, 0.016f, 0.063f, 0.55f);
             _root.style.alignItems = Align.Center;
             _root.style.justifyContent = Justify.Center;
             _root.style.opacity = 0f;
             // Tap anywhere advances to the next line / finishes.
             _root.RegisterCallback<PointerDownEvent>(_ => _skipRequested = true);
+
+            // Per-line scene icon — Resources/Intro/intro-N.jpg from the
+            // React asset pack. Owner direction 2026-05-20: small icon size
+            // above the text, NOT full-screen background. ~220×150 px centred
+            // horizontally, sits just above the line label. Scale-to-fit so
+            // the JPG isn't cropped; pickingMode ignore so it never eats taps.
+            _imagePanel = new VisualElement();
+            _imagePanel.style.position = Position.Absolute;
+            _imagePanel.style.width = 240;
+            _imagePanel.style.height = 168;
+            _imagePanel.style.left = Length.Percent(50);
+            _imagePanel.style.translate = new StyleTranslate(new Translate(-120, 0));
+            _imagePanel.style.top = Length.Percent(36);
+            _imagePanel.style.unityBackgroundScaleMode = ScaleMode.ScaleToFit;
+            _imagePanel.style.opacity = 0f;
+            _imagePanel.pickingMode = PickingMode.Ignore;
+            _root.Add(_imagePanel);
 
             _lineLabel = new Label
             {
@@ -209,6 +255,91 @@ namespace DeNelle.Onboarding
                 elapsed += Time.deltaTime;
             }
             _root.style.opacity = to;
+        }
+
+        /// <summary>One cinematic beat — text + per-beat hold + optional intro-N.jpg + emphasis.</summary>
+        private readonly struct CinematicBeat
+        {
+            public readonly string Text;
+            public readonly float HoldSeconds;
+            public readonly int ImageId;     // 1..8 maps to Resources/Intro/intro-N.jpg; 0 = none
+            public readonly bool Emphasis;
+            public CinematicBeat(string text, float hold, int imageId = 0, bool emphasis = false)
+            { Text = text; HoldSeconds = hold; ImageId = imageId; Emphasis = emphasis; }
+        }
+
+        /// <summary>
+        /// Verbatim port of OPENING_CINEMATIC from React src/content/story.ts
+        /// (2026-05-20 owner direction). 14 beats, total ~73 seconds; players
+        /// can tap to skip ahead one beat at a time.
+        /// </summary>
+        private static readonly CinematicBeat[] ReactOpeningCinematic = new[]
+        {
+            new CinematicBeat("Long ago, the realm was kept warm by a single light —", 5.0f),
+            new CinematicBeat("the Lantern of Avalon, which never dimmed,", 4.8f, 1),
+            new CinematicBeat("and the Guardian whose quiet hands tended its flame.", 5.2f, 8),
+            new CinematicBeat("Avalon. A village. A promise. A home.", 5.4f, 5, true),
+            new CinematicBeat("But Guardians grow old, and old light grows thin.", 5.0f),
+            new CinematicBeat("Beneath the sleeping hills, something hollow began to wake.", 5.4f),
+            new CinematicBeat("They call it the Withering — it remembers no warmth,", 5.0f, 2),
+            new CinematicBeat("and it forgives no green and growing thing.", 4.8f),
+            new CinematicBeat("Now the old protectors keep a lonely watch —", 4.8f),
+            new CinematicBeat("Sir Bram the knight, Sela the archer, and three small sleeping spirits —", 5.8f),
+            new CinematicBeat("waiting for the one the Lantern will answer to.", 5.0f, 7),
+            new CinematicBeat("That one is you.", 4.5f, 3, true),
+            new CinematicBeat("A young mage, barely an apprentice — yet the flame brightens at your step.", 5.8f, 6),
+            new CinematicBeat("Welcome home, Guardian of the Lantern.", 5.4f, 4, true),
+        };
+
+        private async UniTask WaitBeatOrSkip(float holdSeconds, CancellationToken token)
+        {
+            var elapsed = 0f;
+            while (elapsed < holdSeconds && !_skipRequested)
+            {
+                token.ThrowIfCancellationRequested();
+                await UniTask.Yield(PlayerLoopTiming.Update, token);
+                elapsed += Time.deltaTime;
+            }
+            _skipRequested = false; // consume — one beat at a time
+        }
+
+        /// <summary>Fades the backdrop image panel from <paramref name="from"/> to <paramref name="to"/> alpha.</summary>
+        private async UniTask FadeImage(float from, float to, float seconds, CancellationToken token)
+        {
+            if (_imagePanel == null) return;
+            if (seconds <= 0f) { _imagePanel.style.opacity = to; return; }
+            var elapsed = 0f;
+            while (elapsed < seconds)
+            {
+                token.ThrowIfCancellationRequested();
+                _imagePanel.style.opacity = Mathf.Lerp(from, to, elapsed / seconds);
+                await UniTask.Yield(PlayerLoopTiming.Update, token);
+                elapsed += Time.deltaTime;
+            }
+            _imagePanel.style.opacity = to;
+        }
+
+        /// <summary>
+        /// Fades only the text label, leaving the backdrop alpha alone. Used
+        /// so each cold-open line eases in / out instead of cutting hard.
+        /// </summary>
+        private async UniTask FadeLabel(float from, float to, float seconds, CancellationToken token)
+        {
+            if (_lineLabel == null) return;
+            if (seconds <= 0f)
+            {
+                _lineLabel.style.opacity = to;
+                return;
+            }
+            var elapsed = 0f;
+            while (elapsed < seconds)
+            {
+                token.ThrowIfCancellationRequested();
+                _lineLabel.style.opacity = Mathf.Lerp(from, to, elapsed / seconds);
+                await UniTask.Yield(PlayerLoopTiming.Update, token);
+                elapsed += Time.deltaTime;
+            }
+            _lineLabel.style.opacity = to;
         }
 
         private void HideImmediate()

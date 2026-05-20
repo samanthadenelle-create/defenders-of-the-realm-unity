@@ -88,8 +88,10 @@ namespace DeNelle.Core.State
         public MovementStyle MovementStyle = MovementStyle.Auto;
         /// <summary>#31 — breach battle system. Fresh = Ask. Survives New Game.</summary>
         public BreachStyle BreachStyle = BreachStyle.Ask;
-        /// <summary>#20 — global audio mute. Fresh = true (a11y: fresh visitor muted, T24).</summary>
-        public bool Muted = true;
+        /// <summary>#20 — global audio mute. Fresh = false (owner directive 2026-05-20:
+        /// the a11y-muted default hid the new music wiring; players see-it-and-mute-it
+        /// if they need silence, but the default expectation now is "music plays").</summary>
+        public bool Muted;
         /// <summary>#21 — music volume 0..100. Fresh = 70.</summary>
         public float MusicVolume = 70f;
         /// <summary>#22 — sfx volume 0..100. Fresh = 80.</summary>

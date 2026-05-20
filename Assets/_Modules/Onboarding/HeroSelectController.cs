@@ -201,13 +201,25 @@ namespace DeNelle.Onboarding
             var card = new VisualElement { name = $"hero-card-{info.Hero}" };
             card.AddToClassList(CardClass);
 
-            // Portrait block — a big glyph tinted with the hero's accent.
+            // Portrait block — show the rendered hero PNG if one exists at
+            // Resources/HeroPortraits/<slug>.png; fall back to the glyph
+            // letter otherwise. Slug matches HeroPortraitGenerator output.
             var portrait = new VisualElement();
             portrait.AddToClassList(PortraitClass);
-            var glyph = new Label(info.Glyph);
-            glyph.AddToClassList(GlyphClass);
-            glyph.style.color = info.Accent;
-            portrait.Add(glyph);
+            string slug = info.Hero.ToString().ToLowerInvariant();
+            var portraitTex = Resources.Load<Texture2D>($"HeroPortraits/{slug}");
+            if (portraitTex != null)
+            {
+                portrait.style.backgroundImage = new StyleBackground(portraitTex);
+                portrait.style.unityBackgroundScaleMode = ScaleMode.ScaleAndCrop;
+            }
+            else
+            {
+                var glyph = new Label(info.Glyph);
+                glyph.AddToClassList(GlyphClass);
+                glyph.style.color = info.Accent;
+                portrait.Add(glyph);
+            }
             card.Add(portrait);
 
             // Element-coloured accent strip.

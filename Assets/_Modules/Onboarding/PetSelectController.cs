@@ -202,16 +202,27 @@ namespace DeNelle.Onboarding
 
             Color accent = pet.GlowUnityColor;
 
-            // Portrait block — the pet's first initial, tinted with its glow.
+            // Portrait block — the pet's PNG from the React asset pack (loaded
+            // from Resources/PetPortraits/<pet.Id>) with the single-initial
+            // glyph as a guaranteed fallback if the texture isn't present.
             var portrait = new VisualElement();
             portrait.AddToClassList(PortraitClass);
-            string initial = !string.IsNullOrEmpty(pet.Name)
-                ? pet.Name.Substring(0, 1).ToUpperInvariant()
-                : "?";
-            var glyph = new Label(initial);
-            glyph.AddToClassList(GlyphClass);
-            glyph.style.color = accent;
-            portrait.Add(glyph);
+            var portraitTex = Resources.Load<Texture2D>($"PetPortraits/{pet.Id}");
+            if (portraitTex != null)
+            {
+                portrait.style.backgroundImage = new StyleBackground(portraitTex);
+                portrait.style.unityBackgroundScaleMode = ScaleMode.ScaleAndCrop;
+            }
+            else
+            {
+                string initial = !string.IsNullOrEmpty(pet.Name)
+                    ? pet.Name.Substring(0, 1).ToUpperInvariant()
+                    : "?";
+                var glyph = new Label(initial);
+                glyph.AddToClassList(GlyphClass);
+                glyph.style.color = accent;
+                portrait.Add(glyph);
+            }
             card.Add(portrait);
 
             // Element-coloured accent strip.

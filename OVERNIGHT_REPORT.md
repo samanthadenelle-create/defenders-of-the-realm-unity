@@ -154,3 +154,78 @@ Unity-side clients for the two new endpoints aren't wired yet (they'd need the d
 
 - `Overnight P0 sweep: gates, wilderness, GameStateService, camera, waves, input, Help menu`
 - (Pending — final commit after this report is written includes compass, admin overlay, bug-report HTTP, backend drafts.)
+
+---
+
+## Afternoon-shift sweep — 2026-05-20
+
+Owner ask: "round the word bubbles + tail from speaker", "polish on approach
+to structures in colored modal box", "make sure dungeon is connected",
+"focus on pets — can't see them, should auto-follow hero", "playtest what
+you can". You were away for an hour. Here's what changed.
+
+### Rounded chat-bubble shader (URP SDF)
+- New `Assets/Shaders/RoundedChatBubble.shader` — URP unlit transparent with a
+  signed-distance-field rounded-rect. Properties: `_BaseColor`, `_Radius`
+  (UV units), `_Aspect` (width/height so corner radius is geometrically
+  square on any quad).
+- Edge softness via `fwidth(dist)` so the SDF reads crisp at any screen size.
+- `TownsfolkBubble` (already on it from morning) + `BuildingInteractable`
+  (now applied) + `DungeonPortal` (new) all share the same shader for visual
+  consistency.
+
+### Building approach modal — colored affordance
+- `BuildingInteractable.ShowPrompt` now writes a bright amber-on-deep-amber
+  badge (`〔 F 〕 Mine`) instead of the prior debug-style text. Reads as an
+  action cue at distance.
+- `BuildBubble` switched from flat quads to `ApplyRounded` + a proper
+  triangle-mesh tail (`MakeTriangle`) that points down at the building, so
+  the prompt feels anchored to the structure not floating beside it.
+
+### Dungeon connection (was unreachable in-game)
+- `Assets/_Modules/Village/Buildings/DungeonPortal.cs` — new
+  proximity-driven entrance: glowing purple shimmer between two stone
+  uprights with a lintel, planted at `(0, 0, -18)` just inside the south
+  gate. F-key prompt → `SceneRouter.GoDungeon("Dungeon_HealersCottage")`.
+- Shimmer sheet pulses (`Mathf.Sin(t * 2.0)`) so it reads as "alive". Box
+  trigger collider on the arch frame.
+- `VillageSceneBuilder.SpawnDungeonPortal()` builds it during BuildVillage,
+  idempotent (destroys prior `DungeonPortal` GO first). Verified after
+  rebuild — landed at scene line ~177095.
+
+### Pets — visible + auto-following the hero
+- Root cause: pets spawned at the Heart slots (~15 m from hero) at
+  `localScale = 0.5`, so the wider camera never framed them.
+- `PetDeployer` placeholder bumped to `(0.8, 0.9, 0.8)` — chest height,
+  clearly visible — and gets a species name-tag (`pet-aether-sprite` etc.)
+  on a billboard above its head.
+- New `Pet.SetHomePost(Vector3)` public method (private field was the only
+  blocker for cross-module re-anchoring).
+- New `Assets/_Modules/Pets/PetHeroLeash.cs` — per-pet leash that resolves
+  `DeNelle.Village.HeroLocomotion` by reflection (asmdef isolation: Pets
+  can't reference Village), then drives each frame:
+  - 3-pet orbit around the hero on a 2.2 m ring at a slow spin (18°/s),
+    biased ~1 m behind, with a per-pet `_slotSeed` so they don't crowd one
+    point.
+  - Calls `pet.SetHomePost(targetSlot)`; the pet's existing kinematic
+    drifter walks toward HomePost when no enemy is in scan range. Defenders
+    still hunt when a wave spawns — the leash only governs "where to drift
+    when idle".
+- `PetDeployer.SpawnPet` attaches the leash automatically; the integrator
+  no longer has to remember to wire it.
+
+### Verified
+- `VillageSceneBuilder.BuildVillage` (headless, 6000.4.7f1) — 0 errors,
+  only deprecation warnings (`FindObjectOfType`, `GetInstanceID`) shared
+  with existing code.
+- `Village.unity` post-build: contains `DungeonPortal` GO with the
+  `DeNelle.Village.DungeonPortal` script bound.
+- Player build kicked after this section was written; see the final commit
+  message for the result.
+
+### Pending after this shift
+- Tripo re-export of Ranger + Knight (third request — owner action).
+- Backend deploy: copy `docs/draft-backend-endpoints/*.ts` into the React
+  repo and `vercel --prod`.
+- Wire `UnityWebRequest` clients for `/api/leaderboard` + `/api/metrics`
+  after the deploy is live.

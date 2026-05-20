@@ -88,10 +88,11 @@ namespace DeNelle.Editor
         private const string HexDecoNature = HexPackRoot + "decoration/nature/";
         private const string HexDecoProps = HexPackRoot + "decoration/props/";
 
-        // Hero capsule = 2m tall; owner directive (2026-05-19): houses ≈ 3x
-        // hero height (~6m). Native KayKit house FBX is ~1.2m, so multiplier
-        // ≈4.5x reaches the target. Applied to all gameplay + dressing buildings.
-        private const float BuildingScale = 4.5f;
+        // Hero capsule = 2m tall; owner directive (2026-05-20): drop from 4.5x
+        // → 3.0x so housetops no longer dominate the OTS camera when the hero
+        // walks past. Houses end at ~3.6 m (≈ 2× hero) — still imposing, walls
+        // (which inherit the same multiplier) stay readable from camera height.
+        private const float BuildingScale = 3.0f;
 
         /// <summary>
         /// Building colour variant used consistently across the town (spec §10
@@ -147,8 +148,13 @@ namespace DeNelle.Editor
         private const string TypeHeroAbilities = NsVillage + ".HeroAbilities";
         private const string TypeHeroLocomotion = NsVillage + ".HeroLocomotion";
         private const string TypeHeroAbilityInput = NsVillage + ".HeroAbilityInput";
+        private const string TypeHeroAbilitiesHudBridge = NsVillage + ".HeroAbilitiesHudBridge";
+        private const string TypeHeroCinemachineRig = NsVillage + ".HeroCinemachineRig";
         private const string TypeVillageCamera = NsVillage + ".VillageCamera";
         private const string TypeWaveHudBridge = NsVillage + ".WaveHudBridge";
+        private const string TypeBuildMenuHudBridge = NsVillage + ".BuildMenuHudBridge";
+        private const string TypeBuildingInteractable = NsVillage + ".BuildingInteractable";
+        private const string TypeDungeonPortal = NsVillage + ".DungeonPortal";
         private const string TypeVillageHudController = "DeNelle.HUD.VillageHudController";
         private const string TypeEventSystem = "UnityEngine.EventSystems.EventSystem";
         private const string TypeInputSystemUIInputModule = "UnityEngine.InputSystem.UI.InputSystemUIInputModule";
@@ -289,6 +295,11 @@ namespace DeNelle.Editor
             // ── Curtain wall + gates (WallLayout-driven, shaped rectangle) ───
             int wallCount = BuildWallRing(wallRoot, tWallLayout, controller);
             int gateCount = BuildGates(gateRoot, tWallLayout, controller);
+            // Owner 2026-05-20: at 3.0× scale the WallLayout-baked gate gap
+            // (4 m wide) is too narrow versus the now-9 m-tall walls — segments
+            // adjacent to gates visually close the arch. Sweep + cull any wall
+            // section whose centre is within BuildingScale × 2 m of a gate.
+            ClearWallsNearGates(wallRoot, gateRoot);
 
             // ── Plaza + road network (§7) ────────────────────────────────────
             BuildPlaza(roadRoot);
@@ -354,6 +365,19 @@ namespace DeNelle.Editor
             // Wire WaveManager → HUD so the wave-countdown timer actually
             // updates (the HUD shipped without a subscriber — 2026-05-19).
             WireWaveHudBridge();
+            // Wire HUD Build button → BuildMenu.Open (the click did nothing
+            // before this bridge — 2026-05-20 PO observation).
+            WireBuildMenuHudBridge();
+            // Wire HUD Q/W/E/R buttons → HeroAbilities.TryCast (clicks were
+            // also dead — 2026-05-20 PO observation).
+            WireHeroAbilitiesHudBridge();
+            // Add proximity prompts to every Building so the player can press F
+            // to interact (2026-05-20 PO observation: no interaction).
+            WireBuildingInteractables();
+            // Drop a dungeon portal so the player can actually enter the
+            // Healer's Cottage from the village (2026-05-20 PO observation:
+            // dungeon scene exists but is unreachable in-game).
+            SpawnDungeonPortal();
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene, VillageScenePath);
 
@@ -581,9 +605,11 @@ namespace DeNelle.Editor
                 var shimmer = GameObject.CreatePrimitive(PrimitiveType.Cube);
                 shimmer.name = "ForceFieldShimmer";
                 shimmer.transform.SetParent(go.transform, false);
-                shimmer.transform.localPosition = new Vector3(0f, 1.7f * BuildingScale, 0f);
+                // Owner 2026-05-20 (2nd pass): cut to 0.8 × BuildingScale so
+                // the shimmer reads as a doorway veil, not a tower curtain.
+                shimmer.transform.localPosition = new Vector3(0f, 0.65f * BuildingScale, 0f);
                 shimmer.transform.localRotation = Quaternion.Euler(0f, WallStraightYawFix, 0f);
-                shimmer.transform.localScale = new Vector3(GateHalfWidthConst * 2f * BuildingScale, 3.0f * BuildingScale, 0.08f);
+                shimmer.transform.localScale = new Vector3(GateHalfWidthConst * 2f * BuildingScale, 0.8f * BuildingScale, 0.08f);
                 UnityEngine.Object.DestroyImmediate(shimmer.GetComponent<Collider>());
                 ApplyEmissive(shimmer, new Color(0.61f, 0.44f, 1f), 1.4f);
 
@@ -969,6 +995,11 @@ namespace DeNelle.Editor
                     // hero height (≈6m). 4.5x lifts a ~1.2m house to ~5.4m.
                     visual.transform.localScale = new Vector3(BuildingScale, BuildingScale, BuildingScale);
                 }
+                // Owner 2026-05-20: hero used to walk THROUGH buildings —
+                // adding a footprint BoxCollider so HeroLocomotion's CapsuleCast
+                // blocks the move. Sized from mesh bounds; sits on the plot
+                // GameObject (not the visual mesh) so it isn't scaled twice.
+                AddBuildingFootprintCollider(go, visual);
 
                 // Low fence marking the 2×2-hex property line (§5 -- dressing,
                 // no collider). Build it as a child of the plot, not the
@@ -1139,6 +1170,10 @@ namespace DeNelle.Editor
             {
                 visual.transform.localScale = new Vector3(BuildingScale, BuildingScale, BuildingScale);
             }
+            // Owner 2026-05-20: hero could walk through dressing buildings —
+            // add a footprint BoxCollider so HeroLocomotion's sweep cast blocks
+            // the move. Same approach as gameplay buildings.
+            AddBuildingFootprintCollider(go, visual);
             _dressingCount++;
         }
 
@@ -1431,6 +1466,160 @@ namespace DeNelle.Editor
             if (moduleType != null) go.AddComponent(moduleType);
             else Debug.LogWarning("[VillageSceneBuilder] InputSystemUIInputModule type not " +
                                   "resolvable — falling back to EventSystem-only routing.");
+        }
+
+        /// <summary>
+        /// Wires VillageHudController.BuildRequested → BuildMenu.Open so the
+        /// HUD's Build button actually opens the placement menu.
+        /// </summary>
+        private static void WireBuildMenuHudBridge()
+        {
+            var buildMenuType = FindType(TypeBuildMenu);
+            var hudType = FindType(TypeVillageHudController);
+            var bridgeType = FindType(TypeBuildMenuHudBridge);
+            if (buildMenuType == null || hudType == null || bridgeType == null) return;
+
+            var buildMenu = UnityEngine.Object.FindObjectOfType(buildMenuType);
+            var hud = UnityEngine.Object.FindObjectOfType(hudType);
+            if (buildMenu == null || hud == null) return;
+
+            var menuGo = ((Component)buildMenu).gameObject;
+            var bridge = menuGo.GetComponent(bridgeType) ?? menuGo.AddComponent(bridgeType);
+
+            var so = new SerializedObject(bridge);
+            SetObjectField(so, "_hud", (UnityEngine.Object)hud);
+            so.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        /// <summary>
+        /// Wires VillageHudController.AbilityRequested → HeroAbilities.TryCast
+        /// via a bridge component on the hero, so the HUD's Q/W/E/R buttons
+        /// actually cast (clicks were dead before this — 2026-05-20).
+        /// </summary>
+        private static void WireHeroAbilitiesHudBridge()
+        {
+            var heroAbilitiesType = FindType(TypeHeroAbilities);
+            var hudType = FindType(TypeVillageHudController);
+            var bridgeType = FindType(TypeHeroAbilitiesHudBridge);
+            if (heroAbilitiesType == null || hudType == null || bridgeType == null) return;
+
+            var abilities = UnityEngine.Object.FindObjectOfType(heroAbilitiesType);
+            var hud = UnityEngine.Object.FindObjectOfType(hudType);
+            if (abilities == null || hud == null) return;
+
+            var heroGo = ((Component)abilities).gameObject;
+            var bridge = heroGo.GetComponent(bridgeType) ?? heroGo.AddComponent(bridgeType);
+
+            var so = new SerializedObject(bridge);
+            SetObjectField(so, "_hud", (UnityEngine.Object)hud);
+            so.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        /// <summary>
+        /// Adds a <c>BuildingInteractable</c> to every <c>Building</c> in the
+        /// scene so walking near one shows the "Press F" prompt + dispatches.
+        /// </summary>
+        private static void WireBuildingInteractables()
+        {
+            var buildingType = FindType(TypeBuilding);
+            var interactableType = FindType(TypeBuildingInteractable);
+            if (buildingType == null || interactableType == null) return;
+            foreach (var b in UnityEngine.Object.FindObjectsByType(
+                         buildingType, FindObjectsInactive.Include, FindObjectsSortMode.None))
+            {
+                if (b is Component c && c.GetComponent(interactableType) == null)
+                    c.gameObject.AddComponent(interactableType);
+            }
+        }
+
+        /// <summary>
+        /// Spawns a glowing stone arch near the south gate that routes the
+        /// player into Dungeon_HealersCottage via DungeonPortal (DeNelle.Village).
+        /// Idempotent — a prior "DungeonPortal" GO is destroyed first.
+        /// </summary>
+        private static void SpawnDungeonPortal()
+        {
+            var portalType = FindType(TypeDungeonPortal);
+            if (portalType == null)
+            {
+                Debug.LogWarning("[VillageSceneBuilder] DungeonPortal type not found — skipping.");
+                return;
+            }
+
+            var existing = GameObject.Find("DungeonPortal");
+            if (existing != null) UnityEngine.Object.DestroyImmediate(existing);
+
+            // Tuck the portal just inside the south gate so the player walks
+            // out, sees it framed by the gate arch, and approaches naturally.
+            var root = new GameObject("DungeonPortal");
+            root.transform.position = new Vector3(0f, 0f, -18f);
+            root.transform.rotation = Quaternion.Euler(0f, 180f, 0f);
+
+            const float archWidth = 4.5f;
+            const float archHeight = 5.2f;
+            const float pillarWidth = 0.7f;
+
+            // Left + right stone uprights.
+            BuildPortalPillar(root.transform, new Vector3(-archWidth * 0.5f, archHeight * 0.5f, 0f),
+                              new Vector3(pillarWidth, archHeight, pillarWidth));
+            BuildPortalPillar(root.transform, new Vector3( archWidth * 0.5f, archHeight * 0.5f, 0f),
+                              new Vector3(pillarWidth, archHeight, pillarWidth));
+
+            // Lintel across the top.
+            var lintel = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            lintel.name = "Lintel";
+            lintel.transform.SetParent(root.transform, false);
+            lintel.transform.localPosition = new Vector3(0f, archHeight, 0f);
+            lintel.transform.localScale = new Vector3(archWidth + pillarWidth, pillarWidth, pillarWidth);
+            PaintMaterial(lintel.GetComponent<Renderer>(), new Color(0.36f, 0.32f, 0.28f), false);
+
+            // Shimmer sheet — the "portal" itself.
+            var shimmer = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            shimmer.name = "Shimmer";
+            UnityEngine.Object.DestroyImmediate(shimmer.GetComponent<Collider>());
+            shimmer.transform.SetParent(root.transform, false);
+            shimmer.transform.localPosition = new Vector3(0f, archHeight * 0.5f, 0f);
+            shimmer.transform.localScale = new Vector3(archWidth - pillarWidth, archHeight - pillarWidth, 1f);
+            PaintMaterial(shimmer.GetComponent<Renderer>(), new Color(0.55f, 0.30f, 0.95f, 0.55f), true);
+
+            // Footprint collider — pets / hero don't walk THROUGH it; they bump.
+            var trigger = root.AddComponent<BoxCollider>();
+            trigger.center = new Vector3(0f, archHeight * 0.5f, 0f);
+            trigger.size = new Vector3(archWidth, archHeight, 0.6f);
+            trigger.isTrigger = true;
+
+            // Mount the portal logic + hand it the shimmer renderer for pulsing.
+            var portal = root.AddComponent(portalType);
+            var bindMethod = portalType.GetMethod("BindShimmer");
+            bindMethod?.Invoke(portal, new object[] { shimmer.GetComponent<Renderer>() });
+        }
+
+        private static void BuildPortalPillar(Transform parent, Vector3 pos, Vector3 scale)
+        {
+            var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            go.name = "Pillar";
+            go.transform.SetParent(parent, false);
+            go.transform.localPosition = pos;
+            go.transform.localScale = scale;
+            PaintMaterial(go.GetComponent<Renderer>(), new Color(0.32f, 0.28f, 0.25f), false);
+        }
+
+        private static void PaintMaterial(Renderer renderer, Color colour, bool transparent)
+        {
+            if (renderer == null) return;
+            Shader shader = transparent
+                ? (Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Unlit/Color"))
+                : (Shader.Find("Universal Render Pipeline/Lit")   ?? Shader.Find("Standard"));
+            if (shader == null) return;
+            var mat = new Material(shader);
+            if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", colour);
+            if (mat.HasProperty("_Color"))     mat.SetColor("_Color", colour);
+            if (transparent)
+            {
+                if (mat.HasProperty("_Surface")) mat.SetFloat("_Surface", 1f);
+                mat.renderQueue = 3000;
+            }
+            renderer.sharedMaterial = mat;
         }
 
         /// <summary>
@@ -1827,6 +2016,104 @@ namespace DeNelle.Editor
         {
             foreach (var c in go.GetComponentsInChildren<Collider>())
                 UnityEngine.Object.DestroyImmediate(c);
+        }
+
+        /// <summary>
+        /// Strips every Rigidbody from a model instance. Imported meshes from
+        /// third-party packs occasionally include a default Rigidbody on the
+        /// root — combined with our hero collider that meant the hero fell
+        /// through the village floor (gravity applied + no ground collision).
+        /// </summary>
+        private static void StripRigidbodies(GameObject go)
+        {
+            foreach (var r in go.GetComponentsInChildren<Rigidbody>())
+                UnityEngine.Object.DestroyImmediate(r);
+        }
+
+        /// <summary>
+        /// Destroys any wall section / corner whose world centre lies within
+        /// <c>BuildingScale × 2 m</c> of any gate's world position. The
+        /// WallLayout already carves a 4 m gap for each gate, but at 3.0×
+        /// scale that gap is visually narrow vs the now-9 m-tall walls; the
+        /// flanking segments end up obscuring the gate's arch from the hero's
+        /// eye line. Owner direction 2026-05-20.
+        /// </summary>
+        private static void ClearWallsNearGates(Transform wallRoot, Transform gateRoot)
+        {
+            if (wallRoot == null || gateRoot == null) return;
+            float radius = BuildingScale * 2f;
+            float r2 = radius * radius;
+
+            // Cache gate positions so we don't enumerate twice in the inner loop.
+            var gates = new System.Collections.Generic.List<Vector3>(gateRoot.childCount);
+            for (int i = 0; i < gateRoot.childCount; i++)
+                gates.Add(gateRoot.GetChild(i).position);
+            if (gates.Count == 0) return;
+
+            // Destroy any wall plot whose centre is inside any gate's radius.
+            // Iterate snapshot so destroying children doesn't skew the loop.
+            var walls = new System.Collections.Generic.List<Transform>(wallRoot.childCount);
+            for (int i = 0; i < wallRoot.childCount; i++) walls.Add(wallRoot.GetChild(i));
+            int removed = 0;
+            foreach (var wall in walls)
+            {
+                if (wall == null) continue;
+                Vector3 wp = wall.position;
+                foreach (var gp in gates)
+                {
+                    float dx = wp.x - gp.x;
+                    float dz = wp.z - gp.z;
+                    if (dx * dx + dz * dz <= r2)
+                    {
+                        UnityEngine.Object.DestroyImmediate(wall.gameObject);
+                        removed++;
+                        break;
+                    }
+                }
+            }
+            if (removed > 0)
+                Debug.Log($"[VillageSceneBuilder] ClearWallsNearGates removed {removed} wall section(s) " +
+                          $"within {radius:F1} m of a gate.");
+        }
+
+        /// <summary>
+        /// Adds a BoxCollider sized to the building's mesh bounds to the plot
+        /// root GameObject. HeroLocomotion's CapsuleCast sweeps against these
+        /// each frame so the hero can no longer walk through structures
+        /// (owner 2026-05-20). The visual mesh still has its own colliders
+        /// stripped via InstantiateModel so there's a single source of truth
+        /// for collision.
+        /// </summary>
+        private static void AddBuildingFootprintCollider(GameObject root, GameObject visual)
+        {
+            if (root == null || visual == null) return;
+            // Don't duplicate.
+            if (root.GetComponent<BoxCollider>() != null) return;
+
+            Bounds bounds = ComputeMeshBounds(visual);
+            if (bounds.size == Vector3.zero) return;
+            // Convert world-space mesh bounds back to root-local — the visual
+            // sits inside root with its own scale/rotation, so we ask Unity to
+            // express the bounds in root's local frame.
+            var col = root.AddComponent<BoxCollider>();
+            col.center = root.transform.InverseTransformPoint(bounds.center);
+            // size of the visual in world units, then divide by root.lossyScale
+            // so the collider tracks the world bounds even if root is scaled.
+            Vector3 sz = bounds.size;
+            Vector3 ls = root.transform.lossyScale;
+            col.size = new Vector3(
+                ls.x != 0f ? sz.x / ls.x : sz.x,
+                ls.y != 0f ? sz.y / ls.y : sz.y,
+                ls.z != 0f ? sz.z / ls.z : sz.z);
+        }
+
+        private static Bounds ComputeMeshBounds(GameObject go)
+        {
+            var renderers = go.GetComponentsInChildren<Renderer>();
+            if (renderers.Length == 0) return new Bounds(go.transform.position, Vector3.zero);
+            var b = renderers[0].bounds;
+            for (int i = 1; i < renderers.Length; i++) b.Encapsulate(renderers[i].bounds);
+            return b;
         }
 
         /// <summary>
@@ -2482,6 +2769,10 @@ namespace DeNelle.Editor
             // Strip native KayKit colliders on the mesh; the hero-root capsule
             // collider above is the single source of truth for wall collision.
             StripColliders(body);
+            // Strip any default Rigidbody the Tripo / KayKit import may have
+            // dropped on the root — gravity on the hero pulled the wizard
+            // through the village floor (2026-05-20 PO ticket).
+            StripRigidbodies(body);
 
             // Wire the AnimatorController (built by WizardAnimatorSetup) so the
             // hero plays Idle / Walk / Cast. HeroLocomotion drives SetFloat
@@ -2519,6 +2810,12 @@ namespace DeNelle.Editor
             // Ability input — 1/2/3/4 + gamepad face buttons → TryCast (Q/W/E/R
             // slots). 1-4 chosen over Q-W-E-R to avoid the W movement conflict.
             AddVillageComponent(go, TypeHeroAbilityInput);
+
+            // Cinemachine rig DISABLED 2026-05-20: was putting the camera in
+            // unexpected positions (hero appeared to fall off the world when
+            // viewed from camera). Falling back to the hand-rolled
+            // VillageCamera which we tuned earlier.
+            // AddVillageComponent(go, TypeHeroCinemachineRig);
 
             var so = new SerializedObject(comp);
             // _heart — Healing Beacon (E) restores Heart HP.

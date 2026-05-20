@@ -33,6 +33,13 @@ namespace DeNelle.Village
         [Tooltip("How quickly the hero rotates toward the move direction (rad/sec-ish).")]
         [SerializeField] private float _rotationSpeed = 12f;
 
+        [Tooltip("Acceleration (m/s²) when input is applied. Lower = sluggier start. " +
+                 "Owner feedback 2026-05-20: instant max-speed felt rigid; ramp instead.")]
+        [SerializeField] private float _accelMetresPerSec2 = 22f;
+
+        [Tooltip("Deceleration (m/s²) when input is released. Higher = sharper stop.")]
+        [SerializeField] private float _decelMetresPerSec2 = 28f;
+
         /// <summary>Current XZ velocity, exposed for the follow camera / animator.</summary>
         public Vector3 Velocity { get; private set; }
 
@@ -49,7 +56,9 @@ namespace DeNelle.Village
         {
             Debug.Log($"[HeroLocomotion] Start — pos={transform.position}, " +
                       $"newInputKb={(Keyboard.current != null ? "OK" : "null")}, " +
-                      $"newInputGp={(Gamepad.current != null ? "OK" : "null")}");
+                      $"newInputGp={(Gamepad.current != null ? "OK" : "null")}, " +
+                      $"animator={(_animator != null ? _animator.name : "null")}, " +
+                      $"controller={(_animator != null && _animator.runtimeAnimatorController != null ? _animator.runtimeAnimatorController.name : "null")}");
         }
 
         private void Update()
@@ -75,7 +84,16 @@ namespace DeNelle.Village
             Vector3 move = camRight * input.x + camFwd * input.y;
             if (move.sqrMagnitude > 1f) move.Normalize();
 
-            Velocity = move * _moveSpeed;
+            // Smooth velocity toward target — instant max-speed felt rigid.
+            // Higher accel when grabbing speed, higher decel when releasing,
+            // so the hero responds promptly to a key press but glides slightly
+            // when stopped (no instant-snap to zero).
+            Vector3 targetVelocity = move * _moveSpeed;
+            float maxStep = (targetVelocity.sqrMagnitude > Velocity.sqrMagnitude
+                ? _accelMetresPerSec2
+                : _decelMetresPerSec2) * Time.deltaTime;
+            Velocity = Vector3.MoveTowards(Velocity, targetVelocity, maxStep);
+
             if (Velocity.sqrMagnitude > 0.0001f)
             {
                 if (!_loggedFirstInput)
@@ -83,10 +101,36 @@ namespace DeNelle.Village
                     _loggedFirstInput = true;
                     Debug.Log($"[HeroLocomotion] First input registered: ({input.x:F2}, {input.y:F2}) — moving from {transform.position}");
                 }
-                transform.position += Velocity * Time.deltaTime;
+
+                // CapsuleCast forward to test for buildings/walls before we
+                // commit the move — owner 2026-05-20 reported walking THROUGH
+                // structures. If the path is blocked, clamp distance to just
+                // before the hit so the hero stops cleanly at the wall.
+                Vector3 step = Velocity * Time.deltaTime;
+                float distance = step.magnitude;
+                Vector3 dir = step / Mathf.Max(0.0001f, distance);
+                Vector3 capsuleBottom = transform.position + Vector3.up * 0.4f;
+                Vector3 capsuleTop = transform.position + Vector3.up * 1.6f;
+                if (Physics.CapsuleCast(capsuleBottom, capsuleTop, 0.4f, dir,
+                        out RaycastHit hit, distance + 0.05f,
+                        ~0, QueryTriggerInteraction.Ignore))
+                {
+                    distance = Mathf.Max(0f, hit.distance - 0.06f);
+                }
+                transform.position += dir * distance;
+
                 Quaternion target = Quaternion.LookRotation(Velocity);
                 transform.rotation = Quaternion.Slerp(
                     transform.rotation, target, _rotationSpeed * Time.deltaTime);
+            }
+
+            // Floor clamp — never let the hero fall below the village ground
+            // plane. Without this, any gravity-applying component on the
+            // imported mesh would pull the hero into the void below the map.
+            if (transform.position.y < 0f)
+            {
+                var p = transform.position; p.y = 0f;
+                transform.position = p;
             }
 
             if (_animator != null) _animator.SetFloat(AnimSpeed, Velocity.magnitude);

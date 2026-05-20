@@ -33,23 +33,29 @@ namespace DeNelle.Village
         [Header("Layout")]
         [Tooltip("Local-space height above this transform the panel sits at — " +
                  "clears the villager's head.")]
-        [SerializeField] private float _height = 2.5f;
+        [SerializeField] private float _height = 2.3f;
 
         [Tooltip("World-unit width of the bubble panel.")]
-        [SerializeField] private float _panelWidth = 4.2f;
+        [SerializeField] private float _panelWidth = 1.8f;
 
         [Tooltip("World-unit height of the bubble panel.")]
-        [SerializeField] private float _panelHeight = 1.6f;
+        [SerializeField] private float _panelHeight = 0.7f;
 
         [Header("Style")]
-        [Tooltip("Bubble panel fill colour (warm parchment).")]
-        [SerializeField] private Color _panelColor = new Color(0.972f, 0.949f, 0.886f, 0.97f);
+        [Tooltip("Bubble panel fill colour (soft white speech-bubble).")]
+        [SerializeField] private Color _panelColor = new Color(1f, 0.99f, 0.96f, 0.94f);
+
+        [Tooltip("Bubble panel outline colour (subtle ink border).")]
+        [SerializeField] private Color _outlineColor = new Color(0.14f, 0.11f, 0.09f, 0.85f);
 
         [Tooltip("Bubble text colour (dark ink).")]
-        [SerializeField] private Color _textColor = new Color(0.157f, 0.129f, 0.102f, 1f);
+        [SerializeField] private Color _textColor = new Color(0.10f, 0.08f, 0.06f, 1f);
 
-        [Tooltip("Characters per line before the text wraps.")]
-        [SerializeField] private int _wrapWidth = 32;
+        [Tooltip("Characters per line before the text wraps. Smaller = narrower bubble.")]
+        [SerializeField] private int _wrapWidth = 22;
+
+        [Tooltip("Character scale of the text — keep small so the bubble doesn't dominate.")]
+        [SerializeField] private float _textScale = 0.07f;
 
         // ── Runtime ──────────────────────────────────────────────────────────
 
@@ -93,6 +99,11 @@ namespace DeNelle.Village
         /// <paramref name="speakerName"/>, when given, is prepended as a quiet
         /// attribution line.
         /// </summary>
+        // Owner 2026-05-20: only ONE bubble allowed on screen at a time. Two
+        // overlapping bubbles look like UI glitches. Whoever called Show last
+        // owns the slot; previous bubble force-hides.
+        private static TownsfolkBubble s_activeBubble;
+
         public void Show(string speakerName, string line)
         {
             if (!_built) Build();
@@ -102,12 +113,17 @@ namespace DeNelle.Village
                 ? body
                 : speakerName + "\n" + body;
 
+            // Steal the active-bubble slot from whoever held it before.
+            if (s_activeBubble != null && s_activeBubble != this)
+                s_activeBubble.SetVisible(false);
+            s_activeBubble = this;
             SetVisible(true);
         }
 
         /// <summary>Hides the bubble.</summary>
         public void Hide()
         {
+            if (s_activeBubble == this) s_activeBubble = null;
             SetVisible(false);
         }
 
@@ -122,34 +138,137 @@ namespace DeNelle.Village
             _root.SetParent(transform, false);
             _root.localPosition = new Vector3(0f, _height, 0f);
 
-            // The panel — a quad with an unlit-ish tinted material.
+            float aspect = _panelWidth / _panelHeight;
+
+            // Dark outline backing — slightly larger rounded-rect behind the
+            // fill, gives the bubble its "ink border" silhouette.
+            var outline = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            outline.name = "BubbleOutline";
+            DestroyImmediate(outline.GetComponent<Collider>());
+            outline.transform.SetParent(_root, false);
+            outline.transform.localPosition = new Vector3(0f, 0f, 0.005f);
+            outline.transform.localScale = new Vector3(_panelWidth + 0.06f, _panelHeight + 0.06f, 1f);
+            ApplyRoundedMaterial(outline.GetComponent<Renderer>(), _outlineColor, aspect, 0.28f);
+
+            // Fill panel — cream chat-bubble face with SDF rounded corners.
             var panel = GameObject.CreatePrimitive(PrimitiveType.Quad);
             panel.name = "BubblePanel";
-            // A speech bubble is decoration — its quad collider must never
-            // intercept a hero tap-to-move raycast or an ability sweep.
-            var quadCollider = panel.GetComponent<Collider>();
-            if (quadCollider != null) Destroy(quadCollider);
+            DestroyImmediate(panel.GetComponent<Collider>());
             panel.transform.SetParent(_root, false);
             panel.transform.localPosition = Vector3.zero;
             panel.transform.localScale = new Vector3(_panelWidth, _panelHeight, 1f);
             _panelRenderer = panel.GetComponent<Renderer>();
-            ApplyPanelMaterial();
+            ApplyRoundedMaterial(_panelRenderer, _panelColor, aspect, 0.28f);
+
+            // Tail — proper triangle mesh pointing down at the speaker. Sits
+            // at the bottom-centre of the bubble. Painted with the same fill
+            // colour so it reads as part of the bubble silhouette.
+            BuildTailMesh(_root, _panelHeight, _panelColor, _outlineColor);
 
             // The text — a TextMesh, slightly proud of the panel so it never
-            // z-fights the quad.
+            // z-fights the quad. Smaller character size + tighter wrap so the
+            // bubble reads as a chat balloon, not a billboard.
             var textGo = new GameObject("BubbleText");
             textGo.transform.SetParent(_root, false);
             textGo.transform.localPosition = new Vector3(0f, 0f, -0.02f);
-            textGo.transform.localScale = Vector3.one * 0.16f;
+            textGo.transform.localScale = Vector3.one * _textScale;
             _text = textGo.AddComponent<TextMesh>();
             _text.anchor = TextAnchor.MiddleCenter;
             _text.alignment = TextAlignment.Center;
             _text.color = _textColor;
-            _text.fontSize = 64;
-            _text.characterSize = 0.5f;
+            _text.fontSize = 96;
+            _text.characterSize = 0.32f;
             _text.richText = false;
 
             _built = true;
+        }
+
+        /// <summary>Builds a flat unlit material for the outline + tail quads.</summary>
+        private static void ApplyFlatMaterial(Renderer renderer, Color colour)
+        {
+            if (renderer == null) return;
+            Shader shader = Shader.Find("Universal Render Pipeline/Unlit")
+                            ?? Shader.Find("Unlit/Color")
+                            ?? Shader.Find("Sprites/Default");
+            if (shader == null) return;
+            var mat = new Material(shader) { color = colour };
+            if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", colour);
+            renderer.sharedMaterial = mat;
+        }
+
+        /// <summary>
+        /// Applies the rounded-rect SDF shader (DeNelle/UI/RoundedChatBubble)
+        /// so the bubble panel renders with soft corners. Falls back to a flat
+        /// material if the shader isn't compiled (build error / dev-only path).
+        /// </summary>
+        private static void ApplyRoundedMaterial(Renderer renderer, Color colour, float aspect, float radius)
+        {
+            if (renderer == null) return;
+            Shader shader = Shader.Find("DeNelle/UI/RoundedChatBubble");
+            if (shader == null)
+            {
+                ApplyFlatMaterial(renderer, colour);
+                return;
+            }
+            var mat = new Material(shader);
+            mat.SetColor("_BaseColor", colour);
+            mat.SetFloat("_Aspect", Mathf.Max(0.1f, aspect));
+            mat.SetFloat("_Radius", Mathf.Clamp(radius, 0f, 0.5f));
+            renderer.sharedMaterial = mat;
+        }
+
+        /// <summary>
+        /// Builds a small downward-pointing triangle mesh as the bubble's tail.
+        /// Fill triangle + slightly larger ink-coloured outline triangle behind
+        /// it so the tail edge matches the bubble's outline.
+        /// </summary>
+        private static void BuildTailMesh(Transform parent, float panelHeight, Color fill, Color outline)
+        {
+            float w = panelHeight * 0.42f;
+            float h = panelHeight * 0.50f;
+            float yOffset = -panelHeight * 0.5f - h * 0.05f;
+
+            // Outline tail — slightly larger triangle behind the fill.
+            var outlineGo = MakeTriangleGO("BubbleTailOutline", w + 0.05f, h + 0.05f, outline);
+            outlineGo.transform.SetParent(parent, false);
+            outlineGo.transform.localPosition = new Vector3(-panelHeight * 0.4f, yOffset, 0.004f);
+
+            // Fill tail — front.
+            var fillGo = MakeTriangleGO("BubbleTailFill", w, h, fill);
+            fillGo.transform.SetParent(parent, false);
+            fillGo.transform.localPosition = new Vector3(-panelHeight * 0.4f, yOffset, 0.002f);
+        }
+
+        private static GameObject MakeTriangleGO(string name, float width, float height, Color colour)
+        {
+            var go = new GameObject(name);
+            var mf = go.AddComponent<MeshFilter>();
+            var mr = go.AddComponent<MeshRenderer>();
+
+            // Vertices: top-centre (apex of triangle is BOTTOM since tail
+            // points DOWN), bottom-left, bottom-right.
+            var mesh = new Mesh { name = "BubbleTail" };
+            mesh.vertices = new[]
+            {
+                new Vector3(-width * 0.5f,  height * 0.5f, 0f), // upper-left
+                new Vector3( width * 0.5f,  height * 0.5f, 0f), // upper-right
+                new Vector3( 0f,           -height * 0.5f, 0f), // bottom point (the tip)
+            };
+            mesh.triangles = new[] { 0, 1, 2 };
+            mesh.uv = new[]
+            {
+                new Vector2(0f, 1f),
+                new Vector2(1f, 1f),
+                new Vector2(0.5f, 0f),
+            };
+            mesh.RecalculateNormals();
+            mesh.RecalculateBounds();
+            mf.sharedMesh = mesh;
+
+            ApplyFlatMaterial(mr, colour);
+            mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            mr.receiveShadows = false;
+            return go;
         }
 
         /// <summary>Tints the bubble panel — a flat parchment fill.</summary>

@@ -99,8 +99,10 @@ namespace DeNelle.Editor
         // 0..1) maps cleanly. The terrain GameObject is offset DOWN by
         // TerrainBaseDepth so heightmap value 0 sits below Y=0 and the village
         // baseline (Y=0) lands at a known normalised height.
-        private const float TerrainHeight = 60f;       // total heightmap span
-        private const float TerrainBaseDepth = 22f;    // how far below Y=0 the terrain floor sits
+        private const float TerrainHeight = 30f;       // total heightmap span (mountains ~30 m above village)
+        private const float TerrainBaseDepth = 0.5f;   // owner 2026-05-20: was 22 — terrain dropped out of
+                                                       // hero sight from village ground. 0.5 m below village
+                                                       // floor keeps a clean seam with the hex disc edge.
 
         // Heightmap resolution -- must be 2^n + 1. 513 gives ~0.58u per sample
         // across 300u, plenty for rolling hills without tanking import time.

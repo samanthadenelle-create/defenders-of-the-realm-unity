@@ -20,6 +20,14 @@
              serialized heart-wing.jpg sprite. -->
         <ui:VisualElement name="heart-wing-banner" class="heart-wing-banner" />
 
+        <!-- Hero flanks — wizard PNG on the left, archer PNG on the right,
+             knight PNG in the middle (behind the title block). Decorative;
+             TitleController assigns the background images from
+             Resources/HeroPortraits/. Matches the React landing-page layout. -->
+        <ui:VisualElement name="hero-flank-left"   class="hero-flank hero-flank-left" />
+        <ui:VisualElement name="hero-flank-center" class="hero-flank hero-flank-center" />
+        <ui:VisualElement name="hero-flank-right"  class="hero-flank hero-flank-right" />
+
         <!-- Centered title block. -->
         <ui:VisualElement name="title-block" class="title-block">
 

@@ -419,6 +419,44 @@ namespace DeNelle.Village
                 return false;
             }
 
+            // Owner 2026-05-20: never let the player wall off a gate. Reject
+            // placement within GateClearRadius m of any Gate component in the
+            // scene so the four cardinal openings stay walkable.
+            if (!IsClearOfGates(tile))
+            {
+                reason = "Too close to a gate — keep the entrance clear.";
+                return false;
+            }
+
+            return true;
+        }
+
+        /// <summary>Buffer (m) the player can't build inside, centred on each gate.</summary>
+        private const float GateClearRadius = 5.5f;
+        private Gate[] _cachedGates;
+        private float _cachedGatesAt;
+
+        /// <summary>True when no Gate sits within <see cref="GateClearRadius"/> of the tile.</summary>
+        private bool IsClearOfGates(Vector3 tile)
+        {
+            // Cache the gate list for 2 s so we don't FindObjectsByType every
+            // placement update. Cheap enough for the 4 gates the scene has.
+            if (_cachedGates == null || Time.unscaledTime - _cachedGatesAt > 2f)
+            {
+                _cachedGates = UnityEngine.Object.FindObjectsByType<Gate>(
+                    FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+                _cachedGatesAt = Time.unscaledTime;
+            }
+            if (_cachedGates == null || _cachedGates.Length == 0) return true;
+            float r2 = GateClearRadius * GateClearRadius;
+            foreach (var g in _cachedGates)
+            {
+                if (g == null) continue;
+                Vector3 p = g.transform.position;
+                float dx = p.x - tile.x;
+                float dz = p.z - tile.z;
+                if (dx * dx + dz * dz < r2) return false;
+            }
             return true;
         }
 

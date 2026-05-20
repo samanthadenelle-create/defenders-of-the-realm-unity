@@ -79,6 +79,15 @@ namespace DeNelle.HUD
                  "is dismissed). The integrator hooks this to WallRepairController.CancelRepair().")]
         public UnityEvent RepairCancelRequested = new UnityEvent();
 
+        /// <summary>
+        /// Raised when the player taps one of the Q/W/E/R ability slots in the
+        /// HUD. Arg = slot index (0=Q, 1=W, 2=E, 3=R). The integrator hooks
+        /// this to <c>HeroAbilities.TryCast</c> via a cross-asmdef bridge —
+        /// the HUD cannot reference DeNelle.Village itself.
+        /// </summary>
+        [System.Serializable] public sealed class AbilitySlotEvent : UnityEvent<int> { }
+        public AbilitySlotEvent AbilityRequested = new AbilitySlotEvent();
+
         // ── UXML element names — the binding contract with VillageHud.uxml ───
         private const string RootName = "village-hud-root";
         private const string HeartHpFillName = "heart-hp-fill";
@@ -292,6 +301,12 @@ namespace DeNelle.HUD
                 key.AddToClassList(AbilityKeyClass);
                 key.pickingMode = PickingMode.Ignore;
                 slot.Add(key);
+
+                // Tap-to-cast — slot raises AbilityRequested(index). The
+                // bridge in DeNelle.Village forwards to HeroAbilities.TryCast.
+                int slotIndex = i;
+                slot.pickingMode = PickingMode.Position;
+                slot.RegisterCallback<PointerDownEvent>(_ => AbilityRequested?.Invoke(slotIndex));
 
                 _abilityBar.Add(slot);
                 _abilityCells[i] = new AbilityCell

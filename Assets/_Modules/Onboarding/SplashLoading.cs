@@ -49,15 +49,15 @@ namespace DeNelle.Onboarding
         [SerializeField] private bool _playBumperVideo = false;
 
         [Header("Timing")]
-        [Tooltip("Hard cap on bumper duration — if the clip runs long or stalls, finish anyway.")]
-        [SerializeField] private float _maxBumperSeconds = 3.5f;
+        [Tooltip("Hard cap on bumper duration. Owner directive 2026-05-20: 3 s total. " +
+                 "2.5 s of bumper + 0.5 s fade lands the player on Title by the 3-s mark.")]
+        [SerializeField] private float _maxBumperSeconds = 2.5f;
 
-        [Tooltip("If the video has not finished preparing within this many seconds, use the static fallback card. " +
-                 "1 s was too tight on Windows Media Foundation; 5 s gives the decoder room to fully prep.")]
-        [SerializeField] private float _videoStartTimeoutSeconds = 5f;
+        [Tooltip("If the video has not finished preparing within this many seconds, use the static fallback card.")]
+        [SerializeField] private float _videoStartTimeoutSeconds = 1.5f;
 
         [Tooltip("How long the static fallback card holds before finishing.")]
-        [SerializeField] private float _staticHoldSeconds = 1.5f;
+        [SerializeField] private float _staticHoldSeconds = 1.0f;
 
         [Tooltip("Seconds the overlay's fade-out takes before handing off to the Title screen.")]
         [SerializeField] private float _fadeSeconds = 0.5f;
@@ -154,6 +154,10 @@ namespace DeNelle.Onboarding
                 _videoPlayer.skipOnDrop = false;
                 _videoPlayer.playOnAwake = false;
                 _videoPlayer.frame = 0;
+                // Owner 2026-05-20: play the full bumper clip but at 3× speed
+                // so the IP reveal lands in ~1 s instead of ~3 s. Full content,
+                // shorter dwell.
+                _videoPlayer.playbackSpeed = 3.0f;
                 _videoPlayer.Prepare();
 
                 // Wait for the clip to be ready, bounded by the start timeout.
@@ -186,11 +190,15 @@ namespace DeNelle.Onboarding
                 }
 
                 // Play until the clip ends, an error fires, or the safety cap is
-                // hit. The cap follows the clip's own length (+1s margin) so a
-                // longer bumper plays in full; _maxBumperSeconds is the floor for
-                // a very short clip.
-                float playCap = _videoPlayer.length > 0d
-                    ? Mathf.Max(_maxBumperSeconds, (float)_videoPlayer.length + 1f)
+                // hit. The cap follows the clip's own real-time duration (clip
+                // length ÷ playbackSpeed, +0.5 s margin) so a longer bumper
+                // plays in full; _maxBumperSeconds is the floor.
+                float speed = Mathf.Max(0.01f, _videoPlayer.playbackSpeed);
+                float realDuration = _videoPlayer.length > 0d
+                    ? (float)_videoPlayer.length / speed
+                    : 0f;
+                float playCap = realDuration > 0f
+                    ? Mathf.Max(_maxBumperSeconds, realDuration + 0.5f)
                     : _maxBumperSeconds;
                 var elapsed = 0f;
                 long lastFrame = _videoPlayer.frame;
