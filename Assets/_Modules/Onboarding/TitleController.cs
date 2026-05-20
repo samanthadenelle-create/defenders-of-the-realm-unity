@@ -82,7 +82,9 @@ namespace DeNelle.Onboarding
 
         // Temporary panel-render diagnostic — logs the title panel's state a
         // beat after it is built, from a plain Update so it runs regardless of
-        // any UI Toolkit layout/scheduler issue.
+        // any UI Toolkit layout/scheduler issue. Also enumerates every other
+        // UIDocument in the scene: if the bumper/cold-open roots are still
+        // attached to the shared panel they can intercept Title-button picks.
         private void Update()
         {
             if (!_titleBuilt || _diagFrames < 0) return;
@@ -95,6 +97,26 @@ namespace DeNelle.Onboarding
                       $"rootPanel={rt != null && rt.panel != null} " +
                       $"worldBound={(rt != null ? rt.worldBound.ToString() : "n/a")} " +
                       $"screen={Screen.width}x{Screen.height}");
+
+            var allDocs = FindObjectsByType<UIDocument>(
+                FindObjectsInactive.Include, FindObjectsSortMode.None);
+            foreach (var d in allDocs)
+            {
+                var root = d != null ? d.rootVisualElement : null;
+                bool attached = root != null && root.panel != null;
+                Debug.Log($"[TitleController] PANELDIAG doc='{d.gameObject.name}' " +
+                          $"enabled={d.enabled} active={d.gameObject.activeInHierarchy} " +
+                          $"sortingOrder={d.sortingOrder} " +
+                          $"attachedToPanel={attached} " +
+                          $"rootDisplay={(root != null ? root.style.display.ToString() : "n/a")} " +
+                          $"rootPicking={(root != null ? root.pickingMode.ToString() : "n/a")} " +
+                          $"rootChildCount={(root != null ? root.childCount.ToString() : "n/a")}");
+            }
+
+            if (_startButton != null)
+                Debug.Log($"[TitleController] PANELDIAG start-button worldBound=" +
+                          $"{_startButton.worldBound} picking={_startButton.pickingMode} " +
+                          $"enabled={_startButton.enabledSelf} display={_startButton.style.display}");
         }
 
         /// <summary>
@@ -201,6 +223,7 @@ namespace DeNelle.Onboarding
         // ── Start — enter the intro flow (hero-select -> pet-select -> village) ─
         private void OnStartClicked()
         {
+            Debug.Log("[TitleController] Start CLICK RECEIVED — routing to HeroSelect.");
             // The intro flow runs Title -> HeroSelect -> PetSelect -> Village.
             // HeroSelectController self-skips to the village for a returning
             // player whose save already records a hero + starter pet, so it is
@@ -211,7 +234,7 @@ namespace DeNelle.Onboarding
         // ── Connect Wallet — Week-1 stub (the real flow is the Week-7 module) ─
         private void OnConnectWalletClicked()
         {
-            Debug.Log("[TitleController] Connect Wallet tapped — stub. The Solana wallet flow ships with the Week-7 Wallet module.");
+            Debug.Log("[TitleController] Connect Wallet CLICK RECEIVED — stub (Week-7 Wallet module ships the real flow).");
         }
 
         // ── Visibility helper ────────────────────────────────────────────────

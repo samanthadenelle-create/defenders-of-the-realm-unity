@@ -88,6 +88,11 @@ namespace DeNelle.Editor
         private const string HexDecoNature = HexPackRoot + "decoration/nature/";
         private const string HexDecoProps = HexPackRoot + "decoration/props/";
 
+        // Hero capsule = 2m tall; owner directive (2026-05-19): houses ≈ 3x
+        // hero height (~6m). Native KayKit house FBX is ~1.2m, so multiplier
+        // ≈4.5x reaches the target. Applied to all gameplay + dressing buildings.
+        private const float BuildingScale = 4.5f;
+
         /// <summary>
         /// Building colour variant used consistently across the town (spec §10
         /// implies one variant for symmetry). "green" reads as a warm,
@@ -140,6 +145,12 @@ namespace DeNelle.Editor
         private const string TypeEnemyDamageable = NsVillage + ".EnemyDamageable";
         private const string TypeDragonBoss = NsVillage + ".DragonBoss";
         private const string TypeHeroAbilities = NsVillage + ".HeroAbilities";
+        private const string TypeHeroLocomotion = NsVillage + ".HeroLocomotion";
+        private const string TypeVillageCamera = NsVillage + ".VillageCamera";
+        private const string TypeWaveHudBridge = NsVillage + ".WaveHudBridge";
+        private const string TypeVillageHudController = "DeNelle.HUD.VillageHudController";
+        private const string TypeEventSystem = "UnityEngine.EventSystems.EventSystem";
+        private const string TypeInputSystemUIInputModule = "UnityEngine.InputSystem.UI.InputSystemUIInputModule";
         private const string TypeBuildMenu = NsVillage + ".BuildMenu";
         private const string NsPets = "DeNelle.Pets";
         private const string TypePetDeployer = NsPets + ".PetDeployer";
@@ -252,6 +263,9 @@ namespace DeNelle.Editor
             // ── Lighting / camera ────────────────────────────────────────────
             CreateDirectionalLight();   // soft dawn (§14 Q4 default)
             CreateCamera();
+            // UI Toolkit button clicks need an EventSystem + InputSystemUIInputModule
+            // (HUD buttons stayed silent without it — 2026-05-19).
+            EnsureEventSystem();
 
             // ── VillageController orchestrator ───────────────────────────────
             var controllerGo = new GameObject("VillageController");
@@ -323,6 +337,32 @@ namespace DeNelle.Editor
             EditorSceneManager.SaveScene(scene, VillageScenePath);
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
+
+            // ── HUD restore (2026-05-19) ─────────────────────────────────────
+            // BuildVillage tears down VillageRoot, which removes the HUD GameObject
+            // that WallRepairSceneSetup.AddWallRepairToVillage authored. Chain it
+            // back in so the HUD survives every BuildVillage run instead of
+            // requiring the menu to be hit manually.
+            try { WallRepairSceneSetup.AddWallRepairToVillage(); }
+            catch (System.Exception ex)
+            {
+                Debug.LogWarning("[VillageSceneBuilder] HUD auto-restore via " +
+                                 "WallRepairSceneSetup.AddWallRepairToVillage failed: " + ex.Message);
+            }
+
+            // Wire WaveManager → HUD so the wave-countdown timer actually
+            // updates (the HUD shipped without a subscriber — 2026-05-19).
+            WireWaveHudBridge();
+            EditorSceneManager.MarkSceneDirty(scene);
+            EditorSceneManager.SaveScene(scene, VillageScenePath);
+
+            // Build the exterior wilderness terrain so the world reads as a
+            // walled village inside a landscape, not a void (2026-05-19).
+            try { ExteriorTerrainBuilder.BuildExterior(); }
+            catch (System.Exception ex)
+            {
+                Debug.LogWarning("[VillageSceneBuilder] Exterior terrain build failed: " + ex.Message);
+            }
 
             Debug.Log($"[VillageSceneBuilder] BuildVillage complete -- " +
                       $"{_groundCount} ground tiles, {wallCount} wall sections/corners, " +
@@ -429,6 +469,13 @@ namespace DeNelle.Editor
                 // keeps WallLayout's transform).
                 visual.transform.localRotation = Quaternion.Euler(
                     0f, corner ? WallCornerYawFix : WallStraightYawFix, 0f);
+
+                // Match the 4.5x building scale so walls don't look dwarfed by
+                // the (now 6 m tall) houses. FitWallVisualToRun below stretches
+                // the run axis independently, so this is safe — height +
+                // thickness get the lift, length stays at runLength.
+                if (model != null)
+                    visual.transform.localScale *= BuildingScale;
 
                 if (model != null && !corner)
                 {
@@ -763,11 +810,17 @@ namespace DeNelle.Editor
                 _propCount++;
             }
 
+            // Capture the authored transform before adding HeartController.
+            // Awake() will snap to origin + scale unless _useAuthoredTransform=true.
+            // We persist BOTH the toggle AND a fallback: directly re-apply the
+            // authored values right after the component is added so even if the
+            // SerializedObject write doesn't survive scene save, runtime gets
+            // the right transform written into the scene asset. Fixes the
+            // standing-stones "floating in air" symptom (2026-05-19).
+            Vector3 authoredPos   = go.transform.position;
+            Vector3 authoredScale = go.transform.localScale;
+
             var heartComp = AddVillageComponent(go, TypeHeartController);
-            // HeartController.Awake() would snap the transform to origin + apply
-            // its own scale. We host Elarion centre-WEST of the plaza beside the
-            // Keep (spec §3.3) and scale the tree mesh itself, so tell the
-            // controller to keep the authored transform.
             if (heartComp != null)
             {
                 var so = new SerializedObject(heartComp);
@@ -775,6 +828,10 @@ namespace DeNelle.Editor
                 if (prop != null) { prop.boolValue = true; so.ApplyModifiedPropertiesWithoutUndo(); }
                 else Debug.LogWarning("[VillageSceneBuilder] HeartController._useAuthoredTransform not found -- Elarion may snap to origin at Play.");
             }
+
+            // Re-stamp the authored transform AFTER the controller is wired.
+            go.transform.position   = authoredPos;
+            go.transform.localScale = authoredScale;
             return heartComp;
         }
 
@@ -898,6 +955,13 @@ namespace DeNelle.Editor
                     visual.transform.localScale = new Vector3(3f, 3f, 3f);
                     visual.transform.localPosition = new Vector3(0f, 1.5f, 0f);
                     ApplyColor(visual, b.PlaceholderColor);
+                }
+                else
+                {
+                    // Native KayKit houses are ~1.2m tall; hero capsule is 2m.
+                    // Owner direction (2026-05-19): houses should read as 3x
+                    // hero height (≈6m). 4.5x lifts a ~1.2m house to ~5.4m.
+                    visual.transform.localScale = new Vector3(BuildingScale, BuildingScale, BuildingScale);
                 }
 
                 // Low fence marking the 2×2-hex property line (§5 -- dressing,
@@ -1064,6 +1128,10 @@ namespace DeNelle.Editor
                 visual.transform.localScale = new Vector3(2.6f, 2.6f, 2.6f);
                 visual.transform.localPosition = new Vector3(0f, 1.3f, 0f);
                 ApplyColor(visual, d.PlaceholderColor);
+            }
+            else
+            {
+                visual.transform.localScale = new Vector3(BuildingScale, BuildingScale, BuildingScale);
             }
             _dressingCount++;
         }
@@ -1311,27 +1379,102 @@ namespace DeNelle.Editor
             camera.farClipPlane = 600f;
             cameraGo.tag = "MainCamera";
 
-            // ── Camera-angle tune pass (Workstream D, 2026-05-19) ────────────
-            // Goal: a tower-defense "overhead-ish" framing that takes in the
-            // whole walled town (interior ±28 X / ±21 Z) AND reads the new
-            // ambient townsfolk on the plaza as recognisable little people.
-            //
-            // The previous frame (0,46,-58 @ 38deg, default 60deg FOV) sat far
-            // back and shallow — the town read flat and the south wall ate the
-            // bottom third of the screen as empty foreground. The tune (values
-            // worked against the interior extents):
-            //   • steeper pitch — 55deg, a cleaner top-down tower-defense read
-            //     of the wall ring + the four gates the waves attack;
-            //   • lower + closer — (0,51,-37): the frame centre lands on the
-            //     Heart/plaza (ground hit ~Z=-1) so the lively town core fills
-            //     the frame and townsfolk are large enough to register;
-            //   • 48deg FOV — the bottom edge sits right on the south wall
-            //     (~Z=-27) so no foreground is wasted; the dawn pink-violet sky
-            //     fills the strip above the north wall, an intentional backdrop.
-            camera.fieldOfView = 48f;
-            cameraGo.transform.position = new Vector3(0f, 51f, -37f);
-            cameraGo.transform.rotation = Quaternion.Euler(55f, 0f, 0f);
+            // ── Camera-angle: over-the-right-shoulder of Hero (Blaise) ───────
+            // Hero spawns at world (2.5, 0, 2.5) facing +Z (toward open plaza).
+            // Hero is a ~2m capsule (HeroBody at localPosition (0,1,0) on a
+            // root at ground). Owner direction (2026-05-19): start over right
+            // shoulder, ~2 feet up + 2 feet back. 2 ft ≈ 0.6 m (Unity units).
+            //   • shoulder X offset: +0.3 right of hero center;
+            //   • Y: hero head ~Y=2, +0.6 above = Y ≈ 2.6;
+            //   • Z: 0.6 behind hero (hero faces +Z, so −0.6 in world Z) = 1.9.
+            // FOV 60deg is the Unity default, comfortable for 3rd-person view.
+            // Slight downward pitch (12deg) so the hero's back/shoulders frame
+            // the lower-third of the screen.
+            camera.fieldOfView = 60f;
+            cameraGo.transform.position = new Vector3(2.8f, 2.6f, 1.9f);
+            cameraGo.transform.rotation = Quaternion.Euler(12f, 0f, 0f);
             cameraGo.AddComponent<AudioListener>();
+
+            // Attach the over-shoulder follow component. The hero transform is
+            // wired later, after BuildHero returns (BuildVillage flow).
+            AddVillageComponent(cameraGo, TypeVillageCamera);
+        }
+
+        /// <summary>
+        /// Creates an EventSystem GameObject with the new-Input-System UI module
+        /// in the active scene. UI Toolkit needs this to route pointer events to
+        /// button.clicked handlers (HUD buttons silent without it). No-op when
+        /// one already exists.
+        /// </summary>
+        private static void EnsureEventSystem()
+        {
+            var esType = FindType(TypeEventSystem);
+            if (esType == null)
+            {
+                Debug.LogWarning("[VillageSceneBuilder] UnityEngine.EventSystems.EventSystem " +
+                                 "type not resolvable — HUD button clicks will not fire.");
+                return;
+            }
+            var existing = UnityEngine.Object.FindObjectOfType(esType);
+            if (existing != null) return;
+
+            var go = new GameObject("EventSystem");
+            go.AddComponent(esType);
+
+            var moduleType = FindType(TypeInputSystemUIInputModule);
+            if (moduleType != null) go.AddComponent(moduleType);
+            else Debug.LogWarning("[VillageSceneBuilder] InputSystemUIInputModule type not " +
+                                  "resolvable — falling back to EventSystem-only routing.");
+        }
+
+        /// <summary>
+        /// Wires WaveManager → VillageHudController so the HUD's wave timer
+        /// actually updates. Adds a <c>WaveHudBridge</c> onto the WaveManager
+        /// GameObject (the bridge talks to the HUD by reflection so DeNelle.Village
+        /// does not have to reference DeNelle.HUD).
+        /// </summary>
+        private static void WireWaveHudBridge()
+        {
+            var waveType = FindType(TypeWaveManager);
+            var hudType = FindType(TypeVillageHudController);
+            var bridgeType = FindType(TypeWaveHudBridge);
+            if (waveType == null || hudType == null || bridgeType == null) return;
+
+            var wave = UnityEngine.Object.FindObjectOfType(waveType);
+            var hud = UnityEngine.Object.FindObjectOfType(hudType);
+            if (wave == null || hud == null) return;
+
+            var waveGo = ((Component)wave).gameObject;
+            var bridge = waveGo.GetComponent(bridgeType) ?? waveGo.AddComponent(bridgeType);
+
+            var so = new SerializedObject(bridge);
+            SetObjectField(so, "_wave", (UnityEngine.Object)wave);
+            SetObjectField(so, "_hud", (UnityEngine.Object)hud);
+            so.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        /// <summary>
+        /// Finds the Main Camera built by <see cref="CreateCamera"/>, locates its
+        /// VillageCamera follow component (added there), and sets the target
+        /// transform to <paramref name="hero"/>. No-op if either is missing.
+        /// </summary>
+        private static void WireVillageCameraTarget(GameObject hero)
+        {
+            if (hero == null) return;
+            var cam = Camera.main;
+            if (cam == null)
+            {
+                Debug.LogWarning("[VillageSceneBuilder] No Camera.main found — " +
+                                 "skipping VillageCamera target wiring.");
+                return;
+            }
+            var camType = FindType(TypeVillageCamera);
+            if (camType == null) return;
+            var follow = cam.GetComponent(camType);
+            if (follow == null) return;
+            var so = new SerializedObject(follow);
+            SetObjectField(so, "_target", hero.transform);
+            so.ApplyModifiedPropertiesWithoutUndo();
         }
 
         private static void CreateDirectionalLight()
@@ -1656,6 +1799,12 @@ namespace DeNelle.Editor
         {
             var cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
             cube.name = $"[PLACEHOLDER] {label}";
+            // Force a neutral-gray URP material so the placeholder doesn't render
+            // as URP's magenta "missing material" sphere/cube. Also drop the
+            // collider — placeholder dressing must not block pathing / picks.
+            ApplyColor(cube, new Color(0.65f, 0.65f, 0.65f));
+            var col = cube.GetComponent<Collider>();
+            if (col != null) UnityEngine.Object.DestroyImmediate(col);
             NotePlaceholder(label);
             return cube;
         }
@@ -1875,6 +2024,11 @@ namespace DeNelle.Editor
 
             // 5) HeroAbilities — on a hero rig stood near the Heart.
             GameObject hero = BuildHero(systemsRoot, heart, heartPos);
+
+            // 5b) Wire the over-shoulder camera onto the hero now that it exists.
+            //     CreateCamera() attached the follow component without a target
+            //     because the hero hadn't been built yet.
+            WireVillageCameraTarget(hero);
 
             // 6) PetDeployer — auto-deploys the three starter pets on Start().
             BuildPetDeployer(systemsRoot, heartPos);
@@ -2277,16 +2431,58 @@ namespace DeNelle.Editor
         {
             var go = new GameObject("Hero (Blaise)");
             go.transform.SetParent(parent, false);
-            // Stand the hero a few units in front of the Heart, on the plaza.
-            go.transform.position = heartPos + new Vector3(2.5f, 0f, 2.5f);
+            // Open plaza spot — far enough from every 4.5x-scaled building that
+            // the OTS camera doesn't spawn looking into a wall. World coords
+            // chosen against the building manifest at lines 928 / 1042-1095:
+            // nearest neighbour (Tavern at 11,-8.5) is ~10 m away, comfortable.
+            go.transform.position = new Vector3(5f, 0f, 0f);
 
-            // Placeholder hero body — a violet-tinted capsule (KayKit hero mesh
-            // imports later, port spec Part 7).
-            var body = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            // Hero body — KayKit Protagonist_A.fbx (Mystery Series 5). The
+            // primitive Capsule stays on the root as an INVISIBLE collider so
+            // wall collision still works (the Protagonist mesh has its own
+            // colliders, but those are stripped to keep nav clean).
+            var collider = go.AddComponent<CapsuleCollider>();
+            collider.height = 2f;
+            collider.radius = 0.4f;
+            collider.center = new Vector3(0f, 1f, 0f);
+
+            // KayKit Adventurers Knight — matches the default Knight selection
+            // on HeroSelect. The pack also ships Mage / Ranger / Barbarian /
+            // Druid / Engineer / Rogue / Rogue_Hooded if/when we wire the
+            // chosen hero through GameStateService (Week 7 work).
+            const string HeroMeshPath =
+                "Assets/Models/KayKit/KayKit Adventurers 2.0/Characters/fbx/Knight.fbx";
+            var heroModel = LoadModel(HeroMeshPath);
+            GameObject body = null;
+            if (heroModel != null)
+            {
+                body = (GameObject)PrefabUtility.InstantiatePrefab(heroModel);
+            }
+            if (body == null)
+            {
+                Debug.LogWarning("[VillageSceneBuilder] Hero mesh '" + HeroMeshPath +
+                                 "' not found — falling back to violet capsule placeholder.");
+                body = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+                ApplyColor(body, HexColor("9d6fff"));
+            }
             body.name = "HeroBody";
             body.transform.SetParent(go.transform, false);
-            body.transform.localPosition = new Vector3(0f, 1f, 0f);
-            ApplyColor(body, HexColor("9d6fff"));
+            body.transform.localPosition = Vector3.zero;
+            // KayKit Protagonist FBX imports at a non-uniform native size that
+            // dwarfs the hero rig when dropped in raw. Normalise to ~2 m so the
+            // OTS camera framing (tuned against the original capsule placeholder)
+            // still reads correctly.
+            if (heroModel != null) NormalizeProp(body, 2.0f);
+            // Strip native KayKit colliders on the mesh; the hero-root capsule
+            // collider above is the single source of truth for wall collision.
+            StripColliders(body);
+
+            // Hero faces +Z by default (toward the open plaza). Explicit reset
+            // so HeroLocomotion's LookRotation chain starts from a known yaw.
+            go.transform.rotation = Quaternion.identity;
+
+            // Walking input — WASD / arrows / dpad / left stick (new Input System).
+            AddVillageComponent(go, TypeHeroLocomotion);
 
             var comp = AddVillageComponent(go, TypeHeroAbilities);
             if (comp == null) return go;

@@ -154,14 +154,16 @@ namespace DeNelle.Village
 
         private void Awake()
         {
-            // Elarion stands at world origin, scaled up ~2x (port spec Week 3) --
-            // UNLESS the scene builder authored an explicit transform. The
-            // canonical layout (docs/avalon-village-layout-spec.md section 3.3)
-            // hosts Elarion centre-WEST of the plaza, beside the Keeper's Keep,
-            // and scales the tree mesh itself; in that case the authored
-            // transform is left untouched.
+            // Honor the authored transform when either:
+            //  (a) _useAuthoredTransform is true (scene-builder flagged it), OR
+            //  (b) the heart is NOT at world origin (the canonical Avalon
+            //      layout hosts Elarion at (-6, 0, 1) centre-west of the plaza).
+            // Defensive heuristic (b) covers the case where _useAuthoredTransform
+            // was set at scene-build time but the SerializedObject write didn't
+            // persist into the saved scene (Unity 6 serialisation quirk, same
+            // class as the PanelSettings YAML issue, 2026-05-19).
             if (_useAuthoredTransform) return;
-            transform.position = Vector3.zero;
+            if (transform.position != Vector3.zero) return;
             transform.localScale = Vector3.one * _heartScale;
         }
 

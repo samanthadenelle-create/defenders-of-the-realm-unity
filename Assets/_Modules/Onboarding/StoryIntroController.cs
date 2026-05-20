@@ -213,8 +213,24 @@ namespace DeNelle.Onboarding
 
         private void HideImmediate()
         {
-            if (_root != null) _root.style.display = DisplayStyle.None;
-            if (_document != null) _document.enabled = false;
+            // Fully tear down the cold-open overlay so it cannot intercept picks
+            // on the Title screen. _document.enabled=false alone has been
+            // observed to leave the root attached on the shared panel in this
+            // Unity 6 build — same class of serialisation quirk that needed the
+            // YAML PanelSettings injection.
+            if (_root != null)
+            {
+                _root.style.display = DisplayStyle.None;
+                _root.pickingMode = PickingMode.Ignore;
+                _root.Clear();
+                _root.RemoveFromHierarchy();
+            }
+            if (_document != null)
+            {
+                _document.visualTreeAsset = null;
+                _document.enabled = false;
+                _document.gameObject.SetActive(false);
+            }
         }
 
         private void Complete()

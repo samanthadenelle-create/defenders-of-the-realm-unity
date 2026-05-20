@@ -94,6 +94,22 @@ namespace DeNelle.Audio
                     "without a mixer. For full mix control (and the six music clips " +
                     "pre-wired) author Assets/Audio/Resources/DeNelleAudioService.prefab. " +
                     "See docs/port-notes/audio-system.md.");
+
+            // Music clips — Resources.Load each by short name (the MP3s ship
+            // directly under Assets/Audio/Resources/). Missing ones stay null;
+            // AudioService's "no clip" guard handles them silently.
+            TryAssignClip(service, MusicTrack.Title,   "title");
+            TryAssignClip(service, MusicTrack.Village, "village");
+            TryAssignClip(service, MusicTrack.Battle,  "battle");
+            TryAssignClip(service, MusicTrack.Victory, "victory");
+            TryAssignClip(service, MusicTrack.Defeat,  "defeat");
+            TryAssignClip(service, MusicTrack.Dungeon, "dungeon");
+        }
+
+        private static void TryAssignClip(AudioService service, MusicTrack track, string resourceName)
+        {
+            var clip = Resources.Load<AudioClip>(resourceName);
+            if (clip != null) service.SetMusicClip(track, clip);
         }
     }
 }
