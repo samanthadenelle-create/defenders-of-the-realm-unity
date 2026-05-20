@@ -726,10 +726,14 @@ namespace DeNelle.Editor
         /// </summary>
         private static Component BuildElarion(Transform parent)
         {
-            // Centre-west of the plaza (§7.3) so the two anchors frame it.
-            Vector3 site = new Vector3(-6f, 0f, 1f);
+            // Owner direction 2026-05-20: replace the rock-cluster + tree
+            // centerpiece with the Tripo fantasy cathedral at village centre,
+            // scaled up to read as the village spire. The cathedral arrived
+            // as Assets/Models/Cathedral/Cathedral.fbx (Tripo embedded-mat
+            // FBX — TripoMaterialFixer rebuilds the URP material on Awake).
+            Vector3 site = new Vector3(0f, 0f, 1f);
 
-            var go = new GameObject("Heart (Elarion)");
+            var go = new GameObject("Heart (Cathedral Spire)");
             go.transform.SetParent(parent, false);
             go.transform.position = site;
 
@@ -741,42 +745,69 @@ namespace DeNelle.Editor
             mound.transform.localScale = new Vector3(5.0f, 0.35f, 5.0f);
             ApplyColor(mound, new Color(0.34f, 0.42f, 0.24f)); // mossy grass mound
 
-            // ── The tree itself ──────────────────────────────────────────────
-            // No KayKit Forest/Nature pack is imported, so the Hexagon pack's
-            // own largest tree mesh stands in for Elarion, scaled up (§3.1
-            // fallback + §13 decisions log entry).
-            var treeModel = LoadModel(HexDecoNature + "trees_A_large.fbx");
-            GameObject tree;
-            if (treeModel != null)
+            // ── Cathedral spire (Tripo FBX) ─────────────────────────────────
+            var cathedralModel = LoadModel("Assets/Models/Cathedral/Cathedral.fbx");
+            if (cathedralModel != null)
             {
-                tree = InstantiateModel(treeModel, "trees_A_large.fbx", "ElarionTree");
-                tree.name = "ElarionTree";
-                tree.transform.SetParent(go.transform, false);
-                tree.transform.localPosition = new Vector3(0f, 0.7f, 0f);
-                tree.transform.localScale = Vector3.one * 3.0f; // ~3× normal (§3.1)
-                // The hex atlas will not resolve onto trees_A_large (renders
-                // white even force-assigned — same mesh/UV quirk as the standing
-                // stones). Flat-tint it a deep canopy green so the centerpiece
-                // reads as a world-tree; the violet veins still glow over it.
-                ApplyColorAll(tree, new Color(0.24f, 0.42f, 0.22f));
-                Debug.Log("[VillageSceneBuilder] Elarion uses KayKit Hexagon-pack " +
-                          "decoration/nature/trees_A_large.fbx scaled 3x, flat-tinted " +
-                          "(atlas does not resolve onto this mesh) -- spec §3.1/§13.");
+                var cathedral = (GameObject)PrefabUtility.InstantiatePrefab(cathedralModel);
+                cathedral.name = "CathedralSpire";
+                cathedral.transform.SetParent(go.transform, false);
+                cathedral.transform.localPosition = new Vector3(0f, 0.7f, 0f);
+                NormalizeProp(cathedral, 14.0f);   // ~14 m tall — towers over walls
+                StripColliders(cathedral);
+                // Attach the runtime URP-material fixer with a stone tint
+                // fallback so the cathedral doesn't render solid white if
+                // Tripo's embedded basecolor doesn't extract on import.
+                var fixerType = FindType("DeNelle.Core.TripoMaterialFixer");
+                if (fixerType != null)
+                {
+                    var fixer = cathedral.AddComponent(fixerType);
+                    var setTint = fixerType.GetMethod("SetFallbackTint");
+                    setTint?.Invoke(fixer, new object[] { new Color(0.72f, 0.68f, 0.60f) }); // sandstone
+                }
+                Debug.Log("[VillageSceneBuilder] Cathedral spire mounted at heart, scaled to ~14m.");
             }
             else
             {
-                tree = new GameObject("[PLACEHOLDER] Elarion world-tree");
-                NotePlaceholder("Elarion world-tree");
-                tree.transform.SetParent(go.transform, false);
-                tree.transform.localPosition = new Vector3(0f, 0.7f, 0f);
-                var trunk = PrimitiveChild(tree.transform, "Trunk", PrimitiveType.Cylinder,
-                    new Vector3(0f, 4f, 0f), new Vector3(1.4f, 4f, 1.4f),
-                    new Color(0.30f, 0.21f, 0.13f));
-                var canopy = PrimitiveChild(tree.transform, "Canopy", PrimitiveType.Sphere,
-                    new Vector3(0f, 9f, 0f), new Vector3(7f, 6f, 7f),
-                    new Color(0.24f, 0.42f, 0.22f));
-                _ = trunk; _ = canopy;
+                Debug.LogWarning("[VillageSceneBuilder] Cathedral.fbx missing — keeping placeholder " +
+                                 "tree mesh as the centerpiece.");
             }
+
+            // ── The tree / spire ─────────────────────────────────────────────
+            // Owner 2026-05-20: cathedral mesh replaces the tree. Skip the
+            // tree block entirely when cathedralModel loaded successfully.
+            if (cathedralModel == null)
+            {
+                var treeModel = LoadModel(HexDecoNature + "trees_A_large.fbx");
+                GameObject tree;
+                if (treeModel != null)
+                {
+                    tree = InstantiateModel(treeModel, "trees_A_large.fbx", "ElarionTree");
+                    tree.name = "ElarionTree";
+                    tree.transform.SetParent(go.transform, false);
+                    tree.transform.localPosition = new Vector3(0f, 0.7f, 0f);
+                    tree.transform.localScale = Vector3.one * 3.0f;
+                    ApplyColorAll(tree, new Color(0.24f, 0.42f, 0.22f));
+                }
+                else
+                {
+                    tree = new GameObject("[PLACEHOLDER] Elarion world-tree");
+                    NotePlaceholder("Elarion world-tree");
+                    tree.transform.SetParent(go.transform, false);
+                    tree.transform.localPosition = new Vector3(0f, 0.7f, 0f);
+                    PrimitiveChild(tree.transform, "Trunk", PrimitiveType.Cylinder,
+                        new Vector3(0f, 4f, 0f), new Vector3(1.4f, 4f, 1.4f),
+                        new Color(0.30f, 0.21f, 0.13f));
+                    PrimitiveChild(tree.transform, "Canopy", PrimitiveType.Sphere,
+                        new Vector3(0f, 9f, 0f), new Vector3(7f, 6f, 7f),
+                        new Color(0.24f, 0.42f, 0.22f));
+                }
+            }
+
+            // Skip the violet veins + standing-stone ring when the cathedral
+            // is the centerpiece (owner 2026-05-20 — the rock cluster + glow
+            // shards read as clutter at the new village centre).
+            if (cathedralModel != null) goto SkipLegacyDressing;
 
             // ── Violet emissive crystalline veins up the trunk (§3.1) ────────
             // #9d6fff, soft glow. A few thin emissive shards climbing the trunk.
@@ -839,6 +870,7 @@ namespace DeNelle.Editor
                 _propCount++;
             }
 
+            SkipLegacyDressing:
             // Capture the authored transform before adding HeartController.
             // Awake() will snap to origin + scale unless _useAuthoredTransform=true.
             // We persist BOTH the toggle AND a fallback: directly re-apply the
