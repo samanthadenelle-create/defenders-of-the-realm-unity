@@ -39,6 +39,21 @@ namespace DeNelle.Editor
 
         // ── Public entry points (one per dungeon) ─────────────────────────────
 
+        /// <summary>
+        /// Builds every remaining secondary dungeon stub in one batch. Lets
+        /// the bring-up flow ship all five new dungeons + register them in
+        /// build settings without a Unity restart per dungeon.
+        /// </summary>
+        public static void BuildAllSecondaryDungeons()
+        {
+            BuildFolksGranary();
+            BuildSunkenBellTower();
+            BuildWolfwardensVigil();
+            BuildFrostStair();
+            BuildGlassCathedral();
+            BuildApothecarysVault();
+        }
+
         public static void BuildFolksGranary() => Build(new DungeonStubParams
         {
             DungeonId  = "Dungeon_FolksGranary",

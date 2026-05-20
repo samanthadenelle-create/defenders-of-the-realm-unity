@@ -1558,12 +1558,16 @@ namespace DeNelle.Editor
                 if (existing != null) UnityEngine.Object.DestroyImmediate(existing);
             }
 
-            // One portal per shipped dungeon scene. Position offsets fan them
-            // around the south gate so the player meets them in sequence.
+            // One portal per shipped dungeon scene. Owner feedback 2026-05-20:
+            // portals at z=-18 read as "rocks blocking the gate" because the
+            // south gate opens at roughly z=-25 (half-size 25) and the portal
+            // pillars sat in the threshold. Push them deeper into the village
+            // (z=-10) so the player can walk OUT the south gate to the
+            // wilderness AND see the portals along the way back.
             BuildOneDungeonPortal(portalType, "DungeonPortal_HealersCottage",
-                new Vector3(-6f, 0f, -18f), "Dungeon_HealersCottage", "Healer's Cottage");
+                new Vector3(-8f, 0f, -10f), "Dungeon_HealersCottage", "Healer's Cottage");
             BuildOneDungeonPortal(portalType, "DungeonPortal_FolksGranary",
-                new Vector3( 6f, 0f, -18f), "Dungeon_FolksGranary",   "Folk's Old Granary");
+                new Vector3( 8f, 0f, -10f), "Dungeon_FolksGranary",   "Folk's Old Granary");
         }
 
         private static void BuildOneDungeonPortal(System.Type portalType, string objectName,

@@ -1,0 +1,17 @@
+{
+    "name": "DeNelle.Cosmetics",
+    "rootNamespace": "DeNelle.Cosmetics",
+    "references": [
+        "DeNelle.Core",
+        "UniTask"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

@@ -1000,19 +1000,28 @@ namespace DeNelle.Editor
             {
                 mountain = GameObject.CreatePrimitive(PrimitiveType.Cube);
                 mountain.name = "DistantMountainPeak";
-                mountain.transform.localScale = new Vector3(120f, 80f, 60f);
+                // Owner observed 2026-05-20: previous 80-tall cube with
+                // pivot at Y=24 left the base 16 m underground but the top
+                // 64 m in the air -- it read as "structure in sky". Halve
+                // the height and ground-anchor it so it reads as a real
+                // distant peak instead of a floating block.
+                mountain.transform.localScale = new Vector3(120f, 40f, 60f);
                 mountain.transform.rotation = Quaternion.Euler(0f, 45f, 0f);
                 ApplyColor(mountain, new Color(0.42f, 0.45f, 0.52f));
             }
             mountain.transform.SetParent(lmRoot.transform, false);
-            mountain.transform.position = new Vector3(20f, 24f, 230f);
+            // Pivot is center; scale.y/2 = 20 puts the base flush with Y=0.
+            mountain.transform.position = new Vector3(20f, 20f, 230f);
 
             // ── Western tower silhouette (Mira's place -- just a hint) ──────
             var tower = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
             tower.name = "DistantTowerSilhouette";
             tower.transform.SetParent(lmRoot.transform, false);
             tower.transform.localScale = new Vector3(7f, 26f, 7f);
-            tower.transform.position = new Vector3(-228f, 24f, -30f);
+            // Cylinder pivot is center; base sits at Y=0 when position.y =
+            // scale.y/2 = 13. Previous Y=24 floated the base 11 m off the
+            // ground (owner 2026-05-20: structure-in-sky bug).
+            tower.transform.position = new Vector3(-228f, 13f, -30f);
             ApplyColor(tower, new Color(0.30f, 0.30f, 0.38f));
 
             // ── Southern "Wound" crack -- a dark, easy-to-miss horizon scar ──
