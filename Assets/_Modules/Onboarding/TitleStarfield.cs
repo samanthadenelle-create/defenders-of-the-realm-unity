@@ -204,7 +204,14 @@ namespace DeNelle.Onboarding
         /// <summary>
         /// Builds a tiny additive-blend material so the particles glow instead
         /// of looking like flat opaque squares. URP-friendly fallback chain.
+        ///
+        /// Owner direction 2026-05-20: the starfield was rendering crisp purple
+        /// SQUARES instead of soft dots because no texture was assigned and the
+        /// default particle quad reads as a hard rect. Generate a soft radial
+        /// disk (32×32) once and hand it to every starfield/comet material so
+        /// each particle reads as a glowing pinprick of light.
         /// </summary>
+        private static Texture2D _softDisk;
         private static void ApplyAdditiveMaterial(ParticleSystemRenderer renderer)
         {
             Shader shader = Shader.Find("Universal Render Pipeline/Particles/Unlit")
@@ -216,8 +223,52 @@ namespace DeNelle.Onboarding
             if (mat.HasProperty("_Blend"))   mat.SetFloat("_Blend", 1f);    // Additive
             if (mat.HasProperty("_BaseColor"))
                 mat.SetColor("_BaseColor", new Color(1f, 1f, 1f, 1f));
+
+            var disk = GetOrCreateSoftDiskTexture();
+            if (disk != null)
+            {
+                if (mat.HasProperty("_BaseMap"))  mat.SetTexture("_BaseMap", disk);
+                if (mat.HasProperty("_MainTex"))  mat.SetTexture("_MainTex", disk);
+            }
             mat.renderQueue = 3500;
             renderer.sharedMaterial = mat;
+        }
+
+        /// <summary>
+        /// Generates a 32×32 radial-falloff disk on first call and caches it.
+        /// Centre alpha = 1, edge alpha = 0 with a smooth quadratic falloff so
+        /// each particle reads as a glowing dot, not a square.
+        /// </summary>
+        private static Texture2D GetOrCreateSoftDiskTexture()
+        {
+            if (_softDisk != null) return _softDisk;
+            const int size = 32;
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false, true)
+            {
+                name = "StarfieldSoftDisk",
+                wrapMode = TextureWrapMode.Clamp,
+                filterMode = FilterMode.Bilinear,
+                hideFlags = HideFlags.HideAndDontSave,
+            };
+            const float center = (size - 1) * 0.5f;
+            float invR = 1f / center;
+            var px = new Color[size * size];
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    float dx = (x - center) * invR;
+                    float dy = (y - center) * invR;
+                    float r = Mathf.Sqrt(dx * dx + dy * dy);
+                    float a = Mathf.Clamp01(1f - r);
+                    a = a * a;   // quadratic falloff softens the edge
+                    px[y * size + x] = new Color(1f, 1f, 1f, a);
+                }
+            }
+            tex.SetPixels(px);
+            tex.Apply(false, true);
+            _softDisk = tex;
+            return tex;
         }
     }
 }

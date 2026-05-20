@@ -140,7 +140,10 @@ namespace DeNelle.Onboarding
                         _lineLabel.style.unityFontStyleAndWeight = beat.Emphasis
                             ? FontStyle.BoldAndItalic
                             : FontStyle.Italic;
-                        _lineLabel.style.fontSize = beat.Emphasis ? 28 : 22;
+                        // Owner direction 2026-05-20: text was too small on
+                        // intro — bump to ~2× across all beats so cinematic
+                        // copy reads at conversational distance.
+                        _lineLabel.style.fontSize = beat.Emphasis ? 56 : 44;
                     }
                     if (_imagePanel != null && beat.ImageId > 0)
                     {
@@ -209,7 +212,7 @@ namespace DeNelle.Onboarding
                 text = string.Empty,
             };
             _lineLabel.style.color = new Color(0.957f, 0.941f, 1f, 0.92f);
-            _lineLabel.style.fontSize = 22;
+            _lineLabel.style.fontSize = 44;
             _lineLabel.style.unityFontStyleAndWeight = FontStyle.Italic;
             _lineLabel.style.unityTextAlign = TextAnchor.MiddleCenter;
             _lineLabel.style.whiteSpace = WhiteSpace.Normal;
