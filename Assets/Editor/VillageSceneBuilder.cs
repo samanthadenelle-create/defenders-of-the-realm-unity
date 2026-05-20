@@ -1188,14 +1188,12 @@ namespace DeNelle.Editor
             // Props — KayKit decoration/props. Each is normalised to a believable
             // largest-dimension target (metres) so the yard dressing reads at a
             // consistent scale despite the meshes' differing native sizes.
-            PlaceProp(yard.transform, HexDecoProps + "resource_lumber.fbx",
-                new Vector3(-1.2f, 0f, 0.8f), 20f, "lumber", 1.3f);
-            PlaceProp(yard.transform, HexDecoProps + "resource_stone.fbx",
-                new Vector3(1.3f, 0f, -0.7f), -35f, "stone", 1.2f);
-            PlaceProp(yard.transform, HexDecoProps + "barrel.fbx",
-                new Vector3(0.9f, 0f, 1.1f), 0f, "barrel", 1.0f);
-            PlaceProp(yard.transform, HexDecoProps + "weaponrack.fbx",
-                new Vector3(-1.0f, 0f, -1.2f), 90f, "weaponrack", 1.6f);
+            // Owner direction 2026-05-20: the yard's wood weaponrack + lumber
+            // + stone + barrel props read as "items that cause issues and
+            // offer no value" — they clutter the plaza and block hero
+            // pathing. Yard stripped down to just the plot fence; per-
+            // building dressing can be reauthored later when each prop has
+            // a real interaction hook.
         }
 
         /// <summary>
@@ -1652,25 +1650,17 @@ namespace DeNelle.Editor
             lintel.transform.localScale = new Vector3(archWidth + pillarWidth, pillarWidth, pillarWidth);
             PaintMaterial(lintel.GetComponent<Renderer>(), new Color(0.36f, 0.32f, 0.28f), false);
 
-            // Shimmer sheet — the "portal" itself.
-            var shimmer = GameObject.CreatePrimitive(PrimitiveType.Quad);
-            shimmer.name = "Shimmer";
-            UnityEngine.Object.DestroyImmediate(shimmer.GetComponent<Collider>());
-            shimmer.transform.SetParent(root.transform, false);
-            shimmer.transform.localPosition = new Vector3(0f, archHeight * 0.5f, 0f);
-            shimmer.transform.localScale = new Vector3(archWidth - pillarWidth, archHeight - pillarWidth, 1f);
-            PaintMaterial(shimmer.GetComponent<Renderer>(), new Color(0.55f, 0.30f, 0.95f, 0.55f), true);
-
             // Footprint collider — pets / hero don't walk THROUGH it; they bump.
+            // (Shimmer sheet removed per owner 2026-05-20: rendered as solid
+            // purple squares that read as broken textures. Portal is now just
+            // the stone arch with a click-to-enter prompt.)
             var trigger = root.AddComponent<BoxCollider>();
             trigger.center = new Vector3(0f, archHeight * 0.5f, 0f);
             trigger.size = new Vector3(archWidth, archHeight, 0.6f);
             trigger.isTrigger = true;
 
-            // Mount the portal logic + hand it the shimmer renderer for pulsing.
+            // Mount the portal logic.
             var portal = root.AddComponent(portalType);
-            var bindMethod = portalType.GetMethod("BindShimmer");
-            bindMethod?.Invoke(portal, new object[] { shimmer.GetComponent<Renderer>() });
             var cfgMethod = portalType.GetMethod("Configure");
             cfgMethod?.Invoke(portal, new object[] { dungeonId, displayName });
         }

@@ -89,6 +89,7 @@ namespace DeNelle.HUD
         {
             _root = _doc.rootVisualElement;
             if (_root == null) return;
+            _root.pickingMode = PickingMode.Ignore; // don't block HUD beneath
             _root.pickingMode = PickingMode.Ignore;
             _root.style.position = Position.Absolute;
             _root.style.left = 0; _root.style.right = 0;

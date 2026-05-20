@@ -90,6 +90,14 @@ namespace DeNelle.HUD
         {
             _root = _doc != null ? _doc.rootVisualElement : null;
             if (_root == null) return;
+            // Owner 2026-05-20: Build button + skillset clicks weren't
+            // registering. The agent-spawned panel UIDocs each have a root
+            // VE with default PickingMode.Position, which captures clicks
+            // even when the inner overlay is display=None — blocking the
+            // village HUD beneath. Set root to Ignore; the overlay itself
+            // (when visible) still listens because it has its own
+            // pickingMode = Position.
+            _root.pickingMode = PickingMode.Ignore;
 
             _overlay = new VisualElement { name = "HeroTalentOverlay" };
             _overlay.style.position = Position.Absolute;

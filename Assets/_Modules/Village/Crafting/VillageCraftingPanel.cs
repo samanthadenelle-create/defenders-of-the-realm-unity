@@ -106,6 +106,7 @@ namespace DeNelle.Village.Crafting
         {
             _root = _doc.rootVisualElement;
             if (_root == null) return;
+            _root.pickingMode = PickingMode.Ignore; // don't block HUD beneath
 
             _root.Clear();
             _root.style.position = Position.Absolute;

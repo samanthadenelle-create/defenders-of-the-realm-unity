@@ -221,13 +221,30 @@ namespace DeNelle.Onboarding
             WireFlankAsHeroPicker(flankR, HeroClass.Ranger);
 
             // ── Buttons ──────────────────────────────────────────────────────
+            // Owner direction 2026-05-20: Start button is no longer needed
+            // (the three hero flanks ARE the start trigger now). Hide it,
+            // and reposition Connect Wallet to the top-right so the flanks
+            // aren't crowded by overlapping UI.
             _startButton = _root.Q<Button>("start-button");
             if (_startButton != null)
-                _startButton.clicked += OnStartClicked;
+            {
+                _startButton.style.display = DisplayStyle.None;
+                _startButton.clicked += OnStartClicked; // still wired for keyboard fallback
+            }
 
             _connectWalletButton = _root.Q<Button>("connect-wallet-button");
             if (_connectWalletButton != null)
+            {
+                _connectWalletButton.style.position = Position.Absolute;
+                _connectWalletButton.style.top = 16;
+                _connectWalletButton.style.right = 16;
+                _connectWalletButton.style.left = StyleKeyword.Auto;
                 _connectWalletButton.clicked += OnConnectWalletClicked;
+            }
+
+            // Add a clear "Select your Hero to begin" call-to-action below
+            // the title heading so the player knows the flanks are clickable.
+            AddHeroCallToAction(_root);
 
             // Diagnostic: confirm the title document loaded and its theme tokens
             // resolved. childCount + the title-root lookup show the UXML loaded;
@@ -248,6 +265,28 @@ namespace DeNelle.Onboarding
         {
             if (_startButton != null) _startButton.clicked -= OnStartClicked;
             if (_connectWalletButton != null) _connectWalletButton.clicked -= OnConnectWalletClicked;
+        }
+
+        /// <summary>
+        /// Inserts a "Select your Hero to begin" call-to-action below the
+        /// title heading. Idempotent — re-runs of OnEnable don't stack.
+        /// </summary>
+        private static void AddHeroCallToAction(VisualElement root)
+        {
+            if (root == null) return;
+            var existing = root.Q<Label>("title-cta");
+            if (existing != null) return;
+            var cta = new Label("✦ Select your Hero to begin ✦") { name = "title-cta" };
+            cta.style.position = Position.Absolute;
+            cta.style.top = Length.Percent(33);
+            cta.style.left = 0;
+            cta.style.right = 0;
+            cta.style.unityTextAlign = TextAnchor.MiddleCenter;
+            cta.style.fontSize = 20;
+            cta.style.color = new StyleColor(new Color(1f, 0.86f, 0.55f, 1f));
+            cta.style.unityFontStyleAndWeight = FontStyle.Bold;
+            cta.pickingMode = PickingMode.Ignore;
+            root.Add(cta);
         }
 
         /// <summary>
