@@ -226,7 +226,13 @@ namespace DeNelle.Village
         //  Rendering
         // =====================================================================
 
-        /// <summary>Rebuilds every building card from the canonical catalogue.</summary>
+        /// <summary>
+        /// Rebuilds the menu. Owner direction 2026-05-20 ("when click build
+        /// should get two options one for tower one for repair") — Option A
+        /// chosen: replace the five-building grid with exactly two cards:
+        /// Build Tower (ArcaneTower from the canon catalogue) and Repair
+        /// Wall (fires the existing WallRepairController via reflection).
+        /// </summary>
         public void Render()
         {
             if (_list == null) return;
@@ -234,10 +240,64 @@ namespace DeNelle.Village
 
             UpdateBalanceLabel();
 
+            // Card 1 — Build Tower (the existing ArcaneTower def).
+            BuildingDef tower = null;
             foreach (var def in BuildingCatalog.Buildings)
             {
                 if (def == null) continue;
-                _list.Add(BuildCard(def));
+                if (def.Id == "arcane-tower") { tower = def; break; }
+            }
+            if (tower != null) _list.Add(BuildCard(tower));
+
+            // Card 2 — Repair Wall (no building cost; routes the repair
+            // confirm through WallRepairController by reflection).
+            _list.Add(BuildRepairCard());
+        }
+
+        private VisualElement BuildRepairCard()
+        {
+            var card = new VisualElement { name = "build-card-repair-wall" };
+            card.AddToClassList(CardClass);
+
+            var nameLabel = new Label("Repair Wall");
+            nameLabel.AddToClassList(CardNameClass);
+            card.Add(nameLabel);
+
+            var desc = new Label("Restore the nearest damaged wall section to full health.");
+            desc.AddToClassList(CardDescClass);
+            desc.style.whiteSpace = WhiteSpace.Normal;
+            card.Add(desc);
+
+            var btn = new Button(InvokeRepairNearestWall) { text = "Repair" };
+            btn.AddToClassList(CardFooterClass);
+            card.Add(btn);
+
+            return card;
+        }
+
+        private static void InvokeRepairNearestWall()
+        {
+            try
+            {
+                System.Type t = null;
+                foreach (var asm in System.AppDomain.CurrentDomain.GetAssemblies())
+                {
+                    t = asm.GetType("DeNelle.Village.WallRepairController", false);
+                    if (t != null) break;
+                }
+                if (t == null) { Debug.LogWarning("[BuildMenu] WallRepairController not found."); return; }
+                var inst = UnityEngine.Object.FindObjectOfType(t) as Component;
+                if (inst == null) { Debug.LogWarning("[BuildMenu] WallRepairController not in scene."); return; }
+                var m = t.GetMethod("RepairNearestDamagedWall")
+                        ?? t.GetMethod("ConfirmRepair")
+                        ?? t.GetMethod("StartRepair");
+                if (m == null) { Debug.LogWarning("[BuildMenu] WallRepairController.Repair* not found."); return; }
+                m.Invoke(inst, m.GetParameters().Length == 0 ? null : new object[] { });
+                Debug.Log("[BuildMenu] Repair Wall click → " + m.Name + "().");
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogError("[BuildMenu] Repair invoke failed: " + ex.Message);
             }
         }
 

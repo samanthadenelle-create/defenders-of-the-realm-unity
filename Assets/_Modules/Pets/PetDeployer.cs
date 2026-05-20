@@ -158,10 +158,15 @@ namespace DeNelle.Pets
                     // Tripo FBXs import with Phong materials URP can't render
                     // (owner 2026-05-20). The fixer rebuilds them as URP/Lit
                     // on Awake; if Tripo's embedded textures didn't extract,
-                    // fall back to the species tint so the mesh isn't white.
+                    // fall back to the species basecolor PNG (Tripo Send-To-
+                    // Unity extract shipped to Resources/Textures/<species>.png)
+                    // and then the species tint as the last-resort colour.
                     var petFixer = visual.AddComponent<DeNelle.Core.TripoMaterialFixer>();
                     if (petFixer != null && def != null)
+                    {
+                        petFixer.SetFallbackTexture("Textures/" + def.Species);
                         petFixer.SetFallbackTint(def.TintColor);
+                    }
                 }
                 else
                 {
