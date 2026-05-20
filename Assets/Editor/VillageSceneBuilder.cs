@@ -1174,10 +1174,14 @@ namespace DeNelle.Editor
 
             // ── §6.5 Northern open ground ────────────────────────────────────
             // Owner direction 2026-05-20 ("rock still persists north gate"):
-            // the building_shrine was a low-poly stone marker that landed
-            // right inside the north gate threshold and read as a rock pile.
-            // Removed; the gate's interior approach is open ground now.
+            // the building_shrine + scatter trees (cut-stumps that read as
+            // rocks) all removed. Northern open ground is now genuinely
+            // open — clean approach to the north gate.
             var northern = NewChild(parent, "Northern-OpenGround");
+            // ScatterTrees(northern, new[] { ... }) — removed.
+            // The return below short-circuits the legacy trailing
+            // ScatterTrees call lower in this method.
+            return;
             // A few scattered trees on the northern open ground (§6.5).
             ScatterTrees(northern, new[]
             {
@@ -1682,11 +1686,50 @@ namespace DeNelle.Editor
             const float archWidth = 4.5f;
             const float archHeight = 5.2f;
 
-            // Owner 2026-05-20: the cube pillar+lintel arch rendered as a
-            // translucent violet frame in the player build (URP shader-find
-            // edge case on primitive-painted materials). All decorative
-            // geometry stripped — the portal is now a pure proximity trigger
-            // with the F-key prompt bubble; no in-world arch to mis-render.
+            // Owner 2026-05-20 ("cannot find entrance to healers cottage"):
+            // the portal needs a visible marker so the player can find it.
+            // Use a flat ground disc + always-visible floating sign — neither
+            // depends on the painted-material shader-find that previously
+            // turned the arch into a violet ghost.
+            var disc = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            disc.name = "PortalDisc";
+            UnityEngine.Object.DestroyImmediate(disc.GetComponent<Collider>());
+            disc.transform.SetParent(root.transform, false);
+            disc.transform.localPosition = new Vector3(0f, 0.05f, 0f);
+            disc.transform.localScale = new Vector3(3.5f, 0.05f, 3.5f);
+            // Bright violet disc that reads at distance — URP/Lit with a
+            // strong base colour (no texture, no shader-find risk).
+            var litShader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+            if (litShader != null)
+            {
+                var mat = new Material(litShader) { name = "PortalDisc" };
+                if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", new Color(0.55f, 0.30f, 0.95f, 1f));
+                if (mat.HasProperty("_Color"))     mat.SetColor("_Color", new Color(0.55f, 0.30f, 0.95f, 1f));
+                if (mat.HasProperty("_EmissionColor"))
+                {
+                    mat.SetColor("_EmissionColor", new Color(0.55f, 0.30f, 0.95f) * 1.5f);
+                    mat.EnableKeyword("_EMISSION");
+                }
+                disc.GetComponent<Renderer>().sharedMaterial = mat;
+            }
+
+            // Floating "Healer's Cottage" sign — TextMesh world-space label,
+            // always visible (not gated on proximity).
+            var sign = new GameObject("PortalSign");
+            sign.transform.SetParent(root.transform, false);
+            sign.transform.localPosition = new Vector3(0f, 3.2f, 0f);
+            sign.transform.localScale = Vector3.one * 0.08f;
+            var tm = sign.AddComponent<TextMesh>();
+            tm.text = "▼ " + displayName + " ▼";
+            tm.fontSize = 64;
+            tm.characterSize = 0.35f;
+            tm.alignment = TextAlignment.Center;
+            tm.anchor = TextAnchor.MiddleCenter;
+            tm.color = new Color(1f, 0.86f, 0.55f);
+            // Mount a billboard component so the sign faces the camera.
+            var bbType = FindType(NsVillage + ".PromptBillboard");
+            if (bbType != null) sign.AddComponent(bbType);
+
             var trigger = root.AddComponent<BoxCollider>();
             trigger.center = new Vector3(0f, archHeight * 0.5f, 0f);
             trigger.size = new Vector3(archWidth, archHeight, 0.6f);

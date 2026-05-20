@@ -7,7 +7,7 @@ TerrainLayer:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_Name: Exterior_Mud
-  m_DiffuseTexture: {fileID: 7241368327558448001, guid: 71af267a01f8af14e851d47985fb6877, type: 2}
+  m_DiffuseTexture: {fileID: -4894104580009016781, guid: 71af267a01f8af14e851d47985fb6877, type: 2}
   m_NormalMapTexture: {fileID: 0}
   m_MaskMapTexture: {fileID: 0}
   m_TileSize: {x: 7, y: 7}
