@@ -267,41 +267,24 @@ namespace DeNelle.HUD
         }
 
         /// <summary>
-        /// Owner 2026-05-20: "cannot manually start waves". The dedicated
-        /// AdminOverlay shortcut still exists (Ctrl+Shift+A → Trigger next
-        /// wave) but it's hidden behind a chord. Surface a visible "Start
-        /// Wave" button on the HUD so the wave loop can be kicked from the
-        /// normal play flow. Reflection-bridge into the WaveManager so the
-        /// HUD asmdef doesn't need to reference DeNelle.Village.
+        /// Owner 2026-05-20 ("two boxes for timer, only using one"): the
+        /// separate "▶ Start Wave" button doubled up the wave HUD. Instead
+        /// of adding a second card, make the existing wave timer label
+        /// clickable — single tap on the countdown skips the prepare phase
+        /// and calls WaveManager.ForceBeginNextWave via reflection.
         /// </summary>
         private void BuildTriggerWaveButton()
         {
-            if (_root == null) return;
-            // Avoid duplicate insertion on a second OnEnable.
-            var existing = _root.Q<Button>("trigger-wave-button");
-            if (existing != null) return;
-
-            var btn = new Button { name = "trigger-wave-button", text = "▶ Start Wave" };
-            btn.style.position = Position.Absolute;
-            btn.style.top = 60;
-            btn.style.right = 16;
-            btn.style.paddingLeft = 10;
-            btn.style.paddingRight = 10;
-            btn.style.paddingTop = 5;
-            btn.style.paddingBottom = 5;
-            btn.style.fontSize = 12;
-            btn.style.color = new StyleColor(new Color(1f, 0.94f, 0.78f, 1f));
-            btn.style.backgroundColor = new StyleColor(new Color(0.30f, 0.08f, 0.10f, 0.92f));
-            btn.style.borderTopLeftRadius = 8;
-            btn.style.borderTopRightRadius = 8;
-            btn.style.borderBottomLeftRadius = 8;
-            btn.style.borderBottomRightRadius = 8;
-            btn.style.borderTopWidth = 1;
-            btn.style.borderBottomWidth = 1;
-            btn.style.borderTopColor = new StyleColor(new Color(0.92f, 0.45f, 0.28f, 1f));
-            btn.style.borderBottomColor = new StyleColor(new Color(0.92f, 0.45f, 0.28f, 1f));
-            btn.clicked += OnTriggerWaveClicked;
-            _root.Add(btn);
+            if (_waveCountdownTimer != null)
+            {
+                _waveCountdownTimer.pickingMode = PickingMode.Position;
+                _waveCountdownTimer.RegisterCallback<ClickEvent>(_ => OnTriggerWaveClicked());
+            }
+            if (_waveNumber != null)
+            {
+                _waveNumber.pickingMode = PickingMode.Position;
+                _waveNumber.RegisterCallback<ClickEvent>(_ => OnTriggerWaveClicked());
+            }
         }
 
         private static System.Type s_waveManagerType;
@@ -613,7 +596,36 @@ namespace DeNelle.HUD
         /// <summary>Forwards the Build button click to the BuildRequested event.</summary>
         private void OnBuildClicked()
         {
+            int listeners = BuildRequested?.GetPersistentEventCount() ?? 0;
+            Debug.Log("[VillageHud] Build CLICK — persistent listeners: " + listeners);
             BuildRequested?.Invoke();
+            // Belt-and-braces: also poke BuildMenu directly via reflection in
+            // case the bridge listener wasn't wired this session (owner
+            // 2026-05-20: "complete build and skillset not clickable").
+            try
+            {
+                System.Type t = null;
+                foreach (var asm in System.AppDomain.CurrentDomain.GetAssemblies())
+                {
+                    t = asm.GetType("DeNelle.Village.BuildMenu", false);
+                    if (t != null) break;
+                }
+                if (t != null)
+                {
+                    var inst = UnityEngine.Object.FindObjectOfType(t) as Component;
+                    if (inst != null)
+                    {
+                        var open = t.GetMethod("Open");
+                        open?.Invoke(inst, null);
+                        Debug.Log("[VillageHud] BuildMenu.Open invoked directly via reflection.");
+                    }
+                    else Debug.LogWarning("[VillageHud] BuildMenu instance not found in scene.");
+                }
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogError("[VillageHud] Direct BuildMenu.Open failed: " + ex.Message);
+            }
         }
 
         /// <summary>Forwards the repair-prompt Repair button to RepairConfirmRequested.</summary>
