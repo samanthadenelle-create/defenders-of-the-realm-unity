@@ -762,8 +762,12 @@ namespace DeNelle.Editor
                 if (fixerType != null)
                 {
                     var fixer = cathedral.AddComponent(fixerType);
+                    var setTex = fixerType.GetMethod("SetFallbackTexture");
+                    // Real basecolor from Tripo Send-To-Unity extract ships at
+                    // Resources/Textures/Cathedral.png (~26 MB).
+                    setTex?.Invoke(fixer, new object[] { "Textures/Cathedral" });
                     var setTint = fixerType.GetMethod("SetFallbackTint");
-                    setTint?.Invoke(fixer, new object[] { new Color(0.72f, 0.68f, 0.60f) }); // sandstone
+                    setTint?.Invoke(fixer, new object[] { Color.white }); // let texture's own colours show
                 }
                 Debug.Log("[VillageSceneBuilder] Cathedral spire mounted at heart, scaled to ~14m.");
             }
@@ -1651,16 +1655,16 @@ namespace DeNelle.Editor
                 if (existing != null) UnityEngine.Object.DestroyImmediate(existing);
             }
 
-            // One portal per shipped dungeon scene. Owner feedback 2026-05-20:
-            // portals at z=-18 read as "rocks blocking the gate" because the
-            // south gate opens at roughly z=-25 (half-size 25) and the portal
-            // pillars sat in the threshold. Push them deeper into the village
-            // (z=-10) so the player can walk OUT the south gate to the
-            // wilderness AND see the portals along the way back.
+            // Owner feedback 2026-05-20 ("still doorway items that say
+            // healers cottage in front of gate"): the stone-arch portals
+            // were blocking the south-gate sightline. Relocated to the
+            // EAST and WEST sides of the village interior, well off the
+            // N-S gate spine, so they read as side attractions instead of
+            // gate clutter.
             BuildOneDungeonPortal(portalType, "DungeonPortal_HealersCottage",
-                new Vector3(-8f, 0f, -10f), "Dungeon_HealersCottage", "Healer's Cottage");
+                new Vector3(-18f, 0f, 6f), "Dungeon_HealersCottage", "Healer's Cottage");
             BuildOneDungeonPortal(portalType, "DungeonPortal_FolksGranary",
-                new Vector3( 8f, 0f, -10f), "Dungeon_FolksGranary",   "Folk's Old Granary");
+                new Vector3( 18f, 0f, 6f), "Dungeon_FolksGranary",   "Folk's Old Granary");
         }
 
         private static void BuildOneDungeonPortal(System.Type portalType, string objectName,

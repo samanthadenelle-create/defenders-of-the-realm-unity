@@ -38,9 +38,19 @@ namespace DeNelle.Village
                 return;
             }
 
-            // Remove the old body if one exists.
+            // Remove the old body if one exists, but FIRST snapshot the
+            // Animator's runtimeAnimatorController so the new body keeps the
+            // Walk / Cast states. Tripo FBXs import without an Animator on
+            // some configs — when null we still try to assign the controller
+            // to a freshly-added Animator on the new body root.
+            RuntimeAnimatorController controllerSnapshot = null;
             var old = transform.Find("HeroBody");
-            if (old != null) Destroy(old.gameObject);
+            if (old != null)
+            {
+                var oldAnim = old.GetComponentInChildren<Animator>();
+                if (oldAnim != null) controllerSnapshot = oldAnim.runtimeAnimatorController;
+                Destroy(old.gameObject);
+            }
 
             var body = Instantiate(prefab, transform);
             body.name = "HeroBody";
@@ -56,6 +66,33 @@ namespace DeNelle.Village
             StripRigidbodies(body);
             StripColliders(body);
             RetargetMaterialsToUrp(body);
+            // Owner ask 2026-05-20 "when hero moves can it call walk
+            // animation". The snapshot-controller from the old wizard body
+            // has Idle / Walk / Cast states keyed on the Speed float that
+            // HeroLocomotion already drives. Reattach it to the new body
+            // so movement plays the walk animation; add an Animator if the
+            // FBX imported without one.
+            if (controllerSnapshot != null)
+            {
+                var anim = body.GetComponentInChildren<Animator>();
+                if (anim == null) anim = body.AddComponent<Animator>();
+                anim.runtimeAnimatorController = controllerSnapshot;
+                anim.applyRootMotion = false;
+                // Force HeroLocomotion to re-cache its Animator reference —
+                // its private _animator field still points at the destroyed
+                // old animator. Reflection write because the field is
+                // private (and reflection here is cheap — runs once per
+                // scene load).
+                var locos = GetComponentsInChildren<MonoBehaviour>(true);
+                foreach (var mb in locos)
+                {
+                    if (mb == null) continue;
+                    if (mb.GetType().Name != "HeroLocomotion") continue;
+                    var f = mb.GetType().GetField("_animator",
+                        System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                    f?.SetValue(mb, anim);
+                }
+            }
             // Owner 2026-05-20: Tripo's Send To Unity feature extracted the
             // Knight basecolor PNG. Copied into Resources/Textures/Knight.png
             // so the runtime can apply the real texture rather than the
