@@ -1661,10 +1661,14 @@ namespace DeNelle.Editor
             // EAST and WEST sides of the village interior, well off the
             // N-S gate spine, so they read as side attractions instead of
             // gate clutter.
+            // dungeonId is the SHORT id — SceneRouter.GoDungeon prepends
+            // "Dungeon_". Passing the full scene name double-prefixed and
+            // routed to a missing scene (owner 2026-05-20: prior connection
+            // error). Strict short ids only.
             BuildOneDungeonPortal(portalType, "DungeonPortal_HealersCottage",
-                new Vector3(-18f, 0f, 6f), "Dungeon_HealersCottage", "Healer's Cottage");
+                new Vector3(-18f, 0f, 6f), "HealersCottage", "Healer's Cottage");
             BuildOneDungeonPortal(portalType, "DungeonPortal_FolksGranary",
-                new Vector3( 18f, 0f, 6f), "Dungeon_FolksGranary",   "Folk's Old Granary");
+                new Vector3( 18f, 0f, 6f), "FolksGranary",   "Folk's Old Granary");
         }
 
         private static void BuildOneDungeonPortal(System.Type portalType, string objectName,
