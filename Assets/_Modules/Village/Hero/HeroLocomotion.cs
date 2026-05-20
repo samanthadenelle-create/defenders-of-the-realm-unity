@@ -37,6 +37,13 @@ namespace DeNelle.Village
         public Vector3 Velocity { get; private set; }
 
         private bool _loggedFirstInput;
+        private Animator _animator;
+        private static readonly int AnimSpeed = Animator.StringToHash("Speed");
+
+        private void Awake()
+        {
+            _animator = GetComponentInChildren<Animator>();
+        }
 
         private void Start()
         {
@@ -81,6 +88,8 @@ namespace DeNelle.Village
                 transform.rotation = Quaternion.Slerp(
                     transform.rotation, target, _rotationSpeed * Time.deltaTime);
             }
+
+            if (_animator != null) _animator.SetFloat(AnimSpeed, Velocity.magnitude);
         }
 
         private static Vector2 ReadMoveInput()

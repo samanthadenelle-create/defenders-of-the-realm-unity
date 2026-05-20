@@ -2446,12 +2446,12 @@ namespace DeNelle.Editor
             collider.radius = 0.4f;
             collider.center = new Vector3(0f, 1f, 0f);
 
-            // KayKit Adventurers Knight — matches the default Knight selection
-            // on HeroSelect. The pack also ships Mage / Ranger / Barbarian /
-            // Druid / Engineer / Rogue / Rogue_Hooded if/when we wire the
-            // chosen hero through GameStateService (Week 7 work).
-            const string HeroMeshPath =
-                "Assets/Models/KayKit/KayKit Adventurers 2.0/Characters/fbx/Knight.fbx";
+            // Tripo-generated Wizard FBX — comes with Walk + Cast animations
+            // (owner paid for them, 2026-05-19). Wired with Wizard.controller
+            // built by WizardAnimatorSetup.cs (Idle/Walk/Cast states + Speed
+            // float + Cast trigger; matches HeroAbilities' Cast hash).
+            const string HeroMeshPath = "Assets/Models/Wizard/Wizard.fbx";
+            const string HeroAnimatorPath = "Assets/Models/Wizard/Wizard.controller";
             var heroModel = LoadModel(HeroMeshPath);
             GameObject body = null;
             if (heroModel != null)
@@ -2476,6 +2476,29 @@ namespace DeNelle.Editor
             // Strip native KayKit colliders on the mesh; the hero-root capsule
             // collider above is the single source of truth for wall collision.
             StripColliders(body);
+
+            // Wire the AnimatorController (built by WizardAnimatorSetup) so the
+            // hero plays Idle / Walk / Cast. HeroLocomotion drives SetFloat
+            // "Speed"; HeroAbilities already drives SetTrigger "Cast" (line 88).
+            if (heroModel != null)
+            {
+                var ctrl = AssetDatabase.LoadAssetAtPath<RuntimeAnimatorController>(HeroAnimatorPath);
+                if (ctrl != null)
+                {
+                    var anim = body.GetComponentInChildren<Animator>();
+                    if (anim != null)
+                    {
+                        anim.runtimeAnimatorController = ctrl;
+                        anim.applyRootMotion = false;
+                    }
+                }
+                else
+                {
+                    Debug.LogWarning("[VillageSceneBuilder] Wizard.controller not found at " +
+                                     $"'{HeroAnimatorPath}' — run Defenders > Animation > " +
+                                     "Setup Wizard Animator first.");
+                }
+            }
 
             // Hero faces +Z by default (toward the open plaza). Explicit reset
             // so HeroLocomotion's LookRotation chain starts from a known yaw.
