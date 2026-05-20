@@ -2987,23 +2987,20 @@ namespace DeNelle.Editor
             // from the camera. Archetype ordinals follow TownsfolkDialogue:
             //   0 Trader · 1 Villager · 2 Guard · 3 Child · 4 Elder
             // X grows east, Z grows north; the plaza is centred on the Heart.
+            // Owner direction 2026-05-20: village feels crowded — cut the
+            // ambient roster from 10 to 4. Keep one wanderer + one idler on
+            // the plaza (the lively core), one off-duty guard near the gate
+            // spine, and one trader at the market so each archetype still
+            // appears once.
             var spots = new[]
             {
                 // Plaza — the lively heart of the town.
                 new TownsfolkSpot { Pos = heartPos + new Vector3( 4f, 0f,  5f), Archetype = 1, Wander = true,  FacingY = 200f },
-                new TownsfolkSpot { Pos = heartPos + new Vector3(-5f, 0f,  4f), Archetype = 3, Wander = true,  FacingY =  20f },
                 new TownsfolkSpot { Pos = heartPos + new Vector3( 2f, 0f, -6f), Archetype = 4, Wander = false, FacingY =   0f },
-                // Market quarter (the church / market / tavern cluster, ~S-SW).
+                // Market quarter (the church / market / tavern cluster).
                 new TownsfolkSpot { Pos = new Vector3(-10f, 0f, -7f), Archetype = 0, Wander = false, FacingY =  90f },
-                new TownsfolkSpot { Pos = new Vector3( -7f, 0f, -9f), Archetype = 1, Wander = true,  FacingY = 135f },
-                // Residential cluster (SW) — everyday village life.
-                new TownsfolkSpot { Pos = new Vector3(-14f, 0f,  6f), Archetype = 1, Wander = true,  FacingY = 300f },
-                new TownsfolkSpot { Pos = new Vector3(-12f, 0f,  9f), Archetype = 3, Wander = true,  FacingY = 250f },
-                // Workshop quarter (NE) — a trader near the blacksmith.
-                new TownsfolkSpot { Pos = new Vector3( 12f, 0f, 10f), Archetype = 0, Wander = false, FacingY = 225f },
-                // Off-duty guards near the N-S spine toward the gates.
+                // Off-duty guard near the N gate spine.
                 new TownsfolkSpot { Pos = new Vector3(  1f, 0f, 14f), Archetype = 2, Wander = true,  FacingY = 180f },
-                new TownsfolkSpot { Pos = new Vector3( -2f, 0f,-14f), Archetype = 2, Wander = false, FacingY =   0f },
             };
 
             int placed = 0;

@@ -294,7 +294,11 @@ namespace DeNelle.Onboarding
             new CinematicBeat("Sir Bram the knight, Sela the archer, and three small sleeping spirits —", 5.8f),
             new CinematicBeat("waiting for the one the Lantern will answer to.", 5.0f, 7),
             new CinematicBeat("That one is you.", 4.5f, 3, true),
-            new CinematicBeat("A young mage, barely an apprentice — yet the flame brightens at your step.", 5.8f, 6),
+            // Class-agnostic phrasing per owner direction 2026-05-20 — the
+            // intro plays before HeroSelect so it shouldn't assume Mage. The
+            // hero-class trio (mage / knight / ranger) is named earlier in
+            // beat 10 ("Sir Bram the knight, Sela the archer, and three…").
+            new CinematicBeat("Barely a recruit, scarcely tested — yet the flame brightens at your step.", 5.8f, 6),
             new CinematicBeat("Welcome home, Guardian of the Lantern.", 5.4f, 4, true),
         };
 

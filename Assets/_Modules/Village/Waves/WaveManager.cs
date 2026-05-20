@@ -296,6 +296,33 @@ namespace DeNelle.Village
             }
         }
 
+        /// <summary>
+        /// Owner-facing: skip the remaining Prepare-Phase and start the
+        /// current wave immediately. Used by the HUD's "Trigger Wave" button
+        /// and the AdminOverlay's debug shortcut. Idle / Complete phases
+        /// route into the next countdown so the call is always meaningful.
+        /// </summary>
+        public void ForceBeginNextWave()
+        {
+            switch (_phase)
+            {
+                case WavePhase.Countdown:
+                    _countdownRemaining = 0f;
+                    OnCountdownTick.Invoke(0f);
+                    StartWave(_currentWaveId);
+                    break;
+                case WavePhase.Active:
+                    Debug.Log("[WaveManager] ForceBeginNextWave called during active wave — ignored (current wave already running).");
+                    break;
+                case WavePhase.Idle:
+                case WavePhase.Complete:
+                default:
+                    Debug.Log("[WaveManager] ForceBeginNextWave kicking the wave loop from " + _phase);
+                    BeginLoop().Forget();
+                    break;
+            }
+        }
+
         // =====================================================================
         //  Active wave — spawn + breach watch
         // =====================================================================

@@ -56,6 +56,9 @@ namespace DeNelle.Village
             StripRigidbodies(body);
             StripColliders(body);
             RetargetMaterialsToUrp(body);
+            // Safety net: if Tripo's embedded textures didn't extract, paint
+            // the body with a class tint so the mesh isn't solid white.
+            ApplyClassTint(body, cls);
             Debug.Log("[HeroBodySwapper] Swapped hero body to " + slug + ".fbx");
         }
 
@@ -118,6 +121,41 @@ namespace DeNelle.Village
             HeroClass.Ranger => "Ranger",
             _ => null,    // Mage uses the scene-builder's Wizard placeholder
         };
+
+        /// <summary>
+        /// If the URP material on the body still ended up white (Tripo's
+        /// embedded textures sometimes don't survive import), paint each
+        /// material with a class tint so the body reads coloured anyway.
+        /// </summary>
+        private static void ApplyClassTint(GameObject body, HeroClass cls)
+        {
+            Color tint = cls switch
+            {
+                HeroClass.Knight => new Color(0.78f, 0.80f, 0.86f),   // steel
+                HeroClass.Ranger => new Color(0.62f, 0.55f, 0.85f),   // alien-violet
+                _                => new Color(0.60f, 0.45f, 0.85f),   // mage fallback
+            };
+            foreach (var r in body.GetComponentsInChildren<Renderer>(true))
+            {
+                if (r == null) continue;
+                var mats = r.sharedMaterials;
+                if (mats == null) continue;
+                for (int i = 0; i < mats.Length; i++)
+                {
+                    var m = mats[i];
+                    if (m == null) continue;
+                    // Only override when the material clearly has no diffuse
+                    // texture — preserve real textures when Unity DID extract.
+                    Texture tex = null;
+                    if (m.HasProperty("_BaseMap")) tex = m.GetTexture("_BaseMap");
+                    if (tex == null && m.HasProperty("_MainTex")) tex = m.GetTexture("_MainTex");
+                    if (tex != null) continue;
+                    if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", tint);
+                    if (m.HasProperty("_Color"))     m.SetColor("_Color", tint);
+                }
+                r.sharedMaterials = mats;
+            }
+        }
 
         private static void NormalizeHeight(GameObject go, float targetHeight)
         {

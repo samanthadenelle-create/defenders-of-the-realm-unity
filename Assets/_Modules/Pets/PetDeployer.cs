@@ -157,8 +157,11 @@ namespace DeNelle.Pets
                     StripPetColliders(visual);
                     // Tripo FBXs import with Phong materials URP can't render
                     // (owner 2026-05-20). The fixer rebuilds them as URP/Lit
-                    // on Awake; idempotent and a no-op if textures already URP.
-                    visual.AddComponent<DeNelle.Core.TripoMaterialFixer>();
+                    // on Awake; if Tripo's embedded textures didn't extract,
+                    // fall back to the species tint so the mesh isn't white.
+                    var petFixer = visual.AddComponent<DeNelle.Core.TripoMaterialFixer>();
+                    if (petFixer != null && def != null)
+                        petFixer.SetFallbackTint(def.TintColor);
                 }
                 else
                 {

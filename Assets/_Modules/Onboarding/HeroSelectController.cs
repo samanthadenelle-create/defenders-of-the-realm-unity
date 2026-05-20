@@ -164,6 +164,11 @@ namespace DeNelle.Onboarding
             if (_subtitle != null) _subtitle.text = CanonStrings.Locale(SubtitleKey);
             if (_confirmButton != null) _confirmButton.text = CanonStrings.Locale(ConfirmKey);
 
+            // Owner direction 2026-05-20: surface a clear call-to-action so
+            // the player knows what to do — "Select your hero to start" sits
+            // above the card row in a soft amber tone.
+            AddHeroSelectHint(_root);
+
             BuildCards();
 
             if (_confirmButton != null)
@@ -178,6 +183,27 @@ namespace DeNelle.Onboarding
             RefreshConfirmEnabled();
 
             _bound = true;
+        }
+
+        /// <summary>
+        /// Adds an explicit "Select your hero to start" hint label above
+        /// the card row. Idempotent — re-runs of OnEnable don't stack copies.
+        /// </summary>
+        private static void AddHeroSelectHint(VisualElement root)
+        {
+            if (root == null) return;
+            var existing = root.Q<Label>("hero-select-hint");
+            if (existing != null) return;
+            var hint = new Label("Select your hero to start") { name = "hero-select-hint" };
+            hint.style.unityTextAlign = TextAnchor.MiddleCenter;
+            hint.style.fontSize = 16;
+            hint.style.color = new StyleColor(new Color(1f, 0.86f, 0.55f, 1f));
+            hint.style.marginTop = 4;
+            hint.style.marginBottom = 6;
+            hint.style.unityFontStyleAndWeight = FontStyle.Italic;
+            // Insert near the top of the layout so it sits between the
+            // header and the card row.
+            root.Insert(Mathf.Min(2, root.childCount), hint);
         }
 
         /// <summary>Builds the three hero cards into the card row once.</summary>

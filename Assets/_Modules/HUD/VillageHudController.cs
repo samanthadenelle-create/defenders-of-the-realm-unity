@@ -262,7 +262,72 @@ namespace DeNelle.HUD
             }
 
             BuildAbilityCells();
+            BuildTriggerWaveButton();
             _bound = true;
+        }
+
+        /// <summary>
+        /// Owner 2026-05-20: "cannot manually start waves". The dedicated
+        /// AdminOverlay shortcut still exists (Ctrl+Shift+A → Trigger next
+        /// wave) but it's hidden behind a chord. Surface a visible "Start
+        /// Wave" button on the HUD so the wave loop can be kicked from the
+        /// normal play flow. Reflection-bridge into the WaveManager so the
+        /// HUD asmdef doesn't need to reference DeNelle.Village.
+        /// </summary>
+        private void BuildTriggerWaveButton()
+        {
+            if (_root == null) return;
+            // Avoid duplicate insertion on a second OnEnable.
+            var existing = _root.Q<Button>("trigger-wave-button");
+            if (existing != null) return;
+
+            var btn = new Button { name = "trigger-wave-button", text = "▶ Start Wave" };
+            btn.style.position = Position.Absolute;
+            btn.style.top = 60;
+            btn.style.right = 16;
+            btn.style.paddingLeft = 10;
+            btn.style.paddingRight = 10;
+            btn.style.paddingTop = 5;
+            btn.style.paddingBottom = 5;
+            btn.style.fontSize = 12;
+            btn.style.color = new StyleColor(new Color(1f, 0.94f, 0.78f, 1f));
+            btn.style.backgroundColor = new StyleColor(new Color(0.30f, 0.08f, 0.10f, 0.92f));
+            btn.style.borderTopLeftRadius = 8;
+            btn.style.borderTopRightRadius = 8;
+            btn.style.borderBottomLeftRadius = 8;
+            btn.style.borderBottomRightRadius = 8;
+            btn.style.borderTopWidth = 1;
+            btn.style.borderBottomWidth = 1;
+            btn.style.borderTopColor = new StyleColor(new Color(0.92f, 0.45f, 0.28f, 1f));
+            btn.style.borderBottomColor = new StyleColor(new Color(0.92f, 0.45f, 0.28f, 1f));
+            btn.clicked += OnTriggerWaveClicked;
+            _root.Add(btn);
+        }
+
+        private static System.Type s_waveManagerType;
+        private void OnTriggerWaveClicked()
+        {
+            try
+            {
+                if (s_waveManagerType == null)
+                {
+                    foreach (var asm in System.AppDomain.CurrentDomain.GetAssemblies())
+                    {
+                        var t = asm.GetType("DeNelle.Village.WaveManager", false);
+                        if (t != null) { s_waveManagerType = t; break; }
+                    }
+                }
+                if (s_waveManagerType == null) { Debug.LogWarning("[VillageHudController] WaveManager type not found."); return; }
+                var inst = UnityEngine.Object.FindObjectOfType(s_waveManagerType) as Component;
+                if (inst == null) { Debug.LogWarning("[VillageHudController] No WaveManager in scene."); return; }
+                var m = s_waveManagerType.GetMethod("ForceBeginNextWave");
+                m?.Invoke(inst, null);
+                Debug.Log("[VillageHudController] Trigger Wave button → ForceBeginNextWave.");
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogError("[VillageHudController] Trigger Wave failed: " + ex.Message);
+            }
         }
 
         /// <summary>

@@ -27,11 +27,27 @@ namespace DeNelle.Core
     public sealed class TripoMaterialFixer : MonoBehaviour
     {
         [SerializeField] private string _fallbackTextureName;
+        [SerializeField] private Color _fallbackTint = Color.white;
+        [SerializeField] private bool _hasFallbackTint;
         [SerializeField] private float _smoothness = 0.15f;
         [SerializeField] private float _metallic = 0f;
         private bool _ran;
 
         public void SetFallbackTexture(string resourcesPath) => _fallbackTextureName = resourcesPath;
+
+        /// <summary>
+        /// Forces a solid fallback colour on every material rebuilt by this
+        /// fixer. Use when the Tripo FBX's embedded textures don't extract
+        /// (the player build sees no _MainTex / _BaseMap on the source) and
+        /// the mesh would otherwise render solid white. Owner direction
+        /// 2026-05-20: pets / heroes show white in the player despite the
+        /// fixer — wire each model's species tint as a safety net.
+        /// </summary>
+        public void SetFallbackTint(Color tint)
+        {
+            _fallbackTint = tint;
+            _hasFallbackTint = true;
+        }
 
         private void Awake() => Run();
 
@@ -73,6 +89,10 @@ namespace DeNelle.Core
                         if (src.HasProperty("_Color")) col = src.color;
                     }
                     if (tex == null && fallbackTex != null) tex = fallbackTex;
+                    // Owner safety net: when nothing else gives a colour, paint
+                    // the material with a species/class tint so the mesh reads
+                    // properly instead of solid white.
+                    if (tex == null && _hasFallbackTint) col = _fallbackTint;
 
                     var newMat = new Material(lit);
                     newMat.name = (src != null && src.name != null ? src.name : "Tripo") + " (URP)";
