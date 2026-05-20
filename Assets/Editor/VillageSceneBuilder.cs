@@ -147,6 +147,7 @@ namespace DeNelle.Editor
         private const string TypeDragonBoss = NsVillage + ".DragonBoss";
         private const string TypeHeroAbilities = NsVillage + ".HeroAbilities";
         private const string TypeHeroLocomotion = NsVillage + ".HeroLocomotion";
+        private const string TypeHeroBodySwapper = NsVillage + ".HeroBodySwapper";
         private const string TypeHeroAbilityInput = NsVillage + ".HeroAbilityInput";
         private const string TypeHeroAbilitiesHudBridge = NsVillage + ".HeroAbilitiesHudBridge";
         private const string TypeHeroCinemachineRig = NsVillage + ".HeroCinemachineRig";
@@ -2841,6 +2842,11 @@ namespace DeNelle.Editor
             // Hero faces +Z by default (toward the open plaza). Explicit reset
             // so HeroLocomotion's LookRotation chain starts from a known yaw.
             go.transform.rotation = Quaternion.identity;
+
+            // Runtime body swap — replaces the Wizard placeholder with the
+            // FBX matching the player's chosen HeroClass (Knight / Ranger).
+            // No-op for Mage. Loads from Resources/Heroes/<slug>.fbx.
+            AddVillageComponent(go, TypeHeroBodySwapper);
 
             // Walking input — WASD / arrows / dpad / left stick (new Input System).
             AddVillageComponent(go, TypeHeroLocomotion);

@@ -135,23 +135,38 @@ namespace DeNelle.Pets
             }
             else
             {
-                // Placeholder primitive — the KayKit pet meshes import later
-                // (port spec Part 7). Owner direction 2026-05-20: pets were
-                // invisible because the 0.5x capsule sat 15m from the hero at
-                // the Heart slots. Bump to chest-height (~1.4 units) so they
-                // read as "a pet" from the new wider camera, and let the
-                // HeroLeash drag them to the hero each frame.
-                var go = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+                var go = new GameObject($"Pet_{def.Species}_root");
                 go.transform.SetParent(transform, false);
-                go.transform.localScale = new Vector3(0.8f, 0.9f, 0.8f);
-                var col = go.GetComponent<Collider>();
-                if (col != null) col.isTrigger = true; // pets do not block pathing
-                pet = go.AddComponent<Pet>();
-                TintPlaceholder(go, def);
+                go.transform.position = slot;
 
-                // A small floating glyph (·species·) above the capsule so the
-                // owner can tell the trio apart even before the KayKit meshes
-                // drop in.
+                // Try a hand-imported FBX first (Resources/Pets/<species>.fbx)
+                // before falling back to the tinted-capsule placeholder.
+                // 2026-05-20: aether-sprite (fairy) + ice-wolf (fox) Tripo FBXs
+                // landed; flame-pup still capsule until its mesh ships.
+                GameObject visual = TryLoadPetMesh(def);
+                if (visual != null)
+                {
+                    visual.transform.SetParent(go.transform, false);
+                    visual.transform.localPosition = Vector3.zero;
+                    visual.transform.localRotation = Quaternion.identity;
+                    NormalizePetHeight(visual, 1.1f);
+                    StripPetColliders(visual);
+                }
+                else
+                {
+                    // Placeholder primitive — owner direction 2026-05-20: pets
+                    // were invisible because the 0.5x capsule sat 15m from the
+                    // hero. Bump to chest height and let HeroLeash drag them.
+                    var capsule = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+                    capsule.name = "Body";
+                    capsule.transform.SetParent(go.transform, false);
+                    capsule.transform.localScale = new Vector3(0.8f, 0.9f, 0.8f);
+                    var col = capsule.GetComponent<Collider>();
+                    if (col != null) col.isTrigger = true;
+                    TintPlaceholder(capsule, def);
+                }
+
+                pet = go.AddComponent<Pet>();
                 AddPetNameTag(go, def);
             }
 
@@ -162,6 +177,36 @@ namespace DeNelle.Pets
 
             pet.name = $"Pet_{def.Species}";
             return pet;
+        }
+
+        /// <summary>
+        /// Tries to load a hand-imported FBX matching this pet's species from
+        /// Resources/Pets/&lt;species&gt;.fbx. Returns an instantiated GameObject
+        /// (parent-less) or null if no mesh exists for that species.
+        /// </summary>
+        private static GameObject TryLoadPetMesh(PetDef def)
+        {
+            if (def == null || string.IsNullOrEmpty(def.Species)) return null;
+            var prefab = Resources.Load<GameObject>("Pets/" + def.Species);
+            if (prefab == null) return null;
+            return Instantiate(prefab);
+        }
+
+        private static void NormalizePetHeight(GameObject go, float targetHeight)
+        {
+            var renderers = go.GetComponentsInChildren<Renderer>();
+            if (renderers == null || renderers.Length == 0) return;
+            Bounds b = renderers[0].bounds;
+            for (int i = 1; i < renderers.Length; i++) b.Encapsulate(renderers[i].bounds);
+            if (b.size.y <= 0.01f) return;
+            float scale = targetHeight / b.size.y;
+            go.transform.localScale *= scale;
+        }
+
+        private static void StripPetColliders(GameObject go)
+        {
+            foreach (var c in go.GetComponentsInChildren<Collider>(true))
+                if (c != null) Destroy(c);
         }
 
         private static void AddPetNameTag(GameObject parent, PetDef def)
