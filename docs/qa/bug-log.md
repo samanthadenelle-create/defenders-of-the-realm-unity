@@ -54,6 +54,7 @@ QA documents; it does not patch. Fixes are made by the build agents/engineers; Q
 | BUG-018 | Low | Village | Per-direction fog density gradient (spec §9.5 — denser fog toward the Wound/south) deferred — Unity built-in `RenderSettings` fog is uniform; needs a volumetric / URP fog pass. Ships with uniform exponential-squared fog. | Deferred | unity-decisions.md Week-3 Flags |
 | BUG-019 | Medium | Onboarding / Canon | Cold-open intro (`StoryIntroController.ReactOpeningCinematic`) and the tutorial step 1 in `OnboardingFlow.cs` still reference the **retired Lantern motif** and the **retired village name "Avalon"** — directly contradicting DESIGN-DECISIONS #1 (Avalon → Elarion) and #18 (lantern motif dropped, Stone Choir framing). First-run players see five lantern/Avalon lines before they reach the village. The intro is a verbatim port from React `story.ts` that pre-dates the pivot. Story-content rewrite — owner / narrative team. | Open | DESIGN-DECISIONS.md #1, #18; STORYLINE.md |
 | BUG-020 | High | Dungeons / Build | Reported 2026-05-20 by Samantha: "entering to healers cottage dungeon loads dungeon stub." Investigation found two likely root causes — see Detail notes. **Primary, on-disk:** `Assets/Scenes/Dungeon_FolksGranary.unity` is currently the **stub** output (contains a root-level `DungeonHeroPlaceholder` capsule; 33 distinct GameObjects vs HC's 93; 793 KB vs HC's 2.8 MB). `GrantPolishBuilder.BuildAll` rebuilds Healer's Cottage via `DungeonSceneBuilder.BuildHealersCottage()` but **never calls `FolksGranaryBuilder.Build()`** — so every grant-polish build leaves Folks Granary as whatever was last on disk (the stub). If the user actually entered the east portal (Folk's Old Granary), the stub is what they saw. **Secondary, runtime:** if the user did enter the west portal (Healer's Cottage), the on-disk HC scene is the full authored dungeon — they may be running a stale build artifact pre-dating the last `DungeonSceneBuilder` rebuild, or a player-build asset-bundle issue is loading older content. | Open | ad hoc (user report 2026-05-20) |
+| BUG-021 | High | Render / Build | Tripo pet/hero/cathedral FBXs render grey/white in URP because their embedded textures aren't extracted by the default importer; fixed by the `TripoAssetPostprocessor` (`Assets/Editor/TripoAssetPostprocessor.cs`) + new asset drop 2026-05-21. The postprocessor sets external materials with `ImportViaMaterialDescription` + `BasedOnTextureName`, runs `ModelImporter.ExtractTextures` into a sibling `Textures/` folder, re-imports to rebind, and writes a `.tripo-extracted` marker for idempotency. Covers `Assets/Resources/Pets/`, `Assets/Resources/Heroes/`, and `Assets/Models/Cathedral/`. Status moves to `Verified` after the integrator opens Unity, watches for the `[TripoAssetPostprocessor] Extracted embedded textures` console lines, runs the three `Defenders > Animation > Setup * Animator` menu items, and re-bakes via Grant-Polish. | Fixed | docs/port-notes/tripo-asset-pipeline.md (2026-05-21) |
 
 ---
 
@@ -115,12 +116,12 @@ Recommended fixes:
 | Severity | Count |
 |----------|-------|
 | Critical | 0 |
-| High | 8 (BUG-001, 003, 004, 006, 007, 008, 010, 020) |
+| High | 9 (BUG-001, 003, 004, 006, 007, 008, 010, 020, 021) |
 | Medium | 7 (BUG-005, 009, 011, 012, 014, 017, 019) |
 | Low | 5 (BUG-002, 013, 015, 016, 018) |
-| **Total** | **20** |
+| **Total** | **21** |
 
-By status: Fixed 6 (BUG-003, BUG-006, BUG-007, BUG-008, BUG-013, BUG-017) ·
+By status: Fixed 7 (BUG-003, BUG-006, BUG-007, BUG-008, BUG-013, BUG-017, BUG-021) ·
 Deferred 2 (BUG-015, BUG-018) · Open 12.
 
 Source-state audit on 2026-05-20 moved four items from Open → Fixed
