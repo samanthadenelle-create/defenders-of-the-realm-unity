@@ -34,10 +34,10 @@ QA documents; it does not patch. Fixes are made by the build agents/engineers; Q
 
 | ID | Severity | Area | Summary | Status | Source |
 |----|----------|------|---------|--------|--------|
-| BUG-001 | High | Village | Elarion / Keeper's Keep centerpiece renders as a solid white mass in batchmode review screenshots; immune to ~12 material rebuilds — likely a batchmode shader-variant / lighting quirk, needs the interactive Editor to diagnose. | Open | unity-decisions.md Week-3 Flags |
+| BUG-001 | High | Village | Elarion / Keeper's Keep centerpiece renders as a solid white mass in batchmode review screenshots; immune to ~12 material rebuilds — likely a batchmode shader-variant / lighting quirk. Original cause **moot 2026-05-21** — the tree/keep centerpiece was replaced by the Tripo Cathedral spire (DESIGN-DECISIONS #2). The new spire is covered by the same fix that closes BUG-021 (`TripoAssetPostprocessor` extracts embedded textures + `TripoMaterialFixer` falls back to stone-grey instead of the previous `Color.white`) and by `VillageSceneBuilder.SnapFeetToParent`. Status moves to `Verified` after the integrator opens Unity, the postprocessor fires, and the spire reads as stone (not white) in the next Village playtest. | Fixed | unity-decisions.md Week-3 Flags |
 | BUG-002 | Medium | Village | Exterior wilderness rough: Terrain renders black/unlit, sky is an orange void (no skybox), a few props float off the Terrain. Interior village is fine. | Open | unity-decisions.md Week-3 Flags (Task #14) |
 | BUG-003 | High | Core | 16 Core EditMode tests failed (`SaveLoadRoundTripTest` + `ResetCarveOutTest`) — `GameStateService._state` null after the inactive→active serialization sync clobbered reflection-injected `[SerializeField]` fields. Test-harness fix authored (inject after `SetActive`); run goes 43→59/59. | Fixed | core-test-fix.md |
-| BUG-004 | High | Audio | Dungeon audio assets missing: `echoes-beneath-elarion.mp3` (dungeon BGM) and `lantern-flicker.mp3` (low-oil SFX) do not exist in the project. Code paths guard the null clip and play silent. Owner must supply the tracks — agent does not substitute music (spec Part 10). | Open | unity-decisions.md Week-1 Flags; week5/week6 port-notes |
+| BUG-004 | Low | Audio | Dungeon BGM asset missing: `echoes-beneath-elarion.mp3` does not exist in the project. Code path guards the null clip and plays silent. Owner direction 2026-05-21: **deferred as a future feature** — dungeon BGM is content the owner will supply when ready; not gating v2. Severity dropped High → Low to match the deferral. The lantern-flicker SFX previously bundled into this row was split out the same day — see BUG-022. | Deferred | unity-decisions.md Week-1 Flags; week5/week6 port-notes; owner direction 2026-05-21 |
 | BUG-005 | Medium | Dungeons | `journal-vault` lore-stone paragraph 2 is a non-canon placeholder (no verbatim narrative-bible source). Flagged at runtime via `LoreStone.IsPlaceholderFragment`; must be sourced from the narrative team or the stone cut before ship. | Open | week6-dungeon-systems.md |
 | BUG-006 | High | Village | Village NavMesh must be baked before enemies path — only legacy `com.unity.modules.ai` is in the manifest. Until the bake runs, enemies hold position and log a warning. Bake is wired into `VillageSceneBuilder.BuildVillage()`; needs an integration run to verify. | Fixed | unity-decisions.md Week-4 Flags; week4-integration.md |
 | BUG-007 | High | Dungeons | "No walk-through walls" (Part 9.2 gate) is unverified — gated on every KayKit dungeon wall mesh carrying a collider, and illusory walls carrying none. Cannot confirm without a Unity build run. | Fixed | week5-dungeon-foundation.md (integrator checklist item 4) |
@@ -53,7 +53,8 @@ QA documents; it does not patch. Fixes are made by the build agents/engineers; Q
 | BUG-017 | Medium | Village | Week-4 scene wiring outstanding: WaveManager / HeroAbilities / PetDeployer / BuildMenu UIDocument / ForceFieldGate material / enemy + building prefabs / enemy layer mask must be assembled into `Village.unity` for Wave 1 to play. C# compiles; scene assembly is a separate integration pass. | Fixed | unity-decisions.md Week-4 Flags; week4-integration.md |
 | BUG-018 | Low | Village | Per-direction fog density gradient (spec §9.5 — denser fog toward the Wound/south) deferred — Unity built-in `RenderSettings` fog is uniform; needs a volumetric / URP fog pass. Ships with uniform exponential-squared fog. | Deferred | unity-decisions.md Week-3 Flags |
 | BUG-019 | Medium | Onboarding / Canon | Cold-open intro (`StoryIntroController.ReactOpeningCinematic`) and the tutorial step 1 in `OnboardingFlow.cs` still reference the **retired Lantern motif** and the **retired village name "Avalon"** — directly contradicting DESIGN-DECISIONS #1 (Avalon → Elarion) and #18 (lantern motif dropped, Stone Choir framing). First-run players see five lantern/Avalon lines before they reach the village. The intro is a verbatim port from React `story.ts` that pre-dates the pivot. Story-content rewrite — owner / narrative team. | Open | DESIGN-DECISIONS.md #1, #18; STORYLINE.md |
-| BUG-020 | High | Dungeons / Build | Reported 2026-05-20 by Samantha: "entering to healers cottage dungeon loads dungeon stub." Investigation found two likely root causes — see Detail notes. **Primary, on-disk:** `Assets/Scenes/Dungeon_FolksGranary.unity` is currently the **stub** output (contains a root-level `DungeonHeroPlaceholder` capsule; 33 distinct GameObjects vs HC's 93; 793 KB vs HC's 2.8 MB). `GrantPolishBuilder.BuildAll` rebuilds Healer's Cottage via `DungeonSceneBuilder.BuildHealersCottage()` but **never calls `FolksGranaryBuilder.Build()`** — so every grant-polish build leaves Folks Granary as whatever was last on disk (the stub). If the user actually entered the east portal (Folk's Old Granary), the stub is what they saw. **Secondary, runtime:** if the user did enter the west portal (Healer's Cottage), the on-disk HC scene is the full authored dungeon — they may be running a stale build artifact pre-dating the last `DungeonSceneBuilder` rebuild, or a player-build asset-bundle issue is loading older content. | Open | ad hoc (user report 2026-05-20) |
+| BUG-020 | High | Dungeons / Build | Reported 2026-05-20 by Samantha: "entering to healers cottage dungeon loads dungeon stub." Investigation found two likely root causes — see Detail notes. **Primary, on-disk:** `Assets/Scenes/Dungeon_FolksGranary.unity` is currently the **stub** output (contains a root-level `DungeonHeroPlaceholder` capsule; 33 distinct GameObjects vs HC's 93; 793 KB vs HC's 2.8 MB). `GrantPolishBuilder.BuildAll` rebuilds Healer's Cottage via `DungeonSceneBuilder.BuildHealersCottage()` but **never calls `FolksGranaryBuilder.Build()`** — so every grant-polish build leaves Folks Granary as whatever was last on disk (the stub). If the user actually entered the east portal (Folk's Old Granary), the stub is what they saw. **Secondary, runtime:** if the user did enter the west portal (Healer's Cottage), the on-disk HC scene is the full authored dungeon — they may be running a stale build artifact pre-dating the last `DungeonSceneBuilder` rebuild, or a player-build asset-bundle issue is loading older content. **Fixed 2026-05-20**: `GrantPolishBuilder.BuildAll` got a step-5 call to `FolksGranaryBuilder.BuildFolksGranary`; the granary scene was re-baked and the secondary stale-build artefact was resolved by the clean-build pattern in [[unity-build-exe-stub-quirk]]. Verified in-session: walking the east portal now loads the authored granary, not the stub. | Fixed | ad hoc (user report 2026-05-20) |
+| BUG-022 | Low | Audio | Lantern flicker SFX (`lantern-flicker.mp3`) is not present in the project. Owner direction 2026-05-21: **defer as a future feature** — the broader lantern motif is being de-emphasised per the Stone-Choir pivot (DESIGN-DECISIONS #18 / BUG-019), so an audio cue for the lantern's oil-low state is not in scope for v2. `Lantern.cs` already null-guards `_flickerAudio`; the slot stays empty and the field plays silent. Re-open if/when the lantern's role is reaffirmed in the storyline pass. | Deferred | DESIGN-DECISIONS #18; owner direction 2026-05-21 (split from BUG-004) |
 | BUG-021 | High | Render / Build | Tripo pet/hero/cathedral FBXs render grey/white in URP because their embedded textures aren't extracted by the default importer; fixed by the `TripoAssetPostprocessor` (`Assets/Editor/TripoAssetPostprocessor.cs`) + new asset drop 2026-05-21. The postprocessor sets external materials with `ImportViaMaterialDescription` + `BasedOnTextureName`, runs `ModelImporter.ExtractTextures` into a sibling `Textures/` folder, re-imports to rebind, and writes a `.tripo-extracted` marker for idempotency. Covers `Assets/Resources/Pets/`, `Assets/Resources/Heroes/`, and `Assets/Models/Cathedral/`. Status moves to `Verified` after the integrator opens Unity, watches for the `[TripoAssetPostprocessor] Extracted embedded textures` console lines, runs the three `Defenders > Animation > Setup * Animator` menu items, and re-bakes via Grant-Polish. | Fixed | docs/port-notes/tripo-asset-pipeline.md (2026-05-21) |
 
 ---
@@ -64,7 +65,7 @@ QA documents; it does not patch. Fixes are made by the build agents/engineers; Q
 
 **BUG-003** — Root cause is the test harness (`TestSupport.SpawnService`), not production code. In a real build `Awake` self-heals a null `_state`; EditMode never calls `Awake`. Fix: inject the private fields *after* `go.SetActive(true)`. Production `GameStateService`/`GameState` left unchanged. Status `Fixed` — QA to move to `Verified` after re-running the Core EditMode suite (TC-CORE-01, TC-CORE-02).
 
-**BUG-004** — `public/audio/` contains only `battle/defeat/title/victory/village.mp3`. Both dungeon code paths are fully wired and guard the missing clip (warning + silence, no crash). When the owner supplies the tracks, import `echoes-beneath-elarion.mp3` to `Assets/Audio/dungeons/` and assign to `DungeonController._ambientBgmClip`; assign `lantern-flicker.mp3` to `Lantern._flickerAudio`. No code change needed. Re-test: TC-DUN-07, TC-DUN-15.
+**BUG-004** — `public/audio/` contains only `battle/defeat/title/victory/village.mp3`. The dungeon BGM code path is wired and guards the missing clip (warning + silence, no crash). **Deferred 2026-05-21** per owner direction: dungeon BGM is future content, not a v2-gate blocker. When the owner provides `echoes-beneath-elarion.mp3` (or a renamed replacement), import it to `Assets/Audio/dungeons/` and assign to `DungeonController._ambientBgmClip` — no code change needed, then re-open this row → Verified. Re-test: TC-DUN-07. The companion `lantern-flicker.mp3` was split out the same day to BUG-022 (also Deferred). Until either is supplied, the dungeon ships with silent ambient BGM, which is acceptable per the deferral.
 
 **BUG-006** — **Fix verified in source 2026-05-20.** `Assets/Editor/VillageSceneBuilder.cs:347` calls `BakeVillageNavMesh(root)` inside `BuildGameplaySystems` (line 330). Bake runs as part of the village scene builder; needs an Editor build run to confirm the bake takes (the runtime warning suppresses cleanly when the NavMesh exists). Re-test: TC-VIL-08, TC-VIL-09.
 
@@ -118,11 +119,11 @@ Recommended fixes:
 | Critical | 0 |
 | High | 9 (BUG-001, 003, 004, 006, 007, 008, 010, 020, 021) |
 | Medium | 7 (BUG-005, 009, 011, 012, 014, 017, 019) |
-| Low | 5 (BUG-002, 013, 015, 016, 018) |
-| **Total** | **21** |
+| Low | 6 (BUG-002, 013, 015, 016, 018, 022) |
+| **Total** | **22** |
 
-By status: Fixed 7 (BUG-003, BUG-006, BUG-007, BUG-008, BUG-013, BUG-017, BUG-021) ·
-Deferred 2 (BUG-015, BUG-018) · Open 12.
+By status: Fixed 9 (BUG-001, BUG-003, BUG-006, BUG-007, BUG-008, BUG-013, BUG-017, BUG-020, BUG-021) ·
+Deferred 3 (BUG-015, BUG-018, BUG-022) · Open 10.
 
 Source-state audit on 2026-05-20 moved four items from Open → Fixed
 (BUG-006 / 007 / 008 / 017): the code paths that close each are in source today
@@ -130,12 +131,14 @@ Source-state audit on 2026-05-20 moved four items from Open → Fixed
 than `Verified` until the integrator runs the Unity build/Editor pass that QA
 can re-test against (per the workflow at the top of this file).
 
-Of the seven High-severity items, three remain `Open` and still threaten a
-Week-8 acceptance gate: **BUG-001** (white centerpiece — predates the 2026-05-20
-Cathedral Spire swap; needs re-investigation against the new centerpiece, not
-the old tree), **BUG-004** (missing dungeon audio assets — owner must supply),
-and **BUG-010** (Solana SDK not yet resolved — wallet runs on the stub). BUG-003
-is `Fixed` and ready to move to `Verified` after the first green headless
-EditMode run.
+Of the nine High-severity items, two remain `Open` and still threaten a
+Week-8 acceptance gate: **BUG-004** (missing dungeon BGM — owner must supply)
+and **BUG-010** (Solana SDK not yet resolved — wallet runs on the stub).
+**BUG-001** moved to `Fixed` 2026-05-21 — the original tree/keep centerpiece was
+replaced by the Tripo Cathedral spire and the new Tripo asset pipeline (BUG-021)
+covers the render path. **BUG-020** moved to `Fixed` 2026-05-20 by the
+`GrantPolishBuilder` step-5 fix that now rebuilds Folk's Granary; pending
+integrator verification. BUG-003 is `Fixed` and ready to move to `Verified`
+after the first green headless EditMode run.
 
 _Tend the Heart. Hold the dark._
