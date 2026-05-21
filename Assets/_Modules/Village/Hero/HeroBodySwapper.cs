@@ -162,8 +162,10 @@ namespace DeNelle.Village
         {
             HeroClass.Knight => "Knight",
             HeroClass.Ranger => "Ranger",
-            // Mage keeps the scene-builder's Wizard placeholder body — the
-            // placeholder IS the Tripo Wizard FBX, so no runtime swap needed.
+            // Mage now has its own paid-for Tripo FBX at Resources/Heroes/Mage.fbx
+            // (24 MB) per docs/port-notes/tripo-asset-pipeline.md. Swap in like
+            // the other two; HeroAnimatorSetup writes Mage.controller alongside.
+            HeroClass.Mage   => "Mage",
             _ => null,
         };
 

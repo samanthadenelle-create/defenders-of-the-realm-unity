@@ -794,7 +794,12 @@ namespace DeNelle.Editor
                 cathedral.name = "CathedralSpire";
                 cathedral.transform.SetParent(go.transform, false);
                 cathedral.transform.localPosition = Vector3.zero;
-                NormalizeProp(cathedral, 8.05f);   // owner 2026-05-20: 7m → 8.05m (+15%)
+                // Owner 2026-05-21: bumped from 8.05m → 16m so the new
+                // dragon-tower Cathedral FBX (88MB, Tripo) reads at city-edge
+                // distance — the dragon detail and stained-glass rose window
+                // both want a taller silhouette to resolve as architecture
+                // instead of as stone-coloured noise.
+                NormalizeProp(cathedral, 16f);
                 StripColliders(cathedral);
                 // Owner 2026-05-20 "spire sits off the ground a little":
                 // after NormalizeProp, the post-scale mesh bottom isn't
