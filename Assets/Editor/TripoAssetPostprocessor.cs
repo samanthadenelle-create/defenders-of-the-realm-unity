@@ -126,11 +126,6 @@ namespace DeNelle.Editor
             {
                 Debug.Log($"[TripoAssetPostprocessor] Extracted embedded textures from " +
                           $"{Path.GetFileName(assetPath)} → {textureDir}");
-
-                // 2) Re-link this FBX's materials to the extracted textures.
-                //    A re-import after extraction is what actually rebinds them.
-                AssetDatabase.WriteImportSettingsIfDirty(assetPath);
-                AssetDatabase.ImportAsset(assetPath, ImportAssetOptions.ForceUpdate);
             }
             else
             {
@@ -138,8 +133,25 @@ namespace DeNelle.Editor
                           $"{Path.GetFileName(assetPath)} (already extracted, or none in source).");
             }
 
-            // 3) Drop the marker file so subsequent imports skip the extract.
+            // 2) Drop the marker BEFORE scheduling any re-import — otherwise the
+            //    delayed ImportAsset re-fires this callback, the marker check
+            //    above misses, and we recurse → SIGABRT crash (observed
+            //    2026-05-21 during batchmode Tripo + grant-polish + player chain).
             WriteMarker(assetPath);
+
+            // 3) Schedule the re-import OUTSIDE this callback. Unity explicitly
+            //    forbids AssetDatabase mutations inside postprocessor callbacks;
+            //    EditorApplication.delayCall runs after the current import
+            //    finishes, so the second pass sees the marker and bails.
+            if (textureExtracted)
+            {
+                string deferPath = assetPath;
+                EditorApplication.delayCall += () =>
+                {
+                    AssetDatabase.WriteImportSettingsIfDirty(deferPath);
+                    AssetDatabase.ImportAsset(deferPath, ImportAssetOptions.ForceUpdate);
+                };
+            }
         }
 
         // ---------------------------------------------------------------------

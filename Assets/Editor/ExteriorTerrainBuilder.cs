@@ -1095,6 +1095,14 @@ namespace DeNelle.Editor
                 EditorUtility.SetDirty(sky);
 
                 RenderSettings.skybox = sky;
+                // BUG-002 fix: with AmbientMode.Skybox (URP default) and no
+                // baked lighting, URP/Terrain/Lit reads a zero ambient probe and
+                // renders the exterior terrain black. Force reflection-mode to
+                // Skybox and clear any stale custom reflection so the env probe
+                // captures from this procedural skybox.
+                RenderSettings.defaultReflectionMode =
+                    UnityEngine.Rendering.DefaultReflectionMode.Skybox;
+                RenderSettings.customReflectionTexture = null;
             }
             else
             {
@@ -1146,6 +1154,12 @@ namespace DeNelle.Editor
             // Halo / flare strength kept gentle for the dawn register.
             RenderSettings.haloStrength = 0.35f;
             RenderSettings.flareStrength = 0.7f;
+
+            // BUG-002 fix: re-bake the ambient + reflection probes from the new
+            // skybox material so URP/Terrain/Lit gets a non-zero sky ambient
+            // contribution and the exterior terrain renders lit instead of
+            // pitch black. Cheap; runs once per builder invocation.
+            UnityEngine.DynamicGI.UpdateEnvironment();
         }
 
         // =====================================================================
