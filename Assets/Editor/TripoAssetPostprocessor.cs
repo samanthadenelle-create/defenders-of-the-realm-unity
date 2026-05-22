@@ -39,6 +39,7 @@
 // postprocessor handles the design path, the fixer handles the edge cases.
 // =============================================================================
 
+using System.Collections.Generic;
 using System.IO;
 using UnityEditor;
 using UnityEngine;
@@ -66,6 +67,16 @@ namespace DeNelle.Editor
         /// <summary>Sentinel file appended next to a processed FBX so we only run once.</summary>
         private const string MarkerSuffix = ".tripo-extracted";
 
+        /// <summary>
+        /// Asset paths discovered during an import pass that still need texture
+        /// extraction. Populated inside the import callback (where AssetDatabase
+        /// mutations are illegal) and drained afterwards via delayCall.
+        /// </summary>
+        private static readonly HashSet<string> Pending = new HashSet<string>();
+
+        /// <summary>Guards against scheduling more than one drain at a time.</summary>
+        private static bool _drainScheduled;
+
         // ---------------------------------------------------------------------
         // OnPreprocessModel — runs before the FBX is parsed. Configure the
         // ModelImporter so materials land as editable external .mat assets
@@ -92,23 +103,75 @@ namespace DeNelle.Editor
         }
 
         // ---------------------------------------------------------------------
-        // OnPostprocessModel — runs after the FBX has been imported. This is
-        // where we can call ExtractTextures (the importer API requires the
-        // asset to exist on disk). Extract embedded textures to a sibling
-        // Textures/ folder, then re-link materials to the extracted images,
-        // then drop a marker so we don't run again.
+        // OnPostprocessModel — runs after the FBX has been imported, but still
+        // INSIDE the import pass. We must not call ExtractTextures / CreateFolder
+        // / ImportAsset here: ExtractTextures synchronously re-imports the model,
+        // which re-enters this callback before any marker exists, recurses, and
+        // blows the stack → SIGABRT (the crash loop observed 2026-05-21 on the
+        // un-imported Mage/aether-sprite FBXs). Instead we only QUEUE the path
+        // and drain it after the import finishes, where those calls are legal.
         // ---------------------------------------------------------------------
         private void OnPostprocessModel(GameObject root)
         {
             if (!IsTripoPath(assetPath)) return;
             if (HasMarker(assetPath)) return;
 
-            var importer = assetImporter as ModelImporter;
+            Pending.Add(assetPath);
+            ScheduleDrain();
+        }
+
+        // ---------------------------------------------------------------------
+        // Deferred extraction — runs via EditorApplication.delayCall, i.e. after
+        // the current import pass has fully finished. AssetDatabase mutations and
+        // ExtractTextures are legal here.
+        // ---------------------------------------------------------------------
+        private static void ScheduleDrain()
+        {
+            if (_drainScheduled) return;
+            _drainScheduled = true;
+            EditorApplication.delayCall += DrainPending;
+        }
+
+        private static void DrainPending()
+        {
+            _drainScheduled = false;
+            if (Pending.Count == 0) return;
+
+            var paths = new List<string>(Pending);
+            Pending.Clear();
+
+            foreach (var path in paths)
+            {
+                if (HasMarker(path)) continue;
+                try
+                {
+                    ProcessOne(path);
+                }
+                catch (System.Exception ex)
+                {
+                    // Marker is written first inside ProcessOne, so a failure here
+                    // does not cause a crash loop on the next launch.
+                    Debug.LogError($"[TripoAssetPostprocessor] Extraction failed for " +
+                                   $"{Path.GetFileName(path)}: {ex}");
+                }
+            }
+
+            AssetDatabase.Refresh();
+        }
+
+        /// <summary>
+        /// Extracts the embedded textures for a single FBX. Writes the marker
+        /// FIRST so that if ExtractTextures hard-crashes the editor, the next
+        /// launch skips this asset instead of crash-looping on it.
+        /// </summary>
+        private static void ProcessOne(string assetPath)
+        {
+            // Marker first — crash-loop insurance (see method summary).
+            WriteMarker(assetPath);
+
+            var importer = AssetImporter.GetAtPath(assetPath) as ModelImporter;
             if (importer == null) return;
 
-            // The textures folder sits next to the FBX:
-            //   Assets/Resources/Pets/aether-sprite.fbx
-            //   Assets/Resources/Pets/Textures/  ← here
             string assetDir = Path.GetDirectoryName(assetPath)?.Replace('\\', '/');
             if (string.IsNullOrEmpty(assetDir)) return;
 
@@ -118,40 +181,15 @@ namespace DeNelle.Editor
                 AssetDatabase.CreateFolder(assetDir, "Textures");
             }
 
-            // 1) Extract every embedded texture inside the FBX into Textures/.
-            //    Returns true if any texture was written out.
+            // ExtractTextures re-imports the model; the marker above guarantees
+            // the re-entrant OnPostprocessModel bails instead of recursing.
             bool textureExtracted = importer.ExtractTextures(textureDir);
 
-            if (textureExtracted)
-            {
-                Debug.Log($"[TripoAssetPostprocessor] Extracted embedded textures from " +
-                          $"{Path.GetFileName(assetPath)} → {textureDir}");
-            }
-            else
-            {
-                Debug.Log($"[TripoAssetPostprocessor] No embedded textures found in " +
-                          $"{Path.GetFileName(assetPath)} (already extracted, or none in source).");
-            }
-
-            // 2) Drop the marker BEFORE scheduling any re-import — otherwise the
-            //    delayed ImportAsset re-fires this callback, the marker check
-            //    above misses, and we recurse → SIGABRT crash (observed
-            //    2026-05-21 during batchmode Tripo + grant-polish + player chain).
-            WriteMarker(assetPath);
-
-            // 3) Schedule the re-import OUTSIDE this callback. Unity explicitly
-            //    forbids AssetDatabase mutations inside postprocessor callbacks;
-            //    EditorApplication.delayCall runs after the current import
-            //    finishes, so the second pass sees the marker and bails.
-            if (textureExtracted)
-            {
-                string deferPath = assetPath;
-                EditorApplication.delayCall += () =>
-                {
-                    AssetDatabase.WriteImportSettingsIfDirty(deferPath);
-                    AssetDatabase.ImportAsset(deferPath, ImportAssetOptions.ForceUpdate);
-                };
-            }
+            Debug.Log(textureExtracted
+                ? $"[TripoAssetPostprocessor] Extracted embedded textures from " +
+                  $"{Path.GetFileName(assetPath)} → {textureDir}"
+                : $"[TripoAssetPostprocessor] No embedded textures found in " +
+                  $"{Path.GetFileName(assetPath)} (already extracted, or none in source).");
         }
 
         // ---------------------------------------------------------------------
@@ -229,6 +267,13 @@ namespace DeNelle.Editor
                     AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
                 }
             }
+
+            // The ImportAsset calls above queued the assets via OnPostprocessModel
+            // and scheduled a delayCall drain — but in batchmode -executeMethod the
+            // editor quits before delayCall fires. Drain synchronously here (we are
+            // outside any import callback, so it is legal) so the extraction runs.
+            DrainPending();
+
             Debug.Log($"[TripoAssetPostprocessor] Force re-extract requested — cleared {cleared} marker(s).");
         }
     }
