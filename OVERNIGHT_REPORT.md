@@ -1,3 +1,41 @@
+# Village Recovery + Windows Build — 2026-05-22 (Claude Code)
+
+Executed Phase A of `docs/claude-code-work-order.md` end-to-end, then the build chain. **Three commits** landed this session: `06fa1d0` (Tripo material repair) and `fca9f5c` (all scenes rebuilt, real dungeons) — both pushed to origin — plus this report + build-tooling commit.
+
+## TL;DR
+
+| Area | Status | Notes |
+|---|---|---|
+| Tripo materials (Cathedral, heroes, pets) | ✅ fixed | Force-re-extracted embedded textures; Cathedral + heroes render textured, not solid-color blobs (verified via review screenshots) |
+| Village rebuild + KayKit materials | ✅ clean | Zero `[VillageSceneBuilder]` asset-missing / `ForceHexMaterial` warnings |
+| Dungeon portal "drops into a stub" | ✅ fixed via clean rebuild | Wiring was already correct (east→FolksGranary, west→HealersCottage); the stub was a **stale build**. GrantPolish regenerated the granary real — 7 intentional placeholders only |
+| Windows x64 player build | ✅ built | 582 MB, exe↔`level3` delta **0s** (no stub-staleness), all 7 scenes incl. both dungeons, built in 1m38s |
+| HUD Mana / "Spire Health" | 🔬 diagnosed, not yet fixed | Mana is never *fed* (no bridge calls `SetMana`); "Spire Health" isn't a separate element — the Heart HP bar **is** the spire |
+
+## What cleared
+- **"Invisible/unstyled village buildings":** root cause was the Tripo texture pipeline — extraction had never completed (zero `.tripo-extracted` markers). After `ForceReextractAll` + rebuild, Cathedral/CastleGate/heroes/pets carry real basecolor materials.
+- **Dungeon-stub symptom:** confirmed it was a stale player build, not broken wiring. A clean rebuild (`Builds/Windows` deleted) now bundles the real Folk's Granary + Healer's Cottage.
+
+## Environment changes
+- **Unity upgraded 6000.4.7f1 → 6000.4.8f1** during the editor reinstall (the prior editor was missing/corrupt — that's why earlier batchmode builds were impossible). All scenes + reimported assets are now serialized under 4.8; `ProjectVersion.txt` committed to match.
+- Two build helpers added at repo root: `run-unity-method.ps1` (fork-aware batchmode `-executeMethod` runner) and `build-windows.ps1` (clean player build). Both handle the Unity.exe relaunch quirk (wrapper exit code is unreliable) and treat the transient 505 license-handshake line as non-fatal.
+
+## New console warnings (non-blocking)
+- A transient `[Licensing::Module] Error: Failed to handshake … ResponseCode: 505 Unsupported protocol version '1.18.1'` appears at startup on **every** batchmode launch, but Unity recovers and every extract/build completed with return code 0. If a future batchmode run ever *fails* with this, it needs an interactive Hub refresh or reboot — do **not** kill processes (per `unity-license-kill-caution`).
+- FolksGranary: 7 intentional placeholder primitives (grain spillage, cellar hatch, lantern posts) — KayKit ships no mesh for these; expected, not a missing-pack signal.
+
+## Phase B priorities (recommended order, smallest-risk first)
+1. **HUD (B-1)** — add a mana-feed bridge (extend `HeroAbilitiesHudBridge` to push `SetMana` each frame via the existing reflection pattern, ~10 lines). Decide whether "Spire Health %" relabels the Heart bar or becomes a new element (product call).
+2. **Build button (B-2)** — verify the reflection-bound Build-click target still resolves (commit `888de07` "Build click reflection fallback").
+3. **Dungeon portal (B-3)** — no code change needed; just confirm in the new build that both portals load real dungeons.
+4. **Volume toggle (B-4)** — add a master mute toggle to the HUD, persist via PlayerPrefs.
+
+## Not done
+- Phase C-4 cleanup (delete ~600 MB orphan KayKit folders) — deferred, not started.
+- Phase B code fixes — diagnosed (HUD, dungeon) but not implemented; awaiting go-ahead.
+
+---
+
 # Overnight QA / Dev / PO Sweep — 2026-05-19 → 05-20
 
 Owner directive: PM-standards regression of the full play path (Title →

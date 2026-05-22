@@ -1,0 +1,105 @@
+# =============================================================================
+# build-windows.ps1 - headless Windows x64 player build for Defenders of the Realm.
+#
+# Does the whole "refresh DLLs then build the exe" flow in one shot:
+#   1. Auto-detects the installed Unity 6 editor (prefers the project's pinned
+#      version, else the newest 6000.* install) so an editor re-install / version
+#      bump does not require editing this script.
+#   2. Deletes Builds/Windows first - incremental player builds skip re-emitting
+#      the exe stub, leaving a stale exe against fresh scenes -> native crash.
+#   3. Launches Unity in batchmode. Unity recompiles every script assembly on
+#      launch (that IS the DLL refresh), then runs DesktopBuild.BuildWindows.
+#
+# Output: Builds/Windows/DefendersOfTheRealm.exe   (log: Builds/build.log)
+# Usage:  powershell -ExecutionPolicy Bypass -File .\build-windows.ps1
+#
+# NOTE: keep this file ASCII-only. Windows PowerShell 5.1 reads BOM-less files
+# as ANSI, so non-ASCII chars (em-dashes, smart quotes) corrupt and break parse.
+# =============================================================================
+
+$ErrorActionPreference = 'Stop'
+$proj       = $PSScriptRoot
+$hubEditors = 'C:\Program Files\Unity\Hub\Editor'
+$pinned     = '6000.4.7f1'   # version recorded in ProjectSettings/ProjectVersion.txt
+
+# --- 1) Locate Unity.exe ------------------------------------------------------
+$candidates = Get-ChildItem $hubEditors -Directory -ErrorAction SilentlyContinue |
+    Where-Object { Test-Path (Join-Path $_.FullName 'Editor\Unity.exe') }
+if (-not $candidates) {
+    Write-Error "No Unity editor found under '$hubEditors'. Install one via Unity Hub first (include Windows Build Support)."
+    exit 1
+}
+
+$chosen = $candidates | Where-Object { $_.Name -eq $pinned } | Select-Object -First 1
+if (-not $chosen) {
+    $six = $candidates | Where-Object { $_.Name -like '6000.*' } | Sort-Object Name -Descending
+    if ($six) {
+        $chosen = $six | Select-Object -First 1
+        Write-Host "[build] Pinned $pinned not installed; using newest Unity 6 editor $($chosen.Name)."
+    } else {
+        $chosen = $candidates | Sort-Object Name -Descending | Select-Object -First 1
+        Write-Warning "No Unity 6 (6000.*) editor found; falling back to $($chosen.Name). Project targets 6000.x - verify compatibility before trusting the build."
+    }
+}
+$unity = Join-Path $chosen.FullName 'Editor\Unity.exe'
+Write-Host "[build] Editor: $($chosen.Name)  ->  $unity"
+
+# --- 2) Clean stale build output ---------------------------------------------
+$outDir = Join-Path $proj 'Builds\Windows'
+if (Test-Path $outDir) {
+    Write-Host "[build] Removing stale output: $outDir"
+    Remove-Item $outDir -Recurse -Force
+}
+New-Item -ItemType Directory -Path (Join-Path $proj 'Builds') -Force | Out-Null
+
+# --- 3) Run batchmode build ---------------------------------------------------
+$log = Join-Path $proj 'Builds\build.log'
+if (Test-Path $log) { Remove-Item $log -Force }
+
+$unityArgs = @(
+    '-batchmode', '-quit',
+    '-projectPath', $proj,
+    '-buildTarget', 'Win64',
+    '-executeMethod', 'DeNelle.Editor.DesktopBuild.BuildWindows',
+    '-logFile', $log
+)
+if (Get-Process -Name 'Unity' -ErrorAction SilentlyContinue) {
+    Write-Error "A 'Unity' editor process is already running - close it before batchmode (project lock)."
+    exit 3
+}
+Write-Host "[build] Launching Unity batchmode (fork-aware wait; first run after a reimport can take several minutes)."
+Write-Host "[build] Log: $log"
+& $unity @unityArgs | Out-Null
+$wrapperExit = $LASTEXITCODE
+
+# Unity.exe forks/relaunches, so the wrapper exit code is unreliable (see memory:
+# unity-batchmode-relaunch-quirk). Poll until no 'Unity' process remains.
+$deadline = (Get-Date).AddMinutes(30)
+Start-Sleep -Seconds 6
+while ((Get-Date) -lt $deadline) {
+    if (-not (Get-Process -Name 'Unity' -ErrorAction SilentlyContinue)) {
+        Start-Sleep -Seconds 4
+        if (-not (Get-Process -Name 'Unity' -ErrorAction SilentlyContinue)) { break }
+    }
+    Start-Sleep -Seconds 10
+}
+$lock = Join-Path $proj 'Temp\UnityLockfile'
+if (Test-Path $lock) { Remove-Item $lock -Force -ErrorAction SilentlyContinue }
+
+$license = $false
+if (Test-Path $log) {
+    $license = [bool](Select-String -Path $log -Pattern 'HandshakeResponse reported an error|No valid Unity Editor license|ResponseCode: 505|Unsupported protocol version' -Quiet -ErrorAction SilentlyContinue)
+}
+
+# --- 4) Report ----------------------------------------------------------------
+$exe = Join-Path $outDir 'DefendersOfTheRealm.exe'
+if (Test-Path $exe) {
+    $mb = [math]::Round((Get-Item $exe).Length / 1MB, 1)
+    Write-Host "[build] SUCCESS -> $exe ($mb MB)"
+    exit 0
+}
+
+if ($license) { Write-Host "[build] *** LICENSE ERROR - needs interactive Hub refresh or reboot; do NOT kill processes. ***" }
+Write-Host "[build] FAILED - no exe produced (wrapperExit=$wrapperExit, license=$license). Last 50 log lines:"
+if (Test-Path $log) { Get-Content $log -Tail 50 }
+if ($license) { exit 7 } else { exit 1 }
