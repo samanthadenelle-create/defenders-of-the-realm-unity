@@ -30,11 +30,12 @@ namespace DeNelle.Editor
         private const int PortraitWidth = 512;
         private const int PortraitHeight = 700;
 
-        [MenuItem("Defenders/Heroes/Render Knight + Ranger Portraits")]
+        [MenuItem("Defenders/Heroes/Render Hero Portraits (transparent)")]
         public static void RenderBoth()
         {
             RenderOne("Assets/Resources/Heroes/Knight.fbx", "knight.png");
             RenderOne("Assets/Resources/Heroes/Ranger.fbx", "ranger.png");
+            RenderOne("Assets/Resources/Heroes/Mage.fbx", "mage.png");
             AssetDatabase.Refresh();
         }
 
@@ -78,8 +79,12 @@ namespace DeNelle.Editor
             camGo.transform.localPosition = new Vector3(0f, 1.05f, -2.4f);
             camGo.transform.localRotation = Quaternion.Euler(2f, 0f, 0f);
             var cam = camGo.AddComponent<Camera>();
+            // Owner 2026-05-25: hero-select portraits need a TRANSPARENT
+            // background so each hero reads on the card's own styling instead
+            // of a baked dark box. A SolidColor clear at alpha 0 + the ARGB32
+            // RenderTexture + EncodeToPNG carries the alpha through.
             cam.clearFlags = CameraClearFlags.SolidColor;
-            cam.backgroundColor = new Color(0.06f, 0.04f, 0.12f, 1f);
+            cam.backgroundColor = new Color(0f, 0f, 0f, 0f);
             cam.orthographic = false;
             cam.fieldOfView = 28f;
             cam.nearClipPlane = 0.1f;
@@ -102,6 +107,18 @@ namespace DeNelle.Editor
             string outPath = ResourcesDir + "/" + pngName;
             File.WriteAllBytes(outPath, pngBytes);
             Debug.Log("[HeroPortraitRenderer] Wrote " + outPath + " (" + pngBytes.Length + " bytes)");
+
+            // Remove any stale opaque .jpg of the same slug — HeroSelectController
+            // loads the portrait by name (Resources.Load("HeroPortraits/<slug>")),
+            // so a leftover knight.jpg/ranger.jpg alongside the new .png makes the
+            // load ambiguous and can win over the transparent .png.
+            string slug = Path.GetFileNameWithoutExtension(pngName);
+            string staleJpg = ResourcesDir + "/" + slug + ".jpg";
+            if (File.Exists(staleJpg))
+            {
+                AssetDatabase.DeleteAsset(staleJpg);
+                Debug.Log("[HeroPortraitRenderer] Removed stale opaque portrait " + staleJpg);
+            }
 
             cam.targetTexture = null;
             Object.DestroyImmediate(rt);

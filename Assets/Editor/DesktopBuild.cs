@@ -79,6 +79,26 @@ namespace DeNelle.Editor
                 Debug.LogWarning($"[DesktopBuild] Could not toggle static batching: {e.Message}");
             }
 
+            // D3D12 upload-buffer crash mitigation (2026-05-25): Village instantiates
+            // raw un-decimated Tripo structure meshes (Cathedral 84MB, PetHome 54MB,
+            // LumberMill 52MB, Forge/Farm 29MB). A single >35MB mesh overflows the
+            // D3D12 staging upload heap ("d3d12: upload buffer was too small for the
+            // requested resource!"), which cascades into a corrupt level3 / "Position
+            // out of bounds!" hard-crash on Village load. Force Direct3D11 for the
+            // standalone player — its mesh upload path has no equivalent fixed staging
+            // limit. (Real long-term fix is to decimate those meshes.)
+            try
+            {
+                PlayerSettings.SetUseDefaultGraphicsAPIs(BuildTarget.StandaloneWindows64, false);
+                PlayerSettings.SetGraphicsAPIs(BuildTarget.StandaloneWindows64,
+                    new[] { UnityEngine.Rendering.GraphicsDeviceType.Direct3D11 });
+                Debug.Log("[DesktopBuild] Graphics API forced to Direct3D11 for StandaloneWindows64 (D3D12 upload-buffer crash mitigation).");
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning($"[DesktopBuild] Could not force Direct3D11 graphics API: {e.Message}");
+            }
+
             var options = new BuildPlayerOptions
             {
                 scenes = scenes,

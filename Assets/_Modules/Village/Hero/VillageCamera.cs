@@ -35,6 +35,11 @@ namespace DeNelle.Village
                  "head sits low-third and the world ahead reads to the horizon.")]
         [SerializeField] private float _localPitchDegrees = 20f;
 
+        [Tooltip("FIXED world yaw of the camera (degrees). The camera does NOT " +
+                 "rotate with the hero — a fixed yaw keeps camera-relative WASD " +
+                 "stable (no circling). 0 = look north (+Z).")]
+        [SerializeField] private float _fixedYawDegrees = 0f;
+
         [Tooltip("Smoothing time for the position chase (seconds). 0 = instant.")]
         [SerializeField] private float _positionSmoothTime = 0.08f;
 
@@ -44,16 +49,18 @@ namespace DeNelle.Village
         {
             if (_target == null) return;
 
-            // Place the camera in the hero's local frame so it trails through
-            // turns instead of staying anchored to world axes.
-            Vector3 desired = _target.TransformPoint(_followOffset);
+            // FIXED-ANGLE follow (owner 2026-05-25): the camera follows the
+            // hero's POSITION with a WORLD-space offset and a FIXED yaw. The old
+            // rig placed the offset in the hero's LOCAL frame and rotated the
+            // camera to the hero's yaw — but HeroLocomotion moves camera-relative,
+            // so that created a feedback loop (turn -> camera turns -> "forward"
+            // shifts -> hero curls into circles). A fixed yaw makes "W" a constant
+            // world direction, so movement is stable and the hero stays centred.
+            Vector3 desired = _target.position + _followOffset;
             transform.position = Vector3.SmoothDamp(
                 transform.position, desired, ref _velocity, _positionSmoothTime);
 
-            // Track the hero's yaw but apply the configured local pitch — so the
-            // camera always sees ahead-and-up regardless of hero direction.
-            float heroYaw = _target.eulerAngles.y;
-            transform.rotation = Quaternion.Euler(_localPitchDegrees, heroYaw, 0f);
+            transform.rotation = Quaternion.Euler(_localPitchDegrees, _fixedYawDegrees, 0f);
         }
 
         /// <summary>Editor-side hook so VillageSceneBuilder can wire the target.</summary>

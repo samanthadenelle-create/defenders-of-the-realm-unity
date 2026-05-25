@@ -775,7 +775,7 @@ namespace DeNelle.Editor
             // FBX — TripoMaterialFixer rebuilds the URP material on Awake).
             Vector3 site = new Vector3(0f, 0f, 1f);
 
-            var go = new GameObject("Heart (Cathedral Spire)");
+            var go = new GameObject("Heart (Elarion Tree of Life)");
             go.transform.SetParent(parent, false);
             go.transform.position = site;
 
@@ -784,7 +784,13 @@ namespace DeNelle.Editor
             // cathedral loads — the green disk peeked out from under the
             // spire as an ugly leftover.
             GameObject cathedralInstance = null;
-            var cathedralModel = LoadModel("Assets/Models/Cathedral/Cathedral.fbx");
+            // Owner direction 2026-05-25: REVERSE the 2026-05-20 cathedral-spire
+            // call. The Cathedral "spire" renders as a rainbow-patchwork Tripo
+            // mesh and is an 84MB memory hog — remove it and restore the Elarion
+            // world-tree ("Tree of Life") centerpiece (raised mound + large tree
+            // + violet crystal veins + 6 standing stones) built in the blocks
+            // below, which all run when cathedralModel is null.
+            GameObject cathedralModel = null;
             if (cathedralModel == null)
             {
                 var mound = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
