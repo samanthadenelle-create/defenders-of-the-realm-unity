@@ -93,6 +93,10 @@ namespace DeNelle.Village
         private float _collapseDisplayed;   // shader value, eased toward _collapseTarget
         private float _collapseTarget;      // 0 = full strength, 1 = collapsed
         private bool _wasForceFieldUp = true;
+        // WO-08: set while the hero is inside a GateProximityOpener radius. An
+        // ADDITIONAL reason to drop the field (the hero walks through), layered
+        // on top of the existing HP-derived collapse — enemies never set it.
+        private bool _isOpenForHero;
 
         /// <summary>Stable damage id -- <c>gate-0</c> .. <c>gate-3</c>.</summary>
         public string GateId => _gateId;
@@ -192,6 +196,39 @@ namespace DeNelle.Village
         /// </summary>
         public void ApplyContactDamage(float amount) => TakeDamage(amount);
 
+        /// <summary>True while a hero is inside this gate's proximity radius.</summary>
+        public bool IsOpenForHero => _isOpenForHero;
+
+        /// <summary>
+        /// WO-08 — opens the force field for an approaching hero: eases the
+        /// collapse to fully passable and drops the blocker so the hero walks
+        /// through. Layered ON TOP of the HP-derived state, so the existing
+        /// damage→collapse mechanic is untouched. Idempotent; called by
+        /// <see cref="GateProximityOpener"/> on hero approach. Only the hero
+        /// ever triggers this — enemies do not.
+        /// </summary>
+        public void RequestOpen()
+        {
+            if (_isOpenForHero) return;
+            _isOpenForHero = true;
+            RefreshCollapseTarget(snap: false);
+            ApplyForceFieldState();
+        }
+
+        /// <summary>
+        /// WO-08 — closes the force field again once the hero leaves the
+        /// proximity radius: the collapse target reverts to whatever HP dictates
+        /// and the blocker re-enables IF HP also wants the field up (a gate the
+        /// enemies already battered below 25% stays open). Idempotent.
+        /// </summary>
+        public void RequestClose()
+        {
+            if (!_isOpenForHero) return;
+            _isOpenForHero = false;
+            RefreshCollapseTarget(snap: false);
+            ApplyForceFieldState();
+        }
+
         private void Awake()
         {
             if (_forceFieldCollider == null) _forceFieldCollider = GetComponent<BoxCollider>();
@@ -224,7 +261,12 @@ namespace DeNelle.Village
         private void RefreshCollapseTarget(bool snap)
         {
             float frac = HpFraction;
-            if (frac > CollapseThreshold)
+            if (_isOpenForHero)
+            {
+                // WO-08: hero in proximity — fully passable regardless of HP.
+                _collapseTarget = 1f;
+            }
+            else if (frac > CollapseThreshold)
             {
                 _collapseTarget = 0f;
             }
@@ -247,7 +289,10 @@ namespace DeNelle.Village
         /// </summary>
         private void ApplyForceFieldState()
         {
-            bool up = IsForceFieldUp;
+            // WO-08: the blocker is up only when the HP-derived field is up AND no
+            // hero is in proximity. Combined state, so the collapse/restore events
+            // fire on the rising/falling edge of "blocking enemies right now".
+            bool up = !_isOpenForHero && IsForceFieldUp;
             if (_forceFieldCollider != null)
                 _forceFieldCollider.enabled = up; // blocker drops on collapse
 

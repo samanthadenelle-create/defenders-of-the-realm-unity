@@ -101,6 +101,10 @@ namespace DeNelle.Village
             if (gate == null) return;
             gate.Configure(gap);
             if (!_gates.Contains(gate)) _gates.Add(gate);
+            // WO-08: hero-approach opens the gate. Idempotent. (Also ensured at
+            // runtime in Start for the already-baked scene — see EnsureGateProximityOpeners.)
+            if (gate.GetComponent<GateProximityOpener>() == null)
+                gate.gameObject.AddComponent<GateProximityOpener>();
         }
 
         /// <summary>Registers a building with the controller.</summary>
@@ -129,6 +133,33 @@ namespace DeNelle.Village
                     Length = seg.Length,
                 };
                 seg.Configure(data, h);
+            }
+        }
+
+        // ── WO-08: hero-proximity gate opening ────────────────────────────────
+
+        private void Start()
+        {
+            EnsureGateProximityOpeners();
+        }
+
+        /// <summary>
+        /// Attaches a <see cref="GateProximityOpener"/> to every gate at runtime
+        /// so walking the hero up to a gate opens it (WO-08). Gates are baked by
+        /// the edit-time VillageSceneBuilder, which the curated-scene rule forbids
+        /// re-running, so the opener is layered on here instead. Idempotent
+        /// (GateProximityOpener is [DisallowMultipleComponent]).
+        /// </summary>
+        private void EnsureGateProximityOpeners()
+        {
+            IEnumerable<Gate> gates = (_gates != null && _gates.Count > 0)
+                ? (IEnumerable<Gate>)_gates
+                : FindObjectsByType<Gate>(FindObjectsInactive.Exclude);
+            foreach (var gate in gates)
+            {
+                if (gate == null) continue;
+                if (gate.GetComponent<GateProximityOpener>() == null)
+                    gate.gameObject.AddComponent<GateProximityOpener>();
             }
         }
     }
