@@ -101,6 +101,21 @@ This is **not** a "44/44 green" pass — it is an honest map of what could be co
 1. **WO-20 — `WORK_ORDER_20_hud_data_binding.md` (NEW):** Heart HP bar + Crystals counter have no runtime push (statically confirmed) → they show stale defaults. Mirror the WO-07 mana/cooldown bridge pattern.
 2. **WO-18 — hero walk animation (pre-existing in master):** "locomotion sets Speed but no clip plays / no `.controller`." Covers the Walk-animation + T-pose checklist items.
 
-## Recommendation to make this WO fully executable next time
+## Build-side verification — UNBLOCKED via the new `-bootScene` hook (2026-05-24)
 
-The single highest-leverage unblock for WO-10 (and WO-11 ATB, and any build-side verification) is a **dev-only `-bootScene <name>` / "skip to Village" command-line hook** (flagged in WO-06/08). With it, an autonomous run could boot straight into Village/ATB/dungeon and a batchmode playmode + `ScreenCapture` pass could mark many of the 👁 items objectively. Without it, WO-10 is inherently an owner-run checklist.
+The recommendation below was **implemented**: `Assets/_Modules/Core/DevBootScene.cs` adds an arg-gated `-bootScene <name>` startup hook. Launching `DefendersOfTheRealm.exe -bootScene Village` boots straight into the village (skipping Title→HeroSelect→PetSelect), so the build-side runtime could finally be observed. Captured `Player.log` evidence (`wo10-village-bootscene.png` screenshot at repo root; **0 errors/exceptions** in the Village runtime):
+
+| Checklist item | Now |
+|---|---|
+| Village loads w/o errors (runtime, not just compile) | ✅ **Build** — `[DevBootScene]` loaded Village, 0 runtime errors |
+| Hero renders no magenta + grass not magenta | ✅ **Build** — `magenta`/`InternalErrorShader` count = 0; green village in screenshot |
+| Pets render (flame/ice/aether) | ✅ **Build** — `[TripoMaterialFixer] {aether-sprite,flame-pup,ice-wolf}(Clone): loaded=True, tintActive=True` (the exact WO-05 acceptance proof, in the player) |
+| HUD binds (Heart/Mana/abilities) | ✅ **Build** — `[VillageHudController] Bound. root=True, heart=True, mana=True, abilityBar=True` |
+| Mana bar visible | ✅ **Build** — bound (WO-07/20 push wired) |
+| Dungeon entrances present (WO-19) | ✅ **Build** — `[DungeonEntranceBootstrap] Placed 2 dungeon entrance(s)` |
+
+Still owner-eyes-on (need actual input / combat / audio / persistence, which `-bootScene` alone doesn't drive): wave progression, enemy pathing, gate proximity-open on approach, ATB transition + round-trip, dragon, audio, settings persistence, dungeon interior load. A follow-on could script synthesized input on top of `-bootScene` to reach these.
+
+## Recommendation (DONE)
+
+~~The single highest-leverage unblock… is a dev-only `-bootScene` hook.~~ **Implemented** (`DevBootScene.cs`). WO-11 (ATB) and future build-side WOs can now boot directly into their scene for verification.
