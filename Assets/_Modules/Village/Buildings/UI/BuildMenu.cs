@@ -148,6 +148,28 @@ namespace DeNelle.Village
         {
             if (_document == null) _document = GetComponent<UIDocument>();
             if (_buildCamera == null) _buildCamera = Camera.main;
+            EnsurePanelSettings();
+        }
+
+        /// <summary>
+        /// The builder creates this UIDocument without a PanelSettings asset, which
+        /// leaves the menu INVISIBLE when Open() runs — so the HUD "Build" button
+        /// appeared to "do nothing" (it opened a panel that never rendered). Borrow
+        /// the scene's PanelSettings (e.g. the village HUD's) and sit above it.
+        /// No-op if a PanelSettings is already assigned. (Mirrors HelpMenu.)
+        /// </summary>
+        private void EnsurePanelSettings()
+        {
+            if (_document == null || _document.panelSettings != null) return;
+            foreach (var doc in FindObjectsByType<UIDocument>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            {
+                if (doc == null || doc == _document || doc.panelSettings == null) continue;
+                _document.panelSettings = doc.panelSettings;
+                _document.sortingOrder = doc.sortingOrder + 5; // render above the HUD
+                Debug.Log("[BuildMenu] Borrowed PanelSettings from '" + doc.name + "' so the build menu renders.");
+                return;
+            }
+            Debug.LogWarning("[BuildMenu] No PanelSettings in scene — build menu will not render.");
         }
 
         private void OnEnable()
