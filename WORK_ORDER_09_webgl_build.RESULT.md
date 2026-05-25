@@ -1,7 +1,20 @@
-# WORK ORDER 09 — RESULT (PARTIAL — infra scaffolded; build blocked on the WebGL editor module)
+# WORK ORDER 09 — RESULT (WebGL build SUCCEEDS; render-quality + browser smoke are the follow-up)
+
+## UPDATE 2026-05-25 (overnight) — module installed, build SUCCEEDED
+- Installed **WebGL Build Support** for 6000.4.8f1 via Unity Hub CLI (`--headless install-modules -m webgl`, exit 0).
+- Ran `build-webgl.ps1`: **`[WebGLBuild] SUCCEEDED — 310 MB in 00:34:45`** → `Builds/WebGL/index.html` + `Build/` + `StreamingAssets/` + `TemplateData/`. **The project's first-ever WebGL build works** (IL2CPP + Brotli compile clean, no build errors). AC1 ✅.
+- ~310 MB on disk (uncompressed dir); the Brotli `.data` payload vs the ≤300 MB cap (AC5) still needs measuring — it's right at the line, so a texture-downscale pass (§2.5) is likely needed.
+- **NOT done (require a browser + a cross-build-affecting edit — controlled, not unattended):**
+  - §2.2 URP shader-stripping (add Always-Included URP/Lit/SimpleLit/Unlit + ForceFieldGate to `GraphicsSettings.asset`; uncheck Strip-Unused-Variants on `DeNelle-URP.asset`). Needed so KayKit/Tripo shaders don't magenta in WebGL2 — but it grows the Windows+Android builds 50–100 MB (commit separately, per the hard rule) and its only proof is an actual in-browser render, so I did **not** make this blind cross-build edit unattended.
+  - §2.3 WebGL code paths (audio-after-first-gesture, `UnityWebRequest` CORS/screenshot, SeekerBootstrap `#elif UNITY_WEBGL`).
+  - §2.4/§0.3 browser smoke (Chrome + Firefox: village renders no-magenta, WASD, abilities, audio-after-click) — needs eyes-on a browser.
+  - §2.5 Brotli payload measurement + texture downscale if >300 MB.
+- **Next (controlled run):** apply §2.2 → rebuild (~35 min) → `cd Builds/WebGL; python -m http.server 8000` → open `http://localhost:8000` and run the §2.4 smoke. The infra makes each build a one-liner now.
+
+---
 
 **Executed:** 2026-05-24 (evening) under Standing Authority #35 + WO-025 — at owner's explicit ask (the WO otherwise defers to Phase 5 / post-WO-17 overnight).
-**Outcome:** Build infrastructure (§2.1) is written and **compiles**, so a WebGL build is one command away — **once the WebGL Build Support editor module is installed.** That module is **not** installed, which hard-blocks the actual build (§2.4) and everything that depends on observing it (§2.2 shader-stripping, §2.3 WebGL code paths, §2.5 size, smoke test). Those are deliberately left for the post-install run.
+**Original outcome (now superseded by the UPDATE above):** Build infrastructure (§2.1) written + compiles; build was blocked on the WebGL module not being installed.
 **Editor:** Unity 6000.4.8f1
 
 ---
