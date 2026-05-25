@@ -337,6 +337,22 @@ namespace DeNelle.Village
             shape.shapeType = ParticleSystemShapeType.Circle;
             shape.radius = 0.2f;
 
+            // A runtime-added ParticleSystem ships with the legacy built-in
+            // particle material, which URP renders as a magenta/invalid burst
+            // (same missing-shader class as the pets in WO-05). Swap in a URP
+            // unlit particle material so the placeholder is actually visible.
+            // Only replace when a known shader resolves in THIS build (Shader.Find
+            // returns null for a stripped shader) so we never trade the default
+            // for a missing (magenta) one. Vertex colour is honoured by both
+            // shaders, so TintAndSize's startColor still drives the ability hue.
+            var psr = go.GetComponent<ParticleSystemRenderer>();
+            if (psr != null)
+            {
+                Shader sh = Shader.Find("Universal Render Pipeline/Particles/Unlit")
+                         ?? Shader.Find("Sprites/Default");
+                if (sh != null) psr.material = new Material(sh);
+            }
+
             return ps;
         }
 
