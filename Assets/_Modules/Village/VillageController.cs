@@ -141,6 +141,19 @@ namespace DeNelle.Village
         private void Start()
         {
             EnsureGateProximityOpeners();
+            EnsureHeartHudBridge();
+        }
+
+        /// <summary>
+        /// Attaches a <see cref="HeartHudBridge"/> at runtime (WO-20) so the HUD
+        /// Heart HP bar + crystal counter get live data — they previously had no
+        /// runtime push. Idempotent ([DisallowMultipleComponent]). Runtime-attached
+        /// for the same reason as the gate openers: the scene is builder-baked.
+        /// </summary>
+        private void EnsureHeartHudBridge()
+        {
+            if (GetComponent<HeartHudBridge>() == null)
+                gameObject.AddComponent<HeartHudBridge>();
         }
 
         /// <summary>
