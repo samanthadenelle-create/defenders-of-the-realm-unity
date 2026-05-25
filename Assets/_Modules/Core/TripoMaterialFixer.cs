@@ -49,7 +49,14 @@ namespace DeNelle.Core
             _hasFallbackTint = true;
         }
 
-        private void Awake() => Run();
+        // Start (not Awake): callers like PetDeployer add this component and
+        // THEN set the fallback texture name + tint on the next line. Awake
+        // fires synchronously inside AddComponent, so the setters would land
+        // too late and Run() would build URP materials with no diffuse and
+        // no tint — the symptom Samantha hit 2026-05-24 (pets invisible,
+        // labels only). Start defers Run() to the next frame so the setter
+        // calls have already landed.
+        private void Start() => Run();
 
         private void Run()
         {
@@ -89,6 +96,13 @@ namespace DeNelle.Core
                         if (tex == null && src.HasProperty("_BaseMap")) tex = src.GetTexture("_BaseMap");
                         if (src.HasProperty("_Color")) col = src.color;
                     }
+                    // Tripo Phong materials sometimes export _Color as
+                    // transparent black (0,0,0,0) — that'd render the rebuilt
+                    // URP material as invisible. Treat near-zero alpha or
+                    // near-black as "no useful source colour" and default to
+                    // white so the texture or fallback tint controls the look.
+                    if (col.a < 0.05f || (col.r + col.g + col.b) < 0.05f)
+                        col = Color.white;
                     if (tex == null && fallbackTex != null) tex = fallbackTex;
                     // Owner 2026-05-20 ("still grey"): the fallback tint was
                     // only applied when tex == null, but Tripo's source

@@ -115,3 +115,8 @@ portraits*.log
 
 # Pre-push backup of .git — kept until first successful push, then deleted.
 /.git-pre-push-backup/
+
+# Recovery backups created by the 2026-05-24 GUID-remap pass. Safe to delete
+# once Unity has imported the corrected .meta files and you've verified.
+*.meta.bak
+*.meta.bak.meta

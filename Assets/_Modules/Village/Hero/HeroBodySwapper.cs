@@ -77,7 +77,44 @@ namespace DeNelle.Village
                 var anim = body.GetComponentInChildren<Animator>();
                 if (anim == null) anim = body.AddComponent<Animator>();
                 anim.runtimeAnimatorController = controllerSnapshot;
+                // applyRootMotion=false is the key fix for left/right turning:
+                // when the Walk clip has baked-in root rotation curves they'd
+                // fight HeroLocomotion's Slerp on the parent transform and the
+                // hero would visually never appear to turn. With root motion
+                // off, HeroLocomotion owns rotation; the Walk clip only drives
+                // the visible mesh anim.
                 anim.applyRootMotion = false;
+                // Keep the loop ticking when the camera frames just past the
+                // hero edge (common during combat camera). Without this Unity
+                // freezes the animator and the hero T-poses for a frame on
+                // re-entry to view.
+                anim.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+                anim.keepAnimatorStateOnDisable = true;
+                // Rebind reconnects bone references after the FBX instantiate
+                // finishes — without this the new mesh sometimes T-poses for
+                // ~10 frames after a hero swap. Cheap call, runs once.
+                anim.Rebind();
+                // Validate the Speed parameter exists. If the controller was
+                // authored without it, the Walk transition never fires and
+                // the hero looks frozen in Idle while clearly moving.
+                bool hasSpeedParam = false;
+                foreach (var p in anim.parameters)
+                {
+                    if (p.name == "Speed" && p.type == AnimatorControllerParameterType.Float)
+                    { hasSpeedParam = true; break; }
+                }
+                if (!hasSpeedParam)
+                {
+                    Debug.LogWarning(
+                        "[HeroBodySwapper] AnimatorController '" + controllerSnapshot.name +
+                        "' has no Speed (float) parameter — Walk transitions won't fire. " +
+                        "Run Defenders → Animation → Setup <Class> Animator to regenerate.");
+                }
+                else
+                {
+                    // Pre-set Speed=0 so the body opens in Idle, not T-pose.
+                    anim.SetFloat("Speed", 0f);
+                }
                 // Force HeroLocomotion to re-cache its Animator reference —
                 // its private _animator field still points at the destroyed
                 // old animator. Reflection write because the field is
@@ -114,15 +151,26 @@ namespace DeNelle.Village
         }
 
         /// <summary>
-        /// Tripo FBXs come in with Phong materials that URP can't render —
-        /// the mesh shows as a transparent magenta ghost. Walk the renderers,
-        /// pull each material's main texture if any, and wrap them in URP/Lit
-        /// so the body lands with its proper texture in the player build.
+        /// Tripo FBXs come in with Phong / Lambert / Blinn materials that URP
+        /// can't render — the mesh shows as a transparent magenta ghost. Walk
+        /// the renderers, pull each material's diffuse / normal / emission
+        /// (whichever property names happen to be present on the source), and
+        /// rebuild under URP/Lit. Falls through to URP/Simple Lit (cheaper on
+        /// mobile) then Standard as a final safety net so the hero is never
+        /// rendered with a null shader.
         /// </summary>
         private static void RetargetMaterialsToUrp(GameObject body)
         {
-            Shader litShader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
-            if (litShader == null) return;
+            Shader litShader = Shader.Find("Universal Render Pipeline/Lit")
+                            ?? Shader.Find("Universal Render Pipeline/Simple Lit")
+                            ?? Shader.Find("Standard");
+            if (litShader == null)
+            {
+                Debug.LogWarning("[HeroBodySwapper] No URP/Lit or Standard shader available — material fix skipped.");
+                return;
+            }
+
+            int converted = 0, skipped = 0;
             foreach (var r in body.GetComponentsInChildren<Renderer>(true))
             {
                 if (r == null) continue;
@@ -132,30 +180,72 @@ namespace DeNelle.Village
                 {
                     var src = mats[i];
                     if (src == null) continue;
-                    // Already URP-compatible? Skip.
-                    if (src.shader != null && src.shader.name != null &&
-                        src.shader.name.StartsWith("Universal Render Pipeline/", System.StringComparison.Ordinal))
-                        continue;
-                    Texture tex = null;
-                    if (src.HasProperty("_MainTex")) tex = src.GetTexture("_MainTex");
-                    if (tex == null && src.HasProperty("_BaseMap")) tex = src.GetTexture("_BaseMap");
-                    Color col = src.HasProperty("_Color") ? src.color : Color.white;
+                    // Already a URP shader? Preserve — upstream art may have
+                    // intentionally placed URP/Unlit on emissive accents etc.
+                    string srcShaderName = src.shader != null ? src.shader.name : "";
+                    if (srcShaderName.StartsWith("Universal Render Pipeline/", System.StringComparison.Ordinal))
+                    { skipped++; continue; }
+
+                    // Diffuse / base texture — try every common property name.
+                    Texture baseTex = null;
+                    if (src.HasProperty("_MainTex"))      baseTex = src.GetTexture("_MainTex");
+                    if (baseTex == null && src.HasProperty("_BaseMap"))       baseTex = src.GetTexture("_BaseMap");
+                    if (baseTex == null && src.HasProperty("_BaseColorMap")) baseTex = src.GetTexture("_BaseColorMap");
+
+                    // Base colour — try URP first, then Built-in.
+                    Color baseColor = Color.white;
+                    if (src.HasProperty("_BaseColor"))      baseColor = src.GetColor("_BaseColor");
+                    else if (src.HasProperty("_Color"))     baseColor = src.GetColor("_Color");
+
+                    // Normal + emission, if the source authored them.
+                    Texture normalTex = null;
+                    if (src.HasProperty("_BumpMap"))                   normalTex = src.GetTexture("_BumpMap");
+                    if (normalTex == null && src.HasProperty("_NormalMap")) normalTex = src.GetTexture("_NormalMap");
+                    Texture emissionTex = null;
+                    Color   emissionColor = Color.black;
+                    if (src.HasProperty("_EmissionMap"))   emissionTex   = src.GetTexture("_EmissionMap");
+                    if (src.HasProperty("_EmissionColor")) emissionColor = src.GetColor("_EmissionColor");
+
+                    // Tiling / offset for whichever map slot held the diffuse.
+                    Vector2 tiling = Vector2.one, offset = Vector2.zero;
+                    if (src.HasProperty("_MainTex"))
+                    { tiling = src.GetTextureScale("_MainTex"); offset = src.GetTextureOffset("_MainTex"); }
+                    else if (src.HasProperty("_BaseMap"))
+                    { tiling = src.GetTextureScale("_BaseMap"); offset = src.GetTextureOffset("_BaseMap"); }
 
                     var newMat = new Material(litShader);
                     newMat.name = (src.name ?? "Tripo") + " (URP)";
-                    if (newMat.HasProperty("_BaseColor")) newMat.SetColor("_BaseColor", col);
-                    if (newMat.HasProperty("_Color"))     newMat.SetColor("_Color", col);
-                    if (tex != null)
+                    if (newMat.HasProperty("_BaseColor")) newMat.SetColor("_BaseColor", baseColor);
+                    if (newMat.HasProperty("_Color"))     newMat.SetColor("_Color",     baseColor);
+                    if (baseTex != null)
                     {
-                        if (newMat.HasProperty("_BaseMap")) newMat.SetTexture("_BaseMap", tex);
-                        if (newMat.HasProperty("_MainTex")) newMat.SetTexture("_MainTex", tex);
+                        if (newMat.HasProperty("_BaseMap"))
+                        { newMat.SetTexture("_BaseMap", baseTex); newMat.SetTextureScale("_BaseMap", tiling); newMat.SetTextureOffset("_BaseMap", offset); }
+                        if (newMat.HasProperty("_MainTex"))
+                        { newMat.SetTexture("_MainTex", baseTex); newMat.SetTextureScale("_MainTex", tiling); newMat.SetTextureOffset("_MainTex", offset); }
+                    }
+                    if (normalTex != null && newMat.HasProperty("_BumpMap"))
+                    {
+                        newMat.SetTexture("_BumpMap", normalTex);
+                        newMat.EnableKeyword("_NORMALMAP");
+                    }
+                    if (emissionTex != null || emissionColor.maxColorComponent > 0.001f)
+                    {
+                        if (newMat.HasProperty("_EmissionColor")) newMat.SetColor("_EmissionColor", emissionColor);
+                        if (emissionTex != null && newMat.HasProperty("_EmissionMap"))
+                            newMat.SetTexture("_EmissionMap", emissionTex);
+                        newMat.EnableKeyword("_EMISSION");
+                        newMat.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
                     }
                     if (newMat.HasProperty("_Smoothness")) newMat.SetFloat("_Smoothness", 0.15f);
-                    if (newMat.HasProperty("_Metallic"))   newMat.SetFloat("_Metallic", 0f);
+                    if (newMat.HasProperty("_Metallic"))   newMat.SetFloat("_Metallic",   0f);
                     mats[i] = newMat;
+                    converted++;
                 }
                 r.sharedMaterials = mats;
             }
+            Debug.Log("[HeroBodySwapper] RetargetMaterialsToUrp: converted=" +
+                      converted + ", skipped (already URP)=" + skipped);
         }
 
         private static string SlugFor(HeroClass cls) => cls switch
