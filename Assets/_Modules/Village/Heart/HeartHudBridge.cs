@@ -31,10 +31,27 @@ namespace DeNelle.Village
         private readonly object[] _hpArgs = new object[2];
         private readonly object[] _crystalArgs = new object[1];
 
+        // The bridge is attached after the scene (incl. the HUD) loads, so it
+        // resolves on the first frame in practice. The cap is a pure safety net:
+        // if the HUD/Heart are genuinely absent, stop the per-frame scene scans
+        // rather than running FindObjectsByType forever (~10s at 60fps).
+        private const int MaxResolveAttempts = 600;
+        private int _resolveAttempts;
+        private bool _gaveUp;
+
         private void OnEnable() => Resolve();
 
         private void Resolve()
         {
+            if (_gaveUp) return;
+            if (_hud != null && _heart != null) return; // fully resolved — nothing to scan
+            if (++_resolveAttempts > MaxResolveAttempts)
+            {
+                _gaveUp = true;
+                Debug.LogWarning("[HeartHudBridge] VillageHudController / HeartController not found — Heart-HP / crystal push disabled.");
+                return;
+            }
+
             if (_hud == null)
             {
                 foreach (var mb in FindObjectsByType<MonoBehaviour>(FindObjectsInactive.Include))
