@@ -142,6 +142,19 @@ namespace DeNelle.Village
         {
             EnsureGateProximityOpeners();
             EnsureHeartHudBridge();
+            EnsureDungeonEntrances();
+        }
+
+        /// <summary>
+        /// Attaches the <see cref="DungeonEntranceBootstrap"/> at runtime (WO-19) so
+        /// the village gets its in-world dungeon entrances. Runtime-attached for the
+        /// same reason as the gate openers / Heart HUD bridge: the scene is
+        /// builder-baked. Idempotent ([DisallowMultipleComponent]).
+        /// </summary>
+        private void EnsureDungeonEntrances()
+        {
+            if (GetComponent<DungeonEntranceBootstrap>() == null)
+                gameObject.AddComponent<DungeonEntranceBootstrap>();
         }
 
         /// <summary>
