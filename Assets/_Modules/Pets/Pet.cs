@@ -89,6 +89,17 @@ namespace DeNelle.Pets
 
         private float _attackCdRemaining;
 
+        // ── Natural locomotion (additive) ────────────────────────────────────
+        // MoveToward eases speed up/down through _currentSpeed instead of
+        // snapping to the full step, so pets accelerate out of rest, coast,
+        // then damp as they arrive — no dead-straight constant-velocity dash.
+        private float _currentSpeed;            // eased toward the target speed
+        private const float Acceleration = 9f;  // units/s^2 ramp toward cruise
+        private const float ArrivalDamp  = 1.6f; // start braking within this radius
+        // Small per-pet multiplier so the three pets don't move in lockstep.
+        // Stable per instance (seeded by id) — set in Awake.
+        private float _speedJitter = 1f;
+
         // Reusable overlap buffer — avoids per-frame GC (OverlapSphereNonAlloc).
         private readonly Collider[] _overlap = new Collider[48];
 
@@ -195,6 +206,12 @@ namespace DeNelle.Pets
             // The Animator sits on the KayKit pet mesh child of the pet rig.
             _animator = GetComponentInChildren<Animator>();
             _lastPosition = transform.position;
+
+            // +/-12% stable per-pet cruise-speed variation so the pack doesn't
+            // travel in perfect lockstep. Seeded by instance id (matches the
+            // per-pet rng PetHeroLeash uses) so a scene restart is deterministic.
+            var rng = new System.Random(gameObject.GetInstanceID());
+            _speedJitter = 0.88f + (float)rng.NextDouble() * 0.24f;
         }
 
         private void Update()
@@ -322,7 +339,24 @@ namespace DeNelle.Pets
         private void MoveToward(Vector3 target, float dt)
         {
             Vector3 flatTarget = new Vector3(target.x, transform.position.y, target.z);
-            transform.position = Vector3.MoveTowards(transform.position, flatTarget, _huntSpeed * dt);
+
+            // Distance left to cover on the ground plane.
+            Vector3 toTarget = flatTarget - transform.position;
+            float remaining = toTarget.magnitude;
+
+            // Cruise speed for this pet, damped down as it nears the target so
+            // it eases to a stop instead of snapping (arrival behaviour).
+            float cruise = _huntSpeed * _speedJitter;
+            float desired = cruise * Mathf.Clamp01(remaining / ArrivalDamp);
+
+            // Accelerate/decelerate toward the desired speed rather than jumping
+            // to it — gives a launch ramp and a soft stop.
+            _currentSpeed = Mathf.MoveTowards(_currentSpeed, desired, Acceleration * dt);
+
+            // Step, capped at the distance left so we never overshoot.
+            float step = Mathf.Min(_currentSpeed * dt, remaining);
+            transform.position = Vector3.MoveTowards(transform.position, flatTarget, step);
+
             FaceToward(target);
         }
 
