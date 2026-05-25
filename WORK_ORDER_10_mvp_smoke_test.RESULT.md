@@ -114,7 +114,9 @@ The recommendation below was **implemented**: `Assets/_Modules/Core/DevBootScene
 | Mana bar visible | ✅ **Build** — bound (WO-07/20 push wired) |
 | Dungeon entrances present (WO-19) | ✅ **Build** — `[DungeonEntranceBootstrap] Placed 2 dungeon entrance(s)` |
 
-Still owner-eyes-on (need actual input / combat / audio / persistence, which `-bootScene` alone doesn't drive): wave progression, enemy pathing, gate proximity-open on approach, ATB transition + round-trip, dragon, audio, settings persistence, dungeon interior load. A follow-on could script synthesized input on top of `-bootScene` to reach these.
+**All five buildable scenes boot clean:** `-bootScene` into Title, Village, ATBBattle, Dungeon_HealersCottage, Dungeon_FolksGranary each loads and stays alive with **0 runtime errors** — confirms no scene regressed in the build (and pre-verifies WO-11's ATB scene loads). (ATB boots even without `BattleParams` — no crash.)
+
+Still owner-eyes-on (need actual input / combat / audio / persistence, which `-bootScene` alone doesn't drive): wave progression, enemy pathing, gate proximity-open on approach, ATB transition + round-trip, dragon, audio, settings persistence, dungeon interior gameplay. A follow-on could script synthesized input on top of `-bootScene` to reach these.
 
 ## Recommendation (DONE)
 
