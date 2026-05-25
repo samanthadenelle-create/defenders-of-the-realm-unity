@@ -1020,6 +1020,7 @@ namespace DeNelle.Editor
             public Color PlaceholderColor;
             public string FenceKind;    // "wood" or "stone"
             public string CustomFbx;    // optional full asset path to a custom (Tripo) FBX; overrides Fbx/Building() when set
+            public string BaseColorTex; // optional: force this basecolor texture onto a clean URP/Lit material (single-texture Tripo buildings)
         }
 
         // Quadrant placements per spec §5. N = +Z. Curtain wall is [-28..+28] X,
@@ -1032,6 +1033,7 @@ namespace DeNelle.Editor
             new BuildingPlacement { Type = 0, Id = "crystal-mine", Label = "Crystal Mine",
                 X = -38f, Z = 14f, YawDeg = 135f, Fbx = "building_mine",
                 CustomFbx = "Assets/Art/TripoStructures/LumberMill.fbx",
+                BaseColorTex = "Assets/Art/TripoStructures/LumberMill.fbm/LumberMill_basecolor.JPEG",
                 PlaceholderColor = new Color(0.38f, 0.65f, 0.98f), FenceKind = "stone" },
             // Pet House — Southwest creek-side (§5).
             new BuildingPlacement { Type = 1, Id = "pet-house", Label = "Pet House",
@@ -1042,16 +1044,19 @@ namespace DeNelle.Editor
             new BuildingPlacement { Type = 2, Id = "arcane-tower", Label = "Arcane Tower",
                 X = 6f, Z = -12.5f, YawDeg = 0f, Fbx = "building_tower_A",
                 CustomFbx = "Assets/Art/TripoStructures/BuildTower.fbx",
+                BaseColorTex = "Assets/Art/TripoStructures/BuildTower.fbm/build_tower_basecolor.JPEG",
                 PlaceholderColor = new Color(0.65f, 0.55f, 0.98f), FenceKind = "stone" },
             // Workshop — Northeast artisan district (§5).
             new BuildingPlacement { Type = 3, Id = "workshop", Label = "Workshop",
                 X = 16f, Z = 12.5f, YawDeg = 215f, Fbx = "building_workshop",
                 CustomFbx = "Assets/Art/TripoStructures/Forge.fbx",
+                BaseColorTex = "Assets/Art/TripoStructures/Forge.fbm/Forge_basecolor.JPEG",
                 PlaceholderColor = new Color(1f, 0.60f, 0.32f), FenceKind = "wood" },
             // Farm — East open ground (§5). Windmill mesh.
             new BuildingPlacement { Type = 4, Id = "farm", Label = "Farm",
                 X = 19f, Z = -1f, YawDeg = 270f, Fbx = "building_windmill",
                 CustomFbx = "Assets/Art/TripoStructures/Farm.fbx",
+                BaseColorTex = "Assets/Art/TripoStructures/Farm.fbm/farm_basecolor.JPEG",
                 PlaceholderColor = new Color(1f, 0.85f, 0.54f), FenceKind = "wood" },
         };
 
@@ -1081,20 +1086,52 @@ namespace DeNelle.Editor
                 }
                 else if (custom)
                 {
-                    // Owner Tripo building — imports at an arbitrary native size,
-                    // so normalize the longest dimension to ~7 m (reads as a 3x-
-                    // hero-height structure) and strip any native colliders /
-                    // rigidbody the Tripo import dropped on it (the plot footprint
-                    // BoxCollider added below is the single gameplay collider).
+                    // Owner Tripo building. The FBX imports tipped ~90deg (lying
+                    // flat), so stand it upright; then normalize the longest
+                    // dimension to ~7 m and strip native colliders/rigidbody (the
+                    // plot footprint BoxCollider below is the single gameplay collider).
+                    visual.transform.localRotation = Quaternion.Euler(-90f, 0f, 0f);
                     NormalizeProp(visual, 7f);
                     StripColliders(visual);
                     StripRigidbodies(visual);
-                    // Runtime URP material fix — Tripo FBXs import with legacy
-                    // Phong/Standard materials that fall to magenta in the URP
-                    // player. The fixer rebuilds them as URP/Lit from the model's
-                    // basecolor at load (same safety net the gate + heroes use).
-                    var bFixer = FindType("DeNelle.Core.TripoMaterialFixer");
-                    if (bFixer != null) visual.AddComponent(bFixer);
+
+                    if (!string.IsNullOrEmpty(b.BaseColorTex))
+                    {
+                        // Single-texture building: the auto-extracted Tripo materials
+                        // render as a rainbow patchwork, so force a clean URP/Lit
+                        // material built straight from the model's basecolor.
+                        var tex = AssetDatabase.LoadAssetAtPath<Texture2D>(b.BaseColorTex);
+                        var lit = Shader.Find("Universal Render Pipeline/Lit");
+                        if (tex != null && lit != null)
+                        {
+                            var mat = new Material(lit) { name = b.Id + "_basecolor (URP)" };
+                            if (mat.HasProperty("_BaseMap")) mat.SetTexture("_BaseMap", tex);
+                            if (mat.HasProperty("_MainTex")) mat.SetTexture("_MainTex", tex);
+                            if (mat.HasProperty("_Smoothness")) mat.SetFloat("_Smoothness", 0.1f);
+                            if (mat.HasProperty("_Metallic")) mat.SetFloat("_Metallic", 0f);
+                            foreach (var rr in visual.GetComponentsInChildren<Renderer>(true))
+                            {
+                                var arr = rr.sharedMaterials;
+                                for (int k = 0; k < arr.Length; k++) arr[k] = mat;
+                                rr.sharedMaterials = arr;
+                            }
+                        }
+                        else
+                        {
+                            Debug.LogWarning($"[VillageSceneBuilder] basecolor '{b.BaseColorTex}' not found for {b.Id}; leaving Tripo materials.");
+                        }
+                    }
+                    else
+                    {
+                        // Multi-part building (PetHome): rebuild each part's material
+                        // as plain URP/Lit carrying its own basecolor (force-rebuild).
+                        var bFixer = FindType("DeNelle.Core.TripoMaterialFixer");
+                        if (bFixer != null)
+                        {
+                            var fx = visual.AddComponent(bFixer);
+                            bFixer.GetMethod("ForceRebuildAll")?.Invoke(fx, null);
+                        }
+                    }
                 }
                 else
                 {

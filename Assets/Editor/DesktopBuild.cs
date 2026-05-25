@@ -84,7 +84,9 @@ namespace DeNelle.Editor
                 scenes = scenes,
                 locationPathName = exePath,
                 target = BuildTarget.StandaloneWindows64,
-                options = BuildOptions.None,
+                // Development build so the DevTools QA panel (gear / F1: force-wave,
+                // grant-materials) compiles in — it is gated #if DEVELOPMENT_BUILD.
+                options = BuildOptions.Development,
             };
 
             BuildReport report = BuildPipeline.BuildPlayer(options);

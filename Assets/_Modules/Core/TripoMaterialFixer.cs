@@ -31,7 +31,17 @@ namespace DeNelle.Core
         [SerializeField] private bool _hasFallbackTint;
         [SerializeField] private float _smoothness = 0.15f;
         [SerializeField] private float _metallic = 0f;
+        [SerializeField] private bool _forceRebuild;
         private bool _ran;
+
+        /// <summary>
+        /// Rebuild EVERY material (even ones already on a URP shader) as a plain
+        /// URP/Lit carrying the source's basecolor. Use when the auto-extracted
+        /// Tripo materials are URP but render wrong (e.g. a vertex-colour shader
+        /// painting a rainbow patchwork) — a plain URP/Lit with the same _BaseMap
+        /// shows the real texture instead.
+        /// </summary>
+        public void ForceRebuildAll() => _forceRebuild = true;
 
         public void SetFallbackTexture(string resourcesPath) => _fallbackTextureName = resourcesPath;
 
@@ -83,8 +93,10 @@ namespace DeNelle.Core
                 for (int i = 0; i < mats.Length; i++)
                 {
                     var src = mats[i];
-                    // Already URP — skip.
-                    if (src != null && src.shader != null && src.shader.name != null &&
+                    // Already URP — skip (unless force-rebuilding: the extracted
+                    // Tripo URP materials can still render wrong, so rebuild them
+                    // as plain URP/Lit from their basecolor).
+                    if (!_forceRebuild && src != null && src.shader != null && src.shader.name != null &&
                         src.shader.name.StartsWith("Universal Render Pipeline/", System.StringComparison.Ordinal))
                         continue;
 

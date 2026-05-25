@@ -98,6 +98,28 @@ namespace DeNelle.Editor
                     "verify-village-perspective.png");
         }
 
+        /// <summary>
+        /// Diagnostic: opens the baked Village and renders close-ups of the Tripo
+        /// gameplay buildings (no re-bake) so their orientation + materials can be
+        /// inspected. Run: -executeMethod DeNelle.Editor.SceneScreenshot.CaptureBuildingsClose
+        /// </summary>
+        [MenuItem("Defenders/Week 3/Capture Buildings (no re-bake)")]
+        public static void CaptureBuildingsClose()
+        {
+            try { EditorSceneManager.OpenScene("Assets/Scenes/Village.unity", OpenSceneMode.Single); }
+            catch (Exception e) { Debug.LogError($"[SceneScreenshot] OpenScene threw: {e}"); return; }
+
+            // SE cluster — arcane-tower (6,-12.5) + farm (19,-1), seen from the south.
+            Capture(new Vector3(12f, 9f, -32f), Quaternion.Euler(12f, 0f, 0f), 58f,
+                    "verify-buildings-se.png");
+            // Pet House (-17,-10.5) from the south-west.
+            Capture(new Vector3(-17f, 7f, -26f), Quaternion.Euler(14f, 0f, 0f), 55f,
+                    "verify-buildings-pethouse.png");
+            // Workshop (16,12.5) from the south.
+            Capture(new Vector3(16f, 8f, 0f), Quaternion.Euler(14f, 0f, 0f), 55f,
+                    "verify-buildings-workshop.png");
+        }
+
         /// <summary>Builds the Healer's Cottage dungeon and captures a review PNG.</summary>
         [MenuItem("Defenders/Dungeons/Build + Capture Healer's Cottage")]
         public static void CaptureDungeon()
