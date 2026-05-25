@@ -154,6 +154,12 @@ namespace DeNelle.Village
 
         private void Awake()
         {
+            // Solid blocker so the hero can't walk through the spire: the scene
+            // builder strips the Cathedral FBX colliders and nothing re-adds one,
+            // and HeroLocomotion's CapsuleCast only stops on non-trigger colliders.
+            // Runtime-attached + idempotent so the curated village scene isn't edited.
+            EnsureBlockerCollider();
+
             // Honor the authored transform when either:
             //  (a) _useAuthoredTransform is true (scene-builder flagged it), OR
             //  (b) the heart is NOT at world origin (the canonical Avalon
@@ -165,6 +171,26 @@ namespace DeNelle.Village
             if (_useAuthoredTransform) return;
             if (transform.position != Vector3.zero) return;
             transform.localScale = Vector3.one * _heartScale;
+        }
+
+        // Spire base footprint for the walk-through blocker (world units).
+        private const float BlockerRadius = 2.0f;
+        private const float BlockerHeight = 8.0f;
+
+        /// <summary>
+        /// Adds a solid (non-trigger) collider at the spire base so the hero can't
+        /// walk through the Heart. isTrigger MUST be false — HeroLocomotion's
+        /// CapsuleCast uses QueryTriggerInteraction.Ignore. Idempotent.
+        /// </summary>
+        private void EnsureBlockerCollider()
+        {
+            if (GetComponent<Collider>() != null) return;
+            var col = gameObject.AddComponent<CapsuleCollider>();
+            col.isTrigger = false;
+            col.direction = 1;                                   // Y-axis (upright spire)
+            col.radius = BlockerRadius;
+            col.height = BlockerHeight;
+            col.center = new Vector3(0f, BlockerHeight * 0.5f, 0f); // feet at y=0
         }
 
         /// <summary>Parses a 6-digit hex string ("rrggbb") into a Color.</summary>
