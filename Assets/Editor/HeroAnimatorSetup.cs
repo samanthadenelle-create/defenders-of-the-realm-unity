@@ -18,17 +18,22 @@ namespace DeNelle.Editor
     public static class HeroAnimatorSetup
     {
         // ── Menu entry points (one per hero) ─────────────────────────────────
+        // Hero FBXes live at Assets/Resources/Heroes/ (the project's Resources
+        // folder, so Resources.Load can find them at runtime). The "Wizard"
+        // hero's FBX is named Mage.fbx on disk — menu label stays "Wizard"
+        // for the WO-029 character spec, but the asset path uses the real
+        // filename. Controllers are emitted alongside each FBX.
         [MenuItem("Defenders/Animation/Setup Wizard Animator")]
-        public static void SetupWizard() => Setup("Assets/Models/Wizard/Wizard.fbx",
-                                                  "Assets/Models/Wizard/Wizard.controller");
+        public static void SetupWizard() => Setup("Assets/Resources/Heroes/Mage.fbx",
+                                                  "Assets/Resources/Heroes/Mage.controller");
 
         [MenuItem("Defenders/Animation/Setup Ranger Animator")]
-        public static void SetupRanger() => Setup("Assets/Models/Ranger/Ranger.fbx",
-                                                  "Assets/Models/Ranger/Ranger.controller");
+        public static void SetupRanger() => Setup("Assets/Resources/Heroes/Ranger.fbx",
+                                                  "Assets/Resources/Heroes/Ranger.controller");
 
         [MenuItem("Defenders/Animation/Setup Knight Animator")]
-        public static void SetupKnight() => Setup("Assets/Models/Knight/Knight.fbx",
-                                                  "Assets/Models/Knight/Knight.controller");
+        public static void SetupKnight() => Setup("Assets/Resources/Heroes/Knight.fbx",
+                                                  "Assets/Resources/Heroes/Knight.controller");
 
         /// <summary>
         /// Configure a Tripo hero FBX + build its Idle/Walk/Cast controller.
