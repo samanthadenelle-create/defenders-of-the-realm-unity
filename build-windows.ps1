@@ -20,7 +20,7 @@
 $ErrorActionPreference = 'Stop'
 $proj       = $PSScriptRoot
 $hubEditors = 'C:\Program Files\Unity\Hub\Editor'
-$pinned     = '6000.4.7f1'   # version recorded in ProjectSettings/ProjectVersion.txt
+$pinned     = '6000.4.8f1'   # version recorded in ProjectSettings/ProjectVersion.txt
 
 # --- 1) Locate Unity.exe ------------------------------------------------------
 $candidates = Get-ChildItem $hubEditors -Directory -ErrorAction SilentlyContinue |
@@ -88,7 +88,13 @@ if (Test-Path $lock) { Remove-Item $lock -Force -ErrorAction SilentlyContinue }
 
 $license = $false
 if (Test-Path $log) {
-    $license = [bool](Select-String -Path $log -Pattern 'HandshakeResponse reported an error|No valid Unity Editor license|ResponseCode: 505|Unsupported protocol version' -Quiet -ErrorAction SilentlyContinue)
+    # Unity 6 routinely fails the first license handshake (legacy protocol
+    # version mismatch on the first LicenseClient pipe) and auto-recovers
+    # on a fresh channel. Only flag a REAL license stopper when the error
+    # appears with NO subsequent "Successfully updated license" recovery line.
+    $errorHit  = [bool](Select-String -Path $log -Pattern 'HandshakeResponse reported an error|No valid Unity Editor license|ResponseCode: 505|Unsupported protocol version' -Quiet -ErrorAction SilentlyContinue)
+    $recovered = [bool](Select-String -Path $log -Pattern 'Successfully updated license|Successfully connected to LicensingClient' -Quiet -ErrorAction SilentlyContinue)
+    $license   = $errorHit -and -not $recovered
 }
 
 # --- 4) Report ----------------------------------------------------------------
