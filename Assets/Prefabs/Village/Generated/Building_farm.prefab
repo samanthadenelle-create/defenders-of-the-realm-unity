@@ -127,11 +127,11 @@ PrefabInstance:
     - target: {fileID: -7511558181221131132, guid: 34437844a0fbc49429c8662e9422771c, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'
       value: 
-      objectReference: {fileID: 2100000, guid: be4bffb6c1cba3e428b0fe8e93702417, type: 2}
+      objectReference: {fileID: 2100000, guid: 9d3f5549c3813da47b7b15095a078b79, type: 2}
     - target: {fileID: -1998816294109216083, guid: 34437844a0fbc49429c8662e9422771c, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'
       value: 
-      objectReference: {fileID: 2100000, guid: be4bffb6c1cba3e428b0fe8e93702417, type: 2}
+      objectReference: {fileID: 2100000, guid: 9d3f5549c3813da47b7b15095a078b79, type: 2}
     - target: {fileID: 919132149155446097, guid: 34437844a0fbc49429c8662e9422771c, type: 3}
       propertyPath: m_Name
       value: building_windmill_green
@@ -139,7 +139,7 @@ PrefabInstance:
     - target: {fileID: 6553454064020000814, guid: 34437844a0fbc49429c8662e9422771c, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'
       value: 
-      objectReference: {fileID: 2100000, guid: be4bffb6c1cba3e428b0fe8e93702417, type: 2}
+      objectReference: {fileID: 2100000, guid: 9d3f5549c3813da47b7b15095a078b79, type: 2}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []

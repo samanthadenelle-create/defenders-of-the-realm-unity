@@ -59,6 +59,45 @@ namespace DeNelle.Editor
                     "screenshot-village-elarion.png");
         }
 
+        /// <summary>
+        /// Verification-only: opens the ALREADY-baked Village.unity and renders
+        /// review PNGs WITHOUT re-baking — so a re-bake + screenshot cycle is two
+        /// fast passes, not a double build. Framed for the WO-26 enlarged ring
+        /// (interior ~84 m x 66 m, WallHalfX=42 / WallHalfZ=33): a straight
+        /// top-down orthographic plan view (best for judging spacing/navigability)
+        /// plus a pulled-back perspective hero view.
+        ///   docs/verify-village-topdown.png    — orthographic plan (spacing check)
+        ///   docs/verify-village-perspective.png — pulled-back 3/4 view
+        /// Run: -executeMethod DeNelle.Editor.SceneScreenshot.CaptureVillageOnly
+        /// </summary>
+        [MenuItem("Defenders/Week 3/Capture Village (no re-bake)")]
+        public static void CaptureVillageOnly()
+        {
+            try
+            {
+                EditorSceneManager.OpenScene("Assets/Scenes/Village.unity", OpenSceneMode.Single);
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"[SceneScreenshot] OpenScene(Village) threw: {e}");
+                return;
+            }
+
+            // Top-down orthographic plan view, centred on origin. Ortho size 95
+            // (half-height) covers Z -95..+95 and (16:9) X -169..+169 -> takes in
+            // the whole WO-27 spawn-world "plus shape": the walled ring PLUS the
+            // four ~40 m march corridors + 16 m spawn aprons radiating out the
+            // cardinal gates (tips at ~+/-90). Best view for judging corridor
+            // continuity, building spacing, and clear streets.
+            CaptureOrtho(new Vector3(0f, 220f, 0.01f), Quaternion.Euler(90f, 0f, 0f), 95f,
+                         "verify-village-topdown.png");
+
+            // Pulled-back 3/4 perspective from the south, high + wide enough to take
+            // in the enlarged town and the south march corridor running out the gate.
+            Capture(new Vector3(0f, 92f, -120f), Quaternion.Euler(38f, 0f, 0f), 60f,
+                    "verify-village-perspective.png");
+        }
+
         /// <summary>Builds the Healer's Cottage dungeon and captures a review PNG.</summary>
         [MenuItem("Defenders/Dungeons/Build + Capture Healer's Cottage")]
         public static void CaptureDungeon()
@@ -109,8 +148,17 @@ namespace DeNelle.Editor
             RenderSettings.fog = prevFog;
         }
 
+        /// <summary>
+        /// Renders one 1920×1080 PNG from a temporary ORTHOGRAPHIC camera —
+        /// a true plan view with no perspective distortion, the right tool for
+        /// judging building spacing and street widths. <paramref name="orthoSize"/>
+        /// is the camera half-height in world units.
+        /// </summary>
+        private static void CaptureOrtho(Vector3 pos, Quaternion rot, float orthoSize, string fileName)
+            => Capture(pos, rot, 0f, fileName, orthoSize);
+
         /// <summary>Renders one 1920×1080 PNG from a temporary camera.</summary>
-        private static void Capture(Vector3 pos, Quaternion rot, float fov, string fileName)
+        private static void Capture(Vector3 pos, Quaternion rot, float fov, string fileName, float orthoSize = 0f)
         {
             const int w = 1920, h = 1080;
 
@@ -118,7 +166,15 @@ namespace DeNelle.Editor
             var cam = camGo.AddComponent<Camera>();
             cam.transform.position = pos;
             cam.transform.rotation = rot;
-            cam.fieldOfView = fov;
+            if (orthoSize > 0f)
+            {
+                cam.orthographic = true;
+                cam.orthographicSize = orthoSize;
+            }
+            else
+            {
+                cam.fieldOfView = fov;
+            }
             cam.nearClipPlane = 0.3f;
             cam.farClipPlane = 3000f;
             cam.clearFlags = CameraClearFlags.Skybox;

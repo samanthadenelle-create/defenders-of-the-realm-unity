@@ -118,9 +118,9 @@ namespace DeNelle.Editor
         private const float WallThicknessConst = 0.62f;
         private const float GateHalfWidthConst = 1.4f;
         // Curtain-wall half-extents — MUST mirror WallLayout.WallHalfX / WallHalfZ.
-        private const float WallHalfX = 28f;
-        private const float WallHalfZ = 21f;
-        private const float SouthBowDepth = 4f;
+        private const float WallHalfX = 42f;
+        private const float WallHalfZ = 33f;
+        private const float SouthBowDepth = 6f;
         // KayKit wall-piece yaw correction — owner-observed 2026-05-19 that the
         // straights sit ~90deg off and corners ~180deg off vs WallLayout's
         // local-X run assumption. Tunable; adjust against the screenshot.
@@ -672,12 +672,12 @@ namespace DeNelle.Editor
             var stone = LoadModel(HexTilesRoads + "hex_road_B.fbx");
 
             // ~6 hex wide × 5 hex deep block of paving centred on the origin.
-            for (int row = -3; row <= 3; row++)
+            for (int row = -4; row <= 4; row++)
             {
                 bool oddRow = (row & 1) != 0;
                 float z = row * HexDepth;
                 float xShift = oddRow ? HexWidth * 0.5f : 0f;
-                for (int col = -4; col <= 4; col++)
+                for (int col = -5; col <= 5; col++)
                 {
                     float x = col * HexWidth + xShift;
                     var tile = InstantiateModel(stone, "hex_road_B.fbx",
@@ -732,7 +732,7 @@ namespace DeNelle.Editor
         /// <summary>Lays a 2-tile-wide road cross-section at one step along an arm.</summary>
         private static void LayRoadPair(Transform parent, GameObject road, bool northSouth, float along)
         {
-            float[] lateral = { -HexWidth * 0.5f, HexWidth * 0.5f };
+            float[] lateral = { -HexWidth, 0f, HexWidth };
             foreach (var off in lateral)
             {
                 var tile = InstantiateModel(road, "hex_road_A.fbx",
@@ -1023,23 +1023,23 @@ namespace DeNelle.Editor
             // 2026-05-20 ("move those mines outside the village for
             // foraging"). Hero walks out the west or north gate to mine.
             new BuildingPlacement { Type = 0, Id = "crystal-mine", Label = "Crystal Mine",
-                X = -38f, Z = 14f, YawDeg = 135f, Fbx = "building_mine",
+                X = -54f, Z = 20f, YawDeg = 135f, Fbx = "building_mine",
                 PlaceholderColor = new Color(0.38f, 0.65f, 0.98f), FenceKind = "stone" },
             // Pet House — Southwest creek-side (§5).
             new BuildingPlacement { Type = 1, Id = "pet-house", Label = "Pet House",
-                X = -17f, Z = -10.5f, YawDeg = 55f, Fbx = "building_stables",
+                X = -24f, Z = -16f, YawDeg = 55f, Fbx = "building_stables",
                 PlaceholderColor = new Color(0.98f, 0.82f, 0.48f), FenceKind = "wood" },
             // Arcane Tower — South-central, near the Keep (§5).
             new BuildingPlacement { Type = 2, Id = "arcane-tower", Label = "Arcane Tower",
-                X = 6f, Z = -12.5f, YawDeg = 0f, Fbx = "building_tower_A",
+                X = 8f, Z = -20f, YawDeg = 0f, Fbx = "building_tower_A",
                 PlaceholderColor = new Color(0.65f, 0.55f, 0.98f), FenceKind = "stone" },
             // Workshop — Northeast artisan district (§5).
             new BuildingPlacement { Type = 3, Id = "workshop", Label = "Workshop",
-                X = 16f, Z = 12.5f, YawDeg = 215f, Fbx = "building_workshop",
+                X = 22f, Z = 20f, YawDeg = 215f, Fbx = "building_workshop",
                 PlaceholderColor = new Color(1f, 0.60f, 0.32f), FenceKind = "wood" },
             // Farm — East open ground (§5). Windmill mesh.
             new BuildingPlacement { Type = 4, Id = "farm", Label = "Farm",
-                X = 19f, Z = -1f, YawDeg = 270f, Fbx = "building_windmill",
+                X = 30f, Z = -4f, YawDeg = 270f, Fbx = "building_windmill",
                 PlaceholderColor = new Color(1f, 0.85f, 0.54f), FenceKind = "wood" },
         };
 
@@ -1171,45 +1171,45 @@ namespace DeNelle.Editor
             var residential = NewChild(parent, "Residential-SW");
             var residentialDefs = new[]
             {
-                new DressDef { Name = "Home-A1", Fbx = "building_home_A", X = -30f, Z = -8f, Yaw = 70f, PlaceholderColor = C("d8c69a") },
-                new DressDef { Name = "Home-A2", Fbx = "building_home_A", X = -30f, Z = -18f, Yaw = 95f, PlaceholderColor = C("d8c69a") },
-                new DressDef { Name = "Home-A3", Fbx = "building_home_A", X = -14f, Z = -22f, Yaw = 160f, PlaceholderColor = C("d8c69a") },
-                new DressDef { Name = "Home-B1", Fbx = "building_home_B", X = -22f, Z = -23f, Yaw = 200f, PlaceholderColor = C("c9b48a") },
-                new DressDef { Name = "Home-B2", Fbx = "building_home_B", X = -32f, Z = -23f, Yaw = 25f, PlaceholderColor = C("c9b48a") },
-                new DressDef { Name = "Home-B3", Fbx = "building_home_B", X = -14f, Z = -14f, Yaw = 120f, PlaceholderColor = C("c9b48a") },
+                new DressDef { Name = "Home-A1", Fbx = "building_home_A", X = -40f, Z = -10f, Yaw = 70f, PlaceholderColor = C("d8c69a") },
+                new DressDef { Name = "Home-A2", Fbx = "building_home_A", X = -40f, Z = -22f, Yaw = 95f, PlaceholderColor = C("d8c69a") },
+                new DressDef { Name = "Home-A3", Fbx = "building_home_A", X = -18f, Z = -30f, Yaw = 160f, PlaceholderColor = C("d8c69a") },
+                new DressDef { Name = "Home-B1", Fbx = "building_home_B", X = -30f, Z = -30f, Yaw = 200f, PlaceholderColor = C("c9b48a") },
+                new DressDef { Name = "Home-B2", Fbx = "building_home_B", X = -40f, Z = -32f, Yaw = 25f, PlaceholderColor = C("c9b48a") },
+                new DressDef { Name = "Home-B3", Fbx = "building_home_B", X = -18f, Z = -18f, Yaw = 120f, PlaceholderColor = C("c9b48a") },
             };
             foreach (var d in residentialDefs) PlaceDressing(residential, d, false);
             PlaceDressing(residential,
-                new DressDef { Name = "Well", Fbx = "building_well", X = -23f, Z = -16f, Yaw = 0f, PlaceholderColor = C("8aa0b0") },
+                new DressDef { Name = "Well", Fbx = "building_well", X = -30f, Z = -20f, Yaw = 0f, PlaceholderColor = C("8aa0b0") },
                 false);
 
             // ── §6.2 Market quarter (around the plaza, south) ────────────────
             var market = NewChild(parent, "Market-S");
             PlaceDressing(market,
-                new DressDef { Name = "Market", Fbx = "building_market", X = -4f, Z = -13f, Yaw = 10f, PlaceholderColor = C("c98f4a") },
+                new DressDef { Name = "Market", Fbx = "building_market", X = -10f, Z = -22f, Yaw = 10f, PlaceholderColor = C("c98f4a") },
                 false);
             PlaceDressing(market,
-                new DressDef { Name = "Tavern", Fbx = "building_tavern", X = 16f, Z = -12f, Yaw = 250f, PlaceholderColor = C("b5793c") },
+                new DressDef { Name = "Tavern", Fbx = "building_tavern", X = 22f, Z = -20f, Yaw = 250f, PlaceholderColor = C("b5793c") },
                 false);
             PlaceDressing(market,
-                new DressDef { Name = "Church", Fbx = "building_church", X = -3f, Z = 14f, Yaw = 185f, PlaceholderColor = C("d7d2c4") },
+                new DressDef { Name = "Church", Fbx = "building_church", X = -8f, Z = 22f, Yaw = 185f, PlaceholderColor = C("d7d2c4") },
                 false);
 
             // ── §6.3 Workshop quarter (NE) — blacksmith + townhall ───────────
             var workshopQ = NewChild(parent, "Workshop-NE");
             PlaceDressing(workshopQ,
-                new DressDef { Name = "Blacksmith", Fbx = "building_blacksmith", X = 30f, Z = 13f, Yaw = 230f, PlaceholderColor = C("8a7d6a") },
+                new DressDef { Name = "Blacksmith", Fbx = "building_blacksmith", X = 40f, Z = 22f, Yaw = 230f, PlaceholderColor = C("8a7d6a") },
                 false);
             PlaceDressing(workshopQ,
-                new DressDef { Name = "Townhall", Fbx = "building_townhall", X = 16f, Z = 12f, Yaw = 200f, PlaceholderColor = C("c2b79a") },
+                new DressDef { Name = "Townhall", Fbx = "building_townhall", X = 32f, Z = 12f, Yaw = 200f, PlaceholderColor = C("c2b79a") },
                 false);
-            BuildWorkshopYard(workshopQ, new Vector3(27f, 0f, 13f));
+            BuildWorkshopYard(workshopQ, new Vector3(36f, 0f, 22f));
 
             // ── §6.4 Farm / orchard (E) — orchard tiles + farmer's hut ───────
             var orchard = NewChild(parent, "Orchard-E");
-            BuildOrchard(orchard, new Vector3(26f, 0f, -1f));
+            BuildOrchard(orchard, new Vector3(38f, 0f, -6f));
             PlaceDressing(orchard,
-                new DressDef { Name = "FarmersHut", Fbx = "building_home_A", X = 31f, Z = -14f, Yaw = 290f, PlaceholderColor = C("d8c69a") },
+                new DressDef { Name = "FarmersHut", Fbx = "building_home_A", X = 40f, Z = -24f, Yaw = 290f, PlaceholderColor = C("d8c69a") },
                 false);
 
             // ── §6.5 Northern open ground ────────────────────────────────────
@@ -1402,6 +1402,13 @@ namespace DeNelle.Editor
         //  Approach lanes + wave spawn points (§8)
         // =====================================================================
 
+        // WO-27 (playable loop): enemies materialize this far OUTSIDE each gate and
+        // march in down a paved corridor. World units (gate -> spawn ring), so the
+        // distance is identical for N/S and E/W gates regardless of hex step. The
+        // corridor + apron are built under the nav-static "Approaches" root and so
+        // are included in BakeVillageNavMesh -> a continuous march lane to the gate.
+        private const float ApproachLength = 40f;
+
         private static int BuildApproaches(Transform parent, Type tWallLayout, Component controller)
         {
             if (tWallLayout == null) return 0;
@@ -1424,12 +1431,16 @@ namespace DeNelle.Editor
 
                 float step = (Mathf.Abs(outward.z) > 0.5f) ? HexDepth : HexWidth;
 
-                // 5 hexes of paved road extending outward (§8.1), 2 tiles wide.
+                // WO-27: paved march corridor the full ApproachLength (40 m) out
+                // each gate, 5 tiles wide (~8 m), so the NavMesh bakes a continuous
+                // lane for the enemies to march down. Loops outward in hex steps
+                // until the corridor reaches the spawn ring.
                 Vector3 lateral = new Vector3(-outward.z, 0f, outward.x); // perpendicular
-                for (int i = 1; i <= 5; i++)
+                int steps = Mathf.CeilToInt(ApproachLength / step);
+                for (int i = 1; i <= steps; i++)
                 {
                     Vector3 along = gatePos + outward * (i * step);
-                    foreach (var lat in new[] { -HexWidth * 0.5f, HexWidth * 0.5f })
+                    foreach (var lat in new[] { -2f * HexWidth, -HexWidth, 0f, HexWidth, 2f * HexWidth })
                     {
                         var tile = InstantiateModel(road, "hex_road_A.fbx",
                             $"ApproachRoad-{direction}-{i}");
@@ -1444,21 +1455,20 @@ namespace DeNelle.Editor
                     }
                 }
 
-                // Lane foliage / boulders removed per owner direction
-                // 2026-05-20 ("rocks in front of entrance"). The approach
-                // trees + rock_single_A boulders flanked each gate, but
-                // read as "rocks in front of the entrance" rather than
-                // wilderness dressing. The bare lane tiles + wave-spawn
-                // grass zone past the gate are kept.
+                // Lane foliage / boulders removed per owner direction 2026-05-20
+                // ("rocks in front of entrance"). Bare paving + grass apron only.
 
-                // The wave-spawn zone — a 3×3 hex grass plot, 5 hexes out (§8.1 / §8.3).
-                Vector3 spawnCentre = gatePos + outward * (7f * step);
+                // WO-27: the wave-spawn apron — a ~16 m x 16 m flat grass pad at the
+                // corridor end (ApproachLength out), room for a full 12-enemy batch
+                // to materialize on baked navmesh without overlap. Overlaps the
+                // corridor end so apron + corridor navmesh are one continuous surface.
+                Vector3 spawnCentre = gatePos + outward * ApproachLength;
                 var zoneRoot = new GameObject($"SpawnZone-{direction}");
                 zoneRoot.transform.SetParent(laneRoot.transform, false);
                 zoneRoot.transform.position = spawnCentre;
-                for (int gx = -1; gx <= 1; gx++)
+                for (int gx = -5; gx <= 5; gx++)
                 {
-                    for (int gz = -1; gz <= 1; gz++)
+                    for (int gz = -5; gz <= 5; gz++)
                     {
                         var tile = InstantiateModel(grass, "hex_grass.fbx", "spawn tile");
                         tile.transform.SetParent(zoneRoot.transform, false);
@@ -2327,9 +2337,9 @@ namespace DeNelle.Editor
             Vector3 sz = bounds.size;
             Vector3 ls = root.transform.lossyScale;
             col.size = new Vector3(
-                ls.x != 0f ? sz.x / ls.x : sz.x,
+                Mathf.Max(1.2f, (ls.x != 0f ? sz.x / ls.x : sz.x) * 0.8f),
                 ls.y != 0f ? sz.y / ls.y : sz.y,
-                ls.z != 0f ? sz.z / ls.z : sz.z);
+                Mathf.Max(1.2f, (ls.z != 0f ? sz.z / ls.z : sz.z) * 0.8f));
         }
 
         private static Bounds ComputeMeshBounds(GameObject go)
@@ -2953,7 +2963,7 @@ namespace DeNelle.Editor
             // the OTS camera doesn't spawn looking into a wall. World coords
             // chosen against the building manifest at lines 928 / 1042-1095:
             // nearest neighbour (Tavern at 11,-8.5) is ~10 m away, comfortable.
-            go.transform.position = new Vector3(5f, 0f, 0f);
+            go.transform.position = new Vector3(6f, 0f, 4f);
 
             // Hero body — KayKit Protagonist_A.fbx (Mystery Series 5). The
             // primitive Capsule stays on the root as an INVISIBLE collider so

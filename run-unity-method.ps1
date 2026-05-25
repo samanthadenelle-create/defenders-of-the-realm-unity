@@ -24,7 +24,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $proj       = $PSScriptRoot
 $hubEditors = 'C:\Program Files\Unity\Hub\Editor'
-$pinned     = '6000.4.7f1'
+$pinned     = '6000.4.8f1'
 
 # --- locate editor ------------------------------------------------------------
 $candidates = Get-ChildItem $hubEditors -Directory -ErrorAction SilentlyContinue |
