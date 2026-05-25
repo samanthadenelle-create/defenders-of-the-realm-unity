@@ -3417,11 +3417,21 @@ namespace DeNelle.Editor
 
             // Mark the walkable / obstacle geometry navigation-static. Renderers
             // under Ground / Roads / Approaches are the walkable floor; Walls /
-            // Gates / Buildings are obstacles the agents path around. Marking by
+            // Buildings are obstacles the agents path around. Marking by
             // GameObjectUtility static flags is what NavMeshBuilder reads.
+            //
+            // WO-27 fix: "Gates" is DELIBERATELY excluded. The KayKit gate arch
+            // (wall_straight_gate, scaled 4.5x) would voxelize into a navmesh wall
+            // across the opening, leaving the route blocked at every gate -- so an
+            // enemy could batter a gate down and STILL have no navmesh path through
+            // to the Heart. Enemies are held at a CLOSED gate by gameplay instead
+            // (Enemy.ProbeForStructure hits the Gate's blocker BoxCollider, which
+            // has no renderer and so never affects the bake); when the gate is
+            // destroyed they resume onto the continuous navmesh and pour through.
+            // The opening therefore must stay WALKABLE in the bake.
             string[] navStaticRoots =
             {
-                "Ground", "Roads", "Approaches", "Walls", "Gates", "Buildings",
+                "Ground", "Roads", "Approaches", "Walls", "Buildings",
             };
             foreach (var rootName in navStaticRoots)
             {
@@ -3458,7 +3468,8 @@ namespace DeNelle.Editor
 
             Debug.Log($"[VillageSceneBuilder] NavMesh baked -- {marked} renderer object(s) " +
                       "marked Navigation Static (Ground/Roads/Approaches walkable, " +
-                      "Walls/Gates/Buildings obstacles). Legacy UnityEditor.AI synchronous bake.");
+                      "Walls/Buildings obstacles; Gates left WALKABLE so enemies path " +
+                      "through once destroyed). Legacy UnityEditor.AI synchronous bake.");
         }
 
         // =====================================================================
