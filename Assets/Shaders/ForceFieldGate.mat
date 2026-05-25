@@ -25,7 +25,7 @@ Material:
     m_TexEnvs: []
     m_Ints: []
     m_Floats:
-    - _BaseAlpha: 0.42
+    - _BaseAlpha: 0.2
     - _Collapse: 0
     - _FresnelPower: 3
     - _PulseDepth: 0.12
