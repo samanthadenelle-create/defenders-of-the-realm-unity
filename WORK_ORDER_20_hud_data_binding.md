@@ -1,4 +1,4 @@
-# WORK ORDER 19 — HUD data binding: Heart HP + Crystals runtime push
+# WORK ORDER 20 — HUD data binding: Heart HP + Crystals runtime push
 
 **Date:** 2026-05-24 (filed as a follow-up from WO-10 smoke test; root-caused in WO-07)
 **Owner:** Samantha Denelle
@@ -31,7 +31,7 @@ This is the same class of gap WO-07 fixed for mana/ability-cooldown: the HUD set
 1. In Village playmode, the Heart HP bar drops when the Heart/a gate takes damage and rises on repair.
 2. The crystal counter reflects `GameState.Resources.Crystals` and updates on spend/earn.
 3. No gameplay-balance values changed; additive only.
-4. Build clean; `WORK_ORDER_19_hud_data_binding.RESULT.md` written.
+4. Build clean; `WORK_ORDER_20_hud_data_binding.RESULT.md` written.
 
 ## 4. Notes
 

@@ -23,7 +23,7 @@
 | Item | Mark | Basis |
 |---|---|---|
 | Village.unity loads w/o compile errors | ✅B | build SUCCEEDED building Village.unity; player boots Title clean (0 errors, WO-06) |
-| Heart HP bar 100/100, decreases on breach | ❌S | `SetHeartHp` has no runtime caller except DevPanel → bar won't update. **→ WO-19** |
+| Heart HP bar 100/100, decreases on breach | ❌S | `SetHeartHp` has no runtime caller except DevPanel → bar won't update. **→ WO-20** |
 | Wave counter ticks (1→…→apex 4) | 🟢S / 👁 | `WaveHudBridge` pushes `SetWave` (WO-07); progression through waves is 👁 |
 | 5-min countdown timer between waves | 🟢S / 👁 | same `SetWave(number,countdown)` path; actual countdown 👁 |
 | Hero renders (no magenta, no T-pose) | 👁 / ❌S | render 👁; **T-pose/no-walk is a known bug → WO-18** |
@@ -92,13 +92,13 @@
 
 - **✅B / 🟢S (build- or structurally-verified, high confidence):** 14 items
 - **👁 owner eyes-on required (not autonomously determinable):** ~30 items
-- **❌S static-confirmed problems:** 2 → **Heart HP/Crystals push (WO-19, new)**, **Hero walk animation (WO-18, pre-existing)**
+- **❌S static-confirmed problems:** 2 → **Heart HP/Crystals push (WO-20, new)**, **Hero walk animation (WO-18, pre-existing)**
 
 This is **not** a "44/44 green" pass — it is an honest map of what could be confirmed without eyes-on. The build is clean and every system's *code/wiring* that I traced (WO-05–08) is sound; the bulk of the checklist is runtime behaviour that needs a human (or a future `-bootScene` dev hook) to observe.
 
 ## Follow-up WOs created / referenced
 
-1. **WO-19 — `WORK_ORDER_19_hud_data_binding.md` (NEW):** Heart HP bar + Crystals counter have no runtime push (statically confirmed) → they show stale defaults. Mirror the WO-07 mana/cooldown bridge pattern.
+1. **WO-20 — `WORK_ORDER_20_hud_data_binding.md` (NEW):** Heart HP bar + Crystals counter have no runtime push (statically confirmed) → they show stale defaults. Mirror the WO-07 mana/cooldown bridge pattern.
 2. **WO-18 — hero walk animation (pre-existing in master):** "locomotion sets Speed but no clip plays / no `.controller`." Covers the Walk-animation + T-pose checklist items.
 
 ## Recommendation to make this WO fully executable next time
