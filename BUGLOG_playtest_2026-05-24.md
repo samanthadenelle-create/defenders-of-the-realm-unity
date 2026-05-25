@@ -50,7 +50,7 @@ Status: pet movement (#2) FIXED in code (Pet.cs — eased accel/decel + arrival 
 - #B hero static / no walk anim → **WO-18** (Mixamo round-trip — pre-existing).
 
 **NEEDS EYES-ON (couldn't root-cause blind):**
-- #H "no bar showing hero life / mana / pet status" → the heart-HP + mana bars DO exist in `VillageHud.uxml` and are now data-pushed (WO-07/20); there is no dedicated hero-health or pet-status element (design gap). Whether the existing bars are simply not visible vs. genuinely absent needs an eyes-on Village look (now that HUD clicks are fixed). Recheck after the HUD-click fix build.
+- #H "no bar showing hero life / mana / pet status" → **investigated (boot screenshot `wo-bugH-village-hud.png`): the HUD renders fine** (ability bar visible bottom-centre, buildings/hero/pets render). The Heart-HP ("Elarion") + mana panels exist in `VillageHud.uxml` and are now data-pushed (WO-07/20). What's genuinely missing is a **dedicated hero-character-health bar and a pet-status display** — neither exists in the HUD design. → **design gap, not a break.** Follow-up: add a hero-HP bar + pet-status widget to `VillageHud.uxml` + `VillageHudController` (small additive HUD WO; pet status would need a Pets→HUD bridge like the others). Not blocking.
 
 ## Fix routing
 - **Code/material (I can do now, no curated-scene edit):** #2 pets, #8 force-field transparency, #9 Spire collider (runtime-add), #A audio mixer params.
