@@ -93,15 +93,34 @@ namespace DeNelle.Village
             if (flatDir.sqrMagnitude > 0.001f)
                 root.transform.rotation = Quaternion.LookRotation(flatDir.normalized);
 
-            // Shared per-entrance URP material (emissive on, so the MPB accent reads).
-            Shader lit = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Sprites/Default");
-            Material mat = lit != null ? new Material(lit) : null;
-            if (mat != null) mat.EnableKeyword("_EMISSION");
-
             float h = _doorwayHeight;
-            BuildBox(root.transform, new Vector3(-0.9f, h * 0.5f, 0f), new Vector3(0.3f, h, 0.3f), mat);          // left post
-            BuildBox(root.transform, new Vector3(0.9f, h * 0.5f, 0f),  new Vector3(0.3f, h, 0.3f), mat);          // right post
-            BuildBox(root.transform, new Vector3(0f, h + 0.15f, 0f),   new Vector3(2.1f, 0.3f, 0.3f), mat);       // lintel
+
+            // Owner Tripo portal model replaces the placeholder doorway frame when
+            // present (Resources/Structures/Portal.fbx); falls back to the box
+            // posts + lintel otherwise. The cube fallback keeps dungeons reachable
+            // even if the art asset is missing on a fresh clone (gitignored).
+            var portalPrefab = Resources.Load<GameObject>("Structures/Portal");
+            if (portalPrefab != null)
+            {
+                var portal = Instantiate(portalPrefab, root.transform);
+                portal.name = "PortalVisual";
+                portal.transform.localPosition = Vector3.zero;
+                portal.transform.localRotation = Quaternion.identity;
+                FitHeight(portal, h * 1.8f);
+                foreach (var c in portal.GetComponentsInChildren<Collider>()) Destroy(c);
+                // Tripo FBX -> URP material fix at runtime (same net the gate uses).
+                portal.AddComponent<DeNelle.Core.TripoMaterialFixer>();
+            }
+            else
+            {
+                // Shared per-entrance URP material (emissive on, so the MPB accent reads).
+                Shader lit = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Sprites/Default");
+                Material mat = lit != null ? new Material(lit) : null;
+                if (mat != null) mat.EnableKeyword("_EMISSION");
+                BuildBox(root.transform, new Vector3(-0.9f, h * 0.5f, 0f), new Vector3(0.3f, h, 0.3f), mat);          // left post
+                BuildBox(root.transform, new Vector3(0.9f, h * 0.5f, 0f),  new Vector3(0.3f, h, 0.3f), mat);          // right post
+                BuildBox(root.transform, new Vector3(0f, h + 0.15f, 0f),   new Vector3(2.1f, 0.3f, 0.3f), mat);       // lintel
+            }
 
             BuildPrompt(root.transform, new Vector3(0f, h + 0.7f, 0f));
 
@@ -130,6 +149,19 @@ namespace DeNelle.Village
             go.transform.localPosition = localPos;
             go.transform.localScale = scale;
             if (mat != null) go.GetComponent<Renderer>().sharedMaterial = mat;
+        }
+
+        /// <summary>Uniformly scales <paramref name="go"/> so its combined renderer
+        /// bounds stand <paramref name="targetHeight"/> metres tall (Tripo models
+        /// import at arbitrary native sizes).</summary>
+        private static void FitHeight(GameObject go, float targetHeight)
+        {
+            var rends = go.GetComponentsInChildren<Renderer>();
+            if (rends.Length == 0) return;
+            var b = rends[0].bounds;
+            for (int i = 1; i < rends.Length; i++) b.Encapsulate(rends[i].bounds);
+            if (b.size.y > 0.001f)
+                go.transform.localScale *= targetHeight / b.size.y;
         }
 
         private static void BuildPrompt(Transform parent, Vector3 localPos)

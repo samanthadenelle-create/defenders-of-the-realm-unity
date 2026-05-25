@@ -1013,6 +1013,7 @@ namespace DeNelle.Editor
             public string Fbx;          // base name in buildings/<color>/
             public Color PlaceholderColor;
             public string FenceKind;    // "wood" or "stone"
+            public string CustomFbx;    // optional full asset path to a custom (Tripo) FBX; overrides Fbx/Building() when set
         }
 
         // Quadrant placements per spec §5. N = +Z. Curtain wall is [-28..+28] X,
@@ -1024,22 +1025,27 @@ namespace DeNelle.Editor
             // foraging"). Hero walks out the west or north gate to mine.
             new BuildingPlacement { Type = 0, Id = "crystal-mine", Label = "Crystal Mine",
                 X = -54f, Z = 20f, YawDeg = 135f, Fbx = "building_mine",
+                CustomFbx = "Assets/Art/TripoStructures/LumberMill.fbx",
                 PlaceholderColor = new Color(0.38f, 0.65f, 0.98f), FenceKind = "stone" },
             // Pet House — Southwest creek-side (§5).
             new BuildingPlacement { Type = 1, Id = "pet-house", Label = "Pet House",
                 X = -24f, Z = -16f, YawDeg = 55f, Fbx = "building_stables",
+                CustomFbx = "Assets/Art/TripoStructures/PetHome.fbx",
                 PlaceholderColor = new Color(0.98f, 0.82f, 0.48f), FenceKind = "wood" },
             // Arcane Tower — South-central, near the Keep (§5).
             new BuildingPlacement { Type = 2, Id = "arcane-tower", Label = "Arcane Tower",
                 X = 8f, Z = -20f, YawDeg = 0f, Fbx = "building_tower_A",
+                CustomFbx = "Assets/Art/TripoStructures/BuildTower.fbx",
                 PlaceholderColor = new Color(0.65f, 0.55f, 0.98f), FenceKind = "stone" },
             // Workshop — Northeast artisan district (§5).
             new BuildingPlacement { Type = 3, Id = "workshop", Label = "Workshop",
                 X = 22f, Z = 20f, YawDeg = 215f, Fbx = "building_workshop",
+                CustomFbx = "Assets/Art/TripoStructures/Forge.fbx",
                 PlaceholderColor = new Color(1f, 0.60f, 0.32f), FenceKind = "wood" },
             // Farm — East open ground (§5). Windmill mesh.
             new BuildingPlacement { Type = 4, Id = "farm", Label = "Farm",
                 X = 30f, Z = -4f, YawDeg = 270f, Fbx = "building_windmill",
+                CustomFbx = "Assets/Art/TripoStructures/Farm.fbx",
                 PlaceholderColor = new Color(1f, 0.85f, 0.54f), FenceKind = "wood" },
         };
 
@@ -1053,15 +1059,36 @@ namespace DeNelle.Editor
                 go.transform.position = new Vector3(b.X, 0f, b.Z);
                 go.transform.rotation = Quaternion.Euler(0f, b.YawDeg, 0f);
 
-                var model = LoadModel(Building(b.Fbx));
+                // Owner Tripo models override the KayKit mesh when CustomFbx is set.
+                bool custom = !string.IsNullOrEmpty(b.CustomFbx);
+                var model = LoadModel(custom ? b.CustomFbx : Building(b.Fbx));
                 GameObject visual = InstantiateModel(model,
-                    b.Fbx + "_" + BuildingColor + ".fbx", $"{b.Fbx} -> {b.Label}");
+                    custom ? System.IO.Path.GetFileName(b.CustomFbx)
+                           : b.Fbx + "_" + BuildingColor + ".fbx",
+                    $"{(custom ? b.CustomFbx : b.Fbx)} -> {b.Label}");
                 visual.transform.SetParent(go.transform, false);
                 if (model == null)
                 {
                     visual.transform.localScale = new Vector3(3f, 3f, 3f);
                     visual.transform.localPosition = new Vector3(0f, 1.5f, 0f);
                     ApplyColor(visual, b.PlaceholderColor);
+                }
+                else if (custom)
+                {
+                    // Owner Tripo building — imports at an arbitrary native size,
+                    // so normalize the longest dimension to ~7 m (reads as a 3x-
+                    // hero-height structure) and strip any native colliders /
+                    // rigidbody the Tripo import dropped on it (the plot footprint
+                    // BoxCollider added below is the single gameplay collider).
+                    NormalizeProp(visual, 7f);
+                    StripColliders(visual);
+                    StripRigidbodies(visual);
+                    // Runtime URP material fix — Tripo FBXs import with legacy
+                    // Phong/Standard materials that fall to magenta in the URP
+                    // player. The fixer rebuilds them as URP/Lit from the model's
+                    // basecolor at load (same safety net the gate + heroes use).
+                    var bFixer = FindType("DeNelle.Core.TripoMaterialFixer");
+                    if (bFixer != null) visual.AddComponent(bFixer);
                 }
                 else
                 {

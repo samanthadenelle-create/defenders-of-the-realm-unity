@@ -91,6 +91,14 @@ Thumbs.db
 /Assets/Models/
 /Assets/Models.meta
 
+# Owner Tripo art — large FBX kept local (same policy as Models/). The builder
+# bakes them by path; on a fresh clone re-copy from the owner's source folder
+# (the Portal falls back to a box doorway, buildings would need the re-copy).
+/Assets/Art/TripoStructures/
+/Assets/Art/TripoStructures.meta
+/Assets/Resources/Structures/
+/Assets/Resources/Structures.meta
+
 # === Session-noise / dev workflow (added 2026-05-20) ===
 # Stale build logs left behind by batch Unity invocations.
 build-*.log

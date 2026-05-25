@@ -62,6 +62,8 @@ namespace DeNelle.Editor
             "Assets/Resources/Pets/",
             "Assets/Resources/Heroes/",
             "Assets/Models/Cathedral/",
+            "Assets/Art/TripoStructures/",   // owner Tripo building models (farm/forge/etc.)
+            "Assets/Resources/Structures/",  // owner Tripo Portal_To_Dungeon (dungeon entrance)
         };
 
         /// <summary>Sentinel file appended next to a processed FBX so we only run once.</summary>
