@@ -118,9 +118,9 @@ namespace DeNelle.Editor
         private const float WallThicknessConst = 0.62f;
         private const float GateHalfWidthConst = 1.4f;
         // Curtain-wall half-extents — MUST mirror WallLayout.WallHalfX / WallHalfZ.
-        private const float WallHalfX = 42f;
-        private const float WallHalfZ = 33f;
-        private const float SouthBowDepth = 6f;
+        private const float WallHalfX = 28f;
+        private const float WallHalfZ = 21f;
+        private const float SouthBowDepth = 4f;
         // KayKit wall-piece yaw correction — owner-observed 2026-05-19 that the
         // straights sit ~90deg off and corners ~180deg off vs WallLayout's
         // local-X run assumption. Tunable; adjust against the screenshot.
@@ -344,7 +344,13 @@ namespace DeNelle.Editor
             // move without a baked NavMesh (week4-waves.md item 1). Done after
             // all geometry is placed + the scene is on disk, via the legacy
             // UnityEditor.AI API.
-            BakeVillageNavMesh(root);
+            // DOTR_SKIP_NAVMESH=1 skips the bake for crash-bisect builds only
+            // (the NavMeshSettings + baked NavMesh asset are an early-load suspect
+            // for the "level3 corrupted / Position out of bounds" player crash).
+            if (System.Environment.GetEnvironmentVariable("DOTR_SKIP_NAVMESH") == "1")
+                Debug.LogWarning("[VillageSceneBuilder] DOTR_SKIP_NAVMESH=1 — skipping NavMesh bake (crash-bisect test build).");
+            else
+                BakeVillageNavMesh(root);
 
             // ── Re-save so the baked-NavMesh scene reference is persisted ────
             EditorSceneManager.MarkSceneDirty(scene);
@@ -1024,27 +1030,27 @@ namespace DeNelle.Editor
             // 2026-05-20 ("move those mines outside the village for
             // foraging"). Hero walks out the west or north gate to mine.
             new BuildingPlacement { Type = 0, Id = "crystal-mine", Label = "Crystal Mine",
-                X = -54f, Z = 20f, YawDeg = 135f, Fbx = "building_mine",
+                X = -38f, Z = 14f, YawDeg = 135f, Fbx = "building_mine",
                 CustomFbx = "Assets/Art/TripoStructures/LumberMill.fbx",
                 PlaceholderColor = new Color(0.38f, 0.65f, 0.98f), FenceKind = "stone" },
             // Pet House — Southwest creek-side (§5).
             new BuildingPlacement { Type = 1, Id = "pet-house", Label = "Pet House",
-                X = -24f, Z = -16f, YawDeg = 55f, Fbx = "building_stables",
+                X = -17f, Z = -10.5f, YawDeg = 55f, Fbx = "building_stables",
                 CustomFbx = "Assets/Art/TripoStructures/PetHome.fbx",
                 PlaceholderColor = new Color(0.98f, 0.82f, 0.48f), FenceKind = "wood" },
             // Arcane Tower — South-central, near the Keep (§5).
             new BuildingPlacement { Type = 2, Id = "arcane-tower", Label = "Arcane Tower",
-                X = 8f, Z = -20f, YawDeg = 0f, Fbx = "building_tower_A",
+                X = 6f, Z = -12.5f, YawDeg = 0f, Fbx = "building_tower_A",
                 CustomFbx = "Assets/Art/TripoStructures/BuildTower.fbx",
                 PlaceholderColor = new Color(0.65f, 0.55f, 0.98f), FenceKind = "stone" },
             // Workshop — Northeast artisan district (§5).
             new BuildingPlacement { Type = 3, Id = "workshop", Label = "Workshop",
-                X = 22f, Z = 20f, YawDeg = 215f, Fbx = "building_workshop",
+                X = 16f, Z = 12.5f, YawDeg = 215f, Fbx = "building_workshop",
                 CustomFbx = "Assets/Art/TripoStructures/Forge.fbx",
                 PlaceholderColor = new Color(1f, 0.60f, 0.32f), FenceKind = "wood" },
             // Farm — East open ground (§5). Windmill mesh.
             new BuildingPlacement { Type = 4, Id = "farm", Label = "Farm",
-                X = 30f, Z = -4f, YawDeg = 270f, Fbx = "building_windmill",
+                X = 19f, Z = -1f, YawDeg = 270f, Fbx = "building_windmill",
                 CustomFbx = "Assets/Art/TripoStructures/Farm.fbx",
                 PlaceholderColor = new Color(1f, 0.85f, 0.54f), FenceKind = "wood" },
         };
@@ -1198,45 +1204,45 @@ namespace DeNelle.Editor
             var residential = NewChild(parent, "Residential-SW");
             var residentialDefs = new[]
             {
-                new DressDef { Name = "Home-A1", Fbx = "building_home_A", X = -40f, Z = -10f, Yaw = 70f, PlaceholderColor = C("d8c69a") },
-                new DressDef { Name = "Home-A2", Fbx = "building_home_A", X = -40f, Z = -22f, Yaw = 95f, PlaceholderColor = C("d8c69a") },
-                new DressDef { Name = "Home-A3", Fbx = "building_home_A", X = -18f, Z = -30f, Yaw = 160f, PlaceholderColor = C("d8c69a") },
-                new DressDef { Name = "Home-B1", Fbx = "building_home_B", X = -30f, Z = -30f, Yaw = 200f, PlaceholderColor = C("c9b48a") },
-                new DressDef { Name = "Home-B2", Fbx = "building_home_B", X = -40f, Z = -32f, Yaw = 25f, PlaceholderColor = C("c9b48a") },
-                new DressDef { Name = "Home-B3", Fbx = "building_home_B", X = -18f, Z = -18f, Yaw = 120f, PlaceholderColor = C("c9b48a") },
+                new DressDef { Name = "Home-A1", Fbx = "building_home_A", X = -30f, Z = -8f, Yaw = 70f, PlaceholderColor = C("d8c69a") },
+                new DressDef { Name = "Home-A2", Fbx = "building_home_A", X = -30f, Z = -18f, Yaw = 95f, PlaceholderColor = C("d8c69a") },
+                new DressDef { Name = "Home-A3", Fbx = "building_home_A", X = -14f, Z = -22f, Yaw = 160f, PlaceholderColor = C("d8c69a") },
+                new DressDef { Name = "Home-B1", Fbx = "building_home_B", X = -22f, Z = -23f, Yaw = 200f, PlaceholderColor = C("c9b48a") },
+                new DressDef { Name = "Home-B2", Fbx = "building_home_B", X = -32f, Z = -23f, Yaw = 25f, PlaceholderColor = C("c9b48a") },
+                new DressDef { Name = "Home-B3", Fbx = "building_home_B", X = -14f, Z = -14f, Yaw = 120f, PlaceholderColor = C("c9b48a") },
             };
             foreach (var d in residentialDefs) PlaceDressing(residential, d, false);
             PlaceDressing(residential,
-                new DressDef { Name = "Well", Fbx = "building_well", X = -30f, Z = -20f, Yaw = 0f, PlaceholderColor = C("8aa0b0") },
+                new DressDef { Name = "Well", Fbx = "building_well", X = -23f, Z = -16f, Yaw = 0f, PlaceholderColor = C("8aa0b0") },
                 false);
 
             // ── §6.2 Market quarter (around the plaza, south) ────────────────
             var market = NewChild(parent, "Market-S");
             PlaceDressing(market,
-                new DressDef { Name = "Market", Fbx = "building_market", X = -10f, Z = -22f, Yaw = 10f, PlaceholderColor = C("c98f4a") },
+                new DressDef { Name = "Market", Fbx = "building_market", X = -4f, Z = -13f, Yaw = 10f, PlaceholderColor = C("c98f4a") },
                 false);
             PlaceDressing(market,
-                new DressDef { Name = "Tavern", Fbx = "building_tavern", X = 22f, Z = -20f, Yaw = 250f, PlaceholderColor = C("b5793c") },
+                new DressDef { Name = "Tavern", Fbx = "building_tavern", X = 16f, Z = -12f, Yaw = 250f, PlaceholderColor = C("b5793c") },
                 false);
             PlaceDressing(market,
-                new DressDef { Name = "Church", Fbx = "building_church", X = -8f, Z = 22f, Yaw = 185f, PlaceholderColor = C("d7d2c4") },
+                new DressDef { Name = "Church", Fbx = "building_church", X = -3f, Z = 14f, Yaw = 185f, PlaceholderColor = C("d7d2c4") },
                 false);
 
             // ── §6.3 Workshop quarter (NE) — blacksmith + townhall ───────────
             var workshopQ = NewChild(parent, "Workshop-NE");
             PlaceDressing(workshopQ,
-                new DressDef { Name = "Blacksmith", Fbx = "building_blacksmith", X = 40f, Z = 22f, Yaw = 230f, PlaceholderColor = C("8a7d6a") },
+                new DressDef { Name = "Blacksmith", Fbx = "building_blacksmith", X = 30f, Z = 13f, Yaw = 230f, PlaceholderColor = C("8a7d6a") },
                 false);
             PlaceDressing(workshopQ,
-                new DressDef { Name = "Townhall", Fbx = "building_townhall", X = 32f, Z = 12f, Yaw = 200f, PlaceholderColor = C("c2b79a") },
+                new DressDef { Name = "Townhall", Fbx = "building_townhall", X = 16f, Z = 12f, Yaw = 200f, PlaceholderColor = C("c2b79a") },
                 false);
-            BuildWorkshopYard(workshopQ, new Vector3(36f, 0f, 22f));
+            BuildWorkshopYard(workshopQ, new Vector3(27f, 0f, 13f));
 
             // ── §6.4 Farm / orchard (E) — orchard tiles + farmer's hut ───────
             var orchard = NewChild(parent, "Orchard-E");
-            BuildOrchard(orchard, new Vector3(38f, 0f, -6f));
+            BuildOrchard(orchard, new Vector3(26f, 0f, -1f));
             PlaceDressing(orchard,
-                new DressDef { Name = "FarmersHut", Fbx = "building_home_A", X = 40f, Z = -24f, Yaw = 290f, PlaceholderColor = C("d8c69a") },
+                new DressDef { Name = "FarmersHut", Fbx = "building_home_A", X = 31f, Z = -14f, Yaw = 290f, PlaceholderColor = C("d8c69a") },
                 false);
 
             // ── §6.5 Northern open ground ────────────────────────────────────

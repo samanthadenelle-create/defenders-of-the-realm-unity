@@ -22,11 +22,14 @@ namespace DeNelle.Editor
         private const string OutputDir = "Assets/_Modules/Onboarding/Resources/HeroPortraits";
         private const int PortraitSize = 512;
 
+        // Render the portraits from the ACTUAL in-game hero bodies (Resources/Heroes
+        // — the owner's Tripo models). The old Assets/Models/* paths are gitignored
+        // and absent, so portraits were not matching (or not generating) the bodies.
         private static readonly (string Slug, string FbxPath)[] Heroes =
         {
-            ("mage",   "Assets/Models/Wizard/Wizard.fbx"),
-            ("knight", "Assets/Models/Knight/Knight.fbx"),
-            ("ranger", "Assets/Models/Ranger/Ranger.fbx"),
+            ("mage",   "Assets/Resources/Heroes/Mage.fbx"),
+            ("knight", "Assets/Resources/Heroes/Knight.fbx"),
+            ("ranger", "Assets/Resources/Heroes/Ranger.fbx"),
         };
 
         [MenuItem("Defenders/Onboarding/Generate Hero Portraits")]

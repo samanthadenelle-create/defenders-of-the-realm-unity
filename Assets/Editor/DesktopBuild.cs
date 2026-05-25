@@ -49,6 +49,36 @@ namespace DeNelle.Editor
             foreach (string s in scenes)
                 Debug.Log($"[DesktopBuild]   scene: {s}");
 
+            // Crash mitigation (2026-05-25): the WO-26 village carries ~5000+
+            // BatchingStatic tiles. Static Batching combines them at build time, and
+            // that combined-mesh serialization produced a CORRUPT level3 — the player
+            // hard-crashes on Village load with "The file 'level3' is corrupted! …
+            // [Position out of bounds!]". Disable Static Batching for the build so the
+            // scene serializes per-renderer (GPU instancing on the materials still
+            // collapses draw calls). SetBatchingForPlatform is historically internal,
+            // so reach it by reflection.
+            try
+            {
+                var setBatching = typeof(PlayerSettings).GetMethod("SetBatchingForPlatform",
+                    System.Reflection.BindingFlags.Static
+                    | System.Reflection.BindingFlags.Public
+                    | System.Reflection.BindingFlags.NonPublic);
+                if (setBatching != null)
+                {
+                    // Overload takes BuildTarget (not BuildTargetGroup): (BuildTarget, staticBatching, dynamicBatching)
+                    setBatching.Invoke(null, new object[] { BuildTarget.StandaloneWindows64, 0, 1 }); // static OFF, dynamic ON
+                    Debug.Log("[DesktopBuild] Static Batching DISABLED for StandaloneWindows64 (level3-corruption mitigation).");
+                }
+                else
+                {
+                    Debug.LogWarning("[DesktopBuild] PlayerSettings.SetBatchingForPlatform not found — static batching left unchanged.");
+                }
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning($"[DesktopBuild] Could not toggle static batching: {e.Message}");
+            }
+
             var options = new BuildPlayerOptions
             {
                 scenes = scenes,

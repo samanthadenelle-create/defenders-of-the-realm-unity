@@ -123,16 +123,16 @@ namespace DeNelle.Village
         // The wall LINE sits a little outside the buildable interior.
 
         /// <summary>Half the wall's east-west extent (world units). The wall is wider E-W.</summary>
-        public const float WallHalfX = 42f;
+        public const float WallHalfX = 28f;
 
         /// <summary>Half the wall's north-south extent (world units).</summary>
-        public const float WallHalfZ = 33f;
+        public const float WallHalfZ = 21f;
 
         /// <summary>How far the south side bows OUTWARD (−Z) to frame the orchard / Farm (spec §4.2).</summary>
-        public const float SouthBowDepth = 6f;
+        public const float SouthBowDepth = 4f;
 
         /// <summary>Half-width (along X) of the flat face of the south bow-out.</summary>
-        public const float SouthBowHalfWidth = 13f;
+        public const float SouthBowHalfWidth = 9f;
 
         /// <summary>Half-width (world units) of a gate opening. Kept from the square layout.</summary>
         public const float GateHalfWidth = 1.4f;
