@@ -838,7 +838,10 @@ namespace DeNelle.Editor
             // mage mesh) is wired by the playable build; the dungeon scene only
             // needs a transform target. The capsule is sized to the mage mesh.
             var body = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-            body.name = "KeeperBody";
+            // Named "HeroBody" so HeroBodySwapper (added below) finds + replaces this
+            // placeholder capsule with the player's real animated class FBX at run
+            // time — the dungeon hero is no longer a "pill" (owner WO-35).
+            body.name = "HeroBody";
             body.transform.SetParent(heroGo.transform, false);
             body.transform.localPosition = new Vector3(0f, 0.95f, 0f);
             // The visual capsule must NOT collide — the CharacterController IS the
@@ -862,6 +865,13 @@ namespace DeNelle.Editor
             // reference DeNelle.Dungeons. The controller auto-finds it on the
             // hero rig; the explicit wire in WireController is belt-and-braces.
             AddDungeonComponent(heroGo, TypeDungeonHero);
+            // Swap the placeholder capsule for the player's real animated hero body
+            // (Mage/Knight/Ranger) at runtime — same component the village uses, so
+            // the dungeon hero matches the village hero instead of being a capsule.
+            // Reflection-added (Editor asmdef can't reference DeNelle.Village); it
+            // reads the persisted HeroClass, falls back to the capsule if the FBX is
+            // missing, and strips embedded cameras/lights off the body.
+            AddComponentByName(heroGo, "DeNelle.Village.HeroBodySwapper");
             return heroGo;
         }
 

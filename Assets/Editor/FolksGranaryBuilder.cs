@@ -547,7 +547,9 @@ namespace DeNelle.Editor
             heroGo.transform.rotation = Quaternion.Euler(0f, 90f, 0f);
 
             var body = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-            body.name = "DungeonHeroBody";
+            // "HeroBody" so HeroBodySwapper (added below) replaces this capsule with
+            // the player's real animated class FBX at runtime (owner WO-35: no pill).
+            body.name = "HeroBody";
             body.transform.SetParent(heroGo.transform, false);
             body.transform.localPosition = new Vector3(0f, 0.95f, 0f);
             StripColliders(body);
@@ -566,6 +568,8 @@ namespace DeNelle.Editor
             // The DungeonHero locomotion (WASD + tap-to-move). Added by
             // reflection — DeNelle.Editor doesn't reference DeNelle.Dungeons.
             AddComponentByName(heroGo, TypeDungeonHero);
+            // Real hero body at runtime (Mage/Knight/Ranger) instead of the capsule.
+            AddComponentByName(heroGo, "DeNelle.Village.HeroBodySwapper");
             return heroGo;
         }
 
