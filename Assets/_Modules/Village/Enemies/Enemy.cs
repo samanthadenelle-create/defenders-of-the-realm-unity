@@ -365,7 +365,7 @@ namespace DeNelle.Village
             _hp = Mathf.Max(0f, _hp - amount);
             if (_hp <= 0f)
             {
-                Die();
+                Die(killed: true);
             }
             else if (_animator != null)
             {
@@ -377,15 +377,25 @@ namespace DeNelle.Village
         /// <summary>Kills the enemy immediately (e.g. consumed into an ATB breach).</summary>
         public void Kill()
         {
-            if (!_dead) Die();
+            if (!_dead) Die(killed: false);
         }
 
-        private void Die()
+        /// <param name="killed">
+        /// True when HP reached zero (a real defender kill — grants shared XP);
+        /// false when force-removed (ATB breach) — no XP, just drop its ledger.
+        /// </param>
+        private void Die(bool killed)
         {
             _dead = true;
             if (_agent != null && _agent.isOnNavMesh) _agent.isStopped = true;
             _currentTarget = null;
             Died?.Invoke(this);
+
+            // Kill-XP attribution: a genuine kill shares this enemy's XP across
+            // the combatants that damaged it; a forced removal (breach) just
+            // discards its damage ledger so nothing leaks and no XP is granted.
+            if (killed) DeNelle.Village.Progression.ProgressionManager.ReportKill(this);
+            else DeNelle.Core.Combat.DamageAttribution.Forget(this);
 
             // Play the death (collapse) animation, then destroy. The Dead bool
             // latches the controller's Death state from anywhere; the GameObject

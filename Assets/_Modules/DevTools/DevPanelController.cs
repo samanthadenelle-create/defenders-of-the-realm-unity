@@ -273,6 +273,8 @@ namespace DeNelle.DevTools
             AddButton(resources, "+500 Stone/Iron/Wood", GiveBuildMaterials);
             AddButton(resources, "+5 Wisdom (talents)", () => GiveWisdom(5));
             AddButton(resources, "+25 Wisdom (talents)", () => GiveWisdom(25));
+            AddButton(resources, "+150 XP (hero)", () => GiveHeroXp(150f));
+            AddButton(resources, "Level up hero", LevelHero);
 
             // ── ENTITLEMENTS ─────────────────────────────────────────────────
             var entitlements = AddGroup("Grant pack / entitlement");
@@ -428,6 +430,30 @@ namespace DeNelle.DevTools
             if (svc == null) { SetStatus("WisdomCurrencyService not in scene yet."); return; }
             svc.Grant(amount);
             SetStatus($"Gave {amount} Wisdom — now {svc.Wisdom}.");
+        }
+
+        /// <summary>Grants the hero raw XP for fast level/progression testing.</summary>
+        private void GiveHeroXp(float amount)
+        {
+            var hp = UnityEngine.Object.FindAnyObjectByType<DeNelle.Village.HeroProgression>();
+            if (hp == null) { SetStatus("HeroProgression not in scene yet."); return; }
+            int levels = hp.AddXp(amount);
+            if (levels > 0)
+                DeNelle.Village.DamageNumberSpawner.SpawnLabel(
+                    $"LEVEL UP!  Lv.{hp.Level}", hp.WorldPosition, new Color(0.45f, 1f, 0.55f, 1f), 1.4f);
+            SetStatus($"Gave {amount:0} XP — hero is Lv.{hp.Level}"
+                      + (levels > 0 ? $" (+{levels} level)" : "") + ".");
+        }
+
+        /// <summary>Forces one hero level (also grants its Wisdom + stat bonus).</summary>
+        private void LevelHero()
+        {
+            var hp = UnityEngine.Object.FindAnyObjectByType<DeNelle.Village.HeroProgression>();
+            if (hp == null) { SetStatus("HeroProgression not in scene yet."); return; }
+            hp.AddXp(hp.XpToNext + 1f);
+            DeNelle.Village.DamageNumberSpawner.SpawnLabel(
+                $"LEVEL UP!  Lv.{hp.Level}", hp.WorldPosition, new Color(0.45f, 1f, 0.55f, 1f), 1.4f);
+            SetStatus($"Hero leveled to Lv.{hp.Level}.");
         }
 
         /// <summary>Tops up the gathered build materials (Stone / Iron / Wood).</summary>

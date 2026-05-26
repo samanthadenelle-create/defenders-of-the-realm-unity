@@ -89,6 +89,13 @@ namespace DeNelle.Pets
 
         private float _attackCdRemaining;
 
+        // ── Level progression (PetProgression drives these) ──────────────────
+        // Stat multipliers from the pet's level. Default 1 (level 1 = base def
+        // stats). _baseMaxHp captures the configured max so HP scaling is applied
+        // off the base, not compounded each level.
+        private float _progressionDmgMult = 1f;
+        private float _baseMaxHp;
+
         // ── Natural locomotion (additive) ────────────────────────────────────
         // MoveToward eases speed up/down through _currentSpeed instead of
         // snapping to the full step, so pets accelerate out of rest, coast,
@@ -316,11 +323,34 @@ namespace DeNelle.Pets
             return best;
         }
 
+        /// <summary>
+        /// Applies a level-progression stat bonus (called by PetProgression on
+        /// level-up). Damage scales the per-hit damage; HP scales max HP off the
+        /// configured base, preserving the current HP fraction so a level-up does
+        /// not heal or hurt the pet.
+        /// </summary>
+        public void SetProgressionMultipliers(float damageMult, float hpMult)
+        {
+            _progressionDmgMult = Mathf.Max(1f, damageMult);
+
+            if (_baseMaxHp <= 0f) _baseMaxHp = _maxHp;   // capture the configured max once
+            float newMax = _baseMaxHp * Mathf.Max(1f, hpMult);
+            float frac = _maxHp > 0f ? _hp / _maxHp : 1f;
+            _maxHp = newMax;
+            _hp = newMax * frac;
+        }
+
         /// <summary>Lands one attack on <paramref name="foe"/> and resets the attack cooldown.</summary>
         private void Attack(IDamageable foe)
         {
             _attackCdRemaining = _attackCooldown;
-            foe.TakeDamage(_attackDamage, _element);
+            float dealt = _attackDamage * _progressionDmgMult;
+            foe.TakeDamage(dealt, _element);
+
+            // Kill-XP attribution: credit this pet's damage so it earns its share
+            // of the enemy's XP when it dies (DamageAttribution lives in Core, so
+            // Pets writes to it without referencing Village).
+            DeNelle.Core.Combat.DamageAttribution.Record(foe, _petId, dealt);
 
             // Small element-coloured hit spark, reusing the hero ability VFX kit
             // via reflection (owner WO-35: pet hits had no VFX).

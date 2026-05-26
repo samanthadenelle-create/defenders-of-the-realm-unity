@@ -203,6 +203,11 @@ namespace DeNelle.Village
         //  Effect resolution — line-equivalent to castAbility.ts.
         // =====================================================================
 
+        // Cached level-progression on the hero (added at runtime by
+        // ProgressionManager). Its DamageMultiplier scales ability damage on top
+        // of the talent multiplier; resolved lazily so it survives the body swap.
+        private HeroProgression _progression;
+
         private void ResolveEffect(AbilityDef def, Vector3 origin)
         {
             DamageElement element = ElementOf(def);
@@ -212,7 +217,10 @@ namespace DeNelle.Village
             // 1f when nothing is unlocked, so the abilities.json baseline holds
             // until the player learns a damage node. NOTE: the Heal case below
             // deliberately uses raw def.Damage (heal amount), not this scalar.
-            float dmg = def.Damage * HeroTalentModifiers.DamageMultiplier(_heroClass);
+            // The level-progression multiplier stacks on top (1f until level 2+).
+            if (_progression == null) _progression = GetComponent<HeroProgression>();
+            float levelMult = _progression != null ? _progression.DamageMultiplier : 1f;
+            float dmg = def.Damage * HeroTalentModifiers.DamageMultiplier(_heroClass) * levelMult;
 
             switch (def.EffectEnum)
             {
@@ -231,6 +239,7 @@ namespace DeNelle.Village
                     if (foe != null)
                     {
                         foe.TakeDamage(dmg, element);
+                        DeNelle.Core.Combat.DamageAttribution.Record(foe, HeroProgression.Id, dmg);
                         if (def.EffectEnum == AbilityEffect.Snare)
                             foe.ApplyStatus(StatusEffect.Slow, 2.5f); // castAbility.ts snare
                     }
@@ -274,6 +283,7 @@ namespace DeNelle.Village
                 // OverlapSphere is centre-distance; castAbility.ts hypot()'s the
                 // same way, so no extra precision pass is needed.
                 target.TakeDamage(damage, element);
+                DeNelle.Core.Combat.DamageAttribution.Record(target, HeroProgression.Id, damage);
                 if (freezeSeconds > 0f)
                     target.ApplyStatus(StatusEffect.Freeze, freezeSeconds);
             }
