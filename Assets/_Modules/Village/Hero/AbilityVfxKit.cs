@@ -81,27 +81,212 @@ namespace DeNelle.Village
         }
 
         /// <summary>
-        /// WO-37: class-flavoured wrapper. Keeps each effect's per-kind treatment
-        /// but shifts the palette toward the hero class — a Knight's blow reads
-        /// steel-gold, a Ranger's leaf-green, a Mage keeps the ability's element
-        /// colour. Deliberately a SEPARATE method from <see cref="SpawnAbilityVfx"/>
-        /// so PetAttackVfxBridge's 5-arg reflection bind on "SpawnAbilityVfx" stays
+        /// WO-37: class-flavoured dispatch. Each hero class now gets a real,
+        /// distinct SHAPE — not just a recolour — so the VFX reads as the class's
+        /// own attack:
+        ///   Knight → heavy MELEE: ground impact/shockwave ring + bright sparks +
+        ///            a short flash, steel-gold. NEVER the long arcane tracer.
+        ///   Ranger → tight ARROW: a fast thin green streak to the foe + a small
+        ///            leaf-green impact burst, leaf-green palette.
+        ///   Mage / default → the existing arcane <see cref="SpawnAbilityVfx"/>.
+        /// Deliberately a SEPARATE method from <see cref="SpawnAbilityVfx"/> so
+        /// PetAttackVfxBridge's 5-arg reflection bind on "SpawnAbilityVfx" stays
         /// unambiguous (adding an overload there would break it).
         /// </summary>
         public static void SpawnAbilityVfxForClass(AbilityEffect kind, Color color, Vector3 position,
                                                    float radius, Vector3 targetHint, string heroClass)
         {
-            SpawnAbilityVfx(kind, TuneColorForClass(color, heroClass), position, radius, targetHint);
-        }
-
-        private static Color TuneColorForClass(Color baseColor, string heroClass)
-        {
             switch ((heroClass ?? string.Empty).ToLowerInvariant())
             {
-                case "knight": return Color.Lerp(baseColor, new Color(0.92f, 0.86f, 0.70f), 0.5f); // steel-gold
-                case "ranger": return Color.Lerp(baseColor, new Color(0.48f, 0.95f, 0.55f), 0.5f); // leaf-green
-                default:       return baseColor;                                                    // mage = element colour
+                case "knight":
+                    SpawnKnightVfx(kind, color, position, radius, targetHint);
+                    break;
+                case "ranger":
+                    SpawnRangerVfx(kind, color, position, radius, targetHint);
+                    break;
+                default: // mage = the ability's element colour, full arcane treatment
+                    SpawnAbilityVfx(kind, color, position, radius, targetHint);
+                    break;
             }
+        }
+
+        // ── Knight — heavy melee, no arcane tracer ─────────────────────────────
+        private static void SpawnKnightVfx(AbilityEffect kind, Color color, Vector3 position,
+                                           float radius, Vector3 targetHint)
+        {
+            // Steel-gold palette regardless of the incoming element colour.
+            Color steel = new Color(0.92f, 0.86f, 0.70f);
+            Color core = Color.Lerp(steel, Color.white, 0.6f);
+            Color body = new Color(steel.r, steel.g, steel.b, 1f);
+            Color edge = new Color(steel.r * 0.5f, steel.g * 0.46f, steel.b * 0.38f, 1f); // dark steel
+            float r = Mathf.Max(0.6f, radius);
+
+            var host = new GameObject("AbilityVFX_Knight_" + kind);
+            host.transform.position = position;
+
+            switch (kind)
+            {
+                // Single-target blows → impact shockwave ring at the foe + sparks.
+                case AbilityEffect.Strike:
+                case AbilityEffect.Snare:
+                {
+                    Vector3 hit = (targetHint - position).sqrMagnitude > 0.04f ? targetHint : position;
+                    BuildKnightImpact(host, core, body, edge, hit);
+                    if (kind == AbilityEffect.Snare)
+                        BuildGroundRing(host, core, body, hit, 0.7f, 1.0f, 24, 0f);
+                    FlashLight(host, body, hit, 7f, 4f, 0.18f);
+                    break;
+                }
+                // Sweeping blows → a heavier nova (more shards, lower arc, gold).
+                case AbilityEffect.Aoe:
+                    BuildNova(host, core, body, edge, position, r, 1.4f);
+                    BuildKnightImpact(host, core, body, edge, position);
+                    FlashLight(host, core, position, 9f, r + 2f, 0.3f);
+                    break;
+                case AbilityEffect.Cleave:
+                    BuildNova(host, core, body, edge, position, r, 1.2f);
+                    BuildKnightImpact(host, core, body, edge, position);
+                    FlashLight(host, body, position, 8f, r + 2f, 0.22f);
+                    break;
+                // Utility kinds have no melee analogue → keep the base shape, gold.
+                case AbilityEffect.Heal:
+                    BuildHeal(host, core, body, position, r);
+                    FlashLight(host, body, position + Vector3.up, 4f, r + 1f, 1.0f);
+                    break;
+                case AbilityEffect.Meteor:
+                    BuildMeteor(host, core, body, edge, position, r);
+                    FlashLight(host, body, position, 12f, r + 4f, 0.4f);
+                    break;
+                default:
+                    BuildKnightImpact(host, core, body, edge, position);
+                    FlashLight(host, body, position, 7f, r + 2f, 0.25f);
+                    break;
+            }
+
+            foreach (var ps in host.GetComponentsInChildren<ParticleSystem>()) ps.Play();
+            Object.Destroy(host, 2.6f);
+        }
+
+        /// <summary>A grounded shockwave ring + a bright spark fan — a steel blow
+        /// landing, no long tracer.</summary>
+        private static void BuildKnightImpact(GameObject host, Color core, Color body, Color edge, Vector3 at)
+        {
+            // Flat ground shockwave ring expanding from the impact point.
+            var ring = NewPS(host, "KnightShock", at + Vector3.up * 0.05f);
+            var rm = ring.main; rm.startLifetime = 0.4f; rm.startSpeed = 6f; rm.startSize = 0.3f;
+            var rsh = ring.shape; rsh.enabled = true; rsh.shapeType = ParticleSystemShapeType.Circle;
+            rsh.radius = 0.3f; rsh.radiusThickness = 0f; rsh.rotation = new Vector3(90f, 0f, 0f);
+            Burst(ring, 36);
+            SizeOverLife(ring, 1f, 0.2f);
+            ApplyCOL(ring, Color.white, body, edge);
+
+            // Bright spark fan kicked up by the blow (gravity-pulled).
+            var spark = NewPS(host, "KnightSparks", at + Vector3.up * 0.1f);
+            var sm = spark.main;
+            sm.startLifetime = new ParticleSystem.MinMaxCurve(0.2f, 0.4f);
+            sm.startSpeed = new ParticleSystem.MinMaxCurve(5f, 10f);
+            sm.startSize = new ParticleSystem.MinMaxCurve(0.08f, 0.16f);
+            sm.gravityModifier = 1.2f;
+            var ssh = spark.shape; ssh.enabled = true; ssh.shapeType = ParticleSystemShapeType.Hemisphere; ssh.radius = 0.25f;
+            Burst(spark, 22);
+            Stretch(spark, 0.06f, 2.2f); // little flying sparks read as streaks
+            ApplyCOL(spark, core, body, edge);
+        }
+
+        // ── Ranger — a tight, fast arrow ───────────────────────────────────────
+        private static void SpawnRangerVfx(AbilityEffect kind, Color color, Vector3 position,
+                                           float radius, Vector3 targetHint)
+        {
+            // Leaf-green palette regardless of the incoming element colour.
+            Color leaf = new Color(0.48f, 0.95f, 0.55f);
+            Color core = Color.Lerp(leaf, Color.white, 0.6f);
+            Color body = new Color(leaf.r, leaf.g, leaf.b, 1f);
+            Color edge = new Color(leaf.r * 0.45f, leaf.g * 0.55f, leaf.b * 0.42f, 1f);
+            float r = Mathf.Max(0.6f, radius);
+
+            var host = new GameObject("AbilityVFX_Ranger_" + kind);
+            host.transform.position = position;
+
+            switch (kind)
+            {
+                // Aimed shots → a thin fast streak + a small leaf burst at impact.
+                case AbilityEffect.Strike:
+                case AbilityEffect.Snare:
+                {
+                    BuildRangerArrow(host, core, body, edge, position, targetHint);
+                    if (kind == AbilityEffect.Snare)
+                    {
+                        Vector3 hit = (targetHint - position).sqrMagnitude > 0.04f ? targetHint : position;
+                        BuildGroundRing(host, core, body, hit, 0.7f, 1.0f, 24, 0f);
+                    }
+                    FlashLight(host, body, targetHint, 5f, 3f, 0.14f);
+                    break;
+                }
+                // Volleys → arrow plus the base nova, leaf-green.
+                case AbilityEffect.Aoe:
+                    BuildRangerArrow(host, core, body, edge, position, targetHint);
+                    BuildNova(host, core, body, edge, position, r, 1.1f);
+                    FlashLight(host, core, position, 7f, r + 2f, 0.3f);
+                    break;
+                case AbilityEffect.Cleave:
+                    BuildRangerArrow(host, core, body, edge, position, targetHint);
+                    BuildNova(host, core, body, edge, position, r, 0.9f);
+                    FlashLight(host, body, position, 6f, r + 2f, 0.22f);
+                    break;
+                case AbilityEffect.Heal:
+                    BuildHeal(host, core, body, position, r);
+                    FlashLight(host, body, position + Vector3.up, 4f, r + 1f, 1.0f);
+                    break;
+                case AbilityEffect.Meteor:
+                    BuildMeteor(host, core, body, edge, position, r);
+                    FlashLight(host, body, position, 12f, r + 4f, 0.4f);
+                    break;
+                default:
+                    BuildRangerArrow(host, core, body, edge, position, targetHint);
+                    FlashLight(host, body, targetHint, 5f, r + 2f, 0.18f);
+                    break;
+            }
+
+            foreach (var ps in host.GetComponentsInChildren<ParticleSystem>()) ps.Play();
+            Object.Destroy(host, 2.6f);
+        }
+
+        /// <summary>A single tight thin arrow streak to the foe + a small green
+        /// leaf-scatter at the impact point.</summary>
+        private static void BuildRangerArrow(GameObject host, Color core, Color body, Color edge,
+                                             Vector3 origin, Vector3 target)
+        {
+            Vector3 dir = target - origin; dir.y = 0f;
+            bool hasFoe = dir.sqrMagnitude > 0.04f;
+            if (!hasFoe) dir = Vector3.forward;
+            dir.Normalize();
+
+            // Thin fast streak — narrower cone, smaller size, longer stretch than
+            // the Mage tracer so it reads as a single arrow, not a spray.
+            var arrow = NewPS(host, "ArrowStreak", origin + Vector3.up * 0.6f);
+            arrow.transform.rotation = Quaternion.LookRotation(dir, Vector3.up);
+            var am = arrow.main;
+            am.startLifetime = 0.14f;
+            am.startSpeed = new ParticleSystem.MinMaxCurve(24f, 28f);
+            am.startSize = new ParticleSystem.MinMaxCurve(0.06f, 0.1f); // thinner than Strike's 0.12-0.22
+            var ash = arrow.shape; ash.enabled = true; ash.shapeType = ParticleSystemShapeType.Cone;
+            ash.angle = 0.6f; ash.radius = 0.02f; // very tight
+            Burst(arrow, 5);
+            Stretch(arrow, 0.07f, 3.4f); // long, lean streak
+            ApplyCOL(arrow, core, body, edge);
+
+            // Small leaf-green burst where the arrow lands.
+            Vector3 hit = hasFoe ? target : origin + dir * 1.5f;
+            var leaves = NewPS(host, "LeafBurst", hit + Vector3.up * 0.4f);
+            var lm = leaves.main;
+            lm.startLifetime = new ParticleSystem.MinMaxCurve(0.3f, 0.5f);
+            lm.startSpeed = new ParticleSystem.MinMaxCurve(1.5f, 3.5f);
+            lm.startSize = new ParticleSystem.MinMaxCurve(0.08f, 0.14f);
+            lm.gravityModifier = 0.5f;
+            var lsh = leaves.shape; lsh.enabled = true; lsh.shapeType = ParticleSystemShapeType.Sphere; lsh.radius = 0.12f;
+            Burst(leaves, 12);
+            SizeOverLife(leaves, 1f, 0f);
+            ApplyCOL(leaves, core, body, edge);
         }
 
         // ── shared builders ────────────────────────────────────────────────────

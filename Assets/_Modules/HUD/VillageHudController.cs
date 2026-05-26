@@ -165,10 +165,23 @@ namespace DeNelle.HUD
             public VisualElement Slot;
             public VisualElement CooldownFill;
             public Label CooldownLabel;
+            public Label KeyLabel;     // hotkey badge (Q/W/E/R or a class-specific key)
+            public Label IconLabel;    // ability glyph
         }
 
         private readonly AbilityCell[] _abilityCells = new AbilityCell[AbilitySlotCount];
         private bool _bound;
+
+        // ── WO-39/WO-40 animated-feedback state (Update-driven) ──────────────
+        // Compass arms whose inbound direction is live — pulsed at ~1 Hz (WO-39).
+        private readonly bool[] _compassActive = new bool[4]; // N, E, S, W
+        // WO-40 wave-imminent vignette: breathes alpha while on, fades over ~0.5s off.
+        private VisualElement _imminentVignette;
+        private bool _imminentBreathing;       // breathe alpha while a wave is imminent
+        private float _imminentFade = 0f;       // 0..1 fade envelope (1 = fully shown)
+        private const float ImminentFadeOutPerSecond = 2f;  // ~0.5s fade-out
+        // WO-40 compass alert: flash ALL arms amber at 2 Hz during the alert.
+        private bool _compassImminent;
 
         // =====================================================================
         //  Lifecycle
@@ -214,6 +227,114 @@ namespace DeNelle.HUD
                     _repairToast.style.display = DisplayStyle.None;
                 }
             }
+
+            // WO-39/WO-40 animated feedback — pulse the compass arms, breathe /
+            // fade the wave-imminent vignette, and flash the compass during alerts.
+            TickAnimatedFeedback();
+        }
+
+        // ── WO-39 + WO-40 per-frame animation tick ───────────────────────────
+        /// <summary>
+        /// Drives the time-based HUD juice each frame: the active compass arms
+        /// pulse opacity at ~1 Hz (WO-39), the wave-imminent vignette breathes its
+        /// alpha while on and fades out over ~0.5 s when cleared (WO-40), and the
+        /// whole compass flashes amber at 2 Hz during a wave-imminent alert (WO-40).
+        /// All effects use <c>Time.unscaledTime</c> so they animate even if the
+        /// game is time-scaled during the alert.
+        /// </summary>
+        private void TickAnimatedFeedback()
+        {
+            float t = Time.unscaledTime;
+
+            // WO-40 compass alert flash takes priority over the WO-39 pulse so the
+            // whole rose reads as a single amber warning while a wave is imminent.
+            if (_compassImminent)
+            {
+                TickCompassImminentFlash(t);
+            }
+            else
+            {
+                TickCompassPulse(t);
+            }
+
+            TickImminentVignette(t);
+        }
+
+        // WO-39: active arms pulse opacity 0.45→1.0 on a ~1 Hz sine; idle arms stay dim.
+        private void TickCompassPulse(float t)
+        {
+            var rose = _root != null ? _root.Q<VisualElement>("compass-rose") : null;
+            if (rose == null) return;
+
+            // 0..1 sine at ~1 Hz.
+            float wave = 0.5f + 0.5f * Mathf.Sin(t * Mathf.PI * 2f);
+            float pulseAlpha = Mathf.Lerp(0.45f, 1f, wave);
+
+            PulseCompassArm(rose, "compass-n", _compassActive[0], pulseAlpha);
+            PulseCompassArm(rose, "compass-e", _compassActive[1], pulseAlpha);
+            PulseCompassArm(rose, "compass-s", _compassActive[2], pulseAlpha);
+            PulseCompassArm(rose, "compass-w", _compassActive[3], pulseAlpha);
+        }
+
+        private static void PulseCompassArm(VisualElement rose, string name, bool active, float pulseAlpha)
+        {
+            var lbl = rose.Q<Label>(name);
+            if (lbl == null) return;
+            lbl.style.color = active
+                ? new Color(0.95f, 0.22f, 0.16f, pulseAlpha)  // attack-red, pulsing
+                : new Color(1f, 1f, 1f, 0.22f);                // dim when idle
+        }
+
+        // WO-40: while a wave is imminent flash EVERY arm amber on a 2 Hz square-ish
+        // pulse so the compass reads as a klaxon regardless of which way enemies come.
+        private void TickCompassImminentFlash(float t)
+        {
+            var rose = _root != null ? _root.Q<VisualElement>("compass-rose") : null;
+            if (rose == null) return;
+
+            // 0..1 at 2 Hz; bias toward a flash by squaring the sine.
+            float s = 0.5f + 0.5f * Mathf.Sin(t * Mathf.PI * 4f);
+            float a = Mathf.Lerp(0.25f, 1f, s * s);
+            var amber = new Color(1f, 0.74f, 0.18f, a);
+
+            var n = rose.Q<Label>("compass-n"); if (n != null) n.style.color = amber;
+            var e = rose.Q<Label>("compass-e"); if (e != null) e.style.color = amber;
+            var sArm = rose.Q<Label>("compass-s"); if (sArm != null) sArm.style.color = amber;
+            var w = rose.Q<Label>("compass-w"); if (w != null) w.style.color = amber;
+        }
+
+        // WO-40: breathe the vignette alpha 0.35→0.60 at ~1 Hz while imminent, then
+        // fade the whole overlay out over ~0.5 s when cleared (not a snap).
+        private void TickImminentVignette(float t)
+        {
+            if (_imminentVignette == null) return;
+
+            if (_imminentBreathing)
+            {
+                if (_imminentFade < 1f)
+                    _imminentFade = Mathf.Min(1f, _imminentFade + Time.unscaledDeltaTime * ImminentFadeOutPerSecond);
+            }
+            else
+            {
+                if (_imminentFade > 0f)
+                    _imminentFade = Mathf.Max(0f, _imminentFade - Time.unscaledDeltaTime * ImminentFadeOutPerSecond);
+
+                if (_imminentFade <= 0f)
+                {
+                    _imminentVignette.style.display = DisplayStyle.None;
+                    return;
+                }
+            }
+
+            // Breathing band 0.35→0.60, scaled by the fade envelope.
+            float wave = 0.5f + 0.5f * Mathf.Sin(t * Mathf.PI * 2f);
+            float breathAlpha = Mathf.Lerp(0.35f, 0.60f, wave);
+            float alpha = breathAlpha * _imminentFade;
+
+            var red = new Color(0.86f, 0.12f, 0.10f, alpha);
+            var s = _imminentVignette.style;
+            s.borderTopColor = red; s.borderBottomColor = red;
+            s.borderLeftColor = red; s.borderRightColor = red;
         }
 
         // =====================================================================
@@ -343,57 +464,99 @@ namespace DeNelle.HUD
             banner.schedule.Execute(() => { if (banner != null) banner.RemoveFromHierarchy(); }).StartingIn(3600);
         }
 
-        // ── WO-40: wave-imminent red edge vignette ───────────────────────────
+        // ── WO-40: wave-imminent red edge vignette (breathing + fade) ─────────
         /// <summary>
         /// Shows/hides a full-screen red edge vignette warning a wave is imminent.
         /// UI Toolkit has no radial gradient, so this is a thick translucent red
         /// inset border on a pass-through overlay (created once, then toggled).
-        /// Called from WaveFeedbackDirector by reflection.
+        /// While on, the alpha BREATHES ~0.35→0.60 at ~1 Hz; when set false it
+        /// FADES out over ~0.5 s rather than snapping off (both driven from
+        /// <see cref="TickImminentVignette"/> in Update). Called from
+        /// WaveFeedbackDirector by reflection.
         /// </summary>
         public void SetWaveImminent(bool on)
         {
             if (_root == null) return;
-            var v = _root.Q<VisualElement>("wave-imminent-vignette");
+
+            if (_imminentVignette == null)
+                _imminentVignette = _root.Q<VisualElement>("wave-imminent-vignette");
+
             if (on)
             {
-                if (v == null)
+                if (_imminentVignette == null)
                 {
-                    v = new VisualElement { name = "wave-imminent-vignette" };
-                    v.pickingMode = PickingMode.Ignore;
-                    var s = v.style;
+                    _imminentVignette = new VisualElement { name = "wave-imminent-vignette" };
+                    _imminentVignette.pickingMode = PickingMode.Ignore;
+                    var s = _imminentVignette.style;
                     s.position = Position.Absolute;
                     s.top = 0f; s.left = 0f; s.right = 0f; s.bottom = 0f;
                     s.borderTopWidth = 40f; s.borderBottomWidth = 40f;
                     s.borderLeftWidth = 40f; s.borderRightWidth = 40f;
-                    var red = new Color(0.86f, 0.12f, 0.10f, 0.55f);
+                    var red = new Color(0.86f, 0.12f, 0.10f, 0f); // alpha animates in via the fade envelope
                     s.borderTopColor = red; s.borderBottomColor = red;
                     s.borderLeftColor = red; s.borderRightColor = red;
-                    _root.Add(v);
+                    _root.Add(_imminentVignette);
                 }
-                v.style.display = DisplayStyle.Flex;
-                v.BringToFront();
+                _imminentVignette.style.display = DisplayStyle.Flex;
+                _imminentVignette.BringToFront();
+                _imminentBreathing = true;   // Update fades-in then breathes the alpha
             }
-            else if (v != null)
+            else
             {
-                v.style.display = DisplayStyle.None;
+                // Don't snap off — let TickImminentVignette fade the alpha to 0
+                // over ~0.5 s, then hide the overlay.
+                _imminentBreathing = false;
             }
         }
 
-        // ── WO-39: enemy-direction compass ───────────────────────────────────
+        /// <summary>
+        /// WO-40 compass alert: flashes ALL compass arms amber at 2 Hz while a wave
+        /// is imminent (driven from <see cref="TickCompassImminentFlash"/> in
+        /// Update). Cleared on wave start, which restores the per-direction WO-39
+        /// pulse. Called from WaveFeedbackDirector by reflection.
+        /// </summary>
+        public void SetCompassImminent(bool on)
+        {
+            _compassImminent = on;
+            // Make sure the rose exists so the flash has arms to drive even before
+            // any enemies have lit a direction.
+            if (on && _root != null)
+            {
+                var rose = _root.Q<VisualElement>("compass-rose");
+                if (rose == null) { rose = BuildCompassRose(); _root.Add(rose); }
+            }
+        }
+
+        // ── WO-39: enemy-direction compass (pulsing) ─────────────────────────
         /// <summary>
         /// Lights the compass arms (N/E/S/W) toward which live enemies are
-        /// attacking. Built once in code (top-centre, under the wave timer) and
-        /// recoloured each call. Called from WaveFeedbackDirector by reflection.
+        /// attacking. Built once in code (top-centre, under the wave timer). The
+        /// active arms PULSE their opacity at ~1 Hz (driven from
+        /// <see cref="TickCompassPulse"/> in Update) so inbound directions read as
+        /// live; idle arms stay dim. This setter only records which arms are
+        /// active. Called from WaveFeedbackDirector by reflection.
         /// </summary>
         public void SetAttackDirections(bool n, bool e, bool s, bool w)
         {
             if (_root == null) return;
             var rose = _root.Q<VisualElement>("compass-rose");
             if (rose == null) { rose = BuildCompassRose(); _root.Add(rose); }
-            SetCompassArm(rose, "compass-n", n);
-            SetCompassArm(rose, "compass-e", e);
-            SetCompassArm(rose, "compass-s", s);
-            SetCompassArm(rose, "compass-w", w);
+
+            _compassActive[0] = n;
+            _compassActive[1] = e;
+            _compassActive[2] = s;
+            _compassActive[3] = w;
+
+            // Seed the colours immediately so a freshly-built rose isn't blank for
+            // a frame; the per-frame pulse then animates the active arms. Skipped
+            // while a wave-imminent alert owns the rose (amber flash).
+            if (!_compassImminent)
+            {
+                SetCompassArm(rose, "compass-n", n);
+                SetCompassArm(rose, "compass-e", e);
+                SetCompassArm(rose, "compass-s", s);
+                SetCompassArm(rose, "compass-w", w);
+            }
         }
 
         private VisualElement BuildCompassRose()
@@ -576,8 +739,37 @@ namespace DeNelle.HUD
                     Slot = slot,
                     CooldownFill = cooldownFill,
                     CooldownLabel = cooldownLabel,
+                    KeyLabel = key,
+                    IconLabel = icon,
                 };
             }
+        }
+
+        /// <summary>
+        /// WO-36 (visual half): retargets one ability slot's hotkey badge, glyph
+        /// and (optionally) name to the active hero's loadout — so the bar stops
+        /// showing the hard-coded Mage kit for a Knight/Ranger. The Village-side
+        /// HeroAbilitiesHudBridge resolves each slot via
+        /// <c>AbilityCatalog.Find(heroClass, slot)</c> and pushes the per-slot
+        /// key/glyph/name in (by reflection, mirroring SetAbilityCooldown/SetMana).
+        /// A null/empty <paramref name="glyph"/> or <paramref name="key"/> leaves
+        /// that part of the cell unchanged. <paramref name="name"/> is stored as
+        /// the slot's tooltip for hover/inspection (art-light placeholder).
+        /// </summary>
+        public void SetAbilitySlot(int slot, string key, string glyph, string name)
+        {
+            if (slot < 0 || slot >= AbilitySlotCount) return;
+            AbilityCell cell = _abilityCells[slot];
+            if (cell.Slot == null) return;
+
+            if (cell.KeyLabel != null && !string.IsNullOrEmpty(key))
+                cell.KeyLabel.text = key;
+
+            if (cell.IconLabel != null && !string.IsNullOrEmpty(glyph))
+                cell.IconLabel.text = glyph;
+
+            if (!string.IsNullOrEmpty(name))
+                cell.Slot.tooltip = name;
         }
 
         // =====================================================================

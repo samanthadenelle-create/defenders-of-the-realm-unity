@@ -18,6 +18,7 @@
 
 using System;
 using System.Reflection;
+using DeNelle.Core.State;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -34,6 +35,7 @@ namespace DeNelle.Village
         private MethodInfo _showBanner;      // ShowWaveClearBanner(int, int)
         private MethodInfo _setImminent;     // SetWaveImminent(bool)
         private MethodInfo _setDirections;   // SetAttackDirections(bool,bool,bool,bool) — WO-39
+        private MethodInfo _setCompassImminent; // SetCompassImminent(bool) — WO-40 compass flash
         private WallRepairController _repair;
         private bool _imminentFired;
         private float _compassTimer;         // WO-39 poll throttle
@@ -51,6 +53,7 @@ namespace DeNelle.Village
                 _setImminent = t.GetMethod("SetWaveImminent", new[] { typeof(bool) });
                 _setDirections = t.GetMethod("SetAttackDirections",
                     new[] { typeof(bool), typeof(bool), typeof(bool), typeof(bool) });
+                _setCompassImminent = t.GetMethod("SetCompassImminent", new[] { typeof(bool) });
             }
         }
 
@@ -105,7 +108,12 @@ namespace DeNelle.Village
         private void OnWaveCleared(int waveId)
         {
             AbilityAudioBridge.PlayMusic("Victory");
-            try { _showBanner?.Invoke(_hud, new object[] { waveId, 0 }); } catch { }
+            // WO-38: show the player's current crystal balance on the banner so the
+            // "+N ◆" line actually renders (was hard-coded to 0). The wave reward is
+            // credited by the wave/reward path before this fires, so the balance is
+            // the freshest number we have without a per-wave reward field.
+            int crystals = CurrentCrystals();
+            try { _showBanner?.Invoke(_hud, new object[] { waveId, crystals }); } catch { }
             PulseHeart();
 
             if (_repair == null) _repair = UnityEngine.Object.FindObjectOfType<WallRepairController>();
@@ -116,6 +124,17 @@ namespace DeNelle.Village
         }
 
         private void ReturnToVillageMusic() => AbilityAudioBridge.PlayMusic("Village");
+
+        // WO-38: the player's current crystal balance for the wave-clear banner.
+        // Reads GameStateService when Core is bootstrapped; falls back to 0 (the
+        // banner then shows just "WAVE n REPELLED" — its own crystals>0 guard).
+        private static int CurrentCrystals()
+        {
+            var svc = GameStateService.Instance;
+            if (svc != null && svc.State != null)
+                return Mathf.Max(0, svc.State.Resources.Crystals);
+            return 0;
+        }
 
         private void PulseHeart()
         {
@@ -134,6 +153,7 @@ namespace DeNelle.Village
         {
             _imminentFired = false;
             SetImminent(false);
+            SetCompassImminent(false);   // WO-40: stop the compass amber flash on wave start
         }
 
         private void OnCountdownTick(float secondsRemaining)
@@ -143,6 +163,7 @@ namespace DeNelle.Village
             {
                 _imminentFired = true;
                 SetImminent(true);
+                SetCompassImminent(true);   // WO-40: flash ALL compass arms amber during the alert
                 AbilityAudioBridge.PlayDangerSting();
                 TriggerHaptic();
                 CancelInvoke(nameof(ClearImminent));
@@ -150,17 +171,33 @@ namespace DeNelle.Village
             }
         }
 
-        private void ClearImminent() => SetImminent(false);
+        private void ClearImminent()
+        {
+            SetImminent(false);
+            SetCompassImminent(false);
+        }
 
         private void SetImminent(bool on)
         {
             try { _setImminent?.Invoke(_hud, new object[] { on }); } catch { }
         }
 
+        private void SetCompassImminent(bool on)
+        {
+            try { _setCompassImminent?.Invoke(_hud, new object[] { on }); } catch { }
+        }
+
+        // WO-40: a DOUBLE-PULSE — two short rumbles (~0.12s on, ~0.10s gap, ~0.12s
+        // on) so the alert reads as a deliberate "bump-bump", not a single buzz.
+        // Sequenced with Invoke so it works without coroutines on the gamepad;
+        // Handheld.Vibrate is double-fired on mobile.
         private void TriggerHaptic()
         {
 #if UNITY_ANDROID || UNITY_IOS
             try { Handheld.Vibrate(); } catch { }
+            // Second mobile buzz lines up with the gamepad's second pulse.
+            CancelInvoke(nameof(VibrateHandheldAgain));
+            Invoke(nameof(VibrateHandheldAgain), 0.22f);
 #endif
             // Gamepad rumble on desktop (best-effort; WebGL pads usually don't rumble).
             try
@@ -168,15 +205,37 @@ namespace DeNelle.Village
                 var pad = UnityEngine.InputSystem.Gamepad.current;
                 if (pad != null)
                 {
+                    // First pulse now; stop it, then fire a second pulse after a gap.
                     pad.SetMotorSpeeds(0.45f, 0.75f);
                     CancelInvoke(nameof(StopHaptic));
-                    Invoke(nameof(StopHaptic), 0.18f);
+                    CancelInvoke(nameof(SecondHapticPulse));
+                    CancelInvoke(nameof(StopHapticFinal));
+                    Invoke(nameof(StopHaptic), 0.12f);          // end first pulse
+                    Invoke(nameof(SecondHapticPulse), 0.22f);   // start second pulse
+                    Invoke(nameof(StopHapticFinal), 0.34f);     // end second pulse
                 }
             }
             catch { }
         }
 
+#if UNITY_ANDROID || UNITY_IOS
+        private void VibrateHandheldAgain()
+        {
+            try { Handheld.Vibrate(); } catch { }
+        }
+#endif
+
+        private void SecondHapticPulse()
+        {
+            try { UnityEngine.InputSystem.Gamepad.current?.SetMotorSpeeds(0.45f, 0.75f); } catch { }
+        }
+
         private void StopHaptic()
+        {
+            try { UnityEngine.InputSystem.Gamepad.current?.SetMotorSpeeds(0f, 0f); } catch { }
+        }
+
+        private void StopHapticFinal()
         {
             try { UnityEngine.InputSystem.Gamepad.current?.SetMotorSpeeds(0f, 0f); } catch { }
         }
