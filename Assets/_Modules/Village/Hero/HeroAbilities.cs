@@ -209,7 +209,7 @@ namespace DeNelle.Village
                         if (def.EffectEnum == AbilityEffect.Snare)
                             foe.ApplyStatus(StatusEffect.Slow, 2.5f); // castAbility.ts snare
                     }
-                    SpawnVfx(origin, def, 1.6f);
+                    SpawnVfx(origin, def, 1.6f, foe != null ? foe.WorldPosition : (Vector3?)null);
                     break;
                 }
 
@@ -303,16 +303,22 @@ namespace DeNelle.Village
         //  Placeholder VFX — Unity built-in particles (port spec Week 4).
         // =====================================================================
 
-        private void SpawnVfx(Vector3 at, AbilityDef def, float radius)
+        // WO-35: real per-ability VFX via AbilityVfxKit (was a single tinted dot
+        // burst — the "random dots"). An authored _castVfxPrefab still overrides.
+        // targetHint = the foe / impact point (drives the strike tracer + meteor fall).
+        private void SpawnVfx(Vector3 at, AbilityDef def, float radius, Vector3? targetHint = null)
         {
-            ParticleSystem ps = _castVfxPrefab != null
-                ? Instantiate(_castVfxPrefab, at, Quaternion.identity)
-                : BuildBuiltInBurst(at);
+            if (_castVfxPrefab != null)
+            {
+                ParticleSystem ps = Instantiate(_castVfxPrefab, at, Quaternion.identity);
+                ps.Play();
+                float life = ps.main.duration + ps.main.startLifetimeMultiplier;
+                Destroy(ps.gameObject, life + 0.5f);
+                return;
+            }
 
-            TintAndSize(ps, def.UnityColor, Mathf.Max(0.6f, radius));
-            ps.Play();
-            float life = ps.main.duration + ps.main.startLifetimeMultiplier;
-            Destroy(ps.gameObject, life + 0.5f);
+            AbilityVfxKit.SpawnAbilityVfx(def.EffectEnum, def.UnityColor, at,
+                                          Mathf.Max(0.6f, radius), targetHint ?? at);
         }
 
         /// <summary>
