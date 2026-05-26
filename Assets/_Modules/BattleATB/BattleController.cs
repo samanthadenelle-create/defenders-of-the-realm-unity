@@ -206,13 +206,37 @@ namespace DeNelle.BattleATB
             {
                 Wave = wave,
                 Seed = seed,
-                HeroClass = HeroClass.Mage, // v2 foundation ships Mage / Blaise only
+                HeroClass = ResolveHeroClass(), // owner: ATB ran as Mage even when you're an Archer
                 HeroName = _fallbackHeroName,
                 Pets = new List<PartyPetSpec>(),
                 Enemies = enemies,
                 Inventory = new Dictionary<ItemKind, int>(),
                 Reinforcements = false,
             };
+        }
+
+        /// <summary>
+        /// The hero's class for this battle, read from the live GameState so the ATB
+        /// hero matches the class the player chose (owner: "drops into the stub with
+        /// Mage — started as Archer"). GameState carries a Core HeroClassOpt; map it
+        /// to the engine HeroClass. Falls back to Mage when there is no save / None.
+        /// </summary>
+        private static HeroClass ResolveHeroClass()
+        {
+            var svc = DeNelle.Core.State.GameStateService.Instance;
+            var opt = (svc != null && svc.State != null)
+                ? svc.State.HeroClass
+                : DeNelle.Core.State.HeroClassOpt.None;
+            HeroClass cls;
+            switch (opt)
+            {
+                case DeNelle.Core.State.HeroClassOpt.Knight: cls = HeroClass.Knight; break;
+                case DeNelle.Core.State.HeroClassOpt.Ranger: cls = HeroClass.Ranger; break;
+                case DeNelle.Core.State.HeroClassOpt.Mage:   cls = HeroClass.Mage;   break;
+                default:                                     cls = HeroClass.Mage;   break; // no save / None
+            }
+            Debug.Log($"[BattleController] ATB hero class resolved to {cls} (GameState={opt}).");
+            return cls;
         }
 
         /// <summary>

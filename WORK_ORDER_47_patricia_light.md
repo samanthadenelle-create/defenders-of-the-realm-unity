@@ -108,6 +108,25 @@ attacking. A per-pet toggle in the HUD flips each pet between Attack and Repair.
 | Breach choice prompt (ATB vs Defend) in the breach path | 1 |
 | `Assets/Scenes/PatriciaLight.unity` + portrait PanelSettings | 1 |
 
+## Animations & VFX (Phase 2 "feel")
+
+Ranger = fast satisfying archery; Mage = flashy impactful casting; mobile-friendly
+(few particles, pooled). **Reuse what exists — do NOT add a parallel `VFXManager`
+or `HeroAnimatorController`:**
+
+- **Casts already animate**: `HeroAbilities.TryCast` fires the hero Animator's cast
+  trigger; the shooter's spam-fire goes through `TryCast`, so draw/release & spell
+  casts animate for free. Add per-slot triggers only if a distinct anim is needed
+  (Multi-Shot burst, charged Power Shot, Fireball wind-up, Arcane Blast channel).
+- **VFX**: extend the existing `AbilityVfxKit` (class-keyed, WO-37) — it already does
+  Ranger arrow streak + leaf burst and Mage impacts. Add: arrow trail, impact
+  burst/sparks, bow/staff charge glow + muzzle flash, ground impact decal. SFX via
+  the existing `AbilityAudioBridge`.
+- **Juice (cheap, high-impact)**: brief screen flash + ~0.3s slow-mo + small camera
+  push on the charged Power Shot / big spell; muzzle flash on every shot.
+- **Perf**: low max-particles, **pool** VFX (don't Instantiate/Destroy per shot),
+  Shader Graph glow over many sprites. Matches the project's asset-free, code-built idiom.
+
 ## Phases
 
 1. **Skeleton & choice** — module + scene + breach choice prompt + spawn hero in the

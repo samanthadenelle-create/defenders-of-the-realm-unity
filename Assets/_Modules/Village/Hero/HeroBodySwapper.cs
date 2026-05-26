@@ -314,12 +314,13 @@ namespace DeNelle.Village
                 // red-splatter Tripo grunge variant — binding either gives the dirty
                 // blood-spattered armour the owner flagged. Returning null lets
                 // ApplyClassTint paint the clean steel tint (0.78,0.80,0.86) instead.
-                // Owner 2026-05-26 ("dark ranger in village AND dungeon"): the Ranger
-                // atlas (Textures/Ranger.png / archer_basecolor) is a dark purple-black
-                // Tripo grunge that renders the Ranger as a near-black blob everywhere.
-                // Drop it (like the Knight's bad atlas) so ApplyClassTint paints a clean
-                // ranger tint instead. The Mage's embedded texture is good and survives
-                // via RetargetMaterialsToUrp, so it stays the only textured class.
+                // Owner 2026-05-26: the Ranger ships a FRESH "archer v2" Tripo export
+                // whose basecolor (Textures/Ranger.png, regenerated from
+                // archerv2_basecolor) is a proper green/brown/leather ranger palette —
+                // bind it so the Ranger reads correctly. (The OLD atlas was the dark
+                // purple-black blob the owner flagged in village + dungeon.) Knight
+                // falls through to its steel tint; the Mage keeps its embedded texture.
+                HeroClass.Ranger => "Textures/Ranger",
                 _ => null,
             };
             if (string.IsNullOrEmpty(texPath)) return;
@@ -362,12 +363,11 @@ namespace DeNelle.Village
                 _                => new Color(0.60f, 0.45f, 0.85f),   // mage fallback
             };
 
-            // Knight + Ranger ship with bad Tripo atlases (red grunge / dark purple),
-            // so FORCE a clean flat tint for them — clearing whatever dark diffuse the
-            // FBX import or RetargetMaterialsToUrp bound (which is exactly why the
-            // Ranger read near-black). The Mage's extracted texture is good, so it is
-            // preserved (the tint only fills in if it somehow has no texture).
-            bool forceTint = cls == HeroClass.Knight || cls == HeroClass.Ranger;
+            // Only the Knight forces a flat tint now — its atlas is a red grunge we
+            // drop for clean steel. The Ranger uses its fresh v2 basecolor (bound by
+            // ApplyExtractedTexture) and the Mage keeps its embedded texture, so both
+            // are preserved; the Ranger tint below is only a no-texture fallback.
+            bool forceTint = cls == HeroClass.Knight;
 
             foreach (var r in body.GetComponentsInChildren<Renderer>(true))
             {
