@@ -46,15 +46,28 @@ namespace DeNelle.Village
         {
             _wave = wave;
             _hud = hud;
-            if (hud != null)
-            {
-                var t = hud.GetType();
+            ResolveHudMethods();
+        }
+
+        // FAIL #6 cause (b): the HUD may not have existed yet when TrySpawn ran, so
+        // _hud / the method binds were null and every SetWaveImminent call was a
+        // silent no-op. Re-find the HUD + (re)resolve the reflection binds on demand
+        // so the alert works even when the HUD bootstraps after this director.
+        private void ResolveHudMethods()
+        {
+            if (_hud == null) _hud = FindHud();
+            if (_hud == null) return;
+
+            var t = _hud.GetType();
+            if (_showBanner == null)
                 _showBanner = t.GetMethod("ShowWaveClearBanner", new[] { typeof(int), typeof(int) });
+            if (_setImminent == null)
                 _setImminent = t.GetMethod("SetWaveImminent", new[] { typeof(bool) });
+            if (_setDirections == null)
                 _setDirections = t.GetMethod("SetAttackDirections",
                     new[] { typeof(bool), typeof(bool), typeof(bool), typeof(bool) });
+            if (_setCompassImminent == null)
                 _setCompassImminent = t.GetMethod("SetCompassImminent", new[] { typeof(bool) });
-            }
         }
 
         // ── WO-39: poll live enemies → light the compass arms ────────────────
@@ -151,24 +164,46 @@ namespace DeNelle.Village
         // ── WO-40: wave imminent ─────────────────────────────────────────────
         private void OnWaveStarted(int waveId)
         {
+            // FAIL #6 cause (a): the owner starts waves with the HUD "START WAVE"
+            // button → WaveManager.ForceBeginNextWave snaps the countdown straight
+            // to 0 and only ever ticks OnCountdownTick(0f), so the 0 < x <= threshold
+            // window is NEVER hit and the alert silently never fired. If the alert
+            // hasn't fired by the time the wave starts (force-start or a zero/short
+            // countdown), fire it now so the red vignette + compass flash still play.
+            if (!_imminentFired)
+                FireImminentAlert("wave-start (countdown skipped)");
+
+            // Now reset for the NEXT wave's countdown and clear the active alert
+            // shortly after, so the flash still reads on the wave kicking off.
             _imminentFired = false;
-            SetImminent(false);
-            SetCompassImminent(false);   // WO-40: stop the compass amber flash on wave start
+            CancelInvoke(nameof(ClearImminent));
+            Invoke(nameof(ClearImminent), 2.2f);
         }
 
         private void OnCountdownTick(float secondsRemaining)
         {
             if (_imminentThreshold <= 0f || _imminentFired) return;
             if (secondsRemaining > 0f && secondsRemaining <= _imminentThreshold)
-            {
-                _imminentFired = true;
-                SetImminent(true);
-                SetCompassImminent(true);   // WO-40: flash ALL compass arms amber during the alert
-                AbilityAudioBridge.PlayDangerSting();
-                TriggerHaptic();
-                CancelInvoke(nameof(ClearImminent));
-                Invoke(nameof(ClearImminent), 2.2f);
-            }
+                FireImminentAlert($"countdown {secondsRemaining:0.0}s <= {_imminentThreshold:0.0}s");
+        }
+
+        // Single entry point for the wave-imminent alert (WO-40): red edge vignette,
+        // amber compass flash, danger sting + haptic. Re-resolves the HUD binds first
+        // (cause (b)) and logs so the alert is verifiable in the player log.
+        private void FireImminentAlert(string reason)
+        {
+            _imminentFired = true;
+            ResolveHudMethods();   // FAIL #6 cause (b): bind lazily if the HUD arrived late
+
+            Debug.Log($"[WaveFeedbackDirector] Wave-imminent ALERT fired ({reason}); " +
+                      $"setImminentBound={_setImminent != null}, compassBound={_setCompassImminent != null}.");
+
+            SetImminent(true);
+            SetCompassImminent(true);   // WO-40: flash ALL compass arms amber during the alert
+            AbilityAudioBridge.PlayDangerSting();
+            TriggerHaptic();
+            CancelInvoke(nameof(ClearImminent));
+            Invoke(nameof(ClearImminent), 2.2f);
         }
 
         private void ClearImminent()
@@ -261,9 +296,11 @@ namespace DeNelle.Village
             var go = new GameObject("WaveFeedbackDirector");
             go.SetActive(false);
             var dir = go.AddComponent<WaveFeedbackDirector>();
-            dir.Bind(wave, FindHud());
+            var hud = FindHud();
+            dir.Bind(wave, hud);
             go.SetActive(true);
-            Debug.Log("[WaveFeedbackDirector] Installed (wave feedback active).");
+            Debug.Log($"[WaveFeedbackDirector] Installed (wave feedback active). hudFound={hud != null} " +
+                      "(binds re-resolve lazily if the HUD arrives later).");
         }
 
         private static object FindHud()

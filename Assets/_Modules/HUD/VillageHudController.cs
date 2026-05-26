@@ -125,6 +125,7 @@ namespace DeNelle.HUD
         private const string AbilityIconClass = "ability-icon";
         private const string AbilityCooldownFillClass = "ability-cooldown-fill";
         private const string AbilityCooldownLabelClass = "ability-cooldown-label";
+        private const string AbilityNameClass = "ability-name";
 
         // The Q/W/E/R hotkey labels + placeholder glyphs for the four slots.
         // Glyphs are visual stand-ins until ability icon art lands (Week 4+).
@@ -167,6 +168,7 @@ namespace DeNelle.HUD
             public Label CooldownLabel;
             public Label KeyLabel;     // hotkey badge (Q/W/E/R or a class-specific key)
             public Label IconLabel;    // ability glyph
+            public Label NameLabel;    // visible ability name beneath the glyph+key (WO-36)
         }
 
         private readonly AbilityCell[] _abilityCells = new AbilityCell[AbilitySlotCount];
@@ -727,6 +729,25 @@ namespace DeNelle.HUD
                 key.pickingMode = PickingMode.Ignore;
                 slot.Add(key);
 
+                // WO-36 (FAIL #2 fix): a VISIBLE ability-name label beneath the
+                // glyph+key so the bar tells the player what each slot does — the
+                // name used to live ONLY in a hover tooltip (invisible in a build).
+                // Absolute-anchored to the cell's bottom edge and styled in code so
+                // it renders even without the USS rule (art-light placeholder).
+                var nameLabel = new Label(string.Empty) { name = "ability-name" };
+                nameLabel.AddToClassList(AbilityNameClass);
+                nameLabel.pickingMode = PickingMode.Ignore;
+                var ns = nameLabel.style;
+                ns.position = Position.Absolute;
+                ns.left = 0f; ns.right = 0f; ns.bottom = 1f;
+                ns.fontSize = 9f;
+                ns.color = new Color(0.92f, 0.92f, 0.98f, 0.95f);
+                ns.unityTextAlign = TextAnchor.LowerCenter;
+                ns.whiteSpace = WhiteSpace.Normal;          // wrap short names to 1-2 lines
+                ns.unityFontStyleAndWeight = FontStyle.Bold;
+                ns.overflow = Overflow.Hidden;              // clip if a name overruns the cell
+                slot.Add(nameLabel);
+
                 // Tap-to-cast — slot raises AbilityRequested(index). The
                 // bridge in DeNelle.Village forwards to HeroAbilities.TryCast.
                 int slotIndex = i;
@@ -741,22 +762,26 @@ namespace DeNelle.HUD
                     CooldownLabel = cooldownLabel,
                     KeyLabel = key,
                     IconLabel = icon,
+                    NameLabel = nameLabel,
                 };
             }
         }
 
         /// <summary>
-        /// WO-36 (visual half): retargets one ability slot's hotkey badge, glyph
-        /// and (optionally) name to the active hero's loadout — so the bar stops
-        /// showing the hard-coded Mage kit for a Knight/Ranger. The Village-side
+        /// WO-36 (visual half): retargets one ability slot's hotkey badge, glyph,
+        /// VISIBLE name label and tooltip to the active hero's loadout — so the bar
+        /// stops showing the hard-coded Mage kit for a Knight/Ranger AND clearly
+        /// tells the player what each slot does. The Village-side
         /// HeroAbilitiesHudBridge resolves each slot via
         /// <c>AbilityCatalog.Find(heroClass, slot)</c> and pushes the per-slot
-        /// key/glyph/name in (by reflection, mirroring SetAbilityCooldown/SetMana).
-        /// A null/empty <paramref name="glyph"/> or <paramref name="key"/> leaves
-        /// that part of the cell unchanged. <paramref name="name"/> is stored as
-        /// the slot's tooltip for hover/inspection (art-light placeholder).
+        /// key/glyph/name/description in (by reflection, mirroring
+        /// SetAbilityCooldown/SetMana). A null/empty <paramref name="glyph"/> or
+        /// <paramref name="key"/> leaves that part of the cell unchanged.
+        /// <paramref name="name"/> drives the always-visible name label beneath the
+        /// glyph+key; <paramref name="description"/> (1-line effect blurb) is stored
+        /// as the slot's hover tooltip.
         /// </summary>
-        public void SetAbilitySlot(int slot, string key, string glyph, string name)
+        public void SetAbilitySlot(int slot, string key, string glyph, string name, string description)
         {
             if (slot < 0 || slot >= AbilitySlotCount) return;
             AbilityCell cell = _abilityCells[slot];
@@ -768,7 +793,16 @@ namespace DeNelle.HUD
             if (cell.IconLabel != null && !string.IsNullOrEmpty(glyph))
                 cell.IconLabel.text = glyph;
 
-            if (!string.IsNullOrEmpty(name))
+            // FAIL #2 fix: surface the ability NAME on a visible label (not just the
+            // invisible-in-build tooltip), so each cell reads differently per class.
+            if (cell.NameLabel != null && !string.IsNullOrEmpty(name))
+                cell.NameLabel.text = name;
+
+            // Hover tooltip carries the longer effect blurb for inspection; fall
+            // back to the name when no description was supplied.
+            if (!string.IsNullOrEmpty(description))
+                cell.Slot.tooltip = description;
+            else if (!string.IsNullOrEmpty(name))
                 cell.Slot.tooltip = name;
         }
 
