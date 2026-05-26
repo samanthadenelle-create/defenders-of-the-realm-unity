@@ -355,5 +355,77 @@ namespace DeNelle.Editor
             }
             return b?.center ?? t.position;
         }
+
+        // ATB battle scene fix: when an enemy breaches the Heart, WaveManager hands
+        // off to ATBBattle.unity, but its BattleController's _runtimeState
+        // (ATBRuntimeState ScriptableObject) reference is NOT wired, so OnEnable
+        // logs "No ATBRuntimeState assigned — battle cannot run" and the battle is
+        // dead ("controller broken"). Wire the field to the existing asset. Also
+        // reports any missing scripts / Animators without a controller. ATBBattle is
+        // a normal scene (not the hand-built village).
+        [MenuItem("Defenders/Cleanup/Fix ATB Battle Scene")]
+        public static void FixAtbBattleScene()
+        {
+            const string AtbPath = "Assets/Scenes/ATBBattle.unity";
+            const string StateAssetPath = "Assets/_Modules/BattleATB/Generated/ATBRuntimeState.asset";
+            var scene = EditorSceneManager.OpenScene(AtbPath, OpenSceneMode.Single);
+            var sb = new System.Text.StringBuilder();
+
+            Type bcType = null;
+            foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                bcType = asm.GetType("DeNelle.BattleATB.BattleController", false);
+                if (bcType != null) break;
+            }
+            if (bcType == null) { Debug.LogError("[ATBFix] BattleController type not found — aborting."); EditorApplication.Exit(2); return; }
+
+            var bc = UnityEngine.Object.FindAnyObjectByType(bcType) as Component;
+            if (bc == null) { Debug.LogError("[ATBFix] No BattleController in ATBBattle.unity — aborting."); EditorApplication.Exit(2); return; }
+
+            bool changed = false;
+            var so = new SerializedObject(bc);
+            var rsProp = so.FindProperty("_runtimeState");
+            if (rsProp == null)
+            {
+                sb.AppendLine("[ATBFix] BattleController has no '_runtimeState' field (renamed?).");
+            }
+            else
+            {
+                sb.AppendLine($"[ATBFix] _runtimeState before = {(rsProp.objectReferenceValue != null ? rsProp.objectReferenceValue.name : "NULL")}");
+                if (rsProp.objectReferenceValue == null)
+                {
+                    var asset = AssetDatabase.LoadAssetAtPath<ScriptableObject>(StateAssetPath);
+                    if (asset != null)
+                    {
+                        rsProp.objectReferenceValue = asset;
+                        so.ApplyModifiedPropertiesWithoutUndo();
+                        changed = true;
+                        sb.AppendLine("[ATBFix] _runtimeState WIRED -> ATBRuntimeState.asset.");
+                    }
+                    else sb.AppendLine($"[ATBFix] ATBRuntimeState asset NOT FOUND at {StateAssetPath}.");
+                }
+            }
+
+            int missing = 0, animNoCtrl = 0;
+            foreach (var root in scene.GetRootGameObjects())
+                foreach (var t in root.GetComponentsInChildren<Transform>(true))
+                {
+                    foreach (var c in t.GetComponents<Component>())
+                        if (c == null) { missing++; sb.AppendLine($"[ATBFix] MISSING script on '{t.name}'."); }
+                    var anim = t.GetComponent<Animator>();
+                    if (anim != null && anim.runtimeAnimatorController == null)
+                    { animNoCtrl++; sb.AppendLine($"[ATBFix] Animator without controller on '{t.name}'."); }
+                }
+            sb.AppendLine($"[ATBFix] missingScripts={missing} animatorsWithoutController={animNoCtrl}");
+
+            Debug.Log(sb.ToString());
+            if (changed)
+            {
+                EditorSceneManager.MarkSceneDirty(scene);
+                bool ok = EditorSceneManager.SaveScene(scene);
+                Debug.Log($"[ATBFix] ATBBattle.unity saved: {ok}.");
+            }
+            else Debug.Log("[ATBFix] No change made (already wired or asset missing).");
+        }
     }
 }

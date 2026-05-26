@@ -412,7 +412,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1d4a7d41f469e9d4885e78e1cc71eaaa, type: 3}
   m_Name: 
   m_EditorClassIdentifier: DeNelle.BattleATB::DeNelle.BattleATB.BattleController
-  _runtimeState: {fileID: 0}
+  _runtimeState: {fileID: 11400000, guid: 2e5ba38cb6a90334898284f491fd675e, type: 2}
   _hudDocument: {fileID: 1032066911}
   _heroCapsule: {fileID: 1528549527}
   _enemyCapsule: {fileID: 2019317286}
