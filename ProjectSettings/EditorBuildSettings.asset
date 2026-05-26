@@ -26,6 +26,9 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/Dungeon_FolksGranary.unity
     guid: 6f71f9f7476706d4fb7c9a43dddd8021
+  - enabled: 1
+    path: Assets/Scenes/PatriciaLightMode.unity
+    guid: 84716325a6d82264e8fabc7edb120228
   m_configObjects:
     com.unity.addressableassets: {fileID: 11400000, guid: 16d06bc18dab1cd408b1472b0382cf8a, type: 2}
     com.unity.localization.settings: {fileID: 11400000, guid: 5c0e933b7e0cc6245829bac0db9201b3, type: 2}

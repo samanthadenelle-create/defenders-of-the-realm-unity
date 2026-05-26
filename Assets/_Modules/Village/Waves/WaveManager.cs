@@ -681,17 +681,19 @@ namespace DeNelle.Village
         }
 
         /// <summary>
-        /// WO-47 "Defend the Tower": clears the rest of the wave off the village
-        /// field (the breaching enemies + any remaining live enemies + the apex
-        /// boss) and starts the real-time <see cref="PatriciaLightMode"/> assault
-        /// in-place. The wave loop stays in <see cref="WavePhase.Breached"/>; the
-        /// mode returns to the village (reload) when it resolves, at which point a
-        /// fresh WaveManager re-runs the loop — same lifecycle as the ATB path.
+        /// WO-47 "Defend the Tower" (Phase 2): clears the rest of the wave off the
+        /// village field (the breaching enemies + any remaining live enemies + the
+        /// apex boss), stashes the breach context, and loads the DEDICATED
+        /// <see cref="SceneRouter.PatriciaLight"/> scene — the third-person tower-
+        /// defense shooter (driven by <c>PatriciaLightController</c>). On win/lose
+        /// that scene returns to the village via <see cref="SceneRouter.GoVillage"/>,
+        /// where a fresh WaveManager re-runs the loop — same lifecycle as the ATB
+        /// path. (Phase 1's in-place <c>PatriciaLightMode.Begin</c> is superseded.)
         /// </summary>
         private void EnterDefendTower()
         {
-            // Clear the wave off the field so it does not keep marching / attacking
-            // while the shooter runs (the shooter spawns its own short assault).
+            // Clear the wave off the field so nothing lingers when we return from
+            // the dedicated scene (the shooter spawns its own assault there).
             foreach (Enemy e in _liveEnemies)
                 if (e != null) e.Kill();
             _liveEnemies.Clear();
@@ -704,8 +706,17 @@ namespace DeNelle.Village
                 _liveApexBoss = null;
             }
 
-            Debug.Log($"[WaveManager] Wave {_currentWaveId} breach — entering Defend the Tower (Patricia Light).");
-            PatriciaLightMode.Begin(this, _heart, _currentWaveId);
+            Debug.Log($"[WaveManager] Wave {_currentWaveId} breach — loading Defend the Tower (Patricia Light) scene.");
+
+            // Stash the breach context the way PendingBattle works, then load the
+            // dedicated scene. PatriciaLightController reads PendingPatriciaLight on
+            // the far side and returns to the village when it resolves.
+            var p = new PatriciaLightParams
+            {
+                Wave = _currentWaveId,
+                ReturnScene = SceneRouter.Village,
+            };
+            SceneRouter.GoPatriciaLight(p).Forget();
         }
 
         /// <summary>

@@ -55,6 +55,23 @@ namespace DeNelle.Core
         public string ReturnScene = SceneRouter.Village;
     }
 
+    /// <summary>
+    /// Hand-off parameters for the "Defend the Tower" (Patricia Light) scene.
+    /// Stashed on <see cref="SceneRouter.PendingPatriciaLight"/> by
+    /// <see cref="SceneRouter.GoPatriciaLight"/> and read by the scene's
+    /// <c>PatriciaLightController</c> on the far side — exactly like
+    /// <see cref="BattleParams"/> / <see cref="SceneRouter.PendingBattle"/>.
+    /// </summary>
+    [Serializable]
+    public sealed class PatriciaLightParams
+    {
+        /// <summary>The wave that breached — difficulty / reward scale off this.</summary>
+        public int Wave;
+
+        /// <summary>The scene the mode returns to once it resolves (default: Village).</summary>
+        public string ReturnScene = SceneRouter.Village;
+    }
+
     /// <summary>Static scene-navigation surface — the React route table's port.</summary>
     public static class SceneRouter
     {
@@ -76,6 +93,16 @@ namespace DeNelle.Core
         public const string Village = "Village";
         /// <summary>The ATB Last-Stand battle scene (React global AtbBattleHost).</summary>
         public const string ATBBattle = "ATBBattle";
+
+        /// <summary>
+        /// The "Defend the Tower" real-time shooter scene (WO-47 "Patricia Light").
+        /// The breach-time alternative to <see cref="ATBBattle"/>: a third-person
+        /// tower-defense stand where the hero fires from the spire while pets
+        /// attack or repair. Built by the editor scene-builder
+        /// <c>DeNelle.Editor.PatriciaLightSceneBuilder.BuildScene</c> and routed via
+        /// <see cref="GoPatriciaLight"/>.
+        /// </summary>
+        public const string PatriciaLight = "PatriciaLightMode";
 
         /// <summary>The Week-1 starter dungeon scene name.</summary>
         public const string DungeonHealersCottage   = "Dungeon_HealersCottage";
@@ -193,6 +220,22 @@ namespace DeNelle.Core
 
         /// <summary>The last <see cref="BattleParams"/> handed to <see cref="GoBattle"/>.</summary>
         public static BattleParams PendingBattle { get; private set; }
+
+        /// <summary>
+        /// Go to the "Defend the Tower" (Patricia Light) shooter scene with a
+        /// fade, stashing <paramref name="p"/> on <see cref="PendingPatriciaLight"/>.
+        /// Mirrors <see cref="GoBattle"/>: the scene's PatriciaLightController reads
+        /// the pending params on the far side and, on resolve, returns via
+        /// <see cref="GoVillage"/>. Fire-and-forget — never await in a hot path.
+        /// </summary>
+        public static UniTask GoPatriciaLight(PatriciaLightParams p)
+        {
+            PendingPatriciaLight = p;
+            return LoadSceneWithFade(PatriciaLight);
+        }
+
+        /// <summary>The last <see cref="PatriciaLightParams"/> handed to <see cref="GoPatriciaLight"/>.</summary>
+        public static PatriciaLightParams PendingPatriciaLight { get; private set; }
 
         // ── Helpers ──────────────────────────────────────────────────────────
         private static bool IsSceneRegistered(string sceneName)
