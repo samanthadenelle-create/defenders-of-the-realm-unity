@@ -169,6 +169,76 @@ namespace DeNelle.Village
         /// <summary>The apex flying boss on the field, or null when no apex wave is live.</summary>
         public DragonBoss LiveApexBoss => _liveApexBoss;
 
+        /// <summary>The Heart the wave loop marches enemies at (resolved at BeginLoop).</summary>
+        public HeartController Heart => _heart;
+
+        // ── Patricia Light hooks (WO-47) ──────────────────────────────────────
+        // The breach-time "Defend the Tower" shooter (PatriciaLightMode) needs to
+        // spawn real Enemy instances using the SAME prefab + roster path the wave
+        // loop uses. These thin accessors + the public SpawnEnemyForExternalMode
+        // helper let it reuse SpawnOne's instantiate / NavMesh-sample / Configure
+        // logic without duplicating it or making fields public. PatriciaLightMode
+        // lives in DeNelle.Village too, so no asmdef boundary is crossed.
+
+        /// <summary>
+        /// The enemy prefab the wave loop instantiates (null = the loop builds a
+        /// primitive-capsule placeholder via <see cref="BuildPlaceholderEnemy"/>).
+        /// Exposed so the breach-time Defend-the-Tower mode can reuse the same body.
+        /// </summary>
+        public Enemy EnemyPrefab => _enemyPrefab;
+
+        /// <summary>
+        /// Loads the canonical enemy catalog if it is not already loaded and
+        /// returns it (null on load failure). PatriciaLightMode uses this to pull
+        /// an <see cref="EnemyDef"/> from the same enemies.json the wave loop uses.
+        /// </summary>
+        public async UniTask<EnemyCatalog> GetEnemyCatalogAsync()
+        {
+            if (_enemyCatalog == null)
+                _enemyCatalog = await WaveDataLoader.LoadEnemiesAsync();
+            return _enemyCatalog;
+        }
+
+        /// <summary>
+        /// Spawns one Enemy at <paramref name="worldPos"/> for an external mode
+        /// (the breach-time Defend-the-Tower shooter), reusing the wave loop's
+        /// instantiate / NavMesh-sample / Configure path. The caller owns the
+        /// returned enemy's lifecycle (this does NOT add it to the wave loop's
+        /// live-enemy roster or breach watch). Returns null if no def is given.
+        /// </summary>
+        /// <param name="def">The enemy stat block (from <see cref="GetEnemyCatalogAsync"/>).</param>
+        /// <param name="worldPos">Where to spawn — snapped to the nearest NavMesh.</param>
+        /// <param name="heart">The transform the enemy marches at.</param>
+        /// <param name="instanceId">Stable per-instance id for attribution / events.</param>
+        public Enemy SpawnEnemyForExternalMode(EnemyDef def, Vector3 worldPos, Transform heart, string instanceId)
+        {
+            if (def == null) return null;
+
+            Vector3 pos = worldPos;
+            if (UnityEngine.AI.NavMesh.SamplePosition(
+                    pos, out var hit, 8f, UnityEngine.AI.NavMesh.AllAreas))
+                pos = hit.position;
+
+            Vector3 toHeart = heart != null ? (heart.position - pos) : Vector3.forward;
+            toHeart.y = 0f;
+            Quaternion rot = Quaternion.LookRotation(
+                toHeart.sqrMagnitude > 0.0001f ? toHeart : Vector3.forward);
+
+            Enemy enemy = _enemyPrefab != null
+                ? Instantiate(_enemyPrefab, pos, rot, _enemyRoot)
+                : BuildPlaceholderEnemy(pos, rot);
+
+            // The hero/pet target sweeps find enemies via GetComponentInParent
+            // <IDamageable>, which resolves to EnemyDamageable. The placeholder
+            // capsule (and some prefabs) may not carry it — add it so the
+            // Defend-the-Tower hero can actually acquire + damage this enemy.
+            if (enemy.GetComponent<EnemyDamageable>() == null)
+                enemy.gameObject.AddComponent<EnemyDamageable>();
+
+            enemy.Configure(instanceId, def, heart);
+            return enemy;
+        }
+
         // =====================================================================
         //  Lifecycle
         // =====================================================================
@@ -568,9 +638,11 @@ namespace DeNelle.Village
         // =====================================================================
 
         /// <summary>
-        /// One or more enemies crossed the inner ring. Pauses the loop, builds a
-        /// <see cref="BattleParams"/> from the breaching roster and hands off to
-        /// the ATB scene via the real <see cref="SceneRouter.GoBattle"/> API.
+        /// One or more enemies crossed the inner ring. Pauses the loop and offers
+        /// the breach CHOICE (WO-47): the player picks the ATB "Last Stand" or the
+        /// real-time "Defend the Tower" shooter (PatriciaLightMode). The choice
+        /// overlay is built in code; if it cannot be created the breach falls back
+        /// to the ATB hand-off so a breach is never a dead end.
         /// </summary>
         private void TriggerBreach()
         {
@@ -578,6 +650,72 @@ namespace DeNelle.Village
             OnBreach.Invoke(_currentWaveId);
             if (_heart != null) _heart.SetState(HeartState.Critical);
 
+            // Snapshot the breaching roster's count + the breaching enemy refs
+            // BEFORE either branch consumes them. PatriciaLightMode runs IN the
+            // village (no scene change), so it borrows the same Heart + a fresh
+            // assault rather than the ATB roster; the ATB branch keeps using the
+            // breach roster verbatim (see EnterAtbBattle).
+            int breachCount = _breachRoster.Count;
+
+            // WO-47 breach choice: show the code-built Last-Stand / Defend prompt.
+            // It returns false if it could not be created (no UIDocument host /
+            // missing PanelSettings) — in that case fall through to the ATB path
+            // immediately so the breach still resolves.
+            bool shown = BreachChoiceOverlay.Show(
+                heart: _heart,
+                onLastStand: EnterAtbBattle,
+                onDefendTower: EnterDefendTower);
+
+            if (!shown)
+            {
+                Debug.LogWarning(
+                    "[WaveManager] Breach choice overlay could not be created — " +
+                    "falling back to the ATB Last Stand so the breach is not a dead end.");
+                EnterAtbBattle();
+                return;
+            }
+
+            Debug.Log(
+                $"[WaveManager] Wave {_currentWaveId} breached with {breachCount} enemies — " +
+                "awaiting the player's Last-Stand / Defend-the-Tower choice.");
+        }
+
+        /// <summary>
+        /// WO-47 "Defend the Tower": clears the rest of the wave off the village
+        /// field (the breaching enemies + any remaining live enemies + the apex
+        /// boss) and starts the real-time <see cref="PatriciaLightMode"/> assault
+        /// in-place. The wave loop stays in <see cref="WavePhase.Breached"/>; the
+        /// mode returns to the village (reload) when it resolves, at which point a
+        /// fresh WaveManager re-runs the loop — same lifecycle as the ATB path.
+        /// </summary>
+        private void EnterDefendTower()
+        {
+            // Clear the wave off the field so it does not keep marching / attacking
+            // while the shooter runs (the shooter spawns its own short assault).
+            foreach (Enemy e in _liveEnemies)
+                if (e != null) e.Kill();
+            _liveEnemies.Clear();
+            _breachRoster.Clear();
+
+            if (_liveApexBoss != null)
+            {
+                _liveApexBoss.Died -= HandleApexBossDied;
+                Destroy(_liveApexBoss.gameObject);
+                _liveApexBoss = null;
+            }
+
+            Debug.Log($"[WaveManager] Wave {_currentWaveId} breach — entering Defend the Tower (Patricia Light).");
+            PatriciaLightMode.Begin(this, _heart, _currentWaveId);
+        }
+
+        /// <summary>
+        /// Consumes the breaching roster and hands off to the ATB "Last Stand"
+        /// scene via the real <see cref="SceneRouter.GoBattle"/> API. This is the
+        /// unchanged pre-WO-47 breach behaviour, extracted so the breach choice
+        /// prompt (and its fallback) can invoke it directly.
+        /// </summary>
+        private void EnterAtbBattle()
+        {
             // BreachedIds: the 3D-layer ids of the breaching enemies. The ATB
             // BattleController maps these onto engine combatant defs (today via
             // its fallback; the per-enemy mapper is its own follow-up).
