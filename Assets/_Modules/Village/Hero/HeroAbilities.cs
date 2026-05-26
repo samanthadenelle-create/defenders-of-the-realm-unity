@@ -165,6 +165,15 @@ namespace DeNelle.Village
             _mana -= def.ManaCost;
 
             // Play the hero's cast animation in sync with the ability resolving.
+            // Self-heal the reference: Awake() caches it before HeroBodySwapper
+            // swaps the real FBX body in, so the Awake cache is stale/null.
+            // HeroBodySwapper re-caches this via reflection after the swap, but
+            // re-resolve here too as a backstop (only while null).
+            if (_animator == null)
+            {
+                var bodyT = transform.Find("HeroBody");
+                if (bodyT != null) _animator = bodyT.GetComponentInChildren<Animator>();
+            }
             if (_animator != null) _animator.SetTrigger(AnimCast);
 
             Vector3 origin = transform.position;

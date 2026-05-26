@@ -94,9 +94,20 @@ namespace DeNelle.Pets
         /// Wolf) at their deploy slots ringing the Heart. Safe to call once per
         /// village-scene load; clears any prior deployment first.
         /// </summary>
+        // TEMP DIAG 2026-05-25 (owner: "try with no pet"): hard-skip all pet
+        // deployment so the village has ZERO pets — isolates the camera/hero so
+        // there's nothing else on screen to mistake the follow target for.
+        // REVERT to false to restore the three starter pets.
+        private const bool DIAG_SKIP_ALL_PETS = false;
+
         public void DeployStarterPets()
         {
             ClearDeployed();
+            if (DIAG_SKIP_ALL_PETS)
+            {
+                Debug.Log("[PetDeployer] DIAG_SKIP_ALL_PETS — no pets deployed (camera/hero isolation test).");
+                return;
+            }
 
             var defs = PetCatalog.Pets;
             if (defs == null || defs.Count == 0)
@@ -155,6 +166,15 @@ namespace DeNelle.Pets
                     visual.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
                     NormalizePetHeight(visual, 1.1f);
                     StripPetColliders(visual);
+                    // Tripo FBXs embed a CAMERA node (and sometimes an
+                    // AudioListener). Left in, a pet's camera renders to the
+                    // screen FROM the pet, so the view "follows the pet" instead
+                    // of the hero's VillageCamera (root cause, 2026-05-25). Strip
+                    // them so only the hero camera ever drives the display.
+                    foreach (var cam in visual.GetComponentsInChildren<Camera>(true))
+                        if (cam != null) Destroy(cam);
+                    foreach (var al in visual.GetComponentsInChildren<AudioListener>(true))
+                        if (al != null) Destroy(al);
                     // Tripo FBXs import with Phong materials URP can't render
                     // (owner 2026-05-20). The fixer rebuilds them as URP/Lit
                     // on Awake; if Tripo's embedded textures didn't extract,
@@ -166,6 +186,14 @@ namespace DeNelle.Pets
                     {
                         petFixer.SetFallbackTexture("Textures/" + def.Species);
                         petFixer.SetFallbackTint(def.TintColor);
+                        // WO-34 (2026-05-25): TripoAssetPostprocessor extracts the
+                        // pet's materials as URP — but those extracted URP mats
+                        // render washed-out/grey, and the fixer SKIPS already-URP
+                        // materials by default, leaving them broken. Force a full
+                        // rebuild from each material's real _BaseMap so every pet
+                        // (incl. ice-wolf, which has no fallback PNG) gets its true
+                        // texture. This is why pets kept coming back grey.
+                        petFixer.ForceRebuildAll();
                     }
                 }
                 else

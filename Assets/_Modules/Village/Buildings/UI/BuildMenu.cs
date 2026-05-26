@@ -201,6 +201,9 @@ namespace DeNelle.Village
             _closeButton = _root.Q<Button>(CloseButtonName);
 
             if (_closeButton != null) _closeButton.clicked += Close;
+
+            // Start pass-through so the closed menu's root never blocks HUD clicks.
+            _root.pickingMode = PickingMode.Ignore;
         }
 
         // =====================================================================
@@ -242,6 +245,15 @@ namespace DeNelle.Village
         {
             if (_panel != null)
                 _panel.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
+
+            // CRITICAL (owner 2026-05-25): this BuildMenu UIDocument renders ABOVE
+            // the HUD (sortingOrder HUD+5). When CLOSED we only hid the inner panel,
+            // but the full-screen ROOT stayed pickingMode=Position and SWALLOWED
+            // every click meant for the HUD beneath it -> Build button + ability
+            // bar were dead. Make the root pass clicks through when closed; capture
+            // (modal) only when open.
+            if (_root != null)
+                _root.pickingMode = visible ? PickingMode.Position : PickingMode.Ignore;
         }
 
         // =====================================================================

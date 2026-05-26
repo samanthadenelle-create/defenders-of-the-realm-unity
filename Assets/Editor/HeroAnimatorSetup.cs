@@ -35,6 +35,19 @@ namespace DeNelle.Editor
         public static void SetupKnight() => Setup("Assets/Resources/Heroes/Knight.fbx",
                                                   "Assets/Resources/Heroes/Knight.controller");
 
+        // Batch entry — wires all three at once. Also the -executeMethod target
+        // for headless runs (build-windows.ps1 / run-unity-method.ps1).
+        [MenuItem("Defenders/Animation/Setup ALL Hero Animators")]
+        public static void SetupAll()
+        {
+            SetupWizard();   // Mage.fbx
+            SetupRanger();
+            SetupKnight();
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+            Debug.Log("[HeroAnimatorSetup] SetupAll complete (Mage / Ranger / Knight).");
+        }
+
         /// <summary>
         /// Configure a Tripo hero FBX + build its Idle/Walk/Cast controller.
         /// Idempotent — re-running rewrites the controller and the clip names.
@@ -71,11 +84,23 @@ namespace DeNelle.Editor
 
             importer.animationType = ModelImporterAnimationType.Generic;
             importer.importAnimation = true;
+            // Generic rigs need an Avatar generated FROM the model so the Animator
+            // can map clip curves onto the skeleton. The FBXs imported with
+            // avatarSetup=0 (None) — without this the controller plays but the
+            // bones never move ("sliding statue" even with a wired controller).
+            importer.avatarSetup = ModelImporterAvatarSetup.CreateFromThisModel;
+
+            // Diagnostic: list what takes the FBX actually exposes, so a missing
+            // animation is obvious in the build log rather than a silent skip.
+            var takes = importer.defaultClipAnimations;
+            Debug.Log($"[HeroAnimatorSetup] '{fbxPath}' exposes {takes.Length} take(s): " +
+                      string.Join(", ", System.Array.ConvertAll(takes, t =>
+                          $"{t.name}[{t.firstFrame:F0}-{t.lastFrame:F0}]")));
 
             // Pick the two default takes whose names do NOT carry the "Armature|"
             // prefix (those are FBX export dupes pointing at the same data).
             ModelImporterClipAnimation longClip = null, shortClip = null;
-            foreach (var c in importer.defaultClipAnimations)
+            foreach (var c in takes)
             {
                 if (c.name.Contains("|")) continue; // skip "Armature|..." dupes
                 float frames = c.lastFrame - c.firstFrame;
@@ -89,20 +114,28 @@ namespace DeNelle.Editor
                     shortClip = c;
                 }
             }
-            if (longClip == null || shortClip == null)
+            if (longClip == null)
             {
-                Debug.LogWarning($"[HeroAnimatorSetup] Could not find two NLA clips inside '{fbxPath}' " +
-                                 "— importer left untouched.");
+                Debug.LogWarning($"[HeroAnimatorSetup] No usable animation take inside '{fbxPath}' " +
+                                 "— importer left untouched. (FBX has no embedded clip?)");
                 return false;
             }
 
             longClip.name = "Walk";
             longClip.loopTime = true;
             longClip.loopPose = true;
-            shortClip.name = "Cast";
-            shortClip.loopTime = false;
-
-            importer.clipAnimations = new[] { longClip, shortClip };
+            if (shortClip != null)
+            {
+                shortClip.name = "Cast";
+                shortClip.loopTime = false;
+                importer.clipAnimations = new[] { longClip, shortClip };
+            }
+            else
+            {
+                Debug.LogWarning($"[HeroAnimatorSetup] Only ONE take in '{fbxPath}' — using it as Walk; " +
+                                 "no Cast clip (Cast trigger will simply no-op).");
+                importer.clipAnimations = new[] { longClip };
+            }
             importer.SaveAndReimport();
             return true;
         }
@@ -118,9 +151,9 @@ namespace DeNelle.Editor
                 if (clip.name == "Walk") walk = clip;
                 else if (clip.name == "Cast") cast = clip;
             }
-            if (walk == null || cast == null)
+            if (walk == null)
             {
-                Debug.LogError($"[HeroAnimatorSetup] Walk / Cast clips not present after reimport for '{fbxPath}'.");
+                Debug.LogError($"[HeroAnimatorSetup] Walk clip not present after reimport for '{fbxPath}'.");
                 return null;
             }
 
@@ -137,9 +170,6 @@ namespace DeNelle.Editor
             var idle = sm.AddState("Idle");
             var walkState = sm.AddState("Walk");
             walkState.motion = walk;
-            var castState = sm.AddState("Cast");
-            castState.motion = cast;
-
             sm.defaultState = idle;
 
             var idleToWalk = idle.AddTransition(walkState);
@@ -150,12 +180,25 @@ namespace DeNelle.Editor
             walkToIdle.hasExitTime = false; walkToIdle.duration = 0.15f;
             walkToIdle.AddCondition(AnimatorConditionMode.Less, 0.1f, "Speed");
 
-            var anyToCast = sm.AddAnyStateTransition(castState);
-            anyToCast.hasExitTime = false; anyToCast.duration = 0.05f;
-            anyToCast.AddCondition(AnimatorConditionMode.If, 0f, "Cast");
+            // Cast state only if the FBX shipped a second take. The Cast param
+            // still exists so HeroAbilities can fire it harmlessly when absent.
+            if (cast != null)
+            {
+                var castState = sm.AddState("Cast");
+                castState.motion = cast;
 
-            var castToIdle = castState.AddTransition(idle);
-            castToIdle.hasExitTime = true; castToIdle.exitTime = 0.95f; castToIdle.duration = 0.1f;
+                var anyToCast = sm.AddAnyStateTransition(castState);
+                anyToCast.hasExitTime = false; anyToCast.duration = 0.05f;
+                anyToCast.AddCondition(AnimatorConditionMode.If, 0f, "Cast");
+
+                var castToIdle = castState.AddTransition(idle);
+                castToIdle.hasExitTime = true; castToIdle.exitTime = 0.95f; castToIdle.duration = 0.1f;
+            }
+            else
+            {
+                Debug.LogWarning($"[HeroAnimatorSetup] No Cast clip for '{fbxPath}' — " +
+                                 "controller built with Idle/Walk only.");
+            }
 
             EditorUtility.SetDirty(ctrl);
             return ctrl;

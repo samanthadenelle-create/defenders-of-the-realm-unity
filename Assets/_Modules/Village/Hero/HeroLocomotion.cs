@@ -59,29 +59,49 @@ namespace DeNelle.Village
                       $"newInputGp={(Gamepad.current != null ? "OK" : "null")}, " +
                       $"animator={(_animator != null ? _animator.name : "null")}, " +
                       $"controller={(_animator != null && _animator.runtimeAnimatorController != null ? _animator.runtimeAnimatorController.name : "null")}");
+
+            SpawnHeroMarker();
+        }
+
+        // Owner/Grok 2026-05-25: the hero has no walk anim (it slides) and reads
+        // small under the high camera, so the animated pet steals the eye and the
+        // camera "looks like" it follows the pet (it doesn't — it's locked to the
+        // hero). A bright emissive ground ring makes the PLAYER hero unmistakable.
+        // Child of the root, so it survives HeroBodySwapper rebuilds.
+        private void SpawnHeroMarker()
+        {
+            if (transform.Find("HeroIndicatorRing") != null) return;
+            var ring = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            ring.name = "HeroIndicatorRing";
+            foreach (var col in ring.GetComponents<Collider>()) Destroy(col);
+            ring.transform.SetParent(transform, false);
+            ring.transform.localPosition = new Vector3(0f, 0.06f, 0f);
+            ring.transform.localScale = new Vector3(1.9f, 0.03f, 1.9f); // flat disc at feet
+            var mr = ring.GetComponent<Renderer>();
+            var sh = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+            var mat = new Material(sh);
+            Color ringColor = new Color(0.15f, 0.95f, 1f); // bright cyan
+            if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", ringColor);
+            if (mat.HasProperty("_Color")) mat.SetColor("_Color", ringColor);
+            if (mat.HasProperty("_EmissionColor"))
+            {
+                mat.SetColor("_EmissionColor", ringColor * 2.2f);
+                mat.EnableKeyword("_EMISSION");
+                mat.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
+            }
+            mr.sharedMaterial = mat;
         }
 
         private void Update()
         {
             Vector2 input = ReadMoveInput();
 
-            // Camera-relative movement: W = into the screen, A/D = strafe.
-            // Project the camera's forward/right onto the XZ plane so steep
-            // pitch on the camera doesn't shrink the move vector.
-            Vector3 camFwd = Vector3.forward;
-            Vector3 camRight = Vector3.right;
-            var cam = Camera.main;
-            if (cam != null)
-            {
-                camFwd = cam.transform.forward; camFwd.y = 0f;
-                camRight = cam.transform.right; camRight.y = 0f;
-                if (camFwd.sqrMagnitude > 0.0001f) camFwd.Normalize();
-                else camFwd = Vector3.forward;
-                if (camRight.sqrMagnitude > 0.0001f) camRight.Normalize();
-                else camRight = Vector3.right;
-            }
-
-            Vector3 move = camRight * input.x + camFwd * input.y;
+            // WORLD-relative movement (owner 2026-05-25): W = +Z (up-screen / north),
+            // D = +X (right). The village camera is now a FIXED-angle follow looking
+            // north, so world axes ARE screen axes — and decoupling movement from the
+            // camera entirely eliminates the old camera-relative feedback loop that
+            // made the hero curl into circles. Bulletproof: no Camera.main dependency.
+            Vector3 move = new Vector3(input.x, 0f, input.y);
             if (move.sqrMagnitude > 1f) move.Normalize();
 
             // Smooth velocity toward target — instant max-speed felt rigid.
@@ -133,6 +153,19 @@ namespace DeNelle.Village
                 transform.position = p;
             }
 
+            // Self-heal the Animator reference. HeroLocomotion.Awake() caches
+            // GetComponentInChildren<Animator>() BEFORE HeroBodySwapper.Start()
+            // swaps the real FBX body in — so the Awake cache is null (the baked
+            // placeholder has no Animator). HeroBodySwapper re-caches this via
+            // reflection after the swap, but re-resolve here too as a backstop so
+            // a future change to swap order can never silently break the walk anim.
+            // Cheap: only runs while _animator is null, stops once wired.
+            if (_animator == null)
+            {
+                var bodyT = transform.Find("HeroBody");
+                if (bodyT != null) _animator = bodyT.GetComponentInChildren<Animator>();
+            }
+
             if (_animator != null) _animator.SetFloat(AnimSpeed, Velocity.magnitude);
         }
 
@@ -167,8 +200,18 @@ namespace DeNelle.Village
             // singletons aren't populated for some reason.
             if (v == Vector2.zero)
             {
-                v.x += UnityEngine.Input.GetAxisRaw("Horizontal");
-                v.y += UnityEngine.Input.GetAxisRaw("Vertical");
+                float h = UnityEngine.Input.GetAxisRaw("Horizontal");
+                float ve = UnityEngine.Input.GetAxisRaw("Vertical");
+                // DEADZONE (owner 2026-05-25 "camera drifts on its own while idle"):
+                // a connected gamepad / VR / joystick resting slightly off-centre
+                // feeds tiny constant values here. The new-input path is already
+                // deadzoned, but this legacy fallback had none — so resting-stick
+                // noise crept the hero forward with no player input and the camera
+                // followed, reading as autonomous camera drift. Kill the noise.
+                if (Mathf.Abs(h) < 0.25f) h = 0f;
+                if (Mathf.Abs(ve) < 0.25f) ve = 0f;
+                v.x += h;
+                v.y += ve;
             }
 
             return v;
