@@ -847,7 +847,14 @@ namespace DeNelle.Editor
             // The visual capsule must NOT collide — the CharacterController IS the
             // collision body. A stray capsule collider would fight the controller.
             StripColliders(body);
-            ApplyTint(body, HexColor("e8d8b8"));
+            // PILL FIX (owner): the old e8d8b8 stand-in is near-white (RGB
+            // 0.91/0.85/0.72) and under the dungeon's bright oil-lantern point
+            // lights it reads as a glowing white "pill" whenever HeroBodySwapper
+            // can't load the class FBX at run time (Resources miss in a build).
+            // Tint the FALLBACK capsule an emissive warm amber so it always reads
+            // as an intentional hero stand-in, never a blank white pill. On the
+            // happy path HeroBodySwapper still destroys + replaces this capsule.
+            ApplyEmissive(body, HexColor("c98a3a"), 0.6f);
 
             // CharacterController sized to the KayKit mage mesh (radius ~0.35,
             // height ~1.9, centred) — DungeonHero [RequireComponent]s this and
@@ -1237,7 +1244,11 @@ namespace DeNelle.Editor
             body.transform.localPosition = new Vector3(0f, 1f, 0f);
             body.transform.localScale = new Vector3(0.8f, 1f, 0.8f);
             StripColliders(body);
-            ApplyTint(body, HexColor("6b7d8a"));
+            // PILL FIX (owner): a flat slate ApplyTint washes to near-white under
+            // the bright lantern light right where Bryn stands (Garden Approach).
+            // Make Bryn's stand-in emissive teal-slate so the wanderer reads as a
+            // tinted body, not a white pill, regardless of nearby light intensity.
+            ApplyEmissive(body, HexColor("5a7a86"), 0.5f);
 
             // World-space speech-bubble anchor. The WandererBubble component
             // (DeNelle.Dungeons — added by reflection) IS the run-time bubble: a

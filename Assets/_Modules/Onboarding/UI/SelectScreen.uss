@@ -38,9 +38,16 @@
    HERO SELECT — two-panel layout
    ════════════════════════════════════════════════════════════════════════ */
 
-/* ── Dragon stage — top 55%, transparent so the 3D scene shows through ── */
+/* ── Dragon stage — top 55%, transparent so the 3D scene shows through ──
+   NB: size via an explicit percentage HEIGHT, not a `flex: 0 0 55%` shorthand.
+   UI Toolkit's USS parser does not accept a percentage flex-BASIS, so the
+   shorthand silently fails to apply and the panel collapses — the redesign
+   then renders as an unstyled stack. Percentage height + flex-shrink:0 is the
+   supported idiom (matches the rest of the project's USS). */
 .hero-dragon-stage {
-    flex: 0 0 55%;
+    height: 55%;
+    flex-grow: 0;
+    flex-shrink: 0;
     background-color: rgba(0, 0, 0, 0);
     flex-direction: column;
     justify-content: space-between;   /* brand block top, wallet btn bottom */
@@ -94,7 +101,8 @@
 
 /* ── Amber separator hairline ────────────────────────────────────────── */
 .hero-section-divider {
-    flex: none;
+    flex-grow: 0;
+    flex-shrink: 0;
     height: 2px;
     background-color: rgb(245, 166, 35);
     align-self: stretch;
@@ -102,7 +110,9 @@
 
 /* ── Hero roster panel — bottom 45%, opaque deep indigo ─────────────── */
 .hero-roster-panel {
-    flex: 1 0 0;                    /* takes all remaining height */
+    flex-grow: 1;                   /* takes all remaining height */
+    flex-shrink: 1;
+    flex-basis: 0;
     background-color: rgba(18, 12, 30, 0.97);
     flex-direction: column;
     align-items: center;

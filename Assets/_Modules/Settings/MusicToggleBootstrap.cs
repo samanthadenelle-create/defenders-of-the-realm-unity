@@ -13,9 +13,19 @@
 // a new player hears nothing AND has no obvious way to turn audio on; this button
 // is that affordance. Turning music ON also clears the master mute so it's audible.
 //
+// LIVE PLAYBACK: SettingsModel.ApplyAll() persists + drives AudioMixerBridge, but
+// that bridge NO-OPS when no AudioMixer asset is assigned — so the toggle changed
+// the saved values without changing what the player hears. The ACTUAL player is
+// DeNelle.Audio.AudioService (a DontDestroyOnLoad singleton) whose SetVolume has a
+// per-source fallback that works WITHOUT a mixer. DeNelle.Settings cannot reference
+// DeNelle.Audio (asmdef isolation), so we reach it via the project's reflection-
+// bridge pattern (AudioServiceBridge below) to make the toggle audible immediately.
+//
 // Lives in DeNelle.Settings (references DeNelle.Core + UI Toolkit only).
 // =============================================================================
 
+using System;
+using System.Reflection;
 using UnityEngine;
 using UnityEngine.UIElements;
 using UnityEngine.SceneManagement;
@@ -41,14 +51,14 @@ namespace DeNelle.Settings
 
         private static void Install()
         {
-            if (Object.FindAnyObjectByType<MusicToggleHud>() != null) return;
+            if (UnityEngine.Object.FindAnyObjectByType<MusicToggleHud>() != null) return;
 
             // Borrow a PanelSettings from any UIDocument in the scene so the toggle
             // renders at that scene's UI scale (a code-built UIDocument with no
             // PanelSettings renders nothing — commit 30ff18b).
             PanelSettings ps = null;
             float topSort = float.MinValue;   // UIDocument.sortingOrder is a float
-            foreach (var doc in Object.FindObjectsByType<UIDocument>(FindObjectsInactive.Include))
+            foreach (var doc in UnityEngine.Object.FindObjectsByType<UIDocument>(FindObjectsInactive.Include))
             {
                 if (doc == null || doc.panelSettings == null) continue;
                 if (doc.sortingOrder >= topSort) { topSort = doc.sortingOrder; ps = doc.panelSettings; }
@@ -104,14 +114,24 @@ namespace DeNelle.Settings
             if (MusicOn)
             {
                 SettingsModel.MusicVolume = 0f;            // music off (SFX untouched)
+                SettingsModel.ApplyAll();                  // push to the mixer + persist
+                // Live effect: silence the music group on the running AudioService
+                // (its per-source fallback works even with no mixer asset). Leave
+                // master/SFX alone — this is a music-only toggle.
+                AudioServiceBridge.SetMusicVolume(0f);
             }
             else
             {
                 SettingsModel.Muted = false;               // ensure it's actually audible
                 if (SettingsModel.MusicVolume < 0.01f)
                     SettingsModel.MusicVolume = SettingsModel.DefaultMusicVolume;
+                SettingsModel.ApplyAll();                  // push to the mixer + persist
+                // Live effect: clear master mute (the fresh-game default is muted)
+                // and raise the music group back to the restored level so the
+                // already-playing per-scene track becomes audible immediately.
+                AudioServiceBridge.SetMuted(false);
+                AudioServiceBridge.SetMusicVolume(SettingsModel.MusicVolume);
             }
-            SettingsModel.ApplyAll();                      // push to the mixer + persist
             Refresh();
         }
 
@@ -124,6 +144,87 @@ namespace DeNelle.Settings
             _btn.style.backgroundColor = on
                 ? new Color(0.16f, 0.52f, 0.34f, 0.92f)    // green = playing
                 : new Color(0.40f, 0.13f, 0.13f, 0.92f);   // red = muted
+        }
+    }
+
+    /// <summary>
+    /// Reflection bridge to <c>DeNelle.Audio.AudioService</c> — DeNelle.Settings
+    /// cannot reference DeNelle.Audio (asmdef isolation), so we resolve the live
+    /// singleton + its <c>SetMuted(bool)</c> / <c>SetVolume(MixerGroup, float)</c>
+    /// methods by reflection (the project's reflection-bridge pattern; see
+    /// DeNelle.Village.AbilityAudioBridge). Every call no-ops safely if the
+    /// AudioService type, the singleton, or the members are absent.
+    ///
+    /// Why this exists: SettingsModel drives <c>AudioMixerBridge</c>, which NO-OPS
+    /// when no AudioMixer asset is present — so the music toggle changed only the
+    /// persisted values, not live playback. AudioService.SetVolume has a per-source
+    /// fallback that adjusts the running music sources even with no mixer, so
+    /// driving it here is what makes the toggle audible.
+    /// </summary>
+    internal static class AudioServiceBridge
+    {
+        private static bool s_resolved;
+        private static PropertyInfo s_instanceProp;     // static AudioService Instance
+        private static MethodInfo s_setMuted;           // void SetMuted(bool)
+        private static MethodInfo s_setVolume;          // void SetVolume(MixerGroup, float)
+        private static object s_musicGroupValue;        // MixerGroup.Music boxed enum value
+
+        /// <summary>Master-unmute the live service (no-op if Audio absent).</summary>
+        public static void SetMuted(bool muted)
+        {
+            Resolve();
+            object inst = Inst();
+            if (inst == null || s_setMuted == null) return;
+            try { s_setMuted.Invoke(inst, new object[] { muted }); }
+            catch { /* audio is best-effort */ }
+        }
+
+        /// <summary>
+        /// Set the Music group's linear 0..1 volume on the live service. Uses
+        /// AudioService's per-source fallback when no mixer asset is present, so it
+        /// changes audible playback even pre-mixer. No-op if Audio is absent.
+        /// </summary>
+        public static void SetMusicVolume(float linear01)
+        {
+            Resolve();
+            object inst = Inst();
+            if (inst == null || s_setVolume == null || s_musicGroupValue == null) return;
+            try { s_setVolume.Invoke(inst, new object[] { s_musicGroupValue, linear01 }); }
+            catch { /* audio is best-effort */ }
+        }
+
+        private static object Inst()
+        {
+            if (s_instanceProp == null) return null;
+            try { return s_instanceProp.GetValue(null); }
+            catch { return null; }
+        }
+
+        private static void Resolve()
+        {
+            if (s_resolved) return;
+            s_resolved = true;
+
+            Type t = null;
+            foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                t = asm.GetType("DeNelle.Audio.AudioService", false);
+                if (t != null) break;
+            }
+            if (t == null) return;   // Audio module not present — every call no-ops.
+
+            s_instanceProp = t.GetProperty("Instance", BindingFlags.Public | BindingFlags.Static);
+            s_setMuted = t.GetMethod("SetMuted", new[] { typeof(bool) });
+
+            // SetVolume(MixerGroup group, float linear01) — MixerGroup is a nested
+            // enum on AudioService; resolve it + its "Music" member by reflection.
+            Type mixerGroup = t.GetNestedType("MixerGroup", BindingFlags.Public);
+            if (mixerGroup != null && mixerGroup.IsEnum)
+            {
+                s_setVolume = t.GetMethod("SetVolume", new[] { mixerGroup, typeof(float) });
+                try { s_musicGroupValue = Enum.Parse(mixerGroup, "Music"); }
+                catch { s_musicGroupValue = null; }
+            }
         }
     }
 }
