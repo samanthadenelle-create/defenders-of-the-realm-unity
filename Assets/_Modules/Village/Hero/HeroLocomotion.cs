@@ -145,7 +145,15 @@ namespace DeNelle.Village
                 }
                 transform.position += dir * distance;
 
-                Quaternion target = Quaternion.LookRotation(Velocity);
+                // The hero mesh is imported with its visual forward along local -X
+                // rather than the Unity-convention +Z.  LookRotation aligns local +Z
+                // with the velocity direction, so without a correction the hero faces
+                // 90° counter-clockwise from the move direction (right → faces up, etc.).
+                // Multiplying by Euler(0,-90,0) rotates the result 90° clockwise to
+                // cancel the model's offset — do NOT remove this without re-importing
+                // the FBX with a corrected root orientation.
+                Quaternion target = Quaternion.LookRotation(Velocity.normalized)
+                                    * Quaternion.Euler(0f, -90f, 0f);
                 transform.rotation = Quaternion.Slerp(
                     transform.rotation, target, _rotationSpeed * Time.deltaTime);
             }
