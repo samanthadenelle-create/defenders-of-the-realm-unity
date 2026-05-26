@@ -137,23 +137,43 @@ namespace DeNelle.Editor
                 if (bc != null) sb.AppendLine($"[VDiag]     BoxCollider center={bc.center} size={bc.size} trigger={bc.isTrigger}");
             }
 
-            sb.AppendLine("[VDiag] ===== BUILDINGS (name starts 'Building') =====");
+            sb.AppendLine("[VDiag] ===== BUILDINGS (name starts 'Building-') =====");
             foreach (var t in all)
             {
-                if (t == null || !t.name.StartsWith("Building")) continue;
+                if (t == null || !t.name.StartsWith("Building-")) continue;   // skip the 'Buildings' container
                 var rends = t.GetComponentsInChildren<Renderer>(true);
-                sb.AppendLine($"[VDiag] BUILDING '{t.name}' worldPos={t.position} localScale={t.localScale} renderers={rends.Length}");
+                sb.AppendLine($"[VDiag] BUILDING '{t.name}' worldPos={t.position} localScale={t.localScale} activeInHierarchy={t.gameObject.activeInHierarchy} renderers={rends.Length}");
                 int i = 0;
                 foreach (var r in rends)
                 {
                     if (r == null) continue;
-                    if (i++ >= 5) { sb.AppendLine("[VDiag]     ...(more renderers)"); break; }
-                    var m = r.sharedMaterial;
-                    string shader = (m != null && m.shader != null) ? m.shader.name : "NULL";
-                    string tex = (m != null && m.HasProperty("_BaseMap") && m.GetTexture("_BaseMap") != null) ? "BaseMap=Y"
-                               : (m != null && m.HasProperty("_MainTex") && m.GetTexture("_MainTex") != null) ? "MainTex=Y" : "tex=NONE";
-                    string col = (m != null && m.HasProperty("_BaseColor")) ? m.GetColor("_BaseColor").ToString() : "";
-                    sb.AppendLine($"[VDiag]     rend '{r.gameObject.name}' on={r.enabled} mat='{(m != null ? m.name : "NULL")}' shader={shader} {tex} baseColor={col}");
+                    if (i++ >= 4) { sb.AppendLine("[VDiag]     ...(more renderers)"); break; }
+                    var mf = r.GetComponent<MeshFilter>();
+                    var mesh = mf != null ? mf.sharedMesh : null;
+                    string meshInfo = mesh != null ? $"mesh='{mesh.name}' verts={mesh.vertexCount}" : "mesh=NULL(!)";
+                    var b = r.bounds;   // world-space render bounds
+                    sb.AppendLine($"[VDiag]     rend '{r.gameObject.name}' on={r.enabled} localScale={r.transform.localScale} lossyScale={r.transform.lossyScale} {meshInfo} worldBoundsSize={b.size} worldBoundsCenter={b.center}");
+                }
+            }
+
+            // Hunt for the owner's VISIBLE portal arch — any sizeable mesh near the
+            // two portal trigger positions (the DungeonPortal_* roots carry only a
+            // trigger + sign; the arch the owner sees may be a separate object).
+            sb.AppendLine("[VDiag] ===== OBJECTS NEAR PORTAL POSITIONS (±18,_,6) =====");
+            Vector3[] portalPts = { new Vector3(-18f, 0f, 6f), new Vector3(18f, 0f, 6f) };
+            foreach (var t in all)
+            {
+                if (t == null) continue;
+                var r = t.GetComponent<Renderer>();
+                if (r == null) continue;   // only objects that actually draw
+                foreach (var p in portalPts)
+                {
+                    Vector3 d = t.position - p; d.y = 0f;
+                    if (d.magnitude <= 8f)
+                    {
+                        sb.AppendLine($"[VDiag] NEAR {p}: '{t.name}' pos={t.position} worldBoundsSize={r.bounds.size} parent='{(t.parent != null ? t.parent.name : "<root>")}'");
+                        break;
+                    }
                 }
             }
 
@@ -169,6 +189,73 @@ namespace DeNelle.Editor
 
             Debug.Log(sb.ToString());
             Debug.Log("[VDiag] DONE (read-only; scene NOT modified).");
+        }
+
+        // WO-28: the 5 building meshes have valid materials but render tens of
+        // metres from their building root — the tripo mesh child is scaled
+        // 100-450x and its off-centre pivot, multiplied by that scale, flings the
+        // visible mesh away from the collider/prompt. Result: the [F] prompt
+        // floats in empty space. Fix: translate each building's visual subtree so
+        // its world bounds re-centre on the building root (feet at the root's Y).
+        // Targeted, no re-bake; the collider + prompt (the correct gameplay anchor)
+        // are not moved.
+        [MenuItem("Defenders/Cleanup/Fix Building Mesh Placement")]
+        public static void FixBuildingMeshPlacement()
+        {
+            var scene = EditorSceneManager.OpenScene(VillagePath, OpenSceneMode.Single);
+            var all = UnityEngine.Object.FindObjectsByType<Transform>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            int fixedCount = 0;
+
+            foreach (var t in all)
+            {
+                if (t == null || !t.name.StartsWith("Building-")) continue;
+
+                // Mesh renderers only — never a Sign/Prompt/Bubble label.
+                var rends = t.GetComponentsInChildren<Renderer>(true);
+                Bounds? combined = null;
+                foreach (var r in rends)
+                {
+                    if (r == null) continue;
+                    string n = r.gameObject.name;
+                    if (n.Contains("Sign") || n.Contains("Prompt") || n.Contains("Bubble") || n.Contains("Text")) continue;
+                    if (combined == null) combined = r.bounds;
+                    else { var b = combined.Value; b.Encapsulate(r.bounds); combined = b; }
+                }
+                if (combined == null) { Debug.Log($"[BFix] '{t.name}' has no mesh renderer — skipped."); continue; }
+
+                Bounds bb = combined.Value;
+                Vector3 root = t.position;
+                Vector3 delta = new Vector3(root.x - bb.center.x, root.y - bb.min.y, root.z - bb.center.z);
+                if (delta.magnitude < 0.10f)
+                {
+                    Debug.Log($"[BFix] '{t.name}' already centred (delta={delta.magnitude:F2}m) — skipped.");
+                    continue;
+                }
+
+                // Move only the visual children (those holding a non-label renderer);
+                // the BoxCollider + interact prompt on the root stay put.
+                foreach (Transform child in t)
+                {
+                    var cr = child.GetComponentInChildren<Renderer>(true);
+                    if (cr == null) continue;
+                    string cn = cr.gameObject.name;
+                    if (cn.Contains("Sign") || cn.Contains("Prompt") || cn.Contains("Bubble") || cn.Contains("Text")) continue;
+                    child.position += delta;
+                }
+                Debug.Log($"[BFix] '{t.name}': moved visual by {delta} (meshCenter {bb.center} -> root {root}; feet to y={root.y:F2}).");
+                fixedCount++;
+            }
+
+            if (fixedCount > 0)
+            {
+                EditorSceneManager.MarkSceneDirty(scene);
+                bool ok = EditorSceneManager.SaveScene(scene);
+                Debug.Log($"[BFix] Re-centred {fixedCount} building(s). Village.unity saved: {ok}.");
+            }
+            else
+            {
+                Debug.Log("[BFix] No buildings needed re-centring — scene left untouched.");
+            }
         }
     }
 }
