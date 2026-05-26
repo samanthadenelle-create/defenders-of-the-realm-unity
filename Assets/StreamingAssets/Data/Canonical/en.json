@@ -136,8 +136,8 @@
 
   "returningPlayer": "Avalon kept your hearth warm. Welcome back, Guardian.",
 
-  "heroSelect.title": "Choose Your Keeper",
-  "heroSelect.subtitle": "Three answer the Heart's call. Which hand will hold the lantern?",
+  "heroSelect.title": "Defenders of the Realm",
+  "heroSelect.subtitle": "powered by SKR",
   "heroSelect.confirm": "Take Up the Watch",
   "hero.mage.name": "The Mage",
   "hero.mage.role": "Arcane Keeper",
@@ -238,5 +238,20 @@
   "shopkeeperPanic.3": "You want to shop? NOW?! Help us, please!",
   "shopkeeperPanic.4": "Coin won't save us from this lot — your magic will!",
   "shopkeeperPanic.5": "My lord, the till is barricaded! Get to the Heart!",
-  "shopkeeperPanic.6": "Discounts after the wave, I swear it! Fight!"
+  "shopkeeperPanic.6": "Discounts after the wave, I swear it! Fight!",
+
+  "swap.title": "Swap to SKR",
+  "swap.inputLabel": "You send",
+  "swap.outputLabel": "You receive",
+  "swap.rateLabel": "Exchange rate",
+  "swap.feeLabel": "Service fee",
+  "swap.networkLabel": "Network fee",
+  "swap.confirm": "Swap Now",
+  "swap.poweredBy": "Powered by Jupiter Aggregator",
+  "swap.statusEnter": "Enter an amount to see the rate.",
+  "swap.statusLoading": "Getting rate…",
+  "swap.statusConnect": "Connect your wallet to swap.",
+  "swap.statusSigning": "Sending to wallet for approval…",
+  "swap.statusError": "Could not fetch rate. Check connection.",
+  "swap.statusFailed": "Swap failed. Please try again."
 }

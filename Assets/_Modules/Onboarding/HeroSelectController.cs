@@ -55,6 +55,9 @@ namespace DeNelle.Onboarding
         private const string SubtitleName = "hero-select-subtitle";
         private const string CardRowName = "hero-card-row";
         private const string ConfirmName = "hero-select-confirm";
+        private const string WalletConnectName = "hero-wallet-connect";
+        private const string NavPrevName = "hero-nav-prev";
+        private const string NavNextName = "hero-nav-next";
 
         // ── USS class names — styled by SelectScreen.uss ─────────────────────
         private const string CardClass = "select-card";
@@ -122,6 +125,19 @@ namespace DeNelle.Onboarding
         private void OnDisable()
         {
             if (_confirmButton != null) _confirmButton.clicked -= OnConfirmClicked;
+
+            // Unwire the WO-42 buttons too — re-resolve from the root so a
+            // disable after a partial bind is still safe.
+            if (_root != null)
+            {
+                var walletBtn = _root.Q<Button>(WalletConnectName);
+                if (walletBtn != null) walletBtn.clicked -= OnWalletConnectClicked;
+                var navPrev = _root.Q<Button>(NavPrevName);
+                if (navPrev != null) navPrev.clicked -= OnNavPrevClicked;
+                var navNext = _root.Q<Button>(NavNextName);
+                if (navNext != null) navNext.clicked -= OnNavNextClicked;
+            }
+
             _bound = false;
         }
 
@@ -164,17 +180,38 @@ namespace DeNelle.Onboarding
             if (_subtitle != null) _subtitle.text = CanonStrings.Locale(SubtitleKey);
             if (_confirmButton != null) _confirmButton.text = CanonStrings.Locale(ConfirmKey);
 
-            // Owner direction 2026-05-20: surface a clear call-to-action so
-            // the player knows what to do — "Select your hero to start" sits
-            // above the card row in a soft amber tone.
-            AddHeroSelectHint(_root);
-
             BuildCards();
 
             if (_confirmButton != null)
             {
                 _confirmButton.clicked -= OnConfirmClicked; // guard a double OnEnable
                 _confirmButton.clicked += OnConfirmClicked;
+            }
+
+            // Wallet-connect CTA (WO-42). The connection logic (SKR / Solana
+            // SDK) is out of scope for this WO — register a stub callback so
+            // the button is live and a future WO can drop the integration in.
+            var walletBtn = _root.Q<Button>(WalletConnectName);
+            if (walletBtn != null)
+            {
+                walletBtn.clicked -= OnWalletConnectClicked; // guard a double OnEnable
+                walletBtn.clicked += OnWalletConnectClicked;
+            }
+
+            // Nav arrows flanking the card row (WO-42). With three heroes they
+            // cycle the active-selection ring (wrapping); they are future-proofed
+            // for a larger roster / carousel.
+            var navPrev = _root.Q<Button>(NavPrevName);
+            var navNext = _root.Q<Button>(NavNextName);
+            if (navPrev != null)
+            {
+                navPrev.clicked -= OnNavPrevClicked; // guard a double OnEnable
+                navPrev.clicked += OnNavPrevClicked;
+            }
+            if (navNext != null)
+            {
+                navNext.clicked -= OnNavNextClicked; // guard a double OnEnable
+                navNext.clicked += OnNavNextClicked;
             }
 
             // A save mid-intro (hero chosen, no pet yet) pre-selects that hero
@@ -185,25 +222,42 @@ namespace DeNelle.Onboarding
             _bound = true;
         }
 
+        // =====================================================================
+        //  Wallet connect + nav arrows  (WO-42)
+        // =====================================================================
+
         /// <summary>
-        /// Adds an explicit "Select your hero to start" hint label above
-        /// the card row. Idempotent — re-runs of OnEnable don't stack copies.
+        /// Wallet-connect CTA tapped. UI-only for now: the SKR / Solana wallet
+        /// SDK integration is reserved for a future WO. Logs so the wiring is
+        /// observable in the editor / player console.
         /// </summary>
-        private static void AddHeroSelectHint(VisualElement root)
+        private void OnWalletConnectClicked()
         {
-            if (root == null) return;
-            var existing = root.Q<Label>("hero-select-hint");
-            if (existing != null) return;
-            var hint = new Label("Select your hero to start") { name = "hero-select-hint" };
-            hint.style.unityTextAlign = TextAnchor.MiddleCenter;
-            hint.style.fontSize = 16;
-            hint.style.color = new StyleColor(new Color(1f, 0.86f, 0.55f, 1f));
-            hint.style.marginTop = 4;
-            hint.style.marginBottom = 6;
-            hint.style.unityFontStyleAndWeight = FontStyle.Italic;
-            // Insert near the top of the layout so it sits between the
-            // header and the card row.
-            root.Insert(Mathf.Min(2, root.childCount), hint);
+            // TODO (future WO): wire the SKR / Solana wallet SDK here.
+            Debug.Log("[HeroSelectController] Wallet connect tapped — not yet wired.");
+        }
+
+        /// <summary>‹ nav arrow — moves the selection ring one hero back (wraps).</summary>
+        private void OnNavPrevClicked() => CycleHero(-1);
+
+        /// <summary>› nav arrow — moves the selection ring one hero forward (wraps).</summary>
+        private void OnNavNextClicked() => CycleHero(+1);
+
+        /// <summary>
+        /// Cycles the active-hero selection by <paramref name="direction"/>
+        /// (-1 / +1), wrapping around the catalog. With no current selection it
+        /// starts from the first hero (forward) or the last (backward).
+        /// </summary>
+        private void CycleHero(int direction)
+        {
+            int count = HeroCatalog.Heroes.Length;
+            if (count == 0) return;
+
+            int current = _hasSelection
+                ? System.Array.FindIndex(HeroCatalog.Heroes, h => h.Hero == _selectedHero)
+                : -1;
+            int next = ((current + direction) % count + count) % count;
+            OnCardClicked(HeroCatalog.Heroes[next].Hero);
         }
 
         /// <summary>Builds the three hero cards into the card row once.</summary>
