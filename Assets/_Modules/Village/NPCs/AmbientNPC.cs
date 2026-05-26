@@ -148,6 +148,14 @@ namespace DeNelle.Village
             _seedPhase = Random.value * Mathf.PI * 2f;
             _lineCursor = Random.Range(0, 64);   // varied opening line per villager
 
+            // WO-29: when this villager's KayKit civilian model is absent (the
+            // Models packs are gitignored, so a clone / this machine may not have
+            // them) the builder leaves a default-white placeholder primitive — the
+            // "white pill" the owner saw. Tint any such untinted body by archetype
+            // at runtime so a missing model still reads as a person, never a blank
+            // capsule. Skips real textured meshes (only recolours the white default).
+            EnsureBodyTinted();
+
             // Resolve the Keeper if the builder did not hand one over — a tagged
             // "Player" GameObject, else the Hero rig the village builder names.
             if (_hero == null) _hero = ResolveHeroFallback();
@@ -309,6 +317,61 @@ namespace DeNelle.Village
             // they are near, so engaging feels deliberate.
             if (Speaking && !(_hasNavMesh && _agent != null && _agent.enabled))
                 FaceHero();
+        }
+
+        // ── Body tint (WO-29 white-pill safety-net) ──────────────────────────
+
+        /// <summary>
+        /// Recolours any default-white / untextured placeholder body this villager
+        /// carries (a primitive left when the KayKit model is missing) with an
+        /// archetype tint, so it never renders as a blank white capsule. Real
+        /// textured meshes are left untouched — only Unity's built-in
+        /// "Default-Material" (or a null material) is replaced.
+        /// </summary>
+        private void EnsureBodyTinted()
+        {
+            var renderers = GetComponentsInChildren<Renderer>(true);
+            if (renderers == null || renderers.Length == 0) return;
+
+            Material tinted = null;   // built lazily, shared across any placeholder parts
+            foreach (var r in renderers)
+            {
+                if (r == null) continue;
+                var mat = r.sharedMaterial;
+                bool isDefault = mat == null ||
+                                 mat.name.StartsWith("Default-Material") ||
+                                 mat.name.StartsWith("Lit");   // bare URP/Lit instance
+                if (!isDefault) continue;
+
+                if (tinted == null)
+                {
+                    var shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+                    if (shader == null) return;
+                    tinted = new Material(shader) { name = "AmbientNPC_" + _archetype };
+                    Color c = ArchetypeTint(_archetype);
+                    if (tinted.HasProperty("_BaseColor")) tinted.SetColor("_BaseColor", c);
+                    if (tinted.HasProperty("_Color")) tinted.SetColor("_Color", c);
+                }
+                r.sharedMaterial = tinted;
+            }
+        }
+
+        /// <summary>Warm, distinguishable tint per townsfolk archetype (WO-29).</summary>
+        private static Color ArchetypeTint(TownsfolkDialogue.Archetype a)
+        {
+            switch (a)
+            {
+                case TownsfolkDialogue.Archetype.Trader:   return Hex("c2925a"); // amber
+                case TownsfolkDialogue.Archetype.Guard:    return Hex("8a6b5a"); // earthy brown
+                case TownsfolkDialogue.Archetype.Child:    return Hex("7fa8c9"); // soft blue
+                case TownsfolkDialogue.Archetype.Elder:    return Hex("a09890"); // grey-white
+                default:                                   return Hex("c2a882"); // Villager warm tan
+            }
+        }
+
+        private static Color Hex(string rrggbb)
+        {
+            return ColorUtility.TryParseHtmlString("#" + rrggbb, out var c) ? c : Color.white;
         }
 
         // ── Helpers ──────────────────────────────────────────────────────────

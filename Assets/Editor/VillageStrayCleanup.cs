@@ -115,5 +115,60 @@ namespace DeNelle.Editor
             bool ok = EditorSceneManager.SaveScene(scene);
             Debug.Log($"[TreeCollider] Village.unity saved: {ok}.");
         }
+
+        // Read-only dump of the hand-built village's portals + buildings +
+        // townsfolk so targeted edits (WO-28/30) work against the ACTUAL scene
+        // rather than the builder's assumed coords. Does NOT modify or save.
+        [MenuItem("Defenders/Cleanup/Diagnose Village (portals + buildings)")]
+        public static void DiagnoseVillage()
+        {
+            EditorSceneManager.OpenScene(VillagePath, OpenSceneMode.Single);
+            var all = UnityEngine.Object.FindObjectsByType<Transform>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            var sb = new System.Text.StringBuilder();
+
+            sb.AppendLine("[VDiag] ===== PORTALS =====");
+            foreach (var t in all)
+            {
+                if (t == null || !t.name.StartsWith("DungeonPortal")) continue;
+                sb.AppendLine($"[VDiag] PORTAL '{t.name}' worldPos={t.position} localScale={t.localScale} lossyScale={t.lossyScale} rotY={t.eulerAngles.y:F0} children={t.childCount}");
+                foreach (Transform c in t)
+                    sb.AppendLine($"[VDiag]     child '{c.name}' localPos={c.localPosition} localScale={c.localScale}");
+                var bc = t.GetComponent<BoxCollider>();
+                if (bc != null) sb.AppendLine($"[VDiag]     BoxCollider center={bc.center} size={bc.size} trigger={bc.isTrigger}");
+            }
+
+            sb.AppendLine("[VDiag] ===== BUILDINGS (name starts 'Building') =====");
+            foreach (var t in all)
+            {
+                if (t == null || !t.name.StartsWith("Building")) continue;
+                var rends = t.GetComponentsInChildren<Renderer>(true);
+                sb.AppendLine($"[VDiag] BUILDING '{t.name}' worldPos={t.position} localScale={t.localScale} renderers={rends.Length}");
+                int i = 0;
+                foreach (var r in rends)
+                {
+                    if (r == null) continue;
+                    if (i++ >= 5) { sb.AppendLine("[VDiag]     ...(more renderers)"); break; }
+                    var m = r.sharedMaterial;
+                    string shader = (m != null && m.shader != null) ? m.shader.name : "NULL";
+                    string tex = (m != null && m.HasProperty("_BaseMap") && m.GetTexture("_BaseMap") != null) ? "BaseMap=Y"
+                               : (m != null && m.HasProperty("_MainTex") && m.GetTexture("_MainTex") != null) ? "MainTex=Y" : "tex=NONE";
+                    string col = (m != null && m.HasProperty("_BaseColor")) ? m.GetColor("_BaseColor").ToString() : "";
+                    sb.AppendLine($"[VDiag]     rend '{r.gameObject.name}' on={r.enabled} mat='{(m != null ? m.name : "NULL")}' shader={shader} {tex} baseColor={col}");
+                }
+            }
+
+            sb.AppendLine("[VDiag] ===== TOWNSFOLK =====");
+            foreach (var t in all)
+            {
+                if (t == null || (!t.name.StartsWith("Townsperson") && t.name != "Townsfolk")) continue;
+                var rends = t.GetComponentsInChildren<Renderer>(true);
+                sb.AppendLine($"[VDiag] NPC '{t.name}' pos={t.position} renderers={rends.Length} children={t.childCount}");
+                foreach (Transform c in t)
+                    sb.AppendLine($"[VDiag]     child '{c.name}'");
+            }
+
+            Debug.Log(sb.ToString());
+            Debug.Log("[VDiag] DONE (read-only; scene NOT modified).");
+        }
     }
 }

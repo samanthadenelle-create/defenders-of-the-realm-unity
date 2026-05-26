@@ -131,6 +131,53 @@ namespace DeNelle.Village
         private bool _hasValidTile;          // is the cursor over a valid tile this frame?
         private Vector3 _snappedTile;        // snapped hex-tile centre under the cursor
 
+        // ── WO-31: multi-screen build/upgrade flow ───────────────────────────
+        // The menu now has three screens: a Root chooser (Build Tower / Upgrade
+        // Tower / Repair Wall), a Build-Tower screen (element radio + cost +
+        // timing), and an Upgrade-Tower screen (placed-tower list + upgrade info).
+        private enum MenuScreen { Root, BuildTower, UpgradeTower }
+        private MenuScreen _screen = MenuScreen.Root;
+
+        // Local element enum — deliberately NOT DeNelle.BattleATB's ElementType:
+        // DeNelle.Village must not take a dependency on BattleATB (WO-31 §Files).
+        private enum TowerElement { Flame, Ice, Aether, Physical }
+        private TowerElement _selectedElement = TowerElement.Flame;
+        private Building _selectedTowerForUpgrade;
+
+        // USS classes for the WO-31 sub-screens (styled in BuildMenu.uss).
+        private const string OptionTileClass = "build-option-tile";
+        private const string BackBtnClass = "build-menu-back-btn";
+        private const string RadioGroupClass = "element-radio-group";
+        private const string RadioRowClass = "element-radio-row";
+        private const string RadioRowSelectedClass = "element-radio-row--selected";
+        private const string CostRowClass = "cost-row";
+        private const string CostCheckClass = "cost-check";
+        private const string CostFailClass = "cost-fail";
+        private const string ConfirmBtnClass = "build-confirm-btn";
+        private const string TowerRowClass = "tower-row";
+        private const string TowerRowSelectedClass = "tower-row--selected";
+
+        /// <summary>One element tower's stub costs/timing (WO-31 — Week 6 moves these to JSON).</summary>
+        private struct TowerVariantDef
+        {
+            public TowerElement Element;
+            public string DisplayName;
+            public int CrystalCost;
+            public int Wood, Stone;
+            public int BuildTimeSec;
+            public int UpgradeCrystalCost, UpgradeStone, UpgradeTimeSec;
+            public int Dps, Hp;
+        }
+
+        // STUB — Week 6: hard-coded variant table until tower-variants.json lands.
+        private static readonly TowerVariantDef[] Variants =
+        {
+            new TowerVariantDef { Element = TowerElement.Flame,    DisplayName = "Flame Tower",  CrystalCost = 150, Wood = 20, Stone = 5,  BuildTimeSec = 150, UpgradeCrystalCost = 200, UpgradeStone = 15, UpgradeTimeSec = 300, Dps = 30, Hp = 200 },
+            new TowerVariantDef { Element = TowerElement.Ice,      DisplayName = "Ice Tower",    CrystalCost = 150, Wood = 20, Stone = 5,  BuildTimeSec = 150, UpgradeCrystalCost = 200, UpgradeStone = 15, UpgradeTimeSec = 300, Dps = 26, Hp = 220 },
+            new TowerVariantDef { Element = TowerElement.Aether,   DisplayName = "Aether Tower", CrystalCost = 180, Wood = 20, Stone = 8,  BuildTimeSec = 180, UpgradeCrystalCost = 240, UpgradeStone = 18, UpgradeTimeSec = 360, Dps = 34, Hp = 190 },
+            new TowerVariantDef { Element = TowerElement.Physical, DisplayName = "Stone Tower",  CrystalCost = 120, Wood = 15, Stone = 10, BuildTimeSec = 120, UpgradeCrystalCost = 160, UpgradeStone = 12, UpgradeTimeSec = 240, Dps = 24, Hp = 260 },
+        };
+
         /// <summary>Raised when a building is successfully placed — carries the new Building + its def.</summary>
         public event Action<Building, BuildingDef> BuildingPlaced;
 
@@ -249,6 +296,8 @@ namespace DeNelle.Village
                       " uxml=" + (_document != null && _document.visualTreeAsset != null ? _document.visualTreeAsset.name : "NULL") +
                       " root=" + (_root != null) + " panel=" + (_panel != null) + " list=" + (_list != null));
             SetPanelVisible(true);
+            _screen = MenuScreen.Root;            // always open on the chooser
+            _selectedTowerForUpgrade = null;
             Disarm();
             Render();
         }
@@ -291,31 +340,296 @@ namespace DeNelle.Village
         // =====================================================================
 
         /// <summary>
-        /// Rebuilds the menu. Owner direction 2026-05-20 ("when click build
-        /// should get two options one for tower one for repair") — Option A
-        /// chosen: replace the five-building grid with exactly two cards:
-        /// Build Tower (ArcaneTower from the canon catalogue) and Repair
-        /// Wall (fires the existing WallRepairController via reflection).
+        /// Rebuilds the menu for the current <see cref="_screen"/>. WO-31 turned
+        /// the flat two-card menu into a three-screen flow: Root chooser →
+        /// Build-Tower (element radio + costs + timing) or Upgrade-Tower
+        /// (placed-tower list + upgrade info). All screens build into the same
+        /// runtime <c>build-menu-list</c> container — no UXML structure change.
         /// </summary>
         public void Render()
         {
             if (_list == null) return;
             _list.Clear();
-
             UpdateBalanceLabel();
 
-            // Card 1 — Build Tower (the existing ArcaneTower def).
+            switch (_screen)
+            {
+                case MenuScreen.BuildTower:   RenderBuildTower();   break;
+                case MenuScreen.UpgradeTower: RenderUpgradeTower(); break;
+                default:                      RenderRoot();         break;
+            }
+        }
+
+        // ── Root chooser ─────────────────────────────────────────────────────
+
+        /// <summary>
+        /// The top-level chooser: three big tiles — Build Tower, Upgrade Tower,
+        /// Repair Wall. (Owner WO-31: "dialog or option to select tower or build
+        /// tower … maybe upgrade tower popup".)
+        /// </summary>
+        private void RenderRoot()
+        {
+            _list.Add(BuildOptionTile("🏗  Build Tower",
+                "Raise a new elemental defence tower.",
+                () => { _screen = MenuScreen.BuildTower; Render(); }));
+
+            _list.Add(BuildOptionTile("⬆  Upgrade Tower",
+                "Spend crystals + stone to level up a placed tower.",
+                () => { _screen = MenuScreen.UpgradeTower; _selectedTowerForUpgrade = null; Render(); }));
+
+            _list.Add(BuildRepairCard());
+        }
+
+        /// <summary>A large tappable tile used by the Root chooser.</summary>
+        private VisualElement BuildOptionTile(string title, string subtitle, Action onClick)
+        {
+            var tile = new Button(() => onClick?.Invoke());
+            tile.AddToClassList(OptionTileClass);
+
+            var t = new Label(title);
+            t.AddToClassList(CardNameClass);
+            tile.Add(t);
+
+            var s = new Label(subtitle);
+            s.AddToClassList(CardDescClass);
+            s.style.whiteSpace = WhiteSpace.Normal;
+            tile.Add(s);
+
+            return tile;
+        }
+
+        /// <summary>The "← Back" row shown on every sub-screen; returns to Root.</summary>
+        private VisualElement BuildBackButton()
+        {
+            var back = new Button(() => { _screen = MenuScreen.Root; _selectedTowerForUpgrade = null; Disarm(); Render(); })
+            {
+                text = "← Back"
+            };
+            back.AddToClassList(BackBtnClass);
+            return back;
+        }
+
+        // ── Build Tower screen ────────────────────────────────────────────────
+
+        /// <summary>
+        /// Element radio (Flame / Ice / Aether / Physical) + the selected
+        /// variant's crystal + material costs (each with a ✓/✗) + build time +
+        /// a Build button greyed out when anything is unaffordable.
+        /// </summary>
+        private void RenderBuildTower()
+        {
+            _list.Add(BuildBackButton());
+
+            var heading = new Label("BUILD TOWER");
+            heading.AddToClassList(CardNameClass);
+            _list.Add(heading);
+
+            var elementLabel = new Label("Element:");
+            elementLabel.AddToClassList(CardDescClass);
+            _list.Add(elementLabel);
+
+            var radioGroup = new VisualElement();
+            radioGroup.AddToClassList(RadioGroupClass);
+            foreach (TowerElement el in new[] { TowerElement.Flame, TowerElement.Ice,
+                                                TowerElement.Aether, TowerElement.Physical })
+                radioGroup.Add(BuildElementRadioRow(el));
+            _list.Add(radioGroup);
+
+            var variant = VariantFor(_selectedElement);
+            _list.Add(BuildCostBlock(variant));
+            _list.Add(BuildTimingLabel("Build time: " + FormatTime(variant.BuildTimeSec)));
+
+            bool canBuild = CanAfford(variant);
+            var btn = new Button(() => OnConfirmBuild(variant)) { text = "Build" };
+            btn.AddToClassList(ConfirmBtnClass);
+            btn.SetEnabled(canBuild);
+            _list.Add(btn);
+        }
+
+        /// <summary>A toggle-style radio row that selects an element on click.</summary>
+        private VisualElement BuildElementRadioRow(TowerElement el)
+        {
+            bool selected = el == _selectedElement;
+            var row = new Button(() => { _selectedElement = el; Render(); });
+            row.AddToClassList(RadioRowClass);
+            row.EnableInClassList(RadioRowSelectedClass, selected);
+            row.text = (selected ? "◉  " : "○  ") + el;
+            return row;
+        }
+
+        /// <summary>Crystal row + one row per material, each with a ✓ (afford) / ✗ (short).</summary>
+        private VisualElement BuildCostBlock(TowerVariantDef v)
+        {
+            var block = new VisualElement();
+            block.Add(BuildCostRow("◆ Crystals", v.CrystalCost, CrystalBalance));
+            if (v.Wood > 0)  block.Add(BuildCostRow("Wood",  v.Wood,  GetMaterialCount("wood")));
+            if (v.Stone > 0) block.Add(BuildCostRow("Stone", v.Stone, GetMaterialCount("stone")));
+            return block;
+        }
+
+        private VisualElement BuildCostRow(string label, int required, int have)
+        {
+            var row = new VisualElement();
+            row.AddToClassList(CostRowClass);
+
+            var name = new Label($"{label}: {required}");
+            name.AddToClassList(CardCostClass);
+            row.Add(name);
+
+            bool ok = have >= required;
+            var mark = new Label(ok ? $"✓ {have}" : $"✗ {have}");
+            mark.AddToClassList(ok ? CostCheckClass : CostFailClass);
+            row.Add(mark);
+            return row;
+        }
+
+        private Label BuildTimingLabel(string text)
+        {
+            var l = new Label(text);
+            l.AddToClassList(CardHpClass);
+            return l;
+        }
+
+        /// <summary>
+        /// Arms the canonical arcane-tower def for tap-to-place (the placement
+        /// pipeline is shared) and returns to Root with a placement hint. The
+        /// chosen element is remembered for when the variant system goes live.
+        /// </summary>
+        private void OnConfirmBuild(TowerVariantDef v)
+        {
+            if (!CanAfford(v))
+            {
+                SetStatus("Not enough crystals or materials for the " + v.DisplayName + ".", isError: true);
+                return;
+            }
+
             BuildingDef tower = null;
             foreach (var def in BuildingCatalog.Buildings)
             {
                 if (def == null) continue;
                 if (def.Id == "arcane-tower") { tower = def; break; }
             }
-            if (tower != null) _list.Add(BuildCard(tower));
+            if (tower == null)
+            {
+                SetStatus("Tower definition missing from the catalogue.", isError: true);
+                return;
+            }
 
-            // Card 2 — Repair Wall (no building cost; routes the repair
-            // confirm through WallRepairController by reflection).
-            _list.Add(BuildRepairCard());
+            Arm(tower);
+            _screen = MenuScreen.Root;
+            Render();
+            SetStatus($"Tap a clear tile to raise the {v.DisplayName}.");
+        }
+
+        // ── Upgrade Tower screen ──────────────────────────────────────────────
+
+        /// <summary>
+        /// Lists every placed ArcaneTower; selecting one shows its upgrade cost,
+        /// time and result. The upgrade action itself is a Week-6 stub.
+        /// </summary>
+        private void RenderUpgradeTower()
+        {
+            _list.Add(BuildBackButton());
+
+            var heading = new Label("UPGRADE TOWER");
+            heading.AddToClassList(CardNameClass);
+            _list.Add(heading);
+
+            var towers = UnityEngine.Object.FindObjectsByType<Building>(
+                FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+
+            var list = new VisualElement();
+            bool any = false;
+            foreach (var b in towers)
+            {
+                if (b == null || b.Type != BuildingType.ArcaneTower) continue;
+                list.Add(BuildTowerSelectRow(b));
+                any = true;
+            }
+            if (!any)
+            {
+                var none = new Label("No towers placed yet.");
+                none.AddToClassList(CardDescClass);
+                list.Add(none);
+            }
+            _list.Add(list);
+
+            if (_selectedTowerForUpgrade != null)
+                _list.Add(BuildUpgradeInfoBlock(_selectedTowerForUpgrade));
+        }
+
+        private VisualElement BuildTowerSelectRow(Building b)
+        {
+            bool selected = ReferenceEquals(b, _selectedTowerForUpgrade);
+            var row = new Button(() => { _selectedTowerForUpgrade = b; Render(); });
+            row.AddToClassList(TowerRowClass);
+            row.EnableInClassList(TowerRowSelectedClass, selected);
+            row.text = (selected ? "◉  " : "○  ") + b.name.Replace("Building-", "").Replace("Building_", "")
+                       + "  (Lvl " + b.Level + ")";
+            return row;
+        }
+
+        /// <summary>Upgrade cost + time + result for the selected tower (action stubbed for Week 6).</summary>
+        private VisualElement BuildUpgradeInfoBlock(Building b)
+        {
+            var block = new VisualElement();
+
+            // STUB — Week 6: until towers carry an element, upgrade the selected
+            // element variant's costs (defaults to Flame).
+            var v = VariantFor(_selectedElement);
+            block.Add(BuildCostRow("◆ Crystals", v.UpgradeCrystalCost, CrystalBalance));
+            if (v.UpgradeStone > 0) block.Add(BuildCostRow("Stone", v.UpgradeStone, GetMaterialCount("stone")));
+            block.Add(BuildTimingLabel("Upgrade time: " + FormatTime(v.UpgradeTimeSec)));
+
+            var result = new Label($"Result: Lvl {b.Level + 1}  (+{v.Dps} DPS, +{v.Hp / 4} HP)");
+            result.AddToClassList(CardDescClass);
+            result.style.whiteSpace = WhiteSpace.Normal;
+            block.Add(result);
+
+            var upgrade = new Button(() =>
+            {
+                // STUB — Week 6: no tower upgrade pipeline yet.
+                Debug.Log("[BuildMenu] Upgrade stub — Week 6 (" + b.name + ").");
+                SetStatus("Tower upgrades arrive in a later update.", isError: false);
+            })
+            { text = "Upgrade" };
+            upgrade.AddToClassList(ConfirmBtnClass);
+            block.Add(upgrade);
+            return block;
+        }
+
+        // ── WO-31 helpers ─────────────────────────────────────────────────────
+
+        private static TowerVariantDef VariantFor(TowerElement el)
+        {
+            foreach (var v in Variants) if (v.Element == el) return v;
+            return Variants[0];
+        }
+
+        private bool CanAfford(TowerVariantDef v)
+        {
+            return CrystalBalance >= v.CrystalCost
+                   && GetMaterialCount("wood") >= v.Wood
+                   && GetMaterialCount("stone") >= v.Stone;
+        }
+
+        // STUB — Week 6: material inventory is not tracked yet, so report fixed
+        // on-hand counts. Crystals come from the live GameState (CrystalBalance).
+        private static int GetMaterialCount(string id)
+        {
+            switch (id)
+            {
+                case "wood":  return 20;
+                case "stone": return 5;
+                default:      return 0;
+            }
+        }
+
+        /// <summary>Formats seconds as "Xm Ys" (or "Ys" under a minute).</summary>
+        private static string FormatTime(int seconds)
+        {
+            int m = seconds / 60, s = seconds % 60;
+            return m > 0 ? $"{m}m {s}s" : $"{s}s";
         }
 
         private VisualElement BuildRepairCard()

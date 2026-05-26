@@ -158,3 +158,133 @@
 .build-menu-status--error {
     color: rgb(248, 113, 113);
 }
+
+/* ── WO-31: Root chooser tiles ──────────────────────────────────────── */
+.build-option-tile {
+    flex-direction: column;
+    align-items: flex-start;
+    margin-bottom: 8px;
+    padding: 12px;
+    border-radius: 10px;
+    background-color: rgba(28, 24, 42, 0.92);
+    border-width: 1px;
+    border-color: rgba(124, 58, 237, 0.30);
+    -unity-text-align: upper-left;
+    white-space: normal;
+}
+
+.build-option-tile:hover {
+    border-color: rgba(196, 181, 253, 0.65);
+    background-color: rgba(40, 34, 58, 0.96);
+}
+
+/* ── WO-31: Back nav ────────────────────────────────────────────────── */
+.build-menu-back-btn {
+    align-self: flex-start;
+    margin-bottom: 6px;
+    padding: 2px 8px;
+    font-size: 12px;
+    color: rgb(160, 152, 178);
+    background-color: rgba(255, 255, 255, 0.05);
+    border-width: 0;
+    border-radius: 8px;
+}
+
+.build-menu-back-btn:hover {
+    color: rgb(237, 233, 250);
+    background-color: rgba(255, 255, 255, 0.10);
+}
+
+/* ── WO-31: Element radio group ─────────────────────────────────────── */
+.element-radio-group {
+    flex-direction: column;
+    margin-top: 4px;
+    margin-bottom: 8px;
+}
+
+.element-radio-row {
+    margin-bottom: 4px;
+    padding: 6px 10px;
+    font-size: 13px;
+    -unity-text-align: middle-left;
+    color: rgb(206, 200, 222);
+    background-color: rgba(28, 24, 42, 0.85);
+    border-width: 1px;
+    border-color: rgba(124, 58, 237, 0.30);
+    border-radius: 14px;
+}
+
+.element-radio-row:hover {
+    border-color: rgba(196, 181, 253, 0.6);
+}
+
+.element-radio-row--selected {
+    color: rgb(20, 16, 30);
+    background-color: rgb(252, 224, 156);
+    border-color: rgb(252, 224, 156);
+    -unity-font-style: bold;
+}
+
+/* ── WO-31: Cost rows ───────────────────────────────────────────────── */
+.cost-row {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 2px;
+}
+
+.cost-check {
+    font-size: 13px;
+    -unity-font-style: bold;
+    color: rgb(110, 231, 183);
+}
+
+.cost-fail {
+    font-size: 13px;
+    -unity-font-style: bold;
+    color: rgb(248, 113, 113);
+}
+
+/* ── WO-31: Confirm (Build / Upgrade) button ────────────────────────── */
+.build-confirm-btn {
+    margin-top: 10px;
+    padding: 8px;
+    font-size: 14px;
+    -unity-font-style: bold;
+    color: rgb(20, 16, 30);
+    background-color: rgb(252, 224, 156);
+    border-width: 0;
+    border-radius: 10px;
+}
+
+.build-confirm-btn:hover {
+    background-color: rgb(253, 235, 186);
+}
+
+.build-confirm-btn:disabled {
+    opacity: 0.4;
+}
+
+/* ── WO-31: Upgrade tower-select rows ───────────────────────────────── */
+.tower-row {
+    margin-bottom: 4px;
+    padding: 6px 10px;
+    font-size: 13px;
+    -unity-text-align: middle-left;
+    color: rgb(206, 200, 222);
+    background-color: rgba(28, 24, 42, 0.85);
+    border-width: 1px;
+    border-color: rgba(80, 110, 140, 0.40);
+    border-radius: 10px;
+}
+
+.tower-row:hover {
+    border-color: rgba(148, 180, 210, 0.7);
+}
+
+.tower-row--selected {
+    color: rgb(20, 16, 30);
+    background-color: rgb(148, 180, 210);
+    border-color: rgb(148, 180, 210);
+    -unity-font-style: bold;
+}
