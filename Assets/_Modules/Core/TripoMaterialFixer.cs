@@ -59,6 +59,22 @@ namespace DeNelle.Core
             _hasFallbackTint = true;
         }
 
+        private bool _hasEmissionOverride;
+        private Color _emissionOverride = Color.black;
+        private const float EmissionOverrideIntensity = 0.30f; // owner: "very minimal"
+
+        /// <summary>
+        /// Owner 2026-05-25: the pets' "aura / light beams" was bright emission
+        /// preserved from their source materials. Replace it with a MINIMAL,
+        /// affinity-coloured glow instead (fire red / ice white / aether violet).
+        /// When set, this overrides any source emission on every rebuilt material.
+        /// </summary>
+        public void SetEmissionOverride(Color color)
+        {
+            _emissionOverride = color;
+            _hasEmissionOverride = true;
+        }
+
         // Start (not Awake): callers like PetDeployer add this component and
         // THEN set the fallback texture name + tint on the next line. Awake
         // fires synchronously inside AddComponent, so the setters would land
@@ -136,16 +152,27 @@ namespace DeNelle.Core
                         if (newMat.HasProperty("_BaseMap")) newMat.SetTexture("_BaseMap", tex);
                         if (newMat.HasProperty("_MainTex")) newMat.SetTexture("_MainTex", tex);
                     }
-                    // Preserve normal + emission so rebuilding an already-correct
-                    // material doesn't flatten it (keeps this non-destructive).
-                    if (src != null)
+                    // Preserve the normal map always (non-destructive).
+                    if (src != null && src.HasProperty("_BumpMap"))
                     {
-                        Texture nrm = src.HasProperty("_BumpMap") ? src.GetTexture("_BumpMap") : null;
+                        Texture nrm = src.GetTexture("_BumpMap");
                         if (nrm != null && newMat.HasProperty("_BumpMap"))
                         {
                             newMat.SetTexture("_BumpMap", nrm);
                             newMat.EnableKeyword("_NORMALMAP");
                         }
+                    }
+                    // Emission: a minimal affinity glow when overridden (pets), else
+                    // preserve the source emission (buildings keep their lit windows).
+                    if (_hasEmissionOverride)
+                    {
+                        if (newMat.HasProperty("_EmissionColor"))
+                            newMat.SetColor("_EmissionColor", _emissionOverride * EmissionOverrideIntensity);
+                        newMat.EnableKeyword("_EMISSION");
+                        newMat.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
+                    }
+                    else if (src != null)
+                    {
                         Texture em = src.HasProperty("_EmissionMap") ? src.GetTexture("_EmissionMap") : null;
                         Color emc = src.HasProperty("_EmissionColor") ? src.GetColor("_EmissionColor") : Color.black;
                         if (em != null || emc.maxColorComponent > 0.01f)

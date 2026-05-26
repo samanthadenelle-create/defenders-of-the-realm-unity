@@ -63,6 +63,10 @@ namespace DeNelle.Onboarding
             velocity.space = ParticleSystemSimulationSpace.Local;
             velocity.x = new ParticleSystem.MinMaxCurve(-0.04f, 0.04f);
             velocity.y = new ParticleSystem.MinMaxCurve(-0.02f, 0.04f);
+            // z MUST be set too: x/y use TwoConstants mode, but an unset z defaults
+            // to Constant mode — the mismatch spams "Particle Velocity curves must
+            // all be in the same mode" EVERY FRAME (16k+ lines an intro). Match it.
+            velocity.z = new ParticleSystem.MinMaxCurve(-0.02f, 0.02f);
 
             // Per-particle alpha twinkle: fade in, hold, fade out.
             var color = ps.colorOverLifetime;
@@ -130,6 +134,7 @@ namespace DeNelle.Onboarding
             velocity.space = ParticleSystemSimulationSpace.Local;
             velocity.x = new ParticleSystem.MinMaxCurve(-2.4f, 2.4f);
             velocity.y = new ParticleSystem.MinMaxCurve(-0.6f, -0.2f);
+            velocity.z = new ParticleSystem.MinMaxCurve(-0.2f, 0.2f); // match x/y mode (kills the per-frame warning)
 
             // Head shrinks as it fades — looks like a comet burning out.
             var sizeOverLife = ps.sizeOverLifetime;

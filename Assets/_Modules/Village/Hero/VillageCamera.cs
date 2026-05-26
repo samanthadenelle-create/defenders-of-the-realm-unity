@@ -43,9 +43,13 @@ namespace DeNelle.Village
         // Force stable values regardless of any stale serialized scene data.
         private void Awake()
         {
-            _followOffset = new Vector3(0f, 8.5f, -6.5f);
+            // Owner 2026-05-25: the (0,8.5,-6.5) seat read as "almost bird's-eye".
+            // Drop the height + push further back so the camera sits BEHIND the
+            // hero looking out toward the horizon (third-person, not top-down).
+            // Tighter smooth time too (was 0.12 -> felt laggy).
+            _followOffset = new Vector3(0f, 5.5f, -9f);
             _lookAtHeight = 1.3f;
-            _smoothTime = 0.12f;
+            _smoothTime = 0.08f;
         }
 
         private void Start()

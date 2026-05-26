@@ -50,6 +50,12 @@ namespace DeNelle.Village
         private void Awake()
         {
             _animator = GetComponentInChildren<Animator>();
+            // Owner 2026-05-25 "movement feels laggy": the baked serialized values
+            // (speed 4 / accel 22) spool up slowly. Force snappier response here —
+            // the scene's stale values can't be changed without a risky re-bake.
+            _moveSpeed = 6f;
+            _accelMetresPerSec2 = 55f;
+            _decelMetresPerSec2 = 45f;
         }
 
         private void Start()

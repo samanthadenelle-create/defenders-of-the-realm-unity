@@ -175,6 +175,12 @@ namespace DeNelle.Pets
                         if (cam != null) Destroy(cam);
                     foreach (var al in visual.GetComponentsInChildren<AudioListener>(true))
                         if (al != null) Destroy(al);
+                    // Strip any baked-in light / particle "aura" too — the affinity
+                    // glow below is the single controlled source (owner 2026-05-25).
+                    foreach (var lt in visual.GetComponentsInChildren<Light>(true))
+                        if (lt != null) Destroy(lt);
+                    foreach (var ps in visual.GetComponentsInChildren<ParticleSystem>(true))
+                        if (ps != null) Destroy(ps);
                     // Tripo FBXs import with Phong materials URP can't render
                     // (owner 2026-05-20). The fixer rebuilds them as URP/Lit
                     // on Awake; if Tripo's embedded textures didn't extract,
@@ -186,6 +192,9 @@ namespace DeNelle.Pets
                     {
                         petFixer.SetFallbackTexture("Textures/" + def.Species);
                         petFixer.SetFallbackTint(def.TintColor);
+                        // Owner 2026-05-25: dim the pet "aura/beams" to a minimal
+                        // affinity-coloured glow (fire red / ice white / aether violet).
+                        petFixer.SetEmissionOverride(AffinityGlow(def.Element));
                         // WO-34 (2026-05-25): TripoAssetPostprocessor extracts the
                         // pet's materials as URP — but those extracted URP mats
                         // render washed-out/grey, and the fixer SKIPS already-URP
@@ -221,6 +230,19 @@ namespace DeNelle.Pets
 
             pet.name = $"Pet_{def.Species}";
             return pet;
+        }
+
+        // Affinity glow colour for a pet's minimal aura (owner 2026-05-25:
+        // "fire red, ice white"). Matches pets.json glow intent per element.
+        private static Color AffinityGlow(string element)
+        {
+            switch ((element ?? "").ToLowerInvariant())
+            {
+                case "flame": return new Color(1.00f, 0.33f, 0.16f); // fire red  (#ff5630)
+                case "ice":   return new Color(0.90f, 0.96f, 1.00f); // icy white (#e6f5ff)
+                case "aether":return new Color(0.62f, 0.44f, 1.00f); // violet    (#9d6fff)
+                default:      return Color.white;
+            }
         }
 
         /// <summary>

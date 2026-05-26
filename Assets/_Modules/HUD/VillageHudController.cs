@@ -140,6 +140,9 @@ namespace DeNelle.HUD
         private Label _waveCountdown;
         private VisualElement _waveCountdownTimer;
         private Label _waveCountdownIcon;
+        private Button _startWaveButton;
+        private float _reachTimer;
+        private int _reachRuns;
         private VisualElement _abilityBar;
         private VisualElement _manaFill;
         private Label _manaLabel;
@@ -191,6 +194,16 @@ namespace DeNelle.HUD
 
         private void Update()
         {
+            // Re-assert HUD reachability for the first ~2s to catch overlay panels
+            // that bootstrap AFTER this HUD binds (owner 2026-05-25: HUD dead — a
+            // full-screen overlay root was swallowing clicks). Skips the BuildMenu,
+            // which manages its own root pickingMode.
+            if (_reachRuns < 5)
+            {
+                _reachTimer -= Time.unscaledDeltaTime;
+                if (_reachTimer <= 0f) { _reachTimer = 0.4f; _reachRuns++; EnsureHudReachable(); }
+            }
+
             // Auto-hide the repair-feedback toast once its dwell time elapses.
             if (_repairToastHideAt >= 0f && Time.unscaledTime >= _repairToastHideAt)
             {
@@ -263,9 +276,64 @@ namespace DeNelle.HUD
 
             BuildAbilityCells();
             BuildTriggerWaveButton();
+            BuildStartWaveButton();
+            EnsureHudReachable();
             MoveManaPanelToTopLeft();
             _bound = true;
             Debug.Log($"[VillageHudController] Bound. root={_root != null}, heart={_heartHpFill != null}, mana={_manaFill != null}, abilityBar={_abilityBar != null}");
+        }
+
+        // Visible, unmistakable START WAVE button (owner 2026-05-25: "gear icon so
+        // I can trigger wave" — the only trigger was a non-obvious click on the
+        // countdown text). Built in code + parented to the HUD root so it doesn't
+        // depend on the UXML; calls the same ForceBeginNextWave reflection path.
+        private void BuildStartWaveButton()
+        {
+            if (_root == null) return;
+            if (_startWaveButton != null) { _startWaveButton.RemoveFromHierarchy(); _startWaveButton = null; }
+
+            var btn = new Button(OnTriggerWaveClicked) { text = "⚔ START WAVE" };
+            btn.name = "StartWaveButton";
+            btn.pickingMode = PickingMode.Position;
+            var s = btn.style;
+            s.position = Position.Absolute;
+            s.top = 110f;                                  // just under the wave timer / compass
+            s.left = Length.Percent(50f);
+            s.translate = new Translate(Length.Percent(-50f), 0f, 0f);
+            s.paddingLeft = 18f; s.paddingRight = 18f; s.paddingTop = 9f; s.paddingBottom = 9f;
+            s.backgroundColor = new Color(0.82f, 0.27f, 0.16f, 0.96f); // attack-red so it reads as 'send the wave'
+            s.color = Color.white;
+            s.unityFontStyleAndWeight = FontStyle.Bold;
+            s.fontSize = 16f;
+            s.borderTopLeftRadius = 9f; s.borderTopRightRadius = 9f;
+            s.borderBottomLeftRadius = 9f; s.borderBottomRightRadius = 9f;
+            _root.Add(btn);
+            _startWaveButton = btn;
+        }
+
+        // Owner 2026-05-25 ("HUD non-responsive — a panel makes them unreachable"):
+        // a full-screen overlay UIDocument root with pickingMode=Position sits over
+        // the HUD and swallows every click. Relax EVERY other panel's ROOT to
+        // Ignore so clicks fall through to the real buttons; the buttons themselves
+        // (children) keep their own pickingMode and stay clickable. The BuildMenu
+        // is skipped — it toggles its own root (Position when open). Only logs the
+        // panels it actually had to relax, so the culprit is obvious in the log.
+        private void EnsureHudReachable()
+        {
+            foreach (var doc in UnityEngine.Object.FindObjectsOfType<UIDocument>(true))
+            {
+                if (doc == null || doc == _document) continue;
+                var r = doc.rootVisualElement;
+                if (r == null) continue;
+                if (doc.gameObject.name.IndexOf("Build", System.StringComparison.OrdinalIgnoreCase) >= 0)
+                    continue; // BuildMenu manages its own root pickingMode
+                if (r.pickingMode != PickingMode.Ignore)
+                {
+                    Debug.Log($"[VillageHudController] HUD-reach: '{doc.gameObject.name}' " +
+                              $"sort={doc.sortingOrder} childCount={r.childCount} root Position->Ignore (was blocking clicks)");
+                    r.pickingMode = PickingMode.Ignore;
+                }
+            }
         }
 
         /// <summary>

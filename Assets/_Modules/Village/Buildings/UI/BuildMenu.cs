@@ -160,16 +160,34 @@ namespace DeNelle.Village
         /// </summary>
         private void EnsurePanelSettings()
         {
-            if (_document == null || _document.panelSettings != null) return;
+            if (_document == null) return;
+            // Owner 2026-05-25 ("nothing triggers on build"): Open() fired but the
+            // menu never rendered. The builder bakes the FIRST project PanelSettings
+            // onto this doc (WirePanelSettings), which can render off-screen / at the
+            // wrong scale. ALWAYS adopt a live sibling's PanelSettings instead —
+            // preferring the HUD's — so the menu renders on the same on-screen panel
+            // as everything else. (Awake runs before OnEnable's BindElements, so the
+            // root reflects the correct panel by the time we query it.)
+            UIDocument hud = null, any = null;
             foreach (var doc in FindObjectsByType<UIDocument>(FindObjectsInactive.Include, FindObjectsSortMode.None))
             {
                 if (doc == null || doc == _document || doc.panelSettings == null) continue;
-                _document.panelSettings = doc.panelSettings;
-                _document.sortingOrder = doc.sortingOrder + 5; // render above the HUD
-                Debug.Log("[BuildMenu] Borrowed PanelSettings from '" + doc.name + "' so the build menu renders.");
-                return;
+                if (any == null) any = doc;
+                if (doc.gameObject.name.IndexOf("Hud", System.StringComparison.OrdinalIgnoreCase) >= 0) { hud = doc; break; }
             }
-            Debug.LogWarning("[BuildMenu] No PanelSettings in scene — build menu will not render.");
+            var src = hud ?? any;
+            if (src != null)
+            {
+                if (_document.panelSettings != src.panelSettings)
+                    Debug.Log("[BuildMenu] Adopted PanelSettings '" + src.panelSettings.name + "' from '" +
+                              src.name + "' (was " + (_document.panelSettings != null ? _document.panelSettings.name : "NULL") + ").");
+                _document.panelSettings = src.panelSettings;
+                _document.sortingOrder = src.sortingOrder + 5; // render above the HUD
+            }
+            else if (_document.panelSettings == null)
+            {
+                Debug.LogWarning("[BuildMenu] No sibling PanelSettings found — build menu will not render.");
+            }
         }
 
         private void OnEnable()
@@ -218,6 +236,13 @@ namespace DeNelle.Village
         public void Open()
         {
             _isOpen = true;
+            // DIAG (owner 2026-05-25 "nothing triggers on build"): Open fires (per
+            // the HUD log) but the menu never appears — dump the render prereqs.
+            Debug.Log("[BuildMenu] Open: doc=" + (_document != null) +
+                      " panelSettings=" + (_document != null && _document.panelSettings != null ? _document.panelSettings.name : "NULL") +
+                      " sort=" + (_document != null ? _document.sortingOrder : -1) +
+                      " uxml=" + (_document != null && _document.visualTreeAsset != null ? _document.visualTreeAsset.name : "NULL") +
+                      " root=" + (_root != null) + " panel=" + (_panel != null) + " list=" + (_list != null));
             SetPanelVisible(true);
             Disarm();
             Render();

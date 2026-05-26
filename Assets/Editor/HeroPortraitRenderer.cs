@@ -93,7 +93,17 @@ namespace DeNelle.Editor
             // Render to a RenderTexture, read back, encode PNG, save.
             var rt = new RenderTexture(PortraitWidth, PortraitHeight, 24, RenderTextureFormat.ARGB32);
             cam.targetTexture = rt;
-            cam.Render();
+            // CRITICAL (owner 2026-05-25: portraits came out blank): the legacy
+            // Camera.Render() does NOT draw under URP in batchmode — the camera
+            // only emitted its transparent clear colour, so every portrait was an
+            // empty PNG. Use the SRP render-request API (Unity 2022.2+/6) which
+            // actually runs the URP pipeline into the target. Fall back to the
+            // legacy call if a render request isn't supported (non-SRP project).
+            var request = new UnityEngine.Rendering.RenderPipeline.StandardRequest { destination = rt };
+            if (UnityEngine.Rendering.RenderPipeline.SupportsRenderRequest(cam, request))
+                UnityEngine.Rendering.RenderPipeline.SubmitRenderRequest(cam, request);
+            else
+                cam.Render();
 
             RenderTexture prev = RenderTexture.active;
             RenderTexture.active = rt;
