@@ -100,6 +100,29 @@ namespace DeNelle.Core.State
             if (_instance == this) _instance = null;
         }
 
+        /// <summary>
+        /// Guarantees a live service exists in ANY scene — even one entered without
+        /// the boot flow (a dev direct-boot, or the Village as the first built
+        /// scene). No-op in normal play: the boot scene's GameStateService Awake
+        /// sets <see cref="_instance"/> first, so this never runs; and if a later
+        /// scene carries its own component it destroys itself against the existing
+        /// singleton (see Awake). A code-created instance still loads the same
+        /// PlayerPrefs save in its Awake, so progress is preserved, not reset.
+        ///
+        /// Without this, every scene where Instance is null silently breaks the
+        /// economy: dev resource grants no-op, the build menu falls back to a local
+        /// crystal balance, and wall repair can't spend — all of which read
+        /// GameStateService.State.Resources. (WisdomCurrencyService already
+        /// self-installs, which is why +Wisdom worked but +Crystals did not.)
+        /// </summary>
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        private static void EnsureInstance()
+        {
+            if (_instance != null) return;
+            var go = new GameObject("GameStateService (auto)");
+            go.AddComponent<GameStateService>();   // Awake sets _instance + DontDestroyOnLoad + loads the save
+        }
+
         // =====================================================================
         //  Load — PlayerPrefs → migrate → validate → apply to the SO
         // =====================================================================

@@ -122,6 +122,10 @@ namespace DeNelle.HUD
             panel.style.paddingRight = 22;
             panel.style.minWidth = 880;
             panel.style.maxWidth = 1100;
+            // Never let the sheet exceed the viewport — the columns scroll inside
+            // it instead of spilling past the screen edges (owner: "talent window
+            // extends outside box, needs a scrolling box to stay inside structure").
+            panel.style.maxHeight = Length.Percent(90);
             panel.style.borderTopLeftRadius = 12;
             panel.style.borderTopRightRadius = 12;
             panel.style.borderBottomLeftRadius = 12;
@@ -164,11 +168,20 @@ namespace DeNelle.HUD
             closeBtn.style.borderBottomLeftRadius = 6; closeBtn.style.borderBottomRightRadius = 6;
             headerRow.Add(closeBtn);
 
+            // The columns live inside a vertical ScrollView so a tall tree (or a
+            // short window) scrolls within the capped panel rather than overflowing
+            // it. The header above stays pinned; only the columns scroll.
+            var scroll = new ScrollView(ScrollViewMode.Vertical);
+            scroll.style.flexGrow = 1f;
+            scroll.style.flexShrink = 1f;
+            scroll.style.marginRight = -6;   // tuck the scrollbar against the rim
+            panel.Add(scroll);
+
             _columnsRow = new VisualElement();
             _columnsRow.style.flexDirection = FlexDirection.Row;
             _columnsRow.style.justifyContent = Justify.SpaceBetween;
             _columnsRow.style.alignItems = Align.FlexStart;
-            panel.Add(_columnsRow);
+            scroll.Add(_columnsRow);
         }
 
         private Label _wisdomLabel;
