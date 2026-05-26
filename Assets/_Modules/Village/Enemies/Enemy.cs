@@ -354,6 +354,14 @@ namespace DeNelle.Village
         public void TakeDamage(float amount)
         {
             if (_dead || amount <= 0f) return;
+
+            // Floating combat text — pop the damage number at the enemy's head so
+            // the player can see the hit (and watch it rise after a damage talent).
+            // Spawned BEFORE death so the killing blow still shows its number even
+            // though this GameObject may be destroyed below. Self-contained + asset
+            // free; it null-guards the camera internally.
+            DamageNumberSpawner.Spawn(amount, HeadWorldPosition());
+
             _hp = Mathf.Max(0f, _hp - amount);
             if (_hp <= 0f)
             {
@@ -401,6 +409,23 @@ namespace DeNelle.Village
         private void EnsureAgent()
         {
             if (_agent == null) _agent = GetComponent<NavMeshAgent>();
+        }
+
+        /// <summary>
+        /// World point just above the enemy's head, where floating damage numbers
+        /// spawn. Uses the rendered mesh bounds when available so the number clears
+        /// the model's actual height; falls back to a fixed offset above the
+        /// transform when the enemy has no Renderer yet.
+        /// </summary>
+        private Vector3 HeadWorldPosition()
+        {
+            Renderer rend = GetComponentInChildren<Renderer>();
+            if (rend != null)
+            {
+                Bounds b = rend.bounds;
+                return new Vector3(b.center.x, b.max.y + 0.4f, b.center.z);
+            }
+            return transform.position + Vector3.up * 2.0f;
         }
 
         /// <summary>

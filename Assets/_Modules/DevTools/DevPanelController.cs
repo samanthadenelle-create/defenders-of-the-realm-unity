@@ -271,6 +271,8 @@ namespace DeNelle.DevTools
             AddButton(resources, $"+{_crystalLargeGrant} Crystals",
                 () => GiveCrystals(_crystalLargeGrant));
             AddButton(resources, "+500 Stone/Iron/Wood", GiveBuildMaterials);
+            AddButton(resources, "+5 Wisdom (talents)", () => GiveWisdom(5));
+            AddButton(resources, "+25 Wisdom (talents)", () => GiveWisdom(25));
 
             // ── ENTITLEMENTS ─────────────────────────────────────────────────
             var entitlements = AddGroup("Grant pack / entitlement");
@@ -417,6 +419,15 @@ namespace DeNelle.DevTools
             state.Resources = r;
             SaveAndNotifyResources();
             SetStatus($"Gave {amount} crystals — now {r.Crystals}.");
+        }
+
+        /// <summary>Grants Wisdom (hero talent currency) for fast skill-tree testing.</summary>
+        private void GiveWisdom(int amount)
+        {
+            var svc = DeNelle.Village.Talents.WisdomCurrencyService.Instance;
+            if (svc == null) { SetStatus("WisdomCurrencyService not in scene yet."); return; }
+            svc.Grant(amount);
+            SetStatus($"Gave {amount} Wisdom — now {svc.Wisdom}.");
         }
 
         /// <summary>Tops up the gathered build materials (Stone / Iron / Wood).</summary>

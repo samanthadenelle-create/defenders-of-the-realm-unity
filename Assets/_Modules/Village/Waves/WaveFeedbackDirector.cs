@@ -129,6 +129,12 @@ namespace DeNelle.Village
             try { _showBanner?.Invoke(_hud, new object[] { waveId, crystals }); } catch { }
             PulseHeart();
 
+            // Per-wave Wisdom reward — the talent-tree income hook (none existed, so
+            // Wisdom could never be earned in normal play and the skill tree was
+            // un-progressable). Grant a small amount each cleared wave; tune freely.
+            const int wisdomPerWave = 2;
+            try { DeNelle.Village.Talents.WisdomCurrencyService.Instance?.Grant(wisdomPerWave); } catch { }
+
             if (_repair == null) _repair = UnityEngine.Object.FindObjectOfType<WallRepairController>();
             if (_repair != null) { try { _repair.SurfaceWorstRepair(); } catch { } }
 
