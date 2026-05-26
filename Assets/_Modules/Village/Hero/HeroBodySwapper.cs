@@ -363,12 +363,12 @@ namespace DeNelle.Village
                 _                => new Color(0.60f, 0.45f, 0.85f),   // mage fallback
             };
 
-            // Only the Knight forces a flat tint now — its atlas is a red grunge we
-            // drop for clean steel. The Ranger uses its fresh v2 basecolor (bound by
-            // ApplyExtractedTexture) and the Mage keeps its embedded texture, so both
-            // are preserved; the Ranger tint below is only a no-texture fallback.
-            bool forceTint = cls == HeroClass.Knight;
-
+            // Owner 2026-05-26: forcing a flat tint "lost the Knight's colour" — it
+            // cleared the textured detail. Restore the original rule: paint the tint
+            // ONLY when a material has no diffuse texture. That preserves every real
+            // texture — the Ranger's fresh v2 basecolor, the Mage's embedded texture,
+            // and whatever the Knight imported — and the tint is just the fallback so
+            // an untextured mesh still reads coloured instead of solid white.
             foreach (var r in body.GetComponentsInChildren<Renderer>(true))
             {
                 if (r == null) continue;
@@ -378,19 +378,10 @@ namespace DeNelle.Village
                 {
                     var m = mats[i];
                     if (m == null) continue;
-
                     Texture tex = null;
                     if (m.HasProperty("_BaseMap")) tex = m.GetTexture("_BaseMap");
                     if (tex == null && m.HasProperty("_MainTex")) tex = m.GetTexture("_MainTex");
-
-                    if (tex != null && !forceTint) continue;   // Mage: keep its good texture
-
-                    if (forceTint)
-                    {
-                        // Drop the bad atlas so the flat tint actually shows.
-                        if (m.HasProperty("_BaseMap")) m.SetTexture("_BaseMap", null);
-                        if (m.HasProperty("_MainTex")) m.SetTexture("_MainTex", null);
-                    }
+                    if (tex != null) continue;   // preserve real textures
                     if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", tint);
                     if (m.HasProperty("_Color"))     m.SetColor("_Color", tint);
                 }
