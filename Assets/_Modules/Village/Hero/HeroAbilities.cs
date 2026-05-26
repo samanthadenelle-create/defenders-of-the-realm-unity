@@ -308,6 +308,7 @@ namespace DeNelle.Village
         // targetHint = the foe / impact point (drives the strike tracer + meteor fall).
         private void SpawnVfx(Vector3 at, AbilityDef def, float radius, Vector3? targetHint = null)
         {
+            AbilityAudioBridge.PlayForKind(def.EffectEnum);   // procedural SFX via AudioService (WO-35)
             if (_castVfxPrefab != null)
             {
                 ParticleSystem ps = Instantiate(_castVfxPrefab, at, Quaternion.identity);

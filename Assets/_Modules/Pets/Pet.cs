@@ -322,6 +322,10 @@ namespace DeNelle.Pets
             _attackCdRemaining = _attackCooldown;
             foe.TakeDamage(_attackDamage, _element);
 
+            // Small element-coloured hit spark, reusing the hero ability VFX kit
+            // via reflection (owner WO-35: pet hits had no VFX).
+            PetAttackVfxBridge.Strike(ElementColor(_element), foe.WorldPosition);
+
             // Fire the strike animation in sync with the damage tick.
             if (_animator != null) _animator.SetTrigger(AnimAttack);
 
@@ -330,6 +334,18 @@ namespace DeNelle.Pets
             // wiring; the slow is the one with a clean IDamageable hook today.
             if (_element == DamageElement.Ice && _bondRank >= 1)
                 foe.ApplyStatus(StatusEffect.Slow, 1.0f);
+        }
+
+        /// <summary>Hit-spark colour for a pet's element (WO-35).</summary>
+        private static Color ElementColor(DamageElement e)
+        {
+            switch (e)
+            {
+                case DamageElement.Flame:  return new Color(1.00f, 0.44f, 0.26f); // #ff7043
+                case DamageElement.Ice:    return new Color(0.49f, 0.83f, 0.99f); // #7dd3fc
+                case DamageElement.Aether: return new Color(0.70f, 0.53f, 1.00f); // #b388ff
+                default:                   return Color.white;
+            }
         }
 
         // =====================================================================
