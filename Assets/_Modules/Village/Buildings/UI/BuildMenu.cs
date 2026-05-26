@@ -325,14 +325,17 @@ namespace DeNelle.Village
             if (_panel != null)
                 _panel.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
 
-            // CRITICAL (owner 2026-05-25): this BuildMenu UIDocument renders ABOVE
-            // the HUD (sortingOrder HUD+5). When CLOSED we only hid the inner panel,
-            // but the full-screen ROOT stayed pickingMode=Position and SWALLOWED
-            // every click meant for the HUD beneath it -> Build button + ability
-            // bar were dead. Make the root pass clicks through when closed; capture
-            // (modal) only when open.
+            // NON-MODAL (owner 2026-05-26 "click the build button -> everything else
+            // stops working"): this UIDocument's full-screen ROOT renders ABOVE the
+            // HUD. Flipping it to PickingMode.Position while open made it a screen-
+            // wide modal that SWALLOWED every world/HUD/camera click — and worse, ate
+            // the world tile-taps needed to actually place a tower. Keep the root
+            // click-through (Ignore) at ALL times: PickingMode.Ignore affects only
+            // the root itself, NOT its descendants, so the _panel and its buttons
+            // (default PickingMode.Position) still receive clicks, while the
+            // transparent area outside the panel passes through to the world + HUD.
             if (_root != null)
-                _root.pickingMode = visible ? PickingMode.Position : PickingMode.Ignore;
+                _root.pickingMode = PickingMode.Ignore;
         }
 
         // =====================================================================
