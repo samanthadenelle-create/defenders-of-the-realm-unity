@@ -523,8 +523,130 @@ namespace DeNelle.BattleATB
             _battleLogContent = root.Q<VisualElement>("battle-log-content");
 
             if (_attackButton == null)
-                Debug.LogWarning("[BattleController] 'attack-button' not found in BattleHUD — input will be inert.");
+            {
+                // The BattleHUD.uxml does not clone its elements in the player build
+                // (the same failure hits BuildMenu.uxml — both UXML docs come up empty
+                // while the project's code-built UIDocuments render fine). Rather than
+                // ship an uninteractive battle, build a functional HUD in code here and
+                // assign the same fields Render() drives. Owner: "ATB lands in a stub".
+                Debug.LogWarning("[BattleController] BattleHUD UXML did not bind — building a code HUD fallback.");
+                BuildFallbackHud(root);
+            }
             return true;
+        }
+
+        /// <summary>
+        /// Code-built BattleHUD used when the UXML fails to clone in a build. Inline
+        /// styles only (no UXML/USS dependency) — mirrors how MusicToggleHud and the
+        /// dev panel build reliable UI in code. Assigns every field Render() reads.
+        /// </summary>
+        private void BuildFallbackHud(VisualElement root)
+        {
+            root.Clear();
+            root.pickingMode = PickingMode.Ignore;   // only the button captures clicks
+
+            var header = new VisualElement();
+            header.style.position = Position.Absolute;
+            header.style.top = 14; header.style.left = 0; header.style.right = 0;
+            header.style.alignItems = Align.Center;
+            root.Add(header);
+
+            var title = new Label("The Last Stand");
+            title.style.color = new StyleColor(new Color(0.97f, 0.92f, 0.74f, 1f));
+            title.style.fontSize = 24; title.style.unityFontStyleAndWeight = FontStyle.Bold;
+            header.Add(title);
+
+            _statusBanner = new Label(string.Empty);
+            _statusBanner.style.color = new StyleColor(Color.white);
+            _statusBanner.style.fontSize = 15; _statusBanner.style.marginTop = 4;
+            header.Add(_statusBanner);
+
+            var strip = new VisualElement();
+            strip.style.position = Position.Absolute;
+            strip.style.top = 84; strip.style.left = 24; strip.style.right = 24;
+            strip.style.flexDirection = FlexDirection.Row;
+            strip.style.justifyContent = Justify.SpaceBetween;
+            strip.style.alignItems = Align.Center;
+            root.Add(strip);
+
+            _heroCard = BuildHudCard(strip, "Hero", new Color(0.26f, 0.20f, 0.42f, 0.92f),
+                out _heroName, out _heroHpFill, out _heroAtbFill);
+            var vs = new Label("vs");
+            vs.style.color = new StyleColor(new Color(0.95f, 0.85f, 0.45f, 1f));
+            vs.style.fontSize = 18; vs.style.unityFontStyleAndWeight = FontStyle.Bold;
+            strip.Add(vs);
+            _enemyCard = BuildHudCard(strip, "Enemy", new Color(0.45f, 0.16f, 0.16f, 0.92f),
+                out _enemyName, out _enemyHpFill, out _enemyAtbFill);
+
+            _battleLog = new ScrollView(ScrollViewMode.Vertical);
+            _battleLog.style.position = Position.Absolute;
+            _battleLog.style.left = 24; _battleLog.style.right = 24;
+            _battleLog.style.top = 240; _battleLog.style.height = 150;
+            _battleLog.style.backgroundColor = new StyleColor(new Color(0f, 0f, 0f, 0.45f));
+            _battleLog.style.paddingLeft = 8; _battleLog.style.paddingRight = 8;
+            root.Add(_battleLog);
+            _battleLogContent = new VisualElement();
+            _battleLog.Add(_battleLogContent);
+
+            _attackButton = new Button { text = "Attack" };
+            var b = _attackButton.style;
+            b.position = Position.Absolute;
+            b.bottom = 40; b.left = 0; b.right = 0;
+            b.marginLeft = StyleKeyword.Auto; b.marginRight = StyleKeyword.Auto; // centre
+            b.width = 240; b.height = 58; b.fontSize = 20;
+            b.unityFontStyleAndWeight = FontStyle.Bold;
+            b.color = new StyleColor(Color.white);
+            b.backgroundColor = new StyleColor(new Color(0.74f, 0.20f, 0.20f, 1f));
+            b.borderTopLeftRadius = 8; b.borderTopRightRadius = 8;
+            b.borderBottomLeftRadius = 8; b.borderBottomRightRadius = 8;
+            root.Add(_attackButton);
+        }
+
+        /// <summary>Builds one combatant card (name + HP + ATB bars) into <paramref name="parent"/>.</summary>
+        private static VisualElement BuildHudCard(VisualElement parent, string fallbackName, Color bg,
+            out Label nameLabel, out VisualElement hpFill, out VisualElement atbFill)
+        {
+            var card = new VisualElement();
+            card.style.width = 230;
+            card.style.paddingTop = 10; card.style.paddingBottom = 10;
+            card.style.paddingLeft = 12; card.style.paddingRight = 12;
+            card.style.backgroundColor = new StyleColor(bg);
+            card.style.borderTopLeftRadius = 8; card.style.borderTopRightRadius = 8;
+            card.style.borderBottomLeftRadius = 8; card.style.borderBottomRightRadius = 8;
+            parent.Add(card);
+
+            nameLabel = new Label(fallbackName);
+            nameLabel.style.color = new StyleColor(Color.white);
+            nameLabel.style.fontSize = 15; nameLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
+            card.Add(nameLabel);
+
+            hpFill = AddHudBar(card, "HP", new Color(0.30f, 0.85f, 0.40f));
+            atbFill = AddHudBar(card, "ATB", new Color(0.40f, 0.65f, 1f));
+            return card;
+        }
+
+        /// <summary>A labelled bar track with a 100%-wide fill (driven by SetBarWidth).</summary>
+        private static VisualElement AddHudBar(VisualElement card, string label, Color fillColor)
+        {
+            var lab = new Label(label);
+            lab.style.color = new StyleColor(new Color(0.85f, 0.85f, 0.85f, 1f));
+            lab.style.fontSize = 10; lab.style.marginTop = 6;
+            card.Add(lab);
+
+            var track = new VisualElement();
+            track.style.height = 12;
+            track.style.backgroundColor = new StyleColor(new Color(0f, 0f, 0f, 0.5f));
+            track.style.borderTopLeftRadius = 4; track.style.borderTopRightRadius = 4;
+            track.style.borderBottomLeftRadius = 4; track.style.borderBottomRightRadius = 4;
+            card.Add(track);
+
+            var fill = new VisualElement();
+            fill.style.height = 12; fill.style.width = Length.Percent(100f);
+            fill.style.backgroundColor = new StyleColor(fillColor);
+            fill.style.borderTopLeftRadius = 4; fill.style.borderTopRightRadius = 4;
+            fill.style.borderBottomLeftRadius = 4; fill.style.borderBottomRightRadius = 4;
+            track.Add(fill);
+            return fill;
         }
 
         /// <summary>Set a bar fill's width as a percentage (0..1) of its track.</summary>

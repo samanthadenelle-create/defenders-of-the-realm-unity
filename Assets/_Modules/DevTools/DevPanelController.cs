@@ -266,15 +266,14 @@ namespace DeNelle.DevTools
 
             // ── RESOURCES ────────────────────────────────────────────────────
             var resources = AddGroup("Resources");
-            AddButton(resources, $"+{_crystalSmallGrant} Crystals",
-                () => GiveCrystals(_crystalSmallGrant));
-            AddButton(resources, $"+{_crystalLargeGrant} Crystals",
-                () => GiveCrystals(_crystalLargeGrant));
+            AddButton(resources, "+100 Crystals", () => GiveCrystals(100));
+            AddButton(resources, "+1000 Crystals", () => GiveCrystals(1000));
             AddButton(resources, "+500 Stone/Iron/Wood", GiveBuildMaterials);
             AddButton(resources, "+5 Wisdom (talents)", () => GiveWisdom(5));
             AddButton(resources, "+25 Wisdom (talents)", () => GiveWisdom(25));
             AddButton(resources, "+150 XP (hero)", () => GiveHeroXp(150f));
             AddButton(resources, "Level up hero", LevelHero);
+            AddButton(resources, "Trigger wave (skip countdown)", TriggerWave);
 
             // ── ENTITLEMENTS ─────────────────────────────────────────────────
             var entitlements = AddGroup("Grant pack / entitlement");
@@ -454,6 +453,15 @@ namespace DeNelle.DevTools
             DeNelle.Village.DamageNumberSpawner.SpawnLabel(
                 $"LEVEL UP!  Lv.{hp.Level}", hp.WorldPosition, new Color(0.45f, 1f, 0.55f, 1f), 1.4f);
             SetStatus($"Hero leveled to Lv.{hp.Level}.");
+        }
+
+        /// <summary>Skips the prep countdown and starts the wave now (WaveManager.ForceBeginNextWave).</summary>
+        private void TriggerWave()
+        {
+            var wm = UnityEngine.Object.FindAnyObjectByType<DeNelle.Village.WaveManager>();
+            if (wm == null) { SetStatus("WaveManager not in scene yet."); return; }
+            wm.ForceBeginNextWave();
+            SetStatus("Triggered the wave — countdown skipped.");
         }
 
         /// <summary>Tops up the gathered build materials (Stone / Iron / Wood).</summary>
