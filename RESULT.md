@@ -25,8 +25,10 @@ Branch: `samantha-village-progress-2025-05-23` · all work committed.
 
 **6. Particle-warning spam fixed** — the 16,000+ "Particle Velocity curves must all be in the same mode" intro errors are **gone** (verified 0 in the build log). It was the title starfield's unset `velocity.z`.
 
-## ⏳ In progress when you wake
-**7. WebGL build** (for Vercel "Dreams") — added `Defenders → Build → WebGL Player` + a `BuildWebGL` method (minimal IL2CPP stripping so the reflection bridges survive, gzip). Kicked off a build overnight (`Builds/WebGL/`); check `Builds/webgl.log` for the result. **The Vercel *deploy* needs your login** — once `Builds/WebGL/` exists, deploy that folder. If the build failed, the log will name the blocker (likely WebGL module install or asset size).
+## ✅ WebGL build SUCCEEDED (for Vercel "Dreams")
+Added `Defenders → Build → WebGL Player` + `BuildWebGL` (minimal IL2CPP stripping so the reflection bridges survive, gzip). **Build succeeded: 247 MB in ~18.5 min → `Builds/WebGL/`** (index.html + Build/ + StreamingAssets + TemplateData). Reflection bridges compiled into IL2CPP fine.
+- **Deploy needs your login:** push `Builds/WebGL/` to Vercel (`cd Builds/WebGL && vercel deploy` after `vercel login`, or drag the folder into the Vercel dashboard).
+- ⚠️ **248 MB is large for web** — first load will be slow and may exceed Vercel free-tier limits. Trimming the big un-decimated Tripo meshes (task #3: PetHome/Portal/pets) would cut this a lot. Fine for a first share link; worth slimming before wide use.
 
 ## 🔨 Needs you (couldn't safely do autonomously)
 
