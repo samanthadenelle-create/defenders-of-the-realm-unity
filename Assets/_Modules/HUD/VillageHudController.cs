@@ -379,6 +379,64 @@ namespace DeNelle.HUD
             }
         }
 
+        // ── WO-39: enemy-direction compass ───────────────────────────────────
+        /// <summary>
+        /// Lights the compass arms (N/E/S/W) toward which live enemies are
+        /// attacking. Built once in code (top-centre, under the wave timer) and
+        /// recoloured each call. Called from WaveFeedbackDirector by reflection.
+        /// </summary>
+        public void SetAttackDirections(bool n, bool e, bool s, bool w)
+        {
+            if (_root == null) return;
+            var rose = _root.Q<VisualElement>("compass-rose");
+            if (rose == null) { rose = BuildCompassRose(); _root.Add(rose); }
+            SetCompassArm(rose, "compass-n", n);
+            SetCompassArm(rose, "compass-e", e);
+            SetCompassArm(rose, "compass-s", s);
+            SetCompassArm(rose, "compass-w", w);
+        }
+
+        private VisualElement BuildCompassRose()
+        {
+            var rose = new VisualElement { name = "compass-rose" };
+            rose.pickingMode = PickingMode.Ignore;
+            var rs = rose.style;
+            rs.position = Position.Absolute;
+            rs.top = 150f;                         // below the wave timer + START WAVE button
+            rs.left = Length.Percent(50f);
+            rs.translate = new Translate(Length.Percent(-50f), 0f, 0f);
+            rs.width = 64f; rs.height = 64f;
+
+            AddCompassArm(rose, "compass-n", "▲", 22f, 0f);    // ▲ top
+            AddCompassArm(rose, "compass-s", "▼", 22f, 44f);   // ▼ bottom
+            AddCompassArm(rose, "compass-e", "▶", 44f, 22f);   // ▶ right
+            AddCompassArm(rose, "compass-w", "◀", 0f, 22f);    // ◀ left
+            return rose;
+        }
+
+        private static void AddCompassArm(VisualElement rose, string name, string glyph, float left, float top)
+        {
+            var lbl = new Label(glyph) { name = name };
+            lbl.pickingMode = PickingMode.Ignore;
+            var s = lbl.style;
+            s.position = Position.Absolute;
+            s.left = left; s.top = top;
+            s.width = 20f; s.height = 20f;
+            s.fontSize = 16f;
+            s.unityTextAlign = TextAnchor.MiddleCenter;
+            s.color = new Color(1f, 1f, 1f, 0.22f);   // dim when idle
+            rose.Add(lbl);
+        }
+
+        private static void SetCompassArm(VisualElement rose, string name, bool active)
+        {
+            var lbl = rose.Q<Label>(name);
+            if (lbl == null) return;
+            lbl.style.color = active
+                ? new Color(0.95f, 0.22f, 0.16f, 1f)   // attack-red when enemies inbound
+                : new Color(1f, 1f, 1f, 0.22f);
+        }
+
         // Owner 2026-05-25 ("HUD non-responsive — a panel makes them unreachable"):
         // a full-screen overlay UIDocument root with pickingMode=Position sits over
         // the HUD and swallows every click. Relax EVERY other panel's ROOT to

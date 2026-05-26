@@ -33,8 +33,11 @@ namespace DeNelle.Village
         private object _hud;                 // DeNelle.HUD.VillageHudController
         private MethodInfo _showBanner;      // ShowWaveClearBanner(int, int)
         private MethodInfo _setImminent;     // SetWaveImminent(bool)
+        private MethodInfo _setDirections;   // SetAttackDirections(bool,bool,bool,bool) — WO-39
         private WallRepairController _repair;
         private bool _imminentFired;
+        private float _compassTimer;         // WO-39 poll throttle
+        private Transform _heartT;
 
         /// <summary>Wires the wave manager + HUD before the GameObject is activated.</summary>
         public void Bind(WaveManager wave, object hud)
@@ -46,7 +49,40 @@ namespace DeNelle.Village
                 var t = hud.GetType();
                 _showBanner = t.GetMethod("ShowWaveClearBanner", new[] { typeof(int), typeof(int) });
                 _setImminent = t.GetMethod("SetWaveImminent", new[] { typeof(bool) });
+                _setDirections = t.GetMethod("SetAttackDirections",
+                    new[] { typeof(bool), typeof(bool), typeof(bool), typeof(bool) });
             }
+        }
+
+        // ── WO-39: poll live enemies → light the compass arms ────────────────
+        private void Update()
+        {
+            if (_wave == null || _setDirections == null) return;
+            _compassTimer -= Time.unscaledDeltaTime;
+            if (_compassTimer > 0f) return;
+            _compassTimer = 0.25f;
+
+            if (_heartT == null)
+            {
+                var heart = UnityEngine.Object.FindObjectOfType<HeartController>();
+                if (heart != null) _heartT = heart.transform;
+            }
+            Vector3 c = _heartT != null ? _heartT.position : Vector3.zero;
+
+            bool n = false, e = false, s = false, w = false;
+            var live = _wave.LiveEnemies;
+            if (live != null)
+            {
+                for (int i = 0; i < live.Count; i++)
+                {
+                    var en = live[i];
+                    if (en == null) continue;
+                    Vector3 d = en.transform.position - c; d.y = 0f;
+                    if (Mathf.Abs(d.x) >= Mathf.Abs(d.z)) { if (d.x >= 0f) e = true; else w = true; }
+                    else { if (d.z >= 0f) n = true; else s = true; }
+                }
+            }
+            try { _setDirections.Invoke(_hud, new object[] { n, e, s, w }); } catch { }
         }
 
         private void OnEnable()
