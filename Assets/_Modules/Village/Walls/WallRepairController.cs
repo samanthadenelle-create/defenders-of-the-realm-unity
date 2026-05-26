@@ -344,6 +344,23 @@ namespace DeNelle.Village
         }
 
         /// <summary>
+        /// WO-38: rescans, then surfaces the most-damaged structure's repair prompt
+        /// (highest <see cref="RepairTarget.DamageFraction"/>). Returns true when a
+        /// damaged structure was found and selected. The wave-clear director calls
+        /// this to nudge the player to repair after surviving a wave.
+        /// </summary>
+        public bool SurfaceWorstRepair()
+        {
+            Rescan();
+            if (_damaged.Count == 0) return false;
+            int best = 0;
+            for (int i = 1; i < _damaged.Count; i++)
+                if (_damaged[i].DamageFraction > _damaged[best].DamageFraction) best = i;
+            RequestRepair(_damaged[best]);
+            return true;
+        }
+
+        /// <summary>
         /// Selects <paramref name="target"/> for repair: marks it with the bright
         /// highlight and raises <see cref="PromptShown"/> so the HUD shows the
         /// crystal cost. An undamaged structure is rejected with feedback.

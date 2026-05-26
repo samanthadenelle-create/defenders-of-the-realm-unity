@@ -311,6 +311,74 @@ namespace DeNelle.HUD
             _startWaveButton = btn;
         }
 
+        // ── WO-38: wave-complete celebration banner ──────────────────────────
+        /// <summary>
+        /// Flashes a centred "WAVE n REPELLED" banner that auto-dismisses after the
+        /// player survives a wave. Built in code + parented to the HUD root (mirrors
+        /// the DailyQuest toast). Called from the Village-side WaveFeedbackDirector
+        /// by reflection (DeNelle.Village can't reference DeNelle.HUD).
+        /// </summary>
+        public void ShowWaveClearBanner(int waveNumber, int crystals)
+        {
+            if (_root == null) return;
+            var banner = new Label(crystals > 0
+                ? $"WAVE {waveNumber} REPELLED\n+{crystals} ◆"
+                : $"WAVE {waveNumber} REPELLED");
+            banner.pickingMode = PickingMode.Ignore;
+            var s = banner.style;
+            s.position = Position.Absolute;
+            s.top = Length.Percent(32f);
+            s.left = Length.Percent(50f);
+            s.translate = new Translate(Length.Percent(-50f), 0f, 0f);
+            s.paddingLeft = 26f; s.paddingRight = 26f; s.paddingTop = 14f; s.paddingBottom = 14f;
+            s.backgroundColor = new Color(0.10f, 0.08f, 0.16f, 0.92f);
+            s.color = new Color(1f, 0.86f, 0.45f);
+            s.unityFontStyleAndWeight = FontStyle.Bold;
+            s.fontSize = 26f;
+            s.unityTextAlign = TextAnchor.MiddleCenter;
+            s.whiteSpace = WhiteSpace.Normal;
+            s.borderTopLeftRadius = 12f; s.borderTopRightRadius = 12f;
+            s.borderBottomLeftRadius = 12f; s.borderBottomRightRadius = 12f;
+            _root.Add(banner);
+            banner.schedule.Execute(() => { if (banner != null) banner.RemoveFromHierarchy(); }).StartingIn(3600);
+        }
+
+        // ── WO-40: wave-imminent red edge vignette ───────────────────────────
+        /// <summary>
+        /// Shows/hides a full-screen red edge vignette warning a wave is imminent.
+        /// UI Toolkit has no radial gradient, so this is a thick translucent red
+        /// inset border on a pass-through overlay (created once, then toggled).
+        /// Called from WaveFeedbackDirector by reflection.
+        /// </summary>
+        public void SetWaveImminent(bool on)
+        {
+            if (_root == null) return;
+            var v = _root.Q<VisualElement>("wave-imminent-vignette");
+            if (on)
+            {
+                if (v == null)
+                {
+                    v = new VisualElement { name = "wave-imminent-vignette" };
+                    v.pickingMode = PickingMode.Ignore;
+                    var s = v.style;
+                    s.position = Position.Absolute;
+                    s.top = 0f; s.left = 0f; s.right = 0f; s.bottom = 0f;
+                    s.borderTopWidth = 40f; s.borderBottomWidth = 40f;
+                    s.borderLeftWidth = 40f; s.borderRightWidth = 40f;
+                    var red = new Color(0.86f, 0.12f, 0.10f, 0.55f);
+                    s.borderTopColor = red; s.borderBottomColor = red;
+                    s.borderLeftColor = red; s.borderRightColor = red;
+                    _root.Add(v);
+                }
+                v.style.display = DisplayStyle.Flex;
+                v.BringToFront();
+            }
+            else if (v != null)
+            {
+                v.style.display = DisplayStyle.None;
+            }
+        }
+
         // Owner 2026-05-25 ("HUD non-responsive — a panel makes them unreachable"):
         // a full-screen overlay UIDocument root with pickingMode=Position sits over
         // the HUD and swallows every click. Relax EVERY other panel's ROOT to

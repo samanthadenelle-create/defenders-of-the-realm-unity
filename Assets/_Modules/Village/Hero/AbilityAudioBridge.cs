@@ -20,6 +20,9 @@ namespace DeNelle.Village
         private static bool s_resolved;
         private static PropertyInfo s_instanceProp;
         private static MethodInfo s_playSfx;
+        private static bool s_musicResolved;
+        private static MethodInfo s_playMusic;
+        private static Type s_musicTrackType;
 
         public static void PlayForKind(AbilityEffect kind)
         {
@@ -31,6 +34,57 @@ namespace DeNelle.Village
             if (clip == null) return;
             try { s_playSfx.Invoke(inst, new object[] { clip, VolumeFor(kind) }); }
             catch { /* audio is best-effort */ }
+        }
+
+        /// <summary>
+        /// Plays a music track by enum name (e.g. "Victory", "Village") through
+        /// AudioService.PlayMusic(MusicTrack), via reflection. No-ops if Audio is
+        /// absent or the track name doesn't exist. WO-38.
+        /// </summary>
+        public static void PlayMusic(string trackName)
+        {
+            ResolveMusic();
+            if (s_instanceProp == null || s_playMusic == null || s_musicTrackType == null) return;
+            object inst = s_instanceProp.GetValue(null);
+            if (inst == null) return;
+            object track;
+            try { track = Enum.Parse(s_musicTrackType, trackName, true); }
+            catch { return; }
+            try { s_playMusic.Invoke(inst, new object[] { track }); }
+            catch { /* best-effort */ }
+        }
+
+        /// <summary>Plays a short tense alarm sting (wave imminent). WO-40.</summary>
+        public static void PlayDangerSting()
+        {
+            Resolve();
+            if (s_instanceProp == null || s_playSfx == null) return;
+            object inst = s_instanceProp.GetValue(null);
+            if (inst == null) return;
+            AudioClip clip = ProceduralSfx.DangerSting();
+            if (clip == null) return;
+            try { s_playSfx.Invoke(inst, new object[] { clip, 0.6f }); }
+            catch { /* best-effort */ }
+        }
+
+        private static void ResolveMusic()
+        {
+            Resolve();   // ensures s_instanceProp
+            if (s_musicResolved) return;
+            s_musicResolved = true;
+            foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                var t = asm.GetType("DeNelle.Audio.AudioService", false);
+                if (t == null) continue;
+                foreach (var m in t.GetMethods(BindingFlags.Public | BindingFlags.Instance))
+                {
+                    if (m.Name != "PlayMusic") continue;
+                    var ps = m.GetParameters();
+                    if (ps.Length == 1 && ps[0].ParameterType.IsEnum)
+                    { s_playMusic = m; s_musicTrackType = ps[0].ParameterType; break; }
+                }
+                break;
+            }
         }
 
         private static void Resolve()
@@ -76,6 +130,34 @@ namespace DeNelle.Village
             // TODO(sfx): drop a CC0 wav at Resources/Sfx/<Kind> to override the generated clip.
             AudioClip clip = Resources.Load<AudioClip>("Sfx/" + kind) ?? Generate(kind);
             s_cache[kind] = clip;
+            return clip;
+        }
+
+        private static AudioClip s_dangerSting;
+
+        /// <summary>A short two-tone descending alarm sting for the wave-imminent alert (WO-40).</summary>
+        public static AudioClip DangerSting()
+        {
+            if (s_dangerSting != null) return s_dangerSting;
+            int n = Mathf.Max(16, (int)(0.45f * Rate));
+            var data = new float[n];
+            float attack = 0.006f * Rate;
+            double phase = 0;
+            int half = Rate / 12;   // ~12 Hz on/off pulse rate
+            for (int i = 0; i < n; i++)
+            {
+                float t = (float)i / n;
+                float baseHz = (i % (half * 2) < half) ? 330f : 247f;   // alternating alarm tones
+                float hz = baseHz * Mathf.Lerp(1f, 0.85f, t);            // slight descent
+                phase += 2.0 * Math.PI * hz / Rate;
+                float s = (float)Math.Sin(phase);
+                float env = i < attack ? (i / attack) : Mathf.Exp(-2.2f * t);
+                if (i > n - 64) env *= (n - i) / 64f;
+                data[i] = s * env * 0.7f;
+            }
+            var clip = AudioClip.Create("sfx_danger", n, 1, Rate, false);
+            clip.SetData(data, 0);
+            s_dangerSting = clip;
             return clip;
         }
 
