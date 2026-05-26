@@ -276,6 +276,10 @@ namespace DeNelle.HUD
             string name = ReadString(node, "Name") ?? id ?? "?";
             string desc = ReadString(node, "Description") ?? "";
             int cost = ReadInt(node, "Cost");
+            // Phase 1 added numeric stat fields to the node DTO; surface them so
+            // players see an unlock's concrete effect before buying.
+            float damageBonus = ReadFloat(node, "DamageBonus");
+            float cdReduction = ReadFloat(node, "CdReduction");
             bool learned = unlocked != null && id != null && unlocked.Contains(id);
             bool canBuy = !learned && CanUnlock(id, wisdom, unlocked);
 
@@ -330,6 +334,23 @@ namespace DeNelle.HUD
             body.style.marginBottom = 6;
             card.Add(body);
 
+            // Talent impact line — a small bold readout of the node's concrete
+            // numbers (DamageBonus 0.10 -> "+10% damage", CdReduction 0.10 ->
+            // "-10% cooldown"). Only shown when at least one stat is non-zero, so
+            // pure-utility nodes stay clean. Sits between the description and the
+            // cost/Spend footer so players read the effect before buying.
+            string impact = BuildImpactText(damageBonus, cdReduction);
+            if (!string.IsNullOrEmpty(impact))
+            {
+                var impactLabel = new Label(impact);
+                impactLabel.style.color = new StyleColor(new Color(0.55f, 0.90f, 0.98f, 1f));
+                impactLabel.style.fontSize = 11;
+                impactLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
+                impactLabel.style.whiteSpace = WhiteSpace.Normal;
+                impactLabel.style.marginBottom = 6;
+                card.Add(impactLabel);
+            }
+
             var footer = new VisualElement();
             footer.style.flexDirection = FlexDirection.Row;
             footer.style.justifyContent = Justify.SpaceBetween;
@@ -360,6 +381,30 @@ namespace DeNelle.HUD
                 footer.Add(spend);
             }
             return card;
+        }
+
+        // Formats the node's numeric stat fields into a short impact string.
+        // DamageBonus is a positive fraction (0.10 -> "+10% damage"); CdReduction
+        // is a positive fraction representing how much cooldown is shaved
+        // (0.10 -> "-10% cooldown"). Multiple stats are joined with a middot.
+        // Returns "" when both are zero so utility nodes show no impact line.
+        private static string BuildImpactText(float damageBonus, float cdReduction)
+        {
+            var parts = new List<string>();
+            if (Mathf.Abs(damageBonus) > 0.0001f)
+            {
+                int pct = Mathf.RoundToInt(damageBonus * 100f);
+                string sign = pct >= 0 ? "+" : "";
+                parts.Add($"{sign}{pct}% damage");
+            }
+            if (Mathf.Abs(cdReduction) > 0.0001f)
+            {
+                // A positive reduction shortens the cooldown, so it reads as "-N%".
+                int pct = Mathf.RoundToInt(cdReduction * 100f);
+                string sign = pct >= 0 ? "-" : "+";
+                parts.Add($"{sign}{Mathf.Abs(pct)}% cooldown");
+            }
+            return string.Join("  ·  ", parts);
         }
 
         private static string TierDisplay(string tierKey) => tierKey switch
@@ -553,6 +598,27 @@ namespace DeNelle.HUD
                 return v is int i ? i : 0;
             }
             return 0;
+        }
+
+        private static float ReadFloat(object obj, string fieldOrProp)
+        {
+            if (obj == null) return 0f;
+            var t = obj.GetType();
+            var f = t.GetField(fieldOrProp);
+            if (f != null) return ToFloat(f.GetValue(obj));
+            var p = t.GetProperty(fieldOrProp);
+            if (p != null) return ToFloat(p.GetValue(obj, null));
+            return 0f;
+        }
+
+        // Boxed numeric values (the Phase-1 fields are floats, but be tolerant of
+        // a double/int author choice) → float; anything else → 0.
+        private static float ToFloat(object v)
+        {
+            if (v is float f) return f;
+            if (v is double d) return (float)d;
+            if (v is int i) return i;
+            return 0f;
         }
 
         private static List<object> ReadList(object obj, string fieldOrProp)

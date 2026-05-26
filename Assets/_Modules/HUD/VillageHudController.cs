@@ -142,6 +142,7 @@ namespace DeNelle.HUD
         private VisualElement _waveCountdownTimer;
         private Label _waveCountdownIcon;
         private Button _startWaveButton;
+        private Button _skillsButton;
         private float _reachTimer;
         private int _reachRuns;
         private VisualElement _abilityBar;
@@ -400,6 +401,7 @@ namespace DeNelle.HUD
             BuildAbilityCells();
             BuildTriggerWaveButton();
             BuildStartWaveButton();
+            BuildSkillsButton();
             EnsureHudReachable();
             MoveManaPanelToTopLeft();
             _bound = true;
@@ -432,6 +434,51 @@ namespace DeNelle.HUD
             s.borderBottomLeftRadius = 9f; s.borderBottomRightRadius = 9f;
             _root.Add(btn);
             _startWaveButton = btn;
+        }
+
+        // Visible "⊕ Skills" button that opens the hero talent tree (the
+        // HeroTalentPanel). Players couldn't find the tree — the only way in was
+        // the T hotkey, undiscoverable in a build. Built in code + parented to the
+        // HUD root (mirrors BuildStartWaveButton). Anchored top-left under the
+        // heart/mana panel (mana sits at top=64, width=220) so it clears the
+        // centred START WAVE button. On click it finds the HeroTalentPanel in the
+        // scene and calls Toggle(); the T hotkey (HeroTalentPanelBootstrap) still
+        // works alongside it.
+        private void BuildSkillsButton()
+        {
+            if (_root == null) return;
+            if (_skillsButton != null) { _skillsButton.RemoveFromHierarchy(); _skillsButton = null; }
+
+            var btn = new Button(OnSkillsClicked) { text = "⊕ Skills" };
+            btn.name = "SkillsButton";
+            btn.pickingMode = PickingMode.Position;
+            var s = btn.style;
+            s.position = Position.Absolute;
+            s.top = 110f;                                  // under the heart + mana panels (mana ends ~96)
+            s.left = 16f;                                  // top-left column, lines up with the mana panel
+            s.paddingLeft = 16f; s.paddingRight = 16f; s.paddingTop = 8f; s.paddingBottom = 8f;
+            s.backgroundColor = new Color(0.36f, 0.24f, 0.52f, 0.96f); // arcane-violet so it reads as 'hero powers'
+            s.color = Color.white;
+            s.unityFontStyleAndWeight = FontStyle.Bold;
+            s.fontSize = 15f;
+            s.borderTopLeftRadius = 9f; s.borderTopRightRadius = 9f;
+            s.borderBottomLeftRadius = 9f; s.borderBottomRightRadius = 9f;
+            _root.Add(btn);
+            _skillsButton = btn;
+        }
+
+        // Finds the HeroTalentPanel in the scene and toggles it. The panel lives in
+        // the same DeNelle.HUD assembly, so it's referenced directly (no reflection
+        // bridge needed). Keeps parity with the T hotkey, which also calls Toggle().
+        private void OnSkillsClicked()
+        {
+            var panel = UnityEngine.Object.FindAnyObjectByType<HeroTalentPanel>();
+            if (panel == null)
+            {
+                Debug.LogWarning("[VillageHudController] Skills button: no HeroTalentPanel in scene.");
+                return;
+            }
+            panel.Toggle();
         }
 
         // ── WO-38: wave-complete celebration banner ──────────────────────────
