@@ -69,6 +69,8 @@ namespace DeNelle.Village
         private Color _startColor;
         private float _baseScale;
         private float _age;
+        private float _lifetime = Lifetime;   // overridable so labels can linger longer
+        private float _rise = RiseDistance;
 
         /// <summary>
         /// Spawns a floating damage number for <paramref name="amount"/> at
@@ -92,6 +94,26 @@ namespace DeNelle.Village
             var num = go.AddComponent<DamageNumberSpawner>();
             num.Build(amount, cam);
             return num;
+        }
+
+        /// <summary>
+        /// Spawns a floating TEXT label (e.g. "LEVEL UP! Lv.3") at
+        /// <paramref name="worldPos"/> — same rise/fade/billboard as a damage
+        /// number but bold, coloured and lingering longer. Used by the XP system
+        /// for level-up feedback. No-op (null) when there is no active camera.
+        /// </summary>
+        public static DamageNumberSpawner SpawnLabel(string label, Vector3 worldPos, Color color, float scale = 1.2f)
+        {
+            if (string.IsNullOrEmpty(label)) return null;
+            Camera cam = Camera.main;
+            if (cam == null) return null;
+
+            var go = new GameObject("FloatingLabel");
+            go.transform.position = worldPos;
+
+            var n = go.AddComponent<DamageNumberSpawner>();
+            n.BuildLabel(label, color, scale, cam);
+            return n;
         }
 
         /// <summary>
@@ -135,10 +157,44 @@ namespace DeNelle.Village
             }
         }
 
+        /// <summary>Builds a bold, longer-lived text label (level-up popups).</summary>
+        private void BuildLabel(string label, Color color, float scale, Camera cam)
+        {
+            _tf = transform;
+            _faceCamera = cam;
+            _startPos = _tf.position;
+            _age = 0f;
+            _lifetime = 1.6f;   // linger ~2x a damage number so the player reads it
+            _rise = 1.6f;
+
+            _baseScale = scale;
+            _tf.localScale = Vector3.one * _baseScale;
+            _startColor = color;
+
+            _text = gameObject.AddComponent<TextMesh>();
+            _text.text = label;
+            _text.anchor = TextAnchor.MiddleCenter;
+            _text.alignment = TextAlignment.Center;
+            _text.characterSize = BaseCharacterSize;
+            _text.fontSize = 96;
+            _text.fontStyle = FontStyle.Bold;
+            _text.richText = false;
+            _text.color = _startColor;
+
+            MeshRenderer mr = GetComponent<MeshRenderer>();
+            if (mr != null)
+            {
+                mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                mr.receiveShadows = false;
+                if (mr.sharedMaterial != null)
+                    mr.sharedMaterial.renderQueue = 4000;
+            }
+        }
+
         private void LateUpdate()
         {
             _age += Time.deltaTime;
-            float k = _age / Lifetime;        // 0..1 progress
+            float k = _age / _lifetime;        // 0..1 progress
             if (k >= 1f)
             {
                 UnityEngine.Object.Destroy(gameObject);
@@ -147,7 +203,7 @@ namespace DeNelle.Village
 
             // Rise: ease-out so the number pops up then settles. Pure local math,
             // no allocation.
-            float rise = (1f - (1f - k) * (1f - k)) * RiseDistance;
+            float rise = (1f - (1f - k) * (1f - k)) * _rise;
             _tf.position = _startPos + Vector3.up * rise;
 
             // Fade: hold full opacity for the first third, then fade to zero.

@@ -125,6 +125,12 @@ namespace DeNelle.Pets
                 Pet pet = SpawnPet(def, slot);
                 pet.Configure(def, bond, slot, _deployMode);
                 pet.SetEnemyMask(_enemyMask);
+
+                // Level progression: attach AFTER Configure so PetId is set when
+                // PetProgression enables and registers under it (XP system).
+                if (pet.GetComponent<PetProgression>() == null)
+                    pet.gameObject.AddComponent<PetProgression>();
+
                 _deployed.Add(pet);
             }
         }
