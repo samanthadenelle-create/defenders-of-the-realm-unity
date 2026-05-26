@@ -103,25 +103,25 @@ namespace DeNelle.BattleATB
         // Lifecycle
         // ---------------------------------------------------------------------
 
+        private bool _bound;        // BindUi() succeeded (UI elements queried)
+        private bool _subscribed;   // runtime-state events + attack button wired
+
         private void Awake()
         {
             if (_hudDocument == null) _hudDocument = GetComponent<UIDocument>();
         }
 
+        // CRITICAL: UI binding + event subscription happen in Start(), NOT here.
+        // A UIDocument builds its rootVisualElement in its OWN OnEnable, and script
+        // execution order means THIS OnEnable can run first — so binding here read a
+        // null root, BindUi() failed, OnEnable bailed before ever subscribing, and
+        // the HUD never rendered. That is the long-standing "ATB shows only the
+        // capsule combatants, no 2D turn-based window" bug. By Start() the document
+        // root is guaranteed built. OnEnable only RE-subscribes on a later re-enable
+        // (once first-time binding in Start has happened).
         private void OnEnable()
         {
-            if (!BindUi()) return;
-            if (_runtimeState == null)
-            {
-                Debug.LogError("[BattleController] No ATBRuntimeState assigned — battle cannot run.");
-                return;
-            }
-
-            // Subscribe — the "subscribe in OnEnable" half of the Zustand parallel.
-            _runtimeState.OnBattleChanged.AddListener(HandleBattleChanged);
-            _runtimeState.OnActionSubmitted.AddListener(HandleActionSubmitted);
-            _runtimeState.OnOutcome.AddListener(HandleOutcome);
-            if (_attackButton != null) _attackButton.clicked += HandleAttackClicked;
+            if (_bound) Subscribe();
         }
 
         private void OnDisable()
@@ -133,11 +133,26 @@ namespace DeNelle.BattleATB
                 _runtimeState.OnOutcome.RemoveListener(HandleOutcome);
             }
             if (_attackButton != null) _attackButton.clicked -= HandleAttackClicked;
+            _subscribed = false;
         }
 
         private void Start()
         {
-            if (_runtimeState == null) return;
+            // Bind the HUD now that UIDocument.rootVisualElement is built (see the
+            // OnEnable note). Without a bound HUD the battle would run invisibly.
+            if (!BindUi())
+            {
+                Debug.LogError("[BattleController] BattleHUD failed to bind in Start — HUD will not render.");
+                return;
+            }
+            _bound = true;
+            Subscribe();   // wire events + the attack button AFTER binding
+
+            if (_runtimeState == null)
+            {
+                Debug.LogError("[BattleController] No ATBRuntimeState assigned — battle cannot run.");
+                return;
+            }
             _renderedLogCount = 0;
             _returnScheduled = false;
 
@@ -145,9 +160,20 @@ namespace DeNelle.BattleATB
             // The handoff source: a wave > 0 from PendingBattle means a village
             // breach; the dev fallback path is treated as a village battle too.
             _runtimeState.StartBattle(setup, BattleSource.Village);
-            // StartBattle fires OnBattleChanged synchronously — but Start may run
-            // after that listener was wired, so render once explicitly to be safe.
+            // StartBattle fires OnBattleChanged synchronously — the listener is wired
+            // above, but render once explicitly as a belt-and-suspenders first paint.
             Render(_runtimeState.Battle);
+        }
+
+        /// <summary>Wires the runtime-state events + the attack button. Idempotent.</summary>
+        private void Subscribe()
+        {
+            if (_subscribed || _runtimeState == null) return;
+            _runtimeState.OnBattleChanged.AddListener(HandleBattleChanged);
+            _runtimeState.OnActionSubmitted.AddListener(HandleActionSubmitted);
+            _runtimeState.OnOutcome.AddListener(HandleOutcome);
+            if (_attackButton != null) _attackButton.clicked += HandleAttackClicked;
+            _subscribed = true;
         }
 
         // ---------------------------------------------------------------------
@@ -180,13 +206,37 @@ namespace DeNelle.BattleATB
             {
                 Wave = wave,
                 Seed = seed,
-                HeroClass = HeroClass.Mage, // v2 foundation ships Mage / Blaise only
+                HeroClass = ResolveHeroClass(), // owner: ATB ran as Mage even when you're an Archer
                 HeroName = _fallbackHeroName,
                 Pets = new List<PartyPetSpec>(),
                 Enemies = enemies,
                 Inventory = new Dictionary<ItemKind, int>(),
                 Reinforcements = false,
             };
+        }
+
+        /// <summary>
+        /// The hero's class for this battle, read from the live GameState so the ATB
+        /// hero matches the class the player chose (owner: "drops into the stub with
+        /// Mage — started as Archer"). GameState carries a Core HeroClassOpt; map it
+        /// to the engine HeroClass. Falls back to Mage when there is no save / None.
+        /// </summary>
+        private static HeroClass ResolveHeroClass()
+        {
+            var svc = DeNelle.Core.State.GameStateService.Instance;
+            var opt = (svc != null && svc.State != null)
+                ? svc.State.HeroClass
+                : DeNelle.Core.State.HeroClassOpt.None;
+            HeroClass cls;
+            switch (opt)
+            {
+                case DeNelle.Core.State.HeroClassOpt.Knight: cls = HeroClass.Knight; break;
+                case DeNelle.Core.State.HeroClassOpt.Ranger: cls = HeroClass.Ranger; break;
+                case DeNelle.Core.State.HeroClassOpt.Mage:   cls = HeroClass.Mage;   break;
+                default:                                     cls = HeroClass.Mage;   break; // no save / None
+            }
+            Debug.Log($"[BattleController] ATB hero class resolved to {cls} (GameState={opt}).");
+            return cls;
         }
 
         /// <summary>

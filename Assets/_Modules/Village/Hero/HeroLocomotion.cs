@@ -81,17 +81,31 @@ namespace DeNelle.Village
             ring.name = "HeroIndicatorRing";
             foreach (var col in ring.GetComponents<Collider>()) Destroy(col);
             ring.transform.SetParent(transform, false);
-            ring.transform.localPosition = new Vector3(0f, 0.06f, 0f);
-            ring.transform.localScale = new Vector3(1.9f, 0.03f, 1.9f); // flat disc at feet
+            ring.transform.localPosition = new Vector3(0f, 0.04f, 0f);
+            ring.transform.localScale = new Vector3(1.5f, 0.02f, 1.5f); // subtle flat disc at feet
             var mr = ring.GetComponent<Renderer>();
+            mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            mr.receiveShadows = false;
             var sh = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
             var mat = new Material(sh);
-            Color ringColor = new Color(0.15f, 0.95f, 1f); // bright cyan
+
+            // Owner 2026-05-26 ("marker below"): the old marker was a solid, glaring
+            // bright-cyan emissive disc. Soften it to a calm, SEMI-TRANSPARENT teal so
+            // the hero stays findable under the high camera without the harsh puddle.
+            // Configure URP/Lit for alpha-blended transparency in code.
+            Color ringColor = new Color(0.35f, 0.85f, 0.95f, 0.33f); // soft translucent teal
+            if (mat.HasProperty("_Surface")) mat.SetFloat("_Surface", 1f);   // 0=opaque, 1=transparent
+            mat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            mat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            mat.SetInt("_ZWrite", 0);
+            mat.DisableKeyword("_SURFACE_TYPE_OPAQUE");
+            mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            mat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
             if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", ringColor);
             if (mat.HasProperty("_Color")) mat.SetColor("_Color", ringColor);
             if (mat.HasProperty("_EmissionColor"))
             {
-                mat.SetColor("_EmissionColor", ringColor * 2.2f);
+                mat.SetColor("_EmissionColor", new Color(0.20f, 0.55f, 0.62f)); // gentle glow, no bloom blowout
                 mat.EnableKeyword("_EMISSION");
                 mat.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
             }
