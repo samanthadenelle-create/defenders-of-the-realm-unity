@@ -314,8 +314,13 @@ namespace DeNelle.Village
                 // red-splatter Tripo grunge variant — binding either gives the dirty
                 // blood-spattered armour the owner flagged. Returning null lets
                 // ApplyClassTint paint the clean steel tint (0.78,0.80,0.86) instead.
-                HeroClass.Ranger => "Textures/Ranger",
-                _ => null,    // Mage placeholder + Knight both fall through to the class tint
+                // Owner 2026-05-26 ("dark ranger in village AND dungeon"): the Ranger
+                // atlas (Textures/Ranger.png / archer_basecolor) is a dark purple-black
+                // Tripo grunge that renders the Ranger as a near-black blob everywhere.
+                // Drop it (like the Knight's bad atlas) so ApplyClassTint paints a clean
+                // ranger tint instead. The Mage's embedded texture is good and survives
+                // via RetargetMaterialsToUrp, so it stays the only textured class.
+                _ => null,
             };
             if (string.IsNullOrEmpty(texPath)) return;
             var tex = Resources.Load<Texture2D>(texPath);
@@ -353,9 +358,17 @@ namespace DeNelle.Village
             Color tint = cls switch
             {
                 HeroClass.Knight => new Color(0.78f, 0.80f, 0.86f),   // steel
-                HeroClass.Ranger => new Color(0.62f, 0.55f, 0.85f),   // alien-violet
+                HeroClass.Ranger => new Color(0.40f, 0.50f, 0.34f),   // hunter / leaf green
                 _                => new Color(0.60f, 0.45f, 0.85f),   // mage fallback
             };
+
+            // Knight + Ranger ship with bad Tripo atlases (red grunge / dark purple),
+            // so FORCE a clean flat tint for them — clearing whatever dark diffuse the
+            // FBX import or RetargetMaterialsToUrp bound (which is exactly why the
+            // Ranger read near-black). The Mage's extracted texture is good, so it is
+            // preserved (the tint only fills in if it somehow has no texture).
+            bool forceTint = cls == HeroClass.Knight || cls == HeroClass.Ranger;
+
             foreach (var r in body.GetComponentsInChildren<Renderer>(true))
             {
                 if (r == null) continue;
@@ -365,12 +378,19 @@ namespace DeNelle.Village
                 {
                     var m = mats[i];
                     if (m == null) continue;
-                    // Only override when the material clearly has no diffuse
-                    // texture — preserve real textures when Unity DID extract.
+
                     Texture tex = null;
                     if (m.HasProperty("_BaseMap")) tex = m.GetTexture("_BaseMap");
                     if (tex == null && m.HasProperty("_MainTex")) tex = m.GetTexture("_MainTex");
-                    if (tex != null) continue;
+
+                    if (tex != null && !forceTint) continue;   // Mage: keep its good texture
+
+                    if (forceTint)
+                    {
+                        // Drop the bad atlas so the flat tint actually shows.
+                        if (m.HasProperty("_BaseMap")) m.SetTexture("_BaseMap", null);
+                        if (m.HasProperty("_MainTex")) m.SetTexture("_MainTex", null);
+                    }
                     if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", tint);
                     if (m.HasProperty("_Color"))     m.SetColor("_Color", tint);
                 }

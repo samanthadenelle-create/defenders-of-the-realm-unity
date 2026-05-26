@@ -247,7 +247,15 @@ namespace DeNelle.Village
         private void OnDisable()
         {
             if (_closeButton != null) _closeButton.clicked -= Close;
+            var svc = GameStateService.Instance;
+            if (svc != null) svc.ResourcesChanged.RemoveListener(OnResourcesChanged);
             DestroyGhost();
+        }
+
+        /// <summary>Re-render the open menu when crystals change (dev grant, wave reward).</summary>
+        private void OnResourcesChanged()
+        {
+            if (_isOpen) Render();
         }
 
         // =====================================================================
@@ -300,6 +308,16 @@ namespace DeNelle.Village
             _selectedTowerForUpgrade = null;
             Disarm();
             Render();
+
+            // Live-refresh the balance + affordability while the menu is open if
+            // crystals change (a dev grant, a wave reward). Remove-then-add guards
+            // against a double subscription.
+            var svc = GameStateService.Instance;
+            if (svc != null)
+            {
+                svc.ResourcesChanged.RemoveListener(OnResourcesChanged);
+                svc.ResourcesChanged.AddListener(OnResourcesChanged);
+            }
         }
 
         /// <summary>
@@ -311,6 +329,8 @@ namespace DeNelle.Village
             _isOpen = false;
             Disarm();
             SetPanelVisible(false);
+            var svc = GameStateService.Instance;
+            if (svc != null) svc.ResourcesChanged.RemoveListener(OnResourcesChanged);
         }
 
         /// <summary>Toggles the menu open/closed.</summary>
@@ -1019,14 +1039,16 @@ namespace DeNelle.Village
         {
             get
             {
-                if (_useGameState)
-                {
-                    var service = GameStateService.Instance;
-                    if (service != null && service.State != null)
-                        return service.State.Resources.Crystals;
-                    // No service in a standalone test — fall back to the local int.
-                }
-                return _localCrystalBalance;
+                // Prefer the live GameState whenever it exists — it always does now
+                // that GameStateService self-bootstraps — so the menu shares ONE
+                // crystal store with the HUD and the dev grants. Keying off the
+                // _useGameState serialized flag was the trap: if it was left off on
+                // the scene instance, dev "+Crystals" updated GameState but the menu
+                // still read its local int (owner: "balance doesn't reflect the grant").
+                var service = GameStateService.Instance;
+                if (service != null && service.State != null)
+                    return service.State.Resources.Crystals;
+                return _localCrystalBalance;   // true standalone test only (no service)
             }
         }
 
@@ -1041,20 +1063,19 @@ namespace DeNelle.Village
         {
             if (amount <= 0) return true;
 
-            if (_useGameState)
+            // Spend from the live GameState whenever it exists (matches CrystalBalance),
+            // independent of the _useGameState flag, so a dev-funded build spends the
+            // crystals the player actually sees.
+            var service = GameStateService.Instance;
+            if (service != null && service.State != null)
             {
-                var service = GameStateService.Instance;
-                if (service != null && service.State != null)
-                {
-                    var r = service.State.Resources;
-                    if (r.Crystals < amount) return false;
-                    r.Crystals -= amount;
-                    service.State.Resources = r;
-                    service.Save();
-                    service.ResourcesChanged.Invoke();
-                    return true;
-                }
-                // Fall through to the local balance when there is no service.
+                var r = service.State.Resources;
+                if (r.Crystals < amount) return false;
+                r.Crystals -= amount;
+                service.State.Resources = r;
+                service.Save();
+                service.ResourcesChanged.Invoke();
+                return true;
             }
 
             if (_localCrystalBalance < amount) return false;

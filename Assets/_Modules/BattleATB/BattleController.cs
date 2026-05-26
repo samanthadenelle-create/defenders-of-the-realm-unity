@@ -103,25 +103,25 @@ namespace DeNelle.BattleATB
         // Lifecycle
         // ---------------------------------------------------------------------
 
+        private bool _bound;        // BindUi() succeeded (UI elements queried)
+        private bool _subscribed;   // runtime-state events + attack button wired
+
         private void Awake()
         {
             if (_hudDocument == null) _hudDocument = GetComponent<UIDocument>();
         }
 
+        // CRITICAL: UI binding + event subscription happen in Start(), NOT here.
+        // A UIDocument builds its rootVisualElement in its OWN OnEnable, and script
+        // execution order means THIS OnEnable can run first — so binding here read a
+        // null root, BindUi() failed, OnEnable bailed before ever subscribing, and
+        // the HUD never rendered. That is the long-standing "ATB shows only the
+        // capsule combatants, no 2D turn-based window" bug. By Start() the document
+        // root is guaranteed built. OnEnable only RE-subscribes on a later re-enable
+        // (once first-time binding in Start has happened).
         private void OnEnable()
         {
-            if (!BindUi()) return;
-            if (_runtimeState == null)
-            {
-                Debug.LogError("[BattleController] No ATBRuntimeState assigned — battle cannot run.");
-                return;
-            }
-
-            // Subscribe — the "subscribe in OnEnable" half of the Zustand parallel.
-            _runtimeState.OnBattleChanged.AddListener(HandleBattleChanged);
-            _runtimeState.OnActionSubmitted.AddListener(HandleActionSubmitted);
-            _runtimeState.OnOutcome.AddListener(HandleOutcome);
-            if (_attackButton != null) _attackButton.clicked += HandleAttackClicked;
+            if (_bound) Subscribe();
         }
 
         private void OnDisable()
@@ -133,11 +133,26 @@ namespace DeNelle.BattleATB
                 _runtimeState.OnOutcome.RemoveListener(HandleOutcome);
             }
             if (_attackButton != null) _attackButton.clicked -= HandleAttackClicked;
+            _subscribed = false;
         }
 
         private void Start()
         {
-            if (_runtimeState == null) return;
+            // Bind the HUD now that UIDocument.rootVisualElement is built (see the
+            // OnEnable note). Without a bound HUD the battle would run invisibly.
+            if (!BindUi())
+            {
+                Debug.LogError("[BattleController] BattleHUD failed to bind in Start — HUD will not render.");
+                return;
+            }
+            _bound = true;
+            Subscribe();   // wire events + the attack button AFTER binding
+
+            if (_runtimeState == null)
+            {
+                Debug.LogError("[BattleController] No ATBRuntimeState assigned — battle cannot run.");
+                return;
+            }
             _renderedLogCount = 0;
             _returnScheduled = false;
 
@@ -145,9 +160,20 @@ namespace DeNelle.BattleATB
             // The handoff source: a wave > 0 from PendingBattle means a village
             // breach; the dev fallback path is treated as a village battle too.
             _runtimeState.StartBattle(setup, BattleSource.Village);
-            // StartBattle fires OnBattleChanged synchronously — but Start may run
-            // after that listener was wired, so render once explicitly to be safe.
+            // StartBattle fires OnBattleChanged synchronously — the listener is wired
+            // above, but render once explicitly as a belt-and-suspenders first paint.
             Render(_runtimeState.Battle);
+        }
+
+        /// <summary>Wires the runtime-state events + the attack button. Idempotent.</summary>
+        private void Subscribe()
+        {
+            if (_subscribed || _runtimeState == null) return;
+            _runtimeState.OnBattleChanged.AddListener(HandleBattleChanged);
+            _runtimeState.OnActionSubmitted.AddListener(HandleActionSubmitted);
+            _runtimeState.OnOutcome.AddListener(HandleOutcome);
+            if (_attackButton != null) _attackButton.clicked += HandleAttackClicked;
+            _subscribed = true;
         }
 
         // ---------------------------------------------------------------------
