@@ -178,7 +178,16 @@ namespace DeNelle.Pets
                     // Strip any baked-in light / particle "aura" too — the affinity
                     // glow below is the single controlled source (owner 2026-05-25).
                     foreach (var lt in visual.GetComponentsInChildren<Light>(true))
-                        if (lt != null) Destroy(lt);
+                    {
+                        if (lt == null) continue;
+                        // URP's UniversalAdditionalLightData has [RequireComponent(Light)],
+                        // so destroying the Light directly logs "Can't remove Light because
+                        // UniversalAdditionalLightData depends on it" (WO-28 §4). Remove the
+                        // dependent first. GetComponent(string) avoids a URP asmdef reference.
+                        var lightData = lt.GetComponent("UniversalAdditionalLightData");
+                        if (lightData != null) Destroy(lightData);
+                        Destroy(lt);
+                    }
                     foreach (var ps in visual.GetComponentsInChildren<ParticleSystem>(true))
                         if (ps != null) Destroy(ps);
                     // Tripo FBXs import with Phong materials URP can't render
