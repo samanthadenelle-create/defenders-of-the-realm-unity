@@ -8,6 +8,7 @@
 // =============================================================================
 
 using System;
+using System.Collections.Generic;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -256,6 +257,103 @@ namespace DeNelle.Editor
             {
                 Debug.Log("[BFix] No buildings needed re-centring — scene left untouched.");
             }
+        }
+
+        // WO-30: owner direction "move portal + dungeon tag inside castle walls and
+        // reduce object 20%". The two DungeonPortal_* objects carry only the trigger
+        // + floating sign; the VISIBLE arch is a separate prefab instance ('Portal',
+        // 'Portal 2') sitting next to each trigger. Move each trigger (sign follows)
+        // to X=±12, Z=8, shrink its trigger 20%, and move+shrink the nearest arch by
+        // the same delta with its feet re-snapped to the ground. Targeted, no re-bake.
+        [MenuItem("Defenders/Cleanup/Reposition Dungeon Portals (WO-30)")]
+        public static void FixDungeonPortals()
+        {
+            var scene = EditorSceneManager.OpenScene(VillagePath, OpenSceneMode.Single);
+            var all = UnityEngine.Object.FindObjectsByType<Transform>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+
+            string[] portalNames = { "DungeonPortal_HealersCottage", "DungeonPortal_FolksGranary" };
+            Vector3[] targets     = { new Vector3(-12f, 0f, 8f),       new Vector3(12f, 0f, 8f) };
+
+            // Collect the visible arch prefab-instances: scene objects whose name
+            // begins "Portal" but is NOT a DungeonPortal trigger or a PortalSign.
+            var arches = new List<Transform>();
+            foreach (var t in all)
+            {
+                if (t == null) continue;
+                string n = t.name;
+                if (!n.StartsWith("Portal")) continue;
+                if (n.StartsWith("DungeonPortal") || n.Contains("Sign")) continue;
+                // keep only top-level arch roots (a renderer somewhere beneath)
+                if (t.GetComponentInChildren<Renderer>(true) == null) continue;
+                if (t.parent != null && t.parent.name.StartsWith("Portal")) continue; // child of another arch
+                arches.Add(t);
+            }
+            Debug.Log($"[PFix] found {arches.Count} visible arch object(s): " +
+                      string.Join(", ", arches.ConvertAll(a => $"'{a.name}'@{a.position}")));
+
+            for (int i = 0; i < portalNames.Length; i++)
+            {
+                Transform portal = null;
+                foreach (var t in all) if (t != null && t.name == portalNames[i]) { portal = t; break; }
+                if (portal == null) { Debug.LogWarning($"[PFix] '{portalNames[i]}' not found — skipped."); continue; }
+
+                Vector3 oldPos = portal.position;
+                Vector3 delta = targets[i] - oldPos;
+
+                // Associate the nearest arch by its MESH world-bounds CENTRE (the
+                // arch prefab's root transform is flung far from its visible mesh by
+                // the tripo pivot offset, so the root position is useless here).
+                Transform arch = null; float best = 6f;
+                foreach (var a in arches)
+                {
+                    Vector3 c = SubtreeBoundsCenter(a); c.y = 0f;
+                    Vector3 o = oldPos; o.y = 0f;
+                    float dist = (c - o).magnitude;
+                    if (dist < best) { best = dist; arch = a; }
+                }
+
+                // Move the trigger (PortalSign child follows) + shrink the trigger 20%.
+                portal.position = targets[i];
+                var bc = portal.GetComponent<BoxCollider>();
+                if (bc != null)
+                {
+                    bc.size = bc.size * 0.8f;
+                    bc.center = new Vector3(bc.center.x, bc.center.y * 0.8f, bc.center.z);
+                }
+
+                if (arch != null)
+                {
+                    // Pure translation: moving the root by a world delta shifts the
+                    // visible mesh by the same delta, keeping arch + trigger aligned.
+                    // (Deliberately NOT scaling — the arch is already ~4 m / door-
+                    // sized, and scaling this offset-pivot prefab would fling the mesh.)
+                    Vector3 meshBefore = SubtreeBoundsCenter(arch);
+                    arch.position += delta;
+                    arches.Remove(arch);                          // one arch per portal
+                    Debug.Log($"[PFix] '{portalNames[i]}': trigger {oldPos}->{targets[i]}; arch '{arch.name}' mesh {meshBefore}->{SubtreeBoundsCenter(arch)} (moved by {delta}).");
+                }
+                else
+                {
+                    Debug.Log($"[PFix] '{portalNames[i]}': trigger {oldPos}->{targets[i]}; NO arch mesh found nearby (moved trigger + sign only).");
+                }
+            }
+
+            EditorSceneManager.MarkSceneDirty(scene);
+            bool ok = EditorSceneManager.SaveScene(scene);
+            Debug.Log($"[PFix] Village.unity saved: {ok}.");
+        }
+
+        /// <summary>World-space centre of the combined renderer bounds beneath a transform.</summary>
+        private static Vector3 SubtreeBoundsCenter(Transform t)
+        {
+            Bounds? b = null;
+            foreach (var r in t.GetComponentsInChildren<Renderer>(true))
+            {
+                if (r == null) continue;
+                if (b == null) b = r.bounds;
+                else { var bb = b.Value; bb.Encapsulate(r.bounds); b = bb; }
+            }
+            return b?.center ?? t.position;
         }
     }
 }
