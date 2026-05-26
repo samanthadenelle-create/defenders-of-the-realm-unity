@@ -32,7 +32,7 @@ Added `Defenders → Build → WebGL Player` + `BuildWebGL` (minimal IL2CPP stri
 
 ## 🔨 Needs you (couldn't safely do autonomously)
 
-**A. Delete the stray `DungeonController` in the village.** There's still **one** `DungeonController` component in `Village.unity`, on an **empty-named GameObject** (the leftover from the deleted "Portal"). It's harmful — it re-places the hero + sets a dungeon camera *in the village* (likely behind earlier hero/camera weirdness). I did **not** remove it because that means re-saving the village, which has a crash history — too risky to do while you slept. **Fix:** in the editor, find the object with a "Dungeon Controller" component (Hierarchy may show it blank-named) and delete it → Ctrl+S. *(Or tell me and I'll do it with a build-verify + git safety net.)*
+**A. ✅ DONE — stray `DungeonController` removed.** You authorized it, so I removed the leftover `Portal` GameObject (a DungeonController at 2.9,-0.5,-1.5 that was re-placing the hero + installing a dungeon camera in the village). Verified: refs 1→0, exactly 1 object removed (135→134), scene well-formed, Heart + 2 portals intact, build SUCCESS. **Please confirm the village still loads in play** (it was a targeted re-save — low risk, but you can't beat a play-test for the `level3` check). Committed `53cd687`.
 
 **B. Tree-of-Life collider** — still blocks too much walkable area. Replace its big mesh collider with a small **Capsule** around the trunk (radius ~1.5, height ~5, center Y ~2.5) so the Heart stays hittable but the plaza is walkable.
 
