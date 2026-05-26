@@ -71,7 +71,14 @@ namespace DeNelle.Village
 
         // Hero / tower layout in the arena.
         private static readonly Vector3 TowerPos    = Vector3.zero;
-        private static readonly Vector3 BalconyPos  = new Vector3(0f, 4f, -1.5f);
+        private const float TowerHeight             = 14f;    // normalized spire height (m)
+        private const float BalconyHeightFraction   = 0.70f;  // hero stands at ~70% of the tower height
+        private const float BalconyDepth            = -1.5f;  // slight pull toward the camera on the platform
+        // Derived hero balcony / spawn perch (kept as a field so the air-glide + camera
+        // share the SAME perch the BuildTower model resolves it to). Recomputed in
+        // BuildTower once the real model's normalized height is known; this is the
+        // default used by the cylinder fallback.
+        private Vector3 _balconyPos                 = new Vector3(0f, TowerHeight * BalconyHeightFraction, BalconyDepth);
         private static readonly Vector3 CamOffset   = new Vector3(0f, 8f, -12f);
 
         // ── State ─────────────────────────────────────────────────────────────
@@ -98,6 +105,18 @@ namespace DeNelle.Village
         private bool _resolved;
         private string _returnScene = SceneRouter.Village;
         private LayerMask _enemyMask = ~0;
+
+        // ── Polish: lighting + reliable combat FX ─────────────────────────────
+        private LastChanceLightingPreset _lighting;
+        private VisualElement _flashOverlay;    // red full-screen tower-hit pulse
+        private Label _bossBanner;               // boss-intro banner
+
+        // Simple code-driven UI tweens (UI Toolkit has no built-in tween).
+        private float _flashTimer;               // seconds left on the red flash fade
+        private float _flashPeak;                // starting alpha of the current flash
+        private const float FlashDuration = 0.45f;
+        private float _bannerTimer;              // seconds left the boss banner is shown
+        private const float BannerDuration = 2.4f;
 
         // ── HUD ───────────────────────────────────────────────────────────────
         private UIDocument _hudDoc;
@@ -155,6 +174,10 @@ namespace DeNelle.Village
 
         private void Update()
         {
+            // UI FX tweens run regardless of the assault state so a flash/banner
+            // started right before win/lose still finishes its fade.
+            TickFxTweens();
+
             if (!_running) return;
 
             // Prune dead / destroyed enemies.
@@ -212,18 +235,65 @@ namespace DeNelle.Village
             towerGo.transform.position = TowerPos;
             _towerTransform = towerGo.transform;
 
-            var spire = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-            spire.name = "Spire";
-            spire.transform.SetParent(towerGo.transform, false);
-            spire.transform.localScale = new Vector3(3f, 4f, 3f);
-            spire.transform.localPosition = new Vector3(0f, 4f, 0f);
-            TintUrp(spire, new Color(0.42f, 0.40f, 0.50f));
+            // ── Real owner-provided Tripo model (Resources/PatriciaLight/Tower) ──
+            // Tripo FBXs import with Phong materials URP can't render, off-centre
+            // pivots that fling the visible mesh away under scale, and stray
+            // cameras/colliders/animators. Mirror the hero/ATB swap handling:
+            // attach TripoMaterialFixer, strip the extras, NormalizeHeight to a tall
+            // spire, then recenter by WORLD bounds (feet → y=0, centre → TowerPos XZ).
+            // Fall back to the cylinder spire if the resource is absent so the mode
+            // never breaks.
+            float spireTopY = TowerHeight;   // top of the visible spire (drives the balcony perch)
+            var towerPrefab = Resources.Load<GameObject>("PatriciaLight/Tower");
+            if (towerPrefab != null)
+            {
+                var model = Instantiate(towerPrefab, towerGo.transform);
+                model.name = "TowerModel";
+                model.transform.localPosition = Vector3.zero;
+                model.transform.localRotation = Quaternion.identity;
 
+                StripCollidersAndCameras(model);
+                StripAnimators(model);
+
+                // URP material fix (find the type so this asmdef carries no Core dep).
+                var fixerType = FindTypeByName("DeNelle.Core.TripoMaterialFixer");
+                if (fixerType != null) { try { model.AddComponent(fixerType); } catch { /* non-fatal */ } }
+                else RetargetMaterialsToUrp(model); // safety net if the fixer type moves
+
+                NormalizeHeight(model, TowerHeight);
+
+                // Recenter by world bounds: centre → tower XZ, feet → y=0 (Tripo pivot
+                // is far off-centre, so naive scaling leaves the mesh flung away).
+                Bounds b = WorldBounds(model);
+                Vector3 d = new Vector3(TowerPos.x - b.center.x,
+                                        TowerPos.y - b.min.y,
+                                        TowerPos.z - b.center.z);
+                model.transform.position += d;
+
+                // The recentred model's top is the real spire height for the perch.
+                Bounds after = WorldBounds(model);
+                spireTopY = after.max.y - TowerPos.y;
+            }
+            else
+            {
+                Debug.LogWarning("[PatriciaLight] Resources/PatriciaLight/Tower not found — using the cylinder spire fallback.");
+                var spire = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                spire.name = "Spire";
+                spire.transform.SetParent(towerGo.transform, false);
+                spire.transform.localScale = new Vector3(3f, TowerHeight * 0.5f, 3f); // cylinder is 2m tall at scale 1
+                spire.transform.localPosition = new Vector3(0f, TowerHeight * 0.5f, 0f);
+                TintUrp(spire, new Color(0.42f, 0.40f, 0.50f));
+            }
+
+            // Hero perch / balcony at ~70% of the spire height (tunable above).
+            _balconyPos = new Vector3(0f, spireTopY * BalconyHeightFraction, BalconyDepth);
+
+            // A small platform the hero stands on so it doesn't hover in mid-air.
             var balcony = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
             balcony.name = "Balcony";
             balcony.transform.SetParent(towerGo.transform, false);
             balcony.transform.localScale = new Vector3(4.5f, 0.3f, 4.5f);
-            balcony.transform.localPosition = new Vector3(0f, BalconyPos.y - 0.3f, 0f);
+            balcony.transform.localPosition = new Vector3(0f, _balconyPos.y - 0.3f, 0f);
             TintUrp(balcony, new Color(0.30f, 0.28f, 0.36f));
 
             // HeartController is the canonical tower HP (0..100). Use its authored
@@ -284,7 +354,7 @@ namespace DeNelle.Village
 
             var heroRoot = new GameObject($"Hero ({slug})");
             heroRoot.transform.SetParent(transform, false);
-            heroRoot.transform.position = TowerPos + BalconyPos;
+            heroRoot.transform.position = TowerPos + _balconyPos;
             heroRoot.transform.rotation = Quaternion.identity; // faces +Z (into the arena)
             _heroTransform = heroRoot.transform;
 
@@ -565,7 +635,7 @@ namespace DeNelle.Village
                 if (e == null || e.IsDead || e.GetComponent<AirEnemyTag>() == null) continue;
 
                 Vector3 self = e.transform.position;
-                Vector3 target = TowerPos + new Vector3(0f, BalconyPos.y, 0f);
+                Vector3 target = TowerPos + new Vector3(0f, _balconyPos.y, 0f);
                 Vector3 to = target - self;
                 float dist = to.magnitude;
 
@@ -585,6 +655,9 @@ namespace DeNelle.Village
 
         private async UniTask SpawnBoss()
         {
+            // Boss intro flourish: banner + a stronger flash + a big camera shake.
+            ShowBossFlourish();
+
             // Prefer the apex DragonBoss prefab if one is reachable in Resources;
             // else field a high-HP ground enemy (the necromancer) as the boss.
             var bossPrefab = Resources.Load<DragonBoss>("Generated/Boss_Dragon")
@@ -636,6 +709,12 @@ namespace DeNelle.Village
         {
             if (enemy != null)
             {
+                // A slain enemy (not a breach — that path unsubscribes first) gets a
+                // small spark burst at its position. Floating damage numbers are
+                // already handled by the damage path's DamageNumberSpawner.
+                bool air = enemy.GetComponent<AirEnemyTag>() != null;
+                SpawnDeathBurst(enemy.transform.position, air);
+
                 enemy.Died -= HandleEnemyDied;
                 enemy.ReachedHeart -= HandleEnemyReachedHeart;
             }
@@ -648,6 +727,7 @@ namespace DeNelle.Village
 
             _heart.SetHp(_heart.Hp - HeartHitDamage);
             RefreshHud();
+            FlashTowerHit(strong: false);   // red pulse + camera shake on every breach
 
             if (enemy != null)
             {
@@ -660,7 +740,12 @@ namespace DeNelle.Village
 
         private void HandleApexBossDied(DragonBoss boss)
         {
-            if (boss != null) boss.Died -= HandleApexBossDied;
+            if (boss != null)
+            {
+                SpawnDeathBurst(boss.transform.position, air: true); // a bigger pop for the boss
+                ShakeCamera(0.7f, 0.6f);
+                boss.Died -= HandleApexBossDied;
+            }
             if (_liveApexBoss == boss) _liveApexBoss = null;
         }
 
@@ -726,25 +811,15 @@ namespace DeNelle.Village
         // =====================================================================
 
         /// <summary>
-        /// Dims + tints the scene to a tense "last chance" mood: lowers ambient,
-        /// pushes the key light to a low amber. Cheap + scene-local; skipped
-        /// silently if no light is present.
+        /// Applies the dramatic "last chance" lighting mood by installing the
+        /// dedicated <see cref="LastChanceLightingPreset"/> (dark flat ambient +
+        /// amber/violet exp² fog + a warm raked amber KEY and a cool blue RIM for
+        /// separation, with a subtle key flicker). Cheap + scene-local; no URP
+        /// post-process Volume (those no-op in this project's setup).
         /// </summary>
         private void ApplyLastChanceLighting()
         {
-            RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
-            RenderSettings.ambientLight = new Color(0.16f, 0.12f, 0.14f);
-            RenderSettings.fog = true;
-            RenderSettings.fogMode = FogMode.ExponentialSquared;
-            RenderSettings.fogDensity = 0.012f;
-            RenderSettings.fogColor = new Color(0.12f, 0.08f, 0.12f);
-
-            var key = UnityEngine.Object.FindAnyObjectByType<Light>();
-            if (key != null && key.type == LightType.Directional)
-            {
-                key.color = new Color(1f, 0.62f, 0.42f); // low amber
-                key.intensity = 0.7f;
-            }
+            _lighting = LastChanceLightingPreset.Install(transform);
         }
 
         // =====================================================================
@@ -834,7 +909,39 @@ namespace DeNelle.Village
             barFrame.Add(_hpLabel);
 
             BuildPetToggles(root);
+            BuildFxOverlays(root);
             RefreshHud();
+        }
+
+        /// <summary>
+        /// Builds the code-only FX overlays on the HUD root: a full-screen red
+        /// pulse element (flashed on tower damage) and a hidden boss-intro banner.
+        /// Both are pure VisualElements (no UXML, per WO-47) and ignore picking so
+        /// they never eat input.
+        /// </summary>
+        private void BuildFxOverlays(VisualElement root)
+        {
+            // Red full-screen tower-hit pulse — starts fully transparent.
+            _flashOverlay = new VisualElement();
+            _flashOverlay.pickingMode = PickingMode.Ignore;
+            _flashOverlay.style.position = Position.Absolute;
+            _flashOverlay.style.top = 0f; _flashOverlay.style.left = 0f;
+            _flashOverlay.style.right = 0f; _flashOverlay.style.bottom = 0f;
+            _flashOverlay.style.backgroundColor = new StyleColor(new Color(0.85f, 0.10f, 0.10f, 0f));
+            root.Add(_flashOverlay);
+
+            // Boss-intro banner — centred, hidden until the boss spawns.
+            _bossBanner = new Label("THE NECROMANCER APPROACHES");
+            _bossBanner.pickingMode = PickingMode.Ignore;
+            _bossBanner.style.position = Position.Absolute;
+            _bossBanner.style.top = Length.Percent(40f);
+            _bossBanner.style.left = 0f; _bossBanner.style.right = 0f;
+            _bossBanner.style.unityTextAlign = TextAnchor.MiddleCenter;
+            _bossBanner.style.color = new StyleColor(new Color(1f, 0.30f, 0.28f, 1f));
+            _bossBanner.style.fontSize = 30f;
+            _bossBanner.style.unityFontStyleAndWeight = FontStyle.Bold;
+            _bossBanner.style.opacity = 0f;
+            root.Add(_bossBanner);
         }
 
         /// <summary>One Attack/Repair toggle button per fielded pet, lower-left.</summary>
@@ -935,6 +1042,86 @@ namespace DeNelle.Village
         }
 
         // =====================================================================
+        //  Reliable combat FX (no URP post-processing — WO-47)
+        // =====================================================================
+
+        /// <summary>Drives the code-only UI tweens (red flash fade + boss banner fade).</summary>
+        private void TickFxTweens()
+        {
+            if (_flashTimer > 0f && _flashOverlay != null)
+            {
+                _flashTimer -= Time.deltaTime;
+                float a = Mathf.Clamp01(_flashTimer / FlashDuration) * _flashPeak;
+                _flashOverlay.style.backgroundColor = new StyleColor(new Color(0.85f, 0.10f, 0.10f, a));
+            }
+
+            if (_bannerTimer > 0f && _bossBanner != null)
+            {
+                _bannerTimer -= Time.deltaTime;
+                float k = Mathf.Clamp01(_bannerTimer / BannerDuration); // 1 → 0
+                // Fade in fast (first 20%), hold, then fade out over the last 40%.
+                float opacity;
+                float age = 1f - k;
+                if (age < 0.2f) opacity = age / 0.2f;
+                else if (k < 0.4f) opacity = k / 0.4f;
+                else opacity = 1f;
+                _bossBanner.style.opacity = opacity;
+                if (_bannerTimer <= 0f) _bossBanner.style.opacity = 0f;
+            }
+        }
+
+        /// <summary>
+        /// Flashes the red full-screen pulse + shakes the camera — the tower took a
+        /// hit. <paramref name="strong"/> drives a heavier pulse + shake (boss arrival).
+        /// </summary>
+        private void FlashTowerHit(bool strong)
+        {
+            _flashPeak = strong ? 0.55f : 0.32f;
+            _flashTimer = FlashDuration;
+            if (_flashOverlay != null)
+                _flashOverlay.style.backgroundColor = new StyleColor(new Color(0.85f, 0.10f, 0.10f, _flashPeak));
+            ShakeCamera(strong ? 0.6f : 0.22f, strong ? 0.5f : 0.28f);
+        }
+
+        /// <summary>The boss-intro flourish: banner + a stronger flash + a big shake.</summary>
+        private void ShowBossFlourish()
+        {
+            if (_bossBanner != null)
+            {
+                _bossBanner.text = string.Equals(BossEnemyId, "necromancer", StringComparison.OrdinalIgnoreCase)
+                    ? "THE NECROMANCER APPROACHES" : "THE BOSS APPROACHES";
+                _bannerTimer = BannerDuration;
+                _bossBanner.style.opacity = 0f;
+            }
+            _flashPeak = 0.6f;
+            _flashTimer = FlashDuration;
+            ShakeCamera(0.8f, 0.7f);
+        }
+
+        private void ShakeCamera(float intensity, float duration)
+        {
+            if (_camFollow != null) _camFollow.Shake(intensity, duration);
+        }
+
+        /// <summary>
+        /// A small spark burst at a slain enemy. Reuses <see cref="AbilityVfxKit"/>'s
+        /// generic impact (the Strike treatment: tracer-less spark + light flash)
+        /// so death reads with a pop. Particle counts stay low (mobile, WO-47).
+        /// </summary>
+        private void SpawnDeathBurst(Vector3 at, bool air)
+        {
+            // Violet for air kills, ember-orange for ground — a readable, cheap pop.
+            Color c = air ? new Color(0.70f, 0.45f, 0.95f) : new Color(1.0f, 0.55f, 0.25f);
+            try
+            {
+                // Strike centred on the enemy with no foe hint → just the impact spark
+                // + a brief light flash (no long tracer). Small radius keeps it cheap.
+                AbilityVfxKit.SpawnAbilityVfx(AbilityEffect.Strike, c, at + Vector3.up * 0.6f, 0.6f, at + Vector3.up * 0.6f);
+            }
+            catch { /* VFX is non-essential — never let it break the loop */ }
+        }
+
+        // =====================================================================
         //  NavMesh — runtime bake under the arena so ground enemies can march
         // =====================================================================
 
@@ -1003,6 +1190,87 @@ namespace DeNelle.Village
             foreach (var rb in go.GetComponentsInChildren<Rigidbody>(true)) if (rb != null) Destroy(rb);
             foreach (var cam in go.GetComponentsInChildren<Camera>(true)) if (cam != null) Destroy(cam);
             foreach (var al in go.GetComponentsInChildren<AudioListener>(true)) if (al != null) Destroy(al);
+        }
+
+        /// <summary>Strips any Animator the FBX brings (the static tower must not animate).</summary>
+        private static void StripAnimators(GameObject go)
+        {
+            foreach (var a in go.GetComponentsInChildren<Animator>(true)) if (a != null) Destroy(a);
+        }
+
+        /// <summary>World-space encapsulated bounds of every renderer under <paramref name="go"/>.</summary>
+        private static Bounds WorldBounds(GameObject go)
+        {
+            var rends = go.GetComponentsInChildren<Renderer>(true);
+            Bounds b = default; bool has = false;
+            foreach (var r in rends)
+            {
+                if (r == null) continue;
+                if (!has) { b = r.bounds; has = true; } else b.Encapsulate(r.bounds);
+            }
+            return has ? b : new Bounds(go.transform.position, Vector3.one);
+        }
+
+        /// <summary>Resolves a type by full name across loaded assemblies (so this
+        /// asmdef needn't reference DeNelle.Core for the TripoMaterialFixer).</summary>
+        private static Type FindTypeByName(string fullName)
+        {
+            foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                var t = asm.GetType(fullName, false);
+                if (t != null) return t;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Safety-net Phong→URP material rebuild, used only if the canonical
+        /// <c>DeNelle.Core.TripoMaterialFixer</c> type can't be found at runtime.
+        /// Mirrors HeroBodySwapper.RetargetMaterialsToUrp (base colour + base map +
+        /// normal carried across to a fresh URP/Lit) so the tower never renders as a
+        /// magenta Phong ghost.
+        /// </summary>
+        private static void RetargetMaterialsToUrp(GameObject go)
+        {
+            Shader lit = Shader.Find("Universal Render Pipeline/Lit")
+                      ?? Shader.Find("Universal Render Pipeline/Simple Lit")
+                      ?? Shader.Find("Standard");
+            if (lit == null) return;
+            foreach (var r in go.GetComponentsInChildren<Renderer>(true))
+            {
+                if (r == null) continue;
+                var mats = r.sharedMaterials;
+                if (mats == null) continue;
+                for (int i = 0; i < mats.Length; i++)
+                {
+                    var src = mats[i];
+                    if (src == null) continue;
+                    if (src.shader != null && src.shader.name.StartsWith(
+                        "Universal Render Pipeline/", StringComparison.Ordinal)) continue;
+
+                    Texture baseTex = null;
+                    if (src.HasProperty("_MainTex")) baseTex = src.GetTexture("_MainTex");
+                    if (baseTex == null && src.HasProperty("_BaseMap")) baseTex = src.GetTexture("_BaseMap");
+                    Color baseColor = Color.white;
+                    if (src.HasProperty("_BaseColor")) baseColor = src.GetColor("_BaseColor");
+                    else if (src.HasProperty("_Color")) baseColor = src.GetColor("_Color");
+                    Texture normalTex = null;
+                    if (src.HasProperty("_BumpMap")) normalTex = src.GetTexture("_BumpMap");
+
+                    var m = new Material(lit) { name = (src.name ?? "Tripo") + " (URP)" };
+                    if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", baseColor);
+                    if (m.HasProperty("_Color"))     m.SetColor("_Color", baseColor);
+                    if (baseTex != null)
+                    {
+                        if (m.HasProperty("_BaseMap")) m.SetTexture("_BaseMap", baseTex);
+                        if (m.HasProperty("_MainTex")) m.SetTexture("_MainTex", baseTex);
+                    }
+                    if (normalTex != null && m.HasProperty("_BumpMap"))
+                    { m.SetTexture("_BumpMap", normalTex); m.EnableKeyword("_NORMALMAP"); }
+                    mats[i] = m;
+                }
+                r.sharedMaterials = mats;
+            }
         }
 
         private void OnDestroy()
