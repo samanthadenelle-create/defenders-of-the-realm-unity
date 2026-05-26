@@ -31,6 +31,15 @@ namespace DeNelle.Village.Talents
         [JsonProperty("cost")] public int Cost;
         [JsonProperty("description")] public string Description;
         [JsonProperty("prerequisites")] public List<string> Prerequisites = new List<string>();
+
+        // WO-36 (talent -> stat half): additive ability stat modifiers applied while
+        // this node is unlocked. Both default to 0 so any node lacking these keys
+        // contributes nothing. damageBonus is an additive fraction (0.10 = +10%
+        // ability damage); cdReduction is a 0..1 fraction shaved off cooldowns
+        // (0.15 = -15% cooldown). Summed across a hero's unlocked nodes by
+        // HeroTalentModifiers and folded into HeroAbilities' damage/cooldown math.
+        [JsonProperty("damageBonus")] public float DamageBonus;
+        [JsonProperty("cdReduction")] public float CdReduction;
     }
 
     [Serializable]

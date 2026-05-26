@@ -27,6 +27,7 @@
 
 using System.Collections.Generic;
 using DeNelle.Core.Combat;
+using DeNelle.Village.Talents; // WO-36: talent -> ability-stat multipliers
 using UnityEngine;
 
 namespace DeNelle.Village
@@ -175,7 +176,10 @@ namespace DeNelle.Village
             if (_cooldownRemaining[(int)slot] > 0f || _mana < def.ManaCost)
                 return false;
 
-            _cooldownRemaining[(int)slot] = def.Cooldown;
+            // WO-36 (talent -> stat): unlocked skill-tree talents shave cooldowns
+            // class-wide via CdReduction. CooldownMultiplier returns 1f when the
+            // hero has no cooldown talents unlocked, preserving the JSON baseline.
+            _cooldownRemaining[(int)slot] = def.Cooldown * HeroTalentModifiers.CooldownMultiplier(_heroClass);
             _mana -= def.ManaCost;
 
             // Play the hero's cast animation in sync with the ability resolving.
@@ -203,6 +207,13 @@ namespace DeNelle.Village
         {
             DamageElement element = ElementOf(def);
 
+            // WO-36 (talent -> stat): scale outgoing enemy damage by the hero's
+            // unlocked DamageBonus talents (class-wide). DamageMultiplier returns
+            // 1f when nothing is unlocked, so the abilities.json baseline holds
+            // until the player learns a damage node. NOTE: the Heal case below
+            // deliberately uses raw def.Damage (heal amount), not this scalar.
+            float dmg = def.Damage * HeroTalentModifiers.DamageMultiplier(_heroClass);
+
             switch (def.EffectEnum)
             {
                 case AbilityEffect.Heal:
@@ -219,7 +230,7 @@ namespace DeNelle.Village
                     var foe = NearestHostile(origin, def.Range + _enemyHitRadius);
                     if (foe != null)
                     {
-                        foe.TakeDamage(def.Damage, element);
+                        foe.TakeDamage(dmg, element);
                         if (def.EffectEnum == AbilityEffect.Snare)
                             foe.ApplyStatus(StatusEffect.Slow, 2.5f); // castAbility.ts snare
                     }
@@ -230,7 +241,7 @@ namespace DeNelle.Village
                 case AbilityEffect.Aoe:
                 case AbilityEffect.Cleave:
                     // blast centred on the caster
-                    Blast(origin, def.Range, def.Damage, element, def.Freeze);
+                    Blast(origin, def.Range, dmg, element, def.Freeze);
                     SpawnVfx(origin, def, def.Range);
                     break;
 
@@ -239,7 +250,7 @@ namespace DeNelle.Village
                     // blast centred on the nearest enemy cluster (castAbility.ts)
                     var foe = NearestHostile(origin, float.MaxValue);
                     Vector3 target = foe != null ? foe.WorldPosition : origin;
-                    Blast(target, def.Range, def.Damage, element, 0f);
+                    Blast(target, def.Range, dmg, element, 0f);
                     SpawnVfx(target, def, def.Range);
                     break;
                 }
