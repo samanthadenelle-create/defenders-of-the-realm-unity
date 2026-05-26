@@ -62,21 +62,59 @@ namespace DeNelle.BattleATB
             var prefab = Resources.Load<GameObject>("Heroes/" + slug);
             if (prefab == null) return;                          // keep the capsule
 
+            // Capture the capsule "slot" (world bounds) + its renderers BEFORE adding
+            // the model, so we can size/place the model into the exact slot and hide
+            // the original pill.
+            var capsuleRenderers = capsule.GetComponentsInChildren<Renderer>(true);
+            Bounds slot = default; bool haveSlot = false;
+            foreach (var r in capsuleRenderers)
+            {
+                if (r == null) continue;
+                if (!haveSlot) { slot = r.bounds; haveSlot = true; } else slot.Encapsulate(r.bounds);
+            }
+
             var model = UnityEngine.Object.Instantiate(prefab, capsule);
             model.name = "AtbHeroModel";
             model.transform.localPosition = Vector3.zero;
             // Hero stands on the LEFT facing the enemy on the RIGHT (+X). The Tripo
-            // heroes' visual forward is local -X (see HeroLocomotion WO-32 note), so
-            // 180° yaw turns that -X to point +X toward the foe. Tunable if it reads wrong.
+            // heroes' visual forward is local -X (HeroLocomotion WO-32 note), so 180°
+            // yaw turns -X to point +X toward the foe. Tunable if it reads wrong.
             model.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
-            NormalizeHeight(model, 2.0f);
             StripCamerasAndColliders(model);
 
             // URP material fix (heroes import with Tripo Phong materials).
             var fixer = FindType("DeNelle.Core.TripoMaterialFixer");
             if (fixer != null) { try { model.AddComponent(fixer); } catch { } }
 
-            HideOwnRenderer(capsule);   // hide the pill; the model shows in its place
+            // Size to the slot, then RE-CENTER onto it. Tripo pivots are far off
+            // centre, so scaling localScale flings the visible mesh away from the
+            // capsule (the "hero in empty area" bug — same trap as the buildings).
+            // Recentre by world bounds: bounds centre → slot centre (XZ), feet → slot base.
+            if (haveSlot)
+            {
+                NormalizeHeight(model, Mathf.Max(0.5f, slot.size.y));
+                Bounds mb = ModelBounds(model);
+                Vector3 d = new Vector3(slot.center.x - mb.center.x,
+                                        slot.min.y    - mb.min.y,
+                                        slot.center.z - mb.center.z);
+                model.transform.position += d;
+            }
+            else NormalizeHeight(model, 2f);
+
+            // Hide the original capsule pill — the model replaces it.
+            foreach (var r in capsuleRenderers) if (r != null) r.enabled = false;
+        }
+
+        private static Bounds ModelBounds(GameObject go)
+        {
+            var rends = go.GetComponentsInChildren<Renderer>(true);
+            Bounds b = default; bool has = false;
+            foreach (var r in rends)
+            {
+                if (r == null) continue;
+                if (!has) { b = r.bounds; has = true; } else b.Encapsulate(r.bounds);
+            }
+            return has ? b : new Bounds(go.transform.position, Vector3.one);
         }
 
         // ── Enemy: tint the capsule (no runtime enemy model in Resources) ────

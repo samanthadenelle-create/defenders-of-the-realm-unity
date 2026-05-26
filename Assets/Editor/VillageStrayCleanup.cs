@@ -406,6 +406,36 @@ namespace DeNelle.Editor
                 }
             }
 
+            // Wire the BattleHUD UIDocument's PanelSettings. When null the 2D
+            // turn-based battle window (HP/ATB bars, log, Attack) does NOT render,
+            // so the player only sees the 3D capsule backdrop ("pills on ATB").
+            // SerializedObject set (the property setter doesn't persist — known
+            // intro-PanelSettings regression).
+            const string BattlePanelPath = "Assets/_Modules/BattleATB/Generated/BattlePanelSettings.asset";
+            var doc = bc.GetComponent<UnityEngine.UIElements.UIDocument>()
+                      ?? UnityEngine.Object.FindAnyObjectByType<UnityEngine.UIElements.UIDocument>();
+            if (doc != null)
+            {
+                var dso = new SerializedObject(doc);
+                var psProp = dso.FindProperty("m_PanelSettings");
+                var vtProp = dso.FindProperty("sourceAsset");
+                sb.AppendLine($"[ATBFix] UIDocument panelSettings={(psProp != null && psProp.objectReferenceValue != null ? psProp.objectReferenceValue.name : "NULL")} " +
+                              $"visualTree={(vtProp != null && vtProp.objectReferenceValue != null ? vtProp.objectReferenceValue.name : "NULL")}");
+                if (psProp != null && psProp.objectReferenceValue == null)
+                {
+                    var ps = AssetDatabase.LoadAssetAtPath<UnityEngine.UIElements.PanelSettings>(BattlePanelPath);
+                    if (ps != null)
+                    {
+                        psProp.objectReferenceValue = ps;
+                        dso.ApplyModifiedPropertiesWithoutUndo();
+                        changed = true;
+                        sb.AppendLine("[ATBFix] PanelSettings WIRED -> BattlePanelSettings.asset (2D battle window will now render).");
+                    }
+                    else sb.AppendLine($"[ATBFix] BattlePanelSettings.asset NOT FOUND at {BattlePanelPath}.");
+                }
+            }
+            else sb.AppendLine("[ATBFix] No UIDocument in ATBBattle scene — 2D HUD cannot render.");
+
             int missing = 0, animNoCtrl = 0;
             foreach (var root in scene.GetRootGameObjects())
                 foreach (var t in root.GetComponentsInChildren<Transform>(true))
