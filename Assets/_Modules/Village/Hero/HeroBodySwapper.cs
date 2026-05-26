@@ -149,6 +149,14 @@ namespace DeNelle.Village
                 var f = mb.GetType().GetField("_animator",
                     System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
                 if (f != null) { f.SetValue(mb, anim); recached++; }
+                // WO-36: bind the hero class on HeroAbilities so a Knight/Ranger
+                // casts its OWN abilities.json loadout. The field defaulted to
+                // "mage" and was never reassigned, so every class fired the Mage
+                // kit. slug is "Knight"/"Ranger"/"Mage"; SetHeroClass lower-cases it.
+                if (n == "HeroAbilities")
+                    mb.GetType().GetMethod("SetHeroClass",
+                        System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)
+                      ?.Invoke(mb, new object[] { slug });
             }
             Debug.Log($"[HeroBodySwapper] Animator wired: controller=" +
                       $"{(anim.runtimeAnimatorController != null ? anim.runtimeAnimatorController.name : "NULL")}, " +
@@ -301,9 +309,13 @@ namespace DeNelle.Village
         {
             string texPath = cls switch
             {
-                HeroClass.Knight => "Textures/Knight",
+                // WO-35: Knight removed. Both available Knight atlases (Resources
+                // Textures/Knight.png AND the FBM knight_basecolor.JPEG) are the same
+                // red-splatter Tripo grunge variant — binding either gives the dirty
+                // blood-spattered armour the owner flagged. Returning null lets
+                // ApplyClassTint paint the clean steel tint (0.78,0.80,0.86) instead.
                 HeroClass.Ranger => "Textures/Ranger",
-                _ => null,    // Mage uses the scene Wizard placeholder body
+                _ => null,    // Mage placeholder + Knight both fall through to the class tint
             };
             if (string.IsNullOrEmpty(texPath)) return;
             var tex = Resources.Load<Texture2D>(texPath);

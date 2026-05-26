@@ -125,6 +125,20 @@ namespace DeNelle.Village
         /// <summary>Wires the Heart reference (the integrator calls this from VillageController).</summary>
         public void SetHeart(HeartController heart) => _heart = heart;
 
+        /// <summary>
+        /// Sets the hero class id that drives the abilities.json lookup (WO-36).
+        /// The field defaults to "mage" and was never reassigned, so a Knight or
+        /// Ranger cast the Mage loadout. HeroBodySwapper calls this after swapping
+        /// in the real class body so each hero casts its own kit. AbilityCatalog
+        /// normalises the id, but lower-case it here to be safe.
+        /// </summary>
+        public void SetHeroClass(string slug)
+        {
+            if (string.IsNullOrWhiteSpace(slug)) return;
+            _heroClass = slug.Trim().ToLowerInvariant();
+            Debug.Log($"[HeroAbilities] Hero class set to '{_heroClass}' (abilities will resolve from this loadout).");
+        }
+
         private void Awake()
         {
             _mana = _maxMana;

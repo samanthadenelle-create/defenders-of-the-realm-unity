@@ -150,12 +150,19 @@ namespace DeNelle.Village
                     transform.rotation, target, _rotationSpeed * Time.deltaTime);
             }
 
-            // Floor clamp — never let the hero fall below the village ground
-            // plane. Without this, any gravity-applying component on the
-            // imported mesh would pull the hero into the void below the map.
-            if (transform.position.y < 0f)
+            // Floor + map-edge clamp (WO-33). Floor: never let the hero fall below
+            // the village ground plane (any gravity-applying component on the
+            // imported mesh would pull it into the void). Edge: keep the hero on the
+            // 300x300 exterior terrain — PlayableHalf (142 m) sits ~8 m inside the
+            // terrain edge so the drop-off lip never shows. Pure runtime clamp, no
+            // boundary geometry / scene edit needed (mirrors the speed override in
+            // Awake — runtime code over a risky village re-bake).
             {
-                var p = transform.position; p.y = 0f;
+                var p = transform.position;
+                const float PlayableHalf = 142f;
+                p.x = Mathf.Clamp(p.x, -PlayableHalf, PlayableHalf);
+                p.z = Mathf.Clamp(p.z, -PlayableHalf, PlayableHalf);
+                if (p.y < 0f) p.y = 0f;
                 transform.position = p;
             }
 
