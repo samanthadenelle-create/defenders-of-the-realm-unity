@@ -37,6 +37,23 @@ namespace DeNelle.Village
         }
 
         /// <summary>
+        /// WO-37: plays a class-flavoured variant of the effect SFX (Knight heavier/
+        /// grittier, Ranger brighter/tighter, Mage = the base clip). Falls back to
+        /// the per-kind clip for unknown classes.
+        /// </summary>
+        public static void PlayForClassAndKind(string heroClass, AbilityEffect kind)
+        {
+            Resolve();
+            if (s_instanceProp == null || s_playSfx == null) return;
+            object inst = s_instanceProp.GetValue(null);
+            if (inst == null) return;
+            AudioClip clip = ProceduralSfx.ForClassAndKind(heroClass, kind);
+            if (clip == null) return;
+            try { s_playSfx.Invoke(inst, new object[] { clip, VolumeFor(kind) }); }
+            catch { /* audio is best-effort */ }
+        }
+
+        /// <summary>
         /// Plays a music track by enum name (e.g. "Victory", "Village") through
         /// AudioService.PlayMusic(MusicTrack), via reflection. No-ops if Audio is
         /// absent or the track name doesn't exist. WO-38.
@@ -161,9 +178,31 @@ namespace DeNelle.Village
             return clip;
         }
 
-        private static AudioClip Generate(AbilityEffect kind)
+        private static readonly Dictionary<string, AudioClip> s_classCache =
+            new Dictionary<string, AudioClip>();
+
+        /// <summary>
+        /// WO-37: class-flavoured SFX. Knight = lower + grittier (heavier, metallic),
+        /// Ranger = brighter + cleaner (tighter snap); Mage / unknown classes get the
+        /// base per-kind clip unchanged. Cached per class+kind.
+        /// </summary>
+        public static AudioClip ForClassAndKind(string heroClass, AbilityEffect kind)
         {
-            float dur, f0, f1, noise, amp;
+            string c = (heroClass ?? string.Empty).ToLowerInvariant();
+            if (c != "knight" && c != "ranger") return ForKind(kind);   // mage / default = base clip
+            string key = c + ":" + kind;
+            if (s_classCache.TryGetValue(key, out var cached) && cached != null) return cached;
+            Params(kind, out float dur, out float f0, out float f1, out float noise, out float amp);
+            if (c == "knight") { f0 *= 0.7f; f1 *= 0.7f; noise = Mathf.Clamp01(noise + 0.18f); dur *= 1.1f; }
+            else               { f0 *= 1.25f; f1 *= 1.25f; noise = Mathf.Clamp01(noise * 0.6f); }   // ranger
+            var clip = Synth("sfx_" + c + "_" + kind, dur, f0, f1, noise, amp, key.GetHashCode());
+            s_classCache[key] = clip;
+            return clip;
+        }
+
+        private static void Params(AbilityEffect kind, out float dur, out float f0, out float f1,
+                                   out float noise, out float amp)
+        {
             switch (kind)
             {
                 case AbilityEffect.Strike: dur = 0.12f; f0 = 1200; f1 = 500;  noise = 0.10f; amp = 0.5f; break;  // zippy pew
@@ -174,10 +213,13 @@ namespace DeNelle.Village
                 case AbilityEffect.Meteor: dur = 0.55f; f0 = 420;  f1 = 70;   noise = 0.50f; amp = 0.8f; break;  // descending roar/boom
                 default:                   dur = 0.20f; f0 = 600;  f1 = 400;  noise = 0.20f; amp = 0.5f; break;
             }
+        }
 
+        private static AudioClip Synth(string name, float dur, float f0, float f1, float noise, float amp, int seed)
+        {
             int n = Mathf.Max(16, (int)(dur * Rate));
             var data = new float[n];
-            var rng = new System.Random(kind.GetHashCode());
+            var rng = new System.Random(seed);
             double phase = 0;
             float attack = 0.006f * Rate;             // 6 ms attack (no click)
             for (int i = 0; i < n; i++)
@@ -192,10 +234,15 @@ namespace DeNelle.Village
                 if (i > n - 64) env *= (n - i) / 64f;  // taper tail to silence (no click)
                 data[i] = v * env * amp;
             }
-
-            var clip = AudioClip.Create("sfx_" + kind, n, 1, Rate, false);
+            var clip = AudioClip.Create(name, n, 1, Rate, false);
             clip.SetData(data, 0);
             return clip;
+        }
+
+        private static AudioClip Generate(AbilityEffect kind)
+        {
+            Params(kind, out float dur, out float f0, out float f1, out float noise, out float amp);
+            return Synth("sfx_" + kind, dur, f0, f1, noise, amp, kind.GetHashCode());
         }
     }
 }

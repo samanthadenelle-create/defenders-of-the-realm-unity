@@ -80,6 +80,30 @@ namespace DeNelle.Village
             Object.Destroy(host, 2.6f);
         }
 
+        /// <summary>
+        /// WO-37: class-flavoured wrapper. Keeps each effect's per-kind treatment
+        /// but shifts the palette toward the hero class — a Knight's blow reads
+        /// steel-gold, a Ranger's leaf-green, a Mage keeps the ability's element
+        /// colour. Deliberately a SEPARATE method from <see cref="SpawnAbilityVfx"/>
+        /// so PetAttackVfxBridge's 5-arg reflection bind on "SpawnAbilityVfx" stays
+        /// unambiguous (adding an overload there would break it).
+        /// </summary>
+        public static void SpawnAbilityVfxForClass(AbilityEffect kind, Color color, Vector3 position,
+                                                   float radius, Vector3 targetHint, string heroClass)
+        {
+            SpawnAbilityVfx(kind, TuneColorForClass(color, heroClass), position, radius, targetHint);
+        }
+
+        private static Color TuneColorForClass(Color baseColor, string heroClass)
+        {
+            switch ((heroClass ?? string.Empty).ToLowerInvariant())
+            {
+                case "knight": return Color.Lerp(baseColor, new Color(0.92f, 0.86f, 0.70f), 0.5f); // steel-gold
+                case "ranger": return Color.Lerp(baseColor, new Color(0.48f, 0.95f, 0.55f), 0.5f); // leaf-green
+                default:       return baseColor;                                                    // mage = element colour
+            }
+        }
+
         // ── shared builders ────────────────────────────────────────────────────
 
         private static void BuildStrike(GameObject host, Color core, Color body, Color edge,
