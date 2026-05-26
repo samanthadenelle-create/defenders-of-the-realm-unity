@@ -852,29 +852,57 @@ namespace DeNelle.Editor
             // tree block entirely when cathedralModel loaded successfully.
             if (cathedralModel == null)
             {
-                var treeModel = LoadModel(HexDecoNature + "trees_A_large.fbx");
+                // Owner 2026-05-25: real Tripo "Tree of Life" centerpiece model at
+                // Resources/Structures/tree_of_life.fbx (with its own basecolor/normal
+                // maps). Prefer it; fall back to the KayKit hex tree, then a primitive.
+                var tolModel = LoadModel("Assets/Resources/Structures/tree_of_life.fbx");
                 GameObject tree;
-                if (treeModel != null)
+                if (tolModel != null)
                 {
-                    tree = InstantiateModel(treeModel, "trees_A_large.fbx", "ElarionTree");
+                    tree = (GameObject)PrefabUtility.InstantiatePrefab(tolModel);
                     tree.name = "ElarionTree";
                     tree.transform.SetParent(go.transform, false);
-                    tree.transform.localPosition = new Vector3(0f, 0.7f, 0f);
-                    tree.transform.localScale = Vector3.one * 3.0f;
-                    ApplyColorAll(tree, new Color(0.24f, 0.42f, 0.22f));
+                    tree.transform.localPosition = new Vector3(0f, 0.4f, 0f);
+                    // Recent owner Tripo exports import upright (the -90°X that stands
+                    // the OLD buildings up tips the NEW ones onto their backs), so
+                    // leave rotation identity — VERIFY orientation after the re-bake.
+                    NormalizeProp(tree, 9f);   // tall centerpiece rising over the mound
+                    StripColliders(tree);
+                    StripRigidbodies(tree);
+                    SnapFeetToParent(tree);
+                    var fxType = FindType("DeNelle.Core.TripoMaterialFixer");
+                    if (fxType != null)
+                    {
+                        var fx = tree.AddComponent(fxType);
+                        fxType.GetMethod("SetFallbackTint")?.Invoke(fx, new object[] { new Color(0.24f, 0.42f, 0.22f) });
+                        fxType.GetMethod("ForceRebuildAll")?.Invoke(fx, null);
+                    }
                 }
                 else
                 {
-                    tree = new GameObject("[PLACEHOLDER] Elarion world-tree");
-                    NotePlaceholder("Elarion world-tree");
-                    tree.transform.SetParent(go.transform, false);
-                    tree.transform.localPosition = new Vector3(0f, 0.7f, 0f);
-                    PrimitiveChild(tree.transform, "Trunk", PrimitiveType.Cylinder,
-                        new Vector3(0f, 4f, 0f), new Vector3(1.4f, 4f, 1.4f),
-                        new Color(0.30f, 0.21f, 0.13f));
-                    PrimitiveChild(tree.transform, "Canopy", PrimitiveType.Sphere,
-                        new Vector3(0f, 9f, 0f), new Vector3(7f, 6f, 7f),
-                        new Color(0.24f, 0.42f, 0.22f));
+                    var treeModel = LoadModel(HexDecoNature + "trees_A_large.fbx");
+                    if (treeModel != null)
+                    {
+                        tree = InstantiateModel(treeModel, "trees_A_large.fbx", "ElarionTree");
+                        tree.name = "ElarionTree";
+                        tree.transform.SetParent(go.transform, false);
+                        tree.transform.localPosition = new Vector3(0f, 0.7f, 0f);
+                        tree.transform.localScale = Vector3.one * 3.0f;
+                        ApplyColorAll(tree, new Color(0.24f, 0.42f, 0.22f));
+                    }
+                    else
+                    {
+                        tree = new GameObject("[PLACEHOLDER] Elarion world-tree");
+                        NotePlaceholder("Elarion world-tree");
+                        tree.transform.SetParent(go.transform, false);
+                        tree.transform.localPosition = new Vector3(0f, 0.7f, 0f);
+                        PrimitiveChild(tree.transform, "Trunk", PrimitiveType.Cylinder,
+                            new Vector3(0f, 4f, 0f), new Vector3(1.4f, 4f, 1.4f),
+                            new Color(0.30f, 0.21f, 0.13f));
+                        PrimitiveChild(tree.transform, "Canopy", PrimitiveType.Sphere,
+                            new Vector3(0f, 9f, 0f), new Vector3(7f, 6f, 7f),
+                            new Color(0.24f, 0.42f, 0.22f));
+                    }
                 }
             }
 
@@ -1839,6 +1867,38 @@ namespace DeNelle.Editor
                     mat.EnableKeyword("_EMISSION");
                 }
                 disc.GetComponent<Renderer>().sharedMaterial = mat;
+            }
+
+            // Owner 2026-05-25: stand the real Tripo Portal_To_Dungeon archway on
+            // the disc as the dungeon ENTRANCE (the disc stays as a ground glow).
+            // TripoMaterialFixer (ForceRebuildAll) colours it from its real basemap
+            // with a violet tint fallback; -90°X stands it upright like the other
+            // Tripo structures (verify orientation after the re-bake and flip if needed).
+            var portalModel = LoadModel("Assets/Resources/Structures/Portal.fbx");
+            if (portalModel != null)
+            {
+                var arch = (GameObject)PrefabUtility.InstantiatePrefab(portalModel);
+                arch.name = "PortalArch";
+                arch.transform.SetParent(root.transform, false);
+                arch.transform.localPosition = Vector3.zero;
+                // Recent owner Tripo exports import upright — leave identity (the old
+                // -90°X tips the new exports onto their backs). Verify after re-bake.
+                arch.transform.localRotation = Quaternion.identity;
+                NormalizeProp(arch, archHeight);
+                StripColliders(arch);
+                StripRigidbodies(arch);
+                SnapFeetToParent(arch);
+                var fxType = FindType("DeNelle.Core.TripoMaterialFixer");
+                if (fxType != null)
+                {
+                    var fx = arch.AddComponent(fxType);
+                    fxType.GetMethod("SetFallbackTint")?.Invoke(fx, new object[] { new Color(0.55f, 0.30f, 0.95f) });
+                    fxType.GetMethod("ForceRebuildAll")?.Invoke(fx, null);
+                }
+            }
+            else
+            {
+                Debug.LogWarning("[VillageSceneBuilder] Portal.fbx not found at Resources/Structures — dungeon entrance keeps the bare disc.");
             }
 
             // Floating "Healer's Cottage" sign — TextMesh world-space label,

@@ -236,8 +236,13 @@ namespace DeNelle.Village
         public void Open()
         {
             _isOpen = true;
-            // DIAG (owner 2026-05-25 "nothing triggers on build"): Open fires (per
-            // the HUD log) but the menu never appears — dump the render prereqs.
+            // FIX (owner 2026-05-25 "build does nothing"): the runtime log showed
+            // panel=False — BindElements() ran in OnEnable BEFORE the UIDocument
+            // finished cloning its UXML (component order on this GameObject), so
+            // _panel was null and SetPanelVisible had nothing to show. By the time
+            // Open() is clicked the document is fully built, so re-bind here.
+            if (_panel == null) BindElements();
+            // DIAG: dump the render prereqs (panel should now be True).
             Debug.Log("[BuildMenu] Open: doc=" + (_document != null) +
                       " panelSettings=" + (_document != null && _document.panelSettings != null ? _document.panelSettings.name : "NULL") +
                       " sort=" + (_document != null ? _document.sortingOrder : -1) +
