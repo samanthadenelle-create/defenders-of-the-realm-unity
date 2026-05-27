@@ -57,7 +57,7 @@ namespace DeNelle.Village
 
             BuildScaffolding();
             StartWorkerVfx();
-            _progressBar = ProgressBar.Create(transform, Vector3.up * 2.5f);
+            _progressBar = ProgressBar.Create(transform, Vector3.up * 3.5f);
             if (_progressBar != null) _progressBar.SetProgress(0f);
         }
 
@@ -128,10 +128,57 @@ namespace DeNelle.Village
 
         private void StartWorkerVfx()
         {
-            if (_data == null || _data.workerHammerVFX == null) return;
-            _workerVfx = Instantiate(_data.workerHammerVFX, transform);
-            _workerVfx.transform.localPosition = new Vector3(0f, 0.5f, 0f);
-            _workerVfx.Play();
+            if (_data != null && _data.workerHammerVFX != null)
+            {
+                _workerVfx = Instantiate(_data.workerHammerVFX, transform);
+                _workerVfx.transform.localPosition = new Vector3(0f, 0.5f, 0f);
+                _workerVfx.Play();
+                return;
+            }
+
+            // Code fallback: a small warm dust puff so the build site reads as
+            // ACTIVE even with no authored VFX prefab (TowerData.workerHammerVFX is
+            // unassigned in the runtime path) — owner: "no particle VFX when building".
+            _workerVfx = BuildPlaceholderVfx();
+        }
+
+        /// <summary>A code-built dust/spark puff used when no VFX prefab is assigned.</summary>
+        private ParticleSystem BuildPlaceholderVfx()
+        {
+            var go = new GameObject("WorkerVFX");
+            go.transform.SetParent(transform, false);
+            go.transform.localPosition = new Vector3(0f, 0.6f, 0f);
+
+            var ps = go.AddComponent<ParticleSystem>();
+            ps.Stop();   // configure before playing
+
+            var main = ps.main;
+            main.startLifetime    = 0.8f;
+            main.startSpeed       = 1.1f;
+            main.startSize        = 0.18f;
+            main.startColor       = new Color(0.85f, 0.70f, 0.42f, 0.9f); // warm sawdust
+            main.gravityModifier  = -0.15f;                                // drifts upward
+            main.maxParticles     = 40;
+            main.simulationSpace  = ParticleSystemSimulationSpace.World;
+
+            var emission = ps.emission;
+            emission.rateOverTime = 14f;
+
+            var shape = ps.shape;
+            shape.shapeType = ParticleSystemShapeType.Cone;
+            shape.angle     = 16f;
+            shape.radius    = 0.35f;
+
+            var rend = go.GetComponent<ParticleSystemRenderer>();
+            if (rend != null)
+            {
+                Shader sh = Shader.Find("Universal Render Pipeline/Particles/Unlit")
+                            ?? Shader.Find("Sprites/Default");
+                if (sh != null) rend.sharedMaterial = new Material(sh);
+            }
+
+            ps.Play();
+            return ps;
         }
     }
 }

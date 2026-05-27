@@ -19,8 +19,10 @@ namespace DeNelle.Village.UI
     /// <summary>World-space construction progress bar (two billboarded quads).</summary>
     public class ProgressBar : MonoBehaviour
     {
-        private const float FullWidth = 1.2f;
-        private const float Height    = 0.16f;
+        // Bumped from 1.2 x 0.16 — the bar was nearly invisible above a ~4.5m tower
+        // under the 3rd-person/bird's-eye camera (owner: "small bar ... but invisible").
+        private const float FullWidth = 2.6f;
+        private const float Height    = 0.40f;
 
         private Transform _fill;
 
@@ -40,10 +42,19 @@ namespace DeNelle.Village.UI
         private void Build()
         {
             var bg = MakeQuad("BarTrack", new Color(0.05f, 0.05f, 0.06f, 1f));
-            bg.transform.localScale = new Vector3(FullWidth, 0.20f, 1f);
+            bg.transform.localScale = new Vector3(FullWidth + 0.12f, Height + 0.10f, 1f);
 
-            var fill = MakeQuad("BarFill", new Color(0.25f, 0.85f, 0.35f, 1f));
+            var fill = MakeQuad("BarFill", new Color(0.30f, 0.95f, 0.40f, 1f));
             _fill = fill.transform;
+
+            // Emissive fill so the bar reads clearly in any lighting (it sits on an
+            // Unlit shader, but the emission keyword makes it pop on URP/Lit too).
+            var fr = fill.GetComponent<Renderer>();
+            if (fr != null && fr.sharedMaterial != null && fr.sharedMaterial.HasProperty("_EmissionColor"))
+            {
+                fr.sharedMaterial.EnableKeyword("_EMISSION");
+                fr.sharedMaterial.SetColor("_EmissionColor", new Color(0.25f, 0.9f, 0.35f) * 1.6f);
+            }
             SetProgress(0f);
         }
 
