@@ -1,6 +1,8 @@
 # v2 Unity Port — Backend + Operational Spec
 
-**Status:** Authoritative operational contract for the parallel Unity port stream. Supplements `docs/v2-unity-port-spec.md` (architecture + 8-week build order + asset pipeline). The Claude Code session running in the Unity stream reads this as its **second required context document**, after the original v2 spec.
+> **🔒 DECISION LOCKED 2026-05-18 — OPTION A.** Following the React-client decommission, the backend layer (Vercel serverless functions + Vercel Postgres + Solana RPC + wallet-signed-nonce auth) **continues unchanged**. The Unity C# client replaces the React TS client as the **canonical and only** consumer of these endpoints. UGS / PlayFab / Supabase were considered as managed-BaaS alternatives but rejected — the load-bearing custom server logic (wallet auth, treasury verification, server-side honeypot anti-cheat, OFAC screening, rewards gating) is not a drop-in fit for any feature-BaaS, and migrating would throw away existing work. The `defenders-of-the-realm` repository is being restructured to **backend-only** (React `src/` deletion is owner-side; the `api/` directory + Postgres schema + Vercel deployment continue as before). This spec is authoritative for that architecture going forward. — Per owner directive and Claude Code (Unity session) recommendation.
+
+**Status:** Authoritative operational contract for the Unity port stream. Supplements `docs/v2-unity-port-spec.md` (architecture + 8-week build order + asset pipeline). The Claude Code session running in the Unity stream reads this as its **second required context document**, after the original v2 spec.
 
 **Owner:** Samantha Denelle / DeNelle Studios.
 **Publisher:** **DeNelle Studios**.
@@ -17,7 +19,28 @@ Town — **Avalon**. World-tree — **Elarion** (also called "the Heart"). Mage 
 
 The original `docs/v2-unity-port-spec.md` answered *"how do we build the foundation?"* — Unity project shape, asmdef topology, the C# port table, the data-extraction protocol, the 8-week build order. By the time this spec is read, that foundation is shipped: the village loads, Wave 1 fires, the dungeon walks, the ATB engine resolves a battle. The Heart is glowing violet at world origin and Blaise can walk around it.
 
-This spec answers the next question: ***how do we make the app actually work end-to-end as a deployed product?*** That covers everything around the gameplay loop:
+This spec answers the next question: ***how do we make the app actually work end-to-end as a deployed product?***
+
+### Client vs backend — the distinction the decommission preserves
+
+When the React **client** was decommissioned (2026-05-18), the **backend stayed alive**. The two are independent layers:
+
+- **Backend** = Vercel serverless TypeScript functions in `api/` + Vercel Postgres + Solana RPC integration + custom auth/anti-cheat/OFAC/rewards logic. **Continues unchanged.** Lives in (what was) the React project's repo, soon to be backend-only after the React `src/` deletion. Same deployment URL, same DB connection, same Solana program integrations.
+- **React client** = `src/` directory, Vite build, React+Three.js gameplay code, Vercel-served SPA. **Decommissioned 2026-05-18.** Code preserved as design reference; no longer deployed.
+- **Unity client** = `defenders-unity/` project. **Becomes the canonical and only client.** Makes the same HTTPS calls to the same backend endpoints; the C# `HttpClient` replaces the TypeScript `fetch`, request/response shapes stay identical.
+
+Practically: the backend doesn't care who's calling. Whether the client is React or Unity, the `api/inbox.ts` function returns the same JSON. The Unity stream's job is to **build the C# client equivalent of every React service call** — same endpoints, same auth flow (wallet-signed nonce), same Result<T> error handling, same status codes (200/400/401/404/500 only).
+
+### What changes operationally under Option A
+
+- The `defenders-of-the-realm` repository structure changes — `src/` deleted, `public/` mostly deleted (except `audio/` if any server-side handler references it), `api/` + `package.json` + Vercel deployment config preserved. Repo may be renamed to `defenders-backend` to reflect its new identity, though that's owner-optional.
+- The Vercel deployment continues serving the API endpoints but stops serving the React SPA. The `defenders-of-the-realm.vercel.app` URL either (a) shuts down the SPA routing while keeping the `/api/*` routes alive, (b) is replaced by a static "coming soon" landing page, or (c) redirects to the eventual dApp Store listing. Owner-decision; see Part 18.
+- The database (Vercel Postgres) is unchanged — same schema, same migrations, same queries. The Unity C# client calls the same endpoints, gets the same data shapes back.
+- All server-side logic (wallet-nonce verification, treasury reads, anti-cheat ingestion, OFAC screening, rewards calculation) continues running in TypeScript inside Vercel functions. The Unity client never replicates this logic — it submits raw events, awaits server decisions, honors server responses.
+
+### What this spec covers
+
+That covers everything around the gameplay loop:
 
 - **Backend services** the Unity client calls (clan, chat, future leaderboards, future reward-distribution endpoints).
 - **Database schema** for everything the client persists server-side (which is intentionally minimal — the game loop is offline-first).
