@@ -412,12 +412,31 @@ namespace DeNelle.Village
                     HideCodeFallbackMenu();
                 }));
 
+                _codePanel.Add(CodeMenuButton("Upgrade Last Tower", new Color(0.30f, 0.52f, 0.34f, 0.95f), () =>
+                {
+                    var towers = UnityEngine.Object.FindObjectsByType<Tower>(FindObjectsSortMode.None);
+                    if (towers.Length > 0)
+                    {
+                        var t = towers[towers.Length - 1];
+                        bool ok = t.Upgrade();
+                        SetStatus(ok ? $"Upgraded the last tower to L{t.CurrentLevel}." : "Tower already at max level.");
+                    }
+                    else SetStatus("No towers to upgrade.");
+                    HideCodeFallbackMenu();
+                }));
+
                 _codePanel.Add(CodeMenuButton("Raze Last Tower", new Color(0.62f, 0.20f, 0.20f, 0.95f), () =>
                 {
                     var towers = UnityEngine.Object.FindObjectsByType<Tower>(FindObjectsSortMode.None);
                     if (towers.Length > 0) { Destroy(towers[towers.Length - 1].gameObject); SetStatus("Razed the last tower."); }
                     else SetStatus("No towers to raze.");
                     HideCodeFallbackMenu();
+                }));
+
+                _codePanel.Add(CodeMenuButton("Manage Towers", new Color(0.20f, 0.30f, 0.50f, 0.95f), () =>
+                {
+                    HideCodeFallbackMenu();
+                    DeNelle.Village.UI.TowerManagerPanel.Instance?.Show();   // or press M
                 }));
 
                 _codePanel.Add(CodeMenuButton("Close", new Color(0.30f, 0.30f, 0.36f, 0.95f), HideCodeFallbackMenu));

@@ -58,6 +58,18 @@ namespace DeNelle.Village
         /// <summary>The authoring data this tower was initialized from.</summary>
         public TowerData Data => _data;
 
+        /// <summary>Attack range for the current level (from TowerData; 0 when unset). (WO-82)</summary>
+        public float CurrentRange { get { var u = CurrentUpgrade(); return u != null ? u.range : 0f; } }
+        /// <summary>Attack damage for the current level (from TowerData; 0 when unset). (WO-82)</summary>
+        public float CurrentDamage { get { var u = CurrentUpgrade(); return u != null ? u.damage : 0f; } }
+
+        private TowerUpgrade CurrentUpgrade()
+        {
+            if (_data == null || _data.upgrades == null) return null;
+            int i = _currentLevel - 1;
+            return (i >= 0 && i < _data.upgrades.Length) ? _data.upgrades[i] : null;
+        }
+
         /// <summary>
         /// Configure a freshly-spawned tower. Called by TowerPlacementSystem right
         /// after Instantiate; applies the level-1 visual.
@@ -67,10 +79,37 @@ namespace DeNelle.Village
             _data = data;
             _currentLevel = 1;
             ApplyVisualForLevel(_currentLevel);
+            EnsureCombat();   // WO-82 — auto-fire once the tower is built
         }
 
         // Empty — Initialize() does the level-1 visual (DEF-74 CP1 Issue 2).
         private void Start() { }
+
+        /// <summary>
+        /// WO-82 — attach the auto-fire TowerCombat once the tower is built/revealed,
+        /// with a FirePoint at the top of the current visual (robust across models +
+        /// import scale). Idempotent; TowerCombat reads CurrentLevel/Range/Damage live
+        /// so upgrades scale automatically.
+        /// </summary>
+        private void EnsureCombat()
+        {
+            if (GetComponent<TowerCombat>() != null) return;
+
+            if (transform.Find("FirePoint") == null)
+            {
+                float topY = 3f;
+                if (_currentVisual != null)
+                {
+                    var r = _currentVisual.GetComponentInChildren<Renderer>();
+                    if (r != null) topY = Mathf.Max(1f, r.bounds.max.y - transform.position.y + 0.3f);
+                }
+                var fp = new GameObject("FirePoint");
+                fp.transform.SetParent(transform);
+                fp.transform.localPosition = new Vector3(0f, topY, 0f);
+            }
+
+            gameObject.AddComponent<TowerCombat>();   // resolves "FirePoint" in its Awake
+        }
 
         /// <summary>
         /// Swap the tower's visual to <paramref name="level"/>'s prefab (or a
