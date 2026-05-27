@@ -137,3 +137,18 @@ portraits*.log
 # once Unity has imported the corrected .meta files and you've verified.
 *.meta.bak
 *.meta.bak.meta
+
+# ── Secrets (v2-unity-port-backend-spec Part 5.2) — added 2026-05-27 ──
+.env
+.env.local
+.env.*.local
+*.jks
+*.keystore
+*.p12
+keystore.properties
+
+# Generated config
+Assets/Generated/
+
+# Test wallets (devnet only, but still treat as secrets)
+Assets/Tests/Fixtures/DevnetTestWallet.*
