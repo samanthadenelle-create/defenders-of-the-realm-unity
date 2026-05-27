@@ -59,6 +59,15 @@ namespace DeNelle.Village
             {
                 UpgradeLastTower();
             }
+            else if (Input.GetKeyDown(KeyCode.N))
+            {
+                // Force the wave loop forward (skip the countdown) — for testing when
+                // the loop stalls / the countdown disappears. ForceBeginNextWave is
+                // WaveManager's existing public method.
+                var wm = FindAnyObjectByType<WaveManager>();
+                if (wm != null) { wm.ForceBeginNextWave(); Debug.Log("[TowerLoopDev] N = ForceBeginNextWave()."); }
+                else Debug.Log("[TowerLoopDev] N: no WaveManager in scene.");
+            }
         }
 
         private static void EnsurePlacement()

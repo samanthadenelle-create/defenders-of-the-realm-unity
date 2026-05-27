@@ -153,8 +153,12 @@ namespace DeNelle.Village
         /// </summary>
         private void EnsureDungeonEntrances()
         {
-            if (GetComponent<DungeonEntranceBootstrap>() == null)
-                gameObject.AddComponent<DungeonEntranceBootstrap>();
+            // DISABLED (owner 2026-05-27): this WO-19 runtime ring placed a SECOND
+            // set of dungeon entrances (the "(F) to enter" doorways) at radius 25m
+            // OUTSIDE the gate, duplicating the baked DungeonPortals (disc + arch +
+            // "Healer's Cottage" label) inside the village. The SW ring entrance also
+            // routed to a broken "hero vs 2 pills" encounter. Keep only the baked
+            // portals; re-enable this only if those are ever removed.
         }
 
         /// <summary>
