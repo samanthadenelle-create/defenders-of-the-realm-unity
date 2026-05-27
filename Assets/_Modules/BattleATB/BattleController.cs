@@ -90,6 +90,9 @@ namespace DeNelle.BattleATB
         private VisualElement _enemyHpFill;
         private VisualElement _enemyAtbFill;
         private Button _attackButton;
+        private Button _skillsButton;
+        private Button _itemButton;
+        private Button _fleeButton;
         private ScrollView _battleLog;
         private VisualElement _battleLogContent;
 
@@ -133,6 +136,9 @@ namespace DeNelle.BattleATB
                 _runtimeState.OnOutcome.RemoveListener(HandleOutcome);
             }
             if (_attackButton != null) _attackButton.clicked -= HandleAttackClicked;
+            if (_skillsButton != null) _skillsButton.clicked -= HandleSkillsClicked;
+            if (_itemButton != null) _itemButton.clicked -= HandleItemClicked;
+            if (_fleeButton != null) _fleeButton.clicked -= HandleFleeClicked;
             _subscribed = false;
         }
 
@@ -173,6 +179,9 @@ namespace DeNelle.BattleATB
             _runtimeState.OnActionSubmitted.AddListener(HandleActionSubmitted);
             _runtimeState.OnOutcome.AddListener(HandleOutcome);
             if (_attackButton != null) _attackButton.clicked += HandleAttackClicked;
+            if (_skillsButton != null) _skillsButton.clicked += HandleSkillsClicked;
+            if (_itemButton != null) _itemButton.clicked += HandleItemClicked;
+            if (_fleeButton != null) _fleeButton.clicked += HandleFleeClicked;
             _subscribed = true;
         }
 
@@ -271,6 +280,9 @@ namespace DeNelle.BattleATB
         private void HandleActionSubmitted(BattleState state)
         {
             if (_attackButton != null) _attackButton.SetEnabled(false);
+            if (_skillsButton != null) _skillsButton.SetEnabled(false);
+            if (_itemButton != null) _itemButton.SetEnabled(false);
+            if (_fleeButton != null) _fleeButton.SetEnabled(false);
             if (_statusBanner != null) _statusBanner.text = "Resolving…";
         }
 
@@ -293,6 +305,27 @@ namespace DeNelle.BattleATB
             if (target == null) return;
 
             _runtimeState.ChooseAction(BattleAction.MakeAttack(target.Id));
+        }
+
+        /// <summary>Skills button — opens skill picker (stub: selects first skill on lowest-HP foe).</summary>
+        private void HandleSkillsClicked()
+        {
+            // TODO: open skill selection panel (DEF-34 full implementation).
+            Debug.Log("[BattleController] Skills button clicked — skill picker not yet implemented.");
+        }
+
+        /// <summary>Item button — opens inventory picker (stub: logs intent).</summary>
+        private void HandleItemClicked()
+        {
+            // TODO: open item selection panel (DEF-34 full implementation).
+            Debug.Log("[BattleController] Item button clicked — item picker not yet implemented.");
+        }
+
+        /// <summary>Flee button — attempt to escape the battle (stub: logs intent).</summary>
+        private void HandleFleeClicked()
+        {
+            // TODO: resolve flee attempt via engine (DEF-34 full implementation).
+            Debug.Log("[BattleController] Flee button clicked — flee logic not yet implemented.");
         }
 
         // ---------------------------------------------------------------------
@@ -437,15 +470,19 @@ namespace DeNelle.BattleATB
             }
         }
 
-        /// <summary>Enable the Attack button only while the hero is choosing.</summary>
+        /// <summary>Enable the Attack/Skills/Item/Flee buttons only while the hero is choosing.</summary>
         private void RenderAttackButton(BattleState state)
         {
-            if (_attackButton == null) return;
             bool canAct = state.Phase == BattlePhase.AwaitingInput
                           && _runtimeState != null
                           && !_runtimeState.Resolving
                           && _runtimeState.Enemies().Count > 0;
-            _attackButton.SetEnabled(canAct);
+            if (_attackButton != null) _attackButton.SetEnabled(canAct);
+            if (_skillsButton != null) _skillsButton.SetEnabled(canAct);
+            if (_itemButton != null) _itemButton.SetEnabled(canAct);
+            // Flee is available whenever it's the player's turn (even with no enemies alive
+            // — the battle is already over, but SetEnabled(false) prevents accidental clicks).
+            if (_fleeButton != null) _fleeButton.SetEnabled(canAct);
         }
 
         // ---------------------------------------------------------------------
@@ -519,6 +556,9 @@ namespace DeNelle.BattleATB
             _enemyHpFill = root.Q<VisualElement>("enemy-hp-fill");
             _enemyAtbFill = root.Q<VisualElement>("enemy-atb-fill");
             _attackButton = root.Q<Button>("attack-button");
+            _skillsButton = root.Q<Button>("skills-button");
+            _itemButton = root.Q<Button>("item-button");
+            _fleeButton = root.Q<Button>("flee-button");
             _battleLog = root.Q<ScrollView>("battle-log");
             _battleLogContent = root.Q<VisualElement>("battle-log-content");
 
@@ -588,18 +628,27 @@ namespace DeNelle.BattleATB
             _battleLogContent = new VisualElement();
             _battleLog.Add(_battleLogContent);
 
-            _attackButton = new Button { text = "Attack" };
-            var b = _attackButton.style;
-            b.position = Position.Absolute;
-            b.bottom = 40; b.left = 0; b.right = 0;
-            b.marginLeft = StyleKeyword.Auto; b.marginRight = StyleKeyword.Auto; // centre
-            b.width = 240; b.height = 58; b.fontSize = 20;
-            b.unityFontStyleAndWeight = FontStyle.Bold;
-            b.color = new StyleColor(Color.white);
-            b.backgroundColor = new StyleColor(new Color(0.74f, 0.20f, 0.20f, 1f));
-            b.borderTopLeftRadius = 8; b.borderTopRightRadius = 8;
-            b.borderBottomLeftRadius = 8; b.borderBottomRightRadius = 8;
-            root.Add(_attackButton);
+            // Action button row — Attack / Skills / Item / Flee
+            var actionRow = new VisualElement();
+            actionRow.style.position = Position.Absolute;
+            actionRow.style.bottom = 30;
+            actionRow.style.left = 16;
+            actionRow.style.right = 16;
+            actionRow.style.flexDirection = FlexDirection.Row;
+            actionRow.style.justifyContent = Justify.SpaceBetween;
+            root.Add(actionRow);
+
+            _attackButton = BuildActionButton("Attack", new Color(0.74f, 0.20f, 0.20f, 1f));
+            actionRow.Add(_attackButton);
+
+            _skillsButton = BuildActionButton("Skills", new Color(0.20f, 0.38f, 0.74f, 1f));
+            actionRow.Add(_skillsButton);
+
+            _itemButton = BuildActionButton("Item", new Color(0.20f, 0.60f, 0.30f, 1f));
+            actionRow.Add(_itemButton);
+
+            _fleeButton = BuildActionButton("Flee", new Color(0.45f, 0.35f, 0.10f, 1f));
+            actionRow.Add(_fleeButton);
         }
 
         /// <summary>Builds one combatant card (name + HP + ATB bars) into <paramref name="parent"/>.</summary>
@@ -647,6 +696,22 @@ namespace DeNelle.BattleATB
             fill.style.borderBottomLeftRadius = 4; fill.style.borderBottomRightRadius = 4;
             track.Add(fill);
             return fill;
+        }
+
+        /// <summary>Creates a consistently-styled action button for the fallback HUD row.</summary>
+        private static Button BuildActionButton(string label, Color bgColor)
+        {
+            var btn = new Button { text = label };
+            var s = btn.style;
+            s.flexGrow = 1;
+            s.marginLeft = 4; s.marginRight = 4;
+            s.height = 52; s.fontSize = 16;
+            s.unityFontStyleAndWeight = FontStyle.Bold;
+            s.color = new StyleColor(Color.white);
+            s.backgroundColor = new StyleColor(bgColor);
+            s.borderTopLeftRadius = 8; s.borderTopRightRadius = 8;
+            s.borderBottomLeftRadius = 8; s.borderBottomRightRadius = 8;
+            return btn;
         }
 
         /// <summary>Set a bar fill's width as a percentage (0..1) of its track.</summary>

@@ -105,6 +105,7 @@ namespace DeNelle.Village
 
         private NavMeshAgent _agent;
         private Transform _heart;
+        private EnemyDef _def;
         private float _attackCooldown;
         private bool _dead;
         private bool _navWarned;
@@ -179,6 +180,7 @@ namespace DeNelle.Village
         {
             _enemyId = enemyId;
             _heart = heart;
+            _def = def;
 
             if (def != null)
             {
@@ -396,6 +398,10 @@ namespace DeNelle.Village
             // discards its damage ledger so nothing leaks and no XP is granted.
             if (killed) DeNelle.Village.Progression.ProgressionManager.ReportKill(this);
             else DeNelle.Core.Combat.DamageAttribution.Forget(this);
+
+            // DEF-88: grant the flat per-enemy XP reward directly to the hero.
+            if (killed && _def != null && HeroProgression.Instance != null)
+                HeroProgression.Instance.AddXp(_def.XpReward);
 
             // Play the death (collapse) animation, then destroy. The Dead bool
             // latches the controller's Death state from anywhere; the GameObject

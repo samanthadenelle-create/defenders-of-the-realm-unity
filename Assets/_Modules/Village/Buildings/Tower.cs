@@ -52,6 +52,9 @@ namespace DeNelle.Village
 
         private ParticleSystem _activeGlow;
 
+        // DEF-87 — per-tower world-space upgrade UI (NOT [SerializeField] — runtime AddComponent)
+        private GameObject _activeUpgradeUI;
+
         /// <summary>Current upgrade level (1-based, 1..3).</summary>
         public int CurrentLevel => _currentLevel;
 
@@ -80,10 +83,34 @@ namespace DeNelle.Village
             _currentLevel = 1;
             ApplyVisualForLevel(_currentLevel);
             EnsureCombat();   // WO-82 — auto-fire once the tower is built
+
+            // DEF-87 — spawn per-tower world-space upgrade UI
+            if (data.upgradeUIPrefab != null)
+            {
+                if (_activeUpgradeUI != null) Destroy(_activeUpgradeUI);
+                _activeUpgradeUI = Instantiate(
+                    data.upgradeUIPrefab,
+                    transform.position + Vector3.up * 4f,
+                    Quaternion.identity,
+                    transform
+                );
+                var btn = _activeUpgradeUI.GetComponentInChildren<UnityEngine.UI.Button>();
+                if (btn != null)
+                {
+                    btn.onClick.RemoveAllListeners();
+                    btn.onClick.AddListener(() => Upgrade());
+                }
+            }
         }
 
         // Empty — Initialize() does the level-1 visual (DEF-74 CP1 Issue 2).
         private void Start() { }
+
+        private void OnDestroy()
+        {
+            // DEF-87 — clean up world-space upgrade UI when the tower is destroyed
+            if (_activeUpgradeUI != null) Destroy(_activeUpgradeUI);
+        }
 
         /// <summary>
         /// WO-82 — attach the auto-fire TowerCombat once the tower is built/revealed,
@@ -158,6 +185,12 @@ namespace DeNelle.Village
 
             // DEF-75 — visual feedback fires AFTER the model swap.
             TriggerUpgradeVFX();
+            var audio = FindAnyObjectByType<TowerAudioController>();
+            if (audio != null) audio.PlayUpgrade();
+
+            // DEF-87 — hide upgrade UI once max level is reached
+            if (_currentLevel >= MaxLevel && _activeUpgradeUI != null)
+                _activeUpgradeUI.SetActive(false);
 
             if (_currentLevel - 1 >= 0 && _currentLevel - 1 < _data.upgrades.Length)
             {

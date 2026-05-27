@@ -79,9 +79,11 @@ namespace DeNelle.Village
         // Hero balcony / spawn perch — a FIXED world point the hero, the air-glide
         // descent target and the platform mesh all share. No bounds derivation.
         private static readonly Vector3 _balconyPos = new Vector3(0f, BalconyHeight, BalconyDepth);
-        // Third-person framing: BEHIND the hero on -Z, a bit ABOVE on +Y. The
-        // camera looks slightly DOWN at the hero (see ThirdPersonCameraFollow).
-        private static readonly Vector3 CamOffset   = new Vector3(0f, 3.5f, -9f);
+        // Bird's-eye framing: high ABOVE on +Y, only slightly BEHIND on -Z, so the
+        // camera looks steeply DOWN at the tower/hero (owner: "needs more birds eye";
+        // was 3.5,-9 which sat too low/behind). Tunable — raise Y / shrink -Z for more
+        // overhead. (see ThirdPersonCameraFollow)
+        private static readonly Vector3 CamOffset   = new Vector3(0f, 12f, -7f);
 
         // ── State ─────────────────────────────────────────────────────────────
         private HeartController _heart;

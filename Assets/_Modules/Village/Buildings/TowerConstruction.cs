@@ -82,6 +82,8 @@ namespace DeNelle.Village
             // there is no baked visual, so Initialize() builds + reveals it now.
             if (_finalTowerVisual != null) _finalTowerVisual.SetActive(true);
             if (_tower != null && _tower.Data == null && _data != null) _tower.Initialize(_data);
+            var audio = FindAnyObjectByType<TowerAudioController>();
+            if (audio != null) audio.PlayBuildComplete();
 
             if (_scaffolding != null) Destroy(_scaffolding);
             if (_workerVfx != null) Destroy(_workerVfx.gameObject);

@@ -62,6 +62,7 @@ namespace DeNelle.Village
         private Transform _root;        // billboarded container for panel + text
         private TextMesh _text;
         private Renderer _panelRenderer;
+        private Transform _outlineTransform;   // scale-tracked alongside the panel
         private Camera _faceCamera;
         private bool _visible;
         private bool _built;
@@ -113,11 +114,56 @@ namespace DeNelle.Village
                 ? body
                 : speakerName + "\n" + body;
 
+            // Resize the panel to fit the actual text so long lines are never
+            // clipped. TextMesh.GetComponent<Renderer>().bounds reflects the
+            // rendered glyph extents once .text is assigned (world space, so
+            // we convert back to panel-local units via _textScale).
+            ResizePanelToText();
+
             // Steal the active-bubble slot from whoever held it before.
             if (s_activeBubble != null && s_activeBubble != this)
                 s_activeBubble.SetVisible(false);
             s_activeBubble = this;
             SetVisible(true);
+        }
+
+        /// <summary>
+        /// Measures the TextMesh renderer bounds and expands the bubble panel
+        /// quads to fit, preserving a padding margin. World-space positioning
+        /// is unchanged — only the quad scales (visual width/height) adjust.
+        /// </summary>
+        private void ResizePanelToText()
+        {
+            if (_text == null || _panelRenderer == null) return;
+
+            // TextMesh reports bounds in world space relative to _root. Since
+            // _root may be rotated (billboard), use localScale and the mesh
+            // renderer's bounds size — both are reliable immediately after
+            // assigning .text, with no layout frame needed.
+            var textRenderer = _text.GetComponent<Renderer>();
+            if (textRenderer == null) return;
+
+            // The text GameObject is scaled by _textScale, so world-space
+            // bounds are already in world-unit metres. Add horizontal and
+            // vertical padding so the text doesn't butt up against the edges.
+            const float PadX = 0.18f;
+            const float PadY = 0.16f;
+
+            float requiredWidth  = textRenderer.bounds.size.x + PadX * 2f;
+            float requiredHeight = textRenderer.bounds.size.y + PadY * 2f;
+
+            // Never shrink below the inspector-configured minimums so a single
+            // short word still produces a visible bubble.
+            float newWidth  = Mathf.Max(requiredWidth,  _panelWidth);
+            float newHeight = Mathf.Max(requiredHeight, _panelHeight);
+
+            // Rescale the panel quad (and the outline quad behind it).
+            _panelRenderer.transform.localScale =
+                new Vector3(newWidth, newHeight, 1f);
+
+            if (_outlineTransform != null)
+                _outlineTransform.localScale =
+                    new Vector3(newWidth + 0.06f, newHeight + 0.06f, 1f);
         }
 
         /// <summary>Hides the bubble.</summary>
@@ -148,6 +194,7 @@ namespace DeNelle.Village
             outline.transform.SetParent(_root, false);
             outline.transform.localPosition = new Vector3(0f, 0f, 0.005f);
             outline.transform.localScale = new Vector3(_panelWidth + 0.06f, _panelHeight + 0.06f, 1f);
+            _outlineTransform = outline.transform;   // retained for ResizePanelToText
             ApplyRoundedMaterial(outline.GetComponent<Renderer>(), _outlineColor, aspect, 0.28f);
 
             // Fill panel — cream chat-bubble face with SDF rounded corners.

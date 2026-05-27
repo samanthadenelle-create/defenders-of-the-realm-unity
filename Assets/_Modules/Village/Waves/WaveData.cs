@@ -79,6 +79,18 @@ namespace DeNelle.Village
         /// <summary>Codex flavour line — narrative-bible voice.</summary>
         [JsonProperty("flavor")] public string Flavor;
 
+        // ── Tactical (DEF-83) ─────────────────────────────────────────────────
+        /// <summary>Override NavMeshAgent speed (world units/sec). Defaults to MoveSpeed when absent in JSON.</summary>
+        [Header("Tactical")]
+        [JsonProperty("aggroRadius")] public float AggroRadius = 8f;
+        /// <summary>Per-enemy stagger offset (seconds) the spawner reads when releasing a group.</summary>
+        [JsonProperty("groupStaggerDelay")] public float GroupStaggerDelay = 0.1f;
+
+        // ── Rewards (DEF-88) ──────────────────────────────────────────────────
+        /// <summary>XP awarded directly to the hero on killing this enemy.</summary>
+        [Header("Rewards")]
+        [JsonProperty("xpReward")] public int XpReward = 15;
+
         /// <summary>The <see cref="Ai"/> token parsed to the typed enum.</summary>
         public EnemyAiKind AiKind
         {

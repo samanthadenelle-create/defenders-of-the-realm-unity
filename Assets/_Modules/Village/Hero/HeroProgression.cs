@@ -49,6 +49,8 @@ namespace DeNelle.Village
         [SerializeField] private float _xp;               // XP banked toward the next level
         [SerializeField] private float _lifetimeXp;       // total XP ever earned (telemetry/UI)
 
+        private bool _hasGrantedStarterPoints;
+
         /// <summary>Fired on each level gained — arg = new level (for VFX / sound).</summary>
         public event Action<int> OnLevelUp;
         /// <summary>Fired whenever XP changes — args = (current XP, XP needed for next level).</summary>
@@ -91,6 +93,20 @@ namespace DeNelle.Village
             XpEarnerRegistry.Unregister(this);
         }
 
+        private void Awake()
+        {
+            if (Instance != null && Instance != this) { Destroy(gameObject); return; }
+        }
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        private static void Bootstrap()
+        {
+            if (Instance != null) return;
+            var go = new GameObject("HeroProgression");
+            DontDestroyOnLoad(go);
+            go.AddComponent<HeroProgression>();
+        }
+
         public int AddXp(float amount)
         {
             if (amount <= 0f) return 0;
@@ -120,6 +136,15 @@ namespace DeNelle.Village
             // DEF-77 — each hero level also banks a spendable craft-skill point; the
             // LevelUpSkillPopup reacts via SkillSystem.OnSkillsChanged + OnLevelUp.
             try { SkillSystem.Instance?.GrantSkillPoint(); } catch { }
+
+            // DEF-82 — on the very first level-up, gift two bonus skill points so
+            // new players can immediately engage the skill tree.
+            if (!_hasGrantedStarterPoints)
+            {
+                _hasGrantedStarterPoints = true;
+                SkillSystem.Instance?.GrantSkillPoint();
+                SkillSystem.Instance?.GrantSkillPoint();
+            }
 
             try { OnLevelUp?.Invoke(newLevel); } catch { }
         }

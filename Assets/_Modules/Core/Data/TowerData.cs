@@ -38,6 +38,9 @@ namespace DeNelle.Core.Data
         public GameObject scaffoldingPrefab;     // shown while building (null → code placeholder)
         public float buildTime = 5f;             // seconds to raise the tower
         public ParticleSystem workerHammerVFX;   // looping worker FX during construction (optional)
+
+        [Header("UI")]
+        public GameObject upgradeUIPrefab;
     }
 
     /// <summary>
