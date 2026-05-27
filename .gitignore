@@ -92,6 +92,13 @@ Thumbs.db
 # source-shrink pass (~90 MB) - see NpcPackSourceCompressor / NpcPackTrimmer.
 /Assets/Models/*
 !/Assets/Models/People/
+# ...but not the redundant CGTrader mesh exports (Unity imports only the .fbx).
+/Assets/Models/People/**/*.obj
+/Assets/Models/People/**/*.obj.meta
+/Assets/Models/People/**/*.ma
+/Assets/Models/People/**/*.ma.meta
+/Assets/Models/People/**/*.mtl
+/Assets/Models/People/**/*.mtl.meta
 
 # Owner Tripo art — large FBX kept local (same policy as Models/). The builder
 # bakes them by path; on a fresh clone re-copy from the owner's source folder
