@@ -2,8 +2,9 @@
 // TowerLoopDevHarness — Sprint C verify aid (DEV-ONLY; compiled out of release
 // builds). Makes the place→build→upgrade loop testable by just hitting Play, with
 // zero editor setup: no seeding, no economy friction, no BuildMenu integration.
-//   • T = arm placement of a free, skill-gate-free tower (left-click ground to
-//     drop it; TowerConstructionQueue raises it over buildTime).
+//   • B = arm placement of a free, skill-gate-free tower (left-click ground to
+//     drop it; TowerConstructionQueue raises it over buildTime). NOTE: T is taken
+//     by the hero talent tree (HeroTalentPanelBootstrap), so placement is on B.
 //   • U = upgrade the most-recently-built Tower one level.
 // -----------------------------------------------------------------------------
 // This is the DEV trigger that sidesteps the open product decision (gap #3: should
@@ -37,12 +38,12 @@ namespace DeNelle.Village
         private void Awake()
         {
             _devTower = BuildDevTower();
-            Debug.Log("[TowerLoopDev] T = place a free tower (left-click ground), U = upgrade the last-built tower.");
+            Debug.Log("[TowerLoopDev] B = place a free tower (left-click ground), U = upgrade the last-built tower. (T is the talent tree.)");
         }
 
         private void Update()
         {
-            if (Input.GetKeyDown(KeyCode.T))
+            if (Input.GetKeyDown(KeyCode.B))
             {
                 EnsurePlacement();
                 if (TowerPlacementSystem.Instance != null)
@@ -63,7 +64,7 @@ namespace DeNelle.Village
         private static void UpgradeLastTower()
         {
             var towers = FindObjectsByType<Tower>(FindObjectsSortMode.None);
-            if (towers.Length == 0) { Debug.Log("[TowerLoopDev] No built towers yet — place one (T) and let it finish."); return; }
+            if (towers.Length == 0) { Debug.Log("[TowerLoopDev] No built towers yet — place one (B) and let it finish."); return; }
             var t = towers[towers.Length - 1];
             bool ok = t.Upgrade();
             Debug.Log($"[TowerLoopDev] Upgrade {t.name} → L{t.CurrentLevel} ({(ok ? "ok" : "already max")}).");

@@ -224,6 +224,23 @@ namespace DeNelle.Core.State
             }
         }
 
+        /// <summary>
+        /// Adds <paramref name="amount"/> crystals to the live state (negative to
+        /// spend; clamped &gt;= 0), persists, and raises <see cref="ResourcesChanged"/>.
+        /// The convenience seam AdminOverlay's reflective "+crystals" actions look
+        /// for ("if AddCrystals isn't defined, owner adds it"), so callers needn't
+        /// reach into the Resources struct directly.
+        /// </summary>
+        public void AddCrystals(int amount)
+        {
+            if (_state == null) return;
+            var r = _state.Resources;
+            r.Crystals = Mathf.Max(0, r.Crystals + amount);
+            _state.Resources = r;
+            Save();
+            ResourcesChanged.Invoke();
+        }
+
         /// <summary>Snapshots the SO's 41 persisted fields into a <see cref="SaveSchema.PersistedState"/>.</summary>
         public SaveSchema.PersistedState Snapshot()
         {
