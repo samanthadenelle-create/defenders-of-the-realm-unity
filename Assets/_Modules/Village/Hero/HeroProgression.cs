@@ -95,12 +95,26 @@ namespace DeNelle.Village
 
         private void Awake()
         {
-            // A redundant HeroProgression must remove ONLY ITSELF, never its host
-            // GameObject. ProgressionManager attaches a HeroProgression to the HERO
-            // while the BeforeSceneLoad Bootstrap's standalone already holds Instance,
-            // so Destroy(gameObject) here was deleting the entire hero root in frame 1
-            // (the "spawn in the tree / can't move, but Build still works" bug).
-            if (Instance != null && Instance != this) { Destroy(this); return; }
+            // ProgressionManager attaches a HeroProgression to the HERO while the
+            // BeforeSceneLoad Bootstrap's throwaway standalone "HeroProgression" GO
+            // already holds Instance. The OLD code ran Destroy(gameObject) -> deleted
+            // the hero in frame 1 (the frozen-village bug). Now: if the existing
+            // Instance is that standalone, the hero's copy TAKES OVER (migrate XP,
+            // destroy only the standalone) so level/XP + the level-up popup track the
+            // hero instead of world origin. Any other duplicate removes only this
+            // component (never the host GameObject).
+            if (Instance != null && Instance != this)
+            {
+                if (Instance.gameObject != gameObject && Instance.gameObject.name == "HeroProgression")
+                {
+                    _level = Instance._level;
+                    _xp = Instance._xp;
+                    _lifetimeXp = Instance._lifetimeXp;
+                    _hasGrantedStarterPoints = Instance._hasGrantedStarterPoints;
+                    Destroy(Instance.gameObject);   // the standalone, NOT the hero
+                }
+                else { Destroy(this); return; }
+            }
         }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]

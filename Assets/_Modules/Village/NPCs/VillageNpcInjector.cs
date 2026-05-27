@@ -115,6 +115,7 @@ namespace DeNelle.Village
 
                 var go = Instantiate(prefab, pos, Quaternion.identity, root);
                 go.name = prefab.name;
+                go.transform.localScale *= 2f;   // owner 2026-05-27: double the People-pack NPC size
 
                 var npc = go.GetComponent<AmbientNPC>();
                 if (npc != null)

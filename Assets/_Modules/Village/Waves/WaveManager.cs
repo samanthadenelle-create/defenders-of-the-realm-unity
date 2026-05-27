@@ -101,6 +101,12 @@ namespace DeNelle.Village
                  "logs an error and is treated as cleared (the loop never stalls).")]
         [SerializeField] private DragonBoss _apexBossPrefab;
 
+        [Header("Wave scaling (DEF-59)")]
+        [Tooltip("Optional SO that scales enemy HP/speed/damage as wave number increases. " +
+                 "Create via Assets → Create → Defenders/Waves/Wave Scaling Curve. " +
+                 "Left blank: all enemies spawn at their base stats from enemies.json.")]
+        [SerializeField] private WaveScalingCurve _scalingCurve;
+
         [Header("Breach detection")]
         [Tooltip("Radius (world units) of the inner wall ring around the Heart. An enemy that " +
                  "crosses INSIDE this ring counts as a breach. Tune to sit just inside the " +
@@ -557,6 +563,15 @@ namespace DeNelle.Village
             Transform heartT = _heart != null ? _heart.transform : null;
             enemy.Configure(instanceId, def, heartT);
 
+            // DEF-59: apply wave-scaling multipliers if a curve SO is assigned.
+            if (_scalingCurve != null)
+            {
+                enemy.ApplyWaveScaling(
+                    _scalingCurve.HpMultiplier(_currentWaveId),
+                    _scalingCurve.SpeedMultiplier(_currentWaveId),
+                    _scalingCurve.DamageMultiplier(_currentWaveId));
+            }
+
             enemy.Died += HandleEnemyDied;
             enemy.ReachedHeart += HandleEnemyReachedHeart;
             _liveEnemies.Add(enemy);
@@ -704,7 +719,11 @@ namespace DeNelle.Village
         {
             // Clear the wave off the field so nothing lingers when we return from
             // the dedicated scene (the shooter spawns its own assault there).
-            foreach (Enemy e in _liveEnemies)
+            // Iterate a SNAPSHOT: Kill() -> Die() removes the enemy from _liveEnemies,
+            // which otherwise throws "Collection was modified" mid-enumeration and
+            // aborts the breach -> Defend-the-Tower transition (dev-log error at
+            // WaveManager.cs:722 / BreachChoiceOverlay.Resolve).
+            foreach (Enemy e in _liveEnemies.ToArray())
                 if (e != null) e.Kill();
             _liveEnemies.Clear();
             _breachRoster.Clear();

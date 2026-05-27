@@ -181,7 +181,10 @@ namespace DeNelle.Village
             // Awake — runtime code over a risky village re-bake).
             {
                 var p = transform.position;
-                const float PlayableHalf = 142f;
+                // Best-guess stopgap (owner 2026-05-27): tightened from 142 so the hero
+                // can't wander onto the untextured outer terrain. The real fix is
+                // completing/texturing the full map, after which this can grow back.
+                const float PlayableHalf = 50f;
                 p.x = Mathf.Clamp(p.x, -PlayableHalf, PlayableHalf);
                 p.z = Mathf.Clamp(p.z, -PlayableHalf, PlayableHalf);
                 if (p.y < 0f) p.y = 0f;
