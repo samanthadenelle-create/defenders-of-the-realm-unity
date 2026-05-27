@@ -31,9 +31,14 @@ namespace DeNelle.Core.Progression
     {
         public static SkillSystem Instance;
 
-        [SerializeField] private int _blacksmithLevel  = 1;
-        [SerializeField] private int _woodworkingLevel = 1;
-        [SerializeField] private int _arcaneLevel      = 1;
+        // Owner Decision 2 (2026-05-27): craft skills START AT 0 so required-skill
+        // gates are meaningful and leveling unlocks better towers. The new-player
+        // gift (_availablePoints = 2, below) keeps the early game from a dead start.
+        // Per-tower gate LEVELS live in the TowerData assets (TowerDataSeeder),
+        // tunable independently of these starting values.
+        [SerializeField] private int _blacksmithLevel  = 0;
+        [SerializeField] private int _woodworkingLevel = 0;
+        [SerializeField] private int _arcaneLevel      = 0;
 
         public int BlacksmithLevel  => _blacksmithLevel;
         public int WoodworkingLevel => _woodworkingLevel;
@@ -43,8 +48,8 @@ namespace DeNelle.Core.Progression
         // above is removed). A point is granted on hero level-up and spent via the
         // LevelUpSkillPopup. All backing fields are [SerializeField] private with
         // public getters (DEF-77 CP1 Issue 4).
-        [SerializeField] private int _gatheringSpeed  = 1;
-        [SerializeField] private int _availablePoints = 0;
+        [SerializeField] private int _gatheringSpeed  = 0;
+        [SerializeField] private int _availablePoints = 2;   // Decision 2: new-player gift (tunable)
 
         public int GatheringSpeed  => _gatheringSpeed;
         public int AvailablePoints => _availablePoints;
