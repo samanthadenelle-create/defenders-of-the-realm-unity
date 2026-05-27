@@ -4,11 +4,22 @@
 **Date:** 2026-05-26 (overnight)
 **Branch:** `feat/tower-core-loop` (off `feat/patricia-light` b356a23 — has everything)
 
-> ⚠️ **The owner provided the DEF-78/73/74/75/76/77 dependency ORDER but the detailed
-> DEF specs were NOT in the repo** (they live in the Claude-UI chat). Claude Code
-> **synthesized** the per-DEF scope below from the DEF titles + [[WORK_ORDER_46_tower_combat]]
-> + the existing economy/build code. **Review against the real DEF specs in the morning**
-> and correct anything that diverged. All work is on a branch, compile-gated, reversible.
+> ✅ **UPDATE — real specs are in Linear** (team "Defenders of the Realm"): DEF-78, DEF-73,
+> DEF-74, DEF-75, DEF-76, DEF-77, each with binding **Correction Pass / Clarifications** comments.
+> The agents now read the Linear issues DIRECTLY and implement to spec. My earlier overnight
+> synthesis (a static Core EconomyService + new-Input-System brief) **diverged and was discarded**
+> (branch reset); DEF-78 was rebuilt verbatim to its Linear spec (MonoBehaviour singleton
+> `EconomyService.Instance` in DeNelle.Village). The synthesized scope below is superseded by Linear.
+
+## Key spec→codebase reconciliations the agents apply
+- **No new asmdefs**: `DeNelle.Core.Data` / `DeNelle.Core.Progression` are namespaces inside the
+  existing `DeNelle.Core` asmdef (not separate assemblies). Files go under `Assets/_Modules/Core/Data`
+  & `/Core/Progression`; `DeNelle.Village` already refs `DeNelle.Core`.
+- **EconomyService** = the DEF-78 spec verbatim (`Instance`, `CanAfford(int)`/`Spend(int)`, Wood-only
+  stub) + a self-bootstrap so Instance is non-null at runtime. SkillSystem gets the same bootstrap.
+- **Legacy Input** (`Input.GetMouseButtonDown`/`mousePosition`) per the DEF-73 clarification — NOT the new Input System.
+- **Code-built UI Toolkit** for TowerUpgradeButton (UXML renders empty in builds; uGUI needs a Canvas).
+- Tower `visualPrefab` null → procedural placeholder (no authored tower art yet).
 
 ## Owner's execution order (verbatim)
 GROUP 0 — Tower Core Loop (first priority, strict order):
@@ -49,8 +60,14 @@ GROUP 1+ — existing wave/camera/AI correction loops, then world expansion, the
 - No `.unity` scene edits (runtime/code-built). No new asmdef cycles.
 - Each stage compile-gated via `run-unity-method.ps1` before the next starts.
 
-## Pipeline status
-- [ ] Stage 1: DEF-78 EconomyService
-- [ ] Stage 2: DEF-73 placement + Tower + SkillSystem + shared types
-- [ ] Stage 3: DEF-74 upgrades ∥ DEF-76 construction queue
-- [ ] Stage 4: DEF-75 VFX ∥ DEF-77 skill popup
+## Pipeline status (verified AM 2026-05-27 from batchmode compile logs)
+- [x] Stage 1: DEF-78 EconomyService — compiled clean (Builds/def78-compile.log, 22:29)
+- [x] Stage 2: DEF-73 placement + SkillSystem + shared types — compiled clean (def73-75-compile.log, 22:49)
+- [~] Stage 3: DEF-74 upgrades **DONE** (Tower.cs, TowerUpgradeButton.cs — in the 22:49 compile) ∥ DEF-76 construction queue **NOT STARTED** (no TowerConstruction/Queue/ProgressBar/Billboard files)
+- [~] Stage 4: DEF-75 VFX **DONE** (folded into Tower.cs: TriggerUpgradeVFX + CameraShakeBridge) ∥ DEF-77 skill popup **NOT STARTED** (no LevelUpSkillPopup; HeroProgression.OnLevelUp delta absent)
+
+> Overnight run stopped after the DEF-73/74/75 compile gate (22:49, 2026-05-26). DEF-76 and DEF-77
+> were not reached. All implemented code is **uncommitted** on `feat/tower-core-loop` (last commit
+> 8cc1754 is the plan only). Bonus not in original scope: `Assets/Editor/TowerDataSeeder.cs`
+> (Defenders → Seed Tower Data) seeds 3 sample TowerData assets so the loop is testable without
+> hand-authoring SOs.

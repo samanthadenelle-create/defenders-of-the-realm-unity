@@ -34,6 +34,13 @@ namespace DeNelle.Village
         /// <summary>Attribution / registry id for the hero.</summary>
         public const string Id = "hero";
 
+        /// <summary>
+        /// The active hero's progression. Set in OnEnable / cleared in OnDisable so
+        /// the DEF-77 LevelUpSkillPopup can subscribe to <see cref="OnLevelUp"/>
+        /// without FindObjectOfType (DEF-77 CP1 Issue 6). Single hero per run.
+        /// </summary>
+        public static HeroProgression Instance { get; private set; }
+
         // ── Tuning ────────────────────────────────────────────────────────────
         private const float DamagePerLevel = 0.06f;      // +6% ability damage per level
         private const float MaxDamageMultiplier = 3f;     // cap the damage scaling
@@ -72,8 +79,17 @@ namespace DeNelle.Village
             return 4;
         }
 
-        private void OnEnable() => XpEarnerRegistry.Register(this);
-        private void OnDisable() => XpEarnerRegistry.Unregister(this);
+        private void OnEnable()
+        {
+            Instance = this;
+            XpEarnerRegistry.Register(this);
+        }
+
+        private void OnDisable()
+        {
+            if (Instance == this) Instance = null;
+            XpEarnerRegistry.Unregister(this);
+        }
 
         public int AddXp(float amount)
         {
@@ -100,6 +116,10 @@ namespace DeNelle.Village
             // Owner's decision: a hero level grants Wisdom talent points so leveling
             // feeds the talent tree (the DamageMultiplier is read live, no push needed).
             try { WisdomCurrencyService.Instance?.Grant(WisdomForLevel(newLevel)); } catch { }
+
+            // DEF-77 — each hero level also banks a spendable craft-skill point; the
+            // LevelUpSkillPopup reacts via SkillSystem.OnSkillsChanged + OnLevelUp.
+            try { SkillSystem.Instance?.GrantSkillPoint(); } catch { }
 
             try { OnLevelUp?.Invoke(newLevel); } catch { }
         }
