@@ -20,9 +20,11 @@
 // is a true round-trip: fight -> back to the stub dungeon at the same spot.
 // =============================================================================
 
+using System.Collections;
 using Cysharp.Threading.Tasks;
 using DeNelle.Core;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace DeNelle.Dungeons
 {
@@ -60,6 +62,16 @@ namespace DeNelle.Dungeons
         // into a fresh battle forever ("stuck in an endless loop"). Arming on exit
         // means a returning hero must step off the pad before it can trigger again.
         private bool _armed;
+
+        // ── #18 round-trip position restore ──────────────────────────────────
+        // The stub dungeon is its own scene; going to the ATB battle unloads it and
+        // returning RELOADS it, so the baked DungeonHeroPlaceholder respawns at the
+        // entrance — the owner's "resets hero to dungeon start." Snapshot the hero's
+        // pre-battle position when the encounter fires (static so it survives the ATB
+        // scene round-trip) and restore it on the reload. Cleared after one restore.
+        private static bool    s_hasReturn;
+        private static string  s_returnScene;
+        private static Vector3 s_returnPos;
 
         /// <summary>Configures the stub encounter at run time (optional — the scene builder pre-wires the fields).</summary>
         public void Configure(string[] enemyTypes, string returnScene, float triggerRadius)
@@ -112,8 +124,57 @@ namespace DeNelle.Dungeons
         {
             if (_fired) return;
             _fired = true;
+
+            // #18: snapshot where the hero is so the battle round-trip drops them
+            // back HERE, not at the dungeon entrance. Restored on scene reload (Start).
+            var heroNow = ResolveHero();
+            if (heroNow != null)
+            {
+                s_returnPos   = heroNow.transform.position;
+                s_returnScene = string.IsNullOrEmpty(_returnScene) ? SceneRouter.Village : _returnScene;
+                s_hasReturn   = true;
+            }
+
             Debug.Log("[DungeonStubEncounter] Encounter zone entered — launching ATB battle.");
             LaunchBattle().Forget();
+        }
+
+        // #18: on (re)load of the stub dungeon after a battle, move the placeholder
+        // hero back to where it triggered the encounter instead of the baked
+        // entrance. Best-effort: a no-op if the snapshot is for another scene or the
+        // hero can't be found.
+        private void Start()
+        {
+            if (s_hasReturn && SceneManager.GetActiveScene().name == s_returnScene)
+                StartCoroutine(RestoreHeroPosition());
+        }
+
+        private IEnumerator RestoreHeroPosition()
+        {
+            // Let the baked placeholder + any controller finish their own init first.
+            yield return null;
+            yield return new WaitForSeconds(0.2f);
+
+            var hero = ResolveHero();
+            if (hero != null)
+            {
+                // A CharacterController fights a raw position set — toggle it off
+                // for the teleport (no-op when the placeholder has none).
+                var cc = hero.GetComponent<CharacterController>();
+                if (cc != null) cc.enabled = false;
+                hero.transform.position = s_returnPos;
+                if (cc != null) cc.enabled = true;
+
+                // The hero is now standing ON the pad again. Re-disarm so the
+                // encounter can't instantly re-fire (it only re-arms once the hero
+                // has been seen OUTSIDE the radius) — keeps the #18 restore and the
+                // anti-loop guard consistent.
+                _armed = false;
+
+                Debug.Log($"[DungeonStubEncounter] #18 restored hero to pre-encounter position {s_returnPos}.");
+            }
+
+            s_hasReturn = false; // one-shot
         }
 
         private async UniTask LaunchBattle()
