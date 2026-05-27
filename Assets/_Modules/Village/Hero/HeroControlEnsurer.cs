@@ -5,15 +5,21 @@
 // ZERO exceptions. Player.log showed HeroLocomotion.Start never logged -> the
 // movement controller never ran -> no input -> "frozen". The hero GameObject
 // exists (the camera targets "Hero (Blaise)") and HeroLocomotion is NOT stripped
-// (no missing-script warnings), so it was baked disabled / on an inactive object
-// in this build for some reason the scene re-bake can't be touched safely.
+// (no missing-script warnings), so it was baked disabled / on an inactive object.
 //
-// This DDOL safety-net (same pattern as VillageNpcInjector) re-activates the hero
-// and enables (or adds) HeroLocomotion on every Village load, so control always
-// works regardless of the baked state. It logs the hero's pre-fix state so the
-// exact cause is visible in the next run.
+// This self-bootstrapping DDOL safety-net (no Village.unity edit -> no scene
+// re-save corruption risk) ensures the hero on every Village load, TWICE:
+//   - immediately (AfterSceneLoad / sceneLoaded): fixes a baked inactive/disabled
+//     hero, which is a static state nothing re-touches.
+//   - again after a short delay (0.5s + 2 frames): fixes the case where a script
+//     re-disables the hero in its own Start() / a late system, which would run
+//     AFTER the immediate pass.
+// Both passes are idempotent and log the pre-fix hero state so the exact cause is
+// visible. Referencing HeroLocomotion directly also preserves it from any future
+// IL2CPP/WebGL stripping (it was previously only reflection-referenced).
 // =============================================================================
 
+using System.Collections;
 using System.Linq;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -40,7 +46,7 @@ namespace DeNelle.Village
             DontDestroyOnLoad(gameObject);
             SceneManager.sceneLoaded -= OnSceneLoaded;
             SceneManager.sceneLoaded += OnSceneLoaded;
-            if (SceneManager.GetActiveScene().name == TargetScene) Ensure();
+            if (SceneManager.GetActiveScene().name == TargetScene) RunEnsure();
         }
 
         private void OnDestroy()
@@ -51,10 +57,24 @@ namespace DeNelle.Village
 
         private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
         {
-            if (scene.name == TargetScene) Ensure();
+            if (scene.name == TargetScene) RunEnsure();
         }
 
-        private void Ensure()
+        private void RunEnsure()
+        {
+            Ensure("load");                 // static inactive/disabled state
+            StartCoroutine(DelayedEnsure()); // late script re-disable
+        }
+
+        private IEnumerator DelayedEnsure()
+        {
+            yield return new WaitForSeconds(0.5f);
+            yield return null;   // let any same-frame late disabler settle
+            yield return null;
+            Ensure("delayed");
+        }
+
+        private void Ensure(string phase)
         {
             // Find the hero even if its GameObject is inactive or its component disabled.
             var loco = FindObjectsByType<HeroLocomotion>(FindObjectsInactive.Include, FindObjectsSortMode.None)
@@ -63,11 +83,11 @@ namespace DeNelle.Village
 
             if (hero == null)
             {
-                Debug.LogWarning("[HeroControlEnsurer] no hero found in Village - cannot ensure control.");
+                Debug.LogWarning($"[HeroControlEnsurer] ({phase}) no hero found in Village.");
                 return;
             }
 
-            bool wasActive = hero.activeSelf;
+            bool wasActive = hero.activeInHierarchy;
             if (!hero.activeSelf) hero.SetActive(true);
 
             var l = hero.GetComponent<HeroLocomotion>();
@@ -76,8 +96,8 @@ namespace DeNelle.Village
             bool wasEnabled = l.enabled;
             l.enabled = true;
 
-            Debug.Log($"[HeroControlEnsurer] hero='{hero.name}' wasActive={wasActive} " +
-                      $"wasLocoEnabled={wasEnabled} locoAdded={added} -> forced active + enabled.");
+            Debug.Log($"[HeroControlEnsurer] ({phase}) hero='{hero.name}' wasActive={wasActive} " +
+                      $"wasLocoEnabled={wasEnabled} locoAdded={added} -> active={hero.activeInHierarchy}, locoEnabled={l.enabled}.");
         }
 
         private static GameObject FindHeroByName()
