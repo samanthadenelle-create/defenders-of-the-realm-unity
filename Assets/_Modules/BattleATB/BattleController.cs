@@ -27,6 +27,7 @@
 // =============================================================================
 
 using System.Collections.Generic;
+using System.Linq;
 using Cysharp.Threading.Tasks;
 using DeNelle.BattleATB.Engine;
 using DeNelle.BattleATB.State;
@@ -219,7 +220,10 @@ namespace DeNelle.BattleATB
                 HeroName = _fallbackHeroName,
                 Pets = new List<PartyPetSpec>(),
                 Enemies = enemies,
-                Inventory = new Dictionary<ItemKind, int>(),
+                // Seed a few potions so the Item command is usable (the empty
+                // inventory left the Item button inert). Full inventory handoff
+                // from the village/dungeon arrives with the breach mapper.
+                Inventory = new Dictionary<ItemKind, int> { { ItemKind.Potion, 3 } },
                 Reinforcements = false,
             };
         }
@@ -307,25 +311,93 @@ namespace DeNelle.BattleATB
             _runtimeState.ChooseAction(BattleAction.MakeAttack(target.Id));
         }
 
-        /// <summary>Skills button — opens skill picker (stub: selects first skill on lowest-HP foe).</summary>
+        /// <summary>
+        /// Skills button — casts the active hero's best currently-usable ability.
+        /// <see cref="BattleStateOps.AvailableAbilities"/> is already cost- and
+        /// cooldown-gated, so anything it returns is a legal submit; the strongest
+        /// damage ability hits the lowest-HP foe, else a self heal/buff is cast,
+        /// else the turn is NOT consumed and the banner explains why (no silent
+        /// no-op — the owner's "skills do nothing").
+        /// </summary>
         private void HandleSkillsClicked()
         {
-            // TODO: open skill selection panel (DEF-34 full implementation).
-            Debug.Log("[BattleController] Skills button clicked — skill picker not yet implemented.");
+            if (_runtimeState == null || !_runtimeState.IsAwaitingPlayer()) return;
+            BattleUnit hero = _runtimeState.ActiveUnit();
+            if (hero == null) return;
+
+            List<AbilityDef> usable = BattleStateOps.AvailableAbilities(hero);
+            if (usable == null || usable.Count == 0)
+            {
+                if (_statusBanner != null) _statusBanner.text = "No skill ready — not enough mana.";
+                return; // do not consume the turn
+            }
+
+            BattleUnit foe = BattleStateOps.LowestHpEnemy(_runtimeState.Battle);
+
+            // Prefer the strongest damaging ability on the weakest foe.
+            List<AbilityDef> damage = usable.Where(a => a.Damage > 0).ToList();
+            if (damage.Count > 0 && foe != null)
+            {
+                AbilityDef best = damage.Aggregate(damage[0], (b, a) => a.Damage > b.Damage ? a : b);
+                _runtimeState.ChooseAction(BattleAction.MakeAbility(best.Slot, foe.Id));
+                return;
+            }
+
+            // Otherwise a self heal / buff (Knight Guard / Last Stand, etc.).
+            AbilityDef support = usable.FirstOrDefault(
+                a => a.SelfStatus != null || a.HealPctSelf != null || a.Heal != null);
+            if (support != null)
+            {
+                _runtimeState.ChooseAction(BattleAction.MakeAbility(support.Slot, hero.Id));
+                return;
+            }
+
+            // Last resort — the first usable ability on the foe (or self).
+            AbilityDef any = usable[0];
+            _runtimeState.ChooseAction(
+                BattleAction.MakeAbility(any.Slot, foe != null ? foe.Id : hero.Id));
         }
 
-        /// <summary>Item button — opens inventory picker (stub: logs intent).</summary>
+        /// <summary>
+        /// Item button — uses a Potion on the active hero. The empty inventory
+        /// left this inert; BuildSetup now seeds potions so it heals. When the
+        /// pouch is empty the banner says so rather than doing nothing silently.
+        /// </summary>
         private void HandleItemClicked()
         {
-            // TODO: open item selection panel (DEF-34 full implementation).
-            Debug.Log("[BattleController] Item button clicked — item picker not yet implemented.");
+            if (_runtimeState == null || !_runtimeState.IsAwaitingPlayer()) return;
+            BattleUnit hero = _runtimeState.ActiveUnit();
+            if (hero == null) return;
+
+            Dictionary<ItemKind, int> inv = _runtimeState.Battle != null ? _runtimeState.Battle.Inventory : null;
+            int potions = (inv != null && inv.TryGetValue(ItemKind.Potion, out int p)) ? p : 0;
+            if (potions <= 0)
+            {
+                if (_statusBanner != null) _statusBanner.text = "No items left.";
+                return;
+            }
+            _runtimeState.ChooseAction(BattleAction.MakeItem(ItemKind.Potion, hero.Id));
         }
 
-        /// <summary>Flee button — attempt to escape the battle (stub: logs intent).</summary>
+        /// <summary>
+        /// Flee button — abandons the fight and returns to the scene the battle
+        /// came from (the dungeon / village). The engine has no flee action, so
+        /// this is a clean scene hand-back: it guarantees the player can always
+        /// leave (the owner's "stuck in an endless loop" escape hatch). Fires once.
+        /// </summary>
         private void HandleFleeClicked()
         {
-            // TODO: resolve flee attempt via engine (DEF-34 full implementation).
-            Debug.Log("[BattleController] Flee button clicked — flee logic not yet implemented.");
+            if (_returnScheduled) return;
+            _returnScheduled = true;
+            if (_statusBanner != null) _statusBanner.text = "Fled the battle…";
+            if (_runtimeState != null) _runtimeState.EndBattle();
+            FleeToReturnScene().Forget();
+        }
+
+        /// <summary>Returns to the previous scene after a flee. Async, never async void.</summary>
+        private async UniTask FleeToReturnScene()
+        {
+            await SceneRouter.LoadSceneWithFade(ResolveReturnScene());
         }
 
         // ---------------------------------------------------------------------

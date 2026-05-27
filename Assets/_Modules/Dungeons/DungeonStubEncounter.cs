@@ -52,6 +52,15 @@ namespace DeNelle.Dungeons
         private bool _fired;
         private float _proxCheck;
 
+        // Becomes true once the hero has been observed clearly OUTSIDE the trigger
+        // radius. The encounter will not fire until then. Without this, the plain
+        // _fired bool reset on every scene load and the battle's round-trip drops
+        // the hero back onto the dungeon spawn (which sits on/near this pad) — so
+        // the encounter re-fired the instant the player reappeared, looping them
+        // into a fresh battle forever ("stuck in an endless loop"). Arming on exit
+        // means a returning hero must step off the pad before it can trigger again.
+        private bool _armed;
+
         /// <summary>Configures the stub encounter at run time (optional — the scene builder pre-wires the fields).</summary>
         public void Configure(string[] enemyTypes, string returnScene, float triggerRadius)
         {
@@ -62,7 +71,7 @@ namespace DeNelle.Dungeons
 
         private void OnTriggerEnter(Collider other)
         {
-            if (_fired) return;
+            if (_fired || !_armed) return;
             if (!LooksLikeHero(other.gameObject)) return;
             Fire();
         }
@@ -84,6 +93,16 @@ namespace DeNelle.Dungeons
 
             float sqr = (hero.transform.position - transform.position).sqrMagnitude;
             bool inside = sqr <= _triggerRadius * _triggerRadius;
+
+            // Arm only after the hero has been seen outside the zone, so a battle
+            // round-trip that returns the hero onto the pad does not instantly
+            // re-fire (see _armed). The F-key force still works once armed.
+            if (!_armed)
+            {
+                if (!inside) _armed = true;
+                return;
+            }
+
             // F-key fallback mirrors DungeonStubReturn so the owner can force it.
             if (inside || (Input.GetKey(KeyCode.F) && sqr <= (_triggerRadius + 1f) * (_triggerRadius + 1f)))
                 Fire();
