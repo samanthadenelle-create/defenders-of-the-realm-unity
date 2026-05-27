@@ -51,6 +51,10 @@ namespace DeNelle.Village
         // Suppresses movement so the hero holds the pose until the next wave begins.
         private static readonly int AnimVictory = Animator.StringToHash("Victory");
         private bool _victoryPose;
+        private float _victoryPoseTimer;
+        // DEF-70 fix: the victory pose is a brief celebration, NEVER a lock. It
+        // ends after this many seconds OR the instant the player gives input.
+        private const float VictoryPoseSeconds = 2.5f;
         private WaveManager _waveManager;
 
         private void Awake()
@@ -96,6 +100,7 @@ namespace DeNelle.Village
         private void OnWaveCleared(int waveId)
         {
             _victoryPose = true;
+            _victoryPoseTimer = VictoryPoseSeconds;
             Velocity = Vector3.zero; // zero carried velocity so the hero stops in place
 
             ResolveAnimator();
@@ -119,10 +124,21 @@ namespace DeNelle.Village
 
         private void Update()
         {
-            // DEF-70: suppress all movement while the hero is playing the victory pose.
-            if (_victoryPose) return;
-
             Vector2 input = ReadMoveInput();
+
+            // DEF-70 fix: the victory pose briefly suppresses movement after a wave
+            // clear — but it must NEVER lock the hero. It ends the instant the player
+            // gives movement input, or after VictoryPoseSeconds. (It previously
+            // latched true forever: OnWaveCleared set it and NOTHING cleared it, so
+            // the hero froze permanently after the first wave clear — the reported
+            // "herolocomotion stopped after the level up.")
+            if (_victoryPose)
+            {
+                _victoryPoseTimer -= Time.deltaTime;
+                if (_victoryPoseTimer > 0f && input.sqrMagnitude < 0.01f)
+                    return;            // still celebrating, no input — hold the pose
+                _victoryPose = false;  // player moved or the timer elapsed — resume
+            }
 
             // WORLD-relative movement (owner 2026-05-25): W = +Z (up-screen / north),
             // D = +X (right). The village camera is now a FIXED-angle follow looking

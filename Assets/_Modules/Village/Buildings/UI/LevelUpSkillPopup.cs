@@ -113,6 +113,11 @@ namespace DeNelle.Village.UI
             if (root == null) return;
 
             _overlay = new VisualElement { name = "levelup-overlay" };
+            // The overlay is full-screen and sits at the top sorting order; without
+            // this it captures every click/tap while shown (blocking other UI, and
+            // movement on pointer control schemes). Children (card + buttons) still
+            // pick, so the popup stays interactive — mirrors MusicToggleHud.
+            _overlay.pickingMode = PickingMode.Ignore;
             var os = _overlay.style;
             os.position = Position.Absolute;
             os.top = 0f; os.left = 0f; os.right = 0f; os.bottom = 0f;
