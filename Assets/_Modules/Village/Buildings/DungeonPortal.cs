@@ -74,6 +74,14 @@ namespace DeNelle.Village
             if (!_heroFound) { ResolveHero(); return; }
             if (_loading) return;
 
+            // The cached hero ref can go null if the village rebuilds/replaces the
+            // hero rig after we first found it. Re-resolve rather than dereferencing
+            // a destroyed Transform — otherwise the line below NREs EVERY FRAME and
+            // the exception/stack-trace spam tanks the framerate (reads to the player
+            // as "frozen, can't move"). DEF-40 regression: the _heroFound cache
+            // removed the per-frame re-resolve that used to mask this.
+            if (_hero == null) { _heroFound = false; return; }
+
             // Throttled proximity check (0.15 s) — prompt show/hide.
             if (Time.time >= _nextProximityCheck)
             {
