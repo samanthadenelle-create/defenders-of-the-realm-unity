@@ -152,3 +152,7 @@ Assets/Generated/
 
 # Test wallets (devnet only, but still treat as secrets)
 Assets/Tests/Fixtures/DevnetTestWallet.*
+
+# Vercel CLI leftovers (Unity is not a Vercel project; these are stray)
+.vercel/
+.vercelignore
