@@ -71,15 +71,17 @@ namespace DeNelle.Village
 
         // Hero / tower layout in the arena.
         private static readonly Vector3 TowerPos    = Vector3.zero;
-        private const float TowerHeight             = 14f;    // normalized spire height (m)
-        private const float BalconyHeightFraction   = 0.70f;  // hero stands at ~70% of the tower height
-        private const float BalconyDepth            = -1.5f;  // slight pull toward the camera on the platform
-        // Derived hero balcony / spawn perch (kept as a field so the air-glide + camera
-        // share the SAME perch the BuildTower model resolves it to). Recomputed in
-        // BuildTower once the real model's normalized height is known; this is the
-        // default used by the cylinder fallback.
-        private Vector3 _balconyPos                 = new Vector3(0f, TowerHeight * BalconyHeightFraction, BalconyDepth);
-        private static readonly Vector3 CamOffset   = new Vector3(0f, 8f, -12f);
+        private const float TowerHeight             = 12f;    // solid spire height (m) — feet at y=0
+        // FIXED balcony height — the hero stands here. Deliberately a const, NOT
+        // derived from a fragile model's world bounds (the shattered-Tripo trap).
+        private const float BalconyHeight           = 8f;     // hero perch / platform height (m)
+        private const float BalconyDepth            = 0f;     // centred on the tower axis
+        // Hero balcony / spawn perch — a FIXED world point the hero, the air-glide
+        // descent target and the platform mesh all share. No bounds derivation.
+        private static readonly Vector3 _balconyPos = new Vector3(0f, BalconyHeight, BalconyDepth);
+        // Third-person framing: BEHIND the hero on -Z, a bit ABOVE on +Y. The
+        // camera looks slightly DOWN at the hero (see ThirdPersonCameraFollow).
+        private static readonly Vector3 CamOffset   = new Vector3(0f, 3.5f, -9f);
 
         // ── State ─────────────────────────────────────────────────────────────
         private HeartController _heart;
@@ -126,6 +128,13 @@ namespace DeNelle.Village
         private Label _waveLabel;
         private Label _statusLabel;
         private readonly List<Button> _petButtons = new List<Button>();
+
+        // Action bar — the player's tap targets (ATTACK + one button per ability
+        // slot). Each ability button tracks its slot so Update can grey it out
+        // while on cooldown / out of mana.
+        private Button _attackButton;
+        private readonly List<Button> _abilityButtons = new List<Button>();
+        private readonly List<AbilitySlot> _abilitySlots = new List<AbilitySlot>();
 
         // =====================================================================
         //  Lifecycle
@@ -189,6 +198,7 @@ namespace DeNelle.Village
 
             DriveAirEnemies();
             TickHeroFire();
+            RefreshActionBar();
 
             if (_heart != null && _heart.Hp <= 0f) { Lose(); return; }
         }
@@ -224,9 +234,18 @@ namespace DeNelle.Village
         }
 
         /// <summary>
-        /// Builds the central tower: a tall stack carrying the canonical
+        /// Builds the central tower as a SOLID, upright procedural gothic keep — a
+        /// guaranteed-intact structure the hero stands on, carrying the canonical
         /// <see cref="HeartController"/> (the tower HP the whole game can see — no
-        /// forked HP) plus a balcony platform the hero stands on.
+        /// forked HP). It is a fixed-scale stack of primitives:
+        ///   • a wider base drum at the foot,
+        ///   • a tall octagonal stone shaft (~12 m, feet at y=0),
+        ///   • a balcony ring platform at the FIXED <see cref="BalconyHeight"/> the
+        ///     hero stands on,
+        ///   • a ring of crenellation cubes around the balcony's edge.
+        /// Built from primitives (not the shattered Tripo FBX) so it ALWAYS reads
+        /// as a strong, solid tower regardless of import / material quirks. No
+        /// world-bounds recenter hack: every piece sits at a known local offset.
         /// </summary>
         private void BuildTower()
         {
@@ -235,66 +254,65 @@ namespace DeNelle.Village
             towerGo.transform.position = TowerPos;
             _towerTransform = towerGo.transform;
 
-            // ── Real owner-provided Tripo model (Resources/PatriciaLight/Tower) ──
-            // Tripo FBXs import with Phong materials URP can't render, off-centre
-            // pivots that fling the visible mesh away under scale, and stray
-            // cameras/colliders/animators. Mirror the hero/ATB swap handling:
-            // attach TripoMaterialFixer, strip the extras, NormalizeHeight to a tall
-            // spire, then recenter by WORLD bounds (feet → y=0, centre → TowerPos XZ).
-            // Fall back to the cylinder spire if the resource is absent so the mode
-            // never breaks.
-            float spireTopY = TowerHeight;   // top of the visible spire (drives the balcony perch)
-            var towerPrefab = Resources.Load<GameObject>("PatriciaLight/Tower");
-            if (towerPrefab != null)
-            {
-                var model = Instantiate(towerPrefab, towerGo.transform);
-                model.name = "TowerModel";
-                model.transform.localPosition = Vector3.zero;
-                model.transform.localRotation = Quaternion.identity;
+            Color stone     = new Color(0.46f, 0.45f, 0.50f); // weathered grey stone
+            Color stoneDark = new Color(0.34f, 0.33f, 0.39f); // shadowed base / merlons
 
-                StripCollidersAndCameras(model);
-                StripAnimators(model);
+            // ── Base drum: a wide squat cylinder anchoring the tower to the ground ─
+            // Cylinder primitive is 2 m tall at scale 1, so localScale.y = halfHeight.
+            const float baseHeight = 2.4f;
+            var baseDrum = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            baseDrum.name = "TowerBase";
+            baseDrum.transform.SetParent(towerGo.transform, false);
+            baseDrum.transform.localScale = new Vector3(6.5f, baseHeight * 0.5f, 6.5f);
+            baseDrum.transform.localPosition = new Vector3(0f, baseHeight * 0.5f, 0f);
+            TintUrp(baseDrum, stoneDark);
 
-                // URP material fix (find the type so this asmdef carries no Core dep).
-                var fixerType = FindTypeByName("DeNelle.Core.TripoMaterialFixer");
-                if (fixerType != null) { try { model.AddComponent(fixerType); } catch { /* non-fatal */ } }
-                else RetargetMaterialsToUrp(model); // safety net if the fixer type moves
+            // ── Main shaft: a tall octagonal keep (an 8-sided cylinder reads gothic) ─
+            // Feet at y=0, top at TowerHeight (~12 m). Cylinder height = 2 m @ scale 1.
+            var shaft = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            shaft.name = "TowerShaft";
+            shaft.transform.SetParent(towerGo.transform, false);
+            shaft.transform.localScale = new Vector3(4.6f, TowerHeight * 0.5f, 4.6f);
+            shaft.transform.localRotation = Quaternion.Euler(0f, 22.5f, 0f); // octagonal facets read
+            shaft.transform.localPosition = new Vector3(0f, TowerHeight * 0.5f, 0f);
+            TintUrp(shaft, stone);
 
-                NormalizeHeight(model, TowerHeight);
-
-                // Recenter by world bounds: centre → tower XZ, feet → y=0 (Tripo pivot
-                // is far off-centre, so naive scaling leaves the mesh flung away).
-                Bounds b = WorldBounds(model);
-                Vector3 d = new Vector3(TowerPos.x - b.center.x,
-                                        TowerPos.y - b.min.y,
-                                        TowerPos.z - b.center.z);
-                model.transform.position += d;
-
-                // The recentred model's top is the real spire height for the perch.
-                Bounds after = WorldBounds(model);
-                spireTopY = after.max.y - TowerPos.y;
-            }
-            else
-            {
-                Debug.LogWarning("[PatriciaLight] Resources/PatriciaLight/Tower not found — using the cylinder spire fallback.");
-                var spire = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-                spire.name = "Spire";
-                spire.transform.SetParent(towerGo.transform, false);
-                spire.transform.localScale = new Vector3(3f, TowerHeight * 0.5f, 3f); // cylinder is 2m tall at scale 1
-                spire.transform.localPosition = new Vector3(0f, TowerHeight * 0.5f, 0f);
-                TintUrp(spire, new Color(0.42f, 0.40f, 0.50f));
-            }
-
-            // Hero perch / balcony at ~70% of the spire height (tunable above).
-            _balconyPos = new Vector3(0f, spireTopY * BalconyHeightFraction, BalconyDepth);
-
-            // A small platform the hero stands on so it doesn't hover in mid-air.
+            // ── Balcony ring platform: the SOLID disc the hero's feet rest on ──────
+            // Its TOP surface sits exactly at BalconyHeight (the fixed perch). The
+            // cylinder is centred, so push it down by its half-thickness.
+            const float platformThickness = 0.5f;
             var balcony = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
             balcony.name = "Balcony";
             balcony.transform.SetParent(towerGo.transform, false);
-            balcony.transform.localScale = new Vector3(4.5f, 0.3f, 4.5f);
-            balcony.transform.localPosition = new Vector3(0f, _balconyPos.y - 0.3f, 0f);
-            TintUrp(balcony, new Color(0.30f, 0.28f, 0.36f));
+            balcony.transform.localScale = new Vector3(5.6f, platformThickness * 0.5f, 5.6f);
+            balcony.transform.localPosition = new Vector3(0f, BalconyHeight - platformThickness * 0.5f, 0f);
+            TintUrp(balcony, stoneDark);
+
+            // ── Crenellations: a ring of merlon cubes around the balcony edge ──────
+            const int merlons = 12;
+            const float merlonRadius = 2.7f;
+            for (int i = 0; i < merlons; i++)
+            {
+                float ang = (i / (float)merlons) * Mathf.PI * 2f;
+                var merlon = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                merlon.name = "Merlon";
+                merlon.transform.SetParent(towerGo.transform, false);
+                merlon.transform.localScale = new Vector3(0.7f, 1.1f, 0.7f);
+                merlon.transform.localPosition = new Vector3(
+                    Mathf.Cos(ang) * merlonRadius,
+                    BalconyHeight + 0.55f,
+                    Mathf.Sin(ang) * merlonRadius);
+                TintUrp(merlon, stoneDark);
+            }
+
+            // ── Roof cap: a cone-ish spire on top so the keep reads finished ───────
+            const float capHeight = 3f;
+            var cap = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            cap.name = "TowerCap";
+            cap.transform.SetParent(towerGo.transform, false);
+            cap.transform.localScale = new Vector3(3.4f, capHeight * 0.5f, 3.4f);
+            cap.transform.localPosition = new Vector3(0f, TowerHeight + capHeight * 0.5f, 0f);
+            TintUrp(cap, new Color(0.30f, 0.20f, 0.26f)); // dark slate roof
 
             // HeartController is the canonical tower HP (0..100). Use its authored
             // transform so it does not snap to origin/scale at Awake.
@@ -908,9 +926,153 @@ namespace DeNelle.Village
             _hpLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
             barFrame.Add(_hpLabel);
 
+            BuildActionBar(root);
             BuildPetToggles(root);
             BuildFxOverlays(root);
             RefreshHud();
+        }
+
+        // =====================================================================
+        //  Action bar — ATTACK + per-slot ability buttons (player taps to act)
+        // =====================================================================
+
+        /// <summary>
+        /// Builds the bottom-centre control bar so the player can ACT: a large
+        /// ATTACK button (fires the hero's primary at the nearest hostile) plus one
+        /// button per remaining ability slot (W/E/R) read from the hero's class
+        /// loadout via <see cref="AbilityCatalog"/>. Each ability button casts its
+        /// own slot through <see cref="HeroAbilities.TryCast"/>, so cooldown + mana
+        /// gates are respected; the auto-fire in <see cref="TickHeroFire"/> stays as
+        /// a gentle fallback, but tapping ATTACK visibly fires Q on demand. Pure
+        /// code-built UI Toolkit (WO-47: no UXML), sized as thumb-reachable tap
+        /// targets for the portrait-ish layout.
+        /// </summary>
+        private void BuildActionBar(VisualElement root)
+        {
+            _abilityButtons.Clear();
+            _abilitySlots.Clear();
+
+            // A horizontal row pinned to the bottom-centre, above the integrity bar.
+            var bar = new VisualElement();
+            bar.style.position = Position.Absolute;
+            bar.style.bottom = 84f;          // sits above the TOWER INTEGRITY bar (bottom:28)
+            bar.style.left = 0f; bar.style.right = 0f;
+            bar.style.flexDirection = FlexDirection.Row;
+            bar.style.justifyContent = Justify.Center;
+            bar.style.alignItems = Align.FlexEnd;
+            root.Add(bar);
+
+            // ── Ability buttons for the non-primary slots (W/E/R) ─────────────────
+            // Read the hero's actual class loadout; one button per ability beyond Q.
+            string heroClass = _hero != null ? _hero.HeroClass : AbilityCatalog.DefaultClass;
+            foreach (AbilitySlot slot in new[] { AbilitySlot.W, AbilitySlot.E, AbilitySlot.R })
+            {
+                AbilityDef def = AbilityCatalog.Find(heroClass, slot);
+                if (def == null) continue; // class may not define every slot
+
+                AbilitySlot captured = slot;
+                var btn = new Button(() => CastSlot(captured));
+                StyleAbilityButton(btn, def);
+                bar.Add(btn);
+                _abilityButtons.Add(btn);
+                _abilitySlots.Add(slot);
+            }
+
+            // ── The big ATTACK button (primary Q) — last, so it sits rightmost and
+            // is the largest / most thumb-reachable target. ──────────────────────
+            _attackButton = new Button(FireAttack);
+            _attackButton.text = "ATTACK";
+            _attackButton.style.width = 130f; _attackButton.style.height = 80f;
+            _attackButton.style.marginLeft = 10f;
+            _attackButton.style.fontSize = 20f;
+            _attackButton.style.unityFontStyleAndWeight = FontStyle.Bold;
+            _attackButton.style.color = new StyleColor(Color.white);
+            _attackButton.style.backgroundColor = new StyleColor(new Color(0.62f, 0.18f, 0.18f, 0.96f));
+            RoundCorners(_attackButton, 16f);
+            ZeroBorders(_attackButton);
+            bar.Add(_attackButton);
+        }
+
+        /// <summary>Styles one ability slot button: name on top, glyph below, tinted to the ability colour.</summary>
+        private static void StyleAbilityButton(Button btn, AbilityDef def)
+        {
+            string glyph = !string.IsNullOrEmpty(def.Icon)
+                ? def.Icon
+                : (!string.IsNullOrEmpty(def.Name) ? def.Name.Substring(0, 1).ToUpperInvariant() : "?");
+            string name = !string.IsNullOrEmpty(def.Name) ? def.Name : def.SlotEnum.ToString();
+            btn.text = $"{glyph}\n{name}";
+
+            btn.style.width = 92f; btn.style.height = 70f;
+            btn.style.marginLeft = 8f; btn.style.marginRight = 0f;
+            btn.style.fontSize = 13f;
+            btn.style.whiteSpace = WhiteSpace.Normal;
+            btn.style.unityFontStyleAndWeight = FontStyle.Bold;
+            btn.style.unityTextAlign = TextAnchor.MiddleCenter;
+            btn.style.color = new StyleColor(Color.white);
+            Color c = def.UnityColor; c.a = 0.92f;
+            btn.style.backgroundColor = new StyleColor(c);
+            RoundCorners(btn, 12f);
+            ZeroBorders(btn);
+        }
+
+        private static void RoundCorners(VisualElement ve, float r)
+        {
+            ve.style.borderTopLeftRadius = r; ve.style.borderTopRightRadius = r;
+            ve.style.borderBottomLeftRadius = r; ve.style.borderBottomRightRadius = r;
+        }
+
+        private static void ZeroBorders(VisualElement ve)
+        {
+            ve.style.borderTopWidth = 0f; ve.style.borderBottomWidth = 0f;
+            ve.style.borderLeftWidth = 0f; ve.style.borderRightWidth = 0f;
+        }
+
+        /// <summary>
+        /// ATTACK tap — faces the hero at the nearest hostile so the cast reads,
+        /// then fires the primary (Q). Casting through HeroAbilities animates +
+        /// scales + attributes the shot. If Q is somehow unavailable (no catalog),
+        /// fall back to the same direct damage sweep the auto-fire uses so the tap
+        /// always does SOMETHING the player can see.
+        /// </summary>
+        private void FireAttack()
+        {
+            FaceNearestHostile();
+            if (_hero != null && _hero.TryCast(AbilitySlot.Q)) return;
+
+            IDamageable target = NearestHostile(
+                _heroTransform != null ? _heroTransform.position : transform.position, HeroFireRange);
+            if (target == null) return;
+            target.TakeDamage(HeroFireDamage, DamageElement.None);
+            DamageAttribution.Record(target, HeroProgression.Id, HeroFireDamage);
+        }
+
+        /// <summary>Ability-slot tap — faces the nearest hostile, then casts that slot (respects cooldown/mana).</summary>
+        private void CastSlot(AbilitySlot slot)
+        {
+            FaceNearestHostile();
+            if (_hero != null) _hero.TryCast(slot);
+        }
+
+        /// <summary>Snaps the hero to face the nearest hostile so a tapped cast reads (no slerp — instant on tap).</summary>
+        private void FaceNearestHostile()
+        {
+            if (_heroTransform == null) return;
+            IDamageable target = NearestHostile(_heroTransform.position, HeroFireRange);
+            if (target == null) return;
+            Vector3 face = target.WorldPosition - _heroTransform.position; face.y = 0f;
+            if (face.sqrMagnitude > 0.01f)
+                _heroTransform.rotation = Quaternion.LookRotation(face);
+        }
+
+        /// <summary>Greys out ability buttons that are on cooldown / out of mana so the bar reads as live.</summary>
+        private void RefreshActionBar()
+        {
+            if (_hero == null) return;
+            for (int i = 0; i < _abilityButtons.Count && i < _abilitySlots.Count; i++)
+            {
+                bool ready = _hero.CanCast(_abilitySlots[i]);
+                _abilityButtons[i].style.opacity = ready ? 1f : 0.45f;
+            }
         }
 
         /// <summary>

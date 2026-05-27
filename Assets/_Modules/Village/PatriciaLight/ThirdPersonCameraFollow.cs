@@ -2,11 +2,22 @@
 // ThirdPersonCameraFollow — over-the-shoulder follow camera for Patricia Light.
 // -----------------------------------------------------------------------------
 // WO-47 Phase 2 ("Defend the Tower"). A dead-simple smoothed follow camera that
-// rides behind + above the hero on the tower balcony and looks slightly above
-// the hero so the streaming enemies fill the lower screen. It is the dedicated-
-// scene analog of the in-village VillageCamera, but with no Cinemachine / input
+// rides BEHIND + ABOVE the hero on the tower balcony and looks slightly DOWN at
+// it, so the streaming enemies fill the lower screen. It is the dedicated-scene
+// analog of the in-village VillageCamera, but with no Cinemachine / input
 // dependency — the hero barely moves here (it fires from the balcony), so a
 // fixed-offset SmoothDamp is all the framing this mode needs.
+//
+// PLAYTEST FIX (feat/patricia-light): the old build read UPWARD from below the
+// tower because the camera could initialise at the world origin (0,0,0) and then
+// lerp toward a high balcony, and the look-at target sat ABOVE the camera while
+// it was still low. This rewrite makes the framing deterministic:
+//   • The offset is WORLD-SPACE behind (-Z) + above (+Y) — never rotated under a
+//     facing flip that could swing it in front of / below the hero.
+//   • The camera SNAPS to the resting pose the moment a Target is assigned (and
+//     on the first LateUpdate as a backstop), so it never starts at the origin.
+//   • AimAtTarget looks at a point only slightly above the hero's feet, and the
+//     camera always sits above that point, so the view is always angled DOWN.
 //
 // HARD CONSTRAINT (WO-47): lives in DeNelle.Village (no new asmdef). The scene
 // builder adds it to the Main Camera by reflection (the editor asmdef cannot
@@ -20,46 +31,53 @@ namespace DeNelle.Village
 {
     /// <summary>
     /// A smoothed third-person follow camera. Set <see cref="Target"/> at runtime
-    /// (PatriciaLightController does this after spawning the hero); the camera
-    /// eases to <c>target.position + offset</c> rotated into the target's facing
-    /// and looks at the target's head. No-op until a target is assigned.
+    /// (PatriciaLightController does this after spawning the hero on the balcony);
+    /// the camera snaps to <c>target.position + offset</c> (behind + above) and
+    /// looks slightly down at the hero. No-op until a target is assigned.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class ThirdPersonCameraFollow : MonoBehaviour
     {
-        [Tooltip("Local-space offset from the followed target (behind + above).")]
-        [SerializeField] private Vector3 _offset = new Vector3(0f, 8f, -12f);
+        [Tooltip("World-space offset from the followed target — behind on -Z and above on +Y. " +
+                 "Default sits the camera 9 m behind and 3.5 m above the hero.")]
+        [SerializeField] private Vector3 _offset = new Vector3(0f, 3.5f, -9f);
 
-        [Tooltip("Height above the target the camera aims at (so enemies fill the lower screen).")]
-        [SerializeField] private float _lookAtHeight = 2.5f;
+        [Tooltip("Height above the target's feet the camera aims at (head height). " +
+                 "The camera always sits above this point, so the view angles DOWN.")]
+        [SerializeField] private float _lookAtHeight = 1.5f;
 
         [Tooltip("Position smoothing time (seconds) — bigger = lazier follow.")]
         [SerializeField] private float _positionSmoothTime = 0.18f;
 
-        [Tooltip("When true the offset is rotated into the target's facing; off = world-space offset.")]
-        [SerializeField] private bool _followFacing = false;
-
         private Transform _target;
         private Vector3 _velocity;
+        private bool _snapped;   // false until we have placed the camera at least once
 
         // ── Camera shake (decaying random positional offset) ──────────────────
         private float _shakeAmplitude;   // current peak offset (metres)
         private float _shakeTimeLeft;    // seconds remaining
         private float _shakeDuration;    // full duration for the linear decay
 
-        /// <summary>The transform the camera follows. Assigned at runtime.</summary>
+        /// <summary>The transform the camera follows. Assigning it snaps the camera
+        /// to its resting pose immediately (no lerp-from-origin).</summary>
         public Transform Target
         {
             get => _target;
             set
             {
                 _target = value;
+                _snapped = false;
                 if (_target != null) SnapToTarget();
             }
         }
 
-        /// <summary>Sets the follow offset (behind + above the target).</summary>
-        public void SetOffset(Vector3 offset) => _offset = offset;
+        /// <summary>Sets the follow offset (behind on -Z + above on +Y). Re-snaps so
+        /// a mid-flight offset change can't leave a stale framing.</summary>
+        public void SetOffset(Vector3 offset)
+        {
+            _offset = offset;
+            if (_target != null) SnapToTarget();
+        }
 
         /// <summary>
         /// Kicks a decaying camera shake — a random positional jitter layered on
@@ -85,18 +103,26 @@ namespace DeNelle.Village
             }
         }
 
-        /// <summary>Immediately places the camera at its resting pose behind the target.</summary>
+        /// <summary>Immediately places the camera at its resting pose behind + above
+        /// the target and aims it down at the hero.</summary>
         public void SnapToTarget()
         {
             if (_target == null) return;
             transform.position = DesiredPosition();
             AimAtTarget();
             _velocity = Vector3.zero;
+            _snapped = true;
         }
 
         private void LateUpdate()
         {
             if (_target == null) return;
+
+            // Backstop: if Target was assigned before this component's first
+            // LateUpdate ran (or the offset changed) we may not have snapped yet —
+            // do it now so the camera never lerps in from the world origin.
+            if (!_snapped) { SnapToTarget(); return; }
+
             transform.position = Vector3.SmoothDamp(
                 transform.position, DesiredPosition(), ref _velocity, _positionSmoothTime);
             AimAtTarget();
@@ -119,12 +145,22 @@ namespace DeNelle.Village
             transform.position += jitter;
         }
 
+        /// <summary>
+        /// The resting camera position: a WORLD-SPACE offset from the target —
+        /// behind on -Z, above on +Y. Deliberately NOT rotated into the target's
+        /// facing, so a hero facing flip can never swing the camera in front of /
+        /// below the hero (the inverted-view bug).
+        /// </summary>
         private Vector3 DesiredPosition()
         {
-            Vector3 worldOffset = _followFacing ? _target.TransformVector(_offset) : _offset;
-            return _target.position + worldOffset;
+            return _target.position + _offset;
         }
 
+        /// <summary>
+        /// Aims at a point slightly above the hero's feet. The camera sits above
+        /// that point (offset.y &gt; lookAtHeight is the intended setup), so the
+        /// resulting direction always angles DOWN — never up at the tower.
+        /// </summary>
         private void AimAtTarget()
         {
             Vector3 lookAt = _target.position + Vector3.up * _lookAtHeight;
