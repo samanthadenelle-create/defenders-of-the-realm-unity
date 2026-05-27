@@ -20,6 +20,20 @@ namespace DeNelle.Editor
     {
         private const string Dir = "Assets/Resources/Towers";
 
+        // Tower visual meshes wired into the DevTower's upgrades[].visualPrefab
+        // (level 1 / 2 / 3). >>> SWAP HERE <<< when the owner's real tower model
+        // lands — point these at the new asset path(s) and re-run the menu item.
+        // Missing paths fall back to the procedural placeholder (null is safe).
+        private static readonly string[] DevTowerModelPaths =
+        {
+            // Owner's real model (viking watch tower). One model across all three
+            // levels for now — the upgrade still bumps stats + fires the VFX; vary
+            // the mesh/scale per level later if desired.
+            "Assets/Art/Towers/VikingWatchTower/Tower.fbx",
+            "Assets/Art/Towers/VikingWatchTower/Tower.fbx",
+            "Assets/Art/Towers/VikingWatchTower/Tower.fbx",
+        };
+
         [MenuItem("Defenders/Seed Tower Data")]
         public static void Seed()
         {
@@ -40,9 +54,14 @@ namespace DeNelle.Editor
                 ability: SpecialAbility.SlowEnemies,
                 baseRange: 9f, baseDamage: 6f, baseUpgradeCost: 130);
 
+            // Free, ungated tower wired with real KayKit hex models —
+            // TowerLoopDevHarness loads this one ("Towers/DevTower") so the dev
+            // B/U loop shows a real tower stepping up A -> B -> cannon per level.
+            CreateDevTower();
+
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
-            Debug.Log($"[TowerDataSeeder] Seeded 3 TowerData assets into {Dir}.");
+            Debug.Log($"[TowerDataSeeder] Seeded 4 TowerData assets into {Dir} (incl. DevTower with models).");
         }
 
         private static void CreateTower(
@@ -70,6 +89,46 @@ namespace DeNelle.Editor
             }
 
             // Overwrite any prior seed cleanly so re-running stays idempotent.
+            AssetDatabase.DeleteAsset(path);
+            AssetDatabase.CreateAsset(data, path);
+        }
+
+        /// <summary>
+        /// A free, skill-gate-free tower wired with the <see cref="DevTowerModelPaths"/>
+        /// meshes — what TowerLoopDevHarness loads ("Towers/DevTower") so the dev
+        /// B/U loop shows a real tower per level. A missing/unfound model leaves
+        /// visualPrefab null, and Tower falls back to its procedural placeholder.
+        /// </summary>
+        private static void CreateDevTower()
+        {
+            string path = $"{Dir}/DevTower.asset";
+
+            var data = ScriptableObject.CreateInstance<TowerData>();
+            data.towerName = "DevTower";
+            data.cost = 0;
+            data.buildTime = 2f;
+            data.requiredSkill = new SkillRequirement { type = SkillType.None, minLevel = 0 };
+            data.upgrades = new TowerUpgrade[3];
+            for (int i = 0; i < 3; i++)
+            {
+                GameObject model = null;
+                if (i < DevTowerModelPaths.Length)
+                {
+                    model = AssetDatabase.LoadAssetAtPath<GameObject>(DevTowerModelPaths[i]);
+                    if (model == null)
+                        Debug.LogWarning($"[TowerDataSeeder] DevTower L{i + 1} model not found at " +
+                                         $"'{DevTowerModelPaths[i]}' — Tower will use the procedural placeholder.");
+                }
+                data.upgrades[i] = new TowerUpgrade
+                {
+                    visualPrefab = model,
+                    ability      = SpecialAbility.None,
+                    range        = 8f + i * 2f,
+                    damage       = 6f + i * 3f,
+                    upgradeCost  = 0,
+                };
+            }
+
             AssetDatabase.DeleteAsset(path);
             AssetDatabase.CreateAsset(data, path);
         }

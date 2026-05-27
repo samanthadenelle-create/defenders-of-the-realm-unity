@@ -37,8 +37,14 @@ namespace DeNelle.Village
 
         private void Awake()
         {
-            _devTower = BuildDevTower();
-            Debug.Log("[TowerLoopDev] B = place a free tower (left-click ground), U = upgrade the last-built tower. (T is the talent tree.)");
+            // Prefer the seeded DevTower (real KayKit models via visualPrefab; run
+            // Defenders > Seed Tower Data). Fall back to a code-built free tower
+            // (procedural cube) if it hasn't been seeded.
+            var seeded = Resources.Load<TowerData>("Towers/DevTower");
+            _devTower = seeded != null ? seeded : BuildDevTower();
+            Debug.Log("[TowerLoopDev] B = place a free tower (left-click ground), U = upgrade the last-built tower. " +
+                      "(T is the talent tree.) Tower visual: " +
+                      (seeded != null ? "seeded model." : "procedural placeholder — run Defenders > Seed Tower Data."));
         }
 
         private void Update()
