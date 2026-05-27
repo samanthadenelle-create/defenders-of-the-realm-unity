@@ -33,6 +33,7 @@
 // Lives in DeNelle.Onboarding; references DeNelle.Core only — module isolation.
 // =============================================================================
 
+using Cysharp.Threading.Tasks;
 using DeNelle.Core;
 using DeNelle.Core.State;
 using UnityEngine;
@@ -55,6 +56,7 @@ namespace DeNelle.Onboarding
         private const string SubtitleName = "hero-select-subtitle";
         private const string CardRowName = "hero-card-row";
         private const string ConfirmName = "hero-select-confirm";
+        private const string DiveName   = "hero-select-dive";
         private const string WalletConnectName = "hero-wallet-connect";
         private const string NavPrevName = "hero-nav-prev";
         private const string NavNextName = "hero-nav-next";
@@ -72,9 +74,12 @@ namespace DeNelle.Onboarding
         private const string ConfirmDisabledClass = "select-confirm--disabled";
 
         // ── en.json keys for the screen's own copy ───────────────────────────
-        private const string TitleKey = "heroSelect.title";
+        private const string TitleKey    = "heroSelect.title";
         private const string SubtitleKey = "heroSelect.subtitle";
-        private const string ConfirmKey = "heroSelect.confirm";
+        // "Dive into Village" — secondary CTA, routes to normal village.
+        private const string DiveKey    = "heroSelect.diveVillage";
+        // "Jump into the Action" — primary CTA, routes to Defend the Tower.
+        private const string ConfirmKey = "heroSelect.jumpAction";
 
         [Header("UI")]
         [Tooltip("UIDocument hosting HeroSelectScreen.uxml. Falls back to the component on this GameObject.")]
@@ -91,7 +96,8 @@ namespace DeNelle.Onboarding
         private Label _title;
         private Label _subtitle;
         private VisualElement _cardRow;
-        private Button _confirmButton;
+        private Button _confirmButton;   // "Jump into the Action" — Defend the Tower
+        private Button _diveButton;      // "Dive into Village"    — normal village
 
         // One card VisualElement per hero, in HeroCatalog order.
         private readonly VisualElement[] _cards = new VisualElement[3];
@@ -125,6 +131,7 @@ namespace DeNelle.Onboarding
         private void OnDisable()
         {
             if (_confirmButton != null) _confirmButton.clicked -= OnConfirmClicked;
+            if (_diveButton    != null) _diveButton.clicked    -= OnDiveVillageClicked;
 
             // Unwire the WO-42 buttons too — re-resolve from the root so a
             // disable after a partial bind is still safe.
@@ -170,22 +177,33 @@ namespace DeNelle.Onboarding
                 return;
             }
 
-            _title = _root.Q<Label>(TitleName);
-            _subtitle = _root.Q<Label>(SubtitleName);
-            _cardRow = _root.Q<VisualElement>(CardRowName);
+            _title         = _root.Q<Label>(TitleName);
+            _subtitle      = _root.Q<Label>(SubtitleName);
+            _cardRow       = _root.Q<VisualElement>(CardRowName);
             _confirmButton = _root.Q<Button>(ConfirmName);
+            _diveButton    = _root.Q<Button>(DiveName);
 
-            // Header + confirm copy — canon strings, never typed inline.
-            if (_title != null) _title.text = CanonStrings.Locale(TitleKey);
+            // Header + CTA copy — canon strings, never typed inline.
+            if (_title   != null) _title.text   = CanonStrings.Locale(TitleKey);
             if (_subtitle != null) _subtitle.text = CanonStrings.Locale(SubtitleKey);
-            if (_confirmButton != null) _confirmButton.text = CanonStrings.Locale(ConfirmKey);
+            // Fallback text so the buttons are always legible even if en.json
+            // hasn't been updated yet.
+            if (_confirmButton != null)
+                _confirmButton.text = FallbackLocale(ConfirmKey, "Jump into the Action");
+            if (_diveButton != null)
+                _diveButton.text    = FallbackLocale(DiveKey,    "Dive into Village");
 
             BuildCards();
 
             if (_confirmButton != null)
             {
-                _confirmButton.clicked -= OnConfirmClicked; // guard a double OnEnable
+                _confirmButton.clicked -= OnConfirmClicked;     // guard a double OnEnable
                 _confirmButton.clicked += OnConfirmClicked;
+            }
+            if (_diveButton != null)
+            {
+                _diveButton.clicked -= OnDiveVillageClicked;    // guard a double OnEnable
+                _diveButton.clicked += OnDiveVillageClicked;
             }
 
             // Wallet-connect CTA (WO-42). The connection logic (SKR / Solana
@@ -284,21 +302,37 @@ namespace DeNelle.Onboarding
             // Portrait block — show the rendered hero PNG if one exists at
             // Resources/HeroPortraits/<slug>.png; fall back to the glyph
             // letter otherwise. Slug matches HeroPortraitGenerator output.
+            //
+            // DEF: Load as Sprite first — HeroPortraitGenerator imports the PNG
+            // as Sprite type, and Resources.Load<Texture2D>() returns null for
+            // Sprite assets (causing the portrait to silently fall through to the
+            // glyph). If no Sprite exists, try Texture2D (covers plain-imported
+            // or freshly-committed textures that haven't been through the generator).
             var portrait = new VisualElement();
             portrait.AddToClassList(PortraitClass);
             string slug = info.Hero.ToString().ToLowerInvariant();
-            var portraitTex = Resources.Load<Texture2D>($"HeroPortraits/{slug}");
-            if (portraitTex != null)
+
+            var portraitSprite = Resources.Load<Sprite>($"HeroPortraits/{slug}");
+            if (portraitSprite != null)
             {
-                portrait.style.backgroundImage = new StyleBackground(portraitTex);
+                portrait.style.backgroundImage = new StyleBackground(portraitSprite);
                 portrait.style.unityBackgroundScaleMode = ScaleMode.ScaleAndCrop;
             }
             else
             {
-                var glyph = new Label(info.Glyph);
-                glyph.AddToClassList(GlyphClass);
-                glyph.style.color = info.Accent;
-                portrait.Add(glyph);
+                var portraitTex = Resources.Load<Texture2D>($"HeroPortraits/{slug}");
+                if (portraitTex != null)
+                {
+                    portrait.style.backgroundImage = new StyleBackground(portraitTex);
+                    portrait.style.unityBackgroundScaleMode = ScaleMode.ScaleAndCrop;
+                }
+                else
+                {
+                    var glyph = new Label(info.Glyph);
+                    glyph.AddToClassList(GlyphClass);
+                    glyph.style.color = info.Accent;
+                    portrait.Add(glyph);
+                }
             }
             card.Add(portrait);
 
@@ -377,30 +411,69 @@ namespace DeNelle.Onboarding
         }
 
         /// <summary>
-        /// Enables the confirm button only once a hero is chosen; before then it
-        /// shows a dimmed, inert-looking state.
+        /// Enables both CTA buttons only once a hero is chosen; before then both
+        /// show a dimmed, inert-looking state.
         /// </summary>
         private void RefreshConfirmEnabled()
         {
-            if (_confirmButton == null) return;
-            _confirmButton.SetEnabled(_hasSelection);
-            _confirmButton.EnableInClassList(ConfirmDisabledClass, !_hasSelection);
+            if (_confirmButton != null)
+            {
+                _confirmButton.SetEnabled(_hasSelection);
+                _confirmButton.EnableInClassList(ConfirmDisabledClass, !_hasSelection);
+            }
+            if (_diveButton != null)
+            {
+                _diveButton.SetEnabled(_hasSelection);
+                _diveButton.EnableInClassList(ConfirmDisabledClass, !_hasSelection);
+            }
+        }
+
+        /// <summary>
+        /// Returns the localised string for <paramref name="key"/>, falling back to
+        /// <paramref name="fallback"/> when the key is absent (so the button is never
+        /// blank if <c>en.json</c> hasn't been updated yet).
+        /// </summary>
+        private static string FallbackLocale(string key, string fallback)
+        {
+            var s = CanonStrings.Locale(key);
+            return string.IsNullOrEmpty(s) ? fallback : s;
         }
 
         // =====================================================================
-        //  Confirm — write the choice + route to pet-select
+        //  Entry-point CTAs — write the hero choice then route
         // =====================================================================
 
         /// <summary>
-        /// Confirm tapped: persists the chosen hero through
-        /// <see cref="GameStateService.ChooseHero"/> (writes
-        /// <see cref="GameState.HeroClass"/> and Save()s) and routes to the
-        /// pet-select screen.
+        /// "Jump into the Action" — persists the chosen hero and routes straight to
+        /// the Defend the Tower (PatriciaLight) scene, bypassing the pet-select
+        /// intro flow. Wave 1 difficulty is used as the entry params.
         /// </summary>
         private void OnConfirmClicked()
         {
             if (!_hasSelection) return;
+            PersistHero();
+            // Fire-and-forget the async scene load — the returned UniTask is
+            // intentionally not awaited (routing proceeds as this screen tears down).
+            SceneRouter.GoPatriciaLight(new PatriciaLightParams { Wave = 1 });
+        }
 
+        /// <summary>
+        /// "Dive into Village" — persists the chosen hero and routes to the normal
+        /// Village scene, bypassing the pet-select intro flow.
+        /// </summary>
+        private void OnDiveVillageClicked()
+        {
+            if (!_hasSelection) return;
+            PersistHero();
+            SceneRouter.GoVillage();
+        }
+
+        /// <summary>
+        /// Writes <see cref="GameState.HeroClass"/> via <see cref="GameStateService"/>
+        /// and saves. Shared by both entry-point handlers.
+        /// </summary>
+        private void PersistHero()
+        {
             var svc = GameStateService.Instance;
             if (svc != null)
             {
@@ -411,8 +484,6 @@ namespace DeNelle.Onboarding
                 Debug.LogWarning("[HeroSelectController] No GameStateService — the hero choice " +
                                  "was NOT persisted. Routing onward anyway.");
             }
-
-            SceneRouter.GoPetSelect();
         }
     }
 }

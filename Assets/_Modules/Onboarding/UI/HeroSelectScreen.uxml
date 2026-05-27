@@ -76,8 +76,14 @@
 
             </ui:VisualElement>
 
-            <!-- Confirm CTA. -->
-            <ui:VisualElement name="select-footer" class="select-footer">
+            <!-- Two-path footer: "Dive into Village" (normal start) or
+                 "Jump into the Action" (straight to Defend the Tower).
+                 hero-select-dive + hero-select-confirm are the binding names
+                 resolved by HeroSelectController — do not rename. -->
+            <ui:VisualElement name="select-footer" class="select-footer select-footer--split">
+                <ui:Button name="hero-select-dive"
+                           text=""
+                           class="select-confirm select-confirm--secondary" />
                 <ui:Button name="hero-select-confirm"
                            text=""
                            class="select-confirm" />

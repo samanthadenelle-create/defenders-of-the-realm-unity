@@ -268,25 +268,49 @@
     align-self: stretch;
 }
 
+/* Split footer — two CTAs side by side (hero-select entry paths). */
+.select-footer--split {
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+}
+
 .select-confirm {
-    min-width: 260px;
+    min-width: 200px;
     height: 52px;
-    font-size: 16px;
+    font-size: 15px;
     -unity-font-style: bold;
     border-radius: 12px;
     border-width: 0;
     color: rgb(22, 14, 6);
     background-color: rgb(245, 166, 35);
+    margin-left: 6px;
+    margin-right: 6px;
 }
 
 .select-confirm:hover {
     background-color: rgb(255, 186, 70);
 }
 
-/* Before a card is chosen — visually muted */
+/* "Dive into Village" — secondary/outline style. */
+.select-confirm--secondary {
+    background-color: rgba(255, 255, 255, 0.05);
+    border-width: 2px;
+    border-color: rgba(196, 181, 253, 0.40);
+    color: rgb(196, 181, 253);
+}
+
+.select-confirm--secondary:hover {
+    background-color: rgba(196, 181, 253, 0.10);
+    border-color: rgba(196, 181, 253, 0.70);
+    color: rgb(237, 233, 250);
+}
+
+/* Before a card is chosen — visually muted (applied to both buttons). */
 .select-confirm--disabled {
     color: rgba(237, 233, 250, 0.35);
     background-color: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.08);
 }
 
 /* ════════════════════════════════════════════════════════════════════════
