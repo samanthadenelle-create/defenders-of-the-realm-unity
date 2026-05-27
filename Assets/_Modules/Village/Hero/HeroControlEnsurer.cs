@@ -142,8 +142,12 @@ namespace DeNelle.Village
     {
         private void OnDestroy()
         {
-            Debug.LogWarning($"[HeroDeathLogger] '{gameObject.name}' DESTROYED  frame={Time.frameCount} t={Time.time:F2}\n" +
-                             System.Environment.StackTrace);
+            // Diagnostic retired: the hero-deletion bug is fixed, and this fired
+            // (harmlessly) on every normal scene-unload. Only warn if the hero dies
+            // while the Village is still the active scene (i.e. an unexpected delete).
+            if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().name == "Village")
+                Debug.LogWarning($"[HeroDeathLogger] '{gameObject.name}' destroyed while in Village " +
+                                 $"(frame={Time.frameCount}) — unexpected; investigate.");
         }
     }
 }

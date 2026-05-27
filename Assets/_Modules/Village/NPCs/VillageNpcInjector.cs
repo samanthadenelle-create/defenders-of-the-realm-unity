@@ -117,6 +117,13 @@ namespace DeNelle.Village
                 go.name = prefab.name;
                 go.transform.localScale *= 2f;   // owner 2026-05-27: double the People-pack NPC size
 
+                // ...but TownsfolkBubble's "BubbleRoot" (a child it builds in Awake)
+                // scaled up too -> huge speech bubbles. Counter-scale it back to 1/2
+                // so the bubble keeps its real world size (still sits above the taller
+                // head, since its localPosition rides the 2x parent).
+                var bubbleRoot = go.transform.Find("BubbleRoot");
+                if (bubbleRoot != null) bubbleRoot.localScale = Vector3.one * 0.5f;
+
                 var npc = go.GetComponent<AmbientNPC>();
                 if (npc != null)
                 {
