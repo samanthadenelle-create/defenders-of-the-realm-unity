@@ -29,7 +29,7 @@ namespace DeNelle.Editor
         private const string PackRoot = "Assets/Models/People";
         private const string MatDir   = "Assets/_Modules/Village/NPCs/Materials";
         private const string AnimDir  = "Assets/_Modules/Village/NPCs/Animators";
-        private const string PrefDir  = "Assets/_Modules/Village/NPCs/Prefabs";
+        private const string PrefDir  = "Assets/Resources/NPCs";   // Resources so VillageNpcInjector can Resources.Load the prefabs (Phase 3)
 
         [MenuItem("Defenders/NPC Pack - Phase 1D-1E (controllers + prefabs)")]
         public static void BuildControllersAndPrefabs()
@@ -57,6 +57,30 @@ namespace DeNelle.Editor
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
             Debug.Log($"[NpcPackBuild] Phase 1D-1E done: 4 controllers, {prefabs} prefabs.");
+        }
+
+        // One-shot (Phase 3): move the already-built prefabs from the old module
+        // folder into Resources/NPCs (GUID-preserved) so VillageNpcInjector can
+        // Resources.Load them. Harmless to re-run.
+        [MenuItem("Defenders/NPC Pack - Relocate Prefabs to Resources")]
+        public static void RelocateNpcPrefabs()
+        {
+            EnsureFolder(PrefDir);
+            const string oldDir = "Assets/_Modules/Village/NPCs/Prefabs";
+            string[] names = { "NPC_Blacksmith", "NPC_Merchant", "NPC_Peasant_Mevina", "NPC_Peasant_Tob" };
+            int moved = 0;
+            foreach (var n in names)
+            {
+                string src = $"{oldDir}/{n}.prefab";
+                if (AssetDatabase.LoadAssetAtPath<GameObject>(src) == null) continue;
+                string err = AssetDatabase.MoveAsset(src, $"{PrefDir}/{n}.prefab");
+                if (string.IsNullOrEmpty(err)) moved++;
+                else Debug.LogWarning($"[NpcPackBuild] move {n}: {err}");
+            }
+            if (AssetDatabase.IsValidFolder(oldDir)) AssetDatabase.DeleteAsset(oldDir);
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+            Debug.Log($"[NpcPackBuild] relocated {moved} prefab(s) to {PrefDir}.");
         }
 
         // ── Controller builders ─────────────────────────────────────────────────
