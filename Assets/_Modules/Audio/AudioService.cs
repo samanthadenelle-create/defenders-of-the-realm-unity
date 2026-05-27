@@ -381,6 +381,13 @@ namespace DeNelle.Audio
             fadeIn.volume = 0f;
             fadeIn.Play();
 
+            // Diagnostic (DEF audio #8 "no sound"): confirms music actually starts +
+            // surfaces the mute/route state, so a smoke run / playtest can tell
+            // "track never played" from "playing but inaudible (device/route)".
+            Debug.Log($"[AudioService] ▶ music '{track}' clip='{clip.name}' " +
+                      $"muted={_muted} target={def.DefaultVolume:F2} " +
+                      $"mixer={(_mixer != null)} group={(fadeIn.outputAudioMixerGroup != null)}");
+
             // The fade target is always the track's owner-locked default volume.
             // Mute is a MIXER concern (the Master param) or, in the no-mixer
             // fallback, the AudioSource.mute flag — never the source .volume —
@@ -539,20 +546,21 @@ namespace DeNelle.Audio
             float v = Mathf.Clamp(linear01, 0f, max);
 
             if (_mixer != null)
-            {
                 _mixer.SetFloat(ParamNameFor(group), LinearToDecibels(v));
-                return;
-            }
 
-            // No-mixer fallback — only Master / Music can be honoured per-source.
-            if (group == MixerGroup.Master || group == MixerGroup.Music)
+            // ALSO scale the music source directly — not "mixer XOR source". The
+            // [AudioService] diagnostic shows the music sources can end up NOT
+            // routed through the mixer's Music group (group=False), so the mixer
+            // param has no effect on what's actually heard and the ♪ toggle /
+            // volume slider would do nothing. Driving the source makes the control
+            // affect playback either way. Guarded by !_fading so it never fights an
+            // in-flight crossfade; respects the current mute state.
+            if ((group == MixerGroup.Master || group == MixerGroup.Music)
+                && _activeSource != null && !_fading)
             {
-                if (_activeSource != null && !_fading && !_muted)
-                {
-                    MusicTrackDef def = MusicTrackRegistry.Get(CurrentTrack);
-                    float baseVol = def?.DefaultVolume ?? 1f;
-                    _activeSource.volume = Mathf.Clamp01(baseVol * v);
-                }
+                MusicTrackDef def = MusicTrackRegistry.Get(CurrentTrack);
+                float baseVol = def?.DefaultVolume ?? 1f;
+                _activeSource.volume = _muted ? 0f : Mathf.Clamp01(baseVol * v);
             }
         }
 
@@ -581,9 +589,12 @@ namespace DeNelle.Audio
             {
                 _mixer.SetFloat(MixerParams.Master, muted ? -80f : 0f);
             }
-            else
             {
-                // No-mixer fallback — snap every source's mute flag.
+                // ALWAYS snap every source's mute flag too (not just the no-mixer
+                // path). When routing to the mixer group failed (diagnostic
+                // group=False), the Master param can't silence the sources — this
+                // is what actually mutes/unmutes audible playback, so the ♪ toggle
+                // works regardless of mixer routing.
                 if (_musicA != null) _musicA.mute = muted;
                 if (_musicB != null) _musicB.mute = muted;
                 foreach (var v in _sfxVoices)
