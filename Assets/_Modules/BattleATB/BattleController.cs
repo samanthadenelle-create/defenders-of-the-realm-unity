@@ -211,15 +211,10 @@ namespace DeNelle.BattleATB
             int wave = handoff != null && handoff.Wave > 0 ? handoff.Wave : 1;
             int seed = _fallbackSeed;
 
-            // Week-2 placeholder: one hero + one enemy. The full breach roster
-            // (handoff.BreachedIds → per-enemy BreachEnemySpec) lands with the
-            // Week-4 village breach wiring; for now a single enemy proves the loop.
-            string enemyDefId = ResolveEnemyDefId(handoff);
-
-            var enemies = new List<BreachEnemySpec>
-            {
-                new BreachEnemySpec { DefId = enemyDefId },
-            };
+            // BUG-009: build the real breach roster — one enemy per breaching id,
+            // each mapped to a valid engine def (was a single inspector-fallback
+            // enemy regardless of who actually breached).
+            var enemies = BuildEnemyRoster(handoff);
 
             return new BattleSetup
             {
@@ -262,17 +257,53 @@ namespace DeNelle.BattleATB
         }
 
         /// <summary>
-        /// Pick the enemy def id. The Week-2 handoff carries 3D-layer ids in
-        /// <see cref="BattleParams.BreachedIds"/>, not engine def ids, so until the
-        /// breach mapper exists this always uses the inspector fallback.
+        /// BUG-009: builds the ATB enemy roster from the breach handoff — one
+        /// <see cref="BreachEnemySpec"/> per breaching id, each mapped to a valid
+        /// <see cref="Defs.ENEMY_DEFS"/> key, capped so a huge breach stays a
+        /// playable battle. WaveManager now passes engine def ids (Enemy.EngineDefId)
+        /// in <see cref="BattleParams.BreachedIds"/>, so the roster matches who
+        /// actually breached. Empty / no handoff (dev / direct play) → one fallback.
         /// </summary>
-        private string ResolveEnemyDefId(BattleParams handoff)
+        private List<BreachEnemySpec> BuildEnemyRoster(BattleParams handoff)
         {
-            // BreachedIds are 3D-sim ids — mapping them to ENEMY_DEFS keys is the
-            // Week-4 breach trigger's job. Use the configured fallback for now.
-            string id = _fallbackEnemyDefId;
-            if (string.IsNullOrEmpty(id)) id = "skeleton";
-            return id;
+            const int MaxEnemies = 6;
+            var roster = new List<BreachEnemySpec>();
+
+            string[] ids = handoff != null ? handoff.BreachedIds : null;
+            if (ids != null)
+            {
+                foreach (string raw in ids)
+                {
+                    if (roster.Count >= MaxEnemies) break;
+                    roster.Add(new BreachEnemySpec { DefId = MapToEngineDef(raw) });
+                }
+            }
+
+            if (roster.Count == 0)
+            {
+                string fb = string.IsNullOrEmpty(_fallbackEnemyDefId) ? "skeleton" : _fallbackEnemyDefId;
+                roster.Add(new BreachEnemySpec { DefId = MapToEngineDef(fb) });
+            }
+            return roster;
+        }
+
+        /// <summary>
+        /// Maps a breached-enemy id onto a valid <see cref="Defs.ENEMY_DEFS"/> key.
+        /// Exact engine keys (e.g. "skeleton", "necromancer") pass straight through;
+        /// 3D / dungeon tokens are matched heuristically; anything unknown falls back
+        /// to "skeleton" so the battle always has a valid roster.
+        /// </summary>
+        private static string MapToEngineDef(string id)
+        {
+            if (string.IsNullOrEmpty(id)) return "skeleton";
+            if (Defs.ENEMY_DEFS.ContainsKey(id)) return id;          // already a valid engine key
+
+            string lower = id.ToLowerInvariant();
+            if (lower.Contains("necro")) return "necromancer";
+            if (lower.Contains("tank") || lower.Contains("bruiser") || lower.Contains("bulwark")
+                || lower.Contains("boss") || lower.Contains("dragon")) return "bruiser";
+            if (lower.Contains("goblin")) return "goblin";
+            return "skeleton";
         }
 
         /// <summary>

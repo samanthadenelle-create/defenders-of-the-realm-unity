@@ -820,11 +820,15 @@ namespace DeNelle.Village
             // BreachedIds: the 3D-layer ids of the breaching enemies. The ATB
             // BattleController maps these onto engine combatant defs (today via
             // its fallback; the per-enemy mapper is its own follow-up).
+            // BUG-009: hand the ATB the ENGINE def id per breacher (Enemy.EngineDefId
+            // → a valid ENEMY_DEFS key like "skeleton"/"necromancer"), not the
+            // per-instance EnemyId — so the battle roster matches who actually
+            // breached instead of always using the single fallback enemy.
             var breachedIds = new List<string>(_breachRoster.Count);
             foreach (Enemy e in _breachRoster)
             {
-                if (e != null && !string.IsNullOrEmpty(e.EnemyId))
-                    breachedIds.Add(e.EnemyId);
+                if (e != null && !string.IsNullOrEmpty(e.EngineDefId))
+                    breachedIds.Add(e.EngineDefId);
             }
 
             var battleParams = new BattleParams

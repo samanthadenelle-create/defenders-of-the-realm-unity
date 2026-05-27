@@ -234,8 +234,25 @@ namespace DeNelle.Village
             if (_forceFieldCollider == null) _forceFieldCollider = GetComponent<BoxCollider>();
             if (_forceFieldRenderer == null) _forceFieldRenderer = GetComponentInChildren<Renderer>();
             _mpb = new MaterialPropertyBlock();
+            ApplyFieldColor();          // BUG-016
             RefreshCollapseTarget(snap: true);
             ApplyForceFieldState();
+        }
+
+        // BUG-016: the force-field stand-in rendered WHITE — a fallback material
+        // reads _BaseColor/_Color, which the ForceFieldGate.shader's violet
+        // (_FieldColor) never sets. Push the canon violet to all three via the
+        // shared MPB so the field is violet on the real shader AND any fallback
+        // material; SetColor on a property the material's shader lacks is a no-op.
+        private void ApplyFieldColor()
+        {
+            if (_forceFieldRenderer == null) return;
+            var violet = new Color(0.486f, 0.227f, 0.929f, 1f); // ForceFieldGate.shader default
+            _forceFieldRenderer.GetPropertyBlock(_mpb);
+            _mpb.SetColor("_FieldColor", violet);
+            _mpb.SetColor("_BaseColor", violet);
+            _mpb.SetColor("_Color", violet);
+            _forceFieldRenderer.SetPropertyBlock(_mpb);
         }
 
         private void Update()
