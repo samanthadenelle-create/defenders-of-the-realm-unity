@@ -95,7 +95,12 @@ namespace DeNelle.Village
 
         private void Awake()
         {
-            if (Instance != null && Instance != this) { Destroy(gameObject); return; }
+            // A redundant HeroProgression must remove ONLY ITSELF, never its host
+            // GameObject. ProgressionManager attaches a HeroProgression to the HERO
+            // while the BeforeSceneLoad Bootstrap's standalone already holds Instance,
+            // so Destroy(gameObject) here was deleting the entire hero root in frame 1
+            // (the "spawn in the tree / can't move, but Build still works" bug).
+            if (Instance != null && Instance != this) { Destroy(this); return; }
         }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]

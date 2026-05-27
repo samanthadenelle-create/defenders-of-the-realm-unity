@@ -164,11 +164,39 @@ namespace DeNelle.Village
                 _currentVisual = Instantiate(upgrade.visualPrefab, transform);
                 _currentVisual.transform.localPosition = Vector3.zero;
                 _currentVisual.transform.localRotation = Quaternion.identity;
+                // Authored tower models (BlastTower.fbx) import at a tiny native
+                // scale -> the placed tower read ~10x too small. Normalize to a
+                // sensible world height from renderer bounds (grows per level).
+                NormalizeVisualHeight(_currentVisual, 4.5f + (level - 1) * 0.6f);
             }
             else
             {
                 _currentVisual = BuildPlaceholderVisual(level);
             }
+        }
+
+        /// <summary>
+        /// Scales a freshly-instantiated tower model to a sensible world height from
+        /// its renderer bounds, regardless of FBX import scale, then re-seats its
+        /// base at the tower origin. Fixes the "tower 10x too small" import-scale bug.
+        /// </summary>
+        private static void NormalizeVisualHeight(GameObject visual, float targetHeight)
+        {
+            if (visual == null) return;
+            var renderers = visual.GetComponentsInChildren<Renderer>();
+            if (renderers == null || renderers.Length == 0) return;
+
+            Bounds b = renderers[0].bounds;
+            for (int i = 1; i < renderers.Length; i++) b.Encapsulate(renderers[i].bounds);
+            if (b.size.y <= 0.001f) return;
+
+            visual.transform.localScale *= targetHeight / b.size.y;
+
+            // Re-seat the base at the tower origin after scaling (bounds shift).
+            Bounds b2 = renderers[0].bounds;
+            for (int i = 1; i < renderers.Length; i++) b2.Encapsulate(renderers[i].bounds);
+            float feet = b2.min.y - visual.transform.position.y;
+            if (feet < 0f) visual.transform.localPosition -= new Vector3(0f, feet, 0f);
         }
 
         /// <summary>
