@@ -107,6 +107,19 @@ namespace DeNelle.Village
                  "Left blank: all enemies spawn at their base stats from enemies.json.")]
         [SerializeField] private WaveScalingCurve _scalingCurve;
 
+        [Header("Group spawner (DEF-21)")]
+        [Tooltip("Optional EnemyGroupSpawner component (child of this object). " +
+                 "When assigned alongside _waveGroupSequence, each wave also spawns " +
+                 "the matching WaveEnemyGroup asset — complementing (not replacing) " +
+                 "the JSON batch system. Leave blank to use JSON batches only.")]
+        [SerializeField] private EnemyGroupSpawner _groupSpawner;
+
+        [Tooltip("One WaveEnemyGroup asset per wave slot (index 0 = wave 1, index 1 = wave 2, …). " +
+                 "Shorter than the wave count is fine — missing slots are skipped. " +
+                 "Requires _groupSpawner to be wired.")]
+        [SerializeField] private System.Collections.Generic.List<WaveEnemyGroup> _waveGroupSequence
+            = new System.Collections.Generic.List<WaveEnemyGroup>();
+
         [Header("Breach detection")]
         [Tooltip("Radius (world units) of the inner wall ring around the Heart. An enemy that " +
                  "crosses INSIDE this ring counts as a breach. Tune to sit just inside the " +
@@ -123,6 +136,12 @@ namespace DeNelle.Village
 
         [Tooltip("Start the loop from this wave id (1 = the first wave). Dev override.")]
         [SerializeField, Min(1)] private int _startWave = 1;
+
+        [Header("Performance budget (DEF-48)")]
+        [Tooltip("Hard cap on simultaneously live enemies. 0 = no cap. " +
+                 "SpawnBatch stalls until an enemy dies when the cap is hit. " +
+                 "Recommended values: 4 (early), 6 (mid), 8 (late), 5 (boss wave).")]
+        [SerializeField, Min(0)] private int _maxSimultaneousEnemies = 8;
 
         // ── Events — HUD / Heart subscribe in OnEnable, unsubscribe in OnDisable ──
 
@@ -431,6 +450,39 @@ namespace DeNelle.Village
                 }
             }
 
+            // DEF-21: group spawner — if a WaveEnemyGroup asset is assigned for
+            // this wave slot, spawn it alongside the JSON batches. Both systems
+            // complement each other; leave waves.json entries empty for group-only waves.
+            int groupIdx = waveId - 1;
+            if (_groupSpawner != null
+                && _waveGroupSequence != null
+                && groupIdx >= 0
+                && groupIdx < _waveGroupSequence.Count
+                && _waveGroupSequence[groupIdx] != null)
+            {
+                WaveSpawnPoint pt = (_spawnPoints != null && _spawnPoints.Count > 0)
+                    ? _spawnPoints[0] : null;
+                Vector3 spawnPos = pt != null
+                    ? pt.transform.position
+                    : transform.position;
+
+                List<Enemy> groupEnemies = _groupSpawner.SpawnGroup(
+                    _waveGroupSequence[groupIdx],
+                    spawnPos,
+                    _heart != null ? _heart.transform : null,
+                    _enemyRoot,
+                    _currentWaveId,
+                    ref _spawnInstanceCounter);
+
+                foreach (Enemy e in groupEnemies)
+                {
+                    if (e == null) continue;
+                    e.Died          += HandleEnemyDied;
+                    e.ReachedHeart  += HandleEnemyReachedHeart;
+                    _liveEnemies.Add(e);
+                }
+            }
+
             // A boss, if the wave names one, releases immediately at the north spawn.
             if (!string.IsNullOrEmpty(wave.Boss))
             {
@@ -531,6 +583,15 @@ namespace DeNelle.Village
                 // The wave may have been breached / cleared while this batch
                 // was still draining — stop releasing if so.
                 if (_phase != WavePhase.Active) return;
+
+                // DEF-48: simultaneous enemy cap — stall the spawn if we're at capacity.
+                // _liveEnemies is pruned in TickActiveWave so the count is current.
+                if (_maxSimultaneousEnemies > 0 && _liveEnemies.Count >= _maxSimultaneousEnemies)
+                {
+                    await UniTask.WaitUntil(
+                        () => _liveEnemies.Count < _maxSimultaneousEnemies || _phase != WavePhase.Active);
+                    if (_phase != WavePhase.Active) return;
+                }
 
                 SpawnOne(def, point);
 

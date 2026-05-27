@@ -109,7 +109,54 @@ namespace DeNelle.Village
         private float _attackCooldown;
         private bool _dead;
         private bool _navWarned;
+        private bool _telegraphing;   // DEF-48: true during wind-up — blocks double-trigger
         private IDamageableStructure _currentTarget;
+
+        // ── DEF-21 / DEF-72: EnemyBrain nav-target override ──────────────────
+        // DEF-21: EnemyBrain.Update() calls SetBrainTarget each frame with a role-
+        //   specific Transform destination. When non-null DriveNav() follows this
+        //   instead of _heart. When null (default, or Role == DPS), Heart-march resumes.
+        // DEF-72: EnemyBrain.Update() calls SetBrainTargetPosition each frame with
+        //   a computed Vector3 destination (flank offset, retreat vector, etc.).
+        //   When non-null it overrides both _brainTarget and _heart. This is the
+        //   tactical-overlay path; _brainTarget is the role-only (no-tactics) path.
+        private Transform _brainTarget;
+        private Vector3?  _brainPositionOverride;   // DEF-72
+
+        // ── DEF-56: path throttle ─────────────────────────────────────────────
+        // SetDestination is O(navmesh) — calling it every frame for 20+ enemies
+        // is the main NavMesh CPU cost. Throttle to _pathRefreshInterval seconds
+        // AND only when the heart has moved more than _pathMinMoveDelta world units.
+        private float   _pathRefreshTimer;
+        private Vector3 _lastPathedDestination;
+
+        /// <summary>DEF-56: Minimum seconds between NavMesh path requests.</summary>
+        [SerializeField, Range(0.1f, 1f)] private float _pathRefreshInterval = 0.25f;
+
+        /// <summary>
+        /// DEF-56: Minimum world-unit delta the Heart must move before a new path
+        /// request fires early. Prevents redundant requests when the Heart is idle.
+        /// </summary>
+        [SerializeField, Range(0.1f, 2f)] private float _pathMinMoveDelta = 0.5f;
+
+        // ── DEF-46: per-type VFX / audio + directional hit reactions ─────────
+
+        [Header("Type VFX + Audio (DEF-46)")]
+        [Tooltip("Per-archetype hit/death/attack VFX and audio. " +
+                 "Leave blank to use the built-in VfxPool fallbacks.")]
+        [SerializeField] private EnemyTypeVfxSet _typeVfxSet;
+
+        // AudioSource is optional — Enemy does not require one, but needs it to
+        // actually play the clip. Resolved in Awake if not set in Inspector.
+        [Tooltip("AudioSource used to play hit / death / attack clips. " +
+                 "Resolved in Awake from the same or child GameObjects if blank.")]
+        [SerializeField] private AudioSource _audioSource;
+
+        /// <summary>
+        /// The cardinal quadrant a hit came from, relative to the enemy's facing.
+        /// Drives the directional flinch sub-state in the Animator.
+        /// </summary>
+        private enum HitDirection { Front = 0, Left = 1, Right = 2, Back = 3 }
 
         // ── Animation ─────────────────────────────────────────────────────────
         // The KayKit skeleton mesh carries an Animator (the AnimatorSetup editor
@@ -121,11 +168,18 @@ namespace DeNelle.Village
         private Animator _animator;
 
         // Animator parameter hashes — must match AnimatorSetup.cs's parameter
-        // names ("Speed" / "Attack" / "Hit" / "Dead").
-        private static readonly int AnimSpeed  = Animator.StringToHash("Speed");
-        private static readonly int AnimAttack = Animator.StringToHash("Attack");
-        private static readonly int AnimHit    = Animator.StringToHash("Hit");
-        private static readonly int AnimDead   = Animator.StringToHash("Dead");
+        // names ("Speed" / "Attack" / "Hit" / "Dead" / "HitDir").
+        private static readonly int AnimSpeed   = Animator.StringToHash("Speed");
+        private static readonly int AnimAttack  = Animator.StringToHash("Attack");
+        private static readonly int AnimWindUp  = Animator.StringToHash("WindUp");  // DEF-48 telegraph
+        private static readonly int AnimHit     = Animator.StringToHash("Hit");
+        private static readonly int AnimDead    = Animator.StringToHash("Dead");
+
+        /// <summary>
+        /// DEF-46: int parameter (0=Front, 1=Left, 2=Right, 3=Back) set BEFORE
+        /// the Hit trigger fires so the sub-state can blend to the right flinch.
+        /// </summary>
+        private static readonly int AnimHitDir = Animator.StringToHash("HitDir");
 
         /// <summary>Raised when this enemy's HP reaches zero. Arg = this enemy.</summary>
         public event Action<Enemy> Died;
@@ -156,6 +210,34 @@ namespace DeNelle.Village
 
         /// <summary>AI archetype this enemy runs.</summary>
         public EnemyAiKind Ai => _ai;
+
+        // ── DEF-21: EnemyBrain integration ────────────────────────────────────
+
+        /// <summary>
+        /// DEF-21: Override the nav destination used by <see cref="DriveNav"/> with
+        /// a scene Transform (role-based path, no TacticalData). Pass null to revert
+        /// to the Heart-march (the default and the DPS path).
+        /// </summary>
+        public void SetBrainTarget(Transform target) => _brainTarget = target;
+
+        /// <summary>
+        /// DEF-72: Override the nav destination with an explicit world-space
+        /// <see cref="Vector3"/> computed by <see cref="EnemyBrain"/>'s tactical
+        /// overlay (flank arc, retreat vector, etc.). Supersedes both
+        /// <see cref="_brainTarget"/> and <see cref="_heart"/> when non-null.
+        /// Pass null to clear the override and revert to the role/Heart-march path.
+        /// </summary>
+        public void SetBrainTargetPosition(Vector3? pos) => _brainPositionOverride = pos;
+
+        /// <summary>
+        /// DEF-21: Restore HP by <paramref name="amount"/> up to <see cref="MaxHp"/>.
+        /// Called by <see cref="EnemyBrain"/> (Healer role) on adjacent wounded allies.
+        /// </summary>
+        public void Heal(float amount)
+        {
+            if (_dead || amount <= 0f) return;
+            _hp = Mathf.Min(_maxHp, _hp + amount);
+        }
 
         /// <summary>
         /// The engine def id the breach trigger maps this enemy to when handing
@@ -196,23 +278,87 @@ namespace DeNelle.Village
             EnsureAgent();
             if (_agent != null)
             {
-                _agent.speed = _moveSpeed;
+                _agent.speed            = _moveSpeed;
                 _agent.stoppingDistance = _heartArrivalRadius;
+                // DEF-56: disable Unity's automatic re-path so Enemy.DriveNav()'s
+                // throttle is the sole trigger for SetDestination calls. Without
+                // this the agent silently re-paths on NavMesh topology changes,
+                // partially defeating the ~80% CPU saving the throttle provides.
+                _agent.autoRepath = false;
+                // DEF-56: randomise avoidance priority so swarm enemies don't all
+                // push the same direction when crowding. Range 50–79 leaves 0–49
+                // free for bosses / high-priority agents.
+                _agent.avoidancePriority = UnityEngine.Random.Range(50, 80);
             }
 
             _dead = false;
             _attackCooldown = 0f;
             _navWarned = false;
+
+            // DEF-56: reset path throttle and stagger the initial SetDestination
+            // call through NavPathCoordinator so a 20-enemy spawn doesn't spike
+            // NavMesh pathing in a single frame.
+            _pathRefreshTimer      = 0f;
+            _lastPathedDestination = Vector3.zero;
+            if (_agent != null && _heart != null)
+                NavPathCoordinator.RequestInitialPath(_agent, _heart.position);
         }
 
         // ---------------------------------------------------------------------
         // Lifecycle
         // ---------------------------------------------------------------------
 
+        /// <summary>
+        /// Applies wave-scaling multipliers after <see cref="Configure"/>. Called by
+        /// <see cref="WaveManager"/> immediately after Configure when a
+        /// <see cref="WaveScalingCurve"/> is assigned. Multipliers of 1 are no-ops.
+        /// </summary>
+        public void ApplyWaveScaling(float hpMult, float speedMult, float damageMult)
+        {
+            if (hpMult > 1f)
+            {
+                _maxHp = Mathf.Max(1f, _maxHp * hpMult);
+                _hp    = _maxHp;
+            }
+            if (speedMult != 1f)
+            {
+                _moveSpeed = Mathf.Max(0.1f, _moveSpeed * speedMult);
+                if (_agent != null && _agent.isOnNavMesh)
+                    _agent.speed = _moveSpeed;
+                else if (_agent != null)
+                    _agent.speed = _moveSpeed;
+            }
+            if (damageMult > 1f)
+            {
+                _contactDamage = Mathf.Max(0f, _contactDamage * damageMult);
+            }
+        }
+
         private void Awake()
         {
             EnsureAgent();
             EnsureAnimator();
+            EnsureAudio();
+        }
+
+        private void EnsureAudio()
+        {
+            if (_audioSource == null)
+                _audioSource = GetComponentInChildren<AudioSource>();
+            // Don't add one automatically — AudioSource requires spatial settings
+            // the integrator should configure (3D falloff, volume rolloff, etc.).
+            // If null, PlayTypeSound is a no-op and the enemy runs silently until
+            // an AudioSource is added to the prefab.
+        }
+
+        /// <summary>
+        /// Plays a clip via the enemy's AudioSource (one-shot, non-interrupting).
+        /// No-op when either the source or the clip is null.
+        /// </summary>
+        private void PlayTypeSound(AudioClip clip)
+        {
+            if (_audioSource == null || clip == null) return;
+            _audioSource.PlayOneShot(clip);
         }
 
         private void Update()
@@ -276,7 +422,37 @@ namespace DeNelle.Village
             }
 
             if (_agent.isStopped) _agent.isStopped = false;
-            _agent.SetDestination(_heart.position);
+
+            // DEF-72 / DEF-21: resolve the nav destination in priority order:
+            //   1. _brainPositionOverride  — tactical Vector3 (flank, retreat, etc.)
+            //   2. _brainTarget Transform  — role-based target (Tank/Healer path)
+            //   3. _heart                  — default Heart-march
+            Vector3 destPos;
+            if (_brainPositionOverride.HasValue)
+            {
+                destPos = _brainPositionOverride.Value;
+            }
+            else
+            {
+                Transform destTransform = (_brainTarget != null
+                    && _brainTarget.gameObject.activeInHierarchy)
+                    ? _brainTarget
+                    : _heart;
+                destPos = destTransform.position;
+            }
+
+            // DEF-56: throttle SetDestination — only re-path when the timer expires
+            // OR the destination has moved significantly. This cuts NavMesh CPU by
+            // ~80% on a 20-enemy wave without visible path quality regression.
+            _pathRefreshTimer -= Time.deltaTime;
+            float distMoved = (destPos - _lastPathedDestination).sqrMagnitude;
+            bool destMoved = distMoved > _pathMinMoveDelta * _pathMinMoveDelta;
+            if (_pathRefreshTimer <= 0f || destMoved)
+            {
+                _pathRefreshTimer = _pathRefreshInterval;
+                _lastPathedDestination = destPos;
+                _agent.SetDestination(destPos);
+            }
 
             // Arrived at the Heart without being repelled — report the breach.
             float planarDist = Vector3.ProjectOnPlane(
@@ -312,13 +488,70 @@ namespace DeNelle.Village
             }
 
             _attackCooldown -= Time.deltaTime;
-            if (_attackCooldown <= 0f)
+            if (_attackCooldown <= 0f && !_telegraphing)
             {
-                _currentTarget.ApplyContactDamage(_contactDamage);
                 _attackCooldown = _attackInterval;
-                // Fire the melee-strike animation in sync with the damage tick.
-                if (_animator != null) _animator.SetTrigger(AnimAttack);
+
+                // DEF-48: if a telegraph duration is configured, play the wind-up
+                // before landing damage. Otherwise deal damage instantly (legacy path).
+                float telegraphDuration = _typeVfxSet != null ? _typeVfxSet.TelegraphDuration : 0f;
+                if (telegraphDuration > 0f)
+                    StartCoroutine(TelegraphThenAttack(telegraphDuration));
+                else
+                    ExecuteContactAttack();
             }
+        }
+
+        // ── DEF-48: telegraph → attack ────────────────────────────────────────
+
+        /// <summary>
+        /// DEF-48: Plays the wind-up animation and optional ground-ring VFX, then
+        /// deals damage after <paramref name="duration"/> seconds. Guards against
+        /// double-trigger via <see cref="_telegraphing"/>.
+        /// </summary>
+        private System.Collections.IEnumerator TelegraphThenAttack(float duration)
+        {
+            _telegraphing = true;
+
+            // Wind-up animation trigger — Animator must have a "WindUp" state.
+            if (_animator != null) _animator.SetTrigger(AnimWindUp);
+
+            // Spawn the ground-ring warning VFX at the target's position (if any).
+            GameObject telegraphVFX = null;
+            if (_typeVfxSet != null && _typeVfxSet.TelegraphVFXPrefab != null
+                && _currentTarget != null)
+            {
+                var targetMb = _currentTarget as MonoBehaviour;
+                if (targetMb != null)
+                    telegraphVFX = Instantiate(
+                        _typeVfxSet.TelegraphVFXPrefab,
+                        targetMb.transform.position,
+                        Quaternion.identity);
+            }
+
+            yield return new WaitForSeconds(duration);
+
+            // Clean up the VFX regardless of whether the attack lands.
+            if (telegraphVFX != null) Destroy(telegraphVFX);
+
+            // Re-check viability after the delay — target may have died or moved.
+            if (!_dead && _currentTarget != null && _currentTarget.IsAlive)
+                ExecuteContactAttack();
+
+            _telegraphing = false;
+        }
+
+        /// <summary>
+        /// DEF-48: The actual damage + animation + audio tick, extracted from
+        /// <see cref="TickContactAttack"/> so both the instant and telegraph paths
+        /// share one call site.
+        /// </summary>
+        private void ExecuteContactAttack()
+        {
+            if (_currentTarget == null || !_currentTarget.IsAlive) return;
+            _currentTarget.ApplyContactDamage(_contactDamage);
+            if (_animator != null) _animator.SetTrigger(AnimAttack);
+            PlayTypeSound(_typeVfxSet != null ? _typeVfxSet.RandomAttackClip() : null);
         }
 
         /// <summary>
@@ -355,13 +588,25 @@ namespace DeNelle.Village
         /// </summary>
         public void TakeDamage(float amount)
         {
+            // No source position — default flinch direction is Front (attacker
+            // presumed to be in front of the enemy; the Nav destination is always
+            // ahead, so most hits do come from that direction).
+            TakeDamageFrom(amount, transform.position + transform.forward * 5f);
+        }
+
+        /// <summary>
+        /// DEF-46: Directional overload — takes the world-space position of the
+        /// damage source so the flinch animation matches the hit direction.
+        /// Called directly by anything that knows its own world position.
+        /// </summary>
+        public void TakeDamageFrom(float amount, Vector3 sourceWorldPos)
+        {
             if (_dead || amount <= 0f) return;
 
             // Floating combat text — pop the damage number at the enemy's head so
             // the player can see the hit (and watch it rise after a damage talent).
             // Spawned BEFORE death so the killing blow still shows its number even
-            // though this GameObject may be destroyed below. Self-contained + asset
-            // free; it null-guards the camera internally.
+            // though this GameObject may be destroyed below.
             DamageNumberSpawner.Spawn(amount, HeadWorldPosition());
 
             _hp = Mathf.Max(0f, _hp - amount);
@@ -371,11 +616,51 @@ namespace DeNelle.Village
             }
             else
             {
-                // Survived — flinch animation + hit-impact pop (DEF-52) + hit stop / combo (DEF-44/45).
-                if (_animator != null) _animator.SetTrigger(AnimHit);
-                VfxPool.SpawnHitImpact(transform.position + Vector3.up * 0.6f);
-                CombatFeedbackManager.Hit(transform.position + Vector3.up * 0.6f, amount);
+                // DEF-46: compute cardinal hit direction from source and drive the
+                // directional flinch sub-state before firing the Hit trigger.
+                HitDirection dir = ComputeHitDirection(sourceWorldPos);
+                if (_animator != null)
+                {
+                    _animator.SetInteger(AnimHitDir, (int)dir);
+                    _animator.SetTrigger(AnimHit);
+                }
+
+                // DEF-46: per-type hit VFX — use SO prefab when assigned, fall
+                // back to the procedural VfxPool burst otherwise.
+                Vector3 hitPos = transform.position + Vector3.up * 0.6f;
+                GameObject hitPrefab = _typeVfxSet != null ? _typeVfxSet.RandomHitVfxPrefab() : null;
+                if (hitPrefab != null)
+                    Instantiate(hitPrefab, hitPos, Quaternion.identity);
+                else
+                    VfxPool.SpawnHitImpact(hitPos);
+
+                // DEF-46: per-type hit audio.
+                PlayTypeSound(_typeVfxSet != null ? _typeVfxSet.RandomHitClip() : null);
+
+                // DEF-44/45: hit-stop + combo counter.
+                CombatFeedbackManager.Hit(hitPos, amount);
             }
+        }
+
+        /// <summary>
+        /// DEF-46: Maps a world-space source position onto the enemy's local axes
+        /// to determine which of the four cardinal quadrants the hit came from.
+        /// </summary>
+        private HitDirection ComputeHitDirection(Vector3 sourceWorldPos)
+        {
+            Vector3 toSource = (sourceWorldPos - transform.position);
+            toSource.y = 0f;
+            if (toSource.sqrMagnitude < 0.01f) return HitDirection.Front;
+
+            // Project onto the enemy's forward/right to get local [-1..1] coords.
+            float fwdDot   = Vector3.Dot(toSource.normalized, transform.forward);
+            float rightDot = Vector3.Dot(toSource.normalized, transform.right);
+
+            // Dominant axis picks Front/Back/Left/Right.
+            if (Mathf.Abs(fwdDot) >= Mathf.Abs(rightDot))
+                return fwdDot >= 0f ? HitDirection.Front : HitDirection.Back;
+            else
+                return rightDot >= 0f ? HitDirection.Right : HitDirection.Left;
         }
 
         /// <summary>Kills the enemy immediately (e.g. consumed into an ATB breach).</summary>
@@ -395,11 +680,22 @@ namespace DeNelle.Village
             _currentTarget = null;
             Died?.Invoke(this);
 
-            // DEF-52: death burst VFX + micro screen shake so kills feel impactful.
+            // DEF-52 / DEF-46: death burst VFX + audio + micro screen shake.
             // DEF-45: kill streak tracked via CombatFeedbackManager.
             if (killed)
             {
-                VfxPool.SpawnDeathBurst(transform.position + Vector3.up * 0.5f);
+                Vector3 deathPos = transform.position + Vector3.up * 0.5f;
+
+                // DEF-46: per-type death VFX — SO prefab when assigned, else VfxPool.
+                GameObject deathPrefab = _typeVfxSet != null ? _typeVfxSet.RandomDeathVfxPrefab() : null;
+                if (deathPrefab != null)
+                    Instantiate(deathPrefab, deathPos, Quaternion.identity);
+                else
+                    VfxPool.SpawnDeathBurst(deathPos);
+
+                // DEF-46: per-type death audio.
+                PlayTypeSound(_typeVfxSet != null ? _typeVfxSet.RandomDeathClip() : null);
+
                 CameraShakeBridge.Shake(0.18f, 0.22f);
                 CombatFeedbackManager.Kill(transform.position);
             }

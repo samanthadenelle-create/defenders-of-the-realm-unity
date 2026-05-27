@@ -117,6 +117,9 @@ namespace DeNelle.Editor
         // ── Wall geometry mirror (Editor asmdef can't reference DeNelle.Village) ─
         private const float WallThicknessConst = 0.62f;
         private const float GateHalfWidthConst = 1.4f;
+        // GateGapHalf mirrors WallLayout.GateGapHalf (= GateHalfWidth + 0.6f = 2.0f).
+        // The wall ring has a 4 m opening per gate (GateGapHalf * 2).
+        private const float GateGapHalfConst = GateHalfWidthConst + 0.6f; // = 2.0 m
         // Curtain-wall half-extents — MUST mirror WallLayout.WallHalfX / WallHalfZ.
         private const float WallHalfX = 28f;
         private const float WallHalfZ = 21f;
@@ -151,7 +154,10 @@ namespace DeNelle.Editor
         private const string TypeHeroAbilityInput = NsVillage + ".HeroAbilityInput";
         private const string TypeHeroAbilitiesHudBridge = NsVillage + ".HeroAbilitiesHudBridge";
         private const string TypeHeroCinemachineRig = NsVillage + ".HeroCinemachineRig";
-        private const string TypeVillageCamera = NsVillage + ".VillageCamera";
+        private const string TypeVillageCamera     = NsVillage + ".VillageCamera";
+        // DEF-53: adaptive follow camera — added alongside VillageCamera; at runtime
+        // SmartMobileCamera.EnforceSoleCamera() disables VillageCamera and takes over.
+        private const string TypeSmartMobileCamera = NsVillage + ".SmartMobileCamera";
         private const string TypeWaveHudBridge = NsVillage + ".WaveHudBridge";
         private const string TypeDailyQuestCombatBridge = NsVillage + ".DailyQuestCombatBridge";
         private const string TypeBuildMenuHudBridge = NsVillage + ".BuildMenuHudBridge";
@@ -644,6 +650,31 @@ namespace DeNelle.Editor
                 // walk-through. The wall sections on either side keep their
                 // colliders so the perimeter remains solid.
                 StripColliders(visual);
+
+                // DEF-19 (2026-05-27): ClearWallsNearGates uses
+                // radius = BuildingScale*2 = 6 m to widen the visual gate
+                // opening, but that destroys wall-section BoxColliders in a
+                // [GateGapHalf=2 m … 6 m] wing on EACH SIDE of the gate
+                // centre.  The gate visual fills the centre 4 m, leaving the
+                // outer 4 m wings on each side as invisible collision gaps the
+                // hero can walk through.  Fix: add two invisible wing-blocker
+                // BoxColliders directly on the gate root (`go`) to close those
+                // gaps.  Local X of `go` is the wall run direction (WallLayout
+                // convention), so ±wingCenterLocal positions the blockers
+                // correctly for all four cardinal gates.
+                {
+                    const float wingInner       = GateGapHalfConst;          // 2.0 m — gate visual edge
+                    const float wingOuter       = BuildingScale * 2f;         // 6.0 m — ClearWallsNearGates radius
+                    const float wingLength      = wingOuter - wingInner;      // 4.0 m per wing
+                    const float wingCenterLocal = (wingInner + wingOuter) * 0.5f; // 4.0 m from gate centre
+                    const float gateWallH       = 3.0f;                       // mirrors wallHeight in BuildWallRing
+                    for (int side = -1; side <= 1; side += 2)
+                    {
+                        var bc = go.AddComponent<BoxCollider>();
+                        bc.size   = new Vector3(wingLength, gateWallH, WallThicknessConst);
+                        bc.center = new Vector3(side * wingCenterLocal, gateWallH * 0.5f, 0f);
+                    }
+                }
 
                 // Castle arch removed per owner direction 2026-05-20: the
                 // Tripo castle ballast Tower FBX rendered as a pink ghost in
@@ -1635,6 +1666,13 @@ namespace DeNelle.Editor
             // Attach the over-shoulder follow component. The hero transform is
             // wired later, after BuildHero returns (BuildVillage flow).
             AddVillageComponent(cameraGo, TypeVillageCamera);
+
+            // DEF-53: also attach SmartMobileCamera so the adaptive follow /
+            // combat-zoom / auto-framing logic is available. At runtime
+            // SmartMobileCamera.EnforceSoleCamera() will disable VillageCamera
+            // and take over as the sole screen camera. Target wired in
+            // WireVillageCameraTarget along with VillageCamera's target.
+            AddVillageComponent(cameraGo, TypeSmartMobileCamera);
         }
 
         /// <summary>
@@ -1901,22 +1939,9 @@ namespace DeNelle.Editor
                 Debug.LogWarning("[VillageSceneBuilder] Portal.fbx not found at Resources/Structures — dungeon entrance keeps the bare disc.");
             }
 
-            // Floating "Healer's Cottage" sign — TextMesh world-space label,
-            // always visible (not gated on proximity).
-            var sign = new GameObject("PortalSign");
-            sign.transform.SetParent(root.transform, false);
-            sign.transform.localPosition = new Vector3(0f, 3.2f, 0f);
-            sign.transform.localScale = Vector3.one * 0.08f;
-            var tm = sign.AddComponent<TextMesh>();
-            tm.text = "▼ " + displayName + " ▼";
-            tm.fontSize = 64;
-            tm.characterSize = 0.35f;
-            tm.alignment = TextAlignment.Center;
-            tm.anchor = TextAnchor.MiddleCenter;
-            tm.color = new Color(1f, 0.86f, 0.55f);
-            // Mount a billboard component so the sign faces the camera.
-            var bbType = FindType(NsVillage + ".PromptBillboard");
-            if (bbType != null) sign.AddComponent(bbType);
+            // DEF-10: floating TextMesh world-space sign removed — "▼ Healer's
+            // Cottage ▼" was a placeholder readability aid visible in screenshot
+            // review (2026-05-26). Proximity [F] prompt (DEF-26) replaces it.
 
             var trigger = root.AddComponent<BoxCollider>();
             trigger.center = new Vector3(0f, archHeight * 0.5f, 0f);
@@ -2021,6 +2046,19 @@ namespace DeNelle.Editor
             var so = new SerializedObject(follow);
             SetObjectField(so, "_target", hero.transform);
             so.ApplyModifiedPropertiesWithoutUndo();
+
+            // DEF-53: wire SmartMobileCamera._target to the same hero.
+            var smcType = FindType(TypeSmartMobileCamera);
+            if (smcType != null)
+            {
+                var smc = cam.GetComponent(smcType);
+                if (smc != null)
+                {
+                    var smcSo = new SerializedObject(smc);
+                    SetObjectField(smcSo, "_target", hero.transform);
+                    smcSo.ApplyModifiedPropertiesWithoutUndo();
+                }
+            }
         }
 
         private static void CreateDirectionalLight()

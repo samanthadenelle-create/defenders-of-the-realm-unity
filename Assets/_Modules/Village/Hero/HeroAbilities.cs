@@ -195,6 +195,12 @@ namespace DeNelle.Village
             if (_animator != null) _animator.SetTrigger(AnimCast);
 
             Vector3 origin = transform.position;
+
+            // DEF-47: register the cast with the timing-bonus tracker. The returned
+            // multiplier (1.00–1.50× depending on chain depth) is stored and applied
+            // to outgoing damage inside ResolveEffect. Heals are unaffected.
+            _pendingTimingBonus = AttackTimingBonus.NotifyCast(origin);
+
             ResolveEffect(def, origin);
             return true;
         }
@@ -208,6 +214,10 @@ namespace DeNelle.Village
         // of the talent multiplier; resolved lazily so it survives the body swap.
         private HeroProgression _progression;
 
+        // DEF-47: timing bonus captured by TryCast() from AttackTimingBonus,
+        // consumed by the next ResolveEffect() damage call, then reset to 1.
+        private float _pendingTimingBonus = 1f;
+
         private void ResolveEffect(AbilityDef def, Vector3 origin)
         {
             DamageElement element = ElementOf(def);
@@ -220,7 +230,11 @@ namespace DeNelle.Village
             // The level-progression multiplier stacks on top (1f until level 2+).
             if (_progression == null) _progression = GetComponent<HeroProgression>();
             float levelMult = _progression != null ? _progression.DamageMultiplier : 1f;
-            float dmg = def.Damage * HeroTalentModifiers.DamageMultiplier(_heroClass) * levelMult;
+            // DEF-47: apply the chain timing bonus captured in TryCast.
+            // _pendingTimingBonus is 1.00× when no chain is active, up to 1.50×
+            // at chain 4+. Reset to 1f so a missed follow-up can't carry over.
+            float dmg = def.Damage * HeroTalentModifiers.DamageMultiplier(_heroClass) * levelMult * _pendingTimingBonus;
+            _pendingTimingBonus = 1f;
 
             switch (def.EffectEnum)
             {

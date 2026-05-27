@@ -122,7 +122,13 @@ namespace DeNelle.Village
 
         // ── Wave event handlers ────────────────────────────────────────────────
 
-        private void HandleWaveStarted(int waveId) => CrossfadeTo(_combatTrack);
+        private void HandleWaveStarted(int waveId)
+        {
+            CrossfadeTo(_combatTrack);
+            // DEF-67: light screen-shake impulse to sell the wave-start transition.
+            // SmartMobileCamera.Instance is null between scenes — safe null-conditional.
+            SmartMobileCamera.Instance?.Shake(0.12f, 0.35f);
+        }
 
         private void HandleWaveCleared(int waveId) => CrossfadeTo(_explorationTrack);
 

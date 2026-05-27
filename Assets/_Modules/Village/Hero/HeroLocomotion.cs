@@ -45,7 +45,13 @@ namespace DeNelle.Village
 
         private bool _loggedFirstInput;
         private Animator _animator;
-        private static readonly int AnimSpeed = Animator.StringToHash("Speed");
+        private static readonly int AnimSpeed   = Animator.StringToHash("Speed");
+
+        // DEF-70: victory pose — triggered when WaveManager fires OnWaveCleared.
+        // Suppresses movement so the hero holds the pose until the next wave begins.
+        private static readonly int AnimVictory = Animator.StringToHash("Victory");
+        private bool _victoryPose;
+        private WaveManager _waveManager;
 
         private void Awake()
         {
@@ -66,54 +72,56 @@ namespace DeNelle.Village
                       $"animator={(_animator != null ? _animator.name : "null")}, " +
                       $"controller={(_animator != null && _animator.runtimeAnimatorController != null ? _animator.runtimeAnimatorController.name : "null")}");
 
-            SpawnHeroMarker();
+            // DEF-10: SpawnHeroMarker / HeroIndicatorRing removed — was a debug
+            // visibility aid, confirmed unwanted in review screenshots (2026-05-26).
+
+            // DEF-70: subscribe to wave clear so the hero plays a victory pose.
+            // WaveManager has no static Instance — FindObjectOfType once in Start
+            // (same pattern as DungeonPortal, TowerVoiceController). Safe: Start
+            // runs after all Awake() calls so WaveManager is already initialised.
+            _waveManager = Object.FindObjectOfType<WaveManager>();
+            if (_waveManager != null)
+                _waveManager.OnWaveCleared.AddListener(OnWaveCleared);
+            else
+                Debug.LogWarning("[HeroLocomotion] WaveManager not found — victory pose will not fire.");
         }
 
-        // Owner/Grok 2026-05-25: the hero has no walk anim (it slides) and reads
-        // small under the high camera, so the animated pet steals the eye and the
-        // camera "looks like" it follows the pet (it doesn't — it's locked to the
-        // hero). A bright emissive ground ring makes the PLAYER hero unmistakable.
-        // Child of the root, so it survives HeroBodySwapper rebuilds.
-        private void SpawnHeroMarker()
+        private void OnDestroy()
         {
-            if (transform.Find("HeroIndicatorRing") != null) return;
-            var ring = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-            ring.name = "HeroIndicatorRing";
-            foreach (var col in ring.GetComponents<Collider>()) Destroy(col);
-            ring.transform.SetParent(transform, false);
-            ring.transform.localPosition = new Vector3(0f, 0.04f, 0f);
-            ring.transform.localScale = new Vector3(1.5f, 0.02f, 1.5f); // subtle flat disc at feet
-            var mr = ring.GetComponent<Renderer>();
-            mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            mr.receiveShadows = false;
-            var sh = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
-            var mat = new Material(sh);
+            if (_waveManager != null)
+                _waveManager.OnWaveCleared.RemoveListener(OnWaveCleared);
+        }
 
-            // Owner 2026-05-26 ("marker below"): the old marker was a solid, glaring
-            // bright-cyan emissive disc. Soften it to a calm, SEMI-TRANSPARENT teal so
-            // the hero stays findable under the high camera without the harsh puddle.
-            // Configure URP/Lit for alpha-blended transparency in code.
-            Color ringColor = new Color(0.35f, 0.85f, 0.95f, 0.33f); // soft translucent teal
-            if (mat.HasProperty("_Surface")) mat.SetFloat("_Surface", 1f);   // 0=opaque, 1=transparent
-            mat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
-            mat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
-            mat.SetInt("_ZWrite", 0);
-            mat.DisableKeyword("_SURFACE_TYPE_OPAQUE");
-            mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
-            mat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
-            if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", ringColor);
-            if (mat.HasProperty("_Color")) mat.SetColor("_Color", ringColor);
-            if (mat.HasProperty("_EmissionColor"))
+        // DEF-70: called by WaveManager.OnWaveCleared (WaveNumberEvent — int waveId).
+        private void OnWaveCleared(int waveId)
+        {
+            _victoryPose = true;
+            Velocity = Vector3.zero; // zero carried velocity so the hero stops in place
+
+            ResolveAnimator();
+            if (_animator != null)
             {
-                mat.SetColor("_EmissionColor", new Color(0.20f, 0.55f, 0.62f)); // gentle glow, no bloom blowout
-                mat.EnableKeyword("_EMISSION");
-                mat.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
+                _animator.SetFloat(AnimSpeed, 0f);
+                _animator.SetTrigger(AnimVictory);
             }
-            mr.sharedMaterial = mat;
+
+            Debug.Log($"[HeroLocomotion] Victory pose triggered — wave {waveId} cleared.");
+        }
+
+        // DEF-70: shared animator resolver — safe to call before HeroBodySwapper fires.
+        private void ResolveAnimator()
+        {
+            if (_animator != null) return;
+            var bodyT = transform.Find("HeroBody");
+            if (bodyT != null) _animator = bodyT.GetComponentInChildren<Animator>();
+            if (_animator == null) _animator = GetComponentInChildren<Animator>();
         }
 
         private void Update()
         {
+            // DEF-70: suppress all movement while the hero is playing the victory pose.
+            if (_victoryPose) return;
+
             Vector2 input = ReadMoveInput();
 
             // WORLD-relative movement (owner 2026-05-25): W = +Z (up-screen / north),
@@ -191,19 +199,9 @@ namespace DeNelle.Village
                 transform.position = p;
             }
 
-            // Self-heal the Animator reference. HeroLocomotion.Awake() caches
-            // GetComponentInChildren<Animator>() BEFORE HeroBodySwapper.Start()
-            // swaps the real FBX body in — so the Awake cache is null (the baked
-            // placeholder has no Animator). HeroBodySwapper re-caches this via
-            // reflection after the swap, but re-resolve here too as a backstop so
-            // a future change to swap order can never silently break the walk anim.
+            // Self-heal the Animator reference (see ResolveAnimator for rationale).
             // Cheap: only runs while _animator is null, stops once wired.
-            if (_animator == null)
-            {
-                var bodyT = transform.Find("HeroBody");
-                if (bodyT != null) _animator = bodyT.GetComponentInChildren<Animator>();
-            }
-
+            ResolveAnimator();
             if (_animator != null) _animator.SetFloat(AnimSpeed, Velocity.magnitude);
         }
 

@@ -21,7 +21,13 @@ namespace DeNelle.Village
     [DisallowMultipleComponent]
     public sealed class DungeonPortal : MonoBehaviour
     {
-        private const float ActivateRadius = 5.5f;
+        // DEF-26 (2026-05-27): tightened from 5.5 → 3.0 m so the [F] prompt
+        // only fires when the hero is at the portal arch entrance. 5.5 m was
+        // activating from ~2 m before the portal disc edge, which looked like
+        // the prompt was firing in the open field when the hero was still clearly
+        // approaching. 3.0 m matches ~the disc radius (3.5 m) and the "~2–3 m
+        // from the door" spec in DEF-26.
+        private const float ActivateRadius = 3.0f;
         private const float PromptHeight = 4.4f;
 
         [SerializeField] private string _dungeonId = "Dungeon_HealersCottage";

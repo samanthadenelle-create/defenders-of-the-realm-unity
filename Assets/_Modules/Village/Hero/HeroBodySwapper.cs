@@ -270,6 +270,15 @@ namespace DeNelle.Village
                         newMat.EnableKeyword("_EMISSION");
                         newMat.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
                     }
+                    // DEF-6: Tripo FBXs frequently export with inverted face
+                    // normals. URP's default back-face cull (Cull=2) renders
+                    // the inside surfaces, producing the "dark purple spiky
+                    // creature" seen in screenshots 1-3. Disabling culling
+                    // (Cull=0 = Off) renders both sides so the mesh is visible
+                    // regardless of which way its normals point.
+                    if (newMat.HasProperty("_Cull"))
+                        newMat.SetFloat("_Cull", 0f); // 0 = Off (double-sided)
+
                     if (newMat.HasProperty("_Smoothness")) newMat.SetFloat("_Smoothness", 0.15f);
                     if (newMat.HasProperty("_Metallic"))   newMat.SetFloat("_Metallic",   0f);
                     mats[i] = newMat;
