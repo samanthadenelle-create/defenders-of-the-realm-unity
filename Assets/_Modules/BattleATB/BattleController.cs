@@ -103,6 +103,12 @@ namespace DeNelle.BattleATB
         /// <summary>True once the result hand-back has been kicked off (fire once).</summary>
         private bool _returnScheduled;
 
+        /// <summary>Where this battle came from — a village tree-breach "Last Stand"
+        /// (Village) vs a dungeon encounter (Dungeon). Gates Flee: you cannot flee
+        /// the Last Stand (owner). Defaults to Dungeon so the dev/direct-play path
+        /// stays fully testable (Flee available).</summary>
+        private BattleSource _source = BattleSource.Dungeon;
+
         // ---------------------------------------------------------------------
         // Lifecycle
         // ---------------------------------------------------------------------
@@ -164,9 +170,12 @@ namespace DeNelle.BattleATB
             _returnScheduled = false;
 
             BattleSetup setup = BuildSetup();
-            // The handoff source: a wave > 0 from PendingBattle means a village
-            // breach; the dev fallback path is treated as a village battle too.
-            _runtimeState.StartBattle(setup, BattleSource.Village);
+            // Tag the source from the handoff: Wave > 0 is a village tree-breach
+            // "Last Stand" (Heart consequences commit on close); Wave == 0 or no
+            // handoff (dungeon / dev) is a Dungeon encounter (no village damage).
+            // Previously hardcoded Village, which mis-tagged dungeon battles.
+            _source = ResolveSource();
+            _runtimeState.StartBattle(setup, _source);
             // StartBattle fires OnBattleChanged synchronously — the listener is wired
             // above, but render once explicitly as a belt-and-suspenders first paint.
             Render(_runtimeState.Battle);
@@ -264,6 +273,19 @@ namespace DeNelle.BattleATB
             string id = _fallbackEnemyDefId;
             if (string.IsNullOrEmpty(id)) id = "skeleton";
             return id;
+        }
+
+        /// <summary>
+        /// The battle's source. A handoff with <c>Wave &gt; 0</c> is a village
+        /// tree-breach "Last Stand" (<see cref="BattleSource.Village"/>); <c>Wave == 0</c>
+        /// or no handoff (dungeon encounter / dev direct-play) is a
+        /// <see cref="BattleSource.Dungeon"/>. Gates Flee — you cannot abandon the
+        /// Last Stand, but a dungeon encounter is a clean escape.
+        /// </summary>
+        private static BattleSource ResolveSource()
+        {
+            BattleParams h = SceneRouter.PendingBattle;
+            return (h != null && h.Wave > 0) ? BattleSource.Village : BattleSource.Dungeon;
         }
 
         // ---------------------------------------------------------------------
@@ -387,6 +409,9 @@ namespace DeNelle.BattleATB
         /// </summary>
         private void HandleFleeClicked()
         {
+            // No fleeing a village tree-breach Last Stand (owner) — defensive guard
+            // in case the button is somehow reached; it is also hidden in render.
+            if (_source == BattleSource.Village) return;
             if (_returnScheduled) return;
             _returnScheduled = true;
             if (_statusBanner != null) _statusBanner.text = "Fled the battle…";
@@ -552,9 +577,14 @@ namespace DeNelle.BattleATB
             if (_attackButton != null) _attackButton.SetEnabled(canAct);
             if (_skillsButton != null) _skillsButton.SetEnabled(canAct);
             if (_itemButton != null) _itemButton.SetEnabled(canAct);
-            // Flee is available whenever it's the player's turn (even with no enemies alive
-            // — the battle is already over, but SetEnabled(false) prevents accidental clicks).
-            if (_fleeButton != null) _fleeButton.SetEnabled(canAct);
+            // Flee: a dungeon encounter is a clean escape; a village tree-breach
+            // Last Stand is do-or-die, so the button is HIDDEN there (owner).
+            if (_fleeButton != null)
+            {
+                bool fleeAllowed = _source != BattleSource.Village;
+                _fleeButton.style.display = fleeAllowed ? DisplayStyle.Flex : DisplayStyle.None;
+                _fleeButton.SetEnabled(fleeAllowed && canAct);
+            }
         }
 
         // ---------------------------------------------------------------------
