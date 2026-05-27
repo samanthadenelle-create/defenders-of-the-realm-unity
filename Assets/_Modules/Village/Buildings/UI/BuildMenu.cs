@@ -303,6 +303,21 @@ namespace DeNelle.Village
                       " sort=" + (_document != null ? _document.sortingOrder : -1) +
                       " uxml=" + (_document != null && _document.visualTreeAsset != null ? _document.visualTreeAsset.name : "NULL") +
                       " root=" + (_root != null) + " panel=" + (_panel != null) + " list=" + (_list != null));
+
+            // KNOWN BUILD ISSUE (uxml-uidocuments-dont-render-in-builds): in player
+            // builds BuildMenu.uxml does not clone, so _panel/_list are null and the
+            // menu opens EMPTY. Fall back to driving the new TowerPlacementSystem
+            // directly, so the HUD Build button still arms the (viking) tower. The
+            // full code-built menu UI is the follow-up; this makes Build work today.
+            if (_panel == null)
+            {
+                // UXML didn't clone (the player-build issue the Player.log confirmed:
+                // panel=False). CODE UIElements DO render in builds, so show a small
+                // code-built window instead of the empty .uxml one.
+                ShowCodeFallbackMenu();
+                return;
+            }
+
             SetPanelVisible(true);
             _screen = MenuScreen.Root;            // always open on the chooser
             _selectedTowerForUpgrade = null;
@@ -356,6 +371,80 @@ namespace DeNelle.Village
             // transparent area outside the panel passes through to the world + HUD.
             if (_root != null)
                 _root.pickingMode = PickingMode.Ignore;
+        }
+
+        // =====================================================================
+        //  Code-built fallback menu — renders in player builds, unlike the .uxml
+        //  (which clones empty: panel=False in the Player.log). Built straight into
+        //  _root with code UIElements. Replace with a full code menu in DEF-86.
+        // =====================================================================
+        private VisualElement _codePanel;
+
+        private void ShowCodeFallbackMenu()
+        {
+            if (_root == null) return;
+            if (_codePanel == null)
+            {
+                _codePanel = new VisualElement { name = "buildmenu-code-fallback" };
+                var s = _codePanel.style;
+                s.position = Position.Absolute;
+                s.left = 20f; s.top = 90f; s.minWidth = 220f;
+                s.paddingTop = 14f; s.paddingBottom = 14f; s.paddingLeft = 16f; s.paddingRight = 16f;
+                s.backgroundColor = new Color(0.08f, 0.10f, 0.16f, 0.96f);
+                s.borderTopLeftRadius = 10f; s.borderTopRightRadius = 10f;
+                s.borderBottomLeftRadius = 10f; s.borderBottomRightRadius = 10f;
+
+                var title = new Label("Build");
+                title.style.color = Color.white; title.style.fontSize = 18f;
+                title.style.unityFontStyleAndWeight = FontStyle.Bold; title.style.marginBottom = 10f;
+                _codePanel.Add(title);
+
+                _codePanel.Add(CodeMenuButton("Build Tower", new Color(0.16f, 0.40f, 0.62f, 0.95f), () =>
+                {
+                    var t = Resources.Load<DeNelle.Core.Data.TowerData>("Towers/DevTower");
+                    if (t != null)
+                    {
+                        if (TowerPlacementSystem.Instance == null)
+                            new GameObject("TowerPlacementSystem").AddComponent<TowerPlacementSystem>();
+                        TowerPlacementSystem.Instance.StartPlacing(t);
+                        SetStatus("Click a clear tile to raise the tower.");
+                    }
+                    HideCodeFallbackMenu();
+                }));
+
+                _codePanel.Add(CodeMenuButton("Raze Last Tower", new Color(0.62f, 0.20f, 0.20f, 0.95f), () =>
+                {
+                    var towers = UnityEngine.Object.FindObjectsByType<Tower>(FindObjectsSortMode.None);
+                    if (towers.Length > 0) { Destroy(towers[towers.Length - 1].gameObject); SetStatus("Razed the last tower."); }
+                    else SetStatus("No towers to raze.");
+                    HideCodeFallbackMenu();
+                }));
+
+                _codePanel.Add(CodeMenuButton("Close", new Color(0.30f, 0.30f, 0.36f, 0.95f), HideCodeFallbackMenu));
+
+                _root.Add(_codePanel);
+            }
+            _codePanel.style.display = DisplayStyle.Flex;
+            _isOpen = true;
+        }
+
+        private void HideCodeFallbackMenu()
+        {
+            if (_codePanel != null) _codePanel.style.display = DisplayStyle.None;
+            _isOpen = false;
+        }
+
+        private static Button CodeMenuButton(string label, Color bg, System.Action onClick)
+        {
+            var b = new Button(onClick) { text = label };
+            var s = b.style;
+            s.height = 40f; s.marginTop = 4f; s.marginBottom = 4f;
+            s.fontSize = 15f; s.unityFontStyleAndWeight = FontStyle.Bold;
+            s.unityTextAlign = TextAnchor.MiddleCenter; s.color = Color.white;
+            s.backgroundColor = bg;
+            s.borderTopLeftRadius = 8f; s.borderTopRightRadius = 8f;
+            s.borderBottomLeftRadius = 8f; s.borderBottomRightRadius = 8f;
+            return b;
         }
 
         // =====================================================================
@@ -520,6 +609,22 @@ namespace DeNelle.Village
         /// </summary>
         private void OnConfirmBuild(TowerVariantDef v)
         {
+            // DEF-86 (light hook): route Build Tower -> the new TowerPlacementSystem
+            // with the real tower model (the seeded DevTower), instead of arming the
+            // legacy Building ghost. Falls back to the old Building flow if the new
+            // system / asset isn't present. (Element->TowerData mapping + the economy
+            // unification are the full DEF-86 follow-up; this places the viking tower.)
+            var newTower = Resources.Load<DeNelle.Core.Data.TowerData>("Towers/DevTower");
+            if (newTower != null)
+            {
+                if (TowerPlacementSystem.Instance == null)
+                    new GameObject("TowerPlacementSystem").AddComponent<TowerPlacementSystem>();
+                TowerPlacementSystem.Instance.StartPlacing(newTower);
+                Close();   // hide the menu so the world click lands the placement
+                SetStatus($"Click a clear tile to raise the {v.DisplayName}.");
+                return;
+            }
+
             if (!CanAfford(v))
             {
                 SetStatus("Not enough crystals or materials for the " + v.DisplayName + ".", isError: true);
