@@ -88,8 +88,10 @@ Thumbs.db
 # Assets/Editor/ are the source of truth — they reconstruct the scenes from
 # whatever KayKit models are present. (Owner instruction 2026-05-18:
 # "exclude not needed files from the assets during check in".)
-/Assets/Models/
-/Assets/Models.meta
+# EXCEPTION: the optimized People NPC pack (DEF-91) IS committed via LFS after a
+# source-shrink pass (~90 MB) - see NpcPackSourceCompressor / NpcPackTrimmer.
+/Assets/Models/*
+!/Assets/Models/People/
 
 # Owner Tripo art — large FBX kept local (same policy as Models/). The builder
 # bakes them by path; on a fresh clone re-copy from the owner's source folder

@@ -101,6 +101,11 @@ namespace DeNelle.Village
         /// <summary>True while the Keeper is close enough that this villager is speaking.</summary>
         public bool Speaking { get; private set; }
 
+        // ── Animator (DEF-91: purchased NPC model pack — walk / idle / talk clips) ─
+        private Animator _animator;
+        private static readonly int SpeedHash   = Animator.StringToHash("Speed");
+        private static readonly int TalkingHash = Animator.StringToHash("IsTalking");
+
         // ── Configuration ────────────────────────────────────────────────────
 
         /// <summary>
@@ -182,6 +187,10 @@ namespace DeNelle.Village
             }
 
             _bubble?.Hide();
+
+            // Grab the Animator from the mesh child (if the NPC model pack prefab is present).
+            // Null-safe: locomotion and speech still work without it.
+            _animator = GetComponentInChildren<Animator>();
         }
 
         private void Update()
@@ -189,6 +198,7 @@ namespace DeNelle.Village
             UpdateProximity();
             UpdateRoaming();
             UpdateIdleMotion();
+            UpdateAnimator();
         }
 
         // ── Proximity speech ─────────────────────────────────────────────────
@@ -317,6 +327,28 @@ namespace DeNelle.Village
             // they are near, so engaging feels deliberate.
             if (Speaking && !(_hasNavMesh && _agent != null && _agent.enabled))
                 FaceHero();
+        }
+
+        // ── Animator driver (DEF-91) ─────────────────────────────────────────
+
+        /// <summary>
+        /// Drives the NPC model pack Animator's Speed and IsTalking parameters
+        /// from live agent velocity and the Speaking flag. No-ops gracefully when
+        /// no Animator is present (placeholder primitives have none).
+        /// </summary>
+        private void UpdateAnimator()
+        {
+            if (_animator == null) return;
+
+            // Speed: agent velocity magnitude when moving, 0 when idle/stopped.
+            float speed = 0f;
+            if (_agent != null && _agent.enabled && !_agent.isStopped)
+                speed = _agent.velocity.magnitude;
+            _animator.SetFloat(SpeedHash, speed, 0.08f, Time.deltaTime);
+
+            // IsTalking: mirrors the Speaking state so the talk clip plays while
+            // the bubble is visible.
+            _animator.SetBool(TalkingHash, Speaking);
         }
 
         // ── Body tint (WO-29 white-pill safety-net) ──────────────────────────
