@@ -24,8 +24,8 @@
 //     The real events are OnApexBossSpawned(DragonBoss) and OnWaveCleared(int).
 //     We map the boss reaction to OnApexBossSpawned and the celebrate reaction to
 //     OnWaveCleared.
-//   * `HeartController` has NO OnHealthChanged event, so the low-HP whimper polls
-//     HeartController.Hp on a throttle (one-shot, guarded, reset on wave start).
+//   * DEF-54 (this pass): HeartController.OnHealthChanged now exists. The low-HP
+//     whimper subscribes to the event instead of polling; Update() removed.
 //
 // ARCHITECTURE (non-negotiable):
 //   * GetComponent caches happen in Awake.
@@ -74,9 +74,6 @@ namespace DeNelle.Village
         [Tooltip("Fraction (0-1) of Heart HP at or below which the pet whimpers once.")]
         [SerializeField, Range(0f, 1f)] private float _whimperHpFraction = 0.25f;
 
-        [Tooltip("Seconds between Heart-HP polls. Never per-frame.")]
-        [SerializeField, Min(0.05f)] private float _hpPollInterval = 0.25f;
-
         [Header("Excited-circle (wave clear)")]
         [Tooltip("How many times the Flame Pup re-triggers the excited circle on a wave clear.")]
         [SerializeField, Min(1)] private int _excitedCircleLoops = 3;
@@ -91,8 +88,8 @@ namespace DeNelle.Village
         // One-shot guard: the whimper fires once per wave (reset on OnWaveStarted).
         private bool _whimperPlayed;
 
-        // HP poll throttle accumulator.
-        private float _hpPollTimer;
+        // Tracked so OnDisable can unsubscribe from the heart event.
+        private HeartController _subscribedHeart;
 
         private Coroutine _excitedCircleRoutine;
 
@@ -124,8 +121,12 @@ namespace DeNelle.Village
                 _waveManager.OnWaveStarted.AddListener(HandleWaveStarted);
             }
 
-            // Prime the throttle so the first poll lands a full interval in.
-            _hpPollTimer = 0f;
+            // DEF-54: subscribe to HeartController.OnHealthChanged now that it exists.
+            if (_heart != null)
+            {
+                _subscribedHeart = _heart;
+                _heart.OnHealthChanged += OnHeartHpChanged;
+            }
         }
 
         private void OnDisable()
@@ -137,6 +138,12 @@ namespace DeNelle.Village
                 _waveManager.OnWaveStarted.RemoveListener(HandleWaveStarted);
             }
 
+            if (_subscribedHeart != null)
+            {
+                _subscribedHeart.OnHealthChanged -= OnHeartHpChanged;
+                _subscribedHeart = null;
+            }
+
             if (_excitedCircleRoutine != null)
             {
                 StopCoroutine(_excitedCircleRoutine);
@@ -144,19 +151,11 @@ namespace DeNelle.Village
             }
         }
 
-        private void Update()
+        private void OnHeartHpChanged(float hp)
         {
-            // Throttled low-HP poll — HeartController has no health-changed event,
-            // so we sample Hp on an interval rather than every frame.
-            if (_whimperPlayed || _heart == null) return;
-
-            _hpPollTimer += Time.deltaTime;
-            if (_hpPollTimer < _hpPollInterval) return;
-            _hpPollTimer = 0f;
-
+            if (_whimperPlayed) return;
             // HeartController.Hp is on the 0-100 scale; compare as a fraction.
-            float fraction = _heart.Hp / 100f;
-            if (fraction <= _whimperHpFraction)
+            if (hp / 100f <= _whimperHpFraction)
             {
                 _whimperPlayed = true;
                 SetTrigger(WhimperHash);
@@ -195,8 +194,8 @@ namespace DeNelle.Village
         /// </summary>
         private void HandleWaveStarted(int waveId)
         {
+            // Re-arm the one-shot whimper so it can fire again for the new wave.
             _whimperPlayed = false;
-            _hpPollTimer = 0f;
         }
 
         private IEnumerator ExcitedCircleRoutine()

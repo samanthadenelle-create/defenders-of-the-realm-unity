@@ -358,7 +358,9 @@ namespace DeNelle.Dungeons
             heading.y = 0f;
             if (heading.sqrMagnitude < 0.0025f) return;
 
-            Quaternion target = Quaternion.LookRotation(heading, Vector3.up);
+            // DEF-7: Tripo FBX exports have a 90° model offset — same fix as HeroLocomotion.cs
+            Quaternion target = Quaternion.LookRotation(heading, Vector3.up)
+                                * Quaternion.Euler(0f, -90f, 0f);
             transform.rotation = Quaternion.RotateTowards(
                 transform.rotation, target, _turnSpeed * Time.deltaTime);
         }

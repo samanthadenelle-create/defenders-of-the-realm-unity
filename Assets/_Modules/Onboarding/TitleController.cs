@@ -180,7 +180,7 @@ namespace DeNelle.Onboarding
 
             // ── Canon strings — never hardcoded (v2 port-spec Part 4) ────────
             var overline = _root.Q<Label>("overline");
-            if (overline != null) overline.text = CanonStrings.Tagline;
+            if (overline != null) overline.text = string.Empty; // DEF-16: overline was duplicating the tagline
 
             var gameTitle = _root.Q<Label>("game-title");
             if (gameTitle != null) gameTitle.text = CanonStrings.GameTitle;

@@ -369,10 +369,12 @@ namespace DeNelle.Village
             {
                 Die(killed: true);
             }
-            else if (_animator != null)
+            else
             {
-                // Survived the hit — play the flinch / hit-react.
-                _animator.SetTrigger(AnimHit);
+                // Survived — flinch animation + hit-impact pop (DEF-52) + hit stop / combo (DEF-44/45).
+                if (_animator != null) _animator.SetTrigger(AnimHit);
+                VfxPool.SpawnHitImpact(transform.position + Vector3.up * 0.6f);
+                CombatFeedbackManager.Hit(transform.position + Vector3.up * 0.6f, amount);
             }
         }
 
@@ -393,6 +395,15 @@ namespace DeNelle.Village
             _currentTarget = null;
             Died?.Invoke(this);
 
+            // DEF-52: death burst VFX + micro screen shake so kills feel impactful.
+            // DEF-45: kill streak tracked via CombatFeedbackManager.
+            if (killed)
+            {
+                VfxPool.SpawnDeathBurst(transform.position + Vector3.up * 0.5f);
+                CameraShakeBridge.Shake(0.18f, 0.22f);
+                CombatFeedbackManager.Kill(transform.position);
+            }
+
             // Kill-XP attribution: a genuine kill shares this enemy's XP across
             // the combatants that damaged it; a forced removal (breach) just
             // discards its damage ledger so nothing leaks and no XP is granted.
@@ -402,6 +413,13 @@ namespace DeNelle.Village
             // DEF-88: grant the flat per-enemy XP reward directly to the hero.
             if (killed && _def != null && HeroProgression.Instance != null)
                 HeroProgression.Instance.AddXp(_def.XpReward);
+
+            // DEF-32: grant Glimmer (cosmetic currency) on kill. Resolved via
+            // reflection — GlimmerCurrencyService lives in DeNelle.Cosmetics,
+            // which DeNelle.Village does not reference (asmdef stays decoupled,
+            // mirroring PetDeployer's bridge).
+            if (killed && _def != null && _def.GlimmerReward > 0)
+                TryAwardGlimmer(_def.GlimmerReward);
 
             // Play the death (collapse) animation, then destroy. The Dead bool
             // latches the controller's Death state from anywhere; the GameObject
@@ -425,6 +443,44 @@ namespace DeNelle.Village
         private void EnsureAgent()
         {
             if (_agent == null) _agent = GetComponent<NavMeshAgent>();
+        }
+
+        // ── Glimmer reflection bridge (DEF-32) ───────────────────────────────
+        // GlimmerCurrencyService lives in DeNelle.Cosmetics, which DeNelle.Village
+        // does not reference. Resolve + invoke by reflection so the asmdef stays
+        // decoupled (same pattern as PetDeployer). The Type/Method lookups are
+        // cached; the live singleton is re-fetched each call so a scene reload
+        // never leaves a stale (destroyed) instance reference.
+        private static System.Type _glimmerType;
+        private static System.Reflection.PropertyInfo _glimmerInstanceProp;
+        private static System.Reflection.MethodInfo _glimmerTryAdd;
+        private static bool _glimmerResolved;
+
+        private static void TryAwardGlimmer(int amount)
+        {
+            try
+            {
+                if (!_glimmerResolved)
+                {
+                    _glimmerResolved = true;
+                    foreach (var asm in System.AppDomain.CurrentDomain.GetAssemblies())
+                    {
+                        var t = asm.GetType("DeNelle.Cosmetics.GlimmerCurrencyService", false);
+                        if (t != null) { _glimmerType = t; break; }
+                    }
+                    if (_glimmerType != null)
+                    {
+                        _glimmerInstanceProp = _glimmerType.GetProperty("Instance",
+                            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+                        _glimmerTryAdd = _glimmerType.GetMethod("TryAddGlimmer", new[] { typeof(int) });
+                    }
+                }
+                if (_glimmerInstanceProp == null || _glimmerTryAdd == null) return;
+                var instance = _glimmerInstanceProp.GetValue(null);
+                if (instance == null) return;
+                _glimmerTryAdd.Invoke(instance, new object[] { amount });
+            }
+            catch { /* cosmetic reward is best-effort; never break the kill path */ }
         }
 
         /// <summary>

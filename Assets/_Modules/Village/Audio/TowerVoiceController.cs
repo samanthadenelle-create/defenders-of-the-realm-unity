@@ -9,15 +9,11 @@
 // Reset()=>GetComponent and re-checked in OnEnable. The scene builder attaches
 // this — this file does NOT wire scenes.
 //
-// RECONCILIATION TO THIS BRANCH (the DEF-67 spec was written against a different
-// lineage):
-//   • The spec subscribed to HeartOfTown.OnHealthChanged and unsubscribed after
-//     firing. NEITHER HeartOfTown NOR any health-changed event exists here:
-//     HeartController exposes only Hp (float) / SetHp(float), no event. So the
-//     low-HP threshold is detected by polling Heart.Hp — and ONLY this poll
-//     (the one throttled poll the architecture rules permit). It runs on a 0.25s
-//     throttle, is guarded by a _voiceFired bool, and stops entirely the moment
-//     the line fires (the equivalent of the spec's "unsubscribe after playing").
+// RECONCILIATION TO THIS BRANCH:
+//   • DEF-54 (this pass): HeartController.OnHealthChanged now exists.
+//     This controller subscribes on OnEnable and unsubscribes on OnDisable —
+//     exactly the spec's "subscribe and unsubscribe after playing" idiom.
+//     The Update() polling loop has been removed.
 //   • The Heart is reached via WaveManager.Heart (this component is on the
 //     WaveManager GameObject), never via Find at runtime.
 //
@@ -63,16 +59,13 @@ namespace DeNelle.Village
         [Tooltip("Fraction of max HP below which the line fires (0-1). Default 0.30 = 30%.")]
         [SerializeField, Range(0f, 1f)] private float _lowHpFraction = 0.30f;
 
-        [Tooltip("Seconds between Hp polls. The only polling loop in the audio layer.")]
-        [SerializeField, Min(0.05f)] private float _pollInterval = 0.25f;
-
         // The hard HP ceiling HeartController clamps to (see header MAX-HP CHOICE).
         private const float DefaultMaxHp = 100f;
 
         private AudioSource _source;
         private float _maxHp = DefaultMaxHp;
-        private float _pollTimer;
         private bool _voiceFired;
+        private HeartController _subscribedHeart;   // tracked so OnDisable can unsubscribe
 
         private void Reset() => _wave = GetComponent<WaveManager>();
 
@@ -90,33 +83,34 @@ namespace DeNelle.Village
         private void OnEnable()
         {
             if (_wave == null) _wave = GetComponent<WaveManager>();
-            _pollTimer = 0f;
-
-            // Seed the max from the first observed Hp if it already exceeds the
-            // 0-100 ceiling (defensive — see header). The 30% threshold then
-            // tracks the real maximum rather than a stale 100.
-            HeartController heart = _wave != null ? _wave.Heart : null;
-            if (heart != null && heart.Hp > _maxHp) _maxHp = heart.Hp;
-        }
-
-        // The ONE permitted throttled poll: HeartController has no HP event, so we
-        // sample Heart.Hp every _pollInterval seconds until the line fires once,
-        // then stop sampling entirely. Uses unscaled time so it ticks even if the
-        // game is paused (timeScale 0) during a breach.
-        private void Update()
-        {
-            if (_voiceFired) return;   // fired once — stop polling for the session
-
-            _pollTimer += Time.unscaledDeltaTime;
-            if (_pollTimer < _pollInterval) return;
-            _pollTimer = 0f;
 
             HeartController heart = _wave != null ? _wave.Heart : null;
             if (heart == null) return;
 
-            float hp = heart.Hp;
-            if (hp > _maxHp) _maxHp = hp;   // keep the ceiling honest
+            // Seed the max from the current Hp in case it exceeds the default 100
+            // ceiling (defensive — see header).
+            if (heart.Hp > _maxHp) _maxHp = heart.Hp;
 
+            // DEF-54: subscribe to HeartController.OnHealthChanged instead of
+            // polling — the event was added to HeartController.SetHp() in this pass.
+            // Unsubscribe in OnDisable so no stale delegate survives a wave restart.
+            _subscribedHeart = heart;
+            heart.OnHealthChanged += OnHeartHpChanged;
+        }
+
+        private void OnDisable()
+        {
+            if (_subscribedHeart != null)
+            {
+                _subscribedHeart.OnHealthChanged -= OnHeartHpChanged;
+                _subscribedHeart = null;
+            }
+        }
+
+        private void OnHeartHpChanged(float hp)
+        {
+            if (_voiceFired) return;
+            if (hp > _maxHp) _maxHp = hp;   // keep the ceiling honest
             float threshold = _maxHp * _lowHpFraction;
             if (hp <= threshold)
                 FireVoiceLine();

@@ -507,8 +507,18 @@ namespace DeNelle.Village
                 return;
             }
 
+            // DEF-52: telegraph ring on the ground while the batch delay ticks so
+            // the player gets a "something's coming" warning at the spawn point.
+            // Only shown when there is a meaningful delay to warn about (≥0.5 s).
+            PooledVfx telegraph = null;
+            if (batch.Delay >= 0.5f)
+                telegraph = VfxPool.GetTelegraph(point.transform.position);
+
             if (batch.Delay > 0f)
                 await UniTask.Delay(System.TimeSpan.FromSeconds(batch.Delay));
+
+            VfxPool.ReturnTelegraph(telegraph);
+            telegraph = null;
 
             for (int i = 0; i < Mathf.Max(0, batch.Count); i++)
             {

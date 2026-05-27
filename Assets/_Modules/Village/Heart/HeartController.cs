@@ -118,6 +118,22 @@ namespace DeNelle.Village
             new HeartStateVisual { Color = Hex("ffffff"), Emissive = 2.0f, PulseHz = 0.5f, PulseDepth = 0.00f, HaloOpacity = 1.00f }, // Victorious
         };
 
+        // ── Events ───────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Fired whenever <see cref="Hp"/> changes (including after a SetHp call
+        /// whose value is clamped to no-op). Subscribers receive the new HP (0-100).
+        /// <para>
+        /// DEF-54: four systems were forced to poll <c>Hp</c> every frame (TowerAudioController,
+        /// TowerRepairVisuals, HeartHudBridge, TowerVoiceController) because no change
+        /// notification existed. Subscribe here and unsubscribe in OnDisable/OnDestroy
+        /// to avoid stale-delegate leaks.
+        /// </para>
+        /// </summary>
+        public event System.Action<float> OnHealthChanged;
+
+        // ── Properties ───────────────────────────────────────────────────────
+
         /// <summary>Current threat state of the Heart.</summary>
         public HeartState State => _state;
 
@@ -146,10 +162,36 @@ namespace DeNelle.Village
             _state = state;
         }
 
-        /// <summary>Sets Heart HP (0-100). Drives the tree's emotional visuals (Week 4+).</summary>
+        /// <summary>
+        /// Sets Heart HP (0-100). Clamps the value, fires <see cref="OnHealthChanged"/>
+        /// on any change, and auto-derives the threat state from the new HP level so
+        /// the crystal colour / pulse track HP without external coordination.
+        /// <para>
+        /// WaveManager's explicit <see cref="SetState"/> calls (Boss, Victorious,
+        /// Breached) still override this derivation — they run AFTER combat events
+        /// and are not triggered by HP changes, so there is no race.
+        /// </para>
+        /// </summary>
         public void SetHp(float hp)
         {
-            _hp = Mathf.Clamp(hp, 0f, 100f);
+            float next = Mathf.Clamp(hp, 0f, 100f);
+            if (Mathf.Approximately(next, _hp)) return;   // no-op guard — avoids spurious events
+            _hp = next;
+            OnHealthChanged?.Invoke(_hp);
+            // Auto-derive a baseline state from HP so the crystal always tracks health.
+            // Boss / Victorious / Breached are set explicitly by WaveManager and should
+            // NOT be stomped here — only derive when in a "normal" HP-driven state.
+            if (_state != HeartState.Boss && _state != HeartState.Victorious)
+                _state = DeriveStateFromHp(_hp);
+        }
+
+        /// <summary>Maps Heart HP (0-100) to a baseline <see cref="HeartState"/>.</summary>
+        private static HeartState DeriveStateFromHp(float hp)
+        {
+            if (hp < 25f) return HeartState.Critical;
+            if (hp < 50f) return HeartState.Danger;
+            if (hp < 75f) return HeartState.Warning;
+            return HeartState.Vigilant;
         }
 
         private void Awake()

@@ -86,10 +86,12 @@ namespace DeNelle.Village
         /// <summary>Per-enemy stagger offset (seconds) the spawner reads when releasing a group.</summary>
         [JsonProperty("groupStaggerDelay")] public float GroupStaggerDelay = 0.1f;
 
-        // ── Rewards (DEF-88) ──────────────────────────────────────────────────
+        // ── Rewards (DEF-88 / DEF-32) ────────────────────────────────────────
         /// <summary>XP awarded directly to the hero on killing this enemy.</summary>
         [Header("Rewards")]
-        [JsonProperty("xpReward")] public int XpReward = 15;
+        [JsonProperty("xpReward")]    public int XpReward    = 15;
+        /// <summary>Glimmer (cosmetic currency) awarded to the hero on kill.</summary>
+        [JsonProperty("glimmerReward")] public int GlimmerReward = 3;
 
         /// <summary>The <see cref="Ai"/> token parsed to the typed enum.</summary>
         public EnemyAiKind AiKind

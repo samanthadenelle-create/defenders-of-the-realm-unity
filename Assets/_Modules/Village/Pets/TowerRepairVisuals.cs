@@ -12,12 +12,10 @@
 //   SetActive on a renderer or particle GameObject.
 //
 // RECONCILIATION WITH THE DEF-71 SPEC (review-repo lineage, not this branch):
-//   * The spec subscribes to `HeartOfTown.OnHealthChanged(pct)`. That type/event
-//     DO NOT EXIST on this branch — the defended structure is HeartController,
-//     which has NO health-changed event and an HP on the 0-100 scale (Hp /
-//     SetHp). We therefore POLL HeartController.Hp on a throttle and detect a
-//     heal by comparing to a cached `_previousHp` (current > previous = heal),
-//     exactly the spec's `_previousHealthPct` comparison, just polled.
+//   * DEF-54 (this pass): HeartController.OnHealthChanged now exists.
+//     This controller subscribes on OnEnable and unsubscribes on OnDisable;
+//     heal detection (current > previous + epsilon) moves into the callback.
+//     The Update() throttled-poll loop has been removed entirely.
 //   * The spec's RepairParticles burst is dropped in favour of an emission-only
 //     shimmer per the DEF-71 reconciliation brief (never SetActive on particle
 //     GameObjects). A renderer shimmer reads cleanly without authored particles.
@@ -58,9 +56,6 @@ namespace DeNelle.Village
         [SerializeField] private Renderer[] _renderers;
 
         [Header("Heal detection")]
-        [Tooltip("Seconds between Heart-HP polls. Never per-frame.")]
-        [SerializeField, Min(0.05f)] private float _hpPollInterval = 0.25f;
-
         [Tooltip("Minimum HP gain (0-100 scale) that counts as a repair worth a " +
                  "shimmer — filters float jitter.")]
         [SerializeField, Min(0f)] private float _healEpsilon = 0.01f;
@@ -75,9 +70,10 @@ namespace DeNelle.Village
         [Tooltip("Peak emission intensity multiplier at the top of the shimmer.")]
         [SerializeField, Min(0f)] private float _shimmerIntensity = 2f;
 
-        // Cached emission state: the previous HP sample + the throttle accumulator.
+        // Previous HP sample — compared in OnHeartHpChanged to detect a heal.
         private float _previousHp;
-        private float _hpPollTimer;
+        // Tracked so OnDisable can unsubscribe correctly.
+        private HeartController _subscribedHeart;
 
         private MaterialPropertyBlock _mpb;
         private Coroutine _shimmerRoutine;
@@ -103,43 +99,45 @@ namespace DeNelle.Village
 
         private void OnEnable()
         {
-            // Re-seed so a re-enable (scene reload / pooling) never reads a phantom
-            // heal from a stale sample.
+            // Re-seed so a re-enable never reads a phantom heal from a stale sample.
             _previousHp = _heart != null ? _heart.Hp : _previousHp;
-            _hpPollTimer = 0f;
+
+            // DEF-54: subscribe to the event now that HeartController raises one.
+            if (_heart != null)
+            {
+                _subscribedHeart = _heart;
+                _heart.OnHealthChanged += OnHeartHpChanged;
+            }
         }
 
         private void OnDisable()
         {
+            if (_subscribedHeart != null)
+            {
+                _subscribedHeart.OnHealthChanged -= OnHeartHpChanged;
+                _subscribedHeart = null;
+            }
+
             if (_shimmerRoutine != null)
             {
                 StopCoroutine(_shimmerRoutine);
                 _shimmerRoutine = null;
             }
-            // Clear any residual emission override so the renderers don't latch
+            // Clear any residual emission override so renderers don't latch
             // a half-finished shimmer when disabled mid-pulse.
             ClearEmission();
         }
 
-        private void Update()
+        private void OnHeartHpChanged(float hp)
         {
-            if (_heart == null) return;
-
-            // Throttled poll — HeartController has no health-changed event.
-            _hpPollTimer += Time.deltaTime;
-            if (_hpPollTimer < _hpPollInterval) return;
-            _hpPollTimer = 0f;
-
-            float currentHp = _heart.Hp;
-            if (currentHp > _previousHp + _healEpsilon)
+            if (hp > _previousHp + _healEpsilon)
             {
-                // HP increased -> a repair. Restart the shimmer (a new repair
+                // HP increased → a repair. Restart the shimmer (a new repair
                 // during a shimmer simply refreshes it).
                 if (_shimmerRoutine != null) StopCoroutine(_shimmerRoutine);
                 _shimmerRoutine = StartCoroutine(ShimmerRoutine());
             }
-
-            _previousHp = currentHp;
+            _previousHp = hp;
         }
 
         /// <summary>

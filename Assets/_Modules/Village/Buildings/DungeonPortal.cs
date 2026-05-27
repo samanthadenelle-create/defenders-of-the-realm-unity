@@ -39,18 +39,27 @@ namespace DeNelle.Village
         private float _t;
         private bool _loading;
 
+        // DEF-40: perf — throttle distance checks; cache in-range state so
+        // GetKeyDown can still fire every frame without regression.
+        private bool _heroFound;
+        private bool _isInRange;
+        private float _nextProximityCheck;
+        private const float CheckInterval = 0.15f;
+
         private void Start() => ResolveHero();
 
         private void ResolveHero()
         {
+            if (_heroFound) return;
             var hero = UnityEngine.Object.FindObjectOfType<HeroLocomotion>();
-            if (hero != null) _hero = hero.transform;
+            if (hero != null) { _hero = hero.transform; _heroFound = true; }
         }
 
         private void Update()
         {
-            // Slow pulse on the shimmer sheet so the portal reads as live.
-            if (_shimmer != null)
+            // Shimmer pulse — gated to in-range so distant portals don't burn
+            // a SetColor + material property lookup every frame.
+            if (_shimmer != null && _isInRange)
             {
                 _t += Time.deltaTime;
                 float pulse = 0.55f + Mathf.Sin(_t * 2.0f) * 0.18f;
@@ -62,16 +71,25 @@ namespace DeNelle.Village
                 }
             }
 
-            if (_hero == null) { ResolveHero(); return; }
+            if (!_heroFound) { ResolveHero(); return; }
             if (_loading) return;
 
-            float distSqr = (_hero.position - transform.position).sqrMagnitude;
-            bool inRange = distSqr <= ActivateRadius * ActivateRadius;
+            // Throttled proximity check (0.15 s) — prompt show/hide.
+            if (Time.time >= _nextProximityCheck)
+            {
+                _nextProximityCheck = Time.time + CheckInterval;
+                float distSqr = (_hero.position - transform.position).sqrMagnitude;
+                bool nowInRange = distSqr <= ActivateRadius * ActivateRadius;
+                if (nowInRange != _isInRange)
+                {
+                    _isInRange = nowInRange;
+                    if (_isInRange) ShowPrompt();
+                    else           HidePrompt();
+                }
+            }
 
-            if (inRange && _promptGo == null) ShowPrompt();
-            else if (!inRange && _promptGo != null) HidePrompt();
-
-            if (inRange && Input.GetKeyDown(KeyCode.F))
+            // F-key check every frame so no keypress is ever dropped.
+            if (_isInRange && Input.GetKeyDown(KeyCode.F))
                 EnterDungeon();
         }
 
