@@ -549,9 +549,9 @@ namespace DeNelle.Core.State
 
         // ── Config ───────────────────────────────────────────────────────────
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
-        private const string BackendBase = "https://defenders-of-the-realm-dev.vercel.app";
+        private const string BackendBase = "https://defenders-of-the-realm-v2.vercel.app";
 #else
-        private const string BackendBase = "https://defenders-of-the-realm.vercel.app";
+        private const string BackendBase = "https://defenders-of-the-realm-v2.vercel.app";
 #endif
         private const string SaveUrl       = BackendBase + "/api/game/save";
         private const string LoadUrl       = BackendBase + "/api/game/load";
