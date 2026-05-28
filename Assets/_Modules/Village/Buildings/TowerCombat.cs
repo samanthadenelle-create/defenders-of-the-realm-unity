@@ -16,8 +16,10 @@
 // child it creates is resolved here in Awake.
 // =============================================================================
 
+using System.Collections;
 using UnityEngine;
 using DeNelle.Core.Combat;
+using DeNelle.Core.Data;
 
 namespace DeNelle.Village
 {
@@ -36,6 +38,25 @@ namespace DeNelle.Village
         private WaveManager _wave;
         private float _nextAttackTime;
 
+        // ── Empowerment state ────────────────────────────────────────────────
+
+        private EmpowermentAbility _empowerment = EmpowermentAbility.None;
+        private bool _isEmpowered;
+
+        // ManaSurge: count shots; every 5th fires a 3-bolt burst.
+        private int _shotsSinceLastBurst;
+        private const int ManaSurgeBurstInterval = 5;
+        private const float ManaSurgeBurstDamageMult = 0.6f;
+
+        // GlacialCore: pulse AoE slow on all enemies in range.
+        private const float GlacialPulseInterval = 2.5f;   // seconds between pulses
+        private const float GlacialSlowDuration  = 3.0f;   // how long each slow lasts
+        private const float GlacialAngle         = 120f;    // not used (full circle)
+
+        // EternalEmber: burn DoT on every hit.
+        private const float EternalEmberBurnDps      = 4f;  // damage per second
+        private const float EternalEmberBurnDuration = 4f;  // seconds
+
         private void Awake()
         {
             _tower = GetComponent<Tower>();
@@ -50,25 +71,52 @@ namespace DeNelle.Village
             _wave = found.Length > 0 ? found[0] : null;
         }
 
+        // ── Empowerment public entry point ────────────────────────────────────
+
+        /// <summary>
+        /// Called by <see cref="Tower.TryEmpower"/> after the crystal cost is deducted.
+        /// Stores the ability and starts any persistent loops (GlacialCore slow field).
+        /// </summary>
+        public void OnEmpowered(EmpowermentAbility ability)
+        {
+            _empowerment = ability;
+            _isEmpowered = true;
+            _shotsSinceLastBurst = 0;
+
+            if (ability == EmpowermentAbility.GlacialCore)
+                StartCoroutine(GlacialCoreSlowLoop());
+
+            Debug.Log($"[TowerCombat] Empowerment activated — {ability} on '{(_tower != null ? _tower.Data?.towerName : name)}'.");
+        }
+
+        // ── Update — fire loop ────────────────────────────────────────────────
+
         private void Update()
         {
             if (Time.time < _nextAttackTime) return;
 
             float range = _tower != null && _tower.CurrentRange > 0f ? _tower.CurrentRange : _fallbackRange;
-            IDamageable target = FindBestTarget(range);
 
+            // TrueAim: acquire secondary (highest-HP) target before primary sweep.
+            IDamageable secondary = null;
+            if (_isEmpowered && _empowerment == EmpowermentAbility.TrueAim)
+                secondary = FindHighestHpTarget(range);
+
+            IDamageable target = FindNearestTarget(range);
             if (target == null)
             {
-                _nextAttackTime = Time.time + _idleRescan;   // throttled re-scan while idle
+                _nextAttackTime = Time.time + _idleRescan;
                 return;
             }
 
-            FireAt(target);
+            FireAt(target, secondary);
             float level = _tower != null ? Mathf.Max(1, _tower.CurrentLevel) : 1;
-            _nextAttackTime = Time.time + (_baseCooldown / level);   // higher level = faster
+            _nextAttackTime = Time.time + (_baseCooldown / level);
         }
 
-        private IDamageable FindBestTarget(float range)
+        // ── Target selection ──────────────────────────────────────────────────
+
+        private IDamageable FindNearestTarget(float range)
         {
             if (_wave == null) { ResolveWave(); if (_wave == null) return null; }
 
@@ -84,71 +132,194 @@ namespace DeNelle.Village
             {
                 var enemy = list[i];
                 if (enemy == null) continue;
-
                 float sq = (enemy.transform.position - myPos).sqrMagnitude;
                 if (sq > maxSq || sq >= bestSq) continue;
-
-                var dmg = enemy.GetComponent<EnemyDamageable>();   // the IDamageable adapter
+                var dmg = enemy.GetComponent<EnemyDamageable>();
                 if (dmg == null || !dmg.IsAlive || dmg.Faction != CombatFaction.Hostile) continue;
-
                 bestSq = sq;
                 best = dmg;
             }
             return best;
         }
 
-        private void FireAt(IDamageable target)
+        // Kept for backward compat (EnemyBrain + test callers used FindBestTarget).
+        private IDamageable FindBestTarget(float range) => FindNearestTarget(range);
+
+        /// <summary>
+        /// TrueAim secondary targeting — returns the highest-HP enemy in range
+        /// (the most dangerous target). Returns null when only one enemy is in range.
+        /// </summary>
+        private IDamageable FindHighestHpTarget(float range)
+        {
+            if (_wave == null) { ResolveWave(); if (_wave == null) return null; }
+
+            var list = _wave.LiveEnemies;
+            if (list == null) return null;
+
+            Vector3 myPos = transform.position;
+            float maxSq = range * range;
+            float bestHp = -1f;
+            IDamageable best = null;
+
+            for (int i = 0; i < list.Count; i++)
+            {
+                var enemy = list[i];
+                if (enemy == null) continue;
+                float sq = (enemy.transform.position - myPos).sqrMagnitude;
+                if (sq > maxSq) continue;
+                var dmg = enemy.GetComponent<EnemyDamageable>();
+                if (dmg == null || !dmg.IsAlive || dmg.Faction != CombatFaction.Hostile) continue;
+                if (dmg.Hp > bestHp) { bestHp = dmg.Hp; best = dmg; }
+            }
+            return best;
+        }
+
+        // ── Fire ──────────────────────────────────────────────────────────────
+
+        private void FireAt(IDamageable target, IDamageable trueAimSecondary = null)
         {
             if (ProjectilePool.Instance == null) return;
 
+            float damage  = _tower != null && _tower.CurrentDamage > 0f ? _tower.CurrentDamage : _fallbackDamage;
+            int   level   = _tower != null ? _tower.CurrentLevel : 1;
             Vector3 firePos = _firePoint != null ? _firePoint.position : transform.position;
-            var proj = ProjectilePool.Instance.GetProjectile();
-            proj.transform.position = firePos;
 
-            float damage = _tower != null && _tower.CurrentDamage > 0f ? _tower.CurrentDamage : _fallbackDamage;
-            proj.Initialize(target, damage, DamageElement.None);
+            // ── ManaSurge: every 5th shot → 3-bolt burst at 60 % each ────────
+            if (_isEmpowered && _empowerment == EmpowermentAbility.ManaSurge)
+            {
+                _shotsSinceLastBurst++;
+                if (_shotsSinceLastBurst >= ManaSurgeBurstInterval)
+                {
+                    _shotsSinceLastBurst = 0;
+                    float burstDmg = damage * ManaSurgeBurstDamageMult;
+                    for (int i = 0; i < 3; i++)
+                        FireSingleProjectile(target, burstDmg, DamageElement.Aether, firePos);
+                    VFXManager.Play(VFXType.Cast_MageCharge, firePos);
+                    HitStopManager.DoImpact(HitTier.Medium);
+                    return;  // burst REPLACES the standard shot this tick
+                }
+            }
 
-            // ── VFX: muzzle flash at the fire point ──────────────────────────
-            // Choose VFXType based on the tower's level — higher levels get
-            // a more dramatic muzzle effect.
-            int level = _tower != null ? _tower.CurrentLevel : 1;
-            var muzzleType = level >= 3
-                ? VFXType.Cast_MageCharge          // L3 towers get a charged burst
-                : VFXType.Projectile_TowerArcane;  // L1-L2 standard arcane orb
+            // ── Standard shot ─────────────────────────────────────────────────
+            DamageElement element = _isEmpowered
+                ? AbilityToElement(_empowerment)
+                : DamageElement.None;
+
+            FireSingleProjectile(target, damage, element, firePos);
+
+            // ── EternalEmber: apply Burn status + start DoT coroutine ─────────
+            if (_isEmpowered && _empowerment == EmpowermentAbility.EternalEmber)
+            {
+                target.ApplyStatus(StatusEffect.Burn, EternalEmberBurnDuration);
+                StartCoroutine(BurnDoTCoroutine(target, EternalEmberBurnDps, EternalEmberBurnDuration));
+            }
+
+            // ── TrueAim: fire at secondary target simultaneously ───────────────
+            if (_isEmpowered && _empowerment == EmpowermentAbility.TrueAim && trueAimSecondary != null)
+                FireSingleProjectile(trueAimSecondary, damage, DamageElement.None, firePos);
+
+            // ── VFX: muzzle flash ─────────────────────────────────────────────
+            var muzzleType = (level >= 3 || _isEmpowered)
+                ? VFXType.Cast_MageCharge
+                : VFXType.Projectile_TowerArcane;
             VFXManager.Play(muzzleType, firePos);
 
-            // ── Hit Stop: light tier for standard tower shots ─────────────────
-            // (feels better than no feedback at all; heavy shots escalate in
-            //  TowerEmpowerment.ApplyEmpowermentEffect when wired)
-            HitStopManager.DoImpact(HitTier.Light);
+            HitStopManager.DoImpact(_isEmpowered ? HitTier.Medium : HitTier.Light);
+        }
+
+        private void FireSingleProjectile(IDamageable target, float damage, DamageElement element, Vector3 firePos)
+        {
+            if (ProjectilePool.Instance == null) return;
+            var proj = ProjectilePool.Instance.GetProjectile();
+            proj.transform.position = firePos;
+            proj.Initialize(target, damage, element);
+        }
+
+        private static DamageElement AbilityToElement(EmpowermentAbility ability) =>
+            ability switch
+            {
+                EmpowermentAbility.ManaSurge    => DamageElement.Aether,
+                EmpowermentAbility.GlacialCore  => DamageElement.Ice,
+                EmpowermentAbility.EternalEmber => DamageElement.Flame,
+                EmpowermentAbility.TrueAim      => DamageElement.None,    // Physical — intentional
+                _                               => DamageElement.None,
+            };
+
+        // ── Empowerment coroutines ────────────────────────────────────────────
+
+        /// <summary>
+        /// GlacialCore — pulses an AoE slow field every <see cref="GlacialPulseInterval"/>
+        /// seconds. Runs for the tower's lifetime (stops when the component is destroyed).
+        /// </summary>
+        private IEnumerator GlacialCoreSlowLoop()
+        {
+            while (true)
+            {
+                yield return new WaitForSeconds(GlacialPulseInterval);
+
+                float range = _tower != null && _tower.CurrentRange > 0f ? _tower.CurrentRange : _fallbackRange;
+                if (_wave == null) { ResolveWave(); continue; }
+
+                var list = _wave.LiveEnemies;
+                if (list == null) continue;
+
+                Vector3 myPos = transform.position;
+                float maxSq   = range * range;
+
+                for (int i = 0; i < list.Count; i++)
+                {
+                    var enemy = list[i];
+                    if (enemy == null) continue;
+                    float sq = (enemy.transform.position - myPos).sqrMagnitude;
+                    if (sq > maxSq) continue;
+                    var dmg = enemy.GetComponent<EnemyDamageable>();
+                    if (dmg == null || !dmg.IsAlive) continue;
+                    dmg.ApplyStatus(StatusEffect.Slow, GlacialSlowDuration);
+                }
+            }
         }
 
         /// <summary>
+        /// EternalEmber — ticks 4 damage per second for <paramref name="duration"/>
+        /// seconds on <paramref name="target"/>. Automatically stops if the target dies.
+        /// </summary>
+        private IEnumerator BurnDoTCoroutine(IDamageable target, float dps, float duration)
+        {
+            float elapsed = 0f;
+            const float tickInterval = 1f;
+            while (elapsed < duration)
+            {
+                yield return new WaitForSeconds(tickInterval);
+                elapsed += tickInterval;
+                if (target == null || !target.IsAlive) yield break;
+                target.TakeDamage(dps * tickInterval, DamageElement.Flame);
+            }
+        }
+
+        // ── Impact callback (called by PooledProjectile.OnHit) ───────────────
+
+        /// <summary>
         /// Called externally (e.g. by PooledProjectile.OnHit) to trigger an
-        /// impact VFX at the hit position.  Determines element from the tower's
-        /// current level and empowerment state.
+        /// impact VFX at the hit position. Scales by level and empowerment state.
         /// </summary>
         public void OnProjectileImpact(Vector3 hitPosition)
         {
             int level = _tower != null ? _tower.CurrentLevel : 1;
 
-            // Basic element escalation by level.
-            var impactType = level switch
-            {
-                3 => VFXType.Impact_ExplosionAether,
-                2 => VFXType.Impact_Aether,
-                _ => VFXType.Impact_Physical,
-            };
+            var impactType = (_isEmpowered || level >= 3)
+                ? VFXType.Impact_ExplosionAether
+                : level == 2
+                    ? VFXType.Impact_Aether
+                    : VFXType.Impact_Physical;
             VFXManager.Play(impactType, hitPosition);
 
-            // Scale hit-stop with level.
-            HitStopManager.DoImpact(level >= 3 ? HitTier.Medium : HitTier.Light);
+            HitStopManager.DoImpact((_isEmpowered || level >= 3) ? HitTier.Medium : HitTier.Light);
         }
 
         private void OnDrawGizmosSelected()
         {
             float r = _tower != null && _tower.CurrentRange > 0f ? _tower.CurrentRange : _fallbackRange;
-            Gizmos.color = Color.red;
+            Gizmos.color = _isEmpowered ? Color.cyan : Color.red;
             Gizmos.DrawWireSphere(transform.position, r);
         }
     }

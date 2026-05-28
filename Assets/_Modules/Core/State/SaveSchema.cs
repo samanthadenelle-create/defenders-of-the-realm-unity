@@ -27,7 +27,7 @@ namespace DeNelle.Core.State
     {
         // ── Versioning ───────────────────────────────────────────────────────
         /// <summary>CURRENT_SCHEMA_VERSION — bumped whenever the persisted shape changes.</summary>
-        public const int CurrentVersion = 10;
+        public const int CurrentVersion = 11;  // v11 — added aetherCrystals (tower empowerment currency)
         /// <summary>SaveExport.format — bumped only if the envelope shape changes.</summary>
         public const int FileFormat = 1;
 
@@ -140,6 +140,14 @@ namespace DeNelle.Core.State
             [JsonProperty("blockedCodes")] public List<string> BlockedCodes;
             [JsonProperty("inbox")] public List<ChatMessage> Inbox;
             [JsonProperty("lastInboxSyncAt")] public double? LastInboxSyncAt;
+
+            // ── v11 — Tower Empowerment ──────────────────────────────────────────
+            /// <summary>
+            /// Aether Crystals — the rare off-chain currency used for tower empowerment.
+            /// Earned via Crystal Mine (passive), wave bonuses, boss kills, and dungeon runs.
+            /// Local-only: never touches the SKR token or Solana wallet.
+            /// </summary>
+            [JsonProperty("aetherCrystals")] public double? AetherCrystals;
         }
 
         // =====================================================================
@@ -211,6 +219,7 @@ namespace DeNelle.Core.State
                 if (raw.Wood.HasValue) raw.Wood = NonNegInt(raw.Wood.Value, "wood");
                 if (raw.WallLevel.HasValue) raw.WallLevel = NonNegInt(raw.WallLevel.Value, "wallLevel");
                 if (raw.AtbLossStreak.HasValue) raw.AtbLossStreak = NonNegInt(raw.AtbLossStreak.Value, "atbLossStreak");
+                if (raw.AetherCrystals.HasValue) raw.AetherCrystals = NonNegInt(raw.AetherCrystals.Value, "aetherCrystals");
 
                 // ── Integer arrays → nonNegInt per entry ─────────────────────
                 ClampNonNegList(raw.PetBonds, "petBonds");

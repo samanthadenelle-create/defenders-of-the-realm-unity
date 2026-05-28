@@ -28,6 +28,7 @@
 // =============================================================================
 
 using System;
+using System.Collections;
 using System.Reflection;
 using UnityEngine;
 using DeNelle.Core.Data;
@@ -35,15 +36,91 @@ using DeNelle.Core.Data;
 namespace DeNelle.Village
 {
     /// <summary>Runtime tower: holds its data, current level, visual, and upgrade state.</summary>
-    public class Tower : MonoBehaviour
+    public class Tower : MonoBehaviour, IDamageableStructure
     {
         public const int MaxLevel = 3;
+
+        // ── WO7: Instant Swap — long-press detection ──────────────────────────
+
+        /// <summary>
+        /// Static event — fires when any tower is held for <see cref="LongPressSeconds"/>.
+        /// <see cref="TowerSwapService"/> subscribes to this to open the swap menu.
+        /// </summary>
+        public static event Action<Tower> AnyLongPressed;
+
+        private const float LongPressSeconds = 0.6f;
+        private Coroutine _longPressRoutine;
+
+        private void OnMouseDown()
+            => _longPressRoutine = StartCoroutine(LongPressRoutine());
+
+        private void OnMouseUp()
+        {
+            if (_longPressRoutine != null)
+            {
+                StopCoroutine(_longPressRoutine);
+                _longPressRoutine = null;
+            }
+        }
+
+        private IEnumerator LongPressRoutine()
+        {
+            yield return new WaitForSeconds(LongPressSeconds);
+            _longPressRoutine = null;
+            AnyLongPressed?.Invoke(this);
+        }
+
+        // ── WO7: Instant Swap — hot-swap data + visual ────────────────────────
+
+        /// <summary>
+        /// Instantly replaces this tower's type while keeping its current level,
+        /// position, and empowerment state. Called by <see cref="TowerSwapService"/>
+        /// after a confirmed Solana Pay transaction.
+        /// </summary>
+        /// <param name="newData">The TowerData for the target tower type.</param>
+        public void SwapToType(TowerData newData)
+        {
+            if (newData == null)
+            {
+                Debug.LogError("[Tower] SwapToType called with null TowerData.");
+                return;
+            }
+
+            _data = newData;
+            ApplyVisualForLevel(_currentLevel);
+            // TowerCombat reads CurrentRange/CurrentDamage live — no further wiring needed.
+            Debug.Log($"[Tower] Swapped to '{newData.towerName}' at level {_currentLevel}.");
+        }
 
         // NOT [SerializeField] — runtime-spawned towers are configured via Initialize,
         // never Inspector assignment (DEF-74 CP1 Issue 2).
         private TowerData _data;
         private int _currentLevel = 1;
         private GameObject _currentVisual;
+
+        // ── Empowerment (Level 3 prestige — Aether Crystals) ─────────────────
+        // Empowerment is NOT a 4th upgrade level — MaxLevel stays at 3. It is a
+        // one-time, irreversible prestige state available only at max level.
+        // The ability and crystal cost are authored on TowerData.empowerment.
+
+        /// <summary>True once the player has paid the crystal cost and activated this tower's empowerment.</summary>
+        public bool IsEmpowered { get; private set; }
+
+        // ── IDamageableStructure — enemy contact attack target ─────────────────
+        [Header("Combat — enemy targeting")]
+        [Tooltip("Maximum HP. Enemies deal contact damage to towers they path to.")]
+        [SerializeField, Min(10f)] private float _maxHp = 200f;
+
+        private float _hp;
+
+        /// <summary>IDamageableStructure — true while this tower still stands.</summary>
+        public bool IsAlive => _hp > 0f;
+
+        /// <summary>
+        /// Fired when enemies destroy this tower (HP hits 0).
+        /// WaveManager / TowerPersistenceService can subscribe to clean up.
+        /// </summary>
+        public event System.Action<Tower> TowerDestroyed;
 
         // DEF-75 — upgrade VFX prefabs (optional; a tiny code burst is built if null).
         [Header("Upgrade VFX (DEF-75)")]
@@ -81,6 +158,7 @@ namespace DeNelle.Village
         {
             _data = data;
             _currentLevel = 1;
+            _hp = _maxHp;   // IDamageableStructure: full HP on spawn
             ApplyVisualForLevel(_currentLevel);
             EnsureCombat();   // WO-82 — auto-fire once the tower is built
 
@@ -197,6 +275,173 @@ namespace DeNelle.Village
             for (int i = 1; i < renderers.Length; i++) b2.Encapsulate(renderers[i].bounds);
             float feet = b2.min.y - visual.transform.position.y;
             if (feet < 0f) visual.transform.localPosition -= new Vector3(0f, feet, 0f);
+        }
+
+        // ── Empowerment — public API ───────────────────────────────────────────
+
+        /// <summary>
+        /// Attempts to empower this tower. Validates max level, deducts Aether Crystals
+        /// via <see cref="CrystalEconomy"/>, fires the empowerment VFX sequence, and
+        /// notifies <see cref="TowerCombat"/> so it activates the new behavior.
+        /// Returns false when the tower is below max level, already empowered,
+        /// has no empowerment data authored, or the player can't afford the cost.
+        /// </summary>
+        public bool TryEmpower()
+        {
+            if (_data == null)
+            {
+                Debug.LogWarning("[Tower] TryEmpower called on uninitialised tower.");
+                return false;
+            }
+            if (_currentLevel < MaxLevel)
+            {
+                Debug.Log($"[Tower] {_data.towerName} must reach Level {MaxLevel} before empowerment.");
+                return false;
+            }
+            if (IsEmpowered)
+            {
+                Debug.Log($"[Tower] {_data.towerName} is already empowered.");
+                return false;
+            }
+
+            var emp = _data.empowerment;
+            if (emp == null || emp.ability == EmpowermentAbility.None)
+            {
+                Debug.LogWarning($"[Tower] {_data.towerName} has no empowerment data — assign TowerEmpowermentData in the TowerData asset.");
+                return false;
+            }
+
+            // CrystalEconomy guards the balance and writes the save.
+            var economy = CrystalEconomy.Instance;
+            if (economy == null)
+            {
+                Debug.LogWarning("[Tower] CrystalEconomy service not found in scene — add CrystalEconomy to a scene GameObject.");
+                return false;
+            }
+            if (!economy.TrySpend(emp.crystalCost)) return false;
+
+            IsEmpowered = true;
+            ApplyEmpowermentVFX();
+
+            // Notify TowerCombat — it picks up the new behavior on the next fire tick.
+            GetComponent<TowerCombat>()?.OnEmpowered(emp.ability);
+
+            // Hide the standard upgrade UI (already hidden at MaxLevel, but be explicit).
+            if (_activeUpgradeUI != null) _activeUpgradeUI.SetActive(false);
+
+            Debug.Log($"[Tower] '{_data.towerName}' empowered — ability: {emp.ability}  cost paid: {emp.crystalCost} Crystals.");
+            return true;
+        }
+
+        /// <summary>
+        /// Instantiates the one-shot nova burst + the persistent aura loop authored
+        /// on <see cref="TowerData.empowerment"/>. Falls back to a code-built particle
+        /// ring coloured by ability element when no prefabs are assigned.
+        /// </summary>
+        private void ApplyEmpowermentVFX()
+        {
+            var emp = _data?.empowerment;
+            if (emp == null) return;
+
+            // One-shot nova burst — world-parented, auto-destroyed.
+            if (emp.empowerNovaPrefab != null)
+            {
+                var nova = Instantiate(emp.empowerNovaPrefab,
+                    transform.position + Vector3.up * 1.5f, Quaternion.identity);
+                nova.transform.SetParent(null, true);
+                Destroy(nova, 4f);
+            }
+            else
+            {
+                // Code fallback — reuse the upgrade burst builder (slightly larger).
+                BuildCodeBurst(transform.position + Vector3.up * 2.0f);
+            }
+
+            // Persistent aura loop — child of the tower, lasts until tower is destroyed.
+            if (emp.empowerAuraPrefab != null)
+            {
+                var aura = Instantiate(emp.empowerAuraPrefab,
+                    transform.position + Vector3.up * 1.5f, Quaternion.identity, transform);
+                aura.name = "EmpowerAura";
+            }
+            else
+            {
+                BuildCodeAura(emp.ability);
+            }
+
+            CameraShakeBridge.Shake(0.9f, 0.5f);
+        }
+
+        /// <summary>
+        /// Procedural aura ring used when no authored <see cref="TowerEmpowermentData.empowerAuraPrefab"/>
+        /// is assigned. Colour is chosen per empowerment ability.
+        /// </summary>
+        private void BuildCodeAura(EmpowermentAbility ability)
+        {
+            var go = new GameObject("EmpowerAura_Code");
+            go.transform.SetParent(transform, false);
+            go.transform.localPosition = Vector3.up * 1.5f;
+
+            var ps = go.AddComponent<ParticleSystem>();
+            ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+
+            // Ability → colour map — matches elemental-codex.md colour assignments.
+            UnityEngine.Color auraColor = ability switch
+            {
+                EmpowermentAbility.ManaSurge    => new UnityEngine.Color(0.55f, 0.25f, 1.0f),   // violet
+                EmpowermentAbility.GlacialCore  => new UnityEngine.Color(0.25f, 0.75f, 1.0f),   // ice blue
+                EmpowermentAbility.EternalEmber => new UnityEngine.Color(1.0f,  0.38f, 0.05f),  // ember orange
+                EmpowermentAbility.TrueAim      => new UnityEngine.Color(0.20f, 0.90f, 0.40f),  // hunter green
+                _                               => UnityEngine.Color.white,
+            };
+
+            var main = ps.main;
+            main.loop = true;
+            main.startLifetime = 1.6f;
+            main.startSpeed = 0.6f;
+            main.startSize = 0.13f;
+            main.startColor = auraColor;
+            main.maxParticles = 80;
+            main.simulationSpace = ParticleSystemSimulationSpace.World;
+
+            var emission = ps.emission;
+            emission.rateOverTime = 25f;
+
+            var shape = ps.shape;
+            shape.enabled = true;
+            shape.shapeType = ParticleSystemShapeType.Circle;
+            shape.radius = 0.75f;
+
+            // URP-compatible particle material.
+            var rend = go.GetComponent<ParticleSystemRenderer>();
+            if (rend != null)
+            {
+                Shader shader = Shader.Find("Universal Render Pipeline/Particles/Unlit")
+                                ?? Shader.Find("Particles/Standard Unlit")
+                                ?? Shader.Find("Sprites/Default");
+                if (shader != null) rend.sharedMaterial = new Material(shader);
+            }
+
+            ps.Play();
+        }
+
+        // ── IDamageableStructure ──────────────────────────────────────────────
+
+        /// <summary>
+        /// IDamageableStructure — called by Enemy contact attack every tick.
+        /// Reduces HP; destroys the tower and fires TowerDestroyed at zero.
+        /// </summary>
+        public void ApplyContactDamage(float amount)
+        {
+            if (_hp <= 0f) return;
+            _hp -= amount;
+            if (_hp <= 0f)
+            {
+                _hp = 0f;
+                Debug.Log($"[Tower] {(_data != null ? _data.towerName : name)} destroyed by enemies.");
+                TowerDestroyed?.Invoke(this);
+                Destroy(gameObject);
+            }
         }
 
         /// <summary>

@@ -59,6 +59,11 @@ namespace DeNelle.Village
         [Tooltip("Radius within which the Tank scans for threatening targets (hero / structure).")]
         [SerializeField, Min(1f)] private float _threatScanRadius = 12f;
 
+        [Header("Tower targeting (all roles)")]
+        [Tooltip("All enemy roles will detour to attack any Tower within this radius " +
+                 "instead of marching past it to the Heart.")]
+        [SerializeField, Min(1f)] private float _towerScanRadius = 20f;
+
         [Header("Healer scan")]
         [Tooltip("Radius within which the Healer scans for wounded allies.")]
         [SerializeField, Min(1f)] private float _healScanRadius = 6f;
@@ -271,15 +276,18 @@ namespace DeNelle.Village
             switch (Role)
             {
                 case EnemyRole.Tank:
-                    return FindHighestThreatTarget() ?? _heartTransform;
+                    return FindHighestThreatTarget() ?? FindNearestTower() ?? _heartTransform;
 
                 case EnemyRole.Healer:
                     return FindMostDamagedAlly() ?? _heartTransform;
 
-                // DPS / Ranged / MiniBoss return null → position will also be null
-                // → Enemy falls back to its own Heart-march.
+                // DPS / Ranged / MiniBoss: towers are high-priority targets.
+                // If a live Tower is within scan radius, route to it instead of the
+                // Heart — enemies should attack and destroy towers they encounter.
+                // Returns null only when no tower is in range, which drops through to
+                // Enemy's own Heart-march (the desired fallback behaviour).
                 default:
-                    return null;
+                    return FindNearestTower();
             }
         }
 
@@ -335,6 +343,34 @@ namespace DeNelle.Village
                 if (structure == null || !structure.IsAlive) continue;
                 float sqr = (_scanBuffer[i].transform.position - transform.position).sqrMagnitude;
                 if (sqr < nearestSqr) { nearestSqr = sqr; nearest = _scanBuffer[i].transform; }
+            }
+
+            return nearest;
+        }
+
+        // ── Tower targeting (all roles) ───────────────────────────────────────
+
+        /// <summary>
+        /// Scans within <see cref="_towerScanRadius"/> for the nearest live
+        /// <see cref="Tower"/>. All enemy roles use this so they detour to attack
+        /// towers rather than marching past them to the Heart.
+        /// Returns null when no live tower is in range.
+        /// </summary>
+        private Transform FindNearestTower()
+        {
+            int count = Physics.OverlapSphereNonAlloc(
+                transform.position, _towerScanRadius, _scanBuffer);
+
+            Transform nearest = null;
+            float nearestSqr = float.MaxValue;
+
+            for (int i = 0; i < count; i++)
+            {
+                if (_scanBuffer[i] == null) continue;
+                var tower = _scanBuffer[i].GetComponentInParent<Tower>();
+                if (tower == null || !tower.IsAlive) continue;
+                float sqr = (tower.transform.position - transform.position).sqrMagnitude;
+                if (sqr < nearestSqr) { nearestSqr = sqr; nearest = tower.transform; }
             }
 
             return nearest;

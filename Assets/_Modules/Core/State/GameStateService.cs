@@ -54,6 +54,13 @@ namespace DeNelle.Core.State
         /// <summary>The live persisted state. Never null after <see cref="Awake"/>.</summary>
         public GameState State => _state;
 
+        /// <summary>
+        /// Backend-controlled remote config. Populated on <see cref="LoadFromBackend"/>;
+        /// returns <see cref="ServerConfig.Default"/> until the first successful load.
+        /// Never null.
+        /// </summary>
+        public ServerConfig ServerConfig { get; private set; } = ServerConfig.Default;
+
         // ── Per-domain change events (improvement #1) ────────────────────────
         /// <summary>Raised when the resource wallet / materials / voidshards change.</summary>
         public readonly UnityEvent ResourcesChanged = new UnityEvent();
@@ -98,6 +105,15 @@ namespace DeNelle.Core.State
 
             if (_loadOnAwake)
                 Load();
+
+            // WO1: ensure the PersistenceBridge is alive so wave-clear saves,
+            // scene-enter loads, and quit saves are all wired automatically.
+            if (Application.isPlaying)
+                PersistenceBridge.EnsureExists();
+
+            // WO2-4: analytics event tracker with batching, offline queue, circuit breaker.
+            if (Application.isPlaying)
+                DeNelle.Core.Analytics.EventTracker.EnsureExists();
         }
 
         private void OnDestroy()
@@ -260,6 +276,7 @@ namespace DeNelle.Core.State
                 OwnedItemIds = s.OwnedItemIds,
                 PetBonds = ToDoubleList(s.PetBonds),
                 Voidshards = s.Voidshards,
+                AetherCrystals = s.AetherCrystals,
                 Towers = ToDoubleList(s.Towers),
                 TowerAbilities = ToDoubleList(s.TowerAbilities),
                 WallLevel = s.WallLevel,
@@ -312,6 +329,7 @@ namespace DeNelle.Core.State
             if (p.OwnedItemIds != null) s.OwnedItemIds = p.OwnedItemIds;
             if (p.PetBonds != null) s.PetBonds = ToIntList(p.PetBonds);
             if (p.Voidshards.HasValue) s.Voidshards = (int)p.Voidshards.Value;
+            if (p.AetherCrystals.HasValue) s.AetherCrystals = (int)p.AetherCrystals.Value;
             if (p.Towers != null) s.Towers = ToIntList(p.Towers);
             if (p.TowerAbilities != null) s.TowerAbilities = ToIntList(p.TowerAbilities);
             if (p.WallLevel.HasValue) s.WallLevel = (int)p.WallLevel.Value;
@@ -504,6 +522,7 @@ namespace DeNelle.Core.State
             s.OwnedItemIds = new List<string>();
             s.PetBonds = new List<int> { 0, 0, 0 };
             s.Voidshards = 5;
+            s.AetherCrystals = 0;
             s.Towers = GameState.NewZeroed(Constants.TowerSlots);
             s.TowerAbilities = GameState.NewZeroed(Constants.TowerSlots);
             s.WallLevel = 0;
@@ -635,6 +654,13 @@ namespace DeNelle.Core.State
 
             if (resp?.Success != true || resp.Data == null) return;
 
+            // Absorb remote config if present; keep existing config on null (older backend).
+            if (resp.Config != null)
+            {
+                ServerConfig = resp.Config;
+                Debug.Log("[Sync] ServerConfig refreshed from backend.");
+            }
+
             var server = resp.Data;
 
             // Server wins on BestWave only — never roll the player back.
@@ -645,6 +671,7 @@ namespace DeNelle.Core.State
             if (server.Resources.HasValue)
                 _state.Resources = server.Resources.Value;
             if (server.Voidshards.HasValue) _state.Voidshards = (int)server.Voidshards.Value;
+            if (server.AetherCrystals.HasValue) _state.AetherCrystals = (int)server.AetherCrystals.Value;
             if (server.Stone.HasValue)      _state.Stone       = (int)server.Stone.Value;
             if (server.Iron.HasValue)       _state.Iron        = (int)server.Iron.Value;
             if (server.Wood.HasValue)       _state.Wood        = (int)server.Wood.Value;
@@ -906,6 +933,7 @@ namespace DeNelle.Core.State
         {
             [JsonProperty("success")] public bool                       Success { get; set; }
             [JsonProperty("data")]    public SaveSchema.PersistedState  Data    { get; set; }
+            [JsonProperty("config")]  public ServerConfig               Config  { get; set; }
         }
 
         // ── Conversions ──────────────────────────────────────────────────────

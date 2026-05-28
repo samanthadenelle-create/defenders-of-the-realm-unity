@@ -48,6 +48,8 @@ namespace DeNelle.Core.State
         public ResourceBalance Resources = ResourceBalance.Starter;
         /// <summary>#8 — rare Voidshard currency. Fresh = 5. Clamped ≥0.</summary>
         public int Voidshards = 5;
+        /// <summary>Aether Crystals — tower-empowerment currency (v11). Fresh = 0. Clamped >= 0.</summary>
+        public int AetherCrystals = 0;
         /// <summary>#12 — gathered Stone. Fresh = 20. Clamped ≥0.</summary>
         public int Stone = 20;
         /// <summary>#13 — gathered Iron. Fresh = 5. Clamped ≥0.</summary>

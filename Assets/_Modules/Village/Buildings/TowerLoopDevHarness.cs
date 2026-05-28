@@ -42,7 +42,7 @@ namespace DeNelle.Village
             // (procedural cube) if it hasn't been seeded.
             var seeded = Resources.Load<TowerData>("Towers/DevTower");
             _devTower = seeded != null ? seeded : BuildDevTower();
-            Debug.Log("[TowerLoopDev] B = place a free tower (left-click ground), U = upgrade the last-built tower. " +
+            Debug.Log("[TowerLoopDev] B = place a free tower (left-click ground), U = upgrade the last-built tower, K = +1 hero level. " +
                       "(T is the talent tree.) Tower visual: " +
                       (seeded != null ? "seeded model." : "procedural placeholder — run Defenders > Seed Tower Data."));
         }
@@ -68,12 +68,24 @@ namespace DeNelle.Village
                 if (wm != null) { wm.ForceBeginNextWave(); Debug.Log("[TowerLoopDev] N = ForceBeginNextWave()."); }
                 else Debug.Log("[TowerLoopDev] N: no WaveManager in scene.");
             }
+            else if (Input.GetKeyDown(KeyCode.K))
+            {
+                LevelUpHero();
+            }
         }
 
         private static void EnsurePlacement()
         {
             if (TowerPlacementSystem.Instance != null) return;
             new GameObject("TowerPlacementSystem").AddComponent<TowerPlacementSystem>();
+        }
+
+        private static void LevelUpHero()
+        {
+            var hp = HeroProgression.Instance;
+            if (hp == null) { Debug.Log("[TowerLoopDev] K: no HeroProgression in scene yet."); return; }
+            int gained = hp.AddXp(hp.XpToNext + 1f);
+            Debug.Log($"[TowerLoopDev] K = leveled hero up (+{gained}).");
         }
 
         private static void UpgradeLastTower()

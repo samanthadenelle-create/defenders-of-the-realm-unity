@@ -39,6 +39,10 @@ namespace DeNelle.Core.Data
         public float buildTime = 5f;             // seconds to raise the tower
         public ParticleSystem workerHammerVFX;   // looping worker FX during construction (optional)
 
+        [Header("Empowerment (unlocked at Max Level)")]
+        [Tooltip("Leave null or ability=None to disable the Empower button for this tower type.")]
+        public TowerEmpowermentData empowerment;
+
         [Header("UI")]
         public GameObject upgradeUIPrefab;
     }
@@ -56,5 +60,34 @@ namespace DeNelle.Core.Data
         public float range  = 10f;
         public float damage = 8f;
         public int upgradeCost = 100;   // DEF-74 — cost to upgrade INTO this level
+    }
+
+    /// <summary>
+    /// Authoring data for a tower's max-level Empowerment — the ability unlocked
+    /// after Level 3. Cost is in Aether Crystals (local-only, off-chain currency).
+    /// Assign once per TowerData asset; leave <see cref="ability"/> as None and the
+    /// Empower button will not appear for that tower type.
+    /// </summary>
+    [System.Serializable]
+    public class TowerEmpowermentData
+    {
+        [Tooltip("Human-readable ability name shown in the Empower button and tooltip.")]
+        public string abilityName = "Empowerment";
+
+        [Tooltip("Short description shown in the Empower confirm popup.")]
+        [TextArea(2, 4)]
+        public string abilityDescription = "Unlocks a unique ability for this tower.";
+
+        [Tooltip("Aether Crystal cost to activate. Deducted by CrystalEconomy.TrySpend().")]
+        [Min(1)] public int crystalCost = 8;
+
+        [Tooltip("Which empowerment behavior to activate in TowerCombat.")]
+        public EmpowermentAbility ability = EmpowermentAbility.None;
+
+        [Tooltip("One-shot VFX prefab instantiated at world origin at the moment of empowerment (nova burst). Auto-destroyed after 4 s.")]
+        public GameObject empowerNovaPrefab;
+
+        [Tooltip("Persistent VFX prefab parented to the tower permanently after empowerment (aura glow loop).")]
+        public GameObject empowerAuraPrefab;
     }
 }

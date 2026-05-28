@@ -145,6 +145,9 @@ namespace DeNelle.Core
                 Debug.LogError($"[SceneRouter] Scene '{sceneName}' is not in Build Settings — load aborted.");
                 return;
             }
+            // WO1: local save before synchronous transitions (no await available here;
+            // the background delta-sync timer will push the backend diff shortly after).
+            DeNelle.Core.State.GameStateService.Instance?.Save();
             SceneManager.LoadScene(sceneName);
         }
 
@@ -164,6 +167,12 @@ namespace DeNelle.Core
                 Debug.LogError($"[SceneRouter] Scene '{sceneName}' is not in Build Settings — load aborted.");
                 return;
             }
+
+            // WO1: flush local + backend before the scene tears down. Runs during
+            // the fade-out so there is no perceptible delay added to the transition.
+            var svc = DeNelle.Core.State.GameStateService.Instance;
+            if (svc != null)
+                await svc.SaveBeforeSceneChange();
 
             if (Fader != null)
                 await Fader.FadeOut(fadeSeconds);

@@ -710,13 +710,67 @@ namespace DeNelle.Village
         //  Wave clear
         // =====================================================================
 
-        /// <summary>Wave cleared without a breach — advance to the next countdown.</summary>
+        /// <summary>Wave cleared without a breach — award crystals then advance.</summary>
         private void CompleteWave()
         {
             int cleared = _currentWaveId;
             if (_heart != null) _heart.SetState(HeartState.Serene);
+
+            AwardWaveCrystals(cleared);
+
             OnWaveCleared.Invoke(cleared);
+
+            // WO2: analytics.
+            DeNelle.Core.Analytics.EventTracker.Track("wave_completed", new
+            {
+                waveId     = cleared,
+                liveEnemiesKilled = 0, // filled by future combat telemetry pass
+            });
+
             EnterCountdown(cleared + 1);
+        }
+
+        /// <summary>
+        /// Evaluates boss-wave drops and active-event bonuses from <see cref="ServerConfig"/>
+        /// and credits Aether Crystals to <see cref="CrystalEconomy"/> if applicable.
+        /// Drop chance and ranges are all backend-controlled — no rebuild needed to tune.
+        /// </summary>
+        private void AwardWaveCrystals(int waveId)
+        {
+            if (CrystalEconomy.Instance == null) return;
+
+            var cfg = GameStateService.Instance != null
+                ? GameStateService.Instance.ServerConfig
+                : ServerConfig.Default;
+
+            int totalAward = 0;
+
+            // ── Boss-wave drop (every Nth wave, chance-based) ─────────────────
+            if (waveId % cfg.BossInterval == 0)
+            {
+                if (UnityEngine.Random.value <= cfg.DropChance)
+                {
+                    int drop = UnityEngine.Random.Range(cfg.DropMin, cfg.DropMax + 1);
+                    totalAward += drop;
+                    Debug.Log($"[WaveManager] Boss-wave crystal drop — wave {waveId} awarded {drop} Aether Crystal(s). " +
+                              $"(chance={cfg.DropChance:P0}, range={cfg.DropMin}–{cfg.DropMax})");
+                }
+                else
+                {
+                    Debug.Log($"[WaveManager] Boss-wave crystal drop — wave {waveId} missed. " +
+                              $"(chance={cfg.DropChance:P0})");
+                }
+            }
+
+            // ── Special event bonus (every wave while event is active) ────────
+            if (cfg.IsEventActive() && cfg.EventBonus > 0)
+            {
+                totalAward += cfg.EventBonus;
+                Debug.Log($"[WaveManager] Event bonus '{cfg.ActiveEventName}' — +{cfg.EventBonus} crystal(s) on wave {waveId}.");
+            }
+
+            if (totalAward > 0)
+                CrystalEconomy.Instance.AddCrystals(totalAward);
         }
 
         // =====================================================================

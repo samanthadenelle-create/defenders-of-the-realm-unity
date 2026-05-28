@@ -145,6 +145,14 @@ namespace DeNelle.Wallet
 
         private VisualElement BuildPackCard(PackDef pack)
         {
+            // WO2: analytics — player saw this bundle.
+            DeNelle.Core.Analytics.EventTracker.Track("bundle_viewed", new
+            {
+                bundleId   = pack.Sku,
+                bundleName = pack.Name,
+                founderOnly = pack.FounderOnly,
+            });
+
             var card = new VisualElement { name = $"pack-{pack.Sku}" };
             card.AddToClassList(CardClass);
 
@@ -306,6 +314,15 @@ namespace DeNelle.Wallet
                     ApplyPackContents(pack);
                     SetStatus($"{pack.Name} unlocked — tx {Shorten(result.TxSignature)}.");
                     PackPurchased?.Invoke(pack, result);
+
+                    // WO2: analytics — purchase confirmed.
+                    DeNelle.Core.Analytics.EventTracker.Track("purchase_completed", new
+                    {
+                        packId   = pack.Sku,
+                        packName = pack.Name,
+                        currency = currency.ToString(),
+                        txSig    = result.TxSignature,
+                    });
                 }
                 else
                 {

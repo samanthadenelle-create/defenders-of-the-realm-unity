@@ -20,4 +20,24 @@ namespace DeNelle.Core.Data
         FrostNova,
         MagicalAffinity
     }
+
+    /// <summary>
+    /// The unique ability a tower unlocks at max level (Level 3) via Empowerment.
+    /// Separate from <see cref="SpecialAbility"/>, which is the per-upgrade passive
+    /// granted at each upgrade step. Empowerment is a one-time, irreversible prestige
+    /// state chosen by the player after reaching max level.
+    /// </summary>
+    public enum EmpowermentAbility
+    {
+        /// <summary>No empowerment ability assigned (tower not empowered).</summary>
+        None,
+        /// <summary>Arcane Tower — every 5th shot fires a 3-bolt spread burst, each at 60 % damage.</summary>
+        ManaSurge,
+        /// <summary>Frost Tower — pulses an AoE slow field; all enemies in range move at 70 % speed.</summary>
+        GlacialCore,
+        /// <summary>Flame Tower — every hit applies a Burn DoT (4 dmg/s for 4 s, non-stacking).</summary>
+        EternalEmber,
+        /// <summary>Arrow Tower — acquires a second target (highest HP in range) and fires both simultaneously.</summary>
+        TrueAim,
+    }
 }
