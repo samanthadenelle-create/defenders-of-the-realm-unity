@@ -379,6 +379,17 @@ namespace DeNelle.Audio
             fadeIn.clip = clip;
             fadeIn.loop = def.Loop;
             fadeIn.volume = 0f;
+
+            // Guard against clips that exist as an AudioClip object but whose
+            // underlying audio file is absent from the build (FMOD "File not found"
+            // crash that fires on every wave clear when "victory" is missing).
+            if (clip.loadState == AudioDataLoadState.Failed)
+            {
+                Debug.LogWarning($"[AudioService] Skipping Play for '{track}' — clip '{clip.name}' failed to load (file missing from build?).");
+                _fading = false;
+                return;
+            }
+
             fadeIn.Play();
 
             // Diagnostic (DEF audio #8 "no sound"): confirms music actually starts +

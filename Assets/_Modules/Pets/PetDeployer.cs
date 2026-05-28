@@ -235,7 +235,9 @@ namespace DeNelle.Pets
                 }
 
                 pet = go.AddComponent<Pet>();
+#if UNITY_EDITOR
                 AddPetNameTag(go, def);
+#endif
             }
 
             // Attach the hero-leash so the pet trails the hero around the

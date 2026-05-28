@@ -14,6 +14,7 @@
 // preserved so the hero stays grounded.
 // =============================================================================
 
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -45,6 +46,10 @@ namespace DeNelle.Village
 
         private bool _loggedFirstInput;
         private Animator _animator;
+#if UNITY_EDITOR
+        // Collision diagnostic: log each unique blocking collider once.
+        private readonly HashSet<Collider> _loggedColliders = new HashSet<Collider>();
+#endif
         private static readonly int AnimSpeed   = Animator.StringToHash("Speed");
 
         // DEF-70: victory pose — triggered when WaveManager fires OnWaveCleared.
@@ -180,6 +185,19 @@ namespace DeNelle.Village
                         ~0, QueryTriggerInteraction.Ignore))
                 {
                     distance = Mathf.Max(0f, hit.distance - 0.06f);
+#if UNITY_EDITOR
+                    // Collision diagnostic — logs once per unique collider so the
+                    // blocking object can be identified via the Unity console.
+                    // Editor-only to avoid performance impact in builds.
+                    if (!_loggedColliders.Contains(hit.collider))
+                    {
+                        _loggedColliders.Add(hit.collider);
+                        Debug.Log($"[HeroLocomotion] Blocked by '{hit.collider.gameObject.name}' " +
+                                  $"(layer={LayerMask.LayerToName(hit.collider.gameObject.layer)}) " +
+                                  $"at pos={hit.collider.transform.position} " +
+                                  $"type={hit.collider.GetType().Name}");
+                    }
+#endif
                 }
                 transform.position += dir * distance;
 

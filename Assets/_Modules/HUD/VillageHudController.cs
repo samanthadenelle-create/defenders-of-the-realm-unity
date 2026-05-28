@@ -1086,33 +1086,9 @@ namespace DeNelle.HUD
             int listeners = BuildRequested?.GetPersistentEventCount() ?? 0;
             Debug.Log("[VillageHud] Build CLICK — persistent listeners: " + listeners);
             BuildRequested?.Invoke();
-            // Belt-and-braces: also poke BuildMenu directly via reflection in
-            // case the bridge listener wasn't wired this session (owner
-            // 2026-05-20: "complete build and skillset not clickable").
-            try
-            {
-                System.Type t = null;
-                foreach (var asm in System.AppDomain.CurrentDomain.GetAssemblies())
-                {
-                    t = asm.GetType("DeNelle.Village.BuildMenu", false);
-                    if (t != null) break;
-                }
-                if (t != null)
-                {
-                    var inst = UnityEngine.Object.FindObjectOfType(t) as Component;
-                    if (inst != null)
-                    {
-                        var open = t.GetMethod("Open");
-                        open?.Invoke(inst, null);
-                        Debug.Log("[VillageHud] BuildMenu.Open invoked directly via reflection.");
-                    }
-                    else Debug.LogWarning("[VillageHud] BuildMenu instance not found in scene.");
-                }
-            }
-            catch (System.Exception ex)
-            {
-                Debug.LogError("[VillageHud] Direct BuildMenu.Open failed: " + ex.Message);
-            }
+            // NOTE: reflection belt-and-braces removed (2026-05-28) — it caused
+            // BuildMenu.Open to fire twice per click. The UnityEvent (BuildRequested)
+            // is the single canonical path; ensure BuildMenuHudBridge is wired in scene.
         }
 
         /// <summary>Forwards the repair-prompt Repair button to RepairConfirmRequested.</summary>

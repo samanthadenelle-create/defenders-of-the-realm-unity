@@ -59,12 +59,14 @@ namespace DeNelle.Village
             _lastTargetPos = _target.position;
             AimAtHero();
 
+#if UNITY_EDITOR
             // DIAG: list EVERY MonoBehaviour on the camera GameObject.
             var sb = new StringBuilder();
             foreach (var m in GetComponents<MonoBehaviour>())
                 if (m != null) sb.Append(m.GetType().Name).Append(' ');
             Debug.Log($"[CAM DIAG] Start target={_target.name} camScripts=[{sb}]");
             LogAllCameras("Start");
+#endif
             EnforceSoleCamera();
         }
 
@@ -90,6 +92,8 @@ namespace DeNelle.Village
 
             // DIAG ~2/sec for ~15s: is the TARGET moving (=> input/phantom drift)
             // or is the camera moving while the target is still (=> rogue script)?
+            // Editor-only — suppressed in builds to avoid log spam.
+#if UNITY_EDITOR
             _diagTimer -= Time.deltaTime;
             if (_diagCount < 30 && _diagTimer <= 0f)
             {
@@ -103,6 +107,7 @@ namespace DeNelle.Village
                           $"camVel={_velocity.magnitude:F2} camPos={transform.position}");
                 if (_diagCount == 3) LogAllCameras("tick3");    // after everything spawned
             }
+#endif
             _lastTargetPos = _target.position;
         }
 
@@ -123,8 +128,10 @@ namespace DeNelle.Village
                 if (c.targetTexture != null) continue;          // offscreen RT cams are fine
                 if (!c.enabled) continue;
                 c.enabled = false;
+#if UNITY_EDITOR
                 Debug.Log($"[CAM DIAG] disabled rogue screen camera '{c.name}' " +
                           $"(scene='{c.gameObject.scene.name}', pos={c.transform.position})");
+#endif
             }
             if (_self != null)
             {
@@ -137,6 +144,7 @@ namespace DeNelle.Village
         // HIGHEST depth is what the player actually sees. If that is NOT this
         // VillageCamera, we've found why the screen shows a pet while our follow
         // cam sits correctly on the hero.
+#if UNITY_EDITOR
         private void LogAllCameras(string when)
         {
             var sb = new StringBuilder();
@@ -151,6 +159,7 @@ namespace DeNelle.Village
             }
             Debug.Log(sb.ToString());
         }
+#endif
 
         private void AimAtHero()
         {
