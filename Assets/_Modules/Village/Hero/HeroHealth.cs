@@ -76,8 +76,11 @@ namespace DeNelle.Village
             if (_cooldown > 0f) return;
 
             Vector3 centre = transform.position + Vector3.up * 0.9f;
+            // Use Collide (not Ignore): PatriciaLight ("Defend the Tower") spawns its
+            // enemies with TRIGGER colliders, so an Ignore sweep finds nothing and the
+            // hero never takes damage there. Collide matches the hero/pet attack sweeps.
             int n = Physics.OverlapSphereNonAlloc(centre, EngageRadius, _buf, _enemyMask,
-                                                  QueryTriggerInteraction.Ignore);
+                                                  QueryTriggerInteraction.Collide);
             int attackers = 0;
             for (int i = 0; i < n; i++)
             {
