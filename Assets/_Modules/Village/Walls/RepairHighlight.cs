@@ -166,10 +166,13 @@ namespace DeNelle.Village
             float pulse = 1f + Mathf.Sin(_phase) * amp;
             ApplyScale(pulse);
 
-            // Slow spin on the floating ring for a touch of life.
+            // NO spin (owner 2026-05-27): the "ring" is a solid flat quad, so
+            // spinning it around its normal read as a rotating yellow SQUARE, which
+            // the owner mistook for an "under attack" cue. Hold it flat — the gentle
+            // scale pulse is enough "life." "Under attack" is now its own red signal
+            // (StructureAttackAlert); this amber marker only means "repairable".
             if (_ringRenderer != null)
-                _ringRenderer.transform.localRotation =
-                    Quaternion.Euler(90f, _phase * 24f, 0f);
+                _ringRenderer.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
         }
 
         private void ApplyScale(float pulse)
