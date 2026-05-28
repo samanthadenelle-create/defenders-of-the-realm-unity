@@ -71,7 +71,7 @@
       "url": "https://packages.unity.com"
     },
     "com.unity.localization": {
-      "version": "1.5.8",
+      "version": "1.5.11",
       "depth": 0,
       "source": "registry",
       "dependencies": {
