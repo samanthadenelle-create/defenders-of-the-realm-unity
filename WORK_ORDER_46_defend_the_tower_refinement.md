@@ -51,6 +51,37 @@ fresh build, and keep the scene revertible.
 
 ---
 
+## C2. Playtest round 2 (post-fix dev build, 2026-05-28)
+
+| ID | Type | Item | Status / root cause |
+|----|------|------|---------------------|
+| REG | Bug | Console flood "Tag: Tower/Building is not defined" | **FIXED** — my P10/placement code used `CompareTag`/`tag = "Tower"` but the project had `tags: []`. Added Tower/Building tags + layers to TagManager.asset. Needs rebuild. |
+| P7b | Bug | Enemies STILL walk through hero | Targeting fix only redirects pathing. Enemy `TickContactAttack` damages only `IDamageableStructure`; the hero has **no health component** and there's no enemy→hero attack. True engagement = a new system (hero HP + enemy melee-vs-hero + death). Overlaps P11. **Design decision needed.** |
+| EMP | Feat | Couldn't see empowerment VFX | Root: **no tower asset has empowerment data** (`empowerment` block empty in ArcherTower/FrostTower/MageTower/DevTower) so `ApplyEmpowermentVFX` bails. Added dev-only **F8 force-empower** (EmpowermentDebugTrigger + Tower.DebugForceEmpower) to showcase the auras. Real fix = author empowerment data on the 4 tower assets. |
+| P11 | Bug | Defeat in Defend-the-Tower just exits to map | No proper loss/defeat flow (no defeat screen / retry). |
+| P12 | Bug | Heart/Tree: ATB breach-choice fires on FIRST hit | Should trigger at ~30% Heart integrity, not on first enemy contact. Trigger lives in HeartController/WaveManager breach path → gate on HpFraction <= 0.30. |
+| P13 | Bug | Crystal cluster prompt reads "[F] Healer's Cottage" | Wrong interact label/target on the crystal mine (WO28 building-interact-tag-alignment). Scene-wiring / interactor target. |
+| P14 | Bug | Crystal shards don't rotate | `CrystalVfx` rotation not running on the shards — component not attached in scene, or rotation not implemented. Verify CrystalVfx + scene wiring. |
+| F4 | Feat | Marketplace building should open Cosmetic & pack store | `MarketplaceInteractor` exists (proximity F → PackStore) but appears unwired in the scene (not attached to "Marketplace" GO / `_storeUiRoot` unset). |
+
+> Note: P11/P12/P13/P14/F4 are largely **scene-wiring / data** issues — several need a careful
+> scene re-bake (beware [[village-scene-resave-corruption]]), not just code.
+
+## C3. Playtest round 3 (2026-05-28) — hero health decided + more
+
+OWNER DECISION: the hero **should take damage and have a visible health bar** ("like we
+used to have"). Implemented `HeroHealth` (proximity contact-damage from enemies + IMGUI
+bar, self-attaching) — see Hero/HeroHealth.cs. Resolves P7b damage intake; loss flow (P11)
+still open (OnDied event is the hook).
+
+| ID | Type | Item | Notes |
+|----|------|------|-------|
+| HH | Feat | Hero health + bar | **Implemented** (HeroHealth.cs). Enemies within 1.5 m deal contact damage; IMGUI bar top-left. Tuning first-pass. |
+| P15 | Bug | "Folk's Old Granary" portal indicator (giant arrow + label) floats over empty field, detached from the actual archway portal | WO30 dungeon-portal reposition. |
+| P17 | Bug | Walk through walls at gates; gates never open/close/animate | Gate.cs — no collider / no open-close logic wired. |
+| F5 | Feat | Pets: start with **one** pet (the 3 are placeholder shapes); add a way to **unlock** more | Pet roster + unlock mechanism. |
+| F6 | Feat | Pets don't earn XP | Want shared damage→XP for pets too (PetProgression as an XpEarner in ProgressionManager.Distribute). |
+
 ## D. Recommended sequencing
 1. ✅ Land the 4 code fixes (this session).
 2. Get Scene-view screenshot → confirm "5 shapes" = placeholder tower vs stacked towers.
