@@ -151,6 +151,23 @@ namespace DeNelle.Editor
                 Debug.LogWarning($"[DesktopBuild] Could not force Direct3D11 graphics API: {e.Message}");
             }
 
+            // Windowed by default (owner 2026-05-27): the player opened in exclusive
+            // fullscreen, which is awkward to alt-tab out of mid-playtest. Ship a
+            // resizable 1600x900 window instead. Players can still toggle fullscreen
+            // at runtime with Alt+Enter.
+            try
+            {
+                PlayerSettings.fullScreenMode      = FullScreenMode.Windowed;
+                PlayerSettings.defaultScreenWidth  = 1600;
+                PlayerSettings.defaultScreenHeight = 900;
+                PlayerSettings.resizableWindow     = true;
+                Debug.Log("[DesktopBuild] Default display mode set to Windowed 1600x900 (resizable; Alt+Enter toggles fullscreen).");
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning($"[DesktopBuild] Could not set windowed mode: {e.Message}");
+            }
+
             var options = new BuildPlayerOptions
             {
                 scenes = scenes,
