@@ -109,6 +109,50 @@ namespace DeNelle.Village
 
             // ── RIM: cool blue back-light for silhouette/separation against the murk ──
             EnsureRim();
+
+            // ── BACKGROUND: a dramatic dusk skybox so the world has a backdrop
+            //    instead of flat-black void behind the fog (owner playtest 2026-05-28). ──
+            EnsureSkybox();
+        }
+
+        // ── Background skybox (mood-matched dusk) ─────────────────────────────
+
+        private static readonly int s_SkyTint     = Shader.PropertyToID("_SkyTint");
+        private static readonly int s_GroundColor  = Shader.PropertyToID("_GroundColor");
+        private static readonly int s_AtmoThick    = Shader.PropertyToID("_AtmosphereThickness");
+        private static readonly int s_Exposure     = Shader.PropertyToID("_Exposure");
+        private static readonly int s_SunSize      = Shader.PropertyToID("_SunSize");
+
+        private Material _sky;
+
+        /// <summary>
+        /// Installs a procedural dusk skybox tinted to the last-chance amber→violet
+        /// palette so the scene reads as a place at dusk rather than a black void
+        /// behind the fog, and points the main camera at it. Built procedurally — no
+        /// authored cubemap asset required. Idempotent.
+        /// </summary>
+        private void EnsureSkybox()
+        {
+            if (_sky == null)
+            {
+                var shader = Shader.Find("Skybox/Procedural");
+                if (shader == null) return;   // shader stripped from build — keep existing clear
+                _sky = new Material(shader) { name = "LastChanceSky (runtime)" };
+            }
+
+            if (_sky.HasProperty(s_SkyTint))    _sky.SetColor(s_SkyTint,    new Color(0.30f, 0.17f, 0.24f)); // dusky violet sky
+            if (_sky.HasProperty(s_GroundColor))_sky.SetColor(s_GroundColor,new Color(0.10f, 0.06f, 0.08f)); // dark horizon band
+            if (_sky.HasProperty(s_AtmoThick))  _sky.SetFloat(s_AtmoThick, 1.7f);   // thick, hazy dusk
+            if (_sky.HasProperty(s_Exposure))   _sky.SetFloat(s_Exposure, 0.7f);    // dim — never washes out the murk
+            if (_sky.HasProperty(s_SunSize))    _sky.SetFloat(s_SunSize, 0.04f);    // low amber sun disc
+
+            RenderSettings.skybox = _sky;
+            DynamicGI.UpdateEnvironment();
+
+            // Only override a flat solid-colour clear — don't stomp an intentional setup.
+            var cam = Camera.main;
+            if (cam != null && cam.clearFlags == CameraClearFlags.SolidColor)
+                cam.clearFlags = CameraClearFlags.Skybox;
         }
 
         private void EnsureRim()
