@@ -18,7 +18,7 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
-namespace DeNelle.Core.Debug
+namespace DeNelle.Core.DevOverlay
 {
     /// <summary>
     /// Playtesting overlay — wallet binding, backend sync, and state inspection.
