@@ -26,6 +26,7 @@ using System.Linq;
 using System.Text;
 using Cysharp.Threading.Tasks;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.Networking;
@@ -692,13 +693,22 @@ namespace DeNelle.Core.State
 
         private async UniTask<bool> SendDelta(SyncDeltaPayload delta)
         {
+            // `delta` is the "something changed" signal (BuildDeltaPayload gates it);
+            // we send the FULL snapshot so save/load round-trip through one shape.
             byte[] body;
             try
             {
-                // PascalCase property names (default resolver) match the field
-                // names api/game/save.js reads (body.PlayerId, deltaFields.Crystals…).
-                var json = JsonConvert.SerializeObject(delta);
-                body = Encoding.UTF8.GetBytes(json);
+                // Serialize the full PersistedState under the SAME camelCase keys
+                // LoadFromBackend reads (nested "resources", arrays, …), then add the
+                // backend's required lowercase "playerId". The deployed store is a
+                // merge-upsert, so strip null fields — never null-out a server value
+                // on a partial sync.
+                var snapshot = Snapshot();
+                var jo = JObject.FromObject(snapshot, JsonSerializer.Create(SaveSchema.JsonSettings));
+                foreach (var p in jo.Properties().Where(p => p.Value.Type == JTokenType.Null).ToList())
+                    jo.Remove(p.Name);
+                jo["playerId"] = _state.BoundWallet;
+                body = Encoding.UTF8.GetBytes(jo.ToString(Formatting.None));
             }
             catch (Exception ex)
             {
@@ -717,7 +727,7 @@ namespace DeNelle.Core.State
 
             if (req.result == UnityWebRequest.Result.Success)
             {
-                Debug.Log($"[Sync] Saved {body.Length} bytes (compressed delta).");
+                Debug.Log($"[Sync] Saved {body.Length} bytes (full snapshot).");
                 return true;
             }
 
