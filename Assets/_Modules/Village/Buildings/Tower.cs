@@ -586,38 +586,86 @@ namespace DeNelle.Village
         // Procedural fallbacks (no authored tower art / VFX yet)
         // ---------------------------------------------------------------------
 
-        /// <summary>A tinted primitive that grows + recolours per level.</summary>
+        /// <summary>
+        /// A distinct per-type placeholder so each tower reads differently until
+        /// authored art (TowerUpgrade.visualPrefab) is assigned. Silhouette + palette
+        /// are keyed off TowerData.towerName; the body grows and an accent piece
+        /// recolours per level so upgrades still read. Child primitive colliders are
+        /// stripped — the tower root owns the single body collider (EnsureBodyCollider).
+        /// </summary>
         private GameObject BuildPlaceholderVisual(int level)
         {
-            var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            go.name = $"TowerVisual_L{level}";
-            go.transform.SetParent(transform, false);
+            var root = new GameObject($"TowerVisual_L{level}");
+            root.transform.SetParent(transform, false);
+            root.transform.localPosition = Vector3.zero;
 
-            float h = 1.5f + level * 0.8f;
-            go.transform.localScale = new Vector3(1f, h, 1f);
-            go.transform.localPosition = new Vector3(0f, h * 0.5f, 0f);
+            string n = (_data.towerName ?? string.Empty).ToLowerInvariant();
+            float lift = level * 0.45f;   // body grows with level
 
-            // Tag so the placement overlap test can see it as an obstacle.
-            go.tag = "Untagged";
+            // Per-level accent (kept from the old visual so upgrades still read).
+            Color accent = level switch
+            {
+                1 => new Color(0.60f, 0.60f, 0.66f),
+                2 => new Color(0.45f, 0.62f, 0.85f),
+                _ => new Color(0.90f, 0.75f, 0.30f),
+            };
 
-            var rend = go.GetComponent<Renderer>();
+            if (n.Contains("frost") || n.Contains("ice"))
+            {
+                Color ice = new Color(0.55f, 0.80f, 0.95f);
+                AddVisualPart(root, PrimitiveType.Cube, new Vector3(1.4f, 0.6f, 1.4f),        new Vector3(0f, 0.3f, 0f),                 Quaternion.identity,         ice * 0.7f);
+                AddVisualPart(root, PrimitiveType.Cube, new Vector3(0.7f, 2.2f + lift, 0.7f), new Vector3(0f, 1.5f + lift * 0.5f, 0f),   Quaternion.Euler(0, 45, 0),  ice);
+                AddVisualPart(root, PrimitiveType.Cube, new Vector3(0.35f, 0.9f, 0.35f),      new Vector3(0f, 2.9f + lift, 0f),          Quaternion.Euler(0, 45, 0),  accent);
+            }
+            else if (n.Contains("flame") || n.Contains("fire") || n.Contains("ember"))
+            {
+                Color fire = new Color(0.80f, 0.30f, 0.15f);
+                AddVisualPart(root, PrimitiveType.Cylinder, new Vector3(1.2f, 0.35f, 1.2f),       new Vector3(0f, 0.35f, 0f),          Quaternion.identity, fire * 0.6f);
+                AddVisualPart(root, PrimitiveType.Cylinder, new Vector3(0.9f, 1.6f + lift, 0.9f), new Vector3(0f, 1.6f + lift, 0f),    Quaternion.identity, fire);
+                AddVisualPart(root, PrimitiveType.Sphere,   new Vector3(0.7f, 0.7f, 0.7f),        new Vector3(0f, 3.2f + lift * 2f, 0f), Quaternion.identity, accent);
+            }
+            else if (n.Contains("arcane") || n.Contains("mage") || n.Contains("mana"))
+            {
+                Color arc = new Color(0.55f, 0.35f, 0.85f);
+                AddVisualPart(root, PrimitiveType.Cylinder, new Vector3(0.7f, 2.0f + lift, 0.7f), new Vector3(0f, 2.0f + lift, 0f),      Quaternion.identity,           arc);
+                AddVisualPart(root, PrimitiveType.Cube,     new Vector3(0.6f, 0.6f, 0.6f),        new Vector3(0f, 4.2f + lift * 2f, 0f), Quaternion.Euler(45, 45, 0),   accent);
+            }
+            else   // archer watchtower (default)
+            {
+                Color wood = new Color(0.45f, 0.32f, 0.20f);
+                AddVisualPart(root, PrimitiveType.Cube,     new Vector3(1.5f, 1.0f, 1.5f), new Vector3(0f, 0.5f, 0f),           Quaternion.identity, wood);
+                AddVisualPart(root, PrimitiveType.Cube,     new Vector3(1.7f, 0.5f, 1.7f), new Vector3(0f, 1.5f + lift, 0f),    Quaternion.identity, wood * 1.2f);
+                AddVisualPart(root, PrimitiveType.Cylinder, new Vector3(0.2f, 1.0f, 0.2f), new Vector3(0f, 2.6f + lift, 0f),    Quaternion.identity, accent);
+            }
+
+            return root;
+        }
+
+        /// <summary>Adds a tinted primitive child (collider stripped) to a tower visual root.</summary>
+        private static void AddVisualPart(GameObject parent, PrimitiveType type, Vector3 scale, Vector3 localPos, Quaternion localRot, Color color)
+        {
+            var part = GameObject.CreatePrimitive(type);
+            part.transform.SetParent(parent.transform, false);
+            part.transform.localScale = scale;
+            part.transform.localPosition = localPos;
+            part.transform.localRotation = localRot;
+
+            // The tower root owns the single body collider; strip the primitive
+            // colliders so they neither fight it nor block the placement cursor ray.
+            var col = part.GetComponent<Collider>();
+            if (col != null) Destroy(col);
+
+            var rend = part.GetComponent<Renderer>();
             if (rend != null)
             {
                 Shader shader = Shader.Find("Universal Render Pipeline/Lit")
                                 ?? Shader.Find("Standard")
                                 ?? Shader.Find("Sprites/Default");
                 var mat = new Material(shader);
-                Color tint = level switch
-                {
-                    1 => new Color(0.55f, 0.55f, 0.60f),   // grey stone
-                    2 => new Color(0.40f, 0.55f, 0.80f),   // reinforced blue
-                    _ => new Color(0.85f, 0.70f, 0.25f),   // gilded gold
-                };
-                if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", tint);
-                else mat.color = tint;
+                if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", color);
+                else mat.color = color;
                 rend.sharedMaterial = mat;
             }
-            return go;
         }
 
         /// <summary>A tiny self-destroying code particle burst (visible with no prefab).</summary>
