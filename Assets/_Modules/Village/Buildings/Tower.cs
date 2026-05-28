@@ -251,6 +251,44 @@ namespace DeNelle.Village
             {
                 _currentVisual = BuildPlaceholderVisual(level);
             }
+
+            EnsureBodyCollider();
+        }
+
+        /// <summary>
+        /// Ensures the tower root carries a solid collider, so the hero cannot walk
+        /// through it, OnMouseDown long-press selection fires, and the placement
+        /// overlap-check can detect the tower. Sized from the current visual's
+        /// renderer bounds and rebuilt each level so it tracks the tower's growth.
+        /// Also assigns the Tower (or Building) layer + tag when they exist so the
+        /// placement layer-mask and tag checks recognise this structure.
+        /// </summary>
+        private void EnsureBodyCollider()
+        {
+            int towerLayer = LayerMask.NameToLayer("Tower");
+            if (towerLayer < 0) towerLayer = LayerMask.NameToLayer("Building");
+            if (towerLayer >= 0) gameObject.layer = towerLayer;
+            try { gameObject.tag = "Tower"; } catch { /* tag undefined in project — keep default */ }
+
+            float height = 4.5f, radius = 0.9f;
+            if (_currentVisual != null)
+            {
+                var renderers = _currentVisual.GetComponentsInChildren<Renderer>();
+                if (renderers != null && renderers.Length > 0)
+                {
+                    Bounds b = renderers[0].bounds;
+                    for (int i = 1; i < renderers.Length; i++) b.Encapsulate(renderers[i].bounds);
+                    height = Mathf.Max(1f, b.size.y);
+                    radius = Mathf.Max(0.4f, Mathf.Max(b.size.x, b.size.z) * 0.5f);
+                }
+            }
+
+            var capsule = GetComponent<CapsuleCollider>();
+            if (capsule == null) capsule = gameObject.AddComponent<CapsuleCollider>();
+            capsule.isTrigger = false;
+            capsule.height = height;
+            capsule.radius = radius;
+            capsule.center = new Vector3(0f, height * 0.5f, 0f);
         }
 
         /// <summary>

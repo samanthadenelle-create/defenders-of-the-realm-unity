@@ -71,7 +71,11 @@ namespace DeNelle.Village
             Mathf.Min(MaxDamageMultiplier, 1f + (_level - 1) * DamagePerLevel);
 
         /// <summary>Growing XP cost to reach the level AFTER <paramref name="level"/> (owner's hero curve).</summary>
-        private static float XpToNextFor(int level) => level * 120f + 80f;
+        // DEF playtest 2026-05-28: the old curve (level*120+80 → 200 XP for L1→L2) was
+        // far too shallow against kill-XP rewards (~1800 XP/wave), so a single wave
+        // jumped the hero ~5 levels and spammed the level-up popup. Steepened to a
+        // quadratic so an early wave is roughly one level. First-pass values — tune.
+        private static float XpToNextFor(int level) => 1000f + (level - 1) * 700f + (level - 1) * (level - 1) * 100f;
 
         /// <summary>Wisdom granted for reaching <paramref name="level"/> — scales by band (owner's v3).</summary>
         private static int WisdomForLevel(int level)

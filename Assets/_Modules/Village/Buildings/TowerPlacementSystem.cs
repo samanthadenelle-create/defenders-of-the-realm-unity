@@ -120,7 +120,7 @@ namespace DeNelle.Village
             Vector3 pos = SnapToGrid(hit.point);
             _currentMarker.transform.position = pos;
 
-            bool valid = CanPlace(pos);
+            bool valid = IsValidSurface(hit) && CanPlace(pos);
             if (_markerRenderer != null)
             {
                 _markerPropertyBlock.SetColor("_BaseColor", valid ? s_validColor : s_invalidColor);
@@ -129,6 +129,21 @@ namespace DeNelle.Village
 
             if (valid && Input.GetMouseButtonDown(0))
                 PlaceTower(pos);
+        }
+
+        /// <summary>
+        /// True when the cursor hit is buildable ground: a near-flat top surface that
+        /// is not another tower/building. The ray hits any collider on the Default
+        /// layer (rooftops, props, slopes), so without this check a tower could be
+        /// placed in the air on top of whatever the cursor happened to be over.
+        /// </summary>
+        private static bool IsValidSurface(RaycastHit hit)
+        {
+            if (hit.collider == null) return false;
+            if (hit.normal.y < 0.85f) return false;   // not a flat, upward-facing top
+            if (hit.collider.CompareTag("Tower") || hit.collider.CompareTag("Building"))
+                return false;                          // standing on a structure
+            return true;
         }
 
         /// <summary>Snap a world point to the build grid (keeps Y from the hit).</summary>

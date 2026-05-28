@@ -64,6 +64,11 @@ namespace DeNelle.Village
                  "instead of marching past it to the Heart.")]
         [SerializeField, Min(1f)] private float _towerScanRadius = 20f;
 
+        [Header("Hero engagement (all roles)")]
+        [Tooltip("Non-Tank roles engage the hero when it comes within this radius, " +
+                 "instead of ignoring it and marching past to towers/Heart.")]
+        [SerializeField, Min(1f)] private float _heroEngageRadius = 4f;
+
         [Header("Healer scan")]
         [Tooltip("Radius within which the Healer scans for wounded allies.")]
         [SerializeField, Min(1f)] private float _healScanRadius = 6f;
@@ -281,13 +286,11 @@ namespace DeNelle.Village
                 case EnemyRole.Healer:
                     return FindMostDamagedAlly() ?? _heartTransform;
 
-                // DPS / Ranged / MiniBoss: towers are high-priority targets.
-                // If a live Tower is within scan radius, route to it instead of the
-                // Heart — enemies should attack and destroy towers they encounter.
-                // Returns null only when no tower is in range, which drops through to
-                // Enemy's own Heart-march (the desired fallback behaviour).
+                // DPS / Ranged / MiniBoss: engage the hero first if it is within
+                // close range (so the hero can body-block / fight instead of being
+                // ignored), then towers, then drop through to Enemy's Heart-march.
                 default:
-                    return FindNearestTower();
+                    return FindNearbyHero() ?? FindNearestTower();
             }
         }
 
@@ -302,6 +305,21 @@ namespace DeNelle.Village
                     return _heroTransform;
             }
             return FindNearestStructure();
+        }
+
+        // ── All roles: opportunistic close-range hero engage ──────────────────
+
+        /// <summary>
+        /// Returns the hero if it is within <see cref="_heroEngageRadius"/>, else null.
+        /// Lets non-Tank roles attack the hero when it physically gets in their way
+        /// instead of walking straight past it (DEF playtest: "enemies ignore me").
+        /// </summary>
+        private Transform FindNearbyHero()
+        {
+            if (_heroTransform == null) return null;
+            float r = _heroEngageRadius;
+            return (_heroTransform.position - transform.position).sqrMagnitude <= r * r
+                ? _heroTransform : null;
         }
 
         // ── Healer: find the most wounded living ally ─────────────────────────
