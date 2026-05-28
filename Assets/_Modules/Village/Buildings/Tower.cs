@@ -376,6 +376,29 @@ namespace DeNelle.Village
         /// on <see cref="TowerData.empowerment"/>. Falls back to a code-built particle
         /// ring coloured by ability element when no prefabs are assigned.
         /// </summary>
+        /// <summary>
+        /// DEV-ONLY: force this tower into the empowered state with <paramref name="ability"/>
+        /// and play the elemental aura/burst, bypassing the level / crystal / asset-data
+        /// gates. Lets a debug hotkey showcase the empowerment VFX before the TowerData
+        /// assets have empowerment authored. Body is compiled out of release builds.
+        /// </summary>
+        public void DebugForceEmpower(EmpowermentAbility ability)
+        {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            if (IsEmpowered) return;
+            IsEmpowered = true;
+
+            BuildCodeBurst(transform.position + Vector3.up * 2.0f);
+            BuildCodeAura(ability);
+            CameraShakeBridge.Shake(0.9f, 0.5f);
+
+            var combat = GetComponent<TowerCombat>();
+            if (combat != null) combat.OnEmpowered(ability);
+
+            Debug.Log($"[Tower] DEBUG force-empower {(_data != null ? _data.towerName : name)} -> {ability}");
+#endif
+        }
+
         private void ApplyEmpowermentVFX()
         {
             var emp = _data?.empowerment;
