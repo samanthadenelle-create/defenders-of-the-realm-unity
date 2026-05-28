@@ -1,0 +1,151 @@
+// =============================================================================
+// VFXType — master catalogue of every named VFX event in the game.
+// -----------------------------------------------------------------------------
+// Assembly: DeNelle.Village   Namespace: DeNelle.Village
+//
+// Add a new value here whenever a new effect is needed — VFXCatalog then lets
+// a designer wire the prefab (or leave it null for procedural fallback).
+//
+// Naming convention:  Category_Descriptor
+//   Impact_*   — oneshot hit/explosion at a point in world space
+//   Projectile_* — moving travel effect (attached to a projectile GameObject)
+//   Cast_*     — charge/wind-up on the caster Transform
+//   Death_*    — oneshot on enemy death
+//   Aura_*     — persistent looping effect (returns VFXHandle)
+//   Env_*      — persistent environmental loop (torch, fog, portal …)
+//   Juice_*    — feedback/feel moments (crit, combo, level-up …)
+// =============================================================================
+
+namespace DeNelle.Village
+{
+    public enum VFXType
+    {
+        None = 0,
+
+        // ── Impacts ──────────────────────────────────────────────────────────
+        /// <summary>Melee contact / generic physical hit (bone-grey sparks).</summary>
+        Impact_Physical,
+        /// <summary>Arcane / Aether bolt or spell impact (white-violet ring).</summary>
+        Impact_Aether,
+        /// <summary>Fire or ember blast impact (red-orange burst).</summary>
+        Impact_Flame,
+        /// <summary>Ice shard or frost bolt impact (pale-blue burst).</summary>
+        Impact_Ice,
+        /// <summary>Healing contact — green sparkle at the heal target.</summary>
+        Impact_Heal,
+        /// <summary>Large fire detonation — Meteor Strike, boss death, big boom.</summary>
+        Impact_ExplosionFire,
+        /// <summary>Large Aether detonation — Withering Surge, necromancer special.</summary>
+        Impact_ExplosionAether,
+        /// <summary>Expanding flat shockwave ring — Knight slam, ground pound.</summary>
+        Impact_ShockwaveRing,
+        /// <summary>Bone / crystal shard scatter — skeleton death, Vault Slam.</summary>
+        Impact_ShardsBurst,
+        /// <summary>Smoke wisp dissolution — death smoke, Reaper trail impact.</summary>
+        Impact_SmokeWisps,
+
+        // ── Projectiles (attach to projectile Transform, loop until hit) ─────
+        /// <summary>Hero Q Arcane Bolt travel — white-violet orb.</summary>
+        Projectile_ArcaneBolt,
+        /// <summary>Hero W Frost bolt travel — pale-blue streak.</summary>
+        Projectile_FrostBolt,
+        /// <summary>Ranger normal arrow travel — green streak.</summary>
+        Projectile_Arrow,
+        /// <summary>Ranger Flaming Arrow upgrade — orange-tipped arrow streak.</summary>
+        Projectile_FlameArrow,
+        /// <summary>Arcane Tower bolt travel — dim violet orb.</summary>
+        Projectile_TowerArcane,
+        /// <summary>Flame Tower bolt (planned) — red-orange bolt.</summary>
+        Projectile_TowerFire,
+        /// <summary>Frost Tower bolt (planned) — pale-blue bolt.</summary>
+        Projectile_TowerIce,
+        /// <summary>Hollow Caster enemy bolt — sickly hollow blob.</summary>
+        Projectile_EnemyCasterBolt,
+
+        // ── Casting / Charge (on caster Transform, plays before release) ──────
+        /// <summary>Mage charge wind-up — swirling white-violet gathering.</summary>
+        Cast_MageCharge,
+        /// <summary>Knight slam wind-up — gold sparks and ground crack glow.</summary>
+        Cast_KnightSlam,
+        /// <summary>Ranger bow-draw — thin green streak spiral around bow.</summary>
+        Cast_RangerDraw,
+        /// <summary>Healing Beacon buildup — rising warm column of light.</summary>
+        Cast_Heal,
+        /// <summary>Frost Nova buildup — spreading frost ring on ground.</summary>
+        Cast_FrostNova,
+        /// <summary>Necromancer summon channel — staff raise + dark wisps.</summary>
+        Cast_NecromancerSummon,
+        /// <summary>Hollow Caster bolt charge — violet blob swelling before throw.</summary>
+        Cast_EnemyCaster,
+
+        // ── Death (oneshot on enemy/boss death position) ──────────────────────
+        /// <summary>Standard Hollow One death — bone shards + smoke wisp.</summary>
+        Death_Skeleton,
+        /// <summary>Boss death — large explosion + distorted shockwave ring.</summary>
+        Death_Boss,
+        /// <summary>Heavy brute / golem death — heavy crumble + dust cloud.</summary>
+        Death_Brute,
+        /// <summary>Wolf death — ice burst + light snow scatter.</summary>
+        Death_Wolf,
+        /// <summary>Tiefling Cultist death — flame burst + ember scatter.</summary>
+        Death_Tiefling,
+        /// <summary>Generic enemy death fallback when no specific type matches.</summary>
+        Death_Generic,
+
+        // ── Auras (persistent loops — callers receive VFXHandle for Stop) ─────
+        /// <summary>Hollow Caster aura — pale violet electroCore loop.</summary>
+        Aura_EnemyCaster,
+        /// <summary>Necromancer boss aura — deep violet ghost-portal loop.</summary>
+        Aura_Necromancer,
+        /// <summary>Hollow Mender / healer aura — soft warm white finalRest loop.</summary>
+        Aura_Healer,
+        /// <summary>Tiefling Cultist fire aura — red fire loop.</summary>
+        Aura_Flame,
+        /// <summary>Feral Wolf ice aura — light snow loop (feet + flanks).</summary>
+        Aura_Ice,
+        /// <summary>Physical heavy enemy foot-dust — dusty loop.</summary>
+        Aura_Dust,
+        /// <summary>Reaper scythe wisps — slow smoke wisps loop.</summary>
+        Aura_SmokeReaper,
+        /// <summary>Heart of Elarion ambient pulse — nucleus loop.</summary>
+        Aura_HeartPulse,
+        /// <summary>Empowered tower persistent glow — nucleus loop (tinted by element).</summary>
+        Aura_EmpowerTower,
+        /// <summary>Pet aura level 1 — dim sparkle loop.</summary>
+        Aura_PetLevel1,
+        /// <summary>Pet aura level 2 — medium sparkle loop, brighter particles.</summary>
+        Aura_PetLevel2,
+        /// <summary>Pet aura level 3 — bright sparkle loop, high emission.</summary>
+        Aura_PetLevel3,
+
+        // ── Environment (attach to scene objects, DontDestroyWithOwner) ────────
+        /// <summary>Torch / brazier fire loop — Lana Studio torch flame.</summary>
+        Env_TorchFlame,
+        /// <summary>Lantern warm glow loop — soft point-light + embers.</summary>
+        Env_LanternGlow,
+        /// <summary>Cold biome dungeon ground fog loop.</summary>
+        Env_GroundFog,
+        /// <summary>Dungeon portal loop — swirling hyperspace/portal effect.</summary>
+        Env_DungeonPortal,
+        /// <summary>Title screen ambient embers + streak particles.</summary>
+        Env_TitleEmbers,
+        /// <summary>Destroyable object impact dust (barrel, crate, wall section).</summary>
+        Env_DestructionDust,
+        /// <summary>Destroyable object sparks on break.</summary>
+        Env_DestructionSparks,
+
+        // ── Juice / Feedback ──────────────────────────────────────────────────
+        /// <summary>Critical hit flash — bright white burst + size pop.</summary>
+        Juice_CriticalHit,
+        /// <summary>Kill-streak combo burst — radial flash at the last kill point.</summary>
+        Juice_KillStreak,
+        /// <summary>Wave complete celebration — upward sparkle fountain.</summary>
+        Juice_WaveClear,
+        /// <summary>Tower or hero level-up burst — ring + rising stars.</summary>
+        Juice_LevelUp,
+        /// <summary>Ground decal — scorch mark (Flame) or frost patch (Ice).</summary>
+        Juice_GroundDecal_Flame,
+        /// <summary>Ground decal — frost patch from Ice impacts.</summary>
+        Juice_GroundDecal_Ice,
+    }
+}

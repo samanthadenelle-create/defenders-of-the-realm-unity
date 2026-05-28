@@ -51,7 +51,7 @@ namespace DeNelle.Village
             _timer += Time.deltaTime;
             if (_timer > _maxLifetime || _target == null || !_target.IsAlive)
             {
-                Return();
+                Return(didHit: false);
                 return;
             }
 
@@ -59,7 +59,7 @@ namespace DeNelle.Village
             if (to.sqrMagnitude <= _hitDistance * _hitDistance)
             {
                 _target.TakeDamage(_damage, _element);   // EnemyDamageable -> Enemy.TakeDamage
-                Return();
+                Return(didHit: true, hitPosition: transform.position);
                 return;
             }
 
@@ -76,12 +76,25 @@ namespace DeNelle.Village
             if (hit != null && ReferenceEquals(hit, _target))
             {
                 _target.TakeDamage(_damage, _element);
-                Return();
+                Return(didHit: true, hitPosition: transform.position);
             }
         }
 
-        private void Return()
+        private void Return(bool didHit = false, Vector3 hitPosition = default)
         {
+            if (didHit)
+            {
+                // DEF-VFX-01: fire impact VFX at the hit point via the owning tower.
+                // Walk up to TowerCombat on the nearest tower — projectiles don't hold
+                // a back-reference to avoid coupling, so we resolve via the pool owner.
+                var towerCombat = GetComponentInParent<TowerCombat>();
+                towerCombat?.OnProjectileImpact(hitPosition);
+
+                // Fallback: if not parented to a tower, fire VFX directly.
+                if (towerCombat == null)
+                    VFXManager.Play(VFXType.Impact_Aether, hitPosition);
+            }
+
             _target = null;
             if (ProjectilePool.Instance != null) ProjectilePool.Instance.ReturnToPool(this);
             else gameObject.SetActive(false);

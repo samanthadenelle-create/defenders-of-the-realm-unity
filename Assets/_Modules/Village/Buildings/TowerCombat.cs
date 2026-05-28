@@ -101,11 +101,48 @@ namespace DeNelle.Village
         {
             if (ProjectilePool.Instance == null) return;
 
+            Vector3 firePos = _firePoint != null ? _firePoint.position : transform.position;
             var proj = ProjectilePool.Instance.GetProjectile();
-            proj.transform.position = _firePoint != null ? _firePoint.position : transform.position;
+            proj.transform.position = firePos;
 
             float damage = _tower != null && _tower.CurrentDamage > 0f ? _tower.CurrentDamage : _fallbackDamage;
             proj.Initialize(target, damage, DamageElement.None);
+
+            // ── VFX: muzzle flash at the fire point ──────────────────────────
+            // Choose VFXType based on the tower's level — higher levels get
+            // a more dramatic muzzle effect.
+            int level = _tower != null ? _tower.CurrentLevel : 1;
+            var muzzleType = level >= 3
+                ? VFXType.Cast_MageCharge          // L3 towers get a charged burst
+                : VFXType.Projectile_TowerArcane;  // L1-L2 standard arcane orb
+            VFXManager.Play(muzzleType, firePos);
+
+            // ── Hit Stop: light tier for standard tower shots ─────────────────
+            // (feels better than no feedback at all; heavy shots escalate in
+            //  TowerEmpowerment.ApplyEmpowermentEffect when wired)
+            HitStopManager.DoImpact(HitTier.Light);
+        }
+
+        /// <summary>
+        /// Called externally (e.g. by PooledProjectile.OnHit) to trigger an
+        /// impact VFX at the hit position.  Determines element from the tower's
+        /// current level and empowerment state.
+        /// </summary>
+        public void OnProjectileImpact(Vector3 hitPosition)
+        {
+            int level = _tower != null ? _tower.CurrentLevel : 1;
+
+            // Basic element escalation by level.
+            var impactType = level switch
+            {
+                3 => VFXType.Impact_ExplosionAether,
+                2 => VFXType.Impact_Aether,
+                _ => VFXType.Impact_Physical,
+            };
+            VFXManager.Play(impactType, hitPosition);
+
+            // Scale hit-stop with level.
+            HitStopManager.DoImpact(level >= 3 ? HitTier.Medium : HitTier.Light);
         }
 
         private void OnDrawGizmosSelected()

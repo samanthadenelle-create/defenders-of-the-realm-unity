@@ -30,6 +30,69 @@ namespace DeNelle.Village
     {
         private static Texture2D s_softDot;
 
+        // ── VFXManager bridge ─────────────────────────────────────────────────
+        // When VFXManager is live and has a prefab wired for the requested type,
+        // it handles pooling + art assets. The procedural builders below are the
+        // fallback — they are ALWAYS available even with no art packages installed.
+
+        /// <summary>
+        /// Play a hero ability VFX. Tries VFXManager first (prefab pool), then
+        /// falls through to the procedural SpawnAbilityVfxForClass builders.
+        /// Use this instead of calling SpawnAbilityVfxForClass directly so future
+        /// art swaps require no code changes.
+        /// </summary>
+        public static void PlayHeroAbility(AbilityEffect kind, Color color, Vector3 position,
+                                           float radius, Vector3 targetHint, string heroClass)
+        {
+            // Map hero class + ability kind to a VFXType so VFXManager can route
+            // to the correct prefab in VFXCatalog.
+            var type = ResolveVFXType(kind, heroClass);
+
+            // Try prefab path first.
+            if (type != VFXType.None && VFXManager.Instance != null)
+            {
+                VFXManager.Play(type, position);
+                return;
+            }
+
+            // Procedural fallback.
+            SpawnAbilityVfxForClass(kind, color, position, radius, targetHint, heroClass);
+        }
+
+        private static VFXType ResolveVFXType(AbilityEffect kind, string heroClass)
+        {
+            switch ((heroClass ?? string.Empty).ToLowerInvariant())
+            {
+                case "mage":
+                    return kind switch
+                    {
+                        AbilityEffect.Strike => VFXType.Projectile_ArcaneBolt,
+                        AbilityEffect.Aoe    => VFXType.Impact_ExplosionAether,
+                        AbilityEffect.Cleave => VFXType.Impact_Aether,
+                        AbilityEffect.Heal   => VFXType.Impact_Heal,
+                        AbilityEffect.Meteor => VFXType.Impact_ExplosionFire,
+                        _                    => VFXType.Impact_Aether,
+                    };
+                case "ranger":
+                    return kind switch
+                    {
+                        AbilityEffect.Strike => VFXType.Projectile_Arrow,
+                        AbilityEffect.Snare  => VFXType.Projectile_FlameArrow,
+                        _                    => VFXType.Projectile_Arrow,
+                    };
+                case "knight":
+                    return kind switch
+                    {
+                        AbilityEffect.Strike => VFXType.Impact_Physical,
+                        AbilityEffect.Aoe    => VFXType.Impact_ShockwaveRing,
+                        AbilityEffect.Cleave => VFXType.Impact_ShockwaveRing,
+                        _                    => VFXType.Impact_Physical,
+                    };
+                default:
+                    return VFXType.None;
+            }
+        }
+
         /// <summary>Spawns the VFX for an ability effect. position = effect centre;
         /// targetHint = the foe / impact point (for tracers + meteor fall).</summary>
         public static void SpawnAbilityVfx(AbilityEffect kind, Color color, Vector3 position,

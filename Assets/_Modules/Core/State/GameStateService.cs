@@ -22,9 +22,13 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using Cysharp.Threading.Tasks;
 using Newtonsoft.Json;
 using UnityEngine;
 using UnityEngine.Events;
+using UnityEngine.Networking;
 
 namespace DeNelle.Core.State
 {
@@ -525,6 +529,373 @@ namespace DeNelle.Core.State
 
             StateReplaced.Invoke();
             Save();
+        }
+
+        // =====================================================================
+        //  Backend Delta Sync — JSON + Neon (Mobile-Optimised)
+        // =====================================================================
+        //
+        //  Architecture:
+        //    • Snapshot()    →  SaveSchema.PersistedState (already exists)
+        //    • Delta builder →  compares current snapshot vs _lastSyncedSnapshot
+        //    • SyncDeltaPayload — flat plain-C# class, JSON-serialised
+        //    • Offline queue →  PlayerPrefs "dotr-sync-queue" (JSON list)
+        //    • ResourceBalance fields: Crystals / Food / Coins  (NOT Gold/Gems/XP)
+        //
+        //  Required packages (already in project):
+        //    • Newtonsoft.Json     (com.unity.nuget.newtonsoft-json)
+        //    • UniTask             (com.cysharp.unitask)
+        // =====================================================================
+
+        // ── Config ───────────────────────────────────────────────────────────
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        private const string BackendBase = "https://your-vercel-app.vercel.app";
+#else
+        private const string BackendBase = "https://your-vercel-app.vercel.app";
+#endif
+        private const string SaveUrl       = BackendBase + "/api/game/save";
+        private const string LoadUrl       = BackendBase + "/api/game/load";
+        private const string SyncQueueKey  = "dotr-sync-queue";
+        private const float  MinSyncDelay  = 8f;   // seconds between background syncs
+
+        // ── State ─────────────────────────────────────────────────────────
+        // The last snapshot the server acknowledged — null means never synced.
+        // Uses PersistedState (plain class) NOT the GameState ScriptableObject.
+        private SaveSchema.PersistedState _lastSyncedSnapshot;
+        private bool  _isSyncing;
+        private float _lastSyncTime = -999f;
+
+        // ── Lifecycle hooks ───────────────────────────────────────────────
+        private void OnApplicationPause(bool paused)
+        {
+            if (paused) SyncToBackend(highPriority: true).Forget();
+        }
+
+        private void OnApplicationQuit()
+        {
+            SyncToBackend(highPriority: true).Forget();
+        }
+
+        // ── Public API ────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Call after every wave is completed. Records the wave locally (via
+        /// <see cref="RecordRun"/>) then immediately pushes a high-priority
+        /// delta to the backend.
+        /// </summary>
+        public async UniTask SyncAfterWave(int completedWave)
+        {
+            RecordRun(completedWave);                     // local save inside RecordRun
+            await SyncToBackend(highPriority: true);
+        }
+
+        /// <summary>
+        /// Call before any scene transition. Ensures local + backend are both
+        /// flushed before Unity tears down the scene.
+        /// </summary>
+        public async UniTask SaveBeforeSceneChange()
+        {
+            Save();
+            await SyncToBackend(highPriority: true);
+        }
+
+        /// <summary>
+        /// Fetches this player's authoritative server record and merges it onto
+        /// the live SO. Merge policy: server wins on BestWave (anti-rollback);
+        /// local wins on Towers and Pets (last in-session layout stands).
+        /// </summary>
+        public async UniTask LoadFromBackend()
+        {
+            if (string.IsNullOrEmpty(_state?.BoundWallet)) return;
+
+            var url = $"{LoadUrl}?playerId={Uri.EscapeDataString(_state.BoundWallet)}";
+            using var req = UnityWebRequest.Get(url);
+            req.SetRequestHeader("Accept", "application/json");
+
+            await req.SendWebRequest();
+
+            if (req.result != UnityWebRequest.Result.Success)
+            {
+                Debug.LogWarning($"[Sync] Load failed: {req.error}");
+                return;
+            }
+
+            BackendLoadResponse resp;
+            try
+            {
+                resp = JsonConvert.DeserializeObject<BackendLoadResponse>(
+                    req.downloadHandler.text, SaveSchema.JsonSettings);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"[Sync] Load parse error: {ex.Message}");
+                return;
+            }
+
+            if (resp?.Success != true || resp.Data == null) return;
+
+            var server = resp.Data;
+
+            // Server wins on BestWave only — never roll the player back.
+            if (server.BestWave.HasValue && server.BestWave > (_state.BestWave))
+                _state.BestWave = (int)server.BestWave.Value;
+
+            // Resources: take server value (authoritative for economy integrity).
+            if (server.Resources.HasValue)
+                _state.Resources = server.Resources.Value;
+            if (server.Voidshards.HasValue) _state.Voidshards = (int)server.Voidshards.Value;
+            if (server.Stone.HasValue)      _state.Stone       = (int)server.Stone.Value;
+            if (server.Iron.HasValue)       _state.Iron        = (int)server.Iron.Value;
+            if (server.Wood.HasValue)       _state.Wood        = (int)server.Wood.Value;
+
+            // Advance ack marker and re-persist locally.
+            _lastSyncedSnapshot = Snapshot();
+            Save();
+            StateReplaced.Invoke();
+            Debug.Log("[Sync] Server state merged onto local SO.");
+        }
+
+        // ── Core sync pipeline ────────────────────────────────────────────
+
+        private async UniTask SyncToBackend(bool highPriority = false)
+        {
+            if (_isSyncing) return;
+            if (!highPriority && Time.time - _lastSyncTime < MinSyncDelay) return;
+            if (string.IsNullOrEmpty(_state?.BoundWallet)) return;   // wallet required
+
+            _isSyncing     = true;
+            _lastSyncTime  = Time.time;
+
+            try
+            {
+                // Drain queued failures first so the server sees events in order.
+                await FlushOfflineQueue();
+
+                var delta = BuildDeltaPayload();
+                if (delta == null)
+                {
+                    Debug.Log("[Sync] No changes since last sync — skipped.");
+                    return;
+                }
+
+                bool ok = await SendDelta(delta);
+                if (ok)
+                    _lastSyncedSnapshot = Snapshot();
+                else
+                    EnqueueOffline(delta);
+            }
+            finally
+            {
+                _isSyncing = false;
+            }
+        }
+
+        private async UniTask<bool> SendDelta(SyncDeltaPayload delta)
+        {
+            byte[] body;
+            try
+            {
+                // PascalCase property names (default resolver) match the field
+                // names api/game/save.js reads (body.PlayerId, deltaFields.Crystals…).
+                var json = JsonConvert.SerializeObject(delta);
+                body = Encoding.UTF8.GetBytes(json);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"[Sync] JSON serialize error: {ex.Message}");
+                return false;
+            }
+
+            using var req = new UnityWebRequest(SaveUrl, "POST")
+            {
+                uploadHandler   = new UploadHandlerRaw(body),
+                downloadHandler = new DownloadHandlerBuffer(),
+            };
+            req.SetRequestHeader("Content-Type", "application/json");
+
+            await req.SendWebRequest();
+
+            if (req.result == UnityWebRequest.Result.Success)
+            {
+                Debug.Log($"[Sync] Saved {body.Length} bytes (compressed delta).");
+                return true;
+            }
+
+            Debug.LogWarning($"[Sync] Save failed ({req.responseCode}): {req.error}");
+            return false;
+        }
+
+        // ── Delta builder — compares snapshots via PersistedState ─────────
+
+        private SyncDeltaPayload BuildDeltaPayload()
+        {
+            var cur  = Snapshot();
+            var prev = _lastSyncedSnapshot;   // null on first sync — sends everything
+            bool any = false;
+
+            var d = new SyncDeltaPayload
+            {
+                PlayerId      = _state.BoundWallet,
+                SchemaVersion = SaveSchema.CurrentVersion,
+            };
+
+            // Resources
+            if (ResourcesDiffer(cur, prev))
+            {
+                var r = cur.Resources ?? default;
+                d.Crystals  = r.Crystals;
+                d.Food      = r.Food;
+                d.Coins     = r.Coins;
+                d.Voidshards = (int?)cur.Voidshards;
+                d.Stone      = (int?)cur.Stone;
+                d.Iron       = (int?)cur.Iron;
+                d.Wood       = (int?)cur.Wood;
+                any = true;
+            }
+
+            // Towers
+            if (TowersDiffer(cur, prev))
+            {
+                d.Towers         = cur.Towers?.Select(v => (int)v).ToArray();
+                d.TowerAbilities = cur.TowerAbilities?.Select(v => (int)v).ToArray();
+                any = true;
+            }
+
+            // Wave
+            if (prev == null || cur.BestWave != prev.BestWave)
+            {
+                d.BestWave = (int?)cur.BestWave;
+                any = true;
+            }
+
+            // Pets — JSON-encoded; PetData/PetSpecies carry complex Unity types
+            // that would require full MessagePack attribute chains to serialize
+            // directly, so we embed them as a JSON string inside the MsgPack body.
+            if (PetsDiffer(cur, prev))
+            {
+                d.PetsJson     = JsonConvert.SerializeObject(cur.Pets,       SaveSchema.JsonSettings);
+                d.OwnedPetsJson = JsonConvert.SerializeObject(cur.OwnedPets, SaveSchema.JsonSettings);
+                d.StarterPetId  = cur.StarterPetId;
+                any = true;
+            }
+
+            return any ? d : null;
+        }
+
+        private static bool ResourcesDiffer(SaveSchema.PersistedState a, SaveSchema.PersistedState b)
+        {
+            if (b == null) return true;
+            var ar = a.Resources; var br = b.Resources;
+            return ar?.Crystals != br?.Crystals
+                || ar?.Food     != br?.Food
+                || ar?.Coins    != br?.Coins
+                || a.Voidshards != b.Voidshards
+                || a.Stone      != b.Stone
+                || a.Iron       != b.Iron
+                || a.Wood       != b.Wood;
+        }
+
+        private static bool TowersDiffer(SaveSchema.PersistedState a, SaveSchema.PersistedState b)
+        {
+            if (b == null) return true;
+            bool towersMatch   = a.Towers?.SequenceEqual(b.Towers ?? Enumerable.Empty<double>()) ?? b.Towers == null;
+            bool abilitiesMatch = a.TowerAbilities?.SequenceEqual(b.TowerAbilities ?? Enumerable.Empty<double>()) ?? b.TowerAbilities == null;
+            return !towersMatch || !abilitiesMatch;
+        }
+
+        private static bool PetsDiffer(SaveSchema.PersistedState a, SaveSchema.PersistedState b) =>
+            b == null
+            || (a.Pets?.Count ?? 0)      != (b.Pets?.Count ?? 0)
+            || (a.OwnedPets?.Count ?? 0) != (b.OwnedPets?.Count ?? 0)
+            || a.StarterPetId != b.StarterPetId;
+
+        // ── Offline queue ─────────────────────────────────────────────────
+
+        private void EnqueueOffline(SyncDeltaPayload delta)
+        {
+            var queue = LoadOfflineQueue();
+            queue.Add(delta);
+            PlayerPrefs.SetString(SyncQueueKey,
+                JsonConvert.SerializeObject(queue, SaveSchema.JsonSettings));
+            PlayerPrefs.Save();
+            Debug.LogWarning($"[Sync] Queued offline payload (queue depth: {queue.Count}).");
+        }
+
+        private async UniTask FlushOfflineQueue()
+        {
+            if (!PlayerPrefs.HasKey(SyncQueueKey)) return;
+            var queue = LoadOfflineQueue();
+            if (queue.Count == 0) return;
+
+            var remaining = new List<SyncDeltaPayload>();
+            foreach (var queued in queue)
+            {
+                if (!await SendDelta(queued)) remaining.Add(queued);
+            }
+
+            if (remaining.Count == 0) PlayerPrefs.DeleteKey(SyncQueueKey);
+            else
+            {
+                PlayerPrefs.SetString(SyncQueueKey,
+                    JsonConvert.SerializeObject(remaining, SaveSchema.JsonSettings));
+            }
+            PlayerPrefs.Save();
+        }
+
+        private List<SyncDeltaPayload> LoadOfflineQueue()
+        {
+            var raw = PlayerPrefs.GetString(SyncQueueKey, "[]");
+            try
+            {
+                return JsonConvert.DeserializeObject<List<SyncDeltaPayload>>(
+                    raw, SaveSchema.JsonSettings) ?? new List<SyncDeltaPayload>();
+            }
+            catch
+            {
+                return new List<SyncDeltaPayload>();
+            }
+        }
+
+        // ── Data types ────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Wire payload sent to /api/game/save. All fields nullable — null means
+        /// "no change in this domain, skip the DB column". Flat primitive-only
+        /// so MessagePack needs no custom resolvers.
+        /// Pets and OwnedPets are pre-serialized JSON strings to avoid nesting
+        /// complex Unity types in the delta object.
+        /// </summary>
+        public sealed class SyncDeltaPayload
+        {
+            public string PlayerId      { get; set; }
+            public int    SchemaVersion { get; set; }
+
+            // Resources — null = domain unchanged
+            public int? Crystals  { get; set; }
+            public int? Food      { get; set; }
+            public int? Coins     { get; set; }
+            public int? Voidshards { get; set; }
+            public int? Stone     { get; set; }
+            public int? Iron      { get; set; }
+            public int? Wood      { get; set; }
+
+            // Towers — null = no layout change
+            public int[] Towers         { get; set; }
+            public int[] TowerAbilities { get; set; }
+
+            // Wave
+            public int? BestWave { get; set; }
+
+            // Pets — JSON string (complex Unity types inside)
+            public string PetsJson      { get; set; }
+            public string OwnedPetsJson { get; set; }
+            public string StarterPetId  { get; set; }
+        }
+
+        private sealed class BackendLoadResponse
+        {
+            [JsonProperty("success")] public bool                       Success { get; set; }
+            [JsonProperty("data")]    public SaveSchema.PersistedState  Data    { get; set; }
         }
 
         // ── Conversions ──────────────────────────────────────────────────────

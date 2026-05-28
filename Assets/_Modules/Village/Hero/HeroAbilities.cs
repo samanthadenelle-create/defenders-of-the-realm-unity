@@ -367,7 +367,9 @@ namespace DeNelle.Village
                 return;
             }
 
-            AbilityVfxKit.SpawnAbilityVfxForClass(def.EffectEnum, def.UnityColor, at,
+            // DEF-VFX-01: route through VFXManager so prefab-based art swaps require
+            // no code changes. Falls back to procedural if no prefab is wired.
+            AbilityVfxKit.PlayHeroAbility(def.EffectEnum, def.UnityColor, at,
                                           Mathf.Max(0.6f, radius), targetHint ?? at, _heroClass);
         }
 
