@@ -280,30 +280,40 @@ namespace DeNelle.Onboarding
         }
 
         /// <summary>
-        /// Verbatim port of OPENING_CINEMATIC from React src/content/story.ts
-        /// (2026-05-20 owner direction). 14 beats, total ~73 seconds; players
-        /// can tap to skip ahead one beat at a time.
+        /// Stone Choir opening cinematic — canon-locked to STORYLINE.md (2026-05-27).
+        /// 14 beats, total ~73 seconds; players can tap to skip ahead one beat at a time.
+        ///
+        /// Canon anchors:
+        ///   - Town = Elarion. The Lantern motif is retired. No named heart.
+        ///   - The Heart-Tree burned a hundred winters ago; the Folk raised the
+        ///     Cathedral Spire over its ashes and bound its last song inside.
+        ///   - The spire holds one long note (the chord). While it sings, the
+        ///     valley holds. The Choir (Hollow Ones) come to silence it.
+        ///   - Three heroes wait: Sir Bram (Knight), Nessa (Ranger), and the
+        ///     youngest Chorister — who is you (the Keeper).
+        ///   - "That one is you" / "The chord is yours now" are the closing beats.
+        ///   - Class-agnostic: plays before HeroSelect, so it does not assume Mage.
         /// </summary>
         private static readonly CinematicBeat[] ReactOpeningCinematic = new[]
         {
-            new CinematicBeat("Long ago, the realm was kept warm by a single light —", 5.0f),
-            new CinematicBeat("the Lantern of Avalon, which never dimmed,", 4.8f, 1),
-            new CinematicBeat("and the Guardian whose quiet hands tended its flame.", 5.2f, 8),
-            new CinematicBeat("Avalon. A village. A promise. A home.", 5.4f, 5, true),
-            new CinematicBeat("But Guardians grow old, and old light grows thin.", 5.0f),
-            new CinematicBeat("Beneath the sleeping hills, something hollow began to wake.", 5.4f),
-            new CinematicBeat("They call it the Withering — it remembers no warmth,", 5.0f, 2),
+            new CinematicBeat("A hundred winters ago, the Heart-Tree burned.", 5.0f),
+            new CinematicBeat("Elarion watched from inside its walls.", 4.8f, 1),
+            new CinematicBeat("The court fled south. No king ever came back.", 5.2f, 8),
+            new CinematicBeat("Elarion. A village. A grief. A vow.", 5.4f, 5, true),
+            new CinematicBeat("So the Folk raised a spire of pale stone over the Tree's ashes,", 5.0f),
+            new CinematicBeat("and bound its last song inside. The spire has held the note ever since.", 5.4f),
+            new CinematicBeat("They call the dark the Withering — it remembers no warmth,", 5.0f, 2),
             new CinematicBeat("and it forgives no green and growing thing.", 4.8f),
-            new CinematicBeat("Now the old protectors keep a lonely watch —", 4.8f),
-            new CinematicBeat("Sir Bram the knight, Sela the archer, and three small sleeping spirits —", 5.8f),
-            new CinematicBeat("waiting for the one the Lantern will answer to.", 5.0f, 7),
+            new CinematicBeat("Three have kept watch over the spire's chord —", 4.8f),
+            // Class-agnostic phrasing per owner direction 2026-05-20 — the intro
+            // plays before HeroSelect so it does not lock the player to Mage.
+            // Sir Bram (Knight) and Nessa (Ranger) are named companions; the
+            // third watcher is the player — any of the three hero classes.
+            new CinematicBeat("Sir Bram the knight, Nessa the ranger, and one Chorister still learning the song —", 5.8f),
+            new CinematicBeat("waiting for the one the chord will answer to.", 5.0f, 7),
             new CinematicBeat("That one is you.", 4.5f, 3, true),
-            // Class-agnostic phrasing per owner direction 2026-05-20 — the
-            // intro plays before HeroSelect so it shouldn't assume Mage. The
-            // hero-class trio (mage / knight / ranger) is named earlier in
-            // beat 10 ("Sir Bram the knight, Sela the archer, and three…").
-            new CinematicBeat("Barely a recruit, scarcely tested — yet the flame brightens at your step.", 5.8f, 6),
-            new CinematicBeat("Welcome home, Guardian of the Lantern.", 5.4f, 4, true),
+            new CinematicBeat("Barely a Keeper, scarcely tested — yet the spire steadies when you step beneath it.", 5.8f, 6),
+            new CinematicBeat("Welcome home. The chord is yours now.", 5.4f, 4, true),
         };
 
         /// <summary>

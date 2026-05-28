@@ -6,8 +6,9 @@
     "tooltipsTs": "defenders-of-the-realm/src/content/tooltips.ts"
   },
 
-  "title.tagline.bible": "Tend the Heart. Hold the dark.",
-  "title.tagline.story": "Tend the Lantern. Hold the dark.",
+  "title.tagline": "Hold the Chord. Defend the Spire.",
+  "title.tagline.legacy.bible": "Tend the Heart. Hold the dark.",
+  "title.tagline.legacy.story": "Tend the Lantern. Hold the dark.",
 
   "intro.coldOpen.line1": "In an old valley, an old tree.",
   "intro.coldOpen.line2": "In the dark beyond, a slow cold rot.",
@@ -25,13 +26,13 @@
   "tutorial.firstBeaconE": "Plant light where the dark gathers thickest. The towers within will fight braver.",
   "tutorial.firstMeteorR": "This is the deep magic. Spend it only when the Heart calls for it.",
 
-  "tutorial.steps.1": "Welcome home, Guardian. The Heart is the Lantern itself. Protect it.",
+  "tutorial.steps.1": "Welcome home, Keeper. The spire holds the realm's last song. Protect it.",
   "tutorial.steps.2": "The Hollowed come from the dark beyond the walls. They want to extinguish the Light.",
   "tutorial.steps.3": "Build your defenses with what you have. Walk to the Crystal Mine — tap to gather.",
   "tutorial.steps.4": "Good. Spend crystals at the Workshop to upgrade your defenses.",
-  "tutorial.steps.5": "When you are ready, begin a wave. Use Q to cast — your magic comes back when the Lantern allows.",
+  "tutorial.steps.5": "When you are ready, begin a wave. Use Q to cast — your magic comes back when the spire allows.",
   "tutorial.steps.6": "Your Wardens fight beside you. Tap one to give them a station.",
-  "tutorial.steps.7": "The Lantern remembers your kindness. Tend it well, Guardian.",
+  "tutorial.steps.7": "The spire remembers your kindness. Tend it well, Keeper.",
   "tutorial.steps.forceField": "The walls hold a force-field of the Heart's own light — see it shimmer in the gates. It turns the Hollowed back while it shines. But every blow thins it, and a thinned field lets the dark slip through. Keep the walls and gates mended, and the light keeps its strength.",
 
   "gate.firstSeen": "The Heart's light parts for those it knows. Walk through, Keeper — but the Hollow Ones will press against it. Mend the gate as you mend the walls.",
@@ -60,13 +61,13 @@
   "heartVoice.victorious": "The song rises. The valley holds.",
 
   "heartVoice.alt.vigilant.1": "The light shifts. The dark is at the gates.",
-  "heartVoice.alt.vigilant.2": "The Lantern stirs. The watch begins.",
-  "heartVoice.alt.warning.1": "A lane wavers. The Lantern felt it before you did.",
+  "heartVoice.alt.vigilant.2": "The spire stirs. The watch begins.",
+  "heartVoice.alt.warning.1": "A lane wavers. The chord felt it before you did.",
   "heartVoice.alt.warning.2": "Something pushes harder than the rest. Look to it.",
-  "heartVoice.alt.danger.1": "The walls are thinning. Avalon calls for you.",
+  "heartVoice.alt.danger.1": "The walls are thinning. Elarion calls for you.",
   "heartVoice.alt.danger.2": "Two lanes at once. Keep your hands moving.",
-  "heartVoice.alt.critical.1": "The light breaks. Defend, Guardian — defend now.",
-  "heartVoice.alt.critical.2": "The Lantern shudders. Hold the line at all costs.",
+  "heartVoice.alt.critical.1": "The chord breaks. Defend, Keeper — defend now.",
+  "heartVoice.alt.critical.2": "The spire shudders. Hold the line at all costs.",
   "heartVoice.alt.boss.1": "He stands within the gate. Time slows. The light dims.",
   "heartVoice.alt.boss.2": "Alduin the Mournful walks the lane. Greet him with steel.",
   "heartVoice.alt.victorious.1": "The light returns. The village breathes again.",
@@ -91,17 +92,17 @@
   "victory.personalBest": "None before you held so long. The old Keepers would have nodded.",
 
   "victory.waveCleared.1": "The dark withdraws — for now.",
-  "victory.waveCleared.2": "The Lantern holds. The watch breathes.",
+  "victory.waveCleared.2": "The chord holds. The watch breathes.",
   "victory.waveCleared.3": "The Folk light a candle for you.",
   "victory.waveCleared.4": "The lanes are quiet again. Tend your Wardens.",
   "victory.waveCleared.5": "A breath. A moment. The next tide will come.",
-  "victory.waveCleared.6": "The wind cools. Avalon remembers your name.",
+  "victory.waveCleared.6": "The wind cools. Elarion remembers your name.",
 
   "defeat.1": "The song stops. The folk look up. The wind feels cold for the first time.",
   "defeat.2": "The Heart breaks. But the bond does not. Begin again, Keeper — there is no other answer.",
   "defeat.3": "Elarion will return where it is needed. You will too.",
   "defeat.alt.1": "The light stops. The folk look up. The wind feels cold for the first time.",
-  "defeat.alt.2": "The Lantern dims. But the bond does not. Begin again, Guardian.",
+  "defeat.alt.2": "The chord falters. But the bond does not. Begin again, Keeper.",
 
   "petCaption.aetherSprite": "(a soft musical hum)",
   "petCaption.flamePup": "(a warm yip, like a small bell)",
@@ -134,7 +135,7 @@
   "milestone.firstBuildingUpgrade": "The Workshop bell is louder now. The Folk are pleased.",
   "milestone.streak7Days": "Seven mornings tending the song. The old Keepers would have called you 'one of ours' by now.",
 
-  "returningPlayer": "Avalon kept your hearth warm. Welcome back, Guardian.",
+  "returningPlayer": "Elarion kept your hearth warm. Welcome back, Keeper.",
 
   "heroSelect.title": "Defenders of the Realm",
   "heroSelect.subtitle": "powered by SKR",
@@ -143,9 +144,9 @@
   "heroSelect.jumpAction": "Jump into the Action",
   "hero.mage.name": "The Mage",
   "hero.mage.role": "Arcane Keeper",
-  "hero.mage.blurb": "Channels the Heart's own light into bolt and beacon. Frail of frame, but the dark fears nothing more than a lantern raised high.",
+  "hero.mage.blurb": "Channels the spire's own song into bolt and beacon. Frail of frame, but the dark fears nothing more than a Chorister who holds the chord.",
   "hero.knight.name": "The Knight",
-  "hero.knight.role": "Shield of Avalon",
+  "hero.knight.role": "Shield of Elarion",
   "hero.knight.blurb": "Plain steel and an unbroken vow. Where the Knight sets a shield, the Hollowed do not pass — and the walls hold a little longer.",
   "hero.ranger.name": "The Ranger",
   "hero.ranger.role": "Warden of the Wood",
@@ -233,7 +234,7 @@
   "movementHint.joystick": "Drag the joystick in the bottom-left corner to walk around the village.",
   "movementHint.tap": "Tap anywhere on the ground and your hero will walk there.",
   "movementHint.both": "Drag the joystick to move — or tap the ground to walk somewhere.",
-  "realmMap.revealHint": "The realm beyond Avalon stirs. Visit the Wayshrine — the pale standing stone — to set out across the Realm Map.",
+  "realmMap.revealHint": "The realm beyond Elarion stirs. Visit the Wayshrine — the pale standing stone — to set out across the Realm Map.",
 
   "shopkeeperPanic.1": "My lord — ENEMIES! The shop can wait!",
   "shopkeeperPanic.2": "Goods later, glory now! To arms!",

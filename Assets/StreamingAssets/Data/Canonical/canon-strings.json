@@ -21,6 +21,7 @@
   "theKeeper": "the Keeper",
   "guardianTitle": "Realm Guardian",
   "guardianOfTheLantern": "Guardian of the Lantern",
+  "_guardianLegacyNote": "Retired title — the player is now 'the Keeper' (STORYLINE.md §4). Preserved so any v1 data reference does not hard-error.",
 
   "alduin": "Alduin the Mournful",
   "alduinTitle": "the Necromancer",
@@ -35,12 +36,14 @@
   "lantern": "the Lantern of Avalon",
   "lanternShort": "the Lantern",
 
-  "tagline": "By lantern. By oath. By Heart.",
-  "titleTagline": "Tend the Lantern. Hold the dark.",
+  "tagline": "Hold the Chord. Defend the Spire.",
+  "titleTagline": "Hold the chord. Hold the dark.",
   "bibleTitleTagline": "Tend the Heart. Hold the dark.",
+  "_taglineLegacyNote": "tagline and titleTagline updated 2026-05-27 — Lantern motif retired, Stone Choir framing adopted. bibleTitleTagline preserved as a historical reference only.",
   "publisher": "DeNelle Studios",
   "gameTitle": "Defenders of the Realm",
-  "gameSubtitle": "Defenders of the Realm: The Lantern of Avalon",
+  "gameSubtitle": "Defenders of the Realm: Elarion",
+  "_gameSubtitleLegacy": "Defenders of the Realm: The Lantern of Avalon",
 
   "hollowOnes": "the Hollow Ones",
   "hollowed": "the Hollowed",
@@ -51,7 +54,11 @@
 
   "wardenAelwyn": "Warden Aelwyn",
   "sirBram": "Sir Bram",
+  "sirBramEpithet": "of the Last Banner",
+  "nessa": "Nessa",
+  "nessaEpithet": "of the Outer Paths",
   "selaThornquiver": "Sela Thornquiver",
+  "_selaLegacyNote": "Sela Thornquiver is the v1 archer name — superseded by Nessa (STORYLINE.md §4) in the v2 Stone Choir pivot. Retained here so old save/data references do not hard-error.",
   "garran": "Garran",
   "garranMentor": "Sir Bram",
   "wrenThornquiver": "Wren Thornquiver",
