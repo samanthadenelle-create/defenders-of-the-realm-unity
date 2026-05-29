@@ -675,6 +675,20 @@ namespace DeNelle.Village
             _hero.SetHeart(_heart);
             TrySetHeroEnemyMask(_hero, _enemyMask);
 
+            // DTT: route heal/ward spells to REPAIR the tower (the thing you're
+            // defending) — the turret hero is invulnerable, so heal-the-hero is moot
+            // here. Village keeps heal-the-hero (HealHandler stays null there). The
+            // closure reads _heart at cast time, so it is valid even if set later.
+            _hero.HealHandler = amount =>
+            {
+                if (_heart == null) return false;
+                _heart.SetHp(Mathf.Min(TowerMaxHp, _heart.Hp + amount));
+                RefreshHud();
+                if (_towerTransform != null)
+                    VFXManager.Play(VFXType.Impact_Heal, _towerTransform.position + Vector3.up * 4f);
+                return true;
+            };
+
             // Camera: over-the-shoulder follow (hero-relative offset, looks past the
             // hero at the tower/battle). Bind to the rendering main camera, silence
             // EVERY other follow controller on it (incl. the baked DefendTowerCamera),
@@ -1435,7 +1449,7 @@ namespace DeNelle.Village
         /// </summary>
         private void FireAttack()
         {
-            FaceNearestHostile();
+            AimAbilitiesAtCrosshair();
             if (_hero != null && _hero.TryCast(AbilitySlot.Q)) return;
 
             IDamageable target = (_aim != null ? _aim.CurrentTarget : null)
@@ -1452,8 +1466,19 @@ namespace DeNelle.Village
         /// <summary>Ability-slot tap — faces the nearest hostile, then casts that slot (respects cooldown/mana).</summary>
         private void CastSlot(AbilitySlot slot)
         {
-            FaceNearestHostile();
+            AimAbilitiesAtCrosshair();
             if (_hero != null) _hero.TryCast(slot);
+        }
+
+        /// <summary>Points the hero's offensive abilities at the crosshair target (or
+        /// the nearest hostile in view) so a turret hero's spells land on the distant
+        /// enemies instead of the empty stand. Null = resolve from the hero (no target).</summary>
+        private void AimAbilitiesAtCrosshair()
+        {
+            if (_hero == null || _heroTransform == null) return;
+            IDamageable t = (_aim != null ? _aim.CurrentTarget : null)
+                ?? NearestHostileInCone(_heroTransform.position, _heroTransform.forward, HeroFireRange, 100f);
+            _hero.AimPointOverride = (t != null) ? t.WorldPosition : (Vector3?)null;
         }
 
         /// <summary>Snaps the hero to face the nearest hostile so a tapped cast reads (no slerp — instant on tap).</summary>

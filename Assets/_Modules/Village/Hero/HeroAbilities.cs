@@ -218,6 +218,16 @@ namespace DeNelle.Village
         // consumed by the next ResolveEffect() damage call, then reset to 1.
         private float _pendingTimingBonus = 1f;
 
+        // ── Defend-the-Tower aim overrides (null in village → behaviour unchanged) ──
+        /// <summary>When set, offensive abilities resolve from this world point (the
+        /// turret player's crosshair / aim target) instead of the hero's feet — so a
+        /// stationary hero's spells reach the distant enemies. PatriciaLightController
+        /// sets it per cast; village mode leaves it null.</summary>
+        public Vector3? AimPointOverride;
+        /// <summary>When set, Heal effects route here (repair the tower) instead of
+        /// healing the caster. Returns true when it handled the heal. Null = heal hero.</summary>
+        public System.Func<float, bool> HealHandler;
+
         private void ResolveEffect(AbilityDef def, Vector3 origin)
         {
             DamageElement element = ElementOf(def);
@@ -236,25 +246,32 @@ namespace DeNelle.Village
             float dmg = def.Damage * HeroTalentModifiers.DamageMultiplier(_heroClass) * levelMult * _pendingTimingBonus;
             _pendingTimingBonus = 1f;
 
+            // DTT: offensive abilities resolve from the player's aim point (crosshair
+            // target) so a stationary turret hero's spells reach the distant enemies.
+            // Null override (village) keeps the original hero-centred behaviour.
+            Vector3 atk = AimPointOverride ?? origin;
+
             switch (def.EffectEnum)
             {
                 case AbilityEffect.Heal:
                 {
-                    // Healing Beacon heals the CASTER (the hero). Executive-creative
-                    // call 2026-05-28: "heal hero is correct — cannot heal a tree."
-                    // def.Damage carries the heal amount; a healing aura plays at
-                    // the caster (HeroHealth.Heal also fires Impact_Heal).
-                    var heroHp = GetComponent<HeroHealth>() ?? HeroHealth.Instance;
-                    if (heroHp != null) heroHp.Heal(def.Damage);
-                    VFXManager.Play(VFXType.Cast_Heal, origin + Vector3.up * 1.2f);
+                    // DTT routes the heal to repair the TOWER (HealHandler). Otherwise
+                    // it heals the CASTER — executive call 2026-05-28: "heal hero is
+                    // correct — cannot heal a tree." def.Damage carries the amount.
+                    if (HealHandler == null || !HealHandler(def.Damage))
+                    {
+                        var heroHp = GetComponent<HeroHealth>() ?? HeroHealth.Instance;
+                        if (heroHp != null) heroHp.Heal(def.Damage);
+                        VFXManager.Play(VFXType.Cast_Heal, origin + Vector3.up * 1.2f);
+                    }
                     break;
                 }
 
                 case AbilityEffect.Strike:
                 case AbilityEffect.Snare:
                 {
-                    // nearest enemy within reach + ENEMY_HIT_R
-                    var foe = NearestHostile(origin, def.Range + _enemyHitRadius);
+                    // nearest enemy to the aim point + ENEMY_HIT_R
+                    var foe = NearestHostile(atk, def.Range + _enemyHitRadius);
                     if (foe != null)
                     {
                         foe.TakeDamage(dmg, element);
@@ -262,22 +279,22 @@ namespace DeNelle.Village
                         if (def.EffectEnum == AbilityEffect.Snare)
                             foe.ApplyStatus(StatusEffect.Slow, 2.5f); // castAbility.ts snare
                     }
-                    SpawnVfx(origin, def, 1.6f, foe != null ? foe.WorldPosition : (Vector3?)null);
+                    SpawnVfx(atk, def, 1.6f, foe != null ? foe.WorldPosition : (Vector3?)null);
                     break;
                 }
 
                 case AbilityEffect.Aoe:
                 case AbilityEffect.Cleave:
-                    // blast centred on the caster
-                    Blast(origin, def.Range, dmg, element, def.Freeze);
-                    SpawnVfx(origin, def, def.Range);
+                    // blast centred on the aim point (the crosshair cluster)
+                    Blast(atk, def.Range, dmg, element, def.Freeze);
+                    SpawnVfx(atk, def, def.Range);
                     break;
 
                 case AbilityEffect.Meteor:
                 {
-                    // blast centred on the nearest enemy cluster (castAbility.ts)
-                    var foe = NearestHostile(origin, float.MaxValue);
-                    Vector3 target = foe != null ? foe.WorldPosition : origin;
+                    // blast centred on the nearest enemy cluster to the aim point
+                    var foe = NearestHostile(atk, float.MaxValue);
+                    Vector3 target = foe != null ? foe.WorldPosition : atk;
                     Blast(target, def.Range, dmg, element, 0f);
                     SpawnVfx(target, def, def.Range);
                     break;
