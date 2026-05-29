@@ -193,9 +193,12 @@ namespace DeNelle.Editor
             var rail = GameObject.CreatePrimitive(PrimitiveType.Cube);
             rail.name = "StandRail";
             rail.transform.SetParent(arena.transform, false);
-            rail.transform.position   = new Vector3(0f, standTop + 0.55f, standZ - 2.3f);
+            rail.transform.position   = new Vector3(0f, standTop + 0.30f, standZ - 2.3f); // lowered a touch
             rail.transform.localScale = new Vector3(7f, 0.8f, 0.25f);
             TintEditor(rail, woodDark);
+            // Invisible — keep it as a low marker/collider but out of the view.
+            var railRenderer = rail.GetComponent<MeshRenderer>();
+            if (railRenderer != null) railRenderer.enabled = false;
 
             // ── Hero spawn marker on the stand, facing the tower ─────────────
             var spawn = new GameObject("HeroSpawn");

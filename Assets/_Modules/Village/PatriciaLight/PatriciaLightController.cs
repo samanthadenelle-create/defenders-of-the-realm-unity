@@ -701,8 +701,9 @@ namespace DeNelle.Village
 
             const float strafeSpeed = 9f;
             var p = _heroTransform.position;
+            // Negated: left/right reads correctly from the over-the-shoulder view.
             p.x = Mathf.Clamp(
-                p.x + Mathf.Clamp(x, -1f, 1f) * strafeSpeed * Time.deltaTime,
+                p.x - Mathf.Clamp(x, -1f, 1f) * strafeSpeed * Time.deltaTime,
                 _strafeCenterX - StrafeHalfWidth, _strafeCenterX + StrafeHalfWidth);
             _heroTransform.position = p;
         }
@@ -1009,7 +1010,9 @@ namespace DeNelle.Village
             // via _bossDef), flying in down the centre and scaled up so it reads as
             // the boss. Its HP comes from its enemies.json def (Configure sets it).
             EnemyDef def = _bossDef ?? _groundDef;
-            Vector3 pos = TowerPos + new Vector3(0f, AirHeight, AirSpawnDist);
+            // Spawn on the FAR side of the tower (-Z), so the boss approaches from the
+            // front and never crosses the hero's stand (which sits at +Z).
+            Vector3 pos = TowerPos + new Vector3(0f, AirHeight, -AirSpawnDist);
             string id = $"pl-boss-{_idCounter++}";
             Enemy boss = SpawnEnemy(def, pos, ground: false);
             if (boss != null)
