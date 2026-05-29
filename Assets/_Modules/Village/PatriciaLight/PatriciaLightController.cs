@@ -104,6 +104,7 @@ namespace DeNelle.Village
         private const float StrafeHalfWidth = 2.8f;   // stay within the 7-wide platform (half 3.5) — no floating off
         private const float AirAttackFrontZ = 7f;      // flyers attack the tower's +Z (hero-facing) face, not the centre/behind
         private DeNelle.Village.Defend.HeroOverShoulderCamera _camFollow;
+        private DeNelle.Village.Defend.TowerAimSystem _aim;   // manual-aim reticle + aim-assisted targeting
 
         private HeroAbilities _hero;
         private Transform _heroTransform;
@@ -655,6 +656,20 @@ namespace DeNelle.Village
                 _camFollow.enabled = true;
                 _camFollow.Target  = _heroTransform;
             }
+
+            // Manual-aim reticle (input-agnostic core).
+            if (_aim == null) _aim = gameObject.AddComponent<DeNelle.Village.Defend.TowerAimSystem>();
+            _aim.Cam       = cam;
+            _aim.AimOrigin = _heroTransform;
+            _aim.Range     = HeroFireRange;
+
+            // Mobile touch driver (Lean Touch): drag = aim, hold-right = fire, pinch = zoom.
+            // The only Lean-dependent piece; the desktop mouse/keyboard fallback in
+            // TowerAimSystem stays active in the editor / Windows build for iteration.
+            var touch = gameObject.GetComponent<DeNelle.Village.Defend.LeanTouchAimDriver>()
+                     ?? gameObject.AddComponent<DeNelle.Village.Defend.LeanTouchAimDriver>();
+            touch.Aim = _aim;
+            touch.Cam = _camFollow;
         }
 
         private static HeroClass ResolvePlayableClass(out bool defaulted)
@@ -712,17 +727,19 @@ namespace DeNelle.Village
         private void TickHeroFire()
         {
             _fireCooldown -= Time.deltaTime;
+            if (_heroTransform == null || _aim == null) return;
+
+            // MANUAL aim: the player holds fire and the shot goes to the aim-assisted
+            // enemy under the reticle (TowerAimSystem.CurrentTarget). Because the reticle
+            // lives in the viewport, the target is always on-screen / forward — backward
+            // shots are impossible (this replaces the old nearest-anywhere auto-fire).
+            if (!_aim.FireHeld) return;
             if (_fireCooldown > 0f) return;
+
+            IDamageable target = _aim.CurrentTarget;
+            if (target == null) return;   // no lock — hold fire, keep the cooldown ready
+
             _fireCooldown = HeroFireCooldown;
-            if (_heroTransform == null) return;
-
-            // Auto-target the nearest hostile IN FRONT and fire a visible projectile at it.
-            // Cone-gated (not nearest-anywhere) so the hero never fires backward at an
-            // enemy behind the stand — that was the "half the shots fire backwards" bug.
-            IDamageable target = NearestHostileInCone(
-                _heroTransform.position, _heroTransform.forward, HeroFireRange, 100f);
-            if (target == null) return;
-
             Vector3 muzzle = _heroTransform.position + Vector3.up * 1.3f + _heroTransform.forward * 0.6f;
             StartCoroutine(FireProjectile(muzzle, target, HeroFireDamage));
         }
@@ -1365,8 +1382,11 @@ namespace DeNelle.Village
             FaceNearestHostile();
             if (_hero != null && _hero.TryCast(AbilitySlot.Q)) return;
 
-            IDamageable target = NearestHostile(
-                _heroTransform != null ? _heroTransform.position : transform.position, HeroFireRange);
+            IDamageable target = (_aim != null ? _aim.CurrentTarget : null)
+                ?? NearestHostileInCone(
+                       _heroTransform != null ? _heroTransform.position : transform.position,
+                       _heroTransform != null ? _heroTransform.forward  : transform.forward,
+                       HeroFireRange, 100f);
             if (target == null) return;
             target.TakeDamage(HeroFireDamage, DamageElement.None);
             DamageAttribution.Record(target, HeroProgression.Id, HeroFireDamage);
@@ -1383,7 +1403,11 @@ namespace DeNelle.Village
         private void FaceNearestHostile()
         {
             if (_heroTransform == null) return;
-            IDamageable target = NearestHostile(_heroTransform.position, HeroFireRange);
+            // Face the aim-assisted reticle target if there is one; else the nearest
+            // hostile IN FRONT (cone-gated). Never the old nearest-anywhere, which
+            // could snap the hero — and the over-shoulder camera — to face backward.
+            IDamageable target = (_aim != null ? _aim.CurrentTarget : null)
+                ?? NearestHostileInCone(_heroTransform.position, _heroTransform.forward, HeroFireRange, 100f);
             if (target == null) return;
             Vector3 face = target.WorldPosition - _heroTransform.position; face.y = 0f;
             if (face.sqrMagnitude > 0.01f)

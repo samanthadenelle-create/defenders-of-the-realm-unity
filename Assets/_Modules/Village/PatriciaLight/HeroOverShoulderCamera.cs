@@ -36,8 +36,31 @@ namespace DeNelle.Village.Defend
         [Tooltip("Position smoothing time (bigger = lazier). 0 = rigid.")]
         [SerializeField] private float _smoothTime = 0.10f;
 
+        [Header("Zoom (pinch) — clamps the shoulder distance")]
+        [SerializeField] private float _minDistance = 2.5f;
+        [SerializeField] private float _maxDistance = 9f;
+
         private Vector3 _velocity;
         private bool _snapped;
+
+        // ── Zoom (pinch) — adjusts how far back the shoulder offset sits ──────
+        // Input-agnostic: the Lean Touch driver feeds pinch here (AddZoom for a
+        // delta, ApplyPinchScale for a multiplicative pinch factor). Desktop can
+        // drive AddZoom from the scroll wheel.
+        /// <summary>Push the camera out (+) or pull it in (-) by <paramref name="deltaUnits"/>, clamped.</summary>
+        public void AddZoom(float deltaUnits)
+        {
+            float dist = Mathf.Clamp(-_shoulderOffset.z + deltaUnits, _minDistance, _maxDistance);
+            _shoulderOffset.z = -dist;
+        }
+
+        /// <summary>Multiply the current distance by a pinch scale (Lean GetPinchScale); >1 zooms out.</summary>
+        public void ApplyPinchScale(float scale)
+        {
+            if (scale <= 0f) return;
+            float dist = Mathf.Clamp(-_shoulderOffset.z * scale, _minDistance, _maxDistance);
+            _shoulderOffset.z = -dist;
+        }
 
         // ── Shake (decaying jitter) — parity with the other rigs (HitStop hook) ──
         private float _shakeAmplitude, _shakeTimeLeft, _shakeDuration;
