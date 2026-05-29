@@ -99,7 +99,7 @@ namespace DeNelle.Village
         private Vector3 _heroLedgePos;
         private float   _strafeCenterX;
         private const float StrafeHalfWidth = 4.2f;
-        private ThirdPersonCameraFollow _camFollow;
+        private FirstPersonTowerCamera _camFollow;
 
         private HeroAbilities _hero;
         private Transform _heroTransform;
@@ -229,12 +229,15 @@ namespace DeNelle.Village
         /// </summary>
         private void BuildArena()
         {
-            var ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
+            // Solid floor: a big thick CUBE slab (not a one-sided Plane) whose top
+            // sits just ABOVE y=0, so it overdraws any scene Terrain/Plane at y=0
+            // and the coplanar z-fighting glitch (two ground surfaces) disappears.
+            var ground = GameObject.CreatePrimitive(PrimitiveType.Cube);
             ground.name = "Arena Ground";
             ground.transform.SetParent(transform, false);
-            ground.transform.position = Vector3.zero;
-            ground.transform.localScale = new Vector3(12f, 1f, 12f); // 120m plane
-            TintUrp(ground, new Color(0.20f, 0.22f, 0.26f));
+            ground.transform.position = new Vector3(0f, -0.08f, 0f);     // top at +0.02: just above terrain, no sink
+            ground.transform.localScale = new Vector3(240f, 0.2f, 240f); // 240m solid slab (big enough to never see past)
+            TintUrp(ground, new Color(0.22f, 0.24f, 0.20f));
 
             if (UnityEngine.Object.FindAnyObjectByType<Light>() == null)
             {
@@ -366,7 +369,7 @@ namespace DeNelle.Village
                 Debug.LogWarning("[PatriciaLight] Resources/PatriciaLight/tower2 not found — keeping placeholder blocks.");
             }
 
-            BuildHeroLedge();
+            BuildHeroStand();
         }
 
         /// <summary>
@@ -374,31 +377,50 @@ namespace DeNelle.Village
         /// (+Z) for the hero to stand on and strafe along. Placeholder until the
         /// spire's own ledge is wired; keeps the spire behind the FP camera.
         /// </summary>
-        private void BuildHeroLedge()
+        private void BuildHeroStand()
         {
-            float ledgeY = _hasSpire ? _spireBounds.min.y + _spireBounds.size.y * 0.50f : BalconyHeight;
-            // Sit the ledge well in front of the spire so the over-the-shoulder
-            // camera (behind the hero) clears the structure.
-            float ledgeZ = _hasSpire ? _spireBounds.max.z + 5f : BalconyDepth + 6f;
+            // A raised WOODEN STAND set BACK from the tower (+Z), facing it. The hero
+            // defends from here in first person, looking out across the field at
+            // tower2 (owner: "first person view from a stand facing the tower2 so we
+            // have a better landscape view of everything").
+            const float standTop = 7f;                                   // platform-top height
+            float standZ = _hasSpire ? _spireBounds.max.z + 14f : 18f;   // distance back from the tower
+
+            Color wood     = new Color(0.45f, 0.30f, 0.16f);
+            Color woodDark = new Color(0.30f, 0.20f, 0.10f);
+
+            var root = new GameObject("HeroStand");
+            root.transform.SetParent(transform, false);
 
             var platform = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            platform.name = "HeroLedge";
-            platform.transform.SetParent(transform, false);
-            platform.transform.position   = new Vector3(0f, ledgeY, ledgeZ);
-            platform.transform.localScale = new Vector3(10f, 0.6f, 4f);
-            TintUrp(platform, new Color(0.42f, 0.40f, 0.45f));
+            platform.name = "StandPlatform";
+            platform.transform.SetParent(root.transform, false);
+            platform.transform.position   = new Vector3(0f, standTop, standZ);
+            platform.transform.localScale = new Vector3(7f, 0.5f, 5f);
+            TintUrp(platform, wood);
 
+            // Four corner legs down to the ground.
+            foreach (var c in new[] { new Vector2(-3f, -2f), new Vector2(3f, -2f),
+                                      new Vector2(-3f,  2f), new Vector2(3f,  2f) })
+            {
+                var leg = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                leg.name = "StandLeg";
+                leg.transform.SetParent(root.transform, false);
+                leg.transform.position   = new Vector3(c.x, standTop * 0.5f, standZ + c.y);
+                leg.transform.localScale = new Vector3(0.4f, standTop, 0.4f);
+                TintUrp(leg, woodDark);
+            }
+
+            // Rail on the tower-facing (-Z) edge so it reads as a watch-stand.
             var rail = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            rail.name = "HeroLedgeRail";
-            rail.transform.SetParent(transform, false);
-            rail.transform.position   = new Vector3(0f, ledgeY + 0.7f, ledgeZ + 1.9f);
-            rail.transform.localScale = new Vector3(10f, 1.0f, 0.3f);
-            TintUrp(rail, new Color(0.30f, 0.28f, 0.33f));
+            rail.name = "StandRail";
+            rail.transform.SetParent(root.transform, false);
+            rail.transform.position   = new Vector3(0f, standTop + 0.55f, standZ - 2.3f);
+            rail.transform.localScale = new Vector3(7f, 0.8f, 0.25f);
+            TintUrp(rail, woodDark);
 
-            // Stand the hero at the FRONT LIP of the ledge (platform depth 4 → front
-            // edge at ledgeZ + 2) so the view looks straight down over the edge at
-            // the troops below, not back from it.
-            _heroLedgePos  = new Vector3(0f, ledgeY + 0.35f, ledgeZ + 1.7f);
+            // Hero stands near the tower-facing edge of the platform.
+            _heroLedgePos  = new Vector3(0f, standTop + 0.35f, standZ - 1.3f);
             _strafeCenterX = 0f;
         }
 
@@ -479,7 +501,12 @@ namespace DeNelle.Village
             // Stand the hero on the ledge built in front of the tower, facing OUT
             // over the field (+Z). The hero strafes left/right along it.
             heroRoot.transform.position = _heroLedgePos;
-            heroRoot.transform.rotation = Quaternion.identity; // faces +Z, out over the field
+            // Face the tower (toward origin) so the FP view looks across the field
+            // at tower2 and the enemies attacking it.
+            Vector3 toTower = TowerPos - _heroLedgePos; toTower.y = 0f;
+            heroRoot.transform.rotation = toTower.sqrMagnitude > 0.01f
+                ? Quaternion.LookRotation(toTower.normalized, Vector3.up)
+                : Quaternion.identity;
             _heroTransform = heroRoot.transform;
 
             // Body from Resources/Heroes/<Class> (the canonical hero pickup path).
@@ -513,28 +540,27 @@ namespace DeNelle.Village
             _hero.SetHeart(_heart);
             TrySetHeroEnemyMask(_hero, _enemyMask);
 
-            // Over-the-shoulder camera (owner call): you need to see the hero AND
-            // the landscape. Bind to the rendering main camera and silence every
-            // other follow controller riding on it (incl. the FP rig).
+            // First-person from the stand (owner call): the hero looks out across
+            // the field at tower2. Bind to the rendering main camera and silence
+            // every other follow controller riding on it.
             var cam = Camera.main != null
                 ? Camera.main
                 : UnityEngine.Object.FindAnyObjectByType<Camera>();
             if (cam != null)
             {
-                foreach (var vc in cam.GetComponents<VillageCamera>())          vc.enabled = false;
-                foreach (var sc in cam.GetComponents<SmartMobileCamera>())      sc.enabled = false;
-                foreach (var fp in cam.GetComponents<FirstPersonTowerCamera>()) fp.enabled = false;
-                _camFollow = cam.GetComponent<ThirdPersonCameraFollow>()
-                          ?? cam.gameObject.AddComponent<ThirdPersonCameraFollow>();
+                foreach (var vc in cam.GetComponents<VillageCamera>())             vc.enabled = false;
+                foreach (var sc in cam.GetComponents<SmartMobileCamera>())         sc.enabled = false;
+                foreach (var tp in cam.GetComponents<ThirdPersonCameraFollow>())   tp.enabled = false;
+                _camFollow = cam.GetComponent<FirstPersonTowerCamera>()
+                          ?? cam.gameObject.AddComponent<FirstPersonTowerCamera>();
             }
             else
             {
-                _camFollow = UnityEngine.Object.FindAnyObjectByType<ThirdPersonCameraFollow>();
+                _camFollow = UnityEngine.Object.FindAnyObjectByType<FirstPersonTowerCamera>();
             }
             if (_camFollow != null)
             {
                 _camFollow.enabled = true;
-                _camFollow.SetOffset(CamOffset);
                 _camFollow.Target  = _heroTransform;
             }
         }
