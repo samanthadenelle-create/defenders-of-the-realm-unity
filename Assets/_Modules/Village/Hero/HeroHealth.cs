@@ -79,9 +79,21 @@ namespace DeNelle.Village
 
         private void Start() => OnHealthChanged?.Invoke(_hp, _maxHp);
 
+        // In Defend-the-Tower the hero is a safe turret on the stand — the TOWER is
+        // what enemies attack, not the hero. Resolve once, then skip contact damage.
+        private bool _modeChecked;
+        private bool _safeTurretMode;
+
         private void Update()
         {
             if (_hp <= 0f) return;
+
+            if (!_modeChecked)
+            {
+                _modeChecked = true;
+                _safeTurretMode = FindAnyObjectByType<DeNelle.Village.PatriciaLightController>() != null;
+            }
+            if (_safeTurretMode) return;   // enemies target the tower, not the hero
 
             _cooldown -= Time.deltaTime;
             if (_cooldown > 0f) return;

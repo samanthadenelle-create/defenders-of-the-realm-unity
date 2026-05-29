@@ -102,7 +102,7 @@ namespace DeNelle.Village
         private float   _strafeCenterX;
         private bool    _arenaBaked;   // true when PatriciaLightSceneBuilder baked the arena into the scene
         private const float StrafeHalfWidth = 4.2f;
-        private DeNelle.Village.Defend.DefendTowerCamera _camFollow;
+        private DeNelle.Village.Defend.HeroOverShoulderCamera _camFollow;
 
         private HeroAbilities _hero;
         private Transform _heroTransform;
@@ -170,6 +170,7 @@ namespace DeNelle.Village
 
         private async UniTask Run()
         {
+            BuildMusic();
             BuildArena();
             BuildTower();
             ResolveEnemyMask();
@@ -230,6 +231,26 @@ namespace DeNelle.Village
         /// the corruption risk the WO warns about is from re-saving the COMPLEX
         /// village scene, not from a fresh flat arena.
         /// </summary>
+        /// <summary>Soft, looping battle music (Resources/Audio/bellssteel-panic).</summary>
+        private void BuildMusic()
+        {
+            var clip = Resources.Load<AudioClip>("Audio/bellssteel-panic");
+            if (clip == null)
+            {
+                Debug.LogWarning("[PatriciaLight] Resources/Audio/bellssteel-panic not found — no battle music.");
+                return;
+            }
+            var go = new GameObject("BattleMusic");
+            go.transform.SetParent(transform, false);
+            var src = go.AddComponent<AudioSource>();
+            src.clip = clip;
+            src.loop = true;
+            src.volume = 0.18f;        // soft background
+            src.spatialBlend = 0f;     // 2D
+            src.playOnAwake = false;
+            src.Play();
+        }
+
         private void BuildArena()
         {
             // If the scene was baked by PatriciaLightSceneBuilder, the arena objects
@@ -607,25 +628,26 @@ namespace DeNelle.Village
             _hero.SetHeart(_heart);
             TrySetHeroEnemyMask(_hero, _enemyMask);
 
-            // Camera: the owner's DefendTowerCamera (overhead third-person follow —
-            // the "looking from afar" view). It's baked onto the Main Camera by the
-            // scene builder so its offset/look-height/smoothing are editor-tunable;
-            // here we just hand it the hero and silence any other follow controller.
+            // Camera: over-the-shoulder follow (hero-relative offset, looks past the
+            // hero at the tower/battle). Bind to the rendering main camera, silence
+            // EVERY other follow controller on it (incl. the baked DefendTowerCamera),
+            // then hand the OTS rig the hero.
             var cam = Camera.main != null
                 ? Camera.main
                 : UnityEngine.Object.FindAnyObjectByType<Camera>();
             if (cam != null)
             {
-                foreach (var vc in cam.GetComponents<VillageCamera>())             vc.enabled = false;
-                foreach (var sc in cam.GetComponents<SmartMobileCamera>())         sc.enabled = false;
-                foreach (var tp in cam.GetComponents<ThirdPersonCameraFollow>())   tp.enabled = false;
-                foreach (var fp in cam.GetComponents<FirstPersonTowerCamera>())    fp.enabled = false;
-                _camFollow = cam.GetComponent<DeNelle.Village.Defend.DefendTowerCamera>()
-                          ?? cam.gameObject.AddComponent<DeNelle.Village.Defend.DefendTowerCamera>();
+                foreach (var vc in cam.GetComponents<VillageCamera>())                      vc.enabled = false;
+                foreach (var sc in cam.GetComponents<SmartMobileCamera>())                  sc.enabled = false;
+                foreach (var tp in cam.GetComponents<ThirdPersonCameraFollow>())            tp.enabled = false;
+                foreach (var fp in cam.GetComponents<FirstPersonTowerCamera>())             fp.enabled = false;
+                foreach (var dt in cam.GetComponents<DeNelle.Village.Defend.DefendTowerCamera>()) dt.enabled = false;
+                _camFollow = cam.GetComponent<DeNelle.Village.Defend.HeroOverShoulderCamera>()
+                          ?? cam.gameObject.AddComponent<DeNelle.Village.Defend.HeroOverShoulderCamera>();
             }
             else
             {
-                _camFollow = UnityEngine.Object.FindAnyObjectByType<DeNelle.Village.Defend.DefendTowerCamera>();
+                _camFollow = UnityEngine.Object.FindAnyObjectByType<DeNelle.Village.Defend.HeroOverShoulderCamera>();
             }
             if (_camFollow != null)
             {
