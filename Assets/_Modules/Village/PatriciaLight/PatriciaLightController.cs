@@ -101,7 +101,8 @@ namespace DeNelle.Village
         private bool       _hasSpawnRot;   // true when a baked HeroSpawn marker supplies the facing
         private float   _strafeCenterX;
         private bool    _arenaBaked;   // true when PatriciaLightSceneBuilder baked the arena into the scene
-        private const float StrafeHalfWidth = 4.2f;
+        private const float StrafeHalfWidth = 2.8f;   // stay within the 7-wide platform (half 3.5) — no floating off
+        private const float AirAttackFrontZ = 7f;      // flyers attack the tower's +Z (hero-facing) face, not the centre/behind
         private DeNelle.Village.Defend.HeroOverShoulderCamera _camFollow;
 
         private HeroAbilities _hero;
@@ -715,8 +716,11 @@ namespace DeNelle.Village
             _fireCooldown = HeroFireCooldown;
             if (_heroTransform == null) return;
 
-            // Auto-target the nearest hostile and fire a visible projectile at it.
-            IDamageable target = NearestHostile(_heroTransform.position, HeroFireRange);
+            // Auto-target the nearest hostile IN FRONT and fire a visible projectile at it.
+            // Cone-gated (not nearest-anywhere) so the hero never fires backward at an
+            // enemy behind the stand — that was the "half the shots fire backwards" bug.
+            IDamageable target = NearestHostileInCone(
+                _heroTransform.position, _heroTransform.forward, HeroFireRange, 100f);
             if (target == null) return;
 
             Vector3 muzzle = _heroTransform.position + Vector3.up * 1.3f + _heroTransform.forward * 0.6f;
@@ -970,7 +974,10 @@ namespace DeNelle.Village
                 if (e == null || e.IsDead || e.GetComponent<AirEnemyTag>() == null) continue;
 
                 Vector3 self = e.transform.position;
-                Vector3 target = TowerPos + new Vector3(0f, _balconyPos.y, 0f);
+                // Attack the tower's FRONT face (+Z, the hero's side) — NOT the centre,
+                // which let flyers (incl. the boss) settle behind the tower where the
+                // hero can't see or reach them. +Z keeps them between tower and hero.
+                Vector3 target = TowerPos + new Vector3(0f, _balconyPos.y, AirAttackFrontZ);
                 Vector3 to = target - self;
                 float dist = to.magnitude;
 

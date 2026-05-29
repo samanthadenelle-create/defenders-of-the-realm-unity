@@ -190,15 +190,28 @@ namespace DeNelle.Editor
                 TintEditor(leg, woodDark);
             }
 
-            var rail = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            rail.name = "StandRail";
-            rail.transform.SetParent(arena.transform, false);
-            rail.transform.position   = new Vector3(0f, standTop + 0.30f, standZ - 2.3f); // lowered a touch
-            rail.transform.localScale = new Vector3(7f, 0.8f, 0.25f);
-            TintEditor(rail, woodDark);
-            // Invisible — keep it as a low marker/collider but out of the view.
-            var railRenderer = rail.GetComponent<MeshRenderer>();
-            if (railRenderer != null) railRenderer.enabled = false;
+            // ── Side boundary walls (LEFT/RIGHT edges) ───────────────────────
+            // No front rail: it was purely cosmetic and its invisible collider was
+            // the likely cause of "half the shots fire backwards" — gone now.
+            // These low side walls sit on the ±X edges so the hero reads as standing
+            // on a framed platform (not floating in air) without occluding the
+            // forward view of the tower. Colliders stripped — nothing invisible in
+            // front of the hero to deflect a shot.
+            foreach (float sx in new[] { -3.5f, 3.5f })
+            {
+                var wall = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                wall.name = "StandSideWall";
+                wall.transform.SetParent(arena.transform, false);
+                wall.transform.position   = new Vector3(sx, standTop + 0.55f, standZ);
+                wall.transform.localScale = new Vector3(0.3f, 1.1f, 5f);
+                TintEditor(wall, woodDark);
+                var wc = wall.GetComponent<Collider>();
+                if (wc != null) UnityEngine.Object.DestroyImmediate(wc);
+                // Invisible: the strafe clamp (StrafeHalfWidth) is what actually keeps
+                // the hero on the platform — these stay as edge markers but don't render.
+                var wr = wall.GetComponent<MeshRenderer>();
+                if (wr != null) wr.enabled = false;
+            }
 
             // ── Hero spawn marker on the stand, facing the tower ─────────────
             var spawn = new GameObject("HeroSpawn");
