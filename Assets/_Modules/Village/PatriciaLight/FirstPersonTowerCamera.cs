@@ -27,7 +27,7 @@ namespace DeNelle.Village
 
         [SerializeField] private float _eyeHeight    = 1.8f;
         [SerializeField] private float _forwardNudge  = 0.6f;   // past the hero's own mesh/weapon
-        [SerializeField] private float _pitchDown     = 20f;    // look down at the field below
+        [SerializeField] private float _pitchDown     = 35f;    // look down at the field/enemies below
 
         private float _shakeAmplitude, _shakeTimeLeft, _shakeDuration;
 

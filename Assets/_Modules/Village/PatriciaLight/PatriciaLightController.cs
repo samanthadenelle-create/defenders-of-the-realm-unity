@@ -97,10 +97,12 @@ namespace DeNelle.Village
         // hero stands on and strafes along (placeholder until the spire's own
         // ledge is wired). Set in BuildTower; read in SpawnHero + TickHeroStrafe.
         private Vector3 _heroLedgePos;
+        private Quaternion _heroSpawnRot = Quaternion.identity;
+        private bool       _hasSpawnRot;   // true when a baked HeroSpawn marker supplies the facing
         private float   _strafeCenterX;
         private bool    _arenaBaked;   // true when PatriciaLightSceneBuilder baked the arena into the scene
         private const float StrafeHalfWidth = 4.2f;
-        private FirstPersonTowerCamera _camFollow;
+        private DeNelle.Village.Defend.DefendTowerCamera _camFollow;
 
         private HeroAbilities _hero;
         private Transform _heroTransform;
@@ -258,11 +260,9 @@ namespace DeNelle.Village
                 light.intensity = 1f;
             }
 
-            // Atmospheric fog — depth + mood for the "looking from afar" battle.
-            RenderSettings.fog        = true;
-            RenderSettings.fogMode    = FogMode.ExponentialSquared;
-            RenderSettings.fogColor   = new Color(0.10f, 0.10f, 0.16f); // dusk haze
-            RenderSettings.fogDensity = 0.012f;
+            // Atmospheric fog — OFF for now (owner). Re-enable + tune later:
+            //   fog=true, ExponentialSquared, color (0.10,0.10,0.16), density ~0.0024.
+            RenderSettings.fog = false;
         }
 
         /// <summary>
@@ -426,6 +426,9 @@ namespace DeNelle.Village
             Transform spawn = arena != null ? arena.transform.Find("HeroSpawn") : null;
             _heroLedgePos  = spawn != null ? spawn.position : (TowerPos + _balconyPos);
             _strafeCenterX = _heroLedgePos.x;
+            // Let the baked HeroSpawn marker drive the hero's facing — rotate the
+            // marker in the editor to aim the hero/FP view (no code change needed).
+            if (spawn != null) { _heroSpawnRot = spawn.rotation; _hasSpawnRot = true; }
         }
 
         /// <summary>
@@ -557,12 +560,20 @@ namespace DeNelle.Village
             // Stand the hero on the ledge built in front of the tower, facing OUT
             // over the field (+Z). The hero strafes left/right along it.
             heroRoot.transform.position = _heroLedgePos;
-            // Face the tower (toward origin) so the FP view looks across the field
-            // at tower2 and the enemies attacking it.
-            Vector3 toTower = TowerPos - _heroLedgePos; toTower.y = 0f;
-            heroRoot.transform.rotation = toTower.sqrMagnitude > 0.01f
-                ? Quaternion.LookRotation(toTower.normalized, Vector3.up)
-                : Quaternion.identity;
+            // Facing: use the baked HeroSpawn marker's rotation when present (so you
+            // aim the hero/FP view by rotating that marker in the editor); otherwise
+            // default to facing the tower across the field.
+            if (_hasSpawnRot)
+            {
+                heroRoot.transform.rotation = _heroSpawnRot;
+            }
+            else
+            {
+                Vector3 toTower = TowerPos - _heroLedgePos; toTower.y = 0f;
+                heroRoot.transform.rotation = toTower.sqrMagnitude > 0.01f
+                    ? Quaternion.LookRotation(toTower.normalized, Vector3.up)
+                    : Quaternion.identity;
+            }
             _heroTransform = heroRoot.transform;
 
             // Body from Resources/Heroes/<Class> (the canonical hero pickup path).
@@ -596,9 +607,10 @@ namespace DeNelle.Village
             _hero.SetHeart(_heart);
             TrySetHeroEnemyMask(_hero, _enemyMask);
 
-            // First-person from the stand (owner call): the hero looks out across
-            // the field at tower2. Bind to the rendering main camera and silence
-            // every other follow controller riding on it.
+            // Camera: the owner's DefendTowerCamera (overhead third-person follow —
+            // the "looking from afar" view). It's baked onto the Main Camera by the
+            // scene builder so its offset/look-height/smoothing are editor-tunable;
+            // here we just hand it the hero and silence any other follow controller.
             var cam = Camera.main != null
                 ? Camera.main
                 : UnityEngine.Object.FindAnyObjectByType<Camera>();
@@ -607,12 +619,13 @@ namespace DeNelle.Village
                 foreach (var vc in cam.GetComponents<VillageCamera>())             vc.enabled = false;
                 foreach (var sc in cam.GetComponents<SmartMobileCamera>())         sc.enabled = false;
                 foreach (var tp in cam.GetComponents<ThirdPersonCameraFollow>())   tp.enabled = false;
-                _camFollow = cam.GetComponent<FirstPersonTowerCamera>()
-                          ?? cam.gameObject.AddComponent<FirstPersonTowerCamera>();
+                foreach (var fp in cam.GetComponents<FirstPersonTowerCamera>())    fp.enabled = false;
+                _camFollow = cam.GetComponent<DeNelle.Village.Defend.DefendTowerCamera>()
+                          ?? cam.gameObject.AddComponent<DeNelle.Village.Defend.DefendTowerCamera>();
             }
             else
             {
-                _camFollow = UnityEngine.Object.FindAnyObjectByType<FirstPersonTowerCamera>();
+                _camFollow = UnityEngine.Object.FindAnyObjectByType<DeNelle.Village.Defend.DefendTowerCamera>();
             }
             if (_camFollow != null)
             {

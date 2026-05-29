@@ -64,6 +64,9 @@ namespace DeNelle.Village.UI
         private void Show(int newLevel)
         {
             if (_overlay == null) return;
+            // Suppressed during the Defend-the-Tower battle — no skill-spend interrupt
+            // mid-fight (the popup belongs to the village/management flow).
+            if (FindAnyObjectByType<DeNelle.Village.PatriciaLightController>() != null) return;
             if (_title != null) _title.text = $"Level {newLevel}!  Spend a skill point";
             _overlay.style.display = DisplayStyle.Flex;
             UpdateUI();

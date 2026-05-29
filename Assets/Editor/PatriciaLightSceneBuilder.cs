@@ -50,7 +50,7 @@ namespace DeNelle.Editor
         private const string ScenePath = ScenesDir + "/PatriciaLightMode.unity";
 
         private const string TypeController = "DeNelle.Village.PatriciaLightController";
-        private const string TypeCameraFollow = "DeNelle.Village.ThirdPersonCameraFollow";
+        private const string TypeCameraFollow = "DeNelle.Village.Defend.DefendTowerCamera";
         private const string TypeEventSystem = "UnityEngine.EventSystems.EventSystem";
         private const string TypeInputSystemUIInputModule = "UnityEngine.InputSystem.UI.InputSystemUIInputModule";
 
