@@ -25,13 +25,13 @@ namespace DeNelle.Village.Defend
         public Transform Target;
 
         [Header("Over-the-shoulder placement (hero-relative: +X right, +Y up, -Z behind)")]
-        [SerializeField] private Vector3 _shoulderOffset = new Vector3(0.9f, 2.0f, -4.0f);
+        [SerializeField] private Vector3 _shoulderOffset = new Vector3(0.9f, 2.0f, -3.7f); // nudged slightly forward
 
         [Header("Aim")]
         [Tooltip("How far ahead of the hero (along its forward) the camera looks.")]
         [SerializeField] private float _lookAhead = 12f;
         [Tooltip("How far below that point to bias the look, so the field/enemies fill the frame.")]
-        [SerializeField] private float _lookDown = 2.5f;
+        [SerializeField] private float _lookDown = 3.0f; // tilted down a touch so the ground/feet come into frame
 
         [Tooltip("Position smoothing time (bigger = lazier). 0 = rigid.")]
         [SerializeField] private float _smoothTime = 0.10f;

@@ -1002,13 +1002,27 @@ namespace DeNelle.Village
             Vector3 pos = TowerPos + new Vector3(x, ground ? 0f : AirHeight, depth);
 
             string id = $"pl-w{_currentWave}-{(ground ? "g" : "a")}-{_idCounter++}";
-            Enemy enemy = SpawnEnemy(_groundDef, pos, ground);
-            if (enemy == null) return;
 
-            enemy.Configure(id, _groundDef, _towerTransform);
+            Enemy enemy;
+            if (ground)
+            {
+                // Codex: pick a Hollow family unlocked by this wave + apply its feel.
+                HollowFamily fam = PickGroundFamily();
+                enemy = SpawnEnemy(_groundDef, pos, true, fam.Model, fam.SizeMult);
+                if (enemy == null) return;
+                enemy.Configure(id, _groundDef, _towerTransform);
+                enemy.ApplyWaveScaling(fam.HpMult, fam.SpeedMult, fam.DamageMult); // HP/speed/damage per family
+            }
+            else
+            {
+                enemy = SpawnEnemy(_groundDef, pos, false); // air = Dragon flyer
+                if (enemy == null) return;
+                enemy.Configure(id, _groundDef, _towerTransform);
+                enemy.gameObject.AddComponent<AirEnemyTag>(); // marks it for the air glide
+            }
+
             enemy.Died += HandleEnemyDied;
             enemy.ReachedHeart += HandleEnemyReachedHeart;
-            if (!ground) enemy.gameObject.AddComponent<AirEnemyTag>(); // marks it for the air glide
             _liveEnemies.Add(enemy);
         }
 
@@ -1022,32 +1036,66 @@ namespace DeNelle.Village
         // Real models (Resources/Enemies/*.fbx). LAND = KayKit skeletons (the horde,
         // they walk); AIR = the Dragon (clearly flies — delineated from the skeletons).
         // Ground grunts rotate through these for variety; air + boss = the Dragon.
-        private static readonly string[] GroundSkeletons =
-            { "Skeleton_Warrior", "Skeleton_Minion", "Skeleton_Rogue" };
+        // ── Codex Hollow Ones roster (docs/enemy-codex.md §1) ────────────────
+        // Pure data: model + per-family feel (speed/size) + the wave it first joins.
+        // Every mesh shares a KayKit rig, so EnemyAnimatorFactory animates them all —
+        // and a missing mesh falls back to a capsule (VisualFactory). So "the codex"
+        // is just this table; adding a family is one row.
+        private struct HollowFamily
+        {
+            public string Model; public float SpeedMult, SizeMult, HpMult, DamageMult; public int IntroWave; public float Weight;
+        }
+        // HpMult/DamageMult take effect at >1 (Enemy.ApplyWaveScaling guards), so fodder
+        // sits at the base and elites scale up — Brute tanky+slow+heavy, Rogue fast.
+        private static readonly HollowFamily[] HollowRoster =
+        {
+            new HollowFamily { Model = "Skeleton_Minion",  SpeedMult = 1.00f, SizeMult = 0.90f, HpMult = 1.0f, DamageMult = 1.0f, IntroWave = 1, Weight = 5f }, // Walker — fodder
+            new HollowFamily { Model = "Skeleton_Warrior", SpeedMult = 0.95f, SizeMult = 1.05f, HpMult = 1.5f, DamageMult = 1.3f, IntroWave = 3, Weight = 3f }, // Warrior
+            new HollowFamily { Model = "Skeleton_Rogue",   SpeedMult = 1.55f, SizeMult = 0.92f, HpMult = 1.0f, DamageMult = 1.0f, IntroWave = 4, Weight = 3f }, // Rogue — fast
+            new HollowFamily { Model = "Skeleton_Mage",    SpeedMult = 0.90f, SizeMult = 1.00f, HpMult = 1.2f, DamageMult = 1.2f, IntroWave = 6, Weight = 2f }, // Caster
+            new HollowFamily { Model = "Skeleton_Golem",   SpeedMult = 0.62f, SizeMult = 1.55f, HpMult = 3.0f, DamageMult = 1.8f, IntroWave = 6, Weight = 1f }, // Brute — heavy/slow
+        };
 
-        private Enemy SpawnEnemy(EnemyDef def, Vector3 pos, bool ground, string modelName = null)
+        /// <summary>Weighted pick among the families unlocked by the current wave —
+        /// waves escalate as Warrior/Rogue/Caster/Brute join the fodder Walkers.</summary>
+        private HollowFamily PickGroundFamily()
+        {
+            float total = 0f;
+            foreach (var f in HollowRoster) if (f.IntroWave <= _currentWave) total += f.Weight;
+            if (total <= 0f) return HollowRoster[0];
+            float r = UnityEngine.Random.value * total;
+            foreach (var f in HollowRoster)
+            {
+                if (f.IntroWave > _currentWave) continue;
+                r -= f.Weight;
+                if (r <= 0f) return f;
+            }
+            return HollowRoster[0];
+        }
+
+        private Enemy SpawnEnemy(EnemyDef def, Vector3 pos, bool ground, string modelName = null, float sizeScale = 1f)
         {
             if (ground && NavMesh.SamplePosition(pos, out var hit, 8f, NavMesh.AllAreas))
                 pos = hit.position;
 
-            // Bare root carries gameplay (collider + Enemy + agent); the skeleton mesh
-            // is a visual child. (Replaces the old placeholder capsule "pill".)
+            // Bare root carries gameplay (collider + Enemy + agent); the mesh is a
+            // visual child fit to size. (Replaces the old placeholder capsule "pill".)
             var go = new GameObject(ground ? "Enemy (ground)" : "Enemy (air)");
             int layer = LayerMask.NameToLayer("Enemy");
             if (layer >= 0) go.layer = layer;
             go.transform.SetParent(transform, false);
             go.transform.position = pos;
 
-            // Trigger capsule so the hero/pet sphere sweeps (QueryTriggerInteraction.
-            // Collide) find it, while Enemy's own contact probe (Ignore) skips it.
+            // Trigger capsule sized to the family so hero/pet sweeps find it. The
+            // NavMeshAgent root stays UNIT scale — only the visual is fit bigger
+            // (scaling an agent root misbehaves), so a Brute reads huge but paths fine.
             var col = go.AddComponent<CapsuleCollider>();
-            col.isTrigger = true; col.radius = 0.42f; col.height = 1.8f;
-            col.center = new Vector3(0f, 0.9f, 0f);
+            col.isTrigger = true;
+            col.radius = 0.42f * sizeScale; col.height = 1.8f * sizeScale;
+            col.center = new Vector3(0f, 0.9f * sizeScale, 0f);
 
-            string model = modelName
-                ?? (ground ? GroundSkeletons[UnityEngine.Random.Range(0, GroundSkeletons.Length)]
-                           : "Dragon");
-            AttachEnemyVisual(go.transform, model, ground);
+            string model = modelName ?? (ground ? "Skeleton_Minion" : "Dragon");
+            AttachEnemyVisual(go.transform, model, ground, sizeScale);
 
             var agent = go.AddComponent<NavMeshAgent>();
             if (!ground) agent.enabled = false; // air enemies glide, not nav-walk
@@ -1060,18 +1108,20 @@ namespace DeNelle.Village
         /// <summary>Instantiates a KayKit skeleton mesh under <paramref name="root"/>,
         /// height-fit and stripped of its own colliders (the root trigger capsule owns
         /// hit detection). Falls back to a tinted capsule mesh if the model is missing.</summary>
-        private void AttachEnemyVisual(Transform root, string modelName, bool ground)
+        private void AttachEnemyVisual(Transform root, string modelName, bool ground, float sizeScale = 1f)
         {
             // Skin the enemy via the shared VisualFactory (load → fit → strip colliders).
-            var vis = VisualFactory.Skin(root, "Enemies/" + modelName,
-                                         SkinOptions.Enemy(ground ? 1.9f : 1.8f));
+            // The family's size is baked into the FIT height (not a root scale).
+            float baseH = (ground ? 1.9f : 1.8f) * sizeScale;
+            var vis = VisualFactory.Skin(root, "Enemies/" + modelName, SkinOptions.Enemy(baseH));
             if (vis == null)
             {
                 // Fallback so a missing model still spawns a visible, hittable enemy.
                 var cap = GameObject.CreatePrimitive(PrimitiveType.Capsule);
                 var cc = cap.GetComponent<Collider>(); if (cc != null) Destroy(cc);
                 cap.transform.SetParent(root, false);
-                cap.transform.localPosition = new Vector3(0f, 0.9f, 0f);
+                cap.transform.localPosition = new Vector3(0f, 0.9f * sizeScale, 0f);
+                cap.transform.localScale = Vector3.one * sizeScale;
                 TintUrp(cap, ground ? new Color(0.6f, 0.25f, 0.25f) : new Color(0.55f, 0.3f, 0.6f));
                 return;
             }

@@ -603,9 +603,17 @@ namespace DeNelle.Village
         /// <summary>Instantiates + configures one enemy at <paramref name="point"/>.</summary>
         private void SpawnOne(EnemyDef def, WaveSpawnPoint point)
         {
-            Vector3 pos = point.transform.position;
-            Quaternion rot = Quaternion.LookRotation(
-                point.HeadingToGate.sqrMagnitude > 0.0001f ? point.HeadingToGate : Vector3.forward);
+            Vector3 heading = point.HeadingToGate.sqrMagnitude > 0.0001f
+                ? point.HeadingToGate.normalized : Vector3.forward;
+            Quaternion rot = Quaternion.LookRotation(heading);
+
+            // Spread each enemy around the spawn marker (lateral + a little depth) so a
+            // batch advances as a loose MOB toward the gate/tree instead of stacking on
+            // one point and marching single-file. Perpendicular = lateral to the heading.
+            Vector3 lateral = Vector3.Cross(Vector3.up, heading);
+            Vector3 pos = point.transform.position
+                        + lateral * UnityEngine.Random.Range(-4.5f, 4.5f)
+                        + heading * UnityEngine.Random.Range(-3f, 3f);
 
             // Snap the spawn position to the nearest NavMesh sample so a
             // slightly-off-mesh spawn point doesn't strand the enemy off-mesh
