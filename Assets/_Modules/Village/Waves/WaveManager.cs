@@ -169,6 +169,14 @@ namespace DeNelle.Village
         private readonly List<Enemy> _liveEnemies = new List<Enemy>();
         private readonly List<Enemy> _breachRoster = new List<Enemy>();
 
+        // Failsafe against a stuck enemy freezing the wave's clear gate (the recurring
+        // "wave won't advance" bug — clear requires _liveEnemies.Count == 0). Tracks each
+        // enemy's best distance toward the Heart; culls one that makes no progress for
+        // StuckTimeout so an off-mesh / boxed-in Hollow One can't hang the wave forever.
+        private readonly Dictionary<Enemy, float> _enemyBestSqr   = new Dictionary<Enemy, float>();
+        private readonly Dictionary<Enemy, float> _enemyStuckTime = new Dictionary<Enemy, float>();
+        private const float StuckTimeout = 12f;
+
         /// <summary>The apex flying boss for the current wave (null when not an apex wave / dead).</summary>
         private DragonBoss _liveApexBoss;
 
@@ -351,6 +359,8 @@ namespace DeNelle.Village
             }
 
             _currentWaveId = waveId;
+            _enemyBestSqr.Clear();    // fresh stuck-tracking per wave
+            _enemyStuckTime.Clear();
             // The between-wave build window scales with the player's chosen
             // difficulty: the canonical WaveDef.CountdownSeconds (45 s first
             // wave, 300 s later) is multiplied by the DifficultyTuning factor so
@@ -680,6 +690,38 @@ namespace DeNelle.Village
 
             // Prune destroyed enemies (Die() destroys the GameObject -> null ref).
             _liveEnemies.RemoveAll(e => e == null);
+
+            // FAILSAFE: cull a stuck enemy (off-mesh / boxed-in / unpathable) that makes
+            // no progress toward the Heart for StuckTimeout, so a single Hollow One can't
+            // hang the wave forever and block the next wave's countdown.
+            if (_heart != null)
+            {
+                Vector3 hpos = _heart.transform.position;
+                for (int i = _liveEnemies.Count - 1; i >= 0; i--)
+                {
+                    Enemy e = _liveEnemies[i];
+                    if (e == null || e.IsDead) continue;
+                    float sqr = Vector3.ProjectOnPlane(e.transform.position - hpos, Vector3.up).sqrMagnitude;
+                    if (!_enemyBestSqr.TryGetValue(e, out float best) || sqr < best - 0.25f)
+                    {
+                        _enemyBestSqr[e]   = sqr;   // got closer → reset the stuck timer
+                        _enemyStuckTime[e] = 0f;
+                    }
+                    else
+                    {
+                        float t = (_enemyStuckTime.TryGetValue(e, out float tv) ? tv : 0f) + Time.deltaTime;
+                        _enemyStuckTime[e] = t;
+                        if (t >= StuckTimeout)
+                        {
+                            Debug.LogWarning($"[WaveManager] Culling stuck enemy '{e.name}' (no progress to the Heart for {StuckTimeout:F0}s) so wave {_currentWaveId} can advance.");
+                            _enemyBestSqr.Remove(e);
+                            _enemyStuckTime.Remove(e);
+                            e.Kill();   // fires Died -> HandleEnemyDied removes it from _liveEnemies
+                        }
+                    }
+                }
+                _liveEnemies.RemoveAll(e => e == null);
+            }
 
             if (_breachArmed && _heart != null)
             {
