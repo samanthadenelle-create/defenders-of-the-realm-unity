@@ -49,9 +49,9 @@ Scene: `Assets/Scenes/PatriciaLightMode.unity` (baked by `Assets/Editor/Patricia
 ## 4. Village (the tower-defense town) — **WIRED, with gaps**
 Scene: `Assets/Scenes/Village.unity` (⚠ corruption-on-resave history — regenerate ONLY via the builder, never hand-save). Builder: `Assets/Editor/VillageSceneBuilder.cs` (`BuildVillage`).
 - Wave loop `Assets/_Modules/Village/Waves/WaveManager.cs`: countdown→spawn→breach/clear→next. **BUILT.** Spawn-spread + stuck-enemy failsafe added (77984d9).
-- 5 gameplay buildings (CrystalMine/PetHouse/ArcaneTower/Workshop/Farm) on heavy **Tripo** meshes; store/interactable wiring on the plot root, dispatch by `Building.Type`. **WIRED.**
-- **Building swap to polyperfect** = planned, safe (mesh-only), in the builder. **SPEC/ready** (see the architect plan; not executed).
-- ⚠ **OPEN BUG (task #20):** wave-4 apex dragon never spawns — live scene's `WaveManager._apexBossPrefab` is null (stale bake predating `WireApexBossPrefab`). Fix = rebake (corruption-safe verify) or Resources fallback.
+- 5 gameplay buildings on lightweight **polyperfect _M Medieval** prefabs (WO-101 Phase A, 4cf0037) — Tripo meshes shed (Seeker file-size win); store/interactable wiring on the plot root (dispatch by `Building.Type`) untouched. **Rebake VERIFIED loads (no level3 crash); rebake is SAFE.** ✅ Materials URP-converted via `PolyperfectUrpFix` (69 mats built-in→URP/Lit) — render correctly (confirmed). Note: polyperfect is gitignored, so re-run `Defenders/Art/Fix Polyperfect URP Materials` on a fresh clone.
+- **WO-101 Phase B** (pending): walls/ground/roads/prop-dressing/nature + MarketplaceInteractor store-wiring (same builder/rebake).
+- ✅ **wave-4 apex dragon FIXED** (4cf0037): rebake re-wires `_apexBossPrefab` + WaveManager has a Resources/Enemies/Boss_Dragon fallback for the stale scene. (Pending in-game confirm that Syndrath flies.)
 
 ## 5. Store / monetization — **~70% BUILT** (do NOT greenfield)
 Specs: `docs/monetization-v2-spec.md` (locked), `WORK_ORDER_73/75`, `CC_MONETIZATION_RECONCILIATION.md`.
