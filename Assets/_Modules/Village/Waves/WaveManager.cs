@@ -524,10 +524,20 @@ namespace DeNelle.Village
 
             if (_apexBossPrefab == null)
             {
-                Debug.LogError(
-                    "[WaveManager] Wave declares an apex boss but no _apexBossPrefab is wired — " +
-                    "the Boss_Dragon prefab must be assigned (see docs/port-notes/dragon-wave-wiring.md).");
-                return;
+                // The live Village.unity predates the builder's _apexBossPrefab wiring
+                // (WireApexBossPrefab), so the serialized reference is null and no dragon
+                // ever spawns. Corruption-safe fallback (no risky village rebake): load the
+                // Boss_Dragon prefab copied into Resources/Enemies.
+                _apexBossPrefab = Resources.Load<DragonBoss>("Enemies/Boss_Dragon");
+                if (_apexBossPrefab == null)
+                {
+                    Debug.LogError(
+                        "[WaveManager] Apex wave has no _apexBossPrefab AND no " +
+                        "Resources/Enemies/Boss_Dragon fallback — no dragon will spawn.");
+                    return;
+                }
+                Debug.Log("[WaveManager] _apexBossPrefab was null (stale scene) — using the " +
+                          "Resources/Enemies/Boss_Dragon fallback so the apex dragon flies.");
             }
 
             // Spawn the dragon at cruise height above the Heart so it begins its

@@ -1086,7 +1086,12 @@ namespace DeNelle.Editor
             public string FenceKind;    // "wood" or "stone"
             public string CustomFbx;    // optional full asset path to a custom (Tripo) FBX; overrides Fbx/Building() when set
             public string BaseColorTex; // optional: force this basecolor texture onto a clean URP/Lit material (single-texture Tripo buildings)
+            public string PrefabM;      // WO-101: full asset path to a lightweight polyperfect _M prefab; wins over CustomFbx/Fbx when set
         }
+
+        // WO-101: polyperfect Low Poly Ultimate Pack — mobile (_M) Medieval prefabs.
+        private const string PolyMedievalDir =
+            "Assets/polyperfect/Low Poly Ultimate Pack/_M/Prefabs_M/Medieval_M/";
 
         // Quadrant placements per spec §5. N = +Z. Curtain wall is [-28..+28] X,
         // [-21..+21] Z (south bows to -25). Buildings sit on 2×2-hex plots.
@@ -1099,29 +1104,34 @@ namespace DeNelle.Editor
                 X = -38f, Z = 14f, YawDeg = 135f, Fbx = "building_mine",
                 CustomFbx = "Assets/Art/TripoStructures/LumberMill.fbx",
                 BaseColorTex = "Assets/Art/TripoStructures/LumberMill.fbm/LumberMill_basecolor.JPEG",
+                PrefabM = PolyMedievalDir + "House_Medieval_Small.prefab",
                 PlaceholderColor = new Color(0.38f, 0.65f, 0.98f), FenceKind = "stone" },
             // Pet House — Southwest creek-side (§5).
             new BuildingPlacement { Type = 1, Id = "pet-house", Label = "Pet House",
                 X = -17f, Z = -10.5f, YawDeg = 55f, Fbx = "building_stables",
                 CustomFbx = "Assets/Art/TripoStructures/PetHome.fbx",
+                PrefabM = PolyMedievalDir + "Stables_Medieval.prefab",
                 PlaceholderColor = new Color(0.98f, 0.82f, 0.48f), FenceKind = "wood" },
             // Arcane Tower — South-central, near the Keep (§5).
             new BuildingPlacement { Type = 2, Id = "arcane-tower", Label = "Arcane Tower",
                 X = 6f, Z = -12.5f, YawDeg = 0f, Fbx = "building_tower_A",
                 CustomFbx = "Assets/Art/TripoStructures/BuildTower.fbx",
                 BaseColorTex = "Assets/Art/TripoStructures/BuildTower.fbm/build_tower_basecolor.JPEG",
+                PrefabM = PolyMedievalDir + "Tower_Medieval_Big.prefab",
                 PlaceholderColor = new Color(0.65f, 0.55f, 0.98f), FenceKind = "stone" },
             // Workshop — Northeast artisan district (§5).
             new BuildingPlacement { Type = 3, Id = "workshop", Label = "Workshop",
                 X = 16f, Z = 12.5f, YawDeg = 215f, Fbx = "building_workshop",
                 CustomFbx = "Assets/Art/TripoStructures/Forge.fbx",
                 BaseColorTex = "Assets/Art/TripoStructures/Forge.fbm/Forge_basecolor.JPEG",
+                PrefabM = PolyMedievalDir + "House_Medieval_Medium.prefab",
                 PlaceholderColor = new Color(1f, 0.60f, 0.32f), FenceKind = "wood" },
             // Farm — East open ground (§5). Windmill mesh.
             new BuildingPlacement { Type = 4, Id = "farm", Label = "Farm",
                 X = 19f, Z = -1f, YawDeg = 270f, Fbx = "building_windmill",
                 CustomFbx = "Assets/Art/TripoStructures/Farm.fbx",
                 BaseColorTex = "Assets/Art/TripoStructures/Farm.fbm/farm_basecolor.JPEG",
+                PrefabM = PolyMedievalDir + "Windmill_Medieval.prefab",
                 PlaceholderColor = new Color(1f, 0.85f, 0.54f), FenceKind = "wood" },
         };
 
@@ -1135,13 +1145,22 @@ namespace DeNelle.Editor
                 go.transform.position = new Vector3(b.X, 0f, b.Z);
                 go.transform.rotation = Quaternion.Euler(0f, b.YawDeg, 0f);
 
-                // Owner Tripo models override the KayKit mesh when CustomFbx is set.
-                bool custom = !string.IsNullOrEmpty(b.CustomFbx);
-                var model = LoadModel(custom ? b.CustomFbx : Building(b.Fbx));
-                GameObject visual = InstantiateModel(model,
-                    custom ? System.IO.Path.GetFileName(b.CustomFbx)
-                           : b.Fbx + "_" + BuildingColor + ".fbx",
-                    $"{(custom ? b.CustomFbx : b.Fbx)} -> {b.Label}");
+                // WO-101: a lightweight polyperfect _M building when PrefabM is set
+                // (replaces the heavy Tripo mesh — the Seeker file-size win). Instantiated
+                // DIRECTLY via PrefabUtility so its atlas material survives —
+                // InstantiateModel's ForceHexMaterial would clobber it. Else: the legacy
+                // path (owner Tripo CustomFbx, or native KayKit).
+                bool poly   = !string.IsNullOrEmpty(b.PrefabM);
+                bool custom = !poly && !string.IsNullOrEmpty(b.CustomFbx);
+                GameObject model = poly
+                    ? AssetDatabase.LoadAssetAtPath<GameObject>(b.PrefabM)
+                    : LoadModel(custom ? b.CustomFbx : Building(b.Fbx));
+                GameObject visual = (poly && model != null)
+                    ? (GameObject)PrefabUtility.InstantiatePrefab(model)
+                    : InstantiateModel(model,
+                        custom ? System.IO.Path.GetFileName(b.CustomFbx)
+                               : b.Fbx + "_" + BuildingColor + ".fbx",
+                        $"{(poly ? b.PrefabM : (custom ? b.CustomFbx : b.Fbx))} -> {b.Label}");
                 visual.transform.SetParent(go.transform, false);
                 if (model == null)
                 {
@@ -1197,6 +1216,17 @@ namespace DeNelle.Editor
                             bFixer.GetMethod("ForceRebuildAll")?.Invoke(fx, null);
                         }
                     }
+                }
+                else if (poly)
+                {
+                    // polyperfect _M building: upright, normalized to ~7 m, colliders +
+                    // rigidbodies stripped (the plot footprint BoxCollider below is the only
+                    // gameplay collider). Its atlas material is already URP-correct — NO
+                    // TripoMaterialFixer / ForceHexMaterial (that's why it isn't InstantiateModel'd).
+                    visual.transform.localRotation = Quaternion.identity;
+                    NormalizeProp(visual, 7f);
+                    StripColliders(visual);
+                    StripRigidbodies(visual);
                 }
                 else
                 {
