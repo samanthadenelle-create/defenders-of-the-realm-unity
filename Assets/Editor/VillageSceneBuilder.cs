@@ -316,6 +316,12 @@ namespace DeNelle.Editor
             // section whose centre is within BuildingScale × 2 m of a gate.
             ClearWallsNearGates(wallRoot, gateRoot);
 
+            // ── WO-101: polyperfect stone wall perimeter ─────────────────────
+            // Replaces / supplements the KayKit wall ring with polyperfect stone
+            // wall segments, corner towers, mid-wall towers and cardinal gates.
+            // Runs after ClearWallsNearGates so the two systems don't fight.
+            BuildWallPerimeter(wallRoot);
+
             // ── Plaza + road network (§7) ────────────────────────────────────
             BuildPlaza(roadRoot);
             BuildRoads(roadRoot, tWallLayout);
@@ -1094,52 +1100,71 @@ namespace DeNelle.Editor
             public string CustomFbx;    // optional full asset path to a custom (Tripo) FBX; overrides Fbx/Building() when set
             public string BaseColorTex; // optional: force this basecolor texture onto a clean URP/Lit material (single-texture Tripo buildings)
             public string PrefabM;      // WO-101: full asset path to a lightweight polyperfect _M prefab; wins over CustomFbx/Fbx when set
+            public string PrefabM2;     // WO-101: optional secondary polyperfect _M prefab placed alongside the primary (offset by +3m X)
         }
 
         // WO-101: polyperfect Low Poly Ultimate Pack — mobile (_M) Medieval prefabs.
         private const string PolyMedievalDir =
             "Assets/polyperfect/Low Poly Ultimate Pack/_M/Prefabs_M/Medieval_M/";
 
-        // Quadrant placements per spec §5. N = +Z. Curtain wall is [-28..+28] X,
-        // [-21..+21] Z (south bows to -25). Buildings sit on 2×2-hex plots.
+        // WO-101: secondary polyperfect prefab folder (Farm_House lives in Farm_M, not Medieval_M).
+        private const string PolyFarmDir =
+            "Assets/polyperfect/Low Poly Ultimate Pack/_M/Prefabs_M/Farm_M/";
+
+        // Quadrant placements per spec §5 / WO-101 Phase B.
+        // N = +Z. Positions updated to WO-101 spec; Cathedral/Heart of Elarion NOT replaced.
+        // PrefabM  = primary polyperfect _M prefab (wins over Tripo CustomFbx / KayKit Fbx).
+        // PrefabM2 = optional secondary polyperfect prefab placed +3 m offset from primary.
         private static readonly BuildingPlacement[] Buildings =
         {
-            // Crystal Mine — moved outside the NW wall per owner direction
-            // 2026-05-20 ("move those mines outside the village for
-            // foraging"). Hero walks out the west or north gate to mine.
+            // Crystal Mine — WO-101: SM_House_Medieval_Small + SM_Well.
+            // Position updated to (-20, 0, +15).
             new BuildingPlacement { Type = 0, Id = "crystal-mine", Label = "Crystal Mine",
-                X = -38f, Z = 14f, YawDeg = 135f, Fbx = "building_mine",
+                X = -20f, Z = 15f, YawDeg = 135f, Fbx = "building_mine",
                 CustomFbx = "Assets/Art/TripoStructures/LumberMill.fbx",
                 BaseColorTex = "Assets/Art/TripoStructures/LumberMill.fbm/LumberMill_basecolor.JPEG",
-                PrefabM = PolyMedievalDir + "House_Medieval_Small.prefab",
+                PrefabM  = PolyMedievalDir + "House_Medieval_Small.prefab",
+                PrefabM2 = PolyMedievalDir + "Well.prefab",
                 PlaceholderColor = new Color(0.38f, 0.65f, 0.98f), FenceKind = "stone" },
-            // Pet House — Southwest creek-side (§5).
+            // Pet House — WO-101: SM_Stables_Medieval.
+            // Position updated to (+20, 0, +15).
             new BuildingPlacement { Type = 1, Id = "pet-house", Label = "Pet House",
-                X = -17f, Z = -10.5f, YawDeg = 55f, Fbx = "building_stables",
+                X = 20f, Z = 15f, YawDeg = 55f, Fbx = "building_stables",
                 CustomFbx = "Assets/Art/TripoStructures/PetHome.fbx",
                 PrefabM = PolyMedievalDir + "Stables_Medieval.prefab",
                 PlaceholderColor = new Color(0.98f, 0.82f, 0.48f), FenceKind = "wood" },
-            // Arcane Tower — South-central, near the Keep (§5).
+            // Arcane Tower — WO-101: SM_Tower_Medieval_Big.
+            // Position updated to (-20, 0, -15).
             new BuildingPlacement { Type = 2, Id = "arcane-tower", Label = "Arcane Tower",
-                X = 6f, Z = -12.5f, YawDeg = 0f, Fbx = "building_tower_A",
+                X = -20f, Z = -15f, YawDeg = 0f, Fbx = "building_tower_A",
                 CustomFbx = "Assets/Art/TripoStructures/BuildTower.fbx",
                 BaseColorTex = "Assets/Art/TripoStructures/BuildTower.fbm/build_tower_basecolor.JPEG",
                 PrefabM = PolyMedievalDir + "Tower_Medieval_Big.prefab",
                 PlaceholderColor = new Color(0.65f, 0.55f, 0.98f), FenceKind = "stone" },
-            // Workshop — Northeast artisan district (§5).
+            // Workshop — WO-101: SM_House_Medieval_Medium.
+            // Position updated to (+20, 0, -15).
             new BuildingPlacement { Type = 3, Id = "workshop", Label = "Workshop",
-                X = 16f, Z = 12.5f, YawDeg = 215f, Fbx = "building_workshop",
+                X = 20f, Z = -15f, YawDeg = 215f, Fbx = "building_workshop",
                 CustomFbx = "Assets/Art/TripoStructures/Forge.fbx",
                 BaseColorTex = "Assets/Art/TripoStructures/Forge.fbm/Forge_basecolor.JPEG",
                 PrefabM = PolyMedievalDir + "House_Medieval_Medium.prefab",
                 PlaceholderColor = new Color(1f, 0.60f, 0.32f), FenceKind = "wood" },
-            // Farm — East open ground (§5). Windmill mesh.
+            // Farm — WO-101: SM_Farm_House (primary) + SM_Windmill_Medieval (secondary).
+            // Position updated to (0, 0, +25).
             new BuildingPlacement { Type = 4, Id = "farm", Label = "Farm",
-                X = 19f, Z = -1f, YawDeg = 270f, Fbx = "building_windmill",
+                X = 0f, Z = 25f, YawDeg = 270f, Fbx = "building_windmill",
                 CustomFbx = "Assets/Art/TripoStructures/Farm.fbx",
                 BaseColorTex = "Assets/Art/TripoStructures/Farm.fbm/farm_basecolor.JPEG",
-                PrefabM = PolyMedievalDir + "Windmill_Medieval.prefab",
+                PrefabM  = PolyFarmDir + "Farm_House.prefab",
+                PrefabM2 = PolyMedievalDir + "Windmill_Medieval.prefab",
                 PlaceholderColor = new Color(1f, 0.85f, 0.54f), FenceKind = "wood" },
+            // Market — WO-101: SM_House_Medieval_Large + SM_Marketplace_Stand_Simple.
+            // New entry; position (0, 0, -20). Type = 5 (next ordinal after Farm).
+            new BuildingPlacement { Type = 5, Id = "market", Label = "Market",
+                X = 0f, Z = -20f, YawDeg = 0f, Fbx = "building_market",
+                PrefabM  = PolyMedievalDir + "House_Medieval_Large.prefab",
+                PrefabM2 = PolyMedievalDir + "Marketplace_Stand_Simple.prefab",
+                PlaceholderColor = new Color(0.78f, 0.55f, 0.30f), FenceKind = "stone" },
         };
 
         private static int BuildBuildings(Transform parent, Component controller)
@@ -1242,6 +1267,34 @@ namespace DeNelle.Editor
                     // hero height (≈6m). 4.5x lifts a ~1.2m house to ~5.4m.
                     visual.transform.localScale = new Vector3(BuildingScale, BuildingScale, BuildingScale);
                 }
+                // WO-101: secondary polyperfect prefab (e.g. Well alongside Crystal
+                // Mine, Windmill alongside Farm House, Marketplace Stand alongside
+                // Market). Placed +3 m to the right of the plot root in its local
+                // space so it reads as a companion structure, not an overlap.
+                if (!string.IsNullOrEmpty(b.PrefabM2))
+                {
+                    var model2 = AssetDatabase.LoadAssetAtPath<GameObject>(b.PrefabM2);
+                    if (model2 != null)
+                    {
+                        var visual2 = (GameObject)PrefabUtility.InstantiatePrefab(model2);
+                        if (visual2 != null)
+                        {
+                            visual2.name = model2.name + "_secondary";
+                            visual2.transform.SetParent(go.transform, false);
+                            visual2.transform.localPosition = new Vector3(3f, 0f, 0f);
+                            visual2.transform.localRotation = Quaternion.identity;
+                            NormalizeProp(visual2, 4f);   // secondary is smaller than the primary
+                            StripColliders(visual2);
+                            StripRigidbodies(visual2);
+                        }
+                    }
+                    else
+                    {
+                        Debug.LogWarning($"[VillageSceneBuilder] WO-101 secondary prefab not found: '{b.PrefabM2}' " +
+                                         $"— secondary mesh for {b.Label} skipped (polyperfect pack re-import needed).");
+                    }
+                }
+
                 // Owner 2026-05-20: hero used to walk THROUGH buildings —
                 // adding a footprint BoxCollider so HeroLocomotion's CapsuleCast
                 // blocks the move. Sized from mesh bounds; sits on the plot
@@ -2522,6 +2575,120 @@ namespace DeNelle.Editor
                           $"within {radius:F1} m of a gate.");
         }
 
+        // =====================================================================
+        //  WO-101: polyperfect stone wall perimeter
+        // =====================================================================
+
+        /// <summary>
+        /// Builds the polyperfect stone wall perimeter around the village using
+        /// Low Poly Ultimate Pack _M prefabs. Layout:
+        ///   North wall  z = +33, segments every 3 m, x = -42 to +42.
+        ///   South wall  z = -33, same + Gate_Medieval_Medium at x = 0.
+        ///   East wall   x = +42, segments every 3 m, z = -33 to +33 + Gate_Medieval_Small at z = 0.
+        ///   West wall   x = -42, same + Gate_Medieval_Small at z = 0.
+        ///   Corner towers (SM_Tower_Castle_Round) at (±42, 0, ±33).
+        ///   Mid-wall towers (SM_Tower_Medieval_Wood) at each wall midpoint.
+        /// All placed under <paramref name="wallRoot"/> so ClearWallsNearGates /
+        /// BakeVillageNavMesh automatically include them.
+        /// </summary>
+        private static void BuildWallPerimeter(Transform wallRoot)
+        {
+            // ── Polyperfect prefab paths ──────────────────────────────────────
+            // All in _M/Prefabs_M/Medieval_M/ per the asset catalog §1.
+            const string WallSeg      = PolyMedievalDir + "Wall_Medieval_Stone.prefab";
+            const string GateMedium   = PolyMedievalDir + "Gate_Medieval_Medium.prefab";
+            const string GateSmall    = PolyMedievalDir + "Gate_Medieval_Small.prefab";
+            const string TowerCorner  = PolyMedievalDir + "Tower_Castle_Round.prefab";
+            const string TowerMidWall = PolyMedievalDir + "Tower_Medieval_Wood.prefab";
+
+            // Load prefabs once (null → graceful placeholder skip).
+            var wallSegModel  = AssetDatabase.LoadAssetAtPath<GameObject>(WallSeg);
+            var gateMedModel  = AssetDatabase.LoadAssetAtPath<GameObject>(GateMedium);
+            var gateSmModel   = AssetDatabase.LoadAssetAtPath<GameObject>(GateSmall);
+            var towerCorModel = AssetDatabase.LoadAssetAtPath<GameObject>(TowerCorner);
+            var towerMidModel = AssetDatabase.LoadAssetAtPath<GameObject>(TowerMidWall);
+
+            if (wallSegModel == null)
+                Debug.LogWarning("[VillageSceneBuilder] WO-101 Wall_Medieval_Stone prefab not found " +
+                                 $"at '{WallSeg}' — wall perimeter will have no stone segments " +
+                                 "(polyperfect pack re-import needed on this machine).");
+
+            // ── Layout constants ──────────────────────────────────────────────
+            const float wallZ    = 33f;  // north/south wall Z
+            const float wallX    = 42f;  // east/west wall X
+            const float segStep  =  3f;  // segment pitch (pack snaps at 3 × 3 m)
+
+            var perimeterRoot = new GameObject("WallPerimeter");
+            perimeterRoot.transform.SetParent(wallRoot, false);
+            var pr = perimeterRoot.transform;
+
+            // ── Helper: spawn one prefab, strip colliders, normalise scale ────
+            System.Func<GameObject, string, Vector3, float, GameObject> Spawn =
+                (prefab, label, pos, yaw) =>
+            {
+                if (prefab == null) return null;
+                var inst = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
+                if (inst == null) return null;
+                inst.name = label;
+                inst.transform.SetParent(pr, false);
+                inst.transform.position = pos;
+                inst.transform.rotation = Quaternion.Euler(0f, yaw, 0f);
+                // Polyperfect _M prefabs already carry URP-correct atlas mats;
+                // strip colliders — the WallSegment BoxColliders from the existing
+                // BuildWallRing pass are the gameplay colliders.
+                StripColliders(inst);
+                StripRigidbodies(inst);
+                return inst;
+            };
+
+            // ── North wall (z = +33) — segments from x = -42 to +42 ──────────
+            for (float x = -wallX + segStep * 0.5f; x < wallX; x += segStep)
+                Spawn(wallSegModel, "WallPerimeter-North", new Vector3(x, 0f,  wallZ), 0f);
+
+            // ── South wall (z = -33) — segments + main gate at x = 0 ─────────
+            for (float x = -wallX + segStep * 0.5f; x < wallX; x += segStep)
+            {
+                // Leave a 6 m opening around x = 0 for the main gate.
+                if (Mathf.Abs(x) < 3f) continue;
+                Spawn(wallSegModel, "WallPerimeter-South", new Vector3(x, 0f, -wallZ), 0f);
+            }
+            Spawn(gateMedModel, "Gate-South-Main", new Vector3(0f, 0f, -wallZ), 0f);
+
+            // ── East wall (x = +42) — segments from z = -33 to +33 ───────────
+            for (float z = -wallZ + segStep * 0.5f; z < wallZ; z += segStep)
+            {
+                if (Mathf.Abs(z) < 3f) continue;   // opening for east gate
+                Spawn(wallSegModel, "WallPerimeter-East", new Vector3(wallX, 0f, z), 90f);
+            }
+            Spawn(gateSmModel, "Gate-East-Side", new Vector3(wallX, 0f, 0f), 90f);
+
+            // ── West wall (x = -42) — segments from z = -33 to +33 ───────────
+            for (float z = -wallZ + segStep * 0.5f; z < wallZ; z += segStep)
+            {
+                if (Mathf.Abs(z) < 3f) continue;   // opening for west gate
+                Spawn(wallSegModel, "WallPerimeter-West", new Vector3(-wallX, 0f, z), 270f);
+            }
+            Spawn(gateSmModel, "Gate-West-Side", new Vector3(-wallX, 0f, 0f), 270f);
+
+            // ── Corner towers at (±42, 0, ±33) ───────────────────────────────
+            Spawn(towerCorModel, "Tower-NE-Corner", new Vector3( wallX, 0f,  wallZ), 0f);
+            Spawn(towerCorModel, "Tower-NW-Corner", new Vector3(-wallX, 0f,  wallZ), 0f);
+            Spawn(towerCorModel, "Tower-SE-Corner", new Vector3( wallX, 0f, -wallZ), 0f);
+            Spawn(towerCorModel, "Tower-SW-Corner", new Vector3(-wallX, 0f, -wallZ), 0f);
+
+            // ── Mid-wall towers at each cardinal wall midpoint ────────────────
+            Spawn(towerMidModel, "Tower-North-Mid", new Vector3(    0f, 0f,  wallZ), 0f);
+            Spawn(towerMidModel, "Tower-South-Mid", new Vector3(    0f, 0f, -wallZ), 180f);
+            Spawn(towerMidModel, "Tower-East-Mid",  new Vector3( wallX, 0f,     0f), 90f);
+            Spawn(towerMidModel, "Tower-West-Mid",  new Vector3(-wallX, 0f,     0f), 270f);
+
+            // Count placed pieces for the build log (reuse _propCount as a proxy).
+            int segCount = perimeterRoot.transform.childCount;
+            Debug.Log($"[VillageSceneBuilder] WO-101 BuildWallPerimeter: {segCount} polyperfect perimeter " +
+                      "pieces placed (wall segments + corner/mid towers + cardinal gates). " +
+                      "Polyperfect atlas materials URP-correct; colliders stripped.");
+        }
+
         /// <summary>
         /// Adds a BoxCollider sized to the building's mesh bounds to the plot
         /// root GameObject. HeroLocomotion's CapsuleCast sweeps against these
@@ -2775,9 +2942,12 @@ namespace DeNelle.Editor
             // 7) BuildMenu — a UIDocument GameObject with the build-menu UI.
             BuildBuildMenu(systemsRoot, buildingPrefabs);
 
-            // 7b) Marketplace + PackStore — the walk-up village store (already-built
-            //     PackStore; the builder just places + wires it into the scene).
-            BuildMarketplace(systemsRoot);
+            // 7b) Marketplace + PackStore — DISABLED for now. Placing it worked, but
+            //     opening it rendered the WRONG panel (the hero talent tree) because
+            //     PackStore's UIDocument grabbed the SHARED PanelSettings, and the UXML
+            //     came up blank in the build. Re-enable after PackStore gets its OWN
+            //     PanelSettings + a code-built UI (not UXML-template-driven).
+            // BuildMarketplace(systemsRoot);
 
             // 8) Ambient townsfolk — wandering / idle KayKit villagers with
             //    engage-on-approach word bubbles. They watch the hero rig built
@@ -3174,6 +3344,9 @@ namespace DeNelle.Editor
         {
             var go = new GameObject("Hero (Blaise)");
             go.transform.SetParent(parent, false);
+            // WO-102: tag the hero so HeroAbilities / camera / pet systems can
+            // find it via GameObject.FindWithTag("Player") without a type lookup.
+            go.tag = "Player";
             // Open plaza spot — far enough from every 4.5x-scaled building that
             // the OTS camera doesn't spawn looking into a wall. World coords
             // chosen against the building manifest at lines 928 / 1042-1095:
@@ -3661,13 +3834,13 @@ namespace DeNelle.Editor
         }
 
         // =====================================================================
-        //  NavMesh bake — legacy UnityEditor.AI API (com.unity.modules.ai)
+        //  NavMesh bake -- legacy UnityEditor.AI API (com.unity.modules.ai)
         // =====================================================================
 
         /// <summary>
         /// Marks the village ground + wall + building geometry navigation-static
         /// and bakes a NavMesh for the open Village scene. Uses the legacy
-        /// <c>UnityEditor.AI.NavMeshBuilder</c> API — the manifest carries
+        /// <c>UnityEditor.AI.NavMeshBuilder</c> API -- the manifest carries
         /// <c>com.unity.modules.ai</c>, NOT the high-level
         /// <c>com.unity.ai.navigation</c> package (week4-waves.md item 1).
         ///
@@ -3715,12 +3888,12 @@ namespace DeNelle.Editor
             // agent settings (Window > AI > Navigation > Agents). ClearAllNavMeshes
             // first keeps a re-run idempotent. The skeleton enemy's NavMeshAgent
             // (radius 0.4, height 2.0) sits inside the Unity default Humanoid
-            // agent (radius 0.5, height 2.0) — the bake is valid for it.
+            // agent (radius 0.5, height 2.0) -- the bake is valid for it.
             UnityEditor.AI.NavMeshBuilder.ClearAllNavMeshes();
             UnityEditor.AI.NavMeshBuilder.BuildNavMesh();
 
-            // ── Static-batching pass (mobile-perf audit P0-4 / §2.1) ─────────
-            // The NavMesh bake above flags only NavigationStatic — which leaves
+            // -- Static-batching pass (mobile-perf audit P0-4 / section 2.1) --
+            // The NavMesh bake above flags only NavigationStatic -- which leaves
             // static batching OFF for all ~2,930 village instances. The audit's
             // headline mobile risk is draw-call submission: 2,600+ ground tiles
             // issuing 2,600+ draws per frame. Flagging BatchingStatic lets Unity
@@ -3736,31 +3909,13 @@ namespace DeNelle.Editor
         }
 
         // =====================================================================
-        //  Static batching + GPU instancing (mobile-perf audit P0-4 / §2.1)
+        //  Static batching + GPU instancing (mobile-perf audit P0-4 / section 2.1)
         // =====================================================================
 
         /// <summary>
         /// Flags the static village geometry <c>BatchingStatic</c> and enables
-        /// GPU instancing on the repeated-prop materials — the audit's P0-4
-        /// draw-call fix (recommendations 2 and 3 in §2.1).
-        ///
-        /// <para><b>BatchingStatic.</b> ORed onto every renderer under the
-        /// static-geometry roots (Ground / Walls / Gates / Roads / Buildings /
-        /// Centerpieces / CityDressing / Approaches). The OR preserves the
-        /// <c>NavigationStatic</c> bit <see cref="BakeVillageNavMesh"/> already
-        /// set. Static batching merges identical static meshes at scene load,
-        /// trading a little memory (duplicated vertex data) for a large drop in
-        /// draw-call count — acceptable for the flat tile grid.</para>
-        ///
-        /// <para><b>GPU instancing.</b> Enabled on the shared materials of the
-        /// CityDressing props/fences/trees. Instancing covers repeated
-        /// mesh+material draws that static batching does NOT merge (e.g. props
-        /// the batcher leaves separate), and is the §2.1-recommendation-3 path.
-        /// Instancing only kicks in when the per-instance data is uniform — the
-        /// builder's per-tile <c>ApplyColor</c> recolouring can break a batch,
-        /// so this is best-effort: it flips the material flag, and the audit
-        /// note in port-notes/mobile-settings.md flags the per-instance-colour
-        /// follow-up.</para>
+        /// GPU instancing on the repeated-prop materials -- the audit's P0-4
+        /// draw-call fix (recommendations 2 and 3 in section 2.1).
         /// </summary>
         private static void MarkStaticBatchingAndInstancing()
         {
@@ -3772,9 +3927,6 @@ namespace DeNelle.Editor
                 return;
             }
 
-            // Every root that holds STATIC village geometry. Superset of the
-            // nav-static roots: also includes Centerpieces + CityDressing, which
-            // are static set-dressing the NavMesh bake did not touch.
             string[] staticGeometryRoots =
             {
                 "Ground", "Walls", "Gates", "Roads", "Buildings",
@@ -3790,24 +3942,18 @@ namespace DeNelle.Editor
                 {
                     if (r == null) continue;
                     var flags = GameObjectUtility.GetStaticEditorFlags(r.gameObject);
-                    // OR the bit in — do NOT clobber NavigationStatic (set by
-                    // BakeVillageNavMesh) or any other flag already present.
                     GameObjectUtility.SetStaticEditorFlags(r.gameObject,
                         flags | StaticEditorFlags.BatchingStatic);
                     batched++;
                 }
             }
 
-            // GPU instancing on the repeated CityDressing prop/fence/tree
-            // materials (audit §2.1 recommendation 3). The dressing root holds
-            // the props/fences/trees that share mesh+material; flipping
-            // enableInstancing lets URP/Lit draw them instanced.
             int instanced = EnableInstancingOnDressingMaterials(root);
 
             Debug.Log($"[VillageSceneBuilder] Static-batching pass -- {batched} renderer object(s) " +
                       "flagged BatchingStatic (OR-ed onto the existing NavigationStatic bit); " +
                       $"GPU instancing enabled on {instanced} dressing material(s). " +
-                      "Mobile-perf audit P0-4 / §2.1.");
+                      "Mobile-perf audit P0-4 / section 2.1.");
         }
 
         /// <summary>
@@ -3844,7 +3990,7 @@ namespace DeNelle.Editor
 
         /// <summary>
         /// Sets a serialized <c>LayerMask</c> field. A LayerMask SerializedProperty
-        /// is backed by an int — <c>intValue</c> carries the mask bits.
+        /// is backed by an int -- <c>intValue</c> carries the mask bits.
         /// </summary>
         private static void SetLayerMaskField(SerializedObject so, string field, int mask)
         {

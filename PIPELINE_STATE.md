@@ -59,6 +59,7 @@ Specs: `docs/monetization-v2-spec.md` (locked), `WORK_ORDER_73/75`, `CC_MONETIZA
 - `MarketplaceInteractor.cs` — village [F] store-open trigger — **BUILT, not placed in scene**.
 - `WalletService.cs` (SOL/USDC/SKR, devnet-stub), `GlimmerCurrencyService.cs`, `CosmeticShopPanel.cs` — **BUILT.**
 - **MISSING:** scene wiring (Marketplace + store UI into the village), `CosmeticApplier`, `BattlePass` runtime (`BattlePassData.cs` = STUB), glimmer-grant in packs (1-line). UXML render risk in builds.
+- ⚠ **Store scene-wiring ATTEMPTED then DISABLED.** `BuildMarketplace` placed the Marketplace + a PackStore UIDocument in the village, but walking up opened the **wrong panel (hero talent tree)** + a blank store: PackStore's UIDocument grabbed the **SHARED PanelSettings** (multiple UIDocuments on one panel render by sortingOrder) and its **UXML came up empty in the build**. The `BuildMarketplace` call is commented out in `VillageSceneBuilder.cs` (method kept). **Re-enable only after PackStore gets its OWN PanelSettings + a code-built UI** (not UXML-template-driven) — same trap as BattleHUD/BuildMenu (see memory: uxml-uidocuments-dont-render-in-builds).
 
 ## 6. Spell book — targeting **BUILT**, creative spells **SPEC**
 - Fire/cast now resolve at the crosshair; backward-shots fixed; heal→tower. **BUILT.**
