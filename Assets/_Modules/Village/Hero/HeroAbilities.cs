@@ -239,11 +239,16 @@ namespace DeNelle.Village
             switch (def.EffectEnum)
             {
                 case AbilityEffect.Heal:
-                    // castAbility.ts: heartHp = min(heartMax, heartHp + power)
-                    if (_heart != null)
-                        _heart.SetHp(_heart.Hp + def.Damage);
-                    SpawnVfx(_heart != null ? _heart.transform.position : origin, def, 5f);
+                {
+                    // Healing Beacon heals the CASTER (the hero). Executive-creative
+                    // call 2026-05-28: "heal hero is correct — cannot heal a tree."
+                    // def.Damage carries the heal amount; a healing aura plays at
+                    // the caster (HeroHealth.Heal also fires Impact_Heal).
+                    var heroHp = GetComponent<HeroHealth>() ?? HeroHealth.Instance;
+                    if (heroHp != null) heroHp.Heal(def.Damage);
+                    VFXManager.Play(VFXType.Cast_Heal, origin + Vector3.up * 1.2f);
                     break;
+                }
 
                 case AbilityEffect.Strike:
                 case AbilityEffect.Snare:

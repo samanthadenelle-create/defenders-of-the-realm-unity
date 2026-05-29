@@ -59,7 +59,7 @@ namespace DeNelle.Village
         private const float AirSpawnDist        = 26f;     // metres left/right (air lanes)
         private const float AirHeight           = 9f;      // cruise height for flying enemies
         private const float HeartHitDamage      = 9f;      // tower HP lost per enemy arrival
-        private const float HeroFireCooldown    = 0.4f;    // spam-friendly auto-fire cadence
+        private const float HeroFireCooldown    = 0.14f;   // fast auto-fire — waves come in hard here
         private const float HeroFireRange       = 90f;     // direct-fire fallback reach
         private const float HeroFireDamage      = 18f;     // direct-fire fallback damage
         private const int   WisdomReward        = 8;       // Phase-2 win bonus (bigger than Phase-1's 3)
@@ -83,11 +83,22 @@ namespace DeNelle.Village
         // camera looks steeply DOWN at the tower/hero (owner: "needs more birds eye";
         // was 3.5,-9 which sat too low/behind). Tunable — raise Y / shrink -Z for more
         // overhead. (see ThirdPersonCameraFollow)
-        private static readonly Vector3 CamOffset   = new Vector3(0f, 12f, -7f);
+        // In FRONT of the hero (+Z) and high (+Y) — the look-at-hero geometry then
+        // lands at ~70 degrees downward (atan(10.99/4) ~= 70).
+        private static readonly Vector3 CamOffset   = new Vector3(0f, 12.5f, 4f);
 
         // ── State ─────────────────────────────────────────────────────────────
         private HeartController _heart;
         private Transform _towerTransform;
+        private Bounds _spireBounds;   // world bounds of the fitted spire mesh
+        private bool   _hasSpire;      // true once the real spire is loaded + fitted
+
+        // Hero ledge — a simple square platform + rail in front of the tower the
+        // hero stands on and strafes along (placeholder until the spire's own
+        // ledge is wired). Set in BuildTower; read in SpawnHero + TickHeroStrafe.
+        private Vector3 _heroLedgePos;
+        private float   _strafeCenterX;
+        private const float StrafeHalfWidth = 4.2f;
         private ThirdPersonCameraFollow _camFollow;
 
         private HeroAbilities _hero;
@@ -199,6 +210,7 @@ namespace DeNelle.Village
             }
 
             DriveAirEnemies();
+            TickHeroStrafe();
             TickHeroFire();
             RefreshActionBar();
 
@@ -327,6 +339,94 @@ namespace DeNelle.Village
             }
             catch { /* non-fatal — Awake's origin heuristic also leaves a non-origin tower alone */ }
             _heart.SetHp(TowerMaxHp);
+
+            // ── Swap the placeholder blocks for the authored spire ────────────────
+            // Resources/PatriciaLight/Tower is the real "Defend the Tower" structure
+            // (explicitly placed for this mode). Hide the primitive blocks (keeping
+            // their colliders + the HeartController for gameplay) and show the real
+            // mesh, fitted by renderer bounds so any FBX import scale / off-pivot is
+            // normalised (the Tripo displacement trap).
+            var spirePrefab = Resources.Load<GameObject>("PatriciaLight/tower2");
+            if (spirePrefab != null)
+            {
+                foreach (var mr in towerGo.GetComponentsInChildren<MeshRenderer>())
+                    mr.enabled = false;   // hide placeholder blocks; colliders stay
+
+                var spire = Instantiate(spirePrefab, towerGo.transform);
+                spire.name = "TowerSpire";
+                spire.transform.localRotation = Quaternion.identity;
+                spire.AddComponent<DeNelle.Core.TripoMaterialFixer>();   // Tripo -> URP on Awake
+                _spireBounds = FitToTowerFootprint(spire, TowerHeight + 5f);
+                _hasSpire = true;
+            }
+            else
+            {
+                Debug.LogWarning("[PatriciaLight] Resources/PatriciaLight/tower2 not found — keeping placeholder blocks.");
+            }
+
+            BuildHeroLedge();
+        }
+
+        /// <summary>
+        /// Builds a simple square platform + front rail OUT IN FRONT of the tower
+        /// (+Z) for the hero to stand on and strafe along. Placeholder until the
+        /// spire's own ledge is wired; keeps the spire behind the FP camera.
+        /// </summary>
+        private void BuildHeroLedge()
+        {
+            float ledgeY = _hasSpire ? _spireBounds.min.y + _spireBounds.size.y * 0.50f : BalconyHeight;
+            // Sit the ledge well in front of the spire so the over-the-shoulder
+            // camera (behind the hero) clears the structure.
+            float ledgeZ = _hasSpire ? _spireBounds.max.z + 5f : BalconyDepth + 6f;
+
+            var platform = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            platform.name = "HeroLedge";
+            platform.transform.SetParent(transform, false);
+            platform.transform.position   = new Vector3(0f, ledgeY, ledgeZ);
+            platform.transform.localScale = new Vector3(10f, 0.6f, 4f);
+            TintUrp(platform, new Color(0.42f, 0.40f, 0.45f));
+
+            var rail = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            rail.name = "HeroLedgeRail";
+            rail.transform.SetParent(transform, false);
+            rail.transform.position   = new Vector3(0f, ledgeY + 0.7f, ledgeZ + 1.9f);
+            rail.transform.localScale = new Vector3(10f, 1.0f, 0.3f);
+            TintUrp(rail, new Color(0.30f, 0.28f, 0.33f));
+
+            // Stand the hero at the FRONT LIP of the ledge (platform depth 4 → front
+            // edge at ledgeZ + 2) so the view looks straight down over the edge at
+            // the troops below, not back from it.
+            _heroLedgePos  = new Vector3(0f, ledgeY + 0.35f, ledgeZ + 1.7f);
+            _strafeCenterX = 0f;
+        }
+
+        /// <summary>
+        /// Scales a freshly-instantiated structure to <paramref name="targetHeight"/>
+        /// by its combined renderer bounds, seats its base at the tower's ground
+        /// point and centres it on the tower axis — robust to any FBX import scale
+        /// or off-centre pivot.
+        /// </summary>
+        private static Bounds FitToTowerFootprint(GameObject go, float targetHeight)
+        {
+            var rends = go.GetComponentsInChildren<Renderer>();
+            if (rends.Length == 0) return new Bounds(TowerPos, Vector3.one);
+
+            Bounds b = rends[0].bounds;
+            for (int i = 1; i < rends.Length; i++) b.Encapsulate(rends[i].bounds);
+            if (b.size.y < 0.0001f) return b;
+
+            go.transform.localScale *= targetHeight / b.size.y;
+
+            // Recompute after scaling, then shift so the base sits at y=0 and the
+            // mesh is centred on the tower axis (TowerPos).
+            rends = go.GetComponentsInChildren<Renderer>();
+            b = rends[0].bounds;
+            for (int i = 1; i < rends.Length; i++) b.Encapsulate(rends[i].bounds);
+            Vector3 shift = new Vector3(
+                TowerPos.x - b.center.x, TowerPos.y - b.min.y, TowerPos.z - b.center.z);
+            go.transform.position += shift;
+            b.center += shift;
+            return b;   // world bounds of the seated spire
         }
 
         private void ResolveEnemyMask()
@@ -374,8 +474,10 @@ namespace DeNelle.Village
 
             var heroRoot = new GameObject($"Hero ({slug})");
             heroRoot.transform.SetParent(transform, false);
-            heroRoot.transform.position = TowerPos + _balconyPos;
-            heroRoot.transform.rotation = Quaternion.identity; // faces +Z (into the arena)
+            // Stand the hero on the ledge built in front of the tower, facing OUT
+            // over the field (+Z). The hero strafes left/right along it.
+            heroRoot.transform.position = _heroLedgePos;
+            heroRoot.transform.rotation = Quaternion.identity; // faces +Z, out over the field
             _heroTransform = heroRoot.transform;
 
             // Body from Resources/Heroes/<Class> (the canonical hero pickup path).
@@ -409,14 +511,29 @@ namespace DeNelle.Village
             _hero.SetHeart(_heart);
             TrySetHeroEnemyMask(_hero, _enemyMask);
 
-            // Point the third-person camera at the hero.
-            _camFollow = UnityEngine.Object.FindAnyObjectByType<ThirdPersonCameraFollow>();
-            if (_camFollow == null && Camera.main != null)
-                _camFollow = Camera.main.gameObject.AddComponent<ThirdPersonCameraFollow>();
+            // Over-the-shoulder camera (owner call): you need to see the hero AND
+            // the landscape. Bind to the rendering main camera and silence every
+            // other follow controller riding on it (incl. the FP rig).
+            var cam = Camera.main != null
+                ? Camera.main
+                : UnityEngine.Object.FindAnyObjectByType<Camera>();
+            if (cam != null)
+            {
+                foreach (var vc in cam.GetComponents<VillageCamera>())          vc.enabled = false;
+                foreach (var sc in cam.GetComponents<SmartMobileCamera>())      sc.enabled = false;
+                foreach (var fp in cam.GetComponents<FirstPersonTowerCamera>()) fp.enabled = false;
+                _camFollow = cam.GetComponent<ThirdPersonCameraFollow>()
+                          ?? cam.gameObject.AddComponent<ThirdPersonCameraFollow>();
+            }
+            else
+            {
+                _camFollow = UnityEngine.Object.FindAnyObjectByType<ThirdPersonCameraFollow>();
+            }
             if (_camFollow != null)
             {
+                _camFollow.enabled = true;
                 _camFollow.SetOffset(CamOffset);
-                _camFollow.Target = _heroTransform;
+                _camFollow.Target  = _heroTransform;
             }
         }
 
@@ -447,29 +564,79 @@ namespace DeNelle.Village
             catch { /* leave the default ~0 mask — still finds enemies */ }
         }
 
+        private void TickHeroStrafe()
+        {
+            if (_heroTransform == null) return;
+
+            float x = 0f;
+            var kb = UnityEngine.InputSystem.Keyboard.current;
+            if (kb != null)
+            {
+                if (kb.leftArrowKey.isPressed  || kb.aKey.isPressed) x -= 1f;
+                if (kb.rightArrowKey.isPressed || kb.dKey.isPressed) x += 1f;
+            }
+            var gp = UnityEngine.InputSystem.Gamepad.current;
+            if (gp != null) x += gp.leftStick.ReadValue().x;
+
+            if (Mathf.Abs(x) < 0.01f) return;
+
+            const float strafeSpeed = 9f;
+            var p = _heroTransform.position;
+            p.x = Mathf.Clamp(
+                p.x + Mathf.Clamp(x, -1f, 1f) * strafeSpeed * Time.deltaTime,
+                _strafeCenterX - StrafeHalfWidth, _strafeCenterX + StrafeHalfWidth);
+            _heroTransform.position = p;
+        }
+
         private void TickHeroFire()
         {
             _fireCooldown -= Time.deltaTime;
             if (_fireCooldown > 0f) return;
             _fireCooldown = HeroFireCooldown;
+            if (_heroTransform == null) return;
 
-            // Face the nearest hostile so the cast reads, then fire. Prefer the
-            // hero's own primary slot (animates + scales + attributes); fall back
-            // to a direct sweep so the tower keeps firing when on cooldown/mana.
-            IDamageable target = NearestHostile(
-                _heroTransform != null ? _heroTransform.position : transform.position, HeroFireRange);
-            if (target != null && _heroTransform != null)
+            // Auto-target the nearest hostile and fire a visible projectile at it.
+            IDamageable target = NearestHostile(_heroTransform.position, HeroFireRange);
+            if (target == null) return;
+
+            Vector3 muzzle = _heroTransform.position + Vector3.up * 1.3f + _heroTransform.forward * 0.6f;
+            StartCoroutine(FireProjectile(muzzle, target, HeroFireDamage));
+        }
+
+        /// <summary>Spawns a visible VFX projectile that flies from <paramref name="from"/>
+        /// to <paramref name="target"/>, then plays an impact and applies damage.</summary>
+        private System.Collections.IEnumerator FireProjectile(Vector3 from, IDamageable target, float damage)
+        {
+            if (target == null) yield break;
+
+            var projGo = new GameObject("HeroShot");
+            projGo.transform.position = from;
+            VFXHandle handle = VFXManager.Instance != null
+                ? VFXManager.Instance.PlayProjectile(VFXType.Projectile_Arrow, projGo.transform)
+                : null;
+
+            const float speed = 48f;
+            while (target != null && target.IsAlive)
             {
-                Vector3 face = target.WorldPosition - _heroTransform.position; face.y = 0f;
-                if (face.sqrMagnitude > 0.01f)
-                    _heroTransform.rotation = Quaternion.Slerp(
-                        _heroTransform.rotation, Quaternion.LookRotation(face), 12f * Time.deltaTime);
+                Vector3 tp  = target.WorldPosition + Vector3.up * 0.6f;
+                Vector3 cur = projGo.transform.position;
+                float step  = speed * Time.deltaTime;
+                if ((tp - cur).sqrMagnitude <= step * step) { projGo.transform.position = tp; break; }
+                Vector3 dir = (tp - cur).normalized;
+                projGo.transform.position = cur + dir * step;
+                projGo.transform.forward  = dir;
+                yield return null;
             }
 
-            if (_hero != null && _hero.TryCast(AbilitySlot.Q)) return;
-            if (target == null) return;
-            target.TakeDamage(HeroFireDamage, DamageElement.None);
-            DamageAttribution.Record(target, HeroProgression.Id, HeroFireDamage);
+            Vector3 impactPos = projGo.transform.position;
+            handle?.Stop();
+            VFXManager.Play(VFXType.Impact_Physical, impactPos);
+            if (target != null && target.IsAlive)
+            {
+                target.TakeDamage(damage, DamageElement.None);
+                DamageAttribution.Record(target, HeroProgression.Id, damage);
+            }
+            Destroy(projGo);
         }
 
         private IDamageable NearestHostile(Vector3 origin, float range)
@@ -485,6 +652,34 @@ namespace DeNelle.Village
                 var dmg = col.GetComponentInParent<IDamageable>();
                 if (dmg == null || !dmg.IsAlive || dmg.Faction != CombatFaction.Hostile) continue;
                 float sqr = (dmg.WorldPosition - origin).sqrMagnitude;
+                if (sqr < bestSqr) { bestSqr = sqr; best = dmg; }
+            }
+            return best;
+        }
+
+        /// <summary>Nearest live hostile within <paramref name="maxAngleDeg"/> of the
+        /// horizontal <paramref name="aimDir"/> — i.e. the enemy under the crosshair.</summary>
+        private IDamageable NearestHostileInCone(Vector3 origin, Vector3 aimDir, float range, float maxAngleDeg)
+        {
+            aimDir.y = 0f;
+            if (aimDir.sqrMagnitude < 0.0001f) aimDir = Vector3.forward;
+            aimDir.Normalize();
+            float cosMax = Mathf.Cos(maxAngleDeg * Mathf.Deg2Rad);
+
+            int count = Physics.OverlapSphereNonAlloc(
+                origin, range, _overlap, ~0, QueryTriggerInteraction.Collide);
+            IDamageable best = null;
+            float bestSqr = float.MaxValue;
+            for (int i = 0; i < count; i++)
+            {
+                var col = _overlap[i];
+                if (col == null) continue;
+                var dmg = col.GetComponentInParent<IDamageable>();
+                if (dmg == null || !dmg.IsAlive || dmg.Faction != CombatFaction.Hostile) continue;
+                Vector3 to = dmg.WorldPosition - origin; to.y = 0f;
+                if (to.sqrMagnitude < 0.0001f) continue;
+                if (Vector3.Dot(to.normalized, aimDir) < cosMax) continue;   // outside the aim cone
+                float sqr = to.sqrMagnitude;
                 if (sqr < bestSqr) { bestSqr = sqr; best = dmg; }
             }
             return best;
