@@ -98,6 +98,7 @@ namespace DeNelle.Village
         // ledge is wired). Set in BuildTower; read in SpawnHero + TickHeroStrafe.
         private Vector3 _heroLedgePos;
         private float   _strafeCenterX;
+        private bool    _arenaBaked;   // true when PatriciaLightSceneBuilder baked the arena into the scene
         private const float StrafeHalfWidth = 4.2f;
         private FirstPersonTowerCamera _camFollow;
 
@@ -229,15 +230,23 @@ namespace DeNelle.Village
         /// </summary>
         private void BuildArena()
         {
-            // Solid floor: a big thick CUBE slab (not a one-sided Plane) whose top
-            // sits just ABOVE y=0, so it overdraws any scene Terrain/Plane at y=0
-            // and the coplanar z-fighting glitch (two ground surfaces) disappears.
-            var ground = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            ground.name = "Arena Ground";
-            ground.transform.SetParent(transform, false);
-            ground.transform.position = new Vector3(0f, -0.08f, 0f);     // top at +0.02: just above terrain, no sink
-            ground.transform.localScale = new Vector3(240f, 0.2f, 240f); // 240m solid slab (big enough to never see past)
-            TintUrp(ground, new Color(0.22f, 0.24f, 0.20f));
+            // If the scene was baked by PatriciaLightSceneBuilder, the arena objects
+            // (floor / tower / stand / HeroSpawn) already exist — reuse them instead
+            // of building at runtime (so the editor Hierarchy is the source of truth).
+            _arenaBaked = GameObject.Find("DefendTowerArena") != null;
+
+            if (!_arenaBaked)
+            {
+                // Solid floor: a big thick CUBE slab (not a one-sided Plane) whose top
+                // sits just ABOVE y=0, so it overdraws any scene Terrain/Plane at y=0
+                // and the coplanar z-fighting glitch (two ground surfaces) disappears.
+                var ground = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                ground.name = "Arena Ground";
+                ground.transform.SetParent(transform, false);
+                ground.transform.position = new Vector3(0f, -0.08f, 0f);
+                ground.transform.localScale = new Vector3(240f, 0.2f, 240f);
+                TintUrp(ground, new Color(0.22f, 0.24f, 0.20f));
+            }
 
             if (UnityEngine.Object.FindAnyObjectByType<Light>() == null)
             {
@@ -248,6 +257,12 @@ namespace DeNelle.Village
                 light.transform.rotation = Quaternion.Euler(50f, -30f, 0f);
                 light.intensity = 1f;
             }
+
+            // Atmospheric fog — depth + mood for the "looking from afar" battle.
+            RenderSettings.fog        = true;
+            RenderSettings.fogMode    = FogMode.ExponentialSquared;
+            RenderSettings.fogColor   = new Color(0.10f, 0.10f, 0.16f); // dusk haze
+            RenderSettings.fogDensity = 0.012f;
         }
 
         /// <summary>
@@ -266,6 +281,10 @@ namespace DeNelle.Village
         /// </summary>
         private void BuildTower()
         {
+            // Baked scene path: reuse the editor-authored arena objects and skip the
+            // whole runtime build (tower2 + stand).
+            if (_arenaBaked) { UseBakedArena(); return; }
+
             var towerGo = new GameObject("Tower");
             towerGo.transform.SetParent(transform, false);
             towerGo.transform.position = TowerPos;
@@ -370,6 +389,43 @@ namespace DeNelle.Village
             }
 
             BuildHeroStand();
+        }
+
+        /// <summary>
+        /// Wires gameplay to the editor-baked arena (DefendTowerArena): the baked
+        /// Tower becomes the enemy target, a clean unscaled hit-box at the tower
+        /// position carries the HeartController (HP) + collider so enemies can
+        /// register attacks, and HeroSpawn becomes the hero's perch. No runtime
+        /// geometry is created — the editor Hierarchy is the source of truth.
+        /// </summary>
+        private void UseBakedArena()
+        {
+            var arena = GameObject.Find("DefendTowerArena");
+            Transform towerT = arena != null ? arena.transform.Find("Tower") : null;
+            _towerTransform = towerT != null ? towerT : (arena != null ? arena.transform : transform);
+
+            // The baked FBX has no collider, and its authored scale/rotation make a
+            // direct box unreliable — so put HP + a hit-box on a clean unscaled child
+            // at the tower's footprint. Enemies path to the tower and strike this.
+            var hitGo = new GameObject("TowerHitBox");
+            hitGo.transform.SetParent(transform, false);
+            hitGo.transform.position = new Vector3(_towerTransform.position.x, 6f, _towerTransform.position.z);
+            var box = hitGo.AddComponent<BoxCollider>();
+            box.size = new Vector3(4f, 12f, 4f);
+
+            _heart = hitGo.AddComponent<HeartController>();
+            try
+            {
+                var f = typeof(HeartController).GetField("_useAuthoredTransform",
+                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                f?.SetValue(_heart, true);
+            }
+            catch { }
+            _heart.SetHp(TowerMaxHp);
+
+            Transform spawn = arena != null ? arena.transform.Find("HeroSpawn") : null;
+            _heroLedgePos  = spawn != null ? spawn.position : (TowerPos + _balconyPos);
+            _strafeCenterX = _heroLedgePos.x;
         }
 
         /// <summary>
