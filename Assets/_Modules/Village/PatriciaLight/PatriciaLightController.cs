@@ -604,7 +604,7 @@ namespace DeNelle.Village
                 var body = Instantiate(prefab, heroRoot.transform);
                 body.name = "HeroBody";
                 body.transform.localPosition = Vector3.zero;
-                body.transform.localRotation = Quaternion.Euler(0f, 180f, 0f); // Tripo -Z forward flip
+                body.transform.localRotation = Quaternion.Euler(0f, 90f, 0f); // -90 from 180: rotate hero 90 left so it faces the field + fires the right way
                 NormalizeHeight(body, 2.0f);
                 StripCollidersAndCameras(body);
             }
@@ -1010,9 +1010,9 @@ namespace DeNelle.Village
             // via _bossDef), flying in down the centre and scaled up so it reads as
             // the boss. Its HP comes from its enemies.json def (Configure sets it).
             EnemyDef def = _bossDef ?? _groundDef;
-            // Spawn on the FAR side of the tower (-Z), so the boss approaches from the
-            // front and never crosses the hero's stand (which sits at +Z).
-            Vector3 pos = TowerPos + new Vector3(0f, AirHeight, -AirSpawnDist);
+            // Spawn off to the SIDE (-X) like the lane enemies, so the boss comes in
+            // from the left toward the tower — not behind the tower or the hero.
+            Vector3 pos = TowerPos + new Vector3(-AirSpawnDist, AirHeight, 0f);
             string id = $"pl-boss-{_idCounter++}";
             Enemy boss = SpawnEnemy(def, pos, ground: false);
             if (boss != null)
