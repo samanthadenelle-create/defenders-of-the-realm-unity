@@ -1062,9 +1062,12 @@ namespace DeNelle.Village
         /// hit detection). Falls back to a tinted capsule mesh if the model is missing.</summary>
         private void AttachEnemyVisual(Transform root, string modelName, bool ground)
         {
-            var prefab = Resources.Load<GameObject>("Enemies/" + modelName);
-            if (prefab == null)
+            // Skin the enemy via the shared VisualFactory (load → fit → strip colliders).
+            var vis = VisualFactory.Skin(root, "Enemies/" + modelName,
+                                         SkinOptions.Enemy(ground ? 1.9f : 1.8f));
+            if (vis == null)
             {
+                // Fallback so a missing model still spawns a visible, hittable enemy.
                 var cap = GameObject.CreatePrimitive(PrimitiveType.Capsule);
                 var cc = cap.GetComponent<Collider>(); if (cc != null) Destroy(cc);
                 cap.transform.SetParent(root, false);
@@ -1072,29 +1075,11 @@ namespace DeNelle.Village
                 TintUrp(cap, ground ? new Color(0.6f, 0.25f, 0.25f) : new Color(0.55f, 0.3f, 0.6f));
                 return;
             }
-            var vis = Instantiate(prefab, root);
-            vis.transform.localPosition = Vector3.zero;
-            vis.transform.localRotation = Quaternion.identity;
-            foreach (var c in vis.GetComponentsInChildren<Collider>()) Destroy(c);
-            FitHeight(vis, ground ? 1.9f : 1.8f);
 
-            // Stamp the shared animator controller by rig family (HumanoidEnemy /
-            // LargeEnemy / Boss / Dragon). Enemy.cs then drives Speed/Attack/Hit/Dead,
-            // so the enemy walks/attacks/dies automatically — no per-type code here.
+            // Living things layer the animator on top (walk/attack/die via Enemy.cs).
             EnemyAnimatorFactory.Apply(vis, modelName);
         }
 
-        /// <summary>Uniformly scales <paramref name="go"/> so its world-bounds height
-        /// equals <paramref name="targetHeight"/> (KayKit import scale is arbitrary).</summary>
-        private static void FitHeight(GameObject go, float targetHeight)
-        {
-            var rends = go.GetComponentsInChildren<Renderer>();
-            if (rends.Length == 0) return;
-            Bounds b = rends[0].bounds;
-            for (int i = 1; i < rends.Length; i++) b.Encapsulate(rends[i].bounds);
-            if (b.size.y < 0.0001f) return;
-            go.transform.localScale *= targetHeight / b.size.y;
-        }
 
         /// <summary>
         /// Glides air enemies toward the tower (their NavMeshAgent is disabled).
