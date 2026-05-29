@@ -167,6 +167,10 @@ namespace DeNelle.Village
         // null-guarded so an enemy with no Animator still runs its gameplay.
         private Animator _animator;
 
+        // Combat-feel (additive): red hit-flash on each non-lethal hit. Auto-added
+        // in Awake so it needs no prefab wiring; flashed from the hit branch below.
+        private EnemyHitReaction _hitReaction;
+
         // Animator parameter hashes — must match AnimatorSetup.cs's parameter
         // names ("Speed" / "Attack" / "Hit" / "Dead" / "HitDir").
         private static readonly int AnimSpeed   = Animator.StringToHash("Speed");
@@ -339,6 +343,14 @@ namespace DeNelle.Village
             EnsureAgent();
             EnsureAnimator();
             EnsureAudio();
+            EnsureHitReaction();
+        }
+
+        private void EnsureHitReaction()
+        {
+            // Auto-attach so every enemy gets the hit-flash with zero prefab wiring.
+            _hitReaction = GetComponent<EnemyHitReaction>();
+            if (_hitReaction == null) _hitReaction = gameObject.AddComponent<EnemyHitReaction>();
         }
 
         private void EnsureAudio()
@@ -633,6 +645,9 @@ namespace DeNelle.Village
                     Instantiate(hitPrefab, hitPos, Quaternion.identity);
                 else
                     VfxPool.SpawnHitImpact(hitPos);
+
+                // Combat feel: blink the enemy red on the hit (additive, null-safe).
+                _hitReaction?.Flash();
 
                 // DEF-46: per-type hit audio.
                 PlayTypeSound(_typeVfxSet != null ? _typeVfxSet.RandomHitClip() : null);

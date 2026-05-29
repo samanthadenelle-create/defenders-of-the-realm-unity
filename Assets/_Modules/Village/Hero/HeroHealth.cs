@@ -210,7 +210,12 @@ namespace DeNelle.Village
 
             var hero = FindAnyObjectByType<HeroAbilities>();
             if (hero != null && hero.GetComponent<HeroHealth>() == null)
+            {
                 hero.gameObject.AddComponent<HeroHealth>();
+                // Combat feel: screen flash on damage + death slow-mo (additive).
+                if (hero.GetComponent<HeroHitReaction>() == null)
+                    hero.gameObject.AddComponent<HeroHitReaction>();
+            }
         }
     }
 }
