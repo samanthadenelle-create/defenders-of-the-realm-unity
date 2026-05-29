@@ -1077,6 +1077,11 @@ namespace DeNelle.Village
             vis.transform.localRotation = Quaternion.identity;
             foreach (var c in vis.GetComponentsInChildren<Collider>()) Destroy(c);
             FitHeight(vis, ground ? 1.9f : 1.8f);
+
+            // Stamp the shared animator controller by rig family (HumanoidEnemy /
+            // LargeEnemy / Boss / Dragon). Enemy.cs then drives Speed/Attack/Hit/Dead,
+            // so the enemy walks/attacks/dies automatically — no per-type code here.
+            EnemyAnimatorFactory.Apply(vis, modelName);
         }
 
         /// <summary>Uniformly scales <paramref name="go"/> so its world-bounds height
