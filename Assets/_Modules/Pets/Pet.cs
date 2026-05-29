@@ -340,11 +340,17 @@ namespace DeNelle.Pets
             _hp = newMax * frac;
         }
 
+        // Pet hits tint their floating damage number green (the hero's read cyan).
+        private static readonly Color PetDamageColor = new Color(0.55f, 1.00f, 0.55f);
+
         /// <summary>Lands one attack on <paramref name="foe"/> and resets the attack cooldown.</summary>
         private void Attack(IDamageable foe)
         {
             _attackCdRemaining = _attackCooldown;
             float dealt = _attackDamage * _progressionDmgMult;
+            // Source-tint this hit green so its floating number reads as PET damage,
+            // distinct from the hero's cyan hits (IDamageTintable lives in Core).
+            (foe as IDamageTintable)?.SetNextDamageTint(PetDamageColor);
             foe.TakeDamage(dealt, _element);
 
             // Kill-XP attribution: credit this pet's damage so it earns its share

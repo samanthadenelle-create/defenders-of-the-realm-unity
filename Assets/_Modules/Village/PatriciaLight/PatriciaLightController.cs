@@ -99,10 +99,15 @@ namespace DeNelle.Village
         private Vector3 _heroLedgePos;
         private Quaternion _heroSpawnRot = Quaternion.identity;
         private bool       _hasSpawnRot;   // true when a baked HeroSpawn marker supplies the facing
+        private Quaternion _heroFacing = Quaternion.identity;   // LOCKED turret facing — re-asserted each frame so the OTS camera stays stable
+        private bool       _hasHeroFacing;
         private float   _strafeCenterX;
         private bool    _arenaBaked;   // true when PatriciaLightSceneBuilder baked the arena into the scene
         private const float StrafeHalfWidth = 2.8f;   // stay within the 7-wide platform (half 3.5) — no floating off
         private const float AirAttackFrontZ = 7f;      // flyers attack the tower's +Z (hero-facing) face, not the centre/behind
+        // Source-coded damage-number tint: the hero's own hits read cyan-white (pets
+        // tint their hits green in Pet.cs) so the player can tell their damage apart.
+        private static readonly Color HeroDamageColor = new Color(0.55f, 0.90f, 1.00f);
         private DeNelle.Village.Defend.HeroOverShoulderCamera _camFollow;
         private DeNelle.Village.Defend.TowerAimSystem _aim;   // manual-aim reticle + aim-assisted targeting
 
@@ -153,6 +158,40 @@ namespace DeNelle.Village
         private Button _attackButton;
         private readonly List<Button> _abilityButtons = new List<Button>();
         private readonly List<AbilitySlot> _abilitySlots = new List<AbilitySlot>();
+        // Circular cooldown rings overlaid on each ability button (+ ATTACK).
+        private readonly List<CooldownRing> _abilityRings = new List<CooldownRing>();
+        private CooldownRing _attackRing;
+
+        /// <summary>A radial cooldown overlay drawn with Painter2D — a dark pie slice
+        /// from 12 o'clock clockwise covering the REMAINING cooldown (Fraction: 1 just
+        /// after cast → 0 when ready). pickingMode Ignore so it never eats the tap.</summary>
+        private sealed class CooldownRing : VisualElement
+        {
+            public float Fraction;
+            public CooldownRing()
+            {
+                pickingMode = PickingMode.Ignore;
+                style.position = Position.Absolute;
+                style.top = 0f; style.left = 0f; style.right = 0f; style.bottom = 0f;
+                generateVisualContent += OnGenerate;
+            }
+            private void OnGenerate(MeshGenerationContext ctx)
+            {
+                float f = Mathf.Clamp01(Fraction);
+                if (f <= 0.001f) return;
+                float w = contentRect.width, h = contentRect.height;
+                if (w <= 1f || h <= 1f) return;
+                var c = new Vector2(w * 0.5f, h * 0.5f);
+                float r = Mathf.Min(w, h) * 0.5f;
+                var p = ctx.painter2D;
+                p.fillColor = new Color(0f, 0f, 0f, 0.55f);
+                p.BeginPath();
+                p.MoveTo(c);
+                p.Arc(c, r, Angle.Degrees(-90f), Angle.Degrees(-90f + 360f * f));
+                p.ClosePath();
+                p.Fill();
+            }
+        }
 
         // =====================================================================
         //  Lifecycle
@@ -598,6 +637,12 @@ namespace DeNelle.Village
                     : Quaternion.identity;
             }
             _heroTransform = heroRoot.transform;
+            // Lock this as the turret's facing. TickHeroStrafe re-asserts it every
+            // frame so neither a cast (FaceNearestHostile) nor HeroLocomotion's
+            // turn-toward-velocity can swing the over-shoulder camera off-axis and
+            // leave it stuck — the view stays a stable forward shot of the field.
+            _heroFacing = heroRoot.transform.rotation;
+            _hasHeroFacing = true;
 
             // Body from Resources/Heroes/<Class> (the canonical hero pickup path).
             var prefab = Resources.Load<GameObject>("Heroes/" + slug);
@@ -703,6 +748,10 @@ namespace DeNelle.Village
         {
             if (_heroTransform == null) return;
 
+            // Hold the locked turret facing so the OTS camera never gets stuck off-axis
+            // (a cast or HeroLocomotion may have nudged the hero's rotation this frame).
+            if (_hasHeroFacing) _heroTransform.rotation = _heroFacing;
+
             float x = 0f;
             var kb = UnityEngine.InputSystem.Keyboard.current;
             if (kb != null)
@@ -774,6 +823,7 @@ namespace DeNelle.Village
             VFXManager.Play(VFXType.Impact_Physical, impactPos);
             if (target != null && target.IsAlive)
             {
+                (target as DeNelle.Core.Combat.IDamageTintable)?.SetNextDamageTint(HeroDamageColor);
                 target.TakeDamage(damage, DamageElement.None);
                 DamageAttribution.Record(target, HeroProgression.Id, damage);
             }
@@ -1233,10 +1283,10 @@ namespace DeNelle.Village
             _statusLabel.style.fontSize = 13f;
             root.Add(_statusLabel);
 
-            // ── Tower Integrity slider (horizontal bar + gradient + N/Max text) ─
+            // ── Tower Integrity slider (top-centre, boss-bar style) ─────────────
             var barFrame = new VisualElement();
             barFrame.style.position = Position.Absolute;
-            barFrame.style.bottom = 28f; barFrame.style.left = 0f; barFrame.style.right = 0f;
+            barFrame.style.top = 90f; barFrame.style.left = 0f; barFrame.style.right = 0f;
             barFrame.style.alignItems = Align.Center;
             root.Add(barFrame);
 
@@ -1294,6 +1344,7 @@ namespace DeNelle.Village
         {
             _abilityButtons.Clear();
             _abilitySlots.Clear();
+            _abilityRings.Clear();
 
             // A horizontal row pinned to the bottom-centre, above the integrity bar.
             var bar = new VisualElement();
@@ -1317,8 +1368,11 @@ namespace DeNelle.Village
                 var btn = new Button(() => CastSlot(captured));
                 StyleAbilityButton(btn, def);
                 bar.Add(btn);
+                var ring = new CooldownRing();
+                btn.Add(ring);
                 _abilityButtons.Add(btn);
                 _abilitySlots.Add(slot);
+                _abilityRings.Add(ring);
             }
 
             // ── The big ATTACK button (primary Q) — last, so it sits rightmost and
@@ -1334,6 +1388,8 @@ namespace DeNelle.Village
             RoundCorners(_attackButton, 16f);
             ZeroBorders(_attackButton);
             bar.Add(_attackButton);
+            _attackRing = new CooldownRing();
+            _attackButton.Add(_attackRing);
         }
 
         /// <summary>Styles one ability slot button: name on top, glyph below, tinted to the ability colour.</summary>
@@ -1388,6 +1444,7 @@ namespace DeNelle.Village
                        _heroTransform != null ? _heroTransform.forward  : transform.forward,
                        HeroFireRange, 100f);
             if (target == null) return;
+            (target as DeNelle.Core.Combat.IDamageTintable)?.SetNextDamageTint(HeroDamageColor);
             target.TakeDamage(HeroFireDamage, DamageElement.None);
             DamageAttribution.Record(target, HeroProgression.Id, HeroFireDamage);
         }
@@ -1402,19 +1459,14 @@ namespace DeNelle.Village
         /// <summary>Snaps the hero to face the nearest hostile so a tapped cast reads (no slerp — instant on tap).</summary>
         private void FaceNearestHostile()
         {
-            if (_heroTransform == null) return;
-            // Face the aim-assisted reticle target if there is one; else the nearest
-            // hostile IN FRONT (cone-gated). Never the old nearest-anywhere, which
-            // could snap the hero — and the over-shoulder camera — to face backward.
-            IDamageable target = (_aim != null ? _aim.CurrentTarget : null)
-                ?? NearestHostileInCone(_heroTransform.position, _heroTransform.forward, HeroFireRange, 100f);
-            if (target == null) return;
-            Vector3 face = target.WorldPosition - _heroTransform.position; face.y = 0f;
-            if (face.sqrMagnitude > 0.01f)
-                _heroTransform.rotation = Quaternion.LookRotation(face);
+            // No-op in the manual-aim turret: the hero holds a LOCKED forward facing
+            // (see TickHeroStrafe) so the over-shoulder camera stays stable, and aiming
+            // is done with the crosshair — not by turning the hero/camera toward a
+            // target. Kept as a seam so the cast call sites read intentionally.
         }
 
-        /// <summary>Greys out ability buttons that are on cooldown / out of mana so the bar reads as live.</summary>
+        /// <summary>Greys out ability buttons that are on cooldown / out of mana and
+        /// drives the circular cooldown rings so the bar reads as live.</summary>
         private void RefreshActionBar()
         {
             if (_hero == null) return;
@@ -1422,6 +1474,17 @@ namespace DeNelle.Village
             {
                 bool ready = _hero.CanCast(_abilitySlots[i]);
                 _abilityButtons[i].style.opacity = ready ? 1f : 0.45f;
+                if (i < _abilityRings.Count)
+                {
+                    _abilityRings[i].Fraction = _hero.CooldownFraction(_abilitySlots[i]);
+                    _abilityRings[i].MarkDirtyRepaint();
+                }
+            }
+            // ATTACK fires the primary (Q) — ring tracks Q's cooldown.
+            if (_attackRing != null)
+            {
+                _attackRing.Fraction = _hero.CooldownFraction(AbilitySlot.Q);
+                _attackRing.MarkDirtyRepaint();
             }
         }
 

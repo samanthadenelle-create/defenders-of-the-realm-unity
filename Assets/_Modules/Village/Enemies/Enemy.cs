@@ -598,6 +598,13 @@ namespace DeNelle.Village
         /// raises <see cref="Died"/> and is destroyed. Hero abilities, pets and
         /// towers route their damage through here.
         /// </summary>
+        // Colour stamped by the damage source (hero / pet) for the NEXT number only;
+        // consumed and cleared in TakeDamageFrom. Null = magnitude-based default colour.
+        private Color? _nextNumberTint;
+
+        /// <summary>Source-tint the next floating damage number (see IDamageTintable).</summary>
+        public void SetNextDamageTint(Color color) => _nextNumberTint = color;
+
         public void TakeDamage(float amount)
         {
             // No source position — default flinch direction is Front (attacker
@@ -618,8 +625,17 @@ namespace DeNelle.Village
             // Floating combat text — pop the damage number at the enemy's head so
             // the player can see the hit (and watch it rise after a damage talent).
             // Spawned BEFORE death so the killing blow still shows its number even
-            // though this GameObject may be destroyed below.
-            DamageNumberSpawner.Spawn(amount, HeadWorldPosition());
+            // though this GameObject may be destroyed below. A source may have
+            // stamped a tint (hero vs pet) for this hit — consume it once.
+            if (_nextNumberTint.HasValue)
+            {
+                DamageNumberSpawner.Spawn(amount, HeadWorldPosition(), _nextNumberTint.Value);
+                _nextNumberTint = null;
+            }
+            else
+            {
+                DamageNumberSpawner.Spawn(amount, HeadWorldPosition());
+            }
 
             _hp = Mathf.Max(0f, _hp - amount);
             if (_hp <= 0f)

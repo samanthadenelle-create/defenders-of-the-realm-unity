@@ -38,7 +38,7 @@ namespace DeNelle.Village
     /// </summary>
     [DisallowMultipleComponent]
     [RequireComponent(typeof(Enemy))]
-    public sealed class EnemyDamageable : MonoBehaviour, IDamageable
+    public sealed class EnemyDamageable : MonoBehaviour, IDamageable, IDamageTintable
     {
         private Enemy _enemy;
 
@@ -82,6 +82,13 @@ namespace DeNelle.Village
             // Element resist / bonus math is a later tuning pass — enemies.json
             // does not yet carry per-element resistances. Forward raw damage.
             _enemy.TakeDamage(amount);
+        }
+
+        /// <summary>Forwards the source tint to the Enemy, which colours the next
+        /// damage number it spawns (hero hits vs pet hits read differently).</summary>
+        public void SetNextDamageTint(Color color)
+        {
+            if (_enemy != null) _enemy.SetNextDamageTint(color);
         }
 
         /// <summary>

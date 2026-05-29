@@ -96,6 +96,22 @@ namespace DeNelle.Village
             return num;
         }
 
+        /// <summary>As <see cref="Spawn(float,Vector3)"/> but tints the number to
+        /// <paramref name="color"/> (source-coded: hero hits vs pet hits).</summary>
+        public static DamageNumberSpawner Spawn(float amount, Vector3 worldPos, Color color)
+        {
+            var num = Spawn(amount, worldPos);
+            if (num != null) num.ApplyColor(color);
+            return num;
+        }
+
+        /// <summary>Overrides the built number's colour (source tint).</summary>
+        public void ApplyColor(Color color)
+        {
+            _startColor = color;
+            if (_text != null) _text.color = color;
+        }
+
         /// <summary>
         /// Spawns a floating TEXT label (e.g. "LEVEL UP! Lv.3") at
         /// <paramref name="worldPos"/> — same rise/fade/billboard as a damage
