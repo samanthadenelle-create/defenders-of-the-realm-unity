@@ -648,6 +648,13 @@ namespace DeNelle.Village
                 ? Instantiate(_enemyPrefab, pos, rot, _enemyRoot)
                 : BuildPlaceholderEnemy(pos, rot);
 
+            // The hero/pet target sweeps find enemies via GetComponentInParent<IDamageable>,
+            // which resolves to EnemyDamageable. The placeholder capsule (and some prefabs)
+            // don't carry it — add it so the hero/pets can actually ACQUIRE + DAMAGE this
+            // wave enemy. Without it the enemy marches + attacks but is INVULNERABLE to you.
+            if (enemy.GetComponent<EnemyDamageable>() == null)
+                enemy.gameObject.AddComponent<EnemyDamageable>();
+
             string instanceId = $"wave{_currentWaveId}-{def.Id}-{_spawnInstanceCounter++}";
             Transform heartT = _heart != null ? _heart.transform : null;
             enemy.Configure(instanceId, def, heartT);

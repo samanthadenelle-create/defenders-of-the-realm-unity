@@ -196,6 +196,13 @@ namespace DeNelle.Editor
         /// <summary>BuildMenu UI Toolkit document the build menu UIDocument hosts.</summary>
         private const string BuildMenuUxmlPath =
             "Assets/_Modules/Village/Buildings/UI/BuildMenu.uxml";
+
+        // Store wiring: the walk-up Marketplace trigger (DeNelle.Village) + the PackStore
+        // UIDocument (DeNelle.Wallet) it opens. The store is ~built already; the builder
+        // just places it in the village scene (MarketplaceInteractor auto-finds PackStore).
+        private const string TypeMarketplaceInteractor = NsVillage + ".MarketplaceInteractor";
+        private const string TypePackStore = "DeNelle.Wallet.PackStore";
+        private const string PackStoreUxmlPath = "Assets/_Modules/Wallet/UI/PackStore.uxml";
         /// <summary>ForceFieldGate shader the gate force-field material runs.</summary>
         private const string ForceFieldShaderPath =
             "Assets/Shaders/ForceFieldGate.shader";
@@ -2768,6 +2775,10 @@ namespace DeNelle.Editor
             // 7) BuildMenu — a UIDocument GameObject with the build-menu UI.
             BuildBuildMenu(systemsRoot, buildingPrefabs);
 
+            // 7b) Marketplace + PackStore — the walk-up village store (already-built
+            //     PackStore; the builder just places + wires it into the scene).
+            BuildMarketplace(systemsRoot);
+
             // 8) Ambient townsfolk — wandering / idle KayKit villagers with
             //    engage-on-approach word bubbles. They watch the hero rig built
             //    in step 5 for the proximity check (Workstream D).
@@ -3552,6 +3563,54 @@ namespace DeNelle.Editor
             WireBuildingPrefabList(so, "_buildingPrefabs", buildingPrefabs);
 
             so.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        /// <summary>
+        /// Places the village STORE: a hidden PackStoreUI (UIDocument + PackStore.uxml +
+        /// PackStore) and a walk-up Marketplace trigger (MarketplaceInteractor) by the
+        /// south-plaza market. Walk near it → "[F] The Realm Store" → opens the packs.
+        /// MarketplaceInteractor auto-finds PackStore; we wire it explicitly anyway.
+        /// </summary>
+        private static void BuildMarketplace(Transform parent)
+        {
+            // 1) The hidden store UI document (UIDocument + PackStore.uxml + PackStore).
+            var uiGo = new GameObject("PackStoreUI");
+            uiGo.transform.SetParent(parent, false);
+            var uiDoc = uiGo.AddComponent<UIDocument>();
+            var uxml = AssetDatabase.LoadAssetAtPath<UnityEngine.UIElements.VisualTreeAsset>(PackStoreUxmlPath);
+            if (uxml != null) uiDoc.visualTreeAsset = uxml;
+            else Debug.LogWarning($"[VillageSceneBuilder] PackStore.uxml not found at '{PackStoreUxmlPath}'.");
+            WirePanelSettings(uiDoc);
+
+            var ps = AddVillageComponent(uiGo, TypePackStore);   // FindType resolves DeNelle.Wallet too
+            if (ps != null)
+            {
+                var pso = new SerializedObject(ps);
+                SetObjectField(pso, "_document", uiDoc);
+                pso.ApplyModifiedPropertiesWithoutUndo();
+            }
+            else
+            {
+                Debug.LogWarning("[VillageSceneBuilder] PackStore type not found — store UI not added.");
+            }
+            uiGo.SetActive(false);   // starts hidden; MarketplaceInteractor enables it on F
+
+            // 2) The walk-up trigger near the south-plaza market (WO-101 Market at ~(0,0,-20)).
+            var mGo = new GameObject("Marketplace");
+            mGo.transform.SetParent(parent, false);
+            mGo.transform.position = new Vector3(0f, 0f, -18f);
+            var mi = AddVillageComponent(mGo, TypeMarketplaceInteractor);
+            if (mi != null)
+            {
+                var mso = new SerializedObject(mi);
+                SetObjectField(mso, "_storeUiRoot", uiGo);
+                mso.ApplyModifiedPropertiesWithoutUndo();
+                Debug.Log("[VillageSceneBuilder] Marketplace + PackStoreUI placed — walk up + F opens the store.");
+            }
+            else
+            {
+                Debug.LogWarning("[VillageSceneBuilder] MarketplaceInteractor type not found — store trigger not added.");
+            }
         }
 
         /// <summary>
