@@ -148,7 +148,7 @@ namespace DeNelle.Editor
             floor.transform.SetParent(arena.transform, false);
             floor.transform.position   = new Vector3(0f, -0.1f, 0f);
             floor.transform.localScale = new Vector3(240f, 0.2f, 240f);
-            TintEditor(floor, new Color(0.22f, 0.24f, 0.20f));
+            TintEditor(floor, new Color(0.40f, 0.38f, 0.32f));   // warm stone/earth, not the old near-black
 
             // ── Tower2 (the defended structure) at origin ────────────────────
             var fbx = AssetDatabase.LoadAssetAtPath<GameObject>(Tower2Path);
@@ -213,6 +213,14 @@ namespace DeNelle.Editor
                 if (wr != null) wr.enabled = false;
             }
 
+            // ── Siege dressing (Low Poly Ultimate Pack) — flanks the approach so the
+            // arena reads as a real "defend the tower" siege. Pack is gitignored, so
+            // these resolve locally / after a re-import (same policy as the Models bake). ─
+            InstantiatePackProp(PackRoot + "Medieval_M/Catapult.prefab", arena.transform, new Vector3(-9f, 0f, 9f),  35f, 4.0f);
+            InstantiatePackProp(PackRoot + "Medieval_M/Catapult.prefab", arena.transform, new Vector3( 9f, 0f, 9f), -35f, 4.0f);
+            InstantiatePackProp(PackRoot + "Medieval_M/Ballista.prefab", arena.transform, new Vector3(-7f, 0f, 15f),  20f, 3.0f);
+            InstantiatePackProp(PackRoot + "Medieval_M/Ballista.prefab", arena.transform, new Vector3( 7f, 0f, 15f), -20f, 3.0f);
+
             // ── Hero spawn marker on the stand, facing the tower ─────────────
             var spawn = new GameObject("HeroSpawn");
             spawn.transform.SetParent(arena.transform, false);
@@ -234,6 +242,29 @@ namespace DeNelle.Editor
             float max = Mathf.Max(b.size.x, Mathf.Max(b.size.y, b.size.z));
             if (max < 0.0001f) return;
             go.transform.localScale *= target / max;
+        }
+
+        /// <summary>Base path for Low Poly Ultimate Pack mobile (_M) prefabs.</summary>
+        private const string PackRoot = "Assets/polyperfect/Low Poly Ultimate Pack/_M/Prefabs_M/";
+
+        /// <summary>Instantiates a Low Poly Ultimate Pack prefab into the arena, scaled
+        /// (largest dim = <paramref name="fitLargest"/>), rotated, and seated on the
+        /// ground at <paramref name="pos"/>. No-op + warning if the pack isn't present
+        /// (it is gitignored — re-import on a fresh clone).</summary>
+        private static GameObject InstantiatePackProp(string assetPath, Transform parent, Vector3 pos, float yRot, float fitLargest)
+        {
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(assetPath);
+            if (prefab == null)
+            {
+                Debug.LogWarning("[PatriciaLightSceneBuilder] pack prop not found (re-import the pack?): " + assetPath);
+                return null;
+            }
+            var go = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
+            go.transform.SetParent(parent, false);
+            go.transform.rotation = Quaternion.Euler(0f, yRot, 0f);
+            if (fitLargest > 0f) FitLargestDimension(go, fitLargest);
+            SeatOnGround(go, new Vector3(pos.x, 0f, pos.z));
+            return go;
         }
 
         /// <summary>Shifts an object so its bounds base sits at <paramref name="basePos"/>.y

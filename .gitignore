@@ -108,6 +108,13 @@ Thumbs.db
 /Assets/Resources/Structures/
 /Assets/Resources/Structures.meta
 
+# Low Poly Ultimate Pack (polyperfect) — 246MB asset pack kept LOCAL (owner
+# instruction 2026-05-29: "use what you like and we can not git the others").
+# Only the SPECIFIC prefabs/meshes we use are committed, copied into a tracked
+# Resources/ path; on a fresh clone re-import the pack from the Asset Store.
+/Assets/polyperfect/
+/Assets/polyperfect.meta
+
 # === Session-noise / dev workflow (added 2026-05-20) ===
 # Stale build logs left behind by batch Unity invocations.
 build-*.log
