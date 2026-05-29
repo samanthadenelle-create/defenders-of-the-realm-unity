@@ -994,9 +994,12 @@ namespace DeNelle.Village
             if (_groundDef == null) return;
 
             float dist = ground ? GroundSpawnDist : AirSpawnDist;
-            // Slight depth jitter so the lane isn't a single file.
-            float depth = UnityEngine.Random.Range(-4f, 4f);
-            Vector3 pos = TowerPos + new Vector3(side * dist, ground ? 0f : AirHeight, depth);
+            // Spread each spawn across a WIDE arc on this side (near-centre out to the
+            // flank) with a deep stagger, so a wave advances as a loose mob instead of
+            // a single-file row marching from one fixed point.
+            float x     = side * UnityEngine.Random.Range(5f, dist);
+            float depth = UnityEngine.Random.Range(-11f, 11f);
+            Vector3 pos = TowerPos + new Vector3(x, ground ? 0f : AirHeight, depth);
 
             string id = $"pl-w{_currentWave}-{(ground ? "g" : "a")}-{_idCounter++}";
             Enemy enemy = SpawnEnemy(_groundDef, pos, ground);
@@ -1016,23 +1019,35 @@ namespace DeNelle.Village
         /// the slice needs. Ground enemies snap to the baked NavMesh; air enemies
         /// keep their agent disabled and glide kinematically (DriveAirEnemies).
         /// </summary>
-        private Enemy SpawnEnemy(EnemyDef def, Vector3 pos, bool ground)
+        // Real models (Resources/Enemies/*.fbx). LAND = KayKit skeletons (the horde,
+        // they walk); AIR = the Dragon (clearly flies — delineated from the skeletons).
+        // Ground grunts rotate through these for variety; air + boss = the Dragon.
+        private static readonly string[] GroundSkeletons =
+            { "Skeleton_Warrior", "Skeleton_Minion", "Skeleton_Rogue" };
+
+        private Enemy SpawnEnemy(EnemyDef def, Vector3 pos, bool ground, string modelName = null)
         {
             if (ground && NavMesh.SamplePosition(pos, out var hit, 8f, NavMesh.AllAreas))
                 pos = hit.position;
 
-            var go = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-            go.name = ground ? "Enemy (ground)" : "Enemy (air)";
+            // Bare root carries gameplay (collider + Enemy + agent); the skeleton mesh
+            // is a visual child. (Replaces the old placeholder capsule "pill".)
+            var go = new GameObject(ground ? "Enemy (ground)" : "Enemy (air)");
             int layer = LayerMask.NameToLayer("Enemy");
             if (layer >= 0) go.layer = layer;
             go.transform.SetParent(transform, false);
             go.transform.position = pos;
-            TintUrp(go, ground ? new Color(0.6f, 0.25f, 0.25f) : new Color(0.55f, 0.3f, 0.6f));
 
-            // The capsule's own collider must be a trigger so it does not block the
-            // hero/pet sphere sweeps' QueryTriggerInteraction.Collide finds it but
-            // Enemy's own contact probe (Ignore) skips it.
-            if (go.TryGetComponent(out Collider col)) col.isTrigger = true;
+            // Trigger capsule so the hero/pet sphere sweeps (QueryTriggerInteraction.
+            // Collide) find it, while Enemy's own contact probe (Ignore) skips it.
+            var col = go.AddComponent<CapsuleCollider>();
+            col.isTrigger = true; col.radius = 0.42f; col.height = 1.8f;
+            col.center = new Vector3(0f, 0.9f, 0f);
+
+            string model = modelName
+                ?? (ground ? GroundSkeletons[UnityEngine.Random.Range(0, GroundSkeletons.Length)]
+                           : "Dragon");
+            AttachEnemyVisual(go.transform, model, ground);
 
             var agent = go.AddComponent<NavMeshAgent>();
             if (!ground) agent.enabled = false; // air enemies glide, not nav-walk
@@ -1040,6 +1055,40 @@ namespace DeNelle.Village
             var enemy = go.AddComponent<Enemy>();
             if (go.GetComponent<EnemyDamageable>() == null) go.AddComponent<EnemyDamageable>();
             return enemy;
+        }
+
+        /// <summary>Instantiates a KayKit skeleton mesh under <paramref name="root"/>,
+        /// height-fit and stripped of its own colliders (the root trigger capsule owns
+        /// hit detection). Falls back to a tinted capsule mesh if the model is missing.</summary>
+        private void AttachEnemyVisual(Transform root, string modelName, bool ground)
+        {
+            var prefab = Resources.Load<GameObject>("Enemies/" + modelName);
+            if (prefab == null)
+            {
+                var cap = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+                var cc = cap.GetComponent<Collider>(); if (cc != null) Destroy(cc);
+                cap.transform.SetParent(root, false);
+                cap.transform.localPosition = new Vector3(0f, 0.9f, 0f);
+                TintUrp(cap, ground ? new Color(0.6f, 0.25f, 0.25f) : new Color(0.55f, 0.3f, 0.6f));
+                return;
+            }
+            var vis = Instantiate(prefab, root);
+            vis.transform.localPosition = Vector3.zero;
+            vis.transform.localRotation = Quaternion.identity;
+            foreach (var c in vis.GetComponentsInChildren<Collider>()) Destroy(c);
+            FitHeight(vis, ground ? 1.9f : 1.8f);
+        }
+
+        /// <summary>Uniformly scales <paramref name="go"/> so its world-bounds height
+        /// equals <paramref name="targetHeight"/> (KayKit import scale is arbitrary).</summary>
+        private static void FitHeight(GameObject go, float targetHeight)
+        {
+            var rends = go.GetComponentsInChildren<Renderer>();
+            if (rends.Length == 0) return;
+            Bounds b = rends[0].bounds;
+            for (int i = 1; i < rends.Length; i++) b.Encapsulate(rends[i].bounds);
+            if (b.size.y < 0.0001f) return;
+            go.transform.localScale *= targetHeight / b.size.y;
         }
 
         /// <summary>
@@ -1102,7 +1151,7 @@ namespace DeNelle.Village
             // from the left toward the tower — not behind the tower or the hero.
             Vector3 pos = TowerPos + new Vector3(-AirSpawnDist, AirHeight, 0f);
             string id = $"pl-boss-{_idCounter++}";
-            Enemy boss = SpawnEnemy(def, pos, ground: false);
+            Enemy boss = SpawnEnemy(def, pos, ground: false, modelName: "Dragon");
             if (boss != null)
             {
                 boss.Configure(id, def, _towerTransform);
