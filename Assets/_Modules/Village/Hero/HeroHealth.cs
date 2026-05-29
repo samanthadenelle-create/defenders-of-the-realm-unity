@@ -46,6 +46,13 @@ namespace DeNelle.Village
         private int   _enemyMask;
         private readonly Collider[] _buf = new Collider[24];
 
+        // Cached siblings for death-stop + haptics. All optional — resolved in
+        // Awake and only used through null-safe calls, so a hero missing any of
+        // them simply skips that bit of feedback.
+        private HeroLocomotion     _locomotion;
+        private HeroAbilities      _abilities;
+        private HeroImpactFeedback _impactFeedback;
+
         public float MaxHp    => _maxHp;
         public float Hp       => _hp;
         public float Fraction => _maxHp > 0f ? Mathf.Clamp01(_hp / _maxHp) : 0f;
@@ -62,6 +69,10 @@ namespace DeNelle.Village
             _hp = _maxHp;
             _enemyMask = LayerMask.GetMask("Enemy");
             if (_enemyMask == 0) _enemyMask = ~0;   // "Enemy" layer missing — scan all
+
+            _locomotion     = GetComponent<HeroLocomotion>();
+            _abilities      = GetComponent<HeroAbilities>();
+            _impactFeedback = GetComponent<HeroImpactFeedback>();
         }
 
         private void OnDestroy() { if (Instance == this) Instance = null; }
@@ -101,11 +112,34 @@ namespace DeNelle.Village
             if (_hp <= 0f || amount <= 0f) return;
             _hp = Mathf.Max(0f, _hp - amount);
             OnHealthChanged?.Invoke(_hp, _maxHp);
+
+            // ── Combat feel (additive) ────────────────────────────────────────
+            // VFXManager.Play and HitStopManager.DoImpact are static + null-safe,
+            // so absent managers are a silent no-op. Contact ticks use the Light
+            // tier (shake only, no time-freeze) so the 1 s cadence never stutters.
+            VFXManager.Play(VFXType.Impact_Physical, transform.position + Vector3.up * 1.0f);
+            _impactFeedback?.PlayHaptic(0.25f, 0.12f);
+
             if (_hp <= 0f)
             {
                 Debug.Log("[HeroHealth] Hero defeated.");
+                HitStopManager.DoImpact(HitTier.Heavy);   // one dramatic beat on death
+                Die();
                 OnDied?.Invoke();   // loss-flow handler hooks here (WO46 P11)
             }
+            else
+            {
+                HitStopManager.DoImpact(HitTier.Light);   // subtle shake per hit
+            }
+        }
+
+        /// <summary>Stops the hero on defeat — no more walking or casting. The
+        /// HeroAnimatorSetup controller has no "Dead" state yet, so the VFX beat
+        /// and the movement/ability halt carry the death feedback.</summary>
+        private void Die()
+        {
+            if (_locomotion != null) _locomotion.enabled = false;
+            if (_abilities  != null) _abilities.enabled  = false;
         }
 
         /// <summary>Heals up to max (for repair pads / potions / wave-clear).</summary>
@@ -114,6 +148,7 @@ namespace DeNelle.Village
             if (amount <= 0f) return;
             _hp = Mathf.Min(_maxHp, _hp + amount);
             OnHealthChanged?.Invoke(_hp, _maxHp);
+            VFXManager.Play(VFXType.Impact_Heal, transform.position + Vector3.up * 1.0f);
         }
 
         // ── IMGUI health bar (no UIDocument dependency) ───────────────────────

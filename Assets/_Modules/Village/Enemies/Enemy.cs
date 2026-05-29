@@ -698,6 +698,10 @@ namespace DeNelle.Village
 
                 CameraShakeBridge.Shake(0.18f, 0.22f);
                 CombatFeedbackManager.Kill(transform.position);
+
+                // Combat feel: leave a persistent ground scorch where the enemy
+                // fell. Null-safe — no DecalSpawner in the scene = no-op.
+                DecalSpawner.Instance?.SpawnScorch(transform.position);
             }
 
             // Kill-XP attribution: a genuine kill shares this enemy's XP across
