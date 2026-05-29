@@ -137,8 +137,14 @@ namespace DeNelle.Village.Progression
 
             int levels = earner.AddXp(xp);
             if (levels > 0)
+            {
                 DamageNumberSpawner.SpawnLabel(
                     $"LEVEL UP!  Lv.{earner.Level}", earner.WorldPosition, LevelUpColor, 1.4f);
+
+                // Combat feel: celebratory burst + gold screen flash on every
+                // level-up (hero AND pets flow through here). Null-safe.
+                LevelUpVFXController.Instance?.PlayLevelUp(earner.WorldPosition, earner.Level);
+            }
         }
 
         private int CurrentWave()
