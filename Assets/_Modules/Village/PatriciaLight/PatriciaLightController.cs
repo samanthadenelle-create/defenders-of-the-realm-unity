@@ -354,7 +354,9 @@ namespace DeNelle.Village
 
                 var spire = Instantiate(spirePrefab, towerGo.transform);
                 spire.name = "TowerSpire";
-                spire.transform.localRotation = Quaternion.identity;
+                // tower2 imports lying on its side — stand it upright. -90 about X is
+                // the usual Z-up-FBX fix; owner can confirm/adjust live in the editor.
+                spire.transform.localRotation = Quaternion.Euler(-90f, 0f, 0f);
                 spire.AddComponent<DeNelle.Core.TripoMaterialFixer>();   // Tripo -> URP on Awake
                 _spireBounds = FitToTowerFootprint(spire, TowerHeight + 5f);
                 _hasSpire = true;
