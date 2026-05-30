@@ -42,7 +42,7 @@ cinematic/preview needs the source, restore with `git checkout HEAD -- "Assets/B
 
 **📜 Vision docs (committed):** `docs/NORTH_STAR.md` (vision/business/GTM source of truth — incl. delivery
 ladder, Pi utility-sink, 3-build distribution, rewarded-ads pillar), `docs/PI_PITCH.md`,
-`docs/ARCHITECTURE_NORTH_STAR.md`, WO-107 (backend reconcile) / 109 (web metrics) / 110 (crystal mine) / 111 (resource pillar).
+`docs/ARCHITECTURE_NORTH_STAR.md`, WO-120 (backend reconcile) / 121 (web metrics) / 122 (crystal mine) / 111 (resource pillar).
 
 ---
 

@@ -1,4 +1,4 @@
-# WORK ORDER 110 — Crystal Mine Site (wire the on-map crystal as the mine)
+# WORK ORDER 122 — Crystal Mine Site (wire the on-map crystal as the mine)
 
 **Status:** READY TO IMPLEMENT — CLI lane (held until green tree)
 **Date:** 2026-05-29
