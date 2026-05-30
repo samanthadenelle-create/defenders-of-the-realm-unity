@@ -45,6 +45,10 @@ namespace DeNelle.Village
         [Tooltip("Visual prefab shown at Level 3 (max level, yielding crystals every wave).")]
         [SerializeField] private GameObject _level3Prefab;
 
+        [Tooltip("WO-110: when true, skip building the placeholder/prefab visual — an external " +
+                 "crystal mesh (+ CrystalVisual spin/pulse) is the mine's body. Gameplay unchanged.")]
+        [SerializeField] private bool _useExternalVisual = false;
+
         [Header("Upgrade costs (Coins)")]
         [Tooltip("Coin cost to upgrade from Level 1 to Level 2.")]
         [SerializeField] private int _costL1toL2 = 200;
@@ -352,6 +356,9 @@ namespace DeNelle.Village
         private void ApplyVisual()
         {
             if (_currentVisual != null) Destroy(_currentVisual);
+
+            // WO-110: an external crystal mesh (+ CrystalVisual) is the body — don't build our own.
+            if (_useExternalVisual) return;
 
             GameObject prefab = _currentLevel switch
             {
