@@ -110,6 +110,95 @@ namespace DeNelle.Editor
             UnityEngine.Debug.Log($"[ActionClipImporter] Reimported {n} Action FBX → Humanoid ({flipped} flipped from non-Human).");
         }
 
+        // ── Fix sliding clips ─────────────────────────────────────────────────
+        /// <summary>
+        /// Forces every Action clip in-place + loop-matched on its importer and
+        /// reimports — fixes the "moves then slides back each cycle" drift. The
+        /// OnPreprocessAnimation settings never persisted (postprocessor didn't
+        /// re-fire), so the clips kept default root motion / un-looped pose; on loop
+        /// the baked pose snapped back = visible slide. Sets lockRootPositionXZ +
+        /// loopTime/loopPose authoritatively. Headless:
+        /// -executeMethod DeNelle.Editor.ActionClipImporter.FixActionClipRootMotion
+        /// </summary>
+        [UnityEditor.MenuItem("Defenders/Animation/Fix Action Clip Root Motion (stop slide)")]
+        public static void FixActionClipRootMotion()
+        {
+            string[] guids = UnityEditor.AssetDatabase.FindAssets("t:Model", new[] { "Assets/Action" });
+            int n = 0;
+            foreach (var guid in guids)
+            {
+                string path = UnityEditor.AssetDatabase.GUIDToAssetPath(guid);
+                var importer = UnityEditor.AssetImporter.GetAtPath(path) as ModelImporter;
+                if (importer == null) continue;
+
+                string lower = path.ToLowerInvariant();
+                bool looping = lower.Contains("idle") || lower.Contains("walk") || lower.Contains("run");
+
+                // Use defaultClipAnimations (the auto-split takes) as the basis and
+                // commit them to clipAnimations with the in-place flags set.
+                var clips = importer.defaultClipAnimations;
+                if (clips == null || clips.Length == 0) continue;
+                for (int i = 0; i < clips.Length; i++)
+                {
+                    var c = clips[i];
+                    c.loopTime = looping;
+                    c.loopPose = looping;              // match start/end pose on loop = no snap
+                    c.lockRootPositionXZ = true;       // bake horizontal root into pose = in place
+                    c.keepOriginalPositionXZ = false;
+                    c.lockRootHeightY = false;         // keep vertical (jumps/deaths)
+                    c.keepOriginalPositionY = true;
+                    c.lockRootRotation = false;
+                    c.keepOriginalOrientation = true;
+                    clips[i] = c;
+                }
+                importer.clipAnimations = clips;
+                importer.SaveAndReimport();
+                n++;
+            }
+            UnityEditor.AssetDatabase.SaveAssets();
+            UnityEditor.AssetDatabase.Refresh();
+            UnityEngine.Debug.Log($"[ActionClipImporter] FixActionClipRootMotion — {n} clip FBX set in-place + loop-matched.");
+        }
+
+        // ── Creature mesh rigs (orc/goblin/etc) ───────────────────────────────
+        /// <summary>
+        /// Flips creature character MESHES to Humanoid so the free Mixamo clips
+        /// retarget onto them (same fix as the heroes — no CC5, no paid anims).
+        /// Add a path to the list and re-run. Materials left intact.
+        /// Headless: -executeMethod DeNelle.Editor.ActionClipImporter.RigCreaturesHumanoid
+        /// </summary>
+        [UnityEditor.MenuItem("Defenders/Animation/Rig Creatures Humanoid (orc/goblin)")]
+        public static void RigCreaturesHumanoid()
+        {
+            string[] creatures =
+            {
+                "Assets/Models/KayKit/KayKit Mystery Monthly Series 4/1 - July 2023 - Orc Raider/character/OrcRaider.fbx",
+            };
+            int flipped = 0;
+            foreach (var path in creatures)
+            {
+                var importer = UnityEditor.AssetImporter.GetAtPath(path) as ModelImporter;
+                if (importer == null)
+                {
+                    UnityEngine.Debug.LogWarning($"[ActionClipImporter] creature FBX not found: {path}");
+                    continue;
+                }
+                bool wasNonHuman = importer.animationType != ModelImporterAnimationType.Human;
+                importer.animationType = ModelImporterAnimationType.Human;
+                importer.avatarSetup   = ModelImporterAvatarSetup.CreateFromThisModel;
+                importer.SaveAndReimport();
+                bool hasAvatar = false;
+                foreach (var a in UnityEditor.AssetDatabase.LoadAllAssetsAtPath(path))
+                    if (a is Avatar av && av.isValid && av.isHuman) hasAvatar = true;
+                UnityEngine.Debug.Log($"[ActionClipImporter] {path}: animType→Human, validHumanAvatar={hasAvatar}" +
+                    (wasNonHuman ? " (flipped)" : ""));
+                if (wasNonHuman) flipped++;
+            }
+            UnityEditor.AssetDatabase.SaveAssets();
+            UnityEditor.AssetDatabase.Refresh();
+            UnityEngine.Debug.Log($"[ActionClipImporter] RigCreaturesHumanoid done — {flipped} creature(s) flipped.");
+        }
+
         // ── Hero mesh rigs ────────────────────────────────────────────────────
         /// <summary>
         /// Flips the playable hero MESHES (Knight/Mage/Ranger) from Generic to

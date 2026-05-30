@@ -105,6 +105,11 @@ namespace DeNelle.Village
         private Animator _animator;
         private static readonly int SpeedHash   = Animator.StringToHash("Speed");
         private static readonly int TalkingHash = Animator.StringToHash("IsTalking");
+        // WO-163: cached once at init — whether THIS NPC's controller actually
+        // declares the param. Driving an absent param logs an error EVERY frame
+        // (3,351-error spam). Guard the SetFloat/SetBool with these.
+        private bool _hasSpeedParam;
+        private bool _hasTalkingParam;
 
         // ── Configuration ────────────────────────────────────────────────────
 
@@ -191,6 +196,18 @@ namespace DeNelle.Village
             // Grab the Animator from the mesh child (if the NPC model pack prefab is present).
             // Null-safe: locomotion and speech still work without it.
             _animator = GetComponentInChildren<Animator>();
+
+            // WO-163: cache which params the controller actually has, so UpdateAnimator
+            // never drives an absent param (was spamming 3,351 errors/run). A controller
+            // with no runtimeAnimatorController has no parameters → both stay false.
+            if (_animator != null && _animator.runtimeAnimatorController != null)
+            {
+                foreach (var p in _animator.parameters)
+                {
+                    if (p.nameHash == SpeedHash)   _hasSpeedParam   = true;
+                    if (p.nameHash == TalkingHash) _hasTalkingParam = true;
+                }
+            }
         }
 
         private void Update()
@@ -341,14 +358,19 @@ namespace DeNelle.Village
             if (_animator == null) return;
 
             // Speed: agent velocity magnitude when moving, 0 when idle/stopped.
-            float speed = 0f;
-            if (_agent != null && _agent.enabled && !_agent.isStopped)
-                speed = _agent.velocity.magnitude;
-            _animator.SetFloat(SpeedHash, speed, 0.08f, Time.deltaTime);
+            // WO-163: only drive params the controller actually declares.
+            if (_hasSpeedParam)
+            {
+                float speed = 0f;
+                if (_agent != null && _agent.enabled && !_agent.isStopped)
+                    speed = _agent.velocity.magnitude;
+                _animator.SetFloat(SpeedHash, speed, 0.08f, Time.deltaTime);
+            }
 
             // IsTalking: mirrors the Speaking state so the talk clip plays while
             // the bubble is visible.
-            _animator.SetBool(TalkingHash, Speaking);
+            if (_hasTalkingParam)
+                _animator.SetBool(TalkingHash, Speaking);
         }
 
         // ── Body tint (WO-29 white-pill safety-net) ──────────────────────────
