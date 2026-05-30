@@ -140,6 +140,7 @@ namespace DeNelle.DevTools
         private string _packIdInput;
         private int _waveInput;
         private double _mockBalanceInput;
+        private int _levelInput = 10;
 
         // ── God-mode / instant-win toggles ───────────────────────────────────
         // DevTools owns these flags; the integrator reads them from gameplay
@@ -589,6 +590,9 @@ namespace DeNelle.DevTools
             AddButton(resources, "+150 XP (hero)", () => GiveHeroXp(150f));
             AddButton(resources, "+10,000 XP (hero)", () => GiveHeroXp(10000f));
             AddButton(resources, "Level up hero", LevelHero);
+            AddTextField(resources, _levelInput.ToString(),
+                v => { if (int.TryParse(v, out var n)) _levelInput = Mathf.Max(1, n); });
+            AddButton(resources, "Set hero to level N", SetHeroLevel);
             AddButton(resources, "Trigger wave (skip countdown)", TriggerWave);
 
             // ── ENTITLEMENTS ─────────────────────────────────────────────────
@@ -788,6 +792,20 @@ namespace DeNelle.DevTools
             DeNelle.Village.DamageNumberSpawner.SpawnLabel(
                 $"LEVEL UP!  Lv.{hp.Level}", hp.WorldPosition, new Color(0.45f, 1f, 0.55f, 1f), 1.4f);
             SetStatus($"Hero leveled to Lv.{hp.Level}.");
+        }
+
+        /// <summary>Levels the hero up to the typed target level (repeated AddXp until reached).</summary>
+        private void SetHeroLevel()
+        {
+            var hp = UnityEngine.Object.FindAnyObjectByType<DeNelle.Village.HeroProgression>();
+            if (hp == null) { SetStatus("HeroProgression not in scene yet."); return; }
+            int target = Mathf.Max(1, _levelInput);
+            int guard = 0;
+            while (hp.Level < target && guard++ < 500)
+                hp.AddXp(hp.XpToNext + 1f);
+            DeNelle.Village.DamageNumberSpawner.SpawnLabel(
+                $"LEVEL {hp.Level}", hp.WorldPosition, new Color(0.45f, 1f, 0.55f, 1f), 1.4f);
+            SetStatus($"Set hero to Lv.{hp.Level} (target {target}).");
         }
 
         /// <summary>Skips the prep countdown and starts the wave now (WaveManager.ForceBeginNextWave).</summary>
