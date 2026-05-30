@@ -131,6 +131,11 @@ namespace DeNelle.Pets
         private static readonly int AnimAttack = Animator.StringToHash("Attack");
         private static readonly int AnimHit    = Animator.StringToHash("Hit");
         private static readonly int AnimDead   = Animator.StringToHash("Dead");
+        // WO-163: cached once — whether the resolved controller actually declares
+        // each param. The ice-wolf (Tripo/CC5 FBX, not a KayKit Rig_Medium) has no
+        // controller with these params, so driving them spammed per-frame errors
+        // (same bug as AmbientNPC). Guard every drive with the matching flag.
+        private bool _hasSpeed, _hasAttack, _hasHit, _hasDead;
 
         /// <summary>Stable pet id — e.g. <c>pet-aether-sprite</c>.</summary>
         public string PetId => _petId;
@@ -226,6 +231,19 @@ namespace DeNelle.Pets
         {
             // The Animator sits on the KayKit pet mesh child of the pet rig.
             _animator = GetComponentInChildren<Animator>();
+            // WO-163: cache which params the controller actually has (Tripo pets like
+            // ice-wolf lack the KayKit Speed/Attack/Hit/Dead set → don't drive absent
+            // params, which spammed per-frame errors).
+            if (_animator != null && _animator.runtimeAnimatorController != null)
+            {
+                foreach (var p in _animator.parameters)
+                {
+                    if (p.nameHash == AnimSpeed)  _hasSpeed  = true;
+                    if (p.nameHash == AnimAttack) _hasAttack = true;
+                    if (p.nameHash == AnimHit)    _hasHit    = true;
+                    if (p.nameHash == AnimDead)   _hasDead   = true;
+                }
+            }
             _lastPosition = transform.position;
 
             // +/-12% stable per-pet cruise-speed variation so the pack doesn't
@@ -243,7 +261,7 @@ namespace DeNelle.Pets
             // Feed the Animator's Speed float from the actual per-frame
             // displacement — Pet moves kinematically (no agent / rigidbody to
             // read a velocity from). Null-guarded; no-op without a rig.
-            if (_animator != null && dt > 0f)
+            if (_animator != null && _hasSpeed && dt > 0f)
             {
                 float moved = (transform.position - _lastPosition).magnitude / dt;
                 _animator.SetFloat(AnimSpeed, moved);
@@ -293,9 +311,10 @@ namespace DeNelle.Pets
 
             if (_animator != null)
             {
-                // Latch the down state at zero HP, else play the flinch.
-                if (_hp <= 0f) _animator.SetBool(AnimDead, true);
-                else _animator.SetTrigger(AnimHit);
+                // Latch the down state at zero HP, else play the flinch. Guarded:
+                // skip params the controller lacks (WO-163).
+                if (_hp <= 0f) { if (_hasDead) _animator.SetBool(AnimDead, true); }
+                else if (_hasHit) _animator.SetTrigger(AnimHit);
             }
         }
 
@@ -377,7 +396,7 @@ namespace DeNelle.Pets
             PetAttackVfxBridge.Strike(ElementColor(_element), foe.WorldPosition);
 
             // Fire the strike animation in sync with the damage tick.
-            if (_animator != null) _animator.SetTrigger(AnimAttack);
+            if (_animator != null && _hasAttack) _animator.SetTrigger(AnimAttack);   // WO-163: guard absent param
 
             // Ice Wolf's Frostbite (bond rank 1+) — attacks briefly slow the foe.
             // The other species' rank perks (burn, novas) are deeper Week-4+
