@@ -16,6 +16,7 @@
 
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.AI;
 using UnityEngine.InputSystem;
 
 namespace DeNelle.Village
@@ -46,6 +47,7 @@ namespace DeNelle.Village
 
         private bool _loggedFirstInput;
         private Animator _animator;
+        private NavMeshAgent _agent;   // unified navigation: hero shares the enemies' NavMesh
 #if UNITY_EDITOR
         // Collision diagnostic: log each unique blocking collider once.
         private readonly HashSet<Collider> _loggedColliders = new HashSet<Collider>();
@@ -71,6 +73,26 @@ namespace DeNelle.Village
             _moveSpeed = 6f;
             _accelMetresPerSec2 = 55f;
             _decelMetresPerSec2 = 45f;
+
+            // Owner 2026-05-30: unify hero navigation onto the SAME NavMesh the enemies use,
+            // so hero + enemies share one definition of "walkable" and traverse the world
+            // (ground, stairs, ramparts, hills, caves) identically — in every scene with a
+            // baked NavMesh, and so enemies can climb to attack a hero defending up top.
+            // Input still drives movement directly via NavMeshAgent.Move below; the agent
+            // just constrains the hero to the walkable surface + follows its height.
+            _agent = GetComponent<NavMeshAgent>();
+            if (_agent == null) _agent = gameObject.AddComponent<NavMeshAgent>();
+            _agent.radius = 0.4f;
+            _agent.height = 1.8f;
+            _agent.baseOffset = 0f;
+            _agent.speed = 30f;              // we drive via Move(); keep high so it never caps us
+            _agent.acceleration = 200f;
+            _agent.angularSpeed = 0f;
+            _agent.updateRotation = false;   // facing handled manually (mesh forward is -X)
+            _agent.updateUpAxis = false;
+            _agent.autoBraking = false;
+            _agent.stoppingDistance = 0f;
+            _agent.obstacleAvoidanceType = ObstacleAvoidanceType.NoObstacleAvoidance;
         }
 
         private void Start()
@@ -171,35 +193,16 @@ namespace DeNelle.Village
                     Debug.Log($"[HeroLocomotion] First input registered: ({input.x:F2}, {input.y:F2}) — moving from {transform.position}");
                 }
 
-                // CapsuleCast forward to test for buildings/walls before we
-                // commit the move — owner 2026-05-20 reported walking THROUGH
-                // structures. If the path is blocked, clamp distance to just
-                // before the hit so the hero stops cleanly at the wall.
+                // Move on the shared NavMesh: the agent constrains the hero to the walkable
+                // surface (so it can't enter walls/buildings — there's no NavMesh there) and
+                // follows the surface height, so stairs / ramparts / hills "just work" exactly
+                // like the enemies. Fall back to a raw transform move if the hero isn't on a
+                // NavMesh yet (scene without a bake / spawned off-mesh) so movement never breaks.
                 Vector3 step = Velocity * Time.deltaTime;
-                float distance = step.magnitude;
-                Vector3 dir = step / Mathf.Max(0.0001f, distance);
-                Vector3 capsuleBottom = transform.position + Vector3.up * 0.4f;
-                Vector3 capsuleTop = transform.position + Vector3.up * 1.6f;
-                if (Physics.CapsuleCast(capsuleBottom, capsuleTop, 0.4f, dir,
-                        out RaycastHit hit, distance + 0.05f,
-                        ~0, QueryTriggerInteraction.Ignore))
-                {
-                    distance = Mathf.Max(0f, hit.distance - 0.06f);
-#if UNITY_EDITOR
-                    // Collision diagnostic — logs once per unique collider so the
-                    // blocking object can be identified via the Unity console.
-                    // Editor-only to avoid performance impact in builds.
-                    if (!_loggedColliders.Contains(hit.collider))
-                    {
-                        _loggedColliders.Add(hit.collider);
-                        Debug.Log($"[HeroLocomotion] Blocked by '{hit.collider.gameObject.name}' " +
-                                  $"(layer={LayerMask.LayerToName(hit.collider.gameObject.layer)}) " +
-                                  $"at pos={hit.collider.transform.position} " +
-                                  $"type={hit.collider.GetType().Name}");
-                    }
-#endif
-                }
-                transform.position += dir * distance;
+                if (_agent != null && _agent.isOnNavMesh)
+                    _agent.Move(step);
+                else
+                    transform.position += step;
 
                 // The hero mesh is imported with its visual forward along local -X
                 // rather than the Unity-convention +Z.  LookRotation aligns local +Z
@@ -214,18 +217,12 @@ namespace DeNelle.Village
                     transform.rotation, target, _rotationSpeed * Time.deltaTime);
             }
 
-            // Floor + map-edge clamp (WO-33). Floor: never let the hero fall below
-            // the village ground plane (any gravity-applying component on the
-            // imported mesh would pull it into the void). Edge: keep the hero on the
-            // 300x300 exterior terrain — PlayableHalf (142 m) sits ~8 m inside the
-            // terrain edge so the drop-off lip never shows. Pure runtime clamp, no
-            // boundary geometry / scene edit needed (mirrors the speed override in
-            // Awake — runtime code over a risky village re-bake).
+            // Edge/floor clamp ONLY when off the NavMesh (the transform fallback). When the
+            // hero is on the NavMesh, the bake defines the walkable bounds + height, so a
+            // manual clamp would fight the agent (and break ramparts/hills by pinning Y to 0).
+            if (_agent == null || !_agent.isOnNavMesh)
             {
                 var p = transform.position;
-                // Best-guess stopgap (owner 2026-05-27): tightened from 142 so the hero
-                // can't wander onto the untextured outer terrain. The real fix is
-                // completing/texturing the full map, after which this can grow back.
                 const float PlayableHalf = 50f;
                 p.x = Mathf.Clamp(p.x, -PlayableHalf, PlayableHalf);
                 p.z = Mathf.Clamp(p.z, -PlayableHalf, PlayableHalf);
