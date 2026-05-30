@@ -755,6 +755,13 @@ namespace DeNelle.Editor
                 }
                 visual.transform.SetParent(go.transform, false);
 
+                // WO-136: hide the KayKit gate visual mesh — the polyperfect
+                // perimeter (BuildWallPerimeter) is now the visible wall+gate art,
+                // so the old KayKit gate arch double-stacked as "old outer gates."
+                // Keep the GameObject + its gate gameplay/collider/force-field; only
+                // the visual renderers are disabled (same approach as the wall ring).
+                foreach (var rr in visual.GetComponentsInChildren<Renderer>()) rr.enabled = false;
+
                 // KayKit gate piece (wall_straight_gate) needs the same yaw
                 // correction as wall_straight — owner-observed 2026-05-19 the
                 // gates sit ~90deg off.
@@ -1093,26 +1100,12 @@ namespace DeNelle.Editor
             if (cathedralModel != null) goto SkipLegacyDressing;
 
             // ── Violet emissive crystalline veins up the trunk (§3.1) ────────
-            // #9d6fff, soft glow. A few thin emissive shards climbing the trunk.
-            Color veinColor = HexColor("9d6fff");
-            var veinsRoot = NewChild(go.transform, "CrystalVeins");
-            for (int i = 0; i < 5; i++)
-            {
-                float t = i / 5f;
-                float ang = t * 360f + 28f;
-                var vein = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                vein.name = $"Vein-{i}";
-                vein.transform.SetParent(veinsRoot, false);
-                UnityEngine.Object.DestroyImmediate(vein.GetComponent<Collider>());
-                float r = 0.55f;
-                vein.transform.localPosition = new Vector3(
-                    Mathf.Cos(ang * Mathf.Deg2Rad) * r,
-                    1.6f + t * 2.4f,
-                    Mathf.Sin(ang * Mathf.Deg2Rad) * r);
-                vein.transform.localScale = new Vector3(0.16f, 2.2f, 0.16f);
-                vein.transform.localRotation = Quaternion.Euler(8f, ang, 6f);
-                ApplyEmissive(vein, veinColor, 0.6f); // intensity 0.6 per §3.1
-            }
+            // WO-136: DISABLED (owner 2026-05-30) — the violet veins read as "tree
+            // roots"/clutter on the trunk. The Tree of Life centerpiece STAYS; only
+            // these emissive vein shards are removed. (Block kept for re-enable.)
+            // Color veinColor = HexColor("9d6fff");
+            // var veinsRoot = NewChild(go.transform, "CrystalVeins");
+            // for (int i = 0; i < 5; i++) { ... emissive vein shards ... }  // WO-136: disabled
 
             // ── 6-stone ring of standing stones (§3.1 / §14 Q3 default 6) ────
             // No prop_stone_pillar in this pack -- rock_single_C is the upright

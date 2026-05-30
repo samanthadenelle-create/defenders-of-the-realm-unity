@@ -74,5 +74,40 @@ namespace DeNelle.Editor
 
             importer.clipAnimations = clips;
         }
+
+        // ── Force reimport ────────────────────────────────────────────────────
+        /// <summary>
+        /// Reimports every FBX under Assets/Action/ so OnPreprocessModel runs and
+        /// flips clips imported BEFORE this postprocessor existed (they're stale at
+        /// Legacy animationType=3) over to Humanoid. Run once after adding the
+        /// importer; the hero animator factory depends on these being Humanoid.
+        /// Headless: -executeMethod DeNelle.Editor.ActionClipImporter.ReimportActionClips
+        /// </summary>
+        [UnityEditor.MenuItem("Defenders/Animation/Reimport Action Clips (force Humanoid)")]
+        public static void ReimportActionClips()
+        {
+            string[] guids = UnityEditor.AssetDatabase.FindAssets("t:Model", new[] { "Assets/Action" });
+            int n = 0, flipped = 0;
+            foreach (var guid in guids)
+            {
+                string path = UnityEditor.AssetDatabase.GUIDToAssetPath(guid);
+                var importer = UnityEditor.AssetImporter.GetAtPath(path) as ModelImporter;
+                if (importer == null) continue;
+                n++;
+
+                // Set authoritatively here (not via OnPreprocessModel — that doesn't
+                // reliably re-fire for already-imported Legacy assets). SaveAndReimport
+                // persists it to the .meta.
+                bool wasLegacy = importer.animationType != ModelImporterAnimationType.Human;
+                importer.animationType = ModelImporterAnimationType.Human;
+                importer.avatarSetup   = ModelImporterAvatarSetup.CreateFromThisModel;
+                importer.materialImportMode = ModelImporterMaterialImportMode.None;
+                importer.SaveAndReimport();
+                if (wasLegacy) flipped++;
+            }
+            UnityEditor.AssetDatabase.SaveAssets();
+            UnityEditor.AssetDatabase.Refresh();
+            UnityEngine.Debug.Log($"[ActionClipImporter] Reimported {n} Action FBX → Humanoid ({flipped} flipped from non-Human).");
+        }
     }
 }
