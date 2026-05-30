@@ -517,6 +517,11 @@ namespace DeNelle.Editor
                     corner ? $"wall_corner ({index})" : $"wall_straight ({index})");
                 visual.transform.SetParent(go.transform, false);
 
+                // WO-104: the poly castle curtain walls (BuildWallPerimeter) are now the
+                // perimeter VISUAL — hide this KayKit wall mesh so they don't double-stack.
+                // The WallSegment + its collider on `go` stay for gameplay (barrier/repair).
+                foreach (var rr in visual.GetComponentsInChildren<Renderer>()) rr.enabled = false;
+
                 // KayKit wall pieces' native orientation differs from WallLayout's
                 // local-X run assumption — owner observed 2026-05-19 that straights
                 // sit ~90deg off and corners ~180deg off. Tunable yaw correction
@@ -1152,7 +1157,7 @@ namespace DeNelle.Editor
             // Farm — WO-101: SM_Farm_House (primary) + SM_Windmill_Medieval (secondary).
             // DEF-101: position (-15, 0, +20) — moved off the north gate (was 0,+25).
             new BuildingPlacement { Type = 4, Id = "farm", Label = "Farm",
-                X = -15f, Z = 20f, YawDeg = 270f, Fbx = "building_windmill",
+                X = -15f, Z = 14f, YawDeg = 270f, Fbx = "building_windmill", // WO-126 Bug2: Z 20->14 clears z=21 inner wall
                 CustomFbx = "Assets/Art/TripoStructures/Farm.fbx",
                 BaseColorTex = "Assets/Art/TripoStructures/Farm.fbm/farm_basecolor.JPEG",
                 PrefabM  = PolyFarmDir + "Farm_House.prefab",
@@ -2349,6 +2354,60 @@ namespace DeNelle.Editor
         }
 
         /// <summary>
+        /// WO-126: some polyperfect perimeter prefabs (notably Gate_Medieval) ship with a
+        /// material slot left UNASSIGNED, so that submesh renders as Unity's magenta error
+        /// material — even though every real polyperfect material is already URP/Lit (the URP
+        /// fixer converts 0). Replace any null / error-shader slot with a shared stone
+        /// fallback so the gate arch reads as stone, not pink. Valid materials are untouched.
+        /// </summary>
+        private static Material _perimeterStoneFallback;
+        private static void RepairPerimeterMaterials(GameObject go)
+        {
+            if (go == null) return;
+            if (_perimeterStoneFallback == null)
+            {
+                var sh = Shader.Find("Universal Render Pipeline/Lit");
+                if (sh == null) return;
+                _perimeterStoneFallback = new Material(sh) { name = "PerimeterStoneFallback" };
+                if (_perimeterStoneFallback.HasProperty("_BaseColor"))
+                    _perimeterStoneFallback.SetColor("_BaseColor", new Color(0.55f, 0.53f, 0.49f));
+            }
+            foreach (var r in go.GetComponentsInChildren<Renderer>())
+            {
+                var mats = r.sharedMaterials;
+                bool changed = false;
+                for (int i = 0; i < mats.Length; i++)
+                {
+                    var m = mats[i];
+                    bool bad = m == null || m.shader == null || m.shader.name.Contains("InternalError");
+                    if (bad)
+                    {
+                        Debug.Log($"[VillageSceneBuilder] WO-126 perimeter material repair: '{go.name}/{r.name}' slot {i} " +
+                                  $"was {(m == null ? "NULL" : (m.shader == null ? "null-shader" : m.shader.name))} -> stone fallback.");
+                        mats[i] = _perimeterStoneFallback;
+                        changed = true;
+                    }
+                }
+                if (changed) r.sharedMaterials = mats;
+            }
+
+            // WO-126 diagnostic: the gate read magenta/purple but the repair above found no
+            // null/error slots — log the gate's REAL materials to find the true cause
+            // (purple base color? missing albedo texture? dusk lighting on grey stone?).
+            if (go.name.Contains("Gate"))
+            {
+                foreach (var r in go.GetComponentsInChildren<Renderer>())
+                {
+                    var m = r.sharedMaterial;
+                    string sn = m == null ? "NULL" : (m.shader == null ? "null-shader" : m.shader.name);
+                    Color bc = (m != null && m.HasProperty("_BaseColor")) ? m.GetColor("_BaseColor") : Color.clear;
+                    bool hasTex = m != null && m.HasProperty("_BaseMap") && m.GetTexture("_BaseMap") != null;
+                    Debug.Log($"[VillageSceneBuilder] WO-126 GATE-DIAG '{go.name}/{r.name}': mat='{(m == null ? "NULL" : m.name)}' shader='{sn}' baseColor={bc} hasBaseMap={hasTex}");
+                }
+            }
+        }
+
+        /// <summary>
         /// Normalises a KayKit prop / dressing instance to a consistent, believable
         /// size. KayKit props are authored across several folders/packs at wildly
         /// different native mesh scales — a barrel, a haybale and a weapon rack do
@@ -2621,12 +2680,14 @@ namespace DeNelle.Editor
         private static void BuildWallPerimeter(Transform wallRoot)
         {
             // ── Polyperfect prefab paths ──────────────────────────────────────
-            // All in _M/Prefabs_M/Medieval_M/ per the asset catalog §1.
-            const string WallSeg      = PolyMedievalDir + "Wall_Medieval_Stone.prefab";
+            // WO-104: the real curtain wall is Wall_Stone_3x3_A in Buildings_M/parts/
+            // Building Walls_M/ (Medieval_M never had "Wall_Medieval_Stone" → walls
+            // were silently missing). Towers/gates stay in Medieval_M.
+            const string WallSeg      = "Assets/polyperfect/Low Poly Ultimate Pack/_M/Prefabs_M/Buildings_M/parts/Building Walls_M/Wall_Stone_3x3_A.prefab";
             const string GateMedium   = PolyMedievalDir + "Gate_Medieval_Medium.prefab";
             const string GateSmall    = PolyMedievalDir + "Gate_Medieval_Small.prefab";
             const string TowerCorner  = PolyMedievalDir + "Tower_Castle_Round.prefab";
-            const string TowerMidWall = PolyMedievalDir + "Tower_Medieval_Wood.prefab";
+            const string TowerMidWall = PolyMedievalDir + "Tower_Castle_Square.prefab"; // WO-104 square watchtower
 
             // Load prefabs once (null → graceful placeholder skip).
             var wallSegModel  = AssetDatabase.LoadAssetAtPath<GameObject>(WallSeg);
@@ -2649,9 +2710,20 @@ namespace DeNelle.Editor
             perimeterRoot.transform.SetParent(wallRoot, false);
             var pr = perimeterRoot.transform;
 
-            // ── Helper: spawn one prefab, strip colliders, normalise scale ────
-            System.Func<GameObject, string, Vector3, float, GameObject> Spawn =
-                (prefab, label, pos, yaw) =>
+            // ── Helpers: instantiate, then size per type ──────────────────────
+            // Poly _M prefabs are tiny AND narrow natively -> uniform scaling made tall
+            // thin bars with gaps (the picket-fence the owner saw). Walls must be STRETCHED
+            // horizontally to fill the 3 m run and pinned to a fixed height so neighbours
+            // abut into a continuous curtain. Towers/gates get a uniform NormalizeProp.
+            // Wall sizing is measured from WORLD renderer bounds at yaw 0 (world x/z == local
+            // x/z before rotating), so the maths needs no rotation bookkeeping.
+            const float wallHeight  = 5f;  // curtain wall world height
+            const float towerTarget = 9f;  // corner/mid towers stand above the curtain
+            const float gateTarget  = 6f;  // gatehouse spans its 6 m opening
+            bool loggedTile = false;
+
+            System.Func<GameObject, string, Vector3, GameObject> Make =
+                (prefab, label, pos) =>
             {
                 if (prefab == null) return null;
                 var inst = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
@@ -2659,55 +2731,87 @@ namespace DeNelle.Editor
                 inst.name = label;
                 inst.transform.SetParent(pr, false);
                 inst.transform.position = pos;
-                inst.transform.rotation = Quaternion.Euler(0f, yaw, 0f);
-                // Polyperfect _M prefabs already carry URP-correct atlas mats;
-                // strip colliders — the WallSegment BoxColliders from the existing
-                // BuildWallRing pass are the gameplay colliders.
-                StripColliders(inst);
-                StripRigidbodies(inst);
+                RepairPerimeterMaterials(inst);   // WO-126: stone fallback for null/error material slots (magenta gate arch)
                 return inst;
+            };
+
+            System.Action<GameObject, string, Vector3, float> Wall =
+                (prefab, label, pos, yaw) =>
+            {
+                var g = Make(prefab, label, pos);
+                if (g == null) return;
+                var rs = g.GetComponentsInChildren<Renderer>();
+                if (rs != null && rs.Length > 0)
+                {
+                    Bounds wb = rs[0].bounds;                                   // world AABB, yaw 0
+                    for (int i = 1; i < rs.Length; i++) wb.Encapsulate(rs[i].bounds);
+                    if (!loggedTile)
+                    {
+                        Debug.Log($"[VillageSceneBuilder] WO-104 wall tile native world bounds = {wb.size} " +
+                                  $"(localScale {g.transform.localScale}); fitting run->{segStep}m height->{wallHeight}m.");
+                        loggedTile = true;
+                    }
+                    var s = g.transform.localScale;
+                    float run = Mathf.Max(wb.size.x, wb.size.z);               // longer horizontal = run axis
+                    if (run > 0.001f) { float f = segStep / run; s.x *= f; s.z *= f; }
+                    if (wb.size.y > 0.001f) s.y *= wallHeight / wb.size.y;
+                    g.transform.localScale = s;
+                }
+                g.transform.rotation = Quaternion.Euler(0f, yaw, 0f);
+                StripColliders(g);                                            // WallSegment colliders (BuildWallRing) own gameplay
+                StripRigidbodies(g);
+            };
+
+            System.Action<GameObject, string, Vector3, float, float> Big =
+                (prefab, label, pos, yaw, target) =>
+            {
+                var g = Make(prefab, label, pos);
+                if (g == null) return;
+                NormalizeProp(g, target);                                     // uniform measure + scale
+                g.transform.rotation = Quaternion.Euler(0f, yaw, 0f);
+                StripColliders(g);
+                StripRigidbodies(g);
             };
 
             // ── North wall (z = +33) — segments from x = -42 to +42 ──────────
             for (float x = -wallX + segStep * 0.5f; x < wallX; x += segStep)
-                Spawn(wallSegModel, "WallPerimeter-North", new Vector3(x, 0f,  wallZ), 0f);
+                Wall(wallSegModel, "WallPerimeter-North", new Vector3(x, 0f,  wallZ), 0f);
 
             // ── South wall (z = -33) — segments + main gate at x = 0 ─────────
             for (float x = -wallX + segStep * 0.5f; x < wallX; x += segStep)
             {
-                // Leave a 6 m opening around x = 0 for the main gate.
-                if (Mathf.Abs(x) < 3f) continue;
-                Spawn(wallSegModel, "WallPerimeter-South", new Vector3(x, 0f, -wallZ), 0f);
+                if (Mathf.Abs(x) < 3f) continue;   // 6 m opening for the main gate
+                Wall(wallSegModel, "WallPerimeter-South", new Vector3(x, 0f, -wallZ), 0f);
             }
-            Spawn(gateMedModel, "Gate-South-Main", new Vector3(0f, 0f, -wallZ), 0f);
+            Big(gateMedModel, "Gate-South-Main", new Vector3(0f, 0f, -wallZ), 0f, gateTarget);
 
             // ── East wall (x = +42) — segments from z = -33 to +33 ───────────
             for (float z = -wallZ + segStep * 0.5f; z < wallZ; z += segStep)
             {
                 if (Mathf.Abs(z) < 3f) continue;   // opening for east gate
-                Spawn(wallSegModel, "WallPerimeter-East", new Vector3(wallX, 0f, z), 90f);
+                Wall(wallSegModel, "WallPerimeter-East", new Vector3(wallX, 0f, z), 90f);
             }
-            Spawn(gateSmModel, "Gate-East-Side", new Vector3(wallX, 0f, 0f), 90f);
+            Big(gateSmModel, "Gate-East-Side", new Vector3(wallX, 0f, 0f), 90f, gateTarget);
 
             // ── West wall (x = -42) — segments from z = -33 to +33 ───────────
             for (float z = -wallZ + segStep * 0.5f; z < wallZ; z += segStep)
             {
                 if (Mathf.Abs(z) < 3f) continue;   // opening for west gate
-                Spawn(wallSegModel, "WallPerimeter-West", new Vector3(-wallX, 0f, z), 270f);
+                Wall(wallSegModel, "WallPerimeter-West", new Vector3(-wallX, 0f, z), 270f);
             }
-            Spawn(gateSmModel, "Gate-West-Side", new Vector3(-wallX, 0f, 0f), 270f);
+            Big(gateSmModel, "Gate-West-Side", new Vector3(-wallX, 0f, 0f), 270f, gateTarget);
 
             // ── Corner towers at (±42, 0, ±33) ───────────────────────────────
-            Spawn(towerCorModel, "Tower-NE-Corner", new Vector3( wallX, 0f,  wallZ), 0f);
-            Spawn(towerCorModel, "Tower-NW-Corner", new Vector3(-wallX, 0f,  wallZ), 0f);
-            Spawn(towerCorModel, "Tower-SE-Corner", new Vector3( wallX, 0f, -wallZ), 0f);
-            Spawn(towerCorModel, "Tower-SW-Corner", new Vector3(-wallX, 0f, -wallZ), 0f);
+            Big(towerCorModel, "Tower-NE-Corner", new Vector3( wallX, 0f,  wallZ), 0f, towerTarget);
+            Big(towerCorModel, "Tower-NW-Corner", new Vector3(-wallX, 0f,  wallZ), 0f, towerTarget);
+            Big(towerCorModel, "Tower-SE-Corner", new Vector3( wallX, 0f, -wallZ), 0f, towerTarget);
+            Big(towerCorModel, "Tower-SW-Corner", new Vector3(-wallX, 0f, -wallZ), 0f, towerTarget);
 
             // ── Mid-wall towers at each cardinal wall midpoint ────────────────
-            Spawn(towerMidModel, "Tower-North-Mid", new Vector3(    0f, 0f,  wallZ), 0f);
-            Spawn(towerMidModel, "Tower-South-Mid", new Vector3(    0f, 0f, -wallZ), 180f);
-            Spawn(towerMidModel, "Tower-East-Mid",  new Vector3( wallX, 0f,     0f), 90f);
-            Spawn(towerMidModel, "Tower-West-Mid",  new Vector3(-wallX, 0f,     0f), 270f);
+            Big(towerMidModel, "Tower-North-Mid", new Vector3(    0f, 0f,  wallZ), 0f,   towerTarget);
+            Big(towerMidModel, "Tower-South-Mid", new Vector3(    0f, 0f, -wallZ), 180f, towerTarget);
+            Big(towerMidModel, "Tower-East-Mid",  new Vector3( wallX, 0f,     0f), 90f,  towerTarget);
+            Big(towerMidModel, "Tower-West-Mid",  new Vector3(-wallX, 0f,     0f), 270f, towerTarget);
 
             // Count placed pieces for the build log (reuse _propCount as a proxy).
             int segCount = perimeterRoot.transform.childCount;

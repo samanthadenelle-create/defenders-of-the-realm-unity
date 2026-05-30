@@ -120,6 +120,10 @@ namespace DeNelle.Village
         // Tracking how many active effects we currently have.
         private int _activeOneshots;
         private int _activeLoops;
+        // bug-triage P1: track which pooled objects are loops so ReturnToPool decrements the
+        // RIGHT counter (the old code guessed oneshot-first, drifting counters until VFX of a
+        // class hit their cap and were silently skipped — combat went quiet mid-run).
+        private readonly HashSet<GameObject> _loopObjects = new HashSet<GameObject>();
 
         // WO-59: dungeon mode flag — ApplyDungeonMode() toggles this.
         private bool _dungeonMode = false;
@@ -386,6 +390,7 @@ namespace DeNelle.Village
                     go.SetActive(true);
                     PlayAllParticles(go);
                     _activeLoops++;
+                    _loopObjects.Add(go);   // bug-triage P1: tag as loop for correct return-decrement
                     return new VFXHandle(go, type);
                 }
             }
@@ -462,10 +467,12 @@ namespace DeNelle.Village
                 _pools[type] = new Queue<GameObject>();
             _pools[type].Enqueue(go);
 
-            // Decrement the right counter. We can't always tell which bucket
-            // the caller came from, so clamp to >= 0.
-            if (_activeOneshots > 0) _activeOneshots--;
-            else if (_activeLoops > 0) _activeLoops--;
+            // bug-triage P1: decrement the counter for the bucket this object actually came
+            // from (tracked in _loopObjects at acquire), instead of guessing oneshot-first
+            // and drifting until a class hit its cap and went silent.
+            bool wasLoop = _loopObjects.Remove(go);
+            if (wasLoop) { if (_activeLoops > 0) _activeLoops--; }
+            else         { if (_activeOneshots > 0) _activeOneshots--; }
         }
 
         /// <summary>Defer pool return by <paramref name="delay"/> seconds (for graceful stop).</summary>
@@ -743,6 +750,7 @@ namespace DeNelle.Village
             ps.Play();
 
             _activeLoops++;
+            _loopObjects.Add(host);   // bug-triage P1: tag as loop for correct return-decrement
             return host;
         }
     }

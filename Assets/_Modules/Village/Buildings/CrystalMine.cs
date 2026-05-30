@@ -76,6 +76,7 @@ namespace DeNelle.Village
         private bool _heroFound;
         private bool _isInRange;
         private bool _uiOpen;
+        private bool _awaitingSimpleConfirm;   // bug-triage P1: gate simple-mode upgrade behind a 2nd, deliberate F press
         private GameObject _promptGo;
         private float _nextCheck;
         private WaveManager _wave;
@@ -113,6 +114,15 @@ namespace DeNelle.Village
 
             if (_uiOpen)
             {
+                // bug-triage P1: simple-mode upgrade now requires a 2nd, deliberate F press
+                // (the first press only opens the confirm bubble; it no longer spends coins).
+                if (_awaitingSimpleConfirm && Input.GetKeyDown(KeyCode.F))
+                {
+                    _awaitingSimpleConfirm = false;
+                    TryUpgrade();
+                    CloseUpgradeUI();
+                    return;
+                }
                 if (Input.GetKeyDown(KeyCode.Escape)) CloseUpgradeUI();
                 return;
             }
@@ -220,6 +230,7 @@ namespace DeNelle.Village
         private void CloseUpgradeUI()
         {
             _uiOpen = false;
+            _awaitingSimpleConfirm = false;
             if (_upgradeUiRoot != null) _upgradeUiRoot.SetActive(false);
             if (_heroLoco != null) _heroLoco.enabled = true;
         }
@@ -340,14 +351,13 @@ namespace DeNelle.Village
             else
             {
                 int cost = _currentLevel == 1 ? _costL1toL2 : _costL2toL3;
-                _promptGo = BuildBubble($"〔 F 〕 Upgrade — {cost} Coins",
+                _promptGo = BuildBubble($"〔 F 〕 Confirm Upgrade — {cost} Coins",
                     _promptHeight + 0.5f,
                     new Color(0.10f, 0.04f, 0.22f, 0.96f),
                     new Color(0.70f, 0.50f, 1.0f));
-                // In simple mode: another F press confirms the upgrade.
-                _uiOpen = false; // allow F to reach Update again for confirm
-                TryUpgrade();
-                ShowPrompt(); // refresh prompt text
+                // bug-triage P1: show a confirm bubble and wait for a 2nd F press in Update.
+                // Keep _uiOpen true so the standard F-path doesn't re-open. Do NOT spend now.
+                _awaitingSimpleConfirm = true;
             }
         }
 
@@ -497,9 +507,13 @@ namespace DeNelle.Village
 
         private void SubscribeToWave()
         {
-            UnsubscribeFromWave();
+            // bug-triage P1: resolve FIRST, then detach+attach on the manager we actually use
+            // (RemoveListener is idempotent). The old order unsubscribed from a stale _wave
+            // before ResolveWave overwrote it -> leaked listeners / duplicated crystal yield.
             ResolveWave();
-            if (_wave != null) _wave.OnWaveCleared.AddListener(OnWaveCleared);
+            if (_wave == null) return;
+            _wave.OnWaveCleared.RemoveListener(OnWaveCleared);
+            _wave.OnWaveCleared.AddListener(OnWaveCleared);
         }
 
         private void UnsubscribeFromWave()

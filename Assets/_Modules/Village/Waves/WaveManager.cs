@@ -1013,6 +1013,8 @@ namespace DeNelle.Village
             {
                 enemy.Died -= HandleEnemyDied;
                 enemy.ReachedHeart -= HandleEnemyReachedHeart;
+                _enemyBestSqr.Remove(enemy);     // bug-triage P1: prune stuck-tracking on normal death (was leaking dead keys)
+                _enemyStuckTime.Remove(enemy);
             }
             _liveEnemies.Remove(enemy);
         }
