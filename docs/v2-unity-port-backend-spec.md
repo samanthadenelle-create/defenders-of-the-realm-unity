@@ -109,6 +109,25 @@ These are the React-project endpoints the Unity client must mirror. Schemas live
 | `/api/clan/me?memberCode=<code>` | GET | The caller's current clan state | App boot |
 | `/api/bug-report` | POST | Submit a bug report | Settings → Report a Bug |
 
+### 2.3a Shipped-client endpoint audit — ⚠ BACKEND NEVER CONNECTED
+
+> **Reality (owner, 2026-05-29):** the Unity client ships these backend-calling services
+> with real-looking Vercel URLs, but **none of the routes were ever deployed/connected** —
+> they are UI + client stub code built *ahead* of a backend that does not exist. Treat the
+> calls below as the **ground-truth contract to build the backend against**, not as live
+> features. Every mismatch/security item is a **pre-deploy gate**, not a live bug. See
+> `WORK_ORDER_107`.
+
+| Client call | Caller | In §2.3? | Pre-deploy action |
+| --- | --- | --- | --- |
+| `/api/game/save`, `/api/game/load?playerId=<wallet>` | `GameStateService` | future as `/api/save/sync` | canonicalize path; **add §2.6 wallet-signed-nonce auth (currently unauthenticated — public wallet = anyone can overwrite a save)** |
+| `/api/events/track` | `EventTracker` | no (spec: `/api/events/ingest`; draft: `/api/metrics`) | pick ONE canonical telemetry name |
+| `/api/promo/redeem` | `PromoCodeService` | **missing** | add endpoint + spec row |
+| `/api/referral/generate`, `/api/referral/claim` | `ReferralService` | **missing** | add endpoint + spec row |
+| `/api/tower-swap/log` | `TowerSwapService` | **missing** | add endpoint + spec row |
+| `/api/bug-report` | `HelpMenu` | yes | fix base host (points at v1 `.vercel.app`, not `-v2`) |
+| `/api/clan/*` | `ClanService` / `ClanChatPanel` | yes | ✅ in §2.3 |
+
 ### 2.4 Endpoints that don't exist yet but Unity will eventually call
 
 These are the **forward endpoints** the Unity port should be scaffolded to accept once the React stream adds them. The agent does NOT build the React side; it only writes the Unity-side DTOs and ApiClient methods, ungated, returning `{ ok: false, error: "not yet enabled" }` until the server endpoint exists.

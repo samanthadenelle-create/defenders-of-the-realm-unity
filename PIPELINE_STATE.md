@@ -10,6 +10,33 @@ PM catalog. Status legend: **BUILT** (works) · **WIRED** (in-scene/connected) �
 
 ---
 
+## ⏸ END OF DAY — 2026-05-29 handoff (read first)
+
+**Tree state: RED.** A large UI batch (~12 WOs / ~39 files) is in the working tree and shipped
+structural corruption. CLI cleared 5 breakers; the 6th blocks green:
+- ✅ ③ `EnemyDiagnostic` shelved to `_ui_bounced/` · ✅ ④ `VFXManager` dup cases deduped ·
+  ✅ ⑤ `CryptoPaymentManager` Cosmetics ref → reflection.
+- ⛔ ⑥ **`Enemy.cs` is GARBLED** (duplicated+interleaved method fragments, TWO class/namespace close
+  pairs, a shredded line). Not hand-patchable.
+
+**UI marching orders to reach green:** **revert `Enemy.cs` to HEAD and cleanly re-apply** its additions
+(IDamageableStructure impl + Glimmer-on-kill + roaming-attack) through the compile gate; re-land
+`EnemyDiagnostic` reflection-based or inside the Village asmdef. Then CLI rebuilds.
+
+**CLI work — STAGED, UNCOMMITTED, compile-clean per checks (do NOT broad `git checkout` — you'll wipe it):**
+`DevTools/DevPanelController.cs` (live metrics + **+10k XP** button), `Wallet/PackStore.cs` (self-render),
+`Village/Buildings/CrystalVisual.cs` (spin/pulse), `Editor/VillageSceneBuilder.cs` (**WO-105 done** — 6
+building repositions + gate-clearance guard; §C/§4 were already present). Commit on first green build.
+
+**Two routes to a playable build tomorrow:** (A) UI un-garbles `Enemy.cs` → one green build ships
+*everything*. (B) **CLI route** — set the whole batch aside, ship just the clean CLI work (~3 min). Owner picks.
+
+**New this session (committed):** `docs/NORTH_STAR.md` — the recovered vision/business/GTM **source of
+truth** (CoC×Warcraft, player-build, Pi utility-sink, 3-build distribution). Route WOs against it.
+Plus WO-107 (backend reconcile), WO-109 (web metrics), WO-110 (crystal mine), WO-111 (resource pillar).
+
+---
+
 ## 0. How the pipeline works
 - **Roles:** Claude UI = specs / work orders / logic + routing. The **CLI (this side) = writes + build-verifies all code.** Owner = PM, catalogs + routes, makes creative calls.
 - **Asset packs:** owner imports Asset Store packs in the Unity editor (CLI can't); CLI integrates. Big packs are **gitignored** (re-import on clone); only the specific used assets are committed.
