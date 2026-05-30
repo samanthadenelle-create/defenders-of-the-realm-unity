@@ -24,7 +24,13 @@ metrics, **+10,000 XP**, and **"Set hero to level N"**. Tricia's Defend-the-Towe
 **Overnight CLI run (each green-gated + committed):**
 - ✅ **WO-103** village rebake — WO-105 repositions in the scene, **0 gate-clearance violations**.
 - ✅ **Set-level dev tool** (`6149cf2`).
-- ✅ **WO-110 §A** — `CrystalMine._useExternalVisual` flag, code half (`bde5080`).
+- ✅ **WO-122 §A** — `CrystalMine._useExternalVisual` flag, code half (`bde5080`).
+- 🎉 **WO-123 WebGL build SUCCEEDED** — `Builds/WebGL/` (186 MB Brotli, 18.5 min). **Testers can get a browser link.**
+- 🧹 Queue cleanup — my WO collisions deduped (→ 120/121/122), WO-123 slotted (`55d3fd5`).
+
+**🌐 READY FOR YOU — host the web build for testers** (`docs/webgl-hosting-notes.md`): **itch.io recommended**
+(handles 186 MB; Vercel may reject the 174 MB `.data.br`). `vercel.json` (Brotli headers) pre-placed in
+`Builds/WebGL/`. Zip → upload → relay me the URL/errors → I adjust. Pairs with the dev portal (F1) for the `docs/qa` cases.
 
 **⏸ Parked for you (need your eye — not safe to do blind):**
 - **WO-104 castle + moat** — big *visual* build; placement needs your judgment. Best done together.
