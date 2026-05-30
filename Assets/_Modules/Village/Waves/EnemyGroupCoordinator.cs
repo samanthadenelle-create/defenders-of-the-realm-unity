@@ -118,6 +118,7 @@ namespace DeNelle.Village
             foreach (EnemyBrain brain in _members)
             {
                 if (brain == null) continue;
+                brain.Died -= HandleMemberDied;   // WO-139 #5: stop stale death callbacks into the soon-destroyed coordinator
                 // Only override Suppressed — don't interrupt a member that already
                 // switched to Rush or Retreat due to taking damage.
                 if (brain.TacticalState == EnemyTacticalState.Suppressed)

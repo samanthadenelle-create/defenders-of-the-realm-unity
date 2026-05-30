@@ -149,8 +149,20 @@ namespace DeNelle.Village
             if (_animator == null) _animator = GetComponentInChildren<Animator>();
         }
 
+        // WO-139 #9: WaveManager may spawn after the hero, leaving _waveManager
+        // null forever (victory pose never wires). Retry the resolve+subscribe
+        // each frame until it's found, then stop.
+        private void TryResolveWaveManager()
+        {
+            if (_waveManager != null) return;
+            _waveManager = Object.FindObjectOfType<WaveManager>();
+            if (_waveManager != null)
+                _waveManager.OnWaveCleared.AddListener(OnWaveCleared);
+        }
+
         private void Update()
         {
+            TryResolveWaveManager();
             Vector2 input = ReadMoveInput();
 
             // DEF-70 fix: the victory pose briefly suppresses movement after a wave

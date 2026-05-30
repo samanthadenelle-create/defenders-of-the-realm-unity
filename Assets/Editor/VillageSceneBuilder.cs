@@ -441,6 +441,37 @@ namespace DeNelle.Editor
         }
 
         /// <summary>
+        /// NavMesh-only rebake. Opens the EXISTING saved Village scene and rebakes
+        /// the NavMesh against its CURRENT contents — it does NOT regenerate any
+        /// geometry, so manual scene cleanup (removed signs/trees, edited walls)
+        /// is preserved. Use this, NOT BuildVillage (which tears down VillageRoot
+        /// and rebuilds from the placement tables), to remap nav after hand edits.
+        /// Headless: -executeMethod DeNelle.Editor.VillageSceneBuilder.RebakeNavMeshOnly
+        /// </summary>
+        [MenuItem("Defenders/Week 3/Rebake NavMesh Only")]
+        public static void RebakeNavMeshOnly()
+        {
+            var scene = EditorSceneManager.OpenScene(VillageScenePath, OpenSceneMode.Single);
+
+            var root = GameObject.Find(VillageRootName);
+            if (root == null)
+            {
+                Debug.LogError("[VillageSceneBuilder] RebakeNavMeshOnly: VillageRoot not found in " +
+                               VillageScenePath + " — nothing baked.");
+                return;
+            }
+
+            BakeVillageNavMesh(root);
+
+            EditorSceneManager.MarkSceneDirty(scene);
+            EditorSceneManager.SaveScene(scene, VillageScenePath);
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+            Debug.Log("[VillageSceneBuilder] RebakeNavMeshOnly complete — NavMesh remapped against " +
+                      "current scene contents and saved to " + VillageScenePath + ".");
+        }
+
+        /// <summary>
         /// WO-126: repairs any renderer in the active scene whose material is null or on
         /// Unity's error shader (renders magenta). Crystal-named objects (the Crystals.fbx
         /// drop-in, which imported with no material) get a glowing aether-cyan gem material

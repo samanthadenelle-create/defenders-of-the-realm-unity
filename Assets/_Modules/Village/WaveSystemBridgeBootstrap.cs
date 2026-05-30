@@ -26,6 +26,15 @@ namespace DeNelle.Village
     {
         private static bool s_hooked;
 
+        // WO-139 #12: with domain-reload disabled, statics persist between play
+        // sessions, so s_hooked would stay true and skip wiring on the 2nd Play.
+        // Reset it at each play start (runs before Init's AfterSceneLoad).
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetStatics()
+        {
+            s_hooked = false;
+        }
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Init()
         {

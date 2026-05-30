@@ -292,6 +292,26 @@ namespace DeNelle.Village
             if (_autoStart) BeginLoop().Forget();
         }
 
+        // Audit 2026-05-30 (WO-139 #4): unsubscribe from all live enemy/boss
+        // events so stale callbacks don't fire into a torn-down manager across
+        // the breach->reload loop. Mirrors the subs in SpawnEnemy/SpawnApexBoss.
+        private void OnDisable()
+        {
+            foreach (Enemy e in _liveEnemies)
+            {
+                if (e == null) continue;
+                e.Died -= HandleEnemyDied;
+                e.ReachedHeart -= HandleEnemyReachedHeart;
+            }
+            _liveEnemies.Clear();
+
+            if (_liveApexBoss != null)
+            {
+                _liveApexBoss.Died -= HandleApexBossDied;
+                _liveApexBoss = null;
+            }
+        }
+
         private void Update()
         {
             switch (_phase)
@@ -1051,9 +1071,19 @@ namespace DeNelle.Village
 
         private WaveSpawnPoint FindSpawnPoint(string spawnId)
         {
-            if (string.IsNullOrEmpty(spawnId) || _spawnPoints == null) return null;
+            if (_spawnPoints == null) return null;
+            if (!string.IsNullOrEmpty(spawnId))
+                foreach (WaveSpawnPoint p in _spawnPoints)
+                    if (p != null && p.SpawnId == spawnId) return p;
+            // Bug-fix (audit 2026-05-30): a missing named id (e.g. boss "spawn-0") used to skip the
+            // whole batch, so the boss/apex never spawned. Fall back to the first valid spawn point.
             foreach (WaveSpawnPoint p in _spawnPoints)
-                if (p != null && p.SpawnId == spawnId) return p;
+                if (p != null)
+                {
+                    if (!string.IsNullOrEmpty(spawnId))
+                        Debug.LogWarning($"[WaveManager] spawn '{spawnId}' not found — using first spawn point.");
+                    return p;
+                }
             return null;
         }
 
