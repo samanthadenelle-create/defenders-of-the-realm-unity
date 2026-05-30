@@ -325,6 +325,9 @@ namespace DeNelle.Editor
             // ── WO-104 Stage 2: moat ring + drawbridges around the curtain wall ──
             BuildMoat(wallRoot);
 
+            // ── WO-104 §7: rampart stairs (inner-wall access, flanking each gate) ──
+            BuildRamparts(wallRoot);
+
             // ── Plaza + road network (§7) ────────────────────────────────────
             BuildPlaza(roadRoot);
             BuildRoads(roadRoot, tWallLayout);
@@ -3028,9 +3031,60 @@ namespace DeNelle.Editor
                                  $"'{DrawbridgePath}' — gates left open across the moat.");
             }
 
-            Debug.Log($"[VillageSceneBuilder] WO-104 BuildMoat: {placed} Terrain_Plane_Lake tiles in the " +
+            Debug.Log($"[VillageSceneBuilder] WO-104 BuildMoat: {placed} water tiles in the " +
                       $"6 m ring (inner +-{innerX}/+-{innerZ}, outer +-{outerX}/+-{outerZ}, y={waterY}); " +
                       $"{(drawbridge != null ? 3 : 0)} drawbridges at the gate spans.");
+        }
+
+        /// <summary>
+        /// WO-104 §7: rampart stairs (`Stairs_Medieval_Stone`) for inner-wall access — two per
+        /// long wall side, flanking each gate from the interior, ascending toward the wall top.
+        /// Purely visual for now (establishes defenders can reach the ramparts); the walkable
+        /// rampart level is WO-109. Placement is a first pass — owner tunes orientation live.
+        /// </summary>
+        private static void BuildRamparts(Transform wallRoot)
+        {
+            const string StairPath = PolyMedievalDir + "Stairs_Medieval_Stone.prefab";
+            var stair = AssetDatabase.LoadAssetAtPath<GameObject>(StairPath);
+            if (stair == null)
+            {
+                Debug.LogWarning($"[VillageSceneBuilder] WO-104 ramparts: Stairs_Medieval_Stone not found at " +
+                                 $"'{StairPath}' — ramparts skipped (polyperfect re-import needed).");
+                return;
+            }
+
+            var root = new GameObject("Ramparts");
+            root.transform.SetParent(wallRoot, false);
+            var rr = root.transform;
+
+            // Inner curtain wall at +-42 (x) / +-33 (z); stairs sit ~2 m inside the face,
+            // flanking the gate spans, yaw'd to face the wall they climb.
+            var stairs = new (string name, Vector3 pos, float yaw)[]
+            {
+                ("Stair-South-W", new Vector3(-6f, 0f, -31f),   0f),
+                ("Stair-South-E", new Vector3( 6f, 0f, -31f),   0f),
+                ("Stair-North-W", new Vector3(-6f, 0f,  31f), 180f),
+                ("Stair-North-E", new Vector3( 6f, 0f,  31f), 180f),
+                ("Stair-East-S",  new Vector3( 40f, 0f, -8f), 270f),
+                ("Stair-East-N",  new Vector3( 40f, 0f,  8f), 270f),
+                ("Stair-West-S",  new Vector3(-40f, 0f, -8f),  90f),
+                ("Stair-West-N",  new Vector3(-40f, 0f,  8f),  90f),
+            };
+
+            int placed = 0;
+            foreach (var (name, pos, yaw) in stairs)
+            {
+                var s = (GameObject)PrefabUtility.InstantiatePrefab(stair);
+                if (s == null) continue;
+                s.name = name;
+                s.transform.SetParent(rr, false);
+                s.transform.position = pos;
+                s.transform.rotation = Quaternion.Euler(0f, yaw, 0f);
+                NormalizeProp(s, 5f);          // ~5 m to reach the 5 m wall top
+                StripRigidbodies(s);
+                placed++;
+            }
+            Debug.Log($"[VillageSceneBuilder] WO-104 BuildRamparts: {placed} Stairs_Medieval_Stone placed (inner-wall access).");
         }
 
         /// <summary>
