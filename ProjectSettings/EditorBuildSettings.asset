@@ -29,6 +29,10 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/PatriciaLightMode.unity
     guid: 84716325a6d82264e8fabc7edb120228
+  - enabled: 1
+    path: Assets/Scenes/OuterWorld.unity
+    guid: 2977fc19ecfa7de46a4ab41135b3e8ff
   m_configObjects:
     com.unity.addressableassets: {fileID: 11400000, guid: 16d06bc18dab1cd408b1472b0382cf8a, type: 2}
+    com.unity.dt.app-ui: {fileID: 11400000, guid: 1b1c20d82303e4b5781c3ef50ac1449f, type: 2}
     com.unity.localization.settings: {fileID: 11400000, guid: 5c0e933b7e0cc6245829bac0db9201b3, type: 2}

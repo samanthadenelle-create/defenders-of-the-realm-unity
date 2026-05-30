@@ -278,7 +278,11 @@ namespace DeNelle.Editor
                     go.name == "DungeonPortal_HealersCottage" ||
                     go.name == "DungeonPortal_FolksGranary" ||
                     go.name.StartsWith("DungeonPortal") ||
-                    go.name == "Crystals")
+                    go.name == "Crystals" ||
+                    // OuterWorld is its own scene now (OuterWorld.unity, loaded
+                    // additively by WorldSceneLoader). Strip any stale copy left in
+                    // Village.unity from before the scene split so it isn't duplicated.
+                    go.name == "OuterWorldRoot")
                 {
                     UnityEngine.Object.DestroyImmediate(go);
                 }
@@ -3167,6 +3171,37 @@ namespace DeNelle.Editor
             Box("Parapet-South", new Vector3(0f,  parTopY, -parZ), new Vector3(2f * wallX, parH, parThk), Quaternion.identity);
             Box("Parapet-East",  new Vector3(parX,  parTopY, 0f),  new Vector3(parThk, parH, 2f * wallZ), Quaternion.identity);
             Box("Parapet-West",  new Vector3(-parX, parTopY, 0f),  new Vector3(parThk, parH, 2f * wallZ), Quaternion.identity);
+
+            // ── Wall barrier collision (WO-136): collide on the REAL visible wall ──
+            // BUG (owner): the perimeter wall mesh (BuildWallPerimeter, ±42/±33) has its
+            // colliders STRIPPED (line ~2925) — gameplay collision lived on the hidden
+            // inner KayKit ring (BuildWallRing, ±28/±21), so hero/enemies collided with an
+            // invisible wall offset from the one they see. FIX: a full-height barrier box on
+            // the visible wall line, Y=0 → wall-top (topY=5), broken at the SAME gate gaps the
+            // wall mesh leaves so enemy lanes stay open. Nav-static so the bake routes around it.
+            //   Gate gaps (from BuildWallPerimeter): South/East/West each skip |coord|<3 (6 m
+            //   opening); North has NO gate (unbroken). Mirror that exactly here.
+            const float barThk = 1.2f;                 // match the visible wall thickness (wallThick)
+            const float barH   = topY;                 // Y=0 → wall-top (5 m)
+            float barY  = barH * 0.5f;                 // box centre
+            float barZ  = wallZ - barThk * 0.5f;       // sit on the visible wall line, inset half-thickness
+            float barX  = wallX - barThk * 0.5f;
+            const float gateHalf = 3f;                 // 6 m gate opening half-width
+            float runHalf = wallX - gateHalf;          // half-length of one side of a gated (S) wall span
+            float sideHalf = (wallX - gateHalf) * 0.5f;// centre offset of each half-span (gated walls)
+            // North wall — NO gate: one unbroken barrier across the full span.
+            Box("WallBarrier-North", new Vector3(0f, barY, barZ), new Vector3(2f * wallX, barH, barThk), Quaternion.identity);
+            // South wall — main gate at x=0: two spans flanking the 6 m gap.
+            Box("WallBarrier-South-W", new Vector3(-(gateHalf + sideHalf), barY, -barZ), new Vector3(2f * sideHalf, barH, barThk), Quaternion.identity);
+            Box("WallBarrier-South-E", new Vector3( (gateHalf + sideHalf), barY, -barZ), new Vector3(2f * sideHalf, barH, barThk), Quaternion.identity);
+            // East wall — side gate at z=0: two spans flanking the gap.
+            float sideHalfZ = (wallZ - gateHalf) * 0.5f;
+            Box("WallBarrier-East-S", new Vector3(barX, barY, -(gateHalf + sideHalfZ)), new Vector3(barThk, barH, 2f * sideHalfZ), Quaternion.identity);
+            Box("WallBarrier-East-N", new Vector3(barX, barY,  (gateHalf + sideHalfZ)), new Vector3(barThk, barH, 2f * sideHalfZ), Quaternion.identity);
+            // West wall — side gate at z=0: two spans flanking the gap.
+            Box("WallBarrier-West-S", new Vector3(-barX, barY, -(gateHalf + sideHalfZ)), new Vector3(barThk, barH, 2f * sideHalfZ), Quaternion.identity);
+            Box("WallBarrier-West-N", new Vector3(-barX, barY,  (gateHalf + sideHalfZ)), new Vector3(barThk, barH, 2f * sideHalfZ), Quaternion.identity);
+            _ = runHalf;  // (kept for clarity; spans computed via sideHalf/sideHalfZ)
 
             // ── Ramps: gentle stone inclines from interior ground up to the walkway edge ──
             // Defined by bottom (interior, y=0) + top (walkway edge, y=topY); LookRotation aligns
