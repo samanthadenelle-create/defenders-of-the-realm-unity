@@ -266,10 +266,19 @@ namespace DeNelle.Editor
                 scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 
             // ── Idempotency: nuke any prior generated root ───────────────────
+            // WO-150: also destroy stray standalone roots from earlier bakes that
+            // are no longer generated — the two dungeon portals (relocating to
+            // world nodes) and any leftover Crystals prop — so a clean re-bake
+            // leaves only the intended village (they were authored as their own
+            // scene roots, outside VillageRoot, so the VillageRoot nuke missed them).
             foreach (var go in scene.GetRootGameObjects())
             {
                 if (go.name == VillageRootName || go.name == "Main Camera" ||
-                    go.name == "Directional Light")
+                    go.name == "Directional Light" ||
+                    go.name == "DungeonPortal_HealersCottage" ||
+                    go.name == "DungeonPortal_FolksGranary" ||
+                    go.name.StartsWith("DungeonPortal") ||
+                    go.name == "Crystals")
                 {
                     UnityEngine.Object.DestroyImmediate(go);
                 }
@@ -332,15 +341,23 @@ namespace DeNelle.Editor
             BuildPlaza(roadRoot);
             BuildRoads(roadRoot, tWallLayout);
 
-            // ── Centerpieces — Elarion + the Keeper's Keep (§3) ──────────────
+            // ── Centerpieces — Elarion (the Heart) only (§3) ─────────────────
             var heart = BuildElarion(centerpieceRoot);
-            BuildKeep(centerpieceRoot);
+            // WO-150 + DESIGN-DECISIONS #3 (CLAUDE.md §7 "No Keep building"): the
+            // Keeper's Keep (building_castle + banner) is NOT one of the five mapped
+            // buildings and contradicts canon; disabled so regen stops placing it.
+            // BuildKeep(centerpieceRoot);   // WO-150: not in the 5-building roster — disabled
 
             // ── Five gameplay buildings (§5) ─────────────────────────────────
             int buildingCount = BuildBuildings(buildingRoot, controller);
 
             // ── City dressing (§6) ───────────────────────────────────────────
-            BuildCityDressing(dressingRoot);
+            // WO-150: SKIPPED — the KayKit dressing buildings (homes/tavern/church/
+            // blacksmith/townhall/well) were deleted by the owner and re-spawned as
+            // magenta missing-material meshes on regen. Skip-guarded like the orchard
+            // so a full BuildVillage no longer resurrects them. (Method kept; the
+            // dressingRoot stays empty.) Re-enable only if the dressing is re-arted.
+            // BuildCityDressing(dressingRoot);   // WO-150: magenta-ghost regen — disabled
 
             // ── Approach lanes + wave spawn points (§8) ──────────────────────
             int spawnCount = BuildApproaches(approachRoot, tWallLayout, controller);
@@ -410,10 +427,11 @@ namespace DeNelle.Editor
             // Add proximity prompts to every Building so the player can press F
             // to interact (2026-05-20 PO observation: no interaction).
             WireBuildingInteractables();
-            // Drop a dungeon portal so the player can actually enter the
-            // Healer's Cottage from the village (2026-05-20 PO observation:
-            // dungeon scene exists but is unreachable in-game).
-            SpawnDungeonPortal();
+            // WO-150: SKIPPED — dungeon entrances are RELOCATING to world nodes in
+            // the outer regions (WO-111 / outer-world), not the village. The in-town
+            // portal generator (which also imported as magenta/missing) is disabled
+            // so regen no longer re-spawns it. (Method kept for the world-node WO.)
+            // SpawnDungeonPortal();   // WO-150: relocating to world nodes — disabled
             // WO-126: repair any renderer with a missing/error material (the Crystals.fbx
             // drop-in imported with no material -> magenta) BEFORE the scene is saved, so the
             // fix lands in Village.unity and the player build.
@@ -1232,15 +1250,18 @@ namespace DeNelle.Editor
         // PrefabM2 = optional secondary polyperfect prefab placed +3 m offset from primary.
         private static readonly BuildingPlacement[] Buildings =
         {
-            // Crystal Mine — WO-101: SM_House_Medieval_Small + SM_Well.
-            // DEF-101: position (-20, 0, +10) — safe clearance from all gates.
-            new BuildingPlacement { Type = 0, Id = "crystal-mine", Label = "Crystal Mine",
-                X = -20f, Z = 10f, YawDeg = 135f, Fbx = "building_mine",
-                CustomFbx = "Assets/Art/TripoStructures/LumberMill.fbx",
-                BaseColorTex = "Assets/Art/TripoStructures/LumberMill.fbm/LumberMill_basecolor.JPEG",
-                PrefabM  = PolyMedievalDir + "House_Medieval_Small.prefab",
-                PrefabM2 = PolyMedievalDir + "Well.prefab",
-                PlaceholderColor = new Color(0.38f, 0.65f, 0.98f), FenceKind = "stone" },
+            // WO-150: Crystal Mine REMOVED from the village roster — the crystal
+            // economy is relocating to harvestable WORLD NODES (WO-111 resource
+            // pillar / outer-world regions), not lost. Its old plot (-20/+10) frees
+            // up so the remaining five read as one-building-per-area. (Entry kept
+            // commented for reference / future re-enable if ever village-bound.)
+            // new BuildingPlacement { Type = 0, Id = "crystal-mine", Label = "Crystal Mine",
+            //     X = -20f, Z = 10f, YawDeg = 135f, Fbx = "building_mine",
+            //     CustomFbx = "Assets/Art/TripoStructures/LumberMill.fbx",
+            //     BaseColorTex = "Assets/Art/TripoStructures/LumberMill.fbm/LumberMill_basecolor.JPEG",
+            //     PrefabM  = PolyMedievalDir + "House_Medieval_Small.prefab",
+            //     PrefabM2 = PolyMedievalDir + "Well.prefab",
+            //     PlaceholderColor = new Color(0.38f, 0.65f, 0.98f), FenceKind = "stone" },
             // Pet House — WO-101: SM_Stables_Medieval.
             // DEF-101: position (+20, 0, +10) — safe clearance from all gates.
             new BuildingPlacement { Type = 1, Id = "pet-house", Label = "Pet House",
@@ -1256,9 +1277,11 @@ namespace DeNelle.Editor
                 BaseColorTex = "Assets/Art/TripoStructures/BuildTower.fbm/build_tower_basecolor.JPEG",
                 PrefabM = PolyMedievalDir + "Tower_Medieval_Big.prefab",
                 PlaceholderColor = new Color(0.65f, 0.55f, 0.98f), FenceKind = "stone" },
-            // Workshop — WO-101: SM_House_Medieval_Medium.
+            // Forge (WO-150: relabeled from "Workshop") — WO-101: SM_House_Medieval_Medium.
             // DEF-101: position (+20, 0, -10) — safe clearance from all gates.
-            new BuildingPlacement { Type = 3, Id = "workshop", Label = "Workshop",
+            // Id stays "workshop" (Building.Type=3 dispatch / interactor wiring is keyed
+            // on it); only the player-facing Label changes to "Forge".
+            new BuildingPlacement { Type = 3, Id = "workshop", Label = "Forge",
                 X = 20f, Z = -10f, YawDeg = 215f, Fbx = "building_workshop",
                 CustomFbx = "Assets/Art/TripoStructures/Forge.fbx",
                 BaseColorTex = "Assets/Art/TripoStructures/Forge.fbm/Forge_basecolor.JPEG",
@@ -1573,11 +1596,16 @@ namespace DeNelle.Editor
             BuildWorkshopYard(workshopQ, new Vector3(27f, 0f, 13f));
 
             // ── §6.4 Farm / orchard (E) — orchard tiles + farmer's hut ───────
+            // WO-136: owner manually removed the orchard trees + farmer's hut from
+            // the village interior; the BuildOrchard call + FarmersHut dressing are
+            // disabled so a full BuildVillage regen no longer resurrects them.
+            // (Method kept for reference / future re-enable.) The Orchard-E root is
+            // still created empty so any downstream lookups don't null.
             var orchard = NewChild(parent, "Orchard-E");
-            BuildOrchard(orchard, new Vector3(26f, 0f, -1f));
-            PlaceDressing(orchard,
-                new DressDef { Name = "FarmersHut", Fbx = "building_home_A", X = 31f, Z = -14f, Yaw = 290f, PlaceholderColor = C("d8c69a") },
-                false);
+            // BuildOrchard(orchard, new Vector3(26f, 0f, -1f));   // WO-136: regen trap — disabled
+            // PlaceDressing(orchard,
+            //     new DressDef { Name = "FarmersHut", Fbx = "building_home_A", X = 31f, Z = -14f, Yaw = 290f, PlaceholderColor = C("d8c69a") },
+            //     false);                                          // WO-136: regen trap — disabled
 
             // ── §6.5 Northern open ground ────────────────────────────────────
             // Owner direction 2026-05-20 ("rock still persists north gate"):
@@ -3124,6 +3152,21 @@ namespace DeNelle.Editor
             float wkE = wallX - walkW * 0.5f;
             Box("Walkway-East",  new Vector3(wkE,  topY, 0f), new Vector3(walkW, 0.4f, 2f * wallZ), Quaternion.identity);
             Box("Walkway-West",  new Vector3(-wkE, topY, 0f), new Vector3(walkW, 0.4f, 2f * wallZ), Quaternion.identity);
+
+            // ── Parapet (WO-136): a low battlement along each walkway's OUTER edge ──
+            // The walkway top sits at topY + 0.2 (0.4-thick slab). The parapet is a
+            // nav-static stone box rising ~1.2 m above it on the side facing OUT of
+            // the village, so the hero reads as protected and the Box collider stops
+            // him walking off the rampart edge (WO-136 acceptance: parapet fall-off).
+            const float parH    = 1.4f;                 // parapet height above the walk
+            const float parThk  = 0.4f;                 // parapet thickness
+            float parTopY = topY + 0.2f + parH * 0.5f;  // centre y (walk-top + half height)
+            float parZ    = wallZ - parThk * 0.5f;       // outer edge, inset by half-thickness
+            float parX    = wallX - parThk * 0.5f;
+            Box("Parapet-North", new Vector3(0f,  parTopY,  parZ), new Vector3(2f * wallX, parH, parThk), Quaternion.identity);
+            Box("Parapet-South", new Vector3(0f,  parTopY, -parZ), new Vector3(2f * wallX, parH, parThk), Quaternion.identity);
+            Box("Parapet-East",  new Vector3(parX,  parTopY, 0f),  new Vector3(parThk, parH, 2f * wallZ), Quaternion.identity);
+            Box("Parapet-West",  new Vector3(-parX, parTopY, 0f),  new Vector3(parThk, parH, 2f * wallZ), Quaternion.identity);
 
             // ── Ramps: gentle stone inclines from interior ground up to the walkway edge ──
             // Defined by bottom (interior, y=0) + top (walkway edge, y=topY); LookRotation aligns
