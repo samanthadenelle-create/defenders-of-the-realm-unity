@@ -88,6 +88,23 @@ brain plumbing are **inherited from the shared base** — no new controller clas
 is the [NORTH_STAR] "data-driven, not hand-authored" principle applied to actors, and it's how
 the meta-counter engine stays cheap to extend (CoC adding Dragons = author data, not systems).
 
+## Content model: Catalog (the look) + Repo (the properties)
+
+Adding anything — by a designer in the builder or a player in build-mode — is one call:
+`home.AddFrom(catalog, "stairs")`, and it composes two delegated sources:
+
+- **Catalog** → the *appearance*: which prefab/mesh/skin. (The polyperfect prefab catalog is already
+  exactly this; cosmetics/skins plug in here.)
+- **Repo** → the *properties/behavior*: the `NavSurface` plank, stats, climb logic, build cost, the
+  `WeaponDef`/`ActionSet` for an actor, etc. (data assets).
+- **Dispatcher** → composes them: select "stairs" and you inherit the look (catalog) **and** the invisible
+  nav plank + properties (repo), assembled with **zero per-item code**.
+
+Decoupling look from behavior is the payoff: **re-skin without touching logic** (swap the catalog entry),
+**re-tune behavior without touching art** (swap the repo entry). And because both halves are *inherited*,
+a player adding from the catalog gets a complete, working object — which is the mechanical reason
+**player-created content reuses the same engine** (build-mode = the dispatcher pointed at player picks).
+
 ## Control scheme + camera (the player-side layer)
 
 The brain's PLAYER variant needs a pluggable **input scheme** so the same Character works across
