@@ -10,30 +10,33 @@ PM catalog. Status legend: **BUILT** (works) · **WIRED** (in-scene/connected) �
 
 ---
 
-## ⏸ END OF DAY — 2026-05-29 handoff (read first)
+## ☀️ MORNING SUMMARY — overnight run complete (read first)
 
-**Tree state: RED.** A large UI batch (~12 WOs / ~39 files) is in the working tree and shipped
-structural corruption. CLI cleared 5 breakers; the 6th blocks green:
-- ✅ ③ `EnemyDiagnostic` shelved to `_ui_bounced/` · ✅ ④ `VFXManager` dup cases deduped ·
-  ✅ ⑤ `CryptoPaymentManager` Cosmetics ref → reflection.
-- ⛔ ⑥ **`Enemy.cs` is GARBLED** (duplicated+interleaved method fragments, TWO class/namespace close
-  pairs, a shredded line). Not hand-patchable.
+**Tree state: GREEN ✅ and locked.** Last night's "red marathon" root cause was found + fixed: a flaky
+**Linux-mount ↔ Windows sync** was truncating/duplicating files on the build side (NOT UI code quality —
+see memory `mount-sync-corruption`). Recovered by truncating the mount-duplicated tails. The full green
+build is committed + pushed — restore points **`00b1662` / `8e4fd35`**.
 
-**UI marching orders to reach green:** **revert `Enemy.cs` to HEAD and cleanly re-apply** its additions
-(IDamageableStructure impl + Glimmer-on-kill + roaming-attack) through the compile gate; re-land
-`EnemyDiagnostic` reflection-based or inside the Village asmdef. Then CLI rebuilds.
+**🎮 Fresh build ready to play** (`Builds/Windows/DefendersOfTheRealm.exe`, boots to Village): the village
+with WO-105 building repositions baked in, plus the dev portal — press **F1** / tap **DEV** for live
+metrics, **+10,000 XP**, and **"Set hero to level N"**. Tricia's Defend-the-Tower is in there too.
 
-**CLI work — STAGED, UNCOMMITTED, compile-clean per checks (do NOT broad `git checkout` — you'll wipe it):**
-`DevTools/DevPanelController.cs` (live metrics + **+10k XP** button), `Wallet/PackStore.cs` (self-render),
-`Village/Buildings/CrystalVisual.cs` (spin/pulse), `Editor/VillageSceneBuilder.cs` (**WO-105 done** — 6
-building repositions + gate-clearance guard; §C/§4 were already present). Commit on first green build.
+**Overnight CLI run (each green-gated + committed):**
+- ✅ **WO-103** village rebake — WO-105 repositions in the scene, **0 gate-clearance violations**.
+- ✅ **Set-level dev tool** (`6149cf2`).
+- ✅ **WO-110 §A** — `CrystalMine._useExternalVisual` flag, code half (`bde5080`).
 
-**Two routes to a playable build tomorrow:** (A) UI un-garbles `Enemy.cs` → one green build ships
-*everything*. (B) **CLI route** — set the whole batch aside, ship just the clean CLI work (~3 min). Owner picks.
+**⏸ Parked for you (need your eye — not safe to do blind):**
+- **WO-104 castle + moat** — big *visual* build; placement needs your judgment. Best done together.
+- **WO-110 scene wiring** — crystal-mine placement is *provisional* (NW was open space); finalize after WO-104.
+- **WO-22** store re-enable (own PanelSettings + code-built UI).
 
-**New this session (committed):** `docs/NORTH_STAR.md` — the recovered vision/business/GTM **source of
-truth** (CoC×Warcraft, player-build, Pi utility-sink, 3-build distribution). Route WOs against it.
-Plus WO-107 (backend reconcile), WO-109 (web metrics), WO-110 (crystal mine), WO-111 (resource pillar).
+**⚠ Coordination:** UI must stay **OFF** the shared tree — the mount-sync corrupts its writes; CLI on
+Windows owns build-affecting files (rule in CLAUDE.md + memory `mount-sync-corruption`).
+
+**📜 Vision docs (committed):** `docs/NORTH_STAR.md` (vision/business/GTM source of truth — incl. delivery
+ladder, Pi utility-sink, 3-build distribution, rewarded-ads pillar), `docs/PI_PITCH.md`,
+`docs/ARCHITECTURE_NORTH_STAR.md`, WO-107 (backend reconcile) / 109 (web metrics) / 110 (crystal mine) / 111 (resource pillar).
 
 ---
 
