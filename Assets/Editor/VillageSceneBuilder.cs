@@ -2949,7 +2949,9 @@ namespace DeNelle.Editor
         /// </summary>
         private static void BuildMoat(Transform wallRoot)
         {
-            const string LakePath       = "Assets/polyperfect/Low Poly Ultimate Pack/_M/Prefabs_M/Terrains_M/Planes_M/Terrain_Plane_Lake.prefab";
+            // WO-104: Terrain_Plane_Water is the clean water surface; Terrain_Plane_Lake is a
+            // GRASS tile with a pond cut into it (tiled 204x it read as a green holey mass).
+            const string LakePath       = "Assets/polyperfect/Low Poly Ultimate Pack/_M/Prefabs_M/Terrains_M/Planes_M/Terrain_Plane_Water.prefab";
             const string DrawbridgePath = PolyMedievalDir + "Drawbridge_Medieval.prefab";
 
             var lake       = AssetDatabase.LoadAssetAtPath<GameObject>(LakePath);
