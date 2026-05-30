@@ -109,5 +109,53 @@ namespace DeNelle.Editor
             UnityEditor.AssetDatabase.Refresh();
             UnityEngine.Debug.Log($"[ActionClipImporter] Reimported {n} Action FBX → Humanoid ({flipped} flipped from non-Human).");
         }
+
+        // ── Hero mesh rigs ────────────────────────────────────────────────────
+        /// <summary>
+        /// Flips the playable hero MESHES (Knight/Mage/Ranger) from Generic to
+        /// Humanoid so the free Mixamo clips (Assets/Action, also Humanoid) RETARGET
+        /// onto them — fixes the T-pose (Generic mesh + Humanoid clips = no avatar
+        /// to map onto = bones never move). Unlike the Action clips, these are real
+        /// meshes, so materials are LEFT INTACT (only the rig/avatar changes).
+        /// Headless: -executeMethod DeNelle.Editor.ActionClipImporter.RigHeroesHumanoid
+        /// </summary>
+        [UnityEditor.MenuItem("Defenders/Animation/Rig Heroes Humanoid (fix T-pose)")]
+        public static void RigHeroesHumanoid()
+        {
+            string[] heroes =
+            {
+                "Assets/Resources/Heroes/Knight.fbx",
+                "Assets/Resources/Heroes/Mage.fbx",
+                "Assets/Resources/Heroes/Ranger.fbx",
+            };
+            int flipped = 0;
+            foreach (var path in heroes)
+            {
+                var importer = UnityEditor.AssetImporter.GetAtPath(path) as ModelImporter;
+                if (importer == null)
+                {
+                    UnityEngine.Debug.LogWarning($"[ActionClipImporter] hero FBX not found: {path}");
+                    continue;
+                }
+                bool wasNonHuman = importer.animationType != ModelImporterAnimationType.Human;
+                importer.animationType = ModelImporterAnimationType.Human;
+                importer.avatarSetup   = ModelImporterAvatarSetup.CreateFromThisModel;
+                // NOTE: do NOT touch materialImportMode here — heroes are visible meshes
+                // and must keep their materials (unlike the motion-only Action clips).
+                importer.SaveAndReimport();
+
+                // Report whether a Humanoid avatar actually built (null = rig failed
+                // to map; the hero would still T-pose and needs a manual avatar map).
+                var avatar = UnityEditor.AssetDatabase.LoadAllAssetsAtPath(path);
+                bool hasAvatar = false;
+                foreach (var a in avatar) if (a is Avatar av && av.isValid && av.isHuman) hasAvatar = true;
+                UnityEngine.Debug.Log($"[ActionClipImporter] {path}: animType→Human, " +
+                    $"validHumanAvatar={hasAvatar}" + (wasNonHuman ? " (flipped)" : ""));
+                if (wasNonHuman) flipped++;
+            }
+            UnityEditor.AssetDatabase.SaveAssets();
+            UnityEditor.AssetDatabase.Refresh();
+            UnityEngine.Debug.Log($"[ActionClipImporter] RigHeroesHumanoid done — {flipped} hero mesh(es) flipped to Humanoid.");
+        }
     }
 }
