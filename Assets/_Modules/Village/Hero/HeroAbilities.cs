@@ -416,7 +416,10 @@ namespace DeNelle.Village
             {
                 ParticleSystem ps = Instantiate(_castVfxPrefab, at, Quaternion.identity);
                 ps.Play();
-                float life = ps.main.duration + ps.main.startLifetimeMultiplier;
+                // bug-triage P2: startLifetimeMultiplier is the curve multiplier, not seconds —
+                // use the actual max lifetime (matches VFXManager.DetectDuration) so longer
+                // prefab effects aren't destroyed before their particles finish.
+                float life = ps.main.duration + ps.main.startLifetime.constantMax;
                 Destroy(ps.gameObject, life + 0.5f);
                 return;
             }

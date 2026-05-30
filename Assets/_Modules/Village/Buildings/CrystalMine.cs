@@ -532,7 +532,7 @@ namespace DeNelle.Village
         private void ResolveHero()
         {
             if (_heroFound) return;
-            var loco = FindObjectOfType<HeroLocomotion>();
+            var loco = FindAnyObjectByType<HeroLocomotion>();   // bug-triage P2: FindObjectOfType is deprecated in Unity 6
             if (loco == null) return;
             _hero = loco.transform;
             _heroLoco = loco;
