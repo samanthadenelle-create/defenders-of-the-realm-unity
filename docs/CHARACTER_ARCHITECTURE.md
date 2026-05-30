@@ -114,14 +114,13 @@ devices with consistent controls, and the view is its own swappable piece:
   `GamepadScheme`. Each feeds `PlayerInputBrain` a uniform *intent* (move dir + action triggers),
   so **everyone gets identical HUD controls regardless of platform.** The HUD control set is a
   function of (input scheme × equipped weapon's action set) — bind once, works everywhere.
-- **Camera (swappable controller, by context)** — fixed-angle follow today; add a **panning
-  camera** (drag-to-pan / pinch-zoom to survey the base + battlefield, CoC-style) as a selectable
-  mode. Base-building/strategy wants pan+zoom; active combat wants follow. One `CameraController`,
-  mode chosen by context.
+- **Camera (one shared controller, modes by context)** — fixed-angle follow today; **pan/zoom**
+  (drag-to-pan / pinch, CoC-style survey) is a **mode in the SAME `CameraController`**, not a
+  separate feature. Combat → follow; build/survey → pan+zoom. Built once in the engine, so **every
+  hero/player inherits it** — panning is a universal capability, never a one-off bolt-on.
 
 Neither touches the shared Character substrate — they *drive* it. Same principle as everything
-else here: **typed + swappable + consistent everywhere.** (Panning camera is also a great
-standalone near-term add, independent of the refactor.)
+else here: **typed + swappable + consistent everywhere; build it in the engine, all inherit it.**
 
 ## Migration — incremental, never big-bang
 
