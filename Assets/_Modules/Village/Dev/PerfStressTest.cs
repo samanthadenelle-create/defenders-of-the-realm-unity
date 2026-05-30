@@ -86,10 +86,23 @@ namespace DeNelle.Village
             _timer += Time.unscaledDeltaTime;
             if (_timer >= 0.5f) { _fps = _accum / Mathf.Max(1, _frames); _accum = 0f; _frames = 0; _timer = 0f; }
 
+            bool spawn = false, clear = false;
+
             var kb = Keyboard.current;
-            if (kb == null) return;
-            if (kb.f9Key.wasPressedThisFrame) Spawn(Batch);
-            if (kb.f10Key.wasPressedThisFrame)
+            if (kb != null)
+            {
+                if (kb.enterKey.wasPressedThisFrame || kb.numpadEnterKey.wasPressedThisFrame ||
+                    kb.spaceKey.wasPressedThisFrame || kb.f9Key.wasPressedThisFrame) spawn = true;
+                if (kb.backspaceKey.wasPressedThisFrame || kb.f10Key.wasPressedThisFrame) clear = true;
+            }
+            // Legacy fallback (project's activeInputHandler = Both) in case the new-system
+            // device singletons aren't populated in this build.
+            if (UnityEngine.Input.GetKeyDown(KeyCode.Return) || UnityEngine.Input.GetKeyDown(KeyCode.KeypadEnter) ||
+                UnityEngine.Input.GetKeyDown(KeyCode.Space)  || UnityEngine.Input.GetKeyDown(KeyCode.F9)) spawn = true;
+            if (UnityEngine.Input.GetKeyDown(KeyCode.Backspace) || UnityEngine.Input.GetKeyDown(KeyCode.F10)) clear = true;
+
+            if (spawn) Spawn(Batch);
+            if (clear)
             {
                 for (int i = _root.childCount - 1; i >= 0; i--) Destroy(_root.GetChild(i).gameObject);
                 _count = 0;
@@ -100,8 +113,8 @@ namespace DeNelle.Village
         private void OnGUI()
         {
             var s = new GUIStyle(GUI.skin.label) { fontSize = 22, normal = { textColor = Color.white } };
-            GUI.Label(new Rect(14, 90, 700, 80),
-                $"PERF STRESS   objects = {_count:N0}   fps = {_fps:F0}\nF9 = +{Batch}    F10 = clear", s);
+            GUI.Label(new Rect(14, 90, 760, 80),
+                $"PERF STRESS   objects = {_count:N0}   fps = {_fps:F0}\nENTER / SPACE / F9 = +{Batch}     BACKSPACE / F10 = clear", s);
         }
     }
 }
