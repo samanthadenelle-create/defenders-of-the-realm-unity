@@ -2934,10 +2934,6 @@ namespace DeNelle.Editor
                 StripRigidbodies(g);
             };
 
-            // ── North wall (z = +33) — segments from x = -42 to +42 ──────────
-            for (float x = -wallX + segStep * 0.5f; x < wallX; x += segStep)
-                Wall(wallSegModel, "WallPerimeter-North", new Vector3(x, 0f,  wallZ), 0f);
-
             // ── North wall (z = +33) — segments + gate at x = 0 (WO-158: 4th gate) ──
             // Owner locked 4 gates. North was previously a solid run with a centre
             // mid-tower; now it gets the same 6 m centre opening + a gate as South.

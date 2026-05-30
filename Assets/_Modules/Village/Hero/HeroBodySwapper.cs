@@ -23,6 +23,9 @@ namespace DeNelle.Village
     public sealed class HeroBodySwapper : MonoBehaviour
     {
         private const float TargetHeightMeters = 2.0f;
+        // Global animator playback multiplier for the hero (Mixamo clips run fast).
+        // 0.5 = half speed. Tune here.
+        private const float HeroAnimSpeed = 0.5f;
 
         private void Start()
         {
@@ -59,9 +62,14 @@ namespace DeNelle.Village
             // camera in the title pose), so they need a 180° correction to
             // align with the hero root's facing direction. KayKit FBXs ship
             // with Unity-standard +Z forward and need no rotation.
-            float yaw = NeedsForwardFlip(cls) ? 180f : 0f;
+            // CC5 fighter (now the Knight body) imports facing +X (right), so it needs a
+            // -90° yaw to face +Z forward (owner field-test 2026-05-30). Other classes keep
+            // the Tripo/-Z (180°) vs KayKit/+Z (0°) rule.
+            float yaw = (cls == HeroClass.Knight) ? 90f : (NeedsForwardFlip(cls) ? 180f : 0f);
             body.transform.localRotation = Quaternion.Euler(0f, yaw, 0f);
-            NormalizeHeight(body, TargetHeightMeters);
+            // CC5 Fighter (Knight) stands 20% taller than the 2 m baseline (owner 2026-05-30).
+            float targetH = (cls == HeroClass.Knight) ? TargetHeightMeters * 1.2f : TargetHeightMeters;
+            NormalizeHeight(body, targetH);
 
             StripRigidbodies(body);
             StripColliders(body);
@@ -108,6 +116,10 @@ namespace DeNelle.Village
             // to turn. Root motion off → HeroLocomotion owns movement/rotation; the
             // clip only drives the visible mesh.
             anim.applyRootMotion = false;
+            // Owner 2026-05-30: Mixamo clips play too fast on the hero. Scale global
+            // animator playback to half speed. Works regardless of which controller is
+            // loaded (it's a multiplier on all clip playback). Tune via HeroAnimSpeed.
+            anim.speed = HeroAnimSpeed;
             // Keep animating even when the follow camera frames just past the hero
             // edge, else Unity freezes the rig and it T-poses on re-entry to view.
             anim.cullingMode = AnimatorCullingMode.AlwaysAnimate;

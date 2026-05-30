@@ -99,15 +99,25 @@ namespace DeNelle.Editor
             sm.defaultState = locoState;
 
             var blend = new BlendTree { name = "Locomotion", blendType = BlendTreeType.Simple1D,
-                                        blendParameter = "Speed" };
+                                        blendParameter = "Speed",
+                                        // CRITICAL: Unity defaults useAutomaticThresholds = true, which
+                                        // OVERWRITES the AddChild thresholds with auto-spaced 0/0.5/1 —
+                                        // that's why walk@6/run@9 never stuck and the hero skipped walk
+                                        // (Speed 0..6 vs thresholds 0/0.5/1 = always max = run). Turn it
+                                        // OFF so the explicit thresholds below are honored.
+                                        useAutomaticThresholds = false };
             AssetDatabase.AddObjectToAsset(blend, ctrl);
             locoState.motion = blend;
             // Null-guarded children: only add the clips that loaded. Always have at
             // least one motion so the state isn't empty.
+            // Thresholds tuned to HeroLocomotion's actual feed: _moveSpeed = 6, so
+            // Speed (= Velocity.magnitude) ramps 0→6. The hero has ONE move speed,
+            // so 6 must land in the WALK band (else it skips walk → straight to run,
+            // the "skips walk" bug). Walk centred at 6; Run only if speed exceeds ~9.
             var added = new List<float>();
-            if (idle != null) { blend.AddChild(idle, 0f);   added.Add(0f); }
-            if (walk != null) { blend.AddChild(walk, 2f);   added.Add(2f); }
-            if (run  != null) { blend.AddChild(run,  5.5f); added.Add(5.5f); }
+            if (idle != null) { blend.AddChild(idle, 0f);  added.Add(0f); }
+            if (walk != null) { blend.AddChild(walk, 6f);  added.Add(6f); }
+            if (run  != null) { blend.AddChild(run,  9f);  added.Add(9f); }
             if (added.Count == 0)
                 Debug.LogWarning($"[HeroAnimatorFactory] {spec.slug}: no locomotion clips found — " +
                                  "Locomotion state is empty.");
