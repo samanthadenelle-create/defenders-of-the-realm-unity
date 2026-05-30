@@ -50,6 +50,24 @@ single engine skeleton.
 - `VillageSceneBuilder.cs` is a single-touch serialization bottleneck — one editor/branch at a time.
 - Runtime player edits carve `NavMeshObstacle` (no per-placement rebake); rebake on build-mode exit.
 
+## How the engine hardens (antifragile — the operating principle)
+
+Every scenario that *invalidates* the engine becomes a **new constraint on the tool, not a one-off
+patch.** Because there is one code path, **one constraint protects the entire content space** — every
+def, every composition, every player creation — retroactively and forever:
+
+- A monolith bugfix fixes **one instance**; an engine constraint fixes the **whole class, everywhere,
+  for good.**
+- The space of valid content only ever **grows**; "can a player break X?" converges to "the engine has
+  a guard for that."
+- The project's hard-won lessons (mount-sync, `DoAction`-VFX-once, cosmetic-only, singleton-dedup,
+  NavMeshObstacle-carve, single-touch builder) stop being tribal knowledge and become **enforced
+  constraints** — structural guarantees, not docs to remember.
+
+Paired with *test-in-catalog → works-everywhere*: **content scales, testing stays flat, reliability
+ratchets up monotonically.** The engine gets *stronger every time it's challenged.* That is the floor
+the whole player-created-world vision stands on.
+
 ## Sequence
 1. **Foundation** — Phase 0 contracts + skeletons (WO-106 + WO-119), landed as the engine skeleton.
 2. **Adapt** — existing entities + world builders onto the contracts.

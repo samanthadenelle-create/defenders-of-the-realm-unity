@@ -55,9 +55,35 @@ CatalogEntry {
 ## How it feeds build-mode
 
 The build palette **is** the catalog, tabbed by `CatalogType`. Select an entry (cell or composite) →
-ghost preview → **90° rotate** (L/R/F/B) → snap to grid → `dispatcher.Build(entry, RuntimePlaced)`
+ghost preview → free-place at the cursor + **rotate** + **edge-snap to neighbouring pieces** (no grid) → `dispatcher.Build(entry, RuntimePlaced)`
 instantiates visual + `NavSurface` (and for composites, each cell, carving NavMeshObstacle so enemies
 re-path live). Granularity is the player's choice on every placement.
+
+## Placement conditions + snap (models: CoC placement, Fallout 4 builder)
+
+Each entry's **repo** carries **`PlacementRules`** — the conditions evaluated the instant the player
+selects it, so the ghost reads **valid (green) / invalid (red)** before commit. CoC's "select item →
+run the conditions for where it can be placed" is precisely this. Rules are **data**, so every item —
+base section, player-built object, or purchased cosmetic — carries its own valid-placement logic:
+**test the rules once, placement is correct everywhere** (and it's the antifragile surface — a bad
+placement nobody anticipated becomes a new rule, enforced for all entries).
+
+`PlacementRules` examples: no-overlap (footprint) · must-sit-on (terrain/biome type) · adjacency
+(stairs require a wall top) · distance/zone (clearance from gates) · support (needs a floor under it) ·
+affordable (cost) · owned (cosmetics). The rule is *"does this naturally work **here**"*, evaluated at
+the free cursor position — not "which grid cell."
+
+**NO GRID — free / organic placement (Fallout 4 · Valheim grain).** The owner explicitly does not want
+grid-snap. Pieces place **freely** at the cursor (continuous position + rotation) and **snap to each
+other's connection points** — a wall's edges, a floor's perimeter, a stair's top/bottom — so structures
+assemble *wherever they naturally fit*: a wall clicks onto a floor edge, stairs onto a wall top. The
+ghost is valid the moment `PlacementRules` pass, anywhere — no cell lock. That edge-snap-to-neighbours
+(not snap-to-grid) is what makes building *feel* good. A **Composite is just a pre-snapped connector
+graph** of cells.
+
+Reuse: `TowerPlacementSystem` already does ghost + overlap + cost; `ValidateBuildingGateClearance` is a
+distance rule. The engine generalizes these scattered checks into **per-entry `PlacementRules`** the one
+placement system evaluates — so all the rules become declarative data, not hand-coded special cases.
 
 ## Reuse (this is mostly classification, not new art)
 
