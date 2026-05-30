@@ -3022,7 +3022,9 @@ namespace DeNelle.Editor
                     d.transform.position = pos;
                     d.transform.rotation = Quaternion.Euler(0f, yaw, 0f);
                     NormalizeProp(d, 7f);          // span the 6 m moat with margin
-                    StripRigidbodies(d);           // keep colliders: the bridge is walkable
+                    SnapFeetToParent(d);           // sit flush on the ground (was a raised surface)
+                    StripColliders(d);             // decorative: hero crosses on the ground through the gate
+                    StripRigidbodies(d);           //   (the raised collider was forcing a walk-around)
                 }
             }
             else
@@ -3037,54 +3039,75 @@ namespace DeNelle.Editor
         }
 
         /// <summary>
-        /// WO-104 §7: rampart stairs (`Stairs_Medieval_Stone`) for inner-wall access — two per
-        /// long wall side, flanking each gate from the interior, ascending toward the wall top.
-        /// Purely visual for now (establishes defenders can reach the ramparts); the walkable
-        /// rampart level is WO-109. Placement is a first pass — owner tunes orientation live.
+        /// WO-104 §7 + unified-NavMesh rampart (owner 2026-05-30): a WALKABLE wall-walk the hero
+        /// AND enemies navigate via the shared NavMesh. A flat stone WALKWAY runs along each wall's
+        /// inner top edge (y = wall height), and a gentle stone RAMP (~29°, under the 45° NavMesh
+        /// slope limit) climbs from the interior ground up to it, flanking each gate. All pieces are
+        /// flagged NavigationStatic so BakeVillageNavMesh connects ground -> ramp -> walkway — making
+        /// a hero defending up top reachable: enemies path up the same ramp to attack.
         /// </summary>
         private static void BuildRamparts(Transform wallRoot)
         {
-            const string StairPath = PolyMedievalDir + "Stairs_Medieval_Stone.prefab";
-            var stair = AssetDatabase.LoadAssetAtPath<GameObject>(StairPath);
-            if (stair == null)
-            {
-                Debug.LogWarning($"[VillageSceneBuilder] WO-104 ramparts: Stairs_Medieval_Stone not found at " +
-                                 $"'{StairPath}' — ramparts skipped (polyperfect re-import needed).");
-                return;
-            }
-
             var root = new GameObject("Ramparts");
             root.transform.SetParent(wallRoot, false);
             var rr = root.transform;
 
-            // Inner curtain wall at +-42 (x) / +-33 (z); stairs sit ~2 m inside the face,
-            // flanking the gate spans, yaw'd to face the wall they climb.
-            var stairs = new (string name, Vector3 pos, float yaw)[]
+            var sh = Shader.Find("Universal Render Pipeline/Lit");
+            var stone = sh != null ? new Material(sh) { name = "RampartStone" } : null;
+            if (stone != null && stone.HasProperty("_BaseColor"))
+                stone.SetColor("_BaseColor", new Color(0.52f, 0.50f, 0.46f));
+
+            const float wallX = 42f, wallZ = 33f;   // poly curtain inner edges
+            const float topY  = 5f;                 // wall height -> walkway level
+            const float walkW = 3f;                 // walkway depth (inner side)
+            const float rampRun = 9f;               // horizontal run (5 m rise -> ~29°, < 45° limit)
+            const float rampW = 3f;                 // ramp width
+            int pieces = 0;
+
+            // Local: nav-static stone box (CreatePrimitive carries a BoxCollider; harmless — the
+            // agents move on the NavMesh, not via physics).
+            System.Func<string, Vector3, Vector3, Quaternion, GameObject> Box =
+                (name, pos, size, rot) =>
             {
-                ("Stair-South-W", new Vector3(-6f, 0f, -31f),   0f),
-                ("Stair-South-E", new Vector3( 6f, 0f, -31f),   0f),
-                ("Stair-North-W", new Vector3(-6f, 0f,  31f), 180f),
-                ("Stair-North-E", new Vector3( 6f, 0f,  31f), 180f),
-                ("Stair-East-S",  new Vector3( 40f, 0f, -8f), 270f),
-                ("Stair-East-N",  new Vector3( 40f, 0f,  8f), 270f),
-                ("Stair-West-S",  new Vector3(-40f, 0f, -8f),  90f),
-                ("Stair-West-N",  new Vector3(-40f, 0f,  8f),  90f),
+                var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                go.name = name;
+                go.transform.SetParent(rr, false);
+                go.transform.SetPositionAndRotation(pos, rot);
+                go.transform.localScale = size;
+                if (stone != null) { var rd = go.GetComponent<Renderer>(); if (rd != null) rd.sharedMaterial = stone; }
+                GameObjectUtility.SetStaticEditorFlags(go,
+                    GameObjectUtility.GetStaticEditorFlags(go) | StaticEditorFlags.NavigationStatic);
+                pieces++;
+                return go;
             };
 
-            int placed = 0;
-            foreach (var (name, pos, yaw) in stairs)
+            // ── Walkways: flat slabs along each wall's INNER top edge (y = topY) ──
+            float wkN = wallZ - walkW * 0.5f;
+            Box("Walkway-North", new Vector3(0f, topY, wkN),  new Vector3(2f * wallX, 0.4f, walkW), Quaternion.identity);
+            Box("Walkway-South", new Vector3(0f, topY, -wkN), new Vector3(2f * wallX, 0.4f, walkW), Quaternion.identity);
+            float wkE = wallX - walkW * 0.5f;
+            Box("Walkway-East",  new Vector3(wkE,  topY, 0f), new Vector3(walkW, 0.4f, 2f * wallZ), Quaternion.identity);
+            Box("Walkway-West",  new Vector3(-wkE, topY, 0f), new Vector3(walkW, 0.4f, 2f * wallZ), Quaternion.identity);
+
+            // ── Ramps: gentle stone inclines from interior ground up to the walkway edge ──
+            // Defined by bottom (interior, y=0) + top (walkway edge, y=topY); LookRotation aligns
+            // the slab's length to the slope so its top face is the walkable surface.
+            System.Action<string, Vector3, Vector3> Ramp = (name, bottom, top) =>
             {
-                var s = (GameObject)PrefabUtility.InstantiatePrefab(stair);
-                if (s == null) continue;
-                s.name = name;
-                s.transform.SetParent(rr, false);
-                s.transform.position = pos;
-                s.transform.rotation = Quaternion.Euler(0f, yaw, 0f);
-                NormalizeProp(s, 5f);          // ~5 m to reach the 5 m wall top
-                StripRigidbodies(s);
-                placed++;
-            }
-            Debug.Log($"[VillageSceneBuilder] WO-104 BuildRamparts: {placed} Stairs_Medieval_Stone placed (inner-wall access).");
+                Vector3 mid = (bottom + top) * 0.5f;
+                Vector3 fwd = (top - bottom).normalized;
+                float len = Vector3.Distance(bottom, top);
+                Box(name, mid, new Vector3(rampW, 0.4f, len), Quaternion.LookRotation(fwd, Vector3.up));
+            };
+            float zEdge = wallZ - walkW;   // walkway inner edge (=30): ramp top meets it
+            Ramp("Ramp-South", new Vector3(-6f, 0f, -zEdge + rampRun), new Vector3(-6f, topY, -zEdge));
+            Ramp("Ramp-North", new Vector3(-6f, 0f,  zEdge - rampRun), new Vector3(-6f, topY,  zEdge));
+            float xEdge = wallX - walkW;   // =39
+            Ramp("Ramp-East",  new Vector3( xEdge - rampRun, 0f, 6f), new Vector3( xEdge, topY, 6f));
+            Ramp("Ramp-West",  new Vector3(-xEdge + rampRun, 0f, 6f), new Vector3(-xEdge, topY, 6f));
+
+            Debug.Log($"[VillageSceneBuilder] WO-104 BuildRamparts: {pieces} nav-static stone pieces " +
+                      "(4 wall-walks + 4 climb ramps); hero + enemies share the NavMesh up to the rampart.");
         }
 
         /// <summary>
