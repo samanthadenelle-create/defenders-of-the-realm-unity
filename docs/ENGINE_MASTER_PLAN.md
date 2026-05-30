@@ -68,6 +68,15 @@ Paired with *test-in-catalog → works-everywhere*: **content scales, testing st
 ratchets up monotonically.** The engine gets *stronger every time it's challenged.* That is the floor
 the whole player-created-world vision stands on.
 
+## Deferred north-stars (kept open by the architecture, NOT current scope)
+
+- **Cross-platform persistence (mobile ↔ PC ↔ console).** Build on phone, continue on console — the
+  realm is a platform-agnostic **def-list**, Unity is multi-target, and `InputScheme` swaps controls,
+  so this is a *build target + sync layer later*, **NOT a rewrite.** Rule: **do not build it now
+  (scope); do not architect *against* it** — the data-driven foundation keeps the door open for free.
+  Largely untried for this genre (CoC mobile-siloed; Valheim PC; Minecraft cross-plays but isn't
+  build-and-defend) — a real differentiator worth keeping reachable.
+
 ## Sequence
 1. **Foundation** — Phase 0 contracts + skeletons (WO-106 + WO-119), landed as the engine skeleton.
 2. **Adapt** — existing entities + world builders onto the contracts.
