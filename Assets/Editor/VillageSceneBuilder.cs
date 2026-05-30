@@ -3057,6 +3057,11 @@ namespace DeNelle.Editor
             if (stone != null && stone.HasProperty("_BaseColor"))
                 stone.SetColor("_BaseColor", new Color(0.52f, 0.50f, 0.46f));
 
+            // Owner 2026-05-30: show the DESIGNED staircase as the visual and hide the nav ramp
+            // beneath it, so it reads as climbing real stairs while the NavMesh stays a clean ramp.
+            var stairPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(
+                PolyMedievalDir + "Stairs_Medieval_Stone.prefab");
+
             const float wallX = 42f, wallZ = 33f;   // poly curtain inner edges
             const float topY  = 5f;                 // wall height -> walkway level
             const float walkW = 3f;                 // walkway depth (inner side)
@@ -3097,7 +3102,27 @@ namespace DeNelle.Editor
                 Vector3 mid = (bottom + top) * 0.5f;
                 Vector3 fwd = (top - bottom).normalized;
                 float len = Vector3.Distance(bottom, top);
-                Box(name, mid, new Vector3(rampW, 0.4f, len), Quaternion.LookRotation(fwd, Vector3.up));
+                // Two objects in parallel: an INVISIBLE nav plank (the walkable surface the agents
+                // climb) + the DESIGNED staircase as the visual on top. Decouples look from navigate.
+                var rampGo = Box(name, mid, new Vector3(rampW, 0.4f, len), Quaternion.LookRotation(fwd, Vector3.up));
+                var rd = rampGo.GetComponent<Renderer>();
+                if (rd != null) rd.enabled = false;   // hidden — the staircase below is the visual
+                if (stairPrefab != null)
+                {
+                    var st = (GameObject)PrefabUtility.InstantiatePrefab(stairPrefab);
+                    if (st != null)
+                    {
+                        st.name = name + "-Visual";
+                        st.transform.SetParent(rr, false);
+                        st.transform.position = bottom;
+                        Vector3 horiz = new Vector3(fwd.x, 0f, fwd.z).normalized;
+                        if (horiz.sqrMagnitude > 0.0001f)
+                            st.transform.rotation = Quaternion.LookRotation(horiz, Vector3.up);
+                        NormalizeProp(st, 7f);   // first-pass size; owner tunes the visual fit
+                        StripColliders(st);
+                        StripRigidbodies(st);
+                    }
+                }
             };
             float zEdge = wallZ - walkW;   // walkway inner edge (=30): ramp top meets it
             Ramp("Ramp-South", new Vector3(-6f, 0f, -zEdge + rampRun), new Vector3(-6f, topY, -zEdge));
