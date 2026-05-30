@@ -34,6 +34,12 @@ metrics, **+10,000 XP**, and **"Set hero to level N"**. Tricia's Defend-the-Towe
 **⚠ Coordination:** UI must stay **OFF** the shared tree — the mount-sync corrupts its writes; CLI on
 Windows owns build-affecting files (rule in CLAUDE.md + memory `mount-sync-corruption`).
 
+**ℹ️ Minor note:** `Assets/Black Dragon/` (source folder) shows **deleted in the working tree** —
+pre-existing, NOT from the overnight run, **recoverable** (HEAD still has it). The *gameplay* dragon is
+unaffected (it loads the `Resources/Enemies/Dragon.fbx` + `Boss_Dragon` copies, both present). If a
+cinematic/preview needs the source, restore with `git checkout HEAD -- "Assets/Black Dragon"`. Left as-is
+(didn't commit the deletion or undo it — your call, possibly an intentional lean-checkin cleanup).
+
 **📜 Vision docs (committed):** `docs/NORTH_STAR.md` (vision/business/GTM source of truth — incl. delivery
 ladder, Pi utility-sink, 3-build distribution, rewarded-ads pillar), `docs/PI_PITCH.md`,
 `docs/ARCHITECTURE_NORTH_STAR.md`, WO-107 (backend reconcile) / 109 (web metrics) / 110 (crystal mine) / 111 (resource pillar).
