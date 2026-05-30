@@ -39,6 +39,7 @@ using DeNelle.Core;
 using DeNelle.Core.State;
 using UnityEngine;
 using UnityEngine.Events;
+using DeNelle.Data;       // WaveData SO — WO-86
 
 namespace DeNelle.Village
 {
@@ -119,6 +120,11 @@ namespace DeNelle.Village
                  "Requires _groupSpawner to be wired.")]
         [SerializeField] private System.Collections.Generic.List<WaveEnemyGroup> _waveGroupSequence
             = new System.Collections.Generic.List<WaveEnemyGroup>();
+
+        [Header("Wave SO Authoring (WO-86)")]
+        [Tooltip("Optional list of WaveData ScriptableObjects for SO-driven authoring. The existing JSON-driven loop runs independently and is unaffected.")]
+        [SerializeField] private List<WaveData> _soWaves
+            = new List<WaveData>();
 
         [Header("Breach detection")]
         [Tooltip("Radius (world units) of the inner wall ring around the Heart. An enemy that " +
@@ -257,6 +263,11 @@ namespace DeNelle.Village
             Quaternion rot = Quaternion.LookRotation(
                 toHeart.sqrMagnitude > 0.0001f ? toHeart : Vector3.forward);
 
+            if (_enemyPrefab == null)
+            {
+                Debug.LogError($"[WaveManager] Prefab is null for enemy data: {def.Id}. Assign an enemy prefab to WaveManager._enemyPrefab in the inspector. Using primitive placeholder.");
+            }
+
             Enemy enemy = _enemyPrefab != null
                 ? Instantiate(_enemyPrefab, pos, rot, _enemyRoot)
                 : BuildPlaceholderEnemy(pos, rot);
@@ -370,6 +381,7 @@ namespace DeNelle.Village
             _countdownRemaining = Mathf.Max(0f, ScaledCountdown(wave.CountdownSeconds));
             _phase = WavePhase.Countdown;
             OnCountdownTick.Invoke(_countdownRemaining);
+            WaveCountdownUI.Instance?.StartCountdown(_countdownRemaining);
         }
 
         /// <summary>

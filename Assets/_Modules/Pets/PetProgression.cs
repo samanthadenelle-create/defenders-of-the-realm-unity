@@ -14,6 +14,7 @@
 // =============================================================================
 
 using DeNelle.Core.Progression;
+using DeNelle.Data;       // PetData SO — WO-86
 using UnityEngine;
 
 namespace DeNelle.Pets
@@ -23,9 +24,17 @@ namespace DeNelle.Pets
     [DisallowMultipleComponent]
     public sealed class PetProgression : MonoBehaviour, IXpEarner
     {
-        private const float DamagePerLevel = 0.07f;   // +7% pet damage per level
-        private const float HpPerLevel = 0.08f;       // +8% pet max HP per level
+        // WO-86: hardcoded fallback values — overridden by PetData SO if assigned.
+        private const float DamagePerLevelDefault = 0.07f;   // +7% per level
+        private const float HpPerLevelDefault = 0.08f;       // +8% per level
         private const float MaxMultiplier = 3f;
+
+        [Header("Data (WO-86)")]
+        [Tooltip("Optional PetData SO. When assigned, damagePerLevel and hpMultiplierPerLevel are read from it instead of the hardcoded defaults.")]
+        [SerializeField] private PetData _petData;
+
+        private float DamagePerLevel => _petData != null ? _petData.damagePerLevel / 100f : DamagePerLevelDefault;
+        private float HpPerLevel     => _petData != null ? _petData.hpMultiplierPerLevel   : HpPerLevelDefault;
 
         [SerializeField] private int _level = 1;
         [SerializeField] private float _xp;

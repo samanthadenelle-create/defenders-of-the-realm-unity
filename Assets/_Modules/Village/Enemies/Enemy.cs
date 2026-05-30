@@ -30,25 +30,10 @@
 using System;
 using UnityEngine;
 using UnityEngine.AI;
+using DeNelle.Core.Combat;   // IDamageableStructure — moved to Core so all assemblies can reference it
 
 namespace DeNelle.Village
 {
-    /// <summary>
-    /// A village structure that can take contact damage from an <see cref="Enemy"/>
-    /// — a building, wall section or gate. Defined here so <see cref="Enemy"/>
-    /// stays free of any Building/Gate API dependency. The integrator implements
-    /// this on <c>Building</c> / <c>WallSegment</c> / <c>Gate</c> when their HP
-    /// gameplay lands (port spec Week 4).
-    /// </summary>
-    public interface IDamageableStructure
-    {
-        /// <summary>True while the structure still stands and can be attacked.</summary>
-        bool IsAlive { get; }
-
-        /// <summary>Applies <paramref name="amount"/> contact damage from an enemy hit.</summary>
-        void ApplyContactDamage(float amount);
-    }
-
     /// <summary>
     /// One Hollow One in the village wave loop. Drives a <see cref="NavMeshAgent"/>
     /// toward the Heart, takes HP damage, attacks the structure in front of it on
@@ -152,6 +137,16 @@ namespace DeNelle.Village
                  "Resolved in Awake from the same or child GameObjects if blank.")]
         [SerializeField] private AudioSource _audioSource;
 
+        [Header("Death VFX Override (WO-84)")]
+        [Tooltip("Override the death VFX type per prefab — leave Death_Generic to use " +
+                 "the VfxPool fallback. Elite/Boss always delegate to EliteVFXController.")]
+        [SerializeField] private VFXType _deathVFXOverride = VFXType.Death_Generic;
+
+        [Header("Heavy Hit (WO-84)")]
+        [Tooltip("Damage at or above this value triggers the heavy-hit path: " +
+                 "larger VFX spawn + stronger camera shake.")]
+        [SerializeField] private float _heavyHitThreshold = 20f;
+
         /// <summary>
         /// The cardinal quadrant a hit came from, relative to the enemy's facing.
         /// Drives the directional flinch sub-state in the Animator.
@@ -245,11 +240,29 @@ namespace DeNelle.Village
 
         /// <summary>
         /// The engine def id the breach trigger maps this enemy to when handing
-        /// the ATB scene a battle. The KayKit village skeletons map onto the ATB
-        /// engine's <c>"skeleton"</c> combatant def (BattleController's fallback);
-        /// the Necromancer maps onto <c>"necromancer"</c> when that def exists.
+        /// the ATB scene a battle. Maps village enemies.json ids to the ATB engine's
+        /// <see cref="DeNelle.BattleATB.Engine.Defs.ENEMY_DEFS"/> keys (WO-94).
+        /// <list type="bullet">
+        ///   <item>hollow-warrior  → "bruiser"     (high-HP tank archetype)</item>
+        ///   <item>hollow-rogue    → "skeleton"     (fast skirmisher — closest grunt)</item>
+        ///   <item>hollow-walker   → "skeleton"     (basic grunt)</item>
+        ///   <item>necromancer     → "necromancer"  (exact match)</item>
+        ///   <item>anything else   → "skeleton"     (safe fallback)</item>
+        /// </list>
         /// </summary>
-        public string EngineDefId => _enemyDefId == "necromancer" ? "necromancer" : "skeleton";
+        public string EngineDefId
+        {
+            get
+            {
+                switch (_enemyDefId)
+                {
+                    case "necromancer":   return "necromancer";
+                    case "hollow-warrior": return "bruiser";
+                    // hollow-walker and hollow-rogue both map to the standard grunt.
+                    default:              return "skeleton";
+                }
+            }
+        }
 
         // ---------------------------------------------------------------------
         // Configuration — called by WaveManager right after Instantiate
@@ -665,6 +678,10 @@ namespace DeNelle.Village
                 // Combat feel: blink the enemy red on the hit (additive, null-safe).
                 _hitReaction?.Flash();
 
+                // WO-84: heavy-hit path — bigger shake + explosion VFX on large hits.
+                if (amount >= _heavyHitThreshold)
+                    CameraShakeBridge.Shake(0.32f, 0.22f);   // heavier than the per-hit default
+
                 // DEF-46: per-type hit audio.
                 PlayTypeSound(_typeVfxSet != null ? _typeVfxSet.RandomHitClip() : null);
 
@@ -717,17 +734,40 @@ namespace DeNelle.Village
             {
                 Vector3 deathPos = transform.position + Vector3.up * 0.5f;
 
-                // DEF-46: per-type death VFX — SO prefab when assigned, else VfxPool.
-                GameObject deathPrefab = _typeVfxSet != null ? _typeVfxSet.RandomDeathVfxPrefab() : null;
-                if (deathPrefab != null)
-                    Instantiate(deathPrefab, deathPos, Quaternion.identity);
+                // WO-66: elite/boss enemies use EliteVFXController for death VFX.
+                // Falls through to the normal per-type SO / VfxPool path for regular enemies.
+                var eliteVfx = GetComponent<EliteVFXController>();
+                if (eliteVfx != null)
+                {
+                    eliteVfx.OnEliteDeath();
+                }
                 else
-                    VfxPool.SpawnDeathBurst(deathPos);
+                {
+                    // WO-84: use the per-prefab deathVFXOverride when set; otherwise fall
+                    // back to the SO prefab pool, then the procedural VfxPool burst.
+                    if (_deathVFXOverride != VFXType.Death_Generic && _deathVFXOverride != VFXType.None)
+                    {
+                        VFXManager.Play(_deathVFXOverride, deathPos);
+                    }
+                    else
+                    {
+                        // DEF-46: per-type death VFX — SO prefab when assigned, else VfxPool.
+                        GameObject deathPrefab = _typeVfxSet != null ? _typeVfxSet.RandomDeathVfxPrefab() : null;
+                        if (deathPrefab != null)
+                            Instantiate(deathPrefab, deathPos, Quaternion.identity);
+                        else
+                            VfxPool.SpawnDeathBurst(deathPos);
+                    }
 
-                // DEF-46: per-type death audio.
+                    // WO-84: secondary burst 0.28 s after the primary death VFX.
+                    StartCoroutine(SecondaryDeathBurst(deathPos));
+                }
+
+                // DEF-46: per-type death audio (always plays, even for elite kills).
                 PlayTypeSound(_typeVfxSet != null ? _typeVfxSet.RandomDeathClip() : null);
 
-                CameraShakeBridge.Shake(0.18f, 0.22f);
+                // Regular shake only when no EliteVFXController handled it.
+                if (eliteVfx == null) CameraShakeBridge.Shake(0.18f, 0.22f);
                 CombatFeedbackManager.Kill(transform.position);
 
                 // Combat feel: leave a persistent ground scorch where the enemy
@@ -770,6 +810,16 @@ namespace DeNelle.Village
         // ---------------------------------------------------------------------
         // Helpers
         // ---------------------------------------------------------------------
+
+        /// <summary>
+        /// WO-84: Small secondary impact burst 0.28 s after the primary death VFX —
+        /// gives the kill a two-beat punch. Null-safe if VFXManager is absent.
+        /// </summary>
+        private System.Collections.IEnumerator SecondaryDeathBurst(Vector3 pos)
+        {
+            yield return new WaitForSeconds(0.28f);
+            VFXManager.Play(VFXType.Impact_Physical, pos + Vector3.up * 0.3f);
+        }
 
         private void EnsureAgent()
         {

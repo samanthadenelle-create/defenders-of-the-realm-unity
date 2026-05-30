@@ -179,6 +179,10 @@ namespace DeNelle.BattleATB
             // StartBattle fires OnBattleChanged synchronously — the listener is wired
             // above, but render once explicitly as a belt-and-suspenders first paint.
             Render(_runtimeState.Battle);
+
+            // WO-68: arm the turn-timer now that the battle is live. Safe null-
+            // conditional — ATBCombatManager is optional (tests / direct-play paths).
+            ATBCombatManager.Instance?.StartCombat();
         }
 
         /// <summary>Wires the runtime-state events + the attack button. Idempotent.</summary>
@@ -290,8 +294,9 @@ namespace DeNelle.BattleATB
         /// <summary>
         /// Maps a breached-enemy id onto a valid <see cref="Defs.ENEMY_DEFS"/> key.
         /// Exact engine keys (e.g. "skeleton", "necromancer") pass straight through;
-        /// 3D / dungeon tokens are matched heuristically; anything unknown falls back
-        /// to "skeleton" so the battle always has a valid roster.
+        /// village enemies.json ids ("hollow-walker", "hollow-warrior", "hollow-rogue")
+        /// are mapped to the closest ATB archetype (WO-94); anything unknown falls
+        /// back to "skeleton" so the battle always has a valid roster.
         /// </summary>
         private static string MapToEngineDef(string id)
         {
@@ -299,10 +304,18 @@ namespace DeNelle.BattleATB
             if (Defs.ENEMY_DEFS.ContainsKey(id)) return id;          // already a valid engine key
 
             string lower = id.ToLowerInvariant();
-            if (lower.Contains("necro")) return "necromancer";
-            if (lower.Contains("tank") || lower.Contains("bruiser") || lower.Contains("bulwark")
-                || lower.Contains("boss") || lower.Contains("dragon")) return "bruiser";
-            if (lower.Contains("goblin")) return "goblin";
+
+            // WO-94: village enemies.json ids — map to ATB engine archetypes.
+            if (lower == "hollow-warrior") return "bruiser";     // heavy tank archetype
+            if (lower == "hollow-walker")  return "skeleton";    // standard grunt
+            if (lower == "hollow-rogue")   return "skeleton";    // fast skirmisher → grunt fallback
+
+            // Generic heuristics for dungeon / other 3D-layer tokens.
+            if (lower.Contains("necro"))   return "necromancer";
+            if (lower.Contains("warrior") || lower.Contains("tank") || lower.Contains("bruiser")
+                || lower.Contains("bulwark") || lower.Contains("boss")
+                || lower.Contains("dragon")) return "bruiser";
+            if (lower.Contains("goblin"))  return "goblin";
             return "skeleton";
         }
 
@@ -348,6 +361,7 @@ namespace DeNelle.BattleATB
         {
             if (result == null || _returnScheduled) return;
             _returnScheduled = true;
+            ATBCombatManager.Instance?.StopCombat(); // WO-68: halt the turn timer
             ReturnAfterResult(result).Forget();
         }
 
@@ -360,6 +374,15 @@ namespace DeNelle.BattleATB
             // mirrors AtbBattleScreen.tsx's command model for the basic attack.
             BattleUnit target = BattleStateOps.LowestHpEnemy(_runtimeState.Battle);
             if (target == null) return;
+
+            // WO-93 Bug 2: trigger the hero attack animation on the capsule/model.
+            // Null-guarded: the placeholder capsule has no Animator, so this is a no-op
+            // there; a real hero model (AtbCombatantSwapper) will play the clip.
+            if (_heroCapsule != null)
+                _heroCapsule.GetComponentInChildren<Animator>()?.SetTrigger("Attack");
+
+            // WO-93: reset the idle-pressure turn timer.
+            ATBCombatManager.Instance?.OnPlayerActed();
 
             _runtimeState.ChooseAction(BattleAction.MakeAttack(target.Id));
         }
@@ -392,6 +415,7 @@ namespace DeNelle.BattleATB
             if (damage.Count > 0 && foe != null)
             {
                 AbilityDef best = damage.Aggregate(damage[0], (b, a) => a.Damage > b.Damage ? a : b);
+                ATBCombatManager.Instance?.OnPlayerActed(); // WO-93: reset idle timer
                 _runtimeState.ChooseAction(BattleAction.MakeAbility(best.Slot, foe.Id));
                 return;
             }
@@ -401,12 +425,14 @@ namespace DeNelle.BattleATB
                 a => a.SelfStatus != null || a.HealPctSelf != null || a.Heal != null);
             if (support != null)
             {
+                ATBCombatManager.Instance?.OnPlayerActed(); // WO-93: reset idle timer
                 _runtimeState.ChooseAction(BattleAction.MakeAbility(support.Slot, hero.Id));
                 return;
             }
 
             // Last resort — the first usable ability on the foe (or self).
             AbilityDef any = usable[0];
+            ATBCombatManager.Instance?.OnPlayerActed(); // WO-93: reset idle timer
             _runtimeState.ChooseAction(
                 BattleAction.MakeAbility(any.Slot, foe != null ? foe.Id : hero.Id));
         }
@@ -429,6 +455,7 @@ namespace DeNelle.BattleATB
                 if (_statusBanner != null) _statusBanner.text = "No items left.";
                 return;
             }
+            ATBCombatManager.Instance?.OnPlayerActed(); // WO-93: reset idle timer
             _runtimeState.ChooseAction(BattleAction.MakeItem(ItemKind.Potion, hero.Id));
         }
 
@@ -446,6 +473,7 @@ namespace DeNelle.BattleATB
             if (_returnScheduled) return;
             _returnScheduled = true;
             if (_statusBanner != null) _statusBanner.text = "Fled the battle…";
+            ATBCombatManager.Instance?.StopCombat(); // WO-68: halt the turn timer on flee
             if (_runtimeState != null) _runtimeState.EndBattle();
             FleeToReturnScene().Forget();
         }
@@ -648,12 +676,28 @@ namespace DeNelle.BattleATB
         /// The scene to return to after the battle — the handoff's
         /// <see cref="BattleParams.ReturnScene"/>, defaulting to the village when
         /// no handoff was supplied or the field is blank.
+        ///
+        /// WO-94 Bug 2: explicitly refuses to return to ATBBattle itself — a
+        /// misconfigured ReturnScene that names "ATBBattle" would restart the same
+        /// fight instead of exiting, producing the "fight restarts after winning"
+        /// symptom. Falls back to Village in that case.
         /// </summary>
         private static string ResolveReturnScene()
         {
             BattleParams handoff = SceneRouter.PendingBattle;
             if (handoff != null && !string.IsNullOrEmpty(handoff.ReturnScene))
+            {
+                // Guard: never reload the battle scene itself.
+                if (string.Equals(handoff.ReturnScene, SceneRouter.ATBBattle,
+                        System.StringComparison.OrdinalIgnoreCase))
+                {
+                    Debug.LogWarning(
+                        "[BattleController] ReturnScene was set to ATBBattle — " +
+                        "this would restart the same fight. Falling back to Village. (WO-94)");
+                    return SceneRouter.Village;
+                }
                 return handoff.ReturnScene;
+            }
             return SceneRouter.Village;
         }
 

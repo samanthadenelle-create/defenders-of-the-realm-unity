@@ -15,6 +15,7 @@
 
 using System;
 using UnityEngine;
+using DeNelle.Core.Combat;
 
 namespace DeNelle.Village
 {

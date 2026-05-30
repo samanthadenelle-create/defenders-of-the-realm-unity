@@ -38,6 +38,7 @@ using System;
 using System.Collections.Generic;
 using Cysharp.Threading.Tasks;
 using DeNelle.Core;
+using DeNelle.Core.Audio;
 using DeNelle.Core.State;
 using UnityEngine;
 using UnityEngine.Audio;
@@ -52,7 +53,7 @@ namespace DeNelle.Audio
     /// automatically by <see cref="AudioBootstrap"/> — no scene wiring required.
     /// </summary>
     [DisallowMultipleComponent]
-    public sealed class AudioService : MonoBehaviour
+    public sealed class AudioService : MonoBehaviour, IAudioService
     {
         // ── Singleton ────────────────────────────────────────────────────────
         private static AudioService _instance;
@@ -186,6 +187,7 @@ namespace DeNelle.Audio
 
             BuildAudioSources();
             ResolveMixerGroups();
+            CoreServices.RegisterAudio(this);
         }
 
         private void OnEnable()
@@ -200,6 +202,7 @@ namespace DeNelle.Audio
 
         private void OnDestroy()
         {
+            CoreServices.UnregisterAudio(this);
             if (_instance == this) _instance = null;
         }
 
@@ -220,6 +223,7 @@ namespace DeNelle.Audio
             // Settings menu can override these live; this just seeds the mixer
             // from GameState so launch audio matches the saved preference.
             ApplyPersistedSettings();
+            ApplyMobilePlatformRules();
 
             // Pick up whatever scene loaded before the service existed (the
             // bootstrap may have created us after the first scene's sceneLoaded
@@ -527,6 +531,22 @@ namespace DeNelle.Audio
             PlayOneShotOn(_voiceGroup, clip, volume);
         }
 
+        /// <summary>
+        /// Fires a positional one-shot SFX by <see cref="SfxId"/>. The clip is resolved
+        /// from the <see cref="SfxClipLibrary"/> (or is a no-op when unassigned).
+        /// Passing <see cref="SfxId.None"/> is a safe no-op. WO-62.
+        /// </summary>
+        /// <param name="id">The SFX event identifier.</param>
+        /// <param name="worldPosition">World-space position — reserved for future 3-D source routing.</param>
+        /// <param name="volume">Pre-mixer volume, 0..1.</param>
+        public void PlaySfxAtPosition(SfxId id, Vector3 worldPosition, float volume = 1f)
+        {
+            if (id == SfxId.None) return;
+            AudioClip clip = _sfxLibrary?.GetClip(id);
+            // Guarded: a null clip is a silent no-op — missing SFX never throws.
+            PlayOneShotOn(_sfxGroup, clip, volume);
+        }
+
         private void PlayOneShotOn(AudioMixerGroup group, AudioClip clip, float volume)
         {
             if (clip == null) return; // guarded — a missing SFX is silent, not an error.
@@ -712,6 +732,62 @@ namespace DeNelle.Audio
                 return MusicTrack.Title;
 
             return MusicTrack.None; // unrecognised — caller leaves music as-is.
+        }
+
+        // =====================================================================
+        //  SFX clip library (WO-62)
+        // =====================================================================
+
+        [Header("SFX Clip Library (WO-62)")]
+        [Tooltip("Assign a SfxClipLibrary ScriptableObject here to enable PlaySfxAtPosition. " +
+                 "When null, SFX triggered via SfxId are silent no-ops (no errors thrown).")]
+        [SerializeField] private SfxClipLibrary _sfxLibrary;
+
+        // =====================================================================
+        //  Mobile platform rules (WO-62)
+        // =====================================================================
+
+        /// <summary>
+        /// Applies mobile-specific audio rules on Awake (WO-62):
+        ///   • Reduces master SFX level by 4 dB to avoid harsh clipping on phone speakers.
+        ///   • Disables the reverb send bus (too expensive on mobile GPUs).
+        /// The AudioSource pool is already round-robin (8 voices) — no per-frame
+        /// AddComponent. On non-mobile platforms this method is a no-op.
+        /// </summary>
+        private void ApplyMobilePlatformRules()
+        {
+            if (!Application.isMobilePlatform) return;
+
+            if (_mixer != null)
+            {
+                // Reduce SFX bus slightly — phone speakers clip at full volume.
+                _mixer.SetFloat(MixerParams.Sfx, LinearToDecibels(1f) - 4f);
+
+                // Kill the reverb send — convolution reverb is too expensive on mobile.
+                // The exposed param name matches the mixer's "ReverbSend" parameter.
+                _mixer.SetFloat("ReverbSend", -80f);
+            }
+
+            // Mute flag is already respected by the voice pool; nothing extra needed.
+        }
+
+        // =====================================================================
+        //  IAudioService explicit implementation (WO-41)
+        // =====================================================================
+
+        /// <summary>
+        /// IAudioService.PlayMusic — maps the Core-side MusicTrack enum to the
+        /// Audio-side MusicTrack enum and delegates to the full PlayMusic method.
+        /// </summary>
+        void IAudioService.PlayMusic(DeNelle.Core.Audio.MusicTrack track)
+        {
+            switch (track)
+            {
+                case DeNelle.Core.Audio.MusicTrack.Village: PlayMusic(MusicTrack.Village); break;
+                case DeNelle.Core.Audio.MusicTrack.Battle:  PlayMusic(MusicTrack.Battle);  break;
+                case DeNelle.Core.Audio.MusicTrack.Victory: PlayMusic(MusicTrack.Victory); break;
+                case DeNelle.Core.Audio.MusicTrack.Dungeon: PlayMusic(MusicTrack.Dungeon); break;
+            }
         }
     }
 }

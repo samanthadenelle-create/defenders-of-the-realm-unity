@@ -106,8 +106,8 @@ namespace DeNelle.Village
             }
             else
             {
-                // In range — top up the canonical tower HP (HeartController.Hp).
-                _tower.SetHp(_tower.Hp + _repairPerSecond * Time.deltaTime);
+                // In range — top up the canonical tower HP via Heal() (WO-98: canonical repair path).
+                _tower.Heal(_repairPerSecond * Time.deltaTime);
             }
         }
     }

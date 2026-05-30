@@ -467,7 +467,7 @@ namespace DeNelle.Village
             {
                 case DragonPhase.Circling:
                     // Mostly fire-breath; an occasional probing swoop.
-                    if (UnityEngine.Random.value < 0.25f) BeginSwoop();
+                    if (UnityEngine.Random.value < 0.55f) BeginSwoop();
                     else FireBreath();
                     break;
 

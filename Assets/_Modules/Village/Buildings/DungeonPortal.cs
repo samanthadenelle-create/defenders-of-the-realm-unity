@@ -44,6 +44,7 @@ namespace DeNelle.Village
         private Renderer _shimmer;
         private float _t;
         private bool _loading;
+        private PortalVFXController _portalVfx;
 
         // DEF-40: perf — throttle distance checks; cache in-range state so
         // GetKeyDown can still fire every frame without regression.
@@ -52,7 +53,11 @@ namespace DeNelle.Village
         private float _nextProximityCheck;
         private const float CheckInterval = 0.15f;
 
-        private void Start() => ResolveHero();
+        private void Start()
+        {
+            ResolveHero();
+            _portalVfx = GetComponent<PortalVFXController>();
+        }
 
         private void ResolveHero()
         {
@@ -122,6 +127,7 @@ namespace DeNelle.Village
             var hero = other.GetComponentInParent<HeroLocomotion>();
             if (hero == null) return;
             Debug.Log("[DungeonPortal] Trigger entered by hero — routing to " + _dungeonId);
+            _portalVfx?.OnHeroApproach();
             EnterDungeon();
         }
 
@@ -155,6 +161,7 @@ namespace DeNelle.Village
             // path to side-step the fader entirely.
             try
             {
+                _portalVfx?.OnHeroEnter();
                 UnityEngine.SceneManagement.SceneManager.LoadScene(sceneName);
             }
             catch (System.Exception ex)

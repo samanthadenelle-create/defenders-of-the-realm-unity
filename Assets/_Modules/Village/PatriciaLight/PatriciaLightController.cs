@@ -679,10 +679,12 @@ namespace DeNelle.Village
             // defending) — the turret hero is invulnerable, so heal-the-hero is moot
             // here. Village keeps heal-the-hero (HealHandler stays null there). The
             // closure reads _heart at cast time, so it is valid even if set later.
+            // WO-98: use HeartController.Heal() so the HP clamp, OnHealthChanged event
+            // and state derivation all go through the canonical path.
             _hero.HealHandler = amount =>
             {
                 if (_heart == null) return false;
-                _heart.SetHp(Mathf.Min(TowerMaxHp, _heart.Hp + amount));
+                _heart.Heal(amount);
                 RefreshHud();
                 if (_towerTransform != null)
                     VFXManager.Play(VFXType.Impact_Heal, _towerTransform.position + Vector3.up * 4f);

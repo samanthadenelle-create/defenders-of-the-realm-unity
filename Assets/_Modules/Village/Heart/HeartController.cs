@@ -17,10 +17,24 @@
 // strings are NOT typed inline in user-facing copy -- they flow through
 // data/canon-strings.json (port spec Part 4). This file only uses them in
 // code comments / non-user-facing identifiers.
+//
+// WO-99 NOTE — HeartHealth / Defend the Tower (DTT) wiring:
+//   A separate HeartHealth.cs is NOT needed for the Defend the Tower scene.
+//   PatriciaLightController instantiates a HeartController at TowerPos and
+//   drives tower HP directly via HeartController.SetHp() + the OnHealthChanged
+//   event (see PatriciaLightController.ApplyTowerDamage / UpdateTowerHpUi).
+//   HeartController already implements IDamageableStructure (IsAlive + ApplyContactDamage)
+//   which enemies use for contact attacks. The tower HP bar in DTT is a code-
+//   built UI-Toolkit slider bound to OnHealthChanged — no second MonoBehaviour
+//   required. If a dedicated HeartHealth component is needed in a future scene
+//   that cannot host a full HeartController (e.g. a lightweight arena), create
+//   HeartHealth.cs in this folder as a thin wrapper: expose Hp, SetHp, and the
+//   OnHealthChanged event, and have it implement IDamageableStructure.
 // =============================================================================
 
 using System;
 using UnityEngine;
+using DeNelle.Core.Combat;
 
 namespace DeNelle.Village
 {
@@ -73,7 +87,7 @@ namespace DeNelle.Village
     /// implementation order). Instantiated by <see cref="VillageController"/>.
     /// </summary>
     [DisallowMultipleComponent]
-    public sealed class HeartController : MonoBehaviour
+    public sealed class HeartController : MonoBehaviour, IDamageableStructure
     {
         [Header("Threat state")]
         [Tooltip("Current threat state. Week 3 = always Serene (no combat in the skeleton).")]
@@ -163,6 +177,21 @@ namespace DeNelle.Village
         }
 
         /// <summary>
+        /// Heals the Heart by <paramref name="amount"/> HP (0-100 clamp). Delegates to
+        /// <see cref="SetHp"/> so the crystal state, OnHealthChanged event and the
+        /// no-op guard are all handled in one place.
+        /// <para>
+        /// WO-98: SalveAbility routes here when the active scene is a Defend-the-Tower
+        /// mode so the E-slot heal repairs the tower instead of the hero.
+        /// </para>
+        /// </summary>
+        public void Heal(float amount)
+        {
+            if (amount <= 0f) return;
+            SetHp(_hp + amount);
+        }
+
+        /// <summary>
         /// Sets Heart HP (0-100). Clamps the value, fires <see cref="OnHealthChanged"/>
         /// on any change, and auto-derives the threat state from the new HP level so
         /// the crystal colour / pulse track HP without external coordination.
@@ -234,6 +263,10 @@ namespace DeNelle.Village
             col.height = BlockerHeight;
             col.center = new Vector3(0f, BlockerHeight * 0.5f, 0f); // feet at y=0
         }
+
+        // ── IDamageableStructure ─────────────────────────────────────────────
+        bool IDamageableStructure.IsAlive => _hp > 0f;
+        void IDamageableStructure.ApplyContactDamage(float amount) => SetHp(_hp - amount);
 
         /// <summary>Parses a 6-digit hex string ("rrggbb") into a Color.</summary>
         private static Color Hex(string rrggbb)

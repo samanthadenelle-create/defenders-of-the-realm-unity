@@ -1,37 +1,30 @@
 // =============================================================================
-// WaveHudBridge — wires WaveManager events to VillageHudController.SetWave.
+// WaveHudBridge — wires WaveManager events to IVillageHud via CoreServices.
 // -----------------------------------------------------------------------------
-// DeNelle.Village ↔ DeNelle.HUD: the HUD module references DeNelle.Core only;
-// DeNelle.Village cannot reference DeNelle.HUD without breaking that contract.
-// Same pattern as WallRepairHudBridge — the bridge talks to the HUD by
-// reflection at runtime, so the asmdef graph stays acyclic.
+// WO-41 refactor: reflection removed. Previously held a plain UnityEngine.Object
+// _hud field and resolved VillageHudController.SetWave(int, float) by reflection
+// at runtime. Now uses CoreServices.Hud (IVillageHud) directly — no asmdef
+// reference to DeNelle.HUD needed because IVillageHud lives in DeNelle.Core.
 //
-// Wiring: VillageSceneBuilder adds this component to the WaveManager
-// GameObject and assigns _wave + _hud. At Start the bridge subscribes to
-// OnCountdownTick / OnWaveStarted and forwards the values to HUD.SetWave.
+// The _hud serialised field is REMOVED. VillageSceneBuilder no longer needs to
+// assign it (Step 6 removes that SetObjectField call). The _wave field is kept
+// so the scene builder can still wire the WaveManager reference.
 // =============================================================================
 
-using System;
-using System.Reflection;
+using DeNelle.Core;
 using UnityEngine;
 
 namespace DeNelle.Village
 {
     /// <summary>
     /// Forwards WaveManager countdown / wave-start events to
-    /// VillageHudController.SetWave(int, float) via reflection.
+    /// <see cref="DeNelle.Core.HUD.IVillageHud"/> via <see cref="CoreServices.Hud"/>.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class WaveHudBridge : MonoBehaviour
     {
         [Tooltip("The scene's WaveManager. Bound by the village scene builder.")]
         [SerializeField] private WaveManager _wave;
-
-        [Tooltip("The VillageHudController instance — held as a plain Object because " +
-                 "DeNelle.Village cannot reference DeNelle.HUD. Bound by the scene builder.")]
-        [SerializeField] private UnityEngine.Object _hud;
-
-        private MethodInfo _setWave; // VillageHudController.SetWave(int, float)
 
         // Subscribe in OnEnable, not Start — WaveManager.BeginLoop is async; if
         // we wait for Start the first OnCountdownTick can fire before our
@@ -41,26 +34,6 @@ namespace DeNelle.Village
             if (_wave == null)
             {
                 Debug.LogWarning("[WaveHudBridge] No WaveManager assigned — wave HUD will not update.");
-                return;
-            }
-            if (_hud == null)
-            {
-                Debug.LogWarning("[WaveHudBridge] No VillageHudController assigned — wave HUD will not update.");
-                return;
-            }
-
-            if (_setWave == null)
-            {
-                _setWave = _hud.GetType().GetMethod("SetWave",
-                    BindingFlags.Public | BindingFlags.Instance,
-                    binder: null,
-                    types: new[] { typeof(int), typeof(float) },
-                    modifiers: null);
-            }
-            if (_setWave == null)
-            {
-                Debug.LogWarning("[WaveHudBridge] VillageHudController.SetWave(int, float) " +
-                                 "not found via reflection — wave HUD will not update.");
                 return;
             }
 
@@ -92,8 +65,8 @@ namespace DeNelle.Village
 
         private void Forward(int waveNumber, float countdown)
         {
-            try { _setWave?.Invoke(_hud, new object[] { waveNumber, countdown }); }
-            catch (Exception ex) { Debug.LogWarning("[WaveHudBridge] HUD update failed: " + ex.Message); }
+            CoreServices.Hud?.SetWave(waveNumber);
+            CoreServices.Hud?.SetCountdown(countdown);
         }
     }
 }

@@ -26,6 +26,7 @@
 // =============================================================================
 
 using DeNelle.Core.Combat;
+using DeNelle.Data;       // PetData SO — WO-86
 using UnityEngine;
 
 namespace DeNelle.Pets
@@ -59,6 +60,10 @@ namespace DeNelle.Pets
 
         [Tooltip("Bond rank 0–4 — drives max HP and per-hit damage.")]
         [SerializeField, Range(0, 4)] private int _bondRank;
+
+        [Header("Data (WO-86)")]
+        [Tooltip("Optional PetData ScriptableObject. When assigned, overrides attack stats in Configure(). Falls back to PetDef JSON values when null.")]
+        [SerializeField] private PetData _petData;
 
         [Header("Behaviour")]
         [Tooltip("Deploy mode — Idle follows the hero, Defend hunts, Fortify holds a wall.")]
@@ -202,6 +207,15 @@ namespace DeNelle.Pets
                     _maxHp = rank.MaxHp;
                     _attackDamage = rank.AttackDamage;
                 }
+            }
+
+            // WO-86: overlay with PetData SO stats if assigned — SO wins over JSON.
+            if (_petData != null)
+            {
+                _attackRange    = _petData.attackRange;
+                _attackCooldown = _petData.attackCooldown;
+                if (_petData.damage > 0f)
+                    _attackDamage = _petData.damage;
             }
 
             _hp = _maxHp;

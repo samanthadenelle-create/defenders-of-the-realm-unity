@@ -34,10 +34,19 @@
 //   • EnemyGroupSpawner sets brain.Role from WaveEnemyGroup.Entries.
 //   • EnemyGroupCoordinator calls SetTacticalState() for group suppression.
 //   • Assign TacticalData SO in the inspector for advanced archetypes.
+//
+// WO-49 / WO-92: tag-based target finding (FindClosestTarget / SearchByTag)
+//   supplements role targeting as a scene-agnostic fallback. Tag "HeroTarget"
+//   on the hero GameObject and "HeartTarget" on HeartController. NavMesh path
+//   validity is checked before setting a Rush destination.
+// WO-90: TryAttack() damages both HeroHealth and IDamageableStructure targets.
 // =============================================================================
 
 using UnityEngine;
+using UnityEngine.AI;
+using DeNelle.Core.Combat;
 using DeNelle.Core.Data;
+using DeNelle.Data;           // EnemyData SO — WO-86
 
 namespace DeNelle.Village
 {
@@ -82,6 +91,17 @@ namespace DeNelle.Village
         [Tooltip("Seconds between heal ticks when adjacent to a wounded ally.")]
         [SerializeField, Range(0.5f, 5f)] private float _healInterval = 2f;
 
+        [Header("Attack (WO-90)")]
+        [Tooltip("Damage dealt per TryAttack() call to HeroHealth or IDamageableStructure targets.")]
+        [SerializeField, Min(0f)] private float damage = 8f;
+
+        [Tooltip("Minimum seconds between TryAttack() hits.")]
+        [SerializeField, Range(0.1f, 5f)] private float attackCooldown = 1.0f;
+
+        [Header("Data (WO-86)")]
+        [Tooltip("Optional ScriptableObject with balance stats. Overlays damage/attackCooldown at Awake. Leave null to keep existing inspector values (legacy prefab safe).")]
+        [SerializeField] private EnemyData _enemyData;
+
         [Header("Tactical overlay (DEF-72 — optional)")]
         [Tooltip("Assign a TacticalData SO to enable flanking, retreat, and group suppression. " +
                  "Leave blank for default role-only targeting (Rush to target).")]
@@ -105,6 +125,14 @@ namespace DeNelle.Village
 
         // DEF-43: optional BehaviorTree override — wired in Awake if present.
         private EnemyBehaviorTree _bt;
+
+        // WO-90: attack state for TryAttack().
+        private float     _nextAttackTime;
+        private Animator  _animator;
+        private Transform _currentTarget;
+
+        // WO-92: cached NavMeshAgent for NavMesh path validation.
+        private NavMeshAgent _navAgent;
 
         // ── Public properties (EnemyGroupCoordinator needs these) ─────────────
 
@@ -153,13 +181,26 @@ namespace DeNelle.Village
             // DEF-43: wire BT if present on this GameObject.
             _bt = GetComponent<EnemyBehaviorTree>();
 
+            // WO-90: cache Animator and NavMeshAgent from this GameObject.
+            _animator  = GetComponentInChildren<Animator>();
+            _navAgent  = GetComponent<NavMeshAgent>();
+
+            // WO-86: overlay balance stats from EnemyData SO if assigned.
+            if (_enemyData != null)
+            {
+                damage         = _enemyData.damage;
+                attackCooldown = _enemyData.attackCooldown;
+            }
+
             // Cache scene-wide refs once — FindAnyObjectByType is expensive per frame.
             var hc = FindAnyObjectByType<HeartController>();
             _heartTransform = hc != null ? hc.transform : null;
 
-            // Hero is expected to carry the "Player" tag.
-            var heroGo = GameObject.FindWithTag("Player");
-            _heroTransform = heroGo != null ? heroGo.transform : null;
+            // WO-49/WO-92: prefer tagged lookup; fall back to "Player" tag for
+            // scenes that haven't been updated to use HeroTarget yet.
+            var heroTagged = GameObject.FindWithTag("HeroTarget");
+            if (heroTagged == null) heroTagged = GameObject.FindWithTag("Player");
+            _heroTransform = heroTagged != null ? heroTagged.transform : null;
         }
 
         private void Update()
@@ -185,6 +226,7 @@ namespace DeNelle.Village
 
             // Choose target based on role.
             Transform target = ChooseTarget();
+            _currentTarget = target;
 
             // Compute the final destination with tactical overlay applied.
             Vector3? dest = ComputeTacticalDestination(target);
@@ -269,8 +311,23 @@ namespace DeNelle.Village
                 }
 
                 default:
+                {
                     // Rush: go directly to the target's position.
+                    // WO-92: validate that a complete NavMesh path exists before
+                    // committing to this destination.
+                    if (_navAgent != null && _navAgent.isOnNavMesh)
+                    {
+                        var path = new NavMeshPath();
+                        if (!_navAgent.CalculatePath(target.position, path) ||
+                            path.status != NavMeshPathStatus.PathComplete)
+                        {
+                            Debug.LogWarning(
+                                $"[EnemyBrain] {name}: No complete NavMesh path to target '{target.name}' — holding.", this);
+                            return null;
+                        }
+                    }
                     return target.position;
+                }
             }
         }
 
@@ -290,7 +347,8 @@ namespace DeNelle.Village
                 // close range (so the hero can body-block / fight instead of being
                 // ignored), then towers, then drop through to Enemy's Heart-march.
                 default:
-                    return FindNearbyHero() ?? FindNearestTower();
+                    // WO-49/WO-92: fall back to tag-based FindClosestTarget.
+                    return FindNearbyHero() ?? FindNearestTower() ?? FindClosestTarget();
             }
         }
 
@@ -392,6 +450,20 @@ namespace DeNelle.Village
             }
 
             return nearest;
+        }
+
+        // ── WO-49/WO-92: tag-based fallback target finding ─────────────────────
+
+        /// <summary>
+        /// Falls back to tag-based search when role targeting returns nothing.
+        /// Searches "HeroTarget" then "HeartTarget" tags.
+        /// </summary>
+        private Transform FindClosestTarget()
+        {
+            var hero = GameObject.FindWithTag("HeroTarget");
+            if (hero != null) return hero.transform;
+            var heart = GameObject.FindWithTag("HeartTarget");
+            return heart != null ? heart.transform : _heartTransform;
         }
 
         // ── Healer tick ───────────────────────────────────────────────────────

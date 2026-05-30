@@ -88,7 +88,12 @@ namespace DeNelle.Village
 
             foreach (EnemyGroupEntry entry in group.Entries)
             {
-                if (entry == null || entry.Prefab == null || entry.Count <= 0) continue;
+                if (entry == null || entry.Count <= 0) continue;
+                if (entry.Prefab == null)
+                {
+                    Debug.LogError($"[EnemyGroupSpawner] Prefab is null for entry in group '{group.GroupName}' (wave {waveId}). Assign a prefab to this EnemyGroupEntry in the WaveEnemyGroup asset.");
+                    continue;
+                }
 
                 for (int i = 0; i < entry.Count; i++)
                 {

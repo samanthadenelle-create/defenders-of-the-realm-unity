@@ -147,5 +147,49 @@ namespace DeNelle.Village
         Juice_GroundDecal_Flame,
         /// <summary>Ground decal — frost patch from Ice impacts.</summary>
         Juice_GroundDecal_Ice,
+
+        // ── Portal ───────────────────────────────────────────────────────────
+        /// <summary>Oneshot burst when hero enters a dungeon portal.</summary>
+        Portal_Enter,
+        /// <summary>Oneshot burst when hero exits a dungeon portal.</summary>
+        Portal_Exit,
+
+        // ── WO-62 celebration / combo / pet aliases ───────────────────────────
+        // Named to match the VfxToSfx mapping table in VFXManager (WO-62).
+        // These mirror the Juice_ / Aura_ values above; VFXCatalog can point
+        // both to the same prefab, or differentiate them independently.
+        /// <summary>Wave-clear celebration burst (alias for Juice_WaveClear). WO-62.</summary>
+        WaveClear_Celebration,
+        /// <summary>Level-up celebration burst (alias for Juice_LevelUp). WO-62.</summary>
+        LevelUp_Celebration,
+        /// <summary>Kill-combo tier-1 feedback burst. WO-62.</summary>
+        Combo_Tier1,
+        /// <summary>Kill-combo tier-2 feedback burst (bigger than tier 1). WO-62.</summary>
+        Combo_Tier2,
+        /// <summary>Pet fire aura loop — use instead of Aura_PetLevel* when pet type is Fire. WO-62.</summary>
+        Pet_Aura_Fire,
+        /// <summary>Pet ice aura loop — use instead of Aura_PetLevel* when pet type is Ice. WO-62.</summary>
+        Pet_Aura_Ice,
+        /// <summary>Oneshot pet attack impact burst. WO-62.</summary>
+        Pet_Attack,
+
+        // Environment / Weather (WO-52)
+        /// <summary>Shooting star streak. WeatherManager pools these. WO-52.</summary>
+        ShootingStar,
+        // -- WO-59 Dungeon VFX -----------------------------------------------------
+        /// <summary>Larger, darker enemy death explosion for dungeon runs. WO-59.</summary>
+        Death_EnemyExplosion_Dungeon,
+
+        // -- WO-66 Elite / Boss ----------------------------------------------------
+        /// <summary>Rising dark energy burst on elite enemy spawn. WO-66.</summary>
+        Elite_Spawn,
+        /// <summary>Dark energy collapse on elite enemy death. WO-66.</summary>
+        Elite_Death,
+        /// <summary>Dark energy + lightning bolt burst on boss spawn. WO-66.</summary>
+        Boss_Spawn,
+        /// <summary>Massive explosion + lingering smoke + debris on boss death. WO-66.</summary>
+        Boss_Death,
+        /// <summary>Oversized shockwave ring on boss melee impact. WO-66.</summary>
+        Boss_AttackImpact,
     }
 }

@@ -22,14 +22,16 @@
 // =============================================================================
 
 using System;
+using System.Collections;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using DeNelle.Core.Combat;
 
 namespace DeNelle.Village
 {
     /// <summary>Hero hit points + contact-damage intake + an IMGUI health bar.</summary>
     [DisallowMultipleComponent]
-    public sealed class HeroHealth : MonoBehaviour
+    public sealed class HeroHealth : MonoBehaviour, IDamageableStructure
     {
         public static HeroHealth Instance { get; private set; }
 
@@ -44,6 +46,7 @@ namespace DeNelle.Village
         private float _hp;
         private float _cooldown;
         private int   _enemyMask;
+        private bool  _isDead;
         private readonly Collider[] _buf = new Collider[24];
 
         // Cached siblings for death-stop + haptics. All optional — resolved in
@@ -132,12 +135,14 @@ namespace DeNelle.Village
             VFXManager.Play(VFXType.Impact_Physical, transform.position + Vector3.up * 1.0f);
             _impactFeedback?.PlayHaptic(0.25f, 0.12f);
 
-            if (_hp <= 0f)
+            if (_hp <= 0f && !_isDead)
             {
+                _isDead = true;
                 Debug.Log("[HeroHealth] Hero defeated.");
                 HitStopManager.DoImpact(HitTier.Heavy);   // one dramatic beat on death
-                Die();
-                OnDied?.Invoke();   // loss-flow handler hooks here (WO46 P11)
+                OnDeath?.Invoke();
+                OnDied?.Invoke();   // legacy event kept for existing listeners
+                StartCoroutine(HandleDeath());
             }
             else
             {
@@ -145,13 +150,69 @@ namespace DeNelle.Village
             }
         }
 
-        /// <summary>Stops the hero on defeat — no more walking or casting. The
-        /// HeroAnimatorSetup controller has no "Dead" state yet, so the VFX beat
-        /// and the movement/ability halt carry the death feedback.</summary>
-        private void Die()
+        /// <summary>Event fired the moment the hero dies (before the coroutine delay).</summary>
+        public event System.Action OnDeath;
+
+        /// <summary>Stops locomotion/abilities immediately, then shows GameOver UI
+        /// (or reloads the scene as a fallback) after a short dramatic pause.</summary>
+        private IEnumerator HandleDeath()
         {
+            // Disable locomotion and abilities immediately
             if (_locomotion != null) _locomotion.enabled = false;
             if (_abilities  != null) _abilities.enabled  = false;
+
+            // Brief pause for death feel
+            yield return new WaitForSeconds(1.5f);
+
+            // Try the game-over UI first. GameOverUI lives in the default
+            // Assembly-CSharp (no asmdef, global namespace), which this
+            // DeNelle.Village asmdef cannot reference — so we resolve it by type
+            // name across loaded assemblies and drive it via reflection (the
+            // project's cross-assembly bridge pattern). Falls back to a reload.
+            var gameOver = FindGameOverUi();
+            if (gameOver != null)
+            {
+                gameOver.gameObject.SetActive(true);
+                var show = gameOver.GetType().GetMethod("Show",
+                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public);
+                show?.Invoke(gameOver, null);
+            }
+            else
+            {
+                // Fallback: reload the scene
+                UnityEngine.SceneManagement.SceneManager.LoadScene(
+                    UnityEngine.SceneManagement.SceneManager.GetActiveScene().name);
+            }
+        }
+
+        /// <summary>
+        /// Finds the GameOverUI MonoBehaviour by type name. It compiles into the
+        /// default Assembly-CSharp (unreachable from this asmdef), so it is located
+        /// reflectively rather than referenced directly. Returns null if absent.
+        /// </summary>
+        private static MonoBehaviour FindGameOverUi()
+        {
+            System.Type t = null;
+            foreach (var asm in System.AppDomain.CurrentDomain.GetAssemblies())
+            {
+                t = asm.GetType("GameOverUI");
+                if (t != null) break;
+            }
+            if (t == null) return null;
+            var found = UnityEngine.Object.FindObjectsByType(
+                t, FindObjectsInactive.Include, FindObjectsSortMode.None);
+            return (found != null && found.Length > 0) ? found[0] as MonoBehaviour : null;
+        }
+
+        /// <summary>Revives the hero at <paramref name="position"/> (future use).</summary>
+        public void Respawn(Vector3 position)
+        {
+            _isDead = false;
+            _hp = _maxHp;
+            transform.position = position;
+            if (_locomotion != null) _locomotion.enabled = true;
+            if (_abilities  != null) _abilities.enabled  = true;
+            OnHealthChanged?.Invoke(_hp, _maxHp);
         }
 
         /// <summary>Heals up to max (for repair pads / potions / wave-clear).</summary>
@@ -163,12 +224,16 @@ namespace DeNelle.Village
             VFXManager.Play(VFXType.Impact_Heal, transform.position + Vector3.up * 1.0f);
         }
 
+        // ── IDamageableStructure ─────────────────────────────────────────────
+        bool IDamageableStructure.IsAlive => IsAlive;
+        void IDamageableStructure.ApplyContactDamage(float amount) => TakeDamage(amount);
+
         // ── IMGUI health bar (no UIDocument dependency) ───────────────────────
         private static Texture2D Px => Texture2D.whiteTexture;
 
         private void OnGUI()
         {
-            const float w = 260f, h = 22f, x = 20f, y = 64f;
+            const float w = 260f, h = 22f, x = 20f, y = 110f;
 
             // Backdrop + empty track.
             GUI.color = new Color(0f, 0f, 0f, 0.55f);

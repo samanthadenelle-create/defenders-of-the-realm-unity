@@ -1,39 +1,24 @@
 // =============================================================================
-// AbilityAudioBridge — plays a per-ability SFX through DeNelle.Audio.AudioService
-// without an asmdef reference (DeNelle.Village can't reference DeNelle.Audio), via
-// the project's reflection-bridge pattern. No-ops safely if Audio is absent.
-// -----------------------------------------------------------------------------
-// Clips are GENERATED procedurally in code (no binary audio assets — fresh-clone
-// safe), cached per effect kind. If an authored CC0 clip exists at
+// AbilityAudioBridge — plays per-ability SFX and music through CoreServices.Audio
+// (WO-41 refactor: reflection removed, uses IAudioService / IAudioService).
+// Clips are GENERATED procedurally in code (no binary audio assets —
+// fresh-clone safe), cached per effect kind. If an authored CC0 clip exists at
 // Resources/Sfx/<Kind>.wav it's preferred (drop-in upgrade path). Owner WO-35.
 // =============================================================================
 
-using System;
 using System.Collections.Generic;
-using System.Reflection;
+using DeNelle.Core;
 using UnityEngine;
 
 namespace DeNelle.Village
 {
     public static class AbilityAudioBridge
     {
-        private static bool s_resolved;
-        private static PropertyInfo s_instanceProp;
-        private static MethodInfo s_playSfx;
-        private static bool s_musicResolved;
-        private static MethodInfo s_playMusic;
-        private static Type s_musicTrackType;
-
         public static void PlayForKind(AbilityEffect kind)
         {
-            Resolve();
-            if (s_instanceProp == null || s_playSfx == null) return;
-            object inst = s_instanceProp.GetValue(null);
-            if (inst == null) return;
             AudioClip clip = ProceduralSfx.ForKind(kind);
             if (clip == null) return;
-            try { s_playSfx.Invoke(inst, new object[] { clip, VolumeFor(kind) }); }
-            catch { /* audio is best-effort */ }
+            CoreServices.Audio?.PlaySfx(clip, VolumeFor(kind));
         }
 
         /// <summary>
@@ -43,79 +28,35 @@ namespace DeNelle.Village
         /// </summary>
         public static void PlayForClassAndKind(string heroClass, AbilityEffect kind)
         {
-            Resolve();
-            if (s_instanceProp == null || s_playSfx == null) return;
-            object inst = s_instanceProp.GetValue(null);
-            if (inst == null) return;
             AudioClip clip = ProceduralSfx.ForClassAndKind(heroClass, kind);
             if (clip == null) return;
-            try { s_playSfx.Invoke(inst, new object[] { clip, VolumeFor(kind) }); }
-            catch { /* audio is best-effort */ }
+            CoreServices.Audio?.PlaySfx(clip, VolumeFor(kind));
         }
 
         /// <summary>
-        /// Plays a music track by enum name (e.g. "Victory", "Village") through
-        /// AudioService.PlayMusic(MusicTrack), via reflection. No-ops if Audio is
-        /// absent or the track name doesn't exist. WO-38.
+        /// Plays a music track by CoreServices.Audio.PlayMusic. Maps the track name
+        /// string to the DeNelle.Core.Audio.MusicTrack enum. No-ops if Audio is
+        /// absent or the track name is not recognised. WO-38.
         /// </summary>
         public static void PlayMusic(string trackName)
         {
-            ResolveMusic();
-            if (s_instanceProp == null || s_playMusic == null || s_musicTrackType == null) return;
-            object inst = s_instanceProp.GetValue(null);
-            if (inst == null) return;
-            object track;
-            try { track = Enum.Parse(s_musicTrackType, trackName, true); }
-            catch { return; }
-            try { s_playMusic.Invoke(inst, new object[] { track }); }
-            catch { /* best-effort */ }
+            if (CoreServices.Audio == null) return;
+            switch (trackName?.ToLowerInvariant())
+            {
+                case "village": CoreServices.Audio.PlayMusic(DeNelle.Core.Audio.MusicTrack.Village); break;
+                case "battle":  CoreServices.Audio.PlayMusic(DeNelle.Core.Audio.MusicTrack.Battle);  break;
+                case "victory": CoreServices.Audio.PlayMusic(DeNelle.Core.Audio.MusicTrack.Victory); break;
+                case "dungeon": CoreServices.Audio.PlayMusic(DeNelle.Core.Audio.MusicTrack.Dungeon); break;
+                // unrecognised track names are silent no-ops
+            }
         }
 
         /// <summary>Plays a short tense alarm sting (wave imminent). WO-40.</summary>
         public static void PlayDangerSting()
         {
-            Resolve();
-            if (s_instanceProp == null || s_playSfx == null) return;
-            object inst = s_instanceProp.GetValue(null);
-            if (inst == null) return;
             AudioClip clip = ProceduralSfx.DangerSting();
             if (clip == null) return;
-            try { s_playSfx.Invoke(inst, new object[] { clip, 0.6f }); }
-            catch { /* best-effort */ }
-        }
-
-        private static void ResolveMusic()
-        {
-            Resolve();   // ensures s_instanceProp
-            if (s_musicResolved) return;
-            s_musicResolved = true;
-            foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
-            {
-                var t = asm.GetType("DeNelle.Audio.AudioService", false);
-                if (t == null) continue;
-                foreach (var m in t.GetMethods(BindingFlags.Public | BindingFlags.Instance))
-                {
-                    if (m.Name != "PlayMusic") continue;
-                    var ps = m.GetParameters();
-                    if (ps.Length == 1 && ps[0].ParameterType.IsEnum)
-                    { s_playMusic = m; s_musicTrackType = ps[0].ParameterType; break; }
-                }
-                break;
-            }
-        }
-
-        private static void Resolve()
-        {
-            if (s_resolved) return;
-            s_resolved = true;
-            foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
-            {
-                var t = asm.GetType("DeNelle.Audio.AudioService", false);
-                if (t == null) continue;
-                s_instanceProp = t.GetProperty("Instance", BindingFlags.Public | BindingFlags.Static);
-                s_playSfx = t.GetMethod("PlaySfx", new[] { typeof(AudioClip), typeof(float) });
-                break;
-            }
+            CoreServices.Audio?.PlaySfx(clip, 0.6f);
         }
 
         private static float VolumeFor(AbilityEffect k)
@@ -166,8 +107,8 @@ namespace DeNelle.Village
                 float t = (float)i / n;
                 float baseHz = (i % (half * 2) < half) ? 330f : 247f;   // alternating alarm tones
                 float hz = baseHz * Mathf.Lerp(1f, 0.85f, t);            // slight descent
-                phase += 2.0 * Math.PI * hz / Rate;
-                float s = (float)Math.Sin(phase);
+                phase += 2.0 * System.Math.PI * hz / Rate;
+                float s = (float)System.Math.Sin(phase);
                 float env = i < attack ? (i / attack) : Mathf.Exp(-2.2f * t);
                 if (i > n - 64) env *= (n - i) / 64f;
                 data[i] = s * env * 0.7f;
@@ -226,8 +167,8 @@ namespace DeNelle.Village
             {
                 float t = (float)i / n;
                 float hz = Mathf.Lerp(f0, f1, t);
-                phase += 2.0 * Math.PI * hz / Rate;
-                float s = (float)Math.Sin(phase);
+                phase += 2.0 * System.Math.PI * hz / Rate;
+                float s = (float)System.Math.Sin(phase);
                 float ns = (float)(rng.NextDouble() * 2.0 - 1.0);
                 float v = Mathf.Lerp(s, ns, noise);
                 float env = i < attack ? (i / attack) : Mathf.Exp(-3.5f * t);  // attack then exp decay

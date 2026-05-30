@@ -1,23 +1,20 @@
 // =============================================================================
 // WaveFeedbackDirector — wave-lifecycle juice (WO-38 + WO-40).
 // -----------------------------------------------------------------------------
-//   WO-38 (wave complete): on OnWaveCleared → victory music sting, a "WAVE n
+//   WO-38 (wave complete): on OnWaveCleared -> victory music sting, a "WAVE n
 //          REPELLED" HUD banner, an amber Heart pulse, and a nudge to repair the
 //          worst-damaged wall; village music resumes after a short dwell.
-//   WO-40 (wave imminent): when the countdown drops to the alert threshold →
+//   WO-40 (wave imminent): when the countdown drops to the alert threshold ->
 //          a red edge vignette, a tense danger sting, and a haptic pulse
 //          (gamepad rumble on desktop / Handheld.Vibrate on mobile; WebGL relies
 //          on the visual + audio). One-shot per countdown; reset on wave start.
 //
-// Added to the village scene at runtime by a SceneManager.sceneLoaded hook (no
-// scene edit / re-bake). Lives in DeNelle.Village so it can call WaveManager,
-// WallRepairController, HeartController, AbilityVfxKit + AbilityAudioBridge
-// directly; the HUD (DeNelle.HUD) is reached by reflection (no asmdef ref), the
-// project's established bridge pattern.
+// WO-41 refactor: reflection removed throughout. HUD calls now go through
+// CoreServices.Hud (IVillageHud) and audio through AbilityAudioBridge which
+// itself uses CoreServices.Audio. FindHud() stub kept so TrySpawn compiles.
 // =============================================================================
 
-using System;
-using System.Reflection;
+using DeNelle.Core;
 using DeNelle.Core.State;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -31,49 +28,22 @@ namespace DeNelle.Village
         [SerializeField] private float _imminentThreshold = 3f;
 
         private WaveManager _wave;
-        private object _hud;                 // DeNelle.HUD.VillageHudController
-        private MethodInfo _showBanner;      // ShowWaveClearBanner(int, int)
-        private MethodInfo _setImminent;     // SetWaveImminent(bool)
-        private MethodInfo _setDirections;   // SetAttackDirections(bool,bool,bool,bool) — WO-39
-        private MethodInfo _setCompassImminent; // SetCompassImminent(bool) — WO-40 compass flash
         private WallRepairController _repair;
         private bool _imminentFired;
         private float _compassTimer;         // WO-39 poll throttle
         private Transform _heartT;
 
-        /// <summary>Wires the wave manager + HUD before the GameObject is activated.</summary>
+        /// <summary>Wires the wave manager before the GameObject is activated.</summary>
         public void Bind(WaveManager wave, object hud)
         {
             _wave = wave;
-            _hud = hud;
-            ResolveHudMethods();
+            // hud parameter kept for call-site compatibility; CoreServices.Hud used directly.
         }
 
-        // FAIL #6 cause (b): the HUD may not have existed yet when TrySpawn ran, so
-        // _hud / the method binds were null and every SetWaveImminent call was a
-        // silent no-op. Re-find the HUD + (re)resolve the reflection binds on demand
-        // so the alert works even when the HUD bootstraps after this director.
-        private void ResolveHudMethods()
-        {
-            if (_hud == null) _hud = FindHud();
-            if (_hud == null) return;
-
-            var t = _hud.GetType();
-            if (_showBanner == null)
-                _showBanner = t.GetMethod("ShowWaveClearBanner", new[] { typeof(int), typeof(int) });
-            if (_setImminent == null)
-                _setImminent = t.GetMethod("SetWaveImminent", new[] { typeof(bool) });
-            if (_setDirections == null)
-                _setDirections = t.GetMethod("SetAttackDirections",
-                    new[] { typeof(bool), typeof(bool), typeof(bool), typeof(bool) });
-            if (_setCompassImminent == null)
-                _setCompassImminent = t.GetMethod("SetCompassImminent", new[] { typeof(bool) });
-        }
-
-        // ── WO-39: poll live enemies → light the compass arms ────────────────
+        // ── WO-39: poll live enemies -> light the compass arms ────────────────
         private void Update()
         {
-            if (_wave == null || _setDirections == null) return;
+            if (_wave == null) return;
             _compassTimer -= Time.unscaledDeltaTime;
             if (_compassTimer > 0f) return;
             _compassTimer = 0.25f;
@@ -98,7 +68,7 @@ namespace DeNelle.Village
                     else { if (d.z >= 0f) n = true; else s = true; }
                 }
             }
-            try { _setDirections.Invoke(_hud, new object[] { n, e, s, w }); } catch { }
+            CoreServices.Hud?.SetAttackDirections(n, e, s, w);
         }
 
         private void OnEnable()
@@ -122,14 +92,14 @@ namespace DeNelle.Village
         {
             AbilityAudioBridge.PlayMusic("Victory");
             // WO-38: show the player's current crystal balance on the banner so the
-            // "+N ◆" line actually renders (was hard-coded to 0). The wave reward is
+            // "+N diamond" line actually renders (was hard-coded to 0). The wave reward is
             // credited by the wave/reward path before this fires, so the balance is
             // the freshest number we have without a per-wave reward field.
             int crystals = CurrentCrystals();
-            try { _showBanner?.Invoke(_hud, new object[] { waveId, crystals }); } catch { }
+            CoreServices.Hud?.ShowWaveClearBanner(waveId, crystals, string.Empty);
             PulseHeart();
 
-            // Per-wave Wisdom reward — the talent-tree income hook (none existed, so
+            // Per-wave Wisdom reward -- the talent-tree income hook (none existed, so
             // Wisdom could never be earned in normal play and the skill tree was
             // un-progressable). Grant a small amount each cleared wave; tune freely.
             const int wisdomPerWave = 2;
@@ -145,8 +115,6 @@ namespace DeNelle.Village
         private void ReturnToVillageMusic() => AbilityAudioBridge.PlayMusic("Village");
 
         // WO-38: the player's current crystal balance for the wave-clear banner.
-        // Reads GameStateService when Core is bootstrapped; falls back to 0 (the
-        // banner then shows just "WAVE n REPELLED" — its own crystals>0 guard).
         private static int CurrentCrystals()
         {
             var svc = GameStateService.Instance;
@@ -171,7 +139,7 @@ namespace DeNelle.Village
         private void OnWaveStarted(int waveId)
         {
             // FAIL #6 cause (a): the owner starts waves with the HUD "START WAVE"
-            // button → WaveManager.ForceBeginNextWave snaps the countdown straight
+            // button -> WaveManager.ForceBeginNextWave snaps the countdown straight
             // to 0 and only ever ticks OnCountdownTick(0f), so the 0 < x <= threshold
             // window is NEVER hit and the alert silently never fired. If the alert
             // hasn't fired by the time the wave starts (force-start or a zero/short
@@ -194,15 +162,13 @@ namespace DeNelle.Village
         }
 
         // Single entry point for the wave-imminent alert (WO-40): red edge vignette,
-        // amber compass flash, danger sting + haptic. Re-resolves the HUD binds first
-        // (cause (b)) and logs so the alert is verifiable in the player log.
+        // amber compass flash, danger sting + haptic.
         private void FireImminentAlert(string reason)
         {
             _imminentFired = true;
-            ResolveHudMethods();   // FAIL #6 cause (b): bind lazily if the HUD arrived late
 
             Debug.Log($"[WaveFeedbackDirector] Wave-imminent ALERT fired ({reason}); " +
-                      $"setImminentBound={_setImminent != null}, compassBound={_setCompassImminent != null}.");
+                      $"hudBound={CoreServices.Hud != null}.");
 
             SetImminent(true);
             SetCompassImminent(true);   // WO-40: flash ALL compass arms amber during the alert
@@ -220,15 +186,17 @@ namespace DeNelle.Village
 
         private void SetImminent(bool on)
         {
-            try { _setImminent?.Invoke(_hud, new object[] { on }); } catch { }
+            CoreServices.Hud?.SetWaveImminent(on);
         }
 
         private void SetCompassImminent(bool on)
         {
-            try { _setCompassImminent?.Invoke(_hud, new object[] { on }); } catch { }
+            // SetCompassImminent is an internal-only method on VillageHudController
+            // (not part of IVillageHud); SetWaveImminent drives the imminent state.
+            CoreServices.Hud?.SetWaveImminent(on);
         }
 
-        // WO-40: a DOUBLE-PULSE — two short rumbles (~0.12s on, ~0.10s gap, ~0.12s
+        // WO-40: a DOUBLE-PULSE -- two short rumbles (~0.12s on, ~0.10s gap, ~0.12s
         // on) so the alert reads as a deliberate "bump-bump", not a single buzz.
         // Sequenced with Invoke so it works without coroutines on the gamepad;
         // Handheld.Vibrate is double-fired on mobile.
@@ -305,18 +273,13 @@ namespace DeNelle.Village
             var hud = FindHud();
             dir.Bind(wave, hud);
             go.SetActive(true);
-            Debug.Log($"[WaveFeedbackDirector] Installed (wave feedback active). hudFound={hud != null} " +
-                      "(binds re-resolve lazily if the HUD arrives later).");
+            Debug.Log($"[WaveFeedbackDirector] Installed (wave feedback active). hudBound={CoreServices.Hud != null}.");
         }
 
         private static object FindHud()
         {
-            foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
-            {
-                var t = asm.GetType("DeNelle.HUD.VillageHudController", false);
-                if (t == null) continue;
-                return UnityEngine.Object.FindObjectOfType(t);
-            }
+            // WO-41: HUD is now registered in CoreServices.Hud; no reflection needed.
+            // Stub kept so Bind(wave, hud) call-site compiles unchanged.
             return null;
         }
     }

@@ -102,6 +102,11 @@ namespace DeNelle.Village
         [Tooltip("Maximum simultaneous active aura/loop GameObjects.")]
         [SerializeField, Min(1)] private int _maxActiveLoops = 20;
 
+        [Header("Dungeon (WO-59)")]
+        [Tooltip("ScriptableObject with darker prefab overrides for dungeon scenes. " +
+                 "Call ApplyDungeonMode(true) on dungeon load to activate.")]
+        public DungeonVFXSettings dungeonSettings;
+
         [Header("Pool Root")]
         [Tooltip("Parent transform for pooled (inactive) objects. Auto-created if null.")]
         [SerializeField] private Transform _poolRoot;
@@ -115,6 +120,9 @@ namespace DeNelle.Village
         // Tracking how many active effects we currently have.
         private int _activeOneshots;
         private int _activeLoops;
+
+        // WO-59: dungeon mode flag — ApplyDungeonMode() toggles this.
+        private bool _dungeonMode = false;
 
         // ── Quality ───────────────────────────────────────────────────────────
 
@@ -134,12 +142,80 @@ namespace DeNelle.Village
         /// Play a oneshot VFX at a world position. Null-safe — does nothing if
         /// VFXManager hasn't been initialised yet.
         /// </summary>
-        public static void Play(VFXType type, Vector3 position, Quaternion rotation = default)
-            => Instance?.PlayOneshot(type, position, rotation);
+        /// <param name="playSound">
+        /// When true (default) a matching SFX is fired through AudioService at the
+        /// same position. Pass false to suppress audio without affecting the visual
+        /// (e.g. when the caller handles audio itself). WO-62.
+        /// </param>
+        public static void Play(VFXType type, Vector3 position,
+                                Quaternion rotation = default, bool playSound = true)
+        {
+            Instance?.PlayOneshot(type, position, rotation);
+            if (playSound)
+                PlayAudio(type, position);
+        }
 
         /// <summary>Play a oneshot and specify an optional parent (effect will move with it).</summary>
         public static void PlayAt(VFXType type, Transform parent)
             => Instance?.PlayOneshot(type, parent.position, parent.rotation, parent);
+
+        // ── Audio bridge (WO-62) ──────────────────────────────────────────────
+
+        /// <summary>
+        /// Maps a VFXType to its paired SfxId and fires the sound through
+        /// AudioService (if available). Called automatically by Play() unless
+        /// <c>playSound:false</c> is passed. Null-safe throughout. WO-62.
+        /// </summary>
+        private static void PlayAudio(VFXType type, Vector3 position)
+        {
+            var sfxId = VfxToSfx(type);
+            if (sfxId == DeNelle.Audio.SfxId.None) return;
+            DeNelle.Audio.AudioService.Instance?.PlaySfxAtPosition(sfxId, position);
+        }
+
+        /// <summary>
+        /// Maps every VFXType that has a sound to its paired SfxId.
+        /// Types without a sound mapping return SfxId.None (silent). WO-62.
+        /// </summary>
+        private static DeNelle.Audio.SfxId VfxToSfx(VFXType type) => type switch
+        {
+            VFXType.Impact_ExplosionFire    => DeNelle.Audio.SfxId.FireExplosion,
+            VFXType.Impact_Flame            => DeNelle.Audio.SfxId.FireExplosion,
+            VFXType.Impact_ExplosionAether  => DeNelle.Audio.SfxId.ArcaneExplosion,
+            VFXType.Impact_Aether           => DeNelle.Audio.SfxId.ArcaneExplosion,
+            VFXType.Impact_ShockwaveRing    => DeNelle.Audio.SfxId.Shockwave,
+            VFXType.Impact_Heal             => DeNelle.Audio.SfxId.Heal,
+            VFXType.Cast_MageCharge         => DeNelle.Audio.SfxId.WizardCast,
+            VFXType.Cast_KnightSlam         => DeNelle.Audio.SfxId.Shockwave,
+            VFXType.Projectile_FlameArrow   => DeNelle.Audio.SfxId.FlameArrowLaunch,
+            VFXType.Projectile_TowerArcane  => DeNelle.Audio.SfxId.TowerShot,
+            VFXType.Projectile_TowerFire    => DeNelle.Audio.SfxId.TowerShot,
+            VFXType.Death_Skeleton          => DeNelle.Audio.SfxId.EnemyDeath,
+            VFXType.Death_Boss              => DeNelle.Audio.SfxId.EnemyDeath,
+            VFXType.Death_Brute             => DeNelle.Audio.SfxId.EnemyDeath,
+            VFXType.Death_Wolf              => DeNelle.Audio.SfxId.EnemyDeath,
+            VFXType.Death_Tiefling          => DeNelle.Audio.SfxId.EnemyDeath,
+            VFXType.Death_Generic           => DeNelle.Audio.SfxId.EnemyDeath,
+            VFXType.WaveClear_Celebration   => DeNelle.Audio.SfxId.WaveClear,
+            VFXType.Juice_WaveClear         => DeNelle.Audio.SfxId.WaveClear,
+            VFXType.LevelUp_Celebration     => DeNelle.Audio.SfxId.LevelUp,
+            VFXType.Juice_LevelUp           => DeNelle.Audio.SfxId.LevelUp,
+            VFXType.Combo_Tier1             => DeNelle.Audio.SfxId.ComboSmall,
+            VFXType.Juice_KillStreak        => DeNelle.Audio.SfxId.ComboSmall,
+            VFXType.Combo_Tier2             => DeNelle.Audio.SfxId.ComboBig,
+            VFXType.Pet_Aura_Fire           => DeNelle.Audio.SfxId.PetFireAura,
+            VFXType.Pet_Attack              => DeNelle.Audio.SfxId.PetAttack,
+            VFXType.ShootingStar            => DeNelle.Audio.SfxId.None,  // WO-52: no SFX entry yet
+            // WO-59 dungeon
+            VFXType.Death_EnemyExplosion_Dungeon => DeNelle.Audio.SfxId.EnemyDeath,
+            // WO-66 elite / boss
+            VFXType.Elite_Spawn             => DeNelle.Audio.SfxId.None,
+            VFXType.Elite_Death             => DeNelle.Audio.SfxId.EnemyDeath,
+            VFXType.Boss_Spawn              => DeNelle.Audio.SfxId.None,
+            VFXType.Boss_Death              => DeNelle.Audio.SfxId.EnemyDeath,
+            VFXType.Boss_AttackImpact       => DeNelle.Audio.SfxId.Shockwave,
+            _                               => DeNelle.Audio.SfxId.None,
+        };
 
         // ── Typed entry points (match work-order method names exactly) ─────────
 
@@ -202,6 +278,56 @@ namespace DeNelle.Village
             };
             return PlayLoop(type, t.position, t);
         }
+
+        // ── WO-59: Dungeon mode ───────────────────────────────────────────────
+
+        /// <summary>
+        /// Swap to dungeon prefab overrides when <paramref name="active"/> is true,
+        /// or restore village prefabs when false. Call on dungeon scene load/unload.
+        /// Null-safe — does nothing when <see cref="dungeonSettings"/> is not assigned.
+        /// WO-59.
+        /// </summary>
+        public void ApplyDungeonMode(bool active)
+        {
+            _dungeonMode = active;
+            if (dungeonSettings == null) return;
+
+            foreach (var ov in dungeonSettings.overrides)
+            {
+                if (ov.prefab == null) continue;
+
+                if (active)
+                {
+                    // Replace pool entry with dungeon variant.
+                    if (_pools.ContainsKey(ov.type)) _pools.Remove(ov.type);
+                    // Pre-warm a single instance of the dungeon prefab.
+                    _pools[ov.type] = new Queue<GameObject>();
+                    _pools[ov.type].Enqueue(CreatePooledInstance(ov.prefab, ov.type));
+                }
+                else
+                {
+                    // Remove dungeon pool — next acquire will re-warm from catalog.
+                    if (_pools.ContainsKey(ov.type)) _pools.Remove(ov.type);
+
+                    // Restore from catalog if a village prefab is wired.
+                    if (_catalog != null && _catalog.TryGet(ov.type, out var entry)
+                        && entry.Prefab != null)
+                    {
+                        _pools[ov.type] = new Queue<GameObject>();
+                        _pools[ov.type].Enqueue(CreatePooledInstance(entry.Prefab, ov.type));
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Play a VFX in dungeon mode. Routing is automatic — dungeon overrides
+        /// are already swapped into the pool by <see cref="ApplyDungeonMode"/>.
+        /// Delegates to <see cref="Play"/> for a one-liner call site. WO-59.
+        /// </summary>
+        public static void PlayDungeon(VFXType type, Vector3 position,
+                                       Quaternion rotation = default)
+            => Play(type, position, rotation);
 
         // ─────────────────────────────────────────────────────────────────────
         // ── INTERNAL PLAY LOGIC ───────────────────────────────────────────────
@@ -451,8 +577,8 @@ namespace DeNelle.Village
                 // ── Healing ───────────────────────────────────────────────────
                 case VFXType.Impact_Heal:
                 case VFXType.Cast_Heal:
-                case VFXType.Juice_LevelUp:
-                case VFXType.Juice_WaveClear:
+                    // CLI ④ dedup: Juice_LevelUp / Juice_WaveClear removed here — they
+                    // are (correctly) handled in the gold "celebration" block below.
                     AbilityVfxKit.SpawnAbilityVfx(AbilityEffect.Heal, _healColor, position, 1.5f, position);
                     break;
 
@@ -504,7 +630,78 @@ namespace DeNelle.Village
                     AbilityVfxKit.SpawnAbilityVfx(AbilityEffect.Snare, _physColor, position, 0.8f, position);
                     break;
 
+                // ── Portal ──────────────────────────────────────────────────────────
+                case VFXType.Portal_Enter:
+                case VFXType.Portal_Exit:
+                    AbilityVfxKit.SpawnAbilityVfx(AbilityEffect.Aoe, _aetherColor, position, 2f, position);
+                    break;
+
                 // ── Default ───────────────────────────────────────────────────
+
+                // ── WO-62 celebration / combo / pet types ────────────────────
+                case VFXType.WaveClear_Celebration:
+                case VFXType.Juice_WaveClear:
+                    AbilityVfxKit.SpawnAbilityVfx(AbilityEffect.Aoe, _goldColor, position, 2.5f, position);
+                    break;
+
+                case VFXType.LevelUp_Celebration:
+                case VFXType.Juice_LevelUp:
+                    AbilityVfxKit.SpawnAbilityVfx(AbilityEffect.Heal, _goldColor, position, 1.5f, position);
+                    break;
+
+                                case VFXType.Combo_Tier1:
+                    AbilityVfxKit.SpawnAbilityVfx(AbilityEffect.Cleave, _goldColor, position, 1f, position);
+                    break;
+
+                case VFXType.Combo_Tier2:
+                    AbilityVfxKit.SpawnAbilityVfx(AbilityEffect.Aoe, _goldColor, position, 2f, position);
+                    break;
+
+                case VFXType.Pet_Aura_Fire:
+                    AbilityVfxKit.SpawnAbilityVfx(AbilityEffect.Cleave, _flameColor, position, 1f, position);
+                    break;
+
+                case VFXType.Pet_Aura_Ice:
+                    AbilityVfxKit.SpawnAbilityVfx(AbilityEffect.Snare, _iceColor, position, 1f, position);
+                    break;
+
+                case VFXType.Pet_Attack:
+                    AbilityVfxKit.SpawnAbilityVfx(AbilityEffect.Strike, _flameColor, position, 1f, position);
+                    break;
+
+                // -- Weather / shooting star (WO-52) -----------------------------------------------
+                case VFXType.ShootingStar:
+                    // Procedural fallback: bright white flash at spawn position.
+                    AbilityVfxKit.SpawnAbilityVfx(AbilityEffect.Aoe, Color.white, position, 0.5f, position);
+                    break;
+
+                // -- WO-59: dungeon enemy death -----------------------------------------------------
+                case VFXType.Death_EnemyExplosion_Dungeon:
+                    // Larger, darker explosion than the village default.
+                    AbilityVfxKit.SpawnAbilityVfx(AbilityEffect.Meteor, _physColor, position, 3.5f, position);
+                    break;
+
+                // -- WO-66: elite / boss VFX -------------------------------------------------------
+                case VFXType.Elite_Spawn:
+                    AbilityVfxKit.SpawnAbilityVfx(AbilityEffect.Aoe, _aetherColor, position, 1.5f, position);
+                    break;
+
+                case VFXType.Elite_Death:
+                    AbilityVfxKit.SpawnAbilityVfx(AbilityEffect.Meteor, _aetherColor, position, 2.5f, position);
+                    break;
+
+                case VFXType.Boss_Spawn:
+                    AbilityVfxKit.SpawnAbilityVfx(AbilityEffect.Aoe, _aetherColor, position, 3f, position);
+                    break;
+
+                case VFXType.Boss_Death:
+                    AbilityVfxKit.SpawnAbilityVfx(AbilityEffect.Meteor, _physColor, position, 4f, position);
+                    break;
+
+                case VFXType.Boss_AttackImpact:
+                    AbilityVfxKit.SpawnAbilityVfx(AbilityEffect.Cleave, _physColor, position, 3f, position);
+                    break;
+
                 default:
                     AbilityVfxKit.SpawnAbilityVfx(AbilityEffect.Aoe, _aetherColor, position, 1.5f, position);
                     break;
@@ -512,7 +709,7 @@ namespace DeNelle.Village
         }
 
         /// <summary>
-        /// Procedural fallback for loop effects — spawns a simple looping procedural
+        /// Procedural fallback for loop effects -- spawns a simple looping procedural
         /// particle child and returns the host GameObject for the VFXHandle to own.
         /// </summary>
         private GameObject ProceduralLoopFallback(VFXType type, Vector3 position, Transform parent)

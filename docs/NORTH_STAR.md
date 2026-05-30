@@ -155,6 +155,30 @@ walls, towers, pets, save, VFX). The gap to the vision is the **player-build lay
 the loop** — a fraction of what it feels like, shippable one playable step at a time. It's a
 **re-centering, not a rebuild.**
 
+## Free tier = rewarded ads = the population engine
+
+**Valid, proven pillar** — the dominant model for casual/mid-core mobile (CoC, Clash Royale, every idle
+game). ~95–98% of players never pay; **rewarded ads are the only way to monetize that silent majority**,
+and they're often 30–50% of total revenue. Use **Unity Ads / LevelPlay** (first-party, in-engine,
+mediated for best fill/rate) — a provider integration that fits the rail abstraction.
+
+**The deeper point — free players are the *content*, not a cost.** In a competitive game the whales pay
+to raid bases, climb ladders, win tournaments — which **requires a full stadium of opponents.** The free
+majority *are* those opponents / clan-mates / ladder / raid targets. Rewarded ads let them participate by
+paying with **attention instead of cash**, which simultaneously: (1) monetizes the 95%, (2) retains them,
+(3) **keeps the whale economy worth paying into.** You're not choosing free vs paying players — **the free
+players are what make the paying players' spend worth it.** Most "crypto whale games" miss this, then
+wonder why whales churn (empty stadium).
+
+**Monetization matrix:**
+| Build | Free majority | Spenders |
+|---|---|---|
+| **Store F2P** (mass market) | **rewarded ads** (opt-in) | IAP |
+| **Crypto** (Pi / whales) | — | tournament buy-ins / pot |
+
+Discipline: rewarded/**opt-in only** (a path, never a wall); **store-build only** (keep ads out of the
+crypto build — store policy + brand/feel).
+
 ## The evergreen engine — symmetric AI + meta counters (the content runway)
 
 **Defense is as smart as offense** (symmetric AI) → a deep strategy space → and a deep space makes

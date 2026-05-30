@@ -1,42 +1,61 @@
 // =============================================================================
-// CoreServices — tiny cross-assembly service registry (introduced by WO-43).
+// CoreServices — cross-assembly service registry (WO-41 + WO-43).
 // -----------------------------------------------------------------------------
-// WO-43 names this type as a dependency of "WO-41 (CoreServices registry)".
-// WO-41 was never landed — there is no CoreServices.cs in the repo and the
-// HUD / Audio modules use their own singleton + [RuntimeInitializeOnLoadMethod]
-// bootstraps, NOT a central registry. Rather than block WO-43 on a missing
-// dependency, this file introduces a MINIMAL registry that exposes only the
-// one slot WO-43 actually needs: the Jupiter swap service.
+// A static registry living in DeNelle.Core (referenced by every module) that
+// lets implementing modules register concrete services behind Core-defined
+// interfaces, so consumers never need an assembly reference to the implementor.
 //
-// Pattern: a static registry living in DeNelle.Core (which every module already
-// references) lets a module register an implementation of a Core-defined
-// interface so other modules can reach it WITHOUT an assembly reference to the
-// implementing module. The Jupiter slot follows exactly that pattern — the
-// concrete JupiterSwapService lives in the non-autoReferenced DeNelle.Web3
-// asmdef, registers itself here on Awake, and callers reach it through this
-// Core-side surface.
+// Slots:
+//   Jupiter — IJupiterService (WO-43, DeNelle.Web3)
+//   Hud     — IVillageHud    (WO-41, DeNelle.HUD)
+//   Audio   — IAudioService  (WO-41, DeNelle.Audio)
 //
-// When/if a fuller WO-41 lands, additional slots (Hud / Audio / …) can be added
-// here following the same Register/Unregister shape.
+// Each slot follows the same Register/Unregister pattern: the concrete
+// MonoBehaviour calls Register in Awake and Unregister in OnDestroy.
+// Callers MUST null-check (e.g. CoreServices.Hud?.SetWave(n)).
 // =============================================================================
 
+using DeNelle.Core.Audio;
+using DeNelle.Core.HUD;
 using DeNelle.Core.Web3;
 using UnityEngine;
 
 namespace DeNelle.Core
 {
     /// <summary>
-    /// A minimal static service registry for cross-assembly access to a small
-    /// set of game-wide services. Slots are populated at runtime by the
-    /// implementing module and consumed through the interface, so consumers
-    /// never need an assembly reference to the implementor.
+    /// A static service registry for cross-assembly access to game-wide
+    /// services. Slots are populated at runtime by the implementing module
+    /// and consumed through Core-defined interfaces.
     /// </summary>
     public static class CoreServices
     {
+        // ── HUD (WO-41) ───────────────────────────────────────────────────────
+        /// <summary>
+        /// The active village HUD, or null when no VillageHudController is
+        /// present in the loaded scenes. Always null-check before use.
+        /// </summary>
+        public static IVillageHud Hud { get; private set; }
+
+        /// <summary>Registers the village HUD. Called by VillageHudController.Awake.</summary>
+        public static void RegisterHud(IVillageHud hud) { Hud = hud; }
+
+        /// <summary>Unregisters the village HUD. Called by VillageHudController.OnDestroy.</summary>
+        public static void UnregisterHud(IVillageHud hud) { if (ReferenceEquals(Hud, hud)) Hud = null; }
+
+        // ── Audio (WO-41) ─────────────────────────────────────────────────────
+        /// <summary>
+        /// The active audio service, or null before AudioBootstrap has run.
+        /// Always null-check before use.
+        /// </summary>
+        public static IAudioService Audio { get; private set; }
+
+        /// <summary>Registers the audio service. Called by AudioService.Awake.</summary>
+        public static void RegisterAudio(IAudioService audio) { Audio = audio; }
+
+        /// <summary>Unregisters the audio service. Called by AudioService.OnDestroy.</summary>
+        public static void UnregisterAudio(IAudioService audio) { if (ReferenceEquals(Audio, audio)) Audio = null; }
+
         // ── Jupiter swap service (WO-43) ─────────────────────────────────────
-        // Populated by JupiterSwapService (DeNelle.Web3) on Awake. Null until a
-        // JupiterSwapService exists in the loaded scene; callers MUST null-check
-        // (e.g. CoreServices.Jupiter?.OpenSwapPanel()).
         /// <summary>
         /// The active Jupiter swap service, or null when no swap host is present
         /// in the loaded scenes. Always null-check before use.

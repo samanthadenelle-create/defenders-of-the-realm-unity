@@ -31,6 +31,7 @@ using System;
 using System.Collections;
 using System.Reflection;
 using UnityEngine;
+using DeNelle.Core.Combat;
 using DeNelle.Core.Data;
 
 namespace DeNelle.Village

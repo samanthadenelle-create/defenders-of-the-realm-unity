@@ -27,6 +27,7 @@
 
 using System.Collections.Generic;
 using DeNelle.Core.Combat;
+using DeNelle.Core.State;     // WO-36: GameState backstop for hero class self-resolve
 using DeNelle.Village.Talents; // WO-36: talent -> ability-stat multipliers
 using UnityEngine;
 
@@ -145,6 +146,29 @@ namespace DeNelle.Village
             _mana = _maxMana;
             // The Animator sits on the KayKit hero mesh child of the hero rig.
             _animator = GetComponentInChildren<Animator>();
+
+            // WO-36 (Bug 1 backstop): self-resolve hero class from GameState so the
+            // correct Q/W/E/R loadout is active even in test scenes where
+            // HeroBodySwapper is absent. HeroBodySwapper.Start() calls SetHeroClass()
+            // directly in the normal village flow (runs after Awake), so this only
+            // matters for stand-alone test scenes and editor play without a full rig.
+            var svc = GameStateService.Instance;
+            if (svc != null)
+            {
+                var opt = svc.State?.HeroClass.ToNullable();
+                if (opt.HasValue)
+                {
+                    _heroClass = opt.Value switch
+                    {
+                        // Fully-qualified: unqualified 'HeroClass' shadows to a string in this scope.
+                        DeNelle.Core.State.HeroClass.Knight => "knight",
+                        DeNelle.Core.State.HeroClass.Ranger => "ranger",
+                        DeNelle.Core.State.HeroClass.Mage   => "mage",
+                        _                                   => AbilityCatalog.DefaultClass,
+                    };
+                    Debug.Log($"[HeroAbilities] Awake backstop: resolved class '{ _heroClass}' from GameState.");
+                }
+            }
         }
 
         private void Update()
@@ -179,8 +203,16 @@ namespace DeNelle.Village
             // WO-36 (talent -> stat): unlocked skill-tree talents shave cooldowns
             // class-wide via CdReduction. CooldownMultiplier returns 1f when the
             // hero has no cooldown talents unlocked, preserving the JSON baseline.
-            _cooldownRemaining[(int)slot] = def.Cooldown * HeroTalentModifiers.CooldownMultiplier(_heroClass);
+            float scaledCooldown = def.Cooldown * HeroTalentModifiers.CooldownMultiplier(_heroClass);
+            _cooldownRemaining[(int)slot] = scaledCooldown;
             _mana -= def.ManaCost;
+
+            // WO-97 Bug 3: drive the per-slot cooldown fill overlay on the ability
+            // button. AbilityCooldownUI lives on the button GameObject; the ability
+            // HeroAbilities lives on the hero rig, so we broadcast to any registered
+            // listener via the HudBridge rather than a direct GetComponent. As a
+            // belt-and-braces fallback also check this GO (in case someone collocates).
+            GetComponent<AbilityCooldownUI>()?.StartCooldown(scaledCooldown);
 
             // Play the hero's cast animation in sync with the ability resolving.
             // Self-heal the reference: Awake() caches it before HeroBodySwapper
@@ -443,19 +475,6 @@ namespace DeNelle.Village
             }
 
             return ps;
-        }
-
-        /// <summary>Tints + scales a particle burst to an ability's colour / radius.</summary>
-        private static void TintAndSize(ParticleSystem ps, Color color, float radius)
-        {
-            var main = ps.main;
-            main.startColor = color;
-
-            var shape = ps.shape;
-            // Burst spread roughly matches the ability's blast radius so the
-            // placeholder reads at the right scale in the scene.
-            if (shape.enabled)
-                shape.radius = Mathf.Clamp(radius * 0.5f, 0.2f, 8f);
         }
     }
 }
