@@ -1118,54 +1118,78 @@ namespace DeNelle.Editor
         private static readonly BuildingPlacement[] Buildings =
         {
             // Crystal Mine — WO-101: SM_House_Medieval_Small + SM_Well.
-            // Position updated to (-20, 0, +15).
+            // DEF-101: position (-20, 0, +10) — safe clearance from all gates.
             new BuildingPlacement { Type = 0, Id = "crystal-mine", Label = "Crystal Mine",
-                X = -20f, Z = 15f, YawDeg = 135f, Fbx = "building_mine",
+                X = -20f, Z = 10f, YawDeg = 135f, Fbx = "building_mine",
                 CustomFbx = "Assets/Art/TripoStructures/LumberMill.fbx",
                 BaseColorTex = "Assets/Art/TripoStructures/LumberMill.fbm/LumberMill_basecolor.JPEG",
                 PrefabM  = PolyMedievalDir + "House_Medieval_Small.prefab",
                 PrefabM2 = PolyMedievalDir + "Well.prefab",
                 PlaceholderColor = new Color(0.38f, 0.65f, 0.98f), FenceKind = "stone" },
             // Pet House — WO-101: SM_Stables_Medieval.
-            // Position updated to (+20, 0, +15).
+            // DEF-101: position (+20, 0, +10) — safe clearance from all gates.
             new BuildingPlacement { Type = 1, Id = "pet-house", Label = "Pet House",
-                X = 20f, Z = 15f, YawDeg = 55f, Fbx = "building_stables",
+                X = 20f, Z = 10f, YawDeg = 55f, Fbx = "building_stables",
                 CustomFbx = "Assets/Art/TripoStructures/PetHome.fbx",
                 PrefabM = PolyMedievalDir + "Stables_Medieval.prefab",
                 PlaceholderColor = new Color(0.98f, 0.82f, 0.48f), FenceKind = "wood" },
             // Arcane Tower — WO-101: SM_Tower_Medieval_Big.
-            // Position updated to (-20, 0, -15).
+            // DEF-101: position (-20, 0, -10) — safe clearance from all gates.
             new BuildingPlacement { Type = 2, Id = "arcane-tower", Label = "Arcane Tower",
-                X = -20f, Z = -15f, YawDeg = 0f, Fbx = "building_tower_A",
+                X = -20f, Z = -10f, YawDeg = 0f, Fbx = "building_tower_A",
                 CustomFbx = "Assets/Art/TripoStructures/BuildTower.fbx",
                 BaseColorTex = "Assets/Art/TripoStructures/BuildTower.fbm/build_tower_basecolor.JPEG",
                 PrefabM = PolyMedievalDir + "Tower_Medieval_Big.prefab",
                 PlaceholderColor = new Color(0.65f, 0.55f, 0.98f), FenceKind = "stone" },
             // Workshop — WO-101: SM_House_Medieval_Medium.
-            // Position updated to (+20, 0, -15).
+            // DEF-101: position (+20, 0, -10) — safe clearance from all gates.
             new BuildingPlacement { Type = 3, Id = "workshop", Label = "Workshop",
-                X = 20f, Z = -15f, YawDeg = 215f, Fbx = "building_workshop",
+                X = 20f, Z = -10f, YawDeg = 215f, Fbx = "building_workshop",
                 CustomFbx = "Assets/Art/TripoStructures/Forge.fbx",
                 BaseColorTex = "Assets/Art/TripoStructures/Forge.fbm/Forge_basecolor.JPEG",
                 PrefabM = PolyMedievalDir + "House_Medieval_Medium.prefab",
                 PlaceholderColor = new Color(1f, 0.60f, 0.32f), FenceKind = "wood" },
             // Farm — WO-101: SM_Farm_House (primary) + SM_Windmill_Medieval (secondary).
-            // Position updated to (0, 0, +25).
+            // DEF-101: position (-15, 0, +20) — moved off the north gate (was 0,+25).
             new BuildingPlacement { Type = 4, Id = "farm", Label = "Farm",
-                X = 0f, Z = 25f, YawDeg = 270f, Fbx = "building_windmill",
+                X = -15f, Z = 20f, YawDeg = 270f, Fbx = "building_windmill",
                 CustomFbx = "Assets/Art/TripoStructures/Farm.fbx",
                 BaseColorTex = "Assets/Art/TripoStructures/Farm.fbm/farm_basecolor.JPEG",
                 PrefabM  = PolyFarmDir + "Farm_House.prefab",
                 PrefabM2 = PolyMedievalDir + "Windmill_Medieval.prefab",
                 PlaceholderColor = new Color(1f, 0.85f, 0.54f), FenceKind = "wood" },
             // Market — WO-101: SM_House_Medieval_Large + SM_Marketplace_Stand_Simple.
-            // New entry; position (0, 0, -20). Type = 5 (next ordinal after Farm).
+            // DEF-101: position (+15, 0, -20) — off the south gate. Type = 5 (after Farm).
             new BuildingPlacement { Type = 5, Id = "market", Label = "Market",
-                X = 0f, Z = -20f, YawDeg = 0f, Fbx = "building_market",
+                X = 15f, Z = -20f, YawDeg = 0f, Fbx = "building_market",
                 PrefabM  = PolyMedievalDir + "House_Medieval_Large.prefab",
                 PrefabM2 = PolyMedievalDir + "Marketplace_Stand_Simple.prefab",
                 PlaceholderColor = new Color(0.78f, 0.55f, 0.30f), FenceKind = "stone" },
         };
+
+        /// <summary>
+        /// DEF-101 gate-clearance guard: logs an error if a building centroid sits
+        /// within 8 m of any cardinal gate, where it would voxelize into the navmesh
+        /// approach corridor and block the enemy lane (the Farm-on-the-north-gate bug).
+        /// </summary>
+        private static void ValidateBuildingGateClearance(string label, Vector3 centroid)
+        {
+            const float MinGateClearance = 8f;
+            var gates = new[]
+            {
+                new Vector3(0f, 0f, -33f), new Vector3(42f, 0f, 0f),
+                new Vector3(-42f, 0f, 0f), new Vector3(0f, 0f, 33f),
+            };
+            var flat = new Vector3(centroid.x, 0f, centroid.z);
+            foreach (var g in gates)
+            {
+                float dist = Vector3.Distance(flat, g);
+                if (dist < MinGateClearance)
+                    Debug.LogError($"[VillageSceneBuilder] DEF-101 gate-clearance violation: " +
+                                   $"building '{label}' at {centroid} is {dist:0.0} m from gate {g} " +
+                                   $"-- minimum is {MinGateClearance} m. Move it off the gate lane.");
+            }
+        }
 
         private static int BuildBuildings(Transform parent, Component controller)
         {
@@ -1176,6 +1200,9 @@ namespace DeNelle.Editor
                 go.transform.SetParent(parent, false);
                 go.transform.position = new Vector3(b.X, 0f, b.Z);
                 go.transform.rotation = Quaternion.Euler(0f, b.YawDeg, 0f);
+
+                // DEF-101: assert this building clears every cardinal gate by >= 8 m.
+                ValidateBuildingGateClearance(b.Label, new Vector3(b.X, 0f, b.Z));
 
                 // WO-101: a lightweight polyperfect _M building when PrefabM is set
                 // (replaces the heavy Tripo mesh — the Seeker file-size win). Instantiated
