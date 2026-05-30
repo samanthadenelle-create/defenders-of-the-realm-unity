@@ -411,6 +411,10 @@ namespace DeNelle.Editor
             // Healer's Cottage from the village (2026-05-20 PO observation:
             // dungeon scene exists but is unreachable in-game).
             SpawnDungeonPortal();
+            // WO-126: repair any renderer with a missing/error material (the Crystals.fbx
+            // drop-in imported with no material -> magenta) BEFORE the scene is saved, so the
+            // fix lands in Village.unity and the player build.
+            RepairMissingMaterials();
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene, VillageScenePath);
 
@@ -431,6 +435,75 @@ namespace DeNelle.Editor
                       $"HeroAbilities / PetDeployer / BuildMenu) + NavMesh wired. " +
                       $"{_placeholderCount} placeholder primitive(s)" +
                       (_placeholderCount > 0 ? ": " + string.Join(", ", _placeholders) : "."));
+        }
+
+        /// <summary>
+        /// WO-126: repairs any renderer in the active scene whose material is null or on
+        /// Unity's error shader (renders magenta). Crystal-named objects (the Crystals.fbx
+        /// drop-in, which imported with no material) get a glowing aether-cyan gem material
+        /// matching the Aether Crystals theme; anything else gets a neutral stone fallback.
+        /// Valid materials are untouched. Runs before SaveScene so the fix lands in the build;
+        /// the owner can refine the crystal look live in the editor afterwards.
+        /// </summary>
+        private static void RepairMissingMaterials()
+        {
+            Material crystalMat = null;
+            int fixedSlots = 0;
+            var scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene();
+            foreach (var root in scene.GetRootGameObjects())
+            {
+                foreach (var r in root.GetComponentsInChildren<Renderer>(true))
+                {
+                    var mats = r.sharedMaterials;
+                    bool changed = false;
+                    for (int i = 0; i < mats.Length; i++)
+                    {
+                        var m = mats[i];
+                        bool err = m == null || m.shader == null
+                                   || m.shader.name.Contains("InternalError")
+                                   || m.shader.name == "Hidden/InternalErrorShader";
+                        if (!err) continue;
+
+                        bool isCrystal = root.name.IndexOf("crystal", System.StringComparison.OrdinalIgnoreCase) >= 0
+                                       || r.name.IndexOf("crystal", System.StringComparison.OrdinalIgnoreCase) >= 0;
+                        Material fix;
+                        if (isCrystal)
+                        {
+                            if (crystalMat == null)
+                            {
+                                var sh = Shader.Find("Universal Render Pipeline/Lit");
+                                crystalMat = new Material(sh) { name = "AetherCrystal (repair)" };
+                                if (crystalMat.HasProperty("_BaseColor"))  crystalMat.SetColor("_BaseColor", new Color(0.32f, 0.80f, 0.95f));
+                                if (crystalMat.HasProperty("_Smoothness")) crystalMat.SetFloat("_Smoothness", 0.85f);
+                                if (crystalMat.HasProperty("_EmissionColor"))
+                                {
+                                    crystalMat.EnableKeyword("_EMISSION");
+                                    crystalMat.SetColor("_EmissionColor", new Color(0.12f, 0.42f, 0.60f));
+                                }
+                            }
+                            fix = crystalMat;
+                        }
+                        else
+                        {
+                            if (_perimeterStoneFallback == null)
+                            {
+                                var sh = Shader.Find("Universal Render Pipeline/Lit");
+                                _perimeterStoneFallback = new Material(sh) { name = "PerimeterStoneFallback" };
+                                if (_perimeterStoneFallback.HasProperty("_BaseColor"))
+                                    _perimeterStoneFallback.SetColor("_BaseColor", new Color(0.55f, 0.53f, 0.49f));
+                            }
+                            fix = _perimeterStoneFallback;
+                        }
+                        mats[i] = fix;
+                        changed = true;
+                        fixedSlots++;
+                        Debug.Log($"[VillageSceneBuilder] WO-126 RepairMissingMaterials: '{r.name}' (root '{root.name}') " +
+                                  $"was {(m == null ? "NULL" : m.shader?.name)} -> {(isCrystal ? "aether-crystal" : "stone")} fallback.");
+                    }
+                    if (changed) r.sharedMaterials = mats;
+                }
+            }
+            Debug.Log($"[VillageSceneBuilder] WO-126 RepairMissingMaterials: fixed {fixedSlots} magenta slot(s).");
         }
 
         // =====================================================================
@@ -2766,8 +2839,23 @@ namespace DeNelle.Editor
                         loggedTile = true;
                     }
                     var s = g.transform.localScale;
-                    float run = Mathf.Max(wb.size.x, wb.size.z);               // longer horizontal = run axis
-                    if (run > 0.001f) { float f = segStep / run; s.x *= f; s.z *= f; }
+                    // Scale run axis to the 3 m pitch, thickness axis up to a SUBSTANTIAL
+                    // 1.2 m (native 0.35 m read as thin bars/posts with the void showing
+                    // through), height to wallHeight. Run = the longer horizontal extent.
+                    const float wallThick   = 1.2f;
+                    const float wallOverlap = 1.5f;   // run spans 1.5x the 3 m pitch so the tile's
+                                                      // solid stone (narrower than its 3 m bbox)
+                                                      // overlaps its neighbour -> no gaps between segments
+                    if (wb.size.x >= wb.size.z)
+                    {
+                        if (wb.size.x > 0.001f) s.x *= (segStep * wallOverlap) / wb.size.x;   // run, overlapped
+                        if (wb.size.z > 0.001f) s.z *= wallThick / wb.size.z;                  // thickness -> 1.2 m
+                    }
+                    else
+                    {
+                        if (wb.size.z > 0.001f) s.z *= (segStep * wallOverlap) / wb.size.z;
+                        if (wb.size.x > 0.001f) s.x *= wallThick / wb.size.x;
+                    }
                     if (wb.size.y > 0.001f) s.y *= wallHeight / wb.size.y;
                     g.transform.localScale = s;
                 }
