@@ -322,6 +322,9 @@ namespace DeNelle.Editor
             // Runs after ClearWallsNearGates so the two systems don't fight.
             BuildWallPerimeter(wallRoot);
 
+            // ── WO-104 Stage 2: moat ring + drawbridges around the curtain wall ──
+            BuildMoat(wallRoot);
+
             // ── Plaza + road network (§7) ────────────────────────────────────
             BuildPlaza(roadRoot);
             BuildRoads(roadRoot, tWallLayout);
@@ -2391,18 +2394,29 @@ namespace DeNelle.Editor
                 if (changed) r.sharedMaterials = mats;
             }
 
-            // WO-126 diagnostic: the gate read magenta/purple but the repair above found no
-            // null/error slots — log the gate's REAL materials to find the true cause
-            // (purple base color? missing albedo texture? dusk lighting on grey stone?).
+            // WO-126: the gate's material is a valid grey URP/Lit (GATE-DIAG confirmed
+            // M_21_Grey_Light_LPUP, baseColor ~0.65, no texture) — the "purple gate" is the
+            // DUSK AMBIENT glowing on that bright flat face, not a material bug. Tint the grey
+            // stone slots to a warmer, dimmer masonry tone (matching the curtain walls) so the
+            // gate reads as stone under the dusk light. Wood/other slots are left alone, and we
+            // use an instance material (not the shared asset) so nothing else in the scene shifts.
             if (go.name.Contains("Gate"))
             {
                 foreach (var r in go.GetComponentsInChildren<Renderer>())
                 {
-                    var m = r.sharedMaterial;
-                    string sn = m == null ? "NULL" : (m.shader == null ? "null-shader" : m.shader.name);
-                    Color bc = (m != null && m.HasProperty("_BaseColor")) ? m.GetColor("_BaseColor") : Color.clear;
-                    bool hasTex = m != null && m.HasProperty("_BaseMap") && m.GetTexture("_BaseMap") != null;
-                    Debug.Log($"[VillageSceneBuilder] WO-126 GATE-DIAG '{go.name}/{r.name}': mat='{(m == null ? "NULL" : m.name)}' shader='{sn}' baseColor={bc} hasBaseMap={hasTex}");
+                    var mats = r.sharedMaterials;
+                    bool ch = false;
+                    for (int i = 0; i < mats.Length; i++)
+                    {
+                        if (mats[i] != null && mats[i].name.Contains("Grey"))
+                        {
+                            var tint = new Material(mats[i]);
+                            if (tint.HasProperty("_BaseColor")) tint.SetColor("_BaseColor", new Color(0.46f, 0.43f, 0.39f));
+                            mats[i] = tint;
+                            ch = true;
+                        }
+                    }
+                    if (ch) r.sharedMaterials = mats;
                 }
             }
         }
@@ -2818,6 +2832,115 @@ namespace DeNelle.Editor
             Debug.Log($"[VillageSceneBuilder] WO-101 BuildWallPerimeter: {segCount} polyperfect perimeter " +
                       "pieces placed (wall segments + corner/mid towers + cardinal gates). " +
                       "Polyperfect atlas materials URP-correct; colliders stripped.");
+        }
+
+        /// <summary>
+        /// Scales a flat ground/water plane so its horizontal footprint is exactly
+        /// <paramref name="size"/> m on both axes (tiles abut), leaving Y untouched.
+        /// Measured from world renderer bounds (planes carry no rotation here).
+        /// </summary>
+        private static void FitGroundTile(GameObject go, float size)
+        {
+            if (go == null) return;
+            var rs = go.GetComponentsInChildren<Renderer>();
+            if (rs == null || rs.Length == 0) return;
+            Bounds wb = rs[0].bounds;
+            for (int i = 1; i < rs.Length; i++) wb.Encapsulate(rs[i].bounds);
+            var s = go.transform.localScale;
+            if (wb.size.x > 0.001f) s.x *= size / wb.size.x;
+            if (wb.size.z > 0.001f) s.z *= size / wb.size.z;
+            go.transform.localScale = s;
+        }
+
+        /// <summary>
+        /// WO-104 Stage 2: a 6 m-wide ring of <c>Terrain_Plane_Lake</c> water tiles around
+        /// the curtain wall exterior — inner edge flush with the wall (±42/±33), outer edge
+        /// 6 m out (±48/±39), set slightly below grade so it reads as a channel. The 6 m gate
+        /// spans (south/east/west) are left clear for the drawbridges, which are placed flat
+        /// across the moat at each gate. Fills the dark exterior void at the wall base.
+        /// </summary>
+        private static void BuildMoat(Transform wallRoot)
+        {
+            const string LakePath       = "Assets/polyperfect/Low Poly Ultimate Pack/_M/Prefabs_M/Terrains_M/Planes_M/Terrain_Plane_Lake.prefab";
+            const string DrawbridgePath = PolyMedievalDir + "Drawbridge_Medieval.prefab";
+
+            var lake       = AssetDatabase.LoadAssetAtPath<GameObject>(LakePath);
+            var drawbridge = AssetDatabase.LoadAssetAtPath<GameObject>(DrawbridgePath);
+            if (lake == null)
+            {
+                Debug.LogWarning($"[VillageSceneBuilder] WO-104 moat: Terrain_Plane_Lake not found at " +
+                                 $"'{LakePath}' — moat skipped (polyperfect re-import needed).");
+                return;
+            }
+
+            var moatRoot = new GameObject("Moat");
+            moatRoot.transform.SetParent(wallRoot, false);
+            var mr = moatRoot.transform;
+
+            const float innerX = 42f, innerZ = 33f;   // flush with wall base
+            const float outerX = 48f, outerZ = 39f;   // 6 m outside the wall
+            const float step    = 3f;
+            const float waterY  = -0.4f;               // sit in a channel, below grade
+            const float gateHalf = 3f;                 // 6 m drawbridge spans to leave clear
+
+            int placed = 0;
+
+            for (float x = -outerX + step * 0.5f; x < outerX; x += step)
+            for (float z = -outerZ + step * 0.5f; z < outerZ; z += step)
+            {
+                float ax = Mathf.Abs(x), az = Mathf.Abs(z);
+                bool insideWall = ax < innerX && az < innerZ;   // strictly inside the curtain
+                bool insideOuter = ax <= outerX && az <= outerZ;
+                if (insideWall || !insideOuter) continue;        // only the 6 m ring band
+
+                // Leave the gate spans clear for the drawbridges (south/east/west; no north gate).
+                bool southGate = ax < gateHalf && z < -innerZ + 0.5f;   // south band, x≈0
+                bool eastGate  = az < gateHalf && x >  innerX - 0.5f;   // east band, z≈0
+                bool westGate  = az < gateHalf && x < -innerX + 0.5f;   // west band, z≈0
+                if (southGate || eastGate || westGate) continue;
+
+                var t = (GameObject)PrefabUtility.InstantiatePrefab(lake);
+                if (t == null) continue;
+                t.name = "MoatTile";
+                t.transform.SetParent(mr, false);
+                t.transform.position = new Vector3(x, waterY, z);
+                FitGroundTile(t, step);
+                StripColliders(t);
+                StripRigidbodies(t);
+                placed++;
+            }
+
+            // ── Drawbridges: flat across the moat at each gate (S/E/W) ──────────
+            if (drawbridge != null)
+            {
+                // (label, position just outside the gate, yaw facing outward)
+                var spans = new (string name, Vector3 pos, float yaw)[]
+                {
+                    ("Drawbridge-South", new Vector3(0f, 0f, -(innerZ + 3f)), 0f),
+                    ("Drawbridge-East",  new Vector3(innerX + 3f, 0f, 0f),    90f),
+                    ("Drawbridge-West",  new Vector3(-(innerX + 3f), 0f, 0f), 270f),
+                };
+                foreach (var (name, pos, yaw) in spans)
+                {
+                    var d = (GameObject)PrefabUtility.InstantiatePrefab(drawbridge);
+                    if (d == null) continue;
+                    d.name = name;
+                    d.transform.SetParent(mr, false);
+                    d.transform.position = pos;
+                    d.transform.rotation = Quaternion.Euler(0f, yaw, 0f);
+                    NormalizeProp(d, 7f);          // span the 6 m moat with margin
+                    StripRigidbodies(d);           // keep colliders: the bridge is walkable
+                }
+            }
+            else
+            {
+                Debug.LogWarning($"[VillageSceneBuilder] WO-104 moat: Drawbridge_Medieval not found at " +
+                                 $"'{DrawbridgePath}' — gates left open across the moat.");
+            }
+
+            Debug.Log($"[VillageSceneBuilder] WO-104 BuildMoat: {placed} Terrain_Plane_Lake tiles in the " +
+                      $"6 m ring (inner +-{innerX}/+-{innerZ}, outer +-{outerX}/+-{outerZ}, y={waterY}); " +
+                      $"{(drawbridge != null ? 3 : 0)} drawbridges at the gate spans.");
         }
 
         /// <summary>
