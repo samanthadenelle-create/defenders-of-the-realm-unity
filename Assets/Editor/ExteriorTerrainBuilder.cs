@@ -1217,6 +1217,42 @@ namespace DeNelle.Editor
         //  Folder helper
         // =====================================================================
 
+        /// <summary>
+        /// WO-173/DEF-108: returns a persisted URP TerrainLit material so the terrain
+        /// SURFACE renders in the build. Without an explicit URP terrain material the
+        /// Terrain falls back to a template that draws nothing under URP (the black
+        /// void). Created once as an asset under Generated/Terrain so it is packaged
+        /// into the player build; reused (shader re-pinned) on subsequent bakes.
+        /// </summary>
+        private static Material EnsureTerrainMaterial()
+        {
+            // URP terrain shader; fall back to the built-in terrain shader so a
+            // non-URP project still bakes instead of throwing.
+            var shader = Shader.Find("Universal Render Pipeline/Terrain/Lit")
+                         ?? Shader.Find("Nature/Terrain/Standard");
+            if (shader == null)
+            {
+                Debug.LogWarning("[ExteriorTerrainBuilder] No terrain shader found " +
+                                 "(URP TerrainLit / built-in) -- terrain uses the engine default.");
+                return null;
+            }
+
+            Material mat = File.Exists(TerrainMaterialPath)
+                ? AssetDatabase.LoadAssetAtPath<Material>(TerrainMaterialPath)
+                : null;
+
+            if (mat == null)
+            {
+                mat = new Material(shader) { name = "ExteriorTerrainMaterial" };
+                AssetDatabase.CreateAsset(mat, TerrainMaterialPath);
+            }
+            else if (mat.shader != shader)
+            {
+                mat.shader = shader;
+            }
+            return mat;
+        }
+
         private static void EnsureFolder(string assetPath)
         {
             if (AssetDatabase.IsValidFolder(assetPath)) return;
