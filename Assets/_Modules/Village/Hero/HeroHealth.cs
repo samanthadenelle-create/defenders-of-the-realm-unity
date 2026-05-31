@@ -49,6 +49,14 @@ namespace DeNelle.Village
         private bool  _isDead;
         private readonly Collider[] _buf = new Collider[24];
 
+        // ── Respawn ───────────────────────────────────────────────────────────
+        // The hero is NOT the lose condition — the Heart is (a Heart breach
+        // escalates to the ATB / Defend-the-Tower flow; there is no game-over
+        // screen for the wave loop). So when the hero falls it RESPAWNS at its
+        // start point after a short delay rather than reloading the scene.
+        private const float RespawnDelaySeconds = 4f;
+        private Vector3 _spawnPosition;          // captured in Awake — respawn anchor
+
         // Cached siblings for death-stop + haptics. All optional — resolved in
         // Awake and only used through null-safe calls, so a hero missing any of
         // them simply skips that bit of feedback.
@@ -76,6 +84,10 @@ namespace DeNelle.Village
             _locomotion     = GetComponent<HeroLocomotion>();
             _abilities      = GetComponent<HeroAbilities>();
             _impactFeedback = GetComponent<HeroImpactFeedback>();
+
+            // Capture the spawn point as the respawn anchor. Resolved later in
+            // HandleDeath against the Heart if the recorded point is unsafe.
+            _spawnPosition = transform.position;
         }
 
         private void OnDestroy() { if (Instance == this) Instance = null; }
@@ -153,66 +165,64 @@ namespace DeNelle.Village
         /// <summary>Event fired the moment the hero dies (before the coroutine delay).</summary>
         public event System.Action OnDeath;
 
-        /// <summary>Stops locomotion/abilities immediately, then shows GameOver UI
-        /// (or reloads the scene as a fallback) after a short dramatic pause.</summary>
+        /// <summary>
+        /// Death → timed respawn. Disables locomotion + abilities immediately so
+        /// the hero is no longer controllable, holds a brief "down" beat, then
+        /// revives the hero at its spawn point (near the Heart) at full HP.
+        /// <para>
+        /// DESIGN (DEF-102): the hero is NOT the lose condition — a Heart breach
+        /// is what escalates the run (WaveManager.TriggerBreach → ATB / Defend-
+        /// the-Tower). Reloading the scene on hero death would be jarring and
+        /// design-wrong, so the hero respawns instead. The old reflection-driven
+        /// GameOverUI path is removed: GameOverUI is not placed in the Village
+        /// scene, so that path always fell through to a hard scene reload.
+        /// </para>
+        /// </summary>
         private IEnumerator HandleDeath()
         {
-            // Disable locomotion and abilities immediately
+            // Disable control immediately so a dead hero can't be walked or cast.
             if (_locomotion != null) _locomotion.enabled = false;
             if (_abilities  != null) _abilities.enabled  = false;
 
-            // Brief pause for death feel
-            yield return new WaitForSeconds(1.5f);
+            // Brief "down" beat. WaitForSeconds is scaled time, but the lethal
+            // HitStop above restores Time.timeScale within ~0.1s, so this elapses.
+            yield return new WaitForSeconds(RespawnDelaySeconds);
 
-            // Try the game-over UI first. GameOverUI lives in the default
-            // Assembly-CSharp (no asmdef, global namespace), which this
-            // DeNelle.Village asmdef cannot reference — so we resolve it by type
-            // name across loaded assemblies and drive it via reflection (the
-            // project's cross-assembly bridge pattern). Falls back to a reload.
-            var gameOver = FindGameOverUi();
-            if (gameOver != null)
+            // Respawn at the recorded spawn point, falling back to the Heart's
+            // position if that point is no longer meaningful (e.g. it was captured
+            // at origin before the hero had been placed in the scene).
+            Vector3 target = _spawnPosition;
+            if (target == Vector3.zero)
             {
-                gameOver.gameObject.SetActive(true);
-                var show = gameOver.GetType().GetMethod("Show",
-                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public);
-                show?.Invoke(gameOver, null);
+                var heart = FindAnyObjectByType<HeartController>();
+                if (heart != null)
+                    target = heart.transform.position + heart.transform.forward * 4f;
             }
-            else
-            {
-                // Fallback: reload the scene
-                UnityEngine.SceneManagement.SceneManager.LoadScene(
-                    UnityEngine.SceneManagement.SceneManager.GetActiveScene().name);
-            }
+            Respawn(target);
         }
 
         /// <summary>
-        /// Finds the GameOverUI MonoBehaviour by type name. It compiles into the
-        /// default Assembly-CSharp (unreachable from this asmdef), so it is located
-        /// reflectively rather than referenced directly. Returns null if absent.
+        /// Revives the hero at <paramref name="position"/> at full HP and restores
+        /// control. Uses NavMeshAgent.Warp when the hero is agent-driven so the
+        /// teleport isn't fought by the agent (HeroLocomotion drives a kinematic
+        /// NavMeshAgent); also clears the death flag so contact damage resumes.
         /// </summary>
-        private static MonoBehaviour FindGameOverUi()
-        {
-            System.Type t = null;
-            foreach (var asm in System.AppDomain.CurrentDomain.GetAssemblies())
-            {
-                t = asm.GetType("GameOverUI");
-                if (t != null) break;
-            }
-            if (t == null) return null;
-            var found = UnityEngine.Object.FindObjectsByType(
-                t, FindObjectsInactive.Include, FindObjectsSortMode.None);
-            return (found != null && found.Length > 0) ? found[0] as MonoBehaviour : null;
-        }
-
-        /// <summary>Revives the hero at <paramref name="position"/> (future use).</summary>
         public void Respawn(Vector3 position)
         {
-            _isDead = false;
-            _hp = _maxHp;
-            transform.position = position;
+            var agent = GetComponent<UnityEngine.AI.NavMeshAgent>();
+            if (agent != null && agent.enabled && agent.isOnNavMesh)
+                agent.Warp(position);
+            else
+                transform.position = position;
+
+            _isDead   = false;
+            _hp       = _maxHp;
+            _cooldown = 0f;
             if (_locomotion != null) _locomotion.enabled = true;
             if (_abilities  != null) _abilities.enabled  = true;
             OnHealthChanged?.Invoke(_hp, _maxHp);
+            VFXManager.Play(VFXType.Impact_Heal, transform.position + Vector3.up * 1.0f);
+            Debug.Log("[HeroHealth] Hero respawned at the Heart.");
         }
 
         /// <summary>Heals up to max (for repair pads / potions / wave-clear).</summary>
