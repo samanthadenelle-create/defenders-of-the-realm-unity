@@ -27,6 +27,8 @@
 // =============================================================================
 
 using System;
+using DeNelle.Core;
+using DeNelle.Core.HUD;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.UIElements;
@@ -41,7 +43,7 @@ namespace DeNelle.HUD
     /// <see cref="UIDocument"/>; wired by the village scene builder / integrator.
     /// </summary>
     [RequireComponent(typeof(UIDocument))]
-    public sealed class VillageHudController : MonoBehaviour
+    public sealed class VillageHudController : MonoBehaviour, IVillageHud
     {
         /// <summary>Number of hero ability slots — the Q/W/E/R kit.</summary>
         public const int AbilitySlotCount = 4;
@@ -175,6 +177,11 @@ namespace DeNelle.HUD
         private readonly AbilityCell[] _abilityCells = new AbilityCell[AbilitySlotCount];
         private bool _bound;
 
+        // Last wave ordinal pushed through the IVillageHud.SetWave(int) path, so the
+        // separate IVillageHud.SetCountdown(float) call can drive the existing
+        // rich SetWave(number, countdown) renderer without losing the wave number.
+        private int _lastWaveNumber = 1;
+
         // ── WO-39/WO-40 animated-feedback state (Update-driven) ──────────────
         // Compass arms whose inbound direction is live — pulsed at ~1 Hz (WO-39).
         private readonly bool[] _compassActive = new bool[4]; // N, E, S, W
@@ -193,6 +200,18 @@ namespace DeNelle.HUD
         private void Awake()
         {
             if (_document == null) _document = GetComponent<UIDocument>();
+
+            // DEF-104 root cause: nothing ever registered this controller as the
+            // CoreServices.Hud (IVillageHud), so every cross-module HUD call —
+            // including WaveFeedbackDirector's SetAttackDirections — no-oped against
+            // a null Hud and the compass never appeared. Register ourselves here so
+            // the Village-side bridges actually reach the live HUD.
+            CoreServices.RegisterHud(this);
+        }
+
+        private void OnDestroy()
+        {
+            CoreServices.UnregisterHud(this);
         }
 
         private void OnEnable()
@@ -530,6 +549,12 @@ namespace DeNelle.HUD
             if (_imminentVignette == null)
                 _imminentVignette = _root.Q<VisualElement>("wave-imminent-vignette");
 
+            // Drive the compass amber-flash alongside the vignette so the imminent
+            // alert reads on the direction rose too. The Village side reaches this
+            // through IVillageHud.SetWaveImminent (SetCompassImminent is HUD-internal
+            // and not on the interface), so couple them here.
+            SetCompassImminent(on);
+
             if (on)
             {
                 if (_imminentVignette == null)
@@ -607,6 +632,80 @@ namespace DeNelle.HUD
                 SetCompassArm(rose, "compass-w", w);
             }
         }
+
+        // =====================================================================
+        //  IVillageHud (DeNelle.Core.HUD) — the cross-module surface the Village
+        //  bridges (WaveHudBridge, WaveFeedbackDirector) call via CoreServices.Hud.
+        //  -------------------------------------------------------------------
+        //  SetCrystals(int) and SetAttackDirections(bool,bool,bool,bool) already
+        //  match the interface and satisfy it implicitly. The members below differ
+        //  in signature from this HUD's richer public setters, so they're EXPLICIT
+        //  interface implementations that forward to the existing renderers —
+        //  keeping the reflection-based bridges (Heart/Hero/Wall) untouched.
+        // =====================================================================
+
+        /// <summary>IVillageHud: set the current wave ordinal (countdown unchanged).</summary>
+        void IVillageHud.SetWave(int waveNumber)
+        {
+            _lastWaveNumber = Mathf.Max(1, waveNumber);
+            // Preserve any countdown currently shown by re-reading the timer text is
+            // brittle; instead just refresh the wave label and leave the countdown to
+            // the dedicated SetCountdown call (the two are pushed together by the
+            // WaveHudBridge each tick).
+            if (_waveNumber != null)
+                _waveNumber.text = $"Wave {_lastWaveNumber}";
+        }
+
+        /// <summary>IVillageHud: drive the between-wave countdown timer.</summary>
+        void IVillageHud.SetCountdown(float secondsRemaining)
+        {
+            // Reuse the full wave renderer (label + pill + urgency styling) with the
+            // last wave number we were given.
+            SetWave(_lastWaveNumber, secondsRemaining);
+        }
+
+        /// <summary>IVillageHud: set the Heart bar from a 0..1 normalised fraction.</summary>
+        void IVillageHud.SetHeartHp(float normalisedHp)
+        {
+            float frac = Mathf.Clamp01(normalisedHp);
+            // The public renderer works in current/max units; feed it a 0..100 scale
+            // so the existing warning/critical tinting thresholds apply unchanged.
+            SetHeartHp(frac * 100f, 100f);
+        }
+
+        /// <summary>IVillageHud: show the wave-clear banner.</summary>
+        void IVillageHud.ShowWaveClearBanner(int waveNumber, int enemiesDefeated, string flavourLine)
+        {
+            // The existing banner takes (waveNumber, crystals); the interface passes
+            // enemiesDefeated + a flavour line. Surface the crystal balance the
+            // Village side already credits — forwarded as the count it expects.
+            ShowWaveClearBanner(waveNumber, enemiesDefeated);
+        }
+
+        /// <summary>IVillageHud: hide the wave-clear banner (auto-dismisses; no-op safe).</summary>
+        void IVillageHud.HideWaveClearBanner()
+        {
+            // The code-built banner removes itself on a schedule; nothing persistent
+            // to tear down. Kept as an explicit no-op so the interface is satisfied.
+        }
+
+        /// <summary>IVillageHud: show the repair prompt for a damaged wall.</summary>
+        void IVillageHud.ShowRepairPrompt(string wallLabel, float damagePercent)
+        {
+            // Bridge the Core signature to the richer in-HUD prompt. We don't know the
+            // crystal cost here, so compose a subtitle and assume affordable; the
+            // Village-side WallRepairHudBridge drives the full ShowRepairPrompt
+            // (subtitle, cost, affordable) overload when it has those values.
+            string subtitle = string.IsNullOrEmpty(wallLabel)
+                ? $"Damaged ({Mathf.RoundToInt(Mathf.Clamp01(damagePercent) * 100f)}%)"
+                : $"{wallLabel} — {Mathf.RoundToInt(Mathf.Clamp01(damagePercent) * 100f)}% damaged";
+            ShowRepairPrompt(subtitle, 0, true);
+        }
+
+        // SetWaveImminent(bool) below also satisfies IVillageHud; in addition to the
+        // red edge vignette it now flashes the compass arms amber so the imminent
+        // alert reads on the direction rose too (the Village side cannot reach the
+        // HUD-internal SetCompassImminent directly via IVillageHud).
 
         private VisualElement BuildCompassRose()
         {
