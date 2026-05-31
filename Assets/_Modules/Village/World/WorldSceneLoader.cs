@@ -113,6 +113,15 @@ namespace DeNelle.Village
                         Debug.Log("[WorldSceneLoader] TERRAINDIAG splat OK (center sum=" + sum + ").");
                     }
                 }
+                // DEF-108 bump probe: actual terrain surface Y at the village + just outside,
+                // vs the village floor (hero spawns ~Y=0.03). Reveals the step/lip at the edge.
+                float baseY = t.transform.position.y;
+                int[] xs = { 0, 30, 42, 50, 70 };
+                foreach (int d in xs)
+                    Debug.Log("[WorldSceneLoader] TERRAINDIAG surfaceY @x=" + d + " -> " +
+                        (baseY + t.SampleHeight(new Vector3(d, 0f, 0f))).ToString("0.000") +
+                        "  @z=" + d + " -> " +
+                        (baseY + t.SampleHeight(new Vector3(0f, 0f, d))).ToString("0.000"));
                 return;
             }
             Debug.Log("[WorldSceneLoader] TERRAINDIAG no Terrain found in OuterWorld!");

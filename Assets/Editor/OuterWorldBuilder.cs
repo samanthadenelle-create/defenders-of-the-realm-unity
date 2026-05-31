@@ -223,5 +223,76 @@ namespace DeNelle.Editor
             // Save dialog.
             UnityEditor.SceneManagement.EditorSceneManager.SaveScene(scene, OuterWorldScenePath);
         }
+
+        // =====================================================================
+        //  WO-173 / DEF-108 -- combined Village + Terrain navmesh
+        // =====================================================================
+
+        /// <summary>
+        /// Bakes ONE continuous navmesh spanning BOTH Village.unity and OuterWorld.unity
+        /// (the legacy multi-scene workflow) so the NavMeshAgent hero can walk OUT of the
+        /// village onto the exterior terrain instead of stopping at the village-navmesh edge
+        /// as an "invisible wall." Marks the terrain NavigationStatic, opens both scenes,
+        /// bakes a single connected surface, and saves each scene's NavMeshData. Run AFTER
+        /// BuildOuterWorld + BuildExterior + BuildVillage. Editor-closed batchmode.
+        /// </summary>
+        [MenuItem("Defenders/World/Bake World NavMesh (Village + Terrain)")]
+        public static void BakeWorldNavMesh()
+        {
+            const string villagePath = "Assets/Scenes/Village.unity";
+            if (!System.IO.File.Exists(villagePath) || !System.IO.File.Exists(OuterWorldScenePath))
+            {
+                Debug.LogError("[OuterWorldBuilder] BakeWorldNavMesh: Village.unity or OuterWorld.unity " +
+                               "missing -- run the village + outer-world + exterior builds first.");
+                return;
+            }
+
+            var village = UnityEditor.SceneManagement.EditorSceneManager.OpenScene(
+                villagePath, UnityEditor.SceneManagement.OpenSceneMode.Single);
+            var outer = UnityEditor.SceneManagement.EditorSceneManager.OpenScene(
+                OuterWorldScenePath, UnityEditor.SceneManagement.OpenSceneMode.Additive);
+
+            // Owner 2026-05-31: the village hex-ground is DROPPED, so the terrain is the single
+            // continuous ground and there's no separate floor to reference. The village
+            // structures sit at Y=0, so just lift the (flat) terrain to Y=0 -- a fixed target,
+            // no dynamic village-ground read. The terrain shipped FLAT at Y=-0.5 (its heightmap
+            // didn't persist into the build); this lifts it flush so the combined navmesh bakes
+            // ALIGNED and the hero walks village -> terrain seamlessly.
+            const float villageFloorY = 0f;
+            foreach (var go in outer.GetRootGameObjects())
+                foreach (var terr in go.GetComponentsInChildren<Terrain>(true))
+                {
+                    float edgeSurface = terr.transform.position.y + terr.SampleHeight(new Vector3(42f, 0f, 0f));
+                    float delta = villageFloorY - edgeSurface;
+                    terr.transform.position += new Vector3(0f, delta, 0f);
+                    Debug.Log("[OuterWorldBuilder] leveled terrain by " + delta.ToString("0.000") +
+                              " (villageFloor=" + villageFloorY.ToString("0.000") +
+                              ", edgeSurface was " + edgeSurface.ToString("0.000") + ") -> flush with village.");
+                }
+
+            // Mark the exterior terrain NavigationStatic so the bake makes it walkable.
+            int marked = 0;
+            foreach (var go in outer.GetRootGameObjects())
+                foreach (var terr in go.GetComponentsInChildren<Terrain>(true))
+                {
+                    var flags = GameObjectUtility.GetStaticEditorFlags(terr.gameObject);
+                    GameObjectUtility.SetStaticEditorFlags(terr.gameObject,
+                        flags | StaticEditorFlags.NavigationStatic);
+                    marked++;
+                }
+
+            // Village floor/walls keep the NavigationStatic flags saved by BuildVillage, so a
+            // combined bake across BOTH open scenes produces ONE connected walkable surface.
+            UnityEditor.AI.NavMeshBuilder.ClearAllNavMeshes();
+            UnityEditor.AI.NavMeshBuilder.BuildNavMesh();
+
+            UnityEditor.SceneManagement.EditorSceneManager.SaveScene(village);
+            UnityEditor.SceneManagement.EditorSceneManager.SaveScene(outer, OuterWorldScenePath);
+            AssetDatabase.SaveAssets();
+
+            Debug.Log("[OuterWorldBuilder] BakeWorldNavMesh: marked " + marked + " terrain(s) " +
+                      "NavigationStatic; baked ONE combined navmesh across Village + OuterWorld; " +
+                      "saved both scenes. Hero (NavMeshAgent) can now walk village -> terrain.");
+        }
     }
 }

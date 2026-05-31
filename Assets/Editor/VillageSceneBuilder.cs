@@ -324,8 +324,13 @@ namespace DeNelle.Editor
             var dressingRoot = NewChild(root.transform, "CityDressing");
             var approachRoot = NewChild(root.transform, "Approaches");
 
-            // ── Ground floor — flat Y=0 hex grass, interior + 1-hex seam ─────
-            BuildGroundFloor(groundRoot);
+            // ── Ground floor — DROPPED (owner 2026-05-31) ───────────────────
+            // The OuterWorld terrain is now the SINGLE continuous ground; it runs THROUGH the
+            // village, not around it. The old hex-tile village floor fought the terrain (the
+            // "map under the city" step + z-fight + ~3,000 redundant tiles). Village structures
+            // (walls / buildings / roads) sit directly on the terrain at Y=0.
+            // BuildGroundFloor(groundRoot);   // intentionally not called
+            _ = groundRoot;                    // kept as an empty root so later passes don't NRE
 
             // ── Curtain wall + gates (WallLayout-driven, shaped rectangle) ───
             int wallCount = BuildWallRing(wallRoot, tWallLayout, controller);
