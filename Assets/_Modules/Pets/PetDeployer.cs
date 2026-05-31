@@ -168,11 +168,18 @@ namespace DeNelle.Pets
                 {
                     visual.transform.SetParent(go.transform, false);
                     visual.transform.localPosition = Vector3.zero;
-                    // CC5 / game-export models already face +Z, so NO yaw flip. The old
-                    // hardcoded 180° (for Tripo FBXs that exported facing -Z) is what made
-                    // the CC5 pet "always travel backwards" (owner 2026-05-30). Identity =
-                    // forward matches Pet.FaceToward's LookRotation (+Z forward).
-                    visual.transform.localRotation = Quaternion.identity;
+                    // FORWARD CORRECTION (DEF-95, owner field-test: "pet travels in
+                    // reverse"). The pet meshes are Tripo exports (ice-wolf =
+                    // icecrystalfox3dmodel) of the SAME family as the hero bodies,
+                    // which import facing +X (EAST) in their bind pose — HeroBodySwapper
+                    // applies a constant -90° yaw (+X→+Z) to align them with the root's
+                    // +Z travel direction. Pet.FaceToward rotates the pet ROOT via
+                    // LookRotation(dir), i.e. root +Z points along travel. With the old
+                    // identity rotation the mesh's authored +X faced 90° off the travel
+                    // direction, reading as "moves/faces the wrong way" (DEF-95). Apply
+                    // the same single, consistent -90° yaw so visual forward == travel.
+                    const float PetForwardYaw = -90f;  // +X (authored forward) → +Z (root forward)
+                    visual.transform.localRotation = Quaternion.Euler(0f, PetForwardYaw, 0f);
                     NormalizePetHeight(visual, 1.1f);
                     StripPetColliders(visual);
                     // Tripo FBXs embed a CAMERA node (and sometimes an

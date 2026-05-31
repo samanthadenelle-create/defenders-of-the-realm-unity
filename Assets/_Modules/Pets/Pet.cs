@@ -28,6 +28,7 @@
 using DeNelle.Core.Combat;
 using DeNelle.Data;       // PetData SO — WO-86
 using UnityEngine;
+using UnityEngine.AI;     // WO-187 — constrain pet to the shared NavMesh
 
 namespace DeNelle.Pets
 {
@@ -114,6 +115,17 @@ namespace DeNelle.Pets
 
         // Reusable overlap buffer — avoids per-frame GC (OverlapSphereNonAlloc).
         private readonly Collider[] _overlap = new Collider[48];
+
+        // ── Navigation (WO-187: pet clipped through walls) ───────────────────
+        // The pet used to move by raw transform translation, so nothing stopped
+        // it walking through the castle walls (there's no collider/agent on it).
+        // Mirror HeroLocomotion: drive a NavMeshAgent via Move() so the agent
+        // constrains the pet to the SAME baked NavMesh the hero + enemies use —
+        // walls/buildings have no NavMesh under them, so the agent can't enter
+        // them, and it follows the walkable surface height (stairs/ramparts).
+        // We keep our own eased-speed kinematics (MoveToward) and only feed the
+        // resulting step through the agent; rotation stays manual (FaceToward).
+        private NavMeshAgent _agent;
 
         // ── Animation ─────────────────────────────────────────────────────────
         // The KayKit pet rig carries an Animator (the AnimatorSetup editor script
@@ -224,7 +236,14 @@ namespace DeNelle.Pets
             }
 
             _hp = _maxHp;
-            transform.position = _homePost;
+            // WO-187: snap to the deploy slot. Use Warp() when the agent is live so
+            // the NavMeshAgent's internal position stays in sync (a raw transform set
+            // would desync it → it'd snap back / refuse to Move). Warp also lands the
+            // pet on the nearest walkable point if the slot is slightly off-mesh.
+            if (_agent != null && _agent.isOnNavMesh)
+                _agent.Warp(_homePost);
+            else
+                transform.position = _homePost;
         }
 
         private void Awake()
@@ -245,6 +264,24 @@ namespace DeNelle.Pets
                 }
             }
             _lastPosition = transform.position;
+
+            // WO-187: unify pet navigation onto the SAME NavMesh the hero + enemies
+            // use, so the pet can't pass through walls/buildings (no NavMesh there)
+            // and follows the walkable surface height. We drive it via Move() below
+            // from our own eased kinematics; the agent only constrains + grounds us.
+            _agent = GetComponent<NavMeshAgent>();
+            if (_agent == null) _agent = gameObject.AddComponent<NavMeshAgent>();
+            _agent.radius = 0.35f;
+            _agent.height = 1.1f;
+            _agent.baseOffset = 0f;
+            _agent.speed = 30f;            // we drive via Move(); keep high so it never caps us
+            _agent.acceleration = 200f;
+            _agent.angularSpeed = 0f;
+            _agent.updateRotation = false; // facing handled manually (FaceToward)
+            _agent.updateUpAxis = false;
+            _agent.autoBraking = false;
+            _agent.stoppingDistance = 0f;
+            _agent.obstacleAvoidanceType = ObstacleAvoidanceType.NoObstacleAvoidance;
 
             // +/-12% stable per-pet cruise-speed variation so the pack doesn't
             // travel in perfect lockstep. Seeded by instance id (matches the
@@ -440,7 +477,21 @@ namespace DeNelle.Pets
 
             // Step, capped at the distance left so we never overshoot.
             float step = Mathf.Min(_currentSpeed * dt, remaining);
-            transform.position = Vector3.MoveTowards(transform.position, flatTarget, step);
+
+            // WO-187: move on the shared NavMesh — the agent clamps the step to the
+            // walkable surface (so the pet can't cross walls/buildings) and follows
+            // its height. Build the displacement vector ourselves (toTarget is the
+            // flat direction) and hand it to Move(). Fall back to a raw transform
+            // move when the pet isn't on a NavMesh yet (scene without a bake, or
+            // spawned just off-mesh) so movement never breaks.
+            if (remaining > 0.0001f)
+            {
+                Vector3 displacement = (toTarget / remaining) * step;
+                if (_agent != null && _agent.isOnNavMesh)
+                    _agent.Move(displacement);
+                else
+                    transform.position = Vector3.MoveTowards(transform.position, flatTarget, step);
+            }
 
             FaceToward(target);
         }
