@@ -57,6 +57,14 @@ CREATE TABLE IF NOT EXISTS player_data (
     updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- DRIFT RECONCILE (2026-05-31): an earlier deploy created player_data with ONLY
+-- (player_id, game_state, updated_at) -- missing schema_version + created_at that
+-- save.js/load.js read+write, so the live save function FAILED against it. CREATE
+-- ... IF NOT EXISTS above does NOT alter an existing table, so add the columns
+-- explicitly. Additive + idempotent (no data touched, no drops):
+ALTER TABLE player_data ADD COLUMN IF NOT EXISTS schema_version INTEGER     NOT NULL DEFAULT 10;
+ALTER TABLE player_data ADD COLUMN IF NOT EXISTS created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW();
+
 -- Index for frequent sorted queries (leaderboard, etc.)
 CREATE INDEX IF NOT EXISTS idx_player_data_best_wave
     ON player_data ((game_state->>'bestWave') DESC NULLS LAST);
