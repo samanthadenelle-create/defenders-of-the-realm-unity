@@ -2924,6 +2924,19 @@ namespace DeNelle.Editor
                     g.transform.localScale = s;
                 }
                 g.transform.rotation = Quaternion.Euler(0f, yaw, 0f);
+                // DIAGNOSTIC (WO-158 castle debris): log each segment's FINAL world
+                // bounds + position so we can see which pieces come out flat/wrong
+                // (the slabs embedded in the wall). Remove once the cause is found.
+                {
+                    var dr = g.GetComponentsInChildren<Renderer>();
+                    if (dr != null && dr.Length > 0)
+                    {
+                        Bounds fb = dr[0].bounds;
+                        for (int i = 1; i < dr.Length; i++) fb.Encapsulate(dr[i].bounds);
+                        Debug.Log($"[WALLDIAG] {g.name} pos={g.transform.position} " +
+                                  $"worldSize={fb.size} center={fb.center} scale={g.transform.localScale}");
+                    }
+                }
                 StripColliders(g);                                            // WallSegment colliders (BuildWallRing) own gameplay
                 StripRigidbodies(g);
             };
@@ -4409,6 +4422,49 @@ namespace DeNelle.Editor
         /// REQUIRED for the wave loop: <c>Enemy</c> uses a NavMeshAgent and
         /// cannot move without a baked NavMesh.
         /// </summary>
+        /// <summary>
+        /// True when <paramref name="t"/> sits under an outer perimeter gatehouse
+        /// (BuildWallPerimeter names them "Gate-North-Main" / "Gate-East-Side" etc.,
+        /// parented to "WallPerimeter" under the "Walls" root). Those scale-10 arch
+        /// meshes must be left OUT of the NavMesh bake or they voxelize solid across
+        /// the opening and seal the gate — see DEF gate-nav fix in BakeVillageNavMesh.
+        /// Walks parents up to (and stopping at) <paramref name="stopAt"/> so it never
+        /// escapes the Walls subtree.
+        /// </summary>
+        private static bool IsUnderPerimeterGate(Transform t, Transform stopAt)
+        {
+            for (var p = t; p != null && p != stopAt; p = p.parent)
+            {
+                if (p.name.StartsWith("Gate-", System.StringComparison.Ordinal))
+                    return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// True for the moat WATER tiles and the DRAWBRIDGE planks (both live under
+        /// "Walls/Moat"). DEF gate-nav fix (2026-05-30): BuildMoat parents the moat
+        /// under the Walls root, so the nav-static sweep was baking the water surface
+        /// (y = -0.4) and the raised plank lip into the NavMesh — fragmenting it right
+        /// at each gate crossing, which dead-ended the hero "at the wood plank." The
+        /// hero is meant to cross on the flat Ground/Approach surface through the 6 m
+        /// opening (same philosophy as the excluded gate arch); the moat + bridge are
+        /// decoration, so they stay OUT of the bake. Matched by name so it is robust to
+        /// the Moat root's parenting.
+        /// </summary>
+        private static bool IsNonWalkableMoatPiece(Transform t)
+        {
+            for (var p = t; p != null; p = p.parent)
+            {
+                string n = p.name;
+                if (n.StartsWith("MoatTile", System.StringComparison.Ordinal) ||
+                    n.StartsWith("Drawbridge", System.StringComparison.Ordinal) ||
+                    n == "Moat")
+                    return true;
+            }
+            return false;
+        }
+
         private static void BakeVillageNavMesh(GameObject root)
         {
             int marked = 0;
@@ -4418,15 +4474,25 @@ namespace DeNelle.Editor
             // Buildings are obstacles the agents path around. Marking by
             // GameObjectUtility static flags is what NavMeshBuilder reads.
             //
-            // WO-27 fix: "Gates" is DELIBERATELY excluded. The KayKit gate arch
-            // (wall_straight_gate, scaled 4.5x) would voxelize into a navmesh wall
-            // across the opening, leaving the route blocked at every gate -- so an
+            // WO-27 fix: the inner "Gates" root is DELIBERATELY excluded. The KayKit
+            // gate arch (wall_straight_gate, scaled 4.5x) would voxelize into a navmesh
+            // wall across the opening, leaving the route blocked at every gate -- so an
             // enemy could batter a gate down and STILL have no navmesh path through
             // to the Heart. Enemies are held at a CLOSED gate by gameplay instead
             // (Enemy.ProbeForStructure hits the Gate's blocker BoxCollider, which
             // has no renderer and so never affects the bake); when the gate is
             // destroyed they resume onto the continuous navmesh and pour through.
             // The opening therefore must stay WALKABLE in the bake.
+            //
+            // DEF gate-nav fix (2026-05-30): the OUTER perimeter gatehouses
+            // (BuildWallPerimeter: "Gate-*-Main" / "Gate-*-Side", scale 10) live UNDER
+            // the "Walls" root, so the sweep below marked their arch mesh NavigationStatic
+            // and it voxelized SOLID across every opening -- sealing the gate on the
+            // NavMesh. This was invisible while the hero moved by free transform, but
+            // HeroLocomotion now moves as a NavMeshAgent (constrained to the bake), so a
+            // plugged opening means "cannot exit." Skip these gate arches exactly like
+            // the inner Gates root; the curtain wall segments on either side still bound
+            // the opening, and the Ground/Approaches floor keeps it walkable through.
             string[] navStaticRoots =
             {
                 "Ground", "Roads", "Approaches", "Walls", "Buildings",
@@ -4438,6 +4504,8 @@ namespace DeNelle.Editor
                 foreach (var r in sub.GetComponentsInChildren<Renderer>())
                 {
                     if (r == null) continue;
+                    if (IsUnderPerimeterGate(r.transform, sub)) continue; // keep gate openings walkable
+                    if (IsNonWalkableMoatPiece(r.transform)) continue;    // water shelf + drawbridge lip fragment the gate crossing
                     var flags = GameObjectUtility.GetStaticEditorFlags(r.gameObject);
                     GameObjectUtility.SetStaticEditorFlags(r.gameObject,
                         flags | StaticEditorFlags.NavigationStatic);
