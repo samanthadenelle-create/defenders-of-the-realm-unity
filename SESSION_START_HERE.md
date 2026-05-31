@@ -10,6 +10,43 @@ Update the [Order Log](#order-log--living-status) as orders close, break, or arr
 
 ---
 
+## 🗓 SESSION 2026-05-31 (CLI gatekeeper) — stopping point
+
+**Branch `feat/tower-core-loop` is GREEN + fully pushed (HEAD `202d026`). Latest Windows build (5:57 PM) has all of the below.**
+
+**✅ Committed + verified this session (newest first):**
+| Commit | What | Verify |
+|---|---|---|
+| `202d026` | **Pet**: NavMeshAgent (no wall-clip) + −90° yaw (no reverse) — WO-187/DEF-95 | playtest |
+| `c90953e` | **Canon**: Avalon→Elarion player-facing strings/dialogue/realm-map — WO-182/DEF-97 | playtest |
+| `ac6f155` | **HUD**: VillageHudController implements IVillageHud + RegisterHud → compass + wave-timer go live — DEF-104 | playtest |
+| `bffbff8` | **Hero**: die + timed respawn at 0 HP (was frozen/scene-reload) — DEF-102 | playtest |
+| `42e500d` | **Hero**: face-forward + walk animation (avatar bind + yaw) — WO-174 | ✅ owner-confirmed |
+| `2d5456e` | **World**: per-quadrant biomes → 4 elemental regions visible — WO-142 | ✅ owner-confirmed |
+| `948c411` | **World P0**: unified terrain ground + walkable (void/bump/wall RESOLVED) — DEF-108/WO-173 | ✅ owner-confirmed |
+| `065216b` `1ee274a` | **World**: terrain renders in build (OuterWorld + shader + splat) | ✅ owner-confirmed |
+
+**📋 Queued / follow-ups (next session):**
+- **WO-163 audio**: code is param-guarded (no console spam). Remaining = EDITOR task: in `Assets/Audio/Resources/Audio/GameAudioMixer.mixer` expose `MasterVol`/`MusicVol`/`SfxVol` (+ Music/SFX groups) so volume sliders work. Optional: add `Speed`/`IsTalking` params to `AC_Blacksmith`/`AC_Merchant` controllers (already silenced).
+- **WO-190**: orc necromancer → first character through the **CharacterFactory harness** (import→bake-texture→decimate-keeping-UVs→URP→own-clip animator→register). OVERNIGHT.
+- **WO-184 pet T-pose**: PetDeployer now loads `Resources/Pets/<species>.controller` (wired) — needs that controller ASSET built from the ice-wolf's own Generic clips.
+- **Asset cleanup (WO-191 Phase 0)**: ✅ confirmed-safe removes (~140 MB): `Cosmetics/Pets/pet-aether-twilight.fbx` (0 refs), `Resources/Enemy/` (stale test, code loads `Enemies/`), `CC5Hero/` + `Editor/CC5ExtractTex.cs` (only the scratch script refs it). Verify: `Textures/Cathedral.png` (23 refs), top-level `Textures/` per-file dedupe.
+- Animation walk-clip POLISH tabled until real models arrive via the harness.
+- Bigger open: WO-156 camera-over-walls, DEF-110 ATB party battle, DEF-105 hero HP bar, region scenery (WO-142 B/C/D).
+
+**Pipeline that worked:** delegate a bug to an Agent (investigate+fix, brace-balanced, no build/commit) → CLI gatekeeper brace+junk-scans, compile/build-verifies, commits by explicit path → owner playtests → Claude UI marks Linear. Keep agent work tracked in Linear (UI owns that).
+
+### 🔒 VILLAGE LANE LOCKED → Claude UI (WO-189 city redesign) — owner 2026-05-31
+Claude UI owns the village single-writer lane to land the **Elarion City Manifest** (29 buildings +
+100 props + 6 wardens + roads + bridges; data-only into `VillageSceneBuilder.Content.cs`, then bake).
+**CLI / every other session STAY OUT until UI releases it:**
+- ❌ Do NOT edit `VillageSceneBuilder.cs` or any `VillageSceneBuilder.*.cs` partial, `WallLayout.cs`, or `Village.unity`.
+- ❌ Do NOT run `BuildVillage` or `BakeWorldNavMesh` (both write `Village.unity`) while UI holds the lane.
+- ✅ CLI is FREE to work everything else: **non-village bugs** (HUD, hero, pet, enemy, ATB, audio), **web/WebGL UI components**, OuterWorld/terrain edits that don't rebake Village, and the asset-cleanup Phase-0 removes (orphan / Enemy\ / CC5Hero — none touch the village bake).
+- Handoff point is HEAD `202d026` (clean). UI removes this lock note when done.
+
+---
+
 ## 1. The 30-second picture
 
 - **Tree is GREEN and playable.** Baseline restore points: `00b1662` / `8e4fd35`.
