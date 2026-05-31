@@ -54,7 +54,7 @@ namespace DeNelle.Village
         // LOCALIZE: shown as the speech-bubble attribution line.
         private static readonly string[] _names =
         {
-            "Avalon Trader",   // Trader
+            "Elarion Trader",  // Trader
             "Villager",        // Villager
             "Off-duty Guard",  // Guard
             "Village Child",   // Child
