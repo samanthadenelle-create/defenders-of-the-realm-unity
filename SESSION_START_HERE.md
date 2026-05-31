@@ -117,15 +117,19 @@ The clean web build IS the deliverable (`docs/webgl-hosting-notes.md`, `BUG_WORK
 > with a one-line comment on *what was applied* or *what changed*. Newest notes at the top of a cell.
 > Status: `OPEN` · `IN PROGRESS` · `DONE` (RESULT filed) · `BROKE` (regressed, needs re-open) · `BLOCKED`.
 
-### WO-181 — VillageSceneBuilder partial-class split (refactor, in progress)
-| Step | Status | Notes |
+### WO-181 — VillageSceneBuilder partial-class split — **COMPLETE ✅**
+`VillageSceneBuilder.cs` **4,657 → 657 lines** across **13 partial files, ALL <800**, every step
+**rebake-equivalence gated** (bake summary byte-identical 5×; editor-only, runtime/scene untouched).
+| Step | Commit | Files |
 |---|---|---|
-| 1 — Helpers | **DONE `267a1fe`** | reflection/utility helpers → `.Helpers.cs` (431). Equivalence-gated. |
-| 2 — Content/Dressing/Characters/NavMesh | **DONE `d50bfa5`** | 4 partials extracted; main **4,657 → 2,495**. All <800. Equivalence byte-identical. |
-| 3 — bug-zone + interleaved remainder | **DEFERRED** | walls/gates/moat/ramparts + force-fields + wiring/materials interleaved with them. Do in a QUIET window (after the village-bug cycle) so it doesn't collide with bug fixes + stale line-numbered specs. |
-> Method to reuse: deterministic line-slice (locate by content regex) → wrap in `public static
-> partial class VillageSceneBuilder` → **rebake-equivalence gate** (bake summary counts must match).
-> `git checkout` reverts instantly if a slice is off (file is committed clean each step).
+| 1 | `267a1fe` | `.Helpers` (reflection/utility) |
+| 2 | `d50bfa5` | `.Content` `.Dressing` `.Characters` `.NavMesh` |
+| 3 | `73523c8` | `.Scene` `.Portals` `.Wiring` `.Materials` `.Systems` |
+| 4 | `47155e9` | `.Walls` `.Fortify` (bug-zone, done in the quiet window) |
+> Sizes: main 657 / Content 635 / Walls 613 / Characters 566 / Fortify 443 / Helpers 431 /
+> Dressing 422 / Systems 298 / NavMesh 194 / Materials 176 / Portals 164 / Scene 145 / Wiring 118.
+> Reusable method if more splits arise: deterministic content-located line-slice → wrap in
+> `public static partial class VillageSceneBuilder` → rebake-equivalence gate.
 
 ### Lane A — Village Scene (SERIAL — one agent, one rebake)
 > **2026-05-31 rebake + Windows build GREEN (`8f4c6f3`).** Reconcile call confirmed: the village
