@@ -216,15 +216,14 @@ namespace DeNelle.Village
                 else
                     transform.position += step;
 
-                // The hero mesh is imported with its visual forward along local -X
-                // rather than the Unity-convention +Z.  LookRotation aligns local +Z
-                // with the velocity direction, so without a correction the hero faces
-                // 90° counter-clockwise from the move direction (right → faces up, etc.).
-                // Multiplying by Euler(0,-90,0) rotates the result 90° clockwise to
-                // cancel the model's offset — do NOT remove this without re-importing
-                // the FBX with a corrected root orientation.
-                Quaternion target = Quaternion.LookRotation(Velocity.normalized)
-                                    * Quaternion.Euler(0f, -90f, 0f);
+                // Face the move direction. HeroBodySwapper already orients each hero
+                // BODY (child) to face +Z forward via its per-class yaw, so the ROOT
+                // just points +Z at the velocity — NO extra offset here. The old
+                // blanket Euler(0,-90,0) was tuned for a prior mesh and fought the
+                // swapper's CC5-Knight +90 body yaw, producing the side-step/glide
+                // (hero walked sideways). Root = LookRotation(velocity); body yaw owns
+                // the mesh-forward correction. (WO: hero side-step fix, 2026-05-30.)
+                Quaternion target = Quaternion.LookRotation(Velocity.normalized);
                 transform.rotation = Quaternion.Slerp(
                     transform.rotation, target, _rotationSpeed * Time.deltaTime);
             }
