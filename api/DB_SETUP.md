@@ -220,3 +220,145 @@ prior table being populated):
    same player; `ALREADY_CLAIMED` on a second claim.
 6. `tower_swaps` — perform a paid swap; one row, re-post is deduped by `tx_sig`.
 7. `bug_reports` — file a bug from the Help menu (resolve the host mismatch first).
+
+---
+
+## Functions (plumbing)
+
+The six client-called endpoints that previously had **no serverless function**
+are now implemented. All follow the exact conventions of `game/save.js` /
+`game/load.js`: `const { neon } = require('@neondatabase/serverless')`,
+`const sql = neon(process.env.DATABASE_URL)`, `module.exports = async (req, res)`,
+`res.status(<code>).json(...)`, status codes constrained to **200 / 400 / 500**
+(401/404 unused here), parameterized tagged-template SQL only (no string concat),
+and the `::jsonb` cast on JSON params (the Neon HTTP driver sends params as
+strings). File path = Vercel route (e.g. `api/tower-swap/log.js` → `/api/tower-swap/log`).
+
+**Body parsing:** only `game/save.js` sets `bodyParser:false` (it needs raw
+MsgPack). The six new functions are JSON, so they use Vercel's **default** body
+parser (`req.body`), with a `typeof body === 'string'` JSON.parse fallback for
+safety. No global parser config exists, so this is correct.
+
+**Business-failure status convention:** `promo/redeem` and `referral/claim`
+return **HTTP 200** with `{ success:false, error:"<CODE>" }` for *business*
+rejections (bad/expired/used code, self-referral, cap reached). This matches the
+clients, which read `resp.Success` + `resp.Error` from the JSON body and only
+treat a non-2xx `UnityWebRequest.Result` as "couldn't reach server". 400/500 are
+reserved for malformed requests / server faults.
+
+### `POST /api/events/track` → `analytics_events`
+- **Client:** `Core/Analytics/EventTracker.cs`
+- **Body:** `{ "events": [ { "playerId", "eventName", "properties", "clientTs" }, … ] }`
+  — `properties` is a **JSON string**; `clientTs` is unix **millis**.
+- **Response:** `{ "success": true, "inserted": <n> }` (client is fire-and-forget; only needs 2xx).
+- **Logic:** loops the array, one INSERT per event. Parses `properties` string →
+  JSONB (`::jsonb`); if it isn't valid JSON, stores `{ "_raw": "<string>" }`
+  rather than dropping the event. Skips events with no `eventName` and a null/
+  blank batch is a valid 200 (`inserted:0`). `playerId` defaults to `"anonymous"`.
+
+### `POST /api/promo/redeem` → `promo_codes` (read) + `promo_redemptions` (write)
+- **Client:** `Core/Promo/PromoCodeService.cs`
+- **Body:** `{ playerId, code }` (code uppercased client-side; we re-uppercase server-side).
+- **Success:** `{ success:true, reward:{ crystals, coins }, message }`
+- **Failure (200):** `{ success:false, error:"INVALID_CODE"|"ALREADY_REDEEMED"|"EXPIRED"|"PLAYER_LIMIT_REACHED" }`
+- **Logic / gates (in order):** missing row OR `active=false` → `INVALID_CODE`;
+  `NOW() > expires_at` → `EXPIRED`; this player already redeemed this code →
+  `ALREADY_REDEEMED`; global count `>= max_redemptions` → `ALREADY_REDEEMED`;
+  player's distinct redeemed codes `>= per_player_limit` → `PLAYER_LIMIT_REACHED`.
+  On success: INSERT into `promo_redemptions` snapshotting `(crystals, coins)`;
+  a `UNIQUE(code, player_id)` race (Postgres `23505`) is caught → `ALREADY_REDEEMED`
+  (idempotent, never double-grants).
+
+### `POST /api/referral/generate` → `referrals`
+- **Client:** `Core/Referral/ReferralService.cs` (`EnsureCodeAsync`)
+- **Body:** `{ playerId }`
+- **Response:** `{ success:true, code, referralUrl }`
+- **Logic:** generate-or-reuse. If the player already has a `referrals` row,
+  returns the **same** code+url (client caches it, calls repeatedly). Otherwise
+  mints an **8-char uppercase** code from an unambiguous alphabet (no `0/O/1/I`),
+  `referralUrl = https://defenders-of-the-realm-v2.vercel.app/r/<code>`, INSERT
+  with `ON CONFLICT (player_id) DO NOTHING` (handles concurrent first-calls by
+  the same player → re-selects), and retries up to 6× on a `UNIQUE(code)`
+  collision with another player.
+
+### `POST /api/referral/claim` → `referrals` (read+bump) + `referral_claims` (write)
+- **Client:** `Core/Referral/ReferralService.cs` (`ClaimAsync`)
+- **Body:** `{ playerId, code }`
+- **Success:** `{ success:true, reward:{ crystals }, message }`
+- **Failure (200):** `{ success:false, error:"INVALID_CODE"|"SELF_REFERRAL"|"ALREADY_CLAIMED"|"CAP_REACHED" }`
+- **Logic / gates (in order):** code not in `referrals` → `INVALID_CODE`;
+  referrer == claimer → `SELF_REFERRAL`; claimer already has a row (any code) →
+  `ALREADY_CLAIMED`; `claim_count >= reward_cap` (only when `reward_cap` set) →
+  `CAP_REACHED`. On success: INSERT into `referral_claims` (`UNIQUE(claimer_id)`
+  race → `ALREADY_CLAIMED`), then **best-effort** `claim_count + 1` bump on
+  `referrals` (a failed bump is logged, not rolled back — the claim/reward stand;
+  the counter is recomputable from `referral_claims`).
+- **Claimer reward amount:** the client sends NO amount — the backend decides.
+  Implemented as env `REFERRAL_CLAIM_CRYSTALS` (**default 25**). **ASSUMPTION —
+  owner must confirm the intended grant** (and whether the *referrer* also gets a
+  reward — see assumption 12 below; no referrer payout is implemented yet).
+
+### `POST /api/tower-swap/log` → `tower_swaps`
+- **Client:** `Village/Buildings/TowerSwapService.cs` (fire-and-forget)
+- **Body:** `{ playerId, waveId, fromTower, toTower, currency, costUsdc, txSig, timestamp }`
+  — `timestamp` is unix **seconds** (NOT millis). `costUsdc` → `NUMERIC(12,4)`.
+- **Response:** `{ "success": true, "deduped": <bool> }` (client ignores the body).
+- **Logic:** straight INSERT with `ON CONFLICT (tx_sig) WHERE tx_sig IS NOT NULL
+  DO NOTHING` (matches the partial unique index `uq_tower_swaps_tx_sig`) so a
+  re-posted on-chain payment is silently deduped (`deduped:true`). Null `tx_sig`
+  rows are never deduped (partial index excludes them), per schema intent.
+
+### `POST /api/bug-report` → `bug_reports`
+- **Client:** `HUD/HelpMenu.cs` (`PostBugReport`)
+- **Body:** `{ "description", "context":{ "route", "appVersion" } }` — **no playerId** today.
+- **Response:** `{ "success": true }` (client only checks 2xx; logs the body).
+- **Logic:** straight INSERT. Stores `description` (capped 4000 chars
+  defensively), `route`, `app_version`, the full `context` object as JSONB, and a
+  nullable `player_id` (accepted if a future caller adds one). Empty/blank
+  description → 400.
+- **⚠ HOST MISMATCH (owner action):** `HelpMenu.BugReportEndpoint` posts to the
+  **OLD** host `https://defenders-of-the-realm.vercel.app/api/bug-report` (NO
+  `-v2`). Every other service uses `-v2`. So **as written, this function will
+  NOT be hit on the `-v2` deployment** — the call lands on the old React project.
+  Two options:
+  1. **Repoint the client** — change `HelpMenu.BugReportEndpoint` to the `-v2`
+     host (a `.cs` edit, out of scope here → flag to gatekeeper). Then this
+     `api/bug-report.js` on `-v2` receives it and writes to this DB. **Recommended.**
+  2. **Deploy this function on the OLD project** and ensure that project's DB has
+     the `bug_reports` table (and a `DATABASE_URL` pointing at it).
+
+---
+
+## Additional assumptions the owner must verify (functions layer)
+
+These extend §6's table-layer assumptions with function-behaviour decisions:
+
+11. **`promo/redeem` & `referral/claim` return HTTP 200 on business failures.**
+    Confirmed against the clients (they branch on the JSON `success`/`error`
+    fields, not the HTTP status). If you later add an API gateway / monitoring
+    that flags non-success by HTTP code, those rejections won't be visible to it.
+
+12. **Referral reward semantics — claimer only, fixed amount.** The claimer gets
+    `REFERRAL_CLAIM_CRYSTALS` (default **25**) crystals. The schema/client mention
+    a **referrer** reward too ("triggers the referrer's reward"), but the client
+    has no path to receive it (the referrer is offline at claim time) and no
+    table column captures a pending referrer payout. **Not implemented** — the
+    referrer's `claim_count` is tracked but no crystals are granted to them. Owner
+    must decide how/when the referrer is paid (e.g. a `referrer_reward` column +
+    a credit applied on the referrer's next `game/load`/`save`).
+
+13. **Generated referral code shape.** 8 chars, alphabet `A-Z2-9` minus
+    `0/O/1/I` (~30 bn combinations). Collision retry is 6×. The `referralUrl`
+    points at `…/r/<code>` on the `-v2` host — there is **no route/handler for
+    `/r/<code>` yet** (it's just a shareable string today). Owner to add a landing
+    page / deep-link if the URL must actually resolve.
+
+14. **`events/track` keeps malformed `properties` instead of dropping.** If the
+    `properties` string fails to JSON-parse, it's stored as
+    `{ "_raw": "<original>" }` rather than discarded, so no event is lost. Change
+    to a hard skip if you'd rather not persist unparseable props.
+
+15. **`tower-swap/log` accepts null `tx_sig`.** Per schema, only non-null sigs are
+    deduped. A swap logged without a signature always inserts a new row (no dedup
+    possible). The current client always sends `result.TxSignature`, so null is an
+    edge case only.
