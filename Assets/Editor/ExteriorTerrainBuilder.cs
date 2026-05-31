@@ -67,6 +67,12 @@ namespace DeNelle.Editor
         // ── Project paths ────────────────────────────────────────────────────
         private const string ScenesDir = "Assets/Scenes";
         private const string VillageScenePath = ScenesDir + "/Village.unity";
+        // WO-173 Option A: the exterior terrain now belongs to OuterWorld.unity (loaded
+        // additively over Village by WorldSceneLoader) so a Village/castle rebake can't
+        // wipe the world ground again. Build order: BuildOuterWorld (regions+nodes) THEN
+        // BuildExterior (terrain) -- BuildExterior opens the existing OuterWorld and only
+        // nukes its own ExteriorRoot, preserving OuterWorldRoot.
+        private const string OuterWorldScenePath = ScenesDir + "/OuterWorld.unity";
         private const string GeneratedDir = "Assets/Generated";
         private const string TerrainAssetDir = GeneratedDir + "/Terrain";
         private const string TerrainDataPath = TerrainAssetDir + "/ExteriorTerrainData.asset";
@@ -176,13 +182,15 @@ namespace DeNelle.Editor
             AssetDatabase.Refresh();
 
             // ── Open the Village scene (must exist -- interior agent owns it) ─
-            if (!File.Exists(VillageScenePath))
+            if (!File.Exists(OuterWorldScenePath))
             {
-                Debug.LogError("[ExteriorTerrainBuilder] Village.unity not found at " +
-                               VillageScenePath + " -- run the village builder first. Aborting.");
+                Debug.LogError("[ExteriorTerrainBuilder] OuterWorld.unity not found at " +
+                               OuterWorldScenePath + " -- run Defenders/World/Build Outer World " +
+                               "(OuterWorldBuilder.BuildOuterWorld) FIRST so the terrain composes " +
+                               "with the regions/nodes. Aborting.");
                 return;
             }
-            var scene = EditorSceneManager.OpenScene(VillageScenePath, OpenSceneMode.Single);
+            var scene = EditorSceneManager.OpenScene(OuterWorldScenePath, OpenSceneMode.Single);
 
             // ── Idempotency: nuke any prior generated exterior root ──────────
             foreach (var go in scene.GetRootGameObjects())
@@ -243,7 +251,7 @@ namespace DeNelle.Editor
             ApplySkyAndFog();
 
             EditorSceneManager.MarkSceneDirty(scene);
-            EditorSceneManager.SaveScene(scene, VillageScenePath);
+            EditorSceneManager.SaveScene(scene, OuterWorldScenePath);
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
 

@@ -285,7 +285,11 @@ namespace DeNelle.Editor
                     // OuterWorld is its own scene now (OuterWorld.unity, loaded
                     // additively by WorldSceneLoader). Strip any stale copy left in
                     // Village.unity from before the scene split so it isn't duplicated.
-                    go.name == "OuterWorldRoot")
+                    go.name == "OuterWorldRoot" ||
+                    // WO-173 Option A: the exterior terrain lives in OuterWorld now. Strip
+                    // any stale terrain baked into Village (the old broken-material copy) so
+                    // it can't render as an invisible void layer or z-fight OuterWorld's terrain.
+                    go.name == "ExteriorRoot" || go.name == "ExteriorTerrain")
                 {
                     UnityEngine.Object.DestroyImmediate(go);
                 }
