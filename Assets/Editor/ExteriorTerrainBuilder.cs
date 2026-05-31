@@ -230,6 +230,7 @@ namespace DeNelle.Editor
             // materials, which is why only the horizon tree-line + the centre patch showed).
             // Create + persist the material as an asset so it's packaged into the build.
             terrain.materialTemplate = EnsureTerrainMaterial();
+            EnsureTerrainShaderIncluded();   // pin URP terrain shader into the build (else BLACK terrain in player)
 
             // ── Texture the terrain (splatmaps) ──────────────────────────────
             PaintSplatmaps(terrainData);
@@ -1259,6 +1260,44 @@ namespace DeNelle.Editor
                 mat.shader = shader;
             }
             return mat;
+        }
+
+        /// <summary>
+        /// WO-173/DEF-108: pins the URP Terrain Lit shader into Graphics Settings'
+        /// Always Included Shaders so it is NOT stripped from the player build. Symptom
+        /// without this: terrain renders BLACK in the build (the shader is present in the
+        /// editor but URP's scriptable stripping drops it from the player) while simpler
+        /// objects render fine.
+        /// </summary>
+        [MenuItem("Defenders/World/Ensure Terrain Shader In Build")]
+        public static void EnsureTerrainShaderIncluded()
+        {
+            var shader = Shader.Find("Universal Render Pipeline/Terrain/Lit");
+            if (shader == null)
+            {
+                Debug.LogWarning("[ExteriorTerrainBuilder] URP Terrain Lit shader not found -- cannot pin it into the build.");
+                return;
+            }
+            var so = new SerializedObject(UnityEngine.Rendering.GraphicsSettings.GetGraphicsSettings());
+            var list = so.FindProperty("m_AlwaysIncludedShaders");
+            if (list == null)
+            {
+                Debug.LogWarning("[ExteriorTerrainBuilder] m_AlwaysIncludedShaders not found on GraphicsSettings.");
+                return;
+            }
+            for (int i = 0; i < list.arraySize; i++)
+            {
+                if (list.GetArrayElementAtIndex(i).objectReferenceValue == shader)
+                {
+                    Debug.Log("[ExteriorTerrainBuilder] URP Terrain Lit already in Always Included Shaders.");
+                    return;
+                }
+            }
+            list.InsertArrayElementAtIndex(list.arraySize);
+            list.GetArrayElementAtIndex(list.arraySize - 1).objectReferenceValue = shader;
+            so.ApplyModifiedProperties();
+            AssetDatabase.SaveAssets();
+            Debug.Log("[ExteriorTerrainBuilder] Pinned URP Terrain Lit into Always Included Shaders (no longer stripped from builds).");
         }
 
         private static void EnsureFolder(string assetPath)
