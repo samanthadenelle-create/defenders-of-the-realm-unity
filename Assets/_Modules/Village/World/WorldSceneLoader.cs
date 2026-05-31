@@ -97,16 +97,34 @@ namespace DeNelle.Village
                     if (sum < 0.01f)
                     {
                         // DEF-108 FIX: the baked splatmap did NOT persist into the player build
-                        // (all-zero weights -> every layer contributes 0 -> terrain renders pure
-                        // black). Repaint grass across the whole terrain at runtime so it renders.
-                        // (Full biome variety to be restored with a bake-side persistence fix.)
+                        // (all-zero weights -> terrain renders pure black). Repaint at runtime.
+                        // Per-quadrant BIOMES so the 4 elemental regions read as distinct ground:
+                        //   E Goldfields=grass(0) / W Stoneback=stone(1) / S Mirewood=mud(2) /
+                        //   N Ashwood=dead-ash(4). Weighted by how far into each quadrant the point
+                        //   sits, normalized -> smooth blends at the seams. (Full slope/height biome
+                        //   variety + scenery to be restored via the bake-side persistence fix + WO-142.)
                         int aw = td.alphamapWidth, ah = td.alphamapHeight, layers = td.alphamapLayers;
                         var fill = new float[ah, aw, layers];
                         for (int z = 0; z < ah; z++)
+                        {
+                            float worldZ = (ah <= 1) ? 0f : (z / (float)(ah - 1)) * 300f - 150f;
                             for (int x = 0; x < aw; x++)
-                                fill[z, x, 0] = 1f;   // grass (layer 0) everywhere
+                            {
+                                float worldX = (aw <= 1) ? 0f : (x / (float)(aw - 1)) * 300f - 150f;
+                                float wGrass = Mathf.Max(0f, worldX);    // east  -> Goldfields
+                                float wStone = Mathf.Max(0f, -worldX);   // west  -> Stoneback
+                                float wDead  = Mathf.Max(0f, worldZ);    // north -> Ashwood
+                                float wMud   = Mathf.Max(0f, -worldZ);   // south -> Mirewood
+                                float total  = wGrass + wStone + wDead + wMud;
+                                if (total < 0.001f) { fill[z, x, 0] = 1f; continue; }  // village centre -> grass
+                                fill[z, x, 0] = wGrass / total;
+                                if (layers > 1) fill[z, x, 1] = wStone / total;
+                                if (layers > 2) fill[z, x, 2] = wMud / total;
+                                if (layers > 4) fill[z, x, 4] = wDead / total;
+                            }
+                        }
                         td.SetAlphamaps(0, 0, fill);
-                        Debug.Log("[WorldSceneLoader] TERRAINDIAG splat was EMPTY -> repainted grass at runtime; terrain should render now.");
+                        Debug.Log("[WorldSceneLoader] TERRAINDIAG splat was EMPTY -> repainted PER-QUADRANT biomes (E grass / W stone / S mud / N dead-ash) so the 4 regions read distinct.");
                     }
                     else
                     {
