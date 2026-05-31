@@ -137,6 +137,15 @@ namespace DeNelle.Core.State
         /// <summary>#38c — unix ms of the last inbox sync. Fresh = 0.</summary>
         public double LastInboxSyncAt;
 
+        // ── World / zones (WO-164) ────────────────────────────────────────────
+        /// <summary>Per-region zone records — discovery/clear flags, neighbor graph,
+        /// and City/Horde destination tag (WO-164). Seeded from
+        /// <see cref="DeNelle.Core.World.ZoneManager.DefaultZoneGraph"/> on a fresh save.
+        /// Append-only field — added at the END so older saves stay loadable. NOT yet
+        /// wired into SaveSchema/SaveMigrator; the save owner (Agent 3) must add its
+        /// (de)serialization + bump the schema version for it to round-trip to disk.</summary>
+        public List<DeNelle.Core.World.ZoneState> Zones = new List<DeNelle.Core.World.ZoneState>();
+
         /// <summary>A fresh List&lt;int&gt; of <paramref name="count"/> zeros.</summary>
         public static List<int> NewZeroed(int count)
         {
