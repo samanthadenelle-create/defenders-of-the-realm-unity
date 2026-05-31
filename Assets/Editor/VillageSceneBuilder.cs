@@ -3253,12 +3253,19 @@ namespace DeNelle.Editor
                     }
                 }
             };
+            // WO-166 #4: ramps run PARALLEL to (hugging) their wall, not perpendicular
+            // into the courtyard. Both ends sit on the walkway-edge line (z=±zEdge for
+            // N/S, x=±xEdge for E/W); the 9 m climb run goes ALONG the wall axis, so the
+            // stairs read as climbing the wall face instead of jutting 9 m mid-courtyard
+            // (owner: "the stps in middle"). Run spans x∈[-15,-6] (N/S) / z∈[-15,-6] (E/W),
+            // clearing the centred gate gap (|coord|<3); the slab's 3 m width sits just
+            // inside the wall. NavMesh link ground→walkway is preserved (ends unchanged in Y).
             float zEdge = wallZ - walkW;   // walkway inner edge (=30): ramp top meets it
-            Ramp("Ramp-South", new Vector3(-6f, 0f, -zEdge + rampRun), new Vector3(-6f, topY, -zEdge));
-            Ramp("Ramp-North", new Vector3(-6f, 0f,  zEdge - rampRun), new Vector3(-6f, topY,  zEdge));
+            Ramp("Ramp-South", new Vector3(-6f - rampRun, 0f, -zEdge), new Vector3(-6f, topY, -zEdge));
+            Ramp("Ramp-North", new Vector3(-6f - rampRun, 0f,  zEdge), new Vector3(-6f, topY,  zEdge));
             float xEdge = wallX - walkW;   // =39
-            Ramp("Ramp-East",  new Vector3( xEdge - rampRun, 0f, 6f), new Vector3( xEdge, topY, 6f));
-            Ramp("Ramp-West",  new Vector3(-xEdge + rampRun, 0f, 6f), new Vector3(-xEdge, topY, 6f));
+            Ramp("Ramp-East",  new Vector3( xEdge, 0f, -6f - rampRun), new Vector3( xEdge, topY, -6f));
+            Ramp("Ramp-West",  new Vector3(-xEdge, 0f, -6f - rampRun), new Vector3(-xEdge, topY, -6f));
 
             Debug.Log($"[VillageSceneBuilder] WO-104 BuildRamparts: {pieces} nav-static stone pieces " +
                       "(4 wall-walks + 4 climb ramps); hero + enemies share the NavMesh up to the rampart.");
