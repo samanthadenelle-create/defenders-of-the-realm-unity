@@ -47,6 +47,14 @@ namespace DeNelle.Village
 
         private bool _loggedFirstInput;
         private Animator _animator;
+        // WO-174 param-guard: cache whether the live controller actually declares the
+        // float/trigger params we drive. SetFloat/SetTrigger on a controller WITHOUT
+        // the param logs an error EVERY frame (the project-wide param-spam pitfall).
+        // Recomputed whenever _animator is (re)resolved — HeroBodySwapper swaps the
+        // controller at runtime, so we can't trust a one-shot Awake check.
+        private Animator _paramCheckedAnimator;
+        private bool _hasSpeedParam;
+        private bool _hasVictoryParam;
         private NavMeshAgent _agent;   // unified navigation: hero shares the enemies' NavMesh
 #if UNITY_EDITOR
         // Collision diagnostic: log each unique blocking collider once.
@@ -133,8 +141,8 @@ namespace DeNelle.Village
             ResolveAnimator();
             if (_animator != null)
             {
-                _animator.SetFloat(AnimSpeed, 0f);
-                _animator.SetTrigger(AnimVictory);
+                if (_hasSpeedParam)   _animator.SetFloat(AnimSpeed, 0f);
+                if (_hasVictoryParam) _animator.SetTrigger(AnimVictory);
             }
 
             Debug.Log($"[HeroLocomotion] Victory pose triggered — wave {waveId} cleared.");
@@ -143,10 +151,34 @@ namespace DeNelle.Village
         // DEF-70: shared animator resolver — safe to call before HeroBodySwapper fires.
         private void ResolveAnimator()
         {
-            if (_animator != null) return;
-            var bodyT = transform.Find("HeroBody");
-            if (bodyT != null) _animator = bodyT.GetComponentInChildren<Animator>();
-            if (_animator == null) _animator = GetComponentInChildren<Animator>();
+            if (_animator == null)
+            {
+                var bodyT = transform.Find("HeroBody");
+                if (bodyT != null) _animator = bodyT.GetComponentInChildren<Animator>();
+                if (_animator == null) _animator = GetComponentInChildren<Animator>();
+            }
+            // WO-174: (re)cache the param presence whenever the resolved Animator
+            // changes — HeroBodySwapper assigns a fresh runtimeAnimatorController at
+            // runtime, so a controller swap means we must re-scan its parameters.
+            if (_animator != null && _animator != _paramCheckedAnimator)
+                RefreshParamCache();
+        }
+
+        // WO-174 param-guard: scan the live controller's declared parameters once
+        // per (re)resolve so the per-frame SetFloat/SetTrigger never hits a missing
+        // param (which spams an error every frame). A null controller leaves every
+        // flag false → the setters silently no-op until a valid controller binds.
+        private void RefreshParamCache()
+        {
+            _paramCheckedAnimator = _animator;
+            _hasSpeedParam = false;
+            _hasVictoryParam = false;
+            if (_animator == null || _animator.runtimeAnimatorController == null) return;
+            foreach (var p in _animator.parameters)
+            {
+                if (p.type == AnimatorControllerParameterType.Float   && p.name == "Speed")   _hasSpeedParam = true;
+                if (p.type == AnimatorControllerParameterType.Trigger && p.name == "Victory") _hasVictoryParam = true;
+            }
         }
 
         // WO-139 #9: WaveManager may spawn after the hero, leaving _waveManager
@@ -244,7 +276,7 @@ namespace DeNelle.Village
             // Self-heal the Animator reference (see ResolveAnimator for rationale).
             // Cheap: only runs while _animator is null, stops once wired.
             ResolveAnimator();
-            if (_animator != null) _animator.SetFloat(AnimSpeed, Velocity.magnitude);
+            if (_animator != null && _hasSpeedParam) _animator.SetFloat(AnimSpeed, Velocity.magnitude);
         }
 
         private static Vector2 ReadMoveInput()

@@ -222,6 +222,19 @@ namespace DeNelle.Pets
                         // texture. This is why pets kept coming back grey.
                         petFixer.ForceRebuildAll();
                     }
+
+                    // WO-184 (pet T-pose): the spawned pet FBX (e.g. ice-wolf) is
+                    // imported WITHOUT an AnimatorController assigned, so its
+                    // Animator has nothing to drive — it freezes in its bind/T-pose
+                    // regardless of the Speed float Pet.cs feeds. Load a per-species
+                    // controller from Resources/Pets/<species>.controller (built by
+                    // the editor pet-animator tool from the species' OWN embedded
+                    // clips — the ice-wolf is a Generic quadruped, so it needs its
+                    // own controller, NOT the KayKit Pet.controller whose Generic
+                    // clip bone-paths won't bind to this rig). If absent, fall back
+                    // to the shared Pet.controller in Resources, then warn so the
+                    // gap is visible rather than a silent statue.
+                    WirePetAnimator(visual, def);
                 }
                 else
                 {
@@ -324,6 +337,45 @@ namespace DeNelle.Pets
             catch
             {
                 return null;
+            }
+        }
+
+        /// <summary>
+        /// WO-184: assign an AnimatorController to a freshly-spawned pet FBX so it
+        /// animates instead of standing in its bind/T-pose. Prefers a per-species
+        /// controller (Resources/Pets/&lt;species&gt;.controller) built from THAT
+        /// species' own clips, then the shared Resources/Pets/Pet.controller, then
+        /// warns. Also guarantees the Animator keeps a valid Avatar (Generic FBXs
+        /// occasionally instantiate without one) and rebinds so bones reconnect.
+        /// </summary>
+        private static void WirePetAnimator(GameObject visual, PetDef def)
+        {
+            if (visual == null) return;
+            var anim = visual.GetComponentInChildren<Animator>();
+            if (anim == null) return;   // no rig on this mesh — nothing to drive.
+
+            string species = def != null ? def.Species : null;
+            RuntimeAnimatorController ctrl = null;
+            if (!string.IsNullOrEmpty(species))
+                ctrl = Resources.Load<RuntimeAnimatorController>("Pets/" + species);
+            if (ctrl == null)
+                ctrl = Resources.Load<RuntimeAnimatorController>("Pets/Pet");
+
+            if (ctrl != null)
+            {
+                anim.runtimeAnimatorController = ctrl;
+                // Keep animating when the follow camera frames just past the pet,
+                // else Unity freezes the rig and it re-T-poses on re-entry to view.
+                anim.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+                anim.Rebind();
+            }
+            else
+            {
+                Debug.LogWarning(
+                    "[PetDeployer] No AnimatorController at Resources/Pets/" +
+                    (species ?? "<species>") + ".controller (nor Resources/Pets/Pet" +
+                    ".controller) — pet '" + (species ?? "?") + "' will not animate " +
+                    "(T-pose). Build a per-species controller from its embedded clips.");
             }
         }
 

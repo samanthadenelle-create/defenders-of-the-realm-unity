@@ -58,15 +58,23 @@ namespace DeNelle.Village
             var body = Instantiate(prefab, transform);
             body.name = "HeroBody";
             body.transform.localPosition = Vector3.zero;
-            // Tripo FBXs export with their forward along -Z (model faces the
-            // camera in the title pose), so they need a 180° correction to
-            // align with the hero root's facing direction. KayKit FBXs ship
-            // with Unity-standard +Z forward and need no rotation.
-            // CC5 fighter (now the Knight body) imports facing +X (right), so it needs a
-            // -90° yaw to face +Z forward (owner field-test 2026-05-30). Other classes keep
-            // the Tripo/-Z (180°) vs KayKit/+Z (0°) rule.
-            float yaw = (cls == HeroClass.Knight) ? 90f : (NeedsForwardFlip(cls) ? 180f : 0f);
-            body.transform.localRotation = Quaternion.Euler(0f, yaw, 0f);
+            // FORWARD CORRECTION (WO-174, owner field-test 2026-05-31):
+            // EVERY current hero body imports facing +X (EAST) in its bind pose —
+            //   • CC5 Fighter (Knight) "imports facing +X (right)" (prior note), and
+            //   • the Tripo Mage/Ranger exports likewise present +X at runtime.
+            // The hero ROOT is rotated by HeroLocomotion via LookRotation(velocity),
+            // i.e. the root's +Z points along travel. To make the mesh's visual
+            // forward agree with the root's +Z we must rotate the body's authored
+            // +X onto +Z — a single, consistent -90° yaw for ALL classes.
+            //
+            // The OLD per-class guesses (Knight +90, others 180) were inconsistent
+            // and left a constant offset: with yaw=180 the Mage's +X mesh faced -X
+            // (WEST) while travelling +Z (NORTH) — the exact "walk north / face west"
+            // 90° offset the owner reported. A constant yaw offset is identical for
+            // every heading, so correcting the constant fixes all four cardinals at
+            // once for every class (facing == heading, no moonwalk).
+            const float ForwardYaw = -90f;   // +X (authored forward) → +Z (root forward)
+            body.transform.localRotation = Quaternion.Euler(0f, ForwardYaw, 0f);
             // CC5 Fighter (Knight) stands 20% taller than the 2 m baseline (owner 2026-05-30).
             float targetH = (cls == HeroClass.Knight) ? TargetHeightMeters * 1.2f : TargetHeightMeters;
             NormalizeHeight(body, targetH);
@@ -100,6 +108,22 @@ namespace DeNelle.Village
 
             var anim = body.GetComponentInChildren<Animator>();
             if (anim == null) anim = body.AddComponent<Animator>();
+            // CRITICAL (WO-174 "no walk / statue"): the per-class controllers are
+            // built from HUMANOID Mixamo/iClone clips (HeroAnimatorFactory). A
+            // Humanoid clip can ONLY pose the rig through an Avatar — with no
+            // Avatar the Animator stays frozen in its bind/T-pose no matter what
+            // Speed we feed it (the "sliding statue"). The FBX prefab's root
+            // Animator normally carries its generated Humanoid avatar; but Tripo
+            // exports sometimes instantiate WITHOUT an Animator (then AddComponent
+            // above yields an avatar-less one), or with the avatar dropped. Pull
+            // the avatar off the source FBX prefab and assign it whenever the
+            // live Animator is missing one, so retarget always binds.
+            if (anim.avatar == null || !anim.avatar.isValid)
+            {
+                var prefabAnim = prefab.GetComponentInChildren<Animator>();
+                if (prefabAnim != null && prefabAnim.avatar != null && prefabAnim.avatar.isValid)
+                    anim.avatar = prefabAnim.avatar;
+            }
             if (controller != null)
             {
                 anim.runtimeAnimatorController = controller;
@@ -313,11 +337,8 @@ namespace DeNelle.Village
             _ => null,
         };
 
-        // All three heroes are Tripo AI exports (-Z forward) — they need a
-        // 180° yaw correction so they face the move direction instead of the
-        // camera. Owner direction 2026-05-20: use the paid-for Tripo models
-        // throughout; KayKit Adventurers swap was rolled back.
-        private static bool NeedsForwardFlip(HeroClass cls) => true;
+        // (Removed NeedsForwardFlip — the per-class -Z/+Z guess was superseded by
+        // the single consistent +X→+Z ForwardYaw correction at swap time, WO-174.)
 
         /// <summary>
         /// Loads a per-class basecolor PNG out of Resources/Textures/
