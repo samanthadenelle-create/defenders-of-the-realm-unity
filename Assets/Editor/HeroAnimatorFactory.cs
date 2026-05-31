@@ -32,7 +32,7 @@ namespace DeNelle.Editor
 
         // Shared locomotion clips (all classes) — FBX basenames in Assets/Action.
         private const string IdleClip      = "standing idle 01";
-        private const string WalkClip      = "standing walk forward";
+        private const string WalkClip      = "simple_walk";    // owner's iClone8-authored walk (2026-05-30)
         private const string RunClip       = "standing run forward";
         private const string VictoryClip   = "Joyful Jump";   // placeholder cheer
 
@@ -157,8 +157,10 @@ namespace DeNelle.Editor
                       $"→ {spec.controllerPath}");
         }
 
-        /// <summary>Load the Humanoid AnimationClip from an Assets/Action FBX by basename.
-        /// Returns the first real clip sub-asset (skips the __preview__ clip). Null + warn if absent.</summary>
+        /// <summary>Load the motion AnimationClip from an Assets/Action FBX by basename.
+        /// Skips __preview__ AND bind/T-pose clips (iClone8 exports like simple_walk
+        /// ship a "0_T-Pose" take alongside the real "…TempMotion" walk — we want the
+        /// motion, not the bind pose). Null + warn if absent.</summary>
         private static AnimationClip LoadClip(string fbxBaseName)
         {
             string path = ActionDir + fbxBaseName + ".fbx";
@@ -168,13 +170,26 @@ namespace DeNelle.Editor
                 Debug.LogWarning($"[HeroAnimatorFactory] clip FBX not found: {path}");
                 return null;
             }
+            AnimationClip fallback = null;
             foreach (var a in assets)
             {
-                if (a is AnimationClip clip && !clip.name.StartsWith("__preview__"))
-                    return clip;
+                if (!(a is AnimationClip clip)) continue;
+                if (clip.name.StartsWith("__preview__")) continue;
+                string n = clip.name.ToLowerInvariant();
+                // Skip bind/T-pose takes (iClone8 "0_T-Pose"); keep the first as a
+                // fallback in case the FBX has only one usable clip.
+                if (n.Contains("t-pose") || n.Contains("tpose") || n.Contains("bind"))
+                {
+                    fallback ??= clip;
+                    continue;
+                }
+                return clip;   // the real motion take
             }
-            Debug.LogWarning($"[HeroAnimatorFactory] no AnimationClip inside {path}");
-            return null;
+            if (fallback != null)
+                Debug.LogWarning($"[HeroAnimatorFactory] {path}: only a T-pose/bind clip found — using it.");
+            else
+                Debug.LogWarning($"[HeroAnimatorFactory] no motion AnimationClip inside {path}");
+            return fallback;
         }
     }
 }

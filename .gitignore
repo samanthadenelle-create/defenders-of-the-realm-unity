@@ -163,3 +163,22 @@ Assets/Tests/Fixtures/DevnetTestWallet.*
 # Vercel CLI leftovers (Unity is not a Vercel project; these are stray)
 .vercel/
 .vercelignore
+
+# ── Vendor VFX packs (gate-stabilize 2026-05-31) ──
+# Bulky Asset-Store VFX packs kept LOCAL — same policy as KayKit/Tripo/polyperfect.
+# Only the specific effects we use are referenced by path; re-import on fresh clone.
+# (Mirza Beig = 3,426 files, Spells Pack = 2,037 — kept the tree out of git-add-all danger.)
+/Assets/Mirza Beig/
+/Assets/Mirza Beig.meta
+/Assets/Spells Pack/
+/Assets/Spells Pack.meta
+
+# Cross-repo implementation staging (defenders-unity-review deltas, *_delta.cs) —
+# NOT part of feat/tower-core-loop; kept local for reference only, never committed here.
+/CC_implementations/
+
+# UI-bounced files (compile-failed drafts returned for rework) — scratch, not tracked.
+/_ui_bounced/
+
+# Stray root-level scripts (must live under Assets/ to compile; kept out of git).
+/ColliderVisualizer.cs

@@ -81,6 +81,12 @@ namespace DeNelle.Village
             if (_audioSource == null)
                 _audioSource = gameObject.AddComponent<AudioSource>();
             _audioSource.spatialBlend = 0f; // 2D — punchy response without attenuation
+
+            // Bug-fix (audit 2026-05-30): an unset _enemyLayer (mask 0 = "Nothing") makes every
+            // OverlapSphere return empty, so a runtime-built hero's melee silently hits nothing.
+            // Default to the Enemy layer, then to Everything — matching HeroHealth/HeroAbilities.
+            if (_enemyLayer == 0) _enemyLayer = LayerMask.GetMask("Enemy");
+            if (_enemyLayer == 0) _enemyLayer = ~0;
         }
 
         private void Update()

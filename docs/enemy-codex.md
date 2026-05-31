@@ -33,7 +33,7 @@ The bestiary splits into **two enemy factions** plus a **set-piece boss tier**.
 
 ### 1.1 The Hollow Ones — the undead wave faction (primary)
 
-Risen Folk of the realm, animated by the Withering. They march on Avalon's four gates. Skeleton-based; the catalog's Skeletons 1.1 pack is their entire body of models. They appear in **the village wave loop** and as **dungeon enemies** (the Hollow Ones lurk in every dungeon's dark).
+Risen Folk of the realm, animated by the Withering. They march on Elarion's four gates. Skeleton-based; the catalog's Skeletons 1.1 pack is their entire body of models. They appear in **the village wave loop** and as **dungeon enemies** (the Hollow Ones lurk in every dungeon's dark).
 
 ### 1.2 The Wildlands — the living (non-undead) enemy faction (secondary)
 
@@ -203,7 +203,7 @@ How the roster distributes across the realm's content.
 
 | Biome / scene | Faction present | Enemies | Boss |
 | --- | --- | --- | --- |
-| **Avalon village — wave loop** | Hollow Ones (realm 1); + Wildlands (realm 2+) | Walker, Warrior, Rogue, Caster, Reaper, Brute; Orc Raider, Caveman (realm 2+) | Necromancer of the Wound (every 6th wave); Hollow Brute (escalation waves) |
+| **Elarion village — wave loop** | Hollow Ones (realm 1); + Wildlands (realm 2+) | Walker, Warrior, Rogue, Caster, Reaper, Brute; Orc Raider, Caveman (realm 2+) | Necromancer of the Wound (every 6th wave); Hollow Brute (escalation waves) |
 | **Healer's Cottage (D1)** — cozy-domestic | Hollow Ones | Walker, Cellar Hollow | **The Apprentice of the Apothecary** (canon) |
 | **Apothecary's Vault (D2)** — apothecary-workshop | Hollow Ones | Walker, Warrior, Caster | The Vault Keeper |
 | **Wolfwarden's Vigil (D3)** — stone-fortress | Hollow Ones; Wildlands (wolves) | Warrior, Reaper, Feral Wolf | The First Wolfwarden |
@@ -288,8 +288,8 @@ Every boss is built from a KayKit model named in the catalog — the catalog's �
 
 ### 4.5 BOSS — The Inn-Keeper *(name from `dungeons-3d-unity-layout-spec.md §10.3` — owner to ratify)*
 
-- **Identity:** Mini-boss of the **Folk Who Forgot (D4)**. The layout spec names "The Inn-Keeper" and flags the register: *"tragic register."* Lore: the keeper of the inn in the drowned village of Old Avalon, still setting tables for guests who will never arrive (`dungeons-storyline.md` Act II — the Bell-Tower Hollow Ones are "the villagers of Old Avalon"). **Name treated as canon-adjacent — flag for owner ratification.** This is the codex's most *gentle* boss — barely a monster at all.
-- **KayKit model:** A **Hollow One** body — `Skeleton_Warrior` re-skinned in an innkeeper's apron, or the `Skeleton_Mage` robe. Held prop: a `mug` / `tankard` (`Adventurers` mugs, or `Dungeon Remastered` bar set). *Not* a Mystery Monthly model — the villagers of Old Avalon are Hollow Ones.
+- **Identity:** Mini-boss of the **Folk Who Forgot (D4)**. The layout spec names "The Inn-Keeper" and flags the register: *"tragic register."* Lore: the keeper of the inn in the drowned village of Old Elarion, still setting tables for guests who will never arrive (`dungeons-storyline.md` Act II — the Bell-Tower Hollow Ones are "the villagers of Old Elarion"). **Name treated as canon-adjacent — flag for owner ratification.** This is the codex's most *gentle* boss — barely a monster at all.
+- **KayKit model:** A **Hollow One** body — `Skeleton_Warrior` re-skinned in an innkeeper's apron, or the `Skeleton_Mage` robe. Held prop: a `mug` / `tankard` (`Adventurers` mugs, or `Dungeon Remastered` bar set). *Not* a Mystery Monthly model — the villagers of Old Elarion are Hollow Ones.
 - **Visual concept:** A skeleton in an apron carrying a tray. It fights almost *apologetically*. The whole encounter is staged in the ruined inn, the bar set dressed with cobwebbed mugs.
 - **Where it appears:** Folk Who Forgot (D4), the inn boss room — near the village well that is the corruption's source.
 - **Stats anchor (ATB):** new def `"inn-keeper"` — `Archetype Boss`, `BaseHp 280`, `BaseAttack 20` (deliberately low — tragic, not threatening), `Speed 1.0`, `Defense 0.12`, `Aether`; Special "Last Call" — summons 2 Cellar Hollows (the inn's lost patrons) + a small all-ally Regen on itself. **(agent-authored — owner to ratify)**

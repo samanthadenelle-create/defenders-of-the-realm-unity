@@ -119,6 +119,9 @@ namespace DeNelle.Pets
             foreach (var def in defs)
             {
                 if (def == null) continue;
+                // SINGLE starter pet until the others are EARNED (owner 2026-05-30) — only the
+                // ice-wolf (CC5 companion) deploys for now; unlock the rest via bond progression.
+                if (def.Species != "ice-wolf") continue;
                 Vector3 slot = PetCatalog.DeploySlotPosition(def.SlotIndex, _heartPosition);
                 int bond = BondRankFor(def.SlotIndex);
 
@@ -165,11 +168,11 @@ namespace DeNelle.Pets
                 {
                     visual.transform.SetParent(go.transform, false);
                     visual.transform.localPosition = Vector3.zero;
-                    // Tripo FBXs export facing -Z (title-pose forward), so the
-                    // body needs a 180° yaw flip to align with Pet.FaceToward's
-                    // LookRotation (which assumes +Z forward). Owner ask
-                    // 2026-05-20: pets should "turn left when going left".
-                    visual.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
+                    // CC5 / game-export models already face +Z, so NO yaw flip. The old
+                    // hardcoded 180° (for Tripo FBXs that exported facing -Z) is what made
+                    // the CC5 pet "always travel backwards" (owner 2026-05-30). Identity =
+                    // forward matches Pet.FaceToward's LookRotation (+Z forward).
+                    visual.transform.localRotation = Quaternion.identity;
                     NormalizePetHeight(visual, 1.1f);
                     StripPetColliders(visual);
                     // Tripo FBXs embed a CAMERA node (and sometimes an

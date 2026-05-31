@@ -22,7 +22,7 @@ The dungeons are her way of finding out.
 
 ## 2. The four acts
 
-### Act I — _The Familiar Edges_ (Avalon outskirts, early Thornwood)
+### Act I — _The Familiar Edges_ (Elarion outskirts, early Thornwood)
 
 **Player level:** unlocked Wave 8. Hero level 3–6.
 **Emotional beat:** _The world is bigger than the valley._
@@ -40,7 +40,7 @@ The Keeper does not yet know the journal is his. She thinks she has found a stra
 **Driving questlines:** _The Folk Who Forgot_ (5 beats), _The Cold-Wandered's Pack_ (8 beats — runs across both acts II and III).
 **Revelations:**
 
-- The Hollow Ones in the Bell-Tower are the villagers of Old Avalon, the settlement that stood before this one. They walked toward the Wound when the previous Keeper called for help. They never came back as themselves.
+- The Hollow Ones in the Bell-Tower are the villagers of Old Elarion, the settlement that stood before this one. They walked toward the Wound when the previous Keeper called for help. They never came back as themselves.
 - The Ice Wolf is the last of a pack of frost-spirits who climbed down from Wintermere to seal the Wound from the north. The Frost-Stair is where they made their last stand. The Glass Cathedral is where one of them — _hers_ — still sleeps.
 
 The Ice Wolf does not lead the Keeper to the Cathedral. The Keeper has to find it. When she does, the Wolf does not enter the inner chamber. It waits at the threshold.

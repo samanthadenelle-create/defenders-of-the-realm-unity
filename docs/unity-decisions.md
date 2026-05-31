@@ -29,6 +29,8 @@ of background work. Newest rows at the bottom of each week.
 
 ## Week 3 — Avalon village layout
 
+> **Naming note (2026-05-30):** "Avalon" is the retired town name (DESIGN-DECISIONS #1); the village is **Elarion**. This heading and the referenced spec filename are kept verbatim as a dated historical record. Treat "Avalon village" here as "Elarion village."
+
 Per `docs/avalon-village-layout-spec.md`; creative decisions logged per spec §13.
 
 | Date | Decision | Alternative considered | Reason chosen | Reversible? |

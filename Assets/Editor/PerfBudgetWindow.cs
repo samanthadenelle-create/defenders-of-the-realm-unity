@@ -39,7 +39,7 @@ namespace DeNelle.Editor
                 : "Enter Play mode to read live metrics.");
             EditorGUILayout.Space();
 
-            Row("Batches",       UnityStats.batches,      BatchWarn, BatchOver);
+            Row("Draw calls",    UnityStats.drawCalls,    BatchWarn, BatchOver);
             Row("SetPass calls", UnityStats.setPassCalls, PassWarn,  PassOver);
             Row("Triangles",     UnityStats.triangles,    TriWarn,   TriOver);
             Row("Vertices",      UnityStats.vertices,     VertWarn,  VertOver);

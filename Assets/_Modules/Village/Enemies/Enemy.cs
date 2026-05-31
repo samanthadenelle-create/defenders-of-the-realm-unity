@@ -724,6 +724,7 @@ namespace DeNelle.Village
         private void Die(bool killed)
         {
             _dead = true;
+            _telegraphing = false;   // audit 2026-05-30: clear the wind-up latch on death (safe for future pooling)
             if (_agent != null && _agent.isOnNavMesh) _agent.isStopped = true;
             _currentTarget = null;
             Died?.Invoke(this);

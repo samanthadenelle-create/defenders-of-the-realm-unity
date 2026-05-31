@@ -82,6 +82,21 @@ still open (OnDied event is the hook).
 | F5 | Feat | Pets: start with **one** pet (the 3 are placeholder shapes); add a way to **unlock** more | Pet roster + unlock mechanism. |
 | F6 | Feat | Pets don't earn XP | Want shared damage→XP for pets too (PetProgression as an XpEarner in ProgressionManager.Distribute). |
 
+## C4. ATB "Last Stand" battle cluster (2026-05-28 annotated playtest)
+
+| ID | Item | Root cause / note |
+|----|------|-------------------|
+| ATB-1 | ATB gauge doesn't move (hero + enemy); no fill-over-time, no timeout/auto-attack | **By design**: `Turn.AdvanceToNextTurn` fills bars *instantly* in code to find the next actor — it's a classic turn-based engine, not a real-time ATB. Owner expects real-time fill + forfeit-on-timeout → loop rework. |
+| ATB-2 | Enemy renders as a purple "pill" | `BattleSceneBuilder.CreateCombatantCapsule` placeholder (= P5). Needs real enemy model. |
+| ATB-3 | Hero pose wrong ("Look at Pose") | Battle scene doesn't drive the hero Animator (idle/attack states). |
+| ATB-4 | Attack should play an animation | No attack anim trigger in the battle visual layer. |
+| ATB-5 | Skills does damage but unclear (no target select / spell type / DoT vs heal) | Needs target selection UI + action feedback. |
+| ATB-6 | Item button does nothing | Not implemented. |
+| ATB-7 | On battle end (Victory) it just re-enters the loop | No victory/reward/return-to-map resolution flow. |
+
+> The ATB battle is a separate system (DeNelle.BattleATB). ATB-1/-5/-7 are loop/UX rework;
+> ATB-2/-3/-4 are visual/animation; ATB-6 is unimplemented. This is its own refinement effort.
+
 ## D. Recommended sequencing
 1. ✅ Land the 4 code fixes (this session).
 2. Get Scene-view screenshot → confirm "5 shapes" = placeholder tower vs stacked towers.

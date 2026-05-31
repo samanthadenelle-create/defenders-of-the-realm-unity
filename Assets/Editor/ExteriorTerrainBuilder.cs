@@ -71,6 +71,7 @@ namespace DeNelle.Editor
         private const string TerrainAssetDir = GeneratedDir + "/Terrain";
         private const string TerrainDataPath = TerrainAssetDir + "/ExteriorTerrainData.asset";
         private const string SkyboxMatPath = TerrainAssetDir + "/AvalonDawnSkybox.mat";
+        private const string TerrainMaterialPath = TerrainAssetDir + "/ExteriorTerrainMaterial.mat";
 
         /// <summary>Root for everything this builder generates -- cleared + rebuilt each run.</summary>
         private const string ExteriorRootName = "ExteriorRoot";
@@ -213,6 +214,14 @@ namespace DeNelle.Editor
             terrain.treeBillboardDistance = 110f;
             terrain.treeCrossFadeLength = 12f;
             terrain.treeMaximumFullLODCount = TreeTargetCount;
+
+            // WO-173/DEF-108: assign a URP TerrainLit material so the terrain SURFACE
+            // renders. With no explicit URP terrain material the Terrain falls back to a
+            // template that draws NOTHING under URP — the ground reads as a black VOID
+            // (the painted trees + the village's own hex-ground still draw via their own
+            // materials, which is why only the horizon tree-line + the centre patch showed).
+            // Create + persist the material as an asset so it's packaged into the build.
+            terrain.materialTemplate = EnsureTerrainMaterial();
 
             // ── Texture the terrain (splatmaps) ──────────────────────────────
             PaintSplatmaps(terrainData);
