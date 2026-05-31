@@ -118,18 +118,27 @@ The clean web build IS the deliverable (`docs/webgl-hosting-notes.md`, `BUG_WORK
 > Status: `OPEN` · `IN PROGRESS` · `DONE` (RESULT filed) · `BROKE` (regressed, needs re-open) · `BLOCKED`.
 
 ### Lane A — Village Scene (SERIAL — one agent, one rebake)
+> **2026-05-31 rebake + Windows build GREEN (`8f4c6f3`).** Reconcile call confirmed: the village
+> geometry was already correct in committed code — the owner's screenshots were a **stale scene**.
+> Rebake re-synced `Village.unity` (4 cardinal gates, 42 wall sections, 0 placeholder primitives,
+> level3=2MB healthy). NEXT: owner playtest tells us which (if any) bugs are genuinely still open.
 | WO | Status | What's been applied / notes |
 |---|---|---|
-| 173 (P0) | **DONE** | Exterior terrain into OuterWorld not the void — commit `ee0d6ae`. Verify in next rebake. |
-| 177 | OPEN | Wall lean/180° + hero walks-through-wall (collision) + south gate wrong (dungeon arch). |
-| 158 | OPEN | Gates impassable / add north gate → 4 passable gates. |
-| 167 | OPEN | Gatehouse pillar clips ceiling (all 4). |
-| 168 | **DONE** | Unseal cardinal gate openings — commit `5834479`. NavMesh rebaked `cb7e0eb`. Re-confirm in pass. |
-| 157 | OPEN | Magenta crystal veins (deleted content respawning) — strip. |
+| 173 (P0) | **DONE ✓built** | Exterior terrain `ee0d6ae`; PLUS `8f4c6f3` implemented the missing `EnsureTerrainMaterial()` (CS0103 had broken compile) so the terrain surface actually renders (URP TerrainLit). Built green. |
+| 177 | **RECONCILED — playtest** | Visible perimeter wall rotates yaw-only (can't lean); leaning KayKit ring has renderers OFF. Likely already fixed; **playtest to confirm** south-gate prefab + wall walk-through collision. |
+| 158 | **RECONCILED — playtest** | 4 cardinal gates baked (north gate present in perimeter + WallBarrier-North-W/E + moat north band). ⚠ RESIDUAL: bake logged only **3 drawbridges** — north gate may lack a moat drawbridge (exitable wall gap, water beyond). Confirm in playtest. |
+| 167 | **OPEN — playtest** | Gatehouse pillar clip — couldn't confirm from code; check in the fresh build (gatehouse = Gate_Medieval_Medium @ target 10). |
+| 168 | **DONE** | Unseal cardinal gate openings — `5834479`; NavMesh rebaked `cb7e0eb` + this rebake. |
+| 157 | **DONE (rebake)** | Crystal veins were already disabled in code (1103, WO-136); the stale scene still showed them — this rebake removed them. |
 | 176 | OPEN (P2) | Tower ugly — swap to stylized polyperfect mesh + fix materials. |
 | 179 | OPEN (P2) | Moat water sits on ground — drop below grade + style water material (gated on VFX pass). |
 | 166 | **DONE** | Base gates + walk-anim + pet + rampart stairs. Stairs hug wall `071e478`. |
-| (rebake) | OPEN | Village rebake after the pass lands (WO-137 pattern). |
+| (rebake) | **DONE** | BuildVillage rebake + Windows build green (`8f4c6f3`, 2026-05-31). |
+
+> ⚠ **Hero-in-village = violet capsule** (bake log: `Wizard.fbx not found`). Runtime Resources hero
+> load may override it; confirm in playtest. Separate from the Lane lanes — note if it shows.
+> ⚠ **ProjectSettings.asset** has uncommitted WebGL config (Brotli OFF, `webGLCompressionFormat 0`) from
+> another session — left untouched; whoever tunes WebGL should confirm before the next web build.
 
 ### Lane B — Combat / AI (parallel)
 | WO | Status | What's been applied / notes |
