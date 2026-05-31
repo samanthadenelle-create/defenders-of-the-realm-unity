@@ -2865,7 +2865,12 @@ namespace DeNelle.Editor
             // x/z before rotating), so the maths needs no rotation bookkeeping.
             const float wallHeight  = 5f;  // curtain wall world height
             const float towerTarget = 9f;  // corner/mid towers stand above the curtain
-            const float gateTarget  = 6f;  // gatehouse spans its 6 m opening
+            // Gate FIX (2026-05-30): NormalizeProp fits the LARGEST dimension to this
+            // value. At 6 the gatehouse came out shorter than the 5 m wall + a tiny
+            // opening ("way too small", all gates). The gatehouse prefab is taller
+            // than wide, so fitting its height to ~10 makes it read as a proper
+            // gatehouse rising to/above the curtain with a hero-passable arch.
+            const float gateTarget  = 10f; // gatehouse — taller than the 5 m curtain, full-size arch
             bool loggedTile = false;
 
             System.Func<GameObject, string, Vector3, GameObject> Make =
@@ -2935,14 +2940,14 @@ namespace DeNelle.Editor
             };
 
             // ── North wall (z = +33) — segments + gate at x = 0 (WO-158: 4th gate) ──
-            // Owner locked 4 gates. North was previously a solid run with a centre
-            // mid-tower; now it gets the same 6 m centre opening + a gate as South.
+            // The "too small / all gates broken" issue was a SCALE bug (gateTarget,
+            // fixed above to 10), not a north-specific fault — so north keeps its gate.
             for (float x = -wallX + segStep * 0.5f; x < wallX; x += segStep)
             {
                 if (Mathf.Abs(x) < 3f) continue;   // 6 m opening for the north gate
-                Wall(wallSegModel, "WallPerimeter-North", new Vector3(x, 0f, wallZ), 180f);
+                Wall(wallSegModel, "WallPerimeter-North", new Vector3(x, 0f, wallZ), 0f);
             }
-            Big(gateMedModel, "Gate-North-Main", new Vector3(0f, 0f, wallZ), 180f, gateTarget);
+            Big(gateMedModel, "Gate-North-Main", new Vector3(0f, 0f, wallZ), 0f, gateTarget);
 
             // ── South wall (z = -33) — segments + main gate at x = 0 ─────────
             for (float x = -wallX + segStep * 0.5f; x < wallX; x += segStep)
@@ -2975,9 +2980,7 @@ namespace DeNelle.Editor
             Big(towerCorModel, "Tower-SW-Corner", new Vector3(-wallX, 0f, -wallZ), 0f, towerTarget);
 
             // ── Mid-wall towers at each cardinal wall midpoint ────────────────
-            // WO-158: north mid-tower shifted off-centre (was x=0, now flanks the
-            // new north gate as a gatehouse tower) so it doesn't seal the opening.
-            Big(towerMidModel, "Tower-North-Mid", new Vector3(  -10f, 0f,  wallZ), 0f,   towerTarget);
+            Big(towerMidModel, "Tower-North-Mid", new Vector3(  -10f, 0f,  wallZ), 0f,   towerTarget);  // off-centre: flank the north gate
             Big(towerMidModel, "Tower-South-Mid", new Vector3(    0f, 0f, -wallZ), 180f, towerTarget);
             Big(towerMidModel, "Tower-East-Mid",  new Vector3( wallX, 0f,     0f), 90f,  towerTarget);
             Big(towerMidModel, "Tower-West-Mid",  new Vector3(-wallX, 0f,     0f), 270f, towerTarget);
@@ -3050,7 +3053,7 @@ namespace DeNelle.Editor
                 bool insideOuter = ax <= outerX && az <= outerZ;
                 if (insideWall || !insideOuter) continue;        // only the 6 m ring band
 
-                // Leave the gate spans clear for the drawbridges (WO-158: all 4 now).
+                // Leave the gate spans clear for the drawbridges (all 4 gates).
                 bool northGate = ax < gateHalf && z >  innerZ - 0.5f;   // north band, x≈0
                 bool southGate = ax < gateHalf && z < -innerZ + 0.5f;   // south band, x≈0
                 bool eastGate  = az < gateHalf && x >  innerX - 0.5f;   // east band, z≈0
@@ -3192,10 +3195,7 @@ namespace DeNelle.Editor
             const float gateHalf = 3f;                 // 6 m gate opening half-width
             float runHalf = wallX - gateHalf;          // half-length of one side of a gated (S) wall span
             float sideHalf = (wallX - gateHalf) * 0.5f;// centre offset of each half-span (gated walls)
-            // North wall — NO gate: one unbroken barrier across the full span.
-            // WO-158: North split into two flanking spans (was one full-width box
-            // that sealed the north gate). Owner locked 4 gates — north now has the
-            // same 6 m opening as South so the hero can exit all four points.
+            // North wall — gate at x=0: two spans flanking the 6 m opening.
             Box("WallBarrier-North-W", new Vector3(-(gateHalf + sideHalf), barY, barZ), new Vector3(2f * sideHalf, barH, barThk), Quaternion.identity);
             Box("WallBarrier-North-E", new Vector3( (gateHalf + sideHalf), barY, barZ), new Vector3(2f * sideHalf, barH, barThk), Quaternion.identity);
             // South wall — main gate at x=0: two spans flanking the 6 m gap.
