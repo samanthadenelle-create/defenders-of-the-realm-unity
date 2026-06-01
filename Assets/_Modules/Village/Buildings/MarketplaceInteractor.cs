@@ -164,6 +164,11 @@ namespace DeNelle.Village
             // Don't double-inject if already present.
             if (root.Q<Button>("marketplace-close-btn") != null) return;
 
+            // PackStore's themed UI now builds its own corner close button
+            // ("store-close-btn", WO-175 shop re-skin). When that exists we skip
+            // injecting a second, unthemed close so the shop window stays clean.
+            if (root.Q<Button>("store-close-btn") != null) return;
+
             var closeBtn = new Button(CloseStore)
             {
                 name = "marketplace-close-btn",

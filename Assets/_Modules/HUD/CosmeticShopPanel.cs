@@ -21,6 +21,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using UnityEngine;
 using UnityEngine.UIElements;
+using DeNelle.Core.UI;
 
 namespace DeNelle.HUD
 {
@@ -260,59 +261,42 @@ namespace DeNelle.HUD
             _root.style.top = 0;  _root.style.bottom = 0;
 
             _overlay = new VisualElement { name = "cosmetic-shop-overlay" };
-            _overlay.style.position = Position.Absolute;
-            _overlay.style.left = 0; _overlay.style.right = 0;
-            _overlay.style.top = 0;  _overlay.style.bottom = 0;
-            _overlay.style.backgroundColor = new Color(0f, 0f, 0f, 0.78f);
-            _overlay.style.alignItems = Align.Center;
-            _overlay.style.justifyContent = Justify.Center;
+            ShopTheme.StyleScrim(_overlay);
             _overlay.style.display = DisplayStyle.None;
             _root.Add(_overlay);
 
+            // Themed shop-window frame (carved wood + aether rim).
             var card = new VisualElement();
             card.style.width = 720;
             card.style.maxWidth = 880;
             card.style.height = 520;
             card.style.flexDirection = FlexDirection.Column;
-            card.style.paddingTop = 16; card.style.paddingBottom = 16;
-            card.style.paddingLeft = 20; card.style.paddingRight = 20;
-            card.style.backgroundColor = new Color(0.07f, 0.05f, 0.11f, 0.98f);
-            card.style.borderTopLeftRadius = 16; card.style.borderTopRightRadius = 16;
-            card.style.borderBottomLeftRadius = 16; card.style.borderBottomRightRadius = 16;
-            var rim = new Color(0.78f, 0.66f, 0.16f, 0.6f);
-            card.style.borderTopWidth = 1; card.style.borderBottomWidth = 1;
-            card.style.borderLeftWidth = 1; card.style.borderRightWidth = 1;
-            card.style.borderTopColor = rim; card.style.borderBottomColor = rim;
-            card.style.borderLeftColor = rim; card.style.borderRightColor = rim;
+            ShopTheme.StylePanelFrame(card);
             _overlay.Add(card);
 
-            // Header: title + Glimmer balance + close.
+            // Header: crest title + Glimmer chip + close.
             var header = new VisualElement();
             header.style.flexDirection = FlexDirection.Row;
             header.style.justifyContent = Justify.SpaceBetween;
             header.style.alignItems = Align.Center;
-            header.style.marginBottom = 10;
             card.Add(header);
 
-            var title = new Label("Cosmetic Shop");
-            title.style.fontSize = 22;
-            title.style.unityFontStyleAndWeight = FontStyle.Bold;
-            title.style.color = new Color(0.95f, 0.90f, 0.78f);
-            header.Add(title);
+            header.Add(ShopTheme.MakeTitle("Cosmetic Shop"));
 
-            _glimmerLabel = new Label("Glimmer: 0");
-            _glimmerLabel.style.fontSize = 14;
-            _glimmerLabel.style.color = new Color(0.95f, 0.85f, 0.45f);
-            _glimmerLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
-            header.Add(_glimmerLabel);
+            var headerRight = new VisualElement();
+            headerRight.style.flexDirection = FlexDirection.Row;
+            headerRight.style.alignItems = Align.Center;
+            header.Add(headerRight);
 
-            var closeBtn = new Button(ToggleOverlay) { text = "X" };
-            closeBtn.style.width = 32; closeBtn.style.height = 28;
-            closeBtn.style.backgroundColor = new Color(0.18f, 0.12f, 0.28f, 1f);
-            closeBtn.style.color = Color.white;
-            closeBtn.style.borderTopLeftRadius = 6; closeBtn.style.borderTopRightRadius = 6;
-            closeBtn.style.borderBottomLeftRadius = 6; closeBtn.style.borderBottomRightRadius = 6;
-            header.Add(closeBtn);
+            var glimmerChip = ShopTheme.MakeGlimmerChip(out _glimmerLabel, 0);
+            glimmerChip.style.marginRight = 10;
+            headerRight.Add(glimmerChip);
+
+            var closeBtn = new Button(ToggleOverlay);
+            ShopTheme.StyleCloseButton(closeBtn);
+            headerRight.Add(closeBtn);
+
+            card.Add(ShopTheme.MakeRule());
 
             // Body: two columns.
             var body = new VisualElement();
@@ -331,25 +315,22 @@ namespace DeNelle.HUD
             rail.Add(BuildTab("Pet",     "pet"));
             rail.Add(BuildTab("Village", "village"));
 
-            // Right side: scrollable card list.
+            // Right side: scrollable card list (themed well, no OS scrollbar).
             var scroller = new ScrollView(ScrollViewMode.Vertical);
             scroller.style.flexGrow = 1;
-            scroller.style.backgroundColor = new Color(0.04f, 0.03f, 0.08f, 0.6f);
-            scroller.style.borderTopLeftRadius = 10; scroller.style.borderTopRightRadius = 10;
-            scroller.style.borderBottomLeftRadius = 10; scroller.style.borderBottomRightRadius = 10;
-            scroller.style.paddingTop = 8; scroller.style.paddingBottom = 8;
-            scroller.style.paddingLeft = 10; scroller.style.paddingRight = 10;
+            ShopTheme.StyleScrollWell(scroller);
             body.Add(scroller);
 
             _cardList = scroller.contentContainer;
 
             // Anti-FOMO footer (spec Section 9).
+            card.Add(ShopTheme.MakeRule());
             var footer = new Label("Beauty is earned, never required.");
-            footer.style.fontSize = 11;
+            footer.style.fontSize = 12;
             footer.style.unityFontStyleAndWeight = FontStyle.Italic;
-            footer.style.color = new Color(0.65f, 0.62f, 0.55f);
+            footer.style.color = ShopTheme.ParchmentDim;
             footer.style.unityTextAlign = TextAnchor.MiddleCenter;
-            footer.style.marginTop = 8;
+            footer.style.marginTop = 2;
             card.Add(footer);
 
             // Toast under the card.
@@ -366,13 +347,8 @@ namespace DeNelle.HUD
         private Button BuildTab(string label, string category)
         {
             var b = new Button(() => { _activeCategory = category; Repaint(); }) { text = label };
-            b.style.height = 36;
-            b.style.marginBottom = 6;
-            b.style.fontSize = 14;
-            b.style.color = new Color(0.95f, 0.92f, 0.85f);
-            b.style.borderTopLeftRadius = 8; b.style.borderTopRightRadius = 8;
-            b.style.borderBottomLeftRadius = 8; b.style.borderBottomRightRadius = 8;
             b.userData = category;
+            ShopTheme.StyleTab(b, category == _activeCategory);
             return b;
         }
 
@@ -384,22 +360,16 @@ namespace DeNelle.HUD
             if (_serviceInstance == null) _serviceInstance = ResolveServiceInstance();
 
             if (_glimmerLabel != null)
-                _glimmerLabel.text = $"Glimmer: {CurrentGlimmer()}";
+                _glimmerLabel.text = CurrentGlimmer().ToString("N0");
 
-            // Highlight the active tab.
-            var rail = _overlay?.Q<VisualElement>()?.Q<VisualElement>();
-            // We tagged tab userData with the category string above.
+            // Re-apply themed tab state (selected vs unselected). Tabs carry their
+            // category in userData.
             if (_overlay != null)
             {
                 _overlay.Query<Button>().ForEach(btn =>
                 {
                     if (btn.userData is string cat)
-                    {
-                        bool active = cat == _activeCategory;
-                        btn.style.backgroundColor = active
-                            ? new Color(0.42f, 0.30f, 0.62f, 1f)
-                            : new Color(0.18f, 0.12f, 0.28f, 1f);
-                    }
+                        ShopTheme.StyleTab(btn, cat == _activeCategory);
                 });
             }
 
@@ -442,25 +412,13 @@ namespace DeNelle.HUD
             var card = new VisualElement();
             card.style.flexDirection = FlexDirection.Row;
             card.style.alignItems = Align.Center;
-            card.style.marginBottom = 8;
-            card.style.paddingTop = 10; card.style.paddingBottom = 10;
-            card.style.paddingLeft = 12; card.style.paddingRight = 12;
-            card.style.backgroundColor = new Color(0.10f, 0.08f, 0.16f, 0.95f);
-            card.style.borderTopLeftRadius = 10; card.style.borderTopRightRadius = 10;
-            card.style.borderBottomLeftRadius = 10; card.style.borderBottomRightRadius = 10;
+            ShopTheme.StyleCard(card);
 
-            var swatch = new VisualElement();
-            swatch.style.width = 56; swatch.style.height = 56;
-            swatch.style.marginRight = 12;
-            swatch.style.backgroundColor = preview;
-            swatch.style.borderTopLeftRadius = 8; swatch.style.borderTopRightRadius = 8;
-            swatch.style.borderBottomLeftRadius = 8; swatch.style.borderBottomRightRadius = 8;
-            swatch.style.borderTopWidth = 1; swatch.style.borderBottomWidth = 1;
-            swatch.style.borderLeftWidth = 1; swatch.style.borderRightWidth = 1;
-            var sw = new Color(1f, 1f, 1f, 0.18f);
-            swatch.style.borderTopColor = sw; swatch.style.borderBottomColor = sw;
-            swatch.style.borderLeftColor = sw; swatch.style.borderRightColor = sw;
-            card.Add(swatch);
+            // Framed item-portrait slot — prefers a real preview render; falls back
+            // to a framed gem tile (never a bare swatch). Preview textures land in a
+            // later art pass; until then the tint reads the cosmetic's accent colour.
+            var iconSlot = ShopTheme.MakeIconSlot(ResolvePreviewTexture(def), preview, 60f);
+            card.Add(iconSlot);
 
             var text = new VisualElement();
             text.style.flexDirection = FlexDirection.Column;
@@ -470,66 +428,71 @@ namespace DeNelle.HUD
             var name = new Label(displayName);
             name.style.fontSize = 15;
             name.style.unityFontStyleAndWeight = FontStyle.Bold;
-            name.style.color = new Color(0.95f, 0.92f, 0.85f);
+            name.style.color = ShopTheme.Parchment;
             text.Add(name);
 
             var desc = new Label(description);
             desc.style.fontSize = 11;
-            desc.style.color = new Color(0.75f, 0.72f, 0.65f);
+            desc.style.color = ShopTheme.ParchmentDim;
             desc.style.unityFontStyleAndWeight = FontStyle.Italic;
             desc.style.whiteSpace = WhiteSpace.Normal;
             desc.style.marginTop = 2;
             text.Add(desc);
 
+            // Price line — coin glyph + amount in gold (matches the header chip).
+            var priceRow = new VisualElement();
+            priceRow.style.flexDirection = FlexDirection.Row;
+            priceRow.style.alignItems = Align.Center;
+            priceRow.style.marginTop = 4;
+            if (!isAchievement && glimmerCost > 0)
+            {
+                var coin = new Label(ShopTheme.CoinGlyph);
+                coin.style.fontSize = 12;
+                coin.style.color = ShopTheme.Glimmer;
+                coin.style.marginRight = 4;
+                priceRow.Add(coin);
+            }
             string priceText;
             if (isAchievement)
                 priceText = owned ? "Earned" : "Earn via play";
             else if (glimmerCost > 0)
-                priceText = $"{glimmerCost} Glimmer";
+                priceText = $"{glimmerCost:N0} Glimmer";
             else
                 priceText = "Free";
             var price = new Label(priceText);
             price.style.fontSize = 12;
-            price.style.color = new Color(0.95f, 0.85f, 0.45f);
-            price.style.marginTop = 4;
-            text.Add(price);
+            price.style.color = ShopTheme.Glimmer;
+            priceRow.Add(price);
+            text.Add(priceRow);
 
             var actionBtn = new Button { text = "Buy" };
-            actionBtn.style.minWidth = 88; actionBtn.style.height = 34;
+            actionBtn.style.minWidth = 92;
             actionBtn.style.marginLeft = 10;
-            actionBtn.style.fontSize = 13;
-            actionBtn.style.borderTopLeftRadius = 8; actionBtn.style.borderTopRightRadius = 8;
-            actionBtn.style.borderBottomLeftRadius = 8; actionBtn.style.borderBottomRightRadius = 8;
 
             if (equipped)
             {
                 actionBtn.text = "Equipped";
+                ShopTheme.StyleButton(actionBtn, ShopTheme.ButtonKind.Confirm);
                 actionBtn.SetEnabled(false);
-                actionBtn.style.backgroundColor = new Color(0.20f, 0.40f, 0.24f, 1f);
-                actionBtn.style.color = new Color(0.85f, 0.95f, 0.85f);
             }
             else if (owned)
             {
                 actionBtn.text = "Equip";
-                actionBtn.style.backgroundColor = new Color(0.30f, 0.42f, 0.66f, 1f);
-                actionBtn.style.color = Color.white;
+                ShopTheme.StyleButton(actionBtn, ShopTheme.ButtonKind.Aether);
                 actionBtn.clicked += () => { EquipId(id); ShowToast($"Equipped {displayName}"); };
             }
             else if (isAchievement)
             {
                 actionBtn.text = "Locked";
+                ShopTheme.StyleButton(actionBtn, ShopTheme.ButtonKind.Disabled);
                 actionBtn.SetEnabled(false);
-                actionBtn.style.backgroundColor = new Color(0.30f, 0.26f, 0.24f, 1f);
-                actionBtn.style.color = new Color(0.7f, 0.66f, 0.6f);
             }
             else
             {
                 bool affordable = CurrentGlimmer() >= glimmerCost;
                 actionBtn.text = "Buy";
-                actionBtn.style.backgroundColor = affordable
-                    ? new Color(0.55f, 0.36f, 0.74f, 1f)
-                    : new Color(0.28f, 0.22f, 0.36f, 1f);
-                actionBtn.style.color = Color.white;
+                ShopTheme.StyleButton(actionBtn,
+                    affordable ? ShopTheme.ButtonKind.Aether : ShopTheme.ButtonKind.Disabled);
                 actionBtn.SetEnabled(affordable);
                 actionBtn.clicked += () =>
                 {
@@ -547,6 +510,24 @@ namespace DeNelle.HUD
 
             card.Add(actionBtn);
             return card;
+        }
+
+        // Optional real preview render, loaded by cosmetic id from Resources. When
+        // absent (the current state — previews are a later art pass) we return null
+        // and the icon slot falls back to a framed gem tile. Cached per id so the
+        // Resources lookup runs once per item.
+        private static readonly Dictionary<string, Texture2D> s_previewCache = new Dictionary<string, Texture2D>();
+
+        private Texture2D ResolvePreviewTexture(object def)
+        {
+            string id = s_defIdField?.GetValue(def) as string;
+            if (string.IsNullOrEmpty(id)) return null;
+            if (s_previewCache.TryGetValue(id, out var cached)) return cached;
+            Texture2D tex = null;
+            try { tex = Resources.Load<Texture2D>($"Cosmetics/Previews/{id}"); }
+            catch { tex = null; }
+            s_previewCache[id] = tex;
+            return tex;
         }
 
         private static int SafeInt(object value)
