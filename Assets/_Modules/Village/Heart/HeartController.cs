@@ -146,6 +146,18 @@ namespace DeNelle.Village
         /// </summary>
         public event System.Action<float> OnHealthChanged;
 
+        /// <summary>
+        /// Fired exactly once, the moment the Heart's HP first reaches 0 — the
+        /// village lose condition (WO-125 Bug 3). A subscriber (WaveManager) halts
+        /// the wave loop and surfaces the defeat outcome. Guarded by
+        /// <see cref="_destroyed"/> so repeat 0-HP <see cref="SetHp"/> calls (e.g. a
+        /// dragon striking an already-dead Heart) cannot re-fire it.
+        /// </summary>
+        public event System.Action OnHeartDestroyed;
+
+        /// <summary>True once <see cref="OnHeartDestroyed"/> has fired — fire-once guard.</summary>
+        private bool _destroyed;
+
         // ── Properties ───────────────────────────────────────────────────────
 
         /// <summary>Current threat state of the Heart.</summary>
@@ -212,6 +224,15 @@ namespace DeNelle.Village
             // NOT be stomped here — only derive when in a "normal" HP-driven state.
             if (_state != HeartState.Boss && _state != HeartState.Victorious)
                 _state = DeriveStateFromHp(_hp);
+
+            // WO-125 Bug 3: the Heart fell — raise the village lose condition once.
+            // The dragon (and any other source) drains HP through SetHp, but nothing
+            // reacted to it hitting 0; a subscriber now halts the loop + shows defeat.
+            if (_hp <= 0f && !_destroyed)
+            {
+                _destroyed = true;
+                OnHeartDestroyed?.Invoke();
+            }
         }
 
         /// <summary>Maps Heart HP (0-100) to a baseline <see cref="HeartState"/>.</summary>

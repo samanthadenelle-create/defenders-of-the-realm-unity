@@ -56,6 +56,8 @@ namespace DeNelle.Village
         Breached = 3,
         /// <summary>Every wave in the schedule has been cleared.</summary>
         Complete = 4,
+        /// <summary>The Heart fell (HP 0) — the run is lost. Terminal; the loop halts here.</summary>
+        Defeated = 5,
     }
 
     /// <summary>A UnityEvent carrying the countdown seconds remaining (HUD binds this).</summary>
@@ -168,6 +170,10 @@ namespace DeNelle.Village
                  "— bind the boss HP bar / camera framing / Heart threat state to it.")]
         public WaveBossEvent OnApexBossSpawned = new WaveBossEvent();
 
+        [Tooltip("Fires once when the Heart of Elarion falls (HP 0) — the village LOSE condition " +
+                 "(WO-125 Bug 3). The loop halts (phase Defeated); bind a defeat screen here.")]
+        public UnityEvent OnDefeat = new UnityEvent();
+
         // ── Runtime state ─────────────────────────────────────────────────────
 
         private WaveSchedule _schedule;
@@ -185,6 +191,9 @@ namespace DeNelle.Village
 
         /// <summary>The apex flying boss for the current wave (null when not an apex wave / dead).</summary>
         private DragonBoss _liveApexBoss;
+
+        /// <summary>True once we've subscribed to the Heart's OnHeartDestroyed — fire-once subscribe guard.</summary>
+        private bool _heartDeathHooked;
 
         private WavePhase _phase = WavePhase.Idle;
         private int _currentWaveId;
@@ -310,6 +319,12 @@ namespace DeNelle.Village
                 _liveApexBoss.Died -= HandleApexBossDied;
                 _liveApexBoss = null;
             }
+
+            // WO-125 Bug 3: drop the Heart lose-condition subscription so a stale
+            // delegate can't fire into a torn-down manager across the breach/reload loop.
+            if (_heart != null && _heartDeathHooked)
+                _heart.OnHeartDestroyed -= HandleHeartDestroyed;
+            _heartDeathHooked = false;
         }
 
         private void Update()
@@ -363,6 +378,15 @@ namespace DeNelle.Village
         {
             if (_heart == null)
                 _heart = FindAnyObjectByType<HeartController>();
+
+            // WO-125 Bug 3: hook the Heart's lose condition once the Heart is known.
+            // Idempotent — BeginLoop can re-run (e.g. after a Defend-the-Tower return),
+            // and the guard keeps us from stacking duplicate handlers on the same Heart.
+            if (_heart != null && !_heartDeathHooked)
+            {
+                _heart.OnHeartDestroyed += HandleHeartDestroyed;
+                _heartDeathHooked = true;
+            }
 
             if (_spawnPoints == null || _spawnPoints.Count == 0)
             {
@@ -870,6 +894,40 @@ namespace DeNelle.Village
 
             if (totalAward > 0)
                 CrystalEconomy.Instance.AddCrystals(totalAward);
+        }
+
+        // =====================================================================
+        //  Defeat — the Heart fell (village lose condition, WO-125 Bug 3)
+        // =====================================================================
+
+        /// <summary>
+        /// WO-125 Bug 3 — the Heart of Elarion fell (HP 0). This is the village's
+        /// real LOSE condition: the dragon (or any source) drained the Heart, and
+        /// previously nothing reacted. Halt the wave loop into the terminal
+        /// <see cref="WavePhase.Defeated"/> state (no further countdown/spawn ticks),
+        /// stop the live boss so it can't keep striking a dead Heart, and raise
+        /// <see cref="OnDefeat"/> so a bound defeat screen can present "Elarion has
+        /// fallen." Fires at most once (HeartController guards the source event).
+        /// </summary>
+        private void HandleHeartDestroyed()
+        {
+            if (_phase == WavePhase.Defeated) return;   // already lost — idempotent
+            _phase = WavePhase.Defeated;
+
+            // Stop the apex boss mid-encounter — a dead Heart should not keep taking
+            // swoop/breath hits, and the boss's death-fall would otherwise read oddly.
+            if (_liveApexBoss != null)
+            {
+                _liveApexBoss.Died -= HandleApexBossDied;
+                _liveApexBoss.Kill();
+                _liveApexBoss = null;
+            }
+
+            // Show the Heart at its terminal critical state for the defeat beat.
+            _heart?.SetState(HeartState.Critical);
+
+            Debug.Log("[WaveManager] The Heart of Elarion has fallen — village defeat. Wave loop halted.");
+            OnDefeat?.Invoke();
         }
 
         // =====================================================================

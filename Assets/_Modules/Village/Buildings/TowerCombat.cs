@@ -139,6 +139,21 @@ namespace DeNelle.Village
                 bestSq = sq;
                 best = dmg;
             }
+
+            // WO-125 Bug 2: the apex dragon is NOT in LiveEnemies (it owns kinematic
+            // flight, not a NavMesh agent) and carries no EnemyDamageable adapter — it
+            // implements IDamageable directly. So the ground-roster scan above can never
+            // see it. Consider it here through the Core seam (Village->Core is allowed).
+            var boss = _wave?.LiveApexBoss;
+            if (boss != null && boss.IsAlive && ((IDamageable)boss).Faction == CombatFaction.Hostile)
+            {
+                float bsq = (((IDamageable)boss).WorldPosition - myPos).sqrMagnitude;
+                if (bsq <= maxSq && bsq < bestSq)
+                {
+                    bestSq = bsq;
+                    best = boss;
+                }
+            }
             return best;
         }
 
@@ -170,6 +185,19 @@ namespace DeNelle.Village
                 var dmg = enemy.GetComponent<EnemyDamageable>();
                 if (dmg == null || !dmg.IsAlive || dmg.Faction != CombatFaction.Hostile) continue;
                 if (dmg.Hp > bestHp) { bestHp = dmg.Hp; best = dmg; }
+            }
+
+            // WO-125 Bug 2 (mirror): also weigh the apex dragon for TrueAim's
+            // highest-HP pick — it's the biggest health pool on the field by far.
+            var boss = _wave?.LiveApexBoss;
+            if (boss != null && boss.IsAlive && ((IDamageable)boss).Faction == CombatFaction.Hostile)
+            {
+                float bsq = (((IDamageable)boss).WorldPosition - myPos).sqrMagnitude;
+                if (bsq <= maxSq && ((IDamageable)boss).Hp > bestHp)
+                {
+                    bestHp = ((IDamageable)boss).Hp;
+                    best = boss;
+                }
             }
             return best;
         }

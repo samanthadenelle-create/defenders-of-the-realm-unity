@@ -304,6 +304,16 @@ namespace DeNelle.Village
                 {
                     // nearest enemy to the aim point + ENEMY_HIT_R
                     var foe = NearestHostile(atk, def.Range + _enemyHitRadius);
+                    // WO-125 Bug 1: the apex dragon orbits at altitude ~22-34u — far
+                    // outside a short-slot sweep (Q ~13u) — so an OverlapSphere from the
+                    // hero's feet can never reach it. In village mode (no aim override),
+                    // when no ground enemy is in reach, let the single-target offensive
+                    // slots punch up at the live boss so the airborne apex is hittable
+                    // (not only during a low swoop). Ground targeting is untouched: a
+                    // reachable ground enemy is still preferred. Resolved through the
+                    // Core IDamageable seam via WaveManager — no concrete/HUD ref added.
+                    if (foe == null && AimPointOverride == null)
+                        foe = LiveBoss();
                     if (foe != null)
                     {
                         foe.TakeDamage(dmg, element);
@@ -326,6 +336,11 @@ namespace DeNelle.Village
                 {
                     // blast centred on the nearest enemy cluster to the aim point
                     var foe = NearestHostile(atk, float.MaxValue);
+                    // WO-125 Bug 1: Meteor's 1000u sweep already encloses the orbiting
+                    // dragon (it's a layer-8 IDamageable with a collider), so this is a
+                    // belt-and-braces fallback for the rare case the sweep misses it.
+                    if (foe == null && AimPointOverride == null)
+                        foe = LiveBoss();
                     Vector3 target = foe != null ? foe.WorldPosition : atk;
                     Blast(target, def.Range, dmg, element, 0f);
                     SpawnVfx(target, def, def.Range);
@@ -389,6 +404,29 @@ namespace DeNelle.Village
             var dmg = col.GetComponentInParent<IDamageable>();
             if (dmg == null || !dmg.IsAlive || dmg.Faction != CombatFaction.Hostile) return null;
             return dmg;
+        }
+
+        // WO-125 Bug 1: cached WaveManager so the hero can reach the apex boss (which
+        // lives in WaveManager._liveApexBoss, NOT in the OverlapSphere-reachable enemy
+        // roster). Resolved lazily and re-resolved only while null — survives a body swap.
+        private WaveManager _wave;
+
+        /// <summary>
+        /// The live apex boss as a hostile <see cref="IDamageable"/>, or null when no
+        /// boss is up / it is dead. Lets the short-range offensive slots punch up at an
+        /// airborne boss they could never sweep. Talks only to the Core seam.
+        /// </summary>
+        private IDamageable LiveBoss()
+        {
+            if (_wave == null)
+            {
+                var found = FindObjectsByType<WaveManager>(FindObjectsSortMode.None);
+                _wave = found.Length > 0 ? found[0] : null;
+            }
+            var boss = _wave?.LiveApexBoss;
+            if (boss != null && boss.IsAlive && ((IDamageable)boss).Faction == CombatFaction.Hostile)
+                return boss;
+            return null;
         }
 
         private static DamageElement ElementOf(AbilityDef def)
