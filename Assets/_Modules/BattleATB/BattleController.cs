@@ -27,7 +27,6 @@
 // =============================================================================
 
 using System.Collections.Generic;
-using System.Linq;
 using Cysharp.Threading.Tasks;
 using DeNelle.BattleATB.Engine;
 using DeNelle.BattleATB.State;
@@ -78,27 +77,13 @@ namespace DeNelle.BattleATB
         [SerializeField] private float _returnDelaySeconds = 2.5f;
 
         // ---------------------------------------------------------------------
-        // Cached UI element queries — bound in OnEnable
+        // Dynamic HUD — WO-169 P1 code-built party battle screen
         // ---------------------------------------------------------------------
 
-        private Label _statusBanner;
-        private VisualElement _heroCard;
-        private Label _heroName;
-        private VisualElement _heroHpFill;
-        private VisualElement _heroAtbFill;
-        private VisualElement _enemyCard;
-        private Label _enemyName;
-        private VisualElement _enemyHpFill;
-        private VisualElement _enemyAtbFill;
-        private Button _attackButton;
-        private Button _skillsButton;
-        private Button _itemButton;
-        private Button _fleeButton;
-        private ScrollView _battleLog;
-        private VisualElement _battleLogContent;
-
-        /// <summary>How many log entries have already been rendered (append-only).</summary>
-        private int _renderedLogCount;
+        /// <summary>The dynamic, data-bound FF HUD (enemies left, party right). Owns
+        /// all combatant cards, the command menu, skill/item menus, and the target
+        /// picker. The controller wires its action callback to ChooseAction.</summary>
+        private BattleHud _hud;
 
         /// <summary>True once the result hand-back has been kicked off (fire once).</summary>
         private bool _returnScheduled;
@@ -142,10 +127,6 @@ namespace DeNelle.BattleATB
                 _runtimeState.OnActionSubmitted.RemoveListener(HandleActionSubmitted);
                 _runtimeState.OnOutcome.RemoveListener(HandleOutcome);
             }
-            if (_attackButton != null) _attackButton.clicked -= HandleAttackClicked;
-            if (_skillsButton != null) _skillsButton.clicked -= HandleSkillsClicked;
-            if (_itemButton != null) _itemButton.clicked -= HandleItemClicked;
-            if (_fleeButton != null) _fleeButton.clicked -= HandleFleeClicked;
             _subscribed = false;
         }
 
@@ -159,14 +140,14 @@ namespace DeNelle.BattleATB
                 return;
             }
             _bound = true;
-            Subscribe();   // wire events + the attack button AFTER binding
+            Subscribe();   // wire events AFTER binding
 
             if (_runtimeState == null)
             {
                 Debug.LogError("[BattleController] No ATBRuntimeState assigned — battle cannot run.");
                 return;
             }
-            _renderedLogCount = 0;
+            _hud?.ResetLog();
             _returnScheduled = false;
 
             BattleSetup setup = BuildSetup();
@@ -192,10 +173,6 @@ namespace DeNelle.BattleATB
             _runtimeState.OnBattleChanged.AddListener(HandleBattleChanged);
             _runtimeState.OnActionSubmitted.AddListener(HandleActionSubmitted);
             _runtimeState.OnOutcome.AddListener(HandleOutcome);
-            if (_attackButton != null) _attackButton.clicked += HandleAttackClicked;
-            if (_skillsButton != null) _skillsButton.clicked += HandleSkillsClicked;
-            if (_itemButton != null) _itemButton.clicked += HandleItemClicked;
-            if (_fleeButton != null) _fleeButton.clicked += HandleFleeClicked;
             _subscribed = true;
         }
 
@@ -220,20 +197,151 @@ namespace DeNelle.BattleATB
             // enemy regardless of who actually breached).
             var enemies = BuildEnemyRoster(handoff);
 
+            HeroClass heroClass = ResolveHeroClass(); // owner: ATB ran as Mage even when you're an Archer
+
+            // WO-169 P0 — surface a REAL party of up to 4 (hero + the player's pets),
+            // each with its own per-member control mode. Was Pets = empty → forced 1v1.
+            List<PartyMemberSpec> party = BuildParty(heroClass);
+
             return new BattleSetup
             {
                 Wave = wave,
                 Seed = seed,
-                HeroClass = ResolveHeroClass(), // owner: ATB ran as Mage even when you're an Archer
+                // Multi-member party is authoritative; the legacy HeroClass/Pets
+                // fields are left as a harmless fallback for any path that ignores
+                // PartyMembers (and they keep the engine's legacy branch buildable).
+                PartyMembers = party,
+                HeroClass = heroClass,
                 HeroName = _fallbackHeroName,
                 Pets = new List<PartyPetSpec>(),
                 Enemies = enemies,
-                // Seed a few potions so the Item command is usable (the empty
-                // inventory left the Item button inert). Full inventory handoff
-                // from the village/dungeon arrives with the breach mapper.
-                Inventory = new Dictionary<ItemKind, int> { { ItemKind.Potion, 3 } },
+                Inventory = BuildInventory(),
                 Reinforcements = false,
             };
+        }
+
+        /// <summary>
+        /// WO-169 P0 — assemble the playable party from live game state, capped at 4
+        /// at the controller/setup level (NOT by touching the engine MAX_PARTY).
+        /// Member 0 is the Keeper/hero (defaults to Player control); up to 3 of the
+        /// player's pets follow (default AI). Each member's stored control-mode
+        /// preference (AtbControlModeStore) wins over the default once set, and is
+        /// seeded on first join so it persists.
+        /// </summary>
+        private List<PartyMemberSpec> BuildParty(HeroClass heroClass)
+        {
+            const int MaxParty = 4; // controller-level cap; engine MAX_PARTY untouched
+            var party = new List<PartyMemberSpec>();
+
+            // Hero / Keeper — id "hero", default Player.
+            party.Add(MakeMember(
+                id: "hero",
+                name: _fallbackHeroName,
+                heroClass: heroClass,
+                species: null,
+                bondRank: 0,
+                aiMode: PetAiMode.Balanced,
+                defaultMode: ControlMode.Player));
+
+            // The player's collected pets → companion members (default AI).
+            var svc = DeNelle.Core.State.GameStateService.Instance;
+            var state = (svc != null) ? svc.State : null;
+            if (state != null && state.Pets != null)
+            {
+                int idx = 0;
+                foreach (var pet in state.Pets)
+                {
+                    if (party.Count >= MaxParty) break;
+                    PetSpecies species = MapPetSpecies(pet.Species);
+                    int bond = BondRankFor(state, pet.Species);
+                    string name = !string.IsNullOrEmpty(pet.Nickname) ? pet.Nickname : DefaultPetName(species);
+                    party.Add(MakeMember(
+                        id: $"pet-{idx}",
+                        name: name,
+                        heroClass: null,
+                        species: species,
+                        bondRank: bond,
+                        aiMode: PetAiMode.Balanced,
+                        defaultMode: ControlMode.AI));
+                    idx++;
+                }
+            }
+
+            Debug.Log($"[BattleController] ATB party surfaced: {party.Count} member(s) " +
+                      $"(hero {heroClass} + {party.Count - 1} pet(s)).");
+            return party;
+        }
+
+        /// <summary>Build one member, applying the persisted control-mode preference
+        /// (seeding the default on first join so the choice sticks).</summary>
+        private static PartyMemberSpec MakeMember(
+            string id, string name, HeroClass? heroClass, PetSpecies? species,
+            int bondRank, PetAiMode aiMode, ControlMode defaultMode)
+        {
+            if (!AtbControlModeStore.HasPreference(id))
+                AtbControlModeStore.Set(id, defaultMode);
+            ControlMode mode = AtbControlModeStore.Get(id, defaultMode);
+            return new PartyMemberSpec
+            {
+                Id = id,
+                Name = name,
+                HeroClass = heroClass,
+                Species = species,
+                BondRank = bondRank,
+                AiMode = aiMode,
+                ControlMode = mode,
+            };
+        }
+
+        /// <summary>Map the Core pet-species enum onto the engine's. Same three
+        /// species, same order — a 1:1 projection.</summary>
+        private static PetSpecies MapPetSpecies(DeNelle.Core.State.PetSpecies s)
+        {
+            switch (s)
+            {
+                case DeNelle.Core.State.PetSpecies.AetherSprite: return PetSpecies.AetherSprite;
+                case DeNelle.Core.State.PetSpecies.FlamePup: return PetSpecies.FlamePup;
+                case DeNelle.Core.State.PetSpecies.IceWolf: return PetSpecies.IceWolf;
+                default: return PetSpecies.AetherSprite;
+            }
+        }
+
+        /// <summary>Bond rank for a species from GameState.PetBonds [Aether,Flame,Ice].</summary>
+        private static int BondRankFor(DeNelle.Core.State.GameState state, DeNelle.Core.State.PetSpecies s)
+        {
+            if (state.PetBonds == null) return 0;
+            int i = (int)s; // enum order matches the [Aether, Flame, Ice] bond list
+            return (i >= 0 && i < state.PetBonds.Count) ? Mathf.Clamp(state.PetBonds[i], 0, 4) : 0;
+        }
+
+        private static string DefaultPetName(PetSpecies s)
+        {
+            switch (s)
+            {
+                case PetSpecies.FlamePup: return "Flame Pup";
+                case PetSpecies.IceWolf: return "Ice Wolf";
+                default: return "Aether Sprite";
+            }
+        }
+
+        /// <summary>The carried item inventory. Reads the player's ATB consumables
+        /// from GameState; seeds a few potions if the pouch is empty so Item is
+        /// usable in dev/direct-play (preserves the old behaviour).</summary>
+        private static Dictionary<ItemKind, int> BuildInventory()
+        {
+            var inv = new Dictionary<ItemKind, int>();
+            var svc = DeNelle.Core.State.GameStateService.Instance;
+            var state = (svc != null) ? svc.State : null;
+            if (state != null)
+            {
+                inv[ItemKind.Potion] = Mathf.Max(0, state.Inventory.Potions);
+                inv[ItemKind.ManaCrystal] = Mathf.Max(0, state.Inventory.ManaCrystals);
+                inv[ItemKind.Cleanse] = Mathf.Max(0, state.Inventory.Cleanses);
+            }
+            int total = 0;
+            foreach (var kv in inv) total += kv.Value;
+            if (total == 0) inv[ItemKind.Potion] = 3; // keep Item usable in dev
+            return inv;
         }
 
         /// <summary>
@@ -343,17 +451,14 @@ namespace DeNelle.BattleATB
         }
 
         /// <summary>
-        /// The hero just submitted an action (before the AI drain). Used purely
-        /// for an immediate "resolving…" affordance — the full re-render arrives
-        /// via <see cref="HandleBattleChanged"/> right after.
+        /// The player just submitted an action (before the AI drain). The dynamic
+        /// HUD re-renders fully on the OnBattleChanged that follows; nothing extra
+        /// is needed here now that the command bar is rebuilt per snapshot.
         /// </summary>
         private void HandleActionSubmitted(BattleState state)
         {
-            if (_attackButton != null) _attackButton.SetEnabled(false);
-            if (_skillsButton != null) _skillsButton.SetEnabled(false);
-            if (_itemButton != null) _itemButton.SetEnabled(false);
-            if (_fleeButton != null) _fleeButton.SetEnabled(false);
-            if (_statusBanner != null) _statusBanner.text = "Resolving…";
+            // No-op: Render() (via HandleBattleChanged) rebuilds the command bar and
+            // disables it whenever it isn't a player-mode member's turn.
         }
 
         /// <summary>Battle reached a final outcome — schedule the scene hand-back.</summary>
@@ -365,188 +470,47 @@ namespace DeNelle.BattleATB
             ReturnAfterResult(result).Forget();
         }
 
-        /// <summary>The "Attack" button — submit a basic attack on the lowest-HP foe.</summary>
-        private void HandleAttackClicked()
+        /// <summary>
+        /// WO-169 — single entry point for every player action the HUD commits
+        /// (attack / ability / item / defend). Routes through ATBRuntimeState, which
+        /// owns the engine call + clone-at-boundary. Guards on the awaiting-player
+        /// gate so a stale click can't submit. Triggers the hero swing animation +
+        /// idle-timer reset for parity with the old per-button handlers.
+        /// </summary>
+        private void SubmitPlayerAction(BattleAction action)
         {
-            if (_runtimeState == null || !_runtimeState.IsAwaitingPlayer()) return;
+            if (_runtimeState == null || !_runtimeState.IsAwaitingPlayer() || action == null) return;
 
-            // Attack auto-resolves vs. the lowest-HP living enemy (no picker) —
-            // mirrors AtbBattleScreen.tsx's command model for the basic attack.
-            BattleUnit target = BattleStateOps.LowestHpEnemy(_runtimeState.Battle);
-            if (target == null) return;
-
-            // WO-93 Bug 2: trigger the hero attack animation on the capsule/model.
-            // Null-guarded: the placeholder capsule has no Animator, so this is a no-op
-            // there; a real hero model (AtbCombatantSwapper) will play the clip.
-            if (_heroCapsule != null)
+            // WO-93: hero swing on the placeholder capsule / swapped model (no-op
+            // when there is no Animator). Only meaningful for an attack/ability.
+            if (_heroCapsule != null && action.Kind != ActionKind.Defend)
                 _heroCapsule.GetComponentInChildren<Animator>()?.SetTrigger("Attack");
 
-            // WO-93: reset the idle-pressure turn timer.
-            ATBCombatManager.Instance?.OnPlayerActed();
-
-            _runtimeState.ChooseAction(BattleAction.MakeAttack(target.Id));
-        }
-
-        /// <summary>
-        /// Skills button — casts the active hero's best currently-usable ability.
-        /// <see cref="BattleStateOps.AvailableAbilities"/> is already cost- and
-        /// cooldown-gated, so anything it returns is a legal submit; the strongest
-        /// damage ability hits the lowest-HP foe, else a self heal/buff is cast,
-        /// else the turn is NOT consumed and the banner explains why (no silent
-        /// no-op — the owner's "skills do nothing").
-        /// </summary>
-        private void HandleSkillsClicked()
-        {
-            if (_runtimeState == null || !_runtimeState.IsAwaitingPlayer()) return;
-            BattleUnit hero = _runtimeState.ActiveUnit();
-            if (hero == null) return;
-
-            List<AbilityDef> usable = BattleStateOps.AvailableAbilities(hero);
-            if (usable == null || usable.Count == 0)
-            {
-                if (_statusBanner != null) _statusBanner.text = "No skill ready — not enough mana.";
-                return; // do not consume the turn
-            }
-
-            BattleUnit foe = BattleStateOps.LowestHpEnemy(_runtimeState.Battle);
-
-            // Prefer the strongest damaging ability on the weakest foe.
-            List<AbilityDef> damage = usable.Where(a => a.Damage > 0).ToList();
-            if (damage.Count > 0 && foe != null)
-            {
-                AbilityDef best = damage.Aggregate(damage[0], (b, a) => a.Damage > b.Damage ? a : b);
-                ATBCombatManager.Instance?.OnPlayerActed(); // WO-93: reset idle timer
-                _runtimeState.ChooseAction(BattleAction.MakeAbility(best.Slot, foe.Id));
-                return;
-            }
-
-            // Otherwise a self heal / buff (Knight Guard / Last Stand, etc.).
-            AbilityDef support = usable.FirstOrDefault(
-                a => a.SelfStatus != null || a.HealPctSelf != null || a.Heal != null);
-            if (support != null)
-            {
-                ATBCombatManager.Instance?.OnPlayerActed(); // WO-93: reset idle timer
-                _runtimeState.ChooseAction(BattleAction.MakeAbility(support.Slot, hero.Id));
-                return;
-            }
-
-            // Last resort — the first usable ability on the foe (or self).
-            AbilityDef any = usable[0];
-            ATBCombatManager.Instance?.OnPlayerActed(); // WO-93: reset idle timer
-            _runtimeState.ChooseAction(
-                BattleAction.MakeAbility(any.Slot, foe != null ? foe.Id : hero.Id));
-        }
-
-        /// <summary>
-        /// Item button — uses a Potion on the active hero. The empty inventory
-        /// left this inert; BuildSetup now seeds potions so it heals. When the
-        /// pouch is empty the banner says so rather than doing nothing silently.
-        /// </summary>
-        private void HandleItemClicked()
-        {
-            if (_runtimeState == null || !_runtimeState.IsAwaitingPlayer()) return;
-            BattleUnit hero = _runtimeState.ActiveUnit();
-            if (hero == null) return;
-
-            Dictionary<ItemKind, int> inv = _runtimeState.Battle != null ? _runtimeState.Battle.Inventory : null;
-            int potions = (inv != null && inv.TryGetValue(ItemKind.Potion, out int p)) ? p : 0;
-            if (potions <= 0)
-            {
-                if (_statusBanner != null) _statusBanner.text = "No items left.";
-                return;
-            }
-            ATBCombatManager.Instance?.OnPlayerActed(); // WO-93: reset idle timer
-            _runtimeState.ChooseAction(BattleAction.MakeItem(ItemKind.Potion, hero.Id));
-        }
-
-        /// <summary>
-        /// Flee button — abandons the fight and returns to the scene the battle
-        /// came from (the dungeon / village). The engine has no flee action, so
-        /// this is a clean scene hand-back: it guarantees the player can always
-        /// leave (the owner's "stuck in an endless loop" escape hatch). Fires once.
-        /// </summary>
-        private void HandleFleeClicked()
-        {
-            // No fleeing a village tree-breach Last Stand (owner) — defensive guard
-            // in case the button is somehow reached; it is also hidden in render.
-            if (_source == BattleSource.Village) return;
-            if (_returnScheduled) return;
-            _returnScheduled = true;
-            if (_statusBanner != null) _statusBanner.text = "Fled the battle…";
-            ATBCombatManager.Instance?.StopCombat(); // WO-68: halt the turn timer on flee
-            if (_runtimeState != null) _runtimeState.EndBattle();
-            FleeToReturnScene().Forget();
-        }
-
-        /// <summary>Returns to the previous scene after a flee. Async, never async void.</summary>
-        private async UniTask FleeToReturnScene()
-        {
-            await SceneRouter.LoadSceneWithFade(ResolveReturnScene());
+            ATBCombatManager.Instance?.OnPlayerActed(); // reset idle-pressure timer
+            _runtimeState.ChooseAction(action);
         }
 
         // ---------------------------------------------------------------------
-        // Rendering — HUD bars, log, capsule state
+        // Rendering — delegate to the dynamic HUD + drive the hero capsule
         // ---------------------------------------------------------------------
 
-        /// <summary>Re-draw the whole HUD + capsule state from a battle snapshot.</summary>
+        /// <summary>Re-bind the dynamic HUD + reflect the hero/first-enemy capsules.</summary>
         private void Render(BattleState state)
         {
             if (state == null) return;
+            _hud?.Render(_runtimeState);
+            RenderCapsules(state);
+        }
 
+        /// <summary>
+        /// Reflect death on the two placeholder capsules (the 3D layer kept for the
+        /// hero + first enemy; the full per-unit visuals are the deferred model-swap
+        /// follow-up). The 2D combatant cards are the authoritative per-unit display.
+        /// </summary>
+        private void RenderCapsules(BattleState state)
+        {
             BattleUnit hero = FirstUnit(state, UnitKind.Hero);
             BattleUnit enemy = FirstUnit(state, Side.Enemy);
-
-            RenderCombatant(hero, _heroCard, _heroName, _heroHpFill, _heroAtbFill, state);
-            RenderCombatant(enemy, _enemyCard, _enemyName, _enemyHpFill, _enemyAtbFill, state);
-            RenderCapsules(hero, enemy);
-            RenderLog(state);
-            RenderStatus(state);
-            RenderAttackButton(state);
-        }
-
-        /// <summary>Bind one combatant's name, HP bar, ATB bar and active highlight.</summary>
-        private static void RenderCombatant(
-            BattleUnit unit,
-            VisualElement card,
-            Label nameLabel,
-            VisualElement hpFill,
-            VisualElement atbFill,
-            BattleState state)
-        {
-            if (unit == null)
-            {
-                if (card != null) card.style.opacity = 0.35f;
-                return;
-            }
-
-            if (nameLabel != null) nameLabel.text = unit.Name;
-
-            float hpPct = unit.MaxHp > 0
-                ? Mathf.Clamp01((float)unit.Hp / unit.MaxHp)
-                : 0f;
-            float atbPct = Mathf.Clamp01((float)(unit.Atb / Defs.ATB_FULL));
-
-            SetBarWidth(hpFill, hpPct);
-            SetBarWidth(atbFill, atbPct);
-
-            // The ATB bar turns amber once the unit is ready to act.
-            if (atbFill != null)
-            {
-                bool ready = unit.Atb >= Defs.ATB_FULL;
-                atbFill.EnableInClassList("bar-fill--atb-ready", ready);
-            }
-
-            if (card != null)
-            {
-                card.style.opacity = unit.Alive ? 1f : 0.35f;
-                bool isActive = unit.Alive && state.ActiveUnitId == unit.Id;
-                card.EnableInClassList("combatant-card--active", isActive);
-            }
-        }
-
-        /// <summary>Reflect HP / death visually on the placeholder capsule meshes.</summary>
-        private void RenderCapsules(BattleUnit hero, BattleUnit enemy)
-        {
             ApplyCapsuleState(_heroCapsule, hero);
             ApplyCapsuleState(_enemyCapsule, enemy);
         }
@@ -559,91 +523,6 @@ namespace DeNelle.BattleATB
             capsule.localRotation = down
                 ? Quaternion.Euler(90f, capsule.localEulerAngles.y, 0f)
                 : Quaternion.Euler(0f, capsule.localEulerAngles.y, 0f);
-        }
-
-        /// <summary>Append any new battle-log entries and scroll to the latest.</summary>
-        private void RenderLog(BattleState state)
-        {
-            if (_battleLogContent == null || state.Log == null) return;
-
-            for (int i = _renderedLogCount; i < state.Log.Count; i++)
-            {
-                BattleLogEntry entry = state.Log[i];
-                var line = new Label(entry.Text);
-                line.AddToClassList("log-entry");
-                string variant = LogVariantClass(entry.Event);
-                if (variant != null) line.AddToClassList(variant);
-                _battleLogContent.Add(line);
-            }
-            _renderedLogCount = state.Log.Count;
-
-            // Scroll the newest entry into view.
-            if (_battleLog != null && _battleLogContent.childCount > 0)
-            {
-                VisualElement last = _battleLogContent[_battleLogContent.childCount - 1];
-                _battleLog.ScrollTo(last);
-            }
-        }
-
-        /// <summary>The accent USS class for a log event, or null for the default.</summary>
-        private static string LogVariantClass(BattleLogEvent ev)
-        {
-            switch (ev)
-            {
-                case BattleLogEvent.BattleStart: return "log-entry--start";
-                case BattleLogEvent.Victory: return "log-entry--victory";
-                case BattleLogEvent.Defeat: return "log-entry--defeat";
-                case BattleLogEvent.Death: return "log-entry--death";
-                default: return null;
-            }
-        }
-
-        /// <summary>Update the status banner from the current phase.</summary>
-        private void RenderStatus(BattleState state)
-        {
-            if (_statusBanner == null) return;
-
-            switch (state.Phase)
-            {
-                case BattlePhase.AwaitingInput:
-                    BattleUnit actor = _runtimeState != null ? _runtimeState.ActiveUnit() : null;
-                    _statusBanner.text = actor != null
-                        ? $"{actor.Name} — choose an action."
-                        : "Choose an action.";
-                    break;
-                case BattlePhase.Resolving:
-                case BattlePhase.Filling:
-                    _statusBanner.text = "Resolving…";
-                    break;
-                case BattlePhase.Ended:
-                    _statusBanner.text = state.Outcome == BattleOutcome.Victory
-                        ? "Victory — the breach is repelled."
-                        : "Defeat — the last stand is lost.";
-                    break;
-                default:
-                    _statusBanner.text = string.Empty;
-                    break;
-            }
-        }
-
-        /// <summary>Enable the Attack/Skills/Item/Flee buttons only while the hero is choosing.</summary>
-        private void RenderAttackButton(BattleState state)
-        {
-            bool canAct = state.Phase == BattlePhase.AwaitingInput
-                          && _runtimeState != null
-                          && !_runtimeState.Resolving
-                          && _runtimeState.Enemies().Count > 0;
-            if (_attackButton != null) _attackButton.SetEnabled(canAct);
-            if (_skillsButton != null) _skillsButton.SetEnabled(canAct);
-            if (_itemButton != null) _itemButton.SetEnabled(canAct);
-            // Flee: a dungeon encounter is a clean escape; a village tree-breach
-            // Last Stand is do-or-die, so the button is HIDDEN there (owner).
-            if (_fleeButton != null)
-            {
-                bool fleeAllowed = _source != BattleSource.Village;
-                _fleeButton.style.display = fleeAllowed ? DisplayStyle.Flex : DisplayStyle.None;
-                _fleeButton.SetEnabled(fleeAllowed && canAct);
-            }
         }
 
         // ---------------------------------------------------------------------
@@ -705,8 +584,12 @@ namespace DeNelle.BattleATB
         // UI binding helpers
         // ---------------------------------------------------------------------
 
-        /// <summary>Query every BattleHUD element by name. Returns false if the
-        /// document is missing so callers can bail cleanly.</summary>
+        /// <summary>
+        /// Build the dynamic, code-built HUD into the UIDocument root and wire its
+        /// action callback to the engine. WO-169 commits to code-built UI: the dead
+        /// BattleHUD.uxml is ignored entirely (it does not clone in builds, CLAUDE.md
+        /// §8). Returns false only if there is no document to draw into.
+        /// </summary>
         private bool BindUi()
         {
             if (_hudDocument == null) _hudDocument = GetComponent<UIDocument>();
@@ -719,183 +602,26 @@ namespace DeNelle.BattleATB
             VisualElement root = _hudDocument.rootVisualElement;
             if (root == null)
             {
-                Debug.LogError("[BattleController] UIDocument has no rootVisualElement — is BattleHUD.uxml assigned?");
+                Debug.LogError("[BattleController] UIDocument has no rootVisualElement.");
                 return false;
             }
 
-            _statusBanner = root.Q<Label>("status-banner");
-            _heroCard = root.Q<VisualElement>("hero-card");
-            _heroName = root.Q<Label>("hero-name");
-            _heroHpFill = root.Q<VisualElement>("hero-hp-fill");
-            _heroAtbFill = root.Q<VisualElement>("hero-atb-fill");
-            _enemyCard = root.Q<VisualElement>("enemy-card");
-            _enemyName = root.Q<Label>("enemy-name");
-            _enemyHpFill = root.Q<VisualElement>("enemy-hp-fill");
-            _enemyAtbFill = root.Q<VisualElement>("enemy-atb-fill");
-            _attackButton = root.Q<Button>("attack-button");
-            _skillsButton = root.Q<Button>("skills-button");
-            _itemButton = root.Q<Button>("item-button");
-            _fleeButton = root.Q<Button>("flee-button");
-            _battleLog = root.Q<ScrollView>("battle-log");
-            _battleLogContent = root.Q<VisualElement>("battle-log-content");
-
-            if (_attackButton == null)
-            {
-                // The BattleHUD.uxml does not clone its elements in the player build
-                // (the same failure hits BuildMenu.uxml — both UXML docs come up empty
-                // while the project's code-built UIDocuments render fine). Rather than
-                // ship an uninteractive battle, build a functional HUD in code here and
-                // assign the same fields Render() drives. Owner: "ATB lands in a stub".
-                Debug.LogWarning("[BattleController] BattleHUD UXML did not bind — building a code HUD fallback.");
-                BuildFallbackHud(root);
-            }
+            _hud = new BattleHud();
+            _hud.OnAction = SubmitPlayerAction;
+            _hud.OnControlModeToggled = HandleControlModeToggled;
+            _hud.Build(root);
             return true;
         }
 
         /// <summary>
-        /// Code-built BattleHUD used when the UXML fails to clone in a build. Inline
-        /// styles only (no UXML/USS dependency) — mirrors how MusicToggleHud and the
-        /// dev panel build reliable UI in code. Assigns every field Render() reads.
+        /// WO-169 P0 — the player flipped a member's Command/Auto toggle. Persist the
+        /// preference so it sticks; it takes effect from the NEXT battle build (the
+        /// engine snapshot's ControlMode is set at construction — we don't hot-swap a
+        /// unit mid-fight, which would risk a turn-phase race).
         /// </summary>
-        private void BuildFallbackHud(VisualElement root)
+        private void HandleControlModeToggled(string memberId, ControlMode mode)
         {
-            root.Clear();
-            root.pickingMode = PickingMode.Ignore;   // only the button captures clicks
-
-            var header = new VisualElement();
-            header.style.position = Position.Absolute;
-            header.style.top = 14; header.style.left = 0; header.style.right = 0;
-            header.style.alignItems = Align.Center;
-            root.Add(header);
-
-            var title = new Label("The Last Stand");
-            title.style.color = new StyleColor(new Color(0.97f, 0.92f, 0.74f, 1f));
-            title.style.fontSize = 24; title.style.unityFontStyleAndWeight = FontStyle.Bold;
-            header.Add(title);
-
-            _statusBanner = new Label(string.Empty);
-            _statusBanner.style.color = new StyleColor(Color.white);
-            _statusBanner.style.fontSize = 15; _statusBanner.style.marginTop = 4;
-            header.Add(_statusBanner);
-
-            var strip = new VisualElement();
-            strip.style.position = Position.Absolute;
-            strip.style.top = 84; strip.style.left = 24; strip.style.right = 24;
-            strip.style.flexDirection = FlexDirection.Row;
-            strip.style.justifyContent = Justify.SpaceBetween;
-            strip.style.alignItems = Align.Center;
-            root.Add(strip);
-
-            _heroCard = BuildHudCard(strip, "Hero", new Color(0.26f, 0.20f, 0.42f, 0.92f),
-                out _heroName, out _heroHpFill, out _heroAtbFill);
-            var vs = new Label("vs");
-            vs.style.color = new StyleColor(new Color(0.95f, 0.85f, 0.45f, 1f));
-            vs.style.fontSize = 18; vs.style.unityFontStyleAndWeight = FontStyle.Bold;
-            strip.Add(vs);
-            _enemyCard = BuildHudCard(strip, "Enemy", new Color(0.45f, 0.16f, 0.16f, 0.92f),
-                out _enemyName, out _enemyHpFill, out _enemyAtbFill);
-
-            _battleLog = new ScrollView(ScrollViewMode.Vertical);
-            _battleLog.style.position = Position.Absolute;
-            _battleLog.style.left = 24; _battleLog.style.right = 24;
-            _battleLog.style.top = 240; _battleLog.style.height = 150;
-            _battleLog.style.backgroundColor = new StyleColor(new Color(0f, 0f, 0f, 0.45f));
-            _battleLog.style.paddingLeft = 8; _battleLog.style.paddingRight = 8;
-            root.Add(_battleLog);
-            _battleLogContent = new VisualElement();
-            _battleLog.Add(_battleLogContent);
-
-            // Action button row — Attack / Skills / Item / Flee
-            var actionRow = new VisualElement();
-            actionRow.style.position = Position.Absolute;
-            actionRow.style.bottom = 30;
-            actionRow.style.left = 16;
-            actionRow.style.right = 16;
-            actionRow.style.flexDirection = FlexDirection.Row;
-            actionRow.style.justifyContent = Justify.SpaceBetween;
-            root.Add(actionRow);
-
-            _attackButton = BuildActionButton("Attack", new Color(0.74f, 0.20f, 0.20f, 1f));
-            actionRow.Add(_attackButton);
-
-            _skillsButton = BuildActionButton("Skills", new Color(0.20f, 0.38f, 0.74f, 1f));
-            actionRow.Add(_skillsButton);
-
-            _itemButton = BuildActionButton("Item", new Color(0.20f, 0.60f, 0.30f, 1f));
-            actionRow.Add(_itemButton);
-
-            _fleeButton = BuildActionButton("Flee", new Color(0.45f, 0.35f, 0.10f, 1f));
-            actionRow.Add(_fleeButton);
-        }
-
-        /// <summary>Builds one combatant card (name + HP + ATB bars) into <paramref name="parent"/>.</summary>
-        private static VisualElement BuildHudCard(VisualElement parent, string fallbackName, Color bg,
-            out Label nameLabel, out VisualElement hpFill, out VisualElement atbFill)
-        {
-            var card = new VisualElement();
-            card.style.width = 230;
-            card.style.paddingTop = 10; card.style.paddingBottom = 10;
-            card.style.paddingLeft = 12; card.style.paddingRight = 12;
-            card.style.backgroundColor = new StyleColor(bg);
-            card.style.borderTopLeftRadius = 8; card.style.borderTopRightRadius = 8;
-            card.style.borderBottomLeftRadius = 8; card.style.borderBottomRightRadius = 8;
-            parent.Add(card);
-
-            nameLabel = new Label(fallbackName);
-            nameLabel.style.color = new StyleColor(Color.white);
-            nameLabel.style.fontSize = 15; nameLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
-            card.Add(nameLabel);
-
-            hpFill = AddHudBar(card, "HP", new Color(0.30f, 0.85f, 0.40f));
-            atbFill = AddHudBar(card, "ATB", new Color(0.40f, 0.65f, 1f));
-            return card;
-        }
-
-        /// <summary>A labelled bar track with a 100%-wide fill (driven by SetBarWidth).</summary>
-        private static VisualElement AddHudBar(VisualElement card, string label, Color fillColor)
-        {
-            var lab = new Label(label);
-            lab.style.color = new StyleColor(new Color(0.85f, 0.85f, 0.85f, 1f));
-            lab.style.fontSize = 10; lab.style.marginTop = 6;
-            card.Add(lab);
-
-            var track = new VisualElement();
-            track.style.height = 12;
-            track.style.backgroundColor = new StyleColor(new Color(0f, 0f, 0f, 0.5f));
-            track.style.borderTopLeftRadius = 4; track.style.borderTopRightRadius = 4;
-            track.style.borderBottomLeftRadius = 4; track.style.borderBottomRightRadius = 4;
-            card.Add(track);
-
-            var fill = new VisualElement();
-            fill.style.height = 12; fill.style.width = Length.Percent(100f);
-            fill.style.backgroundColor = new StyleColor(fillColor);
-            fill.style.borderTopLeftRadius = 4; fill.style.borderTopRightRadius = 4;
-            fill.style.borderBottomLeftRadius = 4; fill.style.borderBottomRightRadius = 4;
-            track.Add(fill);
-            return fill;
-        }
-
-        /// <summary>Creates a consistently-styled action button for the fallback HUD row.</summary>
-        private static Button BuildActionButton(string label, Color bgColor)
-        {
-            var btn = new Button { text = label };
-            var s = btn.style;
-            s.flexGrow = 1;
-            s.marginLeft = 4; s.marginRight = 4;
-            s.height = 52; s.fontSize = 16;
-            s.unityFontStyleAndWeight = FontStyle.Bold;
-            s.color = new StyleColor(Color.white);
-            s.backgroundColor = new StyleColor(bgColor);
-            s.borderTopLeftRadius = 8; s.borderTopRightRadius = 8;
-            s.borderBottomLeftRadius = 8; s.borderBottomRightRadius = 8;
-            return btn;
-        }
-
-        /// <summary>Set a bar fill's width as a percentage (0..1) of its track.</summary>
-        private static void SetBarWidth(VisualElement fill, float pct)
-        {
-            if (fill == null) return;
-            fill.style.width = Length.Percent(Mathf.Clamp01(pct) * 100f);
+            AtbControlModeStore.Set(memberId, mode);
         }
 
         /// <summary>First unit on a side (party first, enemies after — engine order).</summary>
