@@ -580,6 +580,37 @@ namespace DeNelle.Village
         }
 
         /// <summary>
+        /// WO-145 (Tactic B): deals hit-scan ranged damage to <paramref name="target"/>
+        /// without closing to contact. Resolves an <see cref="IDamageableStructure"/>
+        /// on the target (HeroHealth / Tower / Heart all implement it) and routes the
+        /// hit through the same <c>ApplyContactDamage</c> path as melee, so HP,
+        /// floating numbers and death are handled identically. Fires the Attack
+        /// animator trigger (null-safe). No projectile / VFX — instant damage only
+        /// (juice is a follow-on WO). Called by <see cref="EnemyBrain"/> while kiting.
+        /// </summary>
+        /// <param name="target">The transform to strike (its root may host the interface).</param>
+        /// <param name="damage">Damage to apply this shot.</param>
+        /// <returns>True when a live damageable target was hit.</returns>
+        public bool RangedAttack(Transform target, float damage)
+        {
+            if (_dead || target == null || damage <= 0f) return false;
+
+            // The interface may live on the target or a parent (collider is often a child).
+            var structure = target.GetComponentInParent<IDamageableStructure>();
+            if (structure == null || !structure.IsAlive) return false;
+
+            structure.ApplyContactDamage(damage);
+
+            // Face the target so the shot reads, then play the attack pose (null-safe).
+            Vector3 toTarget = target.position - transform.position; toTarget.y = 0f;
+            if (toTarget.sqrMagnitude > 0.001f)
+                transform.rotation = Quaternion.LookRotation(toTarget);
+            if (_animator != null) _animator.SetTrigger(AnimAttack);
+            PlayTypeSound(_typeVfxSet != null ? _typeVfxSet.RandomAttackClip() : null);
+            return true;
+        }
+
+        /// <summary>
         /// Casts a short sphere ahead of the enemy and returns the first
         /// <see cref="IDamageableStructure"/> it hits, or null when the lane is
         /// clear. Skirmishers probe slightly wider so they peel toward walls.

@@ -112,6 +112,7 @@ namespace DeNelle.Village
         private Enemy    _enemy;
         private Transform _heartTransform;
         private Transform _heroTransform;
+        private Transform _petTransform;        // WO-145: resolved by "PetTarget" tag (null-safe).
         private float     _healCooldown;
         private float     _suppressTimer;
 
@@ -120,8 +121,23 @@ namespace DeNelle.Village
         private readonly Collider[] _scanBuffer = new Collider[32];
 
         // DEF-72: throttle target-priority re-evaluation (not per-frame).
+        // WO-145: now WIRED — gates ScoreAndPickTarget so the offensive roles
+        // re-score on the interval and reuse the cached _currentTarget between ticks.
         private float _targetEvalTimer;
         private const float TargetEvalInterval = 2f;
+
+        // WO-145 (Tactic C): a signed flank bearing assigned by EnemyGroupCoordinator
+        // for a coordinated pincer; overrides the per-enemy FlankAngleOffset when set.
+        private bool  _coordinatedFlankSet;
+        private float _coordinatedFlankAngle;
+
+        // WO-145 (Tactic D): reposition (rally → re-engage) timer.
+        private float _repositionTimer;
+        private bool  _atRallyPoint;
+
+        // WO-145 (Tactic B): kite strafe sign, flips on a timer for a lively weave.
+        private float _kiteStrafeTimer;
+        private float _kiteStrafeSign = 1f;
 
         // DEF-43: optional BehaviorTree override — wired in Awake if present.
         private EnemyBehaviorTree _bt;
@@ -130,6 +146,12 @@ namespace DeNelle.Village
         private float     _nextAttackTime;
         private Animator  _animator;
         private Transform _currentTarget;
+
+        // WO-147: consolidated perception sensor (auto-added in Awake) + IsAlert drive.
+        private AwarenessSensor _sensor;
+        private float _sensorScanTimer;
+        private DeNelle.Core.AwarenessState _lastAwareness = DeNelle.Core.AwarenessState.Unaware;
+        private static readonly int AnimIsAlert = Animator.StringToHash("IsAlert");
 
         // WO-92: cached NavMeshAgent for NavMesh path validation.
         private NavMeshAgent _navAgent;
@@ -154,16 +176,59 @@ namespace DeNelle.Village
         public float CurrentHealth => _enemy != null ? _enemy.Hp : 0f;
 
         /// <summary>
-        /// Hook called by EnemyBehaviorTree's StopAndEngage leaf. Currently a
-        /// no-op because Enemy.TickContactAttack fires automatically on the same
-        /// frame the agent stops. Reserved for future ranged / special-attack logic.
+        /// Hook called by EnemyBehaviorTree's StopAndEngage leaf, and by this brain
+        /// while kiting. For melee enemies it remains a no-op (Enemy.TickContactAttack
+        /// fires automatically once the agent stops). WO-145 (#7): when this enemy is
+        /// in the <see cref="EnemyTacticalState.Kite"/> state with its target inside
+        /// the standoff band, it fires a hit-scan ranged attack on cooldown.
         /// </summary>
         public void TriggerAttack()
         {
-            // Enemy handles contact damage in its own Update via TickContactAttack.
-            // Stopping the NavMeshAgent (via SetBrainTargetPosition) is sufficient
-            // to enter contact-attack mode. Expand here for ranged enemies.
+            // Melee path: Enemy handles contact damage in its own Update. Stopping the
+            // NavMeshAgent (via SetBrainTargetPosition) is sufficient to enter contact.
+            if (_tacticalState != EnemyTacticalState.Kite) return;
+
+            // WO-145 (Tactic B): ranged fire while kiting a live target in the band.
+            if (_currentTarget == null) return;
+            if (Time.time < _nextAttackTime) return;
+
+            float dist = (_currentTarget.position - transform.position).magnitude;
+            float desired = _tactics != null ? _tactics.KiteDesiredRange : 8f;
+            if (dist > desired + 0.5f) return;   // out of band — close first, don't fire
+
+            float cooldown = _tactics != null && _tactics.KiteAttackCooldown > 0f
+                ? _tactics.KiteAttackCooldown : attackCooldown;
+            if (_enemy != null && _enemy.RangedAttack(_currentTarget, damage))
+                _nextAttackTime = Time.time + cooldown;
         }
+
+        // ── WO-145 (Tactic C): coordinated-flank surface read by EnemyGroupCoordinator ──
+
+        /// <summary>True when this enemy's tactics opt it into a coordinated group pincer.</summary>
+        public bool WantsCoordinatedFlank =>
+            _tactics != null && _tactics.CoordinatedFlank && _tactics.Archetype == EnemyArchetype.Flanker;
+
+        /// <summary>The per-enemy flank angle from tactics (fallback when no coordinated angle is set).</summary>
+        public float FlankAngleOffset => _tactics != null ? _tactics.FlankAngleOffset : 90f;
+
+        /// <summary>
+        /// WO-145 (Tactic C): EnemyGroupCoordinator assigns a distinct signed bearing
+        /// (left / right / rear) so the released group envelops the target from
+        /// multiple angles at once. Overrides <see cref="FlankAngleOffset"/> in the
+        /// Flank destination math until cleared.
+        /// </summary>
+        public void SetCoordinatedFlankAngle(float signedDegrees)
+        {
+            _coordinatedFlankAngle = signedDegrees;
+            _coordinatedFlankSet   = true;
+        }
+
+        /// <summary>
+        /// WO-145/146/147: the brain's currently chosen offensive target. Read by the
+        /// family leader (WO-146) for engage context and the perception aggregation
+        /// (WO-147). Read-only; no behaviour change.
+        /// </summary>
+        public Transform CurrentTarget => _currentTarget;
 
         /// <summary>
         /// Fired when Enemy.Died fires — allows EnemyGroupCoordinator to prune
@@ -185,6 +250,11 @@ namespace DeNelle.Village
             _animator  = GetComponentInChildren<Animator>();
             _navAgent  = GetComponent<NavMeshAgent>();
 
+            // WO-147: ensure a perception sensor exists (auto-add — backward-safe so
+            // existing enemy prefabs gain perception with zero prefab wiring).
+            _sensor = GetComponent<AwarenessSensor>();
+            if (_sensor == null) _sensor = gameObject.AddComponent<AwarenessSensor>();
+
             // WO-86: overlay balance stats from EnemyData SO if assigned.
             if (_enemyData != null)
             {
@@ -201,6 +271,29 @@ namespace DeNelle.Village
             var heroTagged = GameObject.FindWithTag("HeroTarget");
             if (heroTagged == null) heroTagged = GameObject.FindWithTag("Player");
             _heroTransform = heroTagged != null ? heroTagged.transform : null;
+
+            // WO-145 (Tactic A): resolve the player's pet by tag (null-safe). The pet
+            // is DeNelle.Pets — we never reference it for AI, only target its tagged
+            // transform. Absent tag ⇒ no pet candidate (backward-safe). Wrapped because
+            // FindWithTag throws if the "PetTarget" tag is undefined in the project.
+            _petTransform = TryFindByTag("PetTarget");
+        }
+
+        /// <summary>
+        /// Null-safe tag lookup that tolerates an undefined tag (Unity throws on an
+        /// unknown tag string). Returns null when the tag is absent or unused.
+        /// </summary>
+        private static Transform TryFindByTag(string tag)
+        {
+            try
+            {
+                var go = GameObject.FindWithTag(tag);
+                return go != null ? go.transform : null;
+            }
+            catch (UnityEngine.UnityException)
+            {
+                return null;   // tag not defined in this project — no candidate.
+            }
         }
 
         private void Update()
@@ -213,6 +306,11 @@ namespace DeNelle.Village
                 _bt.Evaluate();
                 return;
             }
+
+            // WO-147: drive the consolidated perception sensor on the (LOD-scaled)
+            // eval cadence — one throttled scan, NOT per frame — then push the
+            // resulting AwarenessState to the Animator "IsAlert" param on change.
+            TickPerception();
 
             // DEF-72: evaluate tactical state first (health-based retreat trigger).
             if (_tactics != null) UpdateTacticalState();
@@ -231,6 +329,11 @@ namespace DeNelle.Village
             // Compute the final destination with tactical overlay applied.
             Vector3? dest = ComputeTacticalDestination(target);
             _enemy.SetBrainTargetPosition(dest);
+
+            // WO-145 (Tactic B): while kiting, fire ranged attacks on cooldown when
+            // the target is inside the standoff band (TriggerAttack no-ops otherwise).
+            if (_tacticalState == EnemyTacticalState.Kite)
+                TriggerAttack();
 
             // Healer: cast heal pulse when we are adjacent to a wounded ally.
             if (Role == EnemyRole.Healer && target != null)
@@ -255,18 +358,53 @@ namespace DeNelle.Village
                 return;
             }
 
-            // Retreat if HP has dropped below threshold.
+            // WO-145 (Tactic D): if currently repositioning, stay until re-engage.
+            if (_tacticalState == EnemyTacticalState.Reposition)
+            {
+                _repositionTimer -= Time.deltaTime;
+                bool healed   = _enemy.HpFraction >= _tactics.ReengageHealthThreshold;
+                bool regrouped = _atRallyPoint && _repositionTimer <= 0f;
+                if (healed || regrouped)
+                {
+                    _atRallyPoint = false;
+                    _tacticalState = ArchetypeDefaultState();
+                }
+                return;
+            }
+
+            // Retreat / Reposition if HP has dropped below threshold.
             if (_tactics.RetreatHealthThreshold > 0f
                 && _enemy.HpFraction < _tactics.RetreatHealthThreshold)
             {
-                _tacticalState = EnemyTacticalState.Retreat;
+                if (_tactics.RepositionInsteadOfFlee)
+                {
+                    // WO-145 (Tactic D): rally to allies, then re-engage (not blind flee).
+                    _tacticalState   = EnemyTacticalState.Reposition;
+                    _repositionTimer = _tactics.RepositionRegroupSeconds;
+                    _atRallyPoint    = false;
+                }
+                else
+                {
+                    _tacticalState = EnemyTacticalState.Retreat;
+                }
                 return;
             }
 
             // Assign archetype-default tactical state when not retreating.
-            _tacticalState = _tactics.Archetype switch
+            _tacticalState = ArchetypeDefaultState();
+        }
+
+        /// <summary>
+        /// WO-145: maps the assigned archetype to its default movement posture.
+        /// Flanker → Flank, Kiter → Kite, everything else → Rush.
+        /// </summary>
+        private EnemyTacticalState ArchetypeDefaultState()
+        {
+            if (_tactics == null) return EnemyTacticalState.Rush;
+            return _tactics.Archetype switch
             {
                 EnemyArchetype.Flanker => EnemyTacticalState.Flank,
+                EnemyArchetype.Kiter   => EnemyTacticalState.Kite,
                 _                      => EnemyTacticalState.Rush,
             };
         }
@@ -300,7 +438,12 @@ namespace DeNelle.Village
 
                 case EnemyTacticalState.Flank:
                 {
-                    float angle = _tactics != null ? _tactics.FlankAngleOffset : 90f;
+                    // WO-145 (Tactic C): use the coordinator-assigned envelope bearing
+                    // when set (distinct L/R/rear per group member), else the per-enemy
+                    // FlankAngleOffset (legacy, backward-compatible).
+                    float angle = _coordinatedFlankSet
+                        ? _coordinatedFlankAngle
+                        : (_tactics != null ? _tactics.FlankAngleOffset : 90f);
                     // Rotate the direct-path vector by the flank angle (in the XZ plane).
                     Vector3 direct = (target.position - transform.position);
                     direct.y = 0f;
@@ -309,6 +452,12 @@ namespace DeNelle.Village
                     float dist = direct.magnitude;
                     return target.position + flankDir * (dist * 0.5f);
                 }
+
+                case EnemyTacticalState.Kite:
+                    return ComputeKiteDestination(target);
+
+                case EnemyTacticalState.Reposition:
+                    return ComputeRepositionDestination(target);
 
                 default:
                 {
@@ -331,6 +480,112 @@ namespace DeNelle.Village
             }
         }
 
+        // ── WO-145 (Tactic B): kite standoff destination ──────────────────────
+
+        /// <summary>
+        /// WO-145: keeps the kiter inside [KiteMinRange, KiteDesiredRange] of its
+        /// target — backs off when the target closes inside the min, closes to the
+        /// outer band when too far, holds (with optional lateral weave) while in
+        /// band. Off-NavMesh standoff points snap to the nearest valid point.
+        /// </summary>
+        private Vector3? ComputeKiteDestination(Transform target)
+        {
+            float desired = _tactics != null ? _tactics.KiteDesiredRange : 8f;
+            float min     = _tactics != null ? _tactics.KiteMinRange : 5f;
+            float jitter  = _tactics != null ? _tactics.KiteStrafeJitter : 0f;
+
+            Vector3 toSelf = transform.position - target.position; toSelf.y = 0f;
+            float dist = toSelf.magnitude;
+            Vector3 dir = dist > 0.001f ? toSelf / dist : transform.forward;
+
+            Vector3 destPos;
+            if (dist < min)
+            {
+                // Too close — back off to the desired band edge.
+                destPos = target.position + dir * desired;
+            }
+            else if (dist > desired)
+            {
+                // Too far — close to the outer band edge.
+                destPos = target.position + dir * desired;
+            }
+            else
+            {
+                // In band — hold, with an optional perpendicular weave so the kiter
+                // feels alive rather than frozen.
+                destPos = transform.position;
+                if (jitter > 0.01f)
+                {
+                    _kiteStrafeTimer -= Time.deltaTime;
+                    if (_kiteStrafeTimer <= 0f)
+                    {
+                        _kiteStrafeSign  = -_kiteStrafeSign;
+                        _kiteStrafeTimer = 1.2f;
+                    }
+                    Vector3 perp = Vector3.Cross(Vector3.up, dir).normalized;
+                    destPos += perp * (_kiteStrafeSign * jitter);
+                }
+            }
+
+            return SampleOnNavMesh(destPos);
+        }
+
+        // ── WO-145 (Tactic D): reposition (rally → re-engage) destination ─────
+
+        /// <summary>
+        /// WO-145: retreat TO a better position — the centroid of the nearest living
+        /// ally cluster (regroup behind the pack), or a standoff fallback away from
+        /// the target when alone. Snaps onto the NavMesh so the rally is reachable.
+        /// </summary>
+        private Vector3? ComputeRepositionDestination(Transform target)
+        {
+            float scanR = _tactics != null ? _tactics.RallyScanRadius : 12f;
+
+            // 1. Nearest ally cluster centroid (reuse the shared scan buffer).
+            int count = Physics.OverlapSphereNonAlloc(transform.position, scanR, _scanBuffer);
+            Vector3 sum = Vector3.zero;
+            int allies = 0;
+            for (int i = 0; i < count; i++)
+            {
+                if (_scanBuffer[i] == null) continue;
+                var ally = _scanBuffer[i].GetComponentInParent<Enemy>();
+                if (ally == null || ally == _enemy || ally.IsDead) continue;
+                sum += ally.transform.position;
+                allies++;
+            }
+
+            Vector3 rally;
+            if (allies > 0)
+            {
+                rally = sum / allies;
+            }
+            else
+            {
+                // 2. No allies — standoff fallback away from the target.
+                float fallback = _tactics != null ? _tactics.RepositionFallbackDistance : 8f;
+                Vector3 away = (transform.position - target.position); away.y = 0f;
+                if (away.sqrMagnitude < 0.001f) away = transform.forward;
+                rally = transform.position + away.normalized * fallback;
+            }
+
+            // Mark arrival so UpdateTacticalState can time the regroup → re-engage.
+            if ((rally - transform.position).sqrMagnitude < 2.25f)   // within ~1.5 m
+                _atRallyPoint = true;
+
+            return SampleOnNavMesh(rally);
+        }
+
+        /// <summary>
+        /// WO-145: snaps a desired world point onto the baked NavMesh (within 2 m),
+        /// returning the sampled point or the original if no nearby mesh is found.
+        /// </summary>
+        private Vector3? SampleOnNavMesh(Vector3 worldPos)
+        {
+            if (NavMesh.SamplePosition(worldPos, out NavMeshHit hit, 2f, NavMesh.AllAreas))
+                return hit.position;
+            return worldPos;
+        }
+
         // ── Role-based target selection (DEF-21) ──────────────────────────────
 
         private Transform ChooseTarget()
@@ -343,14 +598,160 @@ namespace DeNelle.Village
                 case EnemyRole.Healer:
                     return FindMostDamagedAlly() ?? _heartTransform;
 
-                // DPS / Ranged / MiniBoss: engage the hero first if it is within
-                // close range (so the hero can body-block / fight instead of being
-                // ignored), then towers, then drop through to Enemy's Heart-march.
+                // DPS / Ranged / MiniBoss: WO-145 (Tactic A) weighted scorer picks the
+                // best target (focus-fire the pet / wounded defender), throttled to the
+                // eval interval. When tactics weights aren't assigned the scorer
+                // degrades to the legacy nearest-ish chain (FindNearbyHero ?? Tower ?? tag).
                 default:
-                    // WO-49/WO-92: fall back to tag-based FindClosestTarget.
-                    return FindNearbyHero() ?? FindNearestTower() ?? FindClosestTarget();
+                    return ScoreAndPickTarget();
             }
         }
+
+        // ── WO-147: perception cadence + IsAlert drive ────────────────────────
+
+        /// <summary>
+        /// WO-147: throttles the consolidated <see cref="AwarenessSensor"/> scan on
+        /// the eval interval (state/distance LOD: distant Unaware enemies scan less
+        /// often) and pushes the resulting <see cref="DeNelle.Core.AwarenessState"/>
+        /// to the Animator <c>IsAlert</c> bool on change (null-safe no-op if absent).
+        /// </summary>
+        private void TickPerception()
+        {
+            if (_sensor == null) return;
+
+            _sensorScanTimer -= Time.deltaTime;
+            if (_sensorScanTimer <= 0f)
+            {
+                _sensor.Scan();
+
+                // LOD: Unaware + far from the hero ⇒ slower cadence; alerted/near ⇒ tight.
+                float cadence = TargetEvalInterval;
+                if (_sensor.State == DeNelle.Core.AwarenessState.Unaware && IsFarFromHero())
+                    cadence *= 2.5f;
+                _sensorScanTimer = cadence;
+
+                // Push IsAlert only on a state change (not per frame).
+                var aware = _sensor.SharedState;
+                if (aware != _lastAwareness)
+                {
+                    _lastAwareness = aware;
+                    if (_animator != null)
+                        _animator.SetBool(AnimIsAlert, aware >= DeNelle.Core.AwarenessState.Alerted);
+                }
+            }
+        }
+
+        /// <summary>True when the hero is far (or unknown) — used for scan LOD.</summary>
+        private bool IsFarFromHero()
+        {
+            if (_heroTransform == null) return true;
+            const float NearSqr = 18f * 18f;
+            return (_heroTransform.position - transform.position).sqrMagnitude > NearSqr;
+        }
+
+        // ── WO-145 (Tactic A): weighted candidate scorer ──────────────────────
+
+        /// <summary>
+        /// WO-145: picks the best offensive target by a data-driven weighted score
+        /// (role-value + low-HP + threat − distance, scaled by TargetPriorityBias) so
+        /// the enemy focus-fires squishy / wounded targets (the pet, a low-HP
+        /// defender) rather than whatever is merely nearest. Throttled by
+        /// <see cref="_targetEvalTimer"/> — re-scores on the interval and reuses the
+        /// cached <see cref="_currentTarget"/> between ticks (no per-frame thrash).
+        /// With no <see cref="_tactics"/> assigned it falls back to the legacy chain.
+        /// </summary>
+        private Transform ScoreAndPickTarget()
+        {
+            // No tactics SO ⇒ preserve today's EXACT behaviour (per-frame legacy chain,
+            // no scoring, no throttle) so the common case has zero regression.
+            if (_tactics == null)
+                return FindNearbyHero() ?? FindNearestTower() ?? FindClosestTarget();
+
+            // Throttle: reuse the cached pick between eval ticks (and drop a dead/
+            // disabled cached target immediately so we don't aim at a corpse).
+            _targetEvalTimer -= Time.deltaTime;
+            bool cachedValid = _currentTarget != null && _currentTarget.gameObject.activeInHierarchy;
+            if (_targetEvalTimer > 0f && cachedValid)
+                return _currentTarget;
+            _targetEvalTimer = TargetEvalInterval;
+
+            float roleW  = _tactics.RoleValueWeight;
+            float lowHpW = _tactics.LowHpWeight;
+            float threatW = _tactics.ThreatWeight;
+            float distW  = _tactics.DistanceWeight;
+            float bias   = Mathf.Max(0.1f, _tactics.TargetPriorityBias);
+
+            Transform best = null;
+            float bestScore = float.NegativeInfinity;
+            float scanR = Mathf.Max(_threatScanRadius, _towerScanRadius);
+
+            // ── Cached known transforms: pet, hero, Heart ──
+            ConsiderCandidate(_petTransform,  /*roleVal*/ 1.0f, PetHpFraction(),  /*threat*/ 0.4f,
+                              scanR, roleW, lowHpW, threatW, distW, bias, ref best, ref bestScore);
+            ConsiderCandidate(_heroTransform, /*roleVal*/ 0.7f, HeroHpFraction(), /*threat*/ 0.9f,
+                              scanR, roleW, lowHpW, threatW, distW, bias, ref best, ref bestScore);
+
+            // ── Overlap scan once for towers / structures (reuse _scanBuffer) ──
+            int count = Physics.OverlapSphereNonAlloc(transform.position, scanR, _scanBuffer);
+            for (int i = 0; i < count; i++)
+            {
+                if (_scanBuffer[i] == null) continue;
+
+                var tower = _scanBuffer[i].GetComponentInParent<Tower>();
+                if (tower != null && tower.IsAlive)
+                {
+                    ConsiderCandidate(tower.transform, 0.5f, 1f, 0.6f,
+                                      scanR, roleW, lowHpW, threatW, distW, bias, ref best, ref bestScore);
+                    continue;
+                }
+
+                var structure = _scanBuffer[i].GetComponentInParent<IDamageableStructure>();
+                if (structure != null && structure.IsAlive)
+                    ConsiderCandidate(_scanBuffer[i].transform, 0.3f, 1f, 0.3f,
+                                      scanR, roleW, lowHpW, threatW, distW, bias, ref best, ref bestScore);
+            }
+
+            // Heart is the low-priority win-condition fallback.
+            ConsiderCandidate(_heartTransform, 0.15f, 1f, 0.1f,
+                              scanR, roleW, lowHpW, threatW, distW, bias, ref best, ref bestScore);
+
+            // Nothing scored (e.g. all out of range) ⇒ legacy fallback chain.
+            return best != null ? best : (FindNearbyHero() ?? FindNearestTower() ?? FindClosestTarget());
+        }
+
+        /// <summary>
+        /// WO-145: scores one candidate and keeps it if it beats the running best.
+        /// score = (roleVal·roleW + (1-hpFrac)·lowHpW + threat·threatW − normDist·distW) · bias.
+        /// </summary>
+        private void ConsiderCandidate(
+            Transform t, float roleValue, float hpFraction, float threat,
+            float scanRadius, float roleW, float lowHpW, float threatW, float distW,
+            float bias, ref Transform best, ref float bestScore)
+        {
+            if (t == null || !t.gameObject.activeInHierarchy) return;
+
+            float dist = (t.position - transform.position).magnitude;
+            if (dist > scanRadius) return;   // out of perception — not a candidate.
+
+            float normDist = scanRadius > 0.01f ? Mathf.Clamp01(dist / scanRadius) : 0f;
+            float score = (roleValue * roleW
+                         + (1f - Mathf.Clamp01(hpFraction)) * lowHpW
+                         + threat * threatW
+                         - normDist * distW) * bias;
+
+            if (score > bestScore) { bestScore = score; best = t; }
+        }
+
+        /// <summary>HP fraction of the hero if resolvable (HeroHealth), else 1 (unknown = full).</summary>
+        private float HeroHpFraction()
+        {
+            if (_heroTransform == null) return 1f;
+            var hh = _heroTransform.GetComponentInParent<HeroHealth>();
+            return hh != null ? hh.Fraction : 1f;
+        }
+
+        /// <summary>HP fraction of the pet — unknown without a Pets reference, so treat as full.</summary>
+        private float PetHpFraction() => 1f;
 
         // ── Tank: find the biggest nearby threat ──────────────────────────────
 

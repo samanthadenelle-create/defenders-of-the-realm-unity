@@ -41,5 +41,20 @@ namespace DeNelle.Village
         /// <see cref="TacticalData.SuppressDelay"/>.
         /// </summary>
         Suppressed = 3,
+
+        /// <summary>
+        /// WO-145 (Tactic B): maintain a standoff band around the target and fire
+        /// ranged attacks instead of closing to melee. Assigned to the
+        /// <see cref="DeNelle.Core.Data.EnemyArchetype.Kiter"/> archetype.
+        /// </summary>
+        Kite = 4,
+
+        /// <summary>
+        /// WO-145 (Tactic D): retreat TO a better position (an ally cluster / standoff
+        /// rally) rather than blindly away, then re-engage once healed or regrouped.
+        /// Assigned when <see cref="DeNelle.Core.Data.TacticalData.RepositionInsteadOfFlee"/>
+        /// is set and HP drops below the retreat threshold.
+        /// </summary>
+        Reposition = 5,
     }
 }

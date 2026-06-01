@@ -115,10 +115,29 @@ namespace DeNelle.Village
             if (_released) return;
             _released = true;
 
+            // WO-145 (Tactic C): assign DISTINCT flank bearings across the members
+            // that opted into a coordinated flank, so they converge from left / right
+            // / rear at once (a real pincer) instead of every Flanker arcing the same
+            // side. Index-based even spread in [-max .. +max]; the rear pair gets the
+            // widest angle. Only members flagged CoordinatedFlank are enveloped.
+            int flankerIndex = 0;
+            int flankerCount = 0;
+            foreach (EnemyBrain b in _members)
+                if (b != null && b.WantsCoordinatedFlank) flankerCount++;
+
             foreach (EnemyBrain brain in _members)
             {
                 if (brain == null) continue;
                 brain.Died -= HandleMemberDied;   // WO-139 #5: stop stale death callbacks into the soon-destroyed coordinator
+
+                // Coordinated pincer: hand each opted-in flanker a distinct signed angle.
+                if (brain.WantsCoordinatedFlank && flankerCount > 0)
+                {
+                    float signed = ComputeEnvelopeAngle(flankerIndex, flankerCount, brain.FlankAngleOffset);
+                    brain.SetCoordinatedFlankAngle(signed);
+                    flankerIndex++;
+                }
+
                 // Only override Suppressed — don't interrupt a member that already
                 // switched to Rush or Retreat due to taking damage.
                 if (brain.TacticalState == EnemyTacticalState.Suppressed)
@@ -133,6 +152,28 @@ namespace DeNelle.Village
         }
 
         // ── Helpers ───────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// WO-145 (Tactic C): maps a flanker's index within the coordinated group to a
+        /// distinct signed approach bearing. Members are spread across the arc
+        /// [-maxAngle .. +maxAngle]; the last one or two get pushed toward the rear
+        /// (≥150°) so the group envelops the target from L / R / behind at once.
+        /// </summary>
+        private static float ComputeEnvelopeAngle(int index, int count, float maxAngle)
+        {
+            if (count <= 1) return maxAngle;
+            maxAngle = Mathf.Clamp(maxAngle, 30f, 180f);
+
+            // Push the final member (and, for big groups, the penultimate) to the rear.
+            if (count >= 3 && index == count - 1) return 180f;
+            if (count >= 5 && index == count - 2) return -160f;
+
+            // Even spread of the remaining members across [-maxAngle .. +maxAngle].
+            int spreadCount = (count >= 5) ? count - 2 : (count >= 3 ? count - 1 : count);
+            if (spreadCount <= 1) return (index % 2 == 0) ? maxAngle : -maxAngle;
+            float t = index / (float)(spreadCount - 1);   // 0..1
+            return Mathf.Lerp(-maxAngle, maxAngle, t);
+        }
 
         private void HandleMemberDied(Enemy _)
         {

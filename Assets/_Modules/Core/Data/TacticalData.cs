@@ -51,6 +51,12 @@ namespace DeNelle.Core.Data
 
         /// <summary>Boss-tier — uses BossWaveConfig phases + optional add summoning.</summary>
         Boss = 5,
+
+        /// <summary>
+        /// WO-145 (Tactic B): maintains a standoff range and fires ranged attacks
+        /// (the canonical "ranged kiter" when combined with EnemyRole.Ranged).
+        /// </summary>
+        Kiter = 6,
     }
 
     /// <summary>
@@ -85,8 +91,63 @@ namespace DeNelle.Core.Data
         [Min(0f)] public float SuppressDelay = 1.5f;
 
         [Header("Target priority")]
-        [Tooltip("Multiplier applied to this enemy's target-priority score. " +
-                 ">1 = more likely to be scored as a priority target by the AI brain.")]
+        [Tooltip("WO-145 (Tactic A): multiplier this attacker applies to its whole " +
+                 "target-priority cluster (role-value + low-HP + threat). >1 = this " +
+                 "enemy abandons a nearer target to dive a high-priority one (pet / " +
+                 "wounded defender). 1 ≈ today's nearest-ish behaviour. NOW READ by " +
+                 "EnemyBrain.ScoreAndPickTarget.")]
         [Min(0.1f)] public float TargetPriorityBias = 1f;
+
+        // ── WO-145 additions (append-only — existing fields above unchanged) ──
+
+        [Header("Target scoring (WO-145 Tactic A)")]
+        [Tooltip("Weight of the designer role-value term (pet / healer-class high, Heart low).")]
+        [Min(0f)] public float RoleValueWeight = 1f;
+
+        [Tooltip("Weight of the (1 - target HpFraction) term — higher score for wounded / squishy targets.")]
+        [Min(0f)] public float LowHpWeight = 1f;
+
+        [Tooltip("Weight of the target's damage-threat term (hero / live tower pressure).")]
+        [Min(0f)] public float ThreatWeight = 1f;
+
+        [Tooltip("Weight of the nearness term (nearer = slightly preferred). Dominant " +
+                 "for the Standard archetype so defaults reproduce today's nearest-ish feel.")]
+        [Min(0f)] public float DistanceWeight = 1f;
+
+        [Header("Kiting (WO-145 Tactic B — requires EnemyArchetype.Kiter)")]
+        [Tooltip("Preferred standoff distance the kiter holds from its target.")]
+        [Min(0f)] public float KiteDesiredRange = 8f;
+
+        [Tooltip("Back off when the target closes inside this distance.")]
+        [Min(0f)] public float KiteMinRange = 5f;
+
+        [Tooltip("0 = stand still in the band; >0 = lateral weave magnitude while holding (feels alive).")]
+        [Min(0f)] public float KiteStrafeJitter = 0f;
+
+        [Tooltip("Seconds between ranged shots while a kiter holds the band (slower than melee = not oppressive).")]
+        [Min(0.1f)] public float KiteAttackCooldown = 1.6f;
+
+        [Header("Coordinated flank (WO-145 Tactic C)")]
+        [Tooltip("When set, a Suppressed group of these enemies fans to distinct L/R/rear " +
+                 "bearings on release (a real pincer) via EnemyGroupCoordinator, instead of " +
+                 "every member arcing the same FlankAngleOffset side.")]
+        public bool CoordinatedFlank = false;
+
+        [Header("Reposition (WO-145 Tactic D)")]
+        [Tooltip("When set, dropping below RetreatHealthThreshold enters Reposition " +
+                 "(rally to the ally cluster, then re-engage) instead of a blind Retreat away.")]
+        public bool RepositionInsteadOfFlee = false;
+
+        [Tooltip("Search radius for the living-ally cluster centroid to rally toward.")]
+        [Min(1f)] public float RallyScanRadius = 12f;
+
+        [Tooltip("Standoff fallback distance from the target when no allies are found to rally to.")]
+        [Min(1f)] public float RepositionFallbackDistance = 8f;
+
+        [Tooltip("HP fraction at or above which a repositioning enemy re-commits and rejoins the fight.")]
+        [Range(0f, 1f)] public float ReengageHealthThreshold = 0.5f;
+
+        [Tooltip("Seconds spent at the rally point before re-engaging even if HP hasn't recovered.")]
+        [Min(0f)] public float RepositionRegroupSeconds = 3f;
     }
 }
