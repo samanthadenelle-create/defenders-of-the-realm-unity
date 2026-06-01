@@ -27,7 +27,7 @@ namespace DeNelle.Core.State
     {
         // ── Versioning ───────────────────────────────────────────────────────
         /// <summary>CURRENT_SCHEMA_VERSION — bumped whenever the persisted shape changes.</summary>
-        public const int CurrentVersion = 12;  // v12 — added lastHarvestClaimMs (WO-115 offline accrual clock)
+        public const int CurrentVersion = 13;  // v13 — added buildJobs + adSkipsUsedToday/adSkipDayKey (WO-172 build timers + ad-skip)
         /// <summary>SaveExport.format — bumped only if the envelope shape changes.</summary>
         public const int FileFormat = 1;
 
@@ -157,6 +157,20 @@ namespace DeNelle.Core.State
             /// (same additive-default-on-read pattern as <c>aetherCrystals</c>).
             /// </summary>
             [JsonProperty("lastHarvestClaimMs")] public double? LastHarvestClaimMs;
+
+            // ── v13 — Build/upgrade timers + ad-skip (WO-172) ────────────────────
+            /// <summary>
+            /// In-flight construction/upgrade jobs. Absent on an older save → defaults
+            /// to an empty list on load (no jobs), so no explicit migration step is
+            /// needed (same additive-default-on-read pattern as <c>lastHarvestClaimMs</c>).
+            /// </summary>
+            [JsonProperty("buildJobs")] public List<BuildJobData> BuildJobs;
+
+            /// <summary>Rewarded-ad build-skips used in the current local day (daily cap). Absent → 0.</summary>
+            [JsonProperty("adSkipsUsedToday")] public double? AdSkipsUsedToday;
+
+            /// <summary>Local-day key the ad-skip counter belongs to. Absent → null (counter resets on first claim).</summary>
+            [JsonProperty("adSkipDayKey")] public string AdSkipDayKey;
         }
 
         // =====================================================================
@@ -304,6 +318,20 @@ namespace DeNelle.Core.State
                     raw.LastInboxSyncAt = FiniteInt(raw.LastInboxSyncAt.Value, "lastInboxSyncAt");
                 if (raw.LastHarvestClaimMs.HasValue)
                     raw.LastHarvestClaimMs = FiniteInt(raw.LastHarvestClaimMs.Value, "lastHarvestClaimMs");
+
+                // ── Build jobs (WO-172) → startMs/durationMs finiteInt; counter nonNegInt ─
+                if (raw.BuildJobs != null)
+                {
+                    for (var i = 0; i < raw.BuildJobs.Count; i++)
+                    {
+                        var j = raw.BuildJobs[i];
+                        j.StartMs = FiniteInt(j.StartMs, $"buildJobs.{i}.startMs");
+                        j.DurationMs = Math.Max(0, FiniteInt(j.DurationMs, $"buildJobs.{i}.durationMs"));
+                        raw.BuildJobs[i] = j;
+                    }
+                }
+                if (raw.AdSkipsUsedToday.HasValue)
+                    raw.AdSkipsUsedToday = NonNegInt(raw.AdSkipsUsedToday.Value, "adSkipsUsedToday");
 
                 // ── Volumes / joystick → finite-only (NOT clamped on load) ───
                 if (raw.JoystickSensitivity.HasValue)

@@ -313,6 +313,9 @@ namespace DeNelle.Core.State
                 Inbox = s.Inbox,
                 LastInboxSyncAt = s.LastInboxSyncAt,
                 LastHarvestClaimMs = s.LastHarvestClaimMs,
+                BuildJobs = s.BuildJobs != null ? new List<BuildJobData>(s.BuildJobs) : null,
+                AdSkipsUsedToday = s.AdSkipsUsedToday,
+                AdSkipDayKey = s.AdSkipDayKey,
             };
         }
 
@@ -367,6 +370,9 @@ namespace DeNelle.Core.State
             if (p.Inbox != null) s.Inbox = p.Inbox;
             if (p.LastInboxSyncAt.HasValue) s.LastInboxSyncAt = p.LastInboxSyncAt.Value;
             if (p.LastHarvestClaimMs.HasValue) s.LastHarvestClaimMs = p.LastHarvestClaimMs.Value;
+            if (p.BuildJobs != null) s.BuildJobs = p.BuildJobs;
+            if (p.AdSkipsUsedToday.HasValue) s.AdSkipsUsedToday = (int)p.AdSkipsUsedToday.Value;
+            if (p.AdSkipDayKey != null) s.AdSkipDayKey = p.AdSkipDayKey;
         }
 
         // =====================================================================
@@ -548,6 +554,9 @@ namespace DeNelle.Core.State
             s.Quests = QuestProgress.Empty();
             s.Regions = RegionProgress.Empty();
             s.LastHarvestClaimMs = 0;   // New Game → reseed the accrual clock on next load (no haul).
+            s.BuildJobs = new List<BuildJobData>();   // WO-172 — clear in-flight construction timers.
+            s.AdSkipsUsedToday = 0;
+            s.AdSkipDayKey = null;
             // NOTE: BoundWallet, BreachStyle and every social field are deliberately
             // left untouched — preferences and identity survive a New Game.
             s.SchemaVersion = SaveSchema.CurrentVersion;

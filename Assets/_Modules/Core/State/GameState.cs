@@ -149,6 +149,28 @@ namespace DeNelle.Core.State
         /// </summary>
         public double LastHarvestClaimMs;
 
+        // ── Build/upgrade timers + ad-skip (WO-172) ──────────────────────────
+        /// <summary>
+        /// In-flight construction/upgrade jobs (WO-172) — the CoC time-sink. Each
+        /// counts down in REAL wall-clock time (offline too), keyed by structure id;
+        /// the structure completes at job.FinishMs. Managed by BuildTimerService.
+        /// Mirrors <see cref="PendingBuilds"/>'s "small serializable struct in a list"
+        /// persistence shape. Append-only field at the END so older saves stay loadable.
+        /// </summary>
+        public List<BuildJobData> BuildJobs = new List<BuildJobData>();
+
+        /// <summary>
+        /// Rewarded-ad build-skips used in the current local day (WO-172 daily cap).
+        /// Reset to 0 when <see cref="AdSkipDayKey"/> rolls to a new day. Clamped ≥0.
+        /// </summary>
+        public int AdSkipsUsedToday;
+
+        /// <summary>
+        /// Local-day key ("yyyy-MM-dd", device-local) the <see cref="AdSkipsUsedToday"/>
+        /// counter belongs to. When today's key differs, the counter resets (daily cap).
+        /// </summary>
+        public string AdSkipDayKey;
+
         // ── World / zones (WO-164) ────────────────────────────────────────────
         /// <summary>Per-region zone records — discovery/clear flags, neighbor graph,
         /// and City/Horde destination tag (WO-164). Seeded from
