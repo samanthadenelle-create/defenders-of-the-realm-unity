@@ -42,6 +42,12 @@ namespace DeNelle.Village
     /// </summary>
     [DisallowMultipleComponent]
     [RequireComponent(typeof(NavMeshAgent))]
+    // Targeting fix (open world): every Enemy auto-gets the EnemyDamageable adapter so
+    // the hero's melee + ability OverlapSphere sweeps (GetComponentInParent<IDamageable>,
+    // Faction.Hostile) can actually hit it on EVERY spawn path. Previously only
+    // WaveManager / PatriciaLight AddComponent'd it, so the open-world RegionMobSpawner /
+    // TribeManager roaming mobs had no IDamageable and could not be targeted or damaged.
+    [RequireComponent(typeof(EnemyDamageable))]
     public sealed class Enemy : MonoBehaviour
     {
         // ── Inspector tuning (overridden by Configure from the EnemyDef) ──────
