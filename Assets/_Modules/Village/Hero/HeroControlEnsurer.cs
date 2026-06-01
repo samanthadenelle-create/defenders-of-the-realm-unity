@@ -79,6 +79,8 @@ namespace DeNelle.Village
             var l = hero.GetComponent<HeroLocomotion>() ?? hero.AddComponent<HeroLocomotion>();
             l.enabled = true;
             if (hero.GetComponent<HeroDeathLogger>() == null) hero.AddComponent<HeroDeathLogger>();
+            // Open-world combat readability: reticle over the nearest hostile target.
+            if (hero.GetComponent<HeroTargetIndicator>() == null) hero.AddComponent<HeroTargetIndicator>();
             Debug.Log($"[HeroControlEnsurer] ensured hero='{hero.name}' active={hero.activeInHierarchy} locoEnabled={l.enabled}.");
         }
 
@@ -120,6 +122,7 @@ namespace DeNelle.Village
 
             go.AddComponent<HeroLocomotion>();
             go.AddComponent<HeroDeathLogger>();   // catch it too, in case the destroyer is periodic
+            go.AddComponent<HeroTargetIndicator>();
 
             var cam = FindObjectsByType<VillageCamera>(FindObjectsInactive.Include, FindObjectsSortMode.None)
                       .FirstOrDefault();
