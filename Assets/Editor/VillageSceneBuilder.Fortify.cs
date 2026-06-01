@@ -37,11 +37,16 @@ namespace DeNelle.Editor
             {
                 waterMat = new Material(waterShader) { name = "MoatWater" };
                 if (waterMat.HasProperty("_BaseColor"))
-                    waterMat.SetColor("_BaseColor", new Color(0.18f, 0.55f, 0.62f, 0.78f));
+                    // Owner 2026-06-01: deeper, slightly more opaque blue-teal so it reads
+                    // as water depth, not a translucent pane.
+                    waterMat.SetColor("_BaseColor", new Color(0.10f, 0.42f, 0.55f, 0.84f));
                 // Surface -> Transparent (URP/Lit).
                 waterMat.SetFloat("_Surface", 1f);
                 waterMat.SetFloat("_Blend", 0f);
-                waterMat.SetFloat("_Smoothness", 0.85f);
+                // Owner 2026-06-01: the prior 0.85 smoothness gave a sharp glassy specular
+                // that read as faceted "crystal" across the 233 quads. Matte it down to a
+                // soft water sheen so the moat reads as calm liquid, not crystal/glass.
+                waterMat.SetFloat("_Smoothness", 0.30f);
                 if (waterMat.HasProperty("_Metallic")) waterMat.SetFloat("_Metallic", 0f);
                 waterMat.renderQueue = 3000;
                 waterMat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
@@ -84,29 +89,45 @@ namespace DeNelle.Editor
                 placed++;
             }
 
-            // ── Stone bridges: span the moat band at each gate (WO-183: all 4) ──
+            // ── Stone bridges: span the moat band at each gate (WO-188: all 4, STONE,
+            //    laid flat to span the moat). Orientation is AXIS-AWARE — we measure the
+            //    prefab's longer horizontal extent and rotate so that long axis crosses the
+            //    moat RADIALLY (N/S gates span along world Z, E/W gates span along world X).
+            //    This fixes the owner's "bridge turned 90°" report robustly, independent of
+            //    the prefab's authored forward axis (the old hardcoded yaws assumed a forward
+            //    the Bridge_Medieval_Stone prefab does not have, so a bridge ran sideways).
             if (bridge != null)
             {
-                // (label, position centred on the moat band — outside the wall line, yaw facing outward)
-                float bandZ = (innerZ + outerZ) * 0.5f;   // ≈ 50: centre of the moat band, N/S
-                float bandX = (innerX + outerX) * 0.5f;   // ≈ 48: centre of the moat band, E/W
-                var spans = new (string name, Vector3 pos, float yaw)[]
+                float bandZ = (innerZ + outerZ) * 0.5f;   // centre of the N/S moat band (≈40)
+                float bandX = (innerX + outerX) * 0.5f;   // centre of the E/W moat band (≈48)
+
+                // crossAlongZ: the bridge's long axis must point along world Z to cross here.
+                var spans = new (string name, Vector3 pos, bool crossAlongZ)[]
                 {
-                    ("Bridge-North", new Vector3(0f, 0f,  bandZ), 180f),
-                    ("Bridge-South", new Vector3(0f, 0f, -bandZ), 0f),
-                    ("Bridge-East",  new Vector3( bandX, 0f, 0f), 90f),
-                    ("Bridge-West",  new Vector3(-bandX, 0f, 0f), 270f),
+                    ("Bridge-North", new Vector3(0f, 0f,  bandZ), true),
+                    ("Bridge-South", new Vector3(0f, 0f, -bandZ), true),
+                    ("Bridge-East",  new Vector3( bandX, 0f, 0f), false),
+                    ("Bridge-West",  new Vector3(-bandX, 0f, 0f), false),
                 };
-                foreach (var (name, pos, yaw) in spans)
+                foreach (var (name, pos, crossAlongZ) in spans)
                 {
                     var b = (GameObject)PrefabUtility.InstantiatePrefab(bridge);
                     if (b == null) continue;
                     b.name = name;
                     b.transform.SetParent(mr, false);
                     b.transform.position = pos;
+
+                    // Long horizontal axis of the prefab (local bounds; rotation-independent).
+                    bool longAxisIsZ = true;
+                    if (TryMeasureLocalBounds(b, out var lb))
+                        longAxisIsZ = lb.size.z >= lb.size.x;
+
+                    // Rotate so the long axis points along the required crossing direction.
+                    float yaw = (crossAlongZ == longAxisIsZ) ? 0f : 90f;
                     b.transform.rotation = Quaternion.Euler(0f, yaw, 0f);
-                    NormalizeProp(b, 14f);         // span the full ~12 m moat band, reaching both banks
-                    SnapFeetToParent(b);           // sit flush on the ground
+
+                    NormalizeProp(b, 14f);         // long axis ≈ 14 m — spans the band, reaches both banks
+                    SnapFeetToParent(b);           // sit flush on the ground (no float/sink)
                     StripColliders(b);             // decorative: hero crosses on the ground through the gate
                     StripRigidbodies(b);
                 }

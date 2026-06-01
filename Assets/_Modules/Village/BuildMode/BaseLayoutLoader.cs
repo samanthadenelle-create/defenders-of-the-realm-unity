@@ -100,6 +100,17 @@ namespace DeNelle.Village
             Rebuild(layout);
         }
 
+        /// <summary>
+        /// Drop a structure from the live loaded-set WITHOUT freeing its cells or
+        /// destroying it (the caller — BuildModeController.SellSelected — already
+        /// frees the grid + destroys the object). Prevents a double-free on Exit.
+        /// </summary>
+        public void Forget(PlacedStructure ps)
+        {
+            if (ps == null) return;
+            _loaded.Remove(ps);
+        }
+
         /// <summary>Destroy currently-loaded structures and free their grid cells.</summary>
         public void ClearLoaded()
         {

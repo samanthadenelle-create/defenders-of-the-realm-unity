@@ -52,11 +52,21 @@ namespace DeNelle.Village
 
         private PlacementGrid _grid;
         private BuildPaletteUI _palette;
+        private BuildSelectionUI _selectionUi;
         private GhostPreview _ghost;
 
         private Camera _camera;
         private CatalogEntry _armed;
         private int _armedYawSteps;
+
+        // ── Selection / edit state (P2) ───────────────────────────────────────
+        // The currently tap-selected placed structure (move/sell target).
+        private PlacedStructure _selected;
+        // True while re-placing _selected (the MOVE ghost loop). During a move the
+        // structure's OWN cells are freed so it cannot block itself; on a valid tap
+        // it commits to the new cells, on cancel it returns to its origin.
+        private bool _movingSelected;
+        private Vector2Int _moveOriginCell;   // origin to restore if a move is cancelled
 
         // Camera restore state.
         private Vector3 _savedCamPos;
@@ -132,7 +142,9 @@ namespace DeNelle.Village
             IsActive = false;
 
             CancelArmed();
+            ClearSelection();
             _palette?.Hide();
+            _selectionUi?.Hide();
             _grid?.SetGridVisible(false);
 
             CommitLayout();
@@ -149,8 +161,35 @@ namespace DeNelle.Village
 
         private void Update()
         {
-            if (!IsActive || _armed == null || _ghost == null) return;
+            if (!IsActive) return;
             if (_camera == null) { _camera = Camera.main; if (_camera == null) return; }
+
+            // Three exclusive modes: re-placing a selected structure (MOVE), arming a
+            // new one (CREATE), or idle (tap a structure to SELECT it).
+            if (_movingSelected) { UpdateMoveLoop(); return; }
+            if (_armed != null) { UpdatePlaceLoop(); return; }
+            UpdateSelectLoop();
+        }
+
+        /// <summary>Idle mode: a left-click on a PlacedStructure selects it for edit.</summary>
+        private void UpdateSelectLoop()
+        {
+            if (!Input.GetMouseButtonDown(0)) return;
+
+            Ray ray = _camera.ScreenPointToRay(Input.mousePosition);
+            if (!Physics.Raycast(ray, out RaycastHit hit, _rayDistance, _groundMask)) return;
+
+            // Hit collider's GameObject or any parent may carry the marker.
+            var ps = hit.collider != null
+                ? hit.collider.GetComponentInParent<PlacedStructure>()
+                : null;
+            if (ps != null) SelectStructure(ps);
+        }
+
+        /// <summary>CREATE mode: the original armed-entry ghost-follow place loop (P1).</summary>
+        private void UpdatePlaceLoop()
+        {
+            if (_ghost == null) return;
 
             // Right-click / Escape cancels the armed entry (keeps build mode open).
             if (Input.GetMouseButtonDown(1) || Input.GetKeyDown(KeyCode.Escape))
@@ -159,7 +198,7 @@ namespace DeNelle.Village
                 return;
             }
 
-            // R rotates the ghost in 90° steps before placing (free; full edit is P2).
+            // R rotates the ghost in 90° steps before placing (free).
             if (Input.GetKeyDown(KeyCode.R))
                 _armedYawSteps = (_armedYawSteps + 1) & 3;
 
@@ -173,7 +212,7 @@ namespace DeNelle.Village
             Vector3 snapped = _grid.SnapToGrid(hit.point);
             _ghost.MoveTo(snapped, _armedYawSteps);
 
-            bool valid = IsValidPlacement(hit, snapped, out Vector2Int cell, out Vector2Int footprint);
+            bool valid = IsValidPlacement(hit, snapped, _armed, out Vector2Int cell, out Vector2Int footprint);
             _ghost.SetValid(valid);
 
             if (valid && Input.GetMouseButtonDown(0))
@@ -181,30 +220,74 @@ namespace DeNelle.Village
         }
 
         /// <summary>
+        /// MOVE mode: re-place the selected structure with a ghost seeded from its own
+        /// entry + yaw. Its origin cells are already FREE (released on enter) so it
+        /// never blocks itself. A valid tap re-occupies the new cells + moves the
+        /// object + syncs BaseLayout; right-click/Escape cancels back to the origin.
+        /// </summary>
+        private void UpdateMoveLoop()
+        {
+            if (_ghost == null || _selected == null) { CancelMove(); return; }
+
+            if (Input.GetMouseButtonDown(1) || Input.GetKeyDown(KeyCode.Escape))
+            {
+                CancelMove();
+                return;
+            }
+
+            if (Input.GetKeyDown(KeyCode.R))
+                _armedYawSteps = (_armedYawSteps + 1) & 3;
+
+            Ray ray = _camera.ScreenPointToRay(Input.mousePosition);
+            if (!Physics.Raycast(ray, out RaycastHit hit, _rayDistance, _groundMask))
+            {
+                _ghost.Hide();
+                return;
+            }
+
+            Vector3 snapped = _grid.SnapToGrid(hit.point);
+            _ghost.MoveTo(snapped, _armedYawSteps);
+
+            // Affordability is irrelevant for a move (free) — validate placement only.
+            bool valid = IsValidPlacement(hit, snapped, CatalogRegistry.Get(_selected.itemId),
+                out Vector2Int cell, out Vector2Int footprint, ignoreCost: true);
+            _ghost.SetValid(valid);
+
+            if (valid && Input.GetMouseButtonDown(0))
+                CommitMove(cell, footprint, snapped);
+        }
+
+        /// <summary>
         /// Combined validity: flat upward surface, footprint cells free + in-bounds,
         /// gate-lane clearance, and affordable. Pure over grid + config apart from
         /// the surface raycast hit (which the caller supplies).
         /// </summary>
-        private bool IsValidPlacement(RaycastHit hit, Vector3 snapped, out Vector2Int cell, out Vector2Int footprint)
+        private bool IsValidPlacement(RaycastHit hit, Vector3 snapped, CatalogEntry entry,
+            out Vector2Int cell, out Vector2Int footprint, bool ignoreCost = false)
         {
             cell = _grid.WorldToCell(snapped);
             footprint = _grid.FootprintCells(
-                _armed.repo != null && _armed.repo.placement != null ? _armed.repo.placement.footprint : 3f);
+                entry != null && entry.repo != null && entry.repo.placement != null ? entry.repo.placement.footprint : 3f);
 
             // 1. Flat, upward-facing top (TowerPlacementSystem.IsValidSurface rule).
             if (hit.collider == null) return false;
             if (hit.normal.y < 0.85f) return false;
             if (hit.collider.CompareTag("Tower") || hit.collider.CompareTag("Building")) return false;
 
-            // 2. Footprint cells free + in-bounds.
+            // 2. Footprint cells free + in-bounds. (During a MOVE the structure's own
+            //    cells were freed on enter, so they read as free and never self-block.)
             if (!_grid.CanPlace(cell, footprint)) return false;
 
             // 3. Gate-lane clearance — never wall off the spawn→Heart corridor.
             if (_gateClearance > 0f && IsTooCloseToGate(snapped)) return false;
 
             // 4. Affordable from the persisted wallet (the WO-131 single source).
-            int cost = _armed.repo != null ? _armed.repo.buildCost : 0;
-            if (CrystalBalance < cost) return false;
+            //    A move is free, so the cost gate is skipped for it.
+            if (!ignoreCost)
+            {
+                int cost = entry != null && entry.repo != null ? entry.repo.buildCost : 0;
+                if (CrystalBalance < cost) return false;
+            }
 
             return true;
         }
@@ -268,6 +351,8 @@ namespace DeNelle.Village
 
         private void Arm(CatalogEntry entry)
         {
+            // Entering CREATE mode clears any active selection / move (P2).
+            ClearSelection();
             _armed = entry;
             _armedYawSteps = 0;
             if (_ghost == null) _ghost = new GameObject("GhostPreview").AddComponent<GhostPreview>();
@@ -278,6 +363,194 @@ namespace DeNelle.Village
         {
             _armed = null;
             _ghost?.Hide();
+        }
+
+        // =====================================================================
+        //  Select / Move / Sell (P2 edit verbs)
+        // =====================================================================
+
+        /// <summary>
+        /// Select a placed structure: highlight it and show the Move/Sell/Cancel
+        /// action panel (refund = 50% of its catalog buildCost, rounded down). Any
+        /// previously-armed CREATE entry is dropped so the modes never overlap.
+        /// </summary>
+        private void SelectStructure(PlacedStructure ps)
+        {
+            if (ps == null) return;
+            CancelArmed();
+            ClearSelection();   // drop any prior highlight before re-selecting
+
+            _selected = ps;
+            _selected.SetHighlighted(true);
+
+            var entry = CatalogRegistry.Get(ps.itemId);
+            string label = entry != null && !string.IsNullOrEmpty(entry.displayName) ? entry.displayName : ps.itemId;
+
+            EnsureSelectionUi();
+            _selectionUi?.Show(label, RefundFor(ps));
+        }
+
+        /// <summary>Drop the current selection (highlight + panel) and any in-progress move.</summary>
+        private void ClearSelection()
+        {
+            if (_movingSelected) CancelMove();
+            if (_selected != null) _selected.SetHighlighted(false);
+            _selected = null;
+            _selectionUi?.Hide();
+        }
+
+        /// <summary>
+        /// SELL the selected structure: free its grid cells, drop its BaseLayout
+        /// record (matched by cell + itemId), destroy the GameObject, and REFUND 50%
+        /// of its buildCost to the persisted crystal wallet (WO-131 single wallet).
+        /// </summary>
+        private void SellSelected()
+        {
+            if (_selected == null) return;
+            var ps = _selected;
+
+            int refund = RefundFor(ps);
+
+            // Free the cells it held.
+            _grid?.Free(ps.gridCell, ps.footprint);
+
+            // Drop the persisted record (match by cell + itemId).
+            RemoveLayoutEntry(ps.itemId, ps.gridCell);
+
+            // Drop it from the loader's live set so it doesn't double-free on Exit.
+            BaseLayoutLoader.Instance?.Forget(ps);
+
+            // Refund into the ONE persisted wallet.
+            if (refund > 0) GameStateService.Instance?.AddCrystals(+refund);
+
+            Debug.Log($"[BuildMode] Sold '{ps.itemId}' at cell ({ps.gridCell.x},{ps.gridCell.y}) — refunded {refund}.");
+
+            // Clear selection BEFORE destroy so the highlight teardown sees a live object.
+            _selected.SetHighlighted(false);
+            _selected = null;
+            _selectionUi?.Hide();
+            Destroy(ps.gameObject);
+        }
+
+        /// <summary>
+        /// Begin MOVE: seed the ghost from the selected structure's entry + current
+        /// yaw, FREE its current cells (so it can't block its own re-placement), and
+        /// hand control to the move loop. The action panel hides during the move.
+        /// </summary>
+        private void BeginMoveSelected()
+        {
+            if (_selected == null) return;
+            var entry = CatalogRegistry.Get(_selected.itemId);
+            if (entry == null)
+            {
+                Debug.LogWarning($"[BuildMode] Cannot move '{_selected.itemId}' — not in registry.");
+                return;
+            }
+
+            _moveOriginCell = _selected.gridCell;
+            _armedYawSteps = _selected.yawSteps;
+
+            // Release the structure's own cells for the duration of the move.
+            _grid?.Free(_selected.gridCell, _selected.footprint);
+
+            if (_ghost == null) _ghost = new GameObject("GhostPreview").AddComponent<GhostPreview>();
+            _ghost.SetEntry(entry);
+
+            _movingSelected = true;
+            _selectionUi?.Hide();
+        }
+
+        /// <summary>
+        /// Commit a MOVE to a validated cell: occupy the new cells, reposition the
+        /// GameObject, and sync the PlacedStructure marker + its BaseLayout record
+        /// (cellX/cellZ/yawSteps). Free, so the wallet is untouched.
+        /// </summary>
+        private void CommitMove(Vector2Int cell, Vector2Int footprint, Vector3 snapped)
+        {
+            if (_selected == null) { CancelMove(); return; }
+
+            _grid?.Occupy(cell, footprint, _selected.itemId);
+
+            // Move the object (keep the surface height from the snap point).
+            _selected.transform.SetPositionAndRotation(
+                snapped, Quaternion.Euler(0f, _armedYawSteps * 90f, 0f));
+
+            // Sync the live marker, then the matching persisted record (old cell → new).
+            var oldCell = _selected.gridCell;
+            _selected.gridCell = cell;
+            _selected.footprint = footprint;
+            _selected.yawSteps = _armedYawSteps;
+            UpdateLayoutEntry(_selected.itemId, oldCell, cell, _armedYawSteps);
+
+            Debug.Log($"[BuildMode] Moved '{_selected.itemId}' to cell ({cell.x},{cell.y}) yaw {_armedYawSteps * 90}° (free).");
+
+            _movingSelected = false;
+            _ghost?.Hide();
+
+            // Re-show the action panel on the moved structure (stays selected).
+            var entry = CatalogRegistry.Get(_selected.itemId);
+            string label = entry != null && !string.IsNullOrEmpty(entry.displayName) ? entry.displayName : _selected.itemId;
+            _selectionUi?.Show(label, RefundFor(_selected));
+        }
+
+        /// <summary>Abort an in-progress move: re-occupy the origin cells, keep it put.</summary>
+        private void CancelMove()
+        {
+            _movingSelected = false;
+            _ghost?.Hide();
+            if (_selected != null)
+                _grid?.Occupy(_moveOriginCell, _selected.footprint, _selected.itemId);
+        }
+
+        /// <summary>50% of the structure's catalog buildCost, rounded down.</summary>
+        private static int RefundFor(PlacedStructure ps)
+        {
+            if (ps == null) return 0;
+            var entry = CatalogRegistry.Get(ps.itemId);
+            int cost = entry != null && entry.repo != null ? entry.repo.buildCost : 0;
+            return cost / 2;
+        }
+
+        // ── BaseLayout sync (struct list — match by cell + itemId) ───────────────
+
+        /// <summary>Remove the persisted record matching <paramref name="itemId"/> at <paramref name="cell"/>.</summary>
+        private static void RemoveLayoutEntry(string itemId, Vector2Int cell)
+        {
+            var state = GameStateService.Instance != null ? GameStateService.Instance.State : null;
+            var layout = state != null ? state.BaseLayout : null;
+            if (layout == null) return;
+            for (int i = layout.Count - 1; i >= 0; i--)
+            {
+                if (layout[i].itemId == itemId && layout[i].cellX == cell.x && layout[i].cellZ == cell.y)
+                {
+                    layout.RemoveAt(i);
+                    return;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Re-point the persisted record from <paramref name="oldCell"/> to
+        /// <paramref name="newCell"/> + yaw. PlacedStructureData is a struct, so we
+        /// replace the element by index (not mutate a copy).
+        /// </summary>
+        private static void UpdateLayoutEntry(string itemId, Vector2Int oldCell, Vector2Int newCell, int yawSteps)
+        {
+            var state = GameStateService.Instance != null ? GameStateService.Instance.State : null;
+            var layout = state != null ? state.BaseLayout : null;
+            if (layout == null) return;
+            for (int i = 0; i < layout.Count; i++)
+            {
+                if (layout[i].itemId == itemId && layout[i].cellX == oldCell.x && layout[i].cellZ == oldCell.y)
+                {
+                    var d = layout[i];
+                    d.cellX = newCell.x;
+                    d.cellZ = newCell.y;
+                    d.yawSteps = yawSteps;
+                    layout[i] = d;
+                    return;
+                }
+            }
         }
 
         // =====================================================================
@@ -409,6 +682,16 @@ namespace DeNelle.Village
             _palette = go.AddComponent<BuildPaletteUI>();
             _palette.OnEntrySelected += Arm;
             _palette.OnExitRequested += Exit;
+        }
+
+        private void EnsureSelectionUi()
+        {
+            if (_selectionUi != null) return;
+            var go = new GameObject("BuildSelectionUI");
+            _selectionUi = go.AddComponent<BuildSelectionUI>();
+            _selectionUi.OnMoveRequested += BeginMoveSelected;
+            _selectionUi.OnSellRequested += SellSelected;
+            _selectionUi.OnCancelRequested += ClearSelection;
         }
 
         /// <summary>The persisted crystal wallet (WO-131 — single source of truth).</summary>

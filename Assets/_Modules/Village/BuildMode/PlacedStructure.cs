@@ -10,6 +10,7 @@
 // rebuild the BaseLayout on Exit and to drive select / sell (P2).
 // =============================================================================
 
+using System.Collections.Generic;
 using UnityEngine;
 using DeNelle.Core.State;
 
@@ -42,5 +43,41 @@ namespace DeNelle.Village
         /// <summary>Snapshot this live structure into its persisted record.</summary>
         public PlacedStructureData ToSaveData() =>
             new PlacedStructureData(itemId, gridCell.x, gridCell.y, yawSteps, level);
+
+        // ── Selection highlight (WO-108 P2) ──────────────────────────────────────
+        // A non-destructive emissive tint via a shared MaterialPropertyBlock — the
+        // same proven approach GhostPreview uses, so it never leaks a material
+        // instance and restores cleanly on deselect.
+
+        private static readonly Color s_highlight = new Color(0.30f, 0.85f, 1f, 1f);
+        private readonly List<Renderer> _renderers = new List<Renderer>();
+        private MaterialPropertyBlock _mpb;
+        private bool _highlighted;
+
+        /// <summary>Toggle the selection highlight (emissive tint) on this structure.</summary>
+        public void SetHighlighted(bool on)
+        {
+            if (_highlighted == on) return;
+            _highlighted = on;
+
+            if (_mpb == null) _mpb = new MaterialPropertyBlock();
+            if (_renderers.Count == 0)
+                _renderers.AddRange(GetComponentsInChildren<Renderer>(true));
+
+            foreach (var r in _renderers)
+            {
+                if (r == null) continue;
+                r.GetPropertyBlock(_mpb);
+                if (on)
+                {
+                    _mpb.SetColor("_EmissionColor", s_highlight);
+                }
+                else
+                {
+                    _mpb.SetColor("_EmissionColor", Color.black);
+                }
+                r.SetPropertyBlock(_mpb);
+            }
+        }
     }
 }
