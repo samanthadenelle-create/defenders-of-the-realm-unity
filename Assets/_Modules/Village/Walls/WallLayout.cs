@@ -2,7 +2,7 @@
 // WallLayout — the curtain wall's segment layout (shaped rectangle).
 // -----------------------------------------------------------------------------
 // SUPERSEDES the earlier square port of segments.ts. Per
-// docs/avalon-village-layout-spec.md §4 the Avalon curtain wall is a SHAPED
+// docs/avalon-village-layout-spec.md §4 the Elarion curtain wall is a SHAPED
 // RECTANGLE — wider east-west than north-south, ~30×24 hex interior — NOT a
 // tight defensive square. The owner-directed creative latitude (§2) lets the
 // Unity port replace the React square layout entirely.

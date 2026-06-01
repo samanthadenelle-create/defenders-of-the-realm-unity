@@ -254,7 +254,7 @@ namespace DeNelle.Village
 
             // Honor the authored transform when either:
             //  (a) _useAuthoredTransform is true (scene-builder flagged it), OR
-            //  (b) the heart is NOT at world origin (the canonical Avalon
+            //  (b) the heart is NOT at world origin (the canonical Elarion
             //      layout hosts Elarion at (-6, 0, 1) centre-west of the plaza).
             // Defensive heuristic (b) covers the case where _useAuthoredTransform
             // was set at scene-build time but the SerializedObject write didn't

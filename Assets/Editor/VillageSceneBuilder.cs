@@ -1,5 +1,5 @@
 // =============================================================================
-// VillageSceneBuilder — Avalon village INTERIOR scene generator (Editor-only).
+// VillageSceneBuilder — Elarion village INTERIOR scene generator (Editor-only).
 // -----------------------------------------------------------------------------
 // One static entry point that the main Unity session runs (manually via the
 // Defenders menu, or via the Unity -executeMethod flag):
@@ -59,7 +59,7 @@ using UnityEngine.UIElements;
 namespace DeNelle.Editor
 {
     /// <summary>
-    /// Editor utility that assembles the Avalon village interior scene from the
+    /// Editor utility that assembles the Elarion village interior scene from the
     /// KayKit Medieval Hexagon Pack models, per
     /// docs/avalon-village-layout-spec.md §1–§8 / §10–§14. Entry point:
     /// <see cref="BuildVillage"/>.
@@ -100,7 +100,7 @@ namespace DeNelle.Editor
         /// <summary>
         /// Building colour variant used consistently across the town (spec §10
         /// implies one variant for symmetry). "green" reads as a warm,
-        /// lived-in Avalon palette.
+        /// lived-in Elarion palette.
         /// </summary>
         private const string BuildingColor = "green";
 
@@ -250,7 +250,7 @@ namespace DeNelle.Editor
         // =====================================================================
 
         /// <summary>
-        /// Builds the Avalon village interior scene per
+        /// Builds the Elarion village interior scene per
         /// docs/avalon-village-layout-spec.md §1–§8 / §10–§14. Runnable via
         /// <c>-executeMethod DeNelle.Editor.VillageSceneBuilder.BuildVillage</c>.
         /// Idempotent.

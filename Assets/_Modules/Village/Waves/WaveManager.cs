@@ -1,5 +1,5 @@
 // =============================================================================
-// WaveManager — the Avalon village wave loop (Week-4 slice).
+// WaveManager — the Elarion village wave loop (Week-4 slice).
 // -----------------------------------------------------------------------------
 // Port spec Part 3 row: src/modules/village/waves/ -> WaveManager.cs.
 // Port spec Part 5 Week 4: "countdown timer between waves, then spawn per

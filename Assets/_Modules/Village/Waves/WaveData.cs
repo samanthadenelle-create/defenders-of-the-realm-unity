@@ -49,7 +49,7 @@ namespace DeNelle.Village
 
     /// <summary>
     /// One village-enemy stat block — the deserialised shape of an
-    /// <c>enemies.json</c> entry. The Hollow Ones that march on Avalon.
+    /// <c>enemies.json</c> entry. The Hollow Ones that march on Elarion.
     /// </summary>
     [Serializable]
     public sealed class EnemyDef

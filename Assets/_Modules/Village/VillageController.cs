@@ -1,5 +1,5 @@
 // =============================================================================
-// VillageController — the Avalon village scene orchestrator (Week-3 skeleton).
+// VillageController — the Elarion village scene orchestrator (Week-3 skeleton).
 // -----------------------------------------------------------------------------
 // Port spec Part 3 row: src/modules/village/Village3D.tsx -> VillageController.cs.
 //
@@ -23,7 +23,7 @@ using UnityEngine;
 namespace DeNelle.Village
 {
     /// <summary>
-    /// Orchestrates the Avalon village scene. Holds references to the wall ring,
+    /// Orchestrates the Elarion village scene. Holds references to the wall ring,
     /// the four cardinal gates, the Heart and the five buildings; in Week 3 it
     /// owns the assemble pass that places the wall sections + gates against
     /// <see cref="WallLayout"/>. Wave manager / build menu / hero rig / camera

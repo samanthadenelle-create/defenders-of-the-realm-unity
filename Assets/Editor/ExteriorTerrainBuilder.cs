@@ -1,5 +1,5 @@
 // =============================================================================
-// ExteriorTerrainBuilder — Avalon EXTERIOR wilderness generator (Editor-only).
+// ExteriorTerrainBuilder — Elarion EXTERIOR wilderness generator (Editor-only).
 // -----------------------------------------------------------------------------
 // One static entry point that the main Unity session runs (manually via the
 // Defenders menu, or via the Unity -executeMethod flag):
@@ -56,7 +56,7 @@ using UnityEngine;
 namespace DeNelle.Editor
 {
     /// <summary>
-    /// Editor utility that builds the Avalon exterior wilderness -- a Unity
+    /// Editor utility that builds the Elarion exterior wilderness -- a Unity
     /// Terrain with four directional biomes, elevation, splatmaps, natural
     /// paths, instanced trees, scattered rock props, a dawn skybox and
     /// atmospheric fog -- around the walled village. Entry point:
@@ -163,7 +163,7 @@ namespace DeNelle.Editor
         // =====================================================================
 
         /// <summary>
-        /// Builds the Avalon exterior wilderness around the walled village.
+        /// Builds the Elarion exterior wilderness around the walled village.
         /// Runnable via
         /// <c>-executeMethod DeNelle.Editor.ExteriorTerrainBuilder.BuildExterior</c>.
         /// Idempotent -- re-running clears the generated ExteriorRoot + assets.

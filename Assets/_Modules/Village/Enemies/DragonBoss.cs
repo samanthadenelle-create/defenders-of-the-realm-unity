@@ -10,7 +10,7 @@
 //
 // WHERE IT FITS. The Black Dragon is NOT in docs/enemy-codex.md's roster — the
 // codex is a humanoid/quadruped KayKit slate. This boss is an apex encounter:
-// "Syndrath the Devourer" — a sky-boss that circles Avalon and dives on the
+// "Syndrath the Devourer" — a sky-boss that circles Elarion and dives on the
 // Heart, a set-piece above the eight-boss slate. The name was owner-ratified
 // (2026-05-19); the placement — a special apex village wave, above the
 // Necromancer — is the working design.
@@ -61,7 +61,7 @@ namespace DeNelle.Village
     }
 
     /// <summary>
-    /// The Black Dragon flying boss — an apex set-piece encounter for the Avalon
+    /// The Black Dragon flying boss — an apex set-piece encounter for the Elarion
     /// village. Circles the Heart on its own kinematic flight, dives to strike,
     /// loses HP through three behaviour phases and dies in a spiralling fall.
     /// Implements <see cref="IDamageable"/> directly so the hero and the isolated

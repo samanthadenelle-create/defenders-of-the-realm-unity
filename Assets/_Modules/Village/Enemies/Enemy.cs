@@ -1,5 +1,5 @@
 // =============================================================================
-// Enemy — one Hollow One marching on Avalon (Week-4 wave-loop slice).
+// Enemy — one Hollow One marching on Elarion (Week-4 wave-loop slice).
 // -----------------------------------------------------------------------------
 // Port spec Part 3 row: src/modules/village/enemies/ -> Enemy.cs.
 // Port spec Part 5 Week 4: "KayKit skeleton mesh, NavMeshAgent, walks toward the
