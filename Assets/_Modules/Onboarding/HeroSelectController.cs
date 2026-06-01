@@ -99,8 +99,9 @@ namespace DeNelle.Onboarding
         private Button _confirmButton;   // "Jump into the Action" — Defend the Tower
         private Button _diveButton;      // "Dive into Village"    — normal village
 
-        // One card VisualElement per hero, in HeroCatalog order.
-        private readonly VisualElement[] _cards = new VisualElement[3];
+        // One card VisualElement per hero, in HeroCatalog order. Sized from the
+        // catalog so adding a hero card never overruns this array (WO-226).
+        private readonly VisualElement[] _cards = new VisualElement[HeroCatalog.Heroes.Length];
 
         private bool _bound;
         private bool _hasSelection;

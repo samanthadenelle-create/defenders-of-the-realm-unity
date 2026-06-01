@@ -374,6 +374,11 @@ namespace DeNelle.BattleATB
                 case DeNelle.Core.State.HeroClassOpt.Knight: cls = HeroClass.Knight; break;
                 case DeNelle.Core.State.HeroClassOpt.Ranger: cls = HeroClass.Ranger; break;
                 case DeNelle.Core.State.HeroClassOpt.Mage:   cls = HeroClass.Mage;   break;
+                // WO-226: the Cleric is a caster — it reuses the Mage archetype in the
+                // ATB engine (stats/abilities) until it gets its own kit. Mapping it
+                // here keeps the engine HeroClass enum 3-valued so HERO_STATS /
+                // HERO_ABILITIES lookups never miss a key.
+                case DeNelle.Core.State.HeroClassOpt.Cleric: cls = HeroClass.Mage;   break;
                 default:                                     cls = HeroClass.Mage;   break; // no save / None
             }
             Debug.Log($"[BattleController] ATB hero class resolved to {cls} (GameState={opt}).");

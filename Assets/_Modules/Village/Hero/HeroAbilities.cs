@@ -171,6 +171,8 @@ namespace DeNelle.Village
                         DeNelle.Core.State.HeroClass.Knight => "knight",
                         DeNelle.Core.State.HeroClass.Ranger => "ranger",
                         DeNelle.Core.State.HeroClass.Mage   => "mage",
+                        // WO-226: the Cleric is a caster — reuse the Mage loadout.
+                        DeNelle.Core.State.HeroClass.Cleric => "mage",
                         _                                   => AbilityCatalog.DefaultClass,
                     };
                     Debug.Log($"[HeroAbilities] Awake backstop: resolved class '{ _heroClass}' from GameState.");

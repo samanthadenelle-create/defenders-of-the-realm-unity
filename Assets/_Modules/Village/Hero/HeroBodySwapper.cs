@@ -334,6 +334,11 @@ namespace DeNelle.Village
             // (24 MB) per docs/port-notes/tripo-asset-pipeline.md. Swap in like
             // the other two; HeroAnimatorSetup writes Mage.controller alongside.
             HeroClass.Mage   => "Mage",
+            // WO-226: the Cleric has no dedicated body yet — it is a caster, so it
+            // loads the Mage body + Mage.controller and SetHeroClass("Mage") gives it
+            // the Mage ability kit. ApplyExtractedTexture/ApplyClassTint fall through
+            // to the Mage defaults for Cleric, so it reads as an arcane caster.
+            HeroClass.Cleric => "Mage",
             _ => null,
         };
 

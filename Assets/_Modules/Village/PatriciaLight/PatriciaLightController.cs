@@ -742,6 +742,9 @@ namespace DeNelle.Village
                 : HeroClass.Ranger;
 
             if (cls == HeroClass.Knight) { defaulted = true; return HeroClass.Ranger; }
+            // WO-226: the Cleric is a caster with no dedicated body yet — play it as
+            // the Mage here (loads Resources/Heroes/Mage + the Mage ability kit).
+            if (cls == HeroClass.Cleric) { defaulted = true; return HeroClass.Mage; }
             if (cls == HeroClass.Mage || cls == HeroClass.Ranger) return cls;
             return HeroClass.Ranger;
         }

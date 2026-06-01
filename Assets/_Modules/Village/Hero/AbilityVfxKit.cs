@@ -63,6 +63,8 @@ namespace DeNelle.Village
         {
             switch ((heroClass ?? string.Empty).ToLowerInvariant())
             {
+                // WO-226: the Cleric is a caster — it shares the Mage's arcane VFX set.
+                case "cleric":
                 case "mage":
                     return kind switch
                     {
