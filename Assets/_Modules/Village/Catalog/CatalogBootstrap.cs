@@ -91,6 +91,56 @@ namespace DeNelle.Village
                 },
             });
 
+            // ── Siege Tower — mid-range, steady, CANNOT hit air (ground siege) ──
+            // DATA-ONLY new type: reuses the existing TowerBigPrefab visual and the
+            // proven "DefenseTower" behaviorId — proving a new structure is added
+            // by registering data, with no new code path.
+            CatalogRegistry.Register(new CatalogEntry
+            {
+                id          = "tower_siege_tower",
+                displayName = "Siege Tower",
+                type        = CatalogType.Tower,
+                kind        = EntryKind.Cell,
+                visualPrefabPath = TowerBigPrefab,
+                repo = new RepoProps
+                {
+                    behaviorId = "DefenseTower",
+                    buildCost  = 140,
+                    navSurface = NavSurfaceKind.Blocker,
+                    range = 20f, damage = 18f, fireRate = 1.5f,
+                    canHitAir = false, element = DamageElement.None,
+                    placement = new PlacementRules
+                    {
+                        mustSitOn = PlacementSurface.Ground,
+                        footprint = 3f, noOverlap = true, checkAffordable = true,
+                    },
+                },
+            });
+
+            // ── Catapult — long range, high damage, slow, CANNOT hit air ────────
+            // DATA-ONLY new type: reuses the existing TowerWoodPrefab visual.
+            CatalogRegistry.Register(new CatalogEntry
+            {
+                id          = "tower_catapult",
+                displayName = "Catapult",
+                type        = CatalogType.Tower,
+                kind        = EntryKind.Cell,
+                visualPrefabPath = TowerWoodPrefab,
+                repo = new RepoProps
+                {
+                    behaviorId = "DefenseTower",
+                    buildCost  = 180,
+                    navSurface = NavSurfaceKind.Blocker,
+                    range = 28f, damage = 24f, fireRate = 0.8f,
+                    canHitAir = false, element = DamageElement.None,
+                    placement = new PlacementRules
+                    {
+                        mustSitOn = PlacementSurface.Ground,
+                        footprint = 3.5f, noOverlap = true, checkAffordable = true,
+                    },
+                },
+            });
+
             Debug.Log($"[CatalogBootstrap] Registered {CatalogRegistry.Count} catalog " +
                       "entrie(s) — catalog data path is now live.");
         }

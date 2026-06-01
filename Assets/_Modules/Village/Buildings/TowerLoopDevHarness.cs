@@ -18,6 +18,7 @@
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
 using UnityEngine;
 using DeNelle.Core.Data;
+using DeNelle.Core.Catalog;
 
 namespace DeNelle.Village
 {
@@ -42,7 +43,8 @@ namespace DeNelle.Village
             // (procedural cube) if it hasn't been seeded.
             var seeded = Resources.Load<TowerData>("Towers/DevTower");
             _devTower = seeded != null ? seeded : BuildDevTower();
-            Debug.Log("[TowerLoopDev] B = place a free tower (left-click ground), U = upgrade the last-built tower, K = +1 hero level. " +
+            Debug.Log("[TowerLoopDev] B = place a free tower (left-click ground), U = upgrade the last-built tower, K = +1 hero level, " +
+                      "J = spawn 'Catapult' catalog entry via StructureFactory.Create (data-only new type). " +
                       "(T is the talent tree.) Tower visual: " +
                       (seeded != null ? "seeded model." : "procedural placeholder — run Defenders > Seed Tower Data."));
         }
@@ -72,6 +74,61 @@ namespace DeNelle.Village
             {
                 LevelUpHero();
             }
+            else if (Input.GetKeyDown(KeyCode.J))
+            {
+                // J = catalog->factory data-only spawn. Proves a NEW structure type
+                // (registered purely as a CatalogEntry, no new code) can be made live
+                // via the single StructureFactory.Create path.
+                SpawnCatalogStructure("tower_catapult");
+            }
+        }
+
+        // Spawn a registered CatalogEntry by id a few metres in front of the hero,
+        // routed through the ONE creation path (StructureFactory.Create). DEV-ONLY.
+        private static void SpawnCatalogStructure(string entryId)
+        {
+            var entry = CatalogRegistry.Get(entryId);
+            if (entry == null)
+            {
+                Debug.LogWarning($"[TowerLoopDev] J: catalog entry '{entryId}' not registered " +
+                                 "(CatalogBootstrap should have registered it).");
+                return;
+            }
+
+            // Pose: a few metres in front of the hero (fallback: in front of the
+            // main camera, then world origin) so the spawn is always harmless.
+            Vector3 origin; Quaternion facing;
+            var heroGo = GameObject.FindWithTag("HeroTarget");
+            if (heroGo == null) heroGo = GameObject.FindWithTag("Player");
+            if (heroGo != null)
+            {
+                var ht = heroGo.transform;
+                origin = ht.position + ht.forward * 4f;
+                facing = Quaternion.LookRotation(-ht.forward, Vector3.up);
+            }
+            else if (Camera.main != null)
+            {
+                var ct = Camera.main.transform;
+                origin = ct.position + ct.forward * 6f;
+                facing = Quaternion.LookRotation(-ct.forward, Vector3.up);
+            }
+            else
+            {
+                origin = Vector3.zero;
+                facing = Quaternion.identity;
+            }
+            origin.y = 0f; // seat on ground for a ground-placed tower
+
+            // Parent under a dev container so spawns are easy to find/clear.
+            var container = GameObject.Find("DevCatalogSpawns");
+            if (container == null) container = new GameObject("DevCatalogSpawns");
+
+            var spawned = StructureFactory.Create(entry, new Pose(origin, facing),
+                                                  container.transform);
+            Debug.Log(spawned != null
+                ? $"[TowerLoopDev] J = spawned catalog entry '{entryId}' ('{entry.displayName}') " +
+                  $"at {origin} via StructureFactory.Create."
+                : $"[TowerLoopDev] J: StructureFactory.Create returned null for '{entryId}'.");
         }
 
         private static void EnsurePlacement()
