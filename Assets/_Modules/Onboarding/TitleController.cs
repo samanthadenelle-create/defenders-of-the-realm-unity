@@ -135,27 +135,42 @@ namespace DeNelle.Onboarding
         {
             Debug.Log("[TitleController] Arrival: start.");
 
-            // Stage 1 — studio bumper.
+            // Stage 1 — studio bumper. Timeout-guarded: the bumper VIDEO (or any
+            // await inside) can fail to complete in a WebGL build and would hang the
+            // whole boot at a black screen (older builds only "limped past" it because
+            // exceptions were disabled and silently swallowed). Never hang — always
+            // fall through to the title.
             if (_splash != null)
-            {
-                Debug.Log("[TitleController] Arrival: awaiting splash.Play() ...");
-                await _splash.Play();
-            }
+                await SafeStage(_splash.Play(), "splash");
             Debug.Log("[TitleController] Arrival: splash stage done.");
 
-            // Stage 2 — cold open (the controller's own gate decides whether
-            // it actually plays or returns immediately for a returning save).
+            // Stage 2 — cold open (story intro), same guard.
             if (_storyIntro != null)
-            {
-                Debug.Log("[TitleController] Arrival: awaiting storyIntro.Play() ...");
-                await _storyIntro.Play();
-            }
+                await SafeStage(_storyIntro.Play(), "storyIntro");
             Debug.Log("[TitleController] Arrival: storyIntro stage done.");
 
-            // Stage 3 — the title screen.
+            // Stage 3 — the title screen (always reached now).
             BuildTitleScreen();
             SetTitleVisible(true);
             Debug.Log("[TitleController] Arrival: title screen built + visible.");
+        }
+
+        /// <summary>
+        /// Awaits an arrival stage but never lets it hang the boot: on timeout or
+        /// exception it logs and returns so the title screen is always reached.
+        /// (WebGL: the bumper video / async stages can stall indefinitely.)
+        /// </summary>
+        private static async UniTask SafeStage(UniTask stage, string name)
+        {
+            try
+            {
+                await stage.Timeout(System.TimeSpan.FromSeconds(6f));
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning($"[TitleController] Arrival stage '{name}' skipped " +
+                                 $"(timeout/exception) — proceeding to title. {e.Message}");
+            }
         }
 
         // =====================================================================
