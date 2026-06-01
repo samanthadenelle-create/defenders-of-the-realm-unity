@@ -367,6 +367,13 @@ namespace DeNelle.Editor
             // ── Five gameplay buildings (§5) ─────────────────────────────────
             int buildingCount = BuildBuildings(buildingRoot, controller);
 
+            // ── WO-189b: data-driven city population from CityManifest.json ──
+            // Repopulates the full Elarion roster (~29 buildings, ~100 props,
+            // 6 wardens, 4 bridges) under root/CityManifestRoot. Runs after the
+            // hand-placed buildings (it skips the 5 duplicates) and BEFORE the
+            // NavMesh bake so the new structures voxelize into navigation.
+            BuildCityFromManifest(root.transform);
+
             // ── City dressing (§6) ───────────────────────────────────────────
             // WO-150: SKIPPED — the KayKit dressing buildings (homes/tavern/church/
             // blacksmith/townhall/well) were deleted by the owner and re-spawned as
