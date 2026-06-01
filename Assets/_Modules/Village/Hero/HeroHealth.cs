@@ -298,10 +298,30 @@ namespace DeNelle.Village
             var hero = FindAnyObjectByType<HeroAbilities>();
             if (hero != null && hero.GetComponent<HeroHealth>() == null)
             {
-                hero.gameObject.AddComponent<HeroHealth>();
+                var health = hero.gameObject.AddComponent<HeroHealth>();
                 // Combat feel: screen flash on damage + death slow-mo (additive).
                 if (hero.GetComponent<HeroHitReaction>() == null)
                     hero.gameObject.AddComponent<HeroHitReaction>();
+
+                // WO-178: floating world-space HP bar over the hero, matching the
+                // enemy bars so the field reads as one themed combat-HUD set. The
+                // top-left IMGUI bar (HeroHealth.OnGUI) stays as the screen readout;
+                // this is the over-the-head bar. Always shown (hideAtFull:false) so
+                // the player can always locate their hero in a melee.
+                float headOffset = 2.2f;
+                Renderer rend = hero.GetComponentInChildren<Renderer>();
+                if (rend != null)
+                {
+                    float worldTop = rend.bounds.max.y - hero.transform.position.y;
+                    if (worldTop > 0.1f) headOffset = worldTop + 0.4f;
+                }
+                FloatingHealthBar.Attach(
+                    hero.gameObject,
+                    fraction: () => health.Fraction,
+                    isDead:   () => !health.IsAlive,
+                    heightOffset: headOffset,
+                    hideAtFull: false,
+                    destroyOnDead: false);
             }
         }
     }

@@ -166,6 +166,10 @@ namespace DeNelle.Village
         // in Awake so it needs no prefab wiring; flashed from the hit branch below.
         private EnemyHitReaction _hitReaction;
 
+        // WO-178: floating world-space HP bar. Auto-added in Awake (no prefab
+        // wiring); reads HpFraction / IsDead and tears itself down on death.
+        private FloatingHealthBar _healthBar;
+
         // Animator parameter hashes — must match AnimatorSetup.cs's parameter
         // names ("Speed" / "Attack" / "Hit" / "Dead" / "HitDir").
         private static readonly int AnimSpeed   = Animator.StringToHash("Speed");
@@ -357,6 +361,7 @@ namespace DeNelle.Village
             EnsureAnimator();
             EnsureAudio();
             EnsureHitReaction();
+            EnsureHealthBar();
         }
 
         private void EnsureHitReaction()
@@ -364,6 +369,29 @@ namespace DeNelle.Village
             // Auto-attach so every enemy gets the hit-flash with zero prefab wiring.
             _hitReaction = GetComponent<EnemyHitReaction>();
             if (_hitReaction == null) _hitReaction = gameObject.AddComponent<EnemyHitReaction>();
+        }
+
+        /// <summary>
+        /// WO-178: auto-attach the floating world-space HP bar (zero prefab wiring).
+        /// Height is taken from the rendered mesh bounds so the bar clears the
+        /// model regardless of import scale; it reads HpFraction / IsDead and hides
+        /// itself until the enemy first takes damage.
+        /// </summary>
+        private void EnsureHealthBar()
+        {
+            float headOffset = 2.4f;
+            Renderer rend = GetComponentInChildren<Renderer>();
+            if (rend != null)
+            {
+                // Local-space height of the mesh top above this transform, plus a gap.
+                float worldTop = rend.bounds.max.y - transform.position.y;
+                if (worldTop > 0.1f) headOffset = worldTop + 0.4f;
+            }
+            _healthBar = FloatingHealthBar.Attach(
+                gameObject,
+                fraction: () => HpFraction,
+                isDead:   () => _dead,
+                heightOffset: headOffset);
         }
 
         private void EnsureAudio()
