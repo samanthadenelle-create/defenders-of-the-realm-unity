@@ -134,6 +134,18 @@ namespace DeNelle.HUD
         private static readonly string[] SlotKeys = { "Q", "W", "E", "R" };
         private static readonly string[] SlotGlyphs = { "✦", "❄", "✚", "☄" };
 
+        // ── Elarion HUD palette (DEF-105) ─────────────────────────────────────
+        // Shared with FloatingHealthBar, which documents the same values as "echoes
+        // VillageHudController / the quest-panel cards". USS doesn't render in builds
+        // (CLAUDE.md §8), so the vitals bars are styled in code from this palette so
+        // they match the rest of the HUD instead of falling back to the bare theme.
+        private static readonly Color PanelCard   = new Color(0.10f, 0.08f, 0.16f, 0.92f); // arcane-violet card
+        private static readonly Color PanelRim    = new Color(1f,    0.86f, 0.45f, 0.85f); // themed gold rim
+        private static readonly Color BarTrack    = new Color(0.18f, 0.16f, 0.24f, 0.95f); // empty bar track
+        private static readonly Color BarValueTxt = new Color(0.96f, 0.93f, 0.82f, 1f);    // parchment-cream readout
+        private static readonly Color HeartFill   = new Color(0.86f, 0.22f, 0.30f, 1f);    // life-crimson (Elarion vitals)
+        private static readonly Color ManaFill    = new Color(0.36f, 0.55f, 0.95f, 1f);    // arcane-blue mana
+
         // ── Bound UI elements ────────────────────────────────────────────────
         private VisualElement _root;
         private VisualElement _heartHpFill;
@@ -316,7 +328,7 @@ namespace DeNelle.HUD
             if (lbl == null) return;
             lbl.style.color = active
                 ? new Color(0.95f, 0.22f, 0.16f, pulseAlpha)  // attack-red, pulsing
-                : new Color(1f, 1f, 1f, 0.22f);                // dim when idle
+                : CompassArmIdle;                              // dim-but-readable when idle
         }
 
         // WO-40: while a wave is imminent flash EVERY arm amber on a 2 Hz square-ish
@@ -435,6 +447,8 @@ namespace DeNelle.HUD
             BuildSkillsButton();
             EnsureHudReachable();
             MoveManaPanelToTopLeft();
+            ApplyElarionTheme();   // DEF-105: code-built styling for the vitals bars (USS doesn't render in builds)
+            EnsureCompassRose();   // DEF-104: build the direction rose up-front so it's always on screen
             _bound = true;
             Debug.Log($"[VillageHudController] Bound. root={_root != null}, heart={_heartHpFill != null}, mana={_manaFill != null}, abilityBar={_abilityBar != null}");
         }
@@ -767,8 +781,37 @@ namespace DeNelle.HUD
         // alert reads on the direction rose too (the Village side cannot reach the
         // HUD-internal SetCompassImminent directly via IVillageHud).
 
+        // DEF-104: idle arms must stay READABLE (not near-invisible) so the rose
+        // reads as a compass even between waves. Dim parchment-cream rather than the
+        // old 0.22-alpha white that vanished against the village.
+        private static readonly Color CompassArmIdle   = new Color(0.86f, 0.82f, 0.70f, 0.55f);
+        private static readonly Color CompassArmActive = new Color(0.95f, 0.22f, 0.16f, 1f); // attack-red inbound
+
+        /// <summary>
+        /// DEF-104: builds the direction rose ONCE at bind time (was previously only
+        /// built lazily the first time SetAttackDirections/SetCompassImminent ran, so
+        /// with no live enemies it never appeared). Idempotent — re-finds an existing
+        /// rose and never duplicates it.
+        /// </summary>
+        private void EnsureCompassRose()
+        {
+            if (_root == null) return;
+            var rose = _root.Q<VisualElement>("compass-rose");
+            if (rose == null) { rose = BuildCompassRose(); _root.Add(rose); }
+            // Seed the idle look so a freshly-built rose isn't blank for a frame.
+            if (!_compassImminent)
+            {
+                SetCompassArm(rose, "compass-n", _compassActive[0]);
+                SetCompassArm(rose, "compass-e", _compassActive[1]);
+                SetCompassArm(rose, "compass-s", _compassActive[2]);
+                SetCompassArm(rose, "compass-w", _compassActive[3]);
+            }
+        }
+
         private VisualElement BuildCompassRose()
         {
+            // Elarion-themed backing panel (arcane-violet card + gold rim) so the rose
+            // reads as a deliberate HUD widget, consistent with the vitals panels.
             var rose = new VisualElement { name = "compass-rose" };
             rose.pickingMode = PickingMode.Ignore;
             var rs = rose.style;
@@ -776,12 +819,19 @@ namespace DeNelle.HUD
             rs.top = 150f;                         // below the wave timer + START WAVE button
             rs.left = Length.Percent(50f);
             rs.translate = new Translate(Length.Percent(-50f), 0f, 0f);
-            rs.width = 64f; rs.height = 64f;
+            rs.width = 72f; rs.height = 72f;
+            rs.backgroundColor = PanelCard;
+            rs.borderTopWidth = 1.5f; rs.borderBottomWidth = 1.5f;
+            rs.borderLeftWidth = 1.5f; rs.borderRightWidth = 1.5f;
+            rs.borderTopColor = PanelRim; rs.borderBottomColor = PanelRim;
+            rs.borderLeftColor = PanelRim; rs.borderRightColor = PanelRim;
+            rs.borderTopLeftRadius = 36f; rs.borderTopRightRadius = 36f;
+            rs.borderBottomLeftRadius = 36f; rs.borderBottomRightRadius = 36f;
 
-            AddCompassArm(rose, "compass-n", "▲", 22f, 0f);    // ▲ top
-            AddCompassArm(rose, "compass-s", "▼", 22f, 44f);   // ▼ bottom
-            AddCompassArm(rose, "compass-e", "▶", 44f, 22f);   // ▶ right
-            AddCompassArm(rose, "compass-w", "◀", 0f, 22f);    // ◀ left
+            AddCompassArm(rose, "compass-n", "▲", 26f, 4f);    // ▲ top
+            AddCompassArm(rose, "compass-s", "▼", 26f, 48f);   // ▼ bottom
+            AddCompassArm(rose, "compass-e", "▶", 48f, 26f);   // ▶ right
+            AddCompassArm(rose, "compass-w", "◀", 4f, 26f);    // ◀ left
             return rose;
         }
 
@@ -795,7 +845,7 @@ namespace DeNelle.HUD
             s.width = 20f; s.height = 20f;
             s.fontSize = 16f;
             s.unityTextAlign = TextAnchor.MiddleCenter;
-            s.color = new Color(1f, 1f, 1f, 0.22f);   // dim when idle
+            s.color = CompassArmIdle;   // dim-but-readable when idle
             rose.Add(lbl);
         }
 
@@ -803,9 +853,7 @@ namespace DeNelle.HUD
         {
             var lbl = rose.Q<Label>(name);
             if (lbl == null) return;
-            lbl.style.color = active
-                ? new Color(0.95f, 0.22f, 0.16f, 1f)   // attack-red when enemies inbound
-                : new Color(1f, 1f, 1f, 0.22f);
+            lbl.style.color = active ? CompassArmActive : CompassArmIdle;
         }
 
         // Owner 2026-05-25 ("HUD non-responsive — a panel makes them unreachable"):
@@ -849,6 +897,97 @@ namespace DeNelle.HUD
             manaPanel.style.top = 64;       // under heart-hp card
             manaPanel.style.left = 16;
             manaPanel.style.width = 220;
+        }
+
+        /// <summary>
+        /// DEF-105: code-built styling for the vitals bars so they match the Elarion
+        /// panel aesthetic (arcane-violet card, gold rim, parchment readout, crimson
+        /// life / arcane-blue mana fills). The UXML/USS look does NOT render in player
+        /// builds (CLAUDE.md §8), so without this the heart/mana bars fell back to the
+        /// bare default theme and looked off-brand. Applied once after bind; every
+        /// element lookup is null-guarded so a trimmed/absent panel is a no-op.
+        /// </summary>
+        private void ApplyElarionTheme()
+        {
+            if (_root == null) return;
+
+            // Heart (Elarion vitals) panel — the card chrome.
+            StylePanelCard(_root.Q<VisualElement>("heart-panel"));
+            StylePanelCard(_root.Q<VisualElement>("mana-panel"));
+
+            // Panel captions ("Elarion", "Mana") in themed gold.
+            StyleCaption(_root.Q<Label>("heart-title"));
+            StyleCaption(_root.Q<Label>("mana-caption"));
+
+            // Heart HP track + fill.
+            StyleBarTrack(_root.Q<VisualElement>("heart-hp-track"));
+            if (_heartHpFill != null)
+            {
+                var s = _heartHpFill.style;
+                s.backgroundColor = HeartFill;     // default healthy fill; SetHeartHp adds warning/critical tint classes
+                s.borderTopLeftRadius = 5f; s.borderBottomLeftRadius = 5f;
+                s.borderTopRightRadius = 5f; s.borderBottomRightRadius = 5f;
+                s.height = Length.Percent(100f);
+            }
+
+            // Mana track + fill.
+            StyleBarTrack(_root.Q<VisualElement>("mana-track"));
+            if (_manaFill != null)
+            {
+                var s = _manaFill.style;
+                s.backgroundColor = ManaFill;
+                s.borderTopLeftRadius = 5f; s.borderBottomLeftRadius = 5f;
+                s.borderTopRightRadius = 5f; s.borderBottomRightRadius = 5f;
+                s.height = Length.Percent(100f);
+            }
+
+            // Numeric readouts ("100 / 100", "10 / 10").
+            StyleBarValue(_heartHpLabel);
+            StyleBarValue(_manaLabel);
+        }
+
+        private static void StylePanelCard(VisualElement panel)
+        {
+            if (panel == null) return;
+            var s = panel.style;
+            s.backgroundColor = PanelCard;
+            s.paddingLeft = 10f; s.paddingRight = 10f; s.paddingTop = 6f; s.paddingBottom = 6f;
+            s.borderTopWidth = 1.5f; s.borderBottomWidth = 1.5f;
+            s.borderLeftWidth = 1.5f; s.borderRightWidth = 1.5f;
+            s.borderTopColor = PanelRim; s.borderBottomColor = PanelRim;
+            s.borderLeftColor = PanelRim; s.borderRightColor = PanelRim;
+            s.borderTopLeftRadius = 8f; s.borderTopRightRadius = 8f;
+            s.borderBottomLeftRadius = 8f; s.borderBottomRightRadius = 8f;
+        }
+
+        private static void StyleCaption(Label caption)
+        {
+            if (caption == null) return;
+            var s = caption.style;
+            s.color = PanelRim;
+            s.fontSize = 12f;
+            s.unityFontStyleAndWeight = FontStyle.Bold;
+            s.letterSpacing = 2f;
+        }
+
+        private static void StyleBarTrack(VisualElement track)
+        {
+            if (track == null) return;
+            var s = track.style;
+            s.backgroundColor = BarTrack;
+            s.height = 12f;
+            s.borderTopLeftRadius = 6f; s.borderTopRightRadius = 6f;
+            s.borderBottomLeftRadius = 6f; s.borderBottomRightRadius = 6f;
+            s.overflow = Overflow.Hidden;       // keep the fill inside the rounded track
+        }
+
+        private static void StyleBarValue(Label value)
+        {
+            if (value == null) return;
+            var s = value.style;
+            s.color = BarValueTxt;
+            s.fontSize = 12f;
+            s.unityFontStyleAndWeight = FontStyle.Bold;
         }
 
         /// <summary>
@@ -1037,6 +1176,14 @@ namespace DeNelle.HUD
                 bool warning = !critical && fraction <= _heartWarningFraction;
                 _heartHpFill.EnableInClassList(HeartCriticalClass, critical);
                 _heartHpFill.EnableInClassList(HeartWarningClass, warning);
+                // DEF-105: also drive the fill colour in CODE — the USS warning/critical
+                // tint classes don't render in player builds (CLAUDE.md §8), so set the
+                // themed crimson→amber→red ramp directly so the threshold feedback shows.
+                _heartHpFill.style.backgroundColor = critical
+                    ? new Color(0.86f, 0.12f, 0.10f, 1f)   // red — critical
+                    : warning
+                        ? new Color(1f, 0.74f, 0.18f, 1f)  // amber — warning
+                        : HeartFill;                        // life-crimson — healthy
             }
 
             if (_heartHpLabel != null)
