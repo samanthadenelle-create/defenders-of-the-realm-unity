@@ -33,6 +33,13 @@ namespace DeNelle.Editor
         // type from this assembly.
         private const string MineNodeTypeName = "DeNelle.Village.MineNode";
 
+        // WO-153 — the world Crystal Mine companion. Attached (by reflection, same
+        // asmdef-free pattern) onto crystal MineNodes so they become the renewable,
+        // upgradeable, region-graded crystal faucet. Pure additive: CrystalMineNode
+        // reuses MineNode's banking/cooldown/worker seams; it only forces the renewable
+        // mode + stamps the region grade + adds upgrade tiers.
+        private const string CrystalMineNodeTypeName = "DeNelle.Village.CrystalMineNode";
+
         // MineResource enum values (mirror DeNelle.Village.MineResource order):
         // Iron=0, Wood=1, Stone=2, AetherCrystal=3.
         private const int ResIron = 0, ResWood = 1, ResStone = 2, ResAether = 3;
@@ -53,6 +60,13 @@ namespace DeNelle.Editor
         // scales the reserve at runtime (ReserveTotalScaled). Safe-region default is
         // leaner; deep regions richer. Designers tune per node via NodeDef.Reserve.
         private const int DefaultReserve = 400;
+
+        // WO-153 — renewable Crystal Mine tuning (the reliable faucet, not a finite
+        // reserve). A vein holds CrystalExtractsPerVein pulls, then refills over
+        // CrystalRespawnSeconds — repeatable but rate-limited (can't infinite-farm one
+        // mine). The CrystalMineNode companion scales these up per upgrade tier.
+        private const int   CrystalExtractsPerVein = 8;
+        private const float CrystalRespawnSeconds  = 90f;
 
         // Iron in stony Stoneback (W), wood in forested Ashwood (N) + a little in
         // Goldfields, stone broadly, and rare aether crystal in the deadly Mirewood
@@ -120,9 +134,12 @@ namespace DeNelle.Editor
                 Debug.LogError($"[OuterWorldBuilder] {MineNodeTypeName} not found — is DeNelle.Village " +
                                "compiled? Mine nodes will be bare markers without behaviour.");
 
+            // WO-153 — the Crystal Mine companion (resolved the same reflection way).
+            Type crystalMineType = FindType(CrystalMineNodeTypeName);
+
             var nodesRoot = new GameObject("MineNodes");
             nodesRoot.transform.SetParent(root.transform, false);
-            int placed = 0, mismatched = 0;
+            int placed = 0, mismatched = 0, crystalMines = 0;
             foreach (var def in Nodes)
             {
                 // Sanity: the chosen position should classify into the intended region.
@@ -140,6 +157,8 @@ namespace DeNelle.Editor
                 node.transform.position = def.Pos + Vector3.up * 0.5f;
                 node.transform.localScale = new Vector3(1.5f, 1f, 1.5f);
 
+                bool isCrystal = def.Res == ResAether;
+
                 if (mineNodeType != null)
                 {
                     var mn = node.AddComponent(mineNodeType);
@@ -149,14 +168,45 @@ namespace DeNelle.Editor
                     var fYield = mineNodeType.GetField("YieldPerExtract");
                     if (fYield != null) fYield.SetValue(mn, def.Yield);
 
-                    // WO-159 — make the node a persistent finite reserve worked by a
-                    // settlement (UseFiniteReserve + ReserveTotal). Set by name so the
-                    // Editor asmdef stays free of a DeNelle.Village reference.
-                    var fFinite = mineNodeType.GetField("UseFiniteReserve");
-                    if (fFinite != null) fFinite.SetValue(mn, true);
-                    var fReserve = mineNodeType.GetField("ReserveTotal");
-                    if (fReserve != null)
-                        fReserve.SetValue(mn, def.Reserve > 0 ? def.Reserve : DefaultReserve);
+                    if (isCrystal)
+                    {
+                        // WO-153 — the world Crystal Mine is the RENEWABLE, reliable faucet:
+                        // a refilling vein (legacy cooldown-respawn), NOT a finite reserve
+                        // that depletes-and-despawns. Keep UseFiniteReserve OFF; tune a
+                        // sensible renewable capacity so it's rate-limited, not infinite.
+                        var fFinite = mineNodeType.GetField("UseFiniteReserve");
+                        if (fFinite != null) fFinite.SetValue(mn, false);
+                        var fTotal = mineNodeType.GetField("TotalExtracts");
+                        if (fTotal != null) fTotal.SetValue(mn, CrystalExtractsPerVein);
+                        var fRespawn = mineNodeType.GetField("RespawnSeconds");
+                        if (fRespawn != null) fRespawn.SetValue(mn, CrystalRespawnSeconds);
+
+                        // The Crystal Mine companion (WO-153): forces renewable, stamps the
+                        // region grade, adds upgrade tiers. Defaults derive the grade from
+                        // the region at runtime — the builder sets no extra fields.
+                        if (crystalMineType != null)
+                        {
+                            node.AddComponent(crystalMineType);
+                            crystalMines++;
+                        }
+                        else
+                        {
+                            Debug.LogWarning("[OuterWorldBuilder] CrystalMineNode type not found — " +
+                                             "crystal node placed as a plain renewable MineNode " +
+                                             "(no grade/upgrade). Is DeNelle.Village compiled?");
+                        }
+                    }
+                    else
+                    {
+                        // WO-159 — non-crystal nodes stay persistent finite reserves worked
+                        // by a settlement (UseFiniteReserve + ReserveTotal). Set by name so
+                        // the Editor asmdef stays free of a DeNelle.Village reference.
+                        var fFinite = mineNodeType.GetField("UseFiniteReserve");
+                        if (fFinite != null) fFinite.SetValue(mn, true);
+                        var fReserve = mineNodeType.GetField("ReserveTotal");
+                        if (fReserve != null)
+                            fReserve.SetValue(mn, def.Reserve > 0 ? def.Reserve : DefaultReserve);
+                    }
                 }
 
                 Tint(node, def.Res);
@@ -166,7 +216,8 @@ namespace DeNelle.Editor
             EditorSceneManager_MarkAndKeep(scene);
             EnsureInBuildSettings();   // so WorldSceneLoader can load it by name at runtime
             Debug.Log($"[OuterWorldBuilder] Phase A complete — {anchors} region anchors, " +
-                      $"{placed} mine nodes ({mismatched} position mismatch). " +
+                      $"{placed} mine nodes ({crystalMines} renewable crystal mines, " +
+                      $"{mismatched} position mismatch). " +
                       "Regions: Goldfields/Stoneback/Mirewood/Ashwood.");
         }
 
