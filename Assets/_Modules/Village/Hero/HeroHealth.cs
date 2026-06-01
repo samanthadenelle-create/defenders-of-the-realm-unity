@@ -49,13 +49,30 @@ namespace DeNelle.Village
         private bool  _isDead;
         private readonly Collider[] _buf = new Collider[24];
 
-        // ── Respawn ───────────────────────────────────────────────────────────
+        // ── Respawn (DEF-102) ─────────────────────────────────────────────────
         // The hero is NOT the lose condition — the Heart is (a Heart breach
         // escalates to the ATB / Defend-the-Tower flow; there is no game-over
-        // screen for the wave loop). So when the hero falls it RESPAWNS at its
-        // start point after a short delay rather than reloading the scene.
-        private const float RespawnDelaySeconds = 4f;
+        // screen for the wave loop). So when the hero falls it enters a brief
+        // "down" beat then RESPAWNS at its start point rather than reloading the
+        // scene. Tunables are SerializeField so feel can be dialled in-editor.
+        [Header("Death / Respawn (DEF-102)")]
+        [Tooltip("Seconds the hero stays down (no control, death pose) before respawning.")]
+        [SerializeField] private float _downSeconds = 1.75f;
+        [Tooltip("Fraction of max HP restored on respawn (1 = full).")]
+        [Range(0.1f, 1f)]
+        [SerializeField] private float _respawnHpFraction = 1f;
+        [Tooltip("Seconds of damage immunity after respawn so the hero isn't instantly re-killed.")]
+        [SerializeField] private float _respawnInvulnSeconds = 1.5f;
+
         private Vector3 _spawnPosition;          // captured in Awake — respawn anchor
+        private float   _invulnUntil;            // Time.time at which post-respawn invuln ends
+
+        // Hero animator — used only to play a death pose IF the live controller
+        // declares a matching trigger. Guarded with HasParameter so a controller
+        // without a death state (the current hero controllers declare Speed/Cast/
+        // Victory only) is a silent no-op — never the per-frame param-spam pitfall.
+        private Animator _animator;
+        private static readonly string[] DeathTriggerNames = { "Die", "Death", "Defeated", "Dying" };
 
         // Cached siblings for death-stop + haptics. All optional — resolved in
         // Awake and only used through null-safe calls, so a hero missing any of
@@ -84,6 +101,7 @@ namespace DeNelle.Village
             _locomotion     = GetComponent<HeroLocomotion>();
             _abilities      = GetComponent<HeroAbilities>();
             _impactFeedback = GetComponent<HeroImpactFeedback>();
+            _animator       = GetComponentInChildren<Animator>();
 
             // Capture the spawn point as the respawn anchor. Resolved later in
             // HandleDeath against the Heart if the recorded point is unsafe.
@@ -137,6 +155,9 @@ namespace DeNelle.Village
         public void TakeDamage(float amount)
         {
             if (_hp <= 0f || amount <= 0f) return;
+            // DEF-102: post-respawn grace — ignore damage during the invuln window
+            // so a hero respawning into a lingering melee isn't instantly re-killed.
+            if (Time.time < _invulnUntil) return;
             _hp = Mathf.Max(0f, _hp - amount);
             OnHealthChanged?.Invoke(_hp, _maxHp);
 
@@ -149,9 +170,12 @@ namespace DeNelle.Village
 
             if (_hp <= 0f && !_isDead)
             {
+                // Idempotent: _isDead guards re-entry so a swarm landing several
+                // lethal ticks in one frame can't start multiple death coroutines.
                 _isDead = true;
                 Debug.Log("[HeroHealth] Hero defeated.");
                 HitStopManager.DoImpact(HitTier.Heavy);   // one dramatic beat on death
+                PlayDeathAnim();
                 OnDeath?.Invoke();
                 OnDied?.Invoke();   // legacy event kept for existing listeners
                 StartCoroutine(HandleDeath());
@@ -186,7 +210,7 @@ namespace DeNelle.Village
 
             // Brief "down" beat. WaitForSeconds is scaled time, but the lethal
             // HitStop above restores Time.timeScale within ~0.1s, so this elapses.
-            yield return new WaitForSeconds(RespawnDelaySeconds);
+            yield return new WaitForSeconds(Mathf.Max(0.1f, _downSeconds));
 
             // Respawn at the recorded spawn point, falling back to the Heart's
             // position if that point is no longer meaningful (e.g. it was captured
@@ -216,13 +240,55 @@ namespace DeNelle.Village
                 transform.position = position;
 
             _isDead   = false;
-            _hp       = _maxHp;
+            _hp       = _maxHp * Mathf.Clamp01(_respawnHpFraction <= 0f ? 1f : _respawnHpFraction);
             _cooldown = 0f;
+            // DEF-102: short grace so the hero isn't re-killed the instant it lands
+            // back in a melee. Consumed in TakeDamage.
+            _invulnUntil = Time.time + Mathf.Max(0f, _respawnInvulnSeconds);
+            // Clear any death pose so the revived hero animates normally again.
+            ClearDeathAnim();
             if (_locomotion != null) _locomotion.enabled = true;
             if (_abilities  != null) _abilities.enabled  = true;
             OnHealthChanged?.Invoke(_hp, _maxHp);
             VFXManager.Play(VFXType.Impact_Heal, transform.position + Vector3.up * 1.0f);
-            Debug.Log("[HeroHealth] Hero respawned at the Heart.");
+            Debug.Log($"[HeroHealth] Hero respawned at {position} (hp={Mathf.CeilToInt(_hp)}, " +
+                      $"invuln={_respawnInvulnSeconds:F1}s).");
+        }
+
+        // ── Death animation (optional, fully guarded) ─────────────────────────
+        // Plays a death pose only when the live hero controller actually declares
+        // one of the recognised triggers. The current hero controllers declare
+        // Speed/Cast/Victory only, so this is a silent no-op today — wired ahead
+        // so adding a "Die"/"Death" state to the controller activates it with no
+        // code change, while never spamming "param not found" every frame.
+        private void PlayDeathAnim()
+        {
+            if (_animator == null) _animator = GetComponentInChildren<Animator>();
+            if (_animator == null || _animator.runtimeAnimatorController == null) return;
+            foreach (var name in DeathTriggerNames)
+            {
+                if (HasParameter(name, AnimatorControllerParameterType.Trigger))
+                {
+                    _animator.SetTrigger(name);
+                    return;
+                }
+            }
+        }
+
+        private void ClearDeathAnim()
+        {
+            if (_animator == null || _animator.runtimeAnimatorController == null) return;
+            foreach (var name in DeathTriggerNames)
+                if (HasParameter(name, AnimatorControllerParameterType.Trigger))
+                    _animator.ResetTrigger(name);
+        }
+
+        private bool HasParameter(string name, AnimatorControllerParameterType type)
+        {
+            if (_animator == null || _animator.runtimeAnimatorController == null) return false;
+            foreach (var p in _animator.parameters)
+                if (p.type == type && p.name == name) return true;
+            return false;
         }
 
         /// <summary>Heals up to max (for repair pads / potions / wave-clear).</summary>
