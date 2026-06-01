@@ -55,6 +55,15 @@ namespace DeNelle.Pets
                  "calls DeployStarterPets() by hand once the scene context is ready.")]
         [SerializeField] private bool _autoDeployOnStart;
 
+        // WO-211 Phase 2 "lite pet visuals": the three starter pets' Tripo 3D
+        // models are ~208 MB — the dominant WebGL build bloat. While this flag is
+        // true the deployer NEVER loads a pet FBX (TryLoadPetMesh returns null)
+        // and instead renders each pet as a lightweight camera-facing sprite
+        // billboard from Resources/PetPortraits/<id>.png. Pet gameplay
+        // (deploy/fight/leash) is unchanged — only the visual swaps. Flip to
+        // false to restore the full 3D meshes once they're back in the build.
+        private const bool UseLitePetVisuals = true;
+
         private readonly List<Pet> _deployed = new List<Pet>();
 
         /// <summary>The pets currently deployed in the scene.</summary>
@@ -281,16 +290,13 @@ namespace DeNelle.Pets
                 }
                 else
                 {
-                    // Placeholder primitive — owner direction 2026-05-20: pets
-                    // were invisible because the 0.5x capsule sat 15m from the
-                    // hero. Bump to chest height and let HeroLeash drag them.
-                    var capsule = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-                    capsule.name = "Body";
-                    capsule.transform.SetParent(go.transform, false);
-                    capsule.transform.localScale = new Vector3(0.8f, 0.9f, 0.8f);
-                    var col = capsule.GetComponent<Collider>();
-                    if (col != null) col.isTrigger = true;
-                    TintPlaceholder(capsule, def);
+                    // WO-211 Phase 2 lite-pet visuals: render the pet as a single
+                    // camera-facing sprite billboard instead of its 3D mesh. A Quad
+                    // (collider stripped) at chest height carries the pet's portrait
+                    // on an unlit transparent material; PetBillboard turns it to face
+                    // the camera each frame. Falls back to a TintColor-tinted quad
+                    // when the portrait PNG isn't present yet.
+                    BuildSpriteBillboard(go, def);
                 }
 
                 pet = go.AddComponent<Pet>();
@@ -330,6 +336,10 @@ namespace DeNelle.Pets
         /// </summary>
         private static GameObject TryLoadPetMesh(PetDef def)
         {
+            // WO-211 Phase 2: lite-pet visuals path never loads the heavy Tripo
+            // FBX — the caller falls through to the sprite-billboard else-branch.
+            if (UseLitePetVisuals) return null;
+
             if (def == null || string.IsNullOrEmpty(def.Species)) return null;
 
             // Cosmetic pet skin (Glimmer shop) overrides the base mesh. The
@@ -515,6 +525,96 @@ namespace DeNelle.Pets
             if (_bondRanks == null || slotIndex < 0 || slotIndex >= _bondRanks.Length)
                 return 0;
             return Mathf.Clamp(_bondRanks[slotIndex], 0, 4);
+        }
+
+        /// <summary>
+        /// WO-211 Phase 2 "lite pet visuals": builds a camera-facing sprite
+        /// billboard for the pet under <paramref name="root"/>. A Quad (collider
+        /// stripped) at chest height shows the pet's portrait
+        /// (Resources/PetPortraits/&lt;id&gt;.png, id = "pet-&lt;species&gt;") on an
+        /// unlit transparent material; <see cref="PetBillboard"/> keeps it turned
+        /// toward the camera. When the portrait is missing the quad is tinted with
+        /// the species TintColor so the pet is still visible.
+        /// </summary>
+        private static void BuildSpriteBillboard(GameObject root, PetDef def)
+        {
+            var quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            quad.name = "Body";
+            quad.transform.SetParent(root.transform, false);
+            quad.transform.localPosition = new Vector3(0f, 0.9f, 0f);
+            quad.transform.localScale = Vector3.one * 1.4f;
+
+            // No collider on a visual-only billboard (pets hunt via overlap sweeps,
+            // not this quad).
+            var col = quad.GetComponent<Collider>();
+            if (col != null) Destroy(col);
+
+            var renderer = quad.GetComponent<MeshRenderer>();
+            if (renderer != null)
+            {
+                // Prefer the URP unlit shader; fall back to the sprite/legacy
+                // transparent shaders so the quad renders in any pipeline.
+                Shader shader = Shader.Find("Universal Render Pipeline/Unlit")
+                                ?? Shader.Find("Sprites/Default")
+                                ?? Shader.Find("Unlit/Transparent");
+                var mat = shader != null ? new Material(shader) : null;
+
+                // id = "pet-<species>" — matches the PetCatalog id and the PNG the
+                // PetPortraitRenderer writes.
+                string id = "pet-" + (def != null ? def.Species : "");
+                var sprite = Resources.Load<Sprite>("PetPortraits/" + id);
+                Texture portraitTex = sprite != null
+                    ? sprite.texture
+                    : Resources.Load<Texture2D>("PetPortraits/" + id);
+
+                if (mat != null)
+                {
+                    EnableMaterialTransparency(mat);
+                    if (portraitTex != null)
+                    {
+                        if (mat.HasProperty("_BaseMap")) mat.SetTexture("_BaseMap", portraitTex);
+                        if (mat.HasProperty("_MainTex")) mat.SetTexture("_MainTex", portraitTex);
+                        // White base so the texture's own colours show through.
+                        if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", Color.white);
+                        if (mat.HasProperty("_Color"))     mat.SetColor("_Color", Color.white);
+                    }
+                    else
+                    {
+                        // Portrait not baked yet — tint the quad with the species
+                        // colour so the pet is at least visible (owner: keep the
+                        // loop playable while the render runs).
+                        Color tint = def != null ? def.TintColor : Color.white;
+                        if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", tint);
+                        if (mat.HasProperty("_Color"))     mat.SetColor("_Color", tint);
+                        Debug.LogWarning("[PetDeployer] No lite-pet portrait at " +
+                            "Resources/PetPortraits/" + id + " — using TintColor " +
+                            "quad. Run Defenders → Art → Render Pet Portraits.");
+                    }
+                    renderer.sharedMaterial = mat;
+                }
+            }
+
+            quad.AddComponent<PetBillboard>();
+        }
+
+        /// <summary>
+        /// Flips a URP/Unlit (or legacy) material into alpha-blended transparent
+        /// mode so the portrait's transparent background reads through.
+        /// </summary>
+        private static void EnableMaterialTransparency(Material mat)
+        {
+            if (mat == null) return;
+            // URP/Unlit surface keywords for transparent + alpha blend.
+            if (mat.HasProperty("_Surface")) mat.SetFloat("_Surface", 1f); // 1 = Transparent
+            if (mat.HasProperty("_Blend"))   mat.SetFloat("_Blend", 0f);   // 0 = Alpha
+            if (mat.HasProperty("_SrcBlend")) mat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            if (mat.HasProperty("_DstBlend")) mat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            if (mat.HasProperty("_ZWrite"))   mat.SetInt("_ZWrite", 0);
+            if (mat.HasProperty("_Cull"))     mat.SetInt("_Cull", (int)UnityEngine.Rendering.CullMode.Off); // double-sided
+            mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            mat.EnableKeyword("_ALPHABLEND_ON");
+            mat.EnableKeyword("_ALPHAPREMULTIPLY_ON");
+            mat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
         }
 
         private static void TintPlaceholder(GameObject go, PetDef def)
