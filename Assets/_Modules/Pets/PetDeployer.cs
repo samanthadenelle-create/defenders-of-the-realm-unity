@@ -375,15 +375,59 @@ namespace DeNelle.Pets
                 // else Unity freezes the rig and it re-T-poses on re-entry to view.
                 anim.cullingMode = AnimatorCullingMode.AlwaysAnimate;
                 anim.Rebind();
+                return;
+            }
+
+            // WO-184 FALLBACK — no .controller asset shipped for this species (the
+            // ice-wolf is the GAP-PRIMARY quadruped: Generic rig, can't bind the
+            // KayKit Rig_Medium Pet.controller). Rather than leave a T-pose statue,
+            // play the FBX's OWN embedded take directly via a PlayableGraph — no
+            // AnimatorController needed, fully build-safe. Only attach when the
+            // species mesh actually carries an embedded clip.
+            AnimationClip clip = TryLoadEmbeddedClip(species);
+            if (clip != null)
+            {
+                var player = anim.gameObject.GetComponent<PetClipPlayer>();
+                if (player == null) player = anim.gameObject.AddComponent<PetClipPlayer>();
+                player.Initialize(anim, clip);
+                Debug.Log(
+                    "[PetDeployer] No .controller for pet '" + (species ?? "?") +
+                    "' — playing its embedded clip '" + clip.name +
+                    "' via PetClipPlayer (WO-184 fallback). Author a per-species " +
+                    "controller for a proper idle<->walk blend.");
             }
             else
             {
                 Debug.LogWarning(
                     "[PetDeployer] No AnimatorController at Resources/Pets/" +
                     (species ?? "<species>") + ".controller (nor Resources/Pets/Pet" +
-                    ".controller) — pet '" + (species ?? "?") + "' will not animate " +
-                    "(T-pose). Build a per-species controller from its embedded clips.");
+                    ".controller) AND no embedded clip on the FBX — pet '" +
+                    (species ?? "?") + "' will not animate (T-pose). Build a " +
+                    "per-species controller from its embedded clips.");
             }
+        }
+
+        /// <summary>
+        /// WO-184: loads the first <see cref="AnimationClip"/> embedded in the
+        /// species' model at Resources/Pets/&lt;species&gt; (Tripo FBXs import their
+        /// take as a sub-asset even when no clipAnimations are authored). Skips the
+        /// editor-only "__preview__" clip Unity adds. Returns null if the species or
+        /// its mesh carries no clip.
+        /// </summary>
+        private static AnimationClip TryLoadEmbeddedClip(string species)
+        {
+            if (string.IsNullOrEmpty(species)) return null;
+            var all = Resources.LoadAll<AnimationClip>("Pets/" + species);
+            if (all == null) return null;
+            foreach (var c in all)
+            {
+                if (c == null) continue;
+                // Unity injects a hidden "__preview__<name>" clip for the inspector;
+                // never play that one.
+                if (c.name.StartsWith("__preview__")) continue;
+                return c;
+            }
+            return null;
         }
 
         private static void NormalizePetHeight(GameObject go, float targetHeight)
