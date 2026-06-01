@@ -49,8 +49,20 @@ namespace DeNelle.Editor
             }
 
             // --- WebGL Player Settings (WO-09 section 2.1) ---
+            // WO-126: itch.io is a static host and does NOT send the
+            // `Content-Encoding: br` header, so Brotli-compressed payloads
+            // (.wasm.br/.js.br/.data.br) fail to load ("undefined at ...js.br").
+            // Pass `-noBrotli` on the batchmode command line to ship uncompressed
+            // files instead. Vercel keeps Brotli (default).
+            bool noBrotli = System.Environment.GetCommandLineArgs()
+                .Any(a => a.Equals("-noBrotli", System.StringComparison.OrdinalIgnoreCase));
+
             PlayerSettings.SetScriptingBackend(NamedBuildTarget.WebGL, ScriptingImplementation.IL2CPP);
-            PlayerSettings.WebGL.compressionFormat = WebGLCompressionFormat.Brotli;
+            PlayerSettings.WebGL.compressionFormat = noBrotli
+                ? WebGLCompressionFormat.Disabled
+                : WebGLCompressionFormat.Brotli;
+            Debug.Log($"[WebGLBuild] compressionFormat = {PlayerSettings.WebGL.compressionFormat}" +
+                      (noBrotli ? " (-noBrotli: uncompressed for itch.io)" : " (Brotli for Vercel)"));
             PlayerSettings.WebGL.memorySize = 512;
             PlayerSettings.WebGL.exceptionSupport = WebGLExceptionSupport.None;
             PlayerSettings.WebGL.dataCaching = true;
