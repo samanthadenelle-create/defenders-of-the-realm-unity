@@ -265,7 +265,15 @@ namespace DeNelle.Village
             go.AddComponent<NavMeshAgent>();
             var enemy = go.AddComponent<Enemy>();
 
-            var def = BuildRaiderDef(tribeId, threat);
+            // WO-155: compose the raider from the region's roster (RegionSpawnTable) so a
+            // tribe's members match the region theme (Wildlands living vs Wound-tied) — the
+            // SAME roster RegionMobSpawner reads. Falls back to a generic raider when the
+            // position has no roster. ThreatLevel still scales the stats.
+            RegionId region = ZoneManager.GetZone(pos);
+            string rosterId = RegionSpawnTable.HasRoster(region)
+                ? RegionSpawnTable.PickEnemyId(region, ZoneManager.Depth(pos), Random.value)
+                : null;
+            var def = BuildRaiderDef(tribeId, threat, rosterId);
             // March goal = the nearest standing settlement (the claim to raze), falling
             // back to the Heart when no settlement is in range. We DON'T add EnemyBrain:
             // its no-tactics DPS path targets only hero/towers/tagged targets (never a
@@ -288,22 +296,37 @@ namespace DeNelle.Village
 
         // Threat-scaled stat block (ThreatLevel = danger tier × depth). Deadlier
         // region ⇒ stronger raiders ⇒ more defence required (danger ⇄ reward).
-        private static EnemyDef BuildRaiderDef(string tribeId, int threat)
+        // WO-155: when a region-roster id is supplied, the raider takes that roster
+        // body's name + archetype (Wildlands Caveman, Orc Raider, etc.) so a tribe
+        // reads as its region's faction; otherwise it's the generic wandering raider.
+        private static EnemyDef BuildRaiderDef(string tribeId, int threat, string rosterId = null)
         {
             float scale = 1f + 0.12f * Mathf.Max(0, threat);
+
+            string name = "Wandering Raider"; string ai = "walker";
+            float hp = 45f, dmg = 8f, height = 1.8f; int xp = 14;
+            switch (rosterId)
+            {
+                case "orc-raider":       name = "Orc Raider";        ai = "charger";    hp = 60f; dmg = 11f; height = 2.0f; xp = 20; break;
+                case "caveman":          name = "Wildlands Caveman"; ai = "walker";     hp = 50f; dmg = 9f;  height = 1.9f; xp = 16; break;
+                case "feral-wolf":       name = "Feral Wolf";        ai = "skirmisher"; hp = 36f; dmg = 7f;  height = 1.2f; xp = 12; break;
+                case "tiefling-cultist": name = "Tiefling Cultist";  ai = "skirmisher"; hp = 55f; dmg = 10f; height = 1.9f; xp = 18; break;
+                case "necromancer":      name = "Wound Necromancer"; ai = "walker";     hp = 90f; dmg = 13f; height = 2.1f; xp = 28; break;
+            }
+
             return new EnemyDef
             {
-                Id = $"raider-{tribeId}",
-                Name = "Wandering Raider",
-                DisplayName = "Wandering Raider",
-                Ai = "walker",
-                Hp = 45f * scale,
+                Id = string.IsNullOrEmpty(rosterId) ? $"raider-{tribeId}" : rosterId,
+                Name = name,
+                DisplayName = name,
+                Ai = ai,
+                Hp = hp * scale,
                 MoveSpeed = 3.2f,
-                ContactDamage = 8f * scale,
+                ContactDamage = dmg * scale,
                 AttackInterval = 1.2f,
-                Height = 1.8f,
+                Height = height,
                 AggroRadius = 14f,
-                XpReward = 14 + threat,
+                XpReward = xp + threat,
                 GlimmerReward = 3,
             };
         }
