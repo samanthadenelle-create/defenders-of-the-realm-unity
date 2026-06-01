@@ -18,6 +18,12 @@
 --   POST /api/referral/claim       referrals, referral_claims        NO  (client-only)
 --   POST /api/tower-swap/log       tower_swaps                       NO  (client-only)
 --   POST /api/bug-report           bug_reports                       NO  (client-only)
+--   GET  /api/leaderboard          leaderboard_scores, player_profiles  YES (leaderboard/get.js)   [WO-129]
+--   POST /api/leaderboard/submit   leaderboard_scores                YES (leaderboard/submit.js) [WO-129]
+--   GET  /api/profile              player_profiles, leaderboard_scores  YES (profile/get.js)       [WO-129]
+--   POST /api/profile/username     player_profiles                   YES (profile/username.js)   [WO-129]
+--   POST /api/profile/social       player_profiles                   YES (profile/social.js)     [WO-129]
+--   POST /api/referral/install-brag  achievement_grants              YES (referral/install-brag.js) [WO-129]
 --
 -- "client-only" = the Unity client POSTs to the endpoint but the serverless
 -- function does NOT yet exist in api/. The table is defined here so that when
@@ -435,6 +441,132 @@ CREATE TABLE IF NOT EXISTS bug_reports (
 -- Recent reports first (triage view).
 CREATE INDEX IF NOT EXISTS idx_bug_reports_created
     ON bug_reports (created_at DESC);
+
+
+-- =============================================================================
+-- 9. player_profiles  — the identity layer the leaderboard needs (WO-129 §2.2).
+-- -----------------------------------------------------------------------------
+-- Endpoint : GET  /api/profile?wallet=<addr>        (api/profile/get.js)
+--            POST /api/profile/username             (api/profile/username.js)
+--            POST /api/profile/social/link|unlink   (api/profile/social.js)
+-- Client   : ProfileService (Core) — WO-129 §4 (NEW; not yet built)
+--
+-- The durable identity key stays the WALLET (player_id, same join key as every
+-- other table). username is a DISPLAY LABEL mapped onto that wallet — the public
+-- name shown on the leaderboard instead of a raw address (WO-129 §2.2).
+--
+--   wallet           — base58 address (PK). Same value as player_data.player_id;
+--                      NOT FK'd (a profile may be created before the first save).
+--   username         — public display name. NULL until the player sets one (the
+--                      client shows "Defender#<short-wallet>" as a default until
+--                      then; we do NOT persist that default — it's derived).
+--   username_ci      — lower(username), kept UNIQUE so the server enforces
+--                      case-insensitive uniqueness (WO-129 §2.2 USERNAME_TAKEN).
+--                      A generated column so it can never drift from username.
+--   avatar_id        — chosen hero/portrait id (defaults to current hero client-
+--                      side; NULL = "use current hero"). No new art for MVP.
+--   social_links     — JSONB opt-in map { "x": {handle, public}, "discord":{...} }.
+--                      Opt-in only; surfaced publicly only when public=true.
+--   created_at       — first profile touch.
+--   renamed_at       — last username change (NULL = never renamed). Backs the
+--                      "one free rename, then cost/cap" policy (WO-129 §2.2 US-8);
+--                      the rename-cost lever itself is enforced client/economy
+--                      side — this column is the server's timestamp of record.
+--
+-- username_ci is UNIQUE; the username endpoint maps a 23505 on it → USERNAME_TAKEN.
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS player_profiles (
+    wallet       TEXT        PRIMARY KEY,            -- base58 address (= player_data.player_id)
+    username     TEXT,                               -- public display name (NULL until set)
+    username_ci  TEXT        GENERATED ALWAYS AS (lower(username)) STORED, -- case-insensitive key
+    avatar_id    TEXT,                               -- chosen hero/portrait (NULL = current hero)
+    social_links JSONB       NOT NULL DEFAULT '{}',  -- opt-in { provider: { handle, public } }
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    renamed_at   TIMESTAMPTZ                         -- last username change (NULL = never)
+);
+
+-- Case-insensitive uniqueness for usernames (NULLs excluded → many un-named rows OK).
+CREATE UNIQUE INDEX IF NOT EXISTS uq_player_profiles_username_ci
+    ON player_profiles (username_ci)
+    WHERE username_ci IS NOT NULL;
+
+
+-- =============================================================================
+-- 10. leaderboard_scores  — server-authoritative standings (WO-129 §2.1).
+-- -----------------------------------------------------------------------------
+-- Endpoint : GET  /api/leaderboard?metric=<m>&period=<id>&wallet=<addr>
+--                                                   (api/leaderboard/get.js)
+--            POST /api/leaderboard/submit           (api/leaderboard/submit.js)
+-- Client   : LeaderboardService (Core) — WO-129 §4 (NEW; read-only client).
+--
+-- ONE row per (wallet, metric, period_id) — a player's BEST score on that board
+-- for that period. The submit endpoint only ever RAISES a score (a max-merge via
+-- GREATEST on conflict), so it is a monotonic high-water mark per board and a
+-- replayed/stale submit can never lower a standing. The client NEVER asserts a
+-- final rank — rank is computed at read time by ordering scores (WO-129 §5:
+-- "NO client-authoritative scores").
+--
+--   wallet      — the player (= player_data.player_id). NOT FK'd (score may land
+--                 before first save).
+--   metric      — which board: 'highest_wave' (SHIP FIRST), 'longest_hold',
+--                 'total_resources', 'clan', 'arena' (reserved). Free TEXT so a
+--                 new board needs no migration — the endpoints whitelist values.
+--   period_id   — 'alltime' (never resets) or a week key 'YYYY-Www' (e.g.
+--                 '2026-W22', resets Mon 00:00 UTC — WO-129 §2.1).
+--   score       — the standing value (BIGINT — wave count, seconds held, total
+--                 resources). Higher = better for every MVP board.
+--   meta        — optional JSONB context for the row (e.g. run id, hero used).
+--   updated_at  — when this best was last raised.
+--
+-- The PK (wallet, metric, period_id) is what makes submit idempotent + a clean
+-- upsert target; uq is implied by the composite PK.
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS leaderboard_scores (
+    wallet     TEXT        NOT NULL,                 -- player (= player_data.player_id)
+    metric     TEXT        NOT NULL,                 -- board id ('highest_wave', ...)
+    period_id  TEXT        NOT NULL,                 -- 'alltime' | 'YYYY-Www'
+    score      BIGINT      NOT NULL DEFAULT 0,       -- standing (higher = better)
+    meta       JSONB       NOT NULL DEFAULT '{}',    -- optional row context
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (wallet, metric, period_id)
+);
+
+-- The ranking query: ORDER BY score DESC within one board. This index makes both
+-- the top-N read and the caller's rank-window (COUNT scores above them) fast.
+CREATE INDEX IF NOT EXISTS idx_leaderboard_scores_board_rank
+    ON leaderboard_scores (metric, period_id, score DESC);
+
+
+-- =============================================================================
+-- 11. achievement_grants  — one-time, server-validated grants (WO-129 §2.4).
+-- -----------------------------------------------------------------------------
+-- Endpoint : POST /api/referral/install-brag        (api/referral/install-brag.js)
+-- Client   : ReferralService (Core) — install-brag bonus (WO-129 §2.4, extend).
+--
+-- Generic idempotency ledger for "grant this player X exactly once". The install
+-- brag is modelled as achievement_id = 'install_brag'. The PK (wallet,
+-- achievement_id) STRUCTURALLY prevents a double-grant — a second request for the
+-- same pair violates the PK, which the endpoint maps to "already granted" and
+-- returns the original (no second reward). This is the same anti-abuse shape the
+-- WO calls for: "the client requests; the server grants", keyed on durable wallet.
+--
+--   wallet         — who was granted (= player_data.player_id). NOT FK'd.
+--   achievement_id — the one-time grant key ('install_brag', and future grants).
+--   reward         — JSONB snapshot of what was granted (e.g. { crystals, flair })
+--                    so the audit record is self-describing even if policy changes.
+--   granted_at     — when (also the idempotency timestamp returned on re-request).
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS achievement_grants (
+    wallet         TEXT        NOT NULL,             -- player (= player_data.player_id)
+    achievement_id TEXT        NOT NULL,             -- 'install_brag' | future one-time grants
+    reward         JSONB       NOT NULL DEFAULT '{}',-- snapshot of granted reward (audit)
+    granted_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (wallet, achievement_id)
+);
+
+-- List a player's one-time grants (profile "Founding Herald" flair, audits).
+CREATE INDEX IF NOT EXISTS idx_achievement_grants_wallet
+    ON achievement_grants (wallet);
 
 
 -- =============================================================================
