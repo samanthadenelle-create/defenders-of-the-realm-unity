@@ -1,20 +1,31 @@
 // =============================================================================
 // TownsfolkDialogue — the ambient-villager flavour-line table (Workstream D).
 // -----------------------------------------------------------------------------
-// The dialogue content for the Avalon village's ambient townsfolk. When the
-// Keeper draws near a villager a word bubble shows ONE of these lines; it hides
-// again when the Keeper walks away (see AmbientNPC / TownsfolkController).
+// The dialogue content for Elarion's ambient townsfolk and the four named
+// wardens who keep the village's trades alive. When the Keeper draws near an
+// NPC a word bubble shows ONE of these lines; it hides again when the Keeper
+// walks away (see AmbientNPC / TownsfolkController).
 //
 // LOCALIZE: every spoken string in this file is user-facing flavour text. The
 // task brief keeps townsfolk dialogue OUT of the shared en.json (other agents
 // own that file) — these are kept here as clearly-marked // LOCALIZE: constants
 // so a future localization pass can lift them wholesale into the string table.
 //
-// Voice. Avalon is a magical + medieval crossover town that defends the Heart
-// of Elarion against the Hollow Ones. The lines lean cozy, lived-in, and a
-// little anxious about the waves — they should make the town read as ALIVE in
-// a grant demo without long-winded lore dumps. Each villager "type" gets its
-// own small pool so a market trader sounds different from an off-duty guard.
+// Voice. Elarion is a magical + medieval crossover town that defends the Heart
+// of Elarion against the Hollow Ones. Per the narrative bible §8 the tone is
+// short, grounded, hopeful at the core, no fake-archaic "thee/thou", and the
+// Hollow Ones read as grief rather than villains. Ambient lines lean cozy,
+// lived-in, and a little anxious about the waves — they should make the town
+// read as ALIVE in a grant demo without long-winded lore dumps. Each NPC "type"
+// gets its own small pool so a market trader sounds different from the
+// Blacksmith at her anvil or an off-duty wall guard.
+//
+// ── The four wardens (WO-116) ──
+//   • Blacksmith   — keeps the steel; proud, sooty, plain-spoken.
+//   • Quartermaster — keeps the stores; counts everything, jokes dryly.
+//   • Archmage     — keeps the wards; weary scholar, watches the violet light.
+//   • Farmer       — keeps the fields; patient, weather-wise, feeds the wall.
+// These are the named tradesfolk the injector points the People-pack models at.
 //
 // No assembly dependency: this is a plain data class in DeNelle.Village,
 // referenced only by the NPC MonoBehaviours in the same module.
@@ -25,16 +36,20 @@ using System;
 namespace DeNelle.Village
 {
     /// <summary>
-    /// The flavour-line pools the ambient townsfolk speak. Static, read-only
-    /// data — picked from by <see cref="AmbientNPC"/> through
+    /// The flavour-line pools the ambient townsfolk and wardens speak. Static,
+    /// read-only data — picked from by <see cref="AmbientNPC"/> through
     /// <see cref="LineFor"/>.
     /// </summary>
     public static class TownsfolkDialogue
     {
         /// <summary>
-        /// The ambient-villager archetypes. Each maps to its own line pool and a
-        /// display name, so a wandering trader reads differently from an
-        /// idle-by-the-well gossip or an off-duty wall guard.
+        /// The NPC archetypes. Each maps to its own line pool and a display name,
+        /// so a wandering trader reads differently from an idle-by-the-well gossip,
+        /// an off-duty wall guard, or one of the four named wardens.
+        ///
+        /// <para>Numeric values are STABLE — <see cref="AmbientNPC"/> serializes
+        /// this enum by value, so the original five (0–4) keep their numbers and
+        /// the four wardens (WO-116) are appended as 5–8. Do not renumber.</para>
         /// </summary>
         public enum Archetype
         {
@@ -48,17 +63,32 @@ namespace DeNelle.Village
             Child = 3,
             /// <summary>An elder who remembers older wars — calm, encouraging.</summary>
             Elder = 4,
+
+            // ── The four named wardens (WO-116) ──────────────────────────────
+            /// <summary>The Blacksmith — keeps the village's steel; proud, plain-spoken.</summary>
+            Blacksmith = 5,
+            /// <summary>The Quartermaster — keeps the stores; dry-humoured, counts everything.</summary>
+            Quartermaster = 6,
+            /// <summary>The Archmage — keeps the wards; weary scholar of the violet light.</summary>
+            Archmage = 7,
+            /// <summary>The Farmer — keeps the fields; patient, weather-wise, feeds the wall.</summary>
+            Farmer = 8,
         }
 
         // ── Display names per archetype ──────────────────────────────────────
-        // LOCALIZE: shown as the speech-bubble attribution line.
+        // LOCALIZE: shown as the speech-bubble attribution line. Index MUST track
+        // the Archetype enum value (0..8).
         private static readonly string[] _names =
         {
-            "Elarion Trader",  // Trader
-            "Villager",        // Villager
-            "Off-duty Guard",  // Guard
-            "Village Child",   // Child
-            "Village Elder",   // Elder
+            "Elarion Trader",   // 0 Trader
+            "Villager",         // 1 Villager
+            "Off-duty Guard",   // 2 Guard
+            "Village Child",    // 3 Child
+            "Village Elder",    // 4 Elder
+            "Brunhild, the Smith",    // 5 Blacksmith
+            "Aldric, Quartermaster",  // 6 Quartermaster
+            "Archmage Sela",          // 7 Archmage
+            "Goodman Harrow",         // 8 Farmer
         };
 
         // ── Trader lines ─────────────────────────────────────────────────────
@@ -89,7 +119,7 @@ namespace DeNelle.Village
         private static readonly string[] _guard =
         {
             "Walls held through the night. They always do — but I still count every stone.",
-            "Force-fields are humming steady on all four gates. Sleep easy, Keeper.",
+            "The wards hold steady on all four gates. Sleep easy, Keeper.",
             "Saw movement past the south lane at dusk. Could be deer. Could be worse.",
             "Off-duty, but a guard's never truly off. Shout if the horn sounds.",
             "Keep a tower manned and the Hollow Ones break against it like sea on rock.",
@@ -115,6 +145,54 @@ namespace DeNelle.Village
             "Rest when you can, Keeper. Even a guardian must close their eyes.",
         };
 
+        // ── Blacksmith lines (WO-116 warden) ─────────────────────────────────
+        // LOCALIZE: the village smith — proud of her steel, plain-spoken, sooty.
+        private static readonly string[] _blacksmith =
+        {
+            "Bring me crystal and I'll bring you an edge that bites a Hollow One to dust.",
+            "Every blade on that wall came off my anvil. I sleep fine knowing it.",
+            "Mind the sparks, Keeper — the forge runs hot since the last wave thinned my stock.",
+            "A good hammer and a steady hand. That's all that's ever held the dark back.",
+            "Dent your sword on something? Good. Means you were swinging it. Leave it, I'll mend it.",
+            "The Heart keeps the town. I keep the town's teeth. Fair trade, I'd say.",
+        };
+
+        // ── Quartermaster lines (WO-116 warden) ──────────────────────────────
+        // LOCALIZE: keeps the stores — dry-humoured, counts everything twice.
+        private static readonly string[] _quartermaster =
+        {
+            "Crystal, grain, arrows, bandages — I count it all twice and trust none of it once.",
+            "You'll want supplies before the next wave, Keeper. I've set yours aside. Don't tell the others.",
+            "Stores are holding. Holding isn't winning, mind — but it beats the alternative.",
+            "Lose a thing on the wall and I hear about it. I hear about everything. It's the job.",
+            "Spend wisely. The Hollow Ones don't take coin, but the walls surely do.",
+            "Give me a full larder over a full armoury any day. A fed wall is a held wall.",
+        };
+
+        // ── Archmage lines (WO-116 warden) ───────────────────────────────────
+        // LOCALIZE: keeps the wards — weary scholar who reads the violet light.
+        private static readonly string[] _archmage =
+        {
+            "The wards drink crystal like a parched field drinks rain. Keep them fed, Keeper.",
+            "I read the violet light the way a sailor reads the sky. Today it reads... uneasy.",
+            "The Hollow Ones are not evil. They are grief that forgot how to stop. Remember that when you fight.",
+            "Magic is only patience with a shape to it. The Heart taught me that, not any book.",
+            "Wake me if a ward dims past amber. Some nights I do not sleep at all.",
+            "Power flows from the Heart to the wall through me. I am only the channel. Tend the source.",
+        };
+
+        // ── Farmer lines (WO-116 warden) ─────────────────────────────────────
+        // LOCALIZE: keeps the fields — patient, weather-wise, feeds the wall.
+        private static readonly string[] _farmer =
+        {
+            "Soldiers hold the wall, Keeper, but it's the harvest that holds the soldiers.",
+            "Frost came early to the east row. The land remembers the Hollow Ones too, I reckon.",
+            "I've sown through three waves now. The seed doesn't care about the dark. Neither will I.",
+            "Stop by at dusk — there's stew on, and a hungry Keeper's no use to anyone.",
+            "Give me a season of quiet and I'll fill every larder in Elarion. Just a season.",
+            "The fields run right up to the moat. Closest a peaceful thing gets to the wall, that.",
+        };
+
         /// <summary>Returns the speech-bubble display name for an archetype.</summary>
         public static string NameFor(Archetype archetype)
         {
@@ -127,12 +205,16 @@ namespace DeNelle.Village
         {
             switch (archetype)
             {
-                case Archetype.Trader:   return _trader;
-                case Archetype.Villager: return _villager;
-                case Archetype.Guard:    return _guard;
-                case Archetype.Child:    return _child;
-                case Archetype.Elder:    return _elder;
-                default:                 return _villager;
+                case Archetype.Trader:        return _trader;
+                case Archetype.Villager:      return _villager;
+                case Archetype.Guard:         return _guard;
+                case Archetype.Child:         return _child;
+                case Archetype.Elder:         return _elder;
+                case Archetype.Blacksmith:    return _blacksmith;
+                case Archetype.Quartermaster: return _quartermaster;
+                case Archetype.Archmage:      return _archmage;
+                case Archetype.Farmer:        return _farmer;
+                default:                      return _villager;
             }
         }
 

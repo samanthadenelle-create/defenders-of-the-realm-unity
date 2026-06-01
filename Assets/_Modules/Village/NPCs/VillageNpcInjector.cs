@@ -39,12 +39,16 @@ namespace DeNelle.Village
 
         // Positions / archetypes mirror VillageSceneBuilder.BuildTownsfolk so the
         // placement the owner already approved is preserved; only the meshes change.
+        // WO-116: the two named tradesfolk models now speak as their wardens
+        // (the Blacksmith model talks as the Blacksmith, the Merchant as the
+        // Quartermaster) instead of the generic Guard/Trader pools. Mevina (a
+        // wanderer) keeps her everyday-villager voice; Tob keeps the elder voice.
         private static readonly Def[] Defs =
         {
-            new Def { Res = "NPCs/NPC_Peasant_Mevina", Pos = new Vector3(  4f, 0f,  5f), Arch = TownsfolkDialogue.Archetype.Villager, Wander = true  },
-            new Def { Res = "NPCs/NPC_Peasant_Tob",    Pos = new Vector3(  2f, 0f, -6f), Arch = TownsfolkDialogue.Archetype.Elder,    Wander = false },
-            new Def { Res = "NPCs/NPC_Merchant",       Pos = new Vector3(-10f, 0f, -7f), Arch = TownsfolkDialogue.Archetype.Trader,   Wander = false },
-            new Def { Res = "NPCs/NPC_Blacksmith",     Pos = new Vector3(  1f, 0f, 14f), Arch = TownsfolkDialogue.Archetype.Guard,    Wander = false },
+            new Def { Res = "NPCs/NPC_Peasant_Mevina", Pos = new Vector3(  4f, 0f,  5f), Arch = TownsfolkDialogue.Archetype.Villager,      Wander = true  },
+            new Def { Res = "NPCs/NPC_Peasant_Tob",    Pos = new Vector3(  2f, 0f, -6f), Arch = TownsfolkDialogue.Archetype.Elder,         Wander = false },
+            new Def { Res = "NPCs/NPC_Merchant",       Pos = new Vector3(-10f, 0f, -7f), Arch = TownsfolkDialogue.Archetype.Quartermaster, Wander = false },
+            new Def { Res = "NPCs/NPC_Blacksmith",     Pos = new Vector3(  1f, 0f, 14f), Arch = TownsfolkDialogue.Archetype.Blacksmith,    Wander = false },
         };
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]

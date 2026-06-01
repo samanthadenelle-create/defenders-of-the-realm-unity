@@ -1,5 +1,5 @@
 // =============================================================================
-// AmbientNPC — an ambient townsperson of Avalon village (Workstream D).
+// AmbientNPC — an ambient townsperson of Elarion village (Workstream D).
 // -----------------------------------------------------------------------------
 // One ambient villager: a KayKit civilian model that either WANDERS the village
 // on the baked NavMesh or stands IDLE at an authored spot, and shows an
@@ -415,11 +415,16 @@ namespace DeNelle.Village
         {
             switch (a)
             {
-                case TownsfolkDialogue.Archetype.Trader:   return Hex("c2925a"); // amber
-                case TownsfolkDialogue.Archetype.Guard:    return Hex("8a6b5a"); // earthy brown
-                case TownsfolkDialogue.Archetype.Child:    return Hex("7fa8c9"); // soft blue
-                case TownsfolkDialogue.Archetype.Elder:    return Hex("a09890"); // grey-white
-                default:                                   return Hex("c2a882"); // Villager warm tan
+                case TownsfolkDialogue.Archetype.Trader:        return Hex("c2925a"); // amber
+                case TownsfolkDialogue.Archetype.Guard:         return Hex("8a6b5a"); // earthy brown
+                case TownsfolkDialogue.Archetype.Child:         return Hex("7fa8c9"); // soft blue
+                case TownsfolkDialogue.Archetype.Elder:         return Hex("a09890"); // grey-white
+                // WO-116 wardens — each reads at a glance even as a placeholder body.
+                case TownsfolkDialogue.Archetype.Blacksmith:    return Hex("5a5048"); // soot/iron grey
+                case TownsfolkDialogue.Archetype.Quartermaster: return Hex("9c7b3f"); // ledger-brown ochre
+                case TownsfolkDialogue.Archetype.Archmage:      return Hex("8a6fb0"); // ward-violet
+                case TownsfolkDialogue.Archetype.Farmer:        return Hex("8a9a52"); // field green
+                default:                                        return Hex("c2a882"); // Villager warm tan
             }
         }
 
