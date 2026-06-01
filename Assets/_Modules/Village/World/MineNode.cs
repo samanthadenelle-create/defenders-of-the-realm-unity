@@ -50,12 +50,94 @@ namespace DeNelle.Village
         private float _respawnTimer;
         private bool  _depleted;
         private Transform _player;
+        private bool  _claimedByWorker;
 
         private void Awake()
         {
             _extractsLeft = TotalExtracts;
             var p = GameObject.FindWithTag("Player");
             _player = p != null ? p.transform : null;
+        }
+
+        // =====================================================================
+        // WO-117 — auto-collect seam. A dispatched Worker drives the SAME extract
+        // path the player's [F] uses (one banking source of truth — no parallel
+        // economy). The worker claims the node, then ticks TryAutoExtract() on the
+        // node's own cooldown; extraction reuses Extract() so yield, region-danger
+        // bonus, cooldown and depletion all behave identically to a manual tap.
+        // =====================================================================
+
+        /// <summary>True once a worker has claimed this node for auto-collect.
+        /// A second worker should not be dispatched to a claimed node.</summary>
+        public bool IsClaimedByWorker => _claimedByWorker;
+
+        /// <summary>True when the node has run out of extracts (waiting to respawn,
+        /// or permanently spent if RespawnSeconds == 0). No further yield until it
+        /// respawns.</summary>
+        public bool IsDepleted => _depleted;
+
+        /// <summary>Seconds remaining before the next extract is allowed. 0 = ready.</summary>
+        public float CooldownRemaining => Mathf.Max(0f, _cooldown);
+
+        /// <summary>Extracts remaining before depletion (TotalExtracts==0 ⇒ infinite,
+        /// reported as int.MaxValue). Read-only progress for the fill indicator.</summary>
+        public int ExtractsRemaining => TotalExtracts <= 0 ? int.MaxValue : Mathf.Max(0, _extractsLeft);
+
+        /// <summary>0..1 fill toward depletion for the world UI. Infinite nodes report 1
+        /// (always "full of resource"). Depleted reports 0.</summary>
+        public float ExtractFraction
+        {
+            get
+            {
+                if (_depleted) return 0f;
+                if (TotalExtracts <= 0) return 1f;
+                return Mathf.Clamp01((float)_extractsLeft / TotalExtracts);
+            }
+        }
+
+        /// <summary>The node's effective yield-per-extract right now, including the
+        /// region danger bonus. Read-only — used by offline catch-up and UI.</summary>
+        public int EffectiveYield
+        {
+            get
+            {
+                int tier = Mathf.Max(0, ZoneManager.DangerTierAt(transform.position));
+                return Mathf.RoundToInt(YieldPerExtract * (1f + 0.25f * tier));
+            }
+        }
+
+        /// <summary>Average resource banked per second when a worker is on station
+        /// (one extract every ExtractCooldown). The read-only rate the offline-accrual
+        /// seam (WorkerManager.ActiveAssignments) integrates while the player is away.</summary>
+        public float RatePerSecond =>
+            (_depleted || ExtractCooldown <= 0f) ? 0f : EffectiveYield / ExtractCooldown;
+
+        /// <summary>Claim (or release) the node for a worker. Idempotent.</summary>
+        public void SetWorkerClaim(bool claimed) => _claimedByWorker = claimed;
+
+        /// <summary>Worker-driven collect. Banks one extract IF the node is ready
+        /// (not depleted, cooldown elapsed); returns the amount banked (0 if not ready).
+        /// Reuses the exact same Extract() path as the manual [F] tap, so there is no
+        /// second banking code path to keep in sync.</summary>
+        public int TryAutoExtract()
+        {
+            if (_depleted || _cooldown > 0f) return 0;
+            int before = EffectiveYield;
+            Extract();
+            return before;
+        }
+
+        /// <summary>Offline catch-up collect — banks one extract ignoring the LIVE
+        /// cooldown (the elapsed offline time already "paid" it), but still respects
+        /// depletion so an offline node runs dry exactly as a live one would. Returns
+        /// the amount banked (0 if depleted). Used only by WorkerManager's offline
+        /// integration; live collection uses TryAutoExtract().</summary>
+        public int ForceAutoExtract()
+        {
+            if (_depleted) return 0;
+            int before = EffectiveYield;
+            Extract();          // advances depletion + sets the next live cooldown
+            return before;
         }
 
         private void Update()
