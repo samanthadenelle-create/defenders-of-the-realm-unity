@@ -15,6 +15,18 @@
 // so once a controller is on the mesh the enemy walks/attacks/dies for free.
 //
 // Run headless: -executeMethod DeNelle.Editor.EnemyAnimatorSetup.Setup
+//
+// ── WO-217 / WO-218 NOTE ─────────────────────────────────────────────────────
+// WO-217 (snappier enemy attacks) is implemented in AnimatorSetup.BuildHumanoid-
+// Controller (Attack/Cast state.speed = 1.15 + earlier return-to-idle), because
+// the actual enemy attack STATES live in the canonical controllers this script
+// merely copies — there is nothing attack-related to tune here.
+// WO-218 (upper-body attack layer) is SKIPPED for enemies on purpose: the KayKit
+// enemies are GENERIC rigs (EnsureAvatar sets animationType = Generic). Humanoid
+// AvatarMasks (SetHumanoidBodyPartActive) only apply to Humanoid avatars, so a
+// humanoid upper-body mask would not mask a Generic rig correctly — it would risk
+// breaking enemy locomotion/attack for no gain. Enemy layering is therefore left
+// out; only the hero (Humanoid) gets the WO-218 upper-body layer.
 // =============================================================================
 
 using UnityEditor;

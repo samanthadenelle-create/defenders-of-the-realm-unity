@@ -695,6 +695,16 @@ namespace DeNelle.Village
         /// <summary>Source-tint the next floating damage number (see IDamageTintable).</summary>
         public void SetNextDamageTint(Color color) => _nextNumberTint = color;
 
+        // WO-219: element stamped by the damage source (spell / weapon) for the NEXT hit
+        // only; consumed and cleared in TakeDamageFrom so the impact burst is tinted by
+        // element (flame / ice / aether) instead of the generic grey physical spark.
+        // Null = physical (the existing VfxPool / Impact_Physical fallback).
+        private DamageElement? _nextImpactElement;
+
+        /// <summary>WO-219: element-tint the impact VFX for the NEXT hit (spell hits read
+        /// flame/ice/aether; melee stays physical). Set by EnemyDamageable.TakeDamage.</summary>
+        public void SetNextImpactElement(DamageElement element) => _nextImpactElement = element;
+
         public void TakeDamage(float amount)
         {
             // No source position — default flinch direction is Front (attacker
@@ -745,12 +755,26 @@ namespace DeNelle.Village
 
                 // DEF-46: per-type hit VFX — use SO prefab when assigned, fall
                 // back to the procedural VfxPool burst otherwise.
+                // WO-219: when the damage source stamped an element (a spell hit),
+                // route through the existing VFXManager element impacts so flame /
+                // ice / aether hits read distinctly. Melee (null element) keeps the
+                // original SO-prefab / VfxPool grey physical spark. Consume once.
                 Vector3 hitPos = transform.position + Vector3.up * 0.6f;
-                GameObject hitPrefab = _typeVfxSet != null ? _typeVfxSet.RandomHitVfxPrefab() : null;
-                if (hitPrefab != null)
-                    Instantiate(hitPrefab, hitPos, Quaternion.identity);
+                DamageElement? impactElement = _nextImpactElement;
+                _nextImpactElement = null;
+                VFXType elementImpact = ImpactVfxFor(impactElement);
+                if (elementImpact != VFXType.None)
+                {
+                    VFXManager.Play(elementImpact, hitPos);
+                }
                 else
-                    VfxPool.SpawnHitImpact(hitPos);
+                {
+                    GameObject hitPrefab = _typeVfxSet != null ? _typeVfxSet.RandomHitVfxPrefab() : null;
+                    if (hitPrefab != null)
+                        Instantiate(hitPrefab, hitPos, Quaternion.identity);
+                    else
+                        VfxPool.SpawnHitImpact(hitPos);
+                }
 
                 // Combat feel: blink the enemy red on the hit (additive, null-safe).
                 _hitReaction?.Flash();
@@ -897,6 +921,25 @@ namespace DeNelle.Village
         {
             yield return new WaitForSeconds(0.28f);
             VFXManager.Play(VFXType.Impact_Physical, pos + Vector3.up * 0.3f);
+        }
+
+        /// <summary>
+        /// WO-219: maps a damage element to its existing impact VFXType. Returns
+        /// <see cref="VFXType.None"/> for a null element (melee / physical) so the
+        /// caller keeps the original SO-prefab / VfxPool grey-spark path. No new
+        /// VFXType added — these all already exist in VFXType.cs.
+        /// </summary>
+        private static VFXType ImpactVfxFor(DamageElement? element)
+        {
+            if (!element.HasValue) return VFXType.None;
+            switch (element.Value)
+            {
+                case DamageElement.Flame: return VFXType.Impact_Flame;
+                case DamageElement.Ice:    return VFXType.Impact_Ice;
+                case DamageElement.Aether: return VFXType.Impact_Aether;
+                // Physical / None spell damage uses the existing per-type / VfxPool path.
+                default:                   return VFXType.None;
+            }
         }
 
         private void EnsureAgent()

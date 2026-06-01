@@ -79,6 +79,10 @@ namespace DeNelle.Village
         public void TakeDamage(float amount, DamageElement element)
         {
             if (_enemy == null || !IsAlive) return;
+            // WO-219: stamp the element so Enemy.TakeDamageFrom can tint the impact
+            // burst (flame / ice / aether) for this one hit. None = melee/physical →
+            // Enemy keeps its existing grey-spark VfxPool path. Consumed once there.
+            _enemy.SetNextImpactElement(element);
             // Element resist / bonus math is a later tuning pass — enemies.json
             // does not yet carry per-element resistances. Forward raw damage.
             _enemy.TakeDamage(amount);
