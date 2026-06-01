@@ -27,7 +27,7 @@ namespace DeNelle.Core.State
     {
         // ── Versioning ───────────────────────────────────────────────────────
         /// <summary>CURRENT_SCHEMA_VERSION — bumped whenever the persisted shape changes.</summary>
-        public const int CurrentVersion = 11;  // v11 — added aetherCrystals (tower empowerment currency)
+        public const int CurrentVersion = 12;  // v12 — added lastHarvestClaimMs (WO-115 offline accrual clock)
         /// <summary>SaveExport.format — bumped only if the envelope shape changes.</summary>
         public const int FileFormat = 1;
 
@@ -148,6 +148,15 @@ namespace DeNelle.Core.State
             /// Local-only: never touches the SKR token or Solana wallet.
             /// </summary>
             [JsonProperty("aetherCrystals")] public double? AetherCrystals;
+
+            // ── v12 — Offline harvest accrual (WO-115) ───────────────────────────
+            /// <summary>
+            /// Unix-ms of the last offline-harvest accrual claim. Nullable per the
+            /// <c>.partial()</c> convention; absent on an older save → defaults to 0 on
+            /// load (no retroactive haul), so no explicit migration step is needed
+            /// (same additive-default-on-read pattern as <c>aetherCrystals</c>).
+            /// </summary>
+            [JsonProperty("lastHarvestClaimMs")] public double? LastHarvestClaimMs;
         }
 
         // =====================================================================
@@ -293,6 +302,8 @@ namespace DeNelle.Core.State
                 }
                 if (raw.LastInboxSyncAt.HasValue)
                     raw.LastInboxSyncAt = FiniteInt(raw.LastInboxSyncAt.Value, "lastInboxSyncAt");
+                if (raw.LastHarvestClaimMs.HasValue)
+                    raw.LastHarvestClaimMs = FiniteInt(raw.LastHarvestClaimMs.Value, "lastHarvestClaimMs");
 
                 // ── Volumes / joystick → finite-only (NOT clamped on load) ───
                 if (raw.JoystickSensitivity.HasValue)

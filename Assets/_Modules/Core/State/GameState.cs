@@ -137,6 +137,18 @@ namespace DeNelle.Core.State
         /// <summary>#38c — unix ms of the last inbox sync. Fresh = 0.</summary>
         public double LastInboxSyncAt;
 
+        // ── Offline harvest accrual (WO-115) ─────────────────────────────────
+        /// <summary>
+        /// Unix-ms of the last offline-harvest accrual claim (WO-115). Fresh = 0
+        /// (never claimed → seeded to now on first load, no retroactive haul). The
+        /// accrual clock: OfflineHarvestService integrates each active harvest source's
+        /// rate over (now − this) on resume/load, banks the capped haul, then advances
+        /// this to now. Mirrors <see cref="LastInboxSyncAt"/> exactly (a double unix-ms
+        /// field that round-trips through the save layer). Append-only at the END so
+        /// older saves stay loadable.
+        /// </summary>
+        public double LastHarvestClaimMs;
+
         // ── World / zones (WO-164) ────────────────────────────────────────────
         /// <summary>Per-region zone records — discovery/clear flags, neighbor graph,
         /// and City/Horde destination tag (WO-164). Seeded from

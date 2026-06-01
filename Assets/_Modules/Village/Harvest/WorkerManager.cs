@@ -41,9 +41,18 @@ namespace DeNelle.Village
                  "Defaults to this GameObject's position if unset.")]
         public Transform DropOff;
 
-        [Header("Offline catch-up")]
+        [Header("Offline catch-up (SUPERSEDED by WO-115 OfflineHarvestService)")]
+        [Tooltip("Run WorkerManager's own self-contained PlayerPrefs catch-up. DEFAULT OFF: " +
+                 "WO-115's OfflineHarvestService is now the single offline-accrual path (it reads " +
+                 "this manager's ActiveAssignments() seam + MineNode.RatePerSecond, banks via the " +
+                 "save-persisted GameState.LastHarvestClaimMs clock, and shows a welcome-back popup). " +
+                 "Leaving both on would DOUBLE-GRANT, so this stub is disabled by default and kept " +
+                 "only as a fallback for a scene that has no OfflineHarvestService.")]
+        public bool UseOfflineCatchUp = false;
+
         [Tooltip("Cap on offline seconds credited in one catch-up, so a long absence " +
-                 "doesn't overflow a node. 0 = uncapped (still clamped by node depletion).")]
+                 "doesn't overflow a node. 0 = uncapped (still clamped by node depletion). " +
+                 "Only used when UseOfflineCatchUp is on (the superseded fallback path).")]
         [Min(0f)] public float MaxOfflineSeconds = 8f * 3600f;   // 8h default cap
 
         [Tooltip("PlayerPrefs key storing the last-live wall-clock (UTC ticks) of the " +
@@ -68,18 +77,22 @@ namespace DeNelle.Village
         {
             if (Instance == this)
             {
-                StampLastActive();   // record when the harvest went dark, for next launch's catch-up
+                if (UseOfflineCatchUp) StampLastActive();   // record when the harvest went dark
                 Instance = null;
             }
         }
 
         private void OnApplicationPause(bool paused)
         {
+            if (!UseOfflineCatchUp) return;   // WO-115 OfflineHarvestService owns the offline path now
             if (paused) StampLastActive();
             else ApplyOfflineCatchUp();   // mobile resume — credit the backgrounded gap
         }
 
-        private void OnApplicationQuit() => StampLastActive();
+        private void OnApplicationQuit()
+        {
+            if (UseOfflineCatchUp) StampLastActive();
+        }
 
         [Header("Demo dispatch (Phase 1)")]
         [Tooltip("If true, a left-click / tap on a MineNode dispatches the nearest free " +
@@ -103,7 +116,7 @@ namespace DeNelle.Village
                 for (int i = 0; i < nodes.Length; i++) NodeFillIndicator.Attach(nodes[i]);
             }
 
-            ApplyOfflineCatchUp();
+            if (UseOfflineCatchUp) ApplyOfflineCatchUp();   // superseded fallback only
         }
 
         private void Update()

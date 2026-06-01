@@ -312,6 +312,7 @@ namespace DeNelle.Core.State
                 BlockedCodes = s.BlockedCodes,
                 Inbox = s.Inbox,
                 LastInboxSyncAt = s.LastInboxSyncAt,
+                LastHarvestClaimMs = s.LastHarvestClaimMs,
             };
         }
 
@@ -365,6 +366,7 @@ namespace DeNelle.Core.State
             if (p.BlockedCodes != null) s.BlockedCodes = p.BlockedCodes;
             if (p.Inbox != null) s.Inbox = p.Inbox;
             if (p.LastInboxSyncAt.HasValue) s.LastInboxSyncAt = p.LastInboxSyncAt.Value;
+            if (p.LastHarvestClaimMs.HasValue) s.LastHarvestClaimMs = p.LastHarvestClaimMs.Value;
         }
 
         // =====================================================================
@@ -545,6 +547,7 @@ namespace DeNelle.Core.State
             s.ActiveDungeonRun = null;
             s.Quests = QuestProgress.Empty();
             s.Regions = RegionProgress.Empty();
+            s.LastHarvestClaimMs = 0;   // New Game → reseed the accrual clock on next load (no haul).
             // NOTE: BoundWallet, BreachStyle and every social field are deliberately
             // left untouched — preferences and identity survive a New Game.
             s.SchemaVersion = SaveSchema.CurrentVersion;
