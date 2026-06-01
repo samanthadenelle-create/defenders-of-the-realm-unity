@@ -39,10 +39,16 @@ namespace DeNelle.Village
         [SerializeField] private float _verticalArmLength = 0.5f;
 
         [Tooltip("Enable Cinemachine Deoccluder — auto-pulls camera in when " +
-                 "geometry blocks the hero. Currently OFF: the deoccluder was " +
-                 "treating the hero's own collider as an obstacle (2026-05-20). " +
-                 "Re-enable after we tag/layer the hero so the deoccluder ignores it.")]
-        [SerializeField] private bool _enableDeoccluder = false;
+                 "geometry blocks the hero (WO-156). The deoccluder now ignores " +
+                 "the hero via IgnoreTag = \"Player\" and only collides against the " +
+                 "building / wall / tower layers, so it no longer treats the hero's " +
+                 "own collider as an obstacle (the 2026-05-20 reason it was off).")]
+        [SerializeField] private bool _enableDeoccluder = true;
+
+        [Tooltip("Tag of the hero so the deoccluder never treats the hero's own " +
+                 "collider as an obstacle. Must match VillageSceneBuilder.BuildHero " +
+                 "(CLAUDE.md §7 — the hero is tagged \"Player\").")]
+        [SerializeField] private string _heroTag = "Player";
 
         private void Start()
         {
@@ -81,9 +87,37 @@ namespace DeNelle.Village
             if (_enableDeoccluder)
             {
                 var deoccluder = cineGo.AddComponent<CinemachineDeoccluder>();
+
+                // Only buildings / walls / towers should block the camera. Walls
+                // and buildings live on the Default layer (0) in the village build;
+                // dedicated Building (6) + Tower (3) layers exist too. We explicitly
+                // EXCLUDE Enemy (8), Water (4), UI (5), Ignore Raycast (2) and
+                // TransparentFX (1) so passing enemies / water / FX never yank the
+                // camera. (TagManager.asset: Default 0, TransparentFX 1, Ignore
+                // Raycast 2, Tower 3, Water 4, UI 5, Building 6, Enemy 8.)
+                deoccluder.CollideAgainst =
+                    (1 << 0)   // Default — wall barriers + most static geometry
+                    | (1 << 3) // Tower
+                    | (1 << 6);// Building
+
+                // The hero is on the Default layer too, so without this the
+                // deoccluder would treat the hero's own collider as an obstacle
+                // and slam the camera onto it (the 2026-05-20 disable reason).
+                // IgnoreTag makes it skip the hero regardless of layer.
+                deoccluder.IgnoreTag = _heroTag;
+
+                // Don't react to geometry hugging the hero (props, the hero's own
+                // capsule) — only walls/buildings farther out should pull.
+                deoccluder.MinimumDistanceFromTarget = 0.6f;
+
                 deoccluder.AvoidObstacles.Enabled = true;
                 deoccluder.AvoidObstacles.DistanceLimit = 8f;
                 deoccluder.AvoidObstacles.CameraRadius = 0.3f;
+                deoccluder.AvoidObstacles.MaximumEffort = 4;
+                // Preserve framing height while pulling forward so the camera
+                // lifts/clears the wall rather than just jamming straight in.
+                deoccluder.AvoidObstacles.Strategy =
+                    CinemachineDeoccluder.ObstacleAvoidance.ResolutionStrategy.PreserveCameraHeight;
                 deoccluder.AvoidObstacles.SmoothingTime = 0.15f;
                 deoccluder.AvoidObstacles.Damping = 0.4f;
                 deoccluder.AvoidObstacles.DampingWhenOccluded = 0.05f;
