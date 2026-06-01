@@ -24,13 +24,18 @@
 //   stub (Wood 200, Stone 150, Iron 80, Crystals 50) so existing scenes are
 //   unaffected.
 //
-// PERSISTENCE: in-session only (no PlayerPrefs). Resources reset on scene
-//   reload intentionally — a run is a single play session. Cross-run persistence
-//   is a later pass (same deferral as HeroProgression).
+// PERSISTENCE: Wood/Stone/Iron are in-session only (no PlayerPrefs) — they reset
+//   on scene reload intentionally (a run is a single play session; WO-134 owns
+//   their persistence). CRYSTALS are the exception (WO-131): the crystal slot is
+//   a thin facade over GameState.Resources.Crystals — the SINGLE source of truth
+//   the BuildMenu and village HUD display and that wave/empower paths feed. So
+//   EconomyService no longer keeps a divergent in-session crystal pool; every
+//   crystal read/spend/grant here round-trips through GameStateService and persists.
 // =============================================================================
 
 using System;
 using UnityEngine;
+using DeNelle.Core.State;
 
 namespace DeNelle.Village
 {
@@ -92,20 +97,34 @@ namespace DeNelle.Village
 
         // ── Starting amounts (Inspector) ──────────────────────────────────────
 
-        [Header("Starting Resources")]
+        [Header("Starting Resources (Wood/Stone/Iron — in-session)")]
         [SerializeField, Min(0)] private int _wood     = 200;
         [SerializeField, Min(0)] private int _stone    = 150;
         [SerializeField, Min(0)] private int _iron     = 80;
-        [SerializeField, Min(0)] private int _crystals = 50;
+        // NOTE (WO-131): crystals are NO LONGER an in-session field here. They are
+        // backed by GameState.Resources.Crystals — see the Crystals property below.
 
         // ── Public read-only properties ───────────────────────────────────────
 
         public int Wood     => _wood;
         public int Stone    => _stone;
         public int Iron     => _iron;
-        public int Crystals => _crystals;
 
-        public ResourceSnapshot Snapshot => new ResourceSnapshot(_wood, _stone, _iron, _crystals);
+        /// <summary>
+        /// WO-131 — crystals are the SINGLE source of truth on
+        /// GameState.Resources.Crystals (the store the HUD/BuildMenu display), NOT a
+        /// local pool. Reads through GameStateService; returns 0 when state is absent.
+        /// </summary>
+        public int Crystals
+        {
+            get
+            {
+                var state = GameStateService.Instance?.State;
+                return state != null ? state.Resources.Crystals : 0;
+            }
+        }
+
+        public ResourceSnapshot Snapshot => new ResourceSnapshot(_wood, _stone, _iron, Crystals);
 
         // ── Events ────────────────────────────────────────────────────────────
 
@@ -139,23 +158,26 @@ namespace DeNelle.Village
         /// <summary>Returns true when all four resource pools cover <paramref name="cost"/>.</summary>
         public bool CanAfford(ResourceCost cost)
         {
-            return _wood     >= cost.Wood
-                && _stone    >= cost.Stone
-                && _iron     >= cost.Iron
-                && _crystals >= cost.Crystals;
+            return _wood  >= cost.Wood
+                && _stone >= cost.Stone
+                && _iron  >= cost.Iron
+                && Crystals >= cost.Crystals;   // WO-131 — GameState-backed
         }
 
         /// <summary>
         /// Atomically spends <paramref name="cost"/> if affordable. Returns true on
-        /// success, false (no mutation) when any resource is short.
+        /// success, false (no mutation) when any resource is short. The crystal slot
+        /// (WO-131) is deducted from GameState.Resources.Crystals (persisted), the
+        /// Wood/Stone/Iron slots from the in-session pool.
         /// </summary>
         public bool TrySpend(ResourceCost cost)
         {
             if (!CanAfford(cost)) return false;
-            _wood     -= cost.Wood;
-            _stone    -= cost.Stone;
-            _iron     -= cost.Iron;
-            _crystals -= cost.Crystals;
+            _wood  -= cost.Wood;
+            _stone -= cost.Stone;
+            _iron  -= cost.Iron;
+            if (cost.Crystals > 0)
+                GameStateService.Instance?.AddCrystals(-cost.Crystals);   // GameState-backed spend
             NotifyChanged();
             return true;
         }
@@ -163,10 +185,12 @@ namespace DeNelle.Village
         /// <summary>Adds resources — for wave rewards, harvesting, etc. Negative values are clamped to 0.</summary>
         public void Grant(ResourceCost amount)
         {
-            _wood     += Mathf.Max(0, amount.Wood);
-            _stone    += Mathf.Max(0, amount.Stone);
-            _iron     += Mathf.Max(0, amount.Iron);
-            _crystals += Mathf.Max(0, amount.Crystals);
+            _wood  += Mathf.Max(0, amount.Wood);
+            _stone += Mathf.Max(0, amount.Stone);
+            _iron  += Mathf.Max(0, amount.Iron);
+            int crystals = Mathf.Max(0, amount.Crystals);
+            if (crystals > 0)
+                GameStateService.Instance?.AddCrystals(crystals);   // WO-131 — GameState-backed grant
             NotifyChanged();
         }
 

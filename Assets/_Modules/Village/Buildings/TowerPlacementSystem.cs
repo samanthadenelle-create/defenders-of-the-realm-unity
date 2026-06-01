@@ -25,6 +25,7 @@ using System;
 using UnityEngine;
 using DeNelle.Core.Data;
 using DeNelle.Core.Progression;
+using DeNelle.Core.State;
 
 namespace DeNelle.Village
 {
@@ -51,6 +52,13 @@ namespace DeNelle.Village
         private MaterialPropertyBlock _markerPropertyBlock;
         private bool _placing;
 
+        // WO-131 — when true, the caller (BuildMenu.OnConfirmBuild) ALREADY deducted
+        // the crystal cost from GameState.Resources.Crystals (the single spend site),
+        // so this system must NOT charge again. If the player cancels the placement
+        // before landing it, the prepaid cost is REFUNDED to the same store.
+        private bool _prepaid;
+        private int  _prepaidCost;
+
         // --- Overlap test (pre-allocated; no per-frame GC) -----------------------
         private readonly Collider[] _overlapBuffer = new Collider[16];
         private int _towerBuildingLayer;
@@ -76,23 +84,49 @@ namespace DeNelle.Village
             _mainCamera = Camera.main;
         }
 
-        /// <summary>Begin placing <paramref name="data"/>: spawns the ghost marker.</summary>
-        public void StartPlacing(TowerData data)
+        /// <summary>
+        /// Begin placing <paramref name="data"/>: spawns the ghost marker.
+        /// </summary>
+        /// <param name="data">The tower type to place.</param>
+        /// <param name="prepaid">
+        /// WO-131 — true when the caller already deducted the crystal cost
+        /// (BuildMenu.OnConfirmBuild is the single spend site). When prepaid, this
+        /// system neither charges on placement nor gates the cursor on affordability;
+        /// it only validates geometry/skill. A cancelled prepaid placement is refunded.
+        /// When false (legacy / direct callers), the system charges
+        /// <see cref="TowerData.cost"/> on placement as before — now routed through
+        /// the unified GameState crystal store rather than the old Wood pool.
+        /// </param>
+        public void StartPlacing(TowerData data, bool prepaid = false)
         {
             if (data == null) return;
-            CancelPlacing();   // drop any in-flight marker first
+            CancelPlacing();   // drop any in-flight marker first (refunds nothing — _prepaid cleared)
 
             _selectedTower = data;
             _placing = true;
+            _prepaid = prepaid;
+            _prepaidCost = prepaid ? data.cost : 0;
 
             _currentMarker = BuildMarker();
             _markerRenderer = _currentMarker.GetComponentInChildren<Renderer>();
             _markerPropertyBlock = new MaterialPropertyBlock();
         }
 
-        /// <summary>Abort the current placement and tear down the ghost marker.</summary>
+        /// <summary>
+        /// Abort the current placement and tear down the ghost marker. If the cost
+        /// was prepaid by the caller (WO-131) and never spent on a tower, REFUND it
+        /// to the same GameState crystal store so a cancelled build is free.
+        /// </summary>
         public void CancelPlacing()
         {
+            if (_prepaid && _prepaidCost > 0)
+            {
+                // Refund to the single source of truth (Resources.Crystals).
+                GameStateService.Instance?.AddCrystals(_prepaidCost);
+            }
+            _prepaid = false;
+            _prepaidCost = 0;
+
             if (_currentMarker != null) Destroy(_currentMarker);
             _currentMarker = null;
             _markerRenderer = null;
@@ -161,9 +195,22 @@ namespace DeNelle.Village
         {
             if (_selectedTower == null) return false;
 
-            if (EconomyService.Instance == null ||
-                !EconomyService.Instance.CanAfford(_selectedTower.cost))
-                return false;
+            // WO-131 — affordability is gated by the SINGLE crystal source of truth
+            // (GameState.Resources.Crystals). When the cost was prepaid by the caller
+            // (BuildMenu), it was already validated + deducted there, so skip the
+            // affordability gate here (the crystals are spent — re-checking the
+            // now-lower balance would wrongly reject the placement).
+            if (!_prepaid)
+            {
+                // Single source of truth: GameState.Resources.Crystals — the SAME
+                // store the BuildMenu and village HUD display. (CrystalEconomy targets
+                // the separate AetherCrystals field, which the build HUD does not show,
+                // so it is NOT used for build affordability.)
+                var svc   = GameStateService.Instance;
+                var state = svc != null ? svc.State : null;
+                if (state == null || state.Resources.Crystals < _selectedTower.cost)
+                    return false;
+            }
 
             if (SkillSystem.Instance == null ||
                 !SkillSystem.Instance.HasRequiredSkill(_selectedTower.requiredSkill))
@@ -179,17 +226,28 @@ namespace DeNelle.Village
             return true;
         }
 
-        /// <summary>Spend the cost and hand the build to the construction queue (DEF-76).</summary>
+        /// <summary>Spend the cost (unless prepaid) and hand the build to the construction queue (DEF-76).</summary>
         private void PlaceTower(Vector3 pos)
         {
             if (_selectedTower == null) return;
 
-            // Re-check affordability at the click (CanPlace already gates the cursor,
-            // but never spend on a stale frame).
-            if (EconomyService.Instance == null || !EconomyService.Instance.CanAfford(_selectedTower.cost))
-                return;
+            // WO-131 — crystal spend routes through the single source of truth:
+            // GameState.Resources.Crystals (the store the HUD + BuildMenu display).
+            // When prepaid, the caller (BuildMenu) already deducted it — do NOT
+            // charge again. Otherwise re-check + deduct atomically here.
+            if (!_prepaid)
+            {
+                var svc   = GameStateService.Instance;
+                var state = svc != null ? svc.State : null;
+                if (state == null || state.Resources.Crystals < _selectedTower.cost)
+                    return;   // can't afford on this frame — reject without spending
+                svc.AddCrystals(-_selectedTower.cost);   // negative = spend; persisted + HUD-synced
+            }
 
-            EconomyService.Instance.Spend(_selectedTower.cost);
+            // The cost is now consumed by a real placement — clear the prepaid flag
+            // BEFORE CancelPlacing() so the teardown does NOT refund a placed tower.
+            _prepaid = false;
+            _prepaidCost = 0;
 
             // DEF-76 — towers no longer pop in instantly. The queue raises them over
             // buildTime (scaffolding + worker VFX + progress bar) and calls

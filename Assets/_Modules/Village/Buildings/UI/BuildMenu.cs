@@ -593,9 +593,26 @@ namespace DeNelle.Village
                 return;
             }
 
+            // WO-131 — SINGLE AUTHORITATIVE CRYSTAL SPEND for tower placement.
+            // Deduct the DISPLAYED cost (v.CrystalCost) from the SAME store the menu
+            // and the village HUD read: GameState.Resources.Crystals (via
+            // GameStateService.AddCrystals, which clamps >= 0, persists, and raises
+            // ResourcesChanged). This is the one and only place a placement charges
+            // crystals — TowerPlacementSystem no longer touches the economy, so a
+            // placement can never double-charge or charge a divergent (Wood / Aether)
+            // pool. CanAfford(v) above re-checked the live balance one statement ago.
+            var gss = GameStateService.Instance;
+            if (gss == null)
+            {
+                SetStatus("Game state unavailable — cannot charge crystals.", isError: true);
+                return;
+            }
+            gss.AddCrystals(-v.CrystalCost);   // negative = spend; persisted + HUD-synced
+
             if (TowerPlacementSystem.Instance == null)
                 new GameObject("TowerPlacementSystem").AddComponent<TowerPlacementSystem>();
-            TowerPlacementSystem.Instance.StartPlacing(data);
+            // Pass the already-paid cost so TowerPlacementSystem does NOT charge again.
+            TowerPlacementSystem.Instance.StartPlacing(data, prepaid: true);
             Close();   // hide the menu so the world click lands the placement
             SetStatus($"Click a clear tile to raise the {v.DisplayName}.");
         }
@@ -817,9 +834,20 @@ namespace DeNelle.Village
                 return;
             }
 
+            // WO-131 — charge the DISPLAYED cost from the single crystal store
+            // (GameState.Resources.Crystals) exactly once, then hand a PREPAID
+            // placement to TowerPlacementSystem (refunded on cancel, never re-charged).
+            var gss = GameStateService.Instance;
+            if (gss == null)
+            {
+                SetStatus("Game state unavailable — cannot charge crystals.", isError: true);
+                return;
+            }
+            gss.AddCrystals(-def.CrystalCost);   // negative = spend; persisted + HUD-synced
+
             if (TowerPlacementSystem.Instance == null)
                 new GameObject("TowerPlacementSystem").AddComponent<TowerPlacementSystem>();
-            TowerPlacementSystem.Instance.StartPlacing(data);
+            TowerPlacementSystem.Instance.StartPlacing(data, prepaid: true);
             Close();   // hide the menu so the world click lands the placement
             SetStatus($"Click a clear tile to raise the {VillageStrings.BuildingName(def)}.");
         }
