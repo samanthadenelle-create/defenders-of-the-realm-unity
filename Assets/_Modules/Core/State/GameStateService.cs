@@ -23,8 +23,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Text;
 using Cysharp.Threading.Tasks;
+using DeNelle.Core.Web3;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
@@ -575,6 +577,7 @@ namespace DeNelle.Core.State
 #endif
         private const string SaveUrl       = BackendBase + "/api/game/save";
         private const string LoadUrl       = BackendBase + "/api/game/load";
+        private const string NonceUrl      = BackendBase + "/api/auth/nonce";
         private const string SyncQueueKey  = "dotr-sync-queue";
         private const float  MinSyncDelay  = 8f;   // seconds between background syncs
 
@@ -632,6 +635,13 @@ namespace DeNelle.Core.State
             using var req = UnityWebRequest.Get(url);
             req.SetRequestHeader("Accept", "application/json");
 
+            // WO-121: attach wallet-signed auth headers when enforcement is on and
+            // a real signer is connected. A load has no body, so the payload tag is
+            // the literal "load" (matches api/_lib/wallet-auth.buildSignedMessage).
+            // When the flag is off or no real signer exists, this is a no-op and the
+            // request goes out exactly as before (offline-safe).
+            await TryAttachAuthHeaders(req, payloadHashOrLoadTag: "load");
+
             await req.SendWebRequest();
 
             if (req.result != UnityWebRequest.Result.Success)
@@ -681,6 +691,132 @@ namespace DeNelle.Core.State
             Save();
             StateReplaced.Invoke();
             Debug.Log("[Sync] Server state merged onto local SO.");
+        }
+
+        // ── Backend save-auth (WO-121) — wallet-signed nonce headers ──────────
+        //
+        //  Counterpart to the WO-120 backend gate (api/_lib/wallet-auth.js). On a
+        //  save/load the backend wants X-Wallet / X-Nonce / X-Signature, where the
+        //  client GETs a nonce, builds the canonical message and ed25519-signs it.
+        //
+        //  TWO INDEPENDENT GATES, both required to sign (offline-safe by design):
+        //    1. BackendAuthConfig.Enforced — the feature flag (off by default).
+        //    2. CoreServices.WalletSigner.CanSign — a REAL signer is connected
+        //       (the devnet stub registers but cannot sign).
+        //  If either gate is open, we SKIP the headers, log that signing is
+        //  stubbed, and the request goes out unauthed exactly as before. This is
+        //  what keeps current offline/unauthed play working until the flag flips
+        //  AND a real MWA signer (SolanaWalletProvider) lands.
+
+        /// <summary>
+        /// Attaches X-Wallet / X-Nonce / X-Signature to <paramref name="req"/> when
+        /// backend auth is enforced AND a real signer is connected. Otherwise a
+        /// no-op (the request stays unauthed). <paramref name="payloadHashOrLoadTag"/>
+        /// is the sha256-hex of the raw POST body, or the literal "load" for a GET.
+        /// </summary>
+        private async UniTask TryAttachAuthHeaders(UnityWebRequest req, string payloadHashOrLoadTag)
+        {
+            if (!BackendAuthConfig.Enforced)
+                return; // flag off — current behaviour, no auth headers.
+
+            var signer = CoreServices.WalletSigner;
+            if (signer == null || !signer.CanSign)
+            {
+                Debug.LogWarning(
+                    "[Sync] Backend auth enforced but no real wallet signer is available " +
+                    "(signing is stubbed) — sending save/load WITHOUT auth headers. " +
+                    "Connect a real wallet (SolanaWalletProvider) to sign.");
+                return;
+            }
+
+            var wallet = signer.WalletAddress;
+            if (string.IsNullOrEmpty(wallet))
+            {
+                Debug.LogWarning("[Sync] Wallet signer reports CanSign but has no address — skipping auth headers.");
+                return;
+            }
+
+            // 1. GET a fresh single-use nonce bound to this wallet.
+            var nonce = await FetchNonce(wallet);
+            if (string.IsNullOrEmpty(nonce))
+            {
+                Debug.LogWarning("[Sync] Could not obtain an auth nonce — sending without auth headers.");
+                return;
+            }
+
+            // 2. Build the EXACT canonical message the backend reconstructs, then sign.
+            //    dotr-save:v1:<wallet>:<nonce>:<sha256-hex-of-body | "load">
+            var message = $"dotr-save:v1:{wallet}:{nonce}:{payloadHashOrLoadTag}";
+
+            string signature;
+            try
+            {
+                signature = await signer.SignMessageBase58(message);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[Sync] Wallet signing failed ({ex.Message}) — sending without auth headers.");
+                return;
+            }
+
+            if (string.IsNullOrEmpty(signature))
+            {
+                Debug.LogWarning("[Sync] Wallet returned an empty signature — sending without auth headers.");
+                return;
+            }
+
+            // 3. Present the challenge response. Header names match the backend exactly.
+            req.SetRequestHeader("X-Wallet", wallet);
+            req.SetRequestHeader("X-Nonce", nonce);
+            req.SetRequestHeader("X-Signature", signature);
+        }
+
+        /// <summary>
+        /// GET /api/auth/nonce?wallet=&lt;base58&gt; → the issued one-time nonce, or
+        /// null on any failure (caller then sends unauthed rather than throwing).
+        /// </summary>
+        private async UniTask<string> FetchNonce(string wallet)
+        {
+            var url = $"{NonceUrl}?wallet={Uri.EscapeDataString(wallet)}";
+            using var req = UnityWebRequest.Get(url);
+            req.SetRequestHeader("Accept", "application/json");
+
+            await req.SendWebRequest();
+
+            if (req.result != UnityWebRequest.Result.Success)
+            {
+                Debug.LogWarning($"[Sync] Nonce fetch failed ({req.responseCode}): {req.error}");
+                return null;
+            }
+
+            try
+            {
+                var resp = JsonConvert.DeserializeObject<NonceResponse>(req.downloadHandler.text);
+                return resp != null && resp.Success ? resp.Nonce : null;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[Sync] Nonce parse error: {ex.Message}");
+                return null;
+            }
+        }
+
+        /// <summary>Lowercase hex SHA-256 of the raw bytes — matches Node's crypto sha256 hex digest.</summary>
+        private static string Sha256Hex(byte[] bytes)
+        {
+            using var sha = SHA256.Create();
+            var hash = sha.ComputeHash(bytes ?? Array.Empty<byte>());
+            var sb = new StringBuilder(hash.Length * 2);
+            foreach (var b in hash) sb.Append(b.ToString("x2"));
+            return sb.ToString();
+        }
+
+        private sealed class NonceResponse
+        {
+            [JsonProperty("success")]    public bool   Success    { get; set; }
+            [JsonProperty("nonce")]      public string Nonce      { get; set; }
+            [JsonProperty("expiresAt")]  public string ExpiresAt  { get; set; }
+            [JsonProperty("ttlSeconds")] public int    TtlSeconds { get; set; }
         }
 
         // ── Core sync pipeline ────────────────────────────────────────────
@@ -749,6 +885,13 @@ namespace DeNelle.Core.State
                 downloadHandler = new DownloadHandlerBuffer(),
             };
             req.SetRequestHeader("Content-Type", "application/json");
+
+            // WO-121: attach wallet-signed auth headers when enforcement is on and a
+            // real signer is connected. The signed payload tag is the sha256-hex of
+            // the EXACT raw body bytes we upload (binds the signature to this body,
+            // matches api/_lib/wallet-auth.buildSignedMessage). No-op (skips headers)
+            // when the flag is off or no real signer is available — offline-safe.
+            await TryAttachAuthHeaders(req, payloadHashOrLoadTag: Sha256Hex(body));
 
             await req.SendWebRequest();
 

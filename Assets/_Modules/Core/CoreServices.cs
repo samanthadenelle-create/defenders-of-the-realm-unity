@@ -75,5 +75,30 @@ namespace DeNelle.Core
         {
             if (Jupiter == svc) Jupiter = null;
         }
+
+        // ── Wallet signer (WO-121 backend save-auth) ─────────────────────────
+        /// <summary>
+        /// The active wallet message-signer, or null when no wallet is
+        /// connected. Registered by WalletService (DeNelle.Wallet) on Connect,
+        /// unregistered on Disconnect. GameStateService resolves it to sign the
+        /// backend save/load auth nonce. Always null-check; even when non-null,
+        /// check <see cref="IWalletSigner.CanSign"/> before signing (the devnet
+        /// stub registers but cannot sign).
+        /// </summary>
+        public static IWalletSigner WalletSigner { get; private set; }
+
+        /// <summary>Registers the wallet signer. Called by WalletService when a wallet connects.</summary>
+        public static void RegisterWalletSigner(IWalletSigner signer)
+        {
+            if (WalletSigner != null && WalletSigner != signer)
+                Debug.Log("[CoreServices] Replacing existing IWalletSigner registration.");
+            WalletSigner = signer;
+        }
+
+        /// <summary>Unregisters the wallet signer. Called by WalletService on disconnect.</summary>
+        public static void UnregisterWalletSigner(IWalletSigner signer)
+        {
+            if (ReferenceEquals(WalletSigner, signer)) WalletSigner = null;
+        }
     }
 }

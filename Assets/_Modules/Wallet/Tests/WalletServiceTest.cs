@@ -75,6 +75,16 @@ namespace DeNelle.Wallet.Tests
                 ? PaymentResult.Failure(packSku, currency, "Fake provider forced failure.")
                 : PaymentResult.Success(packSku, currency, amount, "FAKE-SIGNATURE"));
         }
+
+        /// <summary>When true, the fake reports it can sign and returns FAKE-MSG-SIG.</summary>
+        public bool CanSign { get; set; }
+
+        public bool CanSignMessages => CanSign;
+
+        public UniTask<string> SignMessageBase58(string utf8Message)
+        {
+            return UniTask.FromResult(CanSign ? "FAKE-MSG-SIG" : null);
+        }
     }
 
     [TestFixture]
