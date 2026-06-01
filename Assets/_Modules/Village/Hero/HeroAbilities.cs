@@ -308,6 +308,13 @@ namespace DeNelle.Village
             {
                 case AbilityEffect.Heal:
                 {
+                    // WO-220: the Heal branch never routes through SpawnVfx (where every
+                    // other ability fires its cast SFX), so the heal cast was silent.
+                    // Play the class-flavoured cast sting here directly so every ability
+                    // beat — offensive AND heal — has a sound. The bridge null-guards
+                    // CoreServices.Audio internally.
+                    AbilityAudioBridge.PlayForClassAndKind(_heroClass, def.EffectEnum);
+
                     // DTT routes the heal to repair the TOWER (HealHandler). Otherwise
                     // it heals the CASTER — executive call 2026-05-28: "heal hero is
                     // correct — cannot heal a tree." def.Damage carries the amount.

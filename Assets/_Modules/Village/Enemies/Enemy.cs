@@ -422,14 +422,33 @@ namespace DeNelle.Village
             // an AudioSource is added to the prefab.
         }
 
+        /// <summary>The kind of combat beat a fallback SFX covers (WO-220).</summary>
+        private enum CombatSfxFallback { None, Hit, Death }
+
         /// <summary>
         /// Plays a clip via the enemy's AudioSource (one-shot, non-interrupting).
         /// No-op when either the source or the clip is null.
+        ///
+        /// WO-220: when the type-set provided NO clip (clip == null) and a
+        /// <paramref name="fallback"/> kind is given, play a generated fallback SFX
+        /// through the EXISTING audio surface (CoreServices.Audio) so the enemy is
+        /// never silent on a hit / death — even before any EnemyTypeVfxSet clips are
+        /// authored. The type-set clip is always preferred when present.
         /// </summary>
-        private void PlayTypeSound(AudioClip clip)
+        private void PlayTypeSound(AudioClip clip, CombatSfxFallback fallback = CombatSfxFallback.None)
         {
-            if (_audioSource == null || clip == null) return;
-            _audioSource.PlayOneShot(clip);
+            if (clip != null)
+            {
+                if (_audioSource != null) _audioSource.PlayOneShot(clip);
+                return;
+            }
+
+            // No authored clip — fill the gap via the central audio service.
+            switch (fallback)
+            {
+                case CombatSfxFallback.Hit:   EnemyCombatAudio.PlayHit();   break;
+                case CombatSfxFallback.Death: EnemyCombatAudio.PlayDeath(); break;
+            }
         }
 
         private void Update()
@@ -783,8 +802,10 @@ namespace DeNelle.Village
                 if (amount >= _heavyHitThreshold)
                     CameraShakeBridge.Shake(0.32f, 0.22f);   // heavier than the per-hit default
 
-                // DEF-46: per-type hit audio.
-                PlayTypeSound(_typeVfxSet != null ? _typeVfxSet.RandomHitClip() : null);
+                // DEF-46: per-type hit audio. WO-220: fall back to a generated hit
+                // SFX (via CoreServices.Audio) when no type-set clip is authored.
+                PlayTypeSound(_typeVfxSet != null ? _typeVfxSet.RandomHitClip() : null,
+                              CombatSfxFallback.Hit);
 
                 // DEF-44/45: hit-stop + combo counter.
                 CombatFeedbackManager.Hit(hitPos, amount);
@@ -866,7 +887,10 @@ namespace DeNelle.Village
                 }
 
                 // DEF-46: per-type death audio (always plays, even for elite kills).
-                PlayTypeSound(_typeVfxSet != null ? _typeVfxSet.RandomDeathClip() : null);
+                // WO-220: fall back to a generated death SFX (via CoreServices.Audio)
+                // when no type-set clip is authored.
+                PlayTypeSound(_typeVfxSet != null ? _typeVfxSet.RandomDeathClip() : null,
+                              CombatSfxFallback.Death);
 
                 // Regular shake only when no EliteVFXController handled it.
                 if (eliteVfx == null) CameraShakeBridge.Shake(0.18f, 0.22f);
