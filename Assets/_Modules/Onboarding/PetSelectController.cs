@@ -6,10 +6,15 @@
 // there was no pick-a-pet UI. This is that screen — a sibling of hero-select,
 // shown right after it.
 //
-// THE SCREEN reuses the hero-select scaffold: same SelectScreen.uss, same card
-// layout (PetSelectScreen.uxml). Three pet cards — Aether Sprite / Flame Pup /
-// Ice Wolf — built at runtime from the canonical pets.json via IntroPetCatalog
-// (a StreamingAssets read, not a DeNelle.Pets dependency — module isolation).
+// THE SCREEN is built ENTIRELY IN CODE — no UXML, no USS. Project memory:
+// UXML-sourced UIDocuments come up blank in player builds (BattleHUD / BuildMenu
+// learned the hard way), so this screen constructs its root / header / card row /
+// footer directly on the UIDocument's rootVisualElement with inline styles
+// (the same idiom StoryIntroController uses). The inline values mirror the old
+// SelectScreen.uss so the look is unchanged. Three pet cards — Aether Sprite /
+// Flame Pup / Ice Wolf — built at runtime from the canonical pets.json via
+// IntroPetCatalog (a StreamingAssets read, not a DeNelle.Pets dependency —
+// module isolation).
 //
 // COPY: the screen title / subtitle / confirm label come from en.json via
 // CanonStrings; the per-pet name + archetype come straight from pets.json.
@@ -44,24 +49,20 @@ namespace DeNelle.Onboarding
     [RequireComponent(typeof(UIDocument))]
     public sealed class PetSelectController : MonoBehaviour
     {
-        // ── UXML element names — the binding contract with PetSelectScreen.uxml ─
-        private const string RootName = "pet-select-root";
-        private const string TitleName = "pet-select-title";
-        private const string SubtitleName = "pet-select-subtitle";
-        private const string CardRowName = "pet-card-row";
-        private const string ConfirmName = "pet-select-confirm";
-
-        // ── USS class names — styled by SelectScreen.uss (shared with hero-select) ─
-        private const string CardClass = "select-card";
-        private const string CardActiveClass = "select-card--active";
-        private const string PortraitClass = "select-card__portrait";
-        private const string GlyphClass = "select-card__glyph";
-        private const string AccentClass = "select-card__accent";
-        private const string BodyClass = "select-card__body";
-        private const string NameClass = "select-card__name";
-        private const string RoleClass = "select-card__role";
-        private const string BlurbClass = "select-card__blurb";
-        private const string ConfirmDisabledClass = "select-confirm--disabled";
+        // ── Palette (inline — mirrors the old SelectScreen.uss values) ───────
+        private static readonly Color ScreenBg   = new Color(0.024f, 0.016f, 0.047f); // rgb(6,4,12)
+        private static readonly Color CardBg      = new Color(0.102f, 0.071f, 0.165f, 0.98f); // rgba(26,18,42,.98)
+        private static readonly Color CardBgActive= new Color(0.149f, 0.102f, 0.204f, 0.98f); // rgba(38,26,52,.98)
+        private static readonly Color CardBorder  = new Color(0.486f, 0.227f, 0.929f, 0.30f); // rgba(124,58,237,.30)
+        private static readonly Color Amber       = new Color(0.961f, 0.651f, 0.137f);        // rgb(245,166,35)
+        private static readonly Color PortraitBg  = new Color(0.486f, 0.227f, 0.929f, 0.10f); // rgba(124,58,237,.10)
+        private static readonly Color TitleText   = new Color(0.929f, 0.914f, 0.980f);        // rgb(237,233,250)
+        private static readonly Color SubtitleText= new Color(0.659f, 0.627f, 0.737f);        // rgb(168,160,188)
+        private static readonly Color BlurbText   = new Color(0.729f, 0.698f, 0.824f, 0.85f); // rgba(186,178,210,.85)
+        private static readonly Color GlyphColorBase = new Color(0.769f, 0.710f, 0.992f);     // rgb(196,181,253)
+        private static readonly Color ConfirmText = new Color(0.086f, 0.055f, 0.024f);        // rgb(22,14,6)
+        private static readonly Color ConfirmDisabledText = new Color(0.929f, 0.914f, 0.980f, 0.35f);
+        private static readonly Color ConfirmDisabledBg   = new Color(1f, 1f, 1f, 0.06f);
 
         // ── en.json keys for the screen's own copy ───────────────────────────
         private const string TitleKey = "petSelect.title";
@@ -141,30 +142,82 @@ namespace DeNelle.Onboarding
 
         private void BindElements()
         {
-            _root = _document != null ? _document.rootVisualElement : null;
-            if (_root == null)
+            var rootDoc = _document != null ? _document.rootVisualElement : null;
+            if (rootDoc == null)
             {
                 Debug.LogWarning("[PetSelectController] No UIDocument root — pet-select will not display.");
                 return;
             }
 
-            _title = _root.Q<Label>(TitleName);
-            _subtitle = _root.Q<Label>(SubtitleName);
-            _cardRow = _root.Q<VisualElement>(CardRowName);
-            _confirmButton = _root.Q<Button>(ConfirmName);
+            // CODE-BUILT scaffold (no UXML — would render blank in a player build).
+            // Clear anything a stale visualTreeAsset may have cloned in, then build
+            // root -> header(title+subtitle) -> card row -> footer(confirm).
+            rootDoc.Clear();
 
-            // Header + confirm copy — canon strings, never typed inline.
-            if (_title != null) _title.text = CanonStrings.Locale(TitleKey);
-            if (_subtitle != null) _subtitle.text = CanonStrings.Locale(SubtitleKey);
-            if (_confirmButton != null) _confirmButton.text = CanonStrings.Locale(ConfirmKey);
+            _root = new VisualElement { name = "pet-select-root" };
+            _root.style.flexGrow = 1f;
+            _root.style.position = Position.Absolute;
+            _root.style.top = 0; _root.style.left = 0; _root.style.right = 0; _root.style.bottom = 0;
+            _root.style.backgroundColor = ScreenBg;
+            _root.style.flexDirection = FlexDirection.Column;
+            _root.style.alignItems = Align.Stretch;
+            _root.style.justifyContent = Justify.FlexStart;
+            rootDoc.Add(_root);
+
+            // ── Header — title + subtitle, centred, from en.json ──────────────
+            var header = new VisualElement { name = "select-header" };
+            header.style.alignItems = Align.Center;
+            header.style.marginBottom = 28;
+            header.style.paddingTop = 36; header.style.paddingBottom = 0;
+            header.style.paddingLeft = 24; header.style.paddingRight = 24;
+            _root.Add(header);
+
+            _title = new Label(CanonStrings.Locale(TitleKey)) { name = "pet-select-title" };
+            _title.style.fontSize = 34;
+            _title.style.unityFontStyleAndWeight = FontStyle.Bold;
+            _title.style.color = TitleText;
+            _title.style.unityTextAlign = TextAnchor.MiddleCenter;
+            header.Add(_title);
+
+            _subtitle = new Label(CanonStrings.Locale(SubtitleKey)) { name = "pet-select-subtitle" };
+            _subtitle.style.marginTop = 8;
+            _subtitle.style.fontSize = 15;
+            _subtitle.style.unityFontStyleAndWeight = FontStyle.Italic;
+            _subtitle.style.color = SubtitleText;
+            _subtitle.style.unityTextAlign = TextAnchor.MiddleCenter;
+            _subtitle.style.whiteSpace = WhiteSpace.Normal;
+            _subtitle.style.maxWidth = 720;
+            header.Add(_subtitle);
+
+            // ── Card row — the three pet cards, built below ───────────────────
+            _cardRow = new VisualElement { name = "pet-card-row" };
+            _cardRow.style.flexDirection = FlexDirection.Row;
+            _cardRow.style.justifyContent = Justify.Center;
+            _cardRow.style.alignItems = Align.Center;
+            _cardRow.style.flexGrow = 1f;
+            _root.Add(_cardRow);
 
             BuildCards();
 
-            if (_confirmButton != null)
-            {
-                _confirmButton.clicked -= OnConfirmClicked; // guard a double OnEnable
-                _confirmButton.clicked += OnConfirmClicked;
-            }
+            // ── Footer — confirm CTA, disabled until a pet is chosen ──────────
+            var footer = new VisualElement { name = "select-footer" };
+            footer.style.marginTop = 14;
+            footer.style.alignItems = Align.Center;
+            _root.Add(footer);
+
+            _confirmButton = new Button { name = "pet-select-confirm", text = CanonStrings.Locale(ConfirmKey) };
+            _confirmButton.style.minWidth = 200;
+            _confirmButton.style.height = 52;
+            _confirmButton.style.fontSize = 15;
+            _confirmButton.style.unityFontStyleAndWeight = FontStyle.Bold;
+            _confirmButton.style.borderTopLeftRadius = 12; _confirmButton.style.borderTopRightRadius = 12;
+            _confirmButton.style.borderBottomLeftRadius = 12; _confirmButton.style.borderBottomRightRadius = 12;
+            _confirmButton.style.borderTopWidth = 0; _confirmButton.style.borderBottomWidth = 0;
+            _confirmButton.style.borderLeftWidth = 0; _confirmButton.style.borderRightWidth = 0;
+            footer.Add(_confirmButton);
+
+            _confirmButton.clicked -= OnConfirmClicked; // guard a double OnEnable
+            _confirmButton.clicked += OnConfirmClicked;
 
             RefreshConfirmEnabled();
             _bound = true;
@@ -194,19 +247,32 @@ namespace DeNelle.Onboarding
             }
         }
 
-        /// <summary>Builds one pet card VisualElement from a pets.json entry.</summary>
+        /// <summary>
+        /// Builds one pet card VisualElement from a pets.json entry. Fully
+        /// inline-styled (code-built — no USS); values mirror the old
+        /// SelectScreen.uss .select-card family.
+        /// </summary>
         private VisualElement BuildCard(IntroPetInfo pet)
         {
-            var card = new VisualElement { name = $"pet-card-{pet.Id}" };
-            card.AddToClassList(CardClass);
-
             Color accent = pet.GlowUnityColor;
 
-            // Portrait block — the pet's PNG from the React asset pack (loaded
-            // from Resources/PetPortraits/<pet.Id>) with the single-initial
-            // glyph as a guaranteed fallback if the texture isn't present.
+            var card = new VisualElement { name = $"pet-card-{pet.Id}" };
+            card.style.width = 240;
+            card.style.marginLeft = 10; card.style.marginRight = 10;
+            SetBorderRadius(card, 14);
+            SetBorderWidth(card, 2);
+            SetBorderColor(card, CardBorder);
+            card.style.backgroundColor = CardBg;
+            card.style.overflow = Overflow.Hidden;
+            card.style.flexDirection = FlexDirection.Column;
+
+            // Portrait block — the pet's PNG (Resources/PetPortraits/<pet.Id>)
+            // with the single-initial glyph as a guaranteed fallback.
             var portrait = new VisualElement();
-            portrait.AddToClassList(PortraitClass);
+            portrait.style.height = 130;
+            portrait.style.alignItems = Align.Center;
+            portrait.style.justifyContent = Justify.Center;
+            portrait.style.backgroundColor = PortraitBg;
             var portraitTex = Resources.Load<Texture2D>($"PetPortraits/{pet.Id}");
             if (portraitTex != null)
             {
@@ -219,7 +285,8 @@ namespace DeNelle.Onboarding
                     ? pet.Name.Substring(0, 1).ToUpperInvariant()
                     : "?";
                 var glyph = new Label(initial);
-                glyph.AddToClassList(GlyphClass);
+                glyph.style.fontSize = 72;
+                glyph.style.unityFontStyleAndWeight = FontStyle.Bold;
                 glyph.style.color = accent;
                 portrait.Add(glyph);
             }
@@ -227,26 +294,36 @@ namespace DeNelle.Onboarding
 
             // Element-coloured accent strip.
             var accentStrip = new VisualElement();
-            accentStrip.AddToClassList(AccentClass);
+            accentStrip.style.height = 4;
             accentStrip.style.backgroundColor = accent;
             card.Add(accentStrip);
 
             // Text body — name / archetype role / element blurb.
             var body = new VisualElement();
-            body.AddToClassList(BodyClass);
+            body.style.paddingTop = 12; body.style.paddingBottom = 16;
+            body.style.paddingLeft = 14; body.style.paddingRight = 14;
+            body.style.flexGrow = 1f;
 
             var nameLabel = new Label(pet.Name ?? "Warden");
-            nameLabel.AddToClassList(NameClass);
+            nameLabel.style.fontSize = 20;
+            nameLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
+            nameLabel.style.color = TitleText;
             body.Add(nameLabel);
 
             var roleLabel = new Label(pet.Archetype ?? string.Empty);
-            roleLabel.AddToClassList(RoleClass);
+            roleLabel.style.marginTop = 3;
+            roleLabel.style.fontSize = 11;
+            roleLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
+            roleLabel.style.color = Amber;
             body.Add(roleLabel);
 
             // The blurb is the canon element flavour line from en.json
             // (elementBlurb.aether / .flame / .ice).
             var blurbLabel = new Label(ElementBlurb(pet.Element));
-            blurbLabel.AddToClassList(BlurbClass);
+            blurbLabel.style.marginTop = 8;
+            blurbLabel.style.fontSize = 12;
+            blurbLabel.style.color = BlurbText;
+            blurbLabel.style.whiteSpace = WhiteSpace.Normal;
             body.Add(blurbLabel);
 
             card.Add(body);
@@ -256,6 +333,25 @@ namespace DeNelle.Onboarding
             card.RegisterCallback<PointerDownEvent>(_ => OnCardClicked(capturedId));
 
             return card;
+        }
+
+        // ── Inline-style border helpers (USS shorthands have no single setter) ─
+        private static void SetBorderRadius(VisualElement e, float r)
+        {
+            e.style.borderTopLeftRadius = r; e.style.borderTopRightRadius = r;
+            e.style.borderBottomLeftRadius = r; e.style.borderBottomRightRadius = r;
+        }
+
+        private static void SetBorderWidth(VisualElement e, float w)
+        {
+            e.style.borderTopWidth = w; e.style.borderBottomWidth = w;
+            e.style.borderLeftWidth = w; e.style.borderRightWidth = w;
+        }
+
+        private static void SetBorderColor(VisualElement e, Color c)
+        {
+            e.style.borderTopColor = c; e.style.borderBottomColor = c;
+            e.style.borderLeftColor = c; e.style.borderRightColor = c;
         }
 
         /// <summary>
@@ -282,7 +378,11 @@ namespace DeNelle.Onboarding
             RefreshConfirmEnabled();
         }
 
-        /// <summary>Marks the active pet card and clears the others.</summary>
+        /// <summary>
+        /// Marks the active pet card (amber ring + lifted bg) and clears the
+        /// others. Inline styling — the cards are code-built, so the old USS
+        /// .select-card--active rule has nothing to hook onto.
+        /// </summary>
         private void UpdateCardHighlight()
         {
             if (_cards == null) return;
@@ -291,19 +391,21 @@ namespace DeNelle.Onboarding
             {
                 if (_cards[i] == null || i >= pets.Count) continue;
                 bool active = _hasSelection && pets[i].Id == _selectedPetId;
-                _cards[i].EnableInClassList(CardActiveClass, active);
+                SetBorderColor(_cards[i], active ? Amber : CardBorder);
+                _cards[i].style.backgroundColor = active ? CardBgActive : CardBg;
             }
         }
 
         /// <summary>
         /// Enables the confirm button only once a pet is chosen; before then it
-        /// shows a dimmed, inert-looking state.
+        /// shows a dimmed, inert-looking state. Inline styling (code-built button).
         /// </summary>
         private void RefreshConfirmEnabled()
         {
             if (_confirmButton == null) return;
             _confirmButton.SetEnabled(_hasSelection);
-            _confirmButton.EnableInClassList(ConfirmDisabledClass, !_hasSelection);
+            _confirmButton.style.backgroundColor = _hasSelection ? Amber : ConfirmDisabledBg;
+            _confirmButton.style.color = _hasSelection ? ConfirmText : ConfirmDisabledText;
         }
 
         // =====================================================================

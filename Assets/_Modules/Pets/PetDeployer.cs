@@ -116,12 +116,21 @@ namespace DeNelle.Pets
                 return;
             }
 
+            // WO-185: deploy the pet the player chose at the pet-select screen, not
+            // a hardcoded default. The onboarding flow writes the pick to
+            // GameState.StarterPetId; resolve that to a species here. Falls back to
+            // the ice-wolf (the original sole starter) when no choice is recorded —
+            // e.g. a pre-WO-185 save, or the Defend-the-Tower express path that
+            // skips pet-select.
+            string starterSpecies = ResolveStarterSpecies();
+
             foreach (var def in defs)
             {
                 if (def == null) continue;
-                // SINGLE starter pet until the others are EARNED (owner 2026-05-30) — only the
-                // ice-wolf (CC5 companion) deploys for now; unlock the rest via bond progression.
-                if (def.Species != "ice-wolf") continue;
+                // SINGLE starter pet until the others are EARNED (owner 2026-05-30) —
+                // only the player's chosen Warden deploys for now; unlock the rest
+                // via bond progression.
+                if (def.Species != starterSpecies) continue;
                 Vector3 slot = PetCatalog.DeploySlotPosition(def.SlotIndex, _heartPosition);
                 int bond = BondRankFor(def.SlotIndex);
 
@@ -136,6 +145,33 @@ namespace DeNelle.Pets
 
                 _deployed.Add(pet);
             }
+        }
+
+        // Fallback starter species when GameState records no pick (pre-WO-185
+        // saves, or the express Defend-the-Tower path that skips pet-select).
+        private const string DefaultStarterSpecies = "ice-wolf";
+
+        /// <summary>
+        /// WO-185: resolves the species of the player's chosen starter pet from
+        /// <c>GameState.StarterPetId</c> (written by the onboarding pet-select
+        /// screen). The id space matches <see cref="PetCatalog"/>
+        /// ("pet-aether-sprite" etc.), so a <see cref="PetCatalog.Find"/> maps the
+        /// id to its <see cref="PetDef.Species"/>. Falls back to
+        /// <see cref="DefaultStarterSpecies"/> when no choice is recorded or the id
+        /// is unknown.
+        /// </summary>
+        private static string ResolveStarterSpecies()
+        {
+            var svc = DeNelle.Core.State.GameStateService.Instance;
+            string starterId = svc != null && svc.State != null ? svc.State.StarterPetId : null;
+            if (string.IsNullOrEmpty(starterId)) return DefaultStarterSpecies;
+
+            var def = PetCatalog.Find(starterId);
+            if (def != null && !string.IsNullOrEmpty(def.Species)) return def.Species;
+
+            Debug.LogWarning($"[PetDeployer] StarterPetId '{starterId}' did not resolve to a " +
+                             $"PetCatalog species — falling back to '{DefaultStarterSpecies}'.");
+            return DefaultStarterSpecies;
         }
 
         /// <summary>Destroys every deployed pet (e.g. on village-scene teardown).</summary>

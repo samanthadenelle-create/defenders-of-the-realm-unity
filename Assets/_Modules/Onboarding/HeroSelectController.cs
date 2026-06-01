@@ -458,14 +458,21 @@ namespace DeNelle.Onboarding
         }
 
         /// <summary>
-        /// "Dive into Village" — persists the chosen hero and routes to the normal
-        /// Village scene, bypassing the pet-select intro flow.
+        /// "Dive into Village" — the canonical first-run path. Persists the chosen
+        /// hero, then routes to the PET-SELECT screen (WO-185) so the player bonds
+        /// a starter Warden before entering the village. PetSelect's confirm then
+        /// routes on to the Village.
+        ///
+        /// A returning player who already has a starter pet is skipped past
+        /// pet-select automatically (PetSelectController self-skips to the Village
+        /// when GameState already records a StarterPetId), so this single route is
+        /// correct for both first-run and returning players.
         /// </summary>
         private void OnDiveVillageClicked()
         {
             if (!_hasSelection) return;
             PersistHero();
-            SceneRouter.GoVillage();
+            SceneRouter.GoPetSelect();
         }
 
         /// <summary>
@@ -504,7 +511,11 @@ namespace DeNelle.Onboarding
 //      hero-select. If a session somehow enters HeroSelect cold, the controller
 //      logs a warning and still routes on (the choice just is not saved).
 //
-//   3. Routing: the Title "Start" button calls SceneRouter.GoHeroSelect();
-//      this controller's confirm calls SceneRouter.GoPetSelect();
-//      PetSelectController's confirm calls SceneRouter.GoVillage().
+//   3. Routing (WO-185): the Title "Start" button calls GoHeroSelect();
+//      "Dive into Village" (the canonical first-run CTA) calls GoPetSelect(),
+//      and PetSelectController's confirm calls GoVillage() — so the full intro
+//      chain is Title -> HeroSelect -> PetSelect -> Village. The secondary
+//      "Jump into the Action" CTA is an express shortcut straight to the
+//      Defend-the-Tower mode (GoPatriciaLight) and intentionally bypasses
+//      pet-select; the player picks a Warden on the next normal village entry.
 // =============================================================================
