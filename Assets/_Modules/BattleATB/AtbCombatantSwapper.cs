@@ -47,10 +47,39 @@ namespace DeNelle.BattleATB
             if (!scene.IsValid()) return;
             if (scene.name.IndexOf("ATBBattle", StringComparison.OrdinalIgnoreCase) < 0) return;
 
+            DisableStrayVillageHero();
+
             var hero = GameObject.Find("HeroCapsule");
             var enemy = GameObject.Find("EnemyCapsule");
             if (hero != null) SwapHero(hero.transform);
             if (enemy != null) TintEnemy(enemy.transform);
+        }
+
+        /// <summary>
+        /// The village hero (DontDestroyOnLoad, HeroLocomotion) can ride into the
+        /// ATB scene and stay player-controllable — a stray "navigable pill" next to
+        /// the turn-based combatant. Deactivate it here so only the ATB combatant
+        /// remains; HeroControlEnsurer re-activates it when the Village scene reloads.
+        /// Reflection: BattleATB does not reference DeNelle.Village.
+        /// </summary>
+        private static void DisableStrayVillageHero()
+        {
+            try
+            {
+                var locoType = FindType("DeNelle.Village.HeroLocomotion");
+                if (locoType == null) return;
+                var found = UnityEngine.Object.FindObjectsByType(locoType, FindObjectsSortMode.None);
+                if (found == null) return;
+                foreach (var obj in found)
+                {
+                    if (obj is Component c && c != null)
+                    {
+                        c.gameObject.SetActive(false);
+                        Debug.Log("[AtbCombatantSwapper] Disabled stray village hero in ATB: " + c.gameObject.name);
+                    }
+                }
+            }
+            catch { /* best-effort — never block the ATB load */ }
         }
 
         // ── Hero: capsule pill → real class model ────────────────────────────
