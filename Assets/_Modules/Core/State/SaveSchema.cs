@@ -27,7 +27,7 @@ namespace DeNelle.Core.State
     {
         // ── Versioning ───────────────────────────────────────────────────────
         /// <summary>CURRENT_SCHEMA_VERSION — bumped whenever the persisted shape changes.</summary>
-        public const int CurrentVersion = 13;  // v13 — added buildJobs + adSkipsUsedToday/adSkipDayKey (WO-172 build timers + ad-skip)
+        public const int CurrentVersion = 14;  // v14 — added baseLayout (WO-108 player build mode); v13 — buildJobs + adSkipsUsedToday/adSkipDayKey (WO-172)
         /// <summary>SaveExport.format — bumped only if the envelope shape changes.</summary>
         public const int FileFormat = 1;
 
@@ -171,6 +171,15 @@ namespace DeNelle.Core.State
 
             /// <summary>Local-day key the ad-skip counter belongs to. Absent → null (counter resets on first claim).</summary>
             [JsonProperty("adSkipDayKey")] public string AdSkipDayKey;
+
+            // ── v14 — Player build mode base layout (WO-108) ─────────────────────
+            /// <summary>
+            /// The player's placed-structure base layout. Nullable per the
+            /// <c>.partial()</c> convention; absent on an older save → the v13→v14
+            /// migration step seeds it to an empty list (existing players keep the
+            /// default VillageSceneBuilder village until they first build + save).
+            /// </summary>
+            [JsonProperty("baseLayout")] public List<PlacedStructureData> BaseLayout;
         }
 
         // =====================================================================

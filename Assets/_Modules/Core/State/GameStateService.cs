@@ -316,6 +316,7 @@ namespace DeNelle.Core.State
                 BuildJobs = s.BuildJobs != null ? new List<BuildJobData>(s.BuildJobs) : null,
                 AdSkipsUsedToday = s.AdSkipsUsedToday,
                 AdSkipDayKey = s.AdSkipDayKey,
+                BaseLayout = s.BaseLayout != null ? new List<PlacedStructureData>(s.BaseLayout) : null,
             };
         }
 
@@ -373,6 +374,7 @@ namespace DeNelle.Core.State
             if (p.BuildJobs != null) s.BuildJobs = p.BuildJobs;
             if (p.AdSkipsUsedToday.HasValue) s.AdSkipsUsedToday = (int)p.AdSkipsUsedToday.Value;
             if (p.AdSkipDayKey != null) s.AdSkipDayKey = p.AdSkipDayKey;
+            if (p.BaseLayout != null) s.BaseLayout = p.BaseLayout;
         }
 
         // =====================================================================
@@ -557,6 +559,7 @@ namespace DeNelle.Core.State
             s.BuildJobs = new List<BuildJobData>();   // WO-172 — clear in-flight construction timers.
             s.AdSkipsUsedToday = 0;
             s.AdSkipDayKey = null;
+            s.BaseLayout = new List<PlacedStructureData>();   // WO-108 — New Game starts on the default village seed.
             // NOTE: BoundWallet, BreachStyle and every social field are deliberately
             // left untouched — preferences and identity survive a New Game.
             s.SchemaVersion = SaveSchema.CurrentVersion;

@@ -203,6 +203,20 @@ namespace DeNelle.Core.State
         /// follow-up.</summary>
         public List<DeNelle.Core.World.WardStoneState> Wards = new List<DeNelle.Core.World.WardStoneState>();
 
+        // ── Build Mode — the player's base layout (WO-108 P0 data spine) ──────
+        /// <summary>
+        /// The player's placed-structure layout — the CREATE-verb spine (WO-108).
+        /// One <see cref="PlacedStructureData"/> per player-placed structure (grid
+        /// cell + discrete yaw + level). Empty on a fresh save → the runtime
+        /// <c>BaseLayoutLoader</c> falls through to the default VillageSceneBuilder
+        /// village (the seed), and the first build-mode entry seeds this from that
+        /// default so the player edits their familiar town, not a blank plot.
+        /// Round-trips through SaveSchema (v14) — additive at the END so older
+        /// saves load empty. This is exactly the payload that becomes
+        /// server-authoritative when async raids land (principle #2).
+        /// </summary>
+        public List<PlacedStructureData> BaseLayout = new List<PlacedStructureData>();
+
         /// <summary>A fresh List&lt;int&gt; of <paramref name="count"/> zeros.</summary>
         public static List<int> NewZeroed(int count)
         {

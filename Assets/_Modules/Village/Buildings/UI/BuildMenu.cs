@@ -99,7 +99,9 @@ namespace DeNelle.Village
         // DeNelle.Village must not take a dependency on BattleATB (WO-31 §Files).
         private enum TowerElement { Flame, Ice, Aether, Physical }
         private TowerElement _selectedElement = TowerElement.Flame;
-        private Building _selectedTowerForUpgrade;
+        // WO-127: the manage/upgrade screen tracks a LIVE Tower (not a Building) so
+        // its level reads correctly and the Upgrade button calls Tower.Upgrade().
+        private Tower _selectedTowerForUpgrade;
 
         // USS classes for the WO-31 sub-screens (styled in BuildMenu.uss).
         private const string OptionTileClass = "build-option-tile";
@@ -391,6 +393,15 @@ namespace DeNelle.Village
                     DeNelle.Village.UI.TowerManagerPanel.Instance?.Show();   // or press M
                 }));
 
+                // WO-108 — the CREATE verb: enter the player Build Mode (catalog
+                // palette + grid placement + persisted BaseLayout). EnsureExists()
+                // self-installs the controller; Enter() freezes waves + shows the palette.
+                _codePanel.Add(CodeMenuButton("Build Mode", new Color(0.42f, 0.30f, 0.58f, 0.95f), () =>
+                {
+                    HideCodeFallbackMenu();
+                    BuildModeController.EnsureExists().Enter();
+                }));
+
                 _codePanel.Add(CodeMenuButton("Close", new Color(0.30f, 0.30f, 0.36f, 0.95f), HideCodeFallbackMenu));
 
                 _root.Add(_codePanel);
@@ -620,8 +631,10 @@ namespace DeNelle.Village
         // ── Upgrade Tower screen ──────────────────────────────────────────────
 
         /// <summary>
-        /// Lists every placed ArcaneTower; selecting one shows its upgrade cost,
-        /// time and result. The upgrade action itself is a Week-6 stub.
+        /// WO-127: lists every LIVE placed <see cref="Tower"/> (not Building), so the
+        /// row level matches the tower's actual <c>CurrentLevel</c>. Selecting one
+        /// shows its upgrade info; the Upgrade button performs a real
+        /// <see cref="Tower.Upgrade"/> and is hidden at <see cref="Tower.MaxLevel"/>.
         /// </summary>
         private void RenderUpgradeTower()
         {
@@ -631,15 +644,22 @@ namespace DeNelle.Village
             heading.AddToClassList(CardNameClass);
             _list.Add(heading);
 
-            var towers = UnityEngine.Object.FindObjectsByType<Building>(
-                FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+            // WO-127 root cause: enumerate LIVE Tower components (the type whose
+            // _currentLevel actually upgrades), not the separate Building type whose
+            // serialized Level never mutates.
+            var towers = UnityEngine.Object.FindObjectsByType<Tower>(FindObjectsSortMode.None);
+
+            // Drop a selection that no longer exists in the scene.
+            if (_selectedTowerForUpgrade == null ||
+                System.Array.IndexOf(towers, _selectedTowerForUpgrade) < 0)
+                _selectedTowerForUpgrade = null;
 
             var list = new VisualElement();
             bool any = false;
-            foreach (var b in towers)
+            foreach (var t in towers)
             {
-                if (b == null || b.Type != BuildingType.ArcaneTower) continue;
-                list.Add(BuildTowerSelectRow(b));
+                if (t == null) continue;
+                list.Add(BuildTowerSelectRow(t));
                 any = true;
             }
             if (!any)
@@ -654,39 +674,64 @@ namespace DeNelle.Village
                 _list.Add(BuildUpgradeInfoBlock(_selectedTowerForUpgrade));
         }
 
-        private VisualElement BuildTowerSelectRow(Building b)
+        private VisualElement BuildTowerSelectRow(Tower t)
         {
-            bool selected = ReferenceEquals(b, _selectedTowerForUpgrade);
-            var row = new Button(() => { _selectedTowerForUpgrade = b; Render(); });
+            bool selected = ReferenceEquals(t, _selectedTowerForUpgrade);
+            var row = new Button(() => { _selectedTowerForUpgrade = t; Render(); });
             row.AddToClassList(TowerRowClass);
             row.EnableInClassList(TowerRowSelectedClass, selected);
-            row.text = (selected ? "◉  " : "○  ") + b.name.Replace("Building-", "").Replace("Building_", "")
-                       + "  (Lvl " + b.Level + ")";
+            // WO-127: print the LIVE level (1..MaxLevel) via the null-conditional, so
+            // it always matches TowerManagerPanel's t.CurrentLevel for the same tower.
+            int level = t != null ? t.CurrentLevel : 1;
+            string label = t != null ? t.name.Replace("Tower-", "").Replace("Tower_", "") : "Tower";
+            row.text = (selected ? "◉  " : "○  ") + label
+                       + "  (Lvl " + level + "/" + Tower.MaxLevel + ")";
             return row;
         }
 
-        /// <summary>Upgrade cost + time + result for the selected tower (action stubbed for Week 6).</summary>
-        private VisualElement BuildUpgradeInfoBlock(Building b)
+        /// <summary>
+        /// WO-127: upgrade info + a REAL upgrade action for the selected live tower.
+        /// Reads <c>t.CurrentLevel</c> for the result line; the Upgrade button calls
+        /// <see cref="Tower.Upgrade"/> then re-renders, and is hidden once the tower
+        /// is at <see cref="Tower.MaxLevel"/>.
+        /// </summary>
+        private VisualElement BuildUpgradeInfoBlock(Tower t)
         {
             var block = new VisualElement();
 
-            // STUB — Week 6: until towers carry an element, upgrade the selected
-            // element variant's costs (defaults to Flame).
+            int level = t != null ? t.CurrentLevel : 1;
+            bool atMax = level >= Tower.MaxLevel;
+
+            // Cost block kept as the element-variant stub (economy gating is optional
+            // per the WO — the minimum viable fix is correct display + a real upgrade).
             var v = VariantFor(_selectedElement);
             block.Add(BuildCostRow("◆ Crystals", v.UpgradeCrystalCost, CrystalBalance));
             if (v.UpgradeStone > 0) block.Add(BuildCostRow("Stone", v.UpgradeStone, GetMaterialCount("stone")));
             block.Add(BuildTimingLabel("Upgrade time: " + FormatTime(v.UpgradeTimeSec)));
 
-            var result = new Label($"Result: Lvl {b.Level + 1}  (+{v.Dps} DPS, +{v.Hp / 4} HP)");
+            if (atMax)
+            {
+                var maxed = new Label($"Lvl {level}/{Tower.MaxLevel} — fully upgraded.");
+                maxed.AddToClassList(CardDescClass);
+                maxed.style.whiteSpace = WhiteSpace.Normal;
+                block.Add(maxed);
+                return block;   // no Upgrade button at max level (WO-127)
+            }
+
+            var result = new Label($"Result: Lvl {level + 1}/{Tower.MaxLevel}  (+{v.Dps} DPS, +{v.Hp / 4} HP)");
             result.AddToClassList(CardDescClass);
             result.style.whiteSpace = WhiteSpace.Normal;
             block.Add(result);
 
             var upgrade = new Button(() =>
             {
-                // STUB — Week 6: no tower upgrade pipeline yet.
-                Debug.Log("[BuildMenu] Upgrade stub — Week 6 (" + b.name + ").");
-                SetStatus("Tower upgrades arrive in a later update.", isError: false);
+                // WO-127: real upgrade — mutate the live tower, then re-render so the
+                // screen re-reads CurrentLevel immediately (mirrors TowerManagerPanel).
+                bool ok = _selectedTowerForUpgrade?.Upgrade() ?? false;
+                SetStatus(ok
+                    ? $"Upgraded to Lvl {_selectedTowerForUpgrade?.CurrentLevel}."
+                    : "Tower already at max level.", isError: false);
+                Render();
             })
             { text = "Upgrade" };
             upgrade.AddToClassList(ConfirmBtnClass);
