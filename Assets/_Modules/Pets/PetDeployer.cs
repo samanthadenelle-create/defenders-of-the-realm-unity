@@ -310,6 +310,14 @@ namespace DeNelle.Pets
             // walk to it; Defend-mode pets snap back to it when no enemy.
             pet.gameObject.AddComponent<PetHeroLeash>();
 
+            // WO-229: auto-harvest. Added AFTER the leash so PetHarvester.Awake
+            // finds it (PetHarvester suspends the leash while gathering and restores
+            // it after). Always-on idle harvesting — the harvester self-yields to
+            // combat for Defend pets and falls back to the leash when no node is in
+            // range, so "pet gathers while you defend" needs no extra mode wiring.
+            if (pet.GetComponent<PetHarvester>() == null)
+                pet.gameObject.AddComponent<PetHarvester>();
+
             pet.name = $"Pet_{def.Species}";
             return pet;
         }

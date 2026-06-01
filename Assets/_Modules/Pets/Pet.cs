@@ -178,6 +178,15 @@ namespace DeNelle.Pets
         public Vector3 HomePost => _homePost;
 
         /// <summary>
+        /// True when a living hostile is within the pet's hunt-scan radius right now.
+        /// Reuses the SAME enemy discovery the combat loop uses
+        /// (<see cref="NearestHostile"/>), so callers (e.g. PetHarvester's
+        /// combat-priority check) don't duplicate the overlap sweep / faction filter.
+        /// Cheap: one OverlapSphereNonAlloc against the cached enemy mask.
+        /// </summary>
+        public bool HasHostileInRange => NearestHostile() != null;
+
+        /// <summary>
         /// Re-anchors the pet's home post. Used by the leash integrator so an
         /// Idle / Defend pet trails the hero around the village instead of
         /// drifting back to the Heart slot when the field is clear.
