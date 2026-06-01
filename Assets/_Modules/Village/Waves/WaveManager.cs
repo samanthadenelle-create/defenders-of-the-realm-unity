@@ -855,13 +855,19 @@ namespace DeNelle.Village
 
         /// <summary>
         /// Evaluates boss-wave drops and active-event bonuses from <see cref="ServerConfig"/>
-        /// and credits Aether Crystals to <see cref="CrystalEconomy"/> if applicable.
+        /// and credits the won crystals to the BUILD-SPEND pool
+        /// (<see cref="GameState.Resources"/>.Crystals) via
+        /// <see cref="GameStateService.AddCrystals"/> — the exact balance the
+        /// BuildMenu spends from and the village HUD top-bar displays (WO-131
+        /// follow-up, owner decision (a): "win waves → build towers" on one
+        /// currency the player sees). This deliberately does NOT touch the
+        /// separate AetherCrystals empower pool (CrystalEconomy); every other
+        /// AetherCrystals source (CrystalMine, MineNode, tower-empower, TalentTree,
+        /// BattlePass, Referral, Promo) stays on AetherCrystals.
         /// Drop chance and ranges are all backend-controlled — no rebuild needed to tune.
         /// </summary>
         private void AwardWaveCrystals(int waveId)
         {
-            if (CrystalEconomy.Instance == null) return;
-
             var cfg = GameStateService.Instance != null
                 ? GameStateService.Instance.ServerConfig
                 : ServerConfig.Default;
@@ -875,7 +881,7 @@ namespace DeNelle.Village
                 {
                     int drop = UnityEngine.Random.Range(cfg.DropMin, cfg.DropMax + 1);
                     totalAward += drop;
-                    Debug.Log($"[WaveManager] Boss-wave crystal drop — wave {waveId} awarded {drop} Aether Crystal(s). " +
+                    Debug.Log($"[WaveManager] Boss-wave crystal drop — wave {waveId} awarded {drop} Crystal(s) to the build-spend pool. " +
                               $"(chance={cfg.DropChance:P0}, range={cfg.DropMin}–{cfg.DropMax})");
                 }
                 else
@@ -893,7 +899,7 @@ namespace DeNelle.Village
             }
 
             if (totalAward > 0)
-                CrystalEconomy.Instance.AddCrystals(totalAward);
+                GameStateService.Instance?.AddCrystals(totalAward);
         }
 
         // =====================================================================
