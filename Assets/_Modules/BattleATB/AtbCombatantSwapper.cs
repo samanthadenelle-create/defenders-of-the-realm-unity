@@ -22,6 +22,7 @@ using System;
 using System.Reflection;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using DeNelle.Core.State;   // direct hero-class read (see ResolveHeroSlug)
 
 namespace DeNelle.BattleATB
 {
@@ -165,21 +166,18 @@ namespace DeNelle.BattleATB
         // ── helpers ──────────────────────────────────────────────────────────
         private static string ResolveHeroSlug()
         {
-            try
+            // Direct read — BattleController (same assembly) reads HeroClass this way.
+            // The OLD code used reflection GetProperty("HeroClass"), but HeroClass is a
+            // FIELD, so GetProperty returned null and the ATB hero was ALWAYS Mage even
+            // when Knight/Ranger was chosen (the village reads it directly and was fine).
+            var svc = GameStateService.Instance;
+            HeroClassOpt hc = (svc != null && svc.State != null) ? svc.State.HeroClass : HeroClassOpt.None;
+            switch (hc)
             {
-                var t = FindType("DeNelle.Core.State.GameStateService");
-                var inst = t?.GetProperty("Instance", BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
-                var state = inst?.GetType().GetProperty("State")?.GetValue(inst);
-                var hc = state?.GetType().GetProperty("HeroClass")?.GetValue(state);
-                string s = hc?.ToString();
-                if (s != null)
-                {
-                    if (s.IndexOf("Knight", StringComparison.OrdinalIgnoreCase) >= 0) return "Knight";
-                    if (s.IndexOf("Ranger", StringComparison.OrdinalIgnoreCase) >= 0) return "Ranger";
-                }
+                case HeroClassOpt.Knight: return "Knight";
+                case HeroClassOpt.Ranger: return "Ranger";
+                default:                  return "Mage";   // Mage, Cleric (reuses Mage for now), None
             }
-            catch { }
-            return "Mage";
         }
 
         private static void NormalizeHeight(GameObject go, float target)
