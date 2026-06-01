@@ -492,6 +492,11 @@ namespace DeNelle.Editor
             // 7) BuildMenu — a UIDocument GameObject with the build-menu UI.
             BuildBuildMenu(systemsRoot, buildingPrefabs);
 
+            // 7a) OnboardingFlow (WO-133) — the first-run tutorial UIDocument,
+            //     sorting above the HUD. Placed after BuildMenu so the runtime
+            //     OnboardingIntegrator (attached by VillageController) can find both.
+            BuildOnboardingFlow(systemsRoot);
+
             // 7b) Marketplace + PackStore — DISABLED for now. Placing it worked, but
             //     opening it rendered the WRONG panel (the hero talent tree) because
             //     PackStore's UIDocument grabbed the SHARED PanelSettings, and the UXML

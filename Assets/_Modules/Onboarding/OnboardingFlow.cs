@@ -249,6 +249,23 @@ namespace DeNelle.Onboarding
             _skipButton = _root.Q<Button>(SkipButtonName);
             _nextButton = _root.Q<Button>(NextButtonName);
 
+            // PIPELINE_STATE §8: a UXML-sourced UIDocument comes up EMPTY in player
+            // builds (BuildMenu / BattleHUD hit this), so TutorialOverlay.uxml may
+            // load a root with none of the named coach-mark elements. When the
+            // named children are missing, build the overlay in code (inline styles,
+            // no USS) so the FTUE actually renders in the build. The UXML is kept
+            // only as an editor reference. This never touches the Finish() /
+            // FinishOnboarding() persistence path — it only supplies the visuals.
+            if (_caption == null || _body == null || _nextButton == null || _skipButton == null)
+            {
+                BuildOverlayInCode();
+                _caption = _root.Q<Label>(CaptionName);
+                _progress = _root.Q<Label>(ProgressName);
+                _body = _root.Q<Label>(BodyName);
+                _skipButton = _root.Q<Button>(SkipButtonName);
+                _nextButton = _root.Q<Button>(NextButtonName);
+            }
+
             if (_skipButton != null)
             {
                 _skipButton.clicked -= OnSkipClicked; // guard a double OnEnable
@@ -263,6 +280,114 @@ namespace DeNelle.Onboarding
             // Start hidden — Run() reveals it.
             SetOverlayVisible(false);
             _bound = true;
+        }
+
+        /// <summary>
+        /// Code-built fallback for the coach-mark overlay (PIPELINE_STATE §8 —
+        /// UXML does not render in player builds). Builds the same element tree
+        /// TutorialOverlay.uxml describes — a dimming scrim plus a bottom-pinned
+        /// card with caption / progress / body / Skip + Next — using inline
+        /// styles (USS does not apply to a code-built tree in a build). The names
+        /// match the binding contract above so BindElements() resolves them
+        /// exactly as it would from the UXML. Mirrors how BuildMenu falls back to
+        /// a code-built UI. Only called when the UXML left the named elements
+        /// absent; it appends the new card UNDER the existing root so the root's
+        /// hidden/opacity controls (SetOverlayVisible / FadeOverlay) still work.
+        /// </summary>
+        private void BuildOverlayInCode()
+        {
+            if (_root == null) return;
+
+            // Re-tag the document root as the tutorial root so the existing
+            // RootHiddenClass / opacity controls drive it. The root fills the
+            // screen and lets pointer events through where there is no card.
+            _root.name = RootName;
+            _root.style.position = Position.Absolute;
+            _root.style.left = 0;
+            _root.style.right = 0;
+            _root.style.top = 0;
+            _root.style.bottom = 0;
+
+            // Dimming scrim — swallows world taps while a coach-mark is up.
+            var scrim = new VisualElement { name = "tutorial-scrim" };
+            scrim.style.position = Position.Absolute;
+            scrim.style.left = 0;
+            scrim.style.right = 0;
+            scrim.style.top = 0;
+            scrim.style.bottom = 0;
+            scrim.style.backgroundColor = new Color(0f, 0f, 0f, 0.55f);
+            _root.Add(scrim);
+
+            // Bottom-pinned coach-mark card.
+            var card = new VisualElement { name = "tutorial-card" };
+            card.style.position = Position.Absolute;
+            card.style.left = Length.Percent(8f);
+            card.style.right = Length.Percent(8f);
+            card.style.bottom = 48;
+            card.style.paddingLeft = 24;
+            card.style.paddingRight = 24;
+            card.style.paddingTop = 20;
+            card.style.paddingBottom = 20;
+            card.style.backgroundColor = new Color(0.07f, 0.08f, 0.12f, 0.96f);
+            card.style.borderTopLeftRadius = 12;
+            card.style.borderTopRightRadius = 12;
+            card.style.borderBottomLeftRadius = 12;
+            card.style.borderBottomRightRadius = 12;
+            var border = new Color(0.85f, 0.72f, 0.36f, 0.85f);
+            card.style.borderTopColor = border;
+            card.style.borderBottomColor = border;
+            card.style.borderLeftColor = border;
+            card.style.borderRightColor = border;
+            card.style.borderTopWidth = 2;
+            card.style.borderBottomWidth = 2;
+            card.style.borderLeftWidth = 2;
+            card.style.borderRightWidth = 2;
+            _root.Add(card);
+
+            // Caption row — kicker + progress readout.
+            var head = new VisualElement { name = "tutorial-card-head" };
+            head.style.flexDirection = FlexDirection.Row;
+            head.style.justifyContent = Justify.SpaceBetween;
+            head.style.marginBottom = 8;
+            card.Add(head);
+
+            var caption = new Label { name = CaptionName };
+            caption.style.unityFontStyleAndWeight = FontStyle.Bold;
+            caption.style.fontSize = 16;
+            caption.style.color = new Color(0.95f, 0.84f, 0.5f);
+            head.Add(caption);
+
+            var progress = new Label { name = ProgressName };
+            progress.style.fontSize = 13;
+            progress.style.color = new Color(0.7f, 0.74f, 0.82f);
+            head.Add(progress);
+
+            // Narrated body copy.
+            var body = new Label { name = BodyName };
+            body.style.fontSize = 15;
+            body.style.color = new Color(0.92f, 0.94f, 0.98f);
+            body.style.whiteSpace = WhiteSpace.Normal;
+            body.style.marginBottom = 16;
+            card.Add(body);
+
+            // Controls — Skip (left), Next / Begin (right).
+            var foot = new VisualElement { name = "tutorial-card-foot" };
+            foot.style.flexDirection = FlexDirection.Row;
+            foot.style.justifyContent = Justify.SpaceBetween;
+            card.Add(foot);
+
+            var skip = new Button { name = SkipButtonName, text = "Skip tutorial" };
+            skip.style.fontSize = 13;
+            foot.Add(skip);
+
+            var next = new Button { name = NextButtonName, text = "Next" };
+            next.style.fontSize = 15;
+            next.style.unityFontStyleAndWeight = FontStyle.Bold;
+            next.style.minWidth = 140;
+            foot.Add(next);
+
+            Debug.Log("[OnboardingFlow] TutorialOverlay.uxml had no coach-mark elements " +
+                      "(UXML does not render in builds) — built the overlay in code.");
         }
 
         // =====================================================================
@@ -489,8 +614,12 @@ namespace DeNelle.Onboarding
 
         private void SetOverlayVisible(bool visible)
         {
-            if (_root != null)
-                _root.EnableInClassList(RootHiddenClass, !visible);
+            if (_root == null) return;
+            // USS-class toggle for the UXML path …
+            _root.EnableInClassList(RootHiddenClass, !visible);
+            // … plus an inline display toggle so the code-built fallback overlay
+            // (PIPELINE_STATE §8 — USS does not apply in builds) hides/shows too.
+            _root.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
         }
 
         /// <summary>Fades the whole overlay opacity. Never <c>async void</c>.</summary>

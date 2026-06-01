@@ -173,6 +173,13 @@ namespace DeNelle.Editor
         private const string NsPets = "DeNelle.Pets";
         private const string TypePetDeployer = NsPets + ".PetDeployer";
 
+        // ── WO-133: first-run tutorial (FTUE) ────────────────────────────────
+        /// <summary>OnboardingFlow lives in DeNelle.Onboarding (resolved by reflection).</summary>
+        private const string TypeOnboardingFlow = "DeNelle.Onboarding.OnboardingFlow";
+        /// <summary>The coach-mark overlay UXML (editor reference; code-built fallback renders in builds).</summary>
+        private const string TutorialOverlayUxmlPath =
+            "Assets/_Modules/Onboarding/UI/TutorialOverlay.uxml";
+
         // ── Ambient-townsfolk type names (Workstream D, resolved by reflection) ─
         private const string TypeAmbientNpc = NsVillage + ".AmbientNPC";
         private const string TypeTownsfolkBubble = NsVillage + ".TownsfolkBubble";

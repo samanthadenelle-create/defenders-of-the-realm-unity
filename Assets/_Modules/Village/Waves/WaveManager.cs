@@ -298,7 +298,28 @@ namespace DeNelle.Village
 
         private void Start()
         {
-            if (_autoStart) BeginLoop().Forget();
+            // WO-133 (FTUE): on a FIRST run (GameState.Onboarded == false) the wave
+            // loop must NOT auto-start — the player is taught first and the
+            // tutorial's BeginWaveRequested is the SOLE kickoff (wired by
+            // OnboardingIntegrator → BeginLoop). Returning players (Onboarded
+            // already true) start normally. Core-not-bootstrapped (no service) is
+            // treated as a returning player so a missing Core never strands the
+            // loop. This also kills the "long silent first-wave countdown" (QA P2-K).
+            if (_autoStart && !IsFirstRun()) BeginLoop().Forget();
+        }
+
+        /// <summary>
+        /// True when this is a brand-new save still in onboarding
+        /// (<see cref="GameState.Onboarded"/> == false). Mirrors
+        /// <c>OnboardingFlow.ShouldRun</c> so the wave loop and the FTUE agree on
+        /// who is a first-run player. No Core service yet ⇒ NOT first-run, so the
+        /// loop is never blocked when Core has not bootstrapped.
+        /// </summary>
+        private static bool IsFirstRun()
+        {
+            var svc = GameStateService.Instance;
+            if (svc == null || svc.State == null) return false;
+            return !svc.State.Onboarded;
         }
 
         // Audit 2026-05-30 (WO-139 #4): unsubscribe from all live enemy/boss

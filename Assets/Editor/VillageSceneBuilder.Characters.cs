@@ -410,6 +410,60 @@ namespace DeNelle.Editor
             so.ApplyModifiedPropertiesWithoutUndo();
         }
 
+        // =====================================================================
+        //  Onboarding / first-run tutorial (WO-133)
+        // =====================================================================
+
+        /// <summary>
+        /// Builds the first-run tutorial GameObject (WO-133): a UIDocument hosting
+        /// TutorialOverlay.uxml plus the <c>DeNelle.Onboarding.OnboardingFlow</c>
+        /// component, sorting ABOVE the VillageHud document so the coach-marks paint
+        /// over the HUD. <c>_runOnStart</c> stays true — OnboardingFlow.Start()
+        /// checks GameState.Onboarded itself and shows the tutorial only on a first
+        /// run; a returning player gets TutorialClosed raised immediately.
+        ///
+        /// The overlay's UXML is wired as an editor reference, but OnboardingFlow
+        /// builds a code-built coach-mark overlay at runtime when the UXML loads no
+        /// elements (PIPELINE_STATE §8 — UXML does not render in player builds), so
+        /// the FTUE renders in the build. The five gameplay SEAMS are wired at
+        /// runtime by OnboardingIntegrator (attached by VillageController) — the
+        /// builder only PLACES the object (DeNelle.Editor cannot reference the
+        /// Onboarding/Village runtime types beyond reflection).
+        /// </summary>
+        private static void BuildOnboardingFlow(Transform parent)
+        {
+            var go = new GameObject("OnboardingFlow");
+            go.transform.SetParent(parent, false);
+
+            var uiDoc = go.AddComponent<UIDocument>();
+            var uxml = AssetDatabase.LoadAssetAtPath<UnityEngine.UIElements.VisualTreeAsset>(TutorialOverlayUxmlPath);
+            if (uxml != null) uiDoc.visualTreeAsset = uxml;
+            else Debug.LogWarning($"[VillageSceneBuilder] TutorialOverlay.uxml not found at " +
+                                  $"'{TutorialOverlayUxmlPath}' -- OnboardingFlow builds the overlay in code anyway.");
+            WirePanelSettings(uiDoc);
+            // Sort ABOVE the HUD (HUD = 0, BuildMenu adopts HUD+5) so the coach-marks
+            // paint over everything (OnboardingFlow integrator note §1).
+            uiDoc.sortingOrder = 100;
+
+            var comp = AddVillageComponent(go, TypeOnboardingFlow);   // FindType resolves DeNelle.Onboarding
+            if (comp == null)
+            {
+                Debug.LogWarning("[VillageSceneBuilder] OnboardingFlow type not found -- " +
+                                 "is the DeNelle.Onboarding assembly compiled? First-run tutorial not placed.");
+                return;
+            }
+
+            var so = new SerializedObject(comp);
+            // _document — the UIDocument on this GameObject.
+            SetObjectField(so, "_document", uiDoc);
+            // _runOnStart stays at its serialized default (true); the gate is the
+            // Onboarded check inside OnboardingFlow.Start/TryRun, not this flag.
+            so.ApplyModifiedPropertiesWithoutUndo();
+
+            Debug.Log("[VillageSceneBuilder] OnboardingFlow (FTUE) placed -- UIDocument sortingOrder 100 " +
+                      "(above HUD); seams wired at runtime by OnboardingIntegrator.");
+        }
+
         /// <summary>
         /// Places the village STORE: a hidden PackStoreUI (UIDocument + PackStore.uxml +
         /// PackStore) and a walk-up Marketplace trigger (MarketplaceInteractor) by the

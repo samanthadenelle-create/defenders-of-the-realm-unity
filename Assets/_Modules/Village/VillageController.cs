@@ -143,6 +143,41 @@ namespace DeNelle.Village
             EnsureGateProximityOpeners();
             EnsureHeartHudBridge();
             EnsureDungeonEntrances();
+            EnsureOnboardingIntegrator();
+        }
+
+        // ── WO-133: first-run tutorial (FTUE) ─────────────────────────────────
+
+        /// <summary>
+        /// WO-133 — called when the first-run tutorial ends (completed OR skipped),
+        /// wired from <c>OnboardingFlow.TutorialClosed</c> by the
+        /// <see cref="OnboardingIntegrator"/>. The cold-open / Onboarded persistence
+        /// is already handled inside OnboardingFlow.Finish — this hook is the seam
+        /// for re-enabling any HUD / input the coach-marks suppressed. Today the
+        /// village HUD is never suppressed, so this is intentionally a light no-op
+        /// kept as the documented integration point (mirrors OnboardingFlow's
+        /// integrator note §3). Returning players (Onboarded already true) also
+        /// reach this immediately via OnboardingFlow.TryRun, which is harmless.
+        /// </summary>
+        public void OnOnboardingClosed()
+        {
+            // No HUD/input is suppressed during the FTUE in this build — nothing to
+            // restore. Logged so the close seam is observable in playtest logs.
+            Debug.Log("[VillageController] Onboarding closed — FTUE complete (or skipped).");
+        }
+
+        /// <summary>
+        /// Attaches the <see cref="OnboardingIntegrator"/> at runtime (WO-133) so the
+        /// first-run tutorial's Core-seam UnityEvents are wired to the village
+        /// gameplay (BuildMenu / WaveManager) and gameplay events feed back to the
+        /// tutorial's Notify* hooks. Runtime-attached for the same reason as the gate
+        /// openers / Heart HUD bridge: the scene is builder-baked. Idempotent
+        /// (OnboardingIntegrator is [DisallowMultipleComponent]).
+        /// </summary>
+        private void EnsureOnboardingIntegrator()
+        {
+            if (GetComponent<OnboardingIntegrator>() == null)
+                gameObject.AddComponent<OnboardingIntegrator>();
         }
 
         /// <summary>
