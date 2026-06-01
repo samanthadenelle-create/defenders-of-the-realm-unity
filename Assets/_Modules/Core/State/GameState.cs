@@ -194,6 +194,15 @@ namespace DeNelle.Core.State
         /// save owner's follow-up.</summary>
         public List<DeNelle.Core.World.SettlementState> Settlements = new List<DeNelle.Core.World.SettlementState>();
 
+        /// <summary>Per-ward relight records (WO-112) — the earned exploration reach. Each
+        /// carries its ward id/region/granted-reach and whether the Keeper has relit it; the
+        /// set of lit wards drives per-march reach (WardReach) and the forgetting effect.
+        /// Append-only field at the END so older saves stay loadable. Same save-wiring note as
+        /// <see cref="Tribes"/>/<see cref="Settlements"/>/<see cref="Zones"/>: in-memory now,
+        /// the schema round-trip (SaveSchema/SaveMigrator + version bump) is the save owner's
+        /// follow-up.</summary>
+        public List<DeNelle.Core.World.WardStoneState> Wards = new List<DeNelle.Core.World.WardStoneState>();
+
         /// <summary>A fresh List&lt;int&gt; of <paramref name="count"/> zeros.</summary>
         public static List<int> NewZeroed(int count)
         {

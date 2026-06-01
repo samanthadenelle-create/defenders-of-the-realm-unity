@@ -69,5 +69,11 @@ namespace DeNelle.Audio
         PetFireAura,
         /// <summary>Pet attack impact sound.</summary>
         PetAttack,
+
+        // ── Ward-tether sounds (WO-112) ───────────────────────────────────────
+        /// <summary>Ward-stone relit — the Heart's song swells, a warm rising kindle.</summary>
+        WardLit,
+        /// <summary>Ward-stone goes cold / the song thins — a low, hollow dim.</summary>
+        WardDim,
     }
 }

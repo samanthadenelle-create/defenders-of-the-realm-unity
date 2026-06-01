@@ -193,6 +193,18 @@ namespace DeNelle.HUD
         // WO-40 compass alert: flash ALL arms amber at 2 Hz during the alert.
         private bool _compassImminent;
 
+        // ── WO-112 ward-tether "forgetting" overlay (passive display only) ───
+        // A lazily-built full-screen grey wash that fades in as the Keeper steps past
+        // the furthest lit ward. NEVER gameplay — pure warmth-removal, fully reversible
+        // (driven down to 0 the instant they step back inside reach). Picking-ignored so
+        // it never eats input.
+        private VisualElement _forgettingOverlay;
+        private float _forgettingLevel;          // 0 warm … 1 the song silent
+        // Last "Wards of the Marches" summary pushed by WardTetherService (Arcane Tower
+        // readout). Stored so a Tower-panel binder can surface it; no own widget yet.
+        private string _wardsReadout = "";
+        private int _wardsLit, _wardsTotal;
+
         // =====================================================================
         //  Lifecycle
         // =====================================================================
@@ -700,6 +712,54 @@ namespace DeNelle.HUD
                 ? $"Damaged ({Mathf.RoundToInt(Mathf.Clamp01(damagePercent) * 100f)}%)"
                 : $"{wallLabel} — {Mathf.RoundToInt(Mathf.Clamp01(damagePercent) * 100f)}% damaged";
             ShowRepairPrompt(subtitle, 0, true);
+        }
+
+        /// <summary>IVillageHud (WO-112): drive the ward-tether "forgetting" wash, 0..1.
+        /// Pure presentation — a grey full-screen fade that creeps in past the furthest lit
+        /// ward and lifts the instant the Keeper steps back inside reach. No gameplay.</summary>
+        void IVillageHud.SetForgettingLevel(float level01)
+        {
+            _forgettingLevel = Mathf.Clamp01(level01);
+            EnsureForgettingOverlay();
+            if (_forgettingOverlay != null)
+            {
+                // Quadratic ease so the early fray-edge is barely-there and the deep
+                // forgetting reads as a real grey wash. Cap alpha so the screen never
+                // fully blacks out (warmth removed, not vision).
+                float a = _forgettingLevel * _forgettingLevel * 0.72f;
+                _forgettingOverlay.style.backgroundColor = new Color(0.10f, 0.10f, 0.12f, a);
+                _forgettingOverlay.style.display = a > 0.001f ? DisplayStyle.Flex : DisplayStyle.None;
+            }
+        }
+
+        /// <summary>IVillageHud (WO-112): store the Arcane Tower "Wards of the Marches"
+        /// readout. Passive — held for a Tower-panel binder to surface; the HUD reads the
+        /// tether, never the reverse.</summary>
+        void IVillageHud.SetWardsReadout(int wardsLit, int wardsTotal, string summary)
+        {
+            _wardsLit = Mathf.Max(0, wardsLit);
+            _wardsTotal = Mathf.Max(0, wardsTotal);
+            _wardsReadout = summary ?? "";
+        }
+
+        /// <summary>Public read of the latest wards readout (for an Arcane Tower panel binder).</summary>
+        public string WardsReadout => _wardsReadout;
+        /// <summary>Lit / total ward counts from the latest WardTetherService push.</summary>
+        public (int lit, int total) WardCounts => (_wardsLit, _wardsTotal);
+
+        // Lazily build the full-screen forgetting wash on first use (so it overlays
+        // everything yet ignores input). Parented to the HUD root; alpha driven above.
+        private void EnsureForgettingOverlay()
+        {
+            if (_forgettingOverlay != null || _root == null) return;
+            _forgettingOverlay = new VisualElement { name = "ward-forgetting-overlay" };
+            _forgettingOverlay.pickingMode = PickingMode.Ignore;
+            var s = _forgettingOverlay.style;
+            s.position = Position.Absolute;
+            s.left = 0; s.right = 0; s.top = 0; s.bottom = 0;
+            s.backgroundColor = new Color(0.10f, 0.10f, 0.12f, 0f);
+            s.display = DisplayStyle.None;
+            _root.Add(_forgettingOverlay);
         }
 
         // SetWaveImminent(bool) below also satisfies IVillageHud; in addition to the
