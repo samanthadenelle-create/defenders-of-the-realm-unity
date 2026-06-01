@@ -36,14 +36,31 @@ Update the [Order Log](#order-log--living-status) as orders close, break, or arr
 
 **Pipeline that worked:** delegate a bug to an Agent (investigate+fix, brace-balanced, no build/commit) → CLI gatekeeper brace+junk-scans, compile/build-verifies, commits by explicit path → owner playtests → Claude UI marks Linear. Keep agent work tracked in Linear (UI owns that).
 
-### 🔒 VILLAGE LANE LOCKED → Claude UI (WO-189 city redesign) — owner 2026-05-31
-Claude UI owns the village single-writer lane to land the **Elarion City Manifest** (29 buildings +
-100 props + 6 wardens + roads + bridges; data-only into `VillageSceneBuilder.Content.cs`, then bake).
-**CLI / every other session STAY OUT until UI releases it:**
-- ❌ Do NOT edit `VillageSceneBuilder.cs` or any `VillageSceneBuilder.*.cs` partial, `WallLayout.cs`, or `Village.unity`.
-- ❌ Do NOT run `BuildVillage` or `BakeWorldNavMesh` (both write `Village.unity`) while UI holds the lane.
-- ✅ CLI is FREE to work everything else: **non-village bugs** (HUD, hero, pet, enemy, ATB, audio), **web/WebGL UI components**, OuterWorld/terrain edits that don't rebake Village, and the asset-cleanup Phase-0 removes (orphan / Enemy\ / CC5Hero — none touch the village bake).
-- Handoff point is HEAD `202d026` (clean). UI removes this lock note when done.
+### 🔒 VILLAGE LANE RE-LOCKED → Claude UI (city REDO to owner's image spec) — owner 2026-05-31
+First city bake landed (`3049b7f`); owner playtested + gave a detailed **4-district layout** for a redo.
+Target (owner image spec): central World Tree plaza + cross-roads to 4 cardinal gates; **NW Crafting**
+(Blacksmith/Armorer/Lumbermill), **NE Commerce** (Market/Pet Shop/Jeweler/hall), **SE Residential**
+(Healer's Hut/NPC houses/Hero's Home), **SW Social** (Tavern/Inn); corner + mid-wall towers; and a
+new **INNER defensive wall ring**. UI re-authors `CityManifest.json` (+ `WallLayout.cs` for the inner
+wall) to match; CLI bakes when UI releases.
+**UPDATE 2026-05-31 (HEAD `e50b1e2`):** UI finished the DATA half (CityManifest.json redo) and
+HANDED the village lane to CLI for the rest, because the builder partials show dirty/desynced on the
+mount and editing single-writer `.cs` on a desynced mount corrupts files. CLI validated the manifest
+parses clean on Windows + baked it (`cfa722d`: 14 buildings/38 props/4 quadrants, navmesh rebaked,
+Windows build green).
+
+**RE-LOCKED → Claude UI 2026-05-31 (late):** owner relocked so UI does the gate/wall + structural
+rework. CLI handed back, reverted its parked edit; village tree clean at `e50b1e2`.
+
+**Gate fix for UI to fold in (owner-reported, CLI-diagnosed):** the S/E/W cardinal gates have a
+mid-wall tower sitting dead-centre ON the opening — the same issue North had. North was fixed by
+offsetting `Tower-North-Mid` to x=-10 (`VillageSceneBuilder.Walls.cs` ~L582). Fix: offset
+`Tower-South-Mid` (x 0→-10), `Tower-East-Mid` (z 0→-10), `Tower-West-Mid` (z 0→-10) so each FLANKS
+its gate. The perimeter loops already cut a 6 m opening — the tower is the only blocker.
+
+**Freeze-2 structural work (now UI's):** stairs (183), moat (179), ramparts (181), footprint
+colliders + scale (189), defeat-screen Canvas (132), Cathedral.png cleanup.
+- ✅ CLI / other sessions work elsewhere (combat/economy/world/backend/webgl); must NOT fire a Village bake.
 
 ---
 
