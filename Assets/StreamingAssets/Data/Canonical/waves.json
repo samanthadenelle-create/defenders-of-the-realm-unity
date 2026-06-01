@@ -25,10 +25,10 @@
       "enemies": [
         {
           "type": "hollow-walker",
-          "count": 8,
+          "count": 2,
           "spawnPoint": "spawn-0",
           "delay": 0,
-          "interval": 1.1
+          "interval": 1.4
         }
       ]
     },
@@ -39,14 +39,14 @@
       "enemies": [
         {
           "type": "hollow-walker",
-          "count": 7,
+          "count": 3,
           "spawnPoint": "spawn-0",
           "delay": 0,
-          "interval": 1.0
+          "interval": 1.2
         },
         {
           "type": "hollow-rogue",
-          "count": 3,
+          "count": 1,
           "spawnPoint": "spawn-1",
           "delay": 6,
           "interval": 1.4
@@ -60,21 +60,21 @@
       "enemies": [
         {
           "type": "hollow-walker",
-          "count": 6,
+          "count": 3,
           "spawnPoint": "spawn-0",
           "delay": 0,
-          "interval": 1.0
+          "interval": 1.1
         },
         {
           "type": "hollow-warrior",
-          "count": 3,
+          "count": 1,
           "spawnPoint": "spawn-2",
           "delay": 4,
           "interval": 1.8
         },
         {
           "type": "hollow-rogue",
-          "count": 3,
+          "count": 2,
           "spawnPoint": "spawn-3",
           "delay": 9,
           "interval": 1.3

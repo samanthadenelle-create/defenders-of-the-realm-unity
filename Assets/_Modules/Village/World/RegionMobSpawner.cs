@@ -36,6 +36,7 @@ using UnityEngine;
 using UnityEngine.AI;
 using UnityEngine.SceneManagement;
 using DeNelle.Core.World;
+using DeNelle.Core.State;
 
 namespace DeNelle.Village
 {
@@ -49,8 +50,18 @@ namespace DeNelle.Village
         public static RegionMobSpawner Instance { get; private set; }
 
         [Header("Population")]
-        [Tooltip("How many roaming mobs to keep alive around the player when in an outer region.")]
-        [Min(0)] public int TargetPopulation = 6;
+        [Tooltip("CAP on roaming mobs kept alive around the player at HIGH progress. The " +
+                 "EFFECTIVE target ramps up to this from a gentle early floor (see EarlyTargetFloor) " +
+                 "as the player progresses (BestWave) — a new player meets 1-2 wanderers, not a pack.")]
+        [Min(0)] public int TargetPopulation = 8;
+
+        [Tooltip("EFFECTIVE roaming-mob target for a brand-new player (BestWave 0). Ramps toward " +
+                 "TargetPopulation as progress climbs (WO-216: wandering primary, gentle onboarding).")]
+        [Min(0)] public int EarlyTargetFloor = 2;
+
+        [Tooltip("How many cleared waves it takes to add one more roamer to the effective target " +
+                 "(WO-216 ramp slope). Smaller = the wilderness fills in faster as you progress.")]
+        [Min(1)] public int WavesPerExtraMob = 2;
 
         [Tooltip("Seconds between population/aggro maintenance passes (throttled — never per-frame heavy).")]
         [Min(0.1f)] public float TickInterval = 1.0f;
@@ -197,7 +208,7 @@ namespace DeNelle.Village
 
         private void TopUpPopulation(Vector3 playerPos)
         {
-            int deficit = TargetPopulation - _live.Count;
+            int deficit = EffectiveTarget() - _live.Count;
             if (deficit <= 0) return;
 
             if (_root == null) _root = new GameObject("[RegionMobs]").transform;
@@ -220,6 +231,28 @@ namespace DeNelle.Village
                 var mob = SpawnMob(enemyId, region, pos, threat);
                 if (mob != null) _live.Add(mob);
             }
+        }
+
+        // ── Progress-ramped effective target (WO-216 / DEF-118) ──────────────────
+        // The flat TargetPopulation of 6 swarmed brand-new players the moment they
+        // stepped outside. Instead the EFFECTIVE target ramps with player progress:
+        // it starts at EarlyTargetFloor (1-2 wanderers to learn the fight on) and adds
+        // one mob per WavesPerExtraMob cleared waves, capped at TargetPopulation.
+        //
+        // PROGRESS SIGNAL = GameState.BestWave (highest village wave ever cleared). Chosen
+        // because it (a) already exists and is the canonical persisted "how far am I"
+        // field — no new persistence invented (WO-216 constraint), (b) is in Core so it
+        // reads cleanly from Village, (c) survives across runs (a returning veteran keeps
+        // their fuller wilderness), and (d) is the same notion of progress the wave siege
+        // cadence keys off, so the wandering layer and the siege layer ramp together.
+        // Hero level was the alternative but it's in-memory only (resets each run), so a
+        // veteran's outer world would reset to 1-2 mobs every session — wrong feel.
+        private int EffectiveTarget()
+        {
+            int bestWave = GameStateService.Instance?.State?.BestWave ?? 0;
+            int slope = Mathf.Max(1, WavesPerExtraMob);
+            int ramped = EarlyTargetFloor + bestWave / slope;
+            return Mathf.Clamp(ramped, EarlyTargetFloor, TargetPopulation);
         }
 
         // Find a NavMesh-valid point in the spawn ring around the player.

@@ -67,6 +67,16 @@ namespace DeNelle.Village
         [Tooltip("After this many clears a tribe stops respawning (fully dominated). 0 = always respawns (floored).")]
         [Min(0)] public int ClearsUntilGone = 4;
 
+        [Header("Early-game ramp (WO-216 / DEF-118)")]
+        [Tooltip("How many raiders are shaved off a FRESH raid roll for a brand-new player (BestWave 0), " +
+                 "easing back to 0 as progress climbs. Keeps early camps small so a new player meets a " +
+                 "couple of wanderers, not a full raid band. Never drops a raid below MinRaidFloor.")]
+        [Min(0)] public int EarlyRaidReduction = 4;
+
+        [Tooltip("Cleared-wave count at which the early-game raid reduction has fully faded (full-size raids). " +
+                 "Below it, the reduction scales down linearly with BestWave (WO-216 ramp).")]
+        [Min(1)] public int FullRaidByWave = 8;
+
         // ── Region tints so the families read at a glance (debug-friendly) ──
         private static readonly Color RaiderTint = new Color(0.62f, 0.22f, 0.20f);
 
@@ -230,7 +240,27 @@ namespace DeNelle.Village
             // Reduced respawn after clears (owner-locked): smaller each wipe.
             rolled -= t.ClearCount * RespawnReductionPerClear;
 
+            // WO-216 early-game ramp: shave a FRESH raid down for new players so the
+            // first camps are small wanderers, not full bands; the reduction fades to 0
+            // as progress climbs. Same progress signal as RegionMobSpawner — GameState.BestWave
+            // (persisted, Core-readable, shared with the wave-siege cadence). Only the fresh-roll
+            // path reaches here (damaged tribes return at their persisted count above), so this
+            // never corrupts the state-saving curve.
+            rolled -= EarlyRaidReductionNow();
+
             return Mathf.Clamp(rolled, MinRaidFloor, MaxRaidCeiling);
+        }
+
+        // Current early-game raid-size reduction (WO-216): EarlyRaidReduction at BestWave 0,
+        // easing linearly to 0 once BestWave reaches FullRaidByWave. Returns 0 for veterans.
+        private int EarlyRaidReductionNow()
+        {
+            if (EarlyRaidReduction <= 0) return 0;
+            int bestWave = GameStateService.Instance?.State?.BestWave ?? 0;
+            int fadeBy = Mathf.Max(1, FullRaidByWave);
+            if (bestWave >= fadeBy) return 0;
+            float t01 = (float)bestWave / fadeBy;            // 0 fresh → 1 at FullRaidByWave
+            return Mathf.RoundToInt(EarlyRaidReduction * (1f - t01));
         }
 
         // ── Spawn one raider (reuse Enemy, code-built capsule) ──
