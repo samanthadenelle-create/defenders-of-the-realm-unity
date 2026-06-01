@@ -104,6 +104,29 @@ namespace DeNelle.Audio
         [Tooltip("defeat.mp3 — battle-loss sting. Default mix volume 0.5, no loop.")]
         [SerializeField] private AudioClip _defeatClip;
 
+        // ── Rotating clip pools (WO-171) ─────────────────────────────────────
+        // Some contexts have MORE THAN ONE clip and rotate per request so the
+        // music varies (battle: 3 owner tracks; overworld: 2 tracks). The pools
+        // are populated by AudioBootstrap (Resources) or SetMusicClip/AddMusicClip.
+        // _battleClip / (the registry's Overworld asset) remain the FIRST entry so
+        // the single-clip fallback path still works when a pool is empty.
+
+        [Tooltip("Battle music pool (battle / battle2 / battle3). PlayMusic(Battle) " +
+                 "rotates through these so fights are not monotonous. Empty -> _battleClip.")]
+        [SerializeField] private List<AudioClip> _battlePool = new List<AudioClip>();
+
+        [Tooltip("Overworld (open-world) music pool (world / mainworld1). PlayMusic(Overworld) " +
+                 "rotates through these. Empty -> the single Overworld clip.")]
+        [SerializeField] private List<AudioClip> _overworldPool = new List<AudioClip>();
+
+        // The single Overworld clip (first/default), assignable like the others.
+        private AudioClip _overworldClip;
+
+        // Round-robin cursors for the pools — advanced each time the pooled track
+        // is (re)started, so successive battles / world visits get different music.
+        private int _battleCursor;
+        private int _overworldCursor;
+
         // ── Runtime ──────────────────────────────────────────────────────────
 
         // Two music sources for crossfading: while one fades out the other
@@ -458,7 +481,12 @@ namespace DeNelle.Audio
             _fading = false;
         }
 
-        /// <summary>The inspector-assigned clip for a track, or null when not yet imported.</summary>
+        /// <summary>
+        /// The clip for a track, or null when not yet imported. Pooled tracks
+        /// (Battle / Overworld) pick the NEXT clip from their rotation pool so the
+        /// music varies per request (WO-171); they fall back to the single clip
+        /// when the pool is empty.
+        /// </summary>
         private AudioClip ClipFor(MusicTrack track)
         {
             switch (track)
@@ -466,11 +494,31 @@ namespace DeNelle.Audio
                 case MusicTrack.Title:   return _titleClip;
                 case MusicTrack.Village: return _villageClip;
                 case MusicTrack.Dungeon: return _dungeonClip;
-                case MusicTrack.Battle:  return _battleClip;
+                case MusicTrack.Battle:  return NextFromPool(_battlePool, ref _battleCursor) ?? _battleClip;
                 case MusicTrack.Victory: return _victoryClip;
                 case MusicTrack.Defeat:  return _defeatClip;
+                case MusicTrack.Overworld: return NextFromPool(_overworldPool, ref _overworldCursor) ?? _overworldClip;
                 default:                 return null;
             }
+        }
+
+        /// <summary>
+        /// Returns the next non-null clip from a rotation pool and advances the
+        /// cursor, or null when the pool is empty / all-null (caller falls back to
+        /// the single clip). One-entry pools just return that entry every time.
+        /// </summary>
+        private static AudioClip NextFromPool(List<AudioClip> pool, ref int cursor)
+        {
+            if (pool == null || pool.Count == 0) return null;
+            // Scan at most pool.Count entries so an all-null pool returns null
+            // rather than looping forever.
+            for (int i = 0; i < pool.Count; i++)
+            {
+                AudioClip clip = pool[cursor % pool.Count];
+                cursor = (cursor + 1) % pool.Count;
+                if (clip != null) return clip;
+            }
+            return null;
         }
 
         /// <summary>
@@ -486,9 +534,13 @@ namespace DeNelle.Audio
                 case MusicTrack.Title:   _titleClip = clip;   break;
                 case MusicTrack.Village: _villageClip = clip; break;
                 case MusicTrack.Dungeon: _dungeonClip = clip; break;
-                case MusicTrack.Battle:  _battleClip = clip;  break;
+                // Battle / Overworld are pooled: SetMusicClip assigns the FIRST /
+                // default entry (also the single-clip fallback) and seeds the pool
+                // with it; AddMusicClip appends the 2nd/3rd rotation entries.
+                case MusicTrack.Battle:  _battleClip = clip; SeedPool(_battlePool, clip); break;
                 case MusicTrack.Victory: _victoryClip = clip; break;
                 case MusicTrack.Defeat:  _defeatClip = clip;  break;
+                case MusicTrack.Overworld: _overworldClip = clip; SeedPool(_overworldPool, clip); break;
             }
 
             // If this track was requested but silent for want of a clip, start it.
@@ -497,6 +549,40 @@ namespace DeNelle.Audio
                 CurrentTrack = MusicTrack.None; // clear the short-circuit guard.
                 PlayMusic(track);
             }
+        }
+
+        /// <summary>
+        /// Appends a clip to a pooled track's rotation (WO-171) — the seam an
+        /// import pass uses to add the 2nd/3rd battle/overworld tracks. Only
+        /// <see cref="MusicTrack.Battle"/> and <see cref="MusicTrack.Overworld"/>
+        /// are pooled; other tracks fall through to <see cref="SetMusicClip"/>.
+        /// Null clips and duplicates are ignored.
+        /// </summary>
+        public void AddMusicClip(MusicTrack track, AudioClip clip)
+        {
+            if (clip == null) return;
+            switch (track)
+            {
+                case MusicTrack.Battle:
+                    if (_battleClip == null) _battleClip = clip;
+                    if (!_battlePool.Contains(clip)) _battlePool.Add(clip);
+                    break;
+                case MusicTrack.Overworld:
+                    if (_overworldClip == null) _overworldClip = clip;
+                    if (!_overworldPool.Contains(clip)) _overworldPool.Add(clip);
+                    break;
+                default:
+                    SetMusicClip(track, clip);
+                    break;
+            }
+        }
+
+        // Seeds a rotation pool with its first/default clip (idempotent — a clip
+        // already present is not duplicated; a null clip is ignored).
+        private static void SeedPool(List<AudioClip> pool, AudioClip clip)
+        {
+            if (pool == null || clip == null) return;
+            if (!pool.Contains(clip)) pool.Add(clip);
         }
 
         private bool IsAnyMusicPlaying()
@@ -707,6 +793,18 @@ namespace DeNelle.Audio
         {
             MusicTrack track = TrackForScene(sceneName);
             if (track == MusicTrack.None) return; // unknown scene — leave music alone.
+
+            // The Village scene is the AMBIENT/EXPLORE context: route it through
+            // PlayAmbientContext so the player's chosen jukebox track (WO-162),
+            // if any, plays instead of the hard-coded village track. Combat /
+            // victory / defeat scenes/states still go straight to their track and
+            // OVERRIDE — player choice never bleeds into a dramatic cue.
+            if (track == MusicTrack.Village)
+            {
+                PlayAmbientContext(AmbientContext.Village);
+                return;
+            }
+
             PlayMusic(track);
         }
 
@@ -732,6 +830,149 @@ namespace DeNelle.Audio
                 return MusicTrack.Title;
 
             return MusicTrack.None; // unrecognised — caller leaves music as-is.
+        }
+
+        // =====================================================================
+        //  Ambient context + player music selection (WO-162 / WO-171)
+        // =====================================================================
+        //
+        // The "ambient/explore" context is the music that plays while the player
+        // is just existing in the world (Village or Overworld) — as opposed to a
+        // state cue (Battle / Victory / Defeat) which OVERRIDES it. WO-162 lets
+        // the player pick which ambient track they hear; WO-171 adds the Overworld
+        // context so crossing into the open world swaps Village -> Overworld music
+        // and combat still overrides, returning to the chosen ambient afterwards.
+        //
+        //   • The current ambient context is remembered (_ambientContext) so when
+        //     combat ends a caller can ReturnToAmbient() and get the RIGHT track
+        //     (village vs overworld) — and the player's CHOICE within it.
+        //   • The choice is persisted in PlayerPrefs (mirrors how audio volume
+        //     persists) keyed per context, so a "village jukebox" pick and an
+        //     "overworld jukebox" pick can differ.
+
+        /// <summary>The non-combat ambient contexts the player can be in (WO-171).</summary>
+        public enum AmbientContext
+        {
+            /// <summary>In/around the village (town, home). Default track: Village.</summary>
+            Village,
+            /// <summary>In the open world (OuterWorld regions). Default track: Overworld.</summary>
+            Overworld,
+        }
+
+        // The ambient context currently in effect — what ReturnToAmbient() restores
+        // once a Battle/Victory/Defeat cue finishes.
+        private AmbientContext _ambientContext = AmbientContext.Village;
+
+        /// <summary>The ambient context currently in effect (village vs overworld).</summary>
+        public AmbientContext CurrentAmbientContext => _ambientContext;
+
+        private const string AmbientChoicePrefKey = "dotr-ambient-music-choice-";
+
+        /// <summary>The default music track for an ambient context.</summary>
+        public static MusicTrack DefaultTrackFor(AmbientContext context)
+        {
+            return context == AmbientContext.Overworld ? MusicTrack.Overworld : MusicTrack.Village;
+        }
+
+        /// <summary>
+        /// Enters an ambient context and plays its music — the player's chosen
+        /// track for that context (WO-162) if one is set and available, otherwise
+        /// the context default (Village / Overworld). This is the ONE entry point
+        /// for "play the explore music": the Village scene loader, an OuterWorld
+        /// region trigger, and combat-end all route through here so the right track
+        /// (and the player's pick) always wins. Combat/Victory/Defeat call
+        /// PlayMusic directly and OVERRIDE — they never come through here.
+        /// </summary>
+        public void PlayAmbientContext(AmbientContext context)
+        {
+            _ambientContext = context;
+            MusicTrack chosen = GetAmbientChoice(context);
+            MusicTrack track = (chosen != MusicTrack.None && MusicTrackRegistry.Has(chosen))
+                ? chosen
+                : DefaultTrackFor(context);
+            PlayMusic(track);
+        }
+
+        /// <summary>
+        /// Re-enters the current ambient context's music — the call combat code
+        /// makes when a fight ends (instead of hard-coding "PlayMusic(Village)").
+        /// Restores the player's chosen ambient track for whatever context they
+        /// were in (village or overworld).
+        /// </summary>
+        public void ReturnToAmbient() => PlayAmbientContext(_ambientContext);
+
+        /// <summary>
+        /// Sets (and persists) the player's chosen ambient track for a context
+        /// (WO-162 jukebox). <see cref="MusicTrack.None"/> clears the choice (the
+        /// context falls back to its default). The choice survives sessions via
+        /// PlayerPrefs. If the player is currently IN that ambient context, the
+        /// new pick starts immediately.
+        /// </summary>
+        public void SetAmbientChoice(AmbientContext context, MusicTrack track)
+        {
+            PlayerPrefs.SetInt(AmbientChoicePrefKey + (int)context, (int)track);
+            PlayerPrefs.Save();
+
+            // Apply live if we're in this context and not mid-combat-cue.
+            if (_ambientContext == context && !IsStateCue(CurrentTrack))
+                PlayAmbientContext(context);
+        }
+
+        /// <summary>
+        /// The player's persisted ambient-track choice for a context, or
+        /// <see cref="MusicTrack.None"/> when unset / invalid (caller uses the
+        /// context default).
+        /// </summary>
+        public MusicTrack GetAmbientChoice(AmbientContext context)
+        {
+            int raw = PlayerPrefs.GetInt(AmbientChoicePrefKey + (int)context, (int)MusicTrack.None);
+            if (!Enum.IsDefined(typeof(MusicTrack), raw)) return MusicTrack.None;
+            return (MusicTrack)raw;
+        }
+
+        /// <summary>Clears the player's ambient choice for a context (back to default).</summary>
+        public void ClearAmbientChoice(AmbientContext context) => SetAmbientChoice(context, MusicTrack.None);
+
+        /// <summary>
+        /// True for the state cues that OVERRIDE ambient music and must never be
+        /// supplanted by a jukebox pick (Battle / Victory / Defeat). Used so
+        /// changing the ambient choice mid-fight doesn't stomp the combat track.
+        /// </summary>
+        private static bool IsStateCue(MusicTrack track)
+        {
+            return track == MusicTrack.Battle
+                || track == MusicTrack.Victory
+                || track == MusicTrack.Defeat;
+        }
+
+        /// <summary>
+        /// The curated set of tracks a player may pick for an ambient context
+        /// (WO-162). Authorable: add a clip + a MusicTrack + an entry here and it
+        /// appears in the jukebox — no other code changes. Combat-state tracks are
+        /// intentionally excluded (you can't pick "Battle" as your village ambient).
+        /// Overworld is offered in both contexts as a calm exploration option.
+        /// </summary>
+        public static IReadOnlyList<MusicChoice> AmbientChoicesFor(AmbientContext context)
+        {
+            // Village ambient: Village (the town theme) + the open-world themes as
+            // mellow alternatives + the title theme. Overworld ambient: the world
+            // themes + the village theme. Curated, expandable, licensing-safe.
+            if (context == AmbientContext.Overworld)
+            {
+                return new List<MusicChoice>
+                {
+                    new MusicChoice(MusicTrack.Overworld, "Wandering the Realm"),
+                    new MusicChoice(MusicTrack.Village,   "Elarion (Town Theme)"),
+                    new MusicChoice(MusicTrack.Title,     "Echoes of Elarion (Main Theme)"),
+                };
+            }
+
+            return new List<MusicChoice>
+            {
+                new MusicChoice(MusicTrack.Village,   "Elarion (Town Theme)"),
+                new MusicChoice(MusicTrack.Overworld, "Wandering the Realm"),
+                new MusicChoice(MusicTrack.Title,     "Echoes of Elarion (Main Theme)"),
+            };
         }
 
         // =====================================================================
@@ -787,6 +1028,7 @@ namespace DeNelle.Audio
                 case DeNelle.Core.Audio.MusicTrack.Battle:  PlayMusic(MusicTrack.Battle);  break;
                 case DeNelle.Core.Audio.MusicTrack.Victory: PlayMusic(MusicTrack.Victory); break;
                 case DeNelle.Core.Audio.MusicTrack.Dungeon: PlayMusic(MusicTrack.Dungeon); break;
+                case DeNelle.Core.Audio.MusicTrack.Overworld: PlayAmbientContext(AmbientContext.Overworld); break;
             }
         }
     }

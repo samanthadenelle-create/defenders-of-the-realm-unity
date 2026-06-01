@@ -105,6 +105,15 @@ namespace DeNelle.Audio
             TryAssignClip(service, MusicTrack.Defeat,  "defeat");
             TryAssignClip(service, MusicTrack.Dungeon, "dungeon");
 
+            // Pooled tracks (WO-171) — extra rotation entries appended after the
+            // default so PlayMusic varies the music. Battle: battle/battle2/battle3
+            // (3 owner tracks). Overworld: world/mainworld1 (2 open-world tracks).
+            // TryAssignClip already seeded "battle" as the default battle entry.
+            TryAddClip(service, MusicTrack.Battle,    "battle2");
+            TryAddClip(service, MusicTrack.Battle,    "battle3");
+            TryAssignClip(service, MusicTrack.Overworld, "world");
+            TryAddClip(service, MusicTrack.Overworld, "mainworld1");
+
             // One-time mute-migration. Pre-2026-05-20 the schema default for
             // GameState.Muted was true, so saves persisted as muted even when
             // the player never opened Settings. Now that music actually exists,
@@ -140,6 +149,17 @@ namespace DeNelle.Audio
         {
             var clip = Resources.Load<AudioClip>(resourceName);
             if (clip != null) service.SetMusicClip(track, clip);
+        }
+
+        /// <summary>
+        /// Appends a clip to a pooled track's rotation (WO-171), if the Resource
+        /// exists. Missing extras are silently skipped — the pool just rotates
+        /// over whatever landed.
+        /// </summary>
+        private static void TryAddClip(AudioService service, MusicTrack track, string resourceName)
+        {
+            var clip = Resources.Load<AudioClip>(resourceName);
+            if (clip != null) service.AddMusicClip(track, clip);
         }
     }
 }

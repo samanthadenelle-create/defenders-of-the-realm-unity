@@ -41,6 +41,28 @@ namespace DeNelle.Audio
         Victory,
         /// <summary>Battle-loss sting. Default volume 0.5. Does not loop.</summary>
         Defeat,
+        /// <summary>Open-world (OuterWorld) exploration ambient. Default volume 0.4 (soft — long sessions). WO-171.</summary>
+        Overworld,
+    }
+
+    /// <summary>
+    /// One selectable entry in the ambient-music jukebox (WO-162) — a track key
+    /// plus the player-facing display name. Pure data; authorable in
+    /// <see cref="AudioService.AmbientChoicesFor"/>. Immutable.
+    /// </summary>
+    public sealed class MusicChoice
+    {
+        /// <summary>The track this choice plays.</summary>
+        public readonly MusicTrack Track;
+
+        /// <summary>The player-facing name shown in the selection UI.</summary>
+        public readonly string DisplayName;
+
+        public MusicChoice(MusicTrack track, string displayName)
+        {
+            Track = track;
+            DisplayName = displayName;
+        }
     }
 
     /// <summary>
@@ -105,6 +127,8 @@ namespace DeNelle.Audio
         public const float VictoryVolume = 0.7f;
         /// <summary>Defeat sting volume — softer; the loss lands slowly.</summary>
         public const float DefeatVolume = 0.5f;
+        /// <summary>Overworld default volume — soft, anti-fatigue for open-world exploration (WO-171).</summary>
+        public const float OverworldVolume = 0.4f;
 
         private static readonly Dictionary<MusicTrack, MusicTrackDef> Defs =
             new Dictionary<MusicTrack, MusicTrackDef>
@@ -122,6 +146,8 @@ namespace DeNelle.Audio
                 "Assets/Audio/victory.mp3",                            VictoryVolume, false, 0.2f, 0.8f) },
             { MusicTrack.Defeat,  new MusicTrackDef(MusicTrack.Defeat,
                 "Assets/Audio/defeat.mp3",                             DefeatVolume,  false, 1.5f, 1.5f) },
+            { MusicTrack.Overworld, new MusicTrackDef(MusicTrack.Overworld,
+                "Assets/Audio/world.mp3",                              OverworldVolume, true, 1.2f, 1.0f) },
         };
 
         /// <summary>
