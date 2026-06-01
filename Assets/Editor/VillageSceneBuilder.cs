@@ -324,13 +324,17 @@ namespace DeNelle.Editor
             var dressingRoot = NewChild(root.transform, "CityDressing");
             var approachRoot = NewChild(root.transform, "Approaches");
 
-            // ── Ground floor — DROPPED (owner 2026-05-31) ───────────────────
-            // The OuterWorld terrain is now the SINGLE continuous ground; it runs THROUGH the
-            // village, not around it. The old hex-tile village floor fought the terrain (the
-            // "map under the city" step + z-fight + ~3,000 redundant tiles). Village structures
-            // (walls / buildings / roads) sit directly on the terrain at Y=0.
-            // BuildGroundFloor(groundRoot);   // intentionally not called
-            _ = groundRoot;                    // kept as an empty root so later passes don't NRE
+            // ── City floor — flat walkable slab a hair ABOVE the terrain ────
+            // WO-192: the old ~3,000-hex-tile floor was dropped (it z-fought the
+            // OuterWorld terrain and was a draw-call hog). But removing it left the
+            // interior with NO continuous flat footing — the hero could only walk the
+            // raised road tiles. RE-ADD a single flat slab spanning the whole city
+            // footprint at y=+0.02 (a hair above the coplanar Y=0 terrain so it wins
+            // the depth test with no flicker — no material-priority logic needed). It
+            // gets a grass/dirt URP material (kills the bare purple-grey terrain look),
+            // a collider, and is marked NavigationStatic so the Village bake covers the
+            // entire interior → continuous flat navmesh, "walk anywhere off the road."
+            BuildCityFloor(groundRoot);
 
             // ── Curtain wall + gates (WallLayout-driven, shaped rectangle) ───
             int wallCount = BuildWallRing(wallRoot, tWallLayout, controller);
@@ -627,6 +631,63 @@ namespace DeNelle.Editor
 
             if (grass == null)
                 Debug.LogWarning("[VillageSceneBuilder] hex_grass.fbx missing -- ground floor used placeholder discs.");
+        }
+
+        // =====================================================================
+        //  City floor — single flat walkable slab (WO-192)
+        // =====================================================================
+
+        /// <summary>
+        /// WO-192: a single flat walkable slab spanning the whole city footprint,
+        /// sitting at y = +0.02 (a hair ABOVE the coplanar Y=0 OuterWorld terrain so
+        /// it wins the depth test cleanly — no z-fight, no render-queue tricks). Carries
+        /// a grass/dirt URP material (so the interior reads as ground, not bare terrain),
+        /// a flat BoxCollider, and the NavigationStatic flag so BakeVillageNavMesh covers
+        /// the entire interior. This is the continuous flat footing that lets the hero +
+        /// enemy NavMeshAgents walk anywhere inside the walls (off the roads) and out
+        /// through every gate onto the terrain.
+        /// </summary>
+        private static void BuildCityFloor(Transform parent)
+        {
+            // Footprint: reach out to the moat band (±54/±47 from BuildMoat) plus a
+            // small margin so the gate exits + bridges land on the slab, not off its
+            // edge. A single quad-thin box keeps it to ONE draw call (vs ~3,000 tiles).
+            const float halfX = 58f;
+            const float halfZ = 52f;
+            const float floorY = 0.02f;   // a hair above the Y=0 terrain — kills the z-fight
+            const float thk    = 0.1f;    // thin slab; collider top lands at floorY
+
+            var floor = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            floor.name = "CityFloor";
+            floor.transform.SetParent(parent, false);
+            // Slab top surface sits at floorY: centre = floorY - thk/2.
+            floor.transform.localPosition = new Vector3(0f, floorY - thk * 0.5f, 0f);
+            floor.transform.localScale = new Vector3(halfX * 2f, thk, halfZ * 2f);
+
+            // Grass/dirt URP material — flat, lit, no z-fight (renderer present but
+            // it's the topmost surface at y=+0.02 so it draws over the terrain).
+            var sh = Shader.Find("Universal Render Pipeline/Lit");
+            if (sh != null)
+            {
+                var mat = new Material(sh) { name = "CityGroundGrass" };
+                if (mat.HasProperty("_BaseColor"))
+                    mat.SetColor("_BaseColor", new Color(0.34f, 0.44f, 0.26f)); // mossy grass-dirt
+                if (mat.HasProperty("_Smoothness")) mat.SetFloat("_Smoothness", 0.08f);
+                if (mat.HasProperty("_Metallic"))   mat.SetFloat("_Metallic", 0f);
+                var rd = floor.GetComponent<Renderer>();
+                if (rd != null) rd.sharedMaterial = mat;
+            }
+
+            // The CreatePrimitive box already carries a BoxCollider (kept — gives the
+            // hero solid footing). Flag NavigationStatic so the bake voxelizes the whole
+            // interior as walkable floor.
+            GameObjectUtility.SetStaticEditorFlags(floor,
+                GameObjectUtility.GetStaticEditorFlags(floor) | StaticEditorFlags.NavigationStatic);
+
+            _groundCount++;
+            Debug.Log($"[VillageSceneBuilder] WO-192 BuildCityFloor: one flat grass slab " +
+                      $"{halfX * 2f:0}x{halfZ * 2f:0}u at y={floorY} (above the Y=0 terrain, no z-fight), " +
+                      "collider + NavigationStatic -> continuous interior navmesh.");
         }
 
         // =====================================================================

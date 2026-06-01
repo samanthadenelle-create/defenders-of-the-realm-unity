@@ -218,6 +218,42 @@ namespace DeNelle.Editor
             Box("Deck-Corner-SE", new Vector3( cornX, deckCtrY, -cornZ), new Vector3(cornDeck, deckThk, cornDeck), Quaternion.identity);
             Box("Deck-Corner-SW", new Vector3(-cornX, deckCtrY, -cornZ), new Vector3(cornDeck, deckThk, cornDeck), Quaternion.identity);
 
+            // ── Inner wall-walk lane (WO-181 #5): CONTINUOUS perimeter loop the
+            //    player can walk ALL the way around. The corner + mid-wall towers
+            //    sit centred ON the wall line (radius ~2.5 m) and their meshes
+            //    voxelize into the NavMesh as obstacles that BLOCK the narrow
+            //    overhanging deck. Fix: a wide walkway lane offset INBOARD of the
+            //    towers — it rests on the wall top + extends inward over the inner
+            //    courtyard edge (at deck height, NOT projecting the overhang inward
+            //    over the town's GROUND; it's an elevated inner walk on the wall).
+            //    Towers sit OUTBOARD of this lane, so the loop passes cleanly INSIDE
+            //    every tower. The lane is contiguous with the deck (same y, abutting
+            //    its inner edge) so deck + lane read as one wide fighting platform,
+            //    and it spans the corners so the perimeter is an unbroken circle.
+            const float laneIn  = 3.2f;   // how far the lane reaches INBOARD of the wall line (clears ~2.5 m tower radius)
+            // Lane spans from the deck inner edge (wallLine - deckIn) inward to
+            // (wallLine - laneIn): width = laneIn - deckIn, centred between them.
+            float laneW   = laneIn - deckIn;                 // ~2.6 m walkable lane
+            float laneOff = (deckIn + laneIn) * 0.5f;        // inboard offset of the lane centre from the wall line
+            float laneZ   = wallZ - laneOff;                 // N/S lane centre
+            float laneX   = wallX - laneOff;                 // E/W lane centre
+            // N/S lanes run corner-to-corner; E/W lanes bridge between them. The
+            // corner pads below close the four corners so the loop never breaks.
+            float laneLenNS = 2f * laneX;   // reach to the E/W lane centres (corners filled by pads)
+            float laneLenEW = 2f * laneZ;
+            Box("WalkLane-North", new Vector3(0f, deckCtrY,  laneZ), new Vector3(laneLenNS, deckThk, laneW), Quaternion.identity);
+            Box("WalkLane-South", new Vector3(0f, deckCtrY, -laneZ), new Vector3(laneLenNS, deckThk, laneW), Quaternion.identity);
+            Box("WalkLane-East",  new Vector3( laneX, deckCtrY, 0f), new Vector3(laneW, deckThk, laneLenEW), Quaternion.identity);
+            Box("WalkLane-West",  new Vector3(-laneX, deckCtrY, 0f), new Vector3(laneW, deckThk, laneLenEW), Quaternion.identity);
+            // Inner corner pads: a solid square at each corner inboard of the tower,
+            // joining the N/S + E/W lanes into one continuous loop (no notch).
+            float laneCorn = laneIn;   // pad reaches from the wall line inward, square
+            float lcX = wallX - laneCorn * 0.5f, lcZ = wallZ - laneCorn * 0.5f;
+            Box("WalkCorner-NE", new Vector3( lcX, deckCtrY,  lcZ), new Vector3(laneCorn, deckThk, laneCorn), Quaternion.identity);
+            Box("WalkCorner-NW", new Vector3(-lcX, deckCtrY,  lcZ), new Vector3(laneCorn, deckThk, laneCorn), Quaternion.identity);
+            Box("WalkCorner-SE", new Vector3( lcX, deckCtrY, -lcZ), new Vector3(laneCorn, deckThk, laneCorn), Quaternion.identity);
+            Box("WalkCorner-SW", new Vector3(-lcX, deckCtrY, -lcZ), new Vector3(laneCorn, deckThk, laneCorn), Quaternion.identity);
+
             // ── Corbel / machicolation brackets (WO-181 #3): a row of small stepped
             //    stone blocks UNDER the projecting outer edge of the deck — the visual
             //    that "holds the overhang up". Each bracket is a short block tucked
@@ -335,23 +371,27 @@ namespace DeNelle.Editor
                     }
                 }
             };
-            // WO-166 #4 + WO-181: ramps run PARALLEL to (hugging) their wall, not
-            // perpendicular into the courtyard. The TOP end lands on the deck's INNER
-            // edge line at deckTopY so the top step connects flush onto the walkable
-            // deck (never short of, or into, a wall face). The 9 m climb run goes ALONG
-            // the wall axis, clearing the centred gate gap (|coord|<3). NavMesh link
-            // ground→deck is preserved (the nav plank's top meets the deck slab).
-            float zLand = wallZ - deckIn;   // deck inner edge (N/S): ramp top lands here (=32.4)
+            // WO-166 #4 + WO-181 + WO-183: ramps run PARALLEL to (hugging) their wall,
+            // not perpendicular into the courtyard. The TOP end lands on the INNER WALK
+            // LANE centre at deckTopY — squarely ON the continuous perimeter loop (not
+            // balanced on the deck's outer edge where the towers/parapet crowd it), so
+            // the top step connects flush onto walkable ground and the hero can step
+            // straight from the climb onto the rampart loop (never short of, or into, a
+            // wall face). The 9 m climb run goes ALONG the wall axis, clearing the centred
+            // gate gap (|coord|<3). NavMesh link ground→lane→deck is preserved (the nav
+            // plank's top meets the lane slab, which is contiguous with the deck).
+            float zLand = laneZ;   // inner walk-lane centre (N/S): ramp top lands here
             Ramp("Ramp-South", new Vector3(-6f - rampRun, 0f, -zLand), new Vector3(-6f, deckTopY, -zLand));
             Ramp("Ramp-North", new Vector3(-6f - rampRun, 0f,  zLand), new Vector3(-6f, deckTopY,  zLand));
-            float xLand = wallX - deckIn;   // deck inner edge (E/W) (=41.4)
+            float xLand = laneX;   // inner walk-lane centre (E/W)
             Ramp("Ramp-East",  new Vector3( xLand, 0f, -6f - rampRun), new Vector3( xLand, deckTopY, -6f));
             Ramp("Ramp-West",  new Vector3(-xLand, 0f, -6f - rampRun), new Vector3(-xLand, deckTopY, -6f));
 
             Debug.Log($"[VillageSceneBuilder] WO-181 BuildRamparts: {pieces} nav-static stone pieces " +
-                      "(overhanging machicolated deck loop + crenellated parapet + corbel brackets + " +
-                      "corner wraps + 4 climb ramps landing flush on the deck); hero + enemies share " +
-                      "the NavMesh ground→ramp→deck.");
+                      "(overhanging machicolated deck + CONTINUOUS inner walk-lane loop INSIDE the " +
+                      "towers + crenellated parapet + corbel brackets + corner wraps + 4 climb ramps " +
+                      "landing flush on the walk-lane); hero + enemies share the NavMesh " +
+                      "ground→ramp→lane→deck and can walk the FULL perimeter circle.");
         }
 
         /// <summary>

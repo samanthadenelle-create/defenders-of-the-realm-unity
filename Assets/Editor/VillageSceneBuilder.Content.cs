@@ -29,10 +29,14 @@ namespace DeNelle.Editor
                     var tile = InstantiateModel(stone, "hex_road_B.fbx",
                         $"PlazaTile ({col},{row})");
                     tile.transform.SetParent(plazaRoot, false);
-                    tile.transform.localPosition = new Vector3(x, 0.02f, z);
+                    // WO-192: FLUSH overlay just above the city floor (y=0.02). A flat
+                    // visual paving, NOT raised geometry — no ledge for the NavMeshAgent
+                    // to get stuck stepping off. Y-scale flattened to a thin skin.
+                    tile.transform.localPosition = new Vector3(x, 0.03f, z);
+                    FlattenOverlayTile(tile);
                     if (stone == null)
                     {
-                        tile.transform.localScale = new Vector3(HexWidth, 0.16f, HexWidth);
+                        tile.transform.localScale = new Vector3(HexWidth, 0.02f, HexWidth);
                         ApplyColor(tile, new Color(0.62f, 0.60f, 0.56f));
                     }
                     _roadCount++;
@@ -84,13 +88,18 @@ namespace DeNelle.Editor
                 var tile = InstantiateModel(road, "hex_road_A.fbx",
                     northSouth ? $"Road-NS ({along:0.0})" : $"Road-EW ({along:0.0})");
                 tile.transform.SetParent(parent, false);
+                // WO-192: roads are a FLUSH visual overlay (y=0.03, just above the
+                // city floor at y=0.02), NOT raised blocks. The old 0.015 height +
+                // the FBX's own mesh thickness made a ledge the NavMeshAgent couldn't
+                // step off — flatten the tile to a thin skin so it's paint, not a wall.
                 Vector3 p = northSouth
-                    ? new Vector3(off, 0.015f, along)
-                    : new Vector3(along, 0.015f, off);
+                    ? new Vector3(off, 0.03f, along)
+                    : new Vector3(along, 0.03f, off);
                 tile.transform.localPosition = p;
+                FlattenOverlayTile(tile);
                 if (road == null)
                 {
-                    tile.transform.localScale = new Vector3(HexWidth, 0.14f, HexWidth);
+                    tile.transform.localScale = new Vector3(HexWidth, 0.02f, HexWidth);
                     ApplyColor(tile, new Color(0.55f, 0.46f, 0.34f));
                 }
                 _roadCount++;

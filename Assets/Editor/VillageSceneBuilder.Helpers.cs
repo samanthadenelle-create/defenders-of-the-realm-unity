@@ -416,6 +416,21 @@ namespace DeNelle.Editor
         }
 
         /// <summary>
+        /// WO-192: turns a road/plaza tile into a FLUSH visual overlay — flattens the
+        /// imported KayKit hex mesh vertically to a thin skin (so it has no raised lip
+        /// the NavMeshAgent would treat as a ledge) and strips its colliders (footing
+        /// comes from the CityFloor below; the road must be paint, not an obstacle).
+        /// </summary>
+        private static void FlattenOverlayTile(GameObject go)
+        {
+            if (go == null) return;
+            // Squash the model's own thickness so the paving lies flat on the floor.
+            var s = go.transform.localScale;
+            go.transform.localScale = new Vector3(s.x, s.y * 0.06f, s.z);
+            StripColliders(go);
+        }
+
+        /// <summary>
         /// Strips every Rigidbody from a model instance. Imported meshes from
         /// third-party packs occasionally include a default Rigidbody on the
         /// root — combined with our hero collider that meant the hero fell

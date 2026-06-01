@@ -339,15 +339,39 @@ namespace DeNelle.Editor
                 }
 
             // Mark the exterior terrain NavigationStatic so the bake makes it walkable.
+            // WO (terrain re-flag): the previous bake logged "marked 0 terrain(s)" — the
+            // OuterWorld rebuild dropped the terrain's static flag and the scene-root walk
+            // above missed it (stale/inactive root, or the terrain sat under a root the
+            // GetComponentsInChildren pass skipped). Re-find the terrain by its Terrain
+            // COMPONENT via the engine's authoritative active-terrain list (Terrain.
+            // activeTerrains) rather than trusting a scene-root reference, and re-flag every
+            // one NavigationStatic + SetDirty so the flag reliably persists into THIS bake.
             int marked = 0;
+            var terrains = new System.Collections.Generic.List<Terrain>(Terrain.activeTerrains);
+            // Belt-and-suspenders: also sweep both open scenes' roots (catches an inactive
+            // terrain not in activeTerrains), de-duping against what we already have.
             foreach (var go in outer.GetRootGameObjects())
                 foreach (var terr in go.GetComponentsInChildren<Terrain>(true))
-                {
-                    var flags = GameObjectUtility.GetStaticEditorFlags(terr.gameObject);
-                    GameObjectUtility.SetStaticEditorFlags(terr.gameObject,
-                        flags | StaticEditorFlags.NavigationStatic);
-                    marked++;
-                }
+                    if (!terrains.Contains(terr)) terrains.Add(terr);
+            foreach (var go in village.GetRootGameObjects())
+                foreach (var terr in go.GetComponentsInChildren<Terrain>(true))
+                    if (!terrains.Contains(terr)) terrains.Add(terr);
+
+            foreach (var terr in terrains)
+            {
+                if (terr == null) continue;
+                var flags = GameObjectUtility.GetStaticEditorFlags(terr.gameObject);
+                GameObjectUtility.SetStaticEditorFlags(terr.gameObject,
+                    flags | StaticEditorFlags.NavigationStatic);
+                EditorUtility.SetDirty(terr.gameObject);
+                marked++;
+            }
+            if (marked == 0)
+                Debug.LogError("[OuterWorldBuilder] BakeWorldNavMesh: found NO Terrain to flag " +
+                               "NavigationStatic — the exterior terrain is missing. Run " +
+                               "Defenders/World/Build Outer World + Build Exterior Terrain FIRST; " +
+                               "the combined bake will have no walkable ground outside the gates.");
+            UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(outer);
 
             // Village floor/walls keep the NavigationStatic flags saved by BuildVillage, so a
             // combined bake across BOTH open scenes produces ONE connected walkable surface.

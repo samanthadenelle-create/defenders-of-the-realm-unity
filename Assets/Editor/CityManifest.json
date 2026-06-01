@@ -38,16 +38,6 @@
 
   "buildings": [
     {
-      "id": "Heart",
-      "prefab": "kaykit_hex/buildings/blue/building_townhall_blue.fbx",
-      "prefabKind": "kaykit_hex",
-      "pos": [0, 0, 1],
-      "rotY": 180,
-      "district": "center",
-      "purpose": "the seat / upgrade sink / defend-target — Tree of Life centerpiece. Sacred plaza stays OPEN: no other buildings, props, or wardens within radius 14 of (0,0,1)."
-    },
-
-    {
       "id": "Forge",
       "prefab": "polyperfect/Medieval_M/House_Medieval_Medium.prefab",
       "prefabKind": "polyperfect",
