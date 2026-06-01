@@ -26,6 +26,15 @@ read/write them live in `api/` (two exist today; the rest are listed below as
 4. **npm deps for the functions** (already noted in `save.js`'s header):
    `@neondatabase/serverless` and `@msgpack/msgpack`. Ensure they're in the
    Vercel project's `package.json`.
+5. **npm deps for wallet-signature auth (WO-120 §D — NEW):** `tweetnacl` and
+   `bs58`. Used by `api/_lib/wallet-auth.js` to verify the Solana/ed25519
+   signature on every save/load. Add both to the Vercel project's
+   `package.json` and redeploy:
+   `npm install tweetnacl bs58`
+   > **WALLET-SCHEME ASSUMPTION (flagged):** the verify path is Solana/ed25519
+   > because the whole client is Solana (base58 wallet = player_id, Solana Pay,
+   > Solana tx sigs). If the chain is ever EVM, swap the verify helper for
+   > `ecrecover` — the `auth_nonces` table + challenge flow are scheme-agnostic.
 
 ---
 

@@ -9,8 +9,9 @@
 --
 --   ENDPOINT                       TABLE(S)                          FUNCTION IN api/?
 --   ----------------------------   -------------------------------   -----------------
---   GET  /api/game/load            player_data                       YES (game/load.js)
---   POST /api/game/save            player_data                       YES (game/save.js)
+--   GET  /api/auth/nonce           auth_nonces                       YES (auth/nonce.js)
+--   GET  /api/game/load            player_data, auth_nonces          YES (game/load.js)
+--   POST /api/game/save            player_data, auth_nonces          YES (game/save.js)
 --   POST /api/events/track         analytics_events                  NO  (client-only)
 --   POST /api/promo/redeem         promo_codes, promo_redemptions    NO  (client-only)
 --   POST /api/referral/generate    referrals                         NO  (client-only)
@@ -97,6 +98,62 @@ CREATE INDEX IF NOT EXISTS idx_player_data_updated_at
 -- above into the merged delta; any extra keys it ignores. The JSONB column will
 -- hold whatever save.js chooses to write — keep save.js as the gatekeeper.
 -- -----------------------------------------------------------------------------
+
+
+-- =============================================================================
+-- 1b. auth_nonces  — single-use wallet-signature challenges (WO-120 §D security).
+-- -----------------------------------------------------------------------------
+-- Endpoint : GET  /api/auth/nonce?wallet=<base58>   (api/auth/nonce.js — issues)
+--            POST /api/game/save  (verifies a signature over the nonce; consumes)
+-- Client   : Assets/_Modules/Core/State/GameStateService.cs (fetch → sign → send)
+--
+-- WHY: /api/game/save + /api/game/load were keyed ONLY by the PUBLIC wallet
+-- address (?playerId=<wallet>) with NO proof of ownership, so anyone who knew a
+-- wallet could overwrite/read that player's save. This table backs a
+-- challenge–response: the server issues a random one-time nonce bound to the
+-- claimed wallet; the client signs {nonce}+payload with the wallet's ed25519
+-- key (Solana); save verifies the signature against the wallet pubkey, then
+-- BURNS the nonce so it can never be replayed.
+--
+-- WALLET SCHEME (ASSUMPTION — flagged): Solana / ed25519. The whole client is
+-- Solana (WalletService base58 address = player_id; tower-swap uses Solana tx
+-- sigs; Solana Pay). Verification therefore uses tweetnacl ed25519 over the
+-- base58-decoded wallet pubkey. If the chain were ever EVM, swap the verify
+-- helper for ecrecover — the table and flow are scheme-agnostic.
+--
+--   nonce       — the random challenge (server-generated, PK). The client signs
+--                 a deterministic message that embeds this value.
+--   wallet      — the base58 address the nonce was issued TO. The save endpoint
+--                 must verify the signature against THIS pubkey AND match it to
+--                 the payload's playerId, else 401.
+--   used        — false on issue; set true the instant a save consumes it. A
+--                 second save presenting the same nonce is rejected (replay).
+--   expires_at  — short TTL (default 5 min). Expired nonces are unusable even if
+--                 never consumed; a periodic sweep (or the WHERE clause on
+--                 verify) discards them.
+--
+-- Consume is atomic: the verify step does
+--   UPDATE auth_nonces SET used = TRUE
+--   WHERE nonce = $1 AND wallet = $2 AND used = FALSE AND expires_at > NOW()
+--   RETURNING nonce;
+-- A zero-row result means missing / already-used / expired / wrong-wallet → 401.
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS auth_nonces (
+    nonce      TEXT        PRIMARY KEY,             -- random one-time challenge (base64url, 32 bytes)
+    wallet     TEXT        NOT NULL,                -- base58 wallet the nonce was issued to
+    used       BOOLEAN     NOT NULL DEFAULT FALSE,  -- burned on first successful verify (replay guard)
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),  -- issue time
+    expires_at TIMESTAMPTZ NOT NULL                 -- created_at + short TTL (issuer sets, e.g. 5 min)
+);
+
+-- Look an issued nonce up by wallet (and prune a wallet's stale challenges).
+CREATE INDEX IF NOT EXISTS idx_auth_nonces_wallet
+    ON auth_nonces (wallet);
+
+-- Sweep expired/used nonces cheaply (a cron or the next issue call can run:
+--   DELETE FROM auth_nonces WHERE expires_at < NOW() OR used = TRUE;).
+CREATE INDEX IF NOT EXISTS idx_auth_nonces_expires
+    ON auth_nonces (expires_at);
 
 
 -- =============================================================================
