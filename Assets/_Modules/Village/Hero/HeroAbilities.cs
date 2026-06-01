@@ -89,6 +89,13 @@ namespace DeNelle.Village
         /// <summary>Animator <c>Cast</c> trigger hash — matches AnimatorSetup.cs.</summary>
         private static readonly int AnimCast = Animator.StringToHash("Cast");
 
+        // WO-163: cached "Cast" param presence for the currently-resolved Animator.
+        // HeroBodySwapper assigns a fresh runtimeAnimatorController at runtime, so
+        // re-scan whenever the resolved Animator changes (same pattern as
+        // HeroLocomotion.RefreshParamCache). Driving an absent param logs an error.
+        private bool _hasCastParam;
+        private Animator _paramCheckedAnimator;
+
         /// <summary>Current mana, 0..<see cref="MaxMana"/>.</summary>
         public float Mana => _mana;
 
@@ -224,7 +231,19 @@ namespace DeNelle.Village
                 var bodyT = transform.Find("HeroBody");
                 if (bodyT != null) _animator = bodyT.GetComponentInChildren<Animator>();
             }
-            if (_animator != null) _animator.SetTrigger(AnimCast);
+            // WO-163: (re)scan the resolved controller for the "Cast" param so we
+            // never drive an absent param (a controller swap rebinds the animator).
+            if (_animator != null && _animator != _paramCheckedAnimator)
+            {
+                _paramCheckedAnimator = _animator;
+                _hasCastParam = false;
+                if (_animator.runtimeAnimatorController != null)
+                {
+                    foreach (var p in _animator.parameters)
+                        if (p.nameHash == AnimCast) { _hasCastParam = true; break; }
+                }
+            }
+            if (_animator != null && _hasCastParam) _animator.SetTrigger(AnimCast);
 
             Vector3 origin = transform.position;
 

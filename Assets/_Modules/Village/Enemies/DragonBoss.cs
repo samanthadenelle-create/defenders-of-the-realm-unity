@@ -165,6 +165,12 @@ namespace DeNelle.Village
         private static readonly int AnimSpeed  = Animator.StringToHash("Speed");
         private static readonly int AnimAttack = Animator.StringToHash("Attack");
         private static readonly int AnimDead   = Animator.StringToHash("Dead");
+        // WO-163: cached once when the Animator resolves — whether this rig's
+        // controller declares each param. Driving an absent param logs every
+        // frame (Speed) / on each event (Attack/Dead). Guard all setter calls.
+        private bool _hasSpeedParam;
+        private bool _hasAttackParam;
+        private bool _hasDeadParam;
 
         // ── Events ────────────────────────────────────────────────────────────
 
@@ -387,7 +393,7 @@ namespace DeNelle.Village
             if (_swoopElapsed > 0f) return;
             _swoopElapsed = Mathf.Epsilon; // mark active; TickSwoop drives it
             _swoopStruck = false;
-            if (_animator != null) _animator.SetTrigger(AnimAttack);
+            if (_animator != null && _hasAttackParam) _animator.SetTrigger(AnimAttack);
         }
 
         /// <summary>
@@ -490,7 +496,7 @@ namespace DeNelle.Village
         /// </summary>
         private void FireBreath()
         {
-            if (_animator != null) _animator.SetTrigger(AnimAttack);
+            if (_animator != null && _hasAttackParam) _animator.SetTrigger(AnimAttack);
             DealStrike(_breathDamage);
         }
 
@@ -546,7 +552,7 @@ namespace DeNelle.Village
             _phase = DragonPhase.Falling;
             _swoopElapsed = 0f;
             _deathElapsed = 0f;
-            if (_animator != null) _animator.SetBool(AnimDead, true);
+            if (_animator != null && _hasDeadParam) _animator.SetBool(AnimDead, true);
             Died?.Invoke(this);
             PhaseChanged?.Invoke(DragonPhase.Falling);
         }
@@ -593,7 +599,7 @@ namespace DeNelle.Village
         /// </summary>
         private void DriveAnimator(float rawSpeed)
         {
-            if (_animator == null) return;
+            if (_animator == null || !_hasSpeedParam) return;
             _shownSpeed = Mathf.Lerp(_shownSpeed, rawSpeed, Time.deltaTime * 4f);
             _animator.SetFloat(AnimSpeed, _shownSpeed);
         }
@@ -630,6 +636,18 @@ namespace DeNelle.Village
         {
             if (_animator == null)
                 _animator = GetComponentInChildren<Animator>();
+
+            // WO-163: cache which params the controller actually declares so the
+            // per-frame Speed drive (and Attack/Dead) never hit an absent param.
+            if (_animator != null && _animator.runtimeAnimatorController != null)
+            {
+                foreach (var p in _animator.parameters)
+                {
+                    if (p.nameHash == AnimSpeed)  _hasSpeedParam  = true;
+                    if (p.nameHash == AnimAttack) _hasAttackParam = true;
+                    if (p.nameHash == AnimDead)   _hasDeadParam   = true;
+                }
+            }
         }
 
 #if UNITY_EDITOR

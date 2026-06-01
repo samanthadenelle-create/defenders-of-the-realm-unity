@@ -33,6 +33,14 @@ namespace DeNelle.Pets
         private static readonly int HitHash    = Animator.StringToHash("Hit");
         private static readonly int DeathHash  = Animator.StringToHash("Death");
 
+        // WO-163: cached once at load — whether this controller declares each
+        // param. Driving an absent param logs "Parameter does not exist" (per
+        // frame for Speed). Guard every setter with these.
+        private bool _hasSpeed;
+        private bool _hasAttack;
+        private bool _hasHit;
+        private bool _hasDeath;
+
         // ── Lifecycle ─────────────────────────────────────────────────────────
 
         private void Awake()
@@ -41,6 +49,17 @@ namespace DeNelle.Pets
             if (_animator == null)
                 Debug.LogError($"[PetAnimatorController] No Animator on '{gameObject.name}'. " +
                                "This component must be on the same GameObject as the Animator.");
+
+            if (_animator != null && _animator.runtimeAnimatorController != null)
+            {
+                foreach (var p in _animator.parameters)
+                {
+                    if (p.nameHash == SpeedHash)  _hasSpeed  = true;
+                    if (p.nameHash == AttackHash) _hasAttack = true;
+                    if (p.nameHash == HitHash)    _hasHit    = true;
+                    if (p.nameHash == DeathHash)  _hasDeath  = true;
+                }
+            }
         }
 
         // ── Movement ──────────────────────────────────────────────────────────
@@ -51,19 +70,19 @@ namespace DeNelle.Pets
         /// </summary>
         public void UpdateMovement(float speed)
         {
-            if (_animator != null) _animator.SetFloat(SpeedHash, speed);
+            if (_animator != null && _hasSpeed) _animator.SetFloat(SpeedHash, speed);
         }
 
         // ── Combat triggers ───────────────────────────────────────────────────
 
         /// <summary>Trigger the attack animation (e.g. when a target is in range).</summary>
-        public void PlayAttack() { if (_animator != null) _animator.SetTrigger(AttackHash); }
+        public void PlayAttack() { if (_animator != null && _hasAttack) _animator.SetTrigger(AttackHash); }
 
         /// <summary>Trigger the hit-react animation (called on taking damage).</summary>
-        public void PlayHit()    { if (_animator != null) _animator.SetTrigger(HitHash); }
+        public void PlayHit()    { if (_animator != null && _hasHit) _animator.SetTrigger(HitHash); }
 
         /// <summary>Trigger the death animation (called when HP reaches zero).</summary>
-        public void PlayDeath()  { if (_animator != null) _animator.SetTrigger(DeathHash); }
+        public void PlayDeath()  { if (_animator != null && _hasDeath) _animator.SetTrigger(DeathHash); }
 
         // ── Animation Events ──────────────────────────────────────────────────
         // These MUST be on the same GameObject as the Animator.

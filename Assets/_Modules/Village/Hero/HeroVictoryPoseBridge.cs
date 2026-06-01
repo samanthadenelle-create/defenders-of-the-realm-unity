@@ -58,6 +58,12 @@ namespace DeNelle.Village
         // is swapped in at runtime (HeroBodySwapper) and may not exist at OnEnable.
         private Animator _heroAnimator;
 
+        // WO-163: cached "VictoryPose" param presence for the resolved animator. The
+        // current hero controller does NOT define it (see header), so an unguarded
+        // SetTrigger/ResetTrigger logs a warning on every wave clear/start.
+        private bool _hasVictoryPoseParam;
+        private Animator _paramCheckedAnimator;
+
         private void Reset() => _wave = GetComponent<WaveManager>();
 
         private void OnEnable()
@@ -83,7 +89,7 @@ namespace DeNelle.Village
         private void HandleWaveCleared(int waveNumber)
         {
             Animator anim = ResolveHeroAnimator();
-            if (anim != null) anim.SetTrigger(VictoryPoseHash);
+            if (anim != null && _hasVictoryPoseParam) anim.SetTrigger(VictoryPoseHash);
         }
 
         /// <summary>
@@ -93,7 +99,7 @@ namespace DeNelle.Village
         private void HandleWaveStarted(int waveNumber)
         {
             Animator anim = ResolveHeroAnimator();
-            if (anim != null) anim.ResetTrigger(VictoryPoseHash);
+            if (anim != null && _hasVictoryPoseParam) anim.ResetTrigger(VictoryPoseHash);
         }
 
         /// <summary>
@@ -113,6 +119,19 @@ namespace DeNelle.Village
             var bodyT = heroRoot.Find("HeroBody");
             if (bodyT != null) _heroAnimator = bodyT.GetComponentInChildren<Animator>();
             if (_heroAnimator == null) _heroAnimator = heroRoot.GetComponentInChildren<Animator>();
+
+            // WO-163: scan the resolved controller for "VictoryPose" once so the
+            // trigger guard reflects the live controller.
+            if (_heroAnimator != null && _heroAnimator != _paramCheckedAnimator)
+            {
+                _paramCheckedAnimator = _heroAnimator;
+                _hasVictoryPoseParam = false;
+                if (_heroAnimator.runtimeAnimatorController != null)
+                {
+                    foreach (var p in _heroAnimator.parameters)
+                        if (p.nameHash == VictoryPoseHash) { _hasVictoryPoseParam = true; break; }
+                }
+            }
             return _heroAnimator;
         }
     }

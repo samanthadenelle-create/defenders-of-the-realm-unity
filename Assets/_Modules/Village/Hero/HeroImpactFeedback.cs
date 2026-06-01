@@ -53,6 +53,13 @@ namespace DeNelle.Village
         private Animator _animator;
         private Coroutine _hapticRoutine;
 
+        // WO-163: cached "BowRecoil" param presence for the resolved Animator. The
+        // current hero controller does NOT define this trigger (see header), so an
+        // unguarded SetTrigger logs a warning each call — guard it. Re-scanned when
+        // the resolved Animator changes (HeroBodySwapper swaps in the real body).
+        private bool _hasBowRecoilParam;
+        private Animator _paramCheckedAnimator;
+
         private void Awake()
         {
             _animator = GetComponentInChildren<Animator>();
@@ -65,10 +72,10 @@ namespace DeNelle.Village
         public void PlayRecoil()
         {
             ResolveAnimatorIfNeeded();
-            // SetTrigger on a parameter the controller has not defined yet is a
-            // no-op + warning in Unity, not an exception — safe until the trigger
-            // is authored (see header). Hash is cached, never a string lookup.
-            if (_animator != null) _animator.SetTrigger(BowRecoilHash);
+            // WO-163: only fire when the controller actually declares "BowRecoil"
+            // — driving an undefined param logs a warning every call. Becomes a
+            // real recoil automatically once the trigger is authored (see header).
+            if (_animator != null && _hasBowRecoilParam) _animator.SetTrigger(BowRecoilHash);
         }
 
         /// <summary>
@@ -116,10 +123,25 @@ namespace DeNelle.Village
         /// </summary>
         private void ResolveAnimatorIfNeeded()
         {
-            if (_animator != null) return;
-            var bodyT = transform.Find("HeroBody");
-            if (bodyT != null) _animator = bodyT.GetComponentInChildren<Animator>();
-            if (_animator == null) _animator = GetComponentInChildren<Animator>();
+            if (_animator == null)
+            {
+                var bodyT = transform.Find("HeroBody");
+                if (bodyT != null) _animator = bodyT.GetComponentInChildren<Animator>();
+                if (_animator == null) _animator = GetComponentInChildren<Animator>();
+            }
+
+            // WO-163: (re)scan the resolved controller for "BowRecoil" so the
+            // trigger guard reflects the live controller (it may swap at runtime).
+            if (_animator != null && _animator != _paramCheckedAnimator)
+            {
+                _paramCheckedAnimator = _animator;
+                _hasBowRecoilParam = false;
+                if (_animator.runtimeAnimatorController != null)
+                {
+                    foreach (var p in _animator.parameters)
+                        if (p.nameHash == BowRecoilHash) { _hasBowRecoilParam = true; break; }
+                }
+            }
         }
     }
 }

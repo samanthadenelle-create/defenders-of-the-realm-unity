@@ -71,12 +71,20 @@ namespace DeNelle.Village
         private bool         _isInSwing;
 
         private static readonly int AnimAttack = Animator.StringToHash("Attack");
+        // WO-163: cached once — whether the controller declares "Attack". Driving an
+        // absent param logs "Parameter does not exist" on each swing.
+        private bool _hasAttackParam;
 
         // ── Lifecycle ─────────────────────────────────────────────────────────
 
         private void Awake()
         {
             _animator    = GetComponentInChildren<Animator>();
+            if (_animator != null && _animator.runtimeAnimatorController != null)
+            {
+                foreach (var p in _animator.parameters)
+                    if (p.nameHash == AnimAttack) { _hasAttackParam = true; break; }
+            }
             _audioSource = GetComponent<AudioSource>();
             if (_audioSource == null)
                 _audioSource = gameObject.AddComponent<AudioSource>();
@@ -115,7 +123,7 @@ namespace DeNelle.Village
             _swingStartTime = Time.time;
             _isInSwing      = true;
 
-            if (_animator != null) _animator.SetTrigger(AnimAttack);
+            if (_animator != null && _hasAttackParam) _animator.SetTrigger(AnimAttack);
             PlayWhoosh();
 
             StartCoroutine(ResolveAttack());

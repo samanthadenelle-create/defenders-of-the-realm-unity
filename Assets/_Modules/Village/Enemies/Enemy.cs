@@ -184,6 +184,18 @@ namespace DeNelle.Village
         /// </summary>
         private static readonly int AnimHitDir = Animator.StringToHash("HitDir");
 
+        // WO-163: cached once when the Animator resolves — whether THIS enemy's
+        // controller actually declares each param. Driving an absent param logs an
+        // error EVERY frame (the 3,351-error spam). Guard every SetFloat/SetBool/
+        // SetTrigger/SetInteger with these. A controller with no
+        // runtimeAnimatorController has no parameters → all stay false.
+        private bool _hasSpeedParam;
+        private bool _hasAttackParam;
+        private bool _hasWindUpParam;
+        private bool _hasHitParam;
+        private bool _hasDeadParam;
+        private bool _hasHitDirParam;
+
         /// <summary>Raised when this enemy's HP reaches zero. Arg = this enemy.</summary>
         public event Action<Enemy> Died;
 
@@ -434,7 +446,7 @@ namespace DeNelle.Village
         /// </summary>
         private void DriveAnimator()
         {
-            if (_animator == null) return;
+            if (_animator == null || !_hasSpeedParam) return;
             float speed = (_agent != null && _agent.isOnNavMesh)
                 ? _agent.velocity.magnitude
                 : 0f;
@@ -567,7 +579,7 @@ namespace DeNelle.Village
             _telegraphing = true;
 
             // Wind-up animation trigger — Animator must have a "WindUp" state.
-            if (_animator != null) _animator.SetTrigger(AnimWindUp);
+            if (_animator != null && _hasWindUpParam) _animator.SetTrigger(AnimWindUp);
 
             // Spawn the ground-ring warning VFX at the target's position (if any).
             GameObject telegraphVFX = null;
@@ -603,7 +615,7 @@ namespace DeNelle.Village
         {
             if (_currentTarget == null || !_currentTarget.IsAlive) return;
             _currentTarget.ApplyContactDamage(_contactDamage);
-            if (_animator != null) _animator.SetTrigger(AnimAttack);
+            if (_animator != null && _hasAttackParam) _animator.SetTrigger(AnimAttack);
             PlayTypeSound(_typeVfxSet != null ? _typeVfxSet.RandomAttackClip() : null);
         }
 
@@ -633,7 +645,7 @@ namespace DeNelle.Village
             Vector3 toTarget = target.position - transform.position; toTarget.y = 0f;
             if (toTarget.sqrMagnitude > 0.001f)
                 transform.rotation = Quaternion.LookRotation(toTarget);
-            if (_animator != null) _animator.SetTrigger(AnimAttack);
+            if (_animator != null && _hasAttackParam) _animator.SetTrigger(AnimAttack);
             PlayTypeSound(_typeVfxSet != null ? _typeVfxSet.RandomAttackClip() : null);
             return true;
         }
@@ -721,8 +733,8 @@ namespace DeNelle.Village
                 HitDirection dir = ComputeHitDirection(sourceWorldPos);
                 if (_animator != null)
                 {
-                    _animator.SetInteger(AnimHitDir, (int)dir);
-                    _animator.SetTrigger(AnimHit);
+                    if (_hasHitDirParam) _animator.SetInteger(AnimHitDir, (int)dir);
+                    if (_hasHitParam)    _animator.SetTrigger(AnimHit);
                 }
 
                 // DEF-46: per-type hit VFX — use SO prefab when assigned, fall
@@ -858,7 +870,7 @@ namespace DeNelle.Village
             // it is removed. With no Animator the enemy is destroyed at once.
             if (_animator != null)
             {
-                _animator.SetBool(AnimDead, true);
+                if (_hasDeadParam) _animator.SetBool(AnimDead, true);
                 Destroy(gameObject, DeathHoldSeconds);
             }
             else
@@ -950,6 +962,22 @@ namespace DeNelle.Village
         {
             if (_animator == null)
                 _animator = GetComponentInChildren<Animator>();
+
+            // WO-163: cache which params the controller actually declares so the
+            // per-frame DriveAnimator (and the trigger/bool calls) never drive an
+            // absent param — that spams "Parameter does not exist" every frame.
+            if (_animator != null && _animator.runtimeAnimatorController != null)
+            {
+                foreach (var p in _animator.parameters)
+                {
+                    if (p.nameHash == AnimSpeed)  _hasSpeedParam  = true;
+                    if (p.nameHash == AnimAttack) _hasAttackParam = true;
+                    if (p.nameHash == AnimWindUp) _hasWindUpParam = true;
+                    if (p.nameHash == AnimHit)    _hasHitParam    = true;
+                    if (p.nameHash == AnimDead)   _hasDeadParam   = true;
+                    if (p.nameHash == AnimHitDir) _hasHitDirParam = true;
+                }
+            }
         }
 
 #if UNITY_EDITOR

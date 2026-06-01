@@ -60,6 +60,12 @@ namespace DeNelle.Pets
         private static readonly int AnimAlert     = Animator.StringToHash("Alert");
         private static readonly int AnimCelebrate = Animator.StringToHash("Celebrate");
 
+        // WO-163: cached once at init — whether the controller declares each emote
+        // param. Driving an absent param logs "Parameter does not exist".
+        private bool _hasHappy;
+        private bool _hasAlert;
+        private bool _hasCelebrate;
+
         // ── Runtime ────────────────────────────────────────────────────────────
         private Animator _animator;
         private float    _happyTimer;
@@ -75,6 +81,16 @@ namespace DeNelle.Pets
         {
             _animator   = GetComponentInChildren<Animator>();
             _happyTimer = UnityEngine.Random.Range(_happyIntervalMin, _happyIntervalMax);
+
+            if (_animator != null && _animator.runtimeAnimatorController != null)
+            {
+                foreach (var p in _animator.parameters)
+                {
+                    if (p.nameHash == AnimHappy)     _hasHappy     = true;
+                    if (p.nameHash == AnimAlert)     _hasAlert     = true;
+                    if (p.nameHash == AnimCelebrate) _hasCelebrate = true;
+                }
+            }
         }
 
         private void OnEnable()
@@ -102,7 +118,7 @@ namespace DeNelle.Pets
                 if (enemiesNear != _alertActive)
                 {
                     _alertActive = enemiesNear;
-                    _animator.SetBool(AnimAlert, _alertActive);
+                    if (_hasAlert) _animator.SetBool(AnimAlert, _alertActive);
                 }
             }
 
@@ -113,7 +129,7 @@ namespace DeNelle.Pets
                 if (_happyTimer <= 0f)
                 {
                     _happyTimer = UnityEngine.Random.Range(_happyIntervalMin, _happyIntervalMax);
-                    _animator.SetTrigger(AnimHappy);
+                    if (_hasHappy) _animator.SetTrigger(AnimHappy);
                 }
             }
         }
@@ -127,7 +143,7 @@ namespace DeNelle.Pets
         /// </summary>
         public void Celebrate()
         {
-            if (_animator == null) return;
+            if (_animator == null || !_hasCelebrate) return;
             _animator.SetTrigger(AnimCelebrate);
         }
 

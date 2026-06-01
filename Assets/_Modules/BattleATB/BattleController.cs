@@ -56,6 +56,10 @@ namespace DeNelle.BattleATB
         [Tooltip("The UIDocument carrying BattleHUD.uxml. Defaults to this GameObject's.")]
         [SerializeField] private UIDocument _hudDocument;
 
+        // WO-163: cached "Attack" trigger hash — guards SubmitPlayerAction's swing
+        // so it never drives an absent param (the placeholder capsule has none).
+        private static readonly int BattleControllerAttackHash = Animator.StringToHash("Attack");
+
         [Header("Placeholder combatants (capsule meshes)")]
         [Tooltip("Transform of the hero capsule.")]
         [SerializeField] private Transform _heroCapsule;
@@ -505,8 +509,18 @@ namespace DeNelle.BattleATB
 
             // WO-93: hero swing on the placeholder capsule / swapped model (no-op
             // when there is no Animator). Only meaningful for an attack/ability.
+            // WO-163: only fire when the controller declares "Attack" — the
+            // placeholder capsule has no such param, so an unguarded SetTrigger
+            // logs a warning on every action.
             if (_heroCapsule != null && action.Kind != ActionKind.Defend)
-                _heroCapsule.GetComponentInChildren<Animator>()?.SetTrigger("Attack");
+            {
+                var heroAnim = _heroCapsule.GetComponentInChildren<Animator>();
+                if (heroAnim != null && heroAnim.runtimeAnimatorController != null)
+                {
+                    foreach (var p in heroAnim.parameters)
+                        if (p.nameHash == BattleControllerAttackHash) { heroAnim.SetTrigger(BattleControllerAttackHash); break; }
+                }
+            }
 
             ATBCombatManager.Instance?.OnPlayerActed(); // reset idle-pressure timer
             _runtimeState.ChooseAction(action);

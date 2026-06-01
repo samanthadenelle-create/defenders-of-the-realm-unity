@@ -98,12 +98,24 @@ namespace DeNelle.Village
         private static readonly int ExcitedCircleHash = Animator.StringToHash("ExcitedCircle");
         private static readonly int WhimperHash = Animator.StringToHash("Whimper");
 
+        // WO-163: param hashes the controller actually declares, cached once.
+        // SetTrigger checks this before driving so an absent param never spams
+        // "Parameter does not exist".
+        private readonly System.Collections.Generic.HashSet<int> _declaredParams
+            = new System.Collections.Generic.HashSet<int>();
+
         private void Awake()
         {
             // Cache component refs in Awake (never in OnEnable / event handlers).
             if (_pet == null) _pet = GetComponentInChildren<Pet>();
             // Drive the SAME child Animator Pet uses (Pet caches it the same way).
             if (_animator == null) _animator = GetComponentInChildren<Animator>();
+
+            if (_animator != null && _animator.runtimeAnimatorController != null)
+            {
+                foreach (var p in _animator.parameters)
+                    _declaredParams.Add(p.nameHash);
+            }
 
             if (_waveManager == null)
                 _waveManager = ResolveWaveManager();
@@ -220,7 +232,9 @@ namespace DeNelle.Village
         /// <summary>Null-guarded animator trigger — a pet with no rig is a no-op.</summary>
         private void SetTrigger(int hash)
         {
-            if (_animator != null) _animator.SetTrigger(hash);
+            // WO-163: only drive a param the controller declares (no error spam).
+            if (_animator != null && _declaredParams.Contains(hash))
+                _animator.SetTrigger(hash);
         }
 
         /// <summary>

@@ -152,6 +152,9 @@ namespace DeNelle.Village
         private float _sensorScanTimer;
         private DeNelle.Core.AwarenessState _lastAwareness = DeNelle.Core.AwarenessState.Unaware;
         private static readonly int AnimIsAlert = Animator.StringToHash("IsAlert");
+        // WO-163: cached once at init — whether this enemy's controller declares
+        // "IsAlert". Driving an absent param logs "Parameter does not exist".
+        private bool _hasIsAlertParam;
 
         // WO-92: cached NavMeshAgent for NavMesh path validation.
         private NavMeshAgent _navAgent;
@@ -249,6 +252,14 @@ namespace DeNelle.Village
             // WO-90: cache Animator and NavMeshAgent from this GameObject.
             _animator  = GetComponentInChildren<Animator>();
             _navAgent  = GetComponent<NavMeshAgent>();
+
+            // WO-163: cache whether the controller declares "IsAlert" so we never
+            // drive an absent param (logs an error each state change otherwise).
+            if (_animator != null && _animator.runtimeAnimatorController != null)
+            {
+                foreach (var p in _animator.parameters)
+                    if (p.nameHash == AnimIsAlert) { _hasIsAlertParam = true; break; }
+            }
 
             // WO-147: ensure a perception sensor exists (auto-add — backward-safe so
             // existing enemy prefabs gain perception with zero prefab wiring).
@@ -635,7 +646,7 @@ namespace DeNelle.Village
                 if (aware != _lastAwareness)
                 {
                     _lastAwareness = aware;
-                    if (_animator != null)
+                    if (_animator != null && _hasIsAlertParam)
                         _animator.SetBool(AnimIsAlert, aware >= DeNelle.Core.AwarenessState.Alerted);
                 }
             }
