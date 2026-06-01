@@ -85,6 +85,11 @@ namespace DeNelle.BattleATB
         /// picker. The controller wires its action callback to ChooseAction.</summary>
         private BattleHud _hud;
 
+        /// <summary>WO-170 — the retro 2D VFX presenter layered over the HUD. Pure
+        /// presentation: replays the battle log as hit-flashes / floating numbers /
+        /// elemental bursts / screen flash+shake. Never touches the engine.</summary>
+        private BattleVfx _vfx;
+
         /// <summary>True once the result hand-back has been kicked off (fire once).</summary>
         private bool _returnScheduled;
 
@@ -125,6 +130,7 @@ namespace DeNelle.BattleATB
             {
                 _runtimeState.OnBattleChanged.RemoveListener(HandleBattleChanged);
                 _runtimeState.OnActionSubmitted.RemoveListener(HandleActionSubmitted);
+                _runtimeState.OnTurnResolved.RemoveListener(HandleTurnResolved);
                 _runtimeState.OnOutcome.RemoveListener(HandleOutcome);
             }
             _subscribed = false;
@@ -148,6 +154,7 @@ namespace DeNelle.BattleATB
                 return;
             }
             _hud?.ResetLog();
+            _vfx?.Reset();   // WO-170 — clear the VFX log-diff cursor for the new fight
             _returnScheduled = false;
 
             BattleSetup setup = BuildSetup();
@@ -172,6 +179,7 @@ namespace DeNelle.BattleATB
             if (_subscribed || _runtimeState == null) return;
             _runtimeState.OnBattleChanged.AddListener(HandleBattleChanged);
             _runtimeState.OnActionSubmitted.AddListener(HandleActionSubmitted);
+            _runtimeState.OnTurnResolved.AddListener(HandleTurnResolved);
             _runtimeState.OnOutcome.AddListener(HandleOutcome);
             _subscribed = true;
         }
@@ -457,8 +465,22 @@ namespace DeNelle.BattleATB
         /// </summary>
         private void HandleActionSubmitted(BattleState state)
         {
-            // No-op: Render() (via HandleBattleChanged) rebuilds the command bar and
-            // disables it whenever it isn't a player-mode member's turn.
+            // Render() (via HandleBattleChanged) rebuilds the command bar and disables
+            // it whenever it isn't a player-mode member's turn. WO-170: also play the
+            // acting unit's retro attack/cast lunge as the move is committed.
+            _vfx?.OnActionSubmitted(state);
+        }
+
+        /// <summary>
+        /// WO-170 — a turn fully resolved and the snapshot updated. Fires AFTER
+        /// OnBattleChanged (which rebinds the HUD cards), so the VFX presenter can
+        /// safely anchor effects to the freshly-bound cards. Replays every NEW battle-
+        /// log entry as a retro effect (hit-flash, floating number, elemental burst,
+        /// defeat, screen flash/shake). Read-only over the log — never mutates state.
+        /// </summary>
+        private void HandleTurnResolved(BattleState state)
+        {
+            _vfx?.OnTurnResolved(state);
         }
 
         /// <summary>Battle reached a final outcome — schedule the scene hand-back.</summary>
@@ -610,6 +632,12 @@ namespace DeNelle.BattleATB
             _hud.OnAction = SubmitPlayerAction;
             _hud.OnControlModeToggled = HandleControlModeToggled;
             _hud.Build(root);
+
+            // WO-170 — bind the retro VFX presenter to the freshly-built HUD. Pure
+            // view: it reads the battle log + card geometry, draws on the HUD's
+            // input-transparent VFX layer, and never calls into the engine.
+            _vfx = new BattleVfx();
+            _vfx.Bind(_hud);
             return true;
         }
 

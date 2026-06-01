@@ -72,6 +72,7 @@ namespace DeNelle.BattleATB
         private VisualElement _battleLogContent;
         private VisualElement _commandBar;     // Attack/Skills/Item/Defend
         private VisualElement _overlay;        // skill list / item list / picker prompt
+        private VisualElement _vfxLayer;       // WO-170 retro VFX (numbers / flashes), above cards, never blocks input
 
         // ── Card pool, keyed by unit Id (the dynamic binding) ────────────────
 
@@ -181,6 +182,45 @@ namespace DeNelle.BattleATB
             _overlay.style.justifyContent = Justify.Center;
             _overlay.style.backgroundColor = new StyleColor(new Color(0f, 0f, 0f, 0.55f));
             root.Add(_overlay);
+
+            // WO-170 — retro VFX layer: a full-screen, input-transparent overlay ABOVE
+            // the cards + menus, where the BattleVfx presenter draws floating damage
+            // numbers, elemental bursts and screen flashes. PickingMode.Ignore so it
+            // never eats a tap meant for a command button or a target card.
+            _vfxLayer = new VisualElement();
+            _vfxLayer.style.position = Position.Absolute;
+            _vfxLayer.style.left = 0; _vfxLayer.style.right = 0;
+            _vfxLayer.style.top = 0; _vfxLayer.style.bottom = 0;
+            _vfxLayer.pickingMode = PickingMode.Ignore;
+            root.Add(_vfxLayer);
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // WO-170 — presentation seams for the retro VFX layer (BattleVfx)
+        // These are READ-ONLY view hooks: they never touch combat state, they only
+        // expose where to draw effects and which card belongs to a unit id.
+        // ─────────────────────────────────────────────────────────────────────
+
+        /// <summary>The HUD root (the UIDocument visual root the HUD was built into).</summary>
+        public VisualElement Root => _root;
+
+        /// <summary>The input-transparent overlay layer for floating numbers / bursts /
+        /// screen flashes. Null until <see cref="Build"/> has run.</summary>
+        public VisualElement VfxLayer => _vfxLayer;
+
+        /// <summary>Locate the live combatant-card box for a unit id, so the VFX layer
+        /// can anchor a hit-flash / number / burst over the right combatant. Returns
+        /// false if the unit has no card this frame.</summary>
+        public bool TryGetCardElement(string unitId, out VisualElement cardBox)
+        {
+            cardBox = null;
+            if (string.IsNullOrEmpty(unitId)) return false;
+            if (_cards.TryGetValue(unitId, out Card card) && card != null)
+            {
+                cardBox = card.Box;
+                return cardBox != null;
+            }
+            return false;
         }
 
         private static VisualElement MakeColumn(string heading, Align align)
