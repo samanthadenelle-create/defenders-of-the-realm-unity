@@ -398,6 +398,14 @@ namespace DeNelle.Editor
                             tile.transform.localScale = new Vector3(HexWidth, 0.18f, HexWidth);
                             ApplyColor(tile, C("4a5a32"));
                         }
+                        else
+                        {
+                            // Owner 2026-06-01 (DEF-25 "yellow plane"): the loaded hex_grass FBX renders
+                            // YELLOW on its native atlas in this spawn apron beyond each gate. Tint it the
+                            // same mossy green as the village interior so the apron reads as grass, not a
+                            // yellow slab. Instance-only (ApplyColorAll touches this tile's renderers only).
+                            ApplyColorAll(tile, C("4a5a32"));
+                        }
                         _groundCount++;
                     }
                 }

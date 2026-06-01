@@ -127,7 +127,21 @@ namespace DeNelle.Editor
                     b.transform.rotation = Quaternion.Euler(0f, yaw, 0f);
 
                     NormalizeProp(b, 14f);         // long axis ≈ 14 m — spans the band, reaches both banks
-                    SnapFeetToParent(b);           // sit flush on the ground (no float/sink)
+                    // Owner 2026-06-01 ("all 4 bridges: top = village base height"): the arched
+                    // bridge was perched ON the ground (feet at grade), humping its deck well above
+                    // the gate threshold. Sink it so the bridge TOP sits at village base height
+                    // (the CityFloor, y=0.02) — reads as a level stone crossing over the moat
+                    // (decorative; the hero crosses on the ground through the open gate).
+                    {
+                        const float villageBaseY = 0.02f;
+                        var brs = b.GetComponentsInChildren<Renderer>();
+                        if (brs != null && brs.Length > 0)
+                        {
+                            Bounds bb = brs[0].bounds;
+                            for (int i = 1; i < brs.Length; i++) bb.Encapsulate(brs[i].bounds);
+                            b.transform.position += new Vector3(0f, villageBaseY - bb.max.y, 0f);
+                        }
+                    }
                     StripColliders(b);             // decorative: hero crosses on the ground through the gate
                     StripRigidbodies(b);
                 }
@@ -222,7 +236,12 @@ namespace DeNelle.Editor
             // N/S decks run the full E-W span PLUS the corner overhang so they meet
             // the E/W decks; E/W decks run between them. (Overlap at corners = a solid
             // wrapped corner deck, no gap.)
-            float deckLenNS = 2f * wallX + 2f * deckX;   // reach out to the E/W deck centres
+            // Owner 2026-06-01 (DEF "long parts jut out SE/SW"): the old 2*wallX + 2*deckX
+            // = ~169 m spanned ~42 m PAST each corner (the parapet merlons only reach
+            // ±(wallX+deckOff)=±42.6), leaving a bare deck beam cantilevering out at every
+            // corner. Span exactly corner-to-corner so the deck ends where the E/W decks /
+            // corner pads / merlons do — no overhanging beam.
+            float deckLenNS = 2f * deckX;   // corner-to-corner: meet the E/W deck centres (±deckX)
             float deckLenEW = 2f * wallZ;                // between the N/S decks
             Box("Deck-North", new Vector3(0f, deckCtrY,  deckZ), new Vector3(deckLenNS, deckThk, deckW), Quaternion.identity);
             Box("Deck-South", new Vector3(0f, deckCtrY, -deckZ), new Vector3(deckLenNS, deckThk, deckW), Quaternion.identity);

@@ -192,8 +192,9 @@ namespace DeNelle.Editor
             }
             else
             {
-                Debug.LogWarning("[VillageSceneBuilder] Cathedral.fbx missing — keeping placeholder " +
-                                 "tree mesh as the centerpiece.");
+                // The Cathedral spire was retired (owner 2026-05-25); the Elarion world-tree
+                // (Tree of Life) is the canon Heart centerpiece, built in the block below.
+                // (No warning — the tree is intended, not a fallback for a missing asset.)
             }
 
             // ── The tree / spire ─────────────────────────────────────────────
