@@ -36,6 +36,20 @@ Update the [Order Log](#order-log--living-status) as orders close, break, or arr
 
 **Pipeline that worked:** delegate a bug to an Agent (investigate+fix, brace-balanced, no build/commit) → CLI gatekeeper brace+junk-scans, compile/build-verifies, commits by explicit path → owner playtests → Claude UI marks Linear. Keep agent work tracked in Linear (UI owns that).
 
+### 🔒 VILLAGE LANE LOCKED → Claude UI — owner 2026-06-01 (CURRENT)
+**Owner re-confirmed the lock 2026-06-01.** UI owns the village structural redo (S/E/W gate fix + any
+further tweaks); CLI is fully OUT — NO edits to `VillageSceneBuilder.*` / `WallLayout.cs` /
+`CityManifest.json` / `Village.unity`, and NO Village bake (`BuildVillage`/`BakeWorldNavMesh`) until UI
+releases. Branch HEAD `046b041` (overnight run complete, tree green).
+**Already committed (the freeze-2 rework — do NOT redo):** `2e5400c` = stone bridges, ~12m moat, flat
+water, fixed stairs/ramparts, sole-driver camera, tree-clear + blacksmith at forge.
+**Still owed by UI's redo:** the S/E/W gate mid-tower fix (see below) + whatever else UI is reworking.
+**Handoff back to CLI:** when UI releases, CLI validates the changed files on Windows (mount-sync —
+NUL/truncation/brace) THEN one bake: `BuildVillage` → `BakeWorldNavMesh` → `Build Outer World` → build.
+Also pending that same bake: activate the overnight OuterWorld nodes (finite-reserve/crystal) + raider/mob pathing.
+
+---
+
 ### 🔒 VILLAGE LANE RE-LOCKED → Claude UI (city REDO to owner's image spec) — owner 2026-05-31
 First city bake landed (`3049b7f`); owner playtested + gave a detailed **4-district layout** for a redo.
 Target (owner image spec): central World Tree plaza + cross-roads to 4 cardinal gates; **NW Crafting**
