@@ -171,13 +171,28 @@ namespace DeNelle.Village
             UpdateSelectLoop();
         }
 
+        /// <summary>
+        /// Cursor→ground raycast shared by the placement loops. Tries the configured
+        /// <see cref="_groundMask"/> first; if it misses — e.g. the scene-baked mask
+        /// excludes the ground's layer (WO-215: VillageSceneBuilder baked 1&lt;&lt;0 /
+        /// Default-only, but the village ground collider is on another layer, so the
+        /// raycast missed every frame and the ghost never appeared) — retries against
+        /// all layers so placement always tracks real ground. Mirrors
+        /// TowerPlacementSystem's ~0 mask, which works.
+        /// </summary>
+        private bool RaycastGround(out RaycastHit hit)
+        {
+            Ray ray = _camera.ScreenPointToRay(Input.mousePosition);
+            if (Physics.Raycast(ray, out hit, _rayDistance, _groundMask)) return true;
+            return Physics.Raycast(ray, out hit, _rayDistance, ~0);
+        }
+
         /// <summary>Idle mode: a left-click on a PlacedStructure selects it for edit.</summary>
         private void UpdateSelectLoop()
         {
             if (!Input.GetMouseButtonDown(0)) return;
 
-            Ray ray = _camera.ScreenPointToRay(Input.mousePosition);
-            if (!Physics.Raycast(ray, out RaycastHit hit, _rayDistance, _groundMask)) return;
+            if (!RaycastGround(out RaycastHit hit)) return;
 
             // Hit collider's GameObject or any parent may carry the marker.
             var ps = hit.collider != null
@@ -202,8 +217,7 @@ namespace DeNelle.Village
             if (Input.GetKeyDown(KeyCode.R))
                 _armedYawSteps = (_armedYawSteps + 1) & 3;
 
-            Ray ray = _camera.ScreenPointToRay(Input.mousePosition);
-            if (!Physics.Raycast(ray, out RaycastHit hit, _rayDistance, _groundMask))
+            if (!RaycastGround(out RaycastHit hit))
             {
                 _ghost.Hide();
                 return;
@@ -238,8 +252,7 @@ namespace DeNelle.Village
             if (Input.GetKeyDown(KeyCode.R))
                 _armedYawSteps = (_armedYawSteps + 1) & 3;
 
-            Ray ray = _camera.ScreenPointToRay(Input.mousePosition);
-            if (!Physics.Raycast(ray, out RaycastHit hit, _rayDistance, _groundMask))
+            if (!RaycastGround(out RaycastHit hit))
             {
                 _ghost.Hide();
                 return;
