@@ -146,6 +146,20 @@ namespace DeNelle.Core.State
         /// (de)serialization + bump the schema version for it to round-trip to disk.</summary>
         public List<DeNelle.Core.World.ZoneState> Zones = new List<DeNelle.Core.World.ZoneState>();
 
+        // ── World content (WO-159 settlements / WO-160 tribes) ───────────────
+        /// <summary>Per-tribe roaming-raider records (WO-160) — members remaining, cleared
+        /// flag, clear-count for reduced respawn, last-seen. Append-only field at the END so
+        /// older saves stay loadable. Like <see cref="Zones"/>, NOT yet wired into
+        /// SaveSchema/SaveMigrator — the save owner adds its (de)serialisation + bumps the
+        /// schema version for it to round-trip to disk. Lives correctly in-memory meanwhile.</summary>
+        public List<DeNelle.Core.World.TribeState> Tribes = new List<DeNelle.Core.World.TribeState>();
+
+        /// <summary>Per-site node-settlement records (WO-159) — claim phase, defence HP, and
+        /// the razed-site game-day lockout. Append-only field at the END. Same save-wiring note
+        /// as <see cref="Tribes"/>/<see cref="Zones"/>: in-memory now, schema round-trip is the
+        /// save owner's follow-up.</summary>
+        public List<DeNelle.Core.World.SettlementState> Settlements = new List<DeNelle.Core.World.SettlementState>();
+
         /// <summary>A fresh List&lt;int&gt; of <paramref name="count"/> zeros.</summary>
         public static List<int> NewZeroed(int count)
         {

@@ -44,7 +44,15 @@ namespace DeNelle.Editor
             public Vector3  Pos;       // world position (well outside the ±42/±33 walls)
             public int      Res;       // MineResource enum value (Iron/Wood/Stone/Aether)
             public int      Yield;
+            public int      Reserve;   // WO-159 finite-reserve total (0 ⇒ use builder default)
         }
+
+        // WO-159 — outer-world nodes are persistent FINITE RESERVES worked by player-
+        // built settlements (not [F]-tap clickers). The builder sets UseFiniteReserve
+        // + ReserveTotal so a settlement drains them; the region danger tier further
+        // scales the reserve at runtime (ReserveTotalScaled). Safe-region default is
+        // leaner; deep regions richer. Designers tune per node via NodeDef.Reserve.
+        private const int DefaultReserve = 400;
 
         // Iron in stony Stoneback (W), wood in forested Ashwood (N) + a little in
         // Goldfields, stone broadly, and rare aether crystal in the deadly Mirewood
@@ -52,18 +60,18 @@ namespace DeNelle.Editor
         // the wall footprint. Designers tune freely.
         private static readonly NodeDef[] Nodes =
         {
-            // Goldfields (E, +X) — safe breadbasket: wood + stone, modest yield.
-            new NodeDef { Region = RegionId.Goldfields, Pos = new Vector3( 70f, 0f,  10f), Res = ResWood,  Yield = 5 },
-            new NodeDef { Region = RegionId.Goldfields, Pos = new Vector3( 85f, 0f, -15f), Res = ResStone, Yield = 5 },
+            // Goldfields (E, +X) — safe breadbasket: wood + stone, modest yield, leaner reserve.
+            new NodeDef { Region = RegionId.Goldfields, Pos = new Vector3( 70f, 0f,  10f), Res = ResWood,  Yield = 5, Reserve = 350 },
+            new NodeDef { Region = RegionId.Goldfields, Pos = new Vector3( 85f, 0f, -15f), Res = ResStone, Yield = 5, Reserve = 350 },
             // Stoneback (W, -X) — stony uplands: the iron region.
-            new NodeDef { Region = RegionId.Stoneback,  Pos = new Vector3(-72f, 0f,  12f), Res = ResIron,  Yield = 5 },
-            new NodeDef { Region = RegionId.Stoneback,  Pos = new Vector3(-88f, 0f, -10f), Res = ResIron,  Yield = 5 },
-            // Mirewood (S, -Z) — drowned valley: rare aether crystal, higher risk.
-            new NodeDef { Region = RegionId.Mirewood,   Pos = new Vector3( 10f, 0f, -78f), Res = ResAether, Yield = 3 },
-            new NodeDef { Region = RegionId.Mirewood,   Pos = new Vector3(-18f, 0f, -90f), Res = ResStone, Yield = 6 },
+            new NodeDef { Region = RegionId.Stoneback,  Pos = new Vector3(-72f, 0f,  12f), Res = ResIron,  Yield = 5, Reserve = 450 },
+            new NodeDef { Region = RegionId.Stoneback,  Pos = new Vector3(-88f, 0f, -10f), Res = ResIron,  Yield = 5, Reserve = 450 },
+            // Mirewood (S, -Z) — drowned valley: rare aether crystal, higher risk, richer.
+            new NodeDef { Region = RegionId.Mirewood,   Pos = new Vector3( 10f, 0f, -78f), Res = ResAether, Yield = 3, Reserve = 550 },
+            new NodeDef { Region = RegionId.Mirewood,   Pos = new Vector3(-18f, 0f, -90f), Res = ResStone, Yield = 6, Reserve = 550 },
             // Ashwood (N, +Z) — ruined front line: wood (dead timber) + crystal, richest tier.
-            new NodeDef { Region = RegionId.Ashwood,    Pos = new Vector3(  8f, 0f,  80f), Res = ResWood,  Yield = 6 },
-            new NodeDef { Region = RegionId.Ashwood,    Pos = new Vector3(-15f, 0f,  92f), Res = ResAether, Yield = 4 },
+            new NodeDef { Region = RegionId.Ashwood,    Pos = new Vector3(  8f, 0f,  80f), Res = ResWood,  Yield = 6, Reserve = 650 },
+            new NodeDef { Region = RegionId.Ashwood,    Pos = new Vector3(-15f, 0f,  92f), Res = ResAether, Yield = 4, Reserve = 650 },
         };
 
         // The outer world is its OWN scene (loaded additively over Village at
@@ -140,6 +148,15 @@ namespace DeNelle.Editor
                     if (fRes != null) fRes.SetValue(mn, Enum.ToObject(fRes.FieldType, def.Res));
                     var fYield = mineNodeType.GetField("YieldPerExtract");
                     if (fYield != null) fYield.SetValue(mn, def.Yield);
+
+                    // WO-159 — make the node a persistent finite reserve worked by a
+                    // settlement (UseFiniteReserve + ReserveTotal). Set by name so the
+                    // Editor asmdef stays free of a DeNelle.Village reference.
+                    var fFinite = mineNodeType.GetField("UseFiniteReserve");
+                    if (fFinite != null) fFinite.SetValue(mn, true);
+                    var fReserve = mineNodeType.GetField("ReserveTotal");
+                    if (fReserve != null)
+                        fReserve.SetValue(mn, def.Reserve > 0 ? def.Reserve : DefaultReserve);
                 }
 
                 Tint(node, def.Res);
