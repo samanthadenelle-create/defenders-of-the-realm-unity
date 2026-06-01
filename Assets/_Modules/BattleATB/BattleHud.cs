@@ -79,6 +79,7 @@ namespace DeNelle.BattleATB
         private sealed class Card
         {
             public VisualElement Box;
+            public VisualElement Portrait;   // hero character icon (WO-213); hidden for non-heroes
             public Label Name;
             public VisualElement HpFill;
             public VisualElement MpRow;
@@ -90,6 +91,14 @@ namespace DeNelle.BattleATB
         }
 
         private readonly Dictionary<string, Card> _cards = new Dictionary<string, Card>();
+
+        // ── Hero portrait cache (WO-213) ─────────────────────────────────────
+        // Resources.Load is cheap but we re-bind cards every frame; cache the
+        // resolved background per hero slug (and remember misses as null) so we
+        // don't hit the loader 60×/sec or re-warn endlessly for a missing asset.
+        private static readonly Dictionary<string, StyleBackground?> _portraitCache =
+            new Dictionary<string, StyleBackground?>();
+        private static readonly HashSet<string> _portraitMissWarned = new HashSet<string>();
 
         // ── Pending-action state for the two-step (choose then target) flow ──
 
@@ -329,11 +338,35 @@ namespace DeNelle.BattleATB
             box.Add(cursor);
             card.TargetCursor = cursor;
 
+            // Header row — portrait icon (WO-213) on the left, name on the right.
+            // The icon is a square that shows the hero's rendered character portrait
+            // (Resources/HeroPortraits/<class>). It stays hidden for enemies/pets and
+            // for any hero whose portrait asset is missing — the name "pill" then
+            // reads exactly as before, so this is a purely additive enhancement.
+            var headerRow = new VisualElement();
+            headerRow.style.flexDirection = FlexDirection.Row;
+            headerRow.style.alignItems = Align.Center;
+            box.Add(headerRow);
+
+            var portrait = new VisualElement();
+            portrait.style.width = 36;
+            portrait.style.height = 36;
+            portrait.style.marginRight = 8;
+            portrait.style.flexShrink = 0;
+            portrait.style.backgroundColor = new StyleColor(new Color(0f, 0f, 0f, 0.35f));
+            portrait.style.unityBackgroundScaleMode = ScaleMode.ScaleAndCrop;
+            portrait.style.display = DisplayStyle.None; // shown only when a portrait loads
+            Round(portrait, 6);
+            headerRow.Add(portrait);
+            card.Portrait = portrait;
+
             var name = new Label("—");
             name.style.color = new StyleColor(Color.white);
             name.style.fontSize = 14;
             name.style.unityFontStyleAndWeight = FontStyle.Bold;
-            box.Add(name);
+            name.style.flexShrink = 1;
+            name.style.whiteSpace = WhiteSpace.Normal;
+            headerRow.Add(name);
             card.Name = name;
 
             card.HpFill = AddBar(box, "HP", HpFill);
@@ -360,6 +393,8 @@ namespace DeNelle.BattleATB
         {
             card.Name.text = u.Name;
 
+            BindPortrait(card, u);
+
             float hpPct = u.MaxHp > 0 ? Mathf.Clamp01((float)u.Hp / u.MaxHp) : 0f;
             SetWidth(card.HpFill, hpPct);
 
@@ -380,6 +415,72 @@ namespace DeNelle.BattleATB
             var border = new StyleColor(isActive ? Gold : new Color(0, 0, 0, 0));
             card.Box.style.borderTopColor = border; card.Box.style.borderBottomColor = border;
             card.Box.style.borderLeftColor = border; card.Box.style.borderRightColor = border;
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // Hero portrait icon (WO-213) — replace the bare name "pill" with the
+        // hero's rendered character portrait when one exists. Heroes only; pets
+        // and enemies keep the icon hidden. A missing portrait falls back to the
+        // existing name-only pill (icon stays collapsed) — never an error/crash.
+        // ─────────────────────────────────────────────────────────────────────
+
+        private static void BindPortrait(Card card, BattleUnit u)
+        {
+            if (card == null || card.Portrait == null) return;
+
+            // Only heroes have rendered portraits. Pets/enemies → no icon.
+            if (u == null || u.Kind != UnitKind.Hero || u.HeroClass == null)
+            {
+                card.Portrait.style.display = DisplayStyle.None;
+                return;
+            }
+
+            string slug = u.HeroClass.Value.ToString().ToLowerInvariant(); // mage/knight/ranger
+            StyleBackground? bg = ResolveHeroPortrait(slug);
+            if (bg.HasValue)
+            {
+                card.Portrait.style.backgroundImage = bg.Value;
+                card.Portrait.style.display = DisplayStyle.Flex;
+            }
+            else
+            {
+                // Graceful fallback: collapse the icon, keep the name pill as-is.
+                card.Portrait.style.display = DisplayStyle.None;
+            }
+        }
+
+        /// <summary>Load (and cache) the hero portrait background for a class slug.
+        /// Mirrors HeroSelectController: try Sprite first, then Texture2D, since the
+        /// committed PNGs may be imported either way. Returns null (cached) and warns
+        /// once if the asset is absent so the pill fallback engages quietly.</summary>
+        private static StyleBackground? ResolveHeroPortrait(string slug)
+        {
+            if (string.IsNullOrEmpty(slug)) return null;
+            if (_portraitCache.TryGetValue(slug, out StyleBackground? cached)) return cached;
+
+            StyleBackground? result = null;
+            var sprite = Resources.Load<Sprite>($"HeroPortraits/{slug}");
+            if (sprite != null)
+            {
+                result = new StyleBackground(sprite);
+            }
+            else
+            {
+                var tex = Resources.Load<Texture2D>($"HeroPortraits/{slug}");
+                if (tex != null)
+                    result = new StyleBackground(tex);
+            }
+
+            if (result == null && !_portraitMissWarned.Contains(slug))
+            {
+                _portraitMissWarned.Add(slug);
+                Debug.LogWarning($"[BattleHud] Hero portrait 'Resources/HeroPortraits/{slug}' " +
+                                 "not found — falling back to the name pill for this hero. " +
+                                 "Run Defenders/Heroes/Render Hero Portraits to generate it.");
+            }
+
+            _portraitCache[slug] = result;
+            return result;
         }
 
         // ─────────────────────────────────────────────────────────────────────
