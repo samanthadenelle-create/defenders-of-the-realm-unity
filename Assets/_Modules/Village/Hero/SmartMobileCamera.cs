@@ -57,11 +57,13 @@ namespace DeNelle.Village
         [SerializeField] private Transform _target;
 
         [Header("Follow offset (idle)")]
-        [Tooltip("World-space offset from the hero in idle/explore state.")]
-        [SerializeField] private Vector3 _followOffset = new Vector3(0f, 5.5f, -9f);
+        [Tooltip("World-space offset from the hero in idle/explore state. " +
+                 "Elevated TD seat (behind + well above) so the hero stays framed " +
+                 "and the camera never dips to stare at the ground or a wall.")]
+        [SerializeField] private Vector3 _followOffset = new Vector3(0f, 18f, -22f);
 
         [Tooltip("Look-at height above hero feet (metres).")]
-        [SerializeField] private float _lookAtHeight = 1.3f;
+        [SerializeField] private float _lookAtHeight = 2.5f;
 
         [Header("Movement lead")]
         [Tooltip("How far ahead of the hero's movement direction the look-at point is biased. " +
@@ -100,8 +102,9 @@ namespace DeNelle.Village
         [SerializeField] private bool _framingEnabled = true;
 
         [Tooltip("Fraction of the offset from hero to nearest enemy applied to the " +
-                 "look-at centroid. 0.5 = halfway between hero and enemy.")]
-        [SerializeField, Range(0f, 0.7f)] private float _framingBias = 0.35f;
+                 "look-at centroid. 0.5 = halfway between hero and enemy. Kept low " +
+                 "so the hero always stays well inside the frame.")]
+        [SerializeField, Range(0f, 0.7f)] private float _framingBias = 0.2f;
 
         [Tooltip("How quickly the look-at recentres on the hero when no enemies are near.")]
         [SerializeField, Min(0.5f)] private float _framingReturnSpeed = 4f;
@@ -141,6 +144,15 @@ namespace DeNelle.Village
             Instance = this;
             _cam    = GetComponent<Camera>();
             _baseFov = _cam.fieldOfView;
+
+            // SINGLE-AUTHORITY GUARD: the scene builder attaches BOTH VillageCamera
+            // and SmartMobileCamera to the Main Camera. Two follow rigs writing the
+            // same transform every LateUpdate fight each other — the hero drifts
+            // off-screen and the camera can swing to the ground/wall. SmartMobileCamera
+            // is the intended DEF-53 driver (combat zoom + Shake singleton), so we
+            // disable the legacy VillageCamera here and own the transform alone.
+            var legacy = GetComponent<VillageCamera>();
+            if (legacy != null) legacy.enabled = false;
         }
 
         private void OnDestroy()
@@ -150,6 +162,10 @@ namespace DeNelle.Village
 
         private void Start()
         {
+            // Fallback: if the scene builder didn't wire a target (or the hero
+            // spawned after this camera), find the hero by canonical tag so the
+            // camera is never left staring at the origin/ground (CLAUDE.md §7).
+            if (_target == null) TryFindHero();
             if (_target == null) return;
             transform.position = _target.position + _followOffset;
             _leadPoint         = _target.position + Vector3.up * _lookAtHeight;
@@ -157,9 +173,25 @@ namespace DeNelle.Village
             EnforceSoleCamera();
         }
 
+        private void TryFindHero()
+        {
+            var heroGo = GameObject.FindWithTag("Player");
+            if (heroGo == null) heroGo = GameObject.FindWithTag("HeroTarget");
+            if (heroGo != null) _target = heroGo.transform;
+        }
+
         private void LateUpdate()
         {
-            if (_target == null) return;
+            // Hero may spawn a frame or two after this camera — keep looking until
+            // we have a target so we never sit framing the origin/ground forever.
+            if (_target == null)
+            {
+                TryFindHero();
+                if (_target == null) return;
+                transform.position = _target.position + _followOffset;
+                _leadPoint         = _target.position + Vector3.up * _lookAtHeight;
+                AimAt(_leadPoint);
+            }
 
             float dt = Time.unscaledDeltaTime;
 

@@ -14,29 +14,44 @@ namespace DeNelle.Editor
     {
         private static void BuildMoat(Transform wallRoot)
         {
-            // WO-104: Terrain_Plane_Water is the clean water surface; Terrain_Plane_Lake is a
-            // GRASS tile with a pond cut into it (tiled 204x it read as a green holey mass).
-            const string LakePath       = "Assets/polyperfect/Low Poly Ultimate Pack/_M/Prefabs_M/Terrains_M/Planes_M/Terrain_Plane_Water.prefab";
-            const string DrawbridgePath = PolyMedievalDir + "Drawbridge_Medieval.prefab";
+            // WO-183: water rendered via flat quads + a translucent teal material (the old
+            // Terrain_Plane_Water prefab has peaked/faceted geometry that read as blue "crystal").
+            const string BridgePath = PolyMedievalDir + "Bridge_Medieval_Stone.prefab";
 
-            var lake       = AssetDatabase.LoadAssetAtPath<GameObject>(LakePath);
-            var drawbridge = AssetDatabase.LoadAssetAtPath<GameObject>(DrawbridgePath);
-            if (lake == null)
-            {
-                Debug.LogWarning($"[VillageSceneBuilder] WO-104 moat: Terrain_Plane_Lake not found at " +
-                                 $"'{LakePath}' — moat skipped (polyperfect re-import needed).");
-                return;
-            }
+            var bridge = AssetDatabase.LoadAssetAtPath<GameObject>(BridgePath);
 
             var moatRoot = new GameObject("Moat");
             moatRoot.transform.SetParent(wallRoot, false);
             var mr = moatRoot.transform;
 
             const float innerX = 42f, innerZ = 33f;   // flush with wall base
-            const float outerX = 48f, outerZ = 39f;   // 6 m outside the wall
+            const float outerX = 54f, outerZ = 47f;   // ~12 m moat band outside the wall (WO-183)
             const float step    = 3f;
             const float waterY  = -0.4f;               // sit in a channel, below grade
-            const float gateHalf = 3f;                 // 6 m drawbridge spans to leave clear
+            const float gateHalf = 3f;                 // gate spans to leave clear for bridges
+
+            // WO-183: one shared translucent-teal water material (built once before the loop).
+            Material waterMat = null;
+            var waterShader = Shader.Find("Universal Render Pipeline/Lit");
+            if (waterShader != null)
+            {
+                waterMat = new Material(waterShader) { name = "MoatWater" };
+                if (waterMat.HasProperty("_BaseColor"))
+                    waterMat.SetColor("_BaseColor", new Color(0.18f, 0.55f, 0.62f, 0.78f));
+                // Surface -> Transparent (URP/Lit).
+                waterMat.SetFloat("_Surface", 1f);
+                waterMat.SetFloat("_Blend", 0f);
+                waterMat.SetFloat("_Smoothness", 0.85f);
+                if (waterMat.HasProperty("_Metallic")) waterMat.SetFloat("_Metallic", 0f);
+                waterMat.renderQueue = 3000;
+                waterMat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+                waterMat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+                waterMat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+                waterMat.SetInt("_ZWrite", 0);
+                waterMat.DisableKeyword("_ALPHATEST_ON");
+                waterMat.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+                waterMat.EnableKeyword("_ALPHABLEND_ON");
+            }
 
             int placed = 0;
 
@@ -48,58 +63,63 @@ namespace DeNelle.Editor
                 bool insideOuter = ax <= outerX && az <= outerZ;
                 if (insideWall || !insideOuter) continue;        // only the 6 m ring band
 
-                // Leave the gate spans clear for the drawbridges (all 4 gates).
+                // Leave the gate spans clear for the bridges (all 4 gates).
                 bool northGate = ax < gateHalf && z >  innerZ - 0.5f;   // north band, x≈0
                 bool southGate = ax < gateHalf && z < -innerZ + 0.5f;   // south band, x≈0
                 bool eastGate  = az < gateHalf && x >  innerX - 0.5f;   // east band, z≈0
                 bool westGate  = az < gateHalf && x < -innerX + 0.5f;   // west band, z≈0
                 if (northGate || southGate || eastGate || westGate) continue;
 
-                var t = (GameObject)PrefabUtility.InstantiatePrefab(lake);
-                if (t == null) continue;
+                // WO-183: flat quad laid horizontal, NOT the faceted Terrain_Plane_Water prefab.
+                var t = GameObject.CreatePrimitive(PrimitiveType.Quad);
                 t.name = "MoatTile";
                 t.transform.SetParent(mr, false);
                 t.transform.position = new Vector3(x, waterY, z);
-                FitGroundTile(t, step);
+                t.transform.rotation = Quaternion.Euler(90f, 0f, 0f);   // lie flat
+                t.transform.localScale = new Vector3(step, step, 1f);
                 StripColliders(t);
                 StripRigidbodies(t);
+                var qrd = t.GetComponent<Renderer>();
+                if (qrd != null && waterMat != null) qrd.sharedMaterial = waterMat;
                 placed++;
             }
 
-            // ── Drawbridges: flat across the moat at each gate (WO-158: all 4) ──
-            if (drawbridge != null)
+            // ── Stone bridges: span the moat band at each gate (WO-183: all 4) ──
+            if (bridge != null)
             {
-                // (label, position just outside the gate, yaw facing outward)
+                // (label, position centred on the moat band — outside the wall line, yaw facing outward)
+                float bandZ = (innerZ + outerZ) * 0.5f;   // ≈ 50: centre of the moat band, N/S
+                float bandX = (innerX + outerX) * 0.5f;   // ≈ 48: centre of the moat band, E/W
                 var spans = new (string name, Vector3 pos, float yaw)[]
                 {
-                    ("Drawbridge-North", new Vector3(0f, 0f, (innerZ + 3f)), 180f),
-                    ("Drawbridge-South", new Vector3(0f, 0f, -(innerZ + 3f)), 0f),
-                    ("Drawbridge-East",  new Vector3(innerX + 3f, 0f, 0f),    90f),
-                    ("Drawbridge-West",  new Vector3(-(innerX + 3f), 0f, 0f), 270f),
+                    ("Bridge-North", new Vector3(0f, 0f,  bandZ), 180f),
+                    ("Bridge-South", new Vector3(0f, 0f, -bandZ), 0f),
+                    ("Bridge-East",  new Vector3( bandX, 0f, 0f), 90f),
+                    ("Bridge-West",  new Vector3(-bandX, 0f, 0f), 270f),
                 };
                 foreach (var (name, pos, yaw) in spans)
                 {
-                    var d = (GameObject)PrefabUtility.InstantiatePrefab(drawbridge);
-                    if (d == null) continue;
-                    d.name = name;
-                    d.transform.SetParent(mr, false);
-                    d.transform.position = pos;
-                    d.transform.rotation = Quaternion.Euler(0f, yaw, 0f);
-                    NormalizeProp(d, 7f);          // span the 6 m moat with margin
-                    SnapFeetToParent(d);           // sit flush on the ground (was a raised surface)
-                    StripColliders(d);             // decorative: hero crosses on the ground through the gate
-                    StripRigidbodies(d);           //   (the raised collider was forcing a walk-around)
+                    var b = (GameObject)PrefabUtility.InstantiatePrefab(bridge);
+                    if (b == null) continue;
+                    b.name = name;
+                    b.transform.SetParent(mr, false);
+                    b.transform.position = pos;
+                    b.transform.rotation = Quaternion.Euler(0f, yaw, 0f);
+                    NormalizeProp(b, 14f);         // span the full ~12 m moat band, reaching both banks
+                    SnapFeetToParent(b);           // sit flush on the ground
+                    StripColliders(b);             // decorative: hero crosses on the ground through the gate
+                    StripRigidbodies(b);
                 }
             }
             else
             {
-                Debug.LogWarning($"[VillageSceneBuilder] WO-104 moat: Drawbridge_Medieval not found at " +
-                                 $"'{DrawbridgePath}' — gates left open across the moat.");
+                Debug.LogWarning($"[VillageSceneBuilder] WO-183 moat: Bridge_Medieval_Stone not found at " +
+                                 $"'{BridgePath}' — gates left open across the moat.");
             }
 
-            Debug.Log($"[VillageSceneBuilder] WO-104 BuildMoat: {placed} water tiles in the " +
-                      $"6 m ring (inner +-{innerX}/+-{innerZ}, outer +-{outerX}/+-{outerZ}, y={waterY}); " +
-                      $"{(drawbridge != null ? 3 : 0)} drawbridges at the gate spans.");
+            Debug.Log($"[VillageSceneBuilder] WO-183 BuildMoat: {placed} water tiles in the " +
+                      $"~12 m ring (inner +-{innerX}/+-{innerZ}, outer +-{outerX}/+-{outerZ}, y={waterY}); " +
+                      $"{(bridge != null ? 4 : 0)} stone bridges at the gate spans.");
         }
 
         /// <summary>
@@ -228,8 +248,9 @@ namespace DeNelle.Editor
                         st.transform.position = bottom;
                         Vector3 horiz = new Vector3(fwd.x, 0f, fwd.z).normalized;
                         if (horiz.sqrMagnitude > 0.0001f)
-                            st.transform.rotation = Quaternion.LookRotation(horiz, Vector3.up);
-                        NormalizeProp(st, 4f);   // WO-136: 7f read as oversized "big steps" — 4f sits proportional to the 5m wall
+                            st.transform.rotation = Quaternion.LookRotation(horiz, Vector3.up)
+                                                    * Quaternion.Euler(0f, 90f, 0f);   // WO-183: model-fwd correction
+                        NormalizeProp(st, Vector3.Distance(bottom, top));   // WO-183: span the full run up to the walkway top
                         StripColliders(st);
                         StripRigidbodies(st);
                     }
