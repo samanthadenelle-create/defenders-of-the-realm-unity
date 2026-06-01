@@ -580,9 +580,9 @@ namespace DeNelle.Editor
 
             // ── Mid-wall towers at each cardinal wall midpoint ────────────────
             Big(towerMidModel, "Tower-North-Mid", new Vector3(  -10f, 0f,  wallZ), 0f,   towerTarget);  // off-centre: flank the north gate
-            Big(towerMidModel, "Tower-South-Mid", new Vector3(    0f, 0f, -wallZ), 180f, towerTarget);
-            Big(towerMidModel, "Tower-East-Mid",  new Vector3( wallX, 0f,     0f), 90f,  towerTarget);
-            Big(towerMidModel, "Tower-West-Mid",  new Vector3(-wallX, 0f,     0f), 270f, towerTarget);
+            Big(towerMidModel, "Tower-South-Mid", new Vector3(  -10f, 0f, -wallZ), 180f, towerTarget);  // off-centre: flank the south gate
+            Big(towerMidModel, "Tower-East-Mid",  new Vector3( wallX, 0f,   -10f), 90f,  towerTarget);  // off-centre: flank the east gate
+            Big(towerMidModel, "Tower-West-Mid",  new Vector3(-wallX, 0f,   -10f), 270f, towerTarget);  // off-centre: flank the west gate
 
             // Count placed pieces for the build log (reuse _propCount as a proxy).
             int segCount = perimeterRoot.transform.childCount;

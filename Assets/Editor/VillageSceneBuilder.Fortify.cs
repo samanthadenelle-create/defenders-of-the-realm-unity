@@ -123,12 +123,17 @@ namespace DeNelle.Editor
         }
 
         /// <summary>
-        /// WO-104 §7 + unified-NavMesh rampart (owner 2026-05-30): a WALKABLE wall-walk the hero
-        /// AND enemies navigate via the shared NavMesh. A flat stone WALKWAY runs along each wall's
-        /// inner top edge (y = wall height), and a gentle stone RAMP (~29°, under the 45° NavMesh
-        /// slope limit) climbs from the interior ground up to it, flanking each gate. All pieces are
-        /// flagged NavigationStatic so BakeVillageNavMesh connects ground -> ramp -> walkway — making
-        /// a hero defending up top reachable: enemies path up the same ramp to attack.
+        /// WO-181 overhanging machicolated rampart (owner 2026-06-01) — supersedes the
+        /// WO-104 inner wall-walk. A WIDE fighting DECK (~2x the wall thickness) runs the
+        /// FULL perimeter loop along all four wall-tops and PROJECTS OUTWARD over the moat
+        /// (never inward into the town). It is continuous — it spans ABOVE the gate gaps
+        /// and WRAPS each corner tower. A CRENELLATED parapet (merlon blocks + crenel gaps)
+        /// lines the deck's outer edge; CORBEL / machicolation brackets step out under the
+        /// overhang to carry it. Gentle stone RAMPS (~31°, under the 45° NavMesh slope
+        /// limit) climb from the interior ground and land FLUSH on the deck's inner edge so
+        /// every stair connects directly onto the walkable deck (no dead-ends). Every piece
+        /// is NavigationStatic so BakeVillageNavMesh connects ground -> ramp -> deck — hero
+        /// AND enemies share the path up to the rampart.
         /// </summary>
         private static void BuildRamparts(Transform wallRoot)
         {
@@ -146,10 +151,24 @@ namespace DeNelle.Editor
             var stairPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(
                 PolyMedievalDir + "Stairs_Medieval_Stone.prefab");
 
-            const float wallX = 42f, wallZ = 33f;   // poly curtain inner edges
-            const float topY  = 5f;                 // wall height -> walkway level
-            const float walkW = 3f;                 // walkway depth (inner side)
-            const float rampRun = 9f;               // horizontal run (5 m rise -> ~29°, < 45° limit)
+            const float wallX = 42f, wallZ = 33f;   // poly curtain wall line (outer face)
+            const float topY  = 5f;                 // wall height -> deck level
+            const float wallThk = 1.2f;             // visible wall thickness (matches BuildWallPerimeter wallThick)
+            // WO-181: OVERHANGING machicolated fighting deck. The deck is ~2x the
+            // wall thickness and projects OUTWARD past the wall's outer face (over
+            // the moat). It rests slightly on the wall top (inner lip) and cantilevers
+            // out; corbel brackets below carry the overhang.
+            const float deckW    = wallThk * 2f;    // ~2.4 m deck (2x wall thickness)
+            const float deckOut  = 1.8f;            // how far the deck projects PAST the outer wall face
+            const float deckIn   = deckW - deckOut; // inner lip resting on the wall top (~0.6 m)
+            const float deckThk  = 0.4f;            // deck slab thickness
+            const float deckCtrY = topY + deckThk * 0.5f;          // deck slab centre y
+            const float deckTopY = topY + deckThk;                 // walkable surface y (5.4)
+            // Deck centre offset from the wall line: positive = OUTWARD. Centre sits
+            // half-way between the inner lip (wallLine - deckIn) and outer edge
+            // (wallLine + deckOut), i.e. wallLine + (deckOut - deckIn)/2.
+            const float deckOff  = (deckOut - deckIn) * 0.5f;
+            const float rampRun = 9f;               // horizontal run (5.4 m rise -> ~31°, < 45° limit)
             const float rampW = 3f;                 // ramp width
             int pieces = 0;
 
@@ -170,28 +189,84 @@ namespace DeNelle.Editor
                 return go;
             };
 
-            // ── Walkways: flat slabs along each wall's INNER top edge (y = topY) ──
-            float wkN = wallZ - walkW * 0.5f;
-            Box("Walkway-North", new Vector3(0f, topY, wkN),  new Vector3(2f * wallX, 0.4f, walkW), Quaternion.identity);
-            Box("Walkway-South", new Vector3(0f, topY, -wkN), new Vector3(2f * wallX, 0.4f, walkW), Quaternion.identity);
-            float wkE = wallX - walkW * 0.5f;
-            Box("Walkway-East",  new Vector3(wkE,  topY, 0f), new Vector3(walkW, 0.4f, 2f * wallZ), Quaternion.identity);
-            Box("Walkway-West",  new Vector3(-wkE, topY, 0f), new Vector3(walkW, 0.4f, 2f * wallZ), Quaternion.identity);
+            // ── Overhanging deck (WO-181): a wide fighting deck along each wall-top
+            //    that PROJECTS OUTWARD over the moat. Each deck slab straddles the
+            //    wall line (deckOff outward of it) and runs the full wall length;
+            //    N/S decks span the corners, E/W decks bridge them, so the four
+            //    decks form ONE CONTINUOUS perimeter loop (it spans ABOVE the gate
+            //    gaps too — the deck is unbroken even where the wall opens for a gate).
+            //    The deck NEVER projects inward into the town.
+            float deckZ = wallZ + deckOff;   // N/S deck centre (north positive, south negative)
+            float deckX = wallX + deckOff;   // E/W deck centre
+            // N/S decks run the full E-W span PLUS the corner overhang so they meet
+            // the E/W decks; E/W decks run between them. (Overlap at corners = a solid
+            // wrapped corner deck, no gap.)
+            float deckLenNS = 2f * wallX + 2f * deckX;   // reach out to the E/W deck centres
+            float deckLenEW = 2f * wallZ;                // between the N/S decks
+            Box("Deck-North", new Vector3(0f, deckCtrY,  deckZ), new Vector3(deckLenNS, deckThk, deckW), Quaternion.identity);
+            Box("Deck-South", new Vector3(0f, deckCtrY, -deckZ), new Vector3(deckLenNS, deckThk, deckW), Quaternion.identity);
+            Box("Deck-East",  new Vector3( deckX, deckCtrY, 0f), new Vector3(deckW, deckThk, deckLenEW), Quaternion.identity);
+            Box("Deck-West",  new Vector3(-deckX, deckCtrY, 0f), new Vector3(deckW, deckThk, deckLenEW), Quaternion.identity);
 
-            // ── Parapet (WO-136): a low battlement along each walkway's OUTER edge ──
-            // The walkway top sits at topY + 0.2 (0.4-thick slab). The parapet is a
-            // nav-static stone box rising ~1.2 m above it on the side facing OUT of
-            // the village, so the hero reads as protected and the Box collider stops
-            // him walking off the rampart edge (WO-136 acceptance: parapet fall-off).
-            const float parH    = 1.4f;                 // parapet height above the walk
-            const float parThk  = 0.4f;                 // parapet thickness
-            float parTopY = topY + 0.2f + parH * 0.5f;  // centre y (walk-top + half height)
-            float parZ    = wallZ - parThk * 0.5f;       // outer edge, inset by half-thickness
-            float parX    = wallX - parThk * 0.5f;
-            Box("Parapet-North", new Vector3(0f,  parTopY,  parZ), new Vector3(2f * wallX, parH, parThk), Quaternion.identity);
-            Box("Parapet-South", new Vector3(0f,  parTopY, -parZ), new Vector3(2f * wallX, parH, parThk), Quaternion.identity);
-            Box("Parapet-East",  new Vector3(parX,  parTopY, 0f),  new Vector3(parThk, parH, 2f * wallZ), Quaternion.identity);
-            Box("Parapet-West",  new Vector3(-parX, parTopY, 0f),  new Vector3(parThk, parH, 2f * wallZ), Quaternion.identity);
+            // ── Corner deck wraps (WO-181 #4): solid square decks at the 4 corners so
+            //    the loop wraps each corner tower flush — the deck has no notch where
+            //    two runs meet. Centred on the corner, projecting outward on BOTH axes.
+            float cornDeck = deckW;   // a deckW x deckW square pad at each corner
+            float cornX = wallX + deckOff, cornZ = wallZ + deckOff;
+            Box("Deck-Corner-NE", new Vector3( cornX, deckCtrY,  cornZ), new Vector3(cornDeck, deckThk, cornDeck), Quaternion.identity);
+            Box("Deck-Corner-NW", new Vector3(-cornX, deckCtrY,  cornZ), new Vector3(cornDeck, deckThk, cornDeck), Quaternion.identity);
+            Box("Deck-Corner-SE", new Vector3( cornX, deckCtrY, -cornZ), new Vector3(cornDeck, deckThk, cornDeck), Quaternion.identity);
+            Box("Deck-Corner-SW", new Vector3(-cornX, deckCtrY, -cornZ), new Vector3(cornDeck, deckThk, cornDeck), Quaternion.identity);
+
+            // ── Corbel / machicolation brackets (WO-181 #3): a row of small stepped
+            //    stone blocks UNDER the projecting outer edge of the deck — the visual
+            //    that "holds the overhang up". Each bracket is a short block tucked
+            //    just under the deck's outer lip, stepped out from the wall face.
+            //    Purely decorative (nav-static like everything else, but agents walk
+            //    the deck above, not these). Spaced ~2 m along each run.
+            const float corbW = 0.5f, corbH = 0.6f, corbD = 1.0f;   // bracket block dims
+            float corbY = topY - corbH * 0.5f + 0.05f;              // hang just under the deck
+            float corbZ = wallZ + deckOut - corbD * 0.5f;           // tucked under the outer lip
+            float corbX = wallX + deckOut - corbD * 0.5f;
+            const float corbStep = 2f;
+            // North + South runs (brackets march along X under the outward edge).
+            for (float x = -wallX + 1f; x <= wallX - 1f + 0.01f; x += corbStep)
+            {
+                Box("Corbel-North", new Vector3(x, corbY,  corbZ), new Vector3(corbW, corbH, corbD), Quaternion.identity);
+                Box("Corbel-South", new Vector3(x, corbY, -corbZ), new Vector3(corbW, corbH, corbD), Quaternion.identity);
+            }
+            // East + West runs (brackets march along Z under the outward edge).
+            for (float z = -wallZ + 1f; z <= wallZ - 1f + 0.01f; z += corbStep)
+            {
+                Box("Corbel-East", new Vector3( corbX, corbY, z), new Vector3(corbD, corbH, corbW), Quaternion.identity);
+                Box("Corbel-West", new Vector3(-corbX, corbY, z), new Vector3(corbD, corbH, corbW), Quaternion.identity);
+            }
+
+            // ── Crenellated parapet (WO-181 #2): merlons (short blocks) with crenel
+            //    gaps between them, marching along the OUTER edge of the deck. The
+            //    merlon row sits on the deck's outermost line so the hero reads as
+            //    fighting from behind battlements over the moat. Built as discrete
+            //    blocks (block, gap, block, …) rather than one solid bar.
+            const float merlonW = 0.9f;                 // merlon block width along the run
+            const float crenelW = 0.7f;                 // gap between merlons
+            const float merlonH = 1.3f;                 // height above the deck top
+            const float merlonThk = 0.45f;              // merlon thickness (radial)
+            float merlonY = deckTopY + merlonH * 0.5f;  // centre y (deck-top + half merlon)
+            float merlonZ = wallZ + deckOut - merlonThk * 0.5f;   // on the deck's OUTER edge
+            float merlonX = wallX + deckOut - merlonThk * 0.5f;
+            float merlonPitch = merlonW + crenelW;       // block + gap pitch
+            // North + South merlon rows (along X). Span the full corner-to-corner run.
+            for (float x = -wallX - deckOff + merlonW * 0.5f; x <= wallX + deckOff; x += merlonPitch)
+            {
+                Box("Merlon-North", new Vector3(x, merlonY,  merlonZ), new Vector3(merlonW, merlonH, merlonThk), Quaternion.identity);
+                Box("Merlon-South", new Vector3(x, merlonY, -merlonZ), new Vector3(merlonW, merlonH, merlonThk), Quaternion.identity);
+            }
+            // East + West merlon rows (along Z).
+            for (float z = -wallZ + merlonW * 0.5f; z <= wallZ; z += merlonPitch)
+            {
+                Box("Merlon-East", new Vector3( merlonX, merlonY, z), new Vector3(merlonThk, merlonH, merlonW), Quaternion.identity);
+                Box("Merlon-West", new Vector3(-merlonX, merlonY, z), new Vector3(merlonThk, merlonH, merlonW), Quaternion.identity);
+            }
 
             // ── Wall barrier collision (WO-136): collide on the REAL visible wall ──
             // BUG (owner): the perimeter wall mesh (BuildWallPerimeter, ±42/±33) has its
@@ -225,9 +300,13 @@ namespace DeNelle.Editor
             Box("WallBarrier-West-N", new Vector3(-barX, barY,  (gateHalf + sideHalfZ)), new Vector3(barThk, barH, 2f * sideHalfZ), Quaternion.identity);
             _ = runHalf;  // (kept for clarity; spans computed via sideHalf/sideHalfZ)
 
-            // ── Ramps: gentle stone inclines from interior ground up to the walkway edge ──
-            // Defined by bottom (interior, y=0) + top (walkway edge, y=topY); LookRotation aligns
-            // the slab's length to the slope so its top face is the walkable surface.
+            // ── Ramps: gentle stone inclines from interior ground up to the deck ──
+            // WO-181 (HARD): the ramp TOP must land FLUSH on the walkable deck top
+            // (deckTopY = 5.4), and the top lands ON the deck's inner edge line so the
+            // stair connects directly onto the deck with no dead-end into a wall face.
+            // Defined by bottom (interior, y=0) + top (deck edge, y=deckTopY);
+            // LookRotation aligns the slab's length to the slope so its top face is the
+            // walkable surface. The 0.4-thick nav plank's top sits at the deck top.
             System.Action<string, Vector3, Vector3> Ramp = (name, bottom, top) =>
             {
                 Vector3 mid = (bottom + top) * 0.5f;
@@ -256,22 +335,23 @@ namespace DeNelle.Editor
                     }
                 }
             };
-            // WO-166 #4: ramps run PARALLEL to (hugging) their wall, not perpendicular
-            // into the courtyard. Both ends sit on the walkway-edge line (z=±zEdge for
-            // N/S, x=±xEdge for E/W); the 9 m climb run goes ALONG the wall axis, so the
-            // stairs read as climbing the wall face instead of jutting 9 m mid-courtyard
-            // (owner: "the stps in middle"). Run spans x∈[-15,-6] (N/S) / z∈[-15,-6] (E/W),
-            // clearing the centred gate gap (|coord|<3); the slab's 3 m width sits just
-            // inside the wall. NavMesh link ground→walkway is preserved (ends unchanged in Y).
-            float zEdge = wallZ - walkW;   // walkway inner edge (=30): ramp top meets it
-            Ramp("Ramp-South", new Vector3(-6f - rampRun, 0f, -zEdge), new Vector3(-6f, topY, -zEdge));
-            Ramp("Ramp-North", new Vector3(-6f - rampRun, 0f,  zEdge), new Vector3(-6f, topY,  zEdge));
-            float xEdge = wallX - walkW;   // =39
-            Ramp("Ramp-East",  new Vector3( xEdge, 0f, -6f - rampRun), new Vector3( xEdge, topY, -6f));
-            Ramp("Ramp-West",  new Vector3(-xEdge, 0f, -6f - rampRun), new Vector3(-xEdge, topY, -6f));
+            // WO-166 #4 + WO-181: ramps run PARALLEL to (hugging) their wall, not
+            // perpendicular into the courtyard. The TOP end lands on the deck's INNER
+            // edge line at deckTopY so the top step connects flush onto the walkable
+            // deck (never short of, or into, a wall face). The 9 m climb run goes ALONG
+            // the wall axis, clearing the centred gate gap (|coord|<3). NavMesh link
+            // ground→deck is preserved (the nav plank's top meets the deck slab).
+            float zLand = wallZ - deckIn;   // deck inner edge (N/S): ramp top lands here (=32.4)
+            Ramp("Ramp-South", new Vector3(-6f - rampRun, 0f, -zLand), new Vector3(-6f, deckTopY, -zLand));
+            Ramp("Ramp-North", new Vector3(-6f - rampRun, 0f,  zLand), new Vector3(-6f, deckTopY,  zLand));
+            float xLand = wallX - deckIn;   // deck inner edge (E/W) (=41.4)
+            Ramp("Ramp-East",  new Vector3( xLand, 0f, -6f - rampRun), new Vector3( xLand, deckTopY, -6f));
+            Ramp("Ramp-West",  new Vector3(-xLand, 0f, -6f - rampRun), new Vector3(-xLand, deckTopY, -6f));
 
-            Debug.Log($"[VillageSceneBuilder] WO-104 BuildRamparts: {pieces} nav-static stone pieces " +
-                      "(4 wall-walks + 4 climb ramps); hero + enemies share the NavMesh up to the rampart.");
+            Debug.Log($"[VillageSceneBuilder] WO-181 BuildRamparts: {pieces} nav-static stone pieces " +
+                      "(overhanging machicolated deck loop + crenellated parapet + corbel brackets + " +
+                      "corner wraps + 4 climb ramps landing flush on the deck); hero + enemies share " +
+                      "the NavMesh ground→ramp→deck.");
         }
 
         /// <summary>
@@ -336,15 +416,19 @@ namespace DeNelle.Editor
 
             var systemsRoot = NewChild(root.transform, "GameplaySystems");
 
-            // 1) Assets — the force-field material, the enemy prefab, the five
-            //    building prefabs. Built first so the scene components can wire
-            //    against them.
-            Material forceFieldMat = EnsureForceFieldMaterial();
+            // 1) Assets — the enemy prefab, the five building prefabs. Built
+            //    first so the scene components can wire against them.
+            //    Owner 2026-05-31 (HARD): the four gate openings must be COMPLETELY
+            //    CLEAR + walkable — no force-field, no portcullis, no door, nothing
+            //    across the gap. The force-field barrier is therefore DISABLED:
+            //    EnsureForceFieldMaterial() + WireGateForceFields() are no longer
+            //    called, so no shader sheet is placed across any gate opening.
             GameObject enemyPrefab = EnsureEnemyPrefab();
             var buildingPrefabs = EnsureBuildingPrefabs();
 
-            // 2) Wire the force-field material onto every Gate's renderer.
-            WireGateForceFields(gateRoot, forceFieldMat);
+            // 2) Force-field gate barrier DISABLED (owner 2026-05-31) — the gates
+            //    are open passages. (Was: WireGateForceFields(gateRoot, EnsureForceFieldMaterial());)
+            _ = gateRoot;   // kept in the signature; no longer wired to a force-field
 
             // 3) The Heart's world position — the centre of the pet ring + the
             //    hero's spawn anchor. Falls back to origin when the Heart type
@@ -384,7 +468,7 @@ namespace DeNelle.Editor
                       "WaveManager + HeroAbilities + PetDeployer + BuildMenu, " +
                       $"{townsfolk} ambient townsfolk, " +
                       $"enemy prefab {(enemyPrefab != null ? "OK" : "MISSING")}, " +
-                      $"force-field material {(forceFieldMat != null ? "OK" : "MISSING")}.");
+                      "gate force-field DISABLED (gates open).");
         }
 
         // =====================================================================

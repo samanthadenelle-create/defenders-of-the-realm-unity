@@ -143,8 +143,11 @@ namespace DeNelle.Editor
                         continue; // duplicates an existing hand-placed building
                     try
                     {
+                        // WO-181 P3: buildings scaled −20% (NormalizeProp 7f → 5.6f).
+                        // WO-181 P2: addFootprint:true → a footprint BoxCollider so the
+                        // hero/enemies + NavMesh treat manifest buildings as solid.
                         var go = PlaceManifestEntry(buildingRoot, b.prefab, b.prefabKind,
-                            b.pos, b.rotY, $"Building-{b.id}", 7f, true);
+                            b.pos, b.rotY, $"Building-{b.id}", 5.6f, true, addFootprint: true);
                         if (go != null)
                         {
                             buildings++;
@@ -152,7 +155,7 @@ namespace DeNelle.Editor
                             {
                                 var sec = PlaceManifestEntry(go.transform, b.secondaryPrefab,
                                     b.prefabKind, new float[] { 3f, 0f, 0f }, 0f,
-                                    $"{b.id}-secondary", 4f, true);
+                                    $"{b.id}-secondary", 4f, true, addFootprint: true);
                                 _ = sec; // companion structure; not separately tallied
                             }
                         }
@@ -213,8 +216,13 @@ namespace DeNelle.Editor
                     if (w == null) continue;
                     try
                     {
+                        // WO-181 P3: wardens were placed at authored scale (0f = no
+                        // normalize) and rendered oversized vs the hero — the blacksmith
+                        // dwarf especially. Normalize each warden to ~1.8 m so they match
+                        // the hero rig (BuildHero normalizes its body to 2.0 m), i.e.
+                        // human/hero proportion. snapFeet:true so they stand on the ground.
                         var go = PlaceManifestEntry(wardenRoot, w.prefab, w.prefabKind,
-                            w.pos, w.rotY, $"Warden-{w.npc}", 0f, false);
+                            w.pos, w.rotY, $"Warden-{w.npc}", 1.8f, true);
                         if (go == null) continue;
                         wardens++;
 
@@ -304,9 +312,14 @@ namespace DeNelle.Editor
         /// pass 0 to skip normalization (props keep their authored scale).</param>
         /// <param name="snapFeet">When true, snaps the model's feet to the parent
         /// floor after normalization (buildings/wardens); props skip it.</param>
+        /// <param name="addFootprint">WO-181: when true, adds a footprint BoxCollider
+        /// (via <see cref="AddBuildingFootprintCollider"/>) to the plot root sized to
+        /// the visual's base — so the building blocks the hero/enemies and the NavMesh
+        /// routes around it. Only buildings pass true; props/wardens/bridges stay
+        /// collider-free so they can't block pathing.</param>
         private static GameObject PlaceManifestEntry(Transform parent, string prefab,
             string prefabKind, float[] pos, float rotY, string label,
-            float normalizeSize, bool snapFeet)
+            float normalizeSize, bool snapFeet, bool addFootprint = false)
         {
             string assetPath = ResolveManifestPrefabPath(prefab, prefabKind);
             if (string.IsNullOrEmpty(assetPath)) return null;
@@ -351,6 +364,13 @@ namespace DeNelle.Editor
 
             if (snapFeet)
                 SnapFeetToParent(visual);
+
+            // WO-181 P2: footprint collider on manifest buildings so the hero/enemies
+            // can't walk through them and the NavMesh routes around them. Added to the
+            // plot root (carries the world transform), measured from the post-scale
+            // visual — exactly as BuildBuildings does for the hand-placed plots.
+            if (addFootprint)
+                AddBuildingFootprintCollider(plot, visual);
 
             return plot;
         }
