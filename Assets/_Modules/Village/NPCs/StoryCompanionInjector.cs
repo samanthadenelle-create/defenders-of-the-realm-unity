@@ -116,16 +116,36 @@ namespace DeNelle.Village
             // strip the collider too so it can never physically block the hero.
             go.layer = 2;
 
-            // Body — a slim capsule primitive, scaled to a person-ish silhouette.
-            var body = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-            body.name = "Body";
-            var col = body.GetComponent<Collider>();
-            if (col != null) Object.Destroy(col);   // no collider → never shoves anyone
-            body.transform.SetParent(go.transform, false);
-            body.transform.localPosition = new Vector3(0f, 1.0f, 0f);
-            body.transform.localScale = new Vector3(0.55f, 1.0f, 0.55f);
-            body.layer = 2;
-            TintBody(body.GetComponent<Renderer>(), hero);
+            // SKIN: a real hero mesh stands in for the companion (same VisualFactory path the
+            // enemies use) — the matching class body from Resources/Heroes, so the companion
+            // reads as a person, not a capsule. Swap to a bespoke CC5 companion model here when
+            // those land. Falls back to the tinted-capsule placeholder if the mesh is missing.
+            string slug = SlugFor(hero);
+            var vis = VisualFactory.Skin(go.transform, "Heroes/" + slug,
+                new SkinOptions { FitHeight = 1.8f, StripColliders = true, FixTripoMaterials = true });
+            if (vis != null)
+            {
+                // Tripo hero FBXs import facing +X; the root faces +Z — correct -90 deg yaw
+                // (mirrors HeroBodySwapper) so the companion faces its travel direction.
+                vis.transform.localRotation = Quaternion.Euler(0f, -90f, 0f);
+                SetLayerRecursive(vis, 2);   // Ignore Raycast — never blocks gameplay rays
+                var anim = vis.GetComponent<Animator>() ?? vis.AddComponent<Animator>();
+                var ctrl = Resources.Load<RuntimeAnimatorController>("Heroes/" + slug);
+                if (ctrl != null) anim.runtimeAnimatorController = ctrl;   // idle/walk, not a T-pose
+            }
+            else
+            {
+                // Fallback — the original tinted-capsule placeholder.
+                var body = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+                body.name = "Body";
+                var col = body.GetComponent<Collider>();
+                if (col != null) Object.Destroy(col);   // no collider -> never shoves anyone
+                body.transform.SetParent(go.transform, false);
+                body.transform.localPosition = new Vector3(0f, 1.0f, 0f);
+                body.transform.localScale = new Vector3(0.55f, 1.0f, 0.55f);
+                body.layer = 2;
+                TintBody(body.GetComponent<Renderer>(), hero);
+            }
 
             // Speech bubble — self-building world-space bubble (same class the
             // ambient townsfolk use). It builds its panel/text in its own Awake.
@@ -168,6 +188,26 @@ namespace DeNelle.Village
                 case HeroClass.Cleric: return new Color(1.00f, 0.93f, 0.70f); // Elara — warm white-gold
                 default:               return Color.white;
             }
+        }
+
+        /// <summary>HeroClass → Resources/Heroes FBX slug (Cleric shares the Mage body).</summary>
+        private static string SlugFor(HeroClass hero)
+        {
+            switch (hero)
+            {
+                case HeroClass.Knight: return "Knight";
+                case HeroClass.Ranger: return "Ranger";
+                case HeroClass.Mage:   return "Mage";
+                case HeroClass.Cleric: return "Mage";
+                default:               return "Knight";
+            }
+        }
+
+        private static void SetLayerRecursive(GameObject root, int layer)
+        {
+            if (root == null) return;
+            root.layer = layer;
+            foreach (Transform child in root.transform) SetLayerRecursive(child.gameObject, layer);
         }
 
         // ── Resolution ───────────────────────────────────────────────────────
