@@ -95,24 +95,26 @@ namespace DeNelle.Onboarding
 
         private static List<IntroPetInfo> Load()
         {
-            var full = Path.Combine(Application.streamingAssetsPath, PetsRelativePath);
+            // WebGL-safe load via CanonicalJson (Resources first, StreamingAssets fallback).
+            // Boot-path catalog (PetSelect) — must not throw in a browser (DEF-124).
             try
             {
-                if (File.Exists(full))
+                string json = DeNelle.Core.CanonicalJson.Read(PetsRelativePath);
+                if (!string.IsNullOrEmpty(json))
                 {
-                    var data = JsonConvert.DeserializeObject<IntroPetCatalogData>(File.ReadAllText(full));
+                    var data = JsonConvert.DeserializeObject<IntroPetCatalogData>(json);
                     if (data != null && data.Pets != null && data.Pets.Count > 0)
                         return data.Pets;
-                    Debug.LogError($"[IntroPetCatalog] pets.json at {full} parsed empty.");
+                    Debug.LogError("[IntroPetCatalog] pets.json parsed empty.");
                 }
                 else
                 {
-                    Debug.LogError($"[IntroPetCatalog] pets.json not found at {full}.");
+                    Debug.LogError("[IntroPetCatalog] pets.json not found (Resources or StreamingAssets).");
                 }
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[IntroPetCatalog] Failed to read {full}: {ex.Message}");
+                Debug.LogError($"[IntroPetCatalog] Failed to read pets.json: {ex.Message}");
             }
             return new List<IntroPetInfo>();
         }

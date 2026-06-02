@@ -57,6 +57,13 @@ namespace DeNelle.Editor
             bool noBrotli = System.Environment.GetCommandLineArgs()
                 .Any(a => a.Equals("-noBrotli", System.StringComparison.OrdinalIgnoreCase));
 
+            // Pass `-debugExceptions` to ship FULL C# exception stack traces to the
+            // browser console — turns the opaque "Uncaught exception from main loop /
+            // _JS_CallAsLongAsNoExceptionsSeen" into the real exception type + stack so
+            // a runtime crash can be diagnosed. Costs size/perf; OFF for the ship build.
+            bool debugExceptions = System.Environment.GetCommandLineArgs()
+                .Any(a => a.Equals("-debugExceptions", System.StringComparison.OrdinalIgnoreCase));
+
             PlayerSettings.SetScriptingBackend(NamedBuildTarget.WebGL, ScriptingImplementation.IL2CPP);
             PlayerSettings.WebGL.compressionFormat = noBrotli
                 ? WebGLCompressionFormat.Disabled
@@ -64,7 +71,15 @@ namespace DeNelle.Editor
             Debug.Log($"[WebGLBuild] compressionFormat = {PlayerSettings.WebGL.compressionFormat}" +
                       (noBrotli ? " (-noBrotli: uncompressed for itch.io)" : " (Brotli for Vercel)"));
             PlayerSettings.WebGL.memorySize = 512;
-            PlayerSettings.WebGL.exceptionSupport = WebGLExceptionSupport.None;
+            // RELEASE was WebGLExceptionSupport.None — but with None, WebGL try/catch
+            // does NOT catch, so ANY thrown exception (e.g. a catalog's File.ReadAllText
+            // on the browser's nonexistent filesystem) HALTS the content -> black screen
+            // at boot (DEF-124). ExplicitlyThrownExceptionsOnly makes try/catch work so the
+            // boot degrades gracefully instead of aborting; small size cost, working build.
+            PlayerSettings.WebGL.exceptionSupport = debugExceptions
+                ? WebGLExceptionSupport.FullWithStacktrace
+                : WebGLExceptionSupport.ExplicitlyThrownExceptionsOnly;
+            Debug.Log($"[WebGLBuild] exceptionSupport = {PlayerSettings.WebGL.exceptionSupport}");
             PlayerSettings.WebGL.dataCaching = true;
             PlayerSettings.SetManagedStrippingLevel(NamedBuildTarget.WebGL, ManagedStrippingLevel.Minimal);
             PlayerSettings.runInBackground = false;
