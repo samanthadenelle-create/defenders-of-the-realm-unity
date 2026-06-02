@@ -308,6 +308,17 @@ namespace DeNelle.Village
         {
             var def = BuildRoamerDef(enemyId, threat);
 
+            // Overly-easy welcome (owner 2026-06-02: "the beginning should be overly easy" —
+            // "hello welcome to town... dead" is the opposite of the onboarding we want).
+            // Scale early-game enemy HP + contact damage WAY down for a brand-new player
+            // (BestWave 0 -> x0.35), ramping to full strength by ~BestWave 6. Threat-scaling
+            // still ramps the LATE game up; this only softens the first hours into a power
+            // fantasy so a fresh hero (or a grant reviewer) wins while they learn the controls.
+            float ease = Mathf.Lerp(0.35f, 1f,
+                Mathf.Clamp01((GameStateService.Instance?.State?.BestWave ?? 0) / 6f));
+            def.Hp = Mathf.Max(1f, def.Hp * ease);
+            def.ContactDamage = Mathf.Max(0f, def.ContactDamage * ease);
+
             // One skinned enemy body via the shared EnemyFactory — no parallel spawn code
             // (CLAUDE.md §9). The factory handles layer + collider + skin + animator + agent.
             var enemy = EnemyFactory.Build(def, pos, Quaternion.identity, _root);
