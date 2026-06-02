@@ -57,10 +57,12 @@ namespace DeNelle.Village
         [SerializeField] private Transform _target;
 
         [Header("Follow offset (idle)")]
-        [Tooltip("World-space offset from the hero in idle/explore state. " +
-                 "Elevated TD seat (behind + well above) so the hero stays framed " +
-                 "and the camera never dips to stare at the ground or a wall.")]
-        [SerializeField] private Vector3 _followOffset = new Vector3(0f, 18f, -22f);
+        [Tooltip("World-space offset from the hero in idle/explore state. Owner 2026-06-01: " +
+                 "dropped to a CLOSE third-person follow (was 0,18,-22 = too far/top-down). " +
+                 "This is the code DEFAULT — the existing Village.unity has the OLD value " +
+                 "serialized, so it applies on the next Build Village Scene OR when you set " +
+                 "_followOffset live in the Inspector (tune Y=height, Z=distance to taste).")]
+        [SerializeField] private Vector3 _followOffset = new Vector3(0f, 8f, -12f);
 
         [Tooltip("Look-at height above hero feet (metres).")]
         [SerializeField] private float _lookAtHeight = 2.5f;

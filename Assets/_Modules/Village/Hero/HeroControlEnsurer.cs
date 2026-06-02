@@ -81,6 +81,13 @@ namespace DeNelle.Village
             if (hero.GetComponent<HeroDeathLogger>() == null) hero.AddComponent<HeroDeathLogger>();
             // Open-world combat readability: reticle over the nearest hostile target.
             if (hero.GetComponent<HeroTargetIndicator>() == null) hero.AddComponent<HeroTargetIndicator>();
+            // DEF (combat feel): wire the melee swing that was BUILT but never attached.
+            // PlayerAttackController.Awake self-configures (_enemyLayer -> "Enemy", animator/audio),
+            // so a bare AddComponent is safe. Melee fires on Space / gamepad-South. NOTE: added for
+            // EVERY class right now (the Knight's sword was the ask); Mage/Ranger get a melee with no
+            // swing anim (their animators lack the Attack trigger — damage still lands). Restrict to
+            // Knight later if desired.
+            if (hero.GetComponent<PlayerAttackController>() == null) hero.AddComponent<PlayerAttackController>();
             Debug.Log($"[HeroControlEnsurer] ensured hero='{hero.name}' active={hero.activeInHierarchy} locoEnabled={l.enabled}.");
         }
 
