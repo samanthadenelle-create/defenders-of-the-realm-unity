@@ -94,10 +94,14 @@ namespace DeNelle.Village
             }
             else
             {
-                // Not carrying. Restore agent control once we're resting on the
-                // ground; while up on the deck leave it suspended so HeroLocomotion's
-                // off-navmesh transform fallback drives the hero across the rampart.
-                if (_agentSuspended && _state == State.AtBottom) RestoreAgent();
+                // Not actively carrying — hand control straight back to the NavMeshAgent
+                // so the hero is navmesh-bound at BOTH ends (ground AND the baked rampart
+                // deck). BUG (owner 2026-06-02 "where i can fly"): leaving the agent
+                // suspended up on the deck let the transform-fallback move the hero with no
+                // ground clamp, so they floated off the rampart. The deck is NavigationStatic
+                // + baked, so re-enabling binds them to it. Agent is suspended ONLY during
+                // the brief ride (the if-branch above), never while resting.
+                if (_agentSuspended) RestoreAgent();
 
                 // Gentle assist: keep a hero standing on an idle platform at its
                 // surface (no XZ lock, so they can freely walk off).

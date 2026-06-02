@@ -208,9 +208,25 @@ namespace DeNelle.Onboarding
                 studioCredit.text = $"Published by {CanonStrings.Publisher}";
 
             // ── Heart-Wing banner ────────────────────────────────────────────
+            // DEF-134: the dragon banner was a black gap in the WebGL build — the title
+            // is code-built at runtime, so the inspector-assigned _heartWingBanner sprite
+            // is null. Fall back to Resources/heart-wing.jpg (same pattern as the hero
+            // portraits) so the dragon actually renders in the build.
             var banner = _root.Q<VisualElement>("heart-wing-banner");
-            if (banner != null && _heartWingBanner != null)
-                banner.style.backgroundImage = new StyleBackground(_heartWingBanner);
+            if (banner != null)
+            {
+                if (_heartWingBanner != null)
+                    banner.style.backgroundImage = new StyleBackground(_heartWingBanner);
+                else
+                {
+                    var bannerTex = Resources.Load<Texture2D>("heart-wing");
+                    if (bannerTex != null)
+                    {
+                        banner.style.backgroundImage = new StyleBackground(bannerTex);
+                        banner.style.backgroundSize = new BackgroundSize(BackgroundSizeType.Cover);
+                    }
+                }
+            }
 
             // ── Hero trio — wizard left, knight centre, archer right (2026-05-20).
             // Pulls the same Resources/HeroPortraits/ PNGs used on HeroSelect.
@@ -292,10 +308,16 @@ namespace DeNelle.Onboarding
             _connectWalletButton = _root.Q<Button>("connect-wallet-button");
             if (_connectWalletButton != null)
             {
+                // DEF-134: the button overlapped the title ("...the Realm") because
+                // Absolute positions relative to the element's PARENT — and its UXML
+                // container sits mid-screen, so top:16 landed over the heading. Re-parent
+                // to the document root so Absolute is SCREEN-relative, then pin top-right.
+                _root.Add(_connectWalletButton);   // reparents off the mid-screen container
                 _connectWalletButton.style.position = Position.Absolute;
                 _connectWalletButton.style.top = 16;
                 _connectWalletButton.style.right = 16;
                 _connectWalletButton.style.left = StyleKeyword.Auto;
+                _connectWalletButton.style.bottom = StyleKeyword.Auto;
                 _connectWalletButton.clicked += OnConnectWalletClicked;
             }
 

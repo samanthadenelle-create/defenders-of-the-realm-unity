@@ -378,6 +378,23 @@ namespace DeNelle.Audio
             CrossfadeTo(track, def, clip).Forget();
         }
 
+        /// <summary>
+        /// WebGL mobile-audio gesture unlock. iOS Safari (and mobile Chrome) start the
+        /// AudioContext SUSPENDED until a user gesture, so music started at scene-load
+        /// is silent (owner 2026-06-02: "dont hear any audio on mobile"). Called once by
+        /// <see cref="WebGLAudioUnlock"/> on the first tap/click/key — un-pauses the
+        /// listener and re-asserts the current track so it actually plays now the context
+        /// is live. No-op when nothing is queued.
+        /// </summary>
+        public void ResumeAfterUnlock()
+        {
+            AudioListener.pause = false;
+            var t = CurrentTrack;
+            if (t == MusicTrack.None) return;
+            CurrentTrack = MusicTrack.None;   // clear the "already playing" short-circuit
+            PlayMusic(t);                     // restart so it sounds now the context is unlocked
+        }
+
         /// <summary>Fades the current music out to silence over its fade-out duration.</summary>
         public void StopMusic()
         {

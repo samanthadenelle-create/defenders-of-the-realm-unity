@@ -34,6 +34,8 @@ namespace DeNelle.Village
         private HeroHealth _hero;
         private GameObject _overlay;
         private bool _shown;
+        private RectTransform _retryBtn;   // mobile tap target — Try Again
+        private RectTransform _exitBtn;    // mobile tap target — Leave to Title
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
@@ -62,6 +64,7 @@ namespace DeNelle.Village
         {
             _shown = false;
             if (_overlay != null) { Destroy(_overlay); _overlay = null; }
+            _retryBtn = null; _exitBtn = null;
             Time.timeScale = 1f;
             _heart = null;
             _hero = null;
@@ -94,8 +97,32 @@ namespace DeNelle.Village
             var kb = Keyboard.current;
             bool retry = (kb != null && kb.rKey.wasPressedThisFrame)      || Input.GetKeyDown(KeyCode.R);
             bool exit  = (kb != null && kb.escapeKey.wasPressedThisFrame)  || Input.GetKeyDown(KeyCode.Escape);
+
+            // Mobile/touch: poll the pointer against the button rects (owner 2026-06-02:
+            // "stuck at the dead screen, i dont have an esc or b button"). uGUI buttons
+            // need an EventSystem the build doesn't have, so we hit-test manually — the
+            // same EventSystem-free approach as VirtualJoystick.
+            if (!retry && !exit && TryGetTap(out Vector2 tap))
+            {
+                if (_retryBtn != null && RectTransformUtility.RectangleContainsScreenPoint(_retryBtn, tap, null)) retry = true;
+                else if (_exitBtn != null && RectTransformUtility.RectangleContainsScreenPoint(_exitBtn, tap, null)) exit = true;
+            }
+
             if (retry)     { Time.timeScale = 1f; SceneRouter.LoadScene(SceneRouter.Village); }
             else if (exit) { Time.timeScale = 1f; SceneRouter.LoadScene(SceneRouter.Title); }
+        }
+
+        /// <summary>First-touch / mouse-down screen position this frame (no EventSystem).</summary>
+        private static bool TryGetTap(out Vector2 pos)
+        {
+            if (Input.touchCount > 0)
+            {
+                var t = Input.GetTouch(0);
+                if (t.phase == UnityEngine.TouchPhase.Began) { pos = t.position; return true; }
+            }
+            if (Input.GetMouseButtonDown(0)) { pos = (Vector2)Input.mousePosition; return true; }
+            pos = default;
+            return false;
         }
 
         private void ShowHeartFell() => Show(
@@ -152,10 +179,44 @@ namespace DeNelle.Village
             txt.text =
                 "<b>" + title + "</b>\n\n" +
                 body + "\n\n" +
-                "[ R ]  Try Again         [ Esc ]  Leave to Title";
+                "Tap a button below  —  or press [ R ] / [ Esc ]";
             var rt = txt.rectTransform;
-            rt.anchorMin = new Vector2(0.08f, 0.28f); rt.anchorMax = new Vector2(0.92f, 0.72f);
+            rt.anchorMin = new Vector2(0.08f, 0.40f); rt.anchorMax = new Vector2(0.92f, 0.78f);
             rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+
+            // Tap buttons (mobile) — side by side under the text.
+            _retryBtn = BuildTapButton("TRY AGAIN", new Color(0.18f, 0.46f, 0.24f),
+                                       new Vector2(0.16f, 0.16f), new Vector2(0.48f, 0.28f));
+            _exitBtn  = BuildTapButton("LEAVE",     new Color(0.46f, 0.20f, 0.20f),
+                                       new Vector2(0.52f, 0.16f), new Vector2(0.84f, 0.28f));
+        }
+
+        /// <summary>A code-built tap button (Image + centred Text). Returns its RectTransform
+        /// for manual hit-testing in <see cref="Update"/> (no EventSystem in builds).</summary>
+        private RectTransform BuildTapButton(string label, Color bg, Vector2 anchorMin, Vector2 anchorMax)
+        {
+            var go = new GameObject("Btn_" + label);
+            go.transform.SetParent(_overlay.transform, false);
+            var img = go.AddComponent<Image>();
+            img.color = bg;
+            var rt = img.rectTransform;
+            rt.anchorMin = anchorMin; rt.anchorMax = anchorMax;
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+
+            var lblGo = new GameObject("Label");
+            lblGo.transform.SetParent(go.transform, false);
+            var lbl = lblGo.AddComponent<Text>();
+            lbl.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf")
+                       ?? Resources.GetBuiltinResource<Font>("Arial.ttf");
+            lbl.alignment = TextAnchor.MiddleCenter;
+            lbl.color = Color.white;
+            lbl.fontSize = 30;
+            lbl.fontStyle = FontStyle.Bold;
+            lbl.text = label;
+            var lrt = lbl.rectTransform;
+            lrt.anchorMin = Vector2.zero; lrt.anchorMax = Vector2.one;
+            lrt.offsetMin = Vector2.zero; lrt.offsetMax = Vector2.zero;
+            return rt;
         }
     }
 }
