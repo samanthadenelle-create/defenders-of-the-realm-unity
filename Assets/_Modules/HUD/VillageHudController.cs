@@ -447,6 +447,7 @@ namespace DeNelle.HUD
             BuildSkillsButton();
             EnsureHudReachable();
             MoveManaPanelToTopLeft();
+            MoveActionBarToRight();   // mobile thumb layout: actions bottom-RIGHT (opposite the joystick)
             ApplyElarionTheme();   // DEF-105: code-built styling for the vitals bars (USS doesn't render in builds)
             EnsureCompassRose();   // DEF-104: build the direction rose up-front so it's always on screen
             _bound = true;
@@ -897,6 +898,39 @@ namespace DeNelle.HUD
             manaPanel.style.top = 64;       // under heart-hp card
             manaPanel.style.left = 16;
             manaPanel.style.width = 220;
+        }
+
+        /// <summary>
+        /// Mobile thumb layout (owner 2026-06-02: "move the action buttons closer to the
+        /// right" / "action buttons challenging"): anchors the ability cluster + Build button
+        /// bottom-RIGHT — opposite the left movement joystick — and enlarges each cell for
+        /// touch. Sizes are set in CODE because USS doesn't render in player builds
+        /// (CLAUDE.md §8). Re-applied after every rebind (cells are rebuilt in BuildAbilityCells).
+        /// </summary>
+        private void MoveActionBarToRight()
+        {
+            if (_abilityBar != null)
+            {
+                var s = _abilityBar.style;
+                s.position = Position.Absolute;
+                s.right = 16; s.bottom = 16;
+                s.left = StyleKeyword.Auto; s.top = StyleKeyword.Auto;
+                s.flexDirection = FlexDirection.Row;
+                foreach (var cell in _abilityBar.Children())
+                {
+                    var cs = cell.style;
+                    cs.width = 66; cs.height = 66;          // chunky touch targets
+                    cs.marginLeft = 5; cs.marginRight = 5;
+                }
+            }
+            if (_buildButton != null)
+            {
+                var b = _buildButton.style;
+                b.position = Position.Absolute;
+                b.right = 16; b.bottom = 92;                // just above the ability row
+                b.left = StyleKeyword.Auto; b.top = StyleKeyword.Auto;
+                b.minWidth = 100; b.height = 40;
+            }
         }
 
         /// <summary>
