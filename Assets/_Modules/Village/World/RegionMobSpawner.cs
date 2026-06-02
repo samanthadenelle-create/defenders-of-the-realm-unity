@@ -75,6 +75,9 @@ namespace DeNelle.Village
         [Min(10f)] public float CullRadius = 70f;
         [Tooltip("A roaming mob aggros (paths to) the player within this radius; beyond it, it wanders its anchor.")]
         [Min(2f)] public float AggroRadius = 18f;
+        [Tooltip("A chasing mob GIVES UP and walks home if dragged this far from where it began the " +
+                 "chase — so running away actually breaks pursuit. It won't re-aggro until it's home.")]
+        [Min(4f)] public float LeashRadius = 28f;
         [Tooltip("Radius a wandering mob picks new roam points within, around its spawn anchor.")]
         [Min(1f)] public float WanderRadius = 8f;
 
@@ -98,6 +101,8 @@ namespace DeNelle.Village
             public Transform RoamAnchor;   // a child transform the mob wanders around / paths to when not aggroed
             public float NextWanderAt;
             public bool Aggroed;
+            public bool Leashing;        // walking home after being dragged past the leash; ignores aggro until back
+            public Vector3 LeashOrigin;  // home territory captured when the chase began
         }
 
         private readonly List<Mob> _live = new List<Mob>();
@@ -168,25 +173,46 @@ namespace DeNelle.Village
                     continue;
                 }
 
-                bool wantAggro = dSqr <= aggroSqr;
+                bool playerInRange = dSqr <= aggroSqr;
+
+                // Leash (owner 2026-06-01): a chasing mob keeps PACE, so player-distance de-aggro
+                // alone never triggers — it stuck to you forever. Add a HOME leash: once dragged
+                // past LeashRadius from where the chase began, it gives up, walks home, and ignores
+                // aggro until it's back. So running away actually breaks pursuit.
+                if (mob.Leashing &&
+                    (mob.Enemy.transform.position - mob.LeashOrigin).sqrMagnitude <= 9f)
+                    mob.Leashing = false;   // reached home — resume normal behaviour
+
+                bool wantAggro = playerInRange && !mob.Leashing;
                 if (wantAggro)
                 {
-                    // Chase the player: redirect the brain target to the player transform.
                     if (!mob.Aggroed)
                     {
+                        // Begin the chase — capture home territory for the leash.
                         mob.Aggroed = true;
+                        mob.LeashOrigin = mob.RoamAnchor != null
+                            ? mob.RoamAnchor.position : mob.Enemy.transform.position;
                         mob.Enemy.SetBrainTarget(_player);
+                    }
+                    else if ((mob.Enemy.transform.position - mob.LeashOrigin).sqrMagnitude
+                             > LeashRadius * LeashRadius)
+                    {
+                        // Dragged past the leash — disengage and head home.
+                        mob.Aggroed  = false;
+                        mob.Leashing = true;
+                        if (mob.RoamAnchor != null) mob.RoamAnchor.position = mob.LeashOrigin;
+                        mob.Enemy.SetBrainTarget(mob.RoamAnchor);
                     }
                 }
                 else
                 {
-                    // Wander: path to the roam anchor; re-pick it periodically so the mob drifts.
+                    // Player out of range (or leashing home): wander the anchor.
                     if (mob.Aggroed)
                     {
                         mob.Aggroed = false;
                         mob.Enemy.SetBrainTarget(mob.RoamAnchor);
                     }
-                    if (Time.time >= mob.NextWanderAt)
+                    if (!mob.Leashing && Time.time >= mob.NextWanderAt)
                     {
                         RepickRoamPoint(mob);
                         mob.NextWanderAt = Time.time + WanderRepathInterval;

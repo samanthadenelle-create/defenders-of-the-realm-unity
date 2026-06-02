@@ -9,13 +9,13 @@
           "slot": "q",
           "key": "Q",
           "name": "Arcane Bolt",
-          "description": "Snap bolt at the nearest foe — 16 dmg, near-instant (0.5s).",
+          "description": "Snap bolt at the nearest foe — 26 dmg, near-instant (0.5s).",
           "icon": "✦",
           "color": "#b388ff",
           "effect": "strike",
           "cooldown": 0.5,
           "manaCost": 0,
-          "damage": 16,
+          "damage": 26,
           "range": 13
         },
         "w": {
@@ -64,7 +64,7 @@
       "displayName": "Knight",
       "_comment": "AUTHORED placeholder — not in React v1 yet. Re-sync on v1 data/abilities.json publish.",
       "abilities": {
-        "q": { "slot": "q", "key": "Q", "name": "Shield Bash", "description": "Quick melee bash — 14 dmg up close (0.6s).", "icon": "✦", "color": "#ffd27a", "effect": "strike", "cooldown": 0.6, "manaCost": 0, "damage": 14, "range": 3.4 },
+        "q": { "slot": "q", "key": "Q", "name": "Shield Bash", "description": "Quick melee bash — 24 dmg up close (0.6s).", "icon": "✦", "color": "#ffd27a", "effect": "strike", "cooldown": 0.6, "manaCost": 0, "damage": 24, "range": 3.4 },
         "w": { "slot": "w", "key": "F", "name": "Bulwark Slam", "description": "Cleaving slam — 22 dmg to all in front (4m, 10s cd).", "icon": "✦", "color": "#facc15", "effect": "cleave", "cooldown": 10, "manaCost": 3, "damage": 22, "range": 4.0 },
         "e": { "slot": "e", "key": "E", "name": "Oath Ward", "description": "Wards the Heart for 40 in a 5m ring (18s cd).", "icon": "✚", "color": "#ffd27a", "effect": "heal", "cooldown": 18, "manaCost": 4, "damage": 40, "range": 5 },
         "r": { "slot": "r", "key": "R", "name": "Lantern Charge", "description": "Ultimate charge — 70 dmg cleave over 6.5m (40s cd).", "icon": "☄", "color": "#ff7043", "effect": "cleave", "cooldown": 40, "manaCost": 6, "damage": 70, "range": 6.5 }
@@ -74,7 +74,7 @@
       "displayName": "Ranger",
       "_comment": "AUTHORED placeholder — not in React v1 yet. Re-sync on v1 data/abilities.json publish.",
       "abilities": {
-        "q": { "slot": "q", "key": "Q", "name": "Quick Shot", "description": "Rapid arrow — 15 dmg at long range (0.45s).", "icon": "✦", "color": "#9ae6b4", "effect": "strike", "cooldown": 0.45, "manaCost": 0, "damage": 15, "range": 15 },
+        "q": { "slot": "q", "key": "Q", "name": "Quick Shot", "description": "Rapid arrow — 25 dmg at long range (0.45s).", "icon": "✦", "color": "#9ae6b4", "effect": "strike", "cooldown": 0.45, "manaCost": 0, "damage": 25, "range": 15 },
         "w": { "slot": "w", "key": "F", "name": "Snare Trap", "description": "Snares + 18 dmg at range (12m, 11s cd).", "icon": "✦", "color": "#7dd3fc", "effect": "snare", "cooldown": 11, "manaCost": 3, "damage": 18, "range": 12 },
         "e": { "slot": "e", "key": "E", "name": "Mending Salve", "description": "Heals the Heart for 44 in a 5m ring (15s cd).", "icon": "✚", "color": "#ffd27a", "effect": "heal", "cooldown": 15, "manaCost": 4, "damage": 44, "range": 5 },
         "r": { "slot": "r", "key": "R", "name": "Storm of Arrows", "description": "Ultimate volley — 72 dmg over a 6.5m area (42s cd).", "icon": "☄", "color": "#ff7043", "effect": "aoe", "cooldown": 42, "manaCost": 7, "damage": 72, "range": 6.5, "freeze": 0 }
