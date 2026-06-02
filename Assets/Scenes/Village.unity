@@ -53414,6 +53414,9 @@ MonoBehaviour:
   _framingEnabled: 1
   _framingBias: 0.2
   _framingReturnSpeed: 4
+  _orbitBehind: 0
+  _orbitYawSpeed: 150
+  _orbitMoveThreshold: 0.4
 --- !u!114 &423154422
 MonoBehaviour:
   m_ObjectHideFlags: 0
