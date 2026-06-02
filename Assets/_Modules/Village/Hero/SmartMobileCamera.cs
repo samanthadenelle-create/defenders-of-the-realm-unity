@@ -116,6 +116,26 @@ namespace DeNelle.Village
         [Tooltip("How quickly the look-at recentres on the hero when no enemies are near.")]
         [SerializeField, Min(0.5f)] private float _framingReturnSpeed = 4f;
 
+        [Header("Orbit-behind (third-person)")]
+        [Tooltip("Owner 2026-06-02 (\"will the camera pivot behind me when I walk around the " +
+                 "castle?\"): when ON, the follow offset rotates with the hero's TRAVEL direction " +
+                 "so the camera swings to your back as you round a building — true third-person. " +
+                 "OFF = the legacy fixed compass angle (always behind world -Z).")]
+        // 2026-06-02: DEFAULT OFF — the first cut (auto-orbit chasing travel heading) fed
+        // back into camera-relative movement and made the hero curve/"always turn left"
+        // while walking + firing. Reverted to the fixed offset the owner called "much
+        // better"; a proper orbit needs a manual/aim-driven yaw, not movement-driven, and
+        // must be decoupled from the locomotion input frame. Left here, off, for that pass.
+        [SerializeField] private bool _orbitBehind = false;
+
+        [Tooltip("Degrees/sec the camera yaw chases the hero's travel heading. Lower = lazier, " +
+                 "more cinematic swing; higher = snaps behind faster.")]
+        [SerializeField, Min(15f)] private float _orbitYawSpeed = 150f;
+
+        [Tooltip("Min planar speed (m/s) before the orbit yaw updates — below this the camera " +
+                 "holds its current angle (so standing still / tiny nudges don't spin the view).")]
+        [SerializeField, Min(0.01f)] private float _orbitMoveThreshold = 0.4f;
+
         // ── Runtime state ──────────────────────────────────────────────────────
 
         private Camera  _cam;
@@ -127,6 +147,8 @@ namespace DeNelle.Village
         private float   _combatBlend;       // 0 = idle, 1 = full combat zoom
         private Vector3 _nearestEnemyPos;
         private bool    _enemyInRange;
+        private float   _orbitYaw;          // smoothed camera yaw (deg) for orbit-behind
+        private bool    _orbitYawInit;      // seeded from the hero's facing on first frame
 
         private readonly Collider[] _scanBuffer = new Collider[32];
 
@@ -226,8 +248,26 @@ namespace DeNelle.Village
             float combatTarget = _enemyInRange ? 1f : 0f;
             _combatBlend = Mathf.MoveTowards(_combatBlend, combatTarget, _combatZoomSpeed * dt);
 
-            // ── 3. Follow offset with combat zoom ─────────────────────────────
+            // ── 3. Follow offset with combat zoom (+ orbit-behind) ────────────
             Vector3 zoomOffset = _followOffset + new Vector3(0f, 0f, -_combatZoomOut * _combatBlend);
+
+            // Orbit-behind: rotate the offset by a yaw that chases the hero's travel
+            // heading, so rounding a building keeps the camera at the hero's back
+            // (true third-person). Seeded from the hero's facing; only updates while
+            // actually moving, so standing still doesn't spin the view.
+            Vector3 heroVelFlat = GetHeroVelocity();
+            heroVelFlat.y = 0f;
+            if (_orbitBehind)
+            {
+                if (!_orbitYawInit) { _orbitYaw = _target.eulerAngles.y; _orbitYawInit = true; }
+                if (heroVelFlat.magnitude >= _orbitMoveThreshold)
+                {
+                    float targetYaw = Mathf.Atan2(heroVelFlat.x, heroVelFlat.z) * Mathf.Rad2Deg;
+                    _orbitYaw = Mathf.MoveTowardsAngle(_orbitYaw, targetYaw, _orbitYawSpeed * dt);
+                }
+                zoomOffset = Quaternion.Euler(0f, _orbitYaw, 0f) * zoomOffset;
+            }
+
             Vector3 desired    = _target.position + zoomOffset;
             transform.position = Vector3.SmoothDamp(transform.position, desired, ref _posVelocity, _smoothTime, float.MaxValue, dt);
             // DEF-67: apply shake offset on top of the smoothed position.
@@ -238,9 +278,8 @@ namespace DeNelle.Village
             _cam.fieldOfView = Mathf.Lerp(_baseFov, _baseFov + _combatFovBoost, _combatBlend);
 
             // ── 5. Movement lead ──────────────────────────────────────────────
+            // (heroVelFlat computed once in section 3 for the orbit yaw — reused here.)
             Vector3 heroBase = _target.position + Vector3.up * _lookAtHeight;
-            Vector3 heroVel  = GetHeroVelocity();
-            Vector3 heroVelFlat = new Vector3(heroVel.x, 0f, heroVel.z);
             Vector3 leadTarget = heroBase;
             if (heroVelFlat.sqrMagnitude > 0.01f)
                 leadTarget += heroVelFlat.normalized * _leadDistance;

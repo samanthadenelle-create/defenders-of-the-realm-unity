@@ -52,6 +52,13 @@ namespace DeNelle.Village
                  "If null, fires from transform.position + 1m up.")]
         [SerializeField] private Transform _launchPoint;
 
+        // Owner 2026-06-02 ("green on fire, red on land to confirm where it's going"):
+        // a GREEN burst at the launch origin (the shot leaving the hero) and a RED burst
+        // at the landing point (where the projectile arrives) — instant visual proof of
+        // aim direction, and clean cast-vs-impact feedback.
+        private static readonly Color FireColor = new Color(0.30f, 1f, 0.40f, 1f); // green = fired
+        private static readonly Color LandColor = new Color(1f, 0.25f, 0.20f, 1f); // red   = landed
+
         // ── Public API ────────────────────────────────────────────────────────
 
         /// <summary>
@@ -61,14 +68,14 @@ namespace DeNelle.Village
         public void FireArrow(Vector3 targetWorldPos, System.Action onArrive = null)
         {
             Vector3 origin = LaunchOrigin();
-            StartCoroutine(PlayCastBurst(origin, new Color(0.9f, 0.8f, 0.5f, 1f), 0.15f));
+            StartCoroutine(PlayCastBurst(origin, FireColor, 0.15f));   // GREEN: fired
 
             var go = _arrowPrefab != null
                 ? Instantiate(_arrowPrefab, origin, Quaternion.identity)
                 : BuildPlaceholderArrow(origin);
 
             var mover = go.GetComponent<ProjectileMover>() ?? go.AddComponent<ProjectileMover>();
-            mover.Launch(targetWorldPos, _arrowSpeed, _arrowArc, onArrive);
+            mover.Launch(targetWorldPos, _arrowSpeed, _arrowArc, WithLandBurst(targetWorldPos, onArrive));
         }
 
         /// <summary>
@@ -78,14 +85,26 @@ namespace DeNelle.Village
         public void FireSpellOrb(Vector3 targetWorldPos, System.Action onArrive = null)
         {
             Vector3 origin = LaunchOrigin();
-            StartCoroutine(PlayCastBurst(origin, new Color(0.4f, 0.55f, 1f, 1f), 0.35f));
+            StartCoroutine(PlayCastBurst(origin, FireColor, 0.35f));   // GREEN: fired
 
             var go = _spellOrbPrefab != null
                 ? Instantiate(_spellOrbPrefab, origin, Quaternion.identity)
                 : BuildPlaceholderOrb(origin);
 
             var mover = go.GetComponent<ProjectileMover>() ?? go.AddComponent<ProjectileMover>();
-            mover.Launch(targetWorldPos, _orbSpeed, 0f, onArrive);
+            mover.Launch(targetWorldPos, _orbSpeed, 0f, WithLandBurst(targetWorldPos, onArrive));
+        }
+
+        /// <summary>Wraps the arrival callback so a RED burst pops where the projectile
+        /// lands (the confirm-on-land marker), then runs the original onArrive.</summary>
+        private System.Action WithLandBurst(Vector3 landPos, System.Action inner)
+        {
+            return () =>
+            {
+                if (this != null && isActiveAndEnabled)
+                    StartCoroutine(PlayCastBurst(landPos, LandColor, 0.18f));   // RED: landed
+                inner?.Invoke();
+            };
         }
 
         // ── Helpers ───────────────────────────────────────────────────────────

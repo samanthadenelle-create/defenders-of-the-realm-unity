@@ -28,7 +28,10 @@ namespace DeNelle.Village
         private const float GroundY    = 0f;
         private const float LaneZ      = 31.1f;
         private const float AccessX    = -10f;
-        private const float Footprint  = 3.2f;
+        // Owner 2026-06-02 ("walked all around inside and didn't see a lift"): the
+        // 3.2 m slab tucked at the wall base was too easy to miss. Widen it and add a
+        // tall glowing beacon (below) so it reads as an interactable from the plaza.
+        private const float Footprint  = 5f;
 
         private bool _built;
 
@@ -86,8 +89,45 @@ namespace DeNelle.Village
             slab.transform.localScale = new Vector3(Footprint, thickness, Footprint);
             TintSlab(slab);
 
+            // Tall glowing beacon so the lift is visible from across the village
+            // (owner couldn't find it). A slim translucent pillar rising past the
+            // deck height, emissive blue — reads as "stand here to ride up".
+            var beacon = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            beacon.name = "LiftBeacon";
+            if (beacon.TryGetComponent(out Collider bc)) Destroy(bc);   // never blocks the hero
+            beacon.transform.SetParent(root.transform, false);
+            // Cylinder is 2 m tall at scale 1 → scale Y so it spans ground→well above the deck.
+            float beaconH = DeckTopY + 3f;
+            beacon.transform.localPosition = new Vector3(0f, beaconH * 0.5f, 0f);
+            beacon.transform.localScale = new Vector3(0.5f, beaconH * 0.5f, 0.5f);
+            TintBeacon(beacon);
+
             var lift = root.AddComponent<LiftPlatform>();
             lift.Configure(GroundY, DeckTopY, Footprint);
+        }
+
+        // Translucent emissive blue pillar — a "ride up here" landmark visible from afar.
+        private static void TintBeacon(GameObject beacon)
+        {
+            var mr = beacon.GetComponent<Renderer>();
+            if (mr == null) return;
+            Shader sh = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+            if (sh == null) return;
+            var m = new Material(sh);
+            var glow = new Color(0.35f, 0.65f, 1f);
+            if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", new Color(glow.r, glow.g, glow.b, 0.55f));
+            else m.color = glow;
+            if (m.HasProperty("_EmissionColor"))
+            {
+                m.EnableKeyword("_EMISSION");
+                m.SetColor("_EmissionColor", glow * 1.6f);
+            }
+            // Transparent so it reads as a light shaft, not a solid post.
+            if (m.HasProperty("_Surface")) m.SetFloat("_Surface", 1f);
+            if (m.HasProperty("_Blend")) m.SetFloat("_Blend", 0f);
+            m.renderQueue = 3000;
+            m.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            mr.sharedMaterial = m;
         }
 
         // Runed blue-grey stone so the lift reads as an interactable, not floor scenery.

@@ -36,8 +36,14 @@ namespace DeNelle.Village
     [DisallowMultipleComponent]
     public sealed class HeroTargetIndicator : MonoBehaviour
     {
+        // 2026-06-02 playtest: wave enemies (close to the hero/heart) locked + died
+        // fine, but a distant SOLO wandering mob never got a reticle (old 18 m) — so
+        // the aim override stayed null and the basic bolt only reached ~13 m from the
+        // hero's feet. Widen the acquire range past the open-world engage distance so
+        // the reticle locks roaming mobs and feeds the aim point that makes ranged
+        // attacks connect at distance.
         [Tooltip("Radius (m) within which hostiles can be targeted.")]
-        [SerializeField, Min(1f)] private float _acquireRange = 18f;
+        [SerializeField, Min(1f)] private float _acquireRange = 32f;
 
         [Tooltip("Seconds between target re-scans (the reticle follows every frame).")]
         [SerializeField, Min(0.02f)] private float _scanInterval = 0.12f;
@@ -66,13 +72,22 @@ namespace DeNelle.Village
         private IDamageable _locked;   // manual lock (null = auto-nearest)
         private readonly List<IDamageable> _candidates = new List<IDamageable>();
 
-        private static readonly Collider[] _hits = new Collider[64];
+        // 2026-06-02 targeting fix: the scan used mask ~0 into a 64-slot buffer, but the
+        // village has ~2,900 colliders — within 32 m the buffer FILLED with walls/ground
+        // and the enemy collider was crowded OUT (OverlapSphere result order is arbitrary),
+        // so the reticle never acquired even with a foe right there. Attacks still landed in
+        // waves because HeroAbilities sweeps the ENEMY layer only (no overflow). Mask to the
+        // Enemy layer here too + a roomier buffer so only enemy colliders come back.
+        private static readonly Collider[] _hits = new Collider[128];
         private static Texture2D _ringTex;
+        private int _enemyMask;
 
         private void Awake()
         {
             BuildReticle();
             _abilities = GetComponent<HeroAbilities>();
+            _enemyMask = LayerMask.GetMask("Enemy");
+            if (_enemyMask == 0) _enemyMask = ~0;   // layer undefined → fall back to all
         }
 
         private void OnDestroy()
@@ -174,7 +189,7 @@ namespace DeNelle.Village
         {
             _candidates.Clear();
             int n = Physics.OverlapSphereNonAlloc(
-                transform.position, _acquireRange, _hits, ~0, QueryTriggerInteraction.Collide);
+                transform.position, _acquireRange, _hits, _enemyMask, QueryTriggerInteraction.Collide);
             for (int i = 0; i < n; i++)
             {
                 var c = _hits[i];
