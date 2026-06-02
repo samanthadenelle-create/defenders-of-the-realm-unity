@@ -279,7 +279,7 @@ namespace DeNelle.Village
 
             Enemy enemy = _enemyPrefab != null
                 ? Instantiate(_enemyPrefab, pos, rot, _enemyRoot)
-                : BuildPlaceholderEnemy(pos, rot);
+                : EnemyFactory.Build(def, pos, rot, _enemyRoot);   // skinned, no more pill
 
             // The hero/pet target sweeps find enemies via GetComponentInParent
             // <IDamageable>, which resolves to EnemyDamageable. The placeholder
@@ -723,7 +723,7 @@ namespace DeNelle.Village
 
             Enemy enemy = _enemyPrefab != null
                 ? Instantiate(_enemyPrefab, pos, rot, _enemyRoot)
-                : BuildPlaceholderEnemy(pos, rot);
+                : EnemyFactory.Build(def, pos, rot, _enemyRoot);   // skinned, no more pill
 
             // The hero/pet target sweeps find enemies via GetComponentInParent<IDamageable>,
             // which resolves to EnemyDamageable. The placeholder capsule (and some prefabs)

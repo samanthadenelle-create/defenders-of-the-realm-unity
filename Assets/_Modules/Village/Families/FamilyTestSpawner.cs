@@ -135,31 +135,11 @@ namespace DeNelle.Village
             Quaternion rot = toHeart.sqrMagnitude > 0.001f
                 ? Quaternion.LookRotation(toHeart) : Quaternion.identity;
 
-            var go = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-            go.name = $"FamilyUnit ({def.DisplayName})";
-            go.transform.SetParent(_root, false);
-            go.transform.SetPositionAndRotation(pos, rot);
-            go.transform.localScale = new Vector3(scale, scale, scale);
-
-            if (go.TryGetComponent(out Collider col)) col.isTrigger = true;
-
-            var mr = go.GetComponent<Renderer>();
-            if (mr != null)
-            {
-                Shader sh = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
-                if (sh != null)
-                {
-                    var m = new Material(sh);
-                    if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", tint);
-                    else m.color = tint;
-                    mr.sharedMaterial = m;
-                }
-            }
-
-            go.AddComponent<NavMeshAgent>();
-            var enemy = go.AddComponent<Enemy>();
+            // One skinned body via the shared EnemyFactory — no parallel spawn code (CLAUDE.md §9).
+            var enemy = EnemyFactory.Build(def, pos, rot, _root);
+            enemy.gameObject.name = $"FamilyUnit ({def.DisplayName})";
             enemy.Configure($"family-{def.Id}-{_counter++}", def, heart);
-            go.AddComponent<EnemyBrain>();   // leader keeps it; followers disable it while following.
+            enemy.gameObject.AddComponent<EnemyBrain>();   // leader keeps it; followers disable it while following.
             return enemy;
         }
 

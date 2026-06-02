@@ -123,39 +123,12 @@ namespace DeNelle.Village
                 ? Quaternion.LookRotation(toHeart)
                 : Quaternion.identity;
 
-            // Capsule body (mirrors WaveManager.BuildPlaceholderEnemy).
-            var go = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-            go.name = $"TestEnemy ({def.DisplayName})";
-            go.transform.SetParent(_root, false);
-            go.transform.SetPositionAndRotation(pos, rot);
-            go.transform.localScale = new Vector3(scale, scale, scale);
-
-            // The capsule's own collider must be a trigger so the enemy's contact
-            // probe (a SphereCast with QueryTriggerInteraction.Ignore) can't self-hit.
-            if (go.TryGetComponent(out Collider col)) col.isTrigger = true;
-
-            // Family tint.
-            var mr = go.GetComponent<Renderer>();
-            if (mr != null)
-            {
-                Shader sh = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
-                if (sh != null)
-                {
-                    var m = new Material(sh);
-                    if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", tint);
-                    else m.color = tint;
-                    mr.sharedMaterial = m;
-                }
-            }
-
-            // NavMeshAgent must exist before Enemy ([RequireComponent]); EnemyBrain
-            // after Enemy (its [RequireComponent(typeof(Enemy))]). EnemyBrain.Awake
-            // resolves the Heart + "Player"-tagged hero itself.
-            go.AddComponent<NavMeshAgent>();
-            var enemy = go.AddComponent<Enemy>();
+            // One skinned body via the shared EnemyFactory — no parallel spawn code (CLAUDE.md §9).
+            var enemy = EnemyFactory.Build(def, pos, rot, _root);
+            enemy.gameObject.name = $"TestEnemy ({def.DisplayName})";
             enemy.Configure($"test-{def.Id}-{_counter++}", def, heart);
 
-            var brain = go.AddComponent<EnemyBrain>();
+            var brain = enemy.gameObject.AddComponent<EnemyBrain>();
             brain.Role = role;
 
             return enemy;

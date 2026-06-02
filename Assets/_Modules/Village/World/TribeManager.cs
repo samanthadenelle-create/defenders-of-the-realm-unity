@@ -270,40 +270,18 @@ namespace DeNelle.Village
             if (NavMesh.SamplePosition(pos, out NavMeshHit hit, 8f, NavMesh.AllAreas))
                 pos = hit.position;
 
-            var go = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-            go.name = $"Raider ({tribeId}-{index})";
-            go.transform.SetParent(_root, false);
-            go.transform.position = pos;
-
-            // Trigger collider so the enemy's own contact probe can't self-hit (same as the test spawner).
-            if (go.TryGetComponent(out Collider col)) col.isTrigger = true;
-
-            var mr = go.GetComponent<Renderer>();
-            if (mr != null)
-            {
-                Shader sh = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
-                if (sh != null)
-                {
-                    var m = new Material(sh);
-                    if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", RaiderTint);
-                    else m.color = RaiderTint;
-                    mr.sharedMaterial = m;
-                }
-            }
-
-            // NavMeshAgent before Enemy ([RequireComponent]).
-            go.AddComponent<NavMeshAgent>();
-            var enemy = go.AddComponent<Enemy>();
-
-            // WO-155: compose the raider from the region's roster (RegionSpawnTable) so a
-            // tribe's members match the region theme (Wildlands living vs Wound-tied) — the
-            // SAME roster RegionMobSpawner reads. Falls back to a generic raider when the
-            // position has no roster. ThreatLevel still scales the stats.
+            // Compose the raider from the region's roster (RegionSpawnTable) so a tribe's
+            // members match the region theme (Wildlands living vs Wound-tied) — the SAME
+            // roster RegionMobSpawner reads. ThreatLevel still scales the stats.
             RegionId region = ZoneManager.GetZone(pos);
             string rosterId = RegionSpawnTable.HasRoster(region)
                 ? RegionSpawnTable.PickEnemyId(region, ZoneManager.Depth(pos), Random.value)
                 : null;
             var def = BuildRaiderDef(tribeId, threat, rosterId);
+
+            // One skinned body via the shared EnemyFactory — no parallel spawn code (CLAUDE.md §9).
+            var enemy = EnemyFactory.Build(def, pos, Quaternion.identity, _root);
+            enemy.gameObject.name = $"Raider ({tribeId}-{index})";
             // March goal = the nearest standing settlement (the claim to raze), falling
             // back to the Heart when no settlement is in range. We DON'T add EnemyBrain:
             // its no-tactics DPS path targets only hero/towers/tagged targets (never a

@@ -388,21 +388,16 @@ namespace DeNelle.Village
             if (NavMesh.SamplePosition(want, out NavMeshHit hit, 8f, NavMesh.AllAreas))
                 want = hit.position;
 
-            var go = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-            go.name = $"KindleDefender ({ward.Id}-{index})";
-            go.transform.SetParent(_root, false);
-            go.transform.position = want;
-            if (go.TryGetComponent(out Collider col)) col.isTrigger = true;
-
-            go.AddComponent<NavMeshAgent>();
-            var enemy = go.AddComponent<Enemy>();
-
             RegionId region = ZoneManager.GetZone(want);
             string rosterId = RegionSpawnTable.HasRoster(region)
                 ? RegionSpawnTable.PickEnemyId(region, ZoneManager.Depth(want), Random.value)
                 : null;
-
             var def = BuildKindleDef(ward, rosterId, threat);
+
+            // One skinned body via the shared EnemyFactory — no parallel spawn code (CLAUDE.md §9).
+            var enemy = EnemyFactory.Build(def, want, Quaternion.identity, _root);
+            enemy.gameObject.name = $"KindleDefender ({ward.Id}-{index})";
+
             enemy.Configure($"kindle-{ward.Id}-{index}", def, ResolveHeart());
             // March the kindle mob at the player (the ritual they defend), not the Heart.
             ResolvePlayer();

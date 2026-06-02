@@ -308,69 +308,15 @@ namespace DeNelle.Village
         {
             var def = BuildRoamerDef(enemyId, threat);
 
-            // Bare root carries gameplay (collider + Enemy + agent); the mesh is a visual
-            // child fit to size — mirrors PatriciaLight.BuildEnemy (replaces the old "pill").
-            var go = new GameObject($"RegionMob ({enemyId} · {region})");
-            go.transform.SetParent(_root, false);
-            go.transform.position = pos;
-
-            // DEF (open-world targeting fix): Enemy layer so the hero's masked ability/target
-            // sweeps (1<<Enemy) can reach roamers — Default(0) leaves them un-hittable. THIS is
-            // why wandering mobs couldn't be hit while wave enemies (layer-set) could.
-            int enemyLayer = LayerMask.NameToLayer("Enemy");
-            if (enemyLayer >= 0) go.layer = enemyLayer;
-
-            // Body size from the archetype height (a 1.9m skeleton = sizeScale 1.0).
-            float sizeScale = Mathf.Clamp(def.Height / 1.9f, 0.55f, 1.5f);
-
-            // Trigger capsule, offset UP so it wraps the body. The root stays UNIT scale
-            // (scaling a NavMeshAgent root misbehaves) — only the visual is fit bigger, so a
-            // Golem reads huge but paths fine. Same recipe as PatriciaLight.BuildEnemy.
-            var col = go.AddComponent<CapsuleCollider>();
-            col.isTrigger = true;
-            col.radius = 0.42f * sizeScale;
-            col.height = 1.8f * sizeScale;
-            col.center = new Vector3(0f, 0.9f * sizeScale, 0f);
-
-            // SKIN: a real skeleton model per archetype so the silhouette reads the threat
-            // (warrior / golem-brute / rogue / mage / necromancer). Falls back to a tinted
-            // capsule if the model is missing, so a roamer still spawns visible + hittable.
-            string model = ModelForRoamer(enemyId);
-            var vis = VisualFactory.Skin(go.transform, "Enemies/" + model, SkinOptions.Enemy(def.Height));
-            if (vis != null)
-            {
-                EnemyAnimatorFactory.Apply(vis, model);   // walk/attack/die controller
-            }
-            else
-            {
-                var cap = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-                if (cap.TryGetComponent(out Collider cc)) Destroy(cc);
-                cap.transform.SetParent(go.transform, false);
-                cap.transform.localPosition = new Vector3(0f, 0.9f * sizeScale, 0f);
-                cap.transform.localScale = Vector3.one * sizeScale;
-                var mr = cap.GetComponent<Renderer>();
-                if (mr != null)
-                {
-                    Shader sh = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
-                    if (sh != null)
-                    {
-                        var m = new Material(sh);
-                        Color tint = IsWoundTied(region) ? WoundTint : LivingTint;
-                        if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", tint);
-                        else m.color = tint;
-                        mr.sharedMaterial = m;
-                    }
-                }
-            }
-
-            // NavMeshAgent before Enemy ([RequireComponent]); Enemy pulls EnemyDamageable.
-            go.AddComponent<NavMeshAgent>();
-            var enemy = go.AddComponent<Enemy>();
+            // One skinned enemy body via the shared EnemyFactory — no parallel spawn code
+            // (CLAUDE.md §9). The factory handles layer + collider + skin + animator + agent.
+            var enemy = EnemyFactory.Build(def, pos, Quaternion.identity, _root);
+            var go = enemy.gameObject;
+            go.name = $"RegionMob ({enemyId} · {region})";
 
             // A per-mob roam anchor (child of the root) it wanders around when not aggroed.
             // Using a Transform target keeps it OFF the Heart-march — these mobs never
-            // trickle into the village. Configure passes a Heart fallback only as a last
-            // resort if the anchor is ever lost; SetBrainTarget(anchor) overrides it.
+            // trickle into the village. SetBrainTarget(anchor) overrides the Heart fallback.
             var anchorGo = new GameObject($"RoamAnchor-{enemyId}-{_counter}");
             anchorGo.transform.SetParent(_root, false);
             anchorGo.transform.position = pos;
