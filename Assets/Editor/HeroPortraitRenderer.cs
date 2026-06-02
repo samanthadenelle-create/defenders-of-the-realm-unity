@@ -202,10 +202,17 @@ namespace DeNelle.Editor
             for (int i = 1; i < renderers.Length; i++) b.Encapsulate(renderers[i].bounds);
             if (b.size.y <= 0.01f) return;
             body.transform.localScale *= (target / b.size.y);
-            // After scaling, re-centre so feet land at y=0 in the camera frame.
-            var pivot = body.transform.position;
-            float bottom = b.min.y;
-            body.transform.position = new Vector3(pivot.x, pivot.y - bottom, pivot.z);
+
+            // Re-measure AFTER scaling, then raise the body in LOCAL space so its feet land
+            // on the parent (stage) plane. BUG FIX (2026-06-02, blank portraits): the old
+            // code used the WORLD bounds bottom (~1000, since the stage sits off at y=1000)
+            // and yanked the body to world y≈0 — 1000 units BELOW the camera (which lives on
+            // the stage at y≈1000), so the hero rendered out of frame and every PNG came out
+            // empty. Local-space re-centre is stage-position-independent.
+            b = renderers[0].bounds;
+            for (int i = 1; i < renderers.Length; i++) b.Encapsulate(renderers[i].bounds);
+            float parentY = body.transform.parent != null ? body.transform.parent.position.y : 0f;
+            body.transform.localPosition += new Vector3(0f, parentY - b.min.y, 0f);
         }
     }
 }
