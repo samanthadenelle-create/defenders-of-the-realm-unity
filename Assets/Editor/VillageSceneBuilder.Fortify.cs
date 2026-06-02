@@ -388,28 +388,14 @@ namespace DeNelle.Editor
                 Vector3 mid = (bottom + top) * 0.5f;
                 Vector3 fwd = (top - bottom).normalized;
                 float len = Vector3.Distance(bottom, top);
-                // Two objects in parallel: an INVISIBLE nav plank (the walkable surface the agents
-                // climb) + the DESIGNED staircase as the visual on top. Decouples look from navigate.
-                var rampGo = Box(name, mid, new Vector3(rampW, 0.4f, len), Quaternion.LookRotation(fwd, Vector3.up));
-                var rd = rampGo.GetComponent<Renderer>();
-                if (rd != null) rd.enabled = false;   // hidden — the staircase below is the visual
-                if (stairPrefab != null)
-                {
-                    var st = (GameObject)PrefabUtility.InstantiatePrefab(stairPrefab);
-                    if (st != null)
-                    {
-                        st.name = name + "-Visual";
-                        st.transform.SetParent(rr, false);
-                        st.transform.position = bottom;
-                        Vector3 horiz = new Vector3(fwd.x, 0f, fwd.z).normalized;
-                        if (horiz.sqrMagnitude > 0.0001f)
-                            st.transform.rotation = Quaternion.LookRotation(horiz, Vector3.up)
-                                                    * Quaternion.Euler(0f, 90f, 0f);   // WO-183: model-fwd correction
-                        NormalizeProp(st, Vector3.Distance(bottom, top));   // WO-183: span the full run up to the walkway top
-                        StripColliders(st);
-                        StripRigidbodies(st);
-                    }
-                }
+                // Owner 2026-06-01: ONE object = the visible climb AND the walkable surface
+                // (a clean stone ramp). Was: an invisible nav plank + a separate stair prefab
+                // placed on top; the two decoupled/misaligned, so the visible stairs had no nav
+                // under them and couldn't be climbed. Box() already makes the slab
+                // NavigationStatic + stone-materialed; leave its renderer ON so what you SEE is
+                // exactly what you WALK — guaranteed climbable, no separate board to drift.
+                Box(name, mid, new Vector3(rampW, 0.5f, len), Quaternion.LookRotation(fwd, Vector3.up));
+                _ = stairPrefab;   // stair prefab no longer instantiated — the ramp slab is the visual now
             };
             // WO-166 #4 + WO-181 + WO-183: ramps run PARALLEL to (hugging) their wall,
             // not perpendicular into the courtyard. The TOP end lands on the INNER WALK
@@ -423,9 +409,12 @@ namespace DeNelle.Editor
             float zLand = laneZ;   // inner walk-lane centre (N/S): ramp top lands here
             Ramp("Ramp-South", new Vector3(-6f - rampRun, 0f, -zLand), new Vector3(-6f, deckTopY, -zLand));
             Ramp("Ramp-North", new Vector3(-6f - rampRun, 0f,  zLand), new Vector3(-6f, deckTopY,  zLand));
-            float xLand = laneX;   // inner walk-lane centre (E/W)
-            Ramp("Ramp-East",  new Vector3( xLand, 0f, -6f - rampRun), new Vector3( xLand, deckTopY, -6f));
-            Ramp("Ramp-West",  new Vector3(-xLand, 0f, -6f - rampRun), new Vector3(-xLand, deckTopY, -6f));
+            // Owner 2026-06-01: keep ONLY the North + South climb stairs — delete the
+            // East + West ramps (the 90°-rotated pair that floated / clipped the wall).
+            // Two climb points (N/S) are enough to reach the rampart walk loop.
+            // float xLand = laneX;   // inner walk-lane centre (E/W) — E/W ramps removed
+            // Ramp("Ramp-East",  new Vector3( xLand, 0f, -6f - rampRun), new Vector3( xLand, deckTopY, -6f));
+            // Ramp("Ramp-West",  new Vector3(-xLand, 0f, -6f - rampRun), new Vector3(-xLand, deckTopY, -6f));
 
             Debug.Log($"[VillageSceneBuilder] WO-181 BuildRamparts: {pieces} nav-static stone pieces " +
                       "(overhanging machicolated deck + CONTINUOUS inner walk-lane loop INSIDE the " +
