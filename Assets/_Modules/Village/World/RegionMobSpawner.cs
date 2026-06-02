@@ -193,6 +193,9 @@ namespace DeNelle.Village
                         mob.LeashOrigin = mob.RoamAnchor != null
                             ? mob.RoamAnchor.position : mob.Enemy.transform.position;
                         mob.Enemy.SetBrainTarget(_player);
+                        // "Spotted" tell — a one-shot "!" so the player feels the moment a
+                        // wanderer locks on instead of getting blindsided (owner 2026-06-02).
+                        EnemyAlertTell.Flash(mob.Enemy.transform);
                     }
                     else if ((mob.Enemy.transform.position - mob.LeashOrigin).sqrMagnitude
                              > LeashRadius * LeashRadius)

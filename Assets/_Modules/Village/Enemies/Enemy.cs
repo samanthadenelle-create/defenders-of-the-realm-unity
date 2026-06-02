@@ -308,7 +308,11 @@ namespace DeNelle.Village
                 _enemyDefId = def.Id;
                 _maxHp = Mathf.Max(1f, def.Hp);
                 _hp = _maxHp;
-                _moveSpeed = Mathf.Max(0.1f, def.MoveSpeed);
+                // Owner 2026-06-02: global -5% enemy speed — early-game generosity so new
+                // players get the "winning while I learn" feel as they scale up + learn the
+                // movement. One central dial; every enemy (roamer/wave/tribe) routes through
+                // Configure, so all of them slow together.
+                _moveSpeed = Mathf.Max(0.1f, def.MoveSpeed) * 0.95f;
                 _contactDamage = Mathf.Max(0f, def.ContactDamage);
                 _attackInterval = Mathf.Max(0.1f, def.AttackInterval);
                 _ai = def.AiKind;
