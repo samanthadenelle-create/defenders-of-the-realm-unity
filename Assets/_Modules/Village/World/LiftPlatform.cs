@@ -7,15 +7,25 @@
 // -----------------------------------------------------------------------------
 // transform.y == the platform's TOP SURFACE level (so the hero's feet ride at
 // exactly transform.y). The visual slab is a child offset DOWN by half its
-// thickness so its top face sits on the surface. Stepping onto an idle platform
-// sends it to the opposite end; it auto-returns a moment after you step off.
+// thickness so its top face sits on the surface.
 //
-// RIDE: while the hero stands within the footprint, their Y is locked to the
-// surface each LateUpdate — works whether or not the custom HeroLocomotion
-// ground-clamps. FIRST PASS — the carry feel wants an in-editor test.
+// THE RIDE (owner 2026-06-02 "starts underground and drops me before the top"):
+// the hero is driven by a NavMeshAgent (HeroLocomotion), which clamps them to the
+// navmesh surface every frame. A passive Y-carry loses that fight the instant the
+// platform leaves the navmesh — the agent drags the hero back down, `heroOn` goes
+// false, and the carry quits mid-rise (the "drops me before the top" bug). So
+// while travelling we SUSPEND the agent and LOCK the hero rigidly to the platform
+// (XZ + Y), guaranteeing they ride the whole way. The agent is re-enabled only
+// once we're back down on the ground navmesh; up on the deck the hero moves via
+// HeroLocomotion's off-navmesh transform fallback.
+//
+// TOGGLE travel: stepping onto an idle platform sends it to the OPPOSITE end and
+// it stays there (no auto-return) — so after riding up you can explore the deck,
+// walk back on, and ride down again instead of being stranded up top.
 // =============================================================================
 
 using UnityEngine;
+using UnityEngine.AI;
 
 namespace DeNelle.Village
 {
@@ -26,14 +36,14 @@ namespace DeNelle.Village
         private float _bottomSurfaceY;
         private float _topSurfaceY;
         private float _speed = 4.5f;        // m/s vertical travel
-        private float _holdSeconds = 0.6f;  // pause before auto-returning once empty
         private float _halfFootprint = 1.6f;
 
         private enum State { AtBottom, Rising, AtTop, Lowering }
         private State _state = State.AtBottom;
-        private float _holdTimer;
         private Transform _hero;
+        private NavMeshAgent _heroAgent;
         private bool _heroOnLast;
+        private bool _agentSuspended;
 
         /// <summary>Set the travel range (TOP-SURFACE world Y at each end) + footprint.
         /// Call once right after AddComponent.</summary>
@@ -51,26 +61,21 @@ namespace DeNelle.Village
 
         private void LateUpdate()
         {
-            if (_hero == null) _hero = FindHero();
+            if (_hero == null) ResolveHero();
             bool heroOn = HeroOnPlatform();
 
             switch (_state)
             {
                 case State.AtBottom:
-                    if (heroOn && !_heroOnLast) _state = State.Rising;       // stepped on → go up
+                    if (heroOn && !_heroOnLast) _state = State.Rising;    // stepped on at ground → go up
                     break;
 
                 case State.AtTop:
-                    if (!heroOn)
-                    {
-                        _holdTimer += Time.deltaTime;
-                        if (_holdTimer > _holdSeconds) { _state = State.Lowering; _holdTimer = 0f; }
-                    }
-                    else _holdTimer = 0f;
+                    if (heroOn && !_heroOnLast) _state = State.Lowering;  // stepped back on at deck → go down
                     break;
 
                 case State.Rising:
-                    if (MoveSurfaceTo(_topSurfaceY)) { _state = State.AtTop; _holdTimer = 0f; }
+                    if (MoveSurfaceTo(_topSurfaceY)) _state = State.AtTop;
                     break;
 
                 case State.Lowering:
@@ -78,14 +83,52 @@ namespace DeNelle.Village
                     break;
             }
 
-            // Carry: lock the hero's feet to the platform surface while aboard.
-            if (heroOn && _hero != null)
+            bool travelling = _state == State.Rising || _state == State.Lowering;
+
+            if (heroOn && travelling)
             {
-                Vector3 hp = _hero.position;
-                hp.y = transform.position.y;
-                _hero.position = hp;
+                // Take full authority: suspend the agent's ground-clamp and pin the
+                // hero to the platform so they CAN'T be dragged off mid-ride.
+                SuspendAgent();
+                _hero.position = transform.position;   // lock XZ + Y to the platform
             }
+            else
+            {
+                // Not carrying. Restore agent control once we're resting on the
+                // ground; while up on the deck leave it suspended so HeroLocomotion's
+                // off-navmesh transform fallback drives the hero across the rampart.
+                if (_agentSuspended && _state == State.AtBottom) RestoreAgent();
+
+                // Gentle assist: keep a hero standing on an idle platform at its
+                // surface (no XZ lock, so they can freely walk off).
+                if (heroOn && _hero != null)
+                {
+                    Vector3 hp = _hero.position;
+                    hp.y = transform.position.y;
+                    _hero.position = hp;
+                }
+            }
+
             _heroOnLast = heroOn;
+        }
+
+        private void SuspendAgent()
+        {
+            if (_agentSuspended) return;
+            if (_heroAgent != null && _heroAgent.enabled)
+            {
+                _heroAgent.enabled = false;
+                _agentSuspended = true;
+            }
+        }
+
+        private void RestoreAgent()
+        {
+            _agentSuspended = false;
+            if (_heroAgent == null) return;
+            _heroAgent.enabled = true;
+            // Sync the agent to where the lift left the hero so it doesn't snap back.
+            if (_heroAgent.isOnNavMesh) _heroAgent.Warp(_hero.position);
         }
 
         private bool MoveSurfaceTo(float targetY)
@@ -105,11 +148,13 @@ namespace DeNelle.Village
             return Mathf.Abs(d.y) < 1.3f;   // feet within ~waist height of the surface
         }
 
-        private static Transform FindHero()
+        private void ResolveHero()
         {
             var go = GameObject.FindWithTag("Player");
             if (go == null) go = GameObject.FindWithTag("HeroTarget");
-            return go != null ? go.transform : null;
+            if (go == null) return;
+            _hero = go.transform;
+            _heroAgent = go.GetComponent<NavMeshAgent>();
         }
     }
 }

@@ -69,7 +69,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: DeNelle.Village::DeNelle.Village.Building
   _type: 3
   _buildingId: workshop
-  _displayLabel: Workshop
+  _displayLabel: Forge
   _displayNameKey: workshop
   _crystalCost: 150
   _hp: 180

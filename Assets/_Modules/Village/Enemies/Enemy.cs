@@ -211,6 +211,14 @@ namespace DeNelle.Village
         /// </summary>
         public event Action<Enemy> ReachedHeart;
 
+        /// <summary>
+        /// Raised when this enemy takes (non-lethal) damage. Arg = world-space
+        /// position of the damage source. EnemyBrain listens to RETALIATE — a
+        /// struck enemy turns on its attacker (the hero/pet) instead of marching
+        /// past to the Heart (owner 2026-06-02: "they just walked on past me").
+        /// </summary>
+        public event Action<Vector3> Damaged;
+
         /// <summary>Stable per-instance id — the breach-roster key.</summary>
         public string EnemyId => _enemyId;
 
@@ -783,6 +791,10 @@ namespace DeNelle.Village
             }
             else
             {
+                // Retaliate: notify the brain it was struck so it aggros the
+                // attacker (regardless of engage radius / role / behaviour tree).
+                Damaged?.Invoke(sourceWorldPos);
+
                 // DEF-46: compute cardinal hit direction from source and drive the
                 // directional flinch sub-state before firing the Hit trigger.
                 HitDirection dir = ComputeHitDirection(sourceWorldPos);

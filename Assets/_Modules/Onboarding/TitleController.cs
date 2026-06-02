@@ -265,6 +265,16 @@ namespace DeNelle.Onboarding
                 fs.left = Length.Percent(3f + fi * 24.25f);   // 4 even columns: ~3 / 27 / 52 / 76 %
                 fs.width = Length.Percent(20f);
                 fs.height = Length.Percent(33f);
+                // SPACING FIX (owner 2026-06-02 "spacing is wrong"): the portrait
+                // textures (Thrain/Grom are 512x700 character renders, Sylas/Elara
+                // full card art) were drawn at NATIVE size with no background-size,
+                // so they overflowed their 20% slots and visually overlapped the
+                // neighbour — the left pair looked bunched. Contain + centre fits
+                // each art inside its own evenly-spaced column so all four read
+                // consistently regardless of source-image dimensions.
+                fs.backgroundSize = new BackgroundSize(BackgroundSizeType.Contain);
+                fs.backgroundPositionX = new BackgroundPosition(BackgroundPositionKeyword.Center);
+                fs.backgroundPositionY = new BackgroundPosition(BackgroundPositionKeyword.Center);
             }
 
             // ── Buttons ──────────────────────────────────────────────────────

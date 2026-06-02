@@ -110,6 +110,10 @@ namespace DeNelle.Village
         {
             if (_shown) return;
             _shown = true;
+            // Game-over music (owner 2026-06-02) — the somber Defeat track on BOTH
+            // death contexts (hero fell + heart/tree fell), since both route through
+            // this one Show(). Null-guarded cross-module call per CLAUDE.md §10.
+            CoreServices.Audio?.PlayMusic(DeNelle.Core.Audio.MusicTrack.Defeat);
             Time.timeScale = 0f;
             BuildOverlay(title, body);
         }

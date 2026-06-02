@@ -358,12 +358,19 @@ namespace DeNelle.Editor
             float barY  = barH * 0.5f;                 // box centre
             float barZ  = wallZ - barThk * 0.5f;       // sit on the visible wall line, inset half-thickness
             float barX  = wallX - barThk * 0.5f;
-            const float gateHalf = 3f;                 // 6 m gate opening half-width
+            const float gateHalf = 3f;                 // 6 m gate opening half-width (S/E/W)
+            // Owner 2026-06-02: the north gate's nav barrier blocked off-centre approaches
+            // ("only at a specific angle did it block me") — the ±3 gap left the navmesh edge
+            // poking into the gate. Widen the NORTH barrier to ±6 to MATCH the widened
+            // WallPerimeter-North opening, so the navmesh is clear across the whole arch and
+            // the hero passes at any angle. (Also the clean step-off exit to the overworld.)
+            const float northGateHalf = 6f;            // 12 m north opening (matches the visual wall)
             float runHalf = wallX - gateHalf;          // half-length of one side of a gated (S) wall span
             float sideHalf = (wallX - gateHalf) * 0.5f;// centre offset of each half-span (gated walls)
-            // North wall — gate at x=0: two spans flanking the 6 m opening.
-            Box("WallBarrier-North-W", new Vector3(-(gateHalf + sideHalf), barY, barZ), new Vector3(2f * sideHalf, barH, barThk), Quaternion.identity);
-            Box("WallBarrier-North-E", new Vector3( (gateHalf + sideHalf), barY, barZ), new Vector3(2f * sideHalf, barH, barThk), Quaternion.identity);
+            float northSideHalf = (wallX - northGateHalf) * 0.5f;
+            // North wall — gate at x=0: two spans flanking the 12 m opening.
+            Box("WallBarrier-North-W", new Vector3(-(northGateHalf + northSideHalf), barY, barZ), new Vector3(2f * northSideHalf, barH, barThk), Quaternion.identity);
+            Box("WallBarrier-North-E", new Vector3( (northGateHalf + northSideHalf), barY, barZ), new Vector3(2f * northSideHalf, barH, barThk), Quaternion.identity);
             // South wall — main gate at x=0: two spans flanking the 6 m gap.
             Box("WallBarrier-South-W", new Vector3(-(gateHalf + sideHalf), barY, -barZ), new Vector3(2f * sideHalf, barH, barThk), Quaternion.identity);
             Box("WallBarrier-South-E", new Vector3( (gateHalf + sideHalf), barY, -barZ), new Vector3(2f * sideHalf, barH, barThk), Quaternion.identity);
@@ -376,45 +383,14 @@ namespace DeNelle.Editor
             Box("WallBarrier-West-N", new Vector3(-barX, barY,  (gateHalf + sideHalfZ)), new Vector3(barThk, barH, 2f * sideHalfZ), Quaternion.identity);
             _ = runHalf;  // (kept for clarity; spans computed via sideHalf/sideHalfZ)
 
-            // ── Ramps: gentle stone inclines from interior ground up to the deck ──
-            // WO-181 (HARD): the ramp TOP must land FLUSH on the walkable deck top
-            // (deckTopY = 5.4), and the top lands ON the deck's inner edge line so the
-            // stair connects directly onto the deck with no dead-end into a wall face.
-            // Defined by bottom (interior, y=0) + top (deck edge, y=deckTopY);
-            // LookRotation aligns the slab's length to the slope so its top face is the
-            // walkable surface. The 0.4-thick nav plank's top sits at the deck top.
-            System.Action<string, Vector3, Vector3> Ramp = (name, bottom, top) =>
-            {
-                Vector3 mid = (bottom + top) * 0.5f;
-                Vector3 fwd = (top - bottom).normalized;
-                float len = Vector3.Distance(bottom, top);
-                // Owner 2026-06-01: ONE object = the visible climb AND the walkable surface
-                // (a clean stone ramp). Was: an invisible nav plank + a separate stair prefab
-                // placed on top; the two decoupled/misaligned, so the visible stairs had no nav
-                // under them and couldn't be climbed. Box() already makes the slab
-                // NavigationStatic + stone-materialed; leave its renderer ON so what you SEE is
-                // exactly what you WALK — guaranteed climbable, no separate board to drift.
-                Box(name, mid, new Vector3(rampW, 0.5f, len), Quaternion.LookRotation(fwd, Vector3.up));
-                _ = stairPrefab;   // stair prefab no longer instantiated — the ramp slab is the visual now
-            };
-            // WO-166 #4 + WO-181 + WO-183: ramps run PARALLEL to (hugging) their wall,
-            // not perpendicular into the courtyard. The TOP end lands on the INNER WALK
-            // LANE centre at deckTopY — squarely ON the continuous perimeter loop (not
-            // balanced on the deck's outer edge where the towers/parapet crowd it), so
-            // the top step connects flush onto walkable ground and the hero can step
-            // straight from the climb onto the rampart loop (never short of, or into, a
-            // wall face). The 9 m climb run goes ALONG the wall axis, clearing the centred
-            // gate gap (|coord|<3). NavMesh link ground→lane→deck is preserved (the nav
-            // plank's top meets the lane slab, which is contiguous with the deck).
-            float zLand = laneZ;   // inner walk-lane centre (N/S): ramp top lands here
-            Ramp("Ramp-South", new Vector3(-6f - rampRun, 0f, -zLand), new Vector3(-6f, deckTopY, -zLand));
-            Ramp("Ramp-North", new Vector3(-6f - rampRun, 0f,  zLand), new Vector3(-6f, deckTopY,  zLand));
-            // Owner 2026-06-01: keep ONLY the North + South climb stairs — delete the
-            // East + West ramps (the 90°-rotated pair that floated / clipped the wall).
-            // Two climb points (N/S) are enough to reach the rampart walk loop.
-            // float xLand = laneX;   // inner walk-lane centre (E/W) — E/W ramps removed
-            // Ramp("Ramp-East",  new Vector3( xLand, 0f, -6f - rampRun), new Vector3( xLand, deckTopY, -6f));
-            // Ramp("Ramp-West",  new Vector3(-xLand, 0f, -6f - rampRun), new Vector3(-xLand, deckTopY, -6f));
+            // ── Rampart access: the runtime LIFT, not a climb ramp ──────────────
+            // Owner 2026-06-02: REMOVED the N/S stone climb ramps. The pressure-plate
+            // RampartLiftInstaller lift is the access path to the deck now, and the old
+            // ~31° ramp sat right beside the lift (X -15..-6 at z ±laneZ), cluttering the
+            // approach. The fighting deck + inner walk-lane loop above stay intact; only
+            // the ground→deck ramp slabs are gone. (rampRun/rampW consts + stairPrefab
+            // remain harmlessly unused — kept so a climb can be re-added without rework.)
+            _ = stairPrefab;
 
             Debug.Log($"[VillageSceneBuilder] WO-181 BuildRamparts: {pieces} nav-static stone pieces " +
                       "(overhanging machicolated deck + CONTINUOUS inner walk-lane loop INSIDE the " +

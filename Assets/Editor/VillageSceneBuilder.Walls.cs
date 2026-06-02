@@ -543,7 +543,11 @@ namespace DeNelle.Editor
             // fixed above to 10), not a north-specific fault — so north keeps its gate.
             for (float x = -wallX + segStep * 0.5f; x < wallX; x += segStep)
             {
-                if (Mathf.Abs(x) < 3f) continue;   // 6 m opening for the north gate
+                // Owner 2026-06-02 ("WallPerimeter-N partially blocks north gate"): the
+                // ±4.5 m flanking segments (segStep=3 lands them at ±4.5) crowded the gate
+                // arch. Widen the north opening to |x|<6 so the wall resumes at ±7.5 and
+                // frames the arch cleanly — also a wider clean exit to the overworld.
+                if (Mathf.Abs(x) < 6f) continue;   // 12 m north gate opening (clears flanking segment)
                 Wall(wallSegModel, "WallPerimeter-North", new Vector3(x, 0f, wallZ), 0f);
             }
             Big(gateMedModel, "Gate-North-Main", new Vector3(0f, 0f, wallZ), 0f, gateTarget);

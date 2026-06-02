@@ -1029,6 +1029,7 @@ namespace DeNelle.Audio
                 case DeNelle.Core.Audio.MusicTrack.Victory: PlayMusic(MusicTrack.Victory); break;
                 case DeNelle.Core.Audio.MusicTrack.Dungeon: PlayMusic(MusicTrack.Dungeon); break;
                 case DeNelle.Core.Audio.MusicTrack.Overworld: PlayAmbientContext(AmbientContext.Overworld); break;
+                case DeNelle.Core.Audio.MusicTrack.Defeat:  PlayMusic(MusicTrack.Defeat);  break;
             }
         }
     }

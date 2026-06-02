@@ -76,7 +76,7 @@ namespace DeNelle.Village
         [Header("Hero engagement (all roles)")]
         [Tooltip("Non-Tank roles engage the hero when it comes within this radius, " +
                  "instead of ignoring it and marching past to towers/Heart.")]
-        [SerializeField, Min(1f)] private float _heroEngageRadius = 4f;
+        [SerializeField, Min(1f)] private float _heroEngageRadius = 11f;
 
         [Header("Healer scan")]
         [Tooltip("Radius within which the Healer scans for wounded allies.")]
@@ -141,6 +141,12 @@ namespace DeNelle.Village
 
         // DEF-43: optional BehaviorTree override — wired in Awake if present.
         private EnemyBehaviorTree _bt;
+
+        // Retaliation: when the hero/pet damages this enemy it is "provoked" and
+        // chases + attacks the attacker for this window, overriding role/BT/radius
+        // (owner 2026-06-02: enemies "just walked on past me"). Re-armed on each hit.
+        private float _provokedUntil;
+        private const float ProvokeDuration = 6f;
 
         // WO-90: attack state for TryAttack().
         private float     _nextAttackTime;
@@ -245,6 +251,7 @@ namespace DeNelle.Village
         {
             _enemy = GetComponent<Enemy>();
             _enemy.Died += e => Died?.Invoke(e);
+            _enemy.Damaged += OnEnemyDamaged;   // retaliate when struck
 
             // DEF-43: wire BT if present on this GameObject.
             _bt = GetComponent<EnemyBehaviorTree>();
@@ -307,9 +314,34 @@ namespace DeNelle.Village
             }
         }
 
+        /// <summary>Hero/pet struck this enemy — provoke it to chase + hit back.</summary>
+        private void OnEnemyDamaged(Vector3 sourceWorldPos)
+        {
+            _provokedUntil = Time.time + ProvokeDuration;
+        }
+
         private void Update()
         {
             if (_enemy == null || _enemy.IsDead) return;
+
+            // RETALIATION OVERRIDE: a recently-struck enemy locks onto the hero and
+            // chases + attacks it, ignoring role/BT/engage-radius for the window.
+            // Runs BEFORE the BT yield so even BT-driven enemies fight back when hit.
+            if (Time.time < _provokedUntil)
+            {
+                // Lazily resolve the hero if it wasn't present at Awake (the enemy was
+                // just struck, so the hero definitely exists now).
+                if (_heroTransform == null)
+                    _heroTransform = TryFindByTag("HeroTarget") ?? TryFindByTag("Player");
+            }
+            if (Time.time < _provokedUntil && _heroTransform != null)
+            {
+                _currentTarget = _heroTransform;
+                _enemy.SetBrainTarget(_heroTransform);
+                _enemy.SetBrainTargetPosition(_heroTransform.position);
+                TriggerAttack();
+                return;
+            }
 
             // DEF-43: if a BehaviorTree is wired and ready, yield all targeting to it.
             if (_bt != null && _bt.IsInitialized)
