@@ -57,12 +57,17 @@ namespace DeNelle.Village
         [SerializeField] private Transform _target;
 
         [Header("Follow offset (idle)")]
-        [Tooltip("World-space offset from the hero in idle/explore state. Owner 2026-06-01: " +
-                 "dropped to a CLOSE third-person follow (was 0,18,-22 = too far/top-down). " +
-                 "This is the code DEFAULT — the existing Village.unity has the OLD value " +
-                 "serialized, so it applies on the next Build Village Scene OR when you set " +
-                 "_followOffset live in the Inspector (tune Y=height, Z=distance to taste).")]
-        [SerializeField] private Vector3 _followOffset = new Vector3(0f, 8f, -12f);
+        [Tooltip("World-space offset from the hero in idle/explore state. Owner 2026-06-02: " +
+                 "this is a 3D game — committed to a CLOSE cinematic third-person (was 0,18,-22 " +
+                 "= flat top-down board-game seat that killed the 3D feel). Awake() auto-migrates " +
+                 "the legacy high value baked into Village.unity to this default, so it applies on " +
+                 "the next Play with NO rebake and NO scene edit. Tune Y=height, Z=distance live to " +
+                 "taste; any value below the legacy threshold is honored.")]
+        [SerializeField] private Vector3 _followOffset = new Vector3(0f, 3.5f, -6f);
+
+        // Close cinematic 3D third-person. Awake() snaps the retired top-down seat to this.
+        private static readonly Vector3 DefaultFollowOffset = new Vector3(0f, 3.5f, -6f);
+        private const float LegacyHighOffsetY = 14f;   // old TD seat sat at y=18; >=14 => retire it
 
         [Tooltip("Look-at height above hero feet (metres).")]
         [SerializeField] private float _lookAtHeight = 2.5f;
@@ -155,6 +160,18 @@ namespace DeNelle.Village
             // disable the legacy VillageCamera here and own the transform alone.
             var legacy = GetComponent<VillageCamera>();
             if (legacy != null) legacy.enabled = false;
+
+            // One-time migration (owner 2026-06-02): retire the legacy high top-down
+            // seat (0,18,-22) baked into Village.unity. Anything this high is the old
+            // board-game framing that flattened the 3D feel — snap it to the close 3D
+            // third-person default. Applies on Play with no rebake/scene edit; any
+            // genuinely-tuned lower offset is left untouched.
+            if (_followOffset.y >= LegacyHighOffsetY)
+            {
+                Debug.Log($"[SmartMobileCamera] retiring legacy top-down offset {_followOffset} " +
+                          $"-> {DefaultFollowOffset} (close 3D third-person).");
+                _followOffset = DefaultFollowOffset;
+            }
         }
 
         private void OnDestroy()
