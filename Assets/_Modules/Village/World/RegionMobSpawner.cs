@@ -303,43 +303,64 @@ namespace DeNelle.Village
 
         private Mob SpawnMob(string enemyId, RegionId region, Vector3 pos, int threat)
         {
-            var go = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-            go.name = $"RegionMob ({enemyId} · {region})";
+            var def = BuildRoamerDef(enemyId, threat);
+
+            // Bare root carries gameplay (collider + Enemy + agent); the mesh is a visual
+            // child fit to size — mirrors PatriciaLight.BuildEnemy (replaces the old "pill").
+            var go = new GameObject($"RegionMob ({enemyId} · {region})");
             go.transform.SetParent(_root, false);
             go.transform.position = pos;
 
-            // Size by the synthesised stat block's height (scale the capsule's ~2m default).
-            var def = BuildRoamerDef(enemyId, threat);
-            float scale = Mathf.Clamp(def.Height / 2f, 0.5f, 1.6f);
-            go.transform.localScale = new Vector3(scale, scale, scale);
-
-            // Trigger collider so the enemy's own contact probe can't self-hit (same as the other spawners).
-            if (go.TryGetComponent(out Collider col)) col.isTrigger = true;
-
-            // DEF (open-world targeting fix): put the roamer on the Enemy layer. The hero's
-            // ability OverlapSphere is masked to the Enemy layer (_enemyMask = 1<<Enemy), and so
-            // is the target reticle's preferred sweep — a mob left on Default(0) is invisible to
-            // spells + targeting. THIS is why wandering mobs couldn't be hit while wave enemies
-            // (layer-set by WaveManager/PatriciaLight) could. Set it so spells/arrows reach them.
+            // DEF (open-world targeting fix): Enemy layer so the hero's masked ability/target
+            // sweeps (1<<Enemy) can reach roamers — Default(0) leaves them un-hittable. THIS is
+            // why wandering mobs couldn't be hit while wave enemies (layer-set) could.
             int enemyLayer = LayerMask.NameToLayer("Enemy");
             if (enemyLayer >= 0) go.layer = enemyLayer;
 
-            // Region tint: Wildlands-living vs Wound-tied.
-            var mr = go.GetComponent<Renderer>();
-            if (mr != null)
+            // Body size from the archetype height (a 1.9m skeleton = sizeScale 1.0).
+            float sizeScale = Mathf.Clamp(def.Height / 1.9f, 0.55f, 1.5f);
+
+            // Trigger capsule, offset UP so it wraps the body. The root stays UNIT scale
+            // (scaling a NavMeshAgent root misbehaves) — only the visual is fit bigger, so a
+            // Golem reads huge but paths fine. Same recipe as PatriciaLight.BuildEnemy.
+            var col = go.AddComponent<CapsuleCollider>();
+            col.isTrigger = true;
+            col.radius = 0.42f * sizeScale;
+            col.height = 1.8f * sizeScale;
+            col.center = new Vector3(0f, 0.9f * sizeScale, 0f);
+
+            // SKIN: a real skeleton model per archetype so the silhouette reads the threat
+            // (warrior / golem-brute / rogue / mage / necromancer). Falls back to a tinted
+            // capsule if the model is missing, so a roamer still spawns visible + hittable.
+            string model = ModelForRoamer(enemyId);
+            var vis = VisualFactory.Skin(go.transform, "Enemies/" + model, SkinOptions.Enemy(def.Height));
+            if (vis != null)
             {
-                Shader sh = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
-                if (sh != null)
+                EnemyAnimatorFactory.Apply(vis, model);   // walk/attack/die controller
+            }
+            else
+            {
+                var cap = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+                if (cap.TryGetComponent(out Collider cc)) Destroy(cc);
+                cap.transform.SetParent(go.transform, false);
+                cap.transform.localPosition = new Vector3(0f, 0.9f * sizeScale, 0f);
+                cap.transform.localScale = Vector3.one * sizeScale;
+                var mr = cap.GetComponent<Renderer>();
+                if (mr != null)
                 {
-                    var m = new Material(sh);
-                    Color tint = IsWoundTied(region) ? WoundTint : LivingTint;
-                    if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", tint);
-                    else m.color = tint;
-                    mr.sharedMaterial = m;
+                    Shader sh = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+                    if (sh != null)
+                    {
+                        var m = new Material(sh);
+                        Color tint = IsWoundTied(region) ? WoundTint : LivingTint;
+                        if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", tint);
+                        else m.color = tint;
+                        mr.sharedMaterial = m;
+                    }
                 }
             }
 
-            // NavMeshAgent before Enemy ([RequireComponent]).
+            // NavMeshAgent before Enemy ([RequireComponent]); Enemy pulls EnemyDamageable.
             go.AddComponent<NavMeshAgent>();
             var enemy = go.AddComponent<Enemy>();
 
@@ -364,6 +385,24 @@ namespace DeNelle.Village
                 NextWanderAt = Time.time + Random.Range(0f, WanderRepathInterval),
                 Aggroed = false,
             };
+        }
+
+        // Archetype -> skeleton model (the readable visual variety). Thematic note: the
+        // Wildlands roster names (orc/caveman/wolf) currently borrow the skeleton family —
+        // the only humanoid enemy models in Resources/Enemies — chosen by ROLE/SIZE so the
+        // silhouette reads the threat. Swap to bespoke models here (one line per id) when
+        // the new character packs land.
+        private static string ModelForRoamer(string enemyId)
+        {
+            switch (enemyId)
+            {
+                case "orc-raider":       return "Skeleton_Warrior"; // heavy melee
+                case "caveman":          return "Skeleton_Golem";   // big brute
+                case "feral-wolf":       return "Skeleton_Rogue";   // fast skirmisher
+                case "tiefling-cultist": return "Skeleton_Mage";    // caster
+                case "necromancer":      return "Necromancer";      // dedicated elite
+                default:                  return "Skeleton_Minion";
+            }
         }
 
         private static void Despawn(Mob mob)
