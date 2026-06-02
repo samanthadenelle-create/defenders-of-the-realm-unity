@@ -390,8 +390,15 @@ namespace DeNelle.Village
                     if (foe == null && AimPointOverride == null)
                         foe = LiveBoss();
                     Vector3 target = foe != null ? foe.WorldPosition : atk;
-                    Blast(target, def.Range, dmg, element, 0f);
-                    SpawnVfx(target, def, def.Range);
+                    // DEF (combat feel): hurl a visible orb to the target, then EXPLODE on arrival
+                    // (blast + impact VFX), so the ultimate reads as a meteor streaking in and
+                    // landing rather than an instant area-pop. Same proven projectile pattern as
+                    // Strike/Snare; the RangedAttackVFX cast-burst covers the cast beat.
+                    LaunchProjectile(target, () =>
+                    {
+                        Blast(target, def.Range, dmg, element, 0f);
+                        SpawnVfx(target, def, def.Range);
+                    });
                     break;
                 }
             }
