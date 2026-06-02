@@ -290,6 +290,14 @@ namespace DeNelle.Village
             // Trigger collider so the enemy's own contact probe can't self-hit (same as the other spawners).
             if (go.TryGetComponent(out Collider col)) col.isTrigger = true;
 
+            // DEF (open-world targeting fix): put the roamer on the Enemy layer. The hero's
+            // ability OverlapSphere is masked to the Enemy layer (_enemyMask = 1<<Enemy), and so
+            // is the target reticle's preferred sweep — a mob left on Default(0) is invisible to
+            // spells + targeting. THIS is why wandering mobs couldn't be hit while wave enemies
+            // (layer-set by WaveManager/PatriciaLight) could. Set it so spells/arrows reach them.
+            int enemyLayer = LayerMask.NameToLayer("Enemy");
+            if (enemyLayer >= 0) go.layer = enemyLayer;
+
             // Region tint: Wildlands-living vs Wound-tied.
             var mr = go.GetComponent<Renderer>();
             if (mr != null)

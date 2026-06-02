@@ -42,6 +42,7 @@ namespace DeNelle.Village
         private float   _totalDistance;
         private float   _t;
         private bool    _launched;
+        private System.Action _onArrive;   // DEF (combat feel): payload fired when the projectile lands
 
         // ── Public API ────────────────────────────────────────────────────────
 
@@ -54,7 +55,7 @@ namespace DeNelle.Village
         /// Peak height of the parabola above the straight-line path.
         /// 0 = straight; 0.4 = arrow-style arc.
         /// </param>
-        public void Launch(Vector3 targetWorld, float speed, float arc)
+        public void Launch(Vector3 targetWorld, float speed, float arc, System.Action onArrive = null)
         {
             _start         = transform.position;
             _end           = targetWorld;
@@ -63,6 +64,7 @@ namespace DeNelle.Village
             _totalDistance = Vector3.Distance(_start, _end);
             _t             = 0f;
             _launched      = true;
+            _onArrive      = onArrive;
         }
 
         // ── Update ────────────────────────────────────────────────────────────
@@ -105,6 +107,13 @@ namespace DeNelle.Village
                 var fx = Instantiate(ImpactFX, transform.position, Quaternion.identity);
                 Destroy(fx, _impactFXLifetime);
             }
+
+            // DEF (combat feel): fire the on-arrival payload — damage + status land WHEN the
+            // projectile reaches the target, so the hit reads as the shot connecting (not an
+            // instant hit-scan at cast time). Cleared after firing so it can't double-apply.
+            var onArrive = _onArrive;
+            _onArrive = null;
+            onArrive?.Invoke();
 
             Destroy(gameObject);
         }

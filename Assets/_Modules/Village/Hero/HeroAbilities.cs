@@ -267,6 +267,9 @@ namespace DeNelle.Village
         // of the talent multiplier; resolved lazily so it survives the body swap.
         private HeroProgression _progression;
 
+        // DEF (combat feel): lazily-attached ranged projectile launcher (arrow / spell orb).
+        private RangedAttackVFX _rangedVfx;
+
         // DEF-47: timing bonus captured by TryCast() from AttackTimingBonus,
         // consumed by the next ResolveEffect() damage call, then reset to 1.
         private float _pendingTimingBonus = 1f;
@@ -344,12 +347,26 @@ namespace DeNelle.Village
                         foe = LiveBoss();
                     if (foe != null)
                     {
-                        foe.TakeDamage(dmg, element);
-                        DeNelle.Core.Combat.DamageAttribution.Record(foe, HeroProgression.Id, dmg);
-                        if (def.EffectEnum == AbilityEffect.Snare)
-                            foe.ApplyStatus(StatusEffect.Slow, 2.5f); // castAbility.ts snare
+                        // DEF (combat feel): LAUNCH a visible projectile (Ranger arrow / Mage
+                        // orb) and land the damage WHEN it arrives — "seeing the arrow/spell go
+                        // is fun; click-button-instant-FX is sad." Capture the payload for the
+                        // arrival closure; the enemy's TakeDamage fires all the impact juice
+                        // (red flash + damage number + hit-stop) at the moment of connection.
+                        var hitFoe = foe;
+                        float hitDmg = dmg;
+                        var hitEl = element;
+                        bool snare = def.EffectEnum == AbilityEffect.Snare;
+                        LaunchProjectile(foe.WorldPosition, () =>
+                        {
+                            if (hitFoe == null || !hitFoe.IsAlive) return;
+                            hitFoe.TakeDamage(hitDmg, hitEl);
+                            DeNelle.Core.Combat.DamageAttribution.Record(hitFoe, HeroProgression.Id, hitDmg);
+                            if (snare) hitFoe.ApplyStatus(StatusEffect.Slow, 2.5f); // castAbility.ts snare
+                        });
                     }
-                    SpawnVfx(atk, def, 1.6f, foe != null ? foe.WorldPosition : (Vector3?)null);
+                    // Cast beat only (origin SFX/VFX). Impact juice now comes from the projectile
+                    // ARRIVAL (enemy TakeDamage), so no target hint -> no premature impact flash.
+                    SpawnVfx(atk, def, 1.6f, null);
                     break;
                 }
 
@@ -375,6 +392,21 @@ namespace DeNelle.Village
                     break;
                 }
             }
+        }
+
+        /// <summary>
+        /// DEF (combat feel): launches a VISIBLE projectile (Ranger arrow / Mage-or-other
+        /// spell orb) toward <paramref name="target"/> and invokes <paramref name="onArrive"/>
+        /// when it lands — so ranged hits read as the shot travelling + connecting rather than
+        /// an instant hit-scan ("seeing the arrow/spell go is fun"). Lazily attaches
+        /// <see cref="RangedAttackVFX"/> so it works on every hero without a builder change.
+        /// </summary>
+        private void LaunchProjectile(Vector3 target, System.Action onArrive)
+        {
+            if (_rangedVfx == null)
+                _rangedVfx = GetComponent<RangedAttackVFX>() ?? gameObject.AddComponent<RangedAttackVFX>();
+            if (_heroClass == "ranger") _rangedVfx.FireArrow(target, onArrive);
+            else                        _rangedVfx.FireSpellOrb(target, onArrive);
         }
 
         /// <summary>

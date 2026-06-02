@@ -58,7 +58,7 @@ namespace DeNelle.Village
         /// Fire an arrow projectile toward <paramref name="targetWorldPos"/>.
         /// Plays a brief bow-draw particle burst at the launch point.
         /// </summary>
-        public void FireArrow(Vector3 targetWorldPos)
+        public void FireArrow(Vector3 targetWorldPos, System.Action onArrive = null)
         {
             Vector3 origin = LaunchOrigin();
             StartCoroutine(PlayCastBurst(origin, new Color(0.9f, 0.8f, 0.5f, 1f), 0.15f));
@@ -68,14 +68,14 @@ namespace DeNelle.Village
                 : BuildPlaceholderArrow(origin);
 
             var mover = go.GetComponent<ProjectileMover>() ?? go.AddComponent<ProjectileMover>();
-            mover.Launch(targetWorldPos, _arrowSpeed, _arrowArc);
+            mover.Launch(targetWorldPos, _arrowSpeed, _arrowArc, onArrive);
         }
 
         /// <summary>
         /// Fire a spell orb projectile toward <paramref name="targetWorldPos"/>.
         /// Plays a staff-tip charge glow before release.
         /// </summary>
-        public void FireSpellOrb(Vector3 targetWorldPos)
+        public void FireSpellOrb(Vector3 targetWorldPos, System.Action onArrive = null)
         {
             Vector3 origin = LaunchOrigin();
             StartCoroutine(PlayCastBurst(origin, new Color(0.4f, 0.55f, 1f, 1f), 0.35f));
@@ -85,7 +85,7 @@ namespace DeNelle.Village
                 : BuildPlaceholderOrb(origin);
 
             var mover = go.GetComponent<ProjectileMover>() ?? go.AddComponent<ProjectileMover>();
-            mover.Launch(targetWorldPos, _orbSpeed, 0f);
+            mover.Launch(targetWorldPos, _orbSpeed, 0f, onArrive);
         }
 
         // ── Helpers ───────────────────────────────────────────────────────────
