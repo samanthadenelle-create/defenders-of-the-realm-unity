@@ -217,9 +217,11 @@ namespace DeNelle.Onboarding
             var flankL = _root.Q<VisualElement>("hero-flank-left");
             var flankC = _root.Q<VisualElement>("hero-flank-center");
             var flankR = _root.Q<VisualElement>("hero-flank-right");
-            var wizardTex = Resources.Load<Texture2D>("HeroPortraits/mage");
-            var knightTex = Resources.Load<Texture2D>("HeroPortraits/knight");
-            var archerTex = Resources.Load<Texture2D>("HeroPortraits/ranger");
+            // Portraits are the owner's character-named art (canon roster): Thrain=Mage,
+            // Grom=Knight, Sylas=Ranger, Elara=Cleric. Loaded by character name.
+            var wizardTex = Resources.Load<Texture2D>("HeroPortraits/Thrain");
+            var knightTex = Resources.Load<Texture2D>("HeroPortraits/Grom");
+            var archerTex = Resources.Load<Texture2D>("HeroPortraits/Sylas");
             if (flankL != null && wizardTex != null)
                 flankL.style.backgroundImage = new StyleBackground(wizardTex);
             if (flankC != null && knightTex != null)
@@ -234,6 +236,36 @@ namespace DeNelle.Onboarding
             WireFlankAsHeroPicker(flankL, HeroClass.Mage);
             WireFlankAsHeroPicker(flankC, HeroClass.Knight);
             WireFlankAsHeroPicker(flankR, HeroClass.Ranger);
+
+            // 4th hero — Elara the Cleric (2026-06-02): the title was hardcoded to 3 flanks,
+            // so the Cleric wasn't pickable at all. Build her flank in CODE (UXML has only 3)
+            // by cloning an existing flank's styling, then re-space ALL FOUR into an even
+            // bottom row with inline styles (so it holds in the player build where USS doesn't
+            // render). Portraits, not models.
+            VisualElement flankCleric = null;
+            if (flankL != null && flankL.parent != null)
+            {
+                flankCleric = new VisualElement { name = "hero-flank-cleric" };
+                foreach (var cls in flankL.GetClasses()) flankCleric.AddToClassList(cls);
+                flankL.parent.Add(flankCleric);
+                var clericTex = Resources.Load<Texture2D>("HeroPortraits/Elara");
+                if (clericTex != null) flankCleric.style.backgroundImage = new StyleBackground(clericTex);
+                WireFlankAsHeroPicker(flankCleric, HeroClass.Cleric);
+            }
+
+            var fourFlanks = new[] { flankL, flankC, flankR, flankCleric };
+            for (int fi = 0; fi < fourFlanks.Length; fi++)
+            {
+                var fl = fourFlanks[fi];
+                if (fl == null) continue;
+                var fs = fl.style;
+                fs.position = Position.Absolute;
+                fs.bottom = 10;
+                fs.top = StyleKeyword.Auto; fs.right = StyleKeyword.Auto;
+                fs.left = Length.Percent(3f + fi * 24.25f);   // 4 even columns: ~3 / 27 / 52 / 76 %
+                fs.width = Length.Percent(20f);
+                fs.height = Length.Percent(33f);
+            }
 
             // ── Buttons ──────────────────────────────────────────────────────
             // Owner direction 2026-05-20: Start button is no longer needed

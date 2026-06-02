@@ -311,7 +311,16 @@ namespace DeNelle.Onboarding
             // or freshly-committed textures that haven't been through the generator).
             var portrait = new VisualElement();
             portrait.AddToClassList(PortraitClass);
-            string slug = info.Hero.ToString().ToLowerInvariant();
+            // Portraits use the owner's character-named art (canon roster), NOT class slugs:
+            // Thrain=Mage, Grom=Knight, Sylas=Ranger, Elara=Cleric. Matches TitleController.
+            string slug = info.Hero switch
+            {
+                HeroClass.Mage   => "Thrain",
+                HeroClass.Knight => "Grom",
+                HeroClass.Ranger => "Sylas",
+                HeroClass.Cleric => "Elara",
+                _                => info.Hero.ToString(),
+            };
 
             var portraitSprite = Resources.Load<Sprite>($"HeroPortraits/{slug}");
             if (portraitSprite != null)
