@@ -254,6 +254,10 @@ namespace DeNelle.Village
             }
 
             EnsureBodyCollider();
+
+            // Coverage ring so the player reads this tower's attack range + places/upgrades
+            // correctly. Reads CurrentRange live (grows with level); faint so it never clutters.
+            if (GetComponent<TowerRangeRing>() == null) gameObject.AddComponent<TowerRangeRing>();
         }
 
         /// <summary>
