@@ -911,25 +911,47 @@ namespace DeNelle.HUD
         {
             if (_abilityBar != null)
             {
+                // DIAMOND layout (console-style, thumb-friendly best practice): the four
+                // ability cells sit around a centre — primary Q at the BOTTOM (closest to the
+                // resting right thumb), W right, E top, R left — inside a bottom-right box.
+                // Each cell is absolutely placed; sizes in code (USS doesn't render in builds).
+                const float Cell = 76f;     // touch target (was a cramped row before)
+                const float Reach = 58f;    // centre-to-cell spread
+                float box = Cell + Reach * 2f;
                 var s = _abilityBar.style;
                 s.position = Position.Absolute;
-                s.right = 16; s.bottom = 16;
+                s.right = 18; s.bottom = 18;
                 s.left = StyleKeyword.Auto; s.top = StyleKeyword.Auto;
-                s.flexDirection = FlexDirection.Row;
-                foreach (var cell in _abilityBar.Children())
+                s.width = box; s.height = box;
+
+                float mid = (box - Cell) * 0.5f;
+                // 0=Q bottom (primary), 1=W right, 2=E top, 3=R left
+                Vector2[] slots =
                 {
-                    var cs = cell.style;
-                    cs.width = 66; cs.height = 66;          // chunky touch targets
-                    cs.marginLeft = 5; cs.marginRight = 5;
+                    new Vector2(mid,        box - Cell),
+                    new Vector2(box - Cell, mid),
+                    new Vector2(mid,        0f),
+                    new Vector2(0f,         mid),
+                };
+                int n = _abilityBar.childCount;
+                for (int i = 0; i < n && i < 4; i++)
+                {
+                    var cs = _abilityBar.ElementAt(i).style;
+                    cs.position = Position.Absolute;
+                    cs.left = slots[i].x; cs.top = slots[i].y;
+                    cs.right = StyleKeyword.Auto; cs.bottom = StyleKeyword.Auto;
+                    cs.width = Cell; cs.height = Cell;
+                    cs.marginLeft = 0; cs.marginRight = 0; cs.marginTop = 0; cs.marginBottom = 0;
                 }
             }
             if (_buildButton != null)
             {
+                // Build sits just ABOVE the diamond box, same right margin.
                 var b = _buildButton.style;
                 b.position = Position.Absolute;
-                b.right = 16; b.bottom = 92;                // just above the ability row
+                b.right = 18; b.bottom = 18 + (76f + 116f) + 8f;
                 b.left = StyleKeyword.Auto; b.top = StyleKeyword.Auto;
-                b.minWidth = 100; b.height = 40;
+                b.minWidth = 110; b.height = 42;
             }
         }
 
