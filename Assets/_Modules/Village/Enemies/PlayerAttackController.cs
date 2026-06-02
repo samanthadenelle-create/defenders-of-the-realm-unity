@@ -34,7 +34,10 @@ namespace DeNelle.Village
         [SerializeField] private float _baseDamage = 30f;
 
         [Tooltip("Radius of the OverlapSphere damage check around the hero.")]
-        [SerializeField, Min(0.1f)] private float _attackRange = 2.5f;
+        [SerializeField, Min(0.1f)] private float _attackRange = 3.2f;
+
+        /// <summary>Melee hitbox radius (m) — read by HeroReachRing to draw the reach ring.</summary>
+        public float AttackRange => _attackRange;
 
         [Tooltip("Minimum seconds between attacks.")]
         [SerializeField, Min(0.1f)] private float _attackCooldown = 0.6f;
