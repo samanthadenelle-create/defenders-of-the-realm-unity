@@ -1,18 +1,19 @@
 // =============================================================================
-// GameOverScreen — "The Heart of Elarion Has Fallen" overlay when the Heart is
-// destroyed (defense lost). DEF-125 (the "tree died" half).
+// GameOverScreen — "You Have Fallen" / "The Heart Has Fallen" overlay with a
+// Try Again / Exit choice. DEF-125.
 // -----------------------------------------------------------------------------
+// Fires on BOTH death contexts (owner 2026-06-02 chose: yes, a screen on hero
+// death — "need a try again option on death"):
+//   • HERO dies (HeroHealth.OnDeath)        -> "You Have Fallen"
+//   • HEART/tree falls (OnHeartDestroyed)   -> "The Heart of Elarion Has Fallen"
+// Both pause the game and offer:  [R] Try Again (reload Village) · [Esc] Title.
+//
 // Code-built uGUI (screen-space Canvas + Text via the proven ThreatSkullPlate
 // font path — NO UXML, which doesn't render in player builds). KEYBOARD prompts,
-// not buttons, so there's no EventSystem/click plumbing to fail in WebGL:
-//   [R] Try Again (reload Village)   ·   [Esc] Leave to Title
-// Pauses the game (timeScale 0; Update still runs unscaled to read input).
-// Self-bootstrapping DDOL; hooks HeartController.OnHeartDestroyed on Village load.
-//
-// SCOPE: this is the HEART (game-over) case only — unambiguous, no conflict with
-// the hero's auto-respawn (DEF-102). The hero-death "You Fell" beat is a separate
-// design call (keep respawn vs screen) tracked in DEF-125. Narrative copy is a
-// stub — creative refines.
+// not buttons, so there's no EventSystem/click plumbing to fail in WebGL. The
+// pause + reload-on-retry supersede the hero's silent auto-respawn (DEF-102) —
+// the player now chooses. Self-bootstrapping DDOL. Copy is a stub for creative.
+// Follow-up: mobile tap-buttons (current is keyboard-only).
 // =============================================================================
 
 using UnityEngine;
@@ -23,13 +24,14 @@ using DeNelle.Core;
 
 namespace DeNelle.Village
 {
-    /// <summary>Heart-fell game-over overlay with [R] retry / [Esc] exit key prompts.</summary>
+    /// <summary>Hero/Heart death overlay with [R] retry / [Esc] exit key prompts.</summary>
     public sealed class GameOverScreen : MonoBehaviour
     {
         public static GameOverScreen Instance { get; private set; }
         private const string TargetScene = "Village";
 
         private HeartController _heart;
+        private HeroHealth _hero;
         private GameObject _overlay;
         private bool _shown;
 
@@ -62,6 +64,7 @@ namespace DeNelle.Village
             if (_overlay != null) { Destroy(_overlay); _overlay = null; }
             Time.timeScale = 1f;
             _heart = null;
+            _hero = null;
             if (scene.name == TargetScene) Hook();
         }
 
@@ -70,34 +73,48 @@ namespace DeNelle.Village
             if (_heart == null) _heart = FindFirstObjectByType<HeartController>();
             if (_heart != null)
             {
-                _heart.OnHeartDestroyed -= ShowGameOver;
-                _heart.OnHeartDestroyed += ShowGameOver;
+                _heart.OnHeartDestroyed -= ShowHeartFell;
+                _heart.OnHeartDestroyed += ShowHeartFell;
+            }
+            if (_hero == null) _hero = HeroHealth.Instance ?? FindFirstObjectByType<HeroHealth>();
+            if (_hero != null)
+            {
+                _hero.OnDeath -= ShowHeroFell;
+                _hero.OnDeath += ShowHeroFell;
             }
         }
 
         private void Update()
         {
-            // Late-resolve the Heart if it spawned after this bootstrap.
-            if (_heart == null && SceneManager.GetActiveScene().name == TargetScene) Hook();
+            // Late-resolve hero/heart if they spawned after this bootstrap.
+            if ((_heart == null || _hero == null) && SceneManager.GetActiveScene().name == TargetScene) Hook();
             if (!_shown) return;
 
             // Key prompts (new Input System + legacy fallback). Runs at timeScale 0.
             var kb = Keyboard.current;
-            bool retry = (kb != null && kb.rKey.wasPressedThisFrame)     || Input.GetKeyDown(KeyCode.R);
-            bool exit  = (kb != null && kb.escapeKey.wasPressedThisFrame) || Input.GetKeyDown(KeyCode.Escape);
+            bool retry = (kb != null && kb.rKey.wasPressedThisFrame)      || Input.GetKeyDown(KeyCode.R);
+            bool exit  = (kb != null && kb.escapeKey.wasPressedThisFrame)  || Input.GetKeyDown(KeyCode.Escape);
             if (retry)     { Time.timeScale = 1f; SceneRouter.LoadScene(SceneRouter.Village); }
             else if (exit) { Time.timeScale = 1f; SceneRouter.LoadScene(SceneRouter.Title); }
         }
 
-        private void ShowGameOver()
+        private void ShowHeartFell() => Show(
+            "THE HEART OF ELARION HAS FALLEN",
+            "The light guttered, and the dark poured in.\nBut Elarion remembers those who rise again.");
+
+        private void ShowHeroFell() => Show(
+            "YOU HAVE FALLEN",
+            "The dark takes you — but Elarion still needs its defender.\nRise, and try again.");
+
+        private void Show(string title, string body)
         {
             if (_shown) return;
             _shown = true;
             Time.timeScale = 0f;
-            BuildOverlay();
+            BuildOverlay(title, body);
         }
 
-        private void BuildOverlay()
+        private void BuildOverlay(string title, string body)
         {
             _overlay = new GameObject("GameOverOverlay");
             DontDestroyOnLoad(_overlay);
@@ -129,9 +146,8 @@ namespace DeNelle.Village
             txt.fontSize = 38;
             txt.supportRichText = true;
             txt.text =
-                "<b>THE HEART OF ELARION HAS FALLEN</b>\n\n" +
-                "The light guttered, and the dark poured in.\n" +
-                "But Elarion remembers those who rise again.\n\n" +
+                "<b>" + title + "</b>\n\n" +
+                body + "\n\n" +
                 "[ R ]  Try Again         [ Esc ]  Leave to Title";
             var rt = txt.rectTransform;
             rt.anchorMin = new Vector2(0.08f, 0.28f); rt.anchorMax = new Vector2(0.92f, 0.72f);
