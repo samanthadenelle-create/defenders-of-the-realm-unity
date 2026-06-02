@@ -304,6 +304,11 @@ namespace DeNelle.Village
                 if (gp.dpad.left.isPressed) v.x -= 1f;
             }
 
+            // On-screen virtual joystick (the web/mobile build's touch movement — the
+            // only nav input when there's no keyboard/gamepad). Added BEFORE the legacy
+            // fallback so it counts as real input and the deadzoned fallback is skipped.
+            v += VirtualJoystick.Move;
+
             // Legacy Input Manager fallback — activeInputHandler=2 (Both)
             // means UnityEngine.Input is always available too. This is the
             // belt-and-braces path for builds where the new system's device
