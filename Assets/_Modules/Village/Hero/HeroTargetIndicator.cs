@@ -46,7 +46,7 @@ namespace DeNelle.Village
         [SerializeField] private float _headHeight = 2.2f;
 
         [Tooltip("Reticle world size (m).")]
-        [SerializeField, Min(0.1f)] private float _size = 1.2f;
+        [SerializeField, Min(0.1f)] private float _size = 1.6f;
 
         [Tooltip("Reticle tint when auto-tracking the nearest hostile.")]
         [SerializeField] private Color _autoTint = new Color(1f, 0.88f, 0.30f, 0.95f);
@@ -101,10 +101,13 @@ namespace DeNelle.Village
 
             CurrentTarget = _locked ?? NearestCandidate();
 
-            // Feed a manual lock to the ability aim so spells hit it (null = village default = nearest).
+            // AUTO-LOCK DRIVES AIM: feed the CURRENT target (auto-nearest OR manual lock)
+            // to the ability aim so what the reticle shows is exactly what your spells hit.
+            // (Previously only a manual Tab-lock overrode aim; auto-nearest fell back to
+            // HeroAbilities' own pick, which could disagree with the reticle.)
             if (_abilities == null) _abilities = GetComponent<HeroAbilities>();
             if (_abilities != null)
-                _abilities.AimPointOverride = _locked != null ? (Vector3?)_locked.WorldPosition : null;
+                _abilities.AimPointOverride = CurrentTarget != null ? (Vector3?)CurrentTarget.WorldPosition : null;
 
             if (CurrentTarget == null || !CurrentTarget.IsAlive)
             {
@@ -113,7 +116,7 @@ namespace DeNelle.Village
             }
 
             SetVisible(true);
-            if (_cam == null) _cam = Camera.main;
+            if (_cam == null || !_cam.isActiveAndEnabled) _cam = ResolveCamera();
             if (_reticleMat != null)
             {
                 Color want = _locked != null ? _lockTint : _autoTint;
@@ -125,11 +128,25 @@ namespace DeNelle.Village
             _reticle.position = p;
             if (_cam != null)
             {
-                Vector3 toCam = _cam.transform.position - p;
-                toCam.y = 0f;
-                if (toCam.sqrMagnitude > 0.0001f)
-                    _reticle.rotation = Quaternion.LookRotation(-toCam.normalized, Vector3.up);
+                // FULL billboard (face the camera on all axes). A yaw-only quad reads
+                // edge-on — i.e. INVISIBLE — from the close 3D third-person cam looking
+                // down. The quad's visible face is -Z, so point +Z away from the camera.
+                Vector3 away = p - _cam.transform.position;
+                if (away.sqrMagnitude > 0.0001f)
+                    _reticle.rotation = Quaternion.LookRotation(away.normalized, Vector3.up);
             }
+        }
+
+        // Robust camera lookup: Camera.main only finds a "MainCamera"-tagged camera, which
+        // isn't guaranteed — fall back to the SmartMobileCamera rig, then any active camera,
+        // so the reticle billboard is never left un-oriented (edge-on quad = invisible).
+        private static Camera ResolveCamera()
+        {
+            var c = Camera.main;
+            if (c != null) return c;
+            var smc = SmartMobileCamera.Instance;
+            if (smc != null) { var cc = smc.GetComponent<Camera>(); if (cc != null) return cc; }
+            return Object.FindFirstObjectByType<Camera>();
         }
 
         // ── Targeting ─────────────────────────────────────────────────────────
