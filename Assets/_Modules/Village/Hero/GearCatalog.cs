@@ -151,16 +151,17 @@ namespace DeNelle.Village
 
         private static T LoadJson<T>(string relativePath, string label) where T : class
         {
-            var full = Path.Combine(Application.streamingAssetsPath, relativePath);
+            // WebGL-safe load via CanonicalJson (Resources first, StreamingAssets fallback).
             try
             {
-                if (File.Exists(full))
-                    return JsonConvert.DeserializeObject<T>(File.ReadAllText(full));
-                Debug.LogWarning($"[GearCatalog] {label} not found at {full} — gear disabled (hero uses 1.0 mult / 0 defense).");
+                string json = DeNelle.Core.CanonicalJson.Read(relativePath);
+                if (!string.IsNullOrEmpty(json))
+                    return JsonConvert.DeserializeObject<T>(json);
+                Debug.LogWarning($"[GearCatalog] {label} not found (Resources or StreamingAssets) — gear disabled (hero uses 1.0 mult / 0 defense).");
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[GearCatalog] Failed to read {full}: {ex.Message}");
+                Debug.LogError($"[GearCatalog] Failed to read {label}: {ex.Message}");
             }
             return null;
         }

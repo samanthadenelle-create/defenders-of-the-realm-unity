@@ -1,0 +1,84 @@
+{
+  "version": 1,
+  "_comment": "Hero ability defs — Q/W/E/R per class. v2 foundation reads Mage (Blaise) only; Knight/Ranger ship in v2.1 per port spec Part 3. Mage values sourced VERBATIM from the React v1 repo: src/modules/village/hero/abilities/mage.ts (MAGE_ABILITIES). Field map: cd -> cooldown, mana -> manaCost, power -> damage, reach -> radius/range (strike/snare = acquire range, aoe/cleave/meteor = blast radius). The 'description' field is a concise 1-line effect blurb for the HUD ability-bar tooltip (WO-36 visual) — NOT canon React data; safe to re-author. Knight + Ranger sets are authored defensible placeholders — NOT yet in the React repo — and must be re-synced when v1 publishes data/abilities.json (port spec Part 8).",
+  "classes": {
+    "mage": {
+      "displayName": "Mage",
+      "abilities": {
+        "q": {
+          "slot": "q",
+          "key": "Q",
+          "name": "Arcane Bolt",
+          "description": "Snap bolt at the nearest foe — 26 dmg, near-instant (0.5s).",
+          "icon": "✦",
+          "color": "#b388ff",
+          "effect": "strike",
+          "cooldown": 0.5,
+          "manaCost": 0,
+          "damage": 26,
+          "range": 13
+        },
+        "w": {
+          "slot": "w",
+          "key": "F",
+          "name": "Frost Nova",
+          "description": "Freezing burst — 26 dmg + 1.4s freeze in a 5m ring (12s cd).",
+          "icon": "❄",
+          "color": "#7dd3fc",
+          "effect": "aoe",
+          "cooldown": 12,
+          "manaCost": 3,
+          "damage": 26,
+          "range": 5.2,
+          "freeze": 1.4
+        },
+        "e": {
+          "slot": "e",
+          "key": "E",
+          "name": "Healing Beacon",
+          "description": "Heals the Heart for 48 in a 5m ring (16s cd).",
+          "icon": "✚",
+          "color": "#ffd27a",
+          "effect": "heal",
+          "cooldown": 16,
+          "manaCost": 4,
+          "damage": 48,
+          "range": 5
+        },
+        "r": {
+          "slot": "r",
+          "key": "R",
+          "name": "Meteor Strike",
+          "description": "Ultimate — 80 dmg meteor over a 6m blast (45s cd).",
+          "icon": "☄",
+          "color": "#ff7043",
+          "effect": "meteor",
+          "cooldown": 45,
+          "manaCost": 7,
+          "damage": 80,
+          "range": 6
+        }
+      }
+    },
+    "knight": {
+      "displayName": "Knight",
+      "_comment": "AUTHORED placeholder — not in React v1 yet. Re-sync on v1 data/abilities.json publish.",
+      "abilities": {
+        "q": { "slot": "q", "key": "Q", "name": "Shield Bash", "description": "Quick melee bash — 24 dmg up close (0.6s).", "icon": "✦", "color": "#ffd27a", "effect": "strike", "cooldown": 0.6, "manaCost": 0, "damage": 24, "range": 3.4 },
+        "w": { "slot": "w", "key": "F", "name": "Bulwark Slam", "description": "Cleaving slam — 22 dmg to all in front (4m, 10s cd).", "icon": "✦", "color": "#facc15", "effect": "cleave", "cooldown": 10, "manaCost": 3, "damage": 22, "range": 4.0 },
+        "e": { "slot": "e", "key": "E", "name": "Oath Ward", "description": "Wards the Heart for 40 in a 5m ring (18s cd).", "icon": "✚", "color": "#ffd27a", "effect": "heal", "cooldown": 18, "manaCost": 4, "damage": 40, "range": 5 },
+        "r": { "slot": "r", "key": "R", "name": "Lantern Charge", "description": "Ultimate charge — 70 dmg cleave over 6.5m (40s cd).", "icon": "☄", "color": "#ff7043", "effect": "cleave", "cooldown": 40, "manaCost": 6, "damage": 70, "range": 6.5 }
+      }
+    },
+    "ranger": {
+      "displayName": "Ranger",
+      "_comment": "AUTHORED placeholder — not in React v1 yet. Re-sync on v1 data/abilities.json publish.",
+      "abilities": {
+        "q": { "slot": "q", "key": "Q", "name": "Quick Shot", "description": "Rapid arrow — 25 dmg at long range (0.45s).", "icon": "✦", "color": "#9ae6b4", "effect": "strike", "cooldown": 0.45, "manaCost": 0, "damage": 25, "range": 15 },
+        "w": { "slot": "w", "key": "F", "name": "Snare Trap", "description": "Snares + 18 dmg at range (12m, 11s cd).", "icon": "✦", "color": "#7dd3fc", "effect": "snare", "cooldown": 11, "manaCost": 3, "damage": 18, "range": 12 },
+        "e": { "slot": "e", "key": "E", "name": "Mending Salve", "description": "Heals the Heart for 44 in a 5m ring (15s cd).", "icon": "✚", "color": "#ffd27a", "effect": "heal", "cooldown": 15, "manaCost": 4, "damage": 44, "range": 5 },
+        "r": { "slot": "r", "key": "R", "name": "Storm of Arrows", "description": "Ultimate volley — 72 dmg over a 6.5m area (42s cd).", "icon": "☄", "color": "#ff7043", "effect": "aoe", "cooldown": 42, "manaCost": 7, "damage": 72, "range": 6.5, "freeze": 0 }
+      }
+    }
+  }
+}
