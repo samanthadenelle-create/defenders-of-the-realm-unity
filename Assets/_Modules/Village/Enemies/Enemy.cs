@@ -229,6 +229,10 @@ namespace DeNelle.Village
         /// <summary>True once the enemy has died (HP hit zero).</summary>
         public bool IsDead => _dead;
 
+        /// <summary>Alive and a valid target — used by <see cref="TargetManager"/>'s
+        /// registry queries (the reticle / towers).</summary>
+        public bool IsAlive => !_dead && _hp > 0f;
+
         /// <summary>AI archetype this enemy runs.</summary>
         public EnemyAiKind Ai => _ai;
 
@@ -385,6 +389,13 @@ namespace DeNelle.Village
             EnsureHitReaction();
             EnsureHealthBar();
         }
+
+        // Registry membership (TargetManager): every enemy — wave, roamer, tribe,
+        // ward — auto-joins on enable and leaves on disable, so the reticle/towers
+        // query a clean live list instead of an overflow-prone physics sweep. Covers
+        // pooling too (re-enable re-registers; Register dedups).
+        private void OnEnable()  => TargetManager.Register(this);
+        private void OnDisable() => TargetManager.Unregister(this);
 
         private void EnsureHitReaction()
         {
@@ -858,6 +869,7 @@ namespace DeNelle.Village
             _telegraphing = false;   // audit 2026-05-30: clear the wind-up latch on death (safe for future pooling)
             if (_agent != null && _agent.isOnNavMesh) _agent.isStopped = true;
             _currentTarget = null;
+            TargetManager.Unregister(this);   // drop from targeting the instant it dies
             Died?.Invoke(this);
 
             // DEF-52 / DEF-46: death burst VFX + audio + micro screen shake.

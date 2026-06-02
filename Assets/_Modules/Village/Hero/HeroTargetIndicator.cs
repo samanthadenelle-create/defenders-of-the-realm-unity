@@ -71,6 +71,7 @@ namespace DeNelle.Village
 
         private IDamageable _locked;   // manual lock (null = auto-nearest)
         private readonly List<IDamageable> _candidates = new List<IDamageable>();
+        private readonly List<Enemy> _enemyBuf = new List<Enemy>(64);   // TargetManager scratch
 
         // 2026-06-02 targeting fix: the scan used mask ~0 into a 64-slot buffer, but the
         // village has ~2,900 colliders — within 32 m the buffer FILLED with walls/ground
@@ -188,6 +189,25 @@ namespace DeNelle.Village
         private void RebuildCandidates()
         {
             _candidates.Clear();
+
+            // PRIMARY: the overflow-proof enemy registry (owner 2026-06-02). A clean
+            // list of live enemies — no collider/layer/buffer fragility, and cheap to
+            // widen the range on. CollectInRange returns them nearest-first.
+            var tm = TargetManager.Instance;
+            if (tm != null && tm.Count > 0)
+            {
+                tm.CollectInRange(transform.position, _acquireRange, _enemyBuf);
+                for (int i = 0; i < _enemyBuf.Count; i++)
+                {
+                    var d = _enemyBuf[i].GetComponent<EnemyDamageable>() as IDamageable;
+                    if (d == null || !d.IsAlive || d.Faction != CombatFaction.Hostile) continue;
+                    if (!_candidates.Contains(d)) _candidates.Add(d);
+                }
+                return;   // already nearest-first
+            }
+
+            // FALLBACK: physics sweep (Enemy layer + 128 buffer) for the early frames
+            // before any enemy registers, or a bare test scene with no TargetManager.
             int n = Physics.OverlapSphereNonAlloc(
                 transform.position, _acquireRange, _hits, _enemyMask, QueryTriggerInteraction.Collide);
             for (int i = 0; i < n; i++)
