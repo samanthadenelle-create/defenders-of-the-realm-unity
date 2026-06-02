@@ -270,6 +270,9 @@ namespace DeNelle.Village
         // DEF (combat feel): lazily-attached ranged projectile launcher (arrow / spell orb).
         private RangedAttackVFX _rangedVfx;
 
+        // Gear v1: lazily-attached equipped-gear loadout — its WeaponMult joins the damage chain.
+        private GearLoadout _gear;
+
         // DEF-47: timing bonus captured by TryCast() from AttackTimingBonus,
         // consumed by the next ResolveEffect() damage call, then reset to 1.
         private float _pendingTimingBonus = 1f;
@@ -299,7 +302,7 @@ namespace DeNelle.Village
             // DEF-47: apply the chain timing bonus captured in TryCast.
             // _pendingTimingBonus is 1.00× when no chain is active, up to 1.50×
             // at chain 4+. Reset to 1f so a missed follow-up can't carry over.
-            float dmg = def.Damage * HeroTalentModifiers.DamageMultiplier(_heroClass) * levelMult * _pendingTimingBonus;
+            float dmg = def.Damage * HeroTalentModifiers.DamageMultiplier(_heroClass) * levelMult * _pendingTimingBonus * WeaponMult();
             _pendingTimingBonus = 1f;
 
             // DTT: offensive abilities resolve from the player's aim point (crosshair
@@ -407,6 +410,17 @@ namespace DeNelle.Village
                 _rangedVfx = GetComponent<RangedAttackVFX>() ?? gameObject.AddComponent<RangedAttackVFX>();
             if (_heroClass == "ranger") _rangedVfx.FireArrow(target, onArrive);
             else                        _rangedVfx.FireSpellOrb(target, onArrive);
+        }
+
+        /// <summary>
+        /// Gear v1: the equipped weapon's damage multiplier (1.0 when none / no catalog).
+        /// Lazily attaches <see cref="GearLoadout"/> so every hero gets gear with no builder
+        /// change; graceful — a missing catalog leaves the multiplier at 1.0.
+        /// </summary>
+        private float WeaponMult()
+        {
+            if (_gear == null) _gear = GetComponent<GearLoadout>() ?? gameObject.AddComponent<GearLoadout>();
+            return _gear.WeaponMult;
         }
 
         /// <summary>

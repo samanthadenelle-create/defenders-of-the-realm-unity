@@ -37,6 +37,9 @@ namespace DeNelle.Village
 
         [SerializeField] private float _maxHp = 100f;
 
+        // Gear v1: equipped armor (fractional damage reduction). Lazily resolved in TakeDamage.
+        private GearLoadout _gear;
+
         // ── Contact-damage tuning (first-pass) ────────────────────────────────
         private const float EngageRadius   = 1.5f;  // enemy must be this close to strike
         private const float DamageInterval = 1.0f;  // seconds between contact ticks
@@ -158,6 +161,13 @@ namespace DeNelle.Village
             // DEF-102: post-respawn grace — ignore damage during the invuln window
             // so a hero respawning into a lingering melee isn't instantly re-killed.
             if (Time.time < _invulnUntil) return;
+
+            // Gear v1: equipped armor reduces incoming damage (fractional). Lazily-resolved;
+            // graceful — no GearLoadout / no armor = no reduction, so combat is unchanged.
+            if (_gear == null) _gear = GetComponent<GearLoadout>();
+            if (_gear != null && _gear.ArmorDefense > 0f)
+                amount *= (1f - _gear.ArmorDefense);
+
             _hp = Mathf.Max(0f, _hp - amount);
             OnHealthChanged?.Invoke(_hp, _maxHp);
 
