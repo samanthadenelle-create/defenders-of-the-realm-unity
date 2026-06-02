@@ -34,6 +34,7 @@
 // =============================================================================
 
 using DeNelle.Core.State;
+using DeNelle.Core.Combat;
 using UnityEngine;
 using UnityEngine.AI;
 
@@ -66,6 +67,20 @@ namespace DeNelle.Village
         private const float IntroDelay        = 2.0f;   // let the scene settle first
         private const float LineHold          = 5.5f;   // a line stays up this long
         private const float LineGap           = 9.0f;   // quiet gap between lines
+
+        // ── Combat (2026-06-02: companions FIGHT) ────────────────────────────
+        // The companion engages the nearest hostile from the shared TargetManager
+        // registry — moves into range, faces it, and fires a class projectile on a
+        // cooldown (support damage; weaker than the hero). When no hostile is near it
+        // reverts to trailing the hero. Tethered to the hero so it never chases off
+        // across the map. The registry is the SAME list the hero's reticle reads.
+        private const float EngageRange   = 16f;   // start fighting a hostile within this of the companion
+        private const float AttackRange   = 12f;   // hold + shoot from here (ranged kit)
+        private const float AttackCooldown = 1.1f;
+        private const float AttackDamage  = 14f;   // support DPS — chips, doesn't carry
+        private const float LeashFromHero = 22f;   // don't engage past this from the hero (stay with the party)
+        private float _attackTimer;
+        private RangedAttackVFX _ranged;
 
         // ── Runtime ──────────────────────────────────────────────────────────
         private HeroClass _hero = HeroClass.Knight;
@@ -141,8 +156,79 @@ namespace DeNelle.Village
         private void Update()
         {
             ResolveHeroIfNeeded();
-            UpdateFollow();
+            // Fight a nearby hostile if there is one; otherwise trail the hero.
+            if (!UpdateCombat())
+                UpdateFollow();
             UpdateSpeech();
+        }
+
+        // ── Combat (engage the shared registry's nearest hostile) ────────────
+
+        /// <summary>
+        /// If a living hostile is within <see cref="EngageRange"/> (and the companion
+        /// is still near the hero), move into <see cref="AttackRange"/>, face it, and
+        /// fire a class projectile on cooldown. Returns true while engaged (so the
+        /// caller skips the follow step). Uses the shared <see cref="TargetManager"/>
+        /// registry — the same source the hero's reticle reads.
+        /// </summary>
+        private bool UpdateCombat()
+        {
+            var tm = TargetManager.Instance;
+            if (tm == null) return false;
+
+            // Stay with the party: only engage when the companion is near the hero, so
+            // it never abandons the Keeper to chase across the field.
+            if (_heroT != null)
+            {
+                Vector3 toHero = _heroT.position - transform.position; toHero.y = 0f;
+                if (toHero.sqrMagnitude > LeashFromHero * LeashFromHero) return false;
+            }
+
+            Enemy foe = tm.GetClosestTarget(transform.position, EngageRange);
+            if (foe == null || !foe.IsAlive) return false;
+
+            Vector3 tp = foe.transform.position;
+            Vector3 flat = tp - transform.position; flat.y = 0f;
+            float dist = flat.magnitude;
+
+            // Close to attack range; hold once inside it.
+            if (_agent != null && _agent.enabled && _agent.isOnNavMesh)
+            {
+                if (dist > AttackRange) { _agent.isStopped = false; _agent.SetDestination(tp); }
+                else _agent.isStopped = true;
+            }
+
+            // Face the foe.
+            if (flat.sqrMagnitude > 0.0004f)
+                transform.rotation = Quaternion.Slerp(
+                    transform.rotation, Quaternion.LookRotation(flat, Vector3.up), Time.deltaTime * 8f);
+
+            // Fire on cooldown when in range.
+            _attackTimer -= Time.deltaTime;
+            if (dist <= AttackRange && _attackTimer <= 0f)
+            {
+                _attackTimer = AttackCooldown;
+                FireAt(foe);
+            }
+            return true;
+        }
+
+        /// <summary>Launches a class projectile at the foe; damages it on arrival via
+        /// the Core IDamageable seam (so it gets the normal hit feedback).</summary>
+        private void FireAt(Enemy foe)
+        {
+            if (_ranged == null)
+                _ranged = GetComponent<RangedAttackVFX>() ?? gameObject.AddComponent<RangedAttackVFX>();
+
+            var dmg = foe.GetComponent<EnemyDamageable>() as IDamageable;
+            Vector3 target = foe.transform.position + Vector3.up;
+            System.Action onArrive = () =>
+            {
+                if (dmg != null && dmg.IsAlive) dmg.TakeDamage(AttackDamage, DamageElement.None);
+            };
+
+            if (_hero == HeroClass.Ranger) _ranged.FireArrow(target, onArrive);
+            else                           _ranged.FireSpellOrb(target, onArrive);
         }
 
         // ── Hero resolution ──────────────────────────────────────────────────

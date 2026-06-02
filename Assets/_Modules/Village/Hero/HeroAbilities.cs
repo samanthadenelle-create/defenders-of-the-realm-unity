@@ -283,6 +283,12 @@ namespace DeNelle.Village
         /// stationary hero's spells reach the distant enemies. PatriciaLightController
         /// sets it per cast; village mode leaves it null.</summary>
         public Vector3? AimPointOverride;
+        /// <summary>When set by HeroTargetIndicator, single-target offensive abilities hit
+        /// THIS exact reticle-locked foe instead of re-searching via an OverlapSphere — so
+        /// the hero damages precisely what the ring shows (the registry target, the same one
+        /// companions hit), even if that enemy's collider isn't found by a physics sweep.
+        /// Null → fall back to NearestHostile.</summary>
+        public IDamageable LockedTarget;
         /// <summary>When set, Heal effects route here (repair the tower) instead of
         /// healing the caster. Returns true when it handled the heal. Null = heal hero.</summary>
         public System.Func<float, bool> HealHandler;
@@ -336,8 +342,13 @@ namespace DeNelle.Village
                 case AbilityEffect.Strike:
                 case AbilityEffect.Snare:
                 {
-                    // nearest enemy to the aim point + ENEMY_HIT_R
-                    var foe = NearestHostile(atk, def.Range + _enemyHitRadius);
+                    // Prefer the reticle's locked target (registry — exactly what the ring
+                    // shows + companions hit); fall back to the OverlapSphere search. This
+                    // fixes "ring locks but my hits do 0" — the physics sweep was finding a
+                    // different/no enemy than the registry-locked one.
+                    var foe = (LockedTarget != null && LockedTarget.IsAlive)
+                        ? LockedTarget
+                        : NearestHostile(atk, def.Range + _enemyHitRadius);
                     // WO-125 Bug 1: the apex dragon orbits at altitude ~22-34u — far
                     // outside a short-slot sweep (Q ~13u) — so an OverlapSphere from the
                     // hero's feet can never reach it. In village mode (no aim override),

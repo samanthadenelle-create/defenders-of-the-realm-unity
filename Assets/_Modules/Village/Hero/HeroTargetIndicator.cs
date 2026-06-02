@@ -36,14 +36,11 @@ namespace DeNelle.Village
     [DisallowMultipleComponent]
     public sealed class HeroTargetIndicator : MonoBehaviour
     {
-        // 2026-06-02 playtest: wave enemies (close to the hero/heart) locked + died
-        // fine, but a distant SOLO wandering mob never got a reticle (old 18 m) — so
-        // the aim override stayed null and the basic bolt only reached ~13 m from the
-        // hero's feet. Widen the acquire range past the open-world engage distance so
-        // the reticle locks roaming mobs and feeds the aim point that makes ranged
-        // attacks connect at distance.
+        // 2026-06-02: the registry (TargetManager) makes the lock range FREE to widen
+        // (no physics-buffer overflow), so push it well past the open-world spawn ring
+        // so roaming mobs in OuterWorld lock from a comfortable distance.
         [Tooltip("Radius (m) within which hostiles can be targeted.")]
-        [SerializeField, Min(1f)] private float _acquireRange = 32f;
+        [SerializeField, Min(1f)] private float _acquireRange = 70f;
 
         [Tooltip("Seconds between target re-scans (the reticle follows every frame).")]
         [SerializeField, Min(0.02f)] private float _scanInterval = 0.12f;
@@ -95,7 +92,7 @@ namespace DeNelle.Village
         {
             if (_reticle != null) Destroy(_reticle.gameObject);
             // Don't leave a stale aim override on the abilities component.
-            if (_abilities != null) _abilities.AimPointOverride = null;
+            if (_abilities != null) { _abilities.AimPointOverride = null; _abilities.LockedTarget = null; }
         }
 
         private void Update()
@@ -123,7 +120,12 @@ namespace DeNelle.Village
             // HeroAbilities' own pick, which could disagree with the reticle.)
             if (_abilities == null) _abilities = GetComponent<HeroAbilities>();
             if (_abilities != null)
+            {
                 _abilities.AimPointOverride = CurrentTarget != null ? (Vector3?)CurrentTarget.WorldPosition : null;
+                // Hand the ability the EXACT locked foe so single-target hits damage what
+                // the ring shows (not whatever an OverlapSphere happens to find).
+                _abilities.LockedTarget = CurrentTarget;
+            }
 
             if (CurrentTarget == null || !CurrentTarget.IsAlive)
             {
@@ -190,24 +192,30 @@ namespace DeNelle.Village
         {
             _candidates.Clear();
 
-            // PRIMARY: the overflow-proof enemy registry (owner 2026-06-02). A clean
-            // list of live enemies — no collider/layer/buffer fragility, and cheap to
-            // widen the range on. CollectInRange returns them nearest-first.
+            // UNION of TWO sources so a nearby enemy is found whether or not it is in the
+            // registry (2026-06-02: a mob that spawned BEFORE an editor hot-reload never
+            // ran the new OnEnable→Register, so it's missing from the registry; the old
+            // code early-returned on the registry and skipped the sweep that would catch
+            // it). Both are cheap with the Enemy-layer mask, so always run both + dedup.
+
+            // Source 1 — the cross-scene registry (overflow-proof, catches registered mobs).
             var tm = TargetManager.Instance;
-            if (tm != null && tm.Count > 0)
+            if (tm != null)
             {
                 tm.CollectInRange(transform.position, _acquireRange, _enemyBuf);
                 for (int i = 0; i < _enemyBuf.Count; i++)
                 {
-                    var d = _enemyBuf[i].GetComponent<EnemyDamageable>() as IDamageable;
+                    var e = _enemyBuf[i];
+                    if (e == null) continue;
+                    // Robust lookup (expert 2026-06-02): root first, then parent chain.
+                    var d = e.GetComponent<IDamageable>() ?? e.GetComponentInParent<IDamageable>();
                     if (d == null || !d.IsAlive || d.Faction != CombatFaction.Hostile) continue;
                     if (!_candidates.Contains(d)) _candidates.Add(d);
                 }
-                return;   // already nearest-first
             }
 
-            // FALLBACK: physics sweep (Enemy layer + 128 buffer) for the early frames
-            // before any enemy registers, or a bare test scene with no TargetManager.
+            // Source 2 — Enemy-layer physics sweep (catches anything not registered, plus
+            // non-Enemy hostiles). Few enemy colliders in range, so the 128 buffer is safe.
             int n = Physics.OverlapSphereNonAlloc(
                 transform.position, _acquireRange, _hits, _enemyMask, QueryTriggerInteraction.Collide);
             for (int i = 0; i < n; i++)
@@ -218,6 +226,7 @@ namespace DeNelle.Village
                 if (d == null || !d.IsAlive || d.Faction != CombatFaction.Hostile) continue;
                 if (!_candidates.Contains(d)) _candidates.Add(d);
             }
+
             // Stable nearest-first order so Tab cycles outward predictably.
             Vector3 me = transform.position;
             _candidates.Sort((a, b) =>

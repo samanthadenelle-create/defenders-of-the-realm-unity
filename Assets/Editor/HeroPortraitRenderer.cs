@@ -36,10 +36,30 @@ namespace DeNelle.Editor
             RenderOne("Assets/Resources/Heroes/Knight.fbx", "knight.png");
             RenderOne("Assets/Resources/Heroes/Ranger.fbx", "ranger.png");
             RenderOne("Assets/Resources/Heroes/Mage.fbx", "mage.png");
+            // 4th hero — Elara the Cleric shares the Mage body (SlugFor Cleric->Mage);
+            // a warm white-gold tint sets her apart from Thrain's icy-blue Mage portrait.
+            RenderOne("Assets/Resources/Heroes/Mage.fbx", "cleric.png", new Color(1f, 0.93f, 0.70f));
             AssetDatabase.Refresh();
         }
 
-        private static void RenderOne(string fbxPath, string pngName)
+        /// <summary>Multiplies every renderer's base colour by <paramref name="tint"/> — used
+        /// to recolour Elara's shared Mage body to a warm healer gold so her portrait reads
+        /// distinct from Thrain's icy-blue Mage.</summary>
+        private static void ApplyTint(GameObject body, Color tint)
+        {
+            foreach (var r in body.GetComponentsInChildren<Renderer>())
+            {
+                if (r == null) continue;
+                foreach (var m in r.materials)
+                {
+                    if (m == null) continue;
+                    if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", m.GetColor("_BaseColor") * tint);
+                    else if (m.HasProperty("_Color")) m.SetColor("_Color", m.color * tint);
+                }
+            }
+        }
+
+        private static void RenderOne(string fbxPath, string pngName, Color? tint = null)
         {
             var fbx = AssetDatabase.LoadAssetAtPath<GameObject>(fbxPath);
             if (fbx == null) { Debug.LogError($"[HeroPortraitRenderer] FBX not found: {fbxPath}"); return; }
@@ -53,6 +73,7 @@ namespace DeNelle.Editor
             body.transform.localRotation = Quaternion.Euler(0f, 200f, 0f); // 3/4 view
             RetargetToUrp(body);
             NormalizeHeight(body, 1.7f);
+            if (tint.HasValue) ApplyTint(body, tint.Value);
 
             // Three-point-ish light: a strong key light, a softer fill.
             var keyLightGo = new GameObject("KeyLight");

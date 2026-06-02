@@ -66,6 +66,11 @@ namespace DeNelle.Village
         private Camera _faceCamera;
         private bool _visible;
         private bool _built;
+        // TextMesh bounds aren't valid until it renders (a frame or two after .text is
+        // set), so a same-frame ResizePanelToText reads stale bounds and the text spills
+        // outside the panel (DEF-107). Re-measure for a few frames after Show to catch
+        // the real glyph extents once they exist.
+        private int _resizePending;
 
         /// <summary>True while the bubble is currently shown.</summary>
         public bool IsVisible => _visible;
@@ -81,6 +86,14 @@ namespace DeNelle.Village
         private void LateUpdate()
         {
             if (!_visible || _root == null) return;
+
+            // Re-fit the panel once TextMesh bounds become valid (DEF-107) — a few
+            // frames of re-measure catches the real glyph extents post-render.
+            if (_resizePending > 0)
+            {
+                ResizePanelToText();
+                _resizePending--;
+            }
 
             // Billboard the bubble to the active camera so it stays readable
             // under the village's overhead-ish tilt.
@@ -119,6 +132,7 @@ namespace DeNelle.Village
             // rendered glyph extents once .text is assigned (world space, so
             // we convert back to panel-local units via _textScale).
             ResizePanelToText();
+            _resizePending = 3;   // re-measure over the next frames once bounds are valid
 
             // Steal the active-bubble slot from whoever held it before.
             if (s_activeBubble != null && s_activeBubble != this)
