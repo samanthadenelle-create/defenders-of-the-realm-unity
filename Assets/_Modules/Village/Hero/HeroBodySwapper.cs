@@ -385,13 +385,16 @@ namespace DeNelle.Village
                 // red-splatter Tripo grunge variant — binding either gives the dirty
                 // blood-spattered armour the owner flagged. Returning null lets
                 // ApplyClassTint paint the clean steel tint (0.78,0.80,0.86) instead.
-                // Owner 2026-05-26: the Ranger ships a FRESH "archer v2" Tripo export
-                // whose basecolor (Textures/Ranger.png, regenerated from
-                // archerv2_basecolor) is a proper green/brown/leather ranger palette —
-                // bind it so the Ranger reads correctly. (The OLD atlas was the dark
-                // purple-black blob the owner flagged in village + dungeon.) Knight
-                // falls through to its steel tint; the Mage keeps its embedded texture.
-                HeroClass.Ranger => "Textures/Ranger",
+                // DEF-229 (2026-06-03): the Ranger body is now the CC5/CC_Base adult
+                // archer (InstaLOD-remeshed: ONE combined mesh + ONE baked PBR atlas),
+                // imported Humanoid by PeopleCharacterImporter.ImportRangerCC5 into
+                // Resources/Heroes/Ranger.fbx with its baked diffuse copied to
+                // Resources/Heroes/Ranger_tex/. The combined bake is a single atlas, so
+                // painting that one diffuse onto every body slot (skin/body/tongue) is
+                // correct — each slot samples its UV region. Repointed off the retired
+                // Tripo "archer v2" basecolor (Textures/Ranger) to the CC5 bake so the
+                // selected archer reads as the adult ranger, not the old spiky youth.
+                HeroClass.Ranger => "Heroes/Ranger_tex/remesh_12_combined_Bake_Diffuse",
                 _ => null,
             };
             if (string.IsNullOrEmpty(texPath)) return;

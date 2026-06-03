@@ -23,6 +23,7 @@
 // =============================================================================
 
 using System.Collections.Generic;
+using System.IO;
 using UnityEditor;
 using UnityEditor.Animations;
 using UnityEngine;
@@ -269,6 +270,308 @@ namespace DeNelle.Editor
                 return clip;
             }
             return fallback;
+        }
+
+        // =====================================================================
+        // CC5 (Reallusion Character Creator) InstaLOD hero pipeline
+        // ---------------------------------------------------------------------
+        // A CC5 hero ships as ONE combined body mesh + a baked PBR texture set
+        // (Diffuse/Normal/Metallic). The FBX's own CC material refs are the
+        // broken Phong/Std_Skin set URP can't render, so we import with
+        // materialImportMode=None and supply our OWN URP/Lit material remapped
+        // onto the FBX's material slots. Generic + reusable: feed any future CC5
+        // hero (e.g. a CC5 Elara/Cleric) through ImportCC5Hero with its paths.
+        //
+        // Ranger headless: -executeMethod DeNelle.Editor.PeopleCharacterImporter.ImportRangerCC5
+        // =====================================================================
+
+        /// <summary>Generic CC5 InstaLOD hero importer. Copies the raw FBX bytes
+        /// (File.Copy — the source often sits in a Unity-reserved .fbm folder that
+        /// CopyAsset refuses) to Resources/Heroes/&lt;slug&gt;.fbx, copies the baked
+        /// textures into Resources/Heroes/&lt;slug&gt;_tex/, sets their importers,
+        /// flips the FBX to a Humanoid rig (copying the proven Mage avatar if the
+        /// rig doesn't auto-map), builds a URP/Lit material from the baked maps,
+        /// and remaps the FBX's material slots onto it. Appends a verdict report.
+        /// srcTexturePaths order is irrelevant — maps are classified by filename
+        /// (Diffuse / Normal / Metallic).</summary>
+        private static void ImportCC5Hero(string srcFbxPath, string[] srcTexturePaths, string destSlug, List<string> report)
+        {
+            report.Add($"-- ImportCC5Hero: {destSlug} --");
+
+            string projectRoot = Directory.GetParent(Application.dataPath).FullName;
+            string destFbx     = HeroDir + destSlug + ".fbx";
+            string texDir      = HeroDir + destSlug + "_tex";
+
+            // 1a. Verify source FBX exists on disk (it lives in a .fbm so the
+            //     AssetDatabase may not see it; check the raw path).
+            string srcFbxFull = Path.Combine(projectRoot, srcFbxPath);
+            if (!File.Exists(srcFbxFull))
+            {
+                report.Add($"  MISSING SRC FBX, aborted: {srcFbxPath}");
+                return;
+            }
+
+            // 1b. Copy the FBX raw bytes over the slug. File.Copy (NOT CopyAsset):
+            //     the source is inside a .fbm and CopyAsset won't touch it.
+            string destFbxFull = Path.Combine(projectRoot, destFbx);
+            try
+            {
+                File.Copy(srcFbxFull, destFbxFull, true);
+            }
+            catch (System.Exception e)
+            {
+                report.Add($"  FBX File.Copy FAILED: {e.Message}");
+                return;
+            }
+
+            // 1c. Clean tex subfolder (under Resources so the build includes it).
+            string texDirFull = Path.Combine(projectRoot, texDir);
+            if (Directory.Exists(texDirFull)) Directory.Delete(texDirFull, true);
+            Directory.CreateDirectory(texDirFull);
+
+            // 1d. Copy each baked texture in, classifying by filename.
+            string diffusePath = null, normalPath = null, metallicPath = null;
+            int texCopied = 0;
+            foreach (var src in srcTexturePaths)
+            {
+                if (string.IsNullOrEmpty(src)) continue;
+                string srcFull = Path.Combine(projectRoot, src);
+                if (!File.Exists(srcFull)) { report.Add($"  tex MISSING, skipped: {src}"); continue; }
+                if (new FileInfo(srcFull).Length < 64) { report.Add($"  tex ~0 bytes, ignored: {src}"); continue; }
+
+                string fileName = Path.GetFileName(src);
+                string destTex  = texDir + "/" + fileName;
+                File.Copy(srcFull, Path.Combine(texDirFull, fileName), true);
+                texCopied++;
+
+                string lower = fileName.ToLowerInvariant();
+                if      (lower.Contains("normal"))   normalPath   = destTex;
+                else if (lower.Contains("metallic")) metallicPath = destTex;
+                else if (lower.Contains("diffuse") || lower.Contains("basecolor") || lower.Contains("albedo")) diffusePath = destTex;
+            }
+
+            AssetDatabase.Refresh();
+
+            // 2. Texture importers: Normal -> NormalMap; Diffuse sRGB on; Metallic linear.
+            if (normalPath != null)
+            {
+                var ti = AssetImporter.GetAtPath(normalPath) as TextureImporter;
+                if (ti != null) { ti.textureType = TextureImporterType.NormalMap; ti.SaveAndReimport(); }
+            }
+            if (diffusePath != null)
+            {
+                var ti = AssetImporter.GetAtPath(diffusePath) as TextureImporter;
+                if (ti != null) { ti.textureType = TextureImporterType.Default; ti.sRGBTexture = true; ti.SaveAndReimport(); }
+            }
+            if (metallicPath != null)
+            {
+                var ti = AssetImporter.GetAtPath(metallicPath) as TextureImporter;
+                if (ti != null) { ti.textureType = TextureImporterType.Default; ti.sRGBTexture = false; ti.SaveAndReimport(); }
+            }
+
+            // 3. FBX ModelImporter -> Humanoid, mesh-only, NO FBX materials.
+            var imp = AssetImporter.GetAtPath(destFbx) as ModelImporter;
+            if (imp == null) { report.Add($"  NO IMPORTER at {destFbx} after copy — aborted"); return; }
+
+            imp.animationType      = ModelImporterAnimationType.Human;
+            imp.avatarSetup        = ModelImporterAvatarSetup.CreateFromThisModel;
+            imp.importAnimation    = false;
+            imp.materialImportMode = ModelImporterMaterialImportMode.None; // supply our own URP material
+            imp.SaveAndReimport();
+
+            // Verify Humanoid; if not, copy the proven Mage avatar (same biped family).
+            string avatarVerdict;
+            {
+                var go   = AssetDatabase.LoadAssetAtPath<GameObject>(destFbx);
+                var anim = go != null ? go.GetComponentInChildren<Animator>() : null;
+                var av   = anim != null ? anim.avatar : null;
+                if (av != null && av.isValid && av.isHuman)
+                {
+                    avatarVerdict = "OK Humanoid (auto-mapped)";
+                }
+                else
+                {
+                    // Copy Mage avatar: assigning sourceAvatar IS the copy-from-other-avatar
+                    // path in 6000.4 (no CopyFromOtherAvatar enum member).
+                    var mageGo   = AssetDatabase.LoadAssetAtPath<GameObject>(HeroDir + "Mage.fbx");
+                    var mageAnim = mageGo != null ? mageGo.GetComponentInChildren<Animator>() : null;
+                    var mageAv   = mageAnim != null ? mageAnim.avatar : null;
+                    if (mageAv != null && mageAv.isValid && mageAv.isHuman)
+                    {
+                        imp.animationType = ModelImporterAnimationType.Human;
+                        imp.sourceAvatar  = mageAv;
+                        imp.SaveAndReimport();
+
+                        go   = AssetDatabase.LoadAssetAtPath<GameObject>(destFbx);
+                        anim = go != null ? go.GetComponentInChildren<Animator>() : null;
+                        av   = anim != null ? anim.avatar : null;
+                        avatarVerdict = (av != null && av.isValid && av.isHuman)
+                            ? "copied-Mage-avatar (now Humanoid)"
+                            : "FAILED — Mage-avatar copy did NOT yield a Humanoid rig (bone names differ)";
+                    }
+                    else
+                    {
+                        avatarVerdict = "FAILED — not Humanoid and no Mage avatar to copy from";
+                    }
+                }
+            }
+
+            // 4. Build the URP/Lit material from the baked maps.
+            string matPath = texDir + "/" + destSlug + "Body.mat";
+            var lit = Shader.Find("Universal Render Pipeline/Lit");
+            Material bodyMat;
+            if (lit == null)
+            {
+                report.Add("  WARN URP/Lit shader not found — using Standard for the material");
+                bodyMat = new Material(Shader.Find("Standard"));
+            }
+            else
+            {
+                bodyMat = new Material(lit);
+            }
+            bodyMat.SetColor("_BaseColor", Color.white);
+
+            Texture2D diffuseTex  = diffusePath  != null ? AssetDatabase.LoadAssetAtPath<Texture2D>(diffusePath)  : null;
+            Texture2D normalTex   = normalPath   != null ? AssetDatabase.LoadAssetAtPath<Texture2D>(normalPath)   : null;
+            Texture2D metallicTex = metallicPath != null ? AssetDatabase.LoadAssetAtPath<Texture2D>(metallicPath) : null;
+
+            if (diffuseTex != null)
+            {
+                bodyMat.SetTexture("_BaseMap", diffuseTex);
+                bodyMat.SetTexture("_MainTex", diffuseTex); // belt-and-suspenders for Standard fallback
+            }
+            if (normalTex != null)
+            {
+                bodyMat.SetTexture("_BumpMap", normalTex);
+                bodyMat.EnableKeyword("_NORMALMAP");
+                bodyMat.SetFloat("_BumpScale", 1f);
+            }
+            if (metallicTex != null)
+            {
+                bodyMat.SetTexture("_MetallicGlossMap", metallicTex);
+                bodyMat.EnableKeyword("_METALLICSPECGLOSSMAP");
+            }
+            bodyMat.SetFloat("_Metallic", 1f);
+            bodyMat.SetFloat("_Smoothness", 0.4f);
+            bodyMat.SetFloat("_Glossiness", 0.4f); // Standard fallback name
+
+            AssetDatabase.DeleteAsset(matPath);
+            AssetDatabase.CreateAsset(bodyMat, matPath);
+            AssetDatabase.SaveAssets();
+
+            // 5. Remap the FBX's material slot(s) onto bodyMat. With
+            //    materialImportMode=None the renderer materials are default/null,
+            //    so we discover the FBX's source material identifiers (the names
+            //    the FBX declares) and AddRemap each. Two passes: the first
+            //    reimport above exposed the importer; gather identifiers now.
+            int remapCount = 0;
+            var matNames = new HashSet<string>();
+            foreach (var id in imp.GetExternalObjectMap().Keys)
+            {
+                if (id.type == typeof(Material)) matNames.Add(id.name);
+            }
+            // GetExternalObjectMap is empty on a fresh None-import; discover the
+            // declared material names from the FBX's imported sub-assets instead.
+            if (matNames.Count == 0)
+            {
+                var subAssets = AssetDatabase.LoadAllAssetsAtPath(destFbx);
+                foreach (var sa in subAssets)
+                {
+                    if (sa is Material m && !string.IsNullOrEmpty(m.name)) matNames.Add(m.name);
+                }
+            }
+            // Final fallback: read renderer material slot names off the GameObject.
+            if (matNames.Count == 0)
+            {
+                var go = AssetDatabase.LoadAssetAtPath<GameObject>(destFbx);
+                if (go != null)
+                {
+                    foreach (var r in go.GetComponentsInChildren<Renderer>(true))
+                    {
+                        foreach (var sm in r.sharedMaterials)
+                        {
+                            if (sm != null && !string.IsNullOrEmpty(sm.name))
+                                matNames.Add(sm.name.Replace(" (Instance)", ""));
+                        }
+                    }
+                }
+            }
+
+            foreach (var name in matNames)
+            {
+                imp.AddRemap(new AssetImporter.SourceAssetIdentifier(typeof(Material), name), bodyMat);
+                remapCount++;
+            }
+            if (remapCount > 0) imp.SaveAndReimport();
+
+            // Verify every renderer slot now points at bodyMat.
+            int slotsOk = 0, slotsBad = 0;
+            {
+                var go = AssetDatabase.LoadAssetAtPath<GameObject>(destFbx);
+                if (go != null)
+                {
+                    foreach (var r in go.GetComponentsInChildren<Renderer>(true))
+                    {
+                        foreach (var sm in r.sharedMaterials)
+                        {
+                            if (sm == bodyMat) slotsOk++;
+                            else slotsBad++;
+                        }
+                    }
+                }
+            }
+
+            // 6. Bounds height (confirm adult proportions, ~1.7–1.9m).
+            float height = 0f;
+            {
+                var go = AssetDatabase.LoadAssetAtPath<GameObject>(destFbx);
+                if (go != null)
+                {
+                    bool any = false;
+                    Bounds b = default;
+                    foreach (var r in go.GetComponentsInChildren<Renderer>(true))
+                    {
+                        if (!any) { b = r.bounds; any = true; }
+                        else b.Encapsulate(r.bounds);
+                    }
+                    if (any) height = b.size.y;
+                }
+            }
+
+            report.Add($"  src -> dst: {srcFbxPath} -> {destFbx}");
+            report.Add($"  textures copied: {texCopied} (diffuse={(diffusePath != null)}, normal={(normalPath != null)}, metallic={(metallicPath != null)})");
+            report.Add($"  avatar: {avatarVerdict}");
+            report.Add($"  material: {matPath} (remapped {remapCount} slot-name(s))");
+            report.Add($"  renderer check: {slotsOk} slot(s) == bodyMat, {slotsBad} still null/other");
+            report.Add($"  mesh bounds height: {height:F3} m (expect ~1.7–1.9 adult)");
+        }
+
+        /// <summary>Headless entry: import the CC5 InstaLOD Ranger (FighterClass
+        /// remesh) into Resources/Heroes/Ranger.fbx with its baked PBR set. This
+        /// REPLACES the prior archer-v2 Ranger FBX by design — HeroBodySwapper
+        /// loads Resources/Heroes/Ranger.</summary>
+        [MenuItem("Defenders/Animation/Import CC5 Ranger")]
+        public static void ImportRangerCC5()
+        {
+            const string fbm = "Assets/Models/People/0_FighterClass_High_High_1024_LOD0.fbm/";
+            var report = new List<string>();
+            report.Add("=== Import CC5 Ranger ===");
+
+            ImportCC5Hero(
+                fbm + "ranger.fbx",
+                new[]
+                {
+                    fbm + "remesh_12_combined_Bake_Diffuse.png",  // albedo (sRGB)
+                    fbm + "remesh_12_combined_Bake_Normal.png",   // normal map
+                    fbm + "remesh_12_combined_Bake_Metallic.png", // metallic (linear)
+                    // remesh_12_combined_Bake_Reflection.png is ~0 bytes — intentionally omitted
+                },
+                "Ranger",
+                report);
+
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+            Debug.Log("[PeopleCharacterImporter] CC5 Ranger DONE\n" + string.Join("\n", report));
         }
     }
 }
