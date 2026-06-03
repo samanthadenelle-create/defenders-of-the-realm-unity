@@ -66,12 +66,21 @@ namespace DeNelle.HUD
             HookHeroProgression();
         }
 
+        /// <summary>Undefined-tag-safe FindWithTag (Unity throws on an undefined tag).</summary>
+        private static GameObject SafeFindWithTag(string tag)
+        {
+            try { return GameObject.FindWithTag(tag); }
+            catch (UnityEngine.UnityException) { return null; }
+        }
+
         private void HookHeroProgression()
         {
             // Try the static Instance path first (fastest, avoids FindWithTag cost).
             // HeroProgression.Instance is accessible by name via reflection.
+            // "Player" is a built-in tag; "HeroTarget" may be undefined (FindWithTag
+            // throws on an undefined tag) — guard the fallback.
             var heroGo = GameObject.FindWithTag("Player")
-                      ?? GameObject.FindWithTag("HeroTarget");
+                      ?? SafeFindWithTag("HeroTarget");
 
             // Also check the DontDestroyOnLoad singleton that may live at world-origin.
             Component prog = heroGo != null

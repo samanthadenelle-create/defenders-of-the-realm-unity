@@ -183,10 +183,18 @@ namespace DeNelle.Village
         private void ResolveHero()
         {
             var go = GameObject.FindWithTag("Player");
-            if (go == null) go = GameObject.FindWithTag("HeroTarget");
+            // "HeroTarget" may be undefined (FindWithTag throws on an undefined tag).
+            if (go == null) go = SafeFindWithTag("HeroTarget");
             if (go == null) return;
             _hero = go.transform;
             _heroAgent = go.GetComponent<NavMeshAgent>();
+        }
+
+        /// <summary>Undefined-tag-safe FindWithTag (Unity throws on an undefined tag).</summary>
+        private static GameObject SafeFindWithTag(string tag)
+        {
+            try { return GameObject.FindWithTag(tag); }
+            catch (UnityEngine.UnityException) { return null; }
         }
     }
 }

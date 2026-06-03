@@ -56,8 +56,18 @@ namespace DeNelle.Village
         private void OnTriggerEnter(Collider other)
         {
             if (_isLowered || _animating) return;
-            if (!other.CompareTag("Player") && !other.CompareTag("HeroTarget")) return;
+            // "Player" is a built-in tag; "HeroTarget" may be undefined (CompareTag
+            // throws on an undefined tag) — guard the second check.
+            if (!other.CompareTag("Player") && !HasTag(other, "HeroTarget")) return;
             StartCoroutine(LowerRoutine());
+        }
+
+        /// <summary>Undefined-tag-safe CompareTag (Unity throws on an undefined tag).</summary>
+        private static bool HasTag(Component c, string tag)
+        {
+            if (c == null) return false;
+            try { return c.CompareTag(tag); }
+            catch (UnityEngine.UnityException) { return false; }
         }
 
         public void LowerImmediate()

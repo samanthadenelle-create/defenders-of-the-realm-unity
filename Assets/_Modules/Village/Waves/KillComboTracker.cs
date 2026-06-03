@@ -136,11 +136,19 @@ namespace DeNelle.Village
             if (_heroTransform != null && _heroTransform.gameObject.activeInHierarchy)
                 return _heroTransform.position;
 
+            // "HeroTarget" may be undefined (FindWithTag throws on an undefined tag).
             var heroGo = GameObject.FindWithTag("Player")
-                      ?? GameObject.FindWithTag("HeroTarget");
+                      ?? SafeFindWithTag("HeroTarget");
             if (heroGo != null) _heroTransform = heroGo.transform;
 
             return _heroTransform != null ? _heroTransform.position : Vector3.zero;
+        }
+
+        /// <summary>Undefined-tag-safe FindWithTag (Unity throws on an undefined tag).</summary>
+        private static GameObject SafeFindWithTag(string tag)
+        {
+            try { return GameObject.FindWithTag(tag); }
+            catch (UnityEngine.UnityException) { return null; }
         }
 
         /// <summary>

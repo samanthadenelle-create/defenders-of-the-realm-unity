@@ -271,8 +271,16 @@ namespace DeNelle.Village
             _nextHeroRefresh = Time.time + HeroRefreshInterval;
 
             var p = GameObject.FindWithTag("Player");
-            if (p == null) p = GameObject.FindWithTag("HeroTarget");
+            // "HeroTarget" may be undefined (FindWithTag throws on an undefined tag).
+            if (p == null) p = SafeFindWithTag("HeroTarget");
             if (p != null) _hero = p.transform;
+        }
+
+        /// <summary>Undefined-tag-safe FindWithTag (Unity throws on an undefined tag).</summary>
+        private static GameObject SafeFindWithTag(string tag)
+        {
+            try { return GameObject.FindWithTag(tag); }
+            catch (UnityEngine.UnityException) { return null; }
         }
 
         public void OnHeroApproach()
@@ -334,7 +342,8 @@ namespace DeNelle.Village
 
         private IEnumerator ScreenFlashRoutine()
         {
-            var flash = GameObject.FindWithTag("ScreenFlash");
+            // "ScreenFlash" may be undefined (FindWithTag throws on an undefined tag).
+            var flash = SafeFindWithTag("ScreenFlash");
             if (flash == null) yield break;
             var img = flash.GetComponent<UnityEngine.UI.Image>();
             if (img == null) yield break;

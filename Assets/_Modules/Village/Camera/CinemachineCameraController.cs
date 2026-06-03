@@ -98,8 +98,10 @@ namespace DeNelle.Village
 
         private void CheckCombatProximity()
         {
-            // Find the hero by canonical tag (CLAUDE.md §7).
-            var heroGo = GameObject.FindWithTag("HeroTarget");
+            // Find the hero by canonical tag (CLAUDE.md §7). "HeroTarget" may be
+            // undefined (FindWithTag throws on an undefined tag) — guard it;
+            // "Player" is a built-in tag and always safe.
+            var heroGo = SafeFindWithTag("HeroTarget");
             if (heroGo == null) heroGo = GameObject.FindWithTag("Player");
             if (heroGo == null) return;
 
@@ -111,6 +113,13 @@ namespace DeNelle.Village
 
             if (vcCombat  != null) vcCombat.enabled  = enemyNear;
             if (vcVillage != null) vcVillage.enabled  = !enemyNear;
+        }
+
+        /// <summary>Undefined-tag-safe FindWithTag (Unity throws on an undefined tag).</summary>
+        private static GameObject SafeFindWithTag(string tag)
+        {
+            try { return GameObject.FindWithTag(tag); }
+            catch (UnityEngine.UnityException) { return null; }
         }
 
         /// <summary>

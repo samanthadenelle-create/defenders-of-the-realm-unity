@@ -145,9 +145,14 @@ namespace DeNelle.Village
             var hc = FindAnyObjectByType<HeartController>();
             _heartTransform = hc != null ? hc.transform : null;
 
-            var heroTagged = GameObject.FindWithTag("HeroTarget");
-            if (heroTagged == null) heroTagged = GameObject.FindWithTag("Player");
-            _heroTransform = heroTagged != null ? heroTagged.transform : null;
+            // "HeroTarget" may be undefined (FindWithTag throws) — TryFindByTag guards
+            // it; "Player" is a built-in tag and always safe.
+            _heroTransform = TryFindByTag("HeroTarget");
+            if (_heroTransform == null)
+            {
+                var playerGo = GameObject.FindWithTag("Player");
+                _heroTransform = playerGo != null ? playerGo.transform : null;
+            }
 
             _petTransform = TryFindByTag("PetTarget");
         }

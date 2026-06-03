@@ -285,10 +285,15 @@ namespace DeNelle.Village
             _heartTransform = hc != null ? hc.transform : null;
 
             // WO-49/WO-92: prefer tagged lookup; fall back to "Player" tag for
-            // scenes that haven't been updated to use HeroTarget yet.
-            var heroTagged = GameObject.FindWithTag("HeroTarget");
-            if (heroTagged == null) heroTagged = GameObject.FindWithTag("Player");
-            _heroTransform = heroTagged != null ? heroTagged.transform : null;
+            // scenes that haven't been updated to use HeroTarget yet. "HeroTarget"
+            // may be undefined (FindWithTag throws) — TryFindByTag guards it; "Player"
+            // is a built-in tag and always safe.
+            _heroTransform = TryFindByTag("HeroTarget");
+            if (_heroTransform == null)
+            {
+                var playerGo = GameObject.FindWithTag("Player");
+                _heroTransform = playerGo != null ? playerGo.transform : null;
+            }
 
             // WO-145 (Tactic A): resolve the player's pet by tag (null-safe). The pet
             // is DeNelle.Pets — we never reference it for AI, only target its tagged
@@ -904,10 +909,12 @@ namespace DeNelle.Village
         /// </summary>
         private Transform FindClosestTarget()
         {
-            var hero = GameObject.FindWithTag("HeroTarget");
-            if (hero != null) return hero.transform;
-            var heart = GameObject.FindWithTag("HeartTarget");
-            return heart != null ? heart.transform : _heartTransform;
+            // "HeroTarget"/"HeartTarget" may be undefined (FindWithTag throws on an
+            // undefined tag) — TryFindByTag guards both.
+            var hero = TryFindByTag("HeroTarget");
+            if (hero != null) return hero;
+            var heart = TryFindByTag("HeartTarget");
+            return heart != null ? heart : _heartTransform;
         }
 
         // ── Healer tick ───────────────────────────────────────────────────────

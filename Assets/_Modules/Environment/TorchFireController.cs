@@ -110,10 +110,22 @@ public class TorchFireController : MonoBehaviour
         var cols = Physics.OverlapSphere(transform.position, combatRadius);
         foreach (var col in cols)
         {
-            if (col.CompareTag("Enemy") || col.CompareTag("EnemyProjectile"))
+            // CompareTag THROWS on a tag that isn't defined in TagManager.
+            // "Enemy"/"EnemyProjectile" aren't guaranteed defined, so guard the
+            // check rather than spamming UnityException every Update.
+            if (HasTag(col, "Enemy") || HasTag(col, "EnemyProjectile"))
                 return true;
         }
         return false;
+    }
+
+    /// <summary>Undefined-tag-safe CompareTag. Returns false if the tag is not
+    /// defined in the project (Unity throws UnityException otherwise).</summary>
+    private static bool HasTag(Component c, string tag)
+    {
+        if (c == null) return false;
+        try { return c.CompareTag(tag); }
+        catch (UnityEngine.UnityException) { return false; }
     }
 
     // ── Editor helpers ────────────────────────────────────────────────────────

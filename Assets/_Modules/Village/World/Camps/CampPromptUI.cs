@@ -122,12 +122,20 @@ namespace DeNelle.Village.World.Camps
                 var p = GameObject.FindWithTag("Player");
                 if (p == null)
                 {
-                    var ht = GameObject.FindWithTag("HeroTarget");
+                    // "HeroTarget" may be undefined (FindWithTag throws on an undefined tag).
+                    var ht = SafeFindWithTag("HeroTarget");
                     if (ht != null) p = ht;
                 }
                 _hero = p != null ? p.transform : null;
             }
             if (_cam == null) _cam = Camera.main;
+        }
+
+        /// <summary>Undefined-tag-safe FindWithTag (Unity throws on an undefined tag).</summary>
+        private static GameObject SafeFindWithTag(string tag)
+        {
+            try { return GameObject.FindWithTag(tag); }
+            catch (UnityEngine.UnityException) { return null; }
         }
 
         // =====================================================================

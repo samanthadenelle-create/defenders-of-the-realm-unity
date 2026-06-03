@@ -120,8 +120,10 @@ namespace DeNelle.HUD
 
         private static Component FindHeroProgression()
         {
+            // "Player" is a built-in tag; "HeroTarget" may be undefined (FindWithTag
+            // throws on an undefined tag) — guard the fallback.
             var heroGo = GameObject.FindWithTag("Player")
-                      ?? GameObject.FindWithTag("HeroTarget");
+                      ?? SafeFindWithTag("HeroTarget");
 
             Component prog = heroGo != null
                 ? heroGo.GetComponent("HeroProgression")
@@ -135,6 +137,13 @@ namespace DeNelle.HUD
             }
 
             return prog;
+        }
+
+        /// <summary>Undefined-tag-safe FindWithTag (Unity throws on an undefined tag).</summary>
+        private static GameObject SafeFindWithTag(string tag)
+        {
+            try { return GameObject.FindWithTag(tag); }
+            catch (UnityEngine.UnityException) { return null; }
         }
 
         private static int GetInt(System.Type type, object obj, string propName, int fallback)
