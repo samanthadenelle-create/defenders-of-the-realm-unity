@@ -915,12 +915,17 @@ namespace DeNelle.HUD
                 // ability cells sit around a centre — primary Q at the BOTTOM (closest to the
                 // resting right thumb), W right, E top, R left — inside a bottom-right box.
                 // Each cell is absolutely placed; sizes in code (USS doesn't render in builds).
-                const float Cell = 76f;     // touch target (was a cramped row before)
-                const float Reach = 58f;    // centre-to-cell spread
+                const float Cell = 72f;     // touch target (was a cramped row before)
+                const float Reach = 54f;    // centre-to-cell spread (tightened so the
+                                            // diamond + Build stack fits a portrait phone)
                 float box = Cell + Reach * 2f;
                 var s = _abilityBar.style;
                 s.position = Position.Absolute;
-                s.right = 18; s.bottom = 18;
+                // DEF-134: lift the diamond OFF the very bottom-right corner — the
+                // browser/WebGL fullscreen toggle lives there and was touching the
+                // primary (Q) cell. right:24/bottom:64 keeps the whole cluster clear
+                // of both the corner toggle and the screen edge on a portrait phone.
+                s.right = 24; s.bottom = 64;
                 s.left = StyleKeyword.Auto; s.top = StyleKeyword.Auto;
                 s.width = box; s.height = box;
 
@@ -946,10 +951,15 @@ namespace DeNelle.HUD
             }
             if (_buildButton != null)
             {
-                // Build sits just ABOVE the diamond box, same right margin.
+                // Build sits just ABOVE the diamond box, same right margin. DEF-134:
+                // derive the offset from the SAME diamond metrics (bottom + box) plus
+                // a 12px gap so the button never overlaps the top (E) ability cell —
+                // the old hard-coded 18+(76+116)+8 no longer matched the box height.
+                const float Cell = 72f, Reach = 54f, Gap = 12f;
+                float diamondBox = Cell + Reach * 2f;   // = 180, must match the block above
                 var b = _buildButton.style;
                 b.position = Position.Absolute;
-                b.right = 18; b.bottom = 18 + (76f + 116f) + 8f;
+                b.right = 24; b.bottom = 64 + diamondBox + Gap;
                 b.left = StyleKeyword.Auto; b.top = StyleKeyword.Auto;
                 b.minWidth = 110; b.height = 42;
             }

@@ -243,6 +243,13 @@ namespace DeNelle.Village
                 _currentVisual = Instantiate(upgrade.visualPrefab, transform);
                 _currentVisual.transform.localPosition = Vector3.zero;
                 _currentVisual.transform.localRotation = Quaternion.identity;
+                // DEF-134: BlastTower.fbx ships with EMBEDDED (non-URP) materials
+                // (materialLocation=1) which render as untextured gray/magenta cubes
+                // under URP in the player build — the "floating untextured tower"
+                // owner reported. Retarget every renderer to a real URP/Lit material
+                // (mirrors PatriciaLightController.RetargetMaterialsToUrp / the Tripo
+                // fixer) so the placed tower always reads as solid stone, not raw cubes.
+                RetargetMaterialsToUrp(_currentVisual);
                 // Authored tower models (BlastTower.fbx) import at a tiny native
                 // scale -> the placed tower read ~10x too small. Normalize to a
                 // sensible world height from renderer bounds (grows per level).
@@ -318,6 +325,70 @@ namespace DeNelle.Village
             for (int i = 1; i < renderers.Length; i++) b2.Encapsulate(renderers[i].bounds);
             float feet = b2.min.y - visual.transform.position.y;
             if (feet < 0f) visual.transform.localPosition -= new Vector3(0f, feet, 0f);
+        }
+
+        /// <summary>
+        /// DEF-134: Re-targets every renderer on an instantiated authored tower model
+        /// to a real URP/Lit material, carrying base colour + base/normal maps across.
+        /// FBX models with embedded (non-URP) materials render as untextured gray or
+        /// magenta cubes under URP in the player build; this guarantees a lit, tinted
+        /// surface instead. No-op for materials already on a URP shader. Mirrors
+        /// PatriciaLightController.RetargetMaterialsToUrp (the same fix for the spire).
+        /// </summary>
+        private static void RetargetMaterialsToUrp(GameObject go)
+        {
+            if (go == null) return;
+            Shader lit = Shader.Find("Universal Render Pipeline/Lit")
+                      ?? Shader.Find("Universal Render Pipeline/Simple Lit")
+                      ?? Shader.Find("Standard");
+            if (lit == null) return;
+
+            foreach (var r in go.GetComponentsInChildren<Renderer>(true))
+            {
+                if (r == null) continue;
+                var mats = r.sharedMaterials;
+                if (mats == null) continue;
+                for (int i = 0; i < mats.Length; i++)
+                {
+                    var src = mats[i];
+                    // A null slot is the classic "magenta" cause; replace it with a
+                    // neutral stone URP material so the tower never shows the error shader.
+                    if (src == null)
+                    {
+                        var fallback = new Material(lit) { name = "TowerStone (URP)" };
+                        if (fallback.HasProperty("_BaseColor"))
+                            fallback.SetColor("_BaseColor", new Color(0.52f, 0.50f, 0.55f));
+                        if (fallback.HasProperty("_Color"))
+                            fallback.SetColor("_Color", new Color(0.52f, 0.50f, 0.55f));
+                        mats[i] = fallback;
+                        continue;
+                    }
+                    if (src.shader != null && src.shader.name.StartsWith(
+                        "Universal Render Pipeline/", StringComparison.Ordinal)) continue;
+
+                    Texture baseTex = null;
+                    if (src.HasProperty("_MainTex")) baseTex = src.GetTexture("_MainTex");
+                    if (baseTex == null && src.HasProperty("_BaseMap")) baseTex = src.GetTexture("_BaseMap");
+                    Color baseColor = Color.white;
+                    if (src.HasProperty("_BaseColor")) baseColor = src.GetColor("_BaseColor");
+                    else if (src.HasProperty("_Color")) baseColor = src.GetColor("_Color");
+                    Texture normalTex = null;
+                    if (src.HasProperty("_BumpMap")) normalTex = src.GetTexture("_BumpMap");
+
+                    var m = new Material(lit) { name = (src.name ?? "Tower") + " (URP)" };
+                    if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", baseColor);
+                    if (m.HasProperty("_Color"))     m.SetColor("_Color", baseColor);
+                    if (baseTex != null)
+                    {
+                        if (m.HasProperty("_BaseMap")) m.SetTexture("_BaseMap", baseTex);
+                        if (m.HasProperty("_MainTex")) m.SetTexture("_MainTex", baseTex);
+                    }
+                    if (normalTex != null && m.HasProperty("_BumpMap"))
+                    { m.SetTexture("_BumpMap", normalTex); m.EnableKeyword("_NORMALMAP"); }
+                    mats[i] = m;
+                }
+                r.sharedMaterials = mats;
+            }
         }
 
         // ── Empowerment — public API ───────────────────────────────────────────

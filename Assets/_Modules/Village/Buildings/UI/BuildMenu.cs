@@ -342,7 +342,13 @@ namespace DeNelle.Village
                 _codePanel = new VisualElement { name = "buildmenu-code-fallback" };
                 var s = _codePanel.style;
                 s.position = Position.Absolute;
-                s.left = 20f; s.top = 90f; s.minWidth = 220f;
+                // DEF-134: was left:20, top:90 — that overlapped the HUD's top-left
+                // column (the "⊕ Skills" button sits at left:16, top:110, and the
+                // vitals cards above it), so the menu covered the Skills control.
+                // Drop it BELOW that column (skills ends ~top:150) and indent it so it
+                // clears the left HUD chrome while staying well left of the bottom-
+                // right ability diamond + Build button cluster.
+                s.left = 16f; s.top = 158f; s.minWidth = 220f;
                 s.paddingTop = 14f; s.paddingBottom = 14f; s.paddingLeft = 16f; s.paddingRight = 16f;
                 s.backgroundColor = new Color(0.08f, 0.10f, 0.16f, 0.96f);
                 s.borderTopLeftRadius = 10f; s.borderTopRightRadius = 10f;
