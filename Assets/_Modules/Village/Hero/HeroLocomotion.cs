@@ -231,12 +231,19 @@ namespace DeNelle.Village
                 _victoryPose = false;  // player moved or the timer elapsed — resume
             }
 
-            // WORLD-relative movement (owner 2026-05-25): W = +Z (up-screen / north),
-            // D = +X (right). The village camera is now a FIXED-angle follow looking
-            // north, so world axes ARE screen axes — and decoupling movement from the
-            // camera entirely eliminates the old camera-relative feedback loop that
-            // made the hero curl into circles. Bulletproof: no Camera.main dependency.
-            Vector3 move = new Vector3(input.x, 0f, input.y);
+            // Camera-relative movement (DEF-204, CAMERA_INPUT_OVERHAUL.md §3): up on stick =
+            // away from camera = up-screen. We read the CAMERA'S yaw — an explicit
+            // player-controlled value (SmartMobileCamera._panYaw) — NEVER the hero's travel
+            // heading. That is the half of the loop we are allowed to keep; the camera-yaw
+            // half ({yaw←velocity}) is structurally absent. Together they satisfy "at most one
+            // of {yaw←velocity, move←yaw}", so the old "always turn left" curl cannot return.
+            // When _orbitBehind is OFF, CameraYaw returns 0 → identity basis → byte-identical
+            // to the legacy world-relative build (A/B parity). cam==null guard covers the DTT
+            // scene (no SmartMobileCamera) → world-relative fallback.
+            var cam = SmartMobileCamera.Instance;
+            float camYaw = cam != null ? cam.CameraYaw : 0f;
+            Quaternion basis = Quaternion.Euler(0f, camYaw, 0f);
+            Vector3 move = basis * new Vector3(input.x, 0f, input.y);
             if (move.sqrMagnitude > 1f) move.Normalize();
 
             // Smooth velocity toward target — instant max-speed felt rigid.

@@ -123,12 +123,33 @@ namespace DeNelle.Village
             pos = (Vector2)UnityEngine.Input.mousePosition;
         }
 
-        private void Layout()
+        // DEF-202/204 (CAMERA_INPUT_OVERHAUL.md §4.2): the single source of truth for the
+        // joystick's screen geometry, so CameraPanInput's start-zone exclusion can't drift
+        // from the live layout. _radius = max(60, min(w,h)*0.16); centre at (_radius*1.35,
+        // _radius*1.35) from bottom-left. Returns (radius, centre) — used by both Layout()
+        // and the static IsInZone() test.
+        private static void ComputeZone(out float radius, out Vector2 center)
         {
             float s = Mathf.Min(Screen.width, Screen.height);
-            _radius = Mathf.Max(60f, s * 0.16f);
-            float margin = _radius * 1.35f;
-            _baseCenter = new Vector2(margin, margin);   // bottom-left
+            radius = Mathf.Max(60f, s * 0.16f);
+            float margin = radius * 1.35f;
+            center = new Vector2(margin, margin);   // bottom-left
+        }
+
+        /// <summary>
+        /// True if <paramref name="screenPos"/> (px, origin bottom-left) is inside the
+        /// joystick engage zone (the same radius*1.7 circle the joystick claims at Update).
+        /// CameraPanInput uses this so it never claims a finger that STARTED in the stick zone.
+        /// </summary>
+        public static bool IsInZone(Vector2 screenPos)
+        {
+            ComputeZone(out float radius, out Vector2 center);
+            return (screenPos - center).magnitude <= radius * 1.7f;
+        }
+
+        private void Layout()
+        {
+            ComputeZone(out _radius, out _baseCenter);
             if (_baseRect != null)
             {
                 _baseRect.position = _baseCenter;

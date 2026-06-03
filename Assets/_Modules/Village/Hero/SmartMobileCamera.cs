@@ -128,6 +128,13 @@ namespace DeNelle.Village
         // must be decoupled from the locomotion input frame. Left here, off, for that pass.
         [SerializeField] private bool _orbitBehind = false;
 
+        // DEF-202/204 (owner: camera was the "worst feature" — world-locked yaw). The fix
+        // ships behind _orbitBehind, but Village.unity BAKES _orbitBehind=0, so a BUILD ships
+        // world-locked — the exact reason this kept reopening (a C# default flip is overridden
+        // by the baked scene value). Force it ON at runtime, no rebake, mirroring the
+        // legacy-offset migration in Awake. Set false in code to A/B the legacy camera.
+        [SerializeField] private bool _forceCameraFix = true;
+
         [Tooltip("Degrees/sec the camera yaw chases the hero's travel heading. Lower = lazier, " +
                  "more cinematic swing; higher = snaps behind faster.")]
         [SerializeField, Min(15f)] private float _orbitYawSpeed = 150f;
@@ -135,6 +142,28 @@ namespace DeNelle.Village
         [Tooltip("Min planar speed (m/s) before the orbit yaw updates — below this the camera " +
                  "holds its current angle (so standing still / tiny nudges don't spin the view).")]
         [SerializeField, Min(0.01f)] private float _orbitMoveThreshold = 0.4f;
+
+        // DEF-202/204 player-authoritative orbit (CAMERA_INPUT_OVERHAUL.md §2). The yaw is
+        // driven ONLY by player pan input (CameraPanInput → AddYaw) plus an optional damped
+        // pull toward the hero's FACING (never velocity). This structurally excludes the old
+        // velocity-chasing curl/spiral: {yaw←velocity} is absent, only {move←yaw} remains.
+        [Tooltip("Min vertical pitch (deg) the player can tilt the orbit camera to (negative = look up).")]
+        [SerializeField] private float _panPitchMin = -10f;
+
+        [Tooltip("Max vertical pitch (deg) the player can tilt the orbit camera to.")]
+        [SerializeField] private float _panPitchMax = 35f;
+
+        [Tooltip("DEF-202/204: gentle auto-recenter that swings the camera toward the hero's FACING " +
+                 "(never velocity) after an idle delay. OFF by default — the camera holds the player's " +
+                 "last yaw until they drag again. Loop gain < 1 (damped + idle-gated + suspended during " +
+                 "drag) so it converges, never spirals.")]
+        [SerializeField] private bool _facingRecenterEnabled = false;
+
+        [Tooltip("Seconds of no-drag before the facing-recenter resumes (only if enabled).")]
+        [SerializeField, Min(0f)] private float _facingRecenterDelay = 2f;
+
+        [Tooltip("Degrees/sec the facing-recenter swings the camera toward the hero's facing.")]
+        [SerializeField, Min(0f)] private float _facingRecenterSpeed = 90f;
 
         [Header("Wall collision (DEF-151)")]
         [Tooltip("When ON, the camera spherecasts from the hero pivot toward its desired position " +
@@ -186,8 +215,17 @@ namespace DeNelle.Village
         private float   _combatBlend;       // 0 = idle, 1 = full combat zoom
         private Vector3 _nearestEnemyPos;
         private bool    _enemyInRange;
-        private float   _orbitYaw;          // smoothed camera yaw (deg) for orbit-behind
+        private float   _orbitYaw;          // legacy: smoothed camera yaw (deg) — no longer drives rotation
         private bool    _orbitYawInit;      // seeded from the hero's facing on first frame
+
+        // ── Player-authoritative camera yaw (DEF-202/204, CAMERA_INPUT_OVERHAUL.md §2) ──
+        // Written ONLY by AddYaw/AddPitch (pan input) plus an optional damped pull toward
+        // hero FACING. NEVER a function of hero velocity/position/MoveIntent. This is the
+        // single yaw authority for both the camera seat AND HeroLocomotion's movement basis
+        // (read via CameraYaw), so a constant stick yields a straight line — no spiral.
+        private float _panYaw;
+        private float _panPitch;          // clamped to [_panPitchMin, _panPitchMax]
+        private float _timeSinceLastDrag; // drives the idle-gated facing-recenter
 
         private readonly Collider[] _scanBuffer = new Collider[32];
 
@@ -204,6 +242,30 @@ namespace DeNelle.Village
         /// Audio / VFX systems use this to call <see cref="Shake"/>.
         /// </summary>
         public static SmartMobileCamera Instance { get; private set; }
+
+        // ── Player-authoritative camera yaw API (DEF-202/204) ──────────────────
+        /// <summary>
+        /// The camera's current yaw (deg) used as the basis for camera-relative movement
+        /// (HeroLocomotion reads this). Returns 0 when orbit-behind is OFF, so movement
+        /// stays world-relative and byte-identical to the legacy shipped build (A/B parity).
+        /// This is a pure player-input value — NEVER derived from hero velocity — so holding
+        /// a constant stick produces a straight line with no spiral.
+        /// </summary>
+        public float CameraYaw => _orbitBehind ? _panYaw : 0f;
+
+        /// <summary>Player drag / right-stick yaw delta (deg). The ONLY way external input rotates the view.</summary>
+        public void AddYaw(float deg)
+        {
+            _panYaw += deg;
+            _timeSinceLastDrag = 0f;
+        }
+
+        /// <summary>Optional pitch from vertical drag; clamped to the safe [_panPitchMin, _panPitchMax] band.</summary>
+        public void AddPitch(float deg)
+        {
+            _panPitch = Mathf.Clamp(_panPitch + deg, _panPitchMin, _panPitchMax);
+            _timeSinceLastDrag = 0f;
+        }
 
         // ── Lifecycle ──────────────────────────────────────────────────────────
 
@@ -232,6 +294,15 @@ namespace DeNelle.Village
                 Debug.Log($"[SmartMobileCamera] retiring legacy top-down offset {_followOffset} " +
                           $"-> {DefaultFollowOffset} (close 3D third-person).");
                 _followOffset = DefaultFollowOffset;
+            }
+
+            // DEF-202/204: override the baked _orbitBehind=0 / _facingRecenterEnabled=0 so the
+            // BUILD gets the camera fix (camera-relative movement + slide-to-pan + lazy
+            // swing-behind). No rebake — same one-time-migration pattern as the offset above.
+            if (_forceCameraFix)
+            {
+                _orbitBehind = true;
+                _facingRecenterEnabled = true;
             }
 
             ResolveCollisionMask();
@@ -322,21 +393,24 @@ namespace DeNelle.Village
             // ── 3. Follow offset with combat zoom (+ orbit-behind) ────────────
             Vector3 zoomOffset = _followOffset + new Vector3(0f, 0f, -_combatZoomOut * _combatBlend);
 
-            // Orbit-behind: rotate the offset by a yaw that chases the hero's travel
-            // heading, so rounding a building keeps the camera at the hero's back
-            // (true third-person). Seeded from the hero's facing; only updates while
-            // actually moving, so standing still doesn't spin the view.
-            Vector3 heroVelFlat = GetHeroVelocity();
-            heroVelFlat.y = 0f;
+            // Orbit-behind (DEF-202/204, CAMERA_INPUT_OVERHAUL.md §2): rotate the offset by
+            // the PLAYER-authoritative _panYaw (set via AddYaw from pan input) — NOT the hero's
+            // velocity. The old velocity-chasing yaw fed back into camera-relative movement and
+            // produced the "always turn left" curl; that {yaw←velocity} edge is now structurally
+            // absent. _panYaw is a pure accumulator of player input plus an optional damped pull
+            // toward the hero's FACING, so holding a constant stick yields a straight line.
             if (_orbitBehind)
             {
-                if (!_orbitYawInit) { _orbitYaw = _target.eulerAngles.y; _orbitYawInit = true; }
-                if (heroVelFlat.magnitude >= _orbitMoveThreshold)
-                {
-                    float targetYaw = Mathf.Atan2(heroVelFlat.x, heroVelFlat.z) * Mathf.Rad2Deg;
-                    _orbitYaw = Mathf.MoveTowardsAngle(_orbitYaw, targetYaw, _orbitYawSpeed * dt);
-                }
-                zoomOffset = Quaternion.Euler(0f, _orbitYaw, 0f) * zoomOffset;
+                if (!_orbitYawInit) { _panYaw = _target.eulerAngles.y; _orbitYawInit = true; }
+
+                // Gentle facing-recenter (OFF by default). Targets the hero's FACING (never
+                // velocity), suspended while the player is actively dragging (AddYaw resets
+                // _timeSinceLastDrag). Loop gain < 1 (small step, idle-gated) → converges.
+                _timeSinceLastDrag += dt;
+                if (_facingRecenterEnabled && _timeSinceLastDrag > _facingRecenterDelay)
+                    _panYaw = Mathf.MoveTowardsAngle(_panYaw, _target.eulerAngles.y, _facingRecenterSpeed * dt);
+
+                zoomOffset = Quaternion.Euler(_panPitch, _panYaw, 0f) * zoomOffset;
             }
 
             Vector3 desired = _target.position + zoomOffset;
@@ -360,7 +434,11 @@ namespace DeNelle.Village
             _cam.fieldOfView = Mathf.Lerp(_baseFov, _baseFov + _combatFovBoost, _combatBlend);
 
             // ── 5. Movement lead ──────────────────────────────────────────────
-            // (heroVelFlat computed once in section 3 for the orbit yaw — reused here.)
+            // Hero velocity is used ONLY for the look-at lead bias here — it MUST NOT feed
+            // the camera yaw (_panYaw), or the old curl/spiral returns. This is the single
+            // GetHeroVelocity() call, deliberately below the yaw block (CAMERA_INPUT_OVERHAUL.md §2.3).
+            Vector3 heroVelFlat = GetHeroVelocity();
+            heroVelFlat.y = 0f;
             Vector3 heroBase = _target.position + Vector3.up * _lookAtHeight;
             Vector3 leadTarget = heroBase;
             if (heroVelFlat.sqrMagnitude > 0.01f)
