@@ -45,6 +45,12 @@ namespace DeNelle.Village
         public string job;        // "mage" | "knight" | "ranger" | "any"
         public string rarity;
         public float damageMult = 1f;
+        // MELEE reach (m): extends the basic-attack hitbox radius for a melee weapon
+        // (greatsword/polearm/axe outreach a dagger). 0 = "unset" -> the hero keeps
+        // PlayerAttackController's fixed AttackRange. Only meaningful for melee jobs
+        // (knight); ranged jobs (mage/ranger) attack via AbilityDef.Range and leave
+        // this 0, so their reach is unaffected.
+        public float reach = 0f;
         public GearReq req;
     }
 

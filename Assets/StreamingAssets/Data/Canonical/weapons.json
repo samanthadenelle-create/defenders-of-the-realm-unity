@@ -1,15 +1,15 @@
 {
-  "_note": "Gear v1 weapon catalog (data-driven, same pattern as abilities.json). damageMult joins the hero's damage chain (base x talent x level x timing x WEAPON). req starts level-gated; add dex/arcane/might keys later. icon = emoji placeholder until real art ships (swap the field, zero code change).",
+  "_note": "Gear v1 weapon catalog (data-driven, same pattern as abilities.json). damageMult joins the hero's damage chain (base x talent x level x timing x WEAPON). reach = MELEE hitbox radius in metres for MELEE jobs (knight) — overrides PlayerAttackController's fixed AttackRange (3.2) when >0; a heavier/longer blade outreaches a lighter one. Ranged jobs (mage/ranger) attack via AbilityDef.Range and leave reach 0 (unset) so their range is unchanged. req starts level-gated; add dex/arcane/might keys later. icon = emoji placeholder until real art ships (swap the field, zero code change).",
   "weapons": [
     { "id": "mage_starter",  "name": "Apprentice Wand",  "icon": "🪄", "job": "mage",   "rarity": "common",   "damageMult": 1.0,  "req": { "level": 1 } },
     { "id": "mage_oak",      "name": "Oakheart Staff",   "icon": "🪄", "job": "mage",   "rarity": "uncommon", "damageMult": 1.25, "req": { "level": 3 } },
     { "id": "mage_arcane",   "name": "Arcane Scepter",   "icon": "🔮", "job": "mage",   "rarity": "rare",     "damageMult": 1.6,  "req": { "level": 6 } },
     { "id": "mage_void",     "name": "Voidcaller Staff", "icon": "🔮", "job": "mage",   "rarity": "epic",     "damageMult": 2.1,  "req": { "level": 10 } },
 
-    { "id": "knight_starter","name": "Squire's Blade",   "icon": "🗡️", "job": "knight", "rarity": "common",   "damageMult": 1.0,  "req": { "level": 1 } },
-    { "id": "knight_iron",   "name": "Iron Longsword",   "icon": "🗡️", "job": "knight", "rarity": "uncommon", "damageMult": 1.25, "req": { "level": 3 } },
-    { "id": "knight_oath",   "name": "Oathkeeper",       "icon": "⚔️", "job": "knight", "rarity": "rare",     "damageMult": 1.6,  "req": { "level": 6 } },
-    { "id": "knight_dawn",   "name": "Dawnbreaker",      "icon": "⚔️", "job": "knight", "rarity": "epic",     "damageMult": 2.1,  "req": { "level": 10 } },
+    { "id": "knight_starter","name": "Squire's Blade",   "icon": "🗡️", "job": "knight", "rarity": "common",   "damageMult": 1.0,  "reach": 2.8, "req": { "level": 1 } },
+    { "id": "knight_iron",   "name": "Iron Longsword",   "icon": "🗡️", "job": "knight", "rarity": "uncommon", "damageMult": 1.25, "reach": 3.4, "req": { "level": 3 } },
+    { "id": "knight_oath",   "name": "Oathkeeper",       "icon": "⚔️", "job": "knight", "rarity": "rare",     "damageMult": 1.6,  "reach": 4.0, "req": { "level": 6 } },
+    { "id": "knight_dawn",   "name": "Dawnbreaker",      "icon": "⚔️", "job": "knight", "rarity": "epic",     "damageMult": 2.1,  "reach": 4.6, "req": { "level": 10 } },
 
     { "id": "ranger_starter","name": "Hunter's Shortbow","icon": "🏹", "job": "ranger", "rarity": "common",   "damageMult": 1.0,  "req": { "level": 1 } },
     { "id": "ranger_yew",    "name": "Yewwood Longbow",  "icon": "🏹", "job": "ranger", "rarity": "uncommon", "damageMult": 1.25, "req": { "level": 3 } },

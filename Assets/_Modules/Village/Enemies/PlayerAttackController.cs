@@ -33,11 +33,36 @@ namespace DeNelle.Village
         [Tooltip("Flat damage per hit before any talent multipliers.")]
         [SerializeField] private float _baseDamage = 30f;
 
-        [Tooltip("Radius of the OverlapSphere damage check around the hero.")]
+        [Tooltip("Radius of the OverlapSphere damage check around the hero (fallback when " +
+                 "the equipped weapon sets no reach).")]
         [SerializeField, Min(0.1f)] private float _attackRange = 3.2f;
 
-        /// <summary>Melee hitbox radius (m) — read by HeroReachRing to draw the reach ring.</summary>
-        public float AttackRange => _attackRange;
+        /// <summary>
+        /// Effective melee hitbox radius (m) — read by HeroReachRing to draw the reach ring,
+        /// and by the swing's OverlapSphere. Weapon-driven: a melee weapon with reach &gt; 0
+        /// (Knight's greatsword/polearm/axe outreach a dagger) overrides the fixed
+        /// <see cref="_attackRange"/>. Ranged classes (mage/ranger) never set reach, so they
+        /// keep the fixed range — their real attacks route through AbilityDef.Range, unchanged.
+        /// </summary>
+        public float AttackRange => EffectiveRange();
+
+        // Gear v1: lazily-resolved equipped-gear loadout — its EquippedWeapon.reach (when >0)
+        // overrides the fixed melee range. Lazily attached so every hero gets gear with no
+        // builder change; graceful — no loadout / no weapon / reach 0 leaves the fixed range.
+        private GearLoadout _gear;
+
+        /// <summary>
+        /// The melee reach to use this swing: the equipped weapon's reach when set (&gt; 0),
+        /// otherwise the serialized fixed <see cref="_attackRange"/>. Preserves today's
+        /// behaviour whenever no weapon reach is authored (all ranged classes, and any melee
+        /// weapon without a reach value).
+        /// </summary>
+        private float EffectiveRange()
+        {
+            if (_gear == null) _gear = GetComponent<GearLoadout>();
+            var w = _gear != null ? _gear.EquippedWeapon : null;
+            return (w != null && w.reach > 0f) ? w.reach : _attackRange;
+        }
 
         [Tooltip("Minimum seconds between attacks.")]
         [SerializeField, Min(0.1f)] private float _attackCooldown = 0.6f;
@@ -171,7 +196,7 @@ namespace DeNelle.Village
             bool isPerfect  = elapsed >= _perfectHitWindowStart
                            && elapsed <= _perfectHitWindowEnd;
 
-            Collider[] hits = Physics.OverlapSphere(transform.position, _attackRange, _enemyLayer);
+            Collider[] hits = Physics.OverlapSphere(transform.position, EffectiveRange(), _enemyLayer);
 
             foreach (var col in hits)
             {
@@ -301,7 +326,7 @@ namespace DeNelle.Village
         private void OnDrawGizmosSelected()
         {
             Gizmos.color = new Color(1f, 0.4f, 0.1f, 0.25f);
-            Gizmos.DrawWireSphere(transform.position, _attackRange);
+            Gizmos.DrawWireSphere(transform.position, Application.isPlaying ? EffectiveRange() : _attackRange);
         }
 #endif
     }
