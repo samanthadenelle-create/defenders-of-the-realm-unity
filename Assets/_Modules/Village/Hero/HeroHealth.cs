@@ -317,9 +317,27 @@ namespace DeNelle.Village
         // ── IMGUI health bar (no UIDocument dependency) ───────────────────────
         private static Texture2D Px => Texture2D.whiteTexture;
 
+        // Reference resolution the bar is laid out against. IMGUI draws in raw
+        // pixels with no auto-scaling, so on a high-DPI / high-resolution player
+        // build the same fixed Rect lands at the wrong size & place — which is how
+        // this bar ended up "HUGE and floating mid-screen". We scale the whole pass
+        // by GUI.matrix against this reference so the bar is a CONSISTENT compact
+        // size and stays anchored top-left, just under the Heart bar, on any screen.
+        private const float RefWidth  = 1920f;
+        private const float RefHeight = 1080f;
+
         private void OnGUI()
         {
-            const float w = 260f, h = 22f, x = 20f, y = 110f;
+            // Compact bar, anchored top-left under the top-left Heart HP bar.
+            const float w = 200f, h = 18f, x = 24f, y = 92f;
+
+            // Uniform reference-resolution scale (letterbox-safe: use the smaller
+            // axis ratio so the bar never balloons on ultrawide / tall screens).
+            float scale = Mathf.Min(Screen.width / RefWidth, Screen.height / RefHeight);
+            if (scale <= 0f) scale = 1f;
+            Matrix4x4 prevMatrix = GUI.matrix;
+            GUI.matrix = Matrix4x4.TRS(Vector3.zero, Quaternion.identity,
+                                       new Vector3(scale, scale, 1f));
 
             // Backdrop + empty track.
             GUI.color = new Color(0f, 0f, 0f, 0.55f);
@@ -337,13 +355,15 @@ namespace DeNelle.Village
             GUI.color = Color.white;
             var style = new GUIStyle(GUI.skin.label)
             {
-                fontSize = 13,
+                fontSize = 12,
                 fontStyle = FontStyle.Bold,
                 alignment = TextAnchor.MiddleCenter,
             };
             GUI.Label(new Rect(x, y, w, h),
                       $"Hero   {Mathf.CeilToInt(_hp)} / {Mathf.CeilToInt(_maxHp)}", style);
+
             GUI.color = Color.white;
+            GUI.matrix = prevMatrix;
         }
     }
 

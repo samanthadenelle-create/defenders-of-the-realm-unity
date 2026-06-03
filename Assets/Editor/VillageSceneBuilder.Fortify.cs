@@ -48,6 +48,15 @@ namespace DeNelle.Editor
                 // soft water sheen so the moat reads as calm liquid, not crystal/glass.
                 waterMat.SetFloat("_Smoothness", 0.30f);
                 if (waterMat.HasProperty("_Metallic")) waterMat.SetFloat("_Metallic", 0f);
+                // DEF-109 (2026-06-03): give the teal a faint self-emission so the moat stays
+                // a vivid blue-teal even on the shaded/fogged side rather than going murky-dark
+                // when shadows fall across the ring. Subtle — it lifts the water, not glows it.
+                if (waterMat.HasProperty("_EmissionColor"))
+                {
+                    waterMat.EnableKeyword("_EMISSION");
+                    waterMat.SetColor("_EmissionColor", new Color(0.05f, 0.18f, 0.22f));
+                    waterMat.globalIlluminationFlags = MaterialGlobalIlluminationFlags.EmissiveIsBlack;
+                }
                 waterMat.renderQueue = 3000;
                 waterMat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
                 waterMat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);

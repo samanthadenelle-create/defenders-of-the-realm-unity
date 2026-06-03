@@ -88,13 +88,20 @@ namespace DeNelle.Village
             return bar;
         }
 
+        // Sane clamp for the head offset. Callers derive this from world-space
+        // renderer bounds, and a mis-scaled / displaced (e.g. Tripo) mesh can report
+        // a bounds.max.y metres away from its pivot — which would fling the bar far
+        // from its owner and leave a green bar "floating mid-field with no owner".
+        // Clamp it so the bar always sits just over the unit it belongs to.
+        private const float MaxHeightOffset = 4.0f;
+
         /// <summary>(Re)configures the bar's data source and layout.</summary>
         public void Init(Func<float> fraction, Func<bool> isDead,
             float heightOffset = 2.4f, bool hideAtFull = true, bool destroyOnDead = true)
         {
             _fraction      = fraction;
             _isDead        = isDead;
-            _heightOffset  = heightOffset;
+            _heightOffset  = Mathf.Clamp(heightOffset, 0.5f, MaxHeightOffset);
             _hideAtFull    = hideAtFull;
             _destroyOnDead = destroyOnDead;
             if (_built && _canvas != null)
@@ -124,7 +131,10 @@ namespace DeNelle.Village
             crt.sizeDelta = _barSize;
             // Keep the bar a constant ~1.5m wide regardless of the host's scale —
             // enemies are imported at wildly different scales, so divide it out.
-            float hostScale = Mathf.Max(0.0001f, transform.lossyScale.x);
+            // Clamp the host-scale we divide by: a near-zero (or absurd) lossyScale
+            // — common on mis-imported / displaced meshes — would otherwise blow the
+            // bar up to fill the screen ("HUGE green bar floating mid-screen").
+            float hostScale = Mathf.Clamp(transform.lossyScale.x, 0.05f, 50f);
             canvasGo.transform.localScale = Vector3.one / hostScale;
 
             // Gold rim (slightly larger backing plate behind the frame).
@@ -175,6 +185,15 @@ namespace DeNelle.Village
         private void LateUpdate()
         {
             if (_canvas == null) return;
+
+            // Lost-owner guard: if the data source went away (delegate cleared) or
+            // the host this bar belongs to is no longer active, hide the bar so it
+            // can never linger as an ownerless green bar floating in the field.
+            if (_fraction == null || !gameObject.activeInHierarchy)
+            {
+                if (_canvas.enabled) _canvas.enabled = false;
+                return;
+            }
 
             // Dead. Enemies destroy the bar so it doesn't linger over a corpse;
             // the respawning hero merely hides it (the unit comes back).

@@ -90,12 +90,44 @@ namespace DeNelle.Editor
             var lightGo = new GameObject("Directional Light");
             var light = lightGo.AddComponent<Light>();
             light.type = LightType.Directional;
-            // Soft dawn — warm low sun (spec §14 Q4 default, §9.5 register).
-            light.color = new Color(1f, 0.93f, 0.82f);
-            light.intensity = 1.05f;
+            // DEF-109 (2026-06-03): the village read murky/dark in a live screenshot — a
+            // 1.05-intensity sun at only 16° above the horizon cast long, flat, gloomy light.
+            // Lift it to a brighter MID-MORNING sun: warmer-white, ~1.55 intensity, raised to
+            // ~42° elevation so the stylized geometry catches clean daylight without blowing
+            // out (kept under 2.0, soft shadows on, so highlights stay readable).
+            light.color = new Color(1f, 0.96f, 0.89f);
+            light.intensity = 1.55f;
             light.shadows = LightShadows.Soft;
-            // ~15° above the horizon (spec §9.5).
-            lightGo.transform.rotation = Quaternion.Euler(16f, -35f, 0f);
+            light.shadowStrength = 0.6f;   // softer shadows so shaded faces don't read as black
+            // ~42° above the horizon — mid-morning sun, removes the low-angle gloom.
+            lightGo.transform.rotation = Quaternion.Euler(42f, -35f, 0f);
+
+            // Environment / ambient + fog lift (DEF-109). No RenderSettings were configured
+            // before, so the scene inherited a dim default skybox-ambient that left shaded
+            // faces and the terrain murky.
+            ConfigureSceneLighting();
+        }
+
+        /// <summary>
+        /// DEF-109: lift ambient/environment lighting so the village reads clearly in daylight.
+        /// Gradient ambient (sky / equator / ground) brightens shaded surfaces without washing
+        /// out the directional key light. Mobile-cheap — no realtime GI, no extra lights.
+        /// </summary>
+        private static void ConfigureSceneLighting()
+        {
+            // Gradient (trichromatic) ambient — brighter than the dim default skybox ambient.
+            RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Trilight;
+            RenderSettings.ambientSkyColor     = new Color(0.62f, 0.66f, 0.74f); // soft blue sky bounce
+            RenderSettings.ambientEquatorColor = new Color(0.52f, 0.52f, 0.50f); // neutral horizon fill
+            RenderSettings.ambientGroundColor  = new Color(0.34f, 0.33f, 0.30f); // warm earth bounce
+            RenderSettings.ambientIntensity = 1.0f;
+
+            // Light, distance-only fog to keep depth/mood without darkening the foreground.
+            RenderSettings.fog = true;
+            RenderSettings.fogMode = FogMode.Linear;
+            RenderSettings.fogColor = new Color(0.70f, 0.74f, 0.80f);
+            RenderSettings.fogStartDistance = 80f;
+            RenderSettings.fogEndDistance   = 220f;
         }
 
         // =====================================================================
