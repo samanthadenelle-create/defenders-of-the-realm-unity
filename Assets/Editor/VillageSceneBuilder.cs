@@ -550,9 +550,11 @@ namespace DeNelle.Editor
                     for (int i = 0; i < mats.Length; i++)
                     {
                         var m = mats[i];
-                        bool err = m == null || m.shader == null
-                                   || m.shader.name.Contains("InternalError")
-                                   || m.shader.name == "Hidden/InternalErrorShader";
+                        // DEF-156: catch BOTH magenta causes — Unity error/null shader AND a
+                        // material left on a non-URP (Built-in/Standard/Legacy) shader that URP
+                        // renders magenta. The original check only saw InternalError, so an
+                        // unconverted "ghost" prop on Standard slipped through and baked pink.
+                        bool err = IsUrpIncompatibleMaterial(m);
                         if (!err) continue;
 
                         bool isCrystal = root.name.IndexOf("crystal", System.StringComparison.OrdinalIgnoreCase) >= 0

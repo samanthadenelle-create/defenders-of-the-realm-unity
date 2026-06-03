@@ -162,6 +162,43 @@ namespace DeNelle.Editor
         /// fallback so the gate arch reads as stone, not pink. Valid materials are untouched.
         /// </summary>
         private static Material _perimeterStoneFallback;
+
+        /// <summary>
+        /// DEF-156 / DEF-157: classifies a material as magenta-prone under URP. Two cases
+        /// produce the pink "ghost mesh": (a) a missing slot / Unity error shader, and
+        /// (b) a material left on a Built-in / Standard / Legacy shader that the Universal
+        /// Render Pipeline cannot render (it falls back to magenta at draw time even though
+        /// the shader name is NOT "InternalError"). The original WO-126 repair only caught
+        /// case (a); case (b) is the unconverted "ghost" prop. We treat a material as URP-safe
+        /// only if its shader namespace is one URP can draw (Universal Render Pipeline/*,
+        /// Unlit, Sprites, UI, Skybox, TextMeshPro, Hidden non-error). Everything else
+        /// (Standard, Mobile/*, Legacy Shaders/*, Autodesk Interactive, Phong FBX imports,
+        /// etc.) is flagged so the repair pass re-skins it.
+        /// </summary>
+        private static bool IsUrpIncompatibleMaterial(Material m)
+        {
+            if (m == null || m.shader == null) return true;
+            string n = m.shader.name;
+            if (string.IsNullOrEmpty(n)) return true;
+
+            // Case (a): explicit Unity error shader.
+            if (n.Contains("InternalError")) return true;
+
+            // Case (b): allow-list the shader families URP renders correctly. Anything
+            // outside this list (Standard, Mobile/Diffuse, Legacy Shaders/*, Diffuse,
+            // Autodesk Interactive, FBX/Phong imports) renders magenta under URP.
+            if (n.StartsWith("Universal Render Pipeline/")) return false;
+            if (n.StartsWith("Unlit/"))               return false;
+            if (n.StartsWith("Sprites/"))             return false;
+            if (n.StartsWith("UI/"))                  return false;
+            if (n.StartsWith("TextMeshPro"))          return false;
+            if (n.StartsWith("Skybox/"))              return false;
+            if (n.StartsWith("Particles/Standard"))   return false; // URP-compatible particle shaders
+            if (n.StartsWith("Hidden/"))              return false; // non-error hidden shaders (error handled above)
+
+            return true;
+        }
+
         private static void RepairPerimeterMaterials(GameObject go)
         {
             if (go == null) return;
@@ -180,7 +217,7 @@ namespace DeNelle.Editor
                 for (int i = 0; i < mats.Length; i++)
                 {
                     var m = mats[i];
-                    bool bad = m == null || m.shader == null || m.shader.name.Contains("InternalError");
+                    bool bad = IsUrpIncompatibleMaterial(m);
                     if (bad)
                     {
                         Debug.Log($"[VillageSceneBuilder] WO-126 perimeter material repair: '{go.name}/{r.name}' slot {i} " +
