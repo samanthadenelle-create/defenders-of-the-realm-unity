@@ -51,6 +51,29 @@ namespace DeNelle.HUD
         // ── Reflection cache ──────────────────────────────────────────────────
         private object _prog;         // the HeroProgression MonoBehaviour instance
 
+        // ── Scene gating ──────────────────────────────────────────────────────
+        // The XP strip is a GAMEPLAY-only HUD. ProgressionManager DontDestroyOnLoads
+        // a HeroProgression, so a HeroProgression can exist even on the Title /
+        // HeroSelect / PetSelect onboarding scenes — the old `_prog == null` guard
+        // alone let the bar (e.g. "Lv 1 · 0/150 XP") leak onto the title under the
+        // hero cards. These onboarding scenes are a small closed set; any other
+        // scene (Village / OuterWorld / Dungeon_* / PatriciaLightMode / ATBBattle)
+        // is gameplay and DOES show the bar. Names match Build Settings exactly.
+        private static readonly System.Collections.Generic.HashSet<string> NonGameplayScenes =
+            new System.Collections.Generic.HashSet<string>
+            {
+                "Title",      // SceneRouter.Title — onboarding landing
+                "HeroSelect", // SceneRouter.HeroSelect
+                "PetSelect",  // SceneRouter.PetSelect
+            };
+
+        /// <summary>True only on a gameplay scene — false on Title/HeroSelect/PetSelect.</summary>
+        private static bool IsGameplayScene()
+        {
+            string active = SceneManager.GetActiveScene().name;
+            return !string.IsNullOrEmpty(active) && !NonGameplayScenes.Contains(active);
+        }
+
         // ─────────────────────────────────────────────────────────────────────
 
         // ── Self-bootstrap ────────────────────────────────────────────────────
@@ -105,6 +128,9 @@ namespace DeNelle.HUD
         // for a few seconds rather than hooking once and giving up.
         private IEnumerator HookWithRetry()
         {
+            // Gameplay-only: never hook (or draw) on the onboarding scenes — the
+            // DDOL HeroProgression would otherwise make the bar appear on the title.
+            if (!IsGameplayScene()) yield break;
             for (int i = 0; i < 30 && _prog == null; i++)
             {
                 HookHeroProgression();
@@ -258,7 +284,8 @@ namespace DeNelle.HUD
         private void OnGUI()
         {
             if (_uiReady) return;   // UXML is driving the UI — skip IMGUI
-            if (_prog == null) return;   // no hero in this scene (title/menus) — draw nothing
+            if (!IsGameplayScene()) return;   // onboarding scene (Title/HeroSelect/PetSelect) — draw nothing
+            if (_prog == null) return;   // no hero in this scene yet — draw nothing
 
             // Position: bottom strip, full width, 28px tall.
             float sw = Screen.width;

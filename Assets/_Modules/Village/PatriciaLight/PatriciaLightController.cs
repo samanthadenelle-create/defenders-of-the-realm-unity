@@ -430,18 +430,28 @@ namespace DeNelle.Village
             // their colliders + the HeartController for gameplay) and show the real
             // mesh, fitted by renderer bounds so any FBX import scale / off-pivot is
             // normalised (the Tripo displacement trap).
-            var spirePrefab = Resources.Load<GameObject>("PatriciaLight/tower2");
-            if (spirePrefab != null)
+            // Route the load → instantiate → strip-colliders → Tripo-material-fix
+            // through the ONE shared factory (VisualFactory.Skin) — the same path the
+            // enemies in this file already use (AttachEnemyVisual). Skin's FixTripoMaterials
+            // attaches the same DeNelle.Core.TripoMaterialFixer this used to add by hand.
+            // The spire-specific layering — upright rotation + the footprint fit/seat
+            // that must measure the POST-rotation bounds (and returns _spireBounds the
+            // hero-stand reads) — stays on top, so NO Skin auto-fit here (Fit* left 0).
+            var spire = VisualFactory.Skin(towerGo.transform, "PatriciaLight/tower2", new SkinOptions
+            {
+                StripColliders = true,
+                FixTripoMaterials = true,
+            });
+            if (spire != null)
             {
                 foreach (var mr in towerGo.GetComponentsInChildren<MeshRenderer>())
-                    mr.enabled = false;   // hide placeholder blocks; colliders stay
+                    if (!mr.transform.IsChildOf(spire.transform))   // exclude the spire's own renderers
+                        mr.enabled = false;   // hide placeholder blocks; colliders stay
 
-                var spire = Instantiate(spirePrefab, towerGo.transform);
                 spire.name = "TowerSpire";
                 // tower2 imports lying on its side — stand it upright. -90 about X is
                 // the usual Z-up-FBX fix; owner can confirm/adjust live in the editor.
                 spire.transform.localRotation = Quaternion.Euler(-90f, 0f, 0f);
-                spire.AddComponent<DeNelle.Core.TripoMaterialFixer>();   // Tripo -> URP on Awake
                 _spireBounds = FitToTowerFootprint(spire, TowerHeight + 5f);
                 _hasSpire = true;
             }
@@ -645,14 +655,25 @@ namespace DeNelle.Village
             _hasHeroFacing = true;
 
             // Body from Resources/Heroes/<Class> (the canonical hero pickup path).
-            var prefab = Resources.Load<GameObject>("Heroes/" + slug);
-            if (prefab != null)
+            // Route the load/instantiate/fit/strip through the ONE shared factory —
+            // the same VisualFactory.Skin path the enemies in this file already use
+            // (AttachEnemyVisual) and the village hero uses (HeroBodySwapper, b52b33f)
+            // — instead of the bespoke Resources.Load + Instantiate + NormalizeHeight
+            // + StripCollidersAndCameras block. Skin handles Instantiate + FitHeight
+            // (= old NormalizeHeight 2.0 m) + StripColliders; the spawn-specific yaw
+            // and the extra camera/AudioListener/Rigidbody strip layer on top below.
+            var body = VisualFactory.Skin(heroRoot.transform, "Heroes/" + slug, new SkinOptions
             {
-                var body = Instantiate(prefab, heroRoot.transform);
+                FitHeight = 2.0f,
+                StripColliders = true,
+            });
+            if (body != null)
+            {
                 body.name = "HeroBody";
-                body.transform.localPosition = Vector3.zero;
                 body.transform.localRotation = Quaternion.Euler(0f, 90f, 0f); // -90 from 180: rotate hero 90 left so it faces the field + fires the right way
-                NormalizeHeight(body, 2.0f);
+                // Skin only strips colliders; the hero body's embedded camera /
+                // AudioListener would fight the OTS rig, so clear those (+ rigidbodies)
+                // on top — the spawn-specific layering the factory stays out of.
                 StripCollidersAndCameras(body);
             }
             else

@@ -391,8 +391,11 @@ namespace DeNelle.Onboarding
         }
 
         /// <summary>
-        /// Builds one hero card. Sized with flex (NOT a fixed pixel width) so the
-        /// four cards share the row evenly and re-flow in both orientations.
+        /// Builds one RICH hero card (matching HeroSelectController's framed card,
+        /// owner-preferred 2026-06-03): portrait + name + CLASS TITLE (role) + the
+        /// full BLURB inline, all inside the card. Sized with flex (NOT a fixed
+        /// pixel width) so the four cards share the row evenly and re-flow in both
+        /// orientations.
         /// </summary>
         private VisualElement BuildCard(HeroCardInfo info)
         {
@@ -420,29 +423,20 @@ namespace DeNelle.Onboarding
             card.style.alignItems = Align.Stretch;
 
             // Portrait — owner's character-named art (Thrain/Grom/Sylas/Elara).
+            // The character art is tall/portrait; with ScaleAndCrop centred, a
+            // square-ish slot crops the face off. Load as a Sprite (Texture2D
+            // fallback), ScaleAndCrop, and TOP-anchor so the head / upper body is
+            // what shows — matching how HeroSelectController frames image 4.
             var portrait = new VisualElement { name = "portrait" };
             portrait.style.flexGrow = 1f;
-            portrait.style.minHeight = 60f;
+            portrait.style.minHeight = 96f;   // taller slot so the head + torso read clearly
             portrait.style.alignItems = Align.Center;
             portrait.style.justifyContent = Justify.Center;
             portrait.style.backgroundColor = new Color(0.486f, 0.227f, 0.929f, 0.10f);
             portrait.pickingMode = PickingMode.Ignore;
 
             string slug = SlugFor(info.Hero);
-            var portraitTex = Resources.Load<Texture2D>($"HeroPortraits/{slug}");
-            if (portraitTex != null)
-            {
-                portrait.style.backgroundImage = new StyleBackground(portraitTex);
-                portrait.style.unityBackgroundScaleMode = ScaleMode.ScaleAndCrop;
-            }
-            else
-            {
-                var glyph = new Label(info.Glyph);
-                glyph.style.fontSize = 44f;
-                glyph.style.unityFontStyleAndWeight = FontStyle.Bold;
-                glyph.style.color = info.Accent;
-                portrait.Add(glyph);
-            }
+            FramePortrait(portrait, slug, info);
             card.Add(portrait);
 
             // Element-coloured accent strip.
@@ -453,20 +447,50 @@ namespace DeNelle.Onboarding
             accent.pickingMode = PickingMode.Ignore;
             card.Add(accent);
 
-            // Hero name under the portrait (full copy is in the detail card).
+            // ── Rich copy block (name + class title + blurb), inside the card ──
+            var copy = new VisualElement { name = "card-copy" };
+            copy.style.flexShrink = 0f;
+            copy.style.paddingTop = 6f;
+            copy.style.paddingBottom = 8f;
+            copy.style.paddingLeft = 6f;
+            copy.style.paddingRight = 6f;
+            copy.pickingMode = PickingMode.Ignore;
+
+            // Hero name.
             var nameLabel = new Label(CanonStrings.Locale(info.NameKey));
             nameLabel.style.unityTextAlign = TextAnchor.MiddleCenter;
-            nameLabel.style.paddingTop = 5f;
-            nameLabel.style.paddingBottom = 5f;
-            nameLabel.style.paddingLeft = 2f;
-            nameLabel.style.paddingRight = 2f;
-            nameLabel.style.fontSize = 13f;
+            nameLabel.style.fontSize = 14f;
             nameLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
             nameLabel.style.color = ColTextBright;
             nameLabel.style.whiteSpace = WhiteSpace.Normal;
             nameLabel.style.flexShrink = 0f;
             nameLabel.pickingMode = PickingMode.Ignore;
-            card.Add(nameLabel);
+            copy.Add(nameLabel);
+
+            // Class title (role) — Frostweaver / Lightbearer / Wood Warden / Divine Healer.
+            var roleLabel = new Label(CanonStrings.Locale(info.RoleKey));
+            roleLabel.style.unityTextAlign = TextAnchor.MiddleCenter;
+            roleLabel.style.marginTop = 1f;
+            roleLabel.style.fontSize = 11f;
+            roleLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
+            roleLabel.style.color = info.Accent;
+            roleLabel.style.whiteSpace = WhiteSpace.Normal;
+            roleLabel.style.flexShrink = 0f;
+            roleLabel.pickingMode = PickingMode.Ignore;
+            copy.Add(roleLabel);
+
+            // Full blurb INLINE in the card.
+            var blurbLabel = new Label(CanonStrings.Locale(info.BlurbKey));
+            blurbLabel.style.unityTextAlign = TextAnchor.UpperCenter;
+            blurbLabel.style.marginTop = 5f;
+            blurbLabel.style.fontSize = 11f;
+            blurbLabel.style.color = ColTextMuted;
+            blurbLabel.style.whiteSpace = WhiteSpace.Normal;
+            blurbLabel.style.flexShrink = 1f;
+            blurbLabel.pickingMode = PickingMode.Ignore;
+            copy.Add(blurbLabel);
+
+            card.Add(copy);
 
             // Whole card is the hit target — tap selects (and shows the detail).
             HeroClass captured = info.Hero;
@@ -481,8 +505,69 @@ namespace DeNelle.Onboarding
         }
 
         /// <summary>
-        /// Builds the selected-hero detail card that sits BELOW the four cards
-        /// (acceptance #3). A "Choose this Hero" CTA confirms and routes onward.
+        /// Frames a hero portrait into its slot so the character FILLS the slot
+        /// cleanly with the head / upper body showing — never centre-cropping the
+        /// face off a tall portrait. Loads as a Sprite first (matching
+        /// HeroSelectController, which the owner prefers), Texture2D fallback, then
+        /// a glyph fallback. Uses ScaleAndCrop + a TOP background anchor.
+        /// </summary>
+        private static void FramePortrait(VisualElement portrait, string slug, HeroCardInfo info)
+        {
+            if (portrait == null) return;
+
+            var sprite = Resources.Load<Sprite>($"HeroPortraits/{slug}");
+            if (sprite != null)
+            {
+                portrait.style.backgroundImage = new StyleBackground(sprite);
+                portrait.style.unityBackgroundScaleMode = ScaleMode.ScaleAndCrop;
+                AnchorPortraitTop(portrait);
+                return;
+            }
+
+            var tex = Resources.Load<Texture2D>($"HeroPortraits/{slug}");
+            if (tex != null)
+            {
+                portrait.style.backgroundImage = new StyleBackground(tex);
+                portrait.style.unityBackgroundScaleMode = ScaleMode.ScaleAndCrop;
+                AnchorPortraitTop(portrait);
+                return;
+            }
+
+            // No art on disk — element-coloured glyph fallback.
+            var glyph = new Label(info.Glyph);
+            glyph.style.fontSize = 44f;
+            glyph.style.unityFontStyleAndWeight = FontStyle.Bold;
+            glyph.style.color = info.Accent;
+            glyph.pickingMode = PickingMode.Ignore;
+            portrait.Add(glyph);
+        }
+
+        /// <summary>
+        /// Anchors a ScaleAndCrop background to the TOP of the slot so a tall
+        /// character portrait shows its head / upper body rather than centre-
+        /// cropping the face off. unityBackgroundPositionY exists on Unity 2022.2+;
+        /// guarded in try/catch so an older UI Toolkit silently keeps centred crop.
+        /// </summary>
+        private static void AnchorPortraitTop(VisualElement portrait)
+        {
+            if (portrait == null) return;
+            try
+            {
+                portrait.style.backgroundPositionY =
+                    new BackgroundPosition(BackgroundPositionKeyword.Top);
+            }
+            catch (System.Exception)
+            {
+                // Older UI Toolkit without BackgroundPosition — keep centred crop.
+            }
+        }
+
+        /// <summary>
+        /// Builds the slim confirm BAR that sits BELOW the four rich cards. Since
+        /// each card now carries its own class title + full blurb inline (the
+        /// owner-preferred rich frame), this bar no longer repeats the blurb — it
+        /// just confirms the current pick: a "you chose X" line + the "Choose this
+        /// Hero" CTA that persists the pick and routes onward.
         /// </summary>
         private void BuildDetailCard()
         {
@@ -490,8 +575,11 @@ namespace DeNelle.Onboarding
             _detailCard.style.marginTop = 10f;
             _detailCard.style.flexShrink = 0f;
             _detailCard.style.alignSelf = Align.Stretch;
-            _detailCard.style.paddingTop = 10f;
-            _detailCard.style.paddingBottom = 10f;
+            _detailCard.style.flexDirection = FlexDirection.Row;
+            _detailCard.style.alignItems = Align.Center;
+            _detailCard.style.justifyContent = Justify.SpaceBetween;
+            _detailCard.style.paddingTop = 8f;
+            _detailCard.style.paddingBottom = 8f;
             _detailCard.style.paddingLeft = 14f;
             _detailCard.style.paddingRight = 14f;
             float r = 12f;
@@ -503,32 +591,24 @@ namespace DeNelle.Onboarding
             SetBorderColor(_detailCard, ColVioletBorder);
             _detailCard.style.backgroundColor = new Color(0.149f, 0.102f, 0.204f, 0.85f);
 
+            // "Selected: <name> — <class title>" status line (left side).
             _detailName = new Label(string.Empty);
-            _detailName.style.fontSize = 18f;
+            _detailName.style.flexShrink = 1f;
+            _detailName.style.fontSize = 15f;
             _detailName.style.unityFontStyleAndWeight = FontStyle.Bold;
             _detailName.style.color = ColTextBright;
             _detailName.style.whiteSpace = WhiteSpace.Normal;
             _detailCard.Add(_detailName);
 
+            // Kept (assigned in RefreshDetailCard) but not added to the tree — the
+            // role + blurb now live inline in each card, so the bar stays slim.
             _detailRole = new Label(string.Empty);
-            _detailRole.style.marginTop = 2f;
-            _detailRole.style.fontSize = 12f;
-            _detailRole.style.unityFontStyleAndWeight = FontStyle.Bold;
-            _detailRole.style.color = ColAmber;
-            _detailRole.style.whiteSpace = WhiteSpace.Normal;
-            _detailCard.Add(_detailRole);
-
             _detailBlurb = new Label(string.Empty);
-            _detailBlurb.style.marginTop = 5f;
-            _detailBlurb.style.fontSize = 13f;
-            _detailBlurb.style.color = ColTextMuted;
-            _detailBlurb.style.whiteSpace = WhiteSpace.Normal;
-            _detailCard.Add(_detailBlurb);
 
             // Confirm CTA — persists the chosen hero and routes onward to PetSelect.
             var confirm = new Button(OnChooseHeroClicked) { text = "Choose this Hero →", name = "title-choose-hero" };
-            confirm.style.marginTop = 10f;
-            confirm.style.alignSelf = Align.FlexEnd;
+            confirm.style.marginLeft = 10f;
+            confirm.style.flexShrink = 0f;
             confirm.style.height = 42f;
             confirm.style.minWidth = 180f;
             confirm.style.fontSize = 15f;
@@ -601,22 +681,30 @@ namespace DeNelle.Onboarding
             RefreshDetailCard();
         }
 
-        /// <summary>Fills the below-cards detail card with the selected hero's copy.</summary>
+        /// <summary>
+        /// Updates the slim confirm bar's status line for the current pick. The
+        /// full role + blurb live inline in each rich card, so this bar only shows
+        /// a short "Selected: Name — Class Title" cue next to the Choose CTA.
+        /// </summary>
         private void RefreshDetailCard()
         {
             if (_detailCard == null) return;
             if (!_hasSelection)
             {
-                if (_detailName  != null) _detailName.text  = "Tap a hero to see their story";
-                if (_detailRole  != null) _detailRole.text  = string.Empty;
-                if (_detailBlurb != null) _detailBlurb.text = string.Empty;
+                if (_detailName != null) _detailName.text = "Tap a hero to choose";
                 return;
             }
             HeroCardInfo info = FindInfo(_selectedHero);
             if (info == null) return;
-            if (_detailName  != null) _detailName.text  = CanonStrings.Locale(info.NameKey);
-            if (_detailRole  != null) _detailRole.text  = CanonStrings.Locale(info.RoleKey);
-            if (_detailBlurb != null) _detailBlurb.text = CanonStrings.Locale(info.BlurbKey);
+            if (_detailName != null)
+            {
+                string name = CanonStrings.Locale(info.NameKey);
+                string role = CanonStrings.Locale(info.RoleKey);
+                _detailName.text = string.IsNullOrEmpty(role)
+                    ? $"Selected: {name}"
+                    : $"Selected: {name} — {role}";
+            }
+            // _detailRole / _detailBlurb intentionally not displayed (inline in cards).
         }
 
         // =====================================================================
