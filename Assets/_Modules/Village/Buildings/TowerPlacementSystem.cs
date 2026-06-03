@@ -80,8 +80,28 @@ namespace DeNelle.Village
 
         private void Start()
         {
-            // Camera.main is a tagged FindObjectWithTag lookup — cache it once.
-            _mainCamera = Camera.main;
+            // DEF-117 — resolve the camera that is ACTUALLY on screen (highest-depth
+            // enabled screen camera), not the tag-based Camera.main, which can resolve
+            // to a rogue / embedded camera and cast the placement ray from the wrong
+            // view so taps miss the ground.
+            _mainCamera = ActiveScreenCamera();
+        }
+
+        /// <summary>
+        /// DEF-117 — the camera the player sees: the enabled, screen-bound (no
+        /// targetTexture) camera with the highest depth. Mirrors the game camera's
+        /// own sole-camera rule; falls back to Camera.main.
+        /// </summary>
+        private static Camera ActiveScreenCamera()
+        {
+            Camera best = null;
+            foreach (var c in Camera.allCameras)
+            {
+                if (c == null || !c.enabled) continue;
+                if (c.targetTexture != null) continue;
+                if (best == null || c.depth > best.depth) best = c;
+            }
+            return best != null ? best : Camera.main;
         }
 
         /// <summary>
@@ -137,7 +157,13 @@ namespace DeNelle.Village
         private void Update()
         {
             if (!_placing || _selectedTower == null || _currentMarker == null) return;
-            if (_mainCamera == null) { _mainCamera = Camera.main; if (_mainCamera == null) return; }
+            // Re-resolve each frame while null AND refresh if the cached camera was
+            // disabled (DEF-117) so the ray always comes from the on-screen camera.
+            if (_mainCamera == null || !_mainCamera.enabled || !_mainCamera.gameObject.activeInHierarchy)
+            {
+                _mainCamera = ActiveScreenCamera();
+                if (_mainCamera == null) return;
+            }
 
             // Right-click cancels (legacy input).
             if (Input.GetMouseButtonDown(1)) { CancelPlacing(); return; }

@@ -73,6 +73,13 @@ namespace DeNelle.Village
         private Quaternion _savedCamRot;
         private readonly List<MonoBehaviour> _disabledCamDrivers = new List<MonoBehaviour>();
 
+        // DEF-117 — every OTHER screen camera we disabled on enter so the overview
+        // does not split-screen with a second view (a runtime-spawned embedded FBX
+        // camera, etc.). Re-enabled on exit. While SmartMobileCamera (the depth=100
+        // renderer) is disabled for the overview, its per-second EnforceSoleCamera
+        // rogue-camera cull stops running, so the build controller must cull them.
+        private readonly List<Camera> _suppressedCameras = new List<Camera>();
+
         // Wave drivers frozen on enter, re-enabled on exit.
         private readonly List<WaveManager> _frozenWaves = new List<WaveManager>();
 
@@ -162,7 +169,11 @@ namespace DeNelle.Village
         private void Update()
         {
             if (!IsActive) return;
-            if (_camera == null) { _camera = Camera.main; if (_camera == null) return; }
+            // DEF-117 — raycast from the camera that is ACTUALLY on screen (the one
+            // we pulled into the overview), never Camera.main: with rogue cameras in
+            // play Camera.main can resolve to a non-rendering / wrong camera, so taps
+            // would miss the build grid. _camera is set in PullCameraBack().
+            if (_camera == null) { _camera = ActiveScreenCamera(); if (_camera == null) return; }
 
             // Three exclusive modes: re-placing a selected structure (MOVE), arming a
             // new one (CREATE), or idle (tap a structure to SELECT it).
@@ -635,7 +646,10 @@ namespace DeNelle.Village
 
         private void PullCameraBack()
         {
-            _camera = Camera.main;
+            // DEF-117 — drive the camera that is ACTUALLY rendering to the screen, not
+            // the tag-resolved Camera.main (which can be a rogue / embedded FBX camera
+            // once the game camera's per-frame sole-camera cull is paused below).
+            _camera = ActiveScreenCamera();
             if (_camera == null) return;
 
             _savedCamPos = _camera.transform.position;
@@ -656,7 +670,18 @@ namespace DeNelle.Village
                 }
             }
 
-            // Top-down overview centred on the grid.
+            // DEF-117 (split-screen) — disabling the game camera's driver above also
+            // pauses its EnforceSoleCamera() rogue-cull. So suppress EVERY other live
+            // screen camera ourselves for the duration of build mode; otherwise a
+            // second view (e.g. a runtime-spawned embedded FBX camera on a half
+            // viewport) renders alongside the overview and the screen splits.
+            SuppressRogueCameras();
+
+            // Top-down overview centred on the grid. The overview owns the whole
+            // screen (full viewport, top render priority) so nothing double-renders.
+            _camera.rect = new Rect(0f, 0f, 1f, 1f);
+            _camera.enabled = true;
+
             Vector3 centre = _grid != null
                 ? _grid.CellToWorld(new Vector2Int(_grid.gridWidth / 2, _grid.gridHeight / 2))
                 : Vector3.zero;
@@ -670,10 +695,51 @@ namespace DeNelle.Village
                 if (mb != null) mb.enabled = true;
             _disabledCamDrivers.Clear();
 
+            // Re-enable the cameras we suppressed for the overview (DEF-117).
+            foreach (var c in _suppressedCameras)
+                if (c != null) c.enabled = true;
+            _suppressedCameras.Clear();
+
             if (_camera != null)
             {
                 _camera.transform.position = _savedCamPos;
                 _camera.transform.rotation = _savedCamRot;
+            }
+        }
+
+        /// <summary>
+        /// DEF-117 — the camera the player actually sees: the enabled, screen-bound
+        /// (no targetTexture) camera with the highest depth. This is the same rule
+        /// SmartMobileCamera/VillageCamera use, so it returns the depth=100 game
+        /// camera rather than a rogue embedded one. Falls back to Camera.main.
+        /// </summary>
+        private static Camera ActiveScreenCamera()
+        {
+            Camera best = null;
+            foreach (var c in Camera.allCameras)
+            {
+                if (c == null || !c.enabled) continue;
+                if (c.targetTexture != null) continue;   // offscreen RT cams are fine
+                if (best == null || c.depth > best.depth) best = c;
+            }
+            return best != null ? best : Camera.main;
+        }
+
+        /// <summary>
+        /// DEF-117 (split-screen) — disable every OTHER live screen camera for the
+        /// build session so only the overview renders, and remember them so Exit()
+        /// can re-enable them. The overview camera (_camera) is left untouched.
+        /// </summary>
+        private void SuppressRogueCameras()
+        {
+            _suppressedCameras.Clear();
+            foreach (var c in Camera.allCameras)
+            {
+                if (c == null || c == _camera) continue;
+                if (c.targetTexture != null) continue;   // leave render-texture cams alone
+                if (!c.enabled) continue;
+                c.enabled = false;
+                _suppressedCameras.Add(c);
             }
         }
 

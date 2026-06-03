@@ -66,6 +66,13 @@ namespace DeNelle.Core.UI
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         public static void Bootstrap()
         {
+            // Owner 2026-06-03 ("why is the game forcing portrait mode" / "camera angle
+            // won't work" in play mode): the rotate-to-portrait gate blocked LANDSCAPE in
+            // the Editor + Device Simulator + play mode, making camera-angle testing
+            // impossible. Real users only ever hit it in the actual mobile build, so skip
+            // it in the Editor entirely. (Player builds keep the lock — Application.isEditor
+            // is false there.)
+            if (Application.isEditor) return;
             if (Instance != null) return;
             var host = new GameObject("PortraitLockOverlay");
             host.AddComponent<PortraitLockOverlay>();

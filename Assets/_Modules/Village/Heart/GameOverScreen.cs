@@ -4,9 +4,10 @@
 // -----------------------------------------------------------------------------
 // Fires on BOTH death contexts (owner 2026-06-02 chose: yes, a screen on hero
 // death — "need a try again option on death"):
-//   • HERO dies (HeroHealth.OnDeath)        -> "You Have Fallen"
-//   • HEART/tree falls (OnHeartDestroyed)   -> "The Heart of Elarion Has Fallen"
+//   • HERO dies (HeroHealth.OnDeath)        -> "You Have Fallen"   (silence)
+//   • HEART/root falls (OnHeartDestroyed)   -> "The Root Went Silent" (+ Defeat music)
 // Both pause the game and offer:  [R] Try Again (reload Village) · [Esc] Title.
+// DEF-141: Defeat music plays on the HEART/root context only, not on hero death.
 //
 // Code-built uGUI (screen-space Canvas + Text via the proven ThreatSkullPlate
 // font path — NO UXML, which doesn't render in player builds). KEYBOARD prompts,
@@ -36,6 +37,7 @@ namespace DeNelle.Village
         private bool _shown;
         private RectTransform _retryBtn;   // mobile tap target — Try Again
         private RectTransform _exitBtn;    // mobile tap target — Leave to Title
+        private float _lastHookAttempt;    // DEF-136: throttle the per-frame Hook() scene search
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
@@ -89,8 +91,16 @@ namespace DeNelle.Village
 
         private void Update()
         {
-            // Late-resolve hero/heart if they spawned after this bootstrap.
-            if ((_heart == null || _hero == null) && SceneManager.GetActiveScene().name == TargetScene) Hook();
+            // Late-resolve hero/heart if they spawned after this bootstrap. DEF-136:
+            // FindFirstObjectByType is a scene-wide search; running it every frame churns
+            // on mobile. Throttle to once per ~0.5s and stop once both refs resolve.
+            if ((_heart == null || _hero == null)
+                && SceneManager.GetActiveScene().name == TargetScene
+                && Time.unscaledTime - _lastHookAttempt > 0.5f)
+            {
+                _lastHookAttempt = Time.unscaledTime;
+                Hook();
+            }
             if (!_shown) return;
 
             // Key prompts (new Input System + legacy fallback). Runs at timeScale 0.
@@ -125,22 +135,27 @@ namespace DeNelle.Village
             return false;
         }
 
+        // DEF-141 / WO-235 locked canon copy for Heartwood (root) destruction.
+        // "THE ROOT WENT SILENT" replaces the retired "HEART OF ELARION HAS FALLEN".
         private void ShowHeartFell() => Show(
-            "THE HEART OF ELARION HAS FALLEN",
-            "The light guttered, and the dark poured in.\nBut Elarion remembers those who rise again.");
+            "THE ROOT WENT SILENT",
+            "The root went silent.\nThe dark poured in where the light had been,\nbut Elarion remembers those who rise again.",
+            isHeartDestroyed: true);
 
         private void ShowHeroFell() => Show(
             "YOU HAVE FALLEN",
-            "The dark takes you, but Elarion still needs its defender.\nRise, and try again.");
+            "The dark takes you, but Elarion still needs its defender.\nRise, and try again.",
+            isHeartDestroyed: false);
 
-        private void Show(string title, string body)
+        private void Show(string title, string body, bool isHeartDestroyed)
         {
             if (_shown) return;
             _shown = true;
-            // Game-over music (owner 2026-06-02) — the somber Defeat track on BOTH
-            // death contexts (hero fell + heart/tree fell), since both route through
-            // this one Show(). Null-guarded cross-module call per CLAUDE.md §10.
-            CoreServices.Audio?.PlayMusic(DeNelle.Core.Audio.MusicTrack.Defeat);
+            // DEF-141 / WO-235: the somber Defeat track (GameOver.mp3) belongs to the
+            // Heartwood/root destruction ONLY. Hero death is silence (single tone) — so
+            // we gate the music on the death context. Null-guarded per CLAUDE.md §10.
+            if (isHeartDestroyed)
+                CoreServices.Audio?.PlayMusic(DeNelle.Core.Audio.MusicTrack.Defeat);
             Time.timeScale = 0f;
             BuildOverlay(title, body);
         }
