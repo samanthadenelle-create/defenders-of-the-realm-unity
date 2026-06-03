@@ -38,6 +38,10 @@ namespace DeNelle.Village
         Workshop = 3,
         /// <summary>Secondary resource building -- yields food.</summary>
         Farm = 4,
+        /// <summary>Sawmill -- yields lumber for upgrades (upgrade district).</summary>
+        Lumbermill = 5,
+        /// <summary>Armorer -- forges armor/weapon upgrades (upgrade district).</summary>
+        Forge = 6,
     }
 
     /// <summary>

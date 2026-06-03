@@ -75,6 +75,30 @@
       "model": "tower_A",
       "footprint": "large",
       "buildMenuOrder": 4
+    },
+    {
+      "id": "lumbermill",
+      "type": "Lumbermill",
+      "displayName": "lumbermill",
+      "descriptionKey": "buildingDesc.lumbermill",
+      "hp": 130,
+      "maxHp": 130,
+      "crystalCost": 70,
+      "model": "lumbermill",
+      "footprint": "medium",
+      "buildMenuOrder": 5
+    },
+    {
+      "id": "forge",
+      "type": "Forge",
+      "displayName": "forge",
+      "descriptionKey": "buildingDesc.forge",
+      "hp": 190,
+      "maxHp": 190,
+      "crystalCost": 140,
+      "model": "blacksmith",
+      "footprint": "medium",
+      "buildMenuOrder": 6
     }
   ]
 }

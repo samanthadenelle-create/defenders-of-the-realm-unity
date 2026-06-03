@@ -52,7 +52,9 @@ namespace DeNelle.Village.World.Camps
             false;
 #endif
 
-        private static bool _enabled = DefaultEnabled;
+        // OWNER ENABLED 2026-06-03 for AM playtest (QA-AC verdict: READY, MVP scope; zero
+        // risk — sole user, re-flippable). To ship DARK again, set back to `DefaultEnabled`.
+        private static bool _enabled = true;
 
         /// <summary>Master switch. When false the whole camp loop is inert: no
         /// spawns, no UI, no event subscriptions. Set this BEFORE the world scene

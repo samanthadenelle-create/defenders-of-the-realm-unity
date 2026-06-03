@@ -456,12 +456,35 @@ namespace DeNelle.Editor
                 PrefabM2 = PolyMedievalDir + "Windmill_Medieval.prefab",
                 PlaceholderColor = new Color(1f, 0.85f, 0.54f), FenceKind = "wood" },
             // Market — WO-101: SM_House_Medieval_Large + SM_Marketplace_Stand_Simple.
-            // DEF-101: position (+15, 0, -20) — off the south gate. Type = 5 (after Farm).
+            // DEF-101: position (+15, 0, -20) — off the south gate.
+            // NOTE (2026-06-02): Market reuses Type=5, which NOW maps to the new
+            // BuildingType.Lumbermill enum value. This is BENIGN: Building identity is
+            // keyed by Id ("market"), and BuildingInteractable's F-prompt for an
+            // un-cased type falls through to label "Building" / "Interaction unavailable"
+            // (unchanged behaviour). Flagged for the owner — Market wants its own enum
+            // value eventually; left as-is here to avoid touching working Market wiring.
             new BuildingPlacement { Type = 5, Id = "market", Label = "Market",
                 X = 15f, Z = -20f, YawDeg = 0f, Fbx = "building_market",
                 PrefabM  = PolyMedievalDir + "House_Medieval_Large.prefab",
                 PrefabM2 = PolyMedievalDir + "Marketplace_Stand_Simple.prefab",
                 PlaceholderColor = new Color(0.78f, 0.55f, 0.30f), FenceKind = "stone" },
+            // Sawmill (catalog id "lumbermill", BuildingType.Lumbermill = 5) — owner ask
+            // "farm sawmill armorer". Upgrade-district building in the SW outer quadrant.
+            // Position (-22, 0, -22): >24 m from every cardinal gate (clears the 8 m
+            // DEF-101 guard) and >=12 m from the arcane-tower plot. Fbx building_lumbermill
+            // (KayKit Medieval Hexagon). Player-facing nameplate "Sawmill" via DisplayLabel.
+            new BuildingPlacement { Type = 5, Id = "lumbermill", Label = "Sawmill",
+                X = -22f, Z = -22f, YawDeg = 45f, Fbx = "building_lumbermill",
+                PlaceholderColor = new Color(0.62f, 0.45f, 0.28f), FenceKind = "wood" },
+            // Armorer (catalog id "forge", BuildingType.Forge = 6) — owner ask. NOTE the
+            // existing workshop is already LABELLED "Forge"; this new building uses the
+            // player-facing name "Armorer" to avoid two "Forge" nameplates (see report).
+            // Upgrade-district building in the NE outer quadrant. Position (+22, 0, +22):
+            // >24 m from every gate (clears the 8 m guard) and >=12 m from the pet-house
+            // plot. Fbx building_blacksmith (KayKit). Nameplate "Armorer" via DisplayLabel.
+            new BuildingPlacement { Type = 6, Id = "forge", Label = "Armorer",
+                X = 22f, Z = 22f, YawDeg = 225f, Fbx = "building_blacksmith",
+                PlaceholderColor = new Color(0.58f, 0.58f, 0.62f), FenceKind = "stone" },
         };
 
         /// <summary>

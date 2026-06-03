@@ -172,6 +172,8 @@
   "buildingDesc.arcaneTower": "Built by the first Keepers. Holds the ward-stones that answer your call.",
   "buildingDesc.farm": "Wheat that grows because the Heart wills it. Apples taste like the old summers.",
   "buildingDesc.workshop": "Hammer and forge. The Folk make what the Keeper needs and ask nothing.",
+  "buildingDesc.lumbermill": "The sawmill's blade hums against timber the green places of Elarion still spare. Its planks brace the highest walls.",
+  "buildingDesc.forge": "The armorer's fire never cools. Here the Folk beat raw iron into plate the Hollowed cannot easily bite through.",
 
   "tooltip.resourceCrystals.title": "Crystals",
   "tooltip.resourceCrystals.body": "The Heart's slow gift. Mined where its overflow seeps up through the stone.",

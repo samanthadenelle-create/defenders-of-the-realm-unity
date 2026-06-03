@@ -538,6 +538,50 @@ namespace DeNelle.Editor
                 StripRigidbodies(g);
             };
 
+            // ── Gate (2026-06-02 SEAM FIX) ───────────────────────────────────
+            // ROOT CAUSE of the "seam where gate meets wall": the gatehouse prefab
+            // is TALLER than wide, so NormalizeProp(target=10) fits its HEIGHT to 10
+            // and leaves its WIDTH well short of the wall opening. The flanking wall
+            // stones resume at a fixed inner edge (north opening was widened to |x|<6,
+            // so the first full stone's solid inner edge is ~5.25 m out), so a bare gap
+            // opens on each side of the arch between the narrow gatehouse and the wall.
+            // FIX: after the uniform NormalizeProp (which gives the correct HEIGHT),
+            // stretch ONLY the gatehouse's horizontal RUN axis (the axis along the wall)
+            // so its outer edges reach the flanking stones flush. Done in LOCAL space
+            // BEFORE applying the yaw, so it is orientation-independent (works for the
+            // 0/90/270-deg gates alike). The gatehouse colliders are stripped (decorative),
+            // and the real walkable opening is governed by the Fortify WallBarrier nav gap
+            // (north ±6, others ±3) — NOT by this visual width — so widening the mesh has
+            // ZERO navmesh/hero-passage impact; it only closes the visible seam.
+            System.Action<GameObject, string, Vector3, float, float, float> GateFill =
+                (prefab, label, pos, yaw, target, openingWidth) =>
+            {
+                var g = Make(prefab, label, pos);
+                if (g == null) return;
+                NormalizeProp(g, target);                                     // uniform: fixes HEIGHT
+                // Identify the wider horizontal LOCAL axis (the run, along the wall)
+                // vs the thinner one (thickness, through the wall) and stretch the run
+                // axis so the gatehouse world-width fills the opening flush.
+                if (openingWidth > 0.01f && TryMeasureLocalBounds(g, out var glb))
+                {
+                    Vector3 s = g.transform.localScale;
+                    float worldX = glb.size.x * Mathf.Abs(s.x);
+                    float worldZ = glb.size.z * Mathf.Abs(s.z);
+                    if (worldX >= worldZ)   // local X is the run axis
+                    {
+                        if (worldX > 0.01f && openingWidth > worldX) s.x *= openingWidth / worldX;
+                    }
+                    else                    // local Z is the run axis
+                    {
+                        if (worldZ > 0.01f && openingWidth > worldZ) s.z *= openingWidth / worldZ;
+                    }
+                    g.transform.localScale = s;
+                }
+                g.transform.rotation = Quaternion.Euler(0f, yaw, 0f);         // yaw AFTER the local stretch
+                StripColliders(g);
+                StripRigidbodies(g);
+            };
+
             // ── North wall (z = +33) — segments + gate at x = 0 (WO-158: 4th gate) ──
             // The "too small / all gates broken" issue was a SCALE bug (gateTarget,
             // fixed above to 10), not a north-specific fault — so north keeps its gate.
@@ -550,7 +594,11 @@ namespace DeNelle.Editor
                 if (Mathf.Abs(x) < 6f) continue;   // 12 m north gate opening (clears flanking segment)
                 Wall(wallSegModel, "WallPerimeter-North", new Vector3(x, 0f, wallZ), 0f);
             }
-            Big(gateMedModel, "Gate-North-Main", new Vector3(0f, 0f, wallZ), 0f, gateTarget);
+            // SEAM FIX (2026-06-02): the |x|<6 opening puts the first full north wall
+            // stone at x=±7.5 with a 4.5 m run -> its solid inner edge sits ~5.25 m from
+            // centre. Fill the gatehouse to ~10.5 m wide so it meets both flanking stones
+            // flush (no seam). Decorative width only; nav gap stays Fortify's north ±6.
+            GateFill(gateMedModel, "Gate-North-Main", new Vector3(0f, 0f, wallZ), 0f, gateTarget, 10.5f);
 
             // ── South wall (z = -33) — segments + main gate at x = 0 ─────────
             for (float x = -wallX + segStep * 0.5f; x < wallX; x += segStep)
@@ -558,7 +606,9 @@ namespace DeNelle.Editor
                 if (Mathf.Abs(x) < 3f) continue;   // 6 m opening for the main gate
                 Wall(wallSegModel, "WallPerimeter-South", new Vector3(x, 0f, -wallZ), 0f);
             }
-            Big(gateMedModel, "Gate-South-Main", new Vector3(0f, 0f, -wallZ), 0f, gateTarget);
+            // SEAM FIX: |x|<3 -> first stone at x=±4.5 (run 4.5) -> inner edge ~2.25 m;
+            // fill the gatehouse to ~4.5 m wide so it meets the flanking stones flush.
+            GateFill(gateMedModel, "Gate-South-Main", new Vector3(0f, 0f, -wallZ), 0f, gateTarget, 4.5f);
 
             // ── East wall (x = +42) — segments from z = -33 to +33 ───────────
             for (float z = -wallZ + segStep * 0.5f; z < wallZ; z += segStep)
@@ -566,7 +616,10 @@ namespace DeNelle.Editor
                 if (Mathf.Abs(z) < 3f) continue;   // opening for east gate
                 Wall(wallSegModel, "WallPerimeter-East", new Vector3(wallX, 0f, z), 90f);
             }
-            Big(gateSmModel, "Gate-East-Side", new Vector3(wallX, 0f, 0f), 90f, gateTarget);
+            // SEAM FIX: same 6 m opening as south -> fill gatehouse to ~4.5 m wide. The
+            // run axis here is world Z (90-deg yaw); GateFill stretches the LOCAL run
+            // axis BEFORE the yaw, so this is handled correctly without axis bookkeeping.
+            GateFill(gateSmModel, "Gate-East-Side", new Vector3(wallX, 0f, 0f), 90f, gateTarget, 4.5f);
 
             // ── West wall (x = -42) — segments from z = -33 to +33 ───────────
             for (float z = -wallZ + segStep * 0.5f; z < wallZ; z += segStep)
@@ -574,7 +627,8 @@ namespace DeNelle.Editor
                 if (Mathf.Abs(z) < 3f) continue;   // opening for west gate
                 Wall(wallSegModel, "WallPerimeter-West", new Vector3(-wallX, 0f, z), 270f);
             }
-            Big(gateSmModel, "Gate-West-Side", new Vector3(-wallX, 0f, 0f), 270f, gateTarget);
+            // SEAM FIX: mirror of the east gate -> fill gatehouse to ~4.5 m wide.
+            GateFill(gateSmModel, "Gate-West-Side", new Vector3(-wallX, 0f, 0f), 270f, gateTarget, 4.5f);
 
             // ── Corner towers at (±42, 0, ±33) ───────────────────────────────
             Big(towerCorModel, "Tower-NE-Corner", new Vector3( wallX, 0f,  wallZ), 0f, towerTarget);
