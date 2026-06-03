@@ -99,13 +99,26 @@ namespace DeNelle.Village
 
         private void Update()
         {
-            if (!_heroInRange || _def == null) return;
+            if (!_heroInRange || _def == null)
+            {
+                MobileInteractButton.Release(this);
+                return;
+            }
+
+            // DEF-203: register the shared on-screen Interact button while in range so
+            // touch/mobile (no keyboard) can enter the dungeon too. Desktop F unchanged.
+            MobileInteractButton.Request(this, "Enter: " + _def.ResolveName(), EnterDungeon);
 
             bool fPressed =
                 (Keyboard.current != null && Keyboard.current.fKey.wasPressedThisFrame) ||
                 UnityEngine.Input.GetKeyDown(KeyCode.F);
 
             if (fPressed) EnterDungeon();
+        }
+
+        private void OnDisable()
+        {
+            MobileInteractButton.Release(this);
         }
 
         private void EnterDungeon()
@@ -124,7 +137,7 @@ namespace DeNelle.Village
         private void ShowPrompt(bool show)
         {
             if (_prompt == null) return;
-            _prompt.text = show ? $"Press F — {_def?.ResolveName()}" : string.Empty;
+            _prompt.text = show ? $"Tap / Press F — {_def?.ResolveName()}" : string.Empty;
             _prompt.gameObject.SetActive(show);
         }
     }

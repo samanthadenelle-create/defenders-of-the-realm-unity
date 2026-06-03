@@ -86,9 +86,12 @@ namespace DeNelle.Village.Buildings.Progression
     internal sealed class BuildingUpgradePanelInput : MonoBehaviour
     {
         private const float ActivateRadius = 6f;
+        private const float ProximityCheckInterval = 0.15f;
 
         private BuildingUpgradePanel _panel;
         private Transform _hero;
+        private float _nextProximityCheck;
+        private bool _inRangeOfResourceBuilding;
 
         private void Awake()
         {
@@ -104,7 +107,12 @@ namespace DeNelle.Village.Buildings.Progression
                 return;
             }
 
-            if (_panel == null || _panel.IsOpen) return;
+            if (_panel == null || _panel.IsOpen)
+            {
+                // Panel open (or none yet) — the panel owns its own close UI.
+                MobileInteractButton.Release(this);
+                return;
+            }
 
             if (_hero == null)
             {
@@ -113,9 +121,35 @@ namespace DeNelle.Village.Buildings.Progression
                 _hero = hero.transform;
             }
 
-            if (!Input.GetKeyDown(KeyCode.F)) return;
+            // Throttle the building scan — it walks every Building each tick, so
+            // don't run it per-frame (mirrors the proximity throttle the other
+            // structure interactions use).
+            if (Time.time >= _nextProximityCheck)
+            {
+                _nextProximityCheck = Time.time + ProximityCheckInterval;
+                _inRangeOfResourceBuilding = HeroNearResourceBuilding();
+            }
 
-            // Open if the hero is within range of ANY resource building.
+            // DEF-203: register the shared on-screen Interact button while in range so
+            // touch/mobile (no keyboard) can open upgrades too. Desktop F + U unchanged.
+            if (_inRangeOfResourceBuilding)
+                MobileInteractButton.Request(this, "Open: Building Upgrades", _panel.Open);
+            else
+                MobileInteractButton.Release(this);
+
+            if (_inRangeOfResourceBuilding && Input.GetKeyDown(KeyCode.F))
+                _panel.Open();
+        }
+
+        private void OnDisable()
+        {
+            MobileInteractButton.Release(this);
+        }
+
+        /// <summary>True when the hero is within range of ANY resource building.</summary>
+        private bool HeroNearResourceBuilding()
+        {
+            if (_hero == null) return false;
             foreach (var b in Object.FindObjectsByType<Building>(
                          FindObjectsInactive.Exclude, FindObjectsSortMode.None))
             {
@@ -123,11 +157,9 @@ namespace DeNelle.Village.Buildings.Progression
                 if (!IsResourceBuilding(b)) continue;
                 float distSqr = (_hero.position - b.transform.position).sqrMagnitude;
                 if (distSqr <= ActivateRadius * ActivateRadius)
-                {
-                    _panel.Open();
-                    return;
-                }
+                    return true;
             }
+            return false;
         }
 
         /// <summary>

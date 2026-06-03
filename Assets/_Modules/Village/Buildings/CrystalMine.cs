@@ -105,6 +105,7 @@ namespace DeNelle.Village
         {
             UnsubscribeFromWave();
             if (_uiOpen) CloseUpgradeUI();
+            MobileInteractButton.Release(this);
         }
 
         private void Update()
@@ -116,11 +117,15 @@ namespace DeNelle.Village
             {
                 // bug-triage P1: simple-mode upgrade now requires a 2nd, deliberate F press
                 // (the first press only opens the confirm bubble; it no longer spends coins).
+                // DEF-203: the shared Interact button mirrors that 2nd press on touch.
+                if (_awaitingSimpleConfirm)
+                    MobileInteractButton.Request(this, "Confirm Upgrade", ConfirmSimpleUpgrade);
+                else
+                    MobileInteractButton.Release(this);
+
                 if (_awaitingSimpleConfirm && Input.GetKeyDown(KeyCode.F))
                 {
-                    _awaitingSimpleConfirm = false;
-                    TryUpgrade();
-                    CloseUpgradeUI();
+                    ConfirmSimpleUpgrade();
                     return;
                 }
                 if (Input.GetKeyDown(KeyCode.Escape)) CloseUpgradeUI();
@@ -140,8 +145,24 @@ namespace DeNelle.Village
                 }
             }
 
+            // DEF-203: register the shared on-screen Interact button while in range so
+            // touch/mobile (no keyboard) can open the upgrade UI too. Desktop F unchanged.
+            if (_isInRange)
+                MobileInteractButton.Request(this, "Upgrade Crystal Mine", OpenUpgradeUI);
+            else
+                MobileInteractButton.Release(this);
+
             if (_isInRange && Input.GetKeyDown(KeyCode.F))
                 OpenUpgradeUI();
+        }
+
+        /// <summary>Spends coins + applies the simple-mode upgrade, then closes the prompt.
+        /// Shared by the desktop 2nd-F press and the mobile Confirm button (DEF-203).</summary>
+        private void ConfirmSimpleUpgrade()
+        {
+            _awaitingSimpleConfirm = false;
+            TryUpgrade();
+            CloseUpgradeUI();
         }
 
         // ── Wave crystal yield ────────────────────────────────────────────────
@@ -233,6 +254,7 @@ namespace DeNelle.Village
             _awaitingSimpleConfirm = false;
             if (_upgradeUiRoot != null) _upgradeUiRoot.SetActive(false);
             if (_heroLoco != null) _heroLoco.enabled = true;
+            MobileInteractButton.Release(this);
         }
 
         /// <summary>
@@ -351,7 +373,7 @@ namespace DeNelle.Village
             else
             {
                 int cost = _currentLevel == 1 ? _costL1toL2 : _costL2toL3;
-                _promptGo = BuildBubble($"〔 F 〕 Confirm Upgrade — {cost} Coins",
+                _promptGo = BuildBubble($"〔 Tap / F 〕 Confirm Upgrade — {cost} Coins",
                     _promptHeight + 0.5f,
                     new Color(0.10f, 0.04f, 0.22f, 0.96f),
                     new Color(0.70f, 0.50f, 1.0f));
@@ -442,7 +464,7 @@ namespace DeNelle.Village
         {
             string label = IsMaxLevel
                 ? "✦  Crystal Mine — Active"
-                : $"〔 F 〕  Upgrade Mine  (L{_currentLevel}→{_currentLevel + 1})";
+                : $"〔 Tap / F 〕  Upgrade Mine  (L{_currentLevel}→{_currentLevel + 1})";
 
             _promptGo = BuildBubble(label, _promptHeight,
                 new Color(0.06f, 0.02f, 0.14f, 0.96f),

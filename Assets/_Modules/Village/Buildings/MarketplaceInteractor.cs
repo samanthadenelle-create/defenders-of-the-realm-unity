@@ -75,6 +75,7 @@ namespace DeNelle.Village
             // Safety: always close the store if this component is disabled
             // (e.g. scene unload) so HeroLocomotion isn't left frozen.
             if (_storeOpen) CloseStore();
+            MobileInteractButton.Release(this);
         }
 
         private void Update()
@@ -85,6 +86,7 @@ namespace DeNelle.Village
             // ── Escape to close ───────────────────────────────────────────────
             if (_storeOpen)
             {
+                MobileInteractButton.Release(this); // the store's own close button takes over
                 if (Input.GetKeyDown(KeyCode.Escape)) CloseStore();
                 return; // skip proximity logic while store is open
             }
@@ -102,6 +104,13 @@ namespace DeNelle.Village
                     else            HidePrompt();
                 }
             }
+
+            // DEF-203: register the shared on-screen Interact button while in range so
+            // touch/mobile (no keyboard) can open the store too. Desktop F unchanged.
+            if (_isInRange)
+                MobileInteractButton.Request(this, "Open: The Realm Store", OpenStore);
+            else
+                MobileInteractButton.Release(this);
 
             // ── F-key fires every frame (no dropped keypresses) ───────────────
             if (_isInRange && Input.GetKeyDown(KeyCode.F))
@@ -199,7 +208,7 @@ namespace DeNelle.Village
         private void ShowPrompt()
         {
             _promptGo = BuildBubble(
-                "〔 F 〕  The Realm Store",
+                "〔 Tap / F 〕  The Realm Store",
                 _promptHeight,
                 new Color(0.08f, 0.04f, 0.16f, 0.96f),   // dark plum bg
                 new Color(0.85f, 0.60f, 1.00f, 1f));      // violet outline

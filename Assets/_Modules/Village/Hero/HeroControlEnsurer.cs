@@ -88,9 +88,11 @@ namespace DeNelle.Village
             // swing anim (their animators lack the Attack trigger — damage still lands). Restrict to
             // Knight later if desired.
             if (hero.GetComponent<PlayerAttackController>() == null) hero.AddComponent<PlayerAttackController>();
-            // Combat readability: a faint ground ring showing basic-attack reach (the hitbox).
-            // Added AFTER PlayerAttackController so HeroReachRing.Start reads the real range.
-            if (hero.GetComponent<HeroReachRing>() == null) hero.AddComponent<HeroReachRing>();
+            // DEF-205: the always-on blue ground "reach ring" read as a mystery indicator
+            // while walking (players couldn't tell what it meant). Removed — do NOT attach
+            // HeroReachRing. The class is kept (HeroReachRing.cs) in case a gated, opt-in
+            // reach hint is wanted later, but it must NOT render during normal play.
+            // (Intentionally not adding HeroReachRing here.)
             Debug.Log($"[HeroControlEnsurer] ensured hero='{hero.name}' active={hero.activeInHierarchy} locoEnabled={l.enabled}.");
         }
 

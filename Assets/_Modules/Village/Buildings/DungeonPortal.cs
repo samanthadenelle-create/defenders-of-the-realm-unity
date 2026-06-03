@@ -111,9 +111,21 @@ namespace DeNelle.Village
                 }
             }
 
+            // DEF-203: register the shared on-screen Interact button while in range so
+            // touch/mobile (no keyboard) can enter too. Desktop F + walk-in unchanged.
+            if (_isInRange)
+                MobileInteractButton.Request(this, "Enter: " + _displayName, EnterDungeon);
+            else
+                MobileInteractButton.Release(this);
+
             // F-key check every frame so no keypress is ever dropped.
             if (_isInRange && Input.GetKeyDown(KeyCode.F))
                 EnterDungeon();
+        }
+
+        private void OnDisable()
+        {
+            MobileInteractButton.Release(this);
         }
 
         /// <summary>
@@ -140,7 +152,7 @@ namespace DeNelle.Village
         private void ShowPrompt()
         {
             _promptGo = BuildBubble(
-                "〔 F 〕 " + _displayName,
+                "〔 Tap / F 〕 " + _displayName,
                 PromptHeight,
                 new Color(0.10f, 0.04f, 0.20f, 0.96f),
                 new Color(0.78f, 0.55f, 1f, 1f));

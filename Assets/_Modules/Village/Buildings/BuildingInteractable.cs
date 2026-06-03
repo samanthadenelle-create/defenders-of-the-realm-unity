@@ -62,11 +62,23 @@ namespace DeNelle.Village
             if (inRange && _promptGo == null) ShowPrompt();
             else if (!inRange && _promptGo != null) HidePrompt();
 
+            // DEF-203: register the shared on-screen Interact button while in range so
+            // touch/mobile (no keyboard) can fire the same action. Desktop F unchanged.
+            if (inRange)
+                MobileInteractButton.Request(this, "Interact: " + LabelFor(_building.Type), Interact);
+            else
+                MobileInteractButton.Release(this);
+
             if (inRange && Input.GetKeyDown(KeyCode.F))
             {
                 Debug.Log($"[BuildingInteractable] F pressed in range of {_building.Type} — invoking Interact.");
                 Interact();
             }
+        }
+
+        private void OnDisable()
+        {
+            MobileInteractButton.Release(this);
         }
 
         // ── Prompt ──────────────────────────────────────────────────────────
@@ -76,7 +88,7 @@ namespace DeNelle.Village
             // label + key prompt. Owner direction 2026-05-20: needs to read as
             // an action affordance, not a debug overlay.
             _promptGo = BuildBubble(
-                $"〔 F 〕 {LabelFor(_building.Type)}",
+                $"〔 Tap / F 〕 {LabelFor(_building.Type)}",
                 ProximityHeightAboveBuilding,
                 new Color(0.18f, 0.10f, 0.04f, 0.96f),     // deep amber-black
                 new Color(1f, 0.78f, 0.32f, 1f));          // bright gold rim

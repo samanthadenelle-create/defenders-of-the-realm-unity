@@ -269,12 +269,25 @@ namespace DeNelle.Village
 
             bool inRange = (_player.position - transform.position).sqrMagnitude
                            <= InteractRadius * InteractRadius;
+
+            // DEF-203: register the shared on-screen Interact button while in range and
+            // off cooldown so touch/mobile (no keyboard) can extract too. Desktop F kept.
+            if (inRange && _cooldown <= 0f)
+                MobileInteractButton.Request(this, "Mine " + Resource, Extract);
+            else
+                MobileInteractButton.Release(this);
+
             if (inRange && _cooldown <= 0f &&
                 (UnityEngine.Input.GetKeyDown(KeyCode.F) ||
                  (Keyboard_FPressed())))
             {
                 Extract();
             }
+        }
+
+        private void OnDisable()
+        {
+            MobileInteractButton.Release(this);
         }
 
         // New Input System safe-check without a hard dependency: fall back to legacy
