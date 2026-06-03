@@ -184,6 +184,11 @@ namespace DeNelle.Onboarding
             // Stage 2 — cold open (story intro), same guard.
             if (_storyIntro != null)
                 await SafeStage(_storyIntro.Play(), "storyIntro");
+            // CRITICAL: SafeStage TIMES OUT the cold-open at 6s, but Play() is a
+            // 14-beat cinematic that keeps running its remaining beats afterwards —
+            // rendering them ON TOP of the title (the recurring "intro on top" bug).
+            // Force-kill the intro overlay here so it can never overlay the title.
+            if (_storyIntro != null) _storyIntro.ForceHide();
             Debug.Log("[TitleController] Arrival: storyIntro stage done.");
 
             // Stage 3 — the title screen (always reached now).

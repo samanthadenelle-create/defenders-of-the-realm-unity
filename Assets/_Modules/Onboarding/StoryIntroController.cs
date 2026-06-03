@@ -195,6 +195,29 @@ namespace DeNelle.Onboarding
             Complete();
         }
 
+        /// <summary>
+        /// Hard-stops the cinematic and removes its overlay NOW. The arrival
+        /// sequence times the cold-open out at 6s (a WebGL hang-guard), but
+        /// <see cref="Play"/> is a 14-beat cinematic that keeps running its
+        /// remaining beats AFTER the timeout — rendering them on top of the
+        /// title/hero-select (the recurring "intro on top" bug). The orchestrator
+        /// calls this right before it reveals the title so the intro can never
+        /// overlay it: cancel the play loop, blank + detach the overlay panel, and
+        /// mark finished so a later Play() is a no-op.
+        /// </summary>
+        public void ForceHide()
+        {
+            _cts?.Cancel();
+            if (_root != null)
+            {
+                _root.style.opacity = 0f;
+                _root.style.display = DisplayStyle.None;
+                _root.pickingMode = PickingMode.Ignore;
+            }
+            if (_document != null) _document.enabled = false;   // detach the panel from rendering entirely
+            HasFinished = true;
+        }
+
         // ── Overlay construction (runtime UI Toolkit, no .uxml needed) ───────
         private void BuildOverlay()
         {
