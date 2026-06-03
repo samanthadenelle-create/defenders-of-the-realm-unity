@@ -45,6 +45,26 @@ namespace DeNelle.Village
         /// <summary>Current XZ velocity, exposed for the follow camera / animator.</summary>
         public Vector3 Velocity { get; private set; }
 
+        // DEF-147 (Part B): off-mesh ground-snap / re-bind. When the hero leaves the
+        // baked NavMesh (walks off a ledge / rampart edge), the agent's height-clamp
+        // stops applying and the raw transform-fallback has NO downward force — so the
+        // hero keeps its last Y forever ("hover exploit"). This re-binds the hero to
+        // the navmesh (NavMesh.SamplePosition → pull Y down, re-warp the agent on)
+        // instead of letting it float. Flag-guarded so it's instantly flippable to
+        // false in playtest if it ever misbehaves; default true (it's a correctness fix).
+        public static bool GroundSnapEnabled = true;
+
+        // Accumulated downward fall velocity (m/s, magnitude) for a gravity-like snap
+        // rather than a hard teleport. Reset to 0 whenever the hero is grounded/on-mesh.
+        private float _fallSpeed;
+        private const float FallAccel    = 30f;   // m/s² downward accel while floating
+        private const float FallSpeedMax = 20f;   // m/s terminal fall speed (cap)
+        // How far down/around to look for the nearest navmesh point to re-bind onto.
+        private const float SnapSampleRadius = 6f;
+        // Vertical band within which we re-warp the AGENT back onto the mesh (rather
+        // than only nudging the transform) — i.e. the hero is essentially at ground.
+        private const float ReBindYBand = 0.35f;
+
         private bool _loggedFirstInput;
         private Animator _animator;
         // WO-174 param-guard: cache whether the live controller actually declares the
@@ -260,23 +280,87 @@ namespace DeNelle.Village
                     transform.rotation, target, _rotationSpeed * Time.deltaTime);
             }
 
-            // Edge/floor clamp ONLY when off the NavMesh (the transform fallback). When the
-            // hero is on the NavMesh, the bake defines the walkable bounds + height, so a
-            // manual clamp would fight the agent (and break ramparts/hills by pinning Y to 0).
+            // Edge/floor clamp + ground-snap ONLY when off the NavMesh (the transform
+            // fallback). When the hero is ON the NavMesh, the bake defines the walkable
+            // bounds + height, so a manual clamp would fight the agent (and break
+            // ramparts/hills by pinning Y to 0).
             if (_agent == null || !_agent.isOnNavMesh)
             {
                 var p = transform.position;
                 const float PlayableHalf = 50f;
                 p.x = Mathf.Clamp(p.x, -PlayableHalf, PlayableHalf);
                 p.z = Mathf.Clamp(p.z, -PlayableHalf, PlayableHalf);
-                if (p.y < 0f) p.y = 0f;
+
+                // DEF-147: off-mesh ground-snap / re-bind. The agent goes off-mesh both
+                // when the hero walks off a real edge AND when the rampart lift
+                // SUSPENDS the agent to hand-carry the hero up/down. We must NEVER snap
+                // during the lift carry (it would yank the hero off the slab) — so gate
+                // the whole snap on the lift NOT actively carrying. When uncertain, we
+                // do nothing (preserve today's behavior) and just floor Y at 0 below.
+                if (GroundSnapEnabled && !IsLiftCarrying())
+                {
+                    // Find the nearest navmesh point to the hero. If one exists within
+                    // the sample radius, that's valid ground — pull the hero DOWN toward
+                    // its Y at a gravity-like rate (never up; up is the agent's job /
+                    // the lift's), so the hero falls to the surface instead of freezing.
+                    if (NavMesh.SamplePosition(p, out NavMeshHit hit, SnapSampleRadius, NavMesh.AllAreas))
+                    {
+                        float groundY = hit.position.y;
+                        if (p.y > groundY + 0.01f)
+                        {
+                            // Accelerate a downward fall, capped, and step Y toward ground.
+                            _fallSpeed = Mathf.Min(_fallSpeed + FallAccel * Time.deltaTime, FallSpeedMax);
+                            p.y = Mathf.MoveTowards(p.y, groundY, _fallSpeed * Time.deltaTime);
+                        }
+                        else
+                        {
+                            // At or below the sampled ground — clamp to it, stop falling.
+                            p.y = groundY;
+                            _fallSpeed = 0f;
+                        }
+
+                        transform.position = p;
+
+                        // Once essentially down at ground, re-bind the AGENT onto the mesh
+                        // so it resumes its own height-follow (this also auto-heals the
+                        // lift's "suspended-on-deck" float once the lift releases). Only
+                        // when the agent is enabled but off-mesh — never re-enable an agent
+                        // the lift deliberately disabled mid-ride (excluded above).
+                        if (_agent != null && _agent.enabled && !_agent.isOnNavMesh &&
+                            Mathf.Abs(p.y - hit.position.y) <= ReBindYBand)
+                        {
+                            _agent.Warp(hit.position);
+                            _fallSpeed = 0f;
+                        }
+                        return;   // ground-snap handled the Y this frame
+                    }
+                }
+
+                // Fallback (snap disabled, lift carrying, or no navmesh nearby): preserve
+                // the original floor-at-0 behavior — never let the hero sink below Y=0.
+                if (p.y < 0f) { p.y = 0f; _fallSpeed = 0f; }
                 transform.position = p;
+            }
+            else
+            {
+                _fallSpeed = 0f;   // on-mesh: agent owns height, reset any carried fall
             }
 
             // Self-heal the Animator reference (see ResolveAnimator for rationale).
             // Cheap: only runs while _animator is null, stops once wired.
             ResolveAnimator();
             if (_animator != null && _hasSpeedParam) _animator.SetFloat(AnimSpeed, Velocity.magnitude);
+        }
+
+        // DEF-147: the rampart lift suspends the hero's NavMeshAgent and hand-carries
+        // the hero by setting transform.position every frame. During that ride the
+        // ground-snap MUST stay out of the way (snapping would yank the hero off the
+        // slab / fight the lift). LiftPlatform.AnyCarrying() is true only while a lift
+        // is actively carrying — both live in DeNelle.Village, so this is a direct,
+        // reflection-free static read that does not change any lift behavior.
+        private static bool IsLiftCarrying()
+        {
+            return LiftPlatform.AnyCarrying();
         }
 
         private static Vector2 ReadMoveInput()

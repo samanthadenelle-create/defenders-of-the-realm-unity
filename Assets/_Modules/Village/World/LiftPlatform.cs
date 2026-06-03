@@ -45,6 +45,32 @@ namespace DeNelle.Village
         private bool _heroOnLast;
         private bool _agentSuspended;
 
+        // DEF-147: true ONLY while this lift is actively carrying the hero (agent
+        // suspended + hero pinned to the slab). HeroLocomotion's off-mesh ground-snap
+        // reads AnyCarrying() and skips the snap during a ride so it never yanks the
+        // hero off the lift. Read-only; does NOT change any lift behavior.
+        private bool _carrying;
+        private static int s_carryingCount;
+
+        /// <summary>True while ANY lift is mid-ride carrying the hero. Read-only signal
+        /// for HeroLocomotion's ground-snap so it never fights the lift's hand-carry.</summary>
+        public static bool AnyCarrying() => s_carryingCount > 0;
+
+        private void SetCarrying(bool value)
+        {
+            if (value == _carrying) return;
+            _carrying = value;
+            s_carryingCount += value ? 1 : -1;
+            if (s_carryingCount < 0) s_carryingCount = 0;   // defensive clamp
+        }
+
+        private void OnDisable()
+        {
+            // Releasing the carry flag if this lift is torn down mid-ride keeps the
+            // global count honest (e.g. scene unload while travelling).
+            SetCarrying(false);
+        }
+
         /// <summary>Set the travel range (TOP-SURFACE world Y at each end) + footprint.
         /// Call once right after AddComponent.</summary>
         public void Configure(float bottomSurfaceY, float topSurfaceY, float footprint)
@@ -90,10 +116,12 @@ namespace DeNelle.Village
                 // Take full authority: suspend the agent's ground-clamp and pin the
                 // hero to the platform so they CAN'T be dragged off mid-ride.
                 SuspendAgent();
+                SetCarrying(true);                     // DEF-147: signal active carry
                 _hero.position = transform.position;   // lock XZ + Y to the platform
             }
             else
             {
+                SetCarrying(false);                    // DEF-147: ride over → clear signal
                 // Not actively carrying — hand control straight back to the NavMeshAgent
                 // so the hero is navmesh-bound at BOTH ends (ground AND the baked rampart
                 // deck). BUG (owner 2026-06-02 "where i can fly"): leaving the agent
