@@ -1047,6 +1047,9 @@ namespace DeNelle.Audio
                 case DeNelle.Core.Audio.MusicTrack.Dungeon: PlayMusic(MusicTrack.Dungeon); break;
                 case DeNelle.Core.Audio.MusicTrack.Overworld: PlayAmbientContext(AmbientContext.Overworld); break;
                 case DeNelle.Core.Audio.MusicTrack.Defeat:  PlayMusic(MusicTrack.Defeat);  break;
+                // DEF-228: the cold-open intro primes the title theme (title.mp3) so it
+                // is the opening music and the WebGL audio-unlock resumes THIS, not Overworld.
+                case DeNelle.Core.Audio.MusicTrack.Title:   PlayMusic(MusicTrack.Title);   break;
             }
         }
     }

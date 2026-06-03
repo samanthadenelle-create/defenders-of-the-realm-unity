@@ -135,7 +135,10 @@ namespace DeNelle.Onboarding
             // AudioContext on first touch and AudioService re-issues the current
             // track, so the score lands the moment the player taps. Null-guarded:
             // CoreServices.Audio is unset until AudioService registers itself.
-            CoreServices.Audio?.PlayMusic(DeNelle.Core.Audio.MusicTrack.Overworld);
+            // DEF-228: prime the TITLE theme (title.mp3) — the cold-open is part of the
+            // Title scene and title.mp3 is the opening music. This used to request
+            // Overworld, which stomped the title track ~3-6s in (the reported bug).
+            CoreServices.Audio?.PlayMusic(DeNelle.Core.Audio.MusicTrack.Title);
 
             try
             {

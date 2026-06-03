@@ -602,5 +602,120 @@ namespace DeNelle.Editor
             AssetDatabase.Refresh();
             Debug.Log("[PeopleCharacterImporter] CC5 Cleric DONE\n" + string.Join("\n", report));
         }
+
+        /// <summary>Headless entry: import an AccuRIG CC5 hero exported with EMBEDDED
+        /// textures (the owner's re-export workflow). Unlike ImportCC5Hero (separate baked
+        /// PNGs), this lets Unity import the FBX's standard materials, which already carry
+        /// the embedded textures — so RetargetMaterialsToUrp picks them up at runtime and
+        /// no separate texture copy / runtime override is needed. Verifies the renderer
+        /// actually has a texture so we never ship grey. Ranger -> Resources/Heroes/Ranger.fbx.</summary>
+        [MenuItem("Defenders/Animation/Import Ranger (embedded textures)")]
+        public static void ImportRangerEmbedded()
+        {
+            var report = new List<string>();
+            report.Add("=== Import Ranger (embedded textures) ===");
+            ImportEmbeddedHero("Assets/Models/People/Human/Human_Ranger.fbx", "Ranger", report);
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+            Debug.Log("[PeopleCharacterImporter] Ranger (embedded) DONE\n" + string.Join("\n", report));
+        }
+
+        /// <summary>Import a CC5 FBX whose textures are EMBEDDED: copy over the slug,
+        /// flip to Humanoid (copy Mage avatar if it doesn't auto-map), and import the
+        /// FBX's standard materials (materialImportMode=ImportStandard) so the embedded
+        /// textures land on the material. Clears the slug's old _tex folder so a prior
+        /// separate-bake (FighterClass) diffuse can't be mis-applied. Reports whether the
+        /// renderer materials actually carry a texture (the anti-grey gate).</summary>
+        private static void ImportEmbeddedHero(string srcFbxPath, string destSlug, List<string> report)
+        {
+            if (AssetImporter.GetAtPath(srcFbxPath) == null)
+            {
+                report.Add($"  MISSING SRC: {srcFbxPath}");
+                return;
+            }
+
+            string destFbx = HeroDir + destSlug + ".fbx";
+            string texDir  = HeroDir + destSlug + "_tex";
+
+            // Drop any prior separate-bake textures for this slug so HeroBodySwapper's
+            // ApplyExtractedTexture can't paint the OLD model's atlas onto the new mesh.
+            if (AssetDatabase.IsValidFolder(texDir)) AssetDatabase.DeleteAsset(texDir);
+
+            AssetDatabase.DeleteAsset(destFbx);
+            if (!AssetDatabase.CopyAsset(srcFbxPath, destFbx))
+            {
+                report.Add($"  COPY FAILED: {srcFbxPath} -> {destFbx}");
+                return;
+            }
+
+            var imp = AssetImporter.GetAtPath(destFbx) as ModelImporter;
+            if (imp == null) { report.Add($"  NO IMPORTER at {destFbx}"); return; }
+
+            imp.animationType      = ModelImporterAnimationType.Human;
+            imp.avatarSetup        = ModelImporterAvatarSetup.CreateFromThisModel;
+            imp.importAnimation    = false;
+            imp.materialImportMode = ModelImporterMaterialImportMode.ImportStandard; // embedded textures ride the material
+            imp.SaveAndReimport();
+
+            // Avatar verdict (+ Mage-avatar copy fallback, same as ImportCC5Hero).
+            var go   = AssetDatabase.LoadAssetAtPath<GameObject>(destFbx);
+            var anim = go != null ? go.GetComponentInChildren<Animator>() : null;
+            var av   = anim != null ? anim.avatar : null;
+            string avatarVerdict;
+            if (av != null && av.isValid && av.isHuman) avatarVerdict = "OK Humanoid (auto-mapped)";
+            else
+            {
+                var mageGo   = AssetDatabase.LoadAssetAtPath<GameObject>(HeroDir + "Mage.fbx");
+                var mageAnim = mageGo != null ? mageGo.GetComponentInChildren<Animator>() : null;
+                var mageAv   = mageAnim != null ? mageAnim.avatar : null;
+                if (mageAv != null && mageAv.isValid && mageAv.isHuman)
+                {
+                    imp.animationType = ModelImporterAnimationType.Human;
+                    imp.sourceAvatar  = mageAv;
+                    imp.SaveAndReimport();
+                    go   = AssetDatabase.LoadAssetAtPath<GameObject>(destFbx);
+                    anim = go != null ? go.GetComponentInChildren<Animator>() : null;
+                    av   = anim != null ? anim.avatar : null;
+                    avatarVerdict = (av != null && av.isValid && av.isHuman)
+                        ? "copied-Mage-avatar (now Humanoid)"
+                        : "FAILED — not Humanoid after Mage-avatar copy";
+                }
+                else avatarVerdict = "FAILED — not Humanoid and no Mage avatar to copy";
+            }
+
+            // ANTI-GREY GATE: confirm at least one renderer material carries a base texture.
+            int slots = 0, textured = 0;
+            go = AssetDatabase.LoadAssetAtPath<GameObject>(destFbx);
+            if (go != null)
+            {
+                foreach (var r in go.GetComponentsInChildren<Renderer>(true))
+                {
+                    foreach (var m in r.sharedMaterials)
+                    {
+                        slots++;
+                        if (m == null) continue;
+                        Texture t = null;
+                        if (m.HasProperty("_BaseMap")) t = m.GetTexture("_BaseMap");
+                        if (t == null && m.HasProperty("_MainTex")) t = m.GetTexture("_MainTex");
+                        if (t != null) textured++;
+                    }
+                }
+            }
+
+            float height = 0f;
+            if (go != null)
+            {
+                bool any = false; Bounds b = default;
+                foreach (var r in go.GetComponentsInChildren<Renderer>(true))
+                { if (!any) { b = r.bounds; any = true; } else b.Encapsulate(r.bounds); }
+                if (any) height = b.size.y;
+            }
+
+            report.Add($"  src -> dst: {srcFbxPath} -> {destFbx}");
+            report.Add($"  avatar: {avatarVerdict}");
+            report.Add($"  TEXTURE GATE: {textured}/{slots} material slot(s) carry a base texture " +
+                       $"{(textured > 0 ? "(OK — not grey)" : "(*** GREY RISK — 0 textured ***)")}");
+            report.Add($"  mesh bounds height: {height:F3} m");
+        }
     }
 }

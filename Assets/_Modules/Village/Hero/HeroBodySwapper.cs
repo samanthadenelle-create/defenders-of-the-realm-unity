@@ -82,14 +82,25 @@ namespace DeNelle.Village
             // side of the root. The camera follows the ROOT, so the body appeared offset to her
             // right and "pivoted in place" instead of translating. Rotating first, then seating,
             // centres the visible body dead-on over the root the camera follows.
-            const float ForwardYaw = -90f;   // +X (authored forward) → +Z (root forward)
+            // FORWARD-YAW is PER-PIPELINE (owner 2026-06-03): legacy Tripo bodies export
+            // facing +X and need -90 to face the root's +Z; the new CC5/AccuRIG bodies
+            // (Tripo mesh + AccuRIG rig) already export facing +Z, so they need NO yaw.
+            // One -90 constant for all left the CC5 heroes "turned 90 degrees". As each
+            // class migrates to the CC5 pipeline, flip its entry here to 0.
+            // (If a CC5 hero comes out BACKWARDS instead of correct, it's 180f, not 0f.)
+            float forwardYaw = cls switch
+            {
+                HeroClass.Ranger => 0f,   // CC5/AccuRIG (adult archer)
+                HeroClass.Cleric => 0f,   // CC5/AccuRIG (adult cleric / Elara)
+                _ => -90f,                // legacy Tripo (Mage, Knight)
+            };
             var body = VisualFactory.Skin(transform, prefab, new SkinOptions
             {
                 FitHeight = targetH,
                 StripColliders = true,
                 SeatOnGround = true,
                 FixTripoMaterials = false,
-                LocalRotation = Quaternion.Euler(0f, ForwardYaw, 0f),
+                LocalRotation = Quaternion.Euler(0f, forwardYaw, 0f),
             });
             if (body == null) return;
             body.name = "HeroBody";
@@ -405,23 +416,55 @@ namespace DeNelle.Village
             };
             if (string.IsNullOrEmpty(texPath)) return;
             var tex = Resources.Load<Texture2D>(texPath);
-            if (tex == null) return;
+            if (tex == null)
+            {
+                Debug.LogWarning("[HeroBodySwapper] DEF-229 baked diffuse not found at Resources/" +
+                                 texPath + " for " + cls + " — body will fall back to a class tint.");
+                return;
+            }
+
+            // DEF-229: the CC5 bodies import with materialImportMode=None, which leaves the
+            // renderer slots NULL/default — so the old "SetTexture on the existing material"
+            // path had nothing to paint and the hero rendered GREY. Build ONE URP/Lit material
+            // from the single baked atlas (these bodies are one combined mesh + one bake, so one
+            // material is correct) and ASSIGN it to every slot, replacing whatever the import
+            // left. Runtime-built URP/Lit renders in WebGL (RetargetMaterialsToUrp uses the same).
+            Shader lit = Shader.Find("Universal Render Pipeline/Lit")
+                         ?? Shader.Find("Universal Render Pipeline/Simple Lit")
+                         ?? Shader.Find("Sprites/Default");
+            Material baked = lit != null ? new Material(lit) { name = cls + " (CC5 baked)" } : null;
+            if (baked != null)
+            {
+                if (baked.HasProperty("_BaseMap"))   baked.SetTexture("_BaseMap", tex);
+                if (baked.HasProperty("_MainTex"))   baked.SetTexture("_MainTex", tex);
+                if (baked.HasProperty("_BaseColor")) baked.SetColor("_BaseColor", Color.white);
+                if (baked.HasProperty("_Color"))     baked.SetColor("_Color", Color.white);
+            }
+
             foreach (var r in body.GetComponentsInChildren<Renderer>(true))
             {
                 if (r == null) continue;
                 var mats = r.sharedMaterials;
-                if (mats == null) continue;
+                if (mats == null || mats.Length == 0)
+                {
+                    if (baked != null) r.sharedMaterial = baked;
+                    continue;
+                }
                 for (int i = 0; i < mats.Length; i++)
                 {
-                    var m = mats[i];
-                    if (m == null) continue;
-                    if (m.HasProperty("_BaseMap")) m.SetTexture("_BaseMap", tex);
-                    if (m.HasProperty("_MainTex")) m.SetTexture("_MainTex", tex);
-                    // White base colour so the texture's actual colours show
-                    // through (otherwise the class tint would multiply on top
-                    // and dirty the basecolor).
-                    if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", Color.white);
-                    if (m.HasProperty("_Color"))     m.SetColor("_Color", Color.white);
+                    if (baked != null)
+                    {
+                        // Replace the null/default/broken import slot with the baked material.
+                        mats[i] = baked;
+                    }
+                    else if (mats[i] != null)
+                    {
+                        // No URP/Lit shader available (unexpected) — best-effort paint in place.
+                        if (mats[i].HasProperty("_BaseMap")) mats[i].SetTexture("_BaseMap", tex);
+                        if (mats[i].HasProperty("_MainTex")) mats[i].SetTexture("_MainTex", tex);
+                        if (mats[i].HasProperty("_BaseColor")) mats[i].SetColor("_BaseColor", Color.white);
+                        if (mats[i].HasProperty("_Color"))     mats[i].SetColor("_Color", Color.white);
+                    }
                 }
                 r.sharedMaterials = mats;
             }
