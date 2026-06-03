@@ -9,14 +9,49 @@ using DeNelle.Core.Combat;
 
 namespace DeNelle.Core.Catalog
 {
+    /// <summary>
+    /// S4 — a Core-friendly, pure-data multi-resource cost (Wood/Food/Iron/Crystals).
+    /// Lives in Core so <see cref="RepoProps"/> (which Core owns) can carry it without a
+    /// Village reference; the Village boundary (BuildModeController) maps it 1:1 to
+    /// <c>EconomyService.ResourceCost</c> and charges it through the persisted ledger.
+    /// All four slots default to 0 = "no multi-cost" (fall back to crystals-only buildCost).
+    /// JSON deserializes the optional "cost" object's wood/food/iron/crystals straight in.
+    /// </summary>
+    [System.Serializable]
+    public struct ResourceCost
+    {
+        public int wood;
+        public int food;
+        public int iron;
+        public int crystals;
+
+        /// <summary>True when every slot is zero — no multi-resource cost was authored.</summary>
+        public bool IsZero => wood == 0 && food == 0 && iron == 0 && crystals == 0;
+    }
+
     [System.Serializable]
     public sealed class RepoProps
     {
         /// <summary>What this contributes to the NavMesh once placed.</summary>
         public NavSurfaceKind navSurface = NavSurfaceKind.None;
 
-        /// <summary>Build cost (the affordable rule reads this).</summary>
+        /// <summary>
+        /// Crystals-only build cost (the legacy affordable rule reads this). Kept as a
+        /// FALLBACK: when no multi-resource <see cref="cost"/> is supplied (all four
+        /// slots zero), placement charges this many Crystals so older catalog rows and
+        /// any back-compat path never regress. When <see cref="cost"/> is non-zero it
+        /// takes precedence.
+        /// </summary>
         public int buildCost = 0;
+
+        /// <summary>
+        /// S4 — the full multi-resource build cost (Wood/Food/Iron/Crystals). Pure-data,
+        /// Core-friendly (no Village ref); the Village boundary maps it to
+        /// EconomyService.ResourceCost and charges it through the persisted ResourceLedger.
+        /// All-zero (the default) means "no multi-cost" → fall back to <see cref="buildCost"/>
+        /// Crystals. JSON deserializes the optional "cost" object straight into this.
+        /// </summary>
+        public ResourceCost cost = new ResourceCost();
 
         /// <summary>Village resolves this string -> the actual behaviour component (Core stays pure).</summary>
         public string behaviorId = null;

@@ -42,7 +42,13 @@ namespace DeNelle.Village
         // serve the identical two access points.
         private const float DeckTopY = 5.4f;   // walkable deck surface (DeckTopY)
         private const float LaneZ    = 31.1f;  // N/S walk-lane centre Z (±)
-        private const float AccessX  = -10f;   // interior side of the wall
+        private const float LaneX    = 40.1f;  // E/W walk-lane centre X (±) — DEF-216
+        private const float AccessX  = -10f;   // interior side of the wall (LIFT access)
+
+        // DEF-216 stair access points (must match the BuildRampartStaircase top
+        // landings in VillageSceneBuilder.Fortify.cs). Each is the FOOT of a stair on
+        // the interior ground; the StairNavLink samples both ends onto the navmesh.
+        private const float StairFlank = 12f;  // X offset (N/S stairs) / Z offset (E/W stairs)
 
         private bool _built;
 
@@ -60,18 +66,45 @@ namespace DeNelle.Village
             if (_built) return;
             _built = true;
 
-            BuildAccess("RampartStairLink (North)", new Vector3(AccessX, 0f,  LaneZ));
-            BuildAccess("RampartStairLink (South)", new Vector3(AccessX, 0f, -LaneZ));
+            // ── LIFT access (kept) — vertical link, foot XZ == top XZ (X=-10). ──
+            BuildAccess("RampartLiftLink (North)",
+                new Vector2(AccessX,  LaneZ), new Vector2(AccessX,  LaneZ));
+            BuildAccess("RampartLiftLink (South)",
+                new Vector2(AccessX, -LaneZ), new Vector2(AccessX, -LaneZ));
+
+            // ── DEF-216 STAIR access — 4 stairs flanking the gates, clear of the
+            //    lifts. Foot is offset from the top landing by the stair run along the
+            //    run axis (matches BuildRampartStaircase basePos/topPos in the builder).
+            //    The StairNavLink samples both ends onto the navmesh, so exact run
+            //    length isn't critical here — these XZ are the landing + a foot well
+            //    inside the wall, and the link snaps to the baked ramp surface.
+            const float run = 9f;   // matches rampRun in VillageSceneBuilder.Fortify.cs
+            // North/South: stair climbs along Z toward the wall; foot is `run` inboard
+            // of the LaneZ landing. Top landing X=+StairFlank.
+            BuildAccess("RampartStairLink (North)",
+                new Vector2(StairFlank,  LaneZ - run), new Vector2(StairFlank,  LaneZ));
+            BuildAccess("RampartStairLink (South)",
+                new Vector2(StairFlank, -(LaneZ - run)), new Vector2(StairFlank, -LaneZ));
+            // East/West: stair climbs along X; foot is `run` inboard of the LaneX landing.
+            BuildAccess("RampartStairLink (East)",
+                new Vector2(LaneX - run,  StairFlank), new Vector2(LaneX,  StairFlank));
+            BuildAccess("RampartStairLink (West)",
+                new Vector2(-(LaneX - run), -StairFlank), new Vector2(-LaneX, -StairFlank));
         }
 
-        private void BuildAccess(string label, Vector3 xzPos)
+        /// <summary>
+        /// Wires one ground→deck StairNavLink. <paramref name="footXZ"/> is the stair
+        /// FOOT (interior ground); <paramref name="topXZ"/> is the deck/walk-lane
+        /// landing. For the vertical LIFTS the two XZ are identical.
+        /// </summary>
+        private void BuildAccess(string label, Vector2 footXZ, Vector2 topXZ)
         {
-            // Find the REAL interior floor height at this spot, exactly like
+            // Find the REAL interior floor height at the FOOT, exactly like
             // RampartLiftInstaller.SpawnLift: a naive downward ray hits the DECK
             // (≈5.4) first, so scan all colliders below and take the HIGHEST one
             // under ~2 m — that's the walkable ground, never the deck.
             float groundY = 0f;
-            var hits = Physics.RaycastAll(new Vector3(xzPos.x, 8f, xzPos.z),
+            var hits = Physics.RaycastAll(new Vector3(footXZ.x, 8f, footXZ.y),
                                           Vector3.down, 12f, ~0, QueryTriggerInteraction.Ignore);
             float bestFloor = float.NegativeInfinity;
             if (hits != null)
@@ -81,8 +114,8 @@ namespace DeNelle.Village
             }
             if (bestFloor > float.NegativeInfinity) groundY = bestFloor;
 
-            var bottomPos = new Vector3(xzPos.x, groundY,  xzPos.z);
-            var topPos    = new Vector3(xzPos.x, DeckTopY, xzPos.z);
+            var bottomPos = new Vector3(footXZ.x, groundY,  footXZ.y);
+            var topPos    = new Vector3(topXZ.x,  DeckTopY, topXZ.y);
 
             // Host GameObject parented under this installer for tidy hierarchy.
             var host = new GameObject(label);

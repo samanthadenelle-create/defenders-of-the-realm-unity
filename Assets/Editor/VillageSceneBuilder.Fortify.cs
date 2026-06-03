@@ -412,20 +412,118 @@ namespace DeNelle.Editor
             Box("WallBarrier-West-N", new Vector3(-barX, barY,  (gateHalf + sideHalfZ)), new Vector3(barThk, barH, 2f * sideHalfZ), Quaternion.identity);
             _ = runHalf;  // (kept for clarity; spans computed via sideHalf/sideHalfZ)
 
-            // ── Rampart access: the runtime LIFT, not a climb ramp ──────────────
-            // Owner 2026-06-02: REMOVED the N/S stone climb ramps. The pressure-plate
-            // RampartLiftInstaller lift is the access path to the deck now, and the old
-            // ~31° ramp sat right beside the lift (X -15..-6 at z ±laneZ), cluttering the
-            // approach. The fighting deck + inner walk-lane loop above stay intact; only
-            // the ground→deck ramp slabs are gone. (rampRun/rampW consts + stairPrefab
-            // remain harmlessly unused — kept so a climb can be re-added without rework.)
-            _ = stairPrefab;
+            // ── DEF-216: STONE STAIRS for natural wall access (alongside the lifts) ──
+            // Owner 2026-06-02 removed the old N/S climb ramps in favour of the runtime
+            // RampartLiftInstaller lift — but a lift alone reads as a puzzle, not a
+            // castle. DEF-216 restores REAL STAIRS: four stone staircases climb from the
+            // interior ground up to the inner walk-lane (deck height), placed at sensible
+            // spots flanking the cardinal gates and CLEAR of the two N/S lifts (which sit
+            // at X=-10). Each staircase is:
+            //   • a visual Stairs_Medieval_Stone prefab (polyperfect, LogWarning on miss), and
+            //   • a nav-static stone RAMP underneath it (~31°, < 45° NavMesh slope limit) so
+            //     BakeVillageNavMesh connects ground→ramp→lane and the hero/enemies actually
+            //     have walkable mesh on the climb. The visual prefab sits ON the ramp.
+            // A StairNavLink (wired by RampartNavLinkInstaller at the SAME XZ points) then
+            // guarantees agent traversal even if the bake doesn't fully connect the ramp.
+            // The LIFTS STAY — both access paths coexist.
+            //
+            // Access points (interior side, landing FLUSH on the walk-lane inner edge):
+            //   • North  X=+12, Z=+laneZ   (flanks the north gate, opposite the lift at X=-10)
+            //   • South  X=+12, Z=-laneZ   (flanks the south main gate, opposite the lift)
+            //   • East   X=+laneX, Z=+12   (E walk-lane, flanks the east side gate)
+            //   • West   X=-laneX, Z=-12   (W walk-lane, flanks the west side gate)
+            // (laneZ / laneX computed above = ±31.1 / ±40.1 — the inner walk-lane centres.)
+            int stairCount = 0;
+            // North + South stairs run along Z (climbing from interior toward the wall),
+            // landing on the N/S walk-lane. rot faces the climb up the +Z (north) / -Z (south).
+            stairCount += BuildRampartStaircase(rr, stairPrefab, stone, "RampartStairs-North",
+                new Vector3(12f,  0f,  laneZ - rampRun * 0.5f), new Vector3(12f, deckTopY,  laneZ),
+                rampRun, rampW, deckTopY, 0f);
+            stairCount += BuildRampartStaircase(rr, stairPrefab, stone, "RampartStairs-South",
+                new Vector3(12f,  0f, -(laneZ - rampRun * 0.5f)), new Vector3(12f, deckTopY, -laneZ),
+                rampRun, rampW, deckTopY, 180f);
+            // East + West stairs run along X, landing on the E/W walk-lane.
+            stairCount += BuildRampartStaircase(rr, stairPrefab, stone, "RampartStairs-East",
+                new Vector3(laneX - rampRun * 0.5f,  0f, 12f), new Vector3(laneX, deckTopY, 12f),
+                rampRun, rampW, deckTopY, 90f);
+            stairCount += BuildRampartStaircase(rr, stairPrefab, stone, "RampartStairs-West",
+                new Vector3(-(laneX - rampRun * 0.5f), 0f, -12f), new Vector3(-laneX, deckTopY, -12f),
+                rampRun, rampW, deckTopY, 270f);
 
-            Debug.Log($"[VillageSceneBuilder] WO-181 BuildRamparts: {pieces} nav-static stone pieces " +
-                      "(overhanging machicolated deck + CONTINUOUS inner walk-lane loop INSIDE the " +
-                      "towers + crenellated parapet + corbel brackets + corner wraps + 4 climb ramps " +
-                      "landing flush on the walk-lane); hero + enemies share the NavMesh " +
-                      "ground→ramp→lane→deck and can walk the FULL perimeter circle.");
+            Debug.Log($"[VillageSceneBuilder] WO-181/DEF-216 BuildRamparts: {pieces} nav-static stone pieces " +
+                      $"+ {stairCount} ground→deck stone staircases (N/S/E/W, flanking the gates, " +
+                      "clear of the 2 lifts) wired with StairNavLink via RampartNavLinkInstaller; " +
+                      "hero + enemies share the NavMesh ground→ramp→lane→deck and can walk the FULL " +
+                      "perimeter circle. Lifts kept as the alternate access.");
+        }
+
+        /// <summary>
+        /// DEF-216: builds ONE rampart staircase — a nav-static stone RAMP (the
+        /// walkable NavMesh surface, ~31° &lt; 45° slope limit) climbing from
+        /// <paramref name="basePos"/> (interior ground) up to <paramref name="topPos"/>
+        /// (the walk-lane at deck height), with a visual Stairs_Medieval_Stone prefab
+        /// laid ON the ramp so it reads as real steps. The ramp carries the path; the
+        /// prefab is cosmetic. A StairNavLink at the same XZ (RampartNavLinkInstaller)
+        /// guarantees agent traversal regardless of the bake. Returns 1 on success.
+        /// <paramref name="yawDeg"/> orients the run (0=+Z, 90=+X, 180=-Z, 270=-X).
+        /// </summary>
+        private static int BuildRampartStaircase(Transform parent, GameObject stairPrefab,
+            Material stone, string name, Vector3 basePos, Vector3 topPos,
+            float run, float width, float deckTopY, float yawDeg)
+        {
+            var rot = Quaternion.Euler(0f, yawDeg, 0f);
+
+            // Group root at the foot of the stair.
+            var grp = new GameObject(name);
+            grp.transform.SetParent(parent, false);
+            grp.transform.SetPositionAndRotation(basePos, rot);
+
+            // ── Nav-static stone RAMP (the real walkable surface) ───────────────
+            // A thin tilted slab from ground (y≈0) to deck (deckTopY). Length = the
+            // slope hypotenuse so it spans run horizontally + deckTopY vertically.
+            float rise = topPos.y - basePos.y;            // ~5.4 m
+            float slopeLen = Mathf.Sqrt(run * run + rise * rise);
+            float pitch = Mathf.Atan2(rise, run) * Mathf.Rad2Deg;   // ~31°
+            // Ramp centre = midpoint between base and top (world), so it bridges both.
+            Vector3 rampCtr = (basePos + topPos) * 0.5f;
+            var ramp = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            ramp.name = "StairNavRamp";
+            ramp.transform.SetParent(grp.transform, true);
+            // Tilt about the axis perpendicular to the run: the run is along the group's
+            // local +Z (after yaw), so pitch DOWN about local X lifts the far end up.
+            ramp.transform.SetPositionAndRotation(rampCtr, rot * Quaternion.Euler(-pitch, 0f, 0f));
+            ramp.transform.localScale = new Vector3(width, 0.3f, slopeLen);
+            if (stone != null)
+            {
+                var rd = ramp.GetComponent<Renderer>();
+                if (rd != null) rd.sharedMaterial = stone;
+            }
+            GameObjectUtility.SetStaticEditorFlags(ramp,
+                GameObjectUtility.GetStaticEditorFlags(ramp) | StaticEditorFlags.NavigationStatic);
+
+            // ── Visual staircase prefab laid ON the ramp ────────────────────────
+            // Cosmetic only — agents path on the ramp, not these steps. Seat the
+            // prefab at the ramp foot and scale its run to roughly match.
+            if (stairPrefab != null)
+            {
+                var vis = (GameObject)PrefabUtility.InstantiatePrefab(stairPrefab);
+                if (vis != null)
+                {
+                    vis.name = "StairsVisual";
+                    vis.transform.SetParent(grp.transform, false);
+                    vis.transform.localPosition = Vector3.zero;     // foot of the run (group origin)
+                    vis.transform.localRotation = Quaternion.identity;
+                    StripColliders(vis);   // visual only — ramp owns the collision/nav
+                }
+            }
+            else
+            {
+                Debug.LogWarning($"[VillageSceneBuilder] DEF-216 {name}: Stairs_Medieval_Stone prefab " +
+                                 "not found (polyperfect pack not imported?) — the nav-static stone RAMP " +
+                                 "still provides the walkable climb; only the decorative steps are absent.");
+            }
+
+            return 1;
         }
 
         /// <summary>

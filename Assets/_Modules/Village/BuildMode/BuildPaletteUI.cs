@@ -168,7 +168,6 @@ namespace DeNelle.Village
             _strip.Clear();
             UpdateBalance();
 
-            int balance = CrystalBalance;
             int cards = 0;
             foreach (var type in _types)
             {
@@ -177,7 +176,7 @@ namespace DeNelle.Village
                 foreach (var e in entries)
                 {
                     if (e == null) continue;
-                    _strip.Add(BuildCard(e, balance));
+                    _strip.Add(BuildCard(e));
                     cards++;
                 }
             }
@@ -191,10 +190,10 @@ namespace DeNelle.Village
             }
         }
 
-        private VisualElement BuildCard(CatalogEntry e, int balance)
+        private VisualElement BuildCard(CatalogEntry e)
         {
-            int cost = e.repo != null ? e.repo.buildCost : 0;
-            bool affordable = balance >= cost;
+            DeNelle.Core.Catalog.ResourceCost cost = CostFor(e);
+            bool affordable = CanAfford(cost);
             bool armed = e.id == _armedId;
 
             var card = new Button(() =>
@@ -221,12 +220,49 @@ namespace DeNelle.Village
             nameLabel.style.whiteSpace = WhiteSpace.Normal;
             card.Add(nameLabel);
 
-            var costLabel = new Label("◆ " + cost);
+            var costLabel = new Label(CostLabel(cost));
             costLabel.style.color = affordable ? new Color(0.6f, 0.9f, 1f) : new Color(1f, 0.5f, 0.5f);
-            costLabel.style.fontSize = 14;
+            costLabel.style.fontSize = 13;
+            costLabel.style.whiteSpace = WhiteSpace.Normal;
             card.Add(costLabel);
 
             return card;
+        }
+
+        // ── Cost resolution (mirrors BuildModeController — crystals-only fallback) ──
+
+        /// <summary>
+        /// Resolve a catalog entry's build cost to the Core multi-resource shape: the
+        /// authored multi-cost (repo.cost) wins; otherwise fall back to repo.buildCost
+        /// Crystals so legacy / cost-less rows still gate + display as before.
+        /// </summary>
+        private static DeNelle.Core.Catalog.ResourceCost CostFor(CatalogEntry e)
+        {
+            var repo = e != null ? e.repo : null;
+            if (repo == null) return default;
+            if (!repo.cost.IsZero) return repo.cost;
+            return new DeNelle.Core.Catalog.ResourceCost { crystals = repo.buildCost };
+        }
+
+        /// <summary>Multi-resource affordability via the persisted ledger (EconomyService).</summary>
+        private static bool CanAfford(DeNelle.Core.Catalog.ResourceCost cost)
+        {
+            var econ = EconomyService.Instance;
+            if (econ != null)
+                return econ.CanAfford(new ResourceCost(cost.wood, cost.food, cost.iron, cost.crystals));
+            return CrystalBalance >= cost.crystals;   // service-less fallback
+        }
+
+        /// <summary>Compact per-resource cost string for the card (skips zero slots).</summary>
+        private static string CostLabel(DeNelle.Core.Catalog.ResourceCost c)
+        {
+            if (c.IsZero) return "Free";
+            var parts = new List<string>(4);
+            if (c.wood     > 0) parts.Add(c.wood     + "W");
+            if (c.food     > 0) parts.Add(c.food     + "F");
+            if (c.iron     > 0) parts.Add(c.iron     + "I");
+            if (c.crystals > 0) parts.Add("◆" + c.crystals);
+            return string.Join("  ", parts);
         }
 
         private void UpdateBalance()

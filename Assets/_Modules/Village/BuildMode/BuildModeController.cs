@@ -305,12 +305,14 @@ namespace DeNelle.Village
             // 3. Gate-lane clearance — never wall off the spawn→Heart corridor.
             if (_gateClearance > 0f && IsTooCloseToGate(snapped)) return false;
 
-            // 4. Affordable from the persisted wallet (the WO-131 single source).
-            //    A move is free, so the cost gate is skipped for it.
+            // 4. Affordable from the persisted multi-resource ledger (EconomyService —
+            //    the GameState-backed Wood/Food/Iron/Crystals surface). Crystals-only
+            //    entries fall back to a Crystals cost. A move is free, so the cost gate
+            //    is skipped for it.
             if (!ignoreCost)
             {
-                int cost = entry != null && entry.repo != null ? entry.repo.buildCost : 0;
-                if (CrystalBalance < cost) return false;
+                DeNelle.Core.Catalog.ResourceCost cost = CostFor(entry);
+                if (!CanAfford(cost)) return false;
             }
 
             return true;
@@ -343,6 +345,16 @@ namespace DeNelle.Village
         /// </summary>
         private void Place(Vector2Int cell, Vector2Int footprint, Vector3 snapped)
         {
+            // Re-check affordability AT commit through the same ledger the validity gate
+            // used — never spawn if the player can't pay (defensive: balance may have
+            // changed since the ghost frame). Charge ONLY after this, per WO-131.
+            DeNelle.Core.Catalog.ResourceCost cost = CostFor(_armed);
+            if (!CanAfford(cost))
+            {
+                Debug.Log($"[BuildMode] Not enough resources to place '{_armed.id}' — placement aborted.");
+                return;
+            }
+
             var loader = BaseLayoutLoader.EnsureExists();
             var data = new PlacedStructureData(_armed.id, cell.x, cell.y, _armedYawSteps, 1);
 
@@ -354,9 +366,10 @@ namespace DeNelle.Village
             }
 
             // Charge ONLY AFTER the committed valid placement (WO-131): the persisted
-            // GameState crystal wallet, never a session/second balance.
-            int cost = _armed.repo != null ? _armed.repo.buildCost : 0;
-            if (cost > 0) GameStateService.Instance?.AddCrystals(-cost);
+            // multi-resource ledger (EconomyService → GameState-backed Crystals/Food +
+            // in-session Wood/Iron). TrySpend is atomic; it can't fail here (we re-checked
+            // CanAfford above) but the bool is honoured for safety.
+            ChargeLedger(cost);
 
             // Append to the live BaseLayout so Exit() persists it.
             var state = GameStateService.Instance != null ? GameStateService.Instance.State : null;
@@ -366,7 +379,7 @@ namespace DeNelle.Village
                 state.BaseLayout.Add(data);
             }
 
-            Debug.Log($"[BuildMode] Placed '{_armed.id}' at cell ({cell.x},{cell.y}) yaw {_armedYawSteps * 90}°, charged {cost}.");
+            Debug.Log($"[BuildMode] Placed '{_armed.id}' at cell ({cell.x},{cell.y}) yaw {_armedYawSteps * 90}°, charged {Describe(cost)}.");
         }
 
         // =====================================================================
@@ -433,7 +446,7 @@ namespace DeNelle.Village
             if (_selected == null) return;
             var ps = _selected;
 
-            int refund = RefundFor(ps);
+            DeNelle.Core.Catalog.ResourceCost refund = RefundCostFor(ps);
 
             // Free the cells it held.
             _grid?.Free(ps.gridCell, ps.footprint);
@@ -444,10 +457,12 @@ namespace DeNelle.Village
             // Drop it from the loader's live set so it doesn't double-free on Exit.
             BaseLayoutLoader.Instance?.Forget(ps);
 
-            // Refund into the ONE persisted wallet.
-            if (refund > 0) GameStateService.Instance?.AddCrystals(+refund);
+            // Refund ~50% of the full multi-resource cost into the persisted ledger
+            // (EconomyService.Grant → GameState-backed Crystals/Food + in-session
+            // Wood/Iron). Crystals-only entries refund Crystals only.
+            RefundLedger(refund);
 
-            Debug.Log($"[BuildMode] Sold '{ps.itemId}' at cell ({ps.gridCell.x},{ps.gridCell.y}) — refunded {refund}.");
+            Debug.Log($"[BuildMode] Sold '{ps.itemId}' at cell ({ps.gridCell.x},{ps.gridCell.y}) — refunded {Describe(refund)}.");
 
             // Clear selection BEFORE destroy so the highlight teardown sees a live object.
             _selected.SetHighlighted(false);
@@ -526,13 +541,102 @@ namespace DeNelle.Village
                 _grid?.Occupy(_moveOriginCell, _selected.footprint, _selected.itemId);
         }
 
-        /// <summary>50% of the structure's catalog buildCost, rounded down.</summary>
+        /// <summary>
+        /// Display refund for the sell panel: the SUM of the 50% multi-resource refund
+        /// across all four pools, rounded down. The panel shows a single "◆ N" value,
+        /// so we surface the total units refunded; the actual per-resource refund is
+        /// applied by <see cref="RefundLedger"/>. For a crystals-only entry this equals
+        /// 50% of buildCost, so the old display is unchanged.
+        /// </summary>
         private static int RefundFor(PlacedStructure ps)
         {
-            if (ps == null) return 0;
-            var entry = CatalogRegistry.Get(ps.itemId);
-            int cost = entry != null && entry.repo != null ? entry.repo.buildCost : 0;
-            return cost / 2;
+            var r = RefundCostFor(ps);
+            return r.wood + r.food + r.iron + r.crystals;
+        }
+
+        /// <summary>
+        /// The full ~50% multi-resource refund for a placed structure (each slot of its
+        /// resolved build cost halved, rounded down). Crystals-only entries refund only
+        /// Crystals (their buildCost fallback halved).
+        /// </summary>
+        private static DeNelle.Core.Catalog.ResourceCost RefundCostFor(PlacedStructure ps)
+        {
+            if (ps == null) return default;
+            var cost = CostFor(CatalogRegistry.Get(ps.itemId));
+            return new DeNelle.Core.Catalog.ResourceCost
+            {
+                wood     = cost.wood     / 2,
+                food     = cost.food     / 2,
+                iron     = cost.iron     / 2,
+                crystals = cost.crystals / 2,
+            };
+        }
+
+        // =====================================================================
+        //  Cost resolution + ledger boundary (S4 — multi-resource economy)
+        // =====================================================================
+
+        /// <summary>
+        /// Resolve a catalog entry's build cost to the Core multi-resource shape, with
+        /// the crystals-only FALLBACK: if the entry authored a non-zero multi-cost
+        /// (repo.cost), use it verbatim; otherwise charge repo.buildCost Crystals so
+        /// legacy / cost-less rows never regress. Null-safe (returns a free cost).
+        /// </summary>
+        private static DeNelle.Core.Catalog.ResourceCost CostFor(CatalogEntry entry)
+        {
+            var repo = entry != null ? entry.repo : null;
+            if (repo == null) return default;
+            if (!repo.cost.IsZero) return repo.cost;                       // multi-cost wins
+            return new DeNelle.Core.Catalog.ResourceCost { crystals = repo.buildCost };   // crystals fallback
+        }
+
+        /// <summary>Map the Core cost to EconomyService.ResourceCost (1:1 field copy).</summary>
+        private static ResourceCost ToEconomy(DeNelle.Core.Catalog.ResourceCost c)
+            => new ResourceCost(c.wood, c.food, c.iron, c.crystals);
+
+        /// <summary>
+        /// Affordability via the persisted multi-resource ledger (EconomyService). Falls
+        /// back to the crystal wallet read if the service isn't up yet, so the build
+        /// menu still gates on Crystals in a service-less edge case.
+        /// </summary>
+        private static bool CanAfford(DeNelle.Core.Catalog.ResourceCost cost)
+        {
+            var econ = EconomyService.Instance;
+            if (econ != null) return econ.CanAfford(ToEconomy(cost));
+            // Service-less fallback: only Crystals are GameState-readable here.
+            return CrystalBalance >= cost.crystals;
+        }
+
+        /// <summary>Spend the cost through the ledger (atomic). No-op for a free cost.</summary>
+        private static void ChargeLedger(DeNelle.Core.Catalog.ResourceCost cost)
+        {
+            if (cost.IsZero) return;
+            var econ = EconomyService.Instance;
+            if (econ != null) { econ.TrySpend(ToEconomy(cost)); return; }
+            // Service-less fallback: charge the persisted crystal wallet directly.
+            if (cost.crystals > 0) GameStateService.Instance?.AddCrystals(-cost.crystals);
+        }
+
+        /// <summary>Refund the cost through the ledger (Grant). No-op for a free cost.</summary>
+        private static void RefundLedger(DeNelle.Core.Catalog.ResourceCost cost)
+        {
+            if (cost.IsZero) return;
+            var econ = EconomyService.Instance;
+            if (econ != null) { econ.Grant(ToEconomy(cost)); return; }
+            // Service-less fallback: refund the persisted crystal wallet directly.
+            if (cost.crystals > 0) GameStateService.Instance?.AddCrystals(+cost.crystals);
+        }
+
+        /// <summary>Compact human-readable cost string for logs (skips zero slots).</summary>
+        private static string Describe(DeNelle.Core.Catalog.ResourceCost c)
+        {
+            if (c.IsZero) return "nothing";
+            var parts = new List<string>(4);
+            if (c.wood     > 0) parts.Add($"{c.wood} wood");
+            if (c.food     > 0) parts.Add($"{c.food} food");
+            if (c.iron     > 0) parts.Add($"{c.iron} iron");
+            if (c.crystals > 0) parts.Add($"{c.crystals} crystals");
+            return string.Join(", ", parts);
         }
 
         // ── BaseLayout sync (struct list — match by cell + itemId) ───────────────
