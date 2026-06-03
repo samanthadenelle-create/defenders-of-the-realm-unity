@@ -161,6 +161,23 @@ namespace DeNelle.Village
                     root.AddComponent<WallSegment>();
                     break;
 
+                // Gate — the cardinal force-field gate. Attach bare (same pattern as
+                // WallSegment): Awake null-guards its collider/renderer + builds the
+                // MPB, so a player-/save-placed gate is a live IDamageableStructure
+                // (takes damage, collapses below 25%). The WallLayout builder calls
+                // Configure() to size the opening; a free-placed gate keeps defaults.
+                case "Gate":
+                    root.AddComponent<Gate>();
+                    break;
+
+                // CrystalMine — passive Aether-Crystal generator (banks +1/wave at
+                // L3 via WaveManager.OnWaveCleared). Self-resolves hero/wave/economy
+                // in Start and builds its own placeholder visual when no prefab is
+                // assigned, so a placed mine is a real, upgradeable gameplay object.
+                case "CrystalMine":
+                    root.AddComponent<CrystalMine>();
+                    break;
+
                 default:
                     Debug.LogWarning($"[StructureFactory] '{entry.id}': unknown behaviorId " +
                                      $"'{behaviorId}' — no behaviour attached.");

@@ -553,11 +553,52 @@ namespace DeNelle.Editor
             // and the real walkable opening is governed by the Fortify WallBarrier nav gap
             // (north ±6, others ±3) — NOT by this visual width — so widening the mesh has
             // ZERO navmesh/hero-passage impact; it only closes the visible seam.
-            System.Action<GameObject, string, Vector3, float, float, float> GateFill =
+            // ── DEF-215 stone for the gate-seam fillers ──────────────────────
+            // A shared URP/Lit stone material (matches RepairPerimeterMaterials'
+            // 0.52/0.50/0.46 wall tint) used to dress the jamb + backing fillers
+            // that close the gate↔wall seam and the see-through behind the
+            // portcullis. Built once; null → fillers placed un-tinted (still
+            // close the gap, just default-grey — placeholder discipline).
+            Material gateStone = null;
+            {
+                var ssh = Shader.Find("Universal Render Pipeline/Lit");
+                if (ssh != null)
+                {
+                    gateStone = new Material(ssh) { name = "GateSeamStone" };
+                    if (gateStone.HasProperty("_BaseColor"))
+                        gateStone.SetColor("_BaseColor", new Color(0.52f, 0.50f, 0.46f));
+                }
+            }
+
+            // Local: a stone box used to fill the gate seams. Colliders are
+            // STRIPPED (decorative) — the walkable opening is governed solely by
+            // the Fortify WallBarrier nav gap, so these blocks NEVER touch the
+            // navmesh or hero passage; they only close the visible see-through.
+            System.Func<Transform, string, Vector3, Vector3, GameObject> StoneFill =
+                (par, name, center, size) =>
+            {
+                var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                go.name = name;
+                go.transform.SetParent(par, false);
+                go.transform.position = center;
+                go.transform.localScale = size;
+                if (gateStone != null)
+                {
+                    var rd = go.GetComponent<Renderer>();
+                    if (rd != null) rd.sharedMaterial = gateStone;
+                }
+                StripColliders(go);
+                StripRigidbodies(go);
+                return go;
+            };
+
+            // GateFill returns the placed gatehouse so the caller can seal its
+            // seams against the flanking wall stones (DEF-215).
+            System.Func<GameObject, string, Vector3, float, float, float, GameObject> GateFill =
                 (prefab, label, pos, yaw, target, openingWidth) =>
             {
                 var g = Make(prefab, label, pos);
-                if (g == null) return;
+                if (g == null) return null;
                 NormalizeProp(g, target);                                     // uniform: fixes HEIGHT
                 // Identify the wider horizontal LOCAL axis (the run, along the wall)
                 // vs the thinner one (thickness, through the wall) and stretch the run
@@ -591,6 +632,78 @@ namespace DeNelle.Editor
                 g.transform.localPosition -= new Vector3(0f, GateGroundEmbed, 0f);
                 StripColliders(g);
                 StripRigidbodies(g);
+                return g;
+            };
+
+            // ── DEF-215 gate↔wall seam sealer ────────────────────────────────
+            // ROOT CAUSE (measured): the prior GateFill matched the gatehouse's
+            // bounding-BOX width to the gap between the flanking stones' bounding-
+            // BOX inner edges. But (a) the Wall_Stone_3x3_A mesh is narrower than
+            // its 1.5×-overlapped 4.5 m bbox, so its *visible* inner edge sits
+            // further out than the bbox edge → a real see-through gap remained
+            // between the gate side and the visible stone; and (b) the gatehouse
+            // arch is OPEN, so from outside you saw the moat/exterior and the
+            // flanking stone through the portcullis grille. FIX: after the gate is
+            // placed + sized, fill the two side seams with full-height stone JAMB
+            // blocks that positively OVERLAP both the gatehouse edge and the first
+            // flanking stone. Being full curtain height, the jambs also block the
+            // angled line-of-sight through the side gap (the "stone behind the
+            // portcullis"). We do NOT wall up the arch itself. All fillers are
+            // decorative (colliders stripped) and their inner face is clamped to the
+            // gate-clearance half-width, so the navmesh opening is untouched.
+            //   runAlongX  = true  → N/S gates (gate run is world X, thickness Z)
+            //   wallLine   = signed wall coordinate (z for N/S, x for E/W)
+            //   openHalf   = navmesh/visual clear half-width at this gate
+            //   stoneInner = the flanking stone's solid INNER edge (where filler ends)
+            System.Action<GameObject, bool, float, float, float> SealGate =
+                (gate, runAlongX, wallLine, openHalf, stoneInner) =>
+            {
+                if (gate == null) return;
+                var rs = gate.GetComponentsInChildren<Renderer>();
+                if (rs == null || rs.Length == 0) return;
+                Bounds gb = rs[0].bounds;
+                for (int i = 1; i < rs.Length; i++) gb.Encapsulate(rs[i].bounds);
+
+                const float fillThk = 1.2f;            // match wall thickness
+                float fillTop = wallHeight;            // up to the curtain top (5 m)
+                float gateRunHalf = (runAlongX ? gb.size.x : gb.size.z) * 0.5f;
+                Transform par = gate.transform.parent;   // WallPerimeter root
+
+                // Jamb: span from JUST inside the gate's outer edge (overlap it by
+                // ~0.3 m so there's no hairline seam) out to the flanking stone's
+                // solid inner edge (overlap that too). The jamb's INNER face must
+                // never cross into the clear opening, so clamp it to >= openHalf.
+                const float overlap = 0.3f;
+                float jambInner = Mathf.Max(openHalf, Mathf.Min(gateRunHalf - overlap, stoneInner));
+                float jambOuter = Mathf.Max(stoneInner + overlap, gateRunHalf);
+                float jambLen   = jambOuter - jambInner;
+                if (jambLen > 0.05f)
+                {
+                    float jambCtr = (jambInner + jambOuter) * 0.5f;
+                    for (int side = -1; side <= 1; side += 2)
+                    {
+                        Vector3 c, sz;
+                        if (runAlongX)
+                        {
+                            c  = new Vector3(side * jambCtr, fillTop * 0.5f, wallLine);
+                            sz = new Vector3(jambLen, fillTop, fillThk);
+                        }
+                        else
+                        {
+                            c  = new Vector3(wallLine, fillTop * 0.5f, side * jambCtr);
+                            sz = new Vector3(fillThk, fillTop, jambLen);
+                        }
+                        StoneFill(par, gate.name + "-Jamb", c, sz);
+                    }
+                }
+
+                // NOTE (DEF-215): we deliberately do NOT drop a backing slab across the
+                // opening — that would visually WALL UP the gate. The "stone behind the
+                // portcullis" the report flagged is the flanking wall stone showing
+                // through the side gap at an angle; the full-height JAMB blocks above
+                // close that line of sight on both sides while leaving the arch (and the
+                // walkable lane through it) completely open. _ = openHalf retained for
+                // the clamp above and signature clarity.
             };
 
             // ── North wall (z = +33) — segments + gate at x = 0 (WO-158: 4th gate) ──
@@ -609,7 +722,11 @@ namespace DeNelle.Editor
             // stone at x=±7.5 with a 4.5 m run -> its solid inner edge sits ~5.25 m from
             // centre. Fill the gatehouse to ~10.5 m wide so it meets both flanking stones
             // flush (no seam). Decorative width only; nav gap stays Fortify's north ±6.
-            GateFill(gateMedModel, "Gate-North-Main", new Vector3(0f, 0f, wallZ), 0f, gateTarget, 10.5f);
+            var gateN = GateFill(gateMedModel, "Gate-North-Main", new Vector3(0f, 0f, wallZ), 0f, gateTarget, 10.5f);
+            // DEF-215: openHalf=6 (matches Fortify north ±6 nav gap); flanking stone at
+            // x=±7.5 — its visible solid inner edge sits ~7 m out (mesh narrower than its
+            // 4.5 m bbox). Jamb bridges 6→7 on each side; backing closes the see-through.
+            SealGate(gateN, true, wallZ, 6f, 7f);
 
             // ── South wall (z = -33) — segments + main gate at x = 0 ─────────
             for (float x = -wallX + segStep * 0.5f; x < wallX; x += segStep)
@@ -619,7 +736,10 @@ namespace DeNelle.Editor
             }
             // SEAM FIX: |x|<3 -> first stone at x=±4.5 (run 4.5) -> inner edge ~2.25 m;
             // fill the gatehouse to ~4.5 m wide so it meets the flanking stones flush.
-            GateFill(gateMedModel, "Gate-South-Main", new Vector3(0f, 0f, -wallZ), 0f, gateTarget, 4.5f);
+            var gateS = GateFill(gateMedModel, "Gate-South-Main", new Vector3(0f, 0f, -wallZ), 0f, gateTarget, 4.5f);
+            // DEF-215: openHalf=3 (matches Fortify ±3 nav gap); flanking stone at x=±4.5,
+            // visible inner edge ~4 m out. Jamb bridges 3→4 each side; backing seals through.
+            SealGate(gateS, true, -wallZ, 3f, 4f);
 
             // ── East wall (x = +42) — segments from z = -33 to +33 ───────────
             for (float z = -wallZ + segStep * 0.5f; z < wallZ; z += segStep)
@@ -630,7 +750,11 @@ namespace DeNelle.Editor
             // SEAM FIX: same 6 m opening as south -> fill gatehouse to ~4.5 m wide. The
             // run axis here is world Z (90-deg yaw); GateFill stretches the LOCAL run
             // axis BEFORE the yaw, so this is handled correctly without axis bookkeeping.
-            GateFill(gateSmModel, "Gate-East-Side", new Vector3(wallX, 0f, 0f), 90f, gateTarget, 4.5f);
+            var gateE = GateFill(gateSmModel, "Gate-East-Side", new Vector3(wallX, 0f, 0f), 90f, gateTarget, 4.5f);
+            // DEF-215: run is along world Z here. openHalf=3; flanking stone at z=±4.5,
+            // visible inner ~4 m. SealGate measures the gate's WORLD bounds, so the run
+            // axis (Z) is read post-yaw — no axis bookkeeping needed.
+            SealGate(gateE, false, wallX, 3f, 4f);
 
             // ── West wall (x = -42) — segments from z = -33 to +33 ───────────
             for (float z = -wallZ + segStep * 0.5f; z < wallZ; z += segStep)
@@ -639,7 +763,9 @@ namespace DeNelle.Editor
                 Wall(wallSegModel, "WallPerimeter-West", new Vector3(-wallX, 0f, z), 270f);
             }
             // SEAM FIX: mirror of the east gate -> fill gatehouse to ~4.5 m wide.
-            GateFill(gateSmModel, "Gate-West-Side", new Vector3(-wallX, 0f, 0f), 270f, gateTarget, 4.5f);
+            var gateW = GateFill(gateSmModel, "Gate-West-Side", new Vector3(-wallX, 0f, 0f), 270f, gateTarget, 4.5f);
+            // DEF-215: mirror of the east gate (run along Z, x=-42 wall line).
+            SealGate(gateW, false, -wallX, 3f, 4f);
 
             // ── Corner towers at (±42, 0, ±33) ───────────────────────────────
             Big(towerCorModel, "Tower-NE-Corner", new Vector3( wallX, 0f,  wallZ), 0f, towerTarget);

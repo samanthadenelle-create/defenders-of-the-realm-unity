@@ -33,5 +33,5 @@
     { "id": "wildcard.watch-intro",          "slot": "wildcard",    "target":  1, "label": "Watch the intro once today",                             "weight": 1.0, "requiresFeature": null },
     { "id": "wildcard.earn-glimmer",         "slot": "wildcard",    "target":  5, "label": "Earn {target} glimmer",                                  "weight": 1.0, "requiresFeature": null }
   ],
-  "notes": "Ported from React docs/daily-quests-spec.md (agent worktree — not yet merged to main). Combat slot uses weighted random with 70% failsafe; wildcard rotates round-robin to maximize variety over a week. Templates whose requiresFeature is not yet shipped are auto-skipped at roll time."
+  "notes": "Resources dual-copy (WebGL-safe, loaded via CanonicalJson; wins over StreamingAssets). Day-1 build-towers quest is guaranteed for new players (day1Guaranteed). Templates whose requiresFeature is not yet shipped are auto-skipped at roll time."
 }

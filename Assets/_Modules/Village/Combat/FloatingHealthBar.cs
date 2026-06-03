@@ -20,8 +20,17 @@
 //   healthy (> warn)   → themed green fill
 //   warning (≤ warn)   → amber fill
 //   critical (≤ crit)  → red fill + gentle pulse
-//   full HP            → hidden (declutters the field; pops in on first damage)
+//   full HP + idle     → hidden (declutters the field; pops in on first damage)
 //   dead               → hidden
+//
+// DEF-206 — "engage to reveal" visibility model (kills the raw-green-bar-on-
+// everything noise the owner flagged). A bar shows only while the unit is
+// ENGAGED: it took damage (HP < max), OR it is the player's locked / current
+// target, OR it was either of those within the last few seconds. When combat
+// ends the bar fades out (canvas alpha) and the field goes quiet again. The bar
+// styles as a slim rounded chip (dark backing + gold rim + green→amber→red
+// fill), not a raw quad; the player's locked target reads distinctly because the
+// reticle owns the lock highlight and this bar simply stays lit while targeted.
 // =============================================================================
 using System;
 using UnityEngine;
@@ -53,9 +62,23 @@ namespace DeNelle.Village
         private Func<float> _fraction;     // 0..1 HP fraction supplier
         private Func<bool>  _isDead;        // true once the unit is dead
         private float _heightOffset = 2.4f; // world-units above the unit pivot
-        private Vector2 _barSize = new Vector2(1.5f, 0.20f);
-        private bool _hideAtFull = true;    // declutter: only show once damaged
+        private Vector2 _barSize = new Vector2(1.5f, 0.18f);
+        // DEF-206: when true the bar stays hidden until the unit is ENGAGED
+        // (damaged / targeted / recently in combat), then fades back out. When
+        // false (the hero) the bar is always present so you can locate yourself.
+        private bool _hideUntilEngaged = true;
         private bool _destroyOnDead = true; // enemies tear down; the hero respawns → just hide
+
+        // ── DEF-206 engagement state ──────────────────────────────────────────
+        // How long the bar lingers (visible) after the last engagement before it
+        // fades away again, and how fast it fades in / out.
+        private const float LingerSeconds = 3.5f;
+        private const float FadeSpeed     = 6f;   // alpha units / second
+        private float _lastEngaged = -999f;       // Time.time of last damage / target ping
+        private bool  _isTargeted;                // currently the player's locked / current target
+        private float _lastFraction = 1f;         // to detect HP drops (= took damage)
+        private CanvasGroup _group;               // drives the fade
+        private float _alpha;                     // current eased alpha (0..1)
 
         // ── Runtime refs ──────────────────────────────────────────────────────
         private Canvas _canvas;
@@ -88,6 +111,31 @@ namespace DeNelle.Village
             return bar;
         }
 
+        /// <summary>
+        /// DEF-206: convenience — find the bar on (or under) <paramref name="host"/>
+        /// and flag it as the player's current target so it stays lit while locked.
+        /// Pass <paramref name="targeted"/> false to release it (it then lingers a
+        /// few seconds and fades). Safe to call on a host with no bar (no-op).
+        /// </summary>
+        public static void SetTargetedOn(GameObject host, bool targeted)
+        {
+            if (host == null) return;
+            var bar = host.GetComponent<FloatingHealthBar>();
+            if (bar != null) bar.SetTargeted(targeted);
+        }
+
+        /// <summary>DEF-206: mark this unit as the player's current/locked target.
+        /// While targeted the bar is always shown; on release it lingers then fades.</summary>
+        public void SetTargeted(bool targeted)
+        {
+            _isTargeted = targeted;
+            if (targeted) _lastEngaged = Time.time;
+        }
+
+        /// <summary>DEF-206: ping the engagement timer (the unit is in active combat).
+        /// Damage is auto-detected, but callers can force a reveal too.</summary>
+        public void MarkEngaged() => _lastEngaged = Time.time;
+
         // Sane clamp for the head offset. Callers derive this from world-space
         // renderer bounds, and a mis-scaled / displaced (e.g. Tripo) mesh can report
         // a bounds.max.y metres away from its pivot — which would fling the bar far
@@ -99,11 +147,12 @@ namespace DeNelle.Village
         public void Init(Func<float> fraction, Func<bool> isDead,
             float heightOffset = 2.4f, bool hideAtFull = true, bool destroyOnDead = true)
         {
-            _fraction      = fraction;
-            _isDead        = isDead;
-            _heightOffset  = Mathf.Clamp(heightOffset, 0.5f, MaxHeightOffset);
-            _hideAtFull    = hideAtFull;
-            _destroyOnDead = destroyOnDead;
+            _fraction         = fraction;
+            _isDead           = isDead;
+            _heightOffset     = Mathf.Clamp(heightOffset, 0.5f, MaxHeightOffset);
+            _hideUntilEngaged = hideAtFull;
+            _destroyOnDead    = destroyOnDead;
+            _lastFraction     = fraction != null ? Mathf.Clamp01(fraction()) : 1f;
             if (_built && _canvas != null)
                 _canvas.transform.localPosition = new Vector3(0f, _heightOffset, 0f);
         }
@@ -127,6 +176,12 @@ namespace DeNelle.Village
 
             _canvas = canvasGo.AddComponent<Canvas>();
             _canvas.renderMode = RenderMode.WorldSpace;
+            // DEF-206: a CanvasGroup drives a smooth fade in/out so the bar slides
+            // away after combat instead of popping off — start hidden.
+            _group = canvasGo.AddComponent<CanvasGroup>();
+            _group.alpha = 0f;
+            _group.interactable = false;
+            _group.blocksRaycasts = false;
             var crt = _canvas.GetComponent<RectTransform>();
             crt.sizeDelta = _barSize;
             // Keep the bar a constant ~1.5m wide regardless of the host's scale —
@@ -137,10 +192,15 @@ namespace DeNelle.Village
             float hostScale = Mathf.Clamp(transform.lossyScale.x, 0.05f, 50f);
             canvasGo.transform.localScale = Vector3.one / hostScale;
 
+            // DEF-206: a soft rounded-rect sprite gives the chip rounded corners +
+            // a subtle inner softness so it reads as a styled bar, not a raw quad.
+            Sprite chip = ChipSprite();
+
             // Gold rim (slightly larger backing plate behind the frame).
             var rimGo = new GameObject("Rim");
             rimGo.transform.SetParent(canvasGo.transform, false);
             var rimImg = rimGo.AddComponent<Image>();
+            rimImg.sprite = chip; rimImg.type = Image.Type.Sliced;
             rimImg.color = RimColor;
             StretchToCanvas(rimGo.GetComponent<RectTransform>(), -0.035f);
 
@@ -148,6 +208,7 @@ namespace DeNelle.Village
             var frameGo = new GameObject("Frame");
             frameGo.transform.SetParent(canvasGo.transform, false);
             var frameImg = frameGo.AddComponent<Image>();
+            frameImg.sprite = chip; frameImg.type = Image.Type.Sliced;
             frameImg.color = FrameColor;
             StretchToCanvas(frameGo.GetComponent<RectTransform>(), -0.018f);
 
@@ -155,6 +216,7 @@ namespace DeNelle.Village
             var trackGo = new GameObject("Track");
             trackGo.transform.SetParent(canvasGo.transform, false);
             var trackImg = trackGo.AddComponent<Image>();
+            trackImg.sprite = chip; trackImg.type = Image.Type.Sliced;
             trackImg.color = TrackColor;
             StretchToCanvas(trackGo.GetComponent<RectTransform>(), 0f);
 
@@ -162,6 +224,7 @@ namespace DeNelle.Village
             var fillGo = new GameObject("Fill");
             fillGo.transform.SetParent(canvasGo.transform, false);
             _fillImg = fillGo.AddComponent<Image>();
+            _fillImg.sprite = chip; _fillImg.type = Image.Type.Sliced;
             _fillImg.color = HealthyColor;
             _fillRect = fillGo.GetComponent<RectTransform>();
             _fillRect.anchorMin = new Vector2(0f, 0f);
@@ -180,6 +243,40 @@ namespace DeNelle.Village
             rt.anchorMax = Vector2.one;
             rt.offsetMin = new Vector2(inset, inset);
             rt.offsetMax = new Vector2(-inset, -inset);
+        }
+
+        // ── DEF-206: rounded-rect chip sprite (cached, drawn once) ────────────
+        // A 9-sliced white rounded-rect so every chip layer gets rounded corners
+        // at any width. Generated at runtime (no art asset / no UXML), WebGL-safe.
+        private static Sprite _chipSprite;
+        private static Sprite ChipSprite()
+        {
+            if (_chipSprite != null) return _chipSprite;
+
+            const int S = 32;             // texture is square; sliced borders stretch the middle
+            const float radius = 10f;     // corner radius in px
+            var tex = new Texture2D(S, S, TextureFormat.RGBA32, false)
+            {
+                wrapMode = TextureWrapMode.Clamp,
+                filterMode = FilterMode.Bilinear,
+            };
+            for (int y = 0; y < S; y++)
+            {
+                for (int x = 0; x < S; x++)
+                {
+                    // Signed distance to the rounded-rect edge → soft 1px antialiased border.
+                    float dx = Mathf.Max(0f, radius - Mathf.Min(x, S - 1 - x));
+                    float dy = Mathf.Max(0f, radius - Mathf.Min(y, S - 1 - y));
+                    float dist = Mathf.Sqrt(dx * dx + dy * dy);
+                    float a = Mathf.Clamp01(radius - dist);   // 1 inside, fades over the last px
+                    tex.SetPixel(x, y, new Color(1f, 1f, 1f, a));
+                }
+            }
+            tex.Apply();
+            // border = radius so the corners are preserved and only the centre stretches.
+            _chipSprite = Sprite.Create(tex, new Rect(0, 0, S, S), new Vector2(0.5f, 0.5f),
+                100f, 0, SpriteMeshType.FullRect, new Vector4(radius, radius, radius, radius));
+            return _chipSprite;
         }
 
         private void LateUpdate()
@@ -214,10 +311,34 @@ namespace DeNelle.Village
 
             float frac = _fraction != null ? Mathf.Clamp01(_fraction()) : 1f;
 
-            // Declutter: hide a full-HP unit's bar until it has actually taken a hit.
-            bool show = !_hideAtFull || frac < 0.999f;
-            if (_canvas.enabled != show) _canvas.enabled = show;
-            if (!show) return;
+            // DEF-206: auto-detect damage. Any drop in the HP fraction since last
+            // frame is a hit → ping the engagement timer so the bar reveals + lingers
+            // (no need to touch every damage path; the fraction delegate is the truth).
+            if (frac < _lastFraction - 0.0005f) _lastEngaged = Time.time;
+            _lastFraction = frac;
+
+            // ── "Engage to reveal" rule ─────────────────────────────────────────
+            // The bar wants to be visible when the unit is ENGAGED:
+            //   • not in hide-until-engaged mode at all (the hero — always on), OR
+            //   • currently the player's locked/current target, OR
+            //   • damaged (HP below full), OR
+            //   • within the linger window after the last damage / target ping.
+            bool engaged =
+                !_hideUntilEngaged
+                || _isTargeted
+                || frac < 0.999f
+                || (Time.time - _lastEngaged) < LingerSeconds;
+
+            // Ease the alpha toward the want-state for a smooth fade in/out.
+            float wantAlpha = engaged ? 1f : 0f;
+            _alpha = Mathf.MoveTowards(_alpha, wantAlpha, FadeSpeed * Time.deltaTime);
+            if (_group != null) _group.alpha = _alpha;
+
+            // Fully faded out → disable the canvas (saves the billboard / layout cost)
+            // until it is engaged again.
+            bool active = _alpha > 0.001f;
+            if (_canvas.enabled != active) _canvas.enabled = active;
+            if (!active) return;
 
             if (_fillRect != null)
                 _fillRect.sizeDelta = new Vector2(_barSize.x * frac, 0f);

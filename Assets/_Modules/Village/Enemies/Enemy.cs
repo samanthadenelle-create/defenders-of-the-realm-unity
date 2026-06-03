@@ -455,16 +455,18 @@ namespace DeNelle.Village
                 float worldTop = rend.bounds.max.y - transform.position.y;
                 if (worldTop > 0.1f) headOffset = worldTop + 0.4f;
             }
-            // hideAtFull:false — enemies show their HP bar the whole time they are
-            // alive (playtest 2026-06-02: "the enemy doesnt get a health bar only
-            // me"). Full-HP-hidden read as "no bar"; the player needs to see every
-            // enemy's health to read the fight and the auto-locked target.
+            // DEF-206: hideAtFull:true — enemies start with NO bar (the "raw green
+            // bar on everything" noise the owner flagged). The bar reveals only once
+            // the enemy is ENGAGED: it takes damage, OR HeroTargetIndicator flags it
+            // as the player's current/locked target (FloatingHealthBar.SetTargeted),
+            // then fades out a few seconds after combat ends. Full-HP idle mobs in
+            // the distance now read clean.
             _healthBar = FloatingHealthBar.Attach(
                 gameObject,
                 fraction: () => HpFraction,
                 isDead:   () => _dead,
                 heightOffset: headOffset,
-                hideAtFull: false);
+                hideAtFull: true);
         }
 
         private void EnsureAudio()

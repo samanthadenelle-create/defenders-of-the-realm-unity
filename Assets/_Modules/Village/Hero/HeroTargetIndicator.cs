@@ -67,6 +67,7 @@ namespace DeNelle.Village
         private float _nextScan;
 
         private IDamageable _locked;   // manual lock (null = auto-nearest)
+        private IDamageable _prevTarget;  // DEF-206: last frame's CurrentTarget, to flip HP bars on change
         private readonly List<IDamageable> _candidates = new List<IDamageable>();
         private readonly List<Enemy> _enemyBuf = new List<Enemy>(64);   // TargetManager scratch
 
@@ -93,6 +94,9 @@ namespace DeNelle.Village
             if (_reticle != null) Destroy(_reticle.gameObject);
             // Don't leave a stale aim override on the abilities component.
             if (_abilities != null) { _abilities.AimPointOverride = null; _abilities.LockedTarget = null; }
+            // DEF-206: release the last target's HP-bar flag so it isn't pinned on.
+            SetBarTargeted(_prevTarget, false);
+            _prevTarget = null;
         }
 
         private void Update()
@@ -125,6 +129,16 @@ namespace DeNelle.Village
                 // Hand the ability the EXACT locked foe so single-target hits damage what
                 // the ring shows (not whatever an OverlapSphere happens to find).
                 _abilities.LockedTarget = CurrentTarget;
+            }
+
+            // DEF-206: keep the CURRENT target's floating HP bar revealed (the
+            // "engage to reveal" rule). When the target changes, release the old
+            // one (it lingers a few seconds then fades) and reveal the new one.
+            if (!ReferenceEquals(CurrentTarget, _prevTarget))
+            {
+                SetBarTargeted(_prevTarget, false);
+                SetBarTargeted(CurrentTarget, true);
+                _prevTarget = CurrentTarget;
             }
 
             if (CurrentTarget == null || !CurrentTarget.IsAlive)
@@ -240,6 +254,17 @@ namespace DeNelle.Village
         {
             if (_reticle != null && _reticle.gameObject.activeSelf != on)
                 _reticle.gameObject.SetActive(on);
+        }
+
+        // DEF-206: flag the target's floating HP bar as the player's current target
+        // so it stays revealed while locked (and lingers when released). The
+        // IDamageable impl (EnemyDamageable) is a MonoBehaviour on the Enemy root,
+        // which is where FloatingHealthBar lives — resolve it via .gameObject.
+        private static void SetBarTargeted(IDamageable target, bool targeted)
+        {
+            var mb = target as MonoBehaviour;
+            if (mb == null) return;
+            FloatingHealthBar.SetTargetedOn(mb.gameObject, targeted);
         }
 
         // ── Visual build (no art asset; runtime ring texture + transparent quad) ──

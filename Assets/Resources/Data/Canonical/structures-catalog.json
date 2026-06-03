@@ -1,0 +1,190 @@
+{
+  "version": 1,
+  "notes": "Build-mode structure catalog — DATA-DRIVEN. Add a row here (+ keep the Resources/Data/Canonical copy byte-equal) and it flows into CatalogRegistry at startup via CatalogBootstrap. 'type' / 'mustSitOn' / 'navSurface' / 'element' are enum NAMES (StringEnumConverter). 'visualPrefabPath' is a Resources-relative path (LogWarning-safe on miss per CLAUDE.md §4). 'behaviorId' is resolved to a Village component by StructureFactory.AttachBehavior — only DefenseTower / WallSegment / CrystalMine / Gate are wired; null = inert decoration.",
+  "entries": [
+    {
+      "id": "tower_ground_archer",
+      "displayName": "Archer Tower",
+      "type": "Tower",
+      "kind": "Cell",
+      "visualPrefabPath": "polyperfect/Tower_Medieval_Big",
+      "repo": {
+        "behaviorId": "DefenseTower",
+        "buildCost": 100,
+        "navSurface": "Blocker",
+        "range": 16.0,
+        "damage": 6.0,
+        "fireRate": 2.5,
+        "canHitAir": false,
+        "element": "None",
+        "placement": {
+          "mustSitOn": "Ground",
+          "footprint": 2.5,
+          "noOverlap": true,
+          "checkAffordable": true
+        }
+      }
+    },
+    {
+      "id": "tower_wall_wizard",
+      "displayName": "Wizard Tower",
+      "type": "Tower",
+      "kind": "Cell",
+      "visualPrefabPath": "polyperfect/Tower_Medieval_Wood",
+      "repo": {
+        "behaviorId": "DefenseTower",
+        "buildCost": 150,
+        "navSurface": "Blocker",
+        "range": 55.0,
+        "damage": 14.0,
+        "fireRate": 1.0,
+        "canHitAir": true,
+        "element": "Aether",
+        "placement": {
+          "mustSitOn": "WallWalk",
+          "footprint": 2.0,
+          "noOverlap": true,
+          "requiresSupport": true,
+          "checkAffordable": true
+        }
+      }
+    },
+    {
+      "id": "tower_siege_tower",
+      "displayName": "Siege Tower",
+      "type": "Tower",
+      "kind": "Cell",
+      "visualPrefabPath": "polyperfect/Tower_Medieval_Big",
+      "repo": {
+        "behaviorId": "DefenseTower",
+        "buildCost": 140,
+        "navSurface": "Blocker",
+        "range": 20.0,
+        "damage": 18.0,
+        "fireRate": 1.5,
+        "canHitAir": false,
+        "element": "None",
+        "placement": {
+          "mustSitOn": "Ground",
+          "footprint": 3.0,
+          "noOverlap": true,
+          "checkAffordable": true
+        }
+      }
+    },
+    {
+      "id": "tower_catapult",
+      "displayName": "Catapult",
+      "type": "Tower",
+      "kind": "Cell",
+      "visualPrefabPath": "polyperfect/Tower_Medieval_Wood",
+      "repo": {
+        "behaviorId": "DefenseTower",
+        "buildCost": 180,
+        "navSurface": "Blocker",
+        "range": 28.0,
+        "damage": 24.0,
+        "fireRate": 0.8,
+        "canHitAir": false,
+        "element": "None",
+        "placement": {
+          "mustSitOn": "Ground",
+          "footprint": 3.5,
+          "noOverlap": true,
+          "checkAffordable": true
+        }
+      }
+    },
+    {
+      "id": "wall_wood",
+      "displayName": "Wooden Palisade",
+      "type": "Wall",
+      "kind": "Cell",
+      "visualPrefabPath": "polyperfect/Wall_Wood_Horizontal_3x3m",
+      "repo": {
+        "behaviorId": "WallSegment",
+        "buildCost": 40,
+        "navSurface": "Blocker",
+        "placement": {
+          "mustSitOn": "Ground",
+          "footprint": 3.0,
+          "noOverlap": true,
+          "checkAffordable": true
+        }
+      }
+    },
+    {
+      "id": "wall_stone",
+      "displayName": "Stone Wall",
+      "type": "Wall",
+      "kind": "Cell",
+      "visualPrefabPath": "polyperfect/Wall_Medieval_Stone",
+      "repo": {
+        "behaviorId": "WallSegment",
+        "buildCost": 90,
+        "navSurface": "Blocker",
+        "placement": {
+          "mustSitOn": "Ground",
+          "footprint": 3.0,
+          "noOverlap": true,
+          "checkAffordable": true
+        }
+      }
+    },
+    {
+      "id": "gate_stone",
+      "displayName": "Stone Gate",
+      "type": "Gate",
+      "kind": "Cell",
+      "visualPrefabPath": "polyperfect/Gate_Medieval_Medium",
+      "repo": {
+        "behaviorId": "Gate",
+        "buildCost": 120,
+        "navSurface": "Blocker",
+        "placement": {
+          "mustSitOn": "Ground",
+          "footprint": 4.0,
+          "noOverlap": true,
+          "minDistanceFromGate": 8.0,
+          "checkAffordable": true
+        }
+      }
+    },
+    {
+      "id": "mine_crystal",
+      "displayName": "Crystal Mine",
+      "type": "Resource",
+      "kind": "Cell",
+      "visualPrefabPath": "polyperfect/House_Medieval_Small",
+      "repo": {
+        "behaviorId": "CrystalMine",
+        "buildCost": 200,
+        "navSurface": "Blocker",
+        "placement": {
+          "mustSitOn": "Ground",
+          "footprint": 3.0,
+          "noOverlap": true,
+          "checkAffordable": true
+        }
+      }
+    },
+    {
+      "id": "deco_torch",
+      "displayName": "Wall Torch",
+      "type": "Decoration",
+      "kind": "Cell",
+      "visualPrefabPath": "polyperfect/Torche_Wall",
+      "repo": {
+        "behaviorId": null,
+        "buildCost": 10,
+        "navSurface": "None",
+        "placement": {
+          "mustSitOn": "AnyTerrain",
+          "footprint": 1.0,
+          "noOverlap": false,
+          "checkAffordable": true
+        }
+      }
+    }
+  ]
+}
