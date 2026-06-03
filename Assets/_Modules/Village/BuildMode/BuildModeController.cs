@@ -15,8 +15,10 @@
 // P1 = place-only (move / sell / rotate-edit / upgrade are P2, deferred). Rotate
 // the ghost before placing is supported (R key / rotate path) since it is free.
 //
-// LEGACY input (Input.GetMouseButton*) to match TowerPlacementSystem; a Lean.Touch
-// driver is the mobile follow-up (P2).
+// INPUT is read through the IBuildInput seam (Build Mode S6), not Input.* directly:
+// DesktopBuildInput (mouse/keyboard, unchanged) is the default; on a touch device
+// LeanTouchBuildDriver installs itself on Enter() and feeds the same place/move/
+// select/rotate/cancel intents from touch gestures + a code-built button bar.
 // =============================================================================
 
 using System.Collections.Generic;
@@ -58,6 +60,14 @@ namespace DeNelle.Village
         private Camera _camera;
         private CatalogEntry _armed;
         private int _armedYawSteps;
+
+        // ── Input seam (Build Mode S6) ────────────────────────────────────────
+        // The place/move/select loops poll high-level intents from this source
+        // instead of reading Input.* directly. Defaults to the mouse/keyboard impl
+        // so desktop is unchanged; on a touch device the Lean.Touch driver installs
+        // itself on Enter() and is removed on Exit().
+        private IBuildInput _input = new DesktopBuildInput();
+        private LeanTouchBuildDriver _touchDriver;
 
         // ── Selection / edit state (P2) ───────────────────────────────────────
         // The currently tap-selected placed structure (move/sell target).
@@ -136,6 +146,8 @@ namespace DeNelle.Village
             EnsurePalette();
             _palette.Show();
 
+            EnsureTouchInput();   // install the Lean.Touch driver on a touch device (S6)
+
             Debug.Log("[BuildMode] Entered build mode.");
         }
 
@@ -153,6 +165,14 @@ namespace DeNelle.Village
             _palette?.Hide();
             _selectionUi?.Hide();
             _grid?.SetGridVisible(false);
+
+            // Stop the Lean.Touch driver + hide its button bar; revert to the desktop
+            // input source so a re-entry on desktop is unaffected (S6).
+            if (_touchDriver != null)
+            {
+                _touchDriver.Uninstall();
+                _input = new DesktopBuildInput();
+            }
 
             CommitLayout();
 
@@ -193,15 +213,15 @@ namespace DeNelle.Village
         /// </summary>
         private bool RaycastGround(out RaycastHit hit)
         {
-            Ray ray = _camera.ScreenPointToRay(Input.mousePosition);
+            Ray ray = _camera.ScreenPointToRay(_input.ScreenPoint);
             if (Physics.Raycast(ray, out hit, _rayDistance, _groundMask)) return true;
             return Physics.Raycast(ray, out hit, _rayDistance, ~0);
         }
 
-        /// <summary>Idle mode: a left-click on a PlacedStructure selects it for edit.</summary>
+        /// <summary>Idle mode: a tap/click on a PlacedStructure selects it for edit.</summary>
         private void UpdateSelectLoop()
         {
-            if (!Input.GetMouseButtonDown(0)) return;
+            if (!_input.PlaceOrSelect) return;
 
             if (!RaycastGround(out RaycastHit hit)) return;
 
@@ -217,15 +237,16 @@ namespace DeNelle.Village
         {
             if (_ghost == null) return;
 
-            // Right-click / Escape cancels the armed entry (keeps build mode open).
-            if (Input.GetMouseButtonDown(1) || Input.GetKeyDown(KeyCode.Escape))
+            // Cancel (right-click / Escape / touch Cancel button) backs out the armed
+            // entry (keeps build mode open).
+            if (_input.Cancel)
             {
                 CancelArmed();
                 return;
             }
 
-            // R rotates the ghost in 90° steps before placing (free).
-            if (Input.GetKeyDown(KeyCode.R))
+            // Rotate (R key / touch Rotate button) yaws the ghost 90° before placing (free).
+            if (_input.Rotate)
                 _armedYawSteps = (_armedYawSteps + 1) & 3;
 
             if (!RaycastGround(out RaycastHit hit))
@@ -240,7 +261,7 @@ namespace DeNelle.Village
             bool valid = IsValidPlacement(hit, snapped, _armed, out Vector2Int cell, out Vector2Int footprint);
             _ghost.SetValid(valid);
 
-            if (valid && Input.GetMouseButtonDown(0))
+            if (valid && _input.PlaceOrSelect)
                 Place(cell, footprint, snapped);
         }
 
@@ -254,13 +275,13 @@ namespace DeNelle.Village
         {
             if (_ghost == null || _selected == null) { CancelMove(); return; }
 
-            if (Input.GetMouseButtonDown(1) || Input.GetKeyDown(KeyCode.Escape))
+            if (_input.Cancel)
             {
                 CancelMove();
                 return;
             }
 
-            if (Input.GetKeyDown(KeyCode.R))
+            if (_input.Rotate)
                 _armedYawSteps = (_armedYawSteps + 1) & 3;
 
             if (!RaycastGround(out RaycastHit hit))
@@ -277,7 +298,7 @@ namespace DeNelle.Village
                 out Vector2Int cell, out Vector2Int footprint, ignoreCost: true);
             _ghost.SetValid(valid);
 
-            if (valid && Input.GetMouseButtonDown(0))
+            if (valid && _input.PlaceOrSelect)
                 CommitMove(cell, footprint, snapped);
         }
 
@@ -875,6 +896,35 @@ namespace DeNelle.Village
             _selectionUi.OnMoveRequested += BeginMoveSelected;
             _selectionUi.OnSellRequested += SellSelected;
             _selectionUi.OnCancelRequested += ClearSelection;
+        }
+
+        /// <summary>
+        /// Install the Lean.Touch driver as the input source on a touch device (S6).
+        /// On desktop (no touch support) the mouse/keyboard DesktopBuildInput stays in
+        /// place, so the desktop path is untouched. The driver is wired to the live
+        /// overview camera (_camera, set by PullCameraBack() earlier in Enter) so its
+        /// two-finger pan/zoom drives the right view.
+        /// </summary>
+        private void EnsureTouchInput()
+        {
+            if (!Input.touchSupported) return;   // desktop → keep DesktopBuildInput
+
+            if (_touchDriver == null)
+            {
+                var go = new GameObject("LeanTouchBuildDriver");
+                _touchDriver = go.AddComponent<LeanTouchBuildDriver>();
+            }
+            _touchDriver.Install(_camera);
+            _input = _touchDriver;
+        }
+
+        /// <summary>
+        /// Override the input source (e.g. a test harness, or to force the touch driver
+        /// on a desktop build for QA). Null reverts to the default mouse/keyboard impl.
+        /// </summary>
+        public void SetInput(IBuildInput input)
+        {
+            _input = input ?? new DesktopBuildInput();
         }
 
         /// <summary>The persisted crystal wallet (WO-131 — single source of truth).</summary>
