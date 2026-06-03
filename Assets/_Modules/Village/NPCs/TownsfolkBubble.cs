@@ -57,6 +57,14 @@ namespace DeNelle.Village
         [Tooltip("Character scale of the text — keep small so the bubble doesn't dominate.")]
         [SerializeField] private float _textScale = 0.07f;
 
+        [Header("Auto-hide")]
+        [Tooltip("Owner playtest 2026-06-03: a bubble shown while the Keeper stands still " +
+                 "next to a villager lingered forever (it only hid when the Keeper walked out " +
+                 "of the speak radius). Auto-hide the bubble this many seconds after it is shown " +
+                 "so lines read and then clear. Re-showing a new line resets the timer. " +
+                 "0 or less = never auto-hide (legacy behaviour).")]
+        [SerializeField] private float _autoHideSeconds = 4.5f;
+
         // ── Runtime ──────────────────────────────────────────────────────────
 
         private Transform _root;        // billboarded container for panel + text
@@ -71,6 +79,9 @@ namespace DeNelle.Village
         // outside the panel (DEF-107). Re-measure for a few frames after Show to catch
         // the real glyph extents once they exist.
         private int _resizePending;
+        // Unscaled time at which the currently-shown bubble should auto-hide. <= 0 = no timeout
+        // armed (legacy / _autoHideSeconds disabled). Timestamp check — no per-frame alloc.
+        private float _autoHideAt;
 
         /// <summary>True while the bubble is currently shown.</summary>
         public bool IsVisible => _visible;
@@ -86,6 +97,16 @@ namespace DeNelle.Village
         private void LateUpdate()
         {
             if (!_visible || _root == null) return;
+
+            // Auto-hide after the timeout so a bubble shown next to a stationary Keeper
+            // clears instead of lingering forever (owner playtest 2026-06-03). Cheap
+            // unscaled-time stamp compare — no per-frame allocation. Re-showing a new
+            // line re-arms _autoHideAt in Show().
+            if (_autoHideAt > 0f && Time.unscaledTime >= _autoHideAt)
+            {
+                Hide();
+                return;
+            }
 
             // Re-fit the panel once TextMesh bounds become valid (DEF-107) — a few
             // frames of re-measure catches the real glyph extents post-render.
@@ -139,6 +160,11 @@ namespace DeNelle.Village
                 s_activeBubble.SetVisible(false);
             s_activeBubble = this;
             SetVisible(true);
+
+            // (Re)arm the auto-hide timeout — a fresh line resets the clock.
+            _autoHideAt = _autoHideSeconds > 0f
+                ? Time.unscaledTime + _autoHideSeconds
+                : 0f;
         }
 
         /// <summary>
@@ -184,6 +210,7 @@ namespace DeNelle.Village
         public void Hide()
         {
             if (s_activeBubble == this) s_activeBubble = null;
+            _autoHideAt = 0f;   // disarm so a later re-show isn't insta-hidden by a stale stamp
             SetVisible(false);
         }
 
@@ -241,7 +268,33 @@ namespace DeNelle.Village
             _text.characterSize = 0.32f;
             _text.richText = false;
 
+            // DEF-151 / owner playtest 2026-06-03 ("camera gets caught on word bubbles"):
+            // the whole bubble hierarchy goes on "Ignore Raycast" (layer 2). The bubble is a
+            // non-blocking visual — it must NEVER push the gameplay camera. The townsperson
+            // root is on Default, which SmartMobileCamera's occlusion spherecast mask
+            // (Default|Building|Tower) includes; a billboard quad swinging in front of the
+            // camera would otherwise let the occlusion pass catch on it and pull the view in.
+            // "Ignore Raycast" is excluded from that mask (it's a non-world-geometry layer), so
+            // real walls/buildings/towers still block the camera (DEF-151 holds) while the
+            // bubble never can. Quad colliders are already stripped above; this layer move is
+            // the belt-and-braces guarantee even if a collider ever survives on a bubble part.
+            SetLayerRecursively(_root.gameObject, IgnoreRaycastLayer);
+
             _built = true;
+        }
+
+        // "Ignore Raycast" is a Unity built-in layer (index 2) — always defined, and the one
+        // layer SmartMobileCamera's collision mask is documented to exclude.
+        private const int IgnoreRaycastLayer = 2;
+
+        /// <summary>Sets <paramref name="go"/> and every descendant onto <paramref name="layer"/>.</summary>
+        private static void SetLayerRecursively(GameObject go, int layer)
+        {
+            if (go == null) return;
+            go.layer = layer;
+            Transform t = go.transform;
+            for (int i = 0; i < t.childCount; i++)
+                SetLayerRecursively(t.GetChild(i).gameObject, layer);
         }
 
         /// <summary>Builds a flat unlit material for the outline + tail quads.</summary>

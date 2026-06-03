@@ -61,11 +61,17 @@ namespace DeNelle.Onboarding
         /// </summary>
         public event Action Finished;
 
+        [Tooltip("Seconds after the intro starts during which a root pointer-down is ignored, " +
+                 "so the launch / initial tap that carried the player into the scene cannot " +
+                 "instantly skip the whole cinematic. The explicit Skip button is never gated.")]
+        [SerializeField] private float _pointerSkipGraceSeconds = 1.25f;
+
         private UIDocument _document;
         private VisualElement _root;
         private VisualElement _imagePanel;
         private Label _lineLabel;
         private bool _skipRequested;
+        private float _overlayStartTime;
         private CancellationTokenSource _cts;
 
         /// <summary>True once <see cref="Play"/> has run to completion.</summary>
@@ -203,8 +209,20 @@ namespace DeNelle.Onboarding
             _root.style.alignItems = Align.Center;
             _root.style.justifyContent = Justify.Center;
             _root.style.opacity = 0f;
-            // Tap anywhere advances to the next line / finishes.
-            _root.RegisterCallback<PointerDownEvent>(_ => _skipRequested = true);
+            // Stamp the start so the grace window below is measured from "intro
+            // began", not from scene load.
+            _overlayStartTime = Time.unscaledTime;
+            // Tap anywhere advances to the next line / finishes — BUT ignore the
+            // first ~1.25s. The pointer-down that LAUNCHED the player into the
+            // scene (the press on the previous screen / the browser's first
+            // gesture) otherwise arrives here on frame 1 and instantly skips the
+            // whole cinematic in ~1s — the recurring "intro cut short" bug. The
+            // explicit Skip button is never gated by this (separate handler).
+            _root.RegisterCallback<PointerDownEvent>(_ =>
+            {
+                if (Time.unscaledTime - _overlayStartTime < _pointerSkipGraceSeconds) return;
+                _skipRequested = true;
+            });
 
             // Per-line scene icon — Resources/Intro/intro-N.jpg from the
             // React asset pack. Owner direction 2026-05-20 (3rd pass): can use
