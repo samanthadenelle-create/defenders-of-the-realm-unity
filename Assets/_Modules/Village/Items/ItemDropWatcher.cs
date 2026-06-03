@@ -96,13 +96,32 @@ namespace DeNelle.Village.Items
         {
             if (enemy == null) return;
             string tableId = ResolveEnemyTable(enemy.EnemyDefId);
-            ItemDropSystem.RollAndDeposit(tableId);
+            DropFor(tableId, enemy.transform != null ? enemy.transform.position : Vector3.zero);
         }
 
         private void OnBossDied(DragonBoss boss)
         {
             string tableId = LootTableCatalog.DefaultBossTableId;
-            ItemDropSystem.RollAndDeposit(tableId);
+            Vector3 at = (boss != null && boss.transform != null) ? boss.transform.position : Vector3.zero;
+            DropFor(tableId, at);
+        }
+
+        /// <summary>
+        /// Route a roll either to a WORLD pickup mote at <paramref name="at"/> (the
+        /// hero collects it) or straight to the larder, per ItemDropSystem.UseWorldPickups.
+        /// </summary>
+        private static void DropFor(string tableId, Vector3 at)
+        {
+            if (ItemDropSystem.UseWorldPickups)
+            {
+                var lines = ItemDropSystem.RollLines(tableId);
+                if (lines != null && lines.Count > 0)
+                    ItemPickupSpawner.Spawn(at, lines);
+            }
+            else
+            {
+                ItemDropSystem.RollAndDeposit(tableId);
+            }
         }
 
         /// <summary>Prefer a table whose id matches the enemy def id; else the default.</summary>

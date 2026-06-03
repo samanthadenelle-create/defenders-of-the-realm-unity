@@ -1,0 +1,53 @@
+{
+  "_comment": "PLACEHOLDER consumable definitions for the ISOLATED item-drops lane. Loaded by DeNelle.Village.Items.ConsumableCatalog via DeNelle.Core.CanonicalJson. DARK by default (gated by ItemDropSystem.Enabled). A consumable's 'id' is also its VillageInventory larder key AND the output id of the matching crafting recipe in crafting-recipes.json - so crafting 'minor-heal-potion' deposits 'minor-heal-potion', and ConsumableUseService.TryUse('minor-heal-potion') consumes it + applies its effect. The OWNER + CREATIVE must finalise the real consumable roster, magnitudes, durations and art before this goes live. Example scaffolding only.",
+  "_schemaNotes": {
+    "kind": "potion | tent | food. Drives where it can be used and its UI bucket.",
+    "effect": "heal | mana | buff | rest. v1 ConsumableUseService implements 'heal' (and 'rest' as a heal); mana/buff/duration are DEFERRED (no mana pool / buff system wired yet).",
+    "magnitude": "heal amount (HP) for heal/rest; percent or flat for buffs (deferred).",
+    "duration": "seconds for timed buffs/food (deferred); 0 = instant.",
+    "usableInFight": "true = potions/food usable mid-fight; false = rest-only (tent kits)."
+  },
+  "version": 1,
+  "consumables": [
+    {
+      "id": "minor-heal-potion",
+      "displayName": "Minor Healing Draught",
+      "kind": "potion",
+      "effect": "heal",
+      "magnitude": 40,
+      "duration": 0,
+      "usableInFight": true,
+      "glyph": "!"
+    },
+    {
+      "id": "greater-heal-potion",
+      "displayName": "Greater Healing Draught",
+      "kind": "potion",
+      "effect": "heal",
+      "magnitude": 90,
+      "duration": 0,
+      "usableInFight": true,
+      "glyph": "!"
+    },
+    {
+      "id": "traveler-rations",
+      "displayName": "Traveler's Rations",
+      "kind": "food",
+      "effect": "heal",
+      "magnitude": 25,
+      "duration": 0,
+      "usableInFight": true,
+      "glyph": "%"
+    },
+    {
+      "id": "scout-tent-kit",
+      "displayName": "Scout's Tent Kit",
+      "kind": "tent",
+      "effect": "rest",
+      "magnitude": 9999,
+      "duration": 0,
+      "usableInFight": false,
+      "glyph": "^"
+    }
+  ]
+}

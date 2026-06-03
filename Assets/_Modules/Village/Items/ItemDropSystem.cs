@@ -86,6 +86,13 @@ namespace DeNelle.Village.Items
         /// enemies (seconds). Cheap: a single FindObjectsByType pass.</summary>
         public const float DefaultScanInterval = 1.5f;
 
+        /// <summary>When true, a kill spawns a WORLD pickup mote at the death point that
+        /// the hero must walk over to collect (the "fight -> harvest" feel). When false,
+        /// rolled drops deposit straight into the larder (the original instant path).
+        /// Default true so the vertical slice has a tangible pickup; still fully dark
+        /// behind <see cref="Enabled"/>.</summary>
+        public static bool UseWorldPickups { get; set; } = true;
+
         private static bool _started;
         private static GameObject _host;
 
@@ -137,6 +144,17 @@ namespace DeNelle.Village.Items
                 if (string.IsNullOrEmpty(kv.Key) || kv.Value <= 0) continue;
                 inv.Add(kv.Key, kv.Value);
             }
+        }
+
+        /// <summary>
+        /// Roll a table and RETURN the materials WITHOUT depositing (the world-pickup
+        /// path uses this so the grant happens only when the hero collects the mote).
+        /// Returns an empty map when disabled / nothing dropped.
+        /// </summary>
+        public static Dictionary<string, int> RollLines(string lootTableId)
+        {
+            if (!Enabled) return new Dictionary<string, int>();
+            return LootTableCatalog.Roll(lootTableId) ?? new Dictionary<string, int>();
         }
     }
 }
