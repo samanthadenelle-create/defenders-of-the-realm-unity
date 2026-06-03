@@ -15,8 +15,12 @@ namespace DeNelle.Village
     public class WaveXpBridge : MonoBehaviour
     {
         [SerializeField] private WaveManager _wave;
-        [SerializeField] private int _baseWaveXp = 120;
-        [SerializeField] private int _xpPerWave = 25;
+        // DEF-133: halved from 120/25 — wave-clear lump was over-leveling the hero
+        // before any base/structure investment ("crazy EXP"). Bake-coupled: this
+        // value is auto-added (RequireComponent) onto WaveManager at build time, so
+        // it takes effect on the next VillageSceneBuilder rebake. Trivially re-tunable.
+        [SerializeField] private int _baseWaveXp = 60;
+        [SerializeField] private int _xpPerWave = 12;
 
         private void Reset() => _wave = GetComponent<WaveManager>();
 
