@@ -1,0 +1,188 @@
+// =============================================================================
+// Outpost - the player-built structure placed on a claimed camp. Auto-harvests a
+// resource trickle into the wallet and is itself a damageable structure.
+// -----------------------------------------------------------------------------
+// Assembly: DeNelle.Village   Namespace: DeNelle.Village.World.Camps
+//
+// ISOLATION:
+//   * Implements the EXISTING DeNelle.Core.Combat.IDamageableStructure interface
+//     (read-only reuse - no edit) so the outpost can later be razed by the same
+//     contact-damage path everything else uses. Interface only; no spawner edit.
+//   * Auto-harvest banks into GameState via the SAME public path MineNode uses:
+//     GameStateService.Instance.State.{Iron|Wood|Stone|AetherCrystals} += amount.
+//     READ from MineNode.BankYield - we call the same public State fields, we do
+//     NOT edit MineNode or GameStateService.
+//   * Region/danger scales yield (deadlier region = richer) mirroring MineNode's
+//     +25% per danger tier dial, via ZoneManager.DangerTierAt (read-only).
+//
+// Code-built primitive visual (a small post + roof). LogWarning, never error.
+// ASCII-only strings. Canon: village is Elarion.
+// =============================================================================
+using UnityEngine;
+using DeNelle.Core.Combat;
+using DeNelle.Core.World;
+
+namespace DeNelle.Village.World.Camps
+{
+    /// <summary>The buildable outpost kinds offered after a claim.</summary>
+    public enum OutpostType
+    {
+        None = 0,
+        Watchtower = 1,     // banks Iron (a guard post that levies metal)
+        LumberOutpost = 2,  // banks Wood
+        FarmOutpost = 3,    // banks Stone (homestead quarry trickle)
+    }
+
+    /// <summary>
+    /// A claimed-camp outpost: auto-harvests a small resource trickle into the
+    /// wallet and implements <see cref="IDamageableStructure"/> for future raids.
+    /// </summary>
+    [DisallowMultipleComponent]
+    public sealed class Outpost : MonoBehaviour, IDamageableStructure
+    {
+        public OutpostType Type { get; private set; } = OutpostType.Watchtower;
+        public RegionId Region { get; private set; } = RegionId.Goldfields;
+        public int ThreatLevel { get; private set; }
+
+        [Header("Harvest")]
+        [Tooltip("Base units banked per harvest tick (before the region danger bonus).")]
+        public int BaseYieldPerTick = 2;
+
+        [Tooltip("Seconds between auto-harvest ticks.")]
+        public float HarvestInterval = 6f;
+
+        [Header("Structure (IDamageableStructure)")]
+        [Tooltip("Outpost hit points. Reaching 0 razes it (defend follow-up).")]
+        public float MaxHp = 120f;
+
+        private float _hp;
+        private float _tick;
+
+        // -- IDamageableStructure ---------------------------------------------
+        public bool IsAlive => _hp > 0f;
+
+        public void ApplyContactDamage(float amount)
+        {
+            if (_hp <= 0f) return;
+            _hp = Mathf.Max(0f, _hp - Mathf.Abs(amount));
+            if (_hp <= 0f)
+            {
+                Debug.LogWarning($"[Outpost] {Type} outpost in {Region} was razed.");
+                Destroy(gameObject);   // the camp remains claimed; outpost can be rebuilt.
+            }
+        }
+
+        /// <summary>Configure + build the primitive visual. Called by ClaimableCamp.</summary>
+        public void Init(OutpostType type, RegionId region, int threat)
+        {
+            Type = type == OutpostType.None ? OutpostType.Watchtower : type;
+            Region = region;
+            ThreatLevel = threat;
+            _hp = MaxHp;
+            BuildVisual();
+        }
+
+        /// <summary>Which wallet field this outpost feeds.</summary>
+        public MineResource Yields =>
+            Type switch
+            {
+                OutpostType.LumberOutpost => MineResource.Wood,
+                OutpostType.FarmOutpost   => MineResource.Stone,
+                _                          => MineResource.Iron,   // Watchtower / default
+            };
+
+        /// <summary>Effective yield per tick including the region danger bonus
+        /// (+25% per danger tier - mirrors MineNode's dial). Read-only.</summary>
+        public int EffectiveYield
+        {
+            get
+            {
+                int tier = Mathf.Max(0, ZoneManager.DangerTierAt(transform.position));
+                return Mathf.RoundToInt(BaseYieldPerTick * (1f + 0.25f * tier));
+            }
+        }
+
+        private void Update()
+        {
+            if (!IsAlive) return;
+            _tick += Time.deltaTime;
+            if (_tick < HarvestInterval) return;
+            _tick = 0f;
+            BankTrickle(EffectiveYield);
+        }
+
+        // Bank into GameState via the SAME public path MineNode.BankYield uses
+        // (Village references Core, so the direct call is valid). Null-conditional
+        // on the cross-module singleton per CLAUDE.md. We do NOT edit GameState.
+        private void BankTrickle(int amount)
+        {
+            if (amount <= 0) return;
+            var state = DeNelle.Core.State.GameStateService.Instance?.State;
+            if (state == null)
+            {
+                Debug.LogWarning("[Outpost] GameStateService.State null - harvest tick dropped.");
+                return;
+            }
+            switch (Yields)
+            {
+                case MineResource.Iron:          state.Iron += amount;           break;
+                case MineResource.Wood:          state.Wood += amount;           break;
+                case MineResource.Stone:         state.Stone += amount;          break;
+                case MineResource.AetherCrystal: state.AetherCrystals += amount; break;
+            }
+            DeNelle.Core.State.GameStateService.Instance?.ResourcesChanged?.Invoke();
+        }
+
+        // -- Code-built primitive visual (no prefab hard-dependency) ----------
+        private void BuildVisual()
+        {
+            try
+            {
+                Color tint = Type switch
+                {
+                    OutpostType.LumberOutpost => new Color(0.45f, 0.30f, 0.15f),
+                    OutpostType.FarmOutpost   => new Color(0.55f, 0.50f, 0.25f),
+                    _                          => new Color(0.35f, 0.40f, 0.50f),
+                };
+
+                // Post.
+                var post = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                post.name = "Post";
+                StripCollider(post);
+                post.transform.SetParent(transform, false);
+                post.transform.localScale = new Vector3(0.4f, 1.4f, 0.4f);
+                post.transform.localPosition = new Vector3(0f, 1.4f, 0f);
+                Paint(post, tint);
+
+                // Roof / banner cap.
+                var cap = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                cap.name = "Cap";
+                StripCollider(cap);
+                cap.transform.SetParent(transform, false);
+                cap.transform.localScale = new Vector3(1.4f, 0.4f, 1.4f);
+                cap.transform.localPosition = new Vector3(0f, 2.9f, 0f);
+                Paint(cap, tint * 1.2f);
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogWarning($"[Outpost] visual build skipped: {ex.Message}");
+            }
+        }
+
+        private static void StripCollider(GameObject go)
+        {
+            var col = go.GetComponent<Collider>();
+            if (col != null) Destroy(col);
+        }
+
+        private static void Paint(GameObject go, Color c)
+        {
+            var r = go.GetComponent<Renderer>();
+            if (r == null) return;
+            // Use a URP-safe lit shader if present; fall back to whatever default is.
+            var shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+            if (shader != null) r.material = new Material(shader);
+            r.material.color = c;
+        }
+    }
+}
