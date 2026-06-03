@@ -50,7 +50,7 @@ namespace DeNelle.Onboarding
     [RequireComponent(typeof(UIDocument))]
     public sealed class HeroSelectController : MonoBehaviour
     {
-        // ── UXML element names — the binding contract with HeroSelectScreen.uxml ─
+        // -- UXML element names — the binding contract with HeroSelectScreen.uxml -
         private const string RootName = "hero-select-root";
         private const string TitleName = "hero-select-title";
         private const string SubtitleName = "hero-select-subtitle";
@@ -61,7 +61,7 @@ namespace DeNelle.Onboarding
         private const string NavPrevName = "hero-nav-prev";
         private const string NavNextName = "hero-nav-next";
 
-        // ── USS class names — styled by SelectScreen.uss ─────────────────────
+        // -- USS class names — styled by SelectScreen.uss ---------------------
         private const string CardClass = "select-card";
         private const string CardActiveClass = "select-card--active";
         private const string PortraitClass = "select-card__portrait";
@@ -73,7 +73,7 @@ namespace DeNelle.Onboarding
         private const string BlurbClass = "select-card__blurb";
         private const string ConfirmDisabledClass = "select-confirm--disabled";
 
-        // ── en.json keys for the screen's own copy ───────────────────────────
+        // -- en.json keys for the screen's own copy ---------------------------
         private const string TitleKey    = "heroSelect.title";
         private const string SubtitleKey = "heroSelect.subtitle";
         // "Dive into Village" — secondary CTA, routes to normal village.
@@ -91,7 +91,7 @@ namespace DeNelle.Onboarding
                  "disable to always show the screen.")]
         [SerializeField] private bool _skipWhenIntroComplete = true;
 
-        // ── Bound UI elements ────────────────────────────────────────────────
+        // -- Bound UI elements ------------------------------------------------
         private VisualElement _root;
         private Label _title;
         private Label _subtitle;
@@ -196,6 +196,21 @@ namespace DeNelle.Onboarding
 
             BuildCards();
 
+            // DEF-143 — render the dragon AND the fully-styled cards TOGETHER.
+            // The screen was sourced entirely from SelectScreen.uss, but a USS-
+            // sourced UIDocument comes up unstyled in the player build (CLAUDE.md
+            // §8 / PIPELINE_STATE §8) — so the two-panel split, the card text
+            // rows and the dragon-stage transparency all hung off ONE stylesheet
+            // resolution. That single coupling is why the dragon and the styled
+            // cards were mutually exclusive: forcing one (e.g. a transparent
+            // panel so a 3D dragon shows through) starved the other of its layout.
+            // The fix is to stop depending on USS resolving at all: lay the screen
+            // out with inline styles (USS still applies in the editor, inline
+            // guarantees the build) AND paint the dragon as a real background
+            // image on the stage, so a transparent panel / 3D scene is no longer
+            // required for the dragon to appear.
+            StyleScreenInline();
+
             if (_confirmButton != null)
             {
                 _confirmButton.clicked -= OnConfirmClicked;     // guard a double OnEnable
@@ -239,6 +254,237 @@ namespace DeNelle.Onboarding
             RefreshConfirmEnabled();
 
             _bound = true;
+        }
+
+        // =====================================================================
+        //  DEF-143 — inline layout (build-safe; no USS dependency) + dragon image
+        // =====================================================================
+
+        /// <summary>
+        /// Lays the hero-select screen out with INLINE styles so it renders
+        /// identically whether or not SelectScreen.uss resolves (a USS-sourced
+        /// UIDocument comes up unstyled in player builds — CLAUDE.md §8). Mirrors
+        /// the USS rules for the two-panel split, the card row and the footer, and
+        /// paints the Heart-Wing dragon as a real background image on the top
+        /// stage so the dragon shows WITHOUT needing a transparent panel / 3D
+        /// scene. This is what lets the dragon AND the fully-styled cards coexist
+        /// instead of trading off against each other. Idempotent.
+        /// </summary>
+        private void StyleScreenInline()
+        {
+            if (_root == null) return;
+
+            // -- Root — full-screen dark column (matches .select-root) ----------
+            _root.style.flexGrow = 1f;
+            _root.style.flexDirection = FlexDirection.Column;
+            _root.style.alignItems = Align.Stretch;
+            _root.style.justifyContent = Justify.FlexStart;
+            _root.style.backgroundColor = new Color(0.024f, 0.016f, 0.047f, 1f);
+
+            // -- Dragon stage — top 55%, paint the Heart-Wing image -------------
+            var stage = _root.Q<VisualElement>("hero-dragon-stage");
+            if (stage != null)
+            {
+                stage.style.height = Length.Percent(55f);
+                stage.style.flexGrow = 0f;
+                stage.style.flexShrink = 0f;
+                stage.style.flexDirection = FlexDirection.Column;
+                stage.style.justifyContent = Justify.SpaceBetween;
+                stage.style.alignItems = Align.Center;
+                stage.style.paddingBottom = 20f;
+
+                // The "dragon": the Heart-Wing banner art (same image the Title
+                // screen uses). A real background image means the stage no longer
+                // relies on a transparent panel + a 3D dragon behind it — so the
+                // dragon always renders and never forces the cards to collapse.
+                var dragonTex = Resources.Load<Texture2D>("heart-wing");
+                if (dragonTex != null)
+                {
+                    stage.style.backgroundImage = new StyleBackground(dragonTex);
+                    stage.style.unityBackgroundScaleMode = ScaleMode.ScaleAndCrop;
+                }
+                else
+                {
+                    // No art on disk — fall back to a deep indigo so the stage is
+                    // a clean banner band rather than a raw black gap.
+                    stage.style.backgroundColor = new Color(0.05f, 0.035f, 0.11f, 1f);
+                }
+            }
+
+            // -- Brand block — legibility wash over the dragon ------------------
+            var brand = _root.Q<VisualElement>("hero-brand-block");
+            if (brand != null)
+            {
+                brand.style.alignItems = Align.Center;
+                brand.style.alignSelf = Align.Stretch;
+                brand.style.paddingTop = 20f;
+                brand.style.paddingBottom = 12f;
+                brand.style.paddingLeft = 32f;
+                brand.style.paddingRight = 32f;
+                brand.style.backgroundColor = new Color(0.024f, 0.016f, 0.047f, 0.55f);
+            }
+            if (_title != null)
+            {
+                _title.style.fontSize = 38f;
+                _title.style.unityFontStyleAndWeight = FontStyle.Bold;
+                _title.style.color = new Color(0.929f, 0.914f, 0.980f, 1f);
+                _title.style.unityTextAlign = TextAnchor.MiddleCenter;
+                _title.style.whiteSpace = WhiteSpace.Normal;
+            }
+            if (_subtitle != null)
+            {
+                _subtitle.style.marginTop = 4f;
+                _subtitle.style.fontSize = 13f;
+                _subtitle.style.unityFontStyleAndWeight = FontStyle.Bold;
+                _subtitle.style.color = new Color(0.961f, 0.651f, 0.137f, 1f);
+                _subtitle.style.unityTextAlign = TextAnchor.MiddleCenter;
+                _subtitle.style.whiteSpace = WhiteSpace.Normal;
+            }
+
+            // -- Wallet button on the stage -------------------------------------
+            var walletBtn = _root.Q<Button>(WalletConnectName);
+            if (walletBtn != null)
+            {
+                walletBtn.style.minWidth = 200f;
+                walletBtn.style.height = 44f;
+                walletBtn.style.fontSize = 14f;
+                walletBtn.style.unityFontStyleAndWeight = FontStyle.Bold;
+                StyleAllBorders(walletBtn, 2f, new Color(0.961f, 0.651f, 0.137f, 1f), 22f);
+                walletBtn.style.backgroundColor = new Color(0.961f, 0.651f, 0.137f, 0.08f);
+                walletBtn.style.color = new Color(0.961f, 0.651f, 0.137f, 1f);
+            }
+
+            // -- Amber divider --------------------------------------------------
+            var divider = _root.Q<VisualElement>("hero-section-divider");
+            if (divider != null)
+            {
+                divider.style.flexGrow = 0f;
+                divider.style.flexShrink = 0f;
+                divider.style.height = 2f;
+                divider.style.alignSelf = Align.Stretch;
+                divider.style.backgroundColor = new Color(0.961f, 0.651f, 0.137f, 1f);
+            }
+
+            // -- Roster panel — opaque bottom 45% -------------------------------
+            var roster = _root.Q<VisualElement>("hero-roster-panel");
+            if (roster != null)
+            {
+                roster.style.flexGrow = 1f;
+                roster.style.flexShrink = 1f;
+                roster.style.flexBasis = 0f;
+                roster.style.backgroundColor = new Color(0.071f, 0.047f, 0.118f, 0.97f);
+                roster.style.flexDirection = FlexDirection.Column;
+                roster.style.alignItems = Align.Center;
+                roster.style.justifyContent = Justify.SpaceBetween;
+                roster.style.paddingTop = 16f;
+                roster.style.paddingBottom = 20f;
+                roster.style.paddingLeft = 12f;
+                roster.style.paddingRight = 12f;
+            }
+
+            var eyebrow = _root.Q<Label>("hero-roster-eyebrow");
+            if (eyebrow != null)
+            {
+                eyebrow.style.fontSize = 12f;
+                eyebrow.style.unityFontStyleAndWeight = FontStyle.Bold;
+                eyebrow.style.color = new Color(0.961f, 0.651f, 0.137f, 1f);
+                eyebrow.style.unityTextAlign = TextAnchor.MiddleCenter;
+                eyebrow.style.marginBottom = 10f;
+                eyebrow.style.alignSelf = Align.Stretch;
+            }
+
+            // -- Card area + row — horizontal, centred, grows -------------------
+            var cardArea = _root.Q<VisualElement>("hero-card-area");
+            if (cardArea != null)
+            {
+                cardArea.style.flexDirection = FlexDirection.Row;
+                cardArea.style.alignItems = Align.Center;
+                cardArea.style.justifyContent = Justify.Center;
+                cardArea.style.flexGrow = 1f;
+                cardArea.style.alignSelf = Align.Stretch;
+            }
+            if (_cardRow != null)
+            {
+                _cardRow.style.flexDirection = FlexDirection.Row;
+                _cardRow.style.justifyContent = Justify.Center;
+                _cardRow.style.alignItems = Align.Center;
+                _cardRow.style.flexGrow = 1f;
+            }
+
+            StyleNavButton(_root.Q<Button>(NavPrevName));
+            StyleNavButton(_root.Q<Button>(NavNextName));
+
+            // -- Footer — two CTAs side by side ---------------------------------
+            var footer = _root.Q<VisualElement>("select-footer");
+            if (footer != null)
+            {
+                footer.style.marginTop = 14f;
+                footer.style.alignSelf = Align.Stretch;
+                footer.style.flexDirection = FlexDirection.Row;
+                footer.style.justifyContent = Justify.Center;
+                footer.style.alignItems = Align.Center;
+            }
+            StylePrimaryCta(_confirmButton, secondary: false);
+            StylePrimaryCta(_diveButton, secondary: true);
+        }
+
+        /// <summary>Applies the same width/colour/radius to all four borders of an element.</summary>
+        private static void StyleAllBorders(VisualElement el, float width, Color color, float radius)
+        {
+            if (el == null) return;
+            el.style.borderTopWidth = width;
+            el.style.borderBottomWidth = width;
+            el.style.borderLeftWidth = width;
+            el.style.borderRightWidth = width;
+            el.style.borderTopColor = color;
+            el.style.borderBottomColor = color;
+            el.style.borderLeftColor = color;
+            el.style.borderRightColor = color;
+            el.style.borderTopLeftRadius = radius;
+            el.style.borderTopRightRadius = radius;
+            el.style.borderBottomLeftRadius = radius;
+            el.style.borderBottomRightRadius = radius;
+        }
+
+        /// <summary>Inline-styles a nav arrow button (matches .hero-nav-btn).</summary>
+        private static void StyleNavButton(Button btn)
+        {
+            if (btn == null) return;
+            btn.style.width = 40f;
+            btn.style.height = 56f;
+            btn.style.fontSize = 28f;
+            btn.style.unityFontStyleAndWeight = FontStyle.Bold;
+            btn.style.flexShrink = 0f;
+            btn.style.unityTextAlign = TextAnchor.MiddleCenter;
+            StyleAllBorders(btn, 1f, new Color(0.769f, 0.710f, 0.992f, 0.25f), 8f);
+            btn.style.backgroundColor = new Color(1f, 1f, 1f, 0.04f);
+            btn.style.color = new Color(0.769f, 0.710f, 0.992f, 0.60f);
+            btn.style.marginLeft = 4f;
+            btn.style.marginRight = 4f;
+        }
+
+        /// <summary>Inline-styles a footer CTA (primary amber, or secondary outline).</summary>
+        private static void StylePrimaryCta(Button btn, bool secondary)
+        {
+            if (btn == null) return;
+            btn.style.minWidth = 200f;
+            btn.style.height = 52f;
+            btn.style.fontSize = 15f;
+            btn.style.unityFontStyleAndWeight = FontStyle.Bold;
+            btn.style.marginLeft = 6f;
+            btn.style.marginRight = 6f;
+            if (secondary)
+            {
+                StyleAllBorders(btn, 2f, new Color(0.769f, 0.710f, 0.992f, 0.40f), 12f);
+                btn.style.backgroundColor = new Color(1f, 1f, 1f, 0.05f);
+                btn.style.color = new Color(0.769f, 0.710f, 0.992f, 1f);
+            }
+            else
+            {
+                StyleAllBorders(btn, 0f, new Color(0f, 0f, 0f, 0f), 12f);
+                btn.style.backgroundColor = new Color(0.961f, 0.651f, 0.137f, 1f);
+                btn.style.color = new Color(0.086f, 0.055f, 0.024f, 1f);
+            }
         }
 
         // =====================================================================
@@ -299,6 +545,29 @@ namespace DeNelle.Onboarding
         {
             var card = new VisualElement { name = $"hero-card-{info.Hero}" };
             card.AddToClassList(CardClass);
+            // DEF-143: inline card styling so the card renders fully even when
+            // SelectScreen.uss does not resolve in the build (the root cause of the
+            // "small thumbnails, no text" state). Mirrors .select-card.
+            card.style.width = 240f;
+            card.style.marginLeft = 10f;
+            card.style.marginRight = 10f;
+            card.style.borderTopLeftRadius = 14f;
+            card.style.borderTopRightRadius = 14f;
+            card.style.borderBottomLeftRadius = 14f;
+            card.style.borderBottomRightRadius = 14f;
+            card.style.borderTopWidth = 2f;
+            card.style.borderBottomWidth = 2f;
+            card.style.borderLeftWidth = 2f;
+            card.style.borderRightWidth = 2f;
+            var cardBorder = new Color(0.486f, 0.227f, 0.929f, 0.30f);
+            card.style.borderTopColor = cardBorder;
+            card.style.borderBottomColor = cardBorder;
+            card.style.borderLeftColor = cardBorder;
+            card.style.borderRightColor = cardBorder;
+            card.style.backgroundColor = new Color(0.102f, 0.071f, 0.165f, 0.98f);
+            card.style.overflow = Overflow.Hidden;
+            card.style.flexDirection = FlexDirection.Column;
+            card.style.flexShrink = 0f;
 
             // Portrait block — show the rendered hero PNG if one exists at
             // Resources/HeroPortraits/<slug>.png; fall back to the glyph
@@ -311,6 +580,14 @@ namespace DeNelle.Onboarding
             // or freshly-committed textures that haven't been through the generator).
             var portrait = new VisualElement();
             portrait.AddToClassList(PortraitClass);
+            // DEF-143: inline portrait block (mirrors .select-card__portrait) so
+            // the portrait has its fixed 130px height even without USS — without
+            // this the unstyled block collapsed and the whole card read as a tiny
+            // thumbnail.
+            portrait.style.height = 130f;
+            portrait.style.alignItems = Align.Center;
+            portrait.style.justifyContent = Justify.Center;
+            portrait.style.backgroundColor = new Color(0.486f, 0.227f, 0.929f, 0.10f);
             // Portraits use the owner's character-named art (canon roster), NOT class slugs:
             // Thrain=Mage, Grom=Knight, Sylas=Ranger, Elara=Cleric. Matches TitleController.
             string slug = info.Hero switch
@@ -340,6 +617,8 @@ namespace DeNelle.Onboarding
                 {
                     var glyph = new Label(info.Glyph);
                     glyph.AddToClassList(GlyphClass);
+                    glyph.style.fontSize = 72f;                       // DEF-143 inline
+                    glyph.style.unityFontStyleAndWeight = FontStyle.Bold;
                     glyph.style.color = info.Accent;
                     portrait.Add(glyph);
                 }
@@ -349,23 +628,47 @@ namespace DeNelle.Onboarding
             // Element-coloured accent strip.
             var accent = new VisualElement();
             accent.AddToClassList(AccentClass);
+            accent.style.height = 4f;                                  // DEF-143 inline (.select-card__accent)
+            accent.style.flexShrink = 0f;
             accent.style.backgroundColor = info.Accent;
             card.Add(accent);
 
             // Text body — name / role / blurb, all from en.json.
+            // DEF-143: inline body + label styling (mirrors .select-card__body /
+            // __name / __role / __blurb) so the hero NAME, CLASS (role) and
+            // DESCRIPTION (blurb) always render — this is the exact text that
+            // vanished when USS failed to resolve.
             var body = new VisualElement();
             body.AddToClassList(BodyClass);
+            body.style.paddingTop = 12f;
+            body.style.paddingBottom = 16f;
+            body.style.paddingLeft = 14f;
+            body.style.paddingRight = 14f;
+            body.style.flexGrow = 1f;
 
             var nameLabel = new Label(CanonStrings.Locale(info.NameKey));
             nameLabel.AddToClassList(NameClass);
+            nameLabel.style.fontSize = 20f;
+            nameLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
+            nameLabel.style.color = new Color(0.929f, 0.914f, 0.980f, 1f);
+            nameLabel.style.whiteSpace = WhiteSpace.Normal;
             body.Add(nameLabel);
 
             var roleLabel = new Label(CanonStrings.Locale(info.RoleKey));
             roleLabel.AddToClassList(RoleClass);
+            roleLabel.style.marginTop = 3f;
+            roleLabel.style.fontSize = 11f;
+            roleLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
+            roleLabel.style.color = new Color(0.961f, 0.651f, 0.137f, 1f);
+            roleLabel.style.whiteSpace = WhiteSpace.Normal;
             body.Add(roleLabel);
 
             var blurbLabel = new Label(CanonStrings.Locale(info.BlurbKey));
             blurbLabel.AddToClassList(BlurbClass);
+            blurbLabel.style.marginTop = 8f;
+            blurbLabel.style.fontSize = 12f;
+            blurbLabel.style.color = new Color(0.729f, 0.698f, 0.824f, 0.85f);
+            blurbLabel.style.whiteSpace = WhiteSpace.Normal;
             body.Add(blurbLabel);
 
             card.Add(body);
@@ -417,6 +720,21 @@ namespace DeNelle.Onboarding
                 if (_cards[i] == null) continue;
                 bool active = _hasSelection && HeroCatalog.Heroes[i].Hero == _selectedHero;
                 _cards[i].EnableInClassList(CardActiveClass, active);
+
+                // DEF-143: drive the active ring inline too — inline border colours
+                // (set in BuildCard for the build-safe path) win over the USS
+                // .select-card--active rule, so the selection cue must be inline
+                // as well or it would never show in the player build.
+                var border = active
+                    ? new Color(0.961f, 0.651f, 0.137f, 1f)          // amber ring
+                    : new Color(0.486f, 0.227f, 0.929f, 0.30f);       // default violet
+                _cards[i].style.borderTopColor = border;
+                _cards[i].style.borderBottomColor = border;
+                _cards[i].style.borderLeftColor = border;
+                _cards[i].style.borderRightColor = border;
+                _cards[i].style.backgroundColor = active
+                    ? new Color(0.149f, 0.102f, 0.204f, 0.98f)
+                    : new Color(0.102f, 0.071f, 0.165f, 0.98f);
             }
         }
 

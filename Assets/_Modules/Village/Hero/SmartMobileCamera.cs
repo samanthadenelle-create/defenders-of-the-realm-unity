@@ -136,6 +136,45 @@ namespace DeNelle.Village
                  "holds its current angle (so standing still / tiny nudges don't spin the view).")]
         [SerializeField, Min(0.01f)] private float _orbitMoveThreshold = 0.4f;
 
+        [Header("Wall collision (DEF-151)")]
+        [Tooltip("When ON, the camera spherecasts from the hero pivot toward its desired position " +
+                 "each frame and pulls IN to just in front of any wall/world geometry in the way, " +
+                 "so it never embeds in a wall mesh and loses the hero. OFF = legacy fixed offset " +
+                 "(the DEF-151 clipping bug). Leave ON.")]
+        [SerializeField] private bool _collisionEnabled = true;
+
+        [Tooltip("World geometry the camera collides against (walls, buildings, towers, ground). " +
+                 "EXCLUDES Enemy/Water/Ignore Raycast/UI so mobs and triggers never shove the view. " +
+                 "Default = Default + Building + Tower (the layers village walls/structures live on).")]
+        [SerializeField] private LayerMask _collisionMask = ~0;
+
+        // Default collision mask, resolved in Awake from the project's named layers so it
+        // stays correct even if layer indices shift. Default(0) | Building(6) | Tower(3).
+        // Enemy(8), Water(4), Ignore Raycast(2), UI(5), TransparentFX(1) are deliberately OUT.
+        [Tooltip("Radius of the occlusion spherecast - the camera keeps at least this much clearance " +
+                 "from a wall so the near clip plane never punches through the surface.")]
+        [SerializeField, Min(0.05f)] private float _collisionRadius = 0.35f;
+
+        [Tooltip("Extra gap (metres) kept between the wall hit point and the camera, on top of the " +
+                 "spherecast radius. Stops the wall's inside face from filling the screen.")]
+        [SerializeField, Min(0f)] private float _collisionSkin = 0.2f;
+
+        [Tooltip("Closest the camera is ever allowed to pull in toward the hero pivot (metres). " +
+                 "Prevents the camera snapping onto the hero's head in a tight corner.")]
+        [SerializeField, Min(0.5f)] private float _minCollisionDistance = 1.2f;
+
+        [Tooltip("How fast the camera pulls IN when a wall appears (higher = snappier, avoids a " +
+                 "clip frame). Pull-in is near-instant; pull-out is eased by _collisionReturnSpeed.")]
+        [SerializeField, Min(1f)] private float _collisionApproachSpeed = 40f;
+
+        [Tooltip("How fast the camera eases back OUT to the full offset once the wall is clear " +
+                 "(lower = smoother, no jitter as you walk along a wall).")]
+        [SerializeField, Min(1f)] private float _collisionReturnSpeed = 8f;
+
+        private bool _collisionMaskInit;
+        // Smoothed 0..1 fraction of the desired distance currently allowed (1 = no wall, full offset).
+        private float _distanceFrac = 1f;
+
         // ── Runtime state ──────────────────────────────────────────────────────
 
         private Camera  _cam;
@@ -193,6 +232,30 @@ namespace DeNelle.Village
                 Debug.Log($"[SmartMobileCamera] retiring legacy top-down offset {_followOffset} " +
                           $"-> {DefaultFollowOffset} (close 3D third-person).");
                 _followOffset = DefaultFollowOffset;
+            }
+
+            ResolveCollisionMask();
+        }
+
+        // DEF-151: build the camera-occlusion mask from the project's NAMED layers so it
+        // tracks the real layer indices (walls/buildings/towers = world geometry the camera
+        // must not enter) and deliberately omits Enemy/Water/UI/triggers (which must never
+        // push the camera). If the inspector value was left at the "~0" sentinel we replace
+        // it; an explicitly-narrowed mask the owner set is honored.
+        private void ResolveCollisionMask()
+        {
+            if (_collisionMaskInit) return;
+            _collisionMaskInit = true;
+
+            // Treat the default "everything" value as "unset" and compute a sane world mask.
+            if (_collisionMask.value == ~0)
+            {
+                int mask = 1 << 0; // Default (walls/ground/most structures live here)
+                int building = LayerMask.NameToLayer("Building");
+                int tower    = LayerMask.NameToLayer("Tower");
+                if (building >= 0) mask |= 1 << building;
+                if (tower    >= 0) mask |= 1 << tower;
+                _collisionMask = mask;
             }
         }
 
@@ -268,7 +331,18 @@ namespace DeNelle.Village
                 zoomOffset = Quaternion.Euler(0f, _orbitYaw, 0f) * zoomOffset;
             }
 
-            Vector3 desired    = _target.position + zoomOffset;
+            Vector3 desired = _target.position + zoomOffset;
+
+            // ── 3b. Wall collision / occlusion (DEF-151) ──────────────────────
+            // ROOT CAUSE of the bug this fixes: the camera was placed at a fixed
+            // offset behind the hero with NO awareness of geometry in between, so a
+            // wall sitting between the pivot and the desired seat let the camera slide
+            // straight through the mesh — the screen filled with the wall's inside face
+            // and the hero shrank to a speck. Fix: spherecast from the hero pivot toward
+            // the desired position; if it hits world geometry, pull the seat IN to just
+            // in front of the hit so the camera body (+ near clip) never enters the wall.
+            desired = ApplyCollision(desired, dt);
+
             transform.position = Vector3.SmoothDamp(transform.position, desired, ref _posVelocity, _smoothTime, float.MaxValue, dt);
             // DEF-67: apply shake offset on top of the smoothed position.
             if (_shakeOffset.sqrMagnitude > 0.0001f)
@@ -380,6 +454,66 @@ namespace DeNelle.Village
 
             _enemyInRange    = found;
             _nearestEnemyPos = found ? closestPos : _target.position + Vector3.up * _lookAtHeight;
+        }
+
+        // DEF-151: camera-collision pass. Casts a small sphere from the hero pivot out to
+        // the desired camera seat; if world geometry (walls/buildings/towers) is in the way
+        // it returns a seat just IN FRONT of the obstruction instead of inside it. When the
+        // path is clear it eases back out to the full offset, so the validated framing is
+        // untouched except when something is actually between the hero and the camera.
+        private Vector3 ApplyCollision(Vector3 desired, float dt)
+        {
+            if (!_collisionEnabled || _target == null)
+            {
+                _distanceFrac = 1f;
+                return desired;
+            }
+
+            // Pivot = where the camera looks (hero chest/head), well above the feet so the
+            // cast doesn't immediately bury itself in the ground collider at the hero's base.
+            Vector3 pivot = _target.position + Vector3.up * _lookAtHeight;
+            Vector3 toCam = desired - pivot;
+            float fullDist = toCam.magnitude;
+            if (fullDist <= 0.0001f)
+            {
+                _distanceFrac = 1f;
+                return desired;
+            }
+
+            Vector3 dir = toCam / fullDist;
+
+            // Target fraction of the full distance we're allowed this frame (1 = no wall).
+            float targetFrac = 1f;
+
+            // SphereCast so the camera body — not just an infinitely-thin ray — clears the
+            // wall; gives a margin before the surface ever reaches the near clip plane.
+            // QueryTriggerInteraction.Ignore so combat-scan / pickup triggers never block.
+            if (Physics.SphereCast(pivot, _collisionRadius, dir, out RaycastHit hit,
+                    fullDist, _collisionMask, QueryTriggerInteraction.Ignore))
+            {
+                // Skip the hero's own colliders (hero is on Default, same layer as walls).
+                if (!IsTargetCollider(hit.collider))
+                {
+                    float allowed = hit.distance - _collisionSkin;
+                    if (allowed < _minCollisionDistance) allowed = _minCollisionDistance;
+                    if (allowed > fullDist)               allowed = fullDist;
+                    targetFrac = allowed / fullDist;
+                }
+            }
+
+            // Pull IN fast (avoid a clip frame), ease OUT slowly (no jitter along a wall).
+            float speed = targetFrac < _distanceFrac ? _collisionApproachSpeed : _collisionReturnSpeed;
+            _distanceFrac = Mathf.MoveTowards(_distanceFrac, targetFrac, speed * dt);
+
+            return pivot + dir * (fullDist * _distanceFrac);
+        }
+
+        // True if the hit collider belongs to the hero we're following (its own body must
+        // never count as an occluder, or the camera would jam onto the hero's back).
+        private bool IsTargetCollider(Collider col)
+        {
+            if (col == null || _target == null) return false;
+            return col.transform == _target || col.transform.IsChildOf(_target);
         }
 
         private Vector3 GetHeroVelocity()
