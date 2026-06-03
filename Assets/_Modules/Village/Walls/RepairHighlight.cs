@@ -36,6 +36,14 @@ namespace DeNelle.Village
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
         private static readonly int ColorId = Shader.PropertyToID("_Color");
 
+        // DEF-226: a small floating world-space label so the amber ground disc is
+        // SELF-EXPLANATORY. Without it the marker reads as an unexplained green/gold
+        // glow (the transparent amber disc seen over green grass) — a mobile playtester
+        // saw exactly this and could not tell what it was. Code-built TextMesh billboard
+        // (no UXML, so it renders in WebGL builds), mirroring BuildingInteractable's bubble.
+        private TextMesh _label;
+        private Transform _labelRoot;
+
         private bool _selected;
         private float _radius = 2f;
         private float _phase;
@@ -84,7 +92,33 @@ namespace DeNelle.Village
             _ringRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             _ringRenderer.receiveShadows = false;
 
+            BuildLabel();
             ApplyColor();
+        }
+
+        // DEF-226: a camera-facing "Repair" text label floating above the disc so the
+        // player instantly understands the marker. TextMesh + PromptBillboard (the same
+        // WebGL-safe pattern BuildingInteractable uses); no UXML/UIDocument (which do not
+        // render in player builds — PIPELINE_STATE.md §8).
+        private void BuildLabel()
+        {
+            var root = new GameObject("RepairLabel");
+            root.transform.SetParent(transform, false);
+            root.transform.localPosition = new Vector3(0f, 2.2f, 0f);
+            root.transform.localScale = Vector3.one * 0.5f;
+            _labelRoot = root.transform;
+
+            var tm = root.AddComponent<TextMesh>();
+            tm.text = "Repair";
+            tm.fontSize = 64;
+            tm.characterSize = 0.18f;
+            tm.anchor = TextAnchor.LowerCenter;
+            tm.alignment = TextAlignment.Center;
+            tm.color = new Color(1f, 0.92f, 0.62f, 1f);   // warm gold, matches the marker
+            _label = tm;
+
+            var billboard = root.AddComponent<PromptBillboard>();
+            billboard.Camera = Camera.main;
         }
 
         private static void DestroyCollider(GameObject go)
@@ -140,6 +174,15 @@ namespace DeNelle.Village
             radius = Mathf.Clamp(radius, 1f, 9f);
             _radius = radius;
             transform.position = center;
+
+            // Lift the label so it clears the structure it sits over (taller props get a
+            // higher label), reading as "this structure is repairable".
+            if (_labelRoot != null)
+            {
+                float lift = (target.TryGetWorldBounds(out var lb) ? lb.size.y : 2f) + 0.8f;
+                _labelRoot.localPosition = new Vector3(0f, Mathf.Clamp(lift, 1.6f, 7f), 0f);
+            }
+
             ApplyScale(1f);
         }
 
@@ -189,6 +232,16 @@ namespace DeNelle.Village
             Color c = _selected ? SelectedColor : RepairableColor;
             ApplyColorTo(_discRenderer, new Color(c.r, c.g, c.b, c.a * 0.45f));
             ApplyColorTo(_ringRenderer, c);
+
+            // DEF-226: keep the label readable + in step with the marker's state — a calm
+            // "Repair" affordance, a clearer call to action once the structure is picked.
+            if (_label != null)
+            {
+                _label.text  = _selected ? "Repair?" : "Repair";
+                _label.color = _selected
+                    ? new Color(0.86f, 0.74f, 1f, 1f)   // violet, matches the selected marker
+                    : new Color(1f, 0.92f, 0.62f, 1f);  // warm gold, matches the calm marker
+            }
         }
 
         private void ApplyColorTo(MeshRenderer r, Color c)

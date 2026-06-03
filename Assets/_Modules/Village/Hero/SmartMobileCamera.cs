@@ -63,10 +63,15 @@ namespace DeNelle.Village
                  "the legacy high value baked into Village.unity to this default, so it applies on " +
                  "the next Play with NO rebake and NO scene edit. Tune Y=height, Z=distance live to " +
                  "taste; any value below the legacy threshold is honored.")]
-        [SerializeField] private Vector3 _followOffset = new Vector3(0f, 3.5f, -6f);
+        [SerializeField] private Vector3 _followOffset = new Vector3(0f, 6.5f, -7.5f);
 
-        // Close cinematic 3D third-person. Awake() snaps the retired top-down seat to this.
-        private static readonly Vector3 DefaultFollowOffset = new Vector3(0f, 3.5f, -6f);
+        // Close cinematic 3D third-person, tilted DOWN for mobile PORTRAIT (DEF-227).
+        // Portrait viewports have a tall vertical FOV, so a near-horizontal seat (the old
+        // 0,3.5,-6 = ~9.5 deg of downtilt) filled the top half with sky/rooftops and shoved
+        // the hero large + low into a corner. This seat sits higher and a touch further back
+        // (~28 deg downtilt over the 2.5m look-at) so the ground frames the hero and the sky
+        // band shrinks. Awake() snaps the retired top-down seat to this.
+        private static readonly Vector3 DefaultFollowOffset = new Vector3(0f, 6.5f, -7.5f);
         private const float LegacyHighOffsetY = 14f;   // old TD seat sat at y=18; >=14 => retire it
 
         [Tooltip("Look-at height above hero feet (metres).")]
@@ -303,6 +308,18 @@ namespace DeNelle.Village
             {
                 _orbitBehind = true;
                 _facingRecenterEnabled = true;
+
+                // DEF-227 — Village.unity BAKES the old near-horizontal seat (0,3.5,-6),
+                // which reads fine in landscape but in mobile PORTRAIT fills the top with
+                // sky/rooftops and pushes the hero large + low into a corner. The legacy
+                // migration above only retires the y>=14 top-down seat, so force the new
+                // tilted-down framing here (same no-rebake override pattern as orbit/offset)
+                // and tame the look-at lead so the hero recentres instead of trailing into
+                // a corner. A genuinely-tuned high seat (y>=14) is left to the migration.
+                if (_followOffset.y < LegacyHighOffsetY)
+                    _followOffset = DefaultFollowOffset;
+                if (_leadDistance > 1.5f)
+                    _leadDistance = 1.5f;
             }
 
             ResolveCollisionMask();
