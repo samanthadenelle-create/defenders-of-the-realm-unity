@@ -578,6 +578,17 @@ namespace DeNelle.Editor
                     g.transform.localScale = s;
                 }
                 g.transform.rotation = Quaternion.Euler(0f, yaw, 0f);         // yaw AFTER the local stretch
+                // DEF-114 (WO-212): the gatehouse prefabs DON'T pivot at their mesh base, so
+                // after NormalizeProp + the run-axis stretch their visual bottom floats above
+                // (or sinks below) the Y=0 ground — same defect the cathedral hit (Content.cs,
+                // owner 2026-05-20). SnapFeetToParent lowers the gate so its renderer-bounds
+                // bottom lands flush on the WallPerimeter root (world Y=0). Run it AFTER the
+                // yaw, since rotating an off-pivot mesh shifts its world-space min.y.
+                SnapFeetToParent(g);
+                // Then embed a hair below ground so the base edge meets the floor slab
+                // (floorY=0.02) WITHOUT a coplanar z-fight. Matches the floor's own
+                // anti-z-fight margin; decorative mesh only (colliders are stripped).
+                g.transform.localPosition -= new Vector3(0f, GateGroundEmbed, 0f);
                 StripColliders(g);
                 StripRigidbodies(g);
             };

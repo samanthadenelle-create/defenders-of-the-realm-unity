@@ -123,6 +123,10 @@ namespace DeNelle.Editor
         // GateGapHalf mirrors WallLayout.GateGapHalf (= GateHalfWidth + 0.6f = 2.0f).
         // The wall ring has a 4 m opening per gate (GateGapHalf * 2).
         private const float GateGapHalfConst = GateHalfWidthConst + 0.6f; // = 2.0 m
+        // DEF-114 (WO-212): downward embed for perimeter gatehouse bases after foot-snap,
+        // so the bottom edge meets the Y=0 ground / floor slab (floorY=0.02) without a
+        // coplanar z-fight. ~0.06 m sits just under the slab top — invisible but flush.
+        private const float GateGroundEmbed = 0.06f;
         // Curtain-wall half-extents — MUST mirror WallLayout.WallHalfX / WallHalfZ.
         private const float WallHalfX = 28f;
         private const float WallHalfZ = 21f;
