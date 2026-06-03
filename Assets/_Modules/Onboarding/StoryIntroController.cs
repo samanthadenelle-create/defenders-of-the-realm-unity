@@ -28,6 +28,7 @@
 using System;
 using System.Threading;
 using Cysharp.Threading.Tasks;
+using DeNelle.Core;
 using DeNelle.Core.State;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -121,6 +122,14 @@ namespace DeNelle.Onboarding
 
             BuildOverlay();
             _skipRequested = false;
+
+            // Prime the intro score the instant the cinematic begins. Browsers
+            // legally block audio until the first user gesture, so this may not
+            // sound immediately on WebGL — WebGLAudioUnlock resumes the
+            // AudioContext on first touch and AudioService re-issues the current
+            // track, so the score lands the moment the player taps. Null-guarded:
+            // CoreServices.Audio is unset until AudioService registers itself.
+            CoreServices.Audio?.PlayMusic(DeNelle.Core.Audio.MusicTrack.Overworld);
 
             try
             {

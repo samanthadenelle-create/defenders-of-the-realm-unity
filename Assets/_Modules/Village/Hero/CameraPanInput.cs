@@ -68,14 +68,23 @@ namespace DeNelle.Village
 
         public static CameraPanInput Instance { get; private set; }
 
+        // Hero-presence gate: this driver stays inert until a HeroLocomotion exists.
+        // The hero may spawn a frame or two AFTER scene-load (same race VirtualJoystick
+        // and SmartMobileCamera defend against), so we re-check on sceneLoaded + a
+        // throttled timer rather than gating at Bootstrap with no retry.
+        private bool _heroPresent;
+        private float _heroCheckTimer;   // throttles the hero-presence re-check
+
         // ── Self-bootstrap (mirror VirtualJoystick; no scene-builder edit needed) ──
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
         {
             if (Instance != null) return;
-            // Only spawn in a gameplay scene that has a hero AND is not the DTT scene.
+            // Spawn in any gameplay scene that is not the DTT scene. We deliberately do
+            // NOT gate on a hero existing yet — the hero can spawn a frame later, and
+            // Bootstrap fires once with no retry. The spawned singleton lazily re-checks
+            // for the hero (RefreshHeroPresence) so a late spawn still enables panning.
             if (SceneManager.GetActiveScene().name == DttSceneName) return;
-            if (Object.FindFirstObjectByType<HeroLocomotion>() == null) return;
             new GameObject("CameraPanInput").AddComponent<CameraPanInput>();
         }
 
@@ -87,6 +96,12 @@ namespace DeNelle.Village
 
             // Lean needs a LeanTouch instance in the scene to dispatch gestures.
             if (LeanTouch.Instance == null) gameObject.AddComponent<LeanTouch>();
+
+            // Re-evaluate hero presence on every scene load (covers Village/OuterWorld
+            // swaps), then seed the initial check (hero may not exist this frame yet).
+            SceneManager.sceneLoaded -= OnSceneLoaded;
+            SceneManager.sceneLoaded += OnSceneLoaded;
+            RefreshHeroPresence();
         }
 
         private void OnEnable()
@@ -103,7 +118,24 @@ namespace DeNelle.Village
 
         private void OnDestroy()
         {
+            SceneManager.sceneLoaded -= OnSceneLoaded;
             if (Instance == this) Instance = null;
+        }
+
+        private void OnSceneLoaded(Scene s, LoadSceneMode m) => RefreshHeroPresence();
+
+        // Single source of truth for the hero gate. Cheap FindFirstObjectByType, called
+        // only on sceneLoaded + a 0.5s throttle (never per-frame) — mirrors
+        // VirtualJoystick.ApplyVisibility's pattern.
+        private void RefreshHeroPresence()
+        {
+            _heroPresent = Object.FindFirstObjectByType<HeroLocomotion>() != null;
+            if (!_heroPresent)
+            {
+                // Drop any in-progress finger claims so we don't resume mid-drag later.
+                _panning.Clear();
+                _fingerTravel.Clear();
+            }
         }
 
         // True while the DTT scene is active — Lean is owned by LeanTouchAimDriver there,
@@ -120,7 +152,7 @@ namespace DeNelle.Village
         // ── Lean Touch finger handler (CAMERA_INPUT_OVERHAUL.md §4.2–4.4) ──────
         private void HandleFinger(LeanFinger f)
         {
-            if (!_panEnabled || f == null) return;
+            if (!_panEnabled || !_heroPresent || f == null) return;
             if (InDttScene()) return;
             if (f.Index < 0) return;            // simulated mouse / hover — desktop fallback owns it
 
@@ -167,7 +199,12 @@ namespace DeNelle.Village
         // ── Desktop parity: right-mouse drag = orbit (CAMERA_INPUT_OVERHAUL.md §4.6) ──
         private void Update()
         {
-            if (!_panEnabled || InDttScene()) return;
+            // Throttled hero re-check (the hero spawns after scene-load, and a scene swap
+            // may not have fired OnSceneLoaded yet). NOT per-frame — mirrors VirtualJoystick.
+            _heroCheckTimer -= Time.unscaledDeltaTime;
+            if (_heroCheckTimer <= 0f) { _heroCheckTimer = 0.5f; RefreshHeroPresence(); }
+
+            if (!_panEnabled || !_heroPresent || InDttScene()) return;
 
             var mouse = Mouse.current;
             if (mouse == null || !mouse.rightButton.isPressed) return;
