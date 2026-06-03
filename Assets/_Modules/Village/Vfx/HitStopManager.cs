@@ -62,6 +62,20 @@ namespace DeNelle.Village
 
         public static HitStopManager Instance { get; private set; }
 
+        // DEF-178: self-bootstrap. Previously NOTHING added this manager to any
+        // scene (no builder, no editor setup, no bootstrap), so Instance was always
+        // null and EVERY HitStopManager.DoImpact(...) call site — TowerCombat shots,
+        // HeroHealth death/hit beats, LevelUpVFXController, EnvironmentVFX — was a
+        // silent no-op. The tiered impact stack was wired but DEAD. Mirroring
+        // CombatFeedbackManager / VfxPool / ProjectilePool, bring it up on load so
+        // those existing calls actually fire. AfterSceneLoad so Camera.main exists.
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        private static void Bootstrap()
+        {
+            if (Instance != null) return;
+            new GameObject("[HitStopManager]").AddComponent<HitStopManager>();
+        }
+
         private void Awake()
         {
             if (Instance != null && Instance != this) { Destroy(gameObject); return; }
@@ -71,6 +85,9 @@ namespace DeNelle.Village
 
         private void OnDestroy()
         {
+            // Guarantee timeScale is restored if this object is torn down mid-stop
+            // (scene unload / domain reload) so a freeze can never leak past us.
+            if (_hitStopRoutine != null) Time.timeScale = 1f;
             if (Instance == this) Instance = null;
         }
 
@@ -173,10 +190,14 @@ namespace DeNelle.Village
 
         private IEnumerator HitStopRoutine(float frozenScale, float duration)
         {
-            float prev = Time.timeScale;
             Time.timeScale = frozenScale;
             yield return new WaitForSecondsRealtime(duration);
-            Time.timeScale = prev;
+            // DEF-178: restore to the game's normal 1f, NOT a captured `prev`. The
+            // project has no slow-mo system — normal time is always 1 — and capturing
+            // `prev` risked pinning a frozen value if CombatFeedbackManager's own
+            // hit-stop (the only other Time.timeScale owner) overlapped this one on
+            // the same frame. Restoring to 1 makes the two managers safe to coexist.
+            Time.timeScale = 1f;
             _hitStopRoutine = null;
         }
 

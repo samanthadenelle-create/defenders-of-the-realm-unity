@@ -1058,6 +1058,14 @@ namespace DeNelle.Village
                 if (eliteVfx == null) CameraShakeBridge.Shake(0.18f, 0.22f);
                 CombatFeedbackManager.Kill(transform.position);
 
+                // DEF-178: a brief hit-stop "punch" on the kill — the satisfying
+                // weight beat that was missing (kills only shook, never froze). Just
+                // the freeze (not DoImpact, which would add a second shake on top of
+                // the CameraShakeBridge one above); HitStopManager is null-safe + its
+                // own quality gate skips this on Low. Short + capped (mobile-safe).
+                // HitStopManager dedups overlaps, so a multi-kill frame won't stack.
+                HitStopManager.Instance?.HitStop(0.05f, 0.04f);
+
                 // Combat feel: leave a persistent ground scorch where the enemy
                 // fell. Null-safe — no DecalSpawner in the scene = no-op.
                 DecalSpawner.Instance?.SpawnScorch(transform.position);

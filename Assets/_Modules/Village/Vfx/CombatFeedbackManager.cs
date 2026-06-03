@@ -73,6 +73,17 @@ namespace DeNelle.Village
         [SerializeField, Range(0.02f, 0.2f)] private float _hitStopDurationSeconds = 0.05f;
 
         /// <summary>
+        /// DEF-178 (mobile safety): minimum REAL seconds between hit-stops. RegisterHit
+        /// fires on EVERY enemy that takes damage; in a 20-enemy AoE wave (mage R, tower
+        /// burst, multi-hit melee) that previously re-froze Time.timeScale every frame —
+        /// a continuous stutter that reads as lag and is nauseating on mobile. With this
+        /// cap a fresh freeze can only start once per window; rapid extra hits inside the
+        /// window still register combo + shake + VFX, they just don't re-trigger the
+        /// freeze. 0 = uncapped (legacy behaviour).
+        /// </summary>
+        [SerializeField, Range(0f, 0.5f)] private float _hitStopMinIntervalSeconds = 0.12f;
+
+        /// <summary>
         /// Lighter camera shake intensity on a surviving hit (landing-blow feel).
         /// Set to 0 to disable per-hit shake — death kills already shake harder via
         /// Enemy.Die().
@@ -107,6 +118,9 @@ namespace DeNelle.Village
         private float _killStreakTimer;
 
         private Coroutine _hitStopRoutine;
+
+        /// <summary>DEF-178: unscaled time the last hit-stop was allowed to start (rate cap).</summary>
+        private float _lastHitStopTime = -999f;
 
         // ── Events ────────────────────────────────────────────────────────────
 
@@ -207,9 +221,16 @@ namespace DeNelle.Village
 
         private void RegisterHit(Vector3 worldPos, float damage)
         {
-            // 1. Hit stop — restart if already running (successive hits refresh, never stack).
-            if (_hitStopRoutine != null) StopCoroutine(_hitStopRoutine);
-            _hitStopRoutine = StartCoroutine(HitStopRoutine());
+            // 1. Hit stop — rate-capped (DEF-178). A fresh freeze can only start once
+            // per _hitStopMinIntervalSeconds so a multi-enemy AoE wave doesn't re-freeze
+            // every frame. Extra hits inside the window still drive combo + shake + VFX
+            // below; they just don't restart the time-freeze. Cap 0 = legacy uncapped.
+            if (Time.unscaledTime - _lastHitStopTime >= _hitStopMinIntervalSeconds)
+            {
+                _lastHitStopTime = Time.unscaledTime;
+                if (_hitStopRoutine != null) StopCoroutine(_hitStopRoutine);
+                _hitStopRoutine = StartCoroutine(HitStopRoutine());
+            }
 
             // 2. Per-hit camera shake (lighter than kill shake).
             if (_hitShakeIntensity > 0f)
