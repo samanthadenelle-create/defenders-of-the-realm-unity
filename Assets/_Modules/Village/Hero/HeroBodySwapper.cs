@@ -395,6 +395,12 @@ namespace DeNelle.Village
                 // Tripo "archer v2" basecolor (Textures/Ranger) to the CC5 bake so the
                 // selected archer reads as the adult ranger, not the old spiky youth.
                 HeroClass.Ranger => "Heroes/Ranger_tex/remesh_12_combined_Bake_Diffuse",
+                // DEF-232/229 (2026-06-03): the Cleric (Healer/Elara body) is now the
+                // owner's fresh CC5/CC_Base adult cleric, imported Humanoid by
+                // PeopleCharacterImporter.ImportClericCC5 with its baked basecolor copied
+                // to Resources/Heroes/Cleric_tex/. Bind that diffuse so the Cleric reads
+                // textured (was falling through to a flat class tint before).
+                HeroClass.Cleric => "Heroes/Cleric_tex/HumanCleric_basecolor",
                 _ => null,
             };
             if (string.IsNullOrEmpty(texPath)) return;

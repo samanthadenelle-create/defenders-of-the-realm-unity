@@ -573,5 +573,34 @@ namespace DeNelle.Editor
             AssetDatabase.Refresh();
             Debug.Log("[PeopleCharacterImporter] CC5 Ranger DONE\n" + string.Join("\n", report));
         }
+
+        /// <summary>Headless entry: import the CC5 Cleric (owner's fresh adult body,
+        /// CC_Base rig fixed for the staff) into Resources/Heroes/Cleric.fbx with its
+        /// baked PBR set (HumanCleric_basecolor/normal/metallic). REPLACES the prior
+        /// DEF-221 Cleric FBX — HeroBodySwapper loads Resources/Heroes/Cleric, and the
+        /// Cleric is the Healer/Elara body.</summary>
+        [MenuItem("Defenders/Animation/Import CC5 Cleric")]
+        public static void ImportClericCC5()
+        {
+            const string dir = "Assets/Models/People/Human/human_Cleric/";
+            var report = new List<string>();
+            report.Add("=== Import CC5 Cleric ===");
+
+            ImportCC5Hero(
+                "Assets/Models/People/Human/human_Cleric.fbx",
+                new[]
+                {
+                    dir + "HumanCleric_basecolor.JPEG", // albedo (sRGB)
+                    dir + "HumanCleric_normal.JPEG",    // normal map
+                    dir + "HumanCleric_metallic.JPEG",  // metallic (linear)
+                    // HumanCleric_roughness.JPEG omitted — URP/Lit uses smoothness, not a roughness map slot
+                },
+                "Cleric",
+                report);
+
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+            Debug.Log("[PeopleCharacterImporter] CC5 Cleric DONE\n" + string.Join("\n", report));
+        }
     }
 }
