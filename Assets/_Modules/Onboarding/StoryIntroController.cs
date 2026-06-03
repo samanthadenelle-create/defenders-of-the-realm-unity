@@ -225,9 +225,11 @@ namespace DeNelle.Onboarding
 
             // Owner 2026-05-20: the Skip button must jump straight to hero
             // selection, not just advance one beat (tap-anywhere already does
-            // that). Cancel the CTS — the foreach catches OperationCanceled
-            // and falls through to Complete(), which routes onward.
-            var skip = new Button(() => _cts?.Cancel()) { text = "Skip" };
+            // that). DEF-134: cancel alone left the intro lingering over the title
+            // because WaitBeatOrSkip loops on _skipRequested (not the token) and
+            // wouldn't break — so set BOTH; the loop breaks immediately and the
+            // teardown (HideImmediate + Complete) is reached at once.
+            var skip = new Button(() => { _skipRequested = true; _cts?.Cancel(); }) { text = "Skip" };
             skip.style.position = Position.Absolute;
             skip.style.top = 18;
             skip.style.right = 18;

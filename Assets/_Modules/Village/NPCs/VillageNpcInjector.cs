@@ -119,14 +119,27 @@ namespace DeNelle.Village
 
                 var go = Instantiate(prefab, pos, Quaternion.identity, root);
                 go.name = prefab.name;
-                go.transform.localScale *= 2f;   // owner 2026-05-27: double the People-pack NPC size
 
-                // ...but TownsfolkBubble's "BubbleRoot" (a child it builds in Awake)
-                // scaled up too -> huge speech bubbles. Counter-scale it back to 1/2
-                // so the bubble keeps its real world size (still sits above the taller
-                // head, since its localPosition rides the 2x parent).
+                // NORMALIZE to roughly hero height. Owner 2026-06-02 (DEF-134): the old flat
+                // x2 made the People-pack NPCs tower 3-4x over the hero — in the close
+                // defend-the-tower camera they merged with the player and their speech bubbles
+                // covered the HUD. Scale to a target height by measured bounds instead, so the
+                // result is consistent regardless of each prefab's native size.
+                float npcScale = 2f;   // fallback if we can't measure (preserves old behaviour)
+                var rends = go.GetComponentsInChildren<Renderer>();
+                if (rends.Length > 0)
+                {
+                    Bounds b = rends[0].bounds;
+                    for (int i = 1; i < rends.Length; i++) b.Encapsulate(rends[i].bounds);
+                    if (b.size.y > 0.01f) npcScale = 1.95f / b.size.y;   // ~hero height (1.8) + a touch
+                }
+                go.transform.localScale *= npcScale;
+
+                // Counter-scale TownsfolkBubble's "BubbleRoot" so the speech bubble keeps its
+                // real world size on the resized body (it still rides above the head via its
+                // localPosition on the scaled parent).
                 var bubbleRoot = go.transform.Find("BubbleRoot");
-                if (bubbleRoot != null) bubbleRoot.localScale = Vector3.one * 0.5f;
+                if (bubbleRoot != null) bubbleRoot.localScale = Vector3.one / Mathf.Max(0.01f, npcScale);
 
                 var npc = go.GetComponent<AmbientNPC>();
                 if (npc != null)

@@ -131,7 +131,7 @@ namespace DeNelle.Village
 
         private void ShowHeroFell() => Show(
             "YOU HAVE FALLEN",
-            "The dark takes you — but Elarion still needs its defender.\nRise, and try again.");
+            "The dark takes you, but Elarion still needs its defender.\nRise, and try again.");
 
         private void Show(string title, string body)
         {

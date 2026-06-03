@@ -274,6 +274,11 @@ namespace DeNelle.Onboarding
             {
                 var fl = fourFlanks[fi];
                 if (fl == null) continue;
+                // DEF-134: reparent to the document root so the absolute left% is
+                // SCREEN-relative. In portrait the flanks' UXML container is offset/narrow,
+                // so left:3% pushed flankL (Thrain) off the left edge — same root cause as
+                // the Connect Wallet overlap. Screen-relative positioning keeps all four on.
+                _root.Add(fl);
                 var fs = fl.style;
                 fs.position = Position.Absolute;
                 fs.bottom = 10;
