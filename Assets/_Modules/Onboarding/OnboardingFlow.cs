@@ -243,6 +243,13 @@ namespace DeNelle.Onboarding
                 return;
             }
 
+            // DEF-153 (root cause): the tutorial is a MODAL coach-mark and must
+            // render ABOVE the in-game HUD. The HUD UIDocuments sort at 80-110;
+            // this panel never set a sortingOrder, so it defaulted to 0 and the HUD
+            // drew on top — making the steps invisible in BOTH orientations. Lift it
+            // above everything HUD-side so the overlay is always seen.
+            if (_document != null) _document.sortingOrder = 250f;
+
             _caption = _root.Q<Label>(CaptionName);
             _progress = _root.Q<Label>(ProgressName);
             _body = _root.Q<Label>(BodyName);
@@ -318,30 +325,38 @@ namespace DeNelle.Onboarding
             scrim.style.backgroundColor = new Color(0f, 0f, 0f, 0.55f);
             _root.Add(scrim);
 
-            // Bottom-pinned coach-mark card.
+            // DEF-153: centered "speech-bubble" coach-mark. The card used to be
+            // bottom-pinned (bottom=48), landing directly under the mobile HUD
+            // cluster (joystick / d-pad / action buttons) that covered it. Center it
+            // via the root's flexbox so it reads clearly in BOTH landscape and
+            // portrait, and cap the width so it stays a bubble — not a full-width
+            // banner — on wide landscape screens. (scrim stays Absolute/full-screen,
+            // so flex-centering only acts on the in-flow card.)
+            _root.style.justifyContent = Justify.Center;
+            _root.style.alignItems = Align.Center;
+
             var card = new VisualElement { name = "tutorial-card" };
-            card.style.position = Position.Absolute;
-            card.style.left = Length.Percent(8f);
-            card.style.right = Length.Percent(8f);
-            card.style.bottom = 48;
-            card.style.paddingLeft = 24;
-            card.style.paddingRight = 24;
-            card.style.paddingTop = 20;
-            card.style.paddingBottom = 20;
-            card.style.backgroundColor = new Color(0.07f, 0.08f, 0.12f, 0.96f);
-            card.style.borderTopLeftRadius = 12;
-            card.style.borderTopRightRadius = 12;
-            card.style.borderBottomLeftRadius = 12;
-            card.style.borderBottomRightRadius = 12;
-            var border = new Color(0.85f, 0.72f, 0.36f, 0.85f);
+            card.style.position = Position.Relative;
+            card.style.width = Length.Percent(86f);
+            card.style.maxWidth = 560;
+            card.style.paddingLeft = 28;
+            card.style.paddingRight = 28;
+            card.style.paddingTop = 24;
+            card.style.paddingBottom = 24;
+            card.style.backgroundColor = new Color(0.07f, 0.08f, 0.12f, 0.97f);
+            card.style.borderTopLeftRadius = 22;
+            card.style.borderTopRightRadius = 22;
+            card.style.borderBottomLeftRadius = 22;
+            card.style.borderBottomRightRadius = 22;
+            var border = new Color(0.85f, 0.72f, 0.36f, 0.9f);
             card.style.borderTopColor = border;
             card.style.borderBottomColor = border;
             card.style.borderLeftColor = border;
             card.style.borderRightColor = border;
-            card.style.borderTopWidth = 2;
-            card.style.borderBottomWidth = 2;
-            card.style.borderLeftWidth = 2;
-            card.style.borderRightWidth = 2;
+            card.style.borderTopWidth = 3;
+            card.style.borderBottomWidth = 3;
+            card.style.borderLeftWidth = 3;
+            card.style.borderRightWidth = 3;
             _root.Add(card);
 
             // Caption row — kicker + progress readout.
@@ -353,21 +368,21 @@ namespace DeNelle.Onboarding
 
             var caption = new Label { name = CaptionName };
             caption.style.unityFontStyleAndWeight = FontStyle.Bold;
-            caption.style.fontSize = 16;
+            caption.style.fontSize = 22;
             caption.style.color = new Color(0.95f, 0.84f, 0.5f);
             head.Add(caption);
 
             var progress = new Label { name = ProgressName };
-            progress.style.fontSize = 13;
+            progress.style.fontSize = 15;
             progress.style.color = new Color(0.7f, 0.74f, 0.82f);
             head.Add(progress);
 
             // Narrated body copy.
             var body = new Label { name = BodyName };
-            body.style.fontSize = 15;
+            body.style.fontSize = 20;
             body.style.color = new Color(0.92f, 0.94f, 0.98f);
             body.style.whiteSpace = WhiteSpace.Normal;
-            body.style.marginBottom = 16;
+            body.style.marginBottom = 20;
             card.Add(body);
 
             // Controls — Skip (left), Next / Begin (right).
@@ -377,13 +392,13 @@ namespace DeNelle.Onboarding
             card.Add(foot);
 
             var skip = new Button { name = SkipButtonName, text = "Skip tutorial" };
-            skip.style.fontSize = 13;
+            skip.style.fontSize = 15;
             foot.Add(skip);
 
             var next = new Button { name = NextButtonName, text = "Next" };
-            next.style.fontSize = 15;
+            next.style.fontSize = 17;
             next.style.unityFontStyleAndWeight = FontStyle.Bold;
-            next.style.minWidth = 140;
+            next.style.minWidth = 160;
             foot.Add(next);
 
             Debug.Log("[OnboardingFlow] TutorialOverlay.uxml had no coach-mark elements " +
