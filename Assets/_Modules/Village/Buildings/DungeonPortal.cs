@@ -56,7 +56,11 @@ namespace DeNelle.Village
         private void Start()
         {
             ResolveHero();
+            // DEF-100: the controller is self-sufficient (builds its own glow/light/
+            // vortex in code) — ensure one exists even if the portal wasn't authored
+            // with it, so the interior glow always renders + reacts to the hero.
             _portalVfx = GetComponent<PortalVFXController>();
+            if (_portalVfx == null) _portalVfx = gameObject.AddComponent<PortalVFXController>();
         }
 
         private void ResolveHero()

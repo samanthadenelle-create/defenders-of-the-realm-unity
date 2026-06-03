@@ -137,6 +137,13 @@ namespace DeNelle.Village
             // Add the driver LAST so its Awake sees the visuals + prompt, then Configure.
             var entrance = root.AddComponent<DungeonEntrance>();
             entrance.Configure(def);
+
+            // DEF-100: attach the self-sufficient portal VFX controller so the
+            // interior glow + light + vortex render and react to the hero at 3 m.
+            // It code-builds its own visuals (no scene/prefab dependency) and
+            // defensively fixes any magenta arch material (DEF-94).
+            if (root.GetComponent<PortalVFXController>() == null)
+                root.AddComponent<PortalVFXController>();
         }
 
         private static void BuildBox(Transform parent, Vector3 localPos, Vector3 scale, Material mat)
