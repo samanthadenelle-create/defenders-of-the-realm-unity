@@ -147,13 +147,20 @@ namespace DeNelle.Village
             // reads as a person, not a capsule. Swap to a bespoke CC5 companion model here when
             // those land. Falls back to the tinted-capsule placeholder if the mesh is missing.
             string slug = SlugFor(hero);
+            // DEF-232: Tripo hero FBXs import facing +X; the root faces +Z — correct -90° yaw
+            // (mirrors HeroBodySwapper). Pass it as LocalRotation so Skin orients the body
+            // BEFORE fitting/seating (the post-Skin rotate pattern offset the mesh on the
+            // seated hero); the companion faces its travel direction and stays centred.
             var vis = VisualFactory.Skin(go.transform, "Heroes/" + slug,
-                new SkinOptions { FitHeight = 1.8f, StripColliders = true, FixTripoMaterials = true });
+                new SkinOptions
+                {
+                    FitHeight = 1.8f,
+                    StripColliders = true,
+                    FixTripoMaterials = true,
+                    LocalRotation = Quaternion.Euler(0f, -90f, 0f),
+                });
             if (vis != null)
             {
-                // Tripo hero FBXs import facing +X; the root faces +Z — correct -90 deg yaw
-                // (mirrors HeroBodySwapper) so the companion faces its travel direction.
-                vis.transform.localRotation = Quaternion.Euler(0f, -90f, 0f);
                 SetLayerRecursive(vis, 2);   // Ignore Raycast — never blocks gameplay rays
                 var anim = vis.GetComponent<Animator>() ?? vis.AddComponent<Animator>();
                 var ctrl = Resources.Load<RuntimeAnimatorController>("Heroes/" + slug);

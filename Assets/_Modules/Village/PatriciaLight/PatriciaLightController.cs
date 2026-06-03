@@ -666,11 +666,13 @@ namespace DeNelle.Village
             {
                 FitHeight = 2.0f,
                 StripColliders = true,
+                // DEF-232: orient the body via Skin BEFORE fit/seat (was a post-Skin rotate).
+                // +90° here: rotate the hero 90° left so it faces the field + fires the right way.
+                LocalRotation = Quaternion.Euler(0f, 90f, 0f),
             });
             if (body != null)
             {
                 body.name = "HeroBody";
-                body.transform.localRotation = Quaternion.Euler(0f, 90f, 0f); // -90 from 180: rotate hero 90 left so it faces the field + fires the right way
                 // Skin only strips colliders; the hero body's embedded camera /
                 // AudioListener would fight the OTS rig, so clear those (+ rigidbodies)
                 // on top — the spawn-specific layering the factory stays out of.

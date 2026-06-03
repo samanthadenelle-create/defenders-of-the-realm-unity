@@ -36,8 +36,16 @@ namespace DeNelle.Village
             var prefab = Resources.Load<GameObject>("Heroes/" + slug);
             if (prefab == null)
             {
-                Debug.LogWarning("[HeroBodySwapper] Resources/Heroes/" + slug +
-                                 ".fbx not found — keeping placeholder body.");
+                // DEF-229 loud-failure guard: a chosen class with NO body asset must shout, not
+                // silently leave the baked placeholder (the "wrong/old hero" symptom). The owner
+                // sees the PLACEHOLDER (Wizard), reads it as "the wrong model spawned", and the
+                // root cause (a missing/mis-named Resources/Heroes/<slug>.fbx) stays hidden. Error
+                // names the exact class → slug → expected path so it is actionable at a glance.
+                Debug.LogError(
+                    "[HeroBodySwapper] DEF-229 — chosen hero " + cls + " maps to slug '" + slug +
+                    "' but Resources/Heroes/" + slug + ".fbx is MISSING. The placeholder body is " +
+                    "being kept, which reads in-game as 'the wrong/old hero spawned'. Import the " +
+                    "matching Humanoid FBX to Resources/Heroes/" + slug + ".fbx (animationType=3).");
                 return;
             }
 
@@ -66,20 +74,32 @@ namespace DeNelle.Village
             // keeps its OWN material pass (RetargetMaterialsToUrp + ApplyExtractedTexture
             // + ApplyClassTint), so the factory's Tripo fix stays OFF (no double-process).
             float targetH = (cls == HeroClass.Knight) ? TargetHeightMeters * 1.2f : TargetHeightMeters;
+            // FORWARD CORRECTION (WO-174): every hero body imports facing +X; rotate the
+            // authored +X onto the root's +Z so facing == heading (no moonwalk).
+            // DEF-232: pass the yaw to Skin as LocalRotation so it is applied BEFORE the
+            // fit/seat pass. The OLD code rotated the body AFTER Skin had already centred the
+            // (off-pivot) bounds over the root at identity — so the -90° swung the mesh to the
+            // side of the root. The camera follows the ROOT, so the body appeared offset to her
+            // right and "pivoted in place" instead of translating. Rotating first, then seating,
+            // centres the visible body dead-on over the root the camera follows.
+            const float ForwardYaw = -90f;   // +X (authored forward) → +Z (root forward)
             var body = VisualFactory.Skin(transform, prefab, new SkinOptions
             {
                 FitHeight = targetH,
                 StripColliders = true,
                 SeatOnGround = true,
                 FixTripoMaterials = false,
+                LocalRotation = Quaternion.Euler(0f, ForwardYaw, 0f),
             });
             if (body == null) return;
             body.name = "HeroBody";
-            // FORWARD CORRECTION (WO-174): every hero body imports facing +X; rotate the
-            // authored +X onto the root's +Z so facing == heading (no moonwalk). Skin
-            // reset localRotation to identity, so this is the single source of body yaw.
-            const float ForwardYaw = -90f;   // +X (authored forward) → +Z (root forward)
-            body.transform.localRotation = Quaternion.Euler(0f, ForwardYaw, 0f);
+
+            // DEF-232 spawn-time validation: the camera (SmartMobileCamera) follows the hero
+            // ROOT by tag; HeroLocomotion drives that same root. The visible body must sit
+            // centred over the root (no horizontal offset) or the camera frames empty space
+            // beside her. Log LOUDLY if Skin left the body off-centre so this regression is
+            // caught at the source instead of re-surfacing as a "camera stays to her right" bug.
+            ValidateBodyCentredOverRoot(body);
 
             StripRigidbodies(body);
             // Tripo FBXs embed a CAMERA / AudioListener; left in, the hero body's camera
@@ -471,6 +491,44 @@ namespace DeNelle.Village
         {
             foreach (var rb in go.GetComponentsInChildren<Rigidbody>(true))
                 if (rb != null) Destroy(rb);
+        }
+
+        /// <summary>
+        /// DEF-232 guard: assert the swapped body's render bounds sit centred (XZ) over the
+        /// hero ROOT — the transform the follow camera tracks and HeroLocomotion drives. A
+        /// horizontal offset is the exact "camera stays to her right / body pivots in place"
+        /// regression (an off-pivot mesh rotated after seating). Logs LOUDLY so it is caught at
+        /// the spawn source rather than re-surfacing as a camera complaint, and re-centres as a
+        /// runtime safety net so the player is never left with the body off to one side.
+        /// </summary>
+        private void ValidateBodyCentredOverRoot(GameObject body)
+        {
+            if (body == null) return;
+            var rends = body.GetComponentsInChildren<Renderer>();
+            if (rends == null || rends.Length == 0) return;
+
+            Bounds b = rends[0].bounds;
+            for (int i = 1; i < rends.Length; i++) b.Encapsulate(rends[i].bounds);
+
+            Vector3 root = transform.position;
+            float dx = b.center.x - root.x;
+            float dz = b.center.z - root.z;
+            float planarOffset = Mathf.Sqrt(dx * dx + dz * dz);
+
+            // ~0.35 m tolerance: a hand/weapon prop can pull the encapsulated centre slightly
+            // off the body's own midline without it reading as "offset to the side".
+            const float MaxPlanarOffset = 0.35f;
+            if (planarOffset > MaxPlanarOffset)
+            {
+                Debug.LogError(
+                    "[HeroBodySwapper] DEF-232 — swapped body '" + body.name + "' is OFF-CENTRE " +
+                    planarOffset.ToString("F2") + "m from the hero root (dx=" + dx.ToString("F2") +
+                    ", dz=" + dz.ToString("F2") + "). The follow camera tracks the ROOT, so the " +
+                    "body would appear offset to one side and 'pivot in place'. Re-centring as a " +
+                    "safety net — investigate the mesh pivot / Skin seating.");
+                // Safety-net re-centre: shift the body so its bounds centre sits over the root's XZ.
+                body.transform.position -= new Vector3(dx, 0f, dz);
+            }
         }
     }
 }

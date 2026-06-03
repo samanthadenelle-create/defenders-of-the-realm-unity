@@ -37,6 +37,16 @@ namespace DeNelle.Village
         public bool  StripColliders;     // remove the model's own colliders (the host owns its collider)
         public bool  FixTripoMaterials;  // attach DeNelle.Core.TripoMaterialFixer (Tripo→URP) via reflection
 
+        // DEF-232: a fixed local orientation correction APPLIED BEFORE Fit / SeatOnGround.
+        // Hero/companion bodies import facing +X and need a -90° yaw to face the root's +Z.
+        // Callers used to apply that yaw AFTER Skin returned — but SeatOnGround had already
+        // centred the (off-pivot) bounds over the root while the body was still at identity,
+        // so the post-Skin rotation swung the off-centre mesh sideways (camera "stays to her
+        // right", body "pivots in place" instead of translating). Set the yaw HERE instead:
+        // the body is rotated FIRST, then fit + seated/centred in its FINAL orientation, so
+        // the visible mesh sits dead-centre over the hero root regardless of import pivot.
+        public Quaternion? LocalRotation;
+
         /// <summary>An enemy/creature: fit to height, strip its colliders (the root carries the trigger capsule).</summary>
         public static SkinOptions Enemy(float height) =>
             new SkinOptions { FitHeight = height, StripColliders = true };
@@ -73,7 +83,11 @@ namespace DeNelle.Village
 
             var go = Object.Instantiate(prefab, host);
             go.transform.localPosition = Vector3.zero;
-            go.transform.localRotation = Quaternion.identity;
+            // DEF-232: apply the caller's orientation BEFORE Fit/SeatOnGround so the body is
+            // measured + centred in its FINAL facing. A post-Skin rotation (the old pattern)
+            // swung the off-pivot bounds sideways. Default is identity (unchanged for callers
+            // that don't pass LocalRotation, e.g. enemies/structures).
+            go.transform.localRotation = opts.LocalRotation ?? Quaternion.identity;
 
             if (opts.StripColliders)
                 foreach (var c in go.GetComponentsInChildren<Collider>()) Object.Destroy(c);
@@ -83,6 +97,9 @@ namespace DeNelle.Village
             if (opts.FitLargest > 0f)     Fit(go, opts.FitLargest, largest: true);
             else if (opts.FitHeight > 0f) Fit(go, opts.FitHeight,  largest: false);
 
+            // SeatOnGround centres the (now correctly-oriented) bounds over the host's x/z and
+            // drops the bounds-base to the host's y — so the visible mesh sits dead-centre over
+            // the hero ROOT, the transform the camera follows and HeroLocomotion drives.
             if (opts.SeatOnGround)
                 SeatOnGround(go, host != null ? host.position : go.transform.position);
 
