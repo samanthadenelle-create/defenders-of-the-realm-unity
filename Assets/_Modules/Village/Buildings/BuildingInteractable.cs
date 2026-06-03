@@ -6,18 +6,31 @@
 // walk past a mine, a pet house or a dungeon and nothing happened.
 //
 // This component attaches to a Building. When the hero walks within
-// _activateRadius, a small floating prompt appears above the building head
-// ("Press F · Shop" / "Pet House" / etc.). Pressing F triggers an action
-// per BuildingType:
-//   • CrystalMine  → +25 crystals toast (Week-7 economy stub)
-//   • PetHouse     → "Pet roster — Week 7" toast
-//   • ArcaneTower  → "Tower upgrade — Week 7" toast
-//   • Workshop     → "Crafting — Week 7" toast
-//   • Farm         → "Farm yield — Week 7" toast
-// All actions are guarded so a missing UI doesn't crash; the visible toast
-// is what proves the interaction system is alive.
+// _activateRadius, a small floating prompt appears above the building head.
+// Pressing F (or tapping the shared button) opens the ONE panel that building
+// owns — building-SPECIFIC routing (DEF-213):
+//   • ArcaneTower            → Hero Talents          (PanelId.HeroTalents)
+//   • Workshop               → Crafting bench        (PanelId.Crafting)
+//   • Forge (Armorer)        → Building Upgrade       (PanelId.BuildingUpgrade)
+//   • Farm / Lumbermill /
+//     CrystalMine            → Building Upgrade       (PanelId.BuildingUpgrade)
+//   • PetHouse               → Pet / Companion tree   (PanelId.PetSkillTree)
+// The panel is opened through DeNelle.Core.UI.PanelRouter — no cross-asmdef
+// reference, no reflection. Each panel routes its own open through PanelManager
+// (DEF-212), so the one-panel-at-a-time rule still holds. A building with no
+// panel registered yet shows a clean "coming soon" note instead of a wrong panel.
+//
+// DEF-213 root cause this replaces: the old code mapped every building through a
+// reflection-driven Toggle() of a panel found by FindObjectOfType, and EVERY
+// BuildingInteractable in the scene listened for the same global F key. With
+// overlapping proximity radii a single F press fired several buildings at once
+// (e.g. Arcane Tower's Hero Talents AND a neighbour's Companion panel), and the
+// Toggle() semantics meant a second press closed an unrelated panel. We now (a)
+// only let the NEAREST in-range building act on F, (b) suppress F while any modal
+// panel is open, and (c) open (never toggle) the one correct panel by id.
 // =============================================================================
 
+using DeNelle.Core.UI;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -76,11 +89,35 @@ namespace DeNelle.Village
             if (inRange && !buttonActive && _promptGo == null) ShowPrompt();
             else if ((!inRange || buttonActive) && _promptGo != null) HidePrompt();
 
-            if (inRange && Input.GetKeyDown(KeyCode.F))
+            // DEF-213: F is a SINGLE global key that every BuildingInteractable polls.
+            // Only the building NEAREST the hero (and only when no modal is already
+            // open) acts on the press, so two buildings with overlapping radii can't
+            // both open a panel on one keystroke. The shared touch button already
+            // routes to exactly one owner per frame, so this guard is desktop-F only.
+            if (inRange && !PanelManager.AnyOpen && Input.GetKeyDown(KeyCode.F) && IsNearestInRange())
             {
-                Debug.Log($"[BuildingInteractable] F pressed in range of {_building.Type} — invoking Interact.");
+                Debug.Log($"[BuildingInteractable] F pressed nearest to {_building.Type} — invoking Interact.");
                 Interact();
             }
+        }
+
+        /// <summary>
+        /// True when THIS building is the closest in-range BuildingInteractable to the
+        /// hero. Resolves the multi-fire on a shared F key when proximity radii overlap.
+        /// </summary>
+        private bool IsNearestInRange()
+        {
+            if (_hero == null) return false;
+            float myDistSqr = (_hero.position - transform.position).sqrMagnitude;
+            foreach (var other in UnityEngine.Object.FindObjectsByType<BuildingInteractable>(
+                         FindObjectsInactive.Exclude, FindObjectsSortMode.None))
+            {
+                if (other == null || other == this) continue;
+                float otherDistSqr = (_hero.position - other.transform.position).sqrMagnitude;
+                if (otherDistSqr > ActivateRadius * ActivateRadius) continue; // not in range
+                if (otherDistSqr < myDistSqr) return false;                    // someone closer
+            }
+            return true;
         }
 
         private void OnDisable()
@@ -110,79 +147,75 @@ namespace DeNelle.Village
         // ── Action dispatch ─────────────────────────────────────────────────
         private void Interact()
         {
-            // Owner direction 2026-05-20 ("SUCH AS PET HOUSE just say week
-            // 7"): wire each F-interaction to a real action. PetHouse opens
-            // the pet-skill-tree panel, Workshop opens the village crafting
-            // panel, etc. — all by sending the key the panel's bootstrap
-            // already listens for, so we don't have to reference the panel
-            // types directly from this asmdef.
-            string note;
-            switch (_building.Type)
+            // DEF-213: open the ONE panel this specific building owns, by id, through
+            // the reflection-free PanelRouter. Each panel's registered open action
+            // routes through PanelManager, so opening it closes any other panel.
+            if (TryPanelFor(_building, out PanelId panelId))
             {
-                case BuildingType.PetHouse:
-                    SimulateKeyPress(KeyCode.P);
-                    note = "Pet roster opened — manage Wardens";
-                    break;
-                case BuildingType.Workshop:
-                    SimulateKeyPress(KeyCode.K);
-                    note = "Workshop crafting opened";
-                    break;
-                case BuildingType.ArcaneTower:
-                    SimulateKeyPress(KeyCode.T);
-                    note = "Talent tree opened";
-                    break;
-                case BuildingType.CrystalMine:
-                    note = "+25 crystals harvested";
-                    break;
-                case BuildingType.Farm:
-                    note = "+20 food harvested";
-                    break;
-                default:
-                    note = "Interaction unavailable";
-                    break;
+                if (PanelRouter.Open(panelId))
+                {
+                    Debug.Log($"[BuildingInteractable] {_building.Type} → opened {panelId}.");
+                    return;
+                }
+
+                // The right panel exists in canon but isn't registered yet (e.g. its
+                // bootstrap hasn't spawned). Show a clean note rather than a wrong panel.
+                Debug.Log($"[BuildingInteractable] {_building.Type} → {panelId} not ready.");
+                ShowFloatingNote($"{LabelFor(_building.Type)} — coming soon");
+                return;
             }
-            Debug.Log($"[BuildingInteractable] {_building.Type}: {note}");
-            ShowFloatingNote(note);
+
+            // No panel mapped for this building: clean name tooltip, never a wrong panel.
+            Debug.Log($"[BuildingInteractable] {_building.Type} has no panel — name tooltip only.");
+            ShowFloatingNote($"{LabelFor(_building.Type)} — coming soon");
         }
 
         /// <summary>
-        /// Cheap cross-asmdef nudge: the agent-built panels (HeroTalentPanel,
-        /// PetSkillTreePanel, VillageCraftingPanel) already listen for a key
-        /// in their Update loop, so the building F-interaction sends a fake
-        /// key event by toggling the panel via reflection if a global
-        /// "fire key" hook is available — otherwise just logs.
+        /// Maps a building to the ONE panel it opens (DEF-213 canon). Returns false
+        /// for buildings that have no panel yet (the caller shows a "coming soon"
+        /// note). Matches the upgrade buildings by BuildingType first, then by the
+        /// id-only resource buildings (Lumbermill / Forge have no enum value).
         /// </summary>
-        private static void SimulateKeyPress(KeyCode key)
+        private static bool TryPanelFor(Building building, out PanelId panelId)
         {
-            // We can't easily inject an Input.GetKeyDown — that's read-only.
-            // Instead the building F-interaction directly toggles the
-            // matching panel by reflection on its Toggle()-style method.
-            string typeName = key switch
+            panelId = default;
+            if (building == null) return false;
+
+            switch (building.Type)
             {
-                KeyCode.P => "DeNelle.HUD.PetSkillTreePanel",
-                KeyCode.K => "DeNelle.Village.Crafting.VillageCraftingPanel",
-                KeyCode.T => "DeNelle.HUD.HeroTalentPanel",
-                _ => null,
-            };
-            if (typeName == null) return;
-            try
+                case BuildingType.ArcaneTower:
+                    panelId = PanelId.HeroTalents;
+                    return true;
+                case BuildingType.Workshop:
+                    panelId = PanelId.Crafting;
+                    return true;
+                case BuildingType.PetHouse:
+                    panelId = PanelId.PetSkillTree;
+                    return true;
+                // Resource + Armorer buildings all share the Building Upgrade panel.
+                case BuildingType.CrystalMine:
+                case BuildingType.Farm:
+                case BuildingType.Lumbermill:
+                case BuildingType.Forge:
+                    panelId = PanelId.BuildingUpgrade;
+                    return true;
+            }
+
+            // Id-keyed resource buildings (Lumbermill / Forge may carry the enum value
+            // OR be authored as the default type with only an id set) → Upgrade panel.
+            string id = building.BuildingId;
+            if (!string.IsNullOrEmpty(id))
             {
-                System.Type t = null;
-                foreach (var asm in System.AppDomain.CurrentDomain.GetAssemblies())
+                string lower = id.ToLowerInvariant();
+                if (lower.Contains("lumbermill") || lower.Contains("forge") ||
+                    lower.Contains("armorer") || lower.Contains("farm") || lower.Contains("mine"))
                 {
-                    t = asm.GetType(typeName, false);
-                    if (t != null) break;
+                    panelId = PanelId.BuildingUpgrade;
+                    return true;
                 }
-                if (t == null) return;
-                var inst = UnityEngine.Object.FindObjectOfType(t) as Component;
-                if (inst == null) return;
-                var m = t.GetMethod("Toggle") ?? t.GetMethod("Open") ?? t.GetMethod("Show");
-                m?.Invoke(inst, m != null && m.GetParameters().Length == 0 ? null : new object[] { });
             }
-            catch (System.Exception ex)
-            {
-                Debug.LogWarning("[BuildingInteractable] Panel toggle failed: " + ex.Message);
-            }
+
+            return false;
         }
 
         private void ShowFloatingNote(string text)

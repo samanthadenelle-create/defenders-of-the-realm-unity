@@ -56,6 +56,9 @@ namespace DeNelle.HUD
         {
             _doc = GetComponent<UIDocument>();
             _panelHandle = PanelManager.Register("Hero Talents", Hide, () => _visible);
+            // DEF-213: let building interactions (Arcane Tower) open this panel by id,
+            // without a cross-asmdef reference and without reflection.
+            PanelRouter.Register(PanelId.HeroTalents, Show);
             ResolveBridges();
             BuildUi();
             Hide();
@@ -64,6 +67,7 @@ namespace DeNelle.HUD
 
         private void OnDestroy()
         {
+            PanelRouter.Unregister(PanelId.HeroTalents, Show);
             UnsubscribeFromService();
         }
 

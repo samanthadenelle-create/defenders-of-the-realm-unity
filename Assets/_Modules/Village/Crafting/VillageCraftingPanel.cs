@@ -62,6 +62,8 @@ namespace DeNelle.Village.Crafting
             if (Instance != null && Instance != this) { Destroy(gameObject); return; }
             Instance = this;
             _panelHandle = PanelManager.Register("Workshop", Close, () => IsOpen);
+            // DEF-213: let the Workshop interaction open this panel by id.
+            PanelRouter.Register(PanelId.Crafting, Open);
         }
 
         private void OnEnable()
@@ -76,6 +78,11 @@ namespace DeNelle.Village.Crafting
             if (VillageInventory.Instance != null)
                 VillageInventory.Instance.Changed -= Repaint;
             if (Instance == this) Instance = null;
+        }
+
+        private void OnDestroy()
+        {
+            PanelRouter.Unregister(PanelId.Crafting, Open);
         }
 
         // ── Public open/close ───────────────────────────────────────────────

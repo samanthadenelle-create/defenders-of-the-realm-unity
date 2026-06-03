@@ -181,6 +181,12 @@ namespace DeNelle.Village
             ps.level = Mathf.Max(1, data.level);
             ps.sellValue = (entry.repo != null ? entry.repo.buildCost : 0) / 2;
 
+            // DEF-208 — 3-tier visual progression: a taller, tier-tinted read per level
+            // (1 bronze · 2 silver · 3 gold). Visual-only; the gameplay upgrade owns stats.
+            var tier = go.AddComponent<StructureTierVisual>();
+            tier.Apply(ps.level);
+            ps.TierVisual = tier;
+
             grid.Occupy(cell, footprint, data.itemId);
             _loaded.Add(ps);
             return ps;

@@ -40,6 +40,10 @@ namespace DeNelle.Village
         /// <summary>Crystals returned on sell (P2). 50% of build cost by convention.</summary>
         public int sellValue;
 
+        /// <summary>The per-tier visual driver (DEF-208), if one was attached at spawn.
+        /// Used to restore the tier accent after the selection highlight clears.</summary>
+        public StructureTierVisual TierVisual;
+
         /// <summary>Snapshot this live structure into its persisted record.</summary>
         public PlacedStructureData ToSaveData() =>
             new PlacedStructureData(itemId, gridCell.x, gridCell.y, yawSteps, level);
@@ -78,6 +82,11 @@ namespace DeNelle.Village
                 }
                 r.SetPropertyBlock(_mpb);
             }
+
+            // DEF-208 — deselect clears the emissive to black, which would also wipe the
+            // tier accent tint. Re-apply the tier visual so the upgraded look persists.
+            if (!on && TierVisual != null)
+                TierVisual.Refresh();
         }
     }
 }

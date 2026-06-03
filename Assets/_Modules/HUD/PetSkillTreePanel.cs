@@ -71,6 +71,8 @@ namespace DeNelle.HUD
             _doc.sortingOrder = 105; // above DailyQuestHud (80), below HelpMenu (?) but visible
 
             _panelHandle = PanelManager.Register("Pet Skills", Close, () => _open);
+            // DEF-213: let the Pet House interaction open this panel by id.
+            PanelRouter.Register(PanelId.PetSkillTree, Open);
             BuildUi();
             SetOpen(false);
         }
@@ -85,6 +87,11 @@ namespace DeNelle.HUD
         {
             if (PetUnlockTracker.Instance != null)
                 PetUnlockTracker.Instance.Changed -= Repaint;
+        }
+
+        private void OnDestroy()
+        {
+            PanelRouter.Unregister(PanelId.PetSkillTree, Open);
         }
 
         public bool IsOpen => _open;

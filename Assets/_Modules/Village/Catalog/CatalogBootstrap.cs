@@ -143,12 +143,13 @@ namespace DeNelle.Village
                 displayName = "Archer Tower",
                 type        = CatalogType.Tower,
                 kind        = EntryKind.Cell,
-                visualPrefabPath = "polyperfect/Tower_Medieval_Big",
+                visualPrefabPath = "PatriciaLight/tower2",
                 repo = new RepoProps
                 {
                     behaviorId = "DefenseTower",
                     buildCost  = 100,
                     navSurface = NavSurfaceKind.Blocker,
+                    visualHeight = 5f,
                     range = 16f, damage = 6f, fireRate = 2.5f,
                     canHitAir = false, element = DamageElement.None,
                     placement = new PlacementRules
@@ -166,12 +167,13 @@ namespace DeNelle.Village
                 displayName = "Wizard Tower",
                 type        = CatalogType.Tower,
                 kind        = EntryKind.Cell,
-                visualPrefabPath = "polyperfect/Tower_Medieval_Wood",
+                visualPrefabPath = "PatriciaLight/tower2",
                 repo = new RepoProps
                 {
                     behaviorId = "DefenseTower",
                     buildCost  = 150,
                     navSurface = NavSurfaceKind.Blocker,
+                    visualHeight = 5f,
                     range = 55f, damage = 14f, fireRate = 1f,
                     canHitAir = true, element = DamageElement.Aether,
                     placement = new PlacementRules

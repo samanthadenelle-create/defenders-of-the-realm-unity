@@ -71,6 +71,8 @@ namespace DeNelle.Village.Buildings.Progression
             if (Instance != null && Instance != this) { Destroy(gameObject); return; }
             Instance = this;
             _panelHandle = PanelManager.Register("Upgrade Buildings", Close, () => IsOpen);
+            // DEF-213: let resource-building / Armorer interactions open this panel by id.
+            PanelRouter.Register(PanelId.BuildingUpgrade, Open);
         }
 
         private void OnEnable()
@@ -87,6 +89,7 @@ namespace DeNelle.Village.Buildings.Progression
             var svc = GameStateService.Instance;
             if (svc != null) svc.ResourcesChanged.RemoveListener(Repaint);
             if (Instance == this) Instance = null;
+            PanelRouter.Unregister(PanelId.BuildingUpgrade, Open);
         }
 
         private void OnLevelChanged(string _) => Repaint();

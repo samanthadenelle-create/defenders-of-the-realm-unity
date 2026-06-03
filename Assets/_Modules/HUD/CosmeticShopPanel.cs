@@ -90,6 +90,8 @@ namespace DeNelle.HUD
             }
             _doc.sortingOrder = 95; // above HUD chips, below the Help overlay (100)
             _panelHandle = PanelManager.Register("Cosmetic Shop", CloseOverlay, IsOverlayOpen);
+            // DEF-213: let the Marketplace / Store interaction open this panel by id.
+            PanelRouter.Register(PanelId.CosmeticShop, OpenOverlay);
         }
 
         private bool IsOverlayOpen() =>
@@ -107,6 +109,11 @@ namespace DeNelle.HUD
         private void OnDisable()
         {
             UnsubscribeChanged();
+        }
+
+        private void OnDestroy()
+        {
+            PanelRouter.Unregister(PanelId.CosmeticShop, OpenOverlay);
         }
 
         private void Update()

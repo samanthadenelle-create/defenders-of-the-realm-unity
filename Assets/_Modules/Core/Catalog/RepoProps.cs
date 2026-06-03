@@ -24,6 +24,15 @@ namespace DeNelle.Core.Catalog
         /// <summary>Placement conditions, evaluated at the free cursor.</summary>
         public PlacementRules placement = new PlacementRules();
 
+        /// <summary>
+        /// Real-world VISUAL height (metres) the skinned model is fit to. &gt;0 fits to
+        /// HEIGHT (correct for tall structures like towers, so they read upright and
+        /// right-sized regardless of the source asset's import scale); 0 (default)
+        /// falls back to the legacy footprint-largest fit. DEF-208: a watchtower wants
+        /// ~5 m, not its footprint (2.5 m) which squashed it.
+        /// </summary>
+        public float visualHeight = 0f;
+
         // --- Combat stats (Tower defs) — copied straight off DefenseTower's public fields ---
         public float         range     = 0f;
         public float         damage    = 0f;

@@ -61,14 +61,29 @@ namespace DeNelle.Village
             root.transform.SetPositionAndRotation(pose.position, pose.rotation);
 
             // LOOK — skin the polyperfect/Resources visual under the root.
-            // Structure preset: fit-to-largest, seat on ground, URP-fix.
+            // DEF-208: a tall structure (tower) must fit to HEIGHT, not to its largest
+            // bounds dim. Fit-to-largest scaled a tower so its tallest axis = footprint
+            // (~2.5 m) → a squashed/wrong-scaled tower. When repo.visualHeight > 0 we
+            // fit-to-height (correct, data-driven right-size); otherwise keep the legacy
+            // footprint-largest fit for walls / props that read fine that way.
             if (!string.IsNullOrEmpty(entry.visualPrefabPath))
             {
-                float fit = entry.repo != null && entry.repo.placement != null
-                    ? Mathf.Max(1f, entry.repo.placement.footprint)
-                    : 3f;
-                var visual = VisualFactory.Skin(root.transform, entry.visualPrefabPath,
-                    SkinOptions.Structure(fit));
+                SkinOptions opts;
+                float visualHeight = entry.repo != null ? entry.repo.visualHeight : 0f;
+                if (visualHeight > 0f)
+                {
+                    opts = SkinOptions.Structure(0f);   // clear FitLargest
+                    opts.FitHeight = visualHeight;       // fit to real-world height instead
+                }
+                else
+                {
+                    float fit = entry.repo != null && entry.repo.placement != null
+                        ? Mathf.Max(1f, entry.repo.placement.footprint)
+                        : 3f;
+                    opts = SkinOptions.Structure(fit);
+                }
+
+                var visual = VisualFactory.Skin(root.transform, entry.visualPrefabPath, opts);
                 if (visual == null)
                     Debug.LogWarning($"[StructureFactory] '{entry.id}': visual '{entry.visualPrefabPath}' " +
                                      "not found — structure created without a mesh.");
