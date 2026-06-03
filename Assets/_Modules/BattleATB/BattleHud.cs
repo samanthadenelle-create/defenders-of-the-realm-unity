@@ -340,7 +340,7 @@ namespace DeNelle.BattleATB
 
             // Header row — portrait icon (WO-213) on the left, name on the right.
             // The icon is a square that shows the hero's rendered character portrait
-            // (Resources/HeroPortraits/<class>). It stays hidden for enemies/pets and
+            // (Resources/HeroPortraits/<character>). It stays hidden for enemies/pets and
             // for any hero whose portrait asset is missing — the name "pill" then
             // reads exactly as before, so this is a purely additive enhancement.
             var headerRow = new VisualElement();
@@ -435,7 +435,16 @@ namespace DeNelle.BattleATB
                 return;
             }
 
-            string slug = u.HeroClass.Value.ToString().ToLowerInvariant(); // mage/knight/ranger
+            // Portrait assets are CHARACTER-named (canon roster), NOT class slugs —
+            // matches HeroSelectController / TitleController. Thrain=Mage, Grom=Knight,
+            // Sylas=Ranger (Elara=Cleric isn't a battle HeroClass, but mapped for safety).
+            string slug = u.HeroClass.Value switch
+            {
+                HeroClass.Mage   => "Thrain",
+                HeroClass.Knight => "Grom",
+                HeroClass.Ranger => "Sylas",
+                _                => u.HeroClass.Value.ToString()
+            };
             StyleBackground? bg = ResolveHeroPortrait(slug);
             if (bg.HasValue)
             {
@@ -476,7 +485,7 @@ namespace DeNelle.BattleATB
                 _portraitMissWarned.Add(slug);
                 Debug.LogWarning($"[BattleHud] Hero portrait 'Resources/HeroPortraits/{slug}' " +
                                  "not found — falling back to the name pill for this hero. " +
-                                 "Run Defenders/Heroes/Render Hero Portraits to generate it.");
+                                 "Run Defenders/Heroes/Render Hero Portraits (transparent) to generate it.");
             }
 
             _portraitCache[slug] = result;
