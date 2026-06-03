@@ -148,6 +148,7 @@ namespace DeNelle.Editor
         // so every Week-4 gameplay type is touched by full-name reflection only —
         // never a direct type reference (that would break the Editor build).
         private const string TypeWaveManager = NsVillage + ".WaveManager";
+        private const string TypeRampartNavLinkInstaller = NsVillage + ".RampartNavLinkInstaller";
         private const string TypeEnemy = NsVillage + ".Enemy";
         private const string TypeEnemyDamageable = NsVillage + ".EnemyDamageable";
         private const string TypeDragonBoss = NsVillage + ".DragonBoss";

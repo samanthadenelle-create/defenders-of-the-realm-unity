@@ -483,6 +483,15 @@ namespace DeNelle.Editor
             // 4) WaveManager — its own sub-system GameObject.
             BuildWaveManager(systemsRoot, heart, enemyPrefab);
 
+            // 4b) RampartNavLinkInstaller (Part A verticality) — builds the N/S
+            //     ground→deck NavMeshLink stairs on Awake so the hero + enemies can
+            //     climb the navmesh onto the rampart deck. Bake-coupled: it lives in
+            //     the baked scene (the links sample the baked deck/walk-lane). The
+            //     rampart LIFT stays as the fallback. Supersedes the old runtime
+            //     StairNavLinkInjector (removed) — single creator, no double-links.
+            var navLinkGo = NewChild(systemsRoot, "RampartNavLinkInstaller");
+            AddVillageComponent(navLinkGo.gameObject, TypeRampartNavLinkInstaller);
+
             // 5) HeroAbilities — on a hero rig stood near the Heart.
             GameObject hero = BuildHero(systemsRoot, heart, heartPos);
 
