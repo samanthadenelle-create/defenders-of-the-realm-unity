@@ -22,6 +22,7 @@
 
 using DeNelle.Core.Quests;
 using DeNelle.Core.State;
+using DeNelle.Cosmetics;
 using DeNelle.Village.Talents;
 using UnityEngine;
 
@@ -129,11 +130,20 @@ namespace DeNelle.Village
             if (reward.RewardWisdom > 0)
                 WisdomCurrencyService.Instance?.Grant(reward.RewardWisdom);
 
+            // Glimmer → the cosmetic-shop currency (DEF-29). daily-quests.json
+            // already specifies rewardGlimmer per slot, but the dispenser dropped
+            // it (no branch existed) so quest Glimmer never actually entered the
+            // wallet. Honour the data-driven amount — a steady, non-grindy trickle
+            // toward the 80-Glimmer cosmetic over normal daily play.
+            if (reward.RewardGlimmer > 0)
+                GlimmerCurrencyService.Instance?.TryAddGlimmer(reward.RewardGlimmer);
+
             // Mark claimed so a re-fire (e.g. a later Repaint) can't double-grant.
             q.ClaimedAtUnix = System.DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
             Debug.Log($"[DailyQuestTowerBridge] Quest '{q.TemplateId}' complete — " +
-                      $"granted {reward.RewardCrystals} crystals, {reward.RewardWisdom} wisdom.");
+                      $"granted {reward.RewardCrystals} crystals, {reward.RewardWisdom} wisdom, " +
+                      $"{reward.RewardGlimmer} glimmer.");
         }
     }
 }

@@ -96,6 +96,17 @@ namespace DeNelle.Onboarding
         private bool _hasSelection;
         private string _selectedPetId;
 
+        // Auto-advance: selecting a pet IS the commit (DEF-230 — drop the extra
+        // confirm tap). After a card is tapped we show a brief visual confirm
+        // beat, then route to the Village automatically. _advancing guards the
+        // single route; until it fires, tapping a DIFFERENT pet re-selects (and
+        // re-arms the beat), so a mis-tap is trivially recoverable. The confirm
+        // button is kept as a belt-and-braces second path but no longer required.
+        private bool _advancing;
+        private bool _autoAdvanceArmed;
+        private float _autoAdvanceAt;
+        private const float AutoAdvanceDelay = 0.6f;
+
         // =====================================================================
         //  Lifecycle
         // =====================================================================
@@ -122,6 +133,22 @@ namespace DeNelle.Onboarding
         {
             if (_confirmButton != null) _confirmButton.clicked -= OnConfirmClicked;
             _bound = false;
+        }
+
+        /// <summary>
+        /// DEF-230 auto-advance: once a pet is selected, route to the Village after
+        /// a brief confirm beat — no confirm tap required. Re-selecting a different
+        /// pet before this fires re-arms the timer (see OnCardClicked), so a
+        /// mis-tap is recoverable.
+        /// </summary>
+        private void Update()
+        {
+            if (_autoAdvanceArmed && _hasSelection && !_advancing &&
+                Time.unscaledTime >= _autoAdvanceAt)
+            {
+                _advancing = true;
+                RouteToVillage();
+            }
         }
 
         // =====================================================================
@@ -369,13 +396,23 @@ namespace DeNelle.Onboarding
         //  Selection
         // =====================================================================
 
-        /// <summary>A pet card was tapped — mark it active and clear the rest.</summary>
+        /// <summary>
+        /// A pet card was tapped — mark it active, clear the rest, and ARM the
+        /// auto-advance (DEF-230: selection IS the commit). Re-tapping a different
+        /// pet before the beat elapses re-selects and re-arms, so a mis-tap is
+        /// recoverable. Once the route has fired (_advancing) late taps are ignored.
+        /// </summary>
         private void OnCardClicked(string petId)
         {
+            if (_advancing) return;   // route already in flight — ignore late taps
             _selectedPetId = petId;
             _hasSelection = true;
             UpdateCardHighlight();
             RefreshConfirmEnabled();
+
+            // Arm (or re-arm) the brief confirm beat — selecting auto-advances.
+            _autoAdvanceArmed = true;
+            _autoAdvanceAt = Time.unscaledTime + AutoAdvanceDelay;
         }
 
         /// <summary>
@@ -420,7 +457,17 @@ namespace DeNelle.Onboarding
         private void OnConfirmClicked()
         {
             if (!_hasSelection) return;
+            if (_advancing) return;   // auto-advance already routing
+            _advancing = true;
+            RouteToVillage();
+        }
 
+        /// <summary>
+        /// Persists the chosen starter pet and loads the Village (single route
+        /// path shared by the confirm button and the DEF-230 auto-advance).
+        /// </summary>
+        private void RouteToVillage()
+        {
             var svc = GameStateService.Instance;
             if (svc != null && svc.State != null)
             {

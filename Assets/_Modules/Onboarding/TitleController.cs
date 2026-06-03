@@ -89,6 +89,21 @@ namespace DeNelle.Onboarding
         private bool _hasSelection;
         private HeroClass _selectedHero;
 
+        // Auto-advance: selecting a hero IS the commit (DEF-230 — drop the extra
+        // "Next"/"Choose" tap). After a card is tapped we show a brief visual
+        // confirm beat, then route to PetSelect automatically. _advancing guards
+        // against a double-route; until the route actually fires, tapping a
+        // DIFFERENT card re-selects (and re-arms the beat) so a mis-tap is
+        // trivially recoverable. The "Choose this Hero →" button is kept as a
+        // belt-and-braces second path but is no longer required.
+        private bool _advancing;
+        private bool _autoAdvanceArmed;   // only a user TAP arms the beat (not a save-preselect)
+        private float _autoAdvanceAt;
+        // How long to linger on the selected card before auto-advancing — long
+        // enough to register the pick + re-tap a different hero, short enough to
+        // feel like "select = go" (the owner wants fewer taps).
+        private const float AutoAdvanceDelay = 0.6f;
+
         // ── Inline palette (no USS dependency — WebGL-safe) ─────────────────
         private static readonly Color ColBackground  = new Color(0.024f, 0.016f, 0.047f, 1f);
         private static readonly Color ColPanelDark    = new Color(0.071f, 0.047f, 0.118f, 0.96f);
@@ -132,6 +147,17 @@ namespace DeNelle.Onboarding
         // attached to the shared panel they can intercept Title-button picks.
         private void Update()
         {
+            // DEF-230 auto-advance: once a hero is selected, route to PetSelect
+            // after a brief confirm beat — no "Choose this Hero" tap required.
+            // Re-selecting a different hero before this fires simply re-arms the
+            // timer (handled in OnCardClicked), so a mis-tap is recoverable.
+            if (_autoAdvanceArmed && _hasSelection && !_advancing && Time.unscaledTime >= _autoAdvanceAt)
+            {
+                _advancing = true;
+                AdvanceToPetSelect();
+                return;
+            }
+
             if (!_titleBuilt || _diagFrames < 0) return;
             if (++_diagFrames < 120) return;
             _diagFrames = -1;
@@ -646,12 +672,23 @@ namespace DeNelle.Onboarding
         //  Selection
         // =====================================================================
 
-        /// <summary>A hero card was tapped — mark it active and refresh the detail card.</summary>
+        /// <summary>
+        /// A hero card was tapped — mark it active, refresh the detail card, and
+        /// ARM the auto-advance (DEF-230: selection IS the commit). Re-tapping a
+        /// different card before the beat elapses simply re-selects and re-arms,
+        /// so a mis-tap is recoverable. Once the route has fired (_advancing) we
+        /// ignore further taps.
+        /// </summary>
         private void OnCardClicked(HeroClass hero)
         {
+            if (_advancing) return;   // route already in flight — ignore late taps
             _selectedHero = hero;
             _hasSelection = true;
             RefreshSelectionVisuals();
+
+            // Arm (or re-arm) the brief confirm beat — selecting auto-advances.
+            _autoAdvanceArmed = true;
+            _autoAdvanceAt = Time.unscaledTime + AutoAdvanceDelay;
         }
 
         /// <summary>Pre-selects the hero the save already records, if any.</summary>
@@ -820,6 +857,8 @@ namespace DeNelle.Onboarding
         }
 
         // ── Choose Hero — persist the pick and route onward to PetSelect ─────
+        // Kept as a belt-and-braces second path; the canonical flow now
+        // auto-advances on card select (DEF-230), so this button is optional.
         private void OnChooseHeroClicked()
         {
             if (!_hasSelection)
@@ -827,6 +866,21 @@ namespace DeNelle.Onboarding
                 Debug.Log("[TitleController] Choose-hero pressed with no selection — ignored.");
                 return;
             }
+            if (_advancing) return;   // auto-advance already routing
+            _advancing = true;
+            RouteToPetSelect();
+        }
+
+        /// <summary>Auto-advance entry (DEF-230): selection committed by the beat.</summary>
+        private void AdvanceToPetSelect()
+        {
+            if (!_hasSelection) { _advancing = false; return; }
+            RouteToPetSelect();
+        }
+
+        /// <summary>Persists the chosen hero and loads PetSelect (single route path).</summary>
+        private void RouteToPetSelect()
+        {
             Debug.Log("[TitleController] Hero confirmed: " + _selectedHero + " — routing to PetSelect.");
             var svc = GameStateService.Instance;
             if (svc != null) svc.ChooseHero(_selectedHero);

@@ -99,11 +99,17 @@ namespace DeNelle.Village
             CoreServices.Hud?.ShowWaveClearBanner(waveId, crystals, string.Empty);
             PulseHeart();
 
-            // Per-wave Wisdom reward -- the talent-tree income hook (none existed, so
-            // Wisdom could never be earned in normal play and the skill tree was
-            // un-progressable). Grant a small amount each cleared wave; tune freely.
-            const int wisdomPerWave = 2;
+            // ── Per-wave soft-currency income (tunables in one place) ────────────
+            // Wisdom (DEF-12): talent-tree income hook — a small amount each cleared
+            // wave so the skill tree is progressable through normal play.
+            // Glimmer (DEF-29): cosmetic-shop income — the cosmetic costs 80 and the
+            // player starts at 25, with the only other earn paths being level-5+ tier
+            // milestones or IAP. A modest per-wave trickle lets a player reach the
+            // first cosmetic over ~a dozen waves of normal play — earned, not grindy.
+            const int wisdomPerWave  = 2;
+            const int glimmerPerWave = 4;
             try { DeNelle.Village.Talents.WisdomCurrencyService.Instance?.Grant(wisdomPerWave); } catch { }
+            try { DeNelle.Cosmetics.GlimmerCurrencyService.Instance?.TryAddGlimmer(glimmerPerWave); } catch { }
 
             if (_repair == null) _repair = UnityEngine.Object.FindObjectOfType<WallRepairController>();
             if (_repair != null) { try { _repair.SurfaceWorstRepair(); } catch { } }

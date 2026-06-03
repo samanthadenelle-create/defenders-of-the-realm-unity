@@ -114,9 +114,18 @@ namespace DeNelle.Village
                  "without scanning every frame.")]
         [SerializeField, Min(0.1f)] private float _rescanInterval = 0.75f;
 
-        [Tooltip("When true the controller scans the whole scene for WallSegment / Gate / " +
-                 "Building. When false only the structures registered via RegisterStructures().")]
-        [SerializeField] private bool _autoFindStructures = true;
+        // DEF-226: the always-on amber repair disc the auto-scan pooled over every
+        // damaged structure read as a confusing, unexplained green/gold ground
+        // artifact (and in one screenshot floated near a hero). DECISION: suppress
+        // the always-on repair highlight entirely. Default this OFF so no marker
+        // auto-spawns during normal play; the repair MECHANIC stays intact and a
+        // highlight is shown ONLY on an explicit selection (tap / RequestRepair /
+        // SurfaceWorstRepair). A baked scene value is overridden at runtime in
+        // Awake() so the build ships suppressed with no rebake.
+        [Tooltip("DEF-226: leave OFF. When true the controller auto-scans the scene and shows an " +
+                 "always-on repair disc over every damaged structure (the suppressed confusing artifact). " +
+                 "When false, highlights appear only on an explicit repair selection.")]
+        [SerializeField] private bool _autoFindStructures = false;
 
         // ── Events — the HUD bridge (the editor cross-wires these) ───────────
 
@@ -168,6 +177,14 @@ namespace DeNelle.Village
         private void Awake()
         {
             if (_camera == null) _camera = Camera.main;
+
+            // DEF-226: force the always-on auto-scan OFF at runtime, even if a baked
+            // scene instance was serialized with _autoFindStructures = true. This is
+            // the no-rebake override pattern used by other DEF-* fixes — the BUILD
+            // ships with the confusing always-on repair disc suppressed without
+            // touching / re-baking the scene. The repair mechanic is unaffected:
+            // a highlight is still shown on an explicit selection (tap / RequestRepair).
+            _autoFindStructures = false;
         }
 
         private void OnEnable()
@@ -233,22 +250,30 @@ namespace DeNelle.Village
             _damaged.Clear();
             CollectDamaged(_damaged);
 
-            // Keep the highlight pool sized to the damaged set, repositioning each
-            // marker over its structure. The selected structure gets the bright
-            // marker instead of a pool one.
+            // DEF-226: only paint the always-on pooled "repairable" discs when the
+            // (now default-OFF, runtime-forced-OFF) auto-scan is enabled. With it
+            // suppressed we still keep _damaged + the damaged-count badge current,
+            // but no unprompted ground disc is shown — a highlight appears ONLY on
+            // an explicit selection (the bright selection marker, see Select()).
             EnsureHighlightRoot();
             int poolIndex = 0;
-            for (int i = 0; i < _damaged.Count; i++)
+            if (_autoFindStructures)
             {
-                var t = _damaged[i];
-                if (_selected != null && _selected.SameAs(t)) continue; // selection marker covers it
+                // Keep the highlight pool sized to the damaged set, repositioning
+                // each marker over its structure. The selected structure gets the
+                // bright marker instead of a pool one.
+                for (int i = 0; i < _damaged.Count; i++)
+                {
+                    var t = _damaged[i];
+                    if (_selected != null && _selected.SameAs(t)) continue; // selection marker covers it
 
-                RepairHighlight hl = GetPooledHighlight(poolIndex++);
-                hl.SetVisible(true);
-                hl.SetSelected(false);
-                hl.FitTo(t);
+                    RepairHighlight hl = GetPooledHighlight(poolIndex++);
+                    hl.SetVisible(true);
+                    hl.SetSelected(false);
+                    hl.FitTo(t);
+                }
             }
-            // Hide any surplus pooled markers.
+            // Hide any surplus pooled markers (also hides ALL of them when suppressed).
             for (int i = poolIndex; i < _highlightPool.Count; i++)
                 _highlightPool[i].SetVisible(false);
 
@@ -259,14 +284,18 @@ namespace DeNelle.Village
             }
         }
 
-        /// <summary>Fills <paramref name="into"/> with a RepairTarget for every damaged structure.</summary>
+        /// <summary>
+        /// Fills <paramref name="into"/> with a RepairTarget for every damaged
+        /// structure. When <c>_autoFindStructures</c> is off (DEF-226 default) the
+        /// periodic scan only considers explicitly-registered structures, so no
+        /// always-on disc is pooled. Explicit flows that need the full scene set
+        /// (e.g. <see cref="SurfaceWorstRepair"/>) call <see cref="CollectAllDamaged"/>.
+        /// </summary>
         private void CollectDamaged(List<RepairTarget> into)
         {
             if (_autoFindStructures)
             {
-                AddDamagedOfType<WallSegment>(into);
-                AddDamagedOfType<Gate>(into);
-                AddDamagedOfType<Building>(into);
+                CollectAllDamaged(into);
             }
             else
             {
@@ -277,6 +306,19 @@ namespace DeNelle.Village
                     if (t != null && t.IsValid && t.NeedsRepair) into.Add(t);
                 }
             }
+        }
+
+        /// <summary>
+        /// Scans the whole scene for damaged WallSegment / Gate / Building targets,
+        /// independent of the always-on highlight suppression (DEF-226). Used by the
+        /// explicit repair flow so "repair the worst structure" still works while the
+        /// unprompted ground disc stays suppressed.
+        /// </summary>
+        private void CollectAllDamaged(List<RepairTarget> into)
+        {
+            AddDamagedOfType<WallSegment>(into);
+            AddDamagedOfType<Gate>(into);
+            AddDamagedOfType<Building>(into);
         }
 
         private static void AddDamagedOfType<T>(List<RepairTarget> into) where T : Component
@@ -351,12 +393,17 @@ namespace DeNelle.Village
         /// </summary>
         public bool SurfaceWorstRepair()
         {
-            Rescan();
-            if (_damaged.Count == 0) return false;
+            // DEF-226: scan the whole scene here regardless of the always-on
+            // highlight suppression so the post-wave "repair your worst structure"
+            // nudge still finds a target — this is an EXPLICIT repair request, which
+            // is exactly the interaction the suppressed always-on disc is replaced by.
+            var all = new List<RepairTarget>();
+            CollectAllDamaged(all);
+            if (all.Count == 0) return false;
             int best = 0;
-            for (int i = 1; i < _damaged.Count; i++)
-                if (_damaged[i].DamageFraction > _damaged[best].DamageFraction) best = i;
-            RequestRepair(_damaged[best]);
+            for (int i = 1; i < all.Count; i++)
+                if (all[i].DamageFraction > all[best].DamageFraction) best = i;
+            RequestRepair(all[best]);
             return true;
         }
 

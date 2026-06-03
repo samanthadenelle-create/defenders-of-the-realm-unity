@@ -481,7 +481,13 @@ namespace DeNelle.Village
         {
             Color tint = cls switch
             {
-                HeroClass.Knight => new Color(0.78f, 0.80f, 0.86f),   // steel
+                // DEF-231: the Knight (Grom) is a LEGACY Tripo body with NO baked
+                // basecolor (ApplyExtractedTexture returns null for Knight), so this
+                // flat tint IS his armour colour. The old steel (0.78,0.80,0.86) read
+                // dark/muddy/desaturated in scene light. Lift the value to a brighter,
+                // cleaner cool steel (keep it cool — blue-biased, NOT muddy brown) so the
+                // armour reads crisp without going flat-white.
+                HeroClass.Knight => new Color(0.92f, 0.94f, 1.00f),   // bright cool steel
                 HeroClass.Ranger => new Color(0.40f, 0.50f, 0.34f),   // hunter / leaf green
                 _                => new Color(0.60f, 0.45f, 0.85f),   // mage fallback
             };
@@ -507,6 +513,18 @@ namespace DeNelle.Village
                     if (tex != null) continue;   // preserve real textures
                     if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", tint);
                     if (m.HasProperty("_Color"))     m.SetColor("_Color", tint);
+                    // DEF-231 (KNIGHT ONLY): the tinted Knight armour was reading dark
+                    // because the runtime URP material's matte 0.15 smoothness / 0 metallic
+                    // gives it no specular lift, so flat steel sits dim in scene light. Give
+                    // the untextured Knight a touch of metallic + higher smoothness so the
+                    // armour catches a soft highlight and reads as crisp steel — NOT a mirror
+                    // (kept well under chrome) and NOT muddy. Scoped to Knight so Mage/Ranger/
+                    // Cleric keep their existing matte look.
+                    if (cls == HeroClass.Knight)
+                    {
+                        if (m.HasProperty("_Metallic"))   m.SetFloat("_Metallic", 0.35f);
+                        if (m.HasProperty("_Smoothness")) m.SetFloat("_Smoothness", 0.45f);
+                    }
                 }
                 r.sharedMaterials = mats;
             }
