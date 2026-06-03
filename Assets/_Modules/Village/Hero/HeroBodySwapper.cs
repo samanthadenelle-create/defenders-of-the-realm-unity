@@ -112,6 +112,16 @@ namespace DeNelle.Village
             // caught at the source instead of re-surfacing as a "camera stays to her right" bug.
             ValidateBodyCentredOverRoot(body);
 
+            // DEF-235: plant the feet on the ground. VisualFactory.SeatOnGround drops the body
+            // so its RENDER-BOUNDS base (b.min.y) sits at the root's y. For the CC5/AccuRIG hero
+            // bodies the lowest *visible* skinned vertex (the soles) sits ABOVE that bounds base
+            // — bind-pose padding leaves the renderer-bounds floor a few cm below the real feet —
+            // so the hero reads as "floating a tiny bit". Measure the TRUE lowest posed vertex in
+            // world space and nudge the body DOWN by exactly that gap so the soles touch root.y.
+            // Y-only (orthogonal to DEF-232's XZ centring) and hero-scoped (does NOT touch the
+            // global VisualFactory.SeatOnGround, which enemies/structures rely on).
+            PlantFeetOnGround(body);
+
             StripRigidbodies(body);
             // Tripo FBXs embed a CAMERA / AudioListener; left in, the hero body's camera
             // fights the VillageCamera (runtime camera-soup, 2026-05-25). Strip both so
@@ -599,6 +609,84 @@ namespace DeNelle.Village
                 // Safety-net re-centre: shift the body so its bounds centre sits over the root's XZ.
                 body.transform.position -= new Vector3(dx, 0f, dz);
             }
+        }
+
+        /// <summary>
+        /// DEF-235: drop the swapped body so the lowest VISIBLE skinned vertex (the feet/soles)
+        /// rests exactly at the hero root's Y. VisualFactory.SeatOnGround already aligned the
+        /// RENDER-BOUNDS base to root.y, but a SkinnedMeshRenderer's bounds carry bind-pose
+        /// padding — the bounds floor sits a few cm BELOW the actual posed soles — so the feet
+        /// hover. We bake each skinned mesh into its current pose, walk its world-space vertices
+        /// to find the true lowest point, and nudge the body DOWN by (lowestVertexY - root.y).
+        ///
+        /// Y-ONLY (does not touch XZ, so it never disturbs DEF-232's centring) and HERO-SCOPED
+        /// (VisualFactory.SeatOnGround stays unchanged, so enemies/structures are unaffected).
+        /// Clamped: only ever corrects a small UPWARD float — it never LIFTS the body, and it
+        /// never sinks more than MaxDrop, so a bad measurement (e.g. a stray low vert on a cape)
+        /// can't bury the hero under the terrain.
+        /// </summary>
+        private void PlantFeetOnGround(GameObject body)
+        {
+            if (body == null) return;
+
+            float rootY = transform.position.y;
+            float lowestY = float.PositiveInfinity;
+            bool measured = false;
+
+            // Prefer skinned meshes baked into their CURRENT pose — the static prefab mesh is in
+            // bind pose and its lowest vertex won't match the posed soles. Bake into a scratch
+            // mesh, transform each vertex to world space, and track the minimum Y.
+            var skinned = body.GetComponentsInChildren<SkinnedMeshRenderer>(true);
+            if (skinned != null && skinned.Length > 0)
+            {
+                var baked = new Mesh();
+                foreach (var smr in skinned)
+                {
+                    if (smr == null || smr.sharedMesh == null) continue;
+                    smr.BakeMesh(baked); // baked is in the SMR's local space, current pose
+                    var verts = baked.vertices;
+                    Transform t = smr.transform;
+                    for (int i = 0; i < verts.Length; i++)
+                    {
+                        float wy = t.TransformPoint(verts[i]).y;
+                        if (wy < lowestY) lowestY = wy;
+                    }
+                    measured = true;
+                }
+                Object.Destroy(baked);
+            }
+
+            // Fallback for any non-skinned (static MeshRenderer) body: walk its shared meshes'
+            // vertices directly in world space. Rare for the hero, but keeps this robust.
+            if (!measured)
+            {
+                foreach (var mf in body.GetComponentsInChildren<MeshFilter>(true))
+                {
+                    if (mf == null || mf.sharedMesh == null) continue;
+                    var verts = mf.sharedMesh.vertices;
+                    Transform t = mf.transform;
+                    for (int i = 0; i < verts.Length; i++)
+                    {
+                        float wy = t.TransformPoint(verts[i]).y;
+                        if (wy < lowestY) lowestY = wy;
+                    }
+                    measured = true;
+                }
+            }
+
+            if (!measured || float.IsInfinity(lowestY)) return;
+
+            // gap > 0 means the soles float ABOVE the ground (the DEF-235 symptom). gap <= 0 means
+            // the feet already touch or sit below — leave those alone (never LIFT the body; sinking
+            // is handled by SeatOnGround / terrain follow elsewhere).
+            float gap = lowestY - rootY;
+            const float MinFloat = 0.001f; // ignore sub-mm noise
+            const float MaxDrop  = 0.30f;  // never sink more than 30 cm on a bad measurement
+            if (gap <= MinFloat) return;
+            float drop = Mathf.Min(gap, MaxDrop);
+            body.transform.position -= new Vector3(0f, drop, 0f);
+            Debug.Log("[HeroBodySwapper] DEF-235 planted feet: lowered body " +
+                      drop.ToString("F3") + "m (measured float gap " + gap.ToString("F3") + "m).");
         }
     }
 }

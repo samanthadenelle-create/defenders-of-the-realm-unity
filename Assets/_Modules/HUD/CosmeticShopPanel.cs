@@ -427,6 +427,16 @@ namespace DeNelle.HUD
             bool equipped = owned && string.Equals(EquippedFor(category), id, StringComparison.OrdinalIgnoreCase);
             bool isAchievement = unlockMethod == "achievement";
 
+            // DEF-197: compute affordability once, up front, so BOTH the price line
+            // and the Buy button reflect it against the live Glimmer balance (the
+            // DEF-29 earn path feeds CurrentGlimmer()). A buyable item the player
+            // can't yet afford now reads "short by N" in muted gold at the row, not
+            // just a greyed button — the *why* is visible without guessing.
+            bool isBuyable  = !owned && !isAchievement && glimmerCost > 0;
+            int  balance    = CurrentGlimmer();
+            bool affordable = balance >= glimmerCost;
+            int  shortfall  = isBuyable && !affordable ? glimmerCost - balance : 0;
+
             var card = new VisualElement();
             card.style.flexDirection = FlexDirection.Row;
             card.style.alignItems = Align.Center;
@@ -458,6 +468,9 @@ namespace DeNelle.HUD
             text.Add(desc);
 
             // Price line — coin glyph + amount in gold (matches the header chip).
+            // DEF-197: when a buyable item is out of reach the coin + price dim to a
+            // muted gold so the gold "reads" as unavailable at a glance.
+            Color priceTint = (isBuyable && !affordable) ? ShopTheme.ParchmentDim : ShopTheme.Glimmer;
             var priceRow = new VisualElement();
             priceRow.style.flexDirection = FlexDirection.Row;
             priceRow.style.alignItems = Align.Center;
@@ -466,7 +479,7 @@ namespace DeNelle.HUD
             {
                 var coin = new Label(ShopTheme.CoinGlyph);
                 coin.style.fontSize = 12;
-                coin.style.color = ShopTheme.Glimmer;
+                coin.style.color = priceTint;
                 coin.style.marginRight = 4;
                 priceRow.Add(coin);
             }
@@ -479,8 +492,17 @@ namespace DeNelle.HUD
                 priceText = "Free";
             var price = new Label(priceText);
             price.style.fontSize = 12;
-            price.style.color = ShopTheme.Glimmer;
+            price.style.color = priceTint;
             priceRow.Add(price);
+            // DEF-197: affordability hint — how much more Glimmer is needed.
+            if (shortfall > 0)
+            {
+                var need = new Label($"  (short {shortfall:N0})");
+                need.style.fontSize = 11;
+                need.style.unityFontStyleAndWeight = FontStyle.Italic;
+                need.style.color = ShopTheme.ParchmentDim;
+                priceRow.Add(need);
+            }
             text.Add(priceRow);
 
             var actionBtn = new Button { text = "Buy" };
@@ -507,7 +529,8 @@ namespace DeNelle.HUD
             }
             else
             {
-                bool affordable = CurrentGlimmer() >= glimmerCost;
+                // DEF-197: 'affordable' is hoisted above so the price line + button
+                // agree on one live-balance check.
                 actionBtn.text = "Buy";
                 ShopTheme.StyleButton(actionBtn,
                     affordable ? ShopTheme.ButtonKind.Aether : ShopTheme.ButtonKind.Disabled);

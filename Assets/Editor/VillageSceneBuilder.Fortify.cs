@@ -486,13 +486,20 @@ namespace DeNelle.Editor
             // (laneZ / laneX computed above = ±31.1 / ±40.1 — the inner walk-lane centres.)
             int stairCount = 0;
             // North + South stairs run along Z (climbing from interior toward the wall),
-            // landing on the N/S walk-lane. rot faces the climb up the +Z (north) / -Z (south).
+            // landing on the N/S walk-lane.
+            // DEF-216 fix (owner playtest 2026-06-03): the N + S visual staircases were
+            // mis-oriented against the wall walkway. Rotate each yaw −90° (turn LEFT) so
+            // the steps face/run the correct way and the TOP step meets the rampart
+            // walk-lane (deckTopY). North 0°→-90°, South 180°→90°. The nav ramp + the
+            // StairNavLink (RampartNavLinkInstaller, same XZ) still bridge base→top, so
+            // agent pathing is unchanged; only the visual orientation + top-snap change.
+            // E/W stairs are CORRECT and left untouched (90° / 270°).
             stairCount += BuildRampartStaircase(rr, stairPrefab, stone, "RampartStairs-North",
                 new Vector3(12f,  0f,  laneZ - rampRun * 0.5f), new Vector3(12f, deckTopY,  laneZ),
-                rampRun, rampW, deckTopY, 0f);
+                rampRun, rampW, deckTopY, -90f);
             stairCount += BuildRampartStaircase(rr, stairPrefab, stone, "RampartStairs-South",
                 new Vector3(12f,  0f, -(laneZ - rampRun * 0.5f)), new Vector3(12f, deckTopY, -laneZ),
-                rampRun, rampW, deckTopY, 180f);
+                rampRun, rampW, deckTopY, 90f);
             // East + West stairs run along X, landing on the E/W walk-lane.
             stairCount += BuildRampartStaircase(rr, stairPrefab, stone, "RampartStairs-East",
                 new Vector3(laneX - rampRun * 0.5f,  0f, 12f), new Vector3(laneX, deckTopY, 12f),
@@ -554,17 +561,27 @@ namespace DeNelle.Editor
                 GameObjectUtility.GetStaticEditorFlags(ramp) | StaticEditorFlags.NavigationStatic);
 
             // ── Visual staircase prefab laid ON the ramp ────────────────────────
-            // Cosmetic only — agents path on the ramp, not these steps. Seat the
-            // prefab at the ramp foot and scale its run to roughly match.
+            // Cosmetic only — agents path on the ramp, not these steps. The prefab is
+            // PITCHED up the run (about local +X, matching the ramp's tilt) and seated
+            // along it so its TOP step meets the rampart walk-lane (deckTopY) instead of
+            // lying flat at the foot. The group is already yaw-rotated (`rot`), so the
+            // prefab only needs the local pitch; placing it at the run-mid local Z keeps
+            // it centred on the ramp slab. This is the owner's "stairs must reach the
+            // walkway" fix; the nav ramp + StairNavLink still own the climb path.
             if (stairPrefab != null)
             {
                 var vis = (GameObject)PrefabUtility.InstantiatePrefab(stairPrefab);
                 if (vis != null)
                 {
                     vis.name = "StairsVisual";
-                    vis.transform.SetParent(grp.transform, false);
-                    vis.transform.localPosition = Vector3.zero;     // foot of the run (group origin)
-                    vis.transform.localRotation = Quaternion.identity;
+                    vis.transform.SetParent(grp.transform, true);
+                    // Match the ramp exactly: same world centre + same yaw+pitch, so the
+                    // visible steps rise with the nav ramp and the top step lands at the
+                    // walk-lane surface (deckTopY). Lift half the slab thickness so the
+                    // steps sit ON the ramp face rather than through it.
+                    vis.transform.SetPositionAndRotation(
+                        rampCtr + Vector3.up * 0.15f,
+                        rot * Quaternion.Euler(-pitch, 0f, 0f));
                     StripColliders(vis);   // visual only — ramp owns the collision/nav
                 }
             }
