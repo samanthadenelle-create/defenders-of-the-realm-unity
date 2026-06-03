@@ -1,6 +1,6 @@
 {
-  "version": 1,
-  "notes": "Build-mode structure catalog — DATA-DRIVEN. Add a row here (+ keep the Resources/Data/Canonical copy byte-equal) and it flows into CatalogRegistry at startup via CatalogBootstrap. 'type' / 'mustSitOn' / 'navSurface' / 'element' are enum NAMES (StringEnumConverter). 'visualPrefabPath' is a Resources-relative path (LogWarning-safe on miss per CLAUDE.md §4). 'behaviorId' is resolved to a Village component by StructureFactory.AttachBehavior — only DefenseTower / WallSegment / CrystalMine / Gate are wired; null = inert decoration. S4: 'repo.cost' is the multi-resource build cost (wood/food/iron/crystals); it is charged + refunded through the persisted ResourceLedger (EconomyService). When 'cost' is omitted / all-zero, placement falls back to charging 'buildCost' Crystals (back-compat).",
+  "version": 2,
+  "notes": "Build-mode structure catalog — DATA-DRIVEN. Add a row here (+ keep the Resources/Data/Canonical copy byte-equal) and it flows into CatalogRegistry at startup via CatalogBootstrap. 'type' / 'mustSitOn' / 'navSurface' / 'element' are enum NAMES (StringEnumConverter). 'visualPrefabPath' is a Resources-relative path (LogWarning-safe on miss per CLAUDE.md §4). 'behaviorId' is resolved to a Village component by StructureFactory.AttachBehavior — only DefenseTower / WallSegment / CrystalMine / Gate are wired; null = inert decoration. S4: 'repo.cost' is the multi-resource build cost (wood/food/iron/crystals); it is charged + refunded through the persisted ResourceLedger (EconomyService). When 'cost' is omitted / all-zero, placement falls back to charging 'buildCost' Crystals (back-compat). S5 (the CoC upgrade sink): 'repo.maxLevel' (default 1 = not upgradeable; ceiling 3 = the StructureTierVisual tier cap) is the highest level the UPGRADE verb can reach; 'repo.upgradeCost' is an optional per-step multi-resource table indexed by the level being upgraded TO minus 2 (entry [0] = L1->L2, [1] = L2->L3). When 'upgradeCost' is omitted, the upgrade cost falls back to the build 'cost' scaled by the level being left (L1->L2 = 1x, L2->L3 = 2x). StructureTierVisual steps the look (scale + bronze/silver/gold accent); DefenseTower range/damage and WallSegment toughness step the stats.",
   "entries": [
     {
       "id": "tower_ground_archer",
@@ -12,6 +12,7 @@
         "behaviorId": "DefenseTower",
         "buildCost": 100,
         "cost": { "wood": 60, "food": 0, "iron": 30, "crystals": 20 },
+        "maxLevel": 3,
         "navSurface": "Blocker",
         "visualHeight": 5.0,
         "range": 16.0,
@@ -37,6 +38,7 @@
         "behaviorId": "DefenseTower",
         "buildCost": 150,
         "cost": { "wood": 40, "food": 0, "iron": 20, "crystals": 60 },
+        "maxLevel": 3,
         "navSurface": "Blocker",
         "visualHeight": 5.0,
         "range": 55.0,
@@ -63,6 +65,7 @@
         "behaviorId": "DefenseTower",
         "buildCost": 140,
         "cost": { "wood": 80, "food": 0, "iron": 50, "crystals": 0 },
+        "maxLevel": 3,
         "navSurface": "Blocker",
         "visualHeight": 6.0,
         "range": 20.0,
@@ -88,6 +91,7 @@
         "behaviorId": "DefenseTower",
         "buildCost": 180,
         "cost": { "wood": 90, "food": 0, "iron": 60, "crystals": 30 },
+        "maxLevel": 3,
         "navSurface": "Blocker",
         "visualHeight": 6.0,
         "range": 28.0,
@@ -113,6 +117,11 @@
         "behaviorId": "WallSegment",
         "buildCost": 40,
         "cost": { "wood": 20, "food": 0, "iron": 0, "crystals": 0 },
+        "maxLevel": 3,
+        "upgradeCost": [
+          { "wood": 20, "food": 0, "iron": 20, "crystals": 0 },
+          { "wood": 10, "food": 0, "iron": 40, "crystals": 10 }
+        ],
         "navSurface": "Blocker",
         "placement": {
           "mustSitOn": "Ground",
@@ -132,6 +141,11 @@
         "behaviorId": "WallSegment",
         "buildCost": 90,
         "cost": { "wood": 30, "food": 40, "iron": 20, "crystals": 0 },
+        "maxLevel": 3,
+        "upgradeCost": [
+          { "wood": 30, "food": 0, "iron": 40, "crystals": 0 },
+          { "wood": 20, "food": 0, "iron": 60, "crystals": 20 }
+        ],
         "navSurface": "Blocker",
         "placement": {
           "mustSitOn": "Ground",

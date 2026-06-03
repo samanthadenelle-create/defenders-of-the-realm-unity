@@ -53,6 +53,25 @@ namespace DeNelle.Core.Catalog
         /// </summary>
         public ResourceCost cost = new ResourceCost();
 
+        /// <summary>
+        /// S5 — the highest upgrade level this structure can reach (the CoC sink). 1 means
+        /// "not upgradeable"; 3 is the canon wood→stone→reinforced / tower L1..L3 ceiling
+        /// (matches StructureTierVisual's 1..3 tier clamp). Default 1 so a row that omits it
+        /// stays a single-tier structure.
+        /// </summary>
+        public int maxLevel = 1;
+
+        /// <summary>
+        /// S5 — per-step upgrade cost, indexed by the level being upgraded TO minus 2:
+        /// <c>upgradeCost[0]</c> = the cost to go L1→L2, <c>upgradeCost[1]</c> = L2→L3, …
+        /// (so a structure with maxLevel 3 authors two entries). Pure-data, multi-resource.
+        /// When NULL / too short for the requested step, the Village boundary falls back to a
+        /// data scaler (the build <see cref="cost"/> scaled by the level being left), so a row
+        /// can opt into upgrades with just <see cref="maxLevel"/> and no explicit table.
+        /// JSON deserializes the optional "upgradeCost" array straight into this.
+        /// </summary>
+        public ResourceCost[] upgradeCost = null;
+
         /// <summary>Village resolves this string -> the actual behaviour component (Core stays pure).</summary>
         public string behaviorId = null;
 

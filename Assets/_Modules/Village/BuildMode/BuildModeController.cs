@@ -441,11 +441,34 @@ namespace DeNelle.Village
             _selected = ps;
             _selected.SetHighlighted(true);
 
+            EnsureSelectionUi();
+            ShowSelectionPanel(ps);
+        }
+
+        /// <summary>
+        /// Populate + show the edit panel for <paramref name="ps"/> with its current tier
+        /// state (S5): label, sell refund, level/maxLevel, and the next-tier upgrade cost +
+        /// whether it is currently affordable. Shared by select + post-move + post-upgrade.
+        /// </summary>
+        private void ShowSelectionPanel(PlacedStructure ps)
+        {
+            if (ps == null) return;
             var entry = CatalogRegistry.Get(ps.itemId);
             string label = entry != null && !string.IsNullOrEmpty(entry.displayName) ? entry.displayName : ps.itemId;
 
-            EnsureSelectionUi();
-            _selectionUi?.Show(label, RefundFor(ps));
+            int level = Mathf.Max(1, ps.level);
+            int maxLevel = MaxLevelFor(entry);
+
+            int upgradeTotal = 0;
+            bool canAfford = false;
+            if (level < maxLevel)
+            {
+                DeNelle.Core.Catalog.ResourceCost up = UpgradeCostFor(entry, level);
+                upgradeTotal = up.wood + up.food + up.iron + up.crystals;
+                canAfford = CanAfford(up);
+            }
+
+            _selectionUi?.Show(label, RefundFor(ps), level, maxLevel, upgradeTotal, canAfford);
         }
 
         /// <summary>Drop the current selection (highlight + panel) and any in-progress move.</summary>
@@ -490,6 +513,142 @@ namespace DeNelle.Village
             _selected = null;
             _selectionUi?.Hide();
             Destroy(ps.gameObject);
+        }
+
+        // =====================================================================
+        //  Upgrade (S5 — the CoC sink: level 1→maxLevel)
+        // =====================================================================
+
+        /// <summary>
+        /// UPGRADE the selected structure one tier: if it is below its catalog maxLevel AND
+        /// the next-tier cost is affordable, spend that cost through the persisted ledger,
+        /// increment <see cref="PlacedStructure.level"/>, step the visual (StructureTierVisual)
+        /// and the gameplay stats (DefenseTower range/damage · WallSegment toughness) up a tier,
+        /// re-persist the level in BaseLayout, and re-show the panel at the new tier. Bails
+        /// (logs) at the ceiling or when unaffordable — never charges on a no-op.
+        /// </summary>
+        private void UpgradeSelected()
+        {
+            if (_selected == null) return;
+            var ps = _selected;
+            var entry = CatalogRegistry.Get(ps.itemId);
+
+            int level = Mathf.Max(1, ps.level);
+            int maxLevel = MaxLevelFor(entry);
+            if (level >= maxLevel)
+            {
+                Debug.Log($"[BuildMode] '{ps.itemId}' already at max tier ({maxLevel}) — no upgrade.");
+                return;
+            }
+
+            DeNelle.Core.Catalog.ResourceCost cost = UpgradeCostFor(entry, level);
+            if (!CanAfford(cost))
+            {
+                Debug.Log($"[BuildMode] Not enough resources to upgrade '{ps.itemId}' to tier {level + 1} " +
+                          $"(needs {Describe(cost)}).");
+                // Re-show so the button reflects the (still-unaffordable) state.
+                ShowSelectionPanel(ps);
+                return;
+            }
+
+            // Charge ONLY after the affordability gate passes (mirrors the place-charge rule).
+            ChargeLedger(cost);
+
+            int newLevel = level + 1;
+            ps.level = newLevel;
+
+            // Step the visual tier (scale + accent). Apply is idempotent + re-collects renderers.
+            if (ps.TierVisual != null) { ps.TierVisual.Apply(newLevel); ps.TierVisual.Refresh(); }
+
+            // Step the gameplay stats per tier (range/damage for towers, toughness for walls).
+            ApplyTierStats(ps, newLevel);
+
+            // Persist the new level in the live BaseLayout (so Exit()'s Save() round-trips it).
+            UpdateLayoutLevel(ps.itemId, ps.gridCell, newLevel);
+
+            Debug.Log($"[BuildMode] Upgraded '{ps.itemId}' at cell ({ps.gridCell.x},{ps.gridCell.y}) " +
+                      $"to tier {newLevel}/{maxLevel}, charged {Describe(cost)}.");
+
+            // Re-show the panel at the new tier (refreshed cost / Max-tier state).
+            ShowSelectionPanel(ps);
+        }
+
+        /// <summary>
+        /// Apply per-tier gameplay stats to a structure at <paramref name="level"/>. Towers
+        /// scale range + damage with the tier (the catalog base × a per-tier multiplier); walls
+        /// step their durability toughness. Visual stepping is owned by StructureTierVisual;
+        /// this is the BEHAVIOUR half. Null-/component-safe (a decoration upgrades visually only).
+        /// Internal so BaseLayoutLoader can re-assert the tier stats when a saved structure
+        /// reloads above level 1 (so a tier-3 tower comes back at tier-3 stats, not base).
+        /// </summary>
+        internal static void ApplyTierStats(PlacedStructure ps, int level)
+        {
+            if (ps == null) return;
+            int tier = Mathf.Clamp(level, 1, 3);
+            var entry = CatalogRegistry.Get(ps.itemId);
+            var repo = entry != null ? entry.repo : null;
+
+            // Tower — scale range + damage from the catalog base off the tier multiplier so a
+            // tier-3 tower hits harder + further (1.0 / 1.25 / 1.55). Read base off the catalog
+            // (not the live field) so repeated upgrades never compound.
+            var tower = ps.GetComponent<DefenseTower>();
+            if (tower != null && repo != null)
+            {
+                float mul = s_towerTierMul[tier];
+                tower.Range  = repo.range  * mul;
+                tower.Damage = repo.damage * mul;
+                // FireRate intentionally unchanged — range + damage are the readable tier wins.
+            }
+
+            // Wall — step the durability tier (incoming-damage toughness on the 0-100 track).
+            var wall = ps.GetComponent<WallSegment>();
+            if (wall != null) wall.SetTier(tier);
+        }
+
+        // Per-tier tower stat multiplier (index 0 unused): L1 ×1.0 · L2 ×1.25 · L3 ×1.55.
+        private static readonly float[] s_towerTierMul = { 1f, 1f, 1.25f, 1.55f };
+
+        /// <summary>
+        /// The catalog max upgrade level for an entry (S5). Clamped to the visual tier ceiling
+        /// (3 — StructureTierVisual supports 1..3). Defaults to 1 (not upgradeable) for a null
+        /// entry or a row that omits maxLevel.
+        /// </summary>
+        private static int MaxLevelFor(CatalogEntry entry)
+        {
+            var repo = entry != null ? entry.repo : null;
+            if (repo == null) return 1;
+            return Mathf.Clamp(repo.maxLevel, 1, 3);
+        }
+
+        /// <summary>
+        /// Resolve the upgrade cost for the step <paramref name="fromLevel"/> → fromLevel+1.
+        /// Uses the authored per-step table (repo.upgradeCost[fromLevel-1]) when present;
+        /// otherwise falls back to a data scaler — the build cost scaled by the level being
+        /// left (so L1→L2 ≈ 1× the build cost, L2→L3 ≈ 2× — a rising CoC-style sink) — so a
+        /// row can opt into upgrades with just maxLevel and no explicit table. Null-safe.
+        /// </summary>
+        private static DeNelle.Core.Catalog.ResourceCost UpgradeCostFor(CatalogEntry entry, int fromLevel)
+        {
+            var repo = entry != null ? entry.repo : null;
+            if (repo == null) return default;
+
+            int idx = Mathf.Max(0, fromLevel - 1);   // L1→L2 uses index 0
+            if (repo.upgradeCost != null && idx < repo.upgradeCost.Length)
+            {
+                var authored = repo.upgradeCost[idx];
+                if (!authored.IsZero) return authored;   // authored table wins
+            }
+
+            // Fallback scaler: the resolved build cost × the level being left.
+            DeNelle.Core.Catalog.ResourceCost baseCost = CostFor(entry);
+            int scale = Mathf.Max(1, fromLevel);
+            return new DeNelle.Core.Catalog.ResourceCost
+            {
+                wood     = baseCost.wood     * scale,
+                food     = baseCost.food     * scale,
+                iron     = baseCost.iron     * scale,
+                crystals = baseCost.crystals * scale,
+            };
         }
 
         /// <summary>
@@ -548,9 +707,7 @@ namespace DeNelle.Village
             _ghost?.Hide();
 
             // Re-show the action panel on the moved structure (stays selected).
-            var entry = CatalogRegistry.Get(_selected.itemId);
-            string label = entry != null && !string.IsNullOrEmpty(entry.displayName) ? entry.displayName : _selected.itemId;
-            _selectionUi?.Show(label, RefundFor(_selected));
+            ShowSelectionPanel(_selected);
         }
 
         /// <summary>Abort an in-progress move: re-occupy the origin cells, keep it put.</summary>
@@ -576,20 +733,36 @@ namespace DeNelle.Village
         }
 
         /// <summary>
-        /// The full ~50% multi-resource refund for a placed structure (each slot of its
-        /// resolved build cost halved, rounded down). Crystals-only entries refund only
-        /// Crystals (their buildCost fallback halved).
+        /// The full ~50% multi-resource refund for a placed structure: the build cost PLUS
+        /// every upgrade step it has paid into (S5 — invested-cost-aware), each slot halved
+        /// (rounded down). So selling a tier-3 tower returns 50% of build + L1→L2 + L2→L3.
+        /// Crystals-only entries refund only Crystals (their buildCost fallback halved).
         /// </summary>
         private static DeNelle.Core.Catalog.ResourceCost RefundCostFor(PlacedStructure ps)
         {
             if (ps == null) return default;
-            var cost = CostFor(CatalogRegistry.Get(ps.itemId));
+            var entry = CatalogRegistry.Get(ps.itemId);
+
+            // Base build cost…
+            var total = CostFor(entry);
+
+            // …plus each upgrade step paid to reach the current level (L1→L2, …, (lvl-1)→lvl).
+            int level = Mathf.Max(1, ps.level);
+            for (int from = 1; from < level; from++)
+            {
+                var step = UpgradeCostFor(entry, from);
+                total.wood     += step.wood;
+                total.food     += step.food;
+                total.iron     += step.iron;
+                total.crystals += step.crystals;
+            }
+
             return new DeNelle.Core.Catalog.ResourceCost
             {
-                wood     = cost.wood     / 2,
-                food     = cost.food     / 2,
-                iron     = cost.iron     / 2,
-                crystals = cost.crystals / 2,
+                wood     = total.wood     / 2,
+                food     = total.food     / 2,
+                iron     = total.iron     / 2,
+                crystals = total.crystals / 2,
             };
         }
 
@@ -696,6 +869,28 @@ namespace DeNelle.Village
                     d.cellX = newCell.x;
                     d.cellZ = newCell.y;
                     d.yawSteps = yawSteps;
+                    layout[i] = d;
+                    return;
+                }
+            }
+        }
+
+        /// <summary>
+        /// S5 — re-stamp the persisted record's upgrade level (match by cell + itemId).
+        /// PlacedStructureData is a struct, so replace the element by index. Exit()'s Save()
+        /// then round-trips the new level so an upgraded structure reloads at its tier.
+        /// </summary>
+        private static void UpdateLayoutLevel(string itemId, Vector2Int cell, int level)
+        {
+            var state = GameStateService.Instance != null ? GameStateService.Instance.State : null;
+            var layout = state != null ? state.BaseLayout : null;
+            if (layout == null) return;
+            for (int i = 0; i < layout.Count; i++)
+            {
+                if (layout[i].itemId == itemId && layout[i].cellX == cell.x && layout[i].cellZ == cell.y)
+                {
+                    var d = layout[i];
+                    d.level = level;
                     layout[i] = d;
                     return;
                 }
@@ -895,6 +1090,7 @@ namespace DeNelle.Village
             _selectionUi = go.AddComponent<BuildSelectionUI>();
             _selectionUi.OnMoveRequested += BeginMoveSelected;
             _selectionUi.OnSellRequested += SellSelected;
+            _selectionUi.OnUpgradeRequested += UpgradeSelected;
             _selectionUi.OnCancelRequested += ClearSelection;
         }
 

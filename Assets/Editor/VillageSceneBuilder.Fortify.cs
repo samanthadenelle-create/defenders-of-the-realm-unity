@@ -373,6 +373,57 @@ namespace DeNelle.Editor
                 Box("Merlon-West", new Vector3(-merlonX, merlonY, z), new Vector3(merlonThk, merlonH, merlonW), Quaternion.identity);
             }
 
+            // ── Low INNER railing (DEF-191 / WO-136): a continuous low stone parapet
+            //    along the walk-lane's TOWN-FACING inner edge. The crenellated merlons
+            //    above guard the OUTER (moat) edge; without an inner kerb the walkway
+            //    read as a bare ledge with an open drop into the courtyard. This low
+            //    railing (~0.9 m, vs the 1.3 m outer merlons) frames the fighting deck
+            //    as a real battlement walk on BOTH edges. Built as one solid stone kerb
+            //    from the same Box() helper (nav-static stone), sitting on the lane's
+            //    inner edge (Z=±29.8 / X=±38.8) at deck-top y. It is BROKEN at every
+            //    stair landing + the two N/S lifts so it never blocks access onto the
+            //    walk (the openings are wider than the access pad so the hero/enemies
+            //    step off cleanly). The kerb is INBOARD of the lane centre, so it never
+            //    z-fights the curtain wall, the merlons, or the deck slab.
+            const float railH    = 0.9f;                 // low inner parapet height above the deck
+            const float railThk  = 0.35f;                // kerb thickness (radial)
+            float railY   = deckTopY + railH * 0.5f;     // centre y (deck-top + half height)
+            // Inner edge of the walk-lane = wallLine - laneIn (29.8 / 38.8). Inset the
+            // kerb half-thickness so it sits flush on that edge, facing the courtyard.
+            float railZ   = wallZ - laneIn + railThk * 0.5f;   // ≈29.975
+            float railX   = wallX - laneIn + railThk * 0.5f;
+            const float railSeg  = 3f;                    // build the kerb in 3 m blocks (matches wall snap)
+            // Access openings: leave the kerb open at each stair landing + lift so the
+            // climb lands on a clear lane. Stairs: N/S at X=+12, E/W at Z=±12. Lifts: N/S
+            // at X=-10 (RampartLiftInstaller). A ±half-gate clear span at each.
+            const float railGapHalf = 2.5f;              // half-width of each opening (5 m clear)
+            // North + South inner railing (runs along X at Z=±railZ). Skip the X spots
+            // where a stair (X=+12) or lift (X=-10) lands on the N/S lane.
+            for (float x = -wallX + deckOff + railSeg * 0.5f; x <= wallX - deckOff; x += railSeg)
+            {
+                bool atStair = Mathf.Abs(x - 12f) < railGapHalf;   // N/S stair landing
+                bool atLift  = Mathf.Abs(x + 10f) < railGapHalf;   // N/S rampart lift
+                if (atStair || atLift) continue;
+                Box("InnerRail-North", new Vector3(x, railY,  railZ), new Vector3(railSeg, railH, railThk), Quaternion.identity);
+                Box("InnerRail-South", new Vector3(x, railY, -railZ), new Vector3(railSeg, railH, railThk), Quaternion.identity);
+            }
+            // East + West inner railing (runs along Z at X=±railX). Skip Z=+12 (east
+            // stair) / Z=-12 (west stair) landings.
+            for (float z = -wallZ + railSeg * 0.5f; z <= wallZ - railSeg * 0.5f; z += railSeg)
+            {
+                bool atEastStair = Mathf.Abs(z - 12f) < railGapHalf;
+                bool atWestStair = Mathf.Abs(z + 12f) < railGapHalf;
+                if (atEastStair)
+                    Box("InnerRail-West", new Vector3(-railX, railY, z), new Vector3(railThk, railH, railSeg), Quaternion.identity);
+                else if (atWestStair)
+                    Box("InnerRail-East", new Vector3( railX, railY, z), new Vector3(railThk, railH, railSeg), Quaternion.identity);
+                else
+                {
+                    Box("InnerRail-East", new Vector3( railX, railY, z), new Vector3(railThk, railH, railSeg), Quaternion.identity);
+                    Box("InnerRail-West", new Vector3(-railX, railY, z), new Vector3(railThk, railH, railSeg), Quaternion.identity);
+                }
+            }
+
             // ── Wall barrier collision (WO-136): collide on the REAL visible wall ──
             // BUG (owner): the perimeter wall mesh (BuildWallPerimeter, ±42/±33) has its
             // colliders STRIPPED (line ~2925) — gameplay collision lived on the hidden
@@ -450,7 +501,8 @@ namespace DeNelle.Editor
                 new Vector3(-(laneX - rampRun * 0.5f), 0f, -12f), new Vector3(-laneX, deckTopY, -12f),
                 rampRun, rampW, deckTopY, 270f);
 
-            Debug.Log($"[VillageSceneBuilder] WO-181/DEF-216 BuildRamparts: {pieces} nav-static stone pieces " +
+            Debug.Log($"[VillageSceneBuilder] WO-181/DEF-191/DEF-216 BuildRamparts: {pieces} nav-static stone pieces " +
+                      "(deck + walk-lane + outer merlons + low INNER railing, openings at stairs/lifts) " +
                       $"+ {stairCount} ground→deck stone staircases (N/S/E/W, flanking the gates, " +
                       "clear of the 2 lifts) wired with StairNavLink via RampartNavLinkInstaller; " +
                       "hero + enemies share the NavMesh ground→ramp→lane→deck and can walk the FULL " +

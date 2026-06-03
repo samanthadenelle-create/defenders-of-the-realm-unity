@@ -187,6 +187,12 @@ namespace DeNelle.Village
             tier.Apply(ps.level);
             ps.TierVisual = tier;
 
+            // S5 — re-assert the per-tier GAMEPLAY stats so a structure saved above level 1
+            // reloads at its tier (tower range/damage, wall toughness), not the base stats
+            // StructureFactory attached. No-op for a level-1 structure.
+            if (ps.level > 1)
+                BuildModeController.ApplyTierStats(ps, ps.level);
+
             grid.Occupy(cell, footprint, data.itemId);
             _loaded.Add(ps);
             return ps;

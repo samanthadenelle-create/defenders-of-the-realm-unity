@@ -54,6 +54,16 @@ namespace DeNelle.Village
         [Tooltip("Box collider blocking the hero / enemies on this section.")]
         [SerializeField] private BoxCollider _blocker;
 
+        [Header("Tier (S5 — wood→stone→reinforced)")]
+        [Tooltip("Upgrade tier (1..3). Higher tiers absorb contact damage more slowly " +
+                 "(effective HP scales ~x1.6 per tier) — the build-mode wall-tier sink.")]
+        [SerializeField] private int _tier = 1;
+
+        // Effective-HP multiplier per tier: wood (x1) → stone (x1.6) → reinforced (x2.56).
+        // Incoming contact damage is DIVIDED by this, so a tier-3 wall takes ~2.56x longer to
+        // wear down on the shared 0-100 damage track without changing the collapse threshold.
+        private static readonly float[] s_tierToughness = { 1f, 1f, 1.6f, 2.56f };
+
         /// <summary>Stable damage id -- <c>wall-&lt;index&gt;</c>.</summary>
         public string SegmentId => _segmentId;
 
@@ -74,6 +84,20 @@ namespace DeNelle.Village
 
         /// <summary>True once the section has taken full damage (Week 4+).</summary>
         public bool IsDestroyed => _damage >= 100f;
+
+        /// <summary>Upgrade tier (1..3). Higher = tougher (S5 wall-tier sink).</summary>
+        public int Tier => _tier;
+
+        /// <summary>
+        /// S5 — set the wall's upgrade tier (clamped 1..3). Higher tiers divide incoming
+        /// contact damage by a per-tier toughness factor (~x1.6 effective HP per tier), so a
+        /// reinforced wall wears down far slower. The tier accent tint is owned by
+        /// StructureTierVisual; this is the gameplay (durability) half of the upgrade.
+        /// </summary>
+        public void SetTier(int tier)
+        {
+            _tier = Mathf.Clamp(tier, 1, 3);
+        }
 
         /// <summary>
         /// <see cref="IDamageableStructure"/> — true while the section still
@@ -120,7 +144,11 @@ namespace DeNelle.Village
         public void ApplyContactDamage(float amount)
         {
             if (amount <= 0f || IsDestroyed) return;
-            _damage = Mathf.Clamp(_damage + amount, 0f, 100f);
+            // S5 — higher tiers absorb the hit more slowly (effective-HP scaling on the
+            // shared 0-100 track). The collapse threshold stays 100; only the rate changes.
+            int t = Mathf.Clamp(_tier, 1, 3);
+            float effective = amount / s_tierToughness[t];
+            _damage = Mathf.Clamp(_damage + effective, 0f, 100f);
             DamageChanged?.Invoke(_damage);
             if (_damage >= 100f) Collapsed?.Invoke(this);
         }

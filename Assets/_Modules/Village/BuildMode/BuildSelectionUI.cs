@@ -32,6 +32,9 @@ namespace DeNelle.Village
         /// <summary>Raised when SELL is tapped — free + remove + refund.</summary>
         public event Action OnSellRequested;
 
+        /// <summary>Raised when UPGRADE is tapped — spend the tier cost + level up (S5).</summary>
+        public event Action OnUpgradeRequested;
+
         /// <summary>Raised when CANCEL is tapped — clear the selection.</summary>
         public event Action OnCancelRequested;
 
@@ -39,6 +42,7 @@ namespace DeNelle.Village
         private VisualElement _root;
         private Label _titleLabel;
         private Button _sellBtn;
+        private Button _upgradeBtn;
 
         private void Awake()
         {
@@ -75,14 +79,53 @@ namespace DeNelle.Village
 
         // ── Show / Hide ────────────────────────────────────────────────────────
 
-        /// <summary>Show the action panel for a structure with the given label + refund.</summary>
-        public void Show(string structureName, int refund)
+        /// <summary>
+        /// Show the action panel for a structure (S5: with its upgrade state). The title
+        /// carries the current/max tier; the Upgrade button shows the next-tier cost, greys +
+        /// reads "MAX" at the ceiling, and greys when the player can't yet afford the step.
+        /// </summary>
+        /// <param name="structureName">Display label.</param>
+        /// <param name="refund">Sell refund total (units across all pools).</param>
+        /// <param name="level">Current upgrade level (1-based).</param>
+        /// <param name="maxLevel">Highest level this structure can reach (1 = not upgradeable).</param>
+        /// <param name="upgradeCostTotal">Total units of the next-tier upgrade cost (for display).</param>
+        /// <param name="canAffordUpgrade">True when the player can pay the next-tier cost now.</param>
+        public void Show(string structureName, int refund, int level, int maxLevel,
+                         int upgradeCostTotal, bool canAffordUpgrade)
         {
             EnsureBuilt();
+
+            int lvl = Mathf.Max(1, level);
+            int max = Mathf.Max(1, maxLevel);
+
             if (_titleLabel != null)
-                _titleLabel.text = string.IsNullOrEmpty(structureName) ? "Structure" : structureName;
+            {
+                string baseName = string.IsNullOrEmpty(structureName) ? "Structure" : structureName;
+                _titleLabel.text = max > 1 ? $"{baseName}  (Lv {lvl}/{max})" : baseName;
+            }
             if (_sellBtn != null)
                 _sellBtn.text = "Sell  ◆ " + Mathf.Max(0, refund);
+
+            if (_upgradeBtn != null)
+            {
+                bool upgradeable = max > 1;
+                _upgradeBtn.style.display = upgradeable ? DisplayStyle.Flex : DisplayStyle.None;
+                if (upgradeable)
+                {
+                    bool atMax = lvl >= max;
+                    if (atMax)
+                    {
+                        _upgradeBtn.text = "Max Tier";
+                        _upgradeBtn.SetEnabled(false);
+                    }
+                    else
+                    {
+                        _upgradeBtn.text = "Upgrade  ◆ " + Mathf.Max(0, upgradeCostTotal);
+                        _upgradeBtn.SetEnabled(canAffordUpgrade);
+                    }
+                }
+            }
+
             if (_root != null) _root.style.display = DisplayStyle.Flex;
         }
 
@@ -125,6 +168,13 @@ namespace DeNelle.Village
             var moveBtn = new Button(() => OnMoveRequested?.Invoke()) { text = "Move" };
             StyleButton(moveBtn, new Color(0.20f, 0.42f, 0.66f, 0.98f));
             bar.Add(moveBtn);
+
+            // S5 — the UPGRADE verb (the CoC sink). Hidden for non-upgradeable structures
+            // (maxLevel == 1) and disabled at the tier ceiling / when unaffordable; Show()
+            // sets its text + enabled state per the selected structure's tier each time.
+            _upgradeBtn = new Button(() => OnUpgradeRequested?.Invoke()) { text = "Upgrade" };
+            StyleButton(_upgradeBtn, new Color(0.24f, 0.56f, 0.30f, 0.98f));
+            bar.Add(_upgradeBtn);
 
             _sellBtn = new Button(() => OnSellRequested?.Invoke()) { text = "Sell" };
             StyleButton(_sellBtn, new Color(0.62f, 0.40f, 0.20f, 0.98f));
