@@ -85,6 +85,20 @@ namespace DeNelle.Village
         [Tooltip("Distance from the Heart at which the enemy considers itself 'arrived'.")]
         [SerializeField] private float _heartArrivalRadius = 2.5f;
 
+        [Header("Hero aggro (DEF-224)")]
+        [Tooltip("When the hero comes within this radius the enemy breaks off its Heart-siege " +
+                 "march and closes on the hero to attack it, then returns to the Heart-siege " +
+                 "path once the hero leaves. 0 disables hero-aggro entirely. " +
+                 "This is ADDITIVE — when an EnemyBrain is actively steering this enemy " +
+                 "(role/tactical/retaliation override set) the brain wins and this stays out of " +
+                 "the way, so it only governs the plain wave/roamer enemies that carry no brain.")]
+        [SerializeField, Range(0f, 20f)] private float _heroAggroRadius = 7f;
+
+        [Tooltip("Hysteresis: once aggro'd, the enemy keeps chasing the hero until the hero " +
+                 "moves THIS much further than _heroAggroRadius — stops the enemy flickering " +
+                 "between chase and march at the radius edge.")]
+        [SerializeField, Range(0f, 6f)] private float _heroAggroDropMargin = 2.5f;
+
         /// <summary>
         /// Seconds the dead enemy GameObject lingers so its death animation can
         /// play before <see cref="Die"/> destroys it. Only applied when the enemy
@@ -113,6 +127,19 @@ namespace DeNelle.Village
         //   tactical-overlay path; _brainTarget is the role-only (no-tactics) path.
         private Transform _brainTarget;
         private Vector3?  _brainPositionOverride;   // DEF-72
+
+        // ── DEF-224: hero aggro ──────────────────────────────────────────────
+        // Plain wave/roamer enemies carry no EnemyBrain (the factory + wave path
+        // never AddComponent one), so the brain's hero-engage / retaliation never
+        // ran and the owner saw enemies "ignore the hero at point-blank". This is a
+        // self-contained, brain-independent aggro: when the hero is inside
+        // _heroAggroRadius the enemy steers at it (and ProbeForStructure's SphereCast
+        // then hits the hero's CapsuleCollider → the existing contact-attack lands,
+        // since HeroHealth implements IDamageableStructure). When the hero leaves
+        // (with hysteresis) the Heart-siege march resumes unchanged.
+        private Transform _heroTransform;
+        private bool      _heroAggroEngaged;     // sticky once in range (hysteresis)
+        private float     _heroResolveTimer;     // periodic re-resolve (hero may spawn late / respawn)
 
         // ── DEF-56: path throttle ─────────────────────────────────────────────
         // SetDestination is O(navmesh) — calling it every frame for 20+ enemies
@@ -541,22 +568,29 @@ namespace DeNelle.Village
 
             if (_agent.isStopped) _agent.isStopped = false;
 
-            // DEF-72 / DEF-21: resolve the nav destination in priority order:
+            // DEF-72 / DEF-21 / DEF-224: resolve the nav destination in priority order:
             //   1. _brainPositionOverride  — tactical Vector3 (flank, retreat, etc.)
             //   2. _brainTarget Transform  — role-based target (Tank/Healer path)
-            //   3. _heart                  — default Heart-march
+            //   3. hero aggro              — DEF-224: chase the hero when it is in range
+            //                               (only when no brain override is active, so a
+            //                               brain-driven enemy is never fought over)
+            //   4. _heart                  — default Heart-march
             Vector3 destPos;
             if (_brainPositionOverride.HasValue)
             {
                 destPos = _brainPositionOverride.Value;
             }
+            else if (_brainTarget != null && _brainTarget.gameObject.activeInHierarchy)
+            {
+                destPos = _brainTarget.position;
+            }
+            else if (TryGetHeroAggroDestination(out Vector3 heroDest))
+            {
+                destPos = heroDest;
+            }
             else
             {
-                Transform destTransform = (_brainTarget != null
-                    && _brainTarget.gameObject.activeInHierarchy)
-                    ? _brainTarget
-                    : _heart;
-                destPos = destTransform.position;
+                destPos = _heart.position;
             }
 
             // DEF-56: throttle SetDestination — only re-path when the timer expires
@@ -582,6 +616,82 @@ namespace DeNelle.Village
         }
 
         // ---------------------------------------------------------------------
+        // DEF-224: hero aggro — break off the Heart-siege to attack a nearby hero
+        // ---------------------------------------------------------------------
+
+        /// <summary>
+        /// Returns true (and the hero's world position) when this enemy should be
+        /// chasing the hero this frame: the hero exists, is alive, and is within
+        /// <see cref="_heroAggroRadius"/> (sticky out to + <see cref="_heroAggroDropMargin"/>
+        /// once engaged, so the enemy doesn't flicker at the edge). Returns false —
+        /// and clears the engaged latch — when aggro is disabled (radius 0) or the
+        /// hero is out of range / gone, so the caller falls through to the
+        /// Heart-siege march. Brain-driven enemies never reach here (DriveNav gives
+        /// the brain override priority), so this is purely additive.
+        /// </summary>
+        private bool TryGetHeroAggroDestination(out Vector3 heroPos)
+        {
+            heroPos = default;
+            if (_heroAggroRadius <= 0f) { _heroAggroEngaged = false; return false; }
+
+            ResolveHeroTransform();
+            if (_heroTransform == null) { _heroAggroEngaged = false; return false; }
+
+            // The hero may have died (HeroHealth.IsAlive false) — don't chase a
+            // downed/invulnerable hero; resume the Heart-siege so the wave keeps
+            // pressuring the win condition.
+            var heroHealth = _heroTransform.GetComponentInParent<HeroHealth>();
+            if (heroHealth != null && !heroHealth.IsAlive) { _heroAggroEngaged = false; return false; }
+
+            float planarSqr = Vector3.ProjectOnPlane(
+                _heroTransform.position - transform.position, Vector3.up).sqrMagnitude;
+
+            // Hysteresis: enter at _heroAggroRadius, leave only past the drop margin.
+            float engageR = _heroAggroRadius;
+            float dropR   = _heroAggroRadius + _heroAggroDropMargin;
+            float threshold = _heroAggroEngaged ? dropR : engageR;
+            if (planarSqr > threshold * threshold) { _heroAggroEngaged = false; return false; }
+
+            _heroAggroEngaged = true;
+            heroPos = _heroTransform.position;
+            return true;
+        }
+
+        /// <summary>
+        /// Lazily resolves (and periodically refreshes) the hero transform by tag.
+        /// Matches EnemyBrain's lookup order: the canonical "HeroTarget" tag first,
+        /// then the built-in "Player" tag the village hero actually carries. Both
+        /// are guarded — Unity throws on an undefined tag — and the result is
+        /// re-checked on an interval so an enemy that spawned before the hero (or
+        /// after a hero respawn) still acquires it.
+        /// </summary>
+        private void ResolveHeroTransform()
+        {
+            _heroResolveTimer -= Time.deltaTime;
+            bool valid = _heroTransform != null && _heroTransform.gameObject.activeInHierarchy;
+            if (valid && _heroResolveTimer > 0f) return;
+
+            _heroResolveTimer = 1f;   // cheap: at most once/sec per enemy
+            if (valid) return;
+
+            _heroTransform = SafeFindByTag("HeroTarget") ?? SafeFindByTag("Player");
+        }
+
+        /// <summary>Null-safe tag lookup tolerating an undefined tag (Unity throws otherwise).</summary>
+        private static Transform SafeFindByTag(string tag)
+        {
+            try
+            {
+                var go = GameObject.FindWithTag(tag);
+                return go != null ? go.transform : null;
+            }
+            catch (UnityEngine.UnityException)
+            {
+                return null;
+            }
+        }
+
+        // ---------------------------------------------------------------------
         // Contact attack — strike the structure directly ahead
         // ---------------------------------------------------------------------
 
@@ -595,6 +705,23 @@ namespace DeNelle.Village
             // Drop a dead / destroyed target.
             if (_currentTarget != null && !_currentTarget.IsAlive)
                 _currentTarget = null;
+
+            // DEF-224: drop a still-alive target that has MOVED out of reach (the
+            // hero runs away). Without this the enemy would stay frozen in place
+            // attacking nothing because the lock only released on the target's
+            // death. Static structures never move past this radius, so they keep
+            // their lock; only a fleeing hero/mobile target is released — at which
+            // point the agent resumes chasing (hero aggro) or marching (Heart).
+            if (_currentTarget != null)
+            {
+                var heldMb = _currentTarget as MonoBehaviour;
+                if (heldMb != null)
+                {
+                    float dropSqr = (_contactProbeDistance + 1.5f) * (_contactProbeDistance + 1.5f);
+                    if ((heldMb.transform.position - transform.position).sqrMagnitude > dropSqr)
+                        _currentTarget = null;
+                }
+            }
 
             if (_currentTarget == null)
                 _currentTarget = ProbeForStructure();

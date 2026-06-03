@@ -59,15 +59,22 @@ namespace DeNelle.Village
             float distSqr = (_hero.position - transform.position).sqrMagnitude;
             bool inRange = distSqr <= ActivateRadius * ActivateRadius;
 
-            if (inRange && _promptGo == null) ShowPrompt();
-            else if (!inRange && _promptGo != null) HidePrompt();
-
             // DEF-203: register the shared on-screen Interact button while in range so
             // touch/mobile (no keyboard) can fire the same action. Desktop F unchanged.
             if (inRange)
                 MobileInteractButton.Request(this, "Interact: " + LabelFor(_building.Type), Interact);
             else
                 MobileInteractButton.Release(this);
+
+            // DEF-217: the shared MobileInteractButton is now the SINGLE canonical
+            // interaction prompt. Suppress the world-space bubble whenever the button is
+            // showing ANY interact prompt (this building or a higher-priority upgrade /
+            // crafting watcher on the same building). The bubble only survives as a
+            // fallback if the button host failed to spawn. Kills the "bubble + button"
+            // (and "bubble + button + 2nd watcher") triple prompt.
+            bool buttonActive = MobileInteractButton.IsActive;
+            if (inRange && !buttonActive && _promptGo == null) ShowPrompt();
+            else if ((!inRange || buttonActive) && _promptGo != null) HidePrompt();
 
             if (inRange && Input.GetKeyDown(KeyCode.F))
             {

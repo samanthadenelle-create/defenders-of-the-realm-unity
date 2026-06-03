@@ -86,6 +86,14 @@ namespace DeNelle.Village.Crafting
             if (_shell == null) Build();
             if (_shell == null) return;
             _shell.style.display = DisplayStyle.Flex;
+            // Dim + capture input only while open, so a closed panel never eats
+            // touches or leaves a permanent darkened backdrop on screen.
+            if (_root != null)
+            {
+                _root.style.backgroundColor = new StyleColor(new Color(0f, 0f, 0f, 0.55f));
+                _root.pickingMode = PickingMode.Position;
+                _root.Focus(); // so the ESC KeyDownEvent reaches us on desktop
+            }
             if (string.IsNullOrEmpty(_selectedRecipeId))
             {
                 var first = CraftingRecipeCatalog.All;
@@ -98,6 +106,12 @@ namespace DeNelle.Village.Crafting
         {
             if (_shell == null) return;
             _shell.style.display = DisplayStyle.None;
+            // Release the backdrop so the HUD beneath is interactive again.
+            if (_root != null)
+            {
+                _root.style.backgroundColor = new StyleColor(new Color(0f, 0f, 0f, 0f));
+                _root.pickingMode = PickingMode.Ignore;
+            }
         }
 
         // ── Build ────────────────────────────────────────────────────────────
@@ -114,9 +128,11 @@ namespace DeNelle.Village.Crafting
             _root.style.top = 0;  _root.style.bottom = 0;
             _root.style.alignItems = Align.Center;
             _root.style.justifyContent = Justify.Center;
-            _root.style.backgroundColor = new StyleColor(new Color(0f, 0f, 0f, 0.55f));
-            _root.pickingMode = PickingMode.Position;
             _root.RegisterCallback<KeyDownEvent>(OnRootKey, TrickleDown.TrickleDown);
+            // Mobile close affordance: a tap on the dimmed backdrop (i.e. NOT inside
+            // the card) dismisses the panel. ESC is keyboard-only, so without this a
+            // touch player who can't hit the small X has no way out (DEF-218).
+            _root.RegisterCallback<PointerDownEvent>(OnBackdropPointerDown);
 
             _shell = new VisualElement { name = "CraftingShell" };
             _shell.style.width = 760;
@@ -200,9 +216,12 @@ namespace DeNelle.Village.Crafting
             title.style.unityFontStyleAndWeight = FontStyle.Bold;
             header.Add(title);
 
+            // 44x44 min touch target (DEF-218) so the close button is reachable
+            // with a finger on mobile, not just a mouse.
             var closeBtn = new Button(Close) { text = "X" };
-            closeBtn.style.width = 32; closeBtn.style.height = 28;
-            closeBtn.style.fontSize = 14;
+            closeBtn.style.width = 44; closeBtn.style.height = 44;
+            closeBtn.style.fontSize = 18;
+            closeBtn.style.unityFontStyleAndWeight = FontStyle.Bold;
             closeBtn.style.color = new StyleColor(new Color(0.97f, 0.94f, 0.84f, 1f));
             closeBtn.style.backgroundColor = new StyleColor(new Color(0.18f, 0.10f, 0.06f, 1f));
             closeBtn.style.borderTopLeftRadius = 6;
@@ -531,6 +550,19 @@ namespace DeNelle.Village.Crafting
         private void OnRootKey(KeyDownEvent evt)
         {
             if (evt.keyCode == KeyCode.Escape && IsOpen)
+            {
+                Close();
+                evt.StopPropagation();
+            }
+        }
+
+        // Tap-outside-to-close for touch (DEF-218). Fires only when the press
+        // landed on the dimmed backdrop itself, never on the card or its children,
+        // so taps inside the panel are never swallowed as a "close".
+        private void OnBackdropPointerDown(PointerDownEvent evt)
+        {
+            if (!IsOpen) return;
+            if (evt.target == _root)
             {
                 Close();
                 evt.StopPropagation();

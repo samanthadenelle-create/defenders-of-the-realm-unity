@@ -55,36 +55,36 @@ namespace DeNelle.Village
                 Destroy(old.gameObject);
             }
 
-            var body = Instantiate(prefab, transform);
+            // DEF-221: build the body through the ONE shared factory — the same
+            // VisualFactory.Skin path the companion (StoryCompanionInjector) and every
+            // enemy (EnemyFactory) already use — instead of the bespoke load/instantiate/
+            // fit/seat/strip block the hero was the LAST holdout for. Skin handles
+            // Instantiate + FitHeight + SeatOnGround (feet at the root, supersedes the
+            // old NormalizeHeight) + StripColliders. Hero-specific wiring (forward yaw,
+            // animator, ability kit, class texture/tint) layers on top below.
+            // Knight stands 20% taller than the 2 m baseline (owner 2026-05-30). The hero
+            // keeps its OWN material pass (RetargetMaterialsToUrp + ApplyExtractedTexture
+            // + ApplyClassTint), so the factory's Tripo fix stays OFF (no double-process).
+            float targetH = (cls == HeroClass.Knight) ? TargetHeightMeters * 1.2f : TargetHeightMeters;
+            var body = VisualFactory.Skin(transform, prefab, new SkinOptions
+            {
+                FitHeight = targetH,
+                StripColliders = true,
+                SeatOnGround = true,
+                FixTripoMaterials = false,
+            });
+            if (body == null) return;
             body.name = "HeroBody";
-            body.transform.localPosition = Vector3.zero;
-            // FORWARD CORRECTION (WO-174, owner field-test 2026-05-31):
-            // EVERY current hero body imports facing +X (EAST) in its bind pose —
-            //   • CC5 Fighter (Knight) "imports facing +X (right)" (prior note), and
-            //   • the Tripo Mage/Ranger exports likewise present +X at runtime.
-            // The hero ROOT is rotated by HeroLocomotion via LookRotation(velocity),
-            // i.e. the root's +Z points along travel. To make the mesh's visual
-            // forward agree with the root's +Z we must rotate the body's authored
-            // +X onto +Z — a single, consistent -90° yaw for ALL classes.
-            //
-            // The OLD per-class guesses (Knight +90, others 180) were inconsistent
-            // and left a constant offset: with yaw=180 the Mage's +X mesh faced -X
-            // (WEST) while travelling +Z (NORTH) — the exact "walk north / face west"
-            // 90° offset the owner reported. A constant yaw offset is identical for
-            // every heading, so correcting the constant fixes all four cardinals at
-            // once for every class (facing == heading, no moonwalk).
+            // FORWARD CORRECTION (WO-174): every hero body imports facing +X; rotate the
+            // authored +X onto the root's +Z so facing == heading (no moonwalk). Skin
+            // reset localRotation to identity, so this is the single source of body yaw.
             const float ForwardYaw = -90f;   // +X (authored forward) → +Z (root forward)
             body.transform.localRotation = Quaternion.Euler(0f, ForwardYaw, 0f);
-            // CC5 Fighter (Knight) stands 20% taller than the 2 m baseline (owner 2026-05-30).
-            float targetH = (cls == HeroClass.Knight) ? TargetHeightMeters * 1.2f : TargetHeightMeters;
-            NormalizeHeight(body, targetH);
 
             StripRigidbodies(body);
-            StripColliders(body);
-            // Tripo FBXs embed a CAMERA node (+ sometimes an AudioListener). Left
-            // in, the hero body's camera renders to the screen and fights the
-            // VillageCamera (part of the runtime camera-soup, 2026-05-25). Strip
-            // so only the hero's follow camera drives the display.
+            // Tripo FBXs embed a CAMERA / AudioListener; left in, the hero body's camera
+            // fights the VillageCamera (runtime camera-soup, 2026-05-25). Strip both so
+            // only the hero's follow camera drives the display.
             foreach (var cam in body.GetComponentsInChildren<Camera>(true))
                 if (cam != null) Destroy(cam);
             foreach (var al in body.GetComponentsInChildren<AudioListener>(true))

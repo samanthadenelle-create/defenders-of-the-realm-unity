@@ -109,6 +109,11 @@ namespace DeNelle.Village
             // touch/mobile (no keyboard) can enter the dungeon too. Desktop F unchanged.
             MobileInteractButton.Request(this, "Enter: " + _def.ResolveName(), EnterDungeon);
 
+            // DEF-217: the shared button is the single canonical prompt — suppress the
+            // redundant world-space TextMesh prompt while the button is showing.
+            if (_prompt != null)
+                _prompt.gameObject.SetActive(!MobileInteractButton.IsActive);
+
             bool fPressed =
                 (Keyboard.current != null && Keyboard.current.fKey.wasPressedThisFrame) ||
                 UnityEngine.Input.GetKeyDown(KeyCode.F);

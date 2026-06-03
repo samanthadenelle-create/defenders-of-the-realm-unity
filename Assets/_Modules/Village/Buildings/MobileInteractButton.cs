@@ -47,24 +47,58 @@ namespace DeNelle.Village
         private Action _onTap;
         private string _text;
         private bool _requestedThisFrame;
+        private int _priority;
 
         /// <summary>
         /// Ask the shared button to show this frame with <paramref name="label"/>; tapping
         /// it invokes <paramref name="onTap"/>. Call every frame the structure is in range.
-        /// First caller per frame wins (so the nearest/earliest structure owns the button).
         /// Null-guarded + lazily self-bootstrapping; safe to call from any structure.
         /// </summary>
         public static void Request(object owner, string label, Action onTap)
+            => Request(owner, label, onTap, 0);
+
+        /// <summary>
+        /// Priority overload (DEF-217). When several watchers are in range of the SAME
+        /// building in one frame (e.g. BuildingInteractable + BuildingUpgradePanelInput +
+        /// VillageCraftingPanelInput all see the Farm/Workshop), a "first caller wins"
+        /// rule picks a non-deterministic winner each frame, so the button label FLICKERS
+        /// between their prompts and reads as several competing prompts. We instead keep
+        /// the HIGHEST-priority request this frame (ties broken by first-come) so exactly
+        /// one stable prompt shows. Higher number = wins. Direct interact = 0; the
+        /// panel-opening watchers pass a higher value so their richer action is what the
+        /// single shared button offers on a shared building.
+        /// </summary>
+        public static void Request(object owner, string label, Action onTap, int priority)
         {
             if (onTap == null) return;
             var inst = EnsureInstance();
             if (inst == null) return;
-            if (inst._requestedThisFrame) return; // one owner per frame
+            // Keep the existing claim unless this one outranks it. First claim of the
+            // frame always sticks until something with a strictly higher priority arrives.
+            if (inst._requestedThisFrame && priority <= inst._priority) return;
             inst._owner = owner;
             inst._onTap = onTap;
             inst._text = string.IsNullOrEmpty(label) ? "Interact" : label;
+            inst._priority = priority;
             inst._requestedThisFrame = true;
         }
+
+        /// <summary>
+        /// True while the shared button is showing a request for <paramref name="owner"/>
+        /// (or, when <paramref name="owner"/> is null, for anyone). Interactors that ALSO
+        /// render a world-space prompt bubble use this to suppress the bubble so the touch
+        /// button is the single on-screen prompt (DEF-217). Null-safe.
+        /// </summary>
+        public static bool IsShowingFor(object owner)
+        {
+            if (_instance == null) return false;
+            if (!_instance._requestedThisFrame || _instance._owner == null) return false;
+            return owner == null || ReferenceEquals(_instance._owner, owner);
+        }
+
+        /// <summary>True while the shared button is showing ANY request this frame.</summary>
+        public static bool IsActive => _instance != null && _instance._requestedThisFrame
+                                       && _instance._owner != null;
 
         /// <summary>
         /// Immediately drop any pending request from <paramref name="owner"/> and hide the
@@ -78,6 +112,7 @@ namespace DeNelle.Village
             _instance._owner = null;
             _instance._onTap = null;
             _instance._requestedThisFrame = false;
+            _instance._priority = 0;
             _instance.HideButton();
         }
 
@@ -121,6 +156,7 @@ namespace DeNelle.Village
                     _owner = null;
                     _onTap = null;
                     _requestedThisFrame = false;
+                    _priority = 0;
                     HideButton();
                     cb?.Invoke();
                     return;
@@ -138,6 +174,7 @@ namespace DeNelle.Village
             // visible state was already committed in Update this frame; clearing the
             // flag here lets the next frame's first requester win again.
             _requestedThisFrame = false;
+            _priority = 0;
             if (_owner == null) HideButton();
         }
 

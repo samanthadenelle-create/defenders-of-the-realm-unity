@@ -152,6 +152,11 @@ namespace DeNelle.Village
             else
                 MobileInteractButton.Release(this);
 
+            // DEF-217: the shared button is the single canonical prompt — drop the
+            // redundant world-space proximity bubble while it is showing. (The separate
+            // confirm-upgrade bubble lives in the _uiOpen branch above and is untouched.)
+            if (_promptGo != null && MobileInteractButton.IsActive) HidePrompt();
+
             if (_isInRange && Input.GetKeyDown(KeyCode.F))
                 OpenUpgradeUI();
         }

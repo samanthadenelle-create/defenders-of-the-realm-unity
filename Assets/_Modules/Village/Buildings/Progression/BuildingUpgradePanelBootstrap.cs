@@ -133,7 +133,10 @@ namespace DeNelle.Village.Buildings.Progression
             // DEF-203: register the shared on-screen Interact button while in range so
             // touch/mobile (no keyboard) can open upgrades too. Desktop F + U unchanged.
             if (_inRangeOfResourceBuilding)
-                MobileInteractButton.Request(this, "Open: Building Upgrades", _panel.Open);
+                // DEF-217: priority 10 so on a resource building this richer "Open Upgrades"
+                // action wins the single shared button over BuildingInteractable's plain
+                // "Interact" (priority 0) instead of the two flickering frame-to-frame.
+                MobileInteractButton.Request(this, "Open: Building Upgrades", _panel.Open, 10);
             else
                 MobileInteractButton.Release(this);
 

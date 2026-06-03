@@ -141,7 +141,10 @@ namespace DeNelle.Village.Crafting
             // DEF-203: register the shared on-screen Interact button while in range so
             // touch/mobile (no keyboard) can open crafting too. Desktop F + K unchanged.
             if (inRange)
-                MobileInteractButton.Request(this, "Open: Workshop Crafting", _panel.Open);
+                // DEF-217: priority 10 so on the Workshop this richer "Open Crafting" action
+                // wins the single shared button over BuildingInteractable's plain "Interact"
+                // (priority 0), instead of the two flickering frame-to-frame.
+                MobileInteractButton.Request(this, "Open: Workshop Crafting", _panel.Open, 10);
             else
                 MobileInteractButton.Release(this);
 

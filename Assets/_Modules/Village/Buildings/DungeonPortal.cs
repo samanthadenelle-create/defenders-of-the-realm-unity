@@ -118,6 +118,10 @@ namespace DeNelle.Village
             else
                 MobileInteractButton.Release(this);
 
+            // DEF-217: the shared button is the single canonical prompt — drop the
+            // redundant world-space bubble while it is showing.
+            if (_promptGo != null && MobileInteractButton.IsActive) HidePrompt();
+
             // F-key check every frame so no keypress is ever dropped.
             if (_isInRange && Input.GetKeyDown(KeyCode.F))
                 EnterDungeon();

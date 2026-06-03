@@ -34,12 +34,13 @@ namespace DeNelle.Editor
             collider.radius = 0.4f;
             collider.center = new Vector3(0f, 1f, 0f);
 
-            // Tripo-generated Wizard FBX — comes with Walk + Cast animations
-            // (owner paid for them, 2026-05-19). Wired with Wizard.controller
-            // built by WizardAnimatorSetup.cs (Idle/Walk/Cast states + Speed
-            // float + Cast trigger; matches HeroAbilities' Cast hash).
-            const string HeroMeshPath = "Assets/Models/Wizard/Wizard.fbx";
-            const string HeroAnimatorPath = "Assets/Models/Wizard/Wizard.controller";
+            // DEF-221: the baked placeholder is now the PEOPLE Mage body
+            // (Resources/Heroes/Mage.fbx = Human_Wizard, Humanoid) + Mage.controller,
+            // NOT the retired Assets/Models/Wizard/Wizard.fbx. HeroBodySwapper still
+            // swaps to the chosen class's Resources/Heroes/<slug>.fbx at runtime; this
+            // just makes the DEFAULT/Mage hero the new People body instead of the old one.
+            const string HeroMeshPath = "Assets/Resources/Heroes/Mage.fbx";
+            const string HeroAnimatorPath = "Assets/Resources/Heroes/Mage.controller";
             var heroModel = LoadModel(HeroMeshPath);
             GameObject body = null;
             if (heroModel != null)
