@@ -17,6 +17,7 @@
 
 using System.Collections;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using UnityEngine.UIElements;
 
 namespace DeNelle.HUD
@@ -52,7 +53,43 @@ namespace DeNelle.HUD
 
         // ─────────────────────────────────────────────────────────────────────
 
+        // ── Self-bootstrap ────────────────────────────────────────────────────
+        // Nothing in the scene hosted this strip, so it never appeared (the bar was
+        // built but unused). Spawn ONE persistent host at game start — the same
+        // self-bootstrap pattern as AudioBootstrap / SkillSystem. The bar only DRAWS
+        // when a HeroProgression exists (gameplay scenes); on the title/menus _prog
+        // stays null and OnGUI early-returns, so it adds nothing there.
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        private static void Bootstrap()
+        {
+            if (FindObjectOfType<XPBarController>() != null) return;
+            var go = new GameObject("XPBarController (HUD)");
+            DontDestroyOnLoad(go);
+            go.AddComponent<XPBarController>();
+        }
+
         private void Start()
+        {
+            ResolveUiElements();
+            SceneManager.sceneLoaded += OnSceneLoaded;
+            StartCoroutine(HookWithRetry());
+        }
+
+        private void OnDestroy()
+        {
+            SceneManager.sceneLoaded -= OnSceneLoaded;
+        }
+
+        // Re-resolve the hero each scene — the village hero spawns after scene load,
+        // and a new scene drops the old (destroyed) HeroProgression reference.
+        private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+        {
+            _prog = null;
+            ResolveUiElements();
+            StartCoroutine(HookWithRetry());
+        }
+
+        private void ResolveUiElements()
         {
             var doc = GetComponent<UIDocument>() ?? FindObjectOfType<UIDocument>();
             if (doc?.rootVisualElement != null)
@@ -62,8 +99,18 @@ namespace DeNelle.HUD
                 _levelLabel = doc.rootVisualElement.Q<Label>("xp-level-label");
                 _uiReady    = (_xpFill != null);   // at least the bar needs to exist
             }
+        }
 
-            HookHeroProgression();
+        // The hero / HeroProgression can come up a beat after the scene loads — poll
+        // for a few seconds rather than hooking once and giving up.
+        private IEnumerator HookWithRetry()
+        {
+            for (int i = 0; i < 30 && _prog == null; i++)
+            {
+                HookHeroProgression();
+                if (_prog != null) yield break;
+                yield return new WaitForSeconds(0.5f);
+            }
         }
 
         /// <summary>Undefined-tag-safe FindWithTag (Unity throws on an undefined tag).</summary>
@@ -97,7 +144,8 @@ namespace DeNelle.HUD
 
             if (prog == null)
             {
-                Debug.LogWarning("[XPBarController] HeroProgression not found — XP bar will not update.");
+                // Not found YET — HookWithRetry keeps polling; no warning to avoid
+                // spamming the log every retry on scenes that have no hero.
                 return;
             }
 
@@ -210,6 +258,7 @@ namespace DeNelle.HUD
         private void OnGUI()
         {
             if (_uiReady) return;   // UXML is driving the UI — skip IMGUI
+            if (_prog == null) return;   // no hero in this scene (title/menus) — draw nothing
 
             // Position: bottom strip, full width, 28px tall.
             float sw = Screen.width;

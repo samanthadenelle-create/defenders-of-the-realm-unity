@@ -1,5 +1,5 @@
 fileFormatVersion: 2
-guid: be1690ec95b9d1445aaa4a0024c41370
+guid: 6d6937df696c64143ab9047b25668a7c
 ModelImporter:
   serializedVersion: 24200
   internalIDToNameTable: []
@@ -7,8 +7,33 @@ ModelImporter:
   - first:
       type: UnityEngine:Material
       assembly: UnityEngine.CoreModule
-      name: tripo_mat_4e974ebf
-    second: {fileID: 2100000, guid: 1b90668fa7ae13b48ad6a51417193aed, type: 2}
+      name: tripo_mat_1cd34ada
+    second: {fileID: 2100000, guid: 7faeba53d4e317940847a3f8d862323f, type: 2}
+  - first:
+      type: UnityEngine:Texture2D
+      assembly: UnityEngine.CoreModule
+      name: orcnecromancer_basecolor
+    second: {fileID: 2800000, guid: 64d5d53116dfb30488cc5b95d44918c9, type: 3}
+  - first:
+      type: UnityEngine:Texture2D
+      assembly: UnityEngine.CoreModule
+      name: orcnecromancer_metallic
+    second: {fileID: 2800000, guid: c97d99f5db1509f4ca431f1264c13dac, type: 3}
+  - first:
+      type: UnityEngine:Texture2D
+      assembly: UnityEngine.CoreModule
+      name: orcnecromancer_normal
+    second: {fileID: 2800000, guid: eca6fa257b34e9446a530639541ac7ce, type: 3}
+  - first:
+      type: UnityEngine:Texture2D
+      assembly: UnityEngine.CoreModule
+      name: orcnecromancer_rm
+    second: {fileID: 2800000, guid: 35c846b8ffc69c94f9ba398594323f1f, type: 3}
+  - first:
+      type: UnityEngine:Texture2D
+      assembly: UnityEngine.CoreModule
+      name: orcnecromancer_roughness
+    second: {fileID: 2800000, guid: 462edbcbcda8db24a96abfb967abdfa4, type: 3}
   materials:
     materialImportMode: 2
     materialName: 0

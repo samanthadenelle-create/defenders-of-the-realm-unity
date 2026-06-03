@@ -20,7 +20,7 @@ using UnityEngine;
 namespace DeNelle.Village
 {
     /// <summary>Rig family of an enemy mesh — selects which shared controller to apply.</summary>
-    public enum EnemyRig { HumanoidMedium, HumanoidLarge, Boss, Dragon }
+    public enum EnemyRig { HumanoidMedium, HumanoidLarge, Boss, Dragon, OrcWarband }
 
     public static class EnemyAnimatorFactory
     {
@@ -32,6 +32,11 @@ namespace DeNelle.Village
                 case "Skeleton_Golem": return EnemyRig.HumanoidLarge;
                 case "Necromancer":    return EnemyRig.Boss;
                 case "Dragon":         return EnemyRig.Dragon;
+                // DEF-221: the orc family is HUMANOID (Tripo), so it CANNOT use the
+                // KayKit Generic HumanoidEnemy controller — it gets its own.
+                case "Orc_Berserker":
+                case "Orc_Shaman":
+                case "Orc_Necromancer": return EnemyRig.OrcWarband;
                 default:               return EnemyRig.HumanoidMedium; // Warrior/Minion/Rogue/Mage
             }
         }
@@ -43,6 +48,7 @@ namespace DeNelle.Village
                 case EnemyRig.HumanoidLarge: return "LargeEnemy";
                 case EnemyRig.Boss:          return "Boss";
                 case EnemyRig.Dragon:        return "Dragon";
+                case EnemyRig.OrcWarband:    return "OrcWarband";   // DEF-221 Humanoid orc controller
                 default:                     return "HumanoidEnemy";
             }
         }

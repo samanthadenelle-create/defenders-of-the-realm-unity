@@ -45,6 +45,58 @@ namespace DeNelle.Village
         /// <summary>Current XZ velocity, exposed for the follow camera / animator.</summary>
         public Vector3 Velocity { get; private set; }
 
+        // WO-277 (tutorial auto-walk): while _autoWalkTarget is set, the tutorial
+        // OWNS the hero — player input is ignored and the hero is driven toward the
+        // target along the shared NavMesh (same agent/Move path as manual walking),
+        // so the village tour "companion leads, hero follows" plays without input.
+        // ClearAutoWalk restores normal control. Null-safe and self-contained: off
+        // the tutorial these stay null and movement behaves exactly as before.
+        private Transform _autoWalkTarget;
+        // How close (XZ) the hero must get to the target before auto-walk reports
+        // arrival (TutorialAutoWalk polls AutoWalkArrived to advance the waypoint).
+        private const float AutoWalkArriveRadius = 1.6f;
+
+        /// <summary>
+        /// WO-277 — true while the tutorial is driving the hero (player input
+        /// suppressed). TutorialAutoWalk / the director read this to know the hero
+        /// is under scripted control.
+        /// </summary>
+        public bool IsAutoWalking => _autoWalkTarget != null;
+
+        /// <summary>
+        /// WO-277 — true once the hero is within <see cref="AutoWalkArriveRadius"/>
+        /// (XZ) of the current auto-walk target. False when not auto-walking.
+        /// </summary>
+        public bool AutoWalkArrived
+        {
+            get
+            {
+                if (_autoWalkTarget == null) return false;
+                Vector3 d = _autoWalkTarget.position - transform.position;
+                d.y = 0f;
+                return d.sqrMagnitude <= AutoWalkArriveRadius * AutoWalkArriveRadius;
+            }
+        }
+
+        /// <summary>
+        /// WO-277 — hand the hero to the tutorial: ignore player input and drive the
+        /// hero toward <paramref name="target"/> via the existing NavMeshAgent. Call
+        /// <see cref="ClearAutoWalk"/> to return control to the player. A null target
+        /// is treated as a clear.
+        /// </summary>
+        public void SetAutoWalk(Transform target)
+        {
+            _autoWalkTarget = target;
+            if (target == null) Velocity = Vector3.zero;
+        }
+
+        /// <summary>WO-277 — return movement control to the player (ends auto-walk).</summary>
+        public void ClearAutoWalk()
+        {
+            _autoWalkTarget = null;
+            Velocity = Vector3.zero;
+        }
+
         // DEF-147 (Part B): off-mesh ground-snap / re-bind. When the hero leaves the
         // baked NavMesh (walks off a ledge / rampart edge), the agent's height-clamp
         // stops applying and the raw transform-fallback has NO downward force — so the
@@ -215,6 +267,20 @@ namespace DeNelle.Village
         private void Update()
         {
             TryResolveWaveManager();
+
+            // WO-277 (tutorial auto-walk): while the tutorial owns the hero, IGNORE
+            // player input entirely and steer toward the scripted target. We build a
+            // WORLD-SPACE move vector here and skip the camera-relative basis below
+            // (so the synthetic heading isn't re-rotated by the camera yaw). Arrival
+            // is reported via AutoWalkArrived; the tutorial clears the target to hand
+            // control back. Returns through the SAME NavMesh Move() path as manual
+            // walking so stairs/ramparts/walls behave identically.
+            if (_autoWalkTarget != null)
+            {
+                AutoWalkStep();
+                return;
+            }
+
             Vector2 input = ReadMoveInput();
 
             // DEF-70 fix: the victory pose briefly suppresses movement after a wave
@@ -357,6 +423,49 @@ namespace DeNelle.Village
             // Cheap: only runs while _animator is null, stops once wired.
             ResolveAnimator();
             if (_animator != null && _hasSpeedParam) _animator.SetFloat(AnimSpeed, Velocity.magnitude);
+        }
+
+        // WO-277: one frame of tutorial-driven movement toward _autoWalkTarget. A
+        // condensed twin of the manual-input branch above — world-space heading
+        // (no camera basis), eased velocity, NavMesh Move(), face-the-direction,
+        // Speed animator drive — so the scripted tour reads identically to the
+        // player walking. Eases to a stop inside the arrive radius so the hero
+        // settles at each waypoint instead of jittering against the target.
+        private void AutoWalkStep()
+        {
+            Vector3 to = _autoWalkTarget.position - transform.position;
+            to.y = 0f;
+            float dist = to.magnitude;
+
+            // Ease the desired speed down as the hero nears the target so it stops
+            // cleanly at the waypoint (mirrors the pet's arrival damping).
+            Vector3 dir = dist > 0.0001f ? to / dist : Vector3.zero;
+            float speedScale = Mathf.Clamp01(dist / Mathf.Max(0.01f, AutoWalkArriveRadius));
+            Vector3 targetVelocity = dir * (_moveSpeed * speedScale);
+
+            float maxStep = (targetVelocity.sqrMagnitude > Velocity.sqrMagnitude
+                ? _accelMetresPerSec2
+                : _decelMetresPerSec2) * Time.deltaTime;
+            Velocity = Vector3.MoveTowards(Velocity, targetVelocity, maxStep);
+
+            if (Velocity.sqrMagnitude > 0.0001f)
+            {
+                Vector3 step = Velocity * Time.deltaTime;
+                if (_agent != null && _agent.isOnNavMesh)
+                    _agent.Move(step);
+                else
+                    transform.position += step;
+
+                Quaternion face = Quaternion.LookRotation(Velocity.normalized);
+                transform.rotation = Quaternion.Slerp(
+                    transform.rotation, face, _rotationSpeed * Time.deltaTime);
+            }
+
+            // Drive the walk animation off the actual speed (guarded — controller
+            // may lack the param, per WO-174).
+            ResolveAnimator();
+            if (_animator != null && _hasSpeedParam)
+                _animator.SetFloat(AnimSpeed, Velocity.magnitude);
         }
 
         // DEF-147: the rampart lift suspends the hero's NavMeshAgent and hand-carries

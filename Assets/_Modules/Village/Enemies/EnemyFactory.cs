@@ -88,6 +88,11 @@ namespace DeNelle.Village
                 case "feral-wolf":       return "Skeleton_Rogue";    // fast skirmisher
                 case "tiefling-cultist": return "Skeleton_Mage";     // caster
                 case "necromancer":      return "Necromancer";       // dedicated elite
+                // DEF-221 Orc Warband family — Humanoid Tripo orcs (Resources/Enemies),
+                // animated by OrcWarband.controller via EnemyAnimatorFactory.
+                case "orc-berserker":    return "Orc_Berserker";     // brute / charger
+                case "orc-shaman":       return "Orc_Shaman";        // caster
+                case "orc-necromancer":  return "Orc_Necromancer";   // camp elite
             }
             // Unmapped roster (wave / tribe / ward) → pick by body size.
             if (def != null && def.Height >= 2.3f) return "Skeleton_Golem";

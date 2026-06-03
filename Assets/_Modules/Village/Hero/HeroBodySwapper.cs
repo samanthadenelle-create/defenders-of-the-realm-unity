@@ -176,6 +176,10 @@ namespace DeNelle.Village
             // which is the core reason the hero never animated. Their private
             // fields still point at the destroyed placeholder animator; reflection
             // write because the fields are private.
+            // DEF-221: the BODY slug and the ABILITY slug can differ. The Cleric loads
+            // its own body/controller (slug "Cleric") but fires the Mage loadout until a
+            // dedicated cleric/healer kit lands — so route its abilities to "Mage".
+            string abilitySlug = (cls == HeroClass.Cleric) ? "Mage" : slug;
             int recached = 0;
             foreach (var mb in GetComponentsInChildren<MonoBehaviour>(true))
             {
@@ -192,7 +196,7 @@ namespace DeNelle.Village
                 if (n == "HeroAbilities")
                     mb.GetType().GetMethod("SetHeroClass",
                         System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)
-                      ?.Invoke(mb, new object[] { slug });
+                      ?.Invoke(mb, new object[] { abilitySlug });
             }
             Debug.Log($"[HeroBodySwapper] Animator wired: controller=" +
                       $"{(anim.runtimeAnimatorController != null ? anim.runtimeAnimatorController.name : "NULL")}, " +
@@ -334,11 +338,11 @@ namespace DeNelle.Village
             // (24 MB) per docs/port-notes/tripo-asset-pipeline.md. Swap in like
             // the other two; HeroAnimatorSetup writes Mage.controller alongside.
             HeroClass.Mage   => "Mage",
-            // WO-226: the Cleric has no dedicated body yet — it is a caster, so it
-            // loads the Mage body + Mage.controller and SetHeroClass("Mage") gives it
-            // the Mage ability kit. ApplyExtractedTexture/ApplyClassTint fall through
-            // to the Mage defaults for Cleric, so it reads as an arcane caster.
-            HeroClass.Cleric => "Mage",
+            // DEF-221: the Cleric now has a DEDICATED body (Resources/Heroes/Cleric.fbx,
+            // from People/Human/human_Cleric) + Cleric.controller (a copy of the Mage
+            // caster kit). It still fires the Mage ability LOADOUT — abilitySlug below
+            // routes Cleric → "Mage" for SetHeroClass — until a cleric/healer kit exists.
+            HeroClass.Cleric => "Cleric",
             _ => null,
         };
 

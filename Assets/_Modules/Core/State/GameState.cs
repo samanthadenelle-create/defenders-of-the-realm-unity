@@ -217,6 +217,17 @@ namespace DeNelle.Core.State
         /// </summary>
         public List<PlacedStructureData> BaseLayout = new List<PlacedStructureData>();
 
+        // ── Pets — onboarding-named starter pet (WO-277) ─────────────────────
+        /// <summary>
+        /// The player-chosen name for their starter pet, set in the tutorial's pet
+        /// introduction (WO-277). Empty/null until the player names it. Persisted via
+        /// <see cref="GameStateService.Save"/> directly (not yet in SaveSchema's
+        /// round-trip — like Zones/Tribes it lives in-memory + the PlayerPrefs SO
+        /// snapshot until the save owner threads it through SaveSchema). Append-only
+        /// field at the END of the class so older saves stay loadable.
+        /// </summary>
+        public string PetName;
+
         /// <summary>A fresh List&lt;int&gt; of <paramref name="count"/> zeros.</summary>
         public static List<int> NewZeroed(int count)
         {

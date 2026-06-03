@@ -95,6 +95,12 @@ namespace DeNelle.Village
         private int   _lineCursor;
         private float _sideSign = 1f;
 
+        // WO-277: while the FTUE owns the narrative the companion's ambient chatter
+        // must stay quiet (the tutorial drives the same bubble with scripted lines).
+        // Suppressing only the AUTO speech leaves the companion still FOLLOWING +
+        // FIGHTING; the tutorial calls SetSpeechSuppressed(false) when it completes.
+        private bool _speechSuppressed;
+
         // ── Configuration ────────────────────────────────────────────────────
 
         /// <summary>
@@ -110,6 +116,25 @@ namespace DeNelle.Village
         public void SetBubble(TownsfolkBubble bubble)
         {
             _bubble = bubble;
+        }
+
+        /// <summary>The companion's speech bubble, so the FTUE can drive it with scripted lines.</summary>
+        public TownsfolkBubble Bubble => _bubble;
+
+        /// <summary>
+        /// WO-277 — suppress (or restore) the companion's AMBIENT auto-chatter while
+        /// the tutorial scripts the dialogue. Follow + combat are unaffected. While
+        /// suppressed the companion hides any line it was showing so it doesn't fight
+        /// the tutorial's bubble.
+        /// </summary>
+        public void SetSpeechSuppressed(bool suppressed)
+        {
+            _speechSuppressed = suppressed;
+            if (suppressed && _bubbleUp)
+            {
+                _bubbleUp = false;
+                _bubble?.Hide();
+            }
         }
 
         /// <summary>Assigns the hero transform to trail (the injector wires this).</summary>
@@ -345,6 +370,8 @@ namespace DeNelle.Village
         private void UpdateSpeech()
         {
             if (_bubble == null || _heroT == null) return;
+            // WO-277: stay quiet while the tutorial owns the dialogue.
+            if (_speechSuppressed) return;
 
             _speakTimer -= Time.deltaTime;
             if (_speakTimer > 0f) return;

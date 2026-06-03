@@ -34,6 +34,32 @@ namespace DeNelle.Village
         // The live companion, so a re-load replaces rather than duplicates it.
         private StoryCompanion _companion;
 
+        // WO-277 (tutorial): the FTUE wants the companion to be a DIFFERENT class
+        // from the player (a comrade, not a mirror). When the tutorial sets this
+        // override, Spawn() builds the companion for the OVERRIDE class instead of
+        // the player's chosen class — so there's exactly ONE companion and it's the
+        // mapped class, not two. Cleared (back to player-class) when the tutorial
+        // completes. Null = normal behaviour (companion = the player's hero class).
+        private static HeroClass? s_heroClassOverride;
+
+        /// <summary>The live story companion's transform, or null if none is spawned.</summary>
+        public Transform CompanionTransform => _companion != null ? _companion.transform : null;
+
+        /// <summary>The live story companion, or null if none is spawned.</summary>
+        public StoryCompanion Companion => _companion;
+
+        /// <summary>
+        /// WO-277 — force the spawned companion to be <paramref name="heroClass"/>
+        /// instead of the player's chosen class (the tutorial maps it to a DIFFERENT
+        /// class), then re-spawn so the change takes effect immediately. Pass null to
+        /// clear the override and restore the player-class companion.
+        /// </summary>
+        public void SetHeroClassOverride(HeroClass? heroClass)
+        {
+            s_heroClassOverride = heroClass;
+            if (SceneManager.GetActiveScene().name == TargetScene) Spawn();
+        }
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
         {
@@ -218,6 +244,10 @@ namespace DeNelle.Village
         /// </summary>
         private static HeroClass ResolveChosenHero()
         {
+            // WO-277: the tutorial override wins so the companion is the mapped
+            // (different) class while the FTUE plays.
+            if (s_heroClassOverride.HasValue) return s_heroClassOverride.Value;
+
             var svc = GameStateService.Instance;
             if (svc != null && svc.State != null)
                 return svc.State.HeroClass.ToNullable() ?? HeroClass.Knight;
