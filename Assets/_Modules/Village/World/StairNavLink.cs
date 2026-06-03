@@ -54,7 +54,10 @@ namespace DeNelle.Village
 
         // Link tuning (owner reference: width ~2.8, bidirectional, cost 1, autoUpdate).
         private const float LinkWidth    = 2.8f;
-        private const float CostOverride = 1f;
+        // Stair traversal cost. Default 1.0 = neutral ("as mobile as the player" — owner's
+        // call). Kept as a static so it's tunable at runtime — bump toward ~1.3 later only
+        // if you ever decide stairs should read as a tactical chokepoint.
+        public static float CostModifier = 1.0f;
         // How far to search for valid navmesh around each requested endpoint.
         private const float SampleRadius = 4f;
 
@@ -125,7 +128,7 @@ namespace DeNelle.Village
             _link.startPoint   = Vector3.zero;                 // local — at the host (= Bottom)
             _link.endPoint     = sampledTop - sampledBottom;   // local — the deck, relative to Bottom
             _link.width        = LinkWidth;
-            _link.costModifier = CostOverride;                  // costOverride 1 (owner reference)
+            _link.costModifier = CostModifier;                  // neutral 1.0 (tunable static)
             _link.bidirectional = true;                         // climb up AND walk down
             _link.autoUpdate   = true;                          // autoUpdate true (owner reference)
             _link.area         = 0;                             // default walkable area — matches the bake

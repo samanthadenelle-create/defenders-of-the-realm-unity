@@ -61,7 +61,14 @@ namespace DeNelle.Village
                 TintCapsule(cap.GetComponent<Renderer>());
             }
 
-            go.AddComponent<NavMeshAgent>();
+            var agent = go.AddComponent<NavMeshAgent>();
+            // Share the hero's agent type (0) so enemies traverse the SAME NavMeshLinks
+            // the hero uses (StairNavLink builds links for agentTypeID 0 — rampart + any
+            // player-built stairs). Match hero radius/height for uniform "as mobile as the
+            // player" pathing on the shared single-agent navmesh.
+            agent.agentTypeID = 0;
+            agent.radius = 0.4f;
+            agent.height = 1.8f;
             var enemy = go.AddComponent<Enemy>();                          // RequireComponent pulls EnemyDamageable
             if (go.GetComponent<EnemyDamageable>() == null)
                 go.AddComponent<EnemyDamageable>();
