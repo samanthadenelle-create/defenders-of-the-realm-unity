@@ -17,6 +17,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using UnityEngine;
 using UnityEngine.UIElements;
+using DeNelle.Core.UI;
 
 namespace DeNelle.HUD
 {
@@ -44,6 +45,9 @@ namespace DeNelle.HUD
         private bool _visible;
         private Delegate _changedHandler;
         private object _serviceInstanceCache;
+        // Modal arbiter handle (DEF-212): opening any panel closes the previously
+        // open one. Hide() is the close action; _visible is the is-open probe.
+        private PanelHandle _panelHandle;
 
         private static readonly string[] HeroOrder = { "mage", "knight", "ranger" };
         private static readonly string[] TierOrderTopDown = { "tier3", "tier2", "tier1" };
@@ -51,6 +55,7 @@ namespace DeNelle.HUD
         private void Awake()
         {
             _doc = GetComponent<UIDocument>();
+            _panelHandle = PanelManager.Register("Hero Talents", Hide, () => _visible);
             ResolveBridges();
             BuildUi();
             Hide();
@@ -74,6 +79,8 @@ namespace DeNelle.HUD
             if (_overlay == null) return;
             _visible = true;
             _overlay.style.display = DisplayStyle.Flex;
+            // Tell the arbiter we're open; it closes any other panel first.
+            PanelManager.NotifyOpened(_panelHandle);
             Repaint();
         }
 
@@ -82,6 +89,8 @@ namespace DeNelle.HUD
             if (_overlay == null) return;
             _visible = false;
             _overlay.style.display = DisplayStyle.None;
+            // Clear our slot. No-op if the manager already swapped us out.
+            PanelManager.NotifyClosed(_panelHandle);
         }
 
         // -- UI build -----------------------------------------------------------
@@ -103,7 +112,10 @@ namespace DeNelle.HUD
             _overlay.style.position = Position.Absolute;
             _overlay.style.left = 0; _overlay.style.right = 0;
             _overlay.style.top = 0;  _overlay.style.bottom = 0;
-            _overlay.style.backgroundColor = new StyleColor(new Color(0f, 0f, 0f, 0.72f));
+            // DEF-212 item 5: world-space labels ("Arcane Tower") bled through the
+            // old 0.72 scrim. Use a near-opaque scrim so no 3D text shows behind the
+            // modal (the panel card on top is already opaque).
+            _overlay.style.backgroundColor = new StyleColor(new Color(0.02f, 0.02f, 0.03f, 0.97f));
             _overlay.style.alignItems = Align.Center;
             _overlay.style.justifyContent = Justify.Center;
             _overlay.pickingMode = PickingMode.Position;
@@ -157,6 +169,11 @@ namespace DeNelle.HUD
             _wisdomLabel.style.color = new StyleColor(new Color(0.95f, 0.85f, 0.45f, 1f));
             _wisdomLabel.style.fontSize = 16;
             _wisdomLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
+            // DEF-212 item 6: Wisdom has no earn path in the current loop, so a
+            // permanent "Wisdom: 0" reads as broken. Hide the counter until heroes
+            // actually grant Wisdom (then flip this back on). The label is still
+            // built + updated by Repaint so re-enabling is a one-line change.
+            _wisdomLabel.style.display = DisplayStyle.None;
             headerRow.Add(_wisdomLabel);
 
             var closeBtn = new Button(Hide) { text = "Close (T)" };

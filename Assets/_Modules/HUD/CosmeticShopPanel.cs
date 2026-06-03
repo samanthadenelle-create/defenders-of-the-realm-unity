@@ -64,6 +64,9 @@ namespace DeNelle.HUD
 
         private object _serviceInstance;
         private Delegate _changedHandler;
+        // Modal arbiter handle (DEF-212). CloseOverlay is the close action; the
+        // overlay's display state is the is-open probe.
+        private PanelHandle _panelHandle;
 
         private void Awake()
         {
@@ -86,7 +89,11 @@ namespace DeNelle.HUD
                 return;
             }
             _doc.sortingOrder = 95; // above HUD chips, below the Help overlay (100)
+            _panelHandle = PanelManager.Register("Cosmetic Shop", CloseOverlay, IsOverlayOpen);
         }
+
+        private bool IsOverlayOpen() =>
+            _overlay != null && _overlay.style.display.value != DisplayStyle.None;
 
         private void OnEnable()
         {
@@ -262,6 +269,10 @@ namespace DeNelle.HUD
 
             _overlay = new VisualElement { name = "cosmetic-shop-overlay" };
             ShopTheme.StyleScrim(_overlay);
+            // DEF-212 item 5: bump the scrim to near-opaque so world-space labels
+            // ("Arcane Tower") behind the modal don't bleed through the edges of the
+            // shop card. Local override only — the shared ShopTheme.Scrim is untouched.
+            _overlay.style.backgroundColor = new StyleColor(new Color(0.03f, 0.02f, 0.06f, 0.98f));
             _overlay.style.display = DisplayStyle.None;
             _root.Add(_overlay);
 
@@ -547,10 +558,27 @@ namespace DeNelle.HUD
         public void ToggleOverlay()
         {
             if (_overlay == null) return;
-            bool open = _overlay.style.display == DisplayStyle.None;
-            _overlay.style.display = open ? DisplayStyle.Flex : DisplayStyle.None;
-            _overlay.pickingMode = open ? PickingMode.Position : PickingMode.Ignore;
-            if (open) Repaint();
+            if (IsOverlayOpen()) CloseOverlay();
+            else OpenOverlay();
+        }
+
+        public void OpenOverlay()
+        {
+            if (_overlay == null) return;
+            _overlay.style.display = DisplayStyle.Flex;
+            _overlay.pickingMode = PickingMode.Position;
+            // Tell the arbiter we're open; it closes any other panel first.
+            PanelManager.NotifyOpened(_panelHandle);
+            Repaint();
+        }
+
+        public void CloseOverlay()
+        {
+            if (_overlay == null) return;
+            _overlay.style.display = DisplayStyle.None;
+            _overlay.pickingMode = PickingMode.Ignore;
+            // Clear our slot. No-op if the manager already swapped us out.
+            PanelManager.NotifyClosed(_panelHandle);
         }
 
         private void ShowToast(string message)

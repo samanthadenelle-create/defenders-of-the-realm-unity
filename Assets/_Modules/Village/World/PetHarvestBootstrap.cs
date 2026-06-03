@@ -67,11 +67,13 @@ namespace DeNelle.Village
             if (Object.FindFirstObjectByType<MineNode>() != null) return;
 
             // A small cluster near the village centre — inside the pet's ~28m harvest detect
-            // (PetHarvester) so the deployed Warden finds + works them. Wood / Iron / Stone so
-            // the economy banks visibly into GameState.
-            SpawnNode("Wood",  MineResource.Wood,  new Vector3( 11f, 0f,  11f), new Color(0.45f, 0.30f, 0.16f));
-            SpawnNode("Iron",  MineResource.Iron,  new Vector3(-12f, 0f,   9f), new Color(0.55f, 0.57f, 0.62f));
-            SpawnNode("Stone", MineResource.Stone, new Vector3(  9f, 0f, -12f), new Color(0.50f, 0.50f, 0.48f));
+            // (PetHarvester) so the deployed Warden finds + works them. One node per
+            // harvestable (DEF-121: Wood / Food / Iron / Crystals) so pet auto-harvest
+            // raises ALL FOUR resource counts in GameState, visibly.
+            SpawnNode("Wood",     MineResource.Wood,         new Vector3( 11f, 0f,  11f), new Color(0.45f, 0.30f, 0.16f));
+            SpawnNode("Iron",     MineResource.Iron,         new Vector3(-12f, 0f,   9f), new Color(0.55f, 0.57f, 0.62f));
+            SpawnNode("Food",     MineResource.Food,         new Vector3(  9f, 0f, -12f), new Color(0.70f, 0.62f, 0.28f));
+            SpawnNode("Crystals", MineResource.AetherCrystal, new Vector3(-9f, 0f, -11f), new Color(0.45f, 0.72f, 0.95f));
         }
 
         private static void SpawnNode(string label, MineResource res, Vector3 pos, Color tint)

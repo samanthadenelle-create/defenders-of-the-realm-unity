@@ -198,8 +198,11 @@ namespace DeNelle.Editor
                 new TownsfolkSpot { Pos = heartPos + new Vector3( 2f, 0f, -6f), Archetype = 4, Wander = false, FacingY =   0f },
                 // Market quarter (the church / market / tavern cluster).
                 new TownsfolkSpot { Pos = new Vector3(-10f, 0f, -7f), Archetype = 0, Wander = false, FacingY =  90f },
-                // Off-duty guard near the N gate spine.
-                new TownsfolkSpot { Pos = new Vector3(  1f, 0f, 14f), Archetype = 2, Wander = true,  FacingY = 180f },
+                // DEF-220: the Blacksmith stands AT the Forge (plot 20,-10 / ForgeYard
+                // front) by his anvil — stationary, facing the smithy. (Was an off-duty
+                // guard wandering the N gate spine; moved here so the smith works the
+                // forge. VillageNpcInjector mirrors this position by index.)
+                new TownsfolkSpot { Pos = new Vector3( 17.5f, 0f, -8f), Archetype = 2, Wander = false, FacingY =  35f },
             };
 
             int placed = 0;

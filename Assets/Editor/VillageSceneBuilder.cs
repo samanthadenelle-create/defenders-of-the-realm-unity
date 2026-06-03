@@ -185,6 +185,9 @@ namespace DeNelle.Editor
         private const string TutorialOverlayUxmlPath =
             "Assets/_Modules/Onboarding/UI/TutorialOverlay.uxml";
 
+        // DEF-195: scrolls a ripple normal across the shared moat material so the moat reads as water.
+        private const string TypeMoatWaterShimmer = NsVillage + ".MoatWaterShimmer";
+
         // ── Ambient-townsfolk type names (Workstream D, resolved by reflection) ─
         private const string TypeAmbientNpc = NsVillage + ".AmbientNPC";
         private const string TypeTownsfolkBubble = NsVillage + ".TownsfolkBubble";

@@ -1,0 +1,128 @@
+{
+  "version": 1,
+  "_comment": "Seed cosmetic catalogue for the Cosmetic Shop + Glimmer system. Ported from docs/cosmetic-shop-spec.md in the React repo. Twelve launch items: 4 hero skins (one per class plus a free-path mage variant), 4 pet skins (aether / flame / ice plus a free-path ice variant), 4 village skins (heart lantern + 3 building palettes). Glimmer is a soft currency: earned in-game (wave milestones, daily quests, login streaks) or buyable in bundles. unlockMethod 'buy' = ordinary Glimmer purchase; 'achievement' = free-path item that is granted by gameplay milestones (Equip works once owned; TryPurchase will refuse). previewColor is the hex used as a swatch in the shop card before the proper preview portraits land.",
+  "items": [
+    {
+      "id": "hero-mage-embergrove",
+      "category": "hero",
+      "appliesTo": "mage",
+      "displayName": "Embergrove Mage",
+      "description": "Robes spun from autumn leaves and Heartwood ash.",
+      "glimmerCost": 80,
+      "unlockMethod": "buy",
+      "previewColor": "#c8632a"
+    },
+    {
+      "id": "hero-knight-frostfall",
+      "category": "hero",
+      "appliesTo": "knight",
+      "displayName": "Frostfall Knight",
+      "description": "Plate rimed with the breath of the high passes.",
+      "glimmerCost": 80,
+      "unlockMethod": "buy",
+      "previewColor": "#7fb4d4"
+    },
+    {
+      "id": "hero-ranger-bloomtide",
+      "category": "hero",
+      "appliesTo": "ranger",
+      "displayName": "Bloomtide Ranger",
+      "description": "Greens of the first thaw stitched into oilskin.",
+      "glimmerCost": 80,
+      "unlockMethod": "buy",
+      "previewColor": "#7bc467"
+    },
+    {
+      "id": "hero-mage-wanderer",
+      "category": "hero",
+      "appliesTo": "mage",
+      "displayName": "Wanderer's Cloak",
+      "description": "Earned by playing five days in season. Beauty is earned, never required.",
+      "glimmerCost": 0,
+      "unlockMethod": "achievement",
+      "previewColor": "#8a7bbd"
+    },
+    {
+      "id": "pet-aether-twilight",
+      "category": "pet",
+      "appliesTo": "aether-sprite",
+      "displayName": "Twilight Sprite (Glowing)",
+      "description": "A crystal-fairy aether sprite wreathed in slow drifting violet glow. Special-sale launch cosmetic.",
+      "glimmerCost": 50,
+      "unlockMethod": "buy",
+      "previewColor": "#7a4fcf",
+      "meshPath": "Cosmetics/Pets/pet-aether-twilight",
+      "specialSale": true
+    },
+    {
+      "id": "pet-flame-emberkin",
+      "category": "pet",
+      "appliesTo": "flame-pup",
+      "displayName": "Emberkin Pup",
+      "description": "Coat the colour of a banked forge, sparks at the heel.",
+      "glimmerCost": 50,
+      "unlockMethod": "buy",
+      "previewColor": "#e76a2f"
+    },
+    {
+      "id": "pet-ice-glacierborn",
+      "category": "pet",
+      "appliesTo": "ice-wolf",
+      "displayName": "Glacierborn Wolf",
+      "description": "Fur of pale frost; the snow remembers its tread.",
+      "glimmerCost": 50,
+      "unlockMethod": "buy",
+      "previewColor": "#bfe0f3"
+    },
+    {
+      "id": "pet-ice-firstfriend",
+      "category": "pet",
+      "appliesTo": "ice-wolf",
+      "displayName": "First-Friend Wolf",
+      "description": "Reach Bond rank 3 with the Ice Wolf to unlock.",
+      "glimmerCost": 0,
+      "unlockMethod": "achievement",
+      "previewColor": "#9bb6c9"
+    },
+    {
+      "id": "village-heart-lantern-frost",
+      "category": "village",
+      "appliesTo": "heart-lantern",
+      "displayName": "Frozen Hearth",
+      "description": "The Heart's lantern glows pale blue through a rime of frost.",
+      "glimmerCost": 140,
+      "unlockMethod": "buy",
+      "previewColor": "#a8d4ff"
+    },
+    {
+      "id": "village-walls-stoneweave",
+      "category": "village",
+      "appliesTo": "wall-tier-2",
+      "displayName": "Stoneweave Walls",
+      "description": "Granite blocks fitted by old craft, moss in every seam.",
+      "glimmerCost": 80,
+      "unlockMethod": "buy",
+      "previewColor": "#7d7466"
+    },
+    {
+      "id": "village-buildings-embergrove",
+      "category": "village",
+      "appliesTo": "building-palette",
+      "displayName": "Embergrove Palette",
+      "description": "Pet House, Workshop, Arcane Tower and Farm in autumn warmth.",
+      "glimmerCost": 140,
+      "unlockMethod": "buy",
+      "previewColor": "#c47a3a"
+    },
+    {
+      "id": "village-bloomtide-banners",
+      "category": "village",
+      "appliesTo": "banners",
+      "displayName": "Bloomtide Banners",
+      "description": "Granted on the first ten-wave clear of the spring season.",
+      "glimmerCost": 0,
+      "unlockMethod": "achievement",
+      "previewColor": "#62b08e"
+    }
+  ]
+}

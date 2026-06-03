@@ -36,6 +36,8 @@ namespace DeNelle.Village.Buildings.Progression
         Insufficient = 2,
         /// <summary>The id is not a known resource building.</summary>
         Unknown = 3,
+        /// <summary>The next tier is Magic-gated and the player lacks the Magic (DEF-121).</summary>
+        NeedMagic = 4,
     }
 
     /// <summary>
@@ -104,12 +106,22 @@ namespace DeNelle.Village.Buildings.Progression
             if (!ResourceLedger.CanAfford(lvlDef.UpgradeCost))
                 return UpgradeResult.Insufficient;
 
-            if (!ResourceLedger.TrySpend(lvlDef.UpgradeCost))
-                return UpgradeResult.Insufficient; // raced / no service
+            // DEF-121 — a Magic-gated tier additionally requires the Magic tech axis.
+            if (lvlDef.IsMagicGated && ResourceLedger.MagicBalance() < lvlDef.MagicCost)
+                return UpgradeResult.NeedMagic;
+
+            // Atomic spend: harvestables + (optional) Magic in one transaction.
+            if (!ResourceLedger.TrySpendWithMagic(lvlDef.UpgradeCost, lvlDef.MagicCost))
+                return lvlDef.IsMagicGated ? UpgradeResult.NeedMagic : UpgradeResult.Insufficient; // raced / no service
 
             int next = def.ClampLevel(level + 1);
             PlayerPrefs.SetInt(Key(buildingId), next);
             PlayerPrefs.Save();
+
+            // Buying a Magic-gated tier lights up the tech-tree node it unlocks.
+            if (!string.IsNullOrEmpty(lvlDef.UnlocksTechNode))
+                TechTree.Unlock(lvlDef.UnlocksTechNode);
+
             LevelChanged?.Invoke(buildingId);
             return UpgradeResult.Upgraded;
         }
@@ -125,6 +137,7 @@ namespace DeNelle.Village.Buildings.Progression
                 PlayerPrefs.DeleteKey(Key(id));
                 LevelChanged?.Invoke(id);
             }
+            TechTree.ResetAll();   // DEF-121 — Magic-gated unlocks reset with the levels.
             PlayerPrefs.Save();
         }
 

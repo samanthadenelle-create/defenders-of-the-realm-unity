@@ -23,6 +23,7 @@
 // =============================================================================
 
 using System;
+using DeNelle.Core.UI;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -71,6 +72,10 @@ namespace DeNelle.Village
         public static void Request(object owner, string label, Action onTap, int priority)
         {
             if (onTap == null) return;
+            // DEF-212 item 3: while a modal panel owns the screen, no world
+            // interaction prompt should show — ignore all requests this frame so the
+            // button stays hidden (PanelManager.AnyOpen is the single source of truth).
+            if (PanelManager.AnyOpen) return;
             var inst = EnsureInstance();
             if (inst == null) return;
             // Keep the existing claim unless this one outranks it. First claim of the
@@ -141,6 +146,18 @@ namespace DeNelle.Village
 
         private void Update()
         {
+            // DEF-212 item 3: a modal panel suppresses the prompt entirely — drop any
+            // pending request and keep the button hidden while a panel is open.
+            if (PanelManager.AnyOpen)
+            {
+                _owner = null;
+                _onTap = null;
+                _requestedThisFrame = false;
+                _priority = 0;
+                HideButton();
+                return;
+            }
+
             // Render the frame's request (if any).
             if (_requestedThisFrame && _btnRect != null)
             {

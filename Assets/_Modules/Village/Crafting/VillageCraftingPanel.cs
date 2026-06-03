@@ -31,6 +31,7 @@
 
 using System.Collections.Generic;
 using System.Text;
+using DeNelle.Core.UI;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -50,6 +51,8 @@ namespace DeNelle.Village.Crafting
         private VisualElement _footerStrip;
 
         private string _selectedRecipeId;
+        // Modal arbiter handle (DEF-212): one panel open at a time.
+        private PanelHandle _panelHandle;
 
         public bool IsOpen => _shell != null && _shell.style.display.value != DisplayStyle.None;
 
@@ -58,6 +61,7 @@ namespace DeNelle.Village.Crafting
             _doc = GetComponent<UIDocument>();
             if (Instance != null && Instance != this) { Destroy(gameObject); return; }
             Instance = this;
+            _panelHandle = PanelManager.Register("Workshop", Close, () => IsOpen);
         }
 
         private void OnEnable()
@@ -86,11 +90,14 @@ namespace DeNelle.Village.Crafting
             if (_shell == null) Build();
             if (_shell == null) return;
             _shell.style.display = DisplayStyle.Flex;
+            // Arbiter closes any other open panel first (DEF-212).
+            PanelManager.NotifyOpened(_panelHandle);
             // Dim + capture input only while open, so a closed panel never eats
-            // touches or leaves a permanent darkened backdrop on screen.
+            // touches or leaves a permanent darkened backdrop on screen. DEF-212
+            // item 5: near-opaque so world-space labels don't bleed through.
             if (_root != null)
             {
-                _root.style.backgroundColor = new StyleColor(new Color(0f, 0f, 0f, 0.55f));
+                _root.style.backgroundColor = new StyleColor(new Color(0f, 0f, 0f, 0.92f));
                 _root.pickingMode = PickingMode.Position;
                 _root.Focus(); // so the ESC KeyDownEvent reaches us on desktop
             }
@@ -112,6 +119,7 @@ namespace DeNelle.Village.Crafting
                 _root.style.backgroundColor = new StyleColor(new Color(0f, 0f, 0f, 0f));
                 _root.pickingMode = PickingMode.Ignore;
             }
+            PanelManager.NotifyClosed(_panelHandle);
         }
 
         // ── Build ────────────────────────────────────────────────────────────

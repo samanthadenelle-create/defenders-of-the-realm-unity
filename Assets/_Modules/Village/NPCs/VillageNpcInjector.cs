@@ -48,7 +48,10 @@ namespace DeNelle.Village
             new Def { Res = "NPCs/NPC_Peasant_Mevina", Pos = new Vector3(  4f, 0f,  5f), Arch = TownsfolkDialogue.Archetype.Villager,      Wander = true  },
             new Def { Res = "NPCs/NPC_Peasant_Tob",    Pos = new Vector3(  2f, 0f, -6f), Arch = TownsfolkDialogue.Archetype.Elder,         Wander = false },
             new Def { Res = "NPCs/NPC_Merchant",       Pos = new Vector3(-10f, 0f, -7f), Arch = TownsfolkDialogue.Archetype.Quartermaster, Wander = false },
-            new Def { Res = "NPCs/NPC_Blacksmith",     Pos = new Vector3(  1f, 0f, 14f), Arch = TownsfolkDialogue.Archetype.Blacksmith,    Wander = false },
+            // DEF-220: the Blacksmith stands at his Forge anvil (plot 20,-10 / ForgeYard
+            // front), stationary, facing the smithy — mirrors VillageSceneBuilder's
+            // baked Townsfolk spot[3] so the swapped People-pack smith lands at the forge.
+            new Def { Res = "NPCs/NPC_Blacksmith",     Pos = new Vector3( 17.5f, 0f, -8f), Arch = TownsfolkDialogue.Archetype.Blacksmith,    Wander = false },
         };
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]

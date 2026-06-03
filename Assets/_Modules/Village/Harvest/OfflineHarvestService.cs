@@ -231,14 +231,20 @@ namespace DeNelle.Village
         {
             if (result.Iron > 0) state.Iron += result.Iron;
             if (result.Wood > 0) state.Wood += result.Wood;
-            if (result.Stone > 0) state.Stone += result.Stone;
+            if (result.Food > 0)
+            {
+                // Food lives on the wallet struct (Resources.Food) — DEF-121.
+                var bal = state.Resources;
+                bal.Food += result.Food;
+                state.Resources = bal;
+            }
             if (result.AetherCrystals > 0) state.AetherCrystals += result.AetherCrystals;
 
             // Nudge the resource-changed listeners (HUD wallet) without coupling to HUD.
             GameStateService.Instance?.ResourcesChanged?.Invoke();
 
             Debug.Log($"[OfflineHarvest] Banked +{result.Iron} iron, +{result.Wood} wood, " +
-                      $"+{result.Stone} stone, +{result.AetherCrystals} crystals over " +
+                      $"+{result.Food} food, +{result.AetherCrystals} crystals over " +
                       $"{Mathf.RoundToInt((float)result.AwaySeconds)}s away" +
                       (result.WasCapped ? " (capped)." : "."));
         }

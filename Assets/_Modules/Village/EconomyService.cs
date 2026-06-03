@@ -4,7 +4,7 @@
 // Assembly: DeNelle.Village   Namespace: DeNelle.Village
 //
 // WHAT IT DOES:
-//   Owns the four build-economy resources — Wood, Stone, Iron, Crystals — and
+//   Owns the four build-economy resources — Wood, Food, Iron, Crystals — and
 //   exposes a clean API for spending, earning, and checking affordability across
 //   any combination of them. Previously a Wood-only stub; this pass completes
 //   the full spec.
@@ -21,16 +21,22 @@
 //   deprecated aliases so TowerPlacementSystem / TowerUpgradeButton don't break.
 //
 // STARTING RESOURCES: editable in the Inspector. Defaults match the existing
-//   stub (Wood 200, Stone 150, Iron 80, Crystals 50) so existing scenes are
-//   unaffected.
+//   stub (Wood 200, Iron 80) so existing scenes are unaffected.
 //
-// PERSISTENCE: Wood/Stone/Iron are in-session only (no PlayerPrefs) — they reset
-//   on scene reload intentionally (a run is a single play session; WO-134 owns
-//   their persistence). CRYSTALS are the exception (WO-131): the crystal slot is
-//   a thin facade over GameState.Resources.Crystals — the SINGLE source of truth
-//   the BuildMenu and village HUD display and that wave/empower paths feed. So
-//   EconomyService no longer keeps a divergent in-session crystal pool; every
-//   crystal read/spend/grant here round-trips through GameStateService and persists.
+// DEF-121 / WO-230 — the four harvestables are Wood / Food / Iron / Crystals.
+//   The retired "Stone" axis is repurposed to FOOD. Like Crystals, Food is now
+//   GameState-backed (GameState.Resources.Food) — the single wallet field the HUD,
+//   BuildingUpgradePanel and harvest paths all share — so the build economy and the
+//   harvest/upgrade economy never diverge. No "Magic" harvestable exists: Magic is
+//   a building-UPGRADE tech axis only (see ResourceBuildingProgression).
+//
+// PERSISTENCE: Wood/Iron are in-session only (no PlayerPrefs) — they reset on scene
+//   reload intentionally (a run is a single play session; WO-134 owns their
+//   persistence). CRYSTALS and FOOD are the exception: each is a thin facade over
+//   GameState.Resources (Crystals/Food) — the SINGLE source of truth the BuildMenu
+//   and village HUD display and that wave/empower/harvest paths feed. So
+//   EconomyService keeps no divergent in-session crystal/food pool; every
+//   crystal/food read/spend/grant here round-trips through GameStateService and persists.
 // =============================================================================
 
 using System;
@@ -45,14 +51,14 @@ namespace DeNelle.Village
     public readonly struct ResourceSnapshot
     {
         public readonly int Wood;
-        public readonly int Stone;
+        public readonly int Food;
         public readonly int Iron;
         public readonly int Crystals;
 
-        public ResourceSnapshot(int wood, int stone, int iron, int crystals)
+        public ResourceSnapshot(int wood, int food, int iron, int crystals)
         {
             Wood     = wood;
-            Stone    = stone;
+            Food     = food;
             Iron     = iron;
             Crystals = crystals;
         }
@@ -65,23 +71,23 @@ namespace DeNelle.Village
     public struct ResourceCost
     {
         [Min(0)] public int Wood;
-        [Min(0)] public int Stone;
+        [Min(0)] public int Food;
         [Min(0)] public int Iron;
         [Min(0)] public int Crystals;
 
-        public ResourceCost(int wood = 0, int stone = 0, int iron = 0, int crystals = 0)
+        public ResourceCost(int wood = 0, int food = 0, int iron = 0, int crystals = 0)
         {
             Wood     = wood;
-            Stone    = stone;
+            Food     = food;
             Iron     = iron;
             Crystals = crystals;
         }
 
         /// <summary>True when all four values are zero — a free action.</summary>
-        public bool IsZero => Wood == 0 && Stone == 0 && Iron == 0 && Crystals == 0;
+        public bool IsZero => Wood == 0 && Food == 0 && Iron == 0 && Crystals == 0;
 
         public static ResourceCost WoodOnly(int amount)     => new ResourceCost(wood:     amount);
-        public static ResourceCost StoneOnly(int amount)    => new ResourceCost(stone:    amount);
+        public static ResourceCost FoodOnly(int amount)     => new ResourceCost(food:     amount);
         public static ResourceCost IronOnly(int amount)     => new ResourceCost(iron:     amount);
         public static ResourceCost CrystalsOnly(int amount) => new ResourceCost(crystals: amount);
     }
@@ -97,18 +103,30 @@ namespace DeNelle.Village
 
         // ── Starting amounts (Inspector) ──────────────────────────────────────
 
-        [Header("Starting Resources (Wood/Stone/Iron — in-session)")]
+        [Header("Starting Resources (Wood/Iron — in-session)")]
         [SerializeField, Min(0)] private int _wood     = 200;
-        [SerializeField, Min(0)] private int _stone    = 150;
         [SerializeField, Min(0)] private int _iron     = 80;
-        // NOTE (WO-131): crystals are NO LONGER an in-session field here. They are
-        // backed by GameState.Resources.Crystals — see the Crystals property below.
+        // NOTE (WO-131 / DEF-121): crystals AND food are NOT in-session fields here.
+        // Both are backed by GameState.Resources — see the Crystals/Food properties.
 
         // ── Public read-only properties ───────────────────────────────────────
 
         public int Wood     => _wood;
-        public int Stone    => _stone;
         public int Iron     => _iron;
+
+        /// <summary>
+        /// DEF-121 — Food is GameState-backed (GameState.Resources.Food), the single
+        /// wallet field the HUD / BuildingUpgradePanel / harvest paths share. Reads
+        /// through GameStateService; returns 0 when state is absent.
+        /// </summary>
+        public int Food
+        {
+            get
+            {
+                var state = GameStateService.Instance?.State;
+                return state != null ? state.Resources.Food : 0;
+            }
+        }
 
         /// <summary>
         /// WO-131 — crystals are the SINGLE source of truth on
@@ -124,7 +142,7 @@ namespace DeNelle.Village
             }
         }
 
-        public ResourceSnapshot Snapshot => new ResourceSnapshot(_wood, _stone, _iron, Crystals);
+        public ResourceSnapshot Snapshot => new ResourceSnapshot(_wood, Food, _iron, Crystals);
 
         // ── Events ────────────────────────────────────────────────────────────
 
@@ -159,23 +177,24 @@ namespace DeNelle.Village
         public bool CanAfford(ResourceCost cost)
         {
             return _wood  >= cost.Wood
-                && _stone >= cost.Stone
+                && Food   >= cost.Food            // DEF-121 — GameState-backed
                 && _iron  >= cost.Iron
                 && Crystals >= cost.Crystals;   // WO-131 — GameState-backed
         }
 
         /// <summary>
         /// Atomically spends <paramref name="cost"/> if affordable. Returns true on
-        /// success, false (no mutation) when any resource is short. The crystal slot
-        /// (WO-131) is deducted from GameState.Resources.Crystals (persisted), the
-        /// Wood/Stone/Iron slots from the in-session pool.
+        /// success, false (no mutation) when any resource is short. The crystal and
+        /// food slots are deducted from GameState.Resources (persisted), the
+        /// Wood/Iron slots from the in-session pool.
         /// </summary>
         public bool TrySpend(ResourceCost cost)
         {
             if (!CanAfford(cost)) return false;
             _wood  -= cost.Wood;
-            _stone -= cost.Stone;
             _iron  -= cost.Iron;
+            if (cost.Food > 0)
+                GameStateService.Instance?.AddFood(-cost.Food);           // DEF-121 — GameState-backed spend
             if (cost.Crystals > 0)
                 GameStateService.Instance?.AddCrystals(-cost.Crystals);   // GameState-backed spend
             NotifyChanged();
@@ -186,8 +205,10 @@ namespace DeNelle.Village
         public void Grant(ResourceCost amount)
         {
             _wood  += Mathf.Max(0, amount.Wood);
-            _stone += Mathf.Max(0, amount.Stone);
             _iron  += Mathf.Max(0, amount.Iron);
+            int food = Mathf.Max(0, amount.Food);
+            if (food > 0)
+                GameStateService.Instance?.AddFood(food);           // DEF-121 — GameState-backed grant
             int crystals = Mathf.Max(0, amount.Crystals);
             if (crystals > 0)
                 GameStateService.Instance?.AddCrystals(crystals);   // WO-131 — GameState-backed grant
@@ -195,9 +216,9 @@ namespace DeNelle.Village
         }
 
         /// <summary>Convenience overload — specify only the resources you want to grant.</summary>
-        public void Grant(int wood = 0, int stone = 0, int iron = 0, int crystals = 0)
+        public void Grant(int wood = 0, int food = 0, int iron = 0, int crystals = 0)
         {
-            Grant(new ResourceCost(wood, stone, iron, crystals));
+            Grant(new ResourceCost(wood, food, iron, crystals));
         }
 
         // ── Backwards-compatible single-resource API (Wood only) ─────────────

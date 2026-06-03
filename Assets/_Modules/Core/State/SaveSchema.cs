@@ -27,7 +27,7 @@ namespace DeNelle.Core.State
     {
         // ── Versioning ───────────────────────────────────────────────────────
         /// <summary>CURRENT_SCHEMA_VERSION — bumped whenever the persisted shape changes.</summary>
-        public const int CurrentVersion = 14;  // v14 — added baseLayout (WO-108 player build mode); v13 — buildJobs + adSkipsUsedToday/adSkipDayKey (WO-172)
+        public const int CurrentVersion = 15;  // v15 — added magic tech-axis currency (DEF-121/WO-230); v14 — baseLayout (WO-108); v13 — buildJobs + adSkip (WO-172)
         /// <summary>SaveExport.format — bumped only if the envelope shape changes.</summary>
         public const int FileFormat = 1;
 
@@ -180,6 +180,15 @@ namespace DeNelle.Core.State
             /// default VillageSceneBuilder village until they first build + save).
             /// </summary>
             [JsonProperty("baseLayout")] public List<PlacedStructureData> BaseLayout;
+
+            // ── v15 — Magic tech-axis currency (DEF-121 / WO-230) ────────────────
+            /// <summary>
+            /// Magic — the building-upgrade tech-tree gating currency (NOT a harvestable).
+            /// Nullable per the <c>.partial()</c> convention; absent on an older save →
+            /// defaults to 0 on load (no retroactive grant), so no explicit migration
+            /// step is needed (same additive-default-on-read pattern as <c>aetherCrystals</c>).
+            /// </summary>
+            [JsonProperty("magic")] public double? Magic;
         }
 
         // =====================================================================
@@ -252,6 +261,7 @@ namespace DeNelle.Core.State
                 if (raw.WallLevel.HasValue) raw.WallLevel = NonNegInt(raw.WallLevel.Value, "wallLevel");
                 if (raw.AtbLossStreak.HasValue) raw.AtbLossStreak = NonNegInt(raw.AtbLossStreak.Value, "atbLossStreak");
                 if (raw.AetherCrystals.HasValue) raw.AetherCrystals = NonNegInt(raw.AetherCrystals.Value, "aetherCrystals");
+                if (raw.Magic.HasValue) raw.Magic = NonNegInt(raw.Magic.Value, "magic");
 
                 // ── Integer arrays → nonNegInt per entry ─────────────────────
                 ClampNonNegList(raw.PetBonds, "petBonds");

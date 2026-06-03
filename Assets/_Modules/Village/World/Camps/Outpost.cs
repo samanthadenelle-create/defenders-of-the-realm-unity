@@ -87,7 +87,7 @@ namespace DeNelle.Village.World.Camps
             Type switch
             {
                 OutpostType.LumberOutpost => MineResource.Wood,
-                OutpostType.FarmOutpost   => MineResource.Stone,
+                OutpostType.FarmOutpost   => MineResource.Food,
                 _                          => MineResource.Iron,   // Watchtower / default
             };
 
@@ -127,7 +127,13 @@ namespace DeNelle.Village.World.Camps
             {
                 case MineResource.Iron:          state.Iron += amount;           break;
                 case MineResource.Wood:          state.Wood += amount;           break;
-                case MineResource.Stone:         state.Stone += amount;          break;
+                case MineResource.Food:
+                {
+                    var bal = state.Resources;
+                    bal.Food += amount;
+                    state.Resources = bal;
+                    break;
+                }
                 case MineResource.AetherCrystal: state.AetherCrystals += amount; break;
             }
             DeNelle.Core.State.GameStateService.Instance?.ResourcesChanged?.Invoke();

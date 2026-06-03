@@ -161,9 +161,29 @@ namespace DeNelle.Editor
                                  $"'{BridgePath}' — gates left open across the moat.");
             }
 
+            // DEF-195: make the moat READ AS WATER, not a flat teal pane. A single
+            // MoatWaterShimmer on the Moat root scrolls a procedural ripple normal
+            // across the SHARED water material (every quad uses it), so the whole ring
+            // shimmers + drifts like a slow current — one component, zero per-tile cost.
+            // Keeps the owner's de-glossed teal tint (the shimmer only adds a normal +
+            // motion; it never touches _BaseColor/_Smoothness). No-op if the type is
+            // missing or no material was built (placeholder discipline).
+            if (waterMat != null)
+            {
+                var shimmer = AddVillageComponent(moatRoot, TypeMoatWaterShimmer);
+                if (shimmer != null)
+                {
+                    var so = new SerializedObject(shimmer);
+                    var matProp = so.FindProperty("_waterMaterial");
+                    if (matProp != null) matProp.objectReferenceValue = waterMat;
+                    so.ApplyModifiedPropertiesWithoutUndo();
+                }
+            }
+
             Debug.Log($"[VillageSceneBuilder] WO-183 BuildMoat: {placed} water tiles in the " +
                       $"~12 m ring (inner +-{innerX}/+-{innerZ}, outer +-{outerX}/+-{outerZ}, y={waterY}); " +
-                      $"{(bridge != null ? 4 : 0)} stone bridges at the gate spans.");
+                      $"{(bridge != null ? 4 : 0)} stone bridges at the gate spans; " +
+                      $"MoatWaterShimmer {(waterMat != null ? "attached" : "skipped (no material)")}.");
         }
 
         /// <summary>

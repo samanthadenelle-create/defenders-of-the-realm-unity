@@ -120,17 +120,24 @@ namespace DeNelle.Village.Talents
         private static void EnsureLoaded()
         {
             if (_data != null) return;
-            var full = Path.Combine(Application.streamingAssetsPath, StreamingRelativePath);
+            // DEF-212: the old path used File.ReadAllText(StreamingAssets), which
+            // THROWS in WebGL (no filesystem) → every class showed "catalog
+            // unavailable". Route through DeNelle.Core.CanonicalJson, which loads a
+            // Resources.Load<TextAsset> copy first (works on ALL platforms incl.
+            // WebGL) and falls back to StreamingAssets only on desktop. The dual
+            // copy lives at Assets/Resources/Data/Canonical/hero-talents.json —
+            // keep it in sync with the StreamingAssets source.
             try
             {
-                if (File.Exists(full))
+                var json = DeNelle.Core.CanonicalJson.Read(StreamingRelativePath);
+                if (!string.IsNullOrEmpty(json))
                 {
-                    var parsed = JsonConvert.DeserializeObject<HeroTalentData>(File.ReadAllText(full));
+                    var parsed = JsonConvert.DeserializeObject<HeroTalentData>(json);
                     if (parsed != null && parsed.Trees != null && parsed.Trees.Count > 0)
                     { _data = parsed; return; }
                     Debug.LogError($"[HeroTalentCatalog] {StreamingRelativePath} parsed empty.");
                 }
-                else Debug.LogError($"[HeroTalentCatalog] file not found at {full}.");
+                else Debug.LogError($"[HeroTalentCatalog] {StreamingRelativePath} not found (Resources or StreamingAssets).");
             }
             catch (Exception ex)
             {

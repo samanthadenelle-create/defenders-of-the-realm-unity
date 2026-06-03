@@ -87,8 +87,27 @@ namespace DeNelle.Village.Buildings.Progression
         /// </summary>
         public IReadOnlyList<ResourceCost> UpgradeCost;
 
+        /// <summary>
+        /// MAGIC tech-axis cost to upgrade FROM this level to the next (DEF-121).
+        /// Magic is NOT a harvestable — it is the building-upgrade tech currency
+        /// (GameState.Magic), spent ON TOP OF the harvestable cost to unlock a
+        /// Magic-GATED tier. 0 = no Magic requirement (an ordinary tier).
+        /// </summary>
+        public int MagicCost;
+
+        /// <summary>
+        /// The tech-tree node id this upgrade UNLOCKS when bought (DEF-121). Null/empty
+        /// for an ordinary tier. A Magic-gated tier sets this so reaching it lights up a
+        /// node in the tech tree (consumed by <see cref="TechTree"/>).
+        /// </summary>
+        public string UnlocksTechNode;
+
+        /// <summary>True when this tier is gated on the Magic tech axis (has a Magic cost).</summary>
+        public bool IsMagicGated => MagicCost > 0;
+
         /// <summary>True when there is no further level to buy.</summary>
-        public bool IsMaxLevel => UpgradeCost == null || UpgradeCost.Count == 0;
+        public bool IsMaxLevel =>
+            (UpgradeCost == null || UpgradeCost.Count == 0) && MagicCost <= 0;
     }
 
     /// <summary>
@@ -179,33 +198,73 @@ namespace DeNelle.Village.Buildings.Progression
                 costResources: new[] { HarvestResource.Food, HarvestResource.Crystals },
                 baseCost: 35, costStep: 1.6f);
 
-            // Forge — produces Iron. Upgraded with Wood + Iron (reinvest some of
-            // its own output) + Crystals. 5 levels — the priciest curve.
+            // Forge — produces Iron. Upgraded with Wood + Crystals. 5 harvestable
+            // levels PLUS a 6th MAGIC-GATED tier (DEF-121): the Arcane Forge. Reaching
+            // it costs Magic (the tech axis, NOT a harvestable) and UNLOCKS a tech-tree
+            // node ("arcane_forge") — the one Magic-gated upgrade tier required by the
+            // economy correction. The priciest curve.
             dict[ForgeId] = MakeBuilding(
                 ForgeId, "Forge", HarvestResource.Iron,
                 baseYield: 8, yieldStep: 6,
                 costResources: new[] { HarvestResource.Wood, HarvestResource.Crystals },
-                baseCost: 60, costStep: 1.7f);
+                baseCost: 60, costStep: 1.7f,
+                magicTier: new MagicTier(
+                    magicCost: 3,
+                    techNodeId: TechTree.ArcaneForgeNodeId,
+                    // The arcane tier still spends some harvestables alongside the Magic.
+                    harvestCost: new[]
+                    {
+                        new ResourceCost(HarvestResource.Iron, 120),
+                        new ResourceCost(HarvestResource.Crystals, 60),
+                    }));
 
             return dict;
         }
 
-        private const int MaxLevel = 5;
+        /// <summary>
+        /// Optional Magic-gated top tier for a building (DEF-121). When supplied,
+        /// <see cref="MakeBuilding"/> appends ONE extra level above the harvestable
+        /// curve that costs <see cref="MagicCost"/> Magic (+ optional harvestables) and
+        /// unlocks <see cref="TechNodeId"/>.
+        /// </summary>
+        private readonly struct MagicTier
+        {
+            public readonly int MagicCost;
+            public readonly string TechNodeId;
+            public readonly ResourceCost[] HarvestCost;
+
+            public MagicTier(int magicCost, string techNodeId, ResourceCost[] harvestCost)
+            {
+                MagicCost = magicCost;
+                TechNodeId = techNodeId;
+                HarvestCost = harvestCost ?? System.Array.Empty<ResourceCost>();
+            }
+        }
+
+        private const int HarvestLevels = 5;
 
         /// <summary>
-        /// Builds a 5-level curve from simple parameters: yield grows linearly
-        /// (<paramref name="baseYield"/> + (level-1)*<paramref name="yieldStep"/>),
+        /// Builds a 5-level harvestable curve from simple parameters: yield grows
+        /// linearly (<paramref name="baseYield"/> + (level-1)*<paramref name="yieldStep"/>),
         /// cost grows geometrically (<paramref name="baseCost"/> * step^(level-1)),
-        /// split evenly across <paramref name="costResources"/>. The top level has
-        /// an empty cost (maxed).
+        /// split evenly across <paramref name="costResources"/>. When
+        /// <paramref name="magicTier"/> is supplied, ONE extra MAGIC-GATED level is
+        /// appended above the harvestable curve (DEF-121): the prior top level now
+        /// upgrades into it (Magic + optional harvestables) and unlocks a tech node;
+        /// the appended level is the true max. Otherwise the top level is the max
+        /// (empty cost).
         /// </summary>
         private static ResourceBuildingDef MakeBuilding(
             string id, string displayName, HarvestResource yields,
             int baseYield, int yieldStep,
-            HarvestResource[] costResources, int baseCost, float costStep)
+            HarvestResource[] costResources, int baseCost, float costStep,
+            MagicTier? magicTier = null)
         {
-            var levels = new ResourceLevelDef[MaxLevel];
-            for (int i = 0; i < MaxLevel; i++)
+            bool hasMagic = magicTier.HasValue;
+            int total = HarvestLevels + (hasMagic ? 1 : 0);
+            var levels = new ResourceLevelDef[total];
+
+            for (int i = 0; i < HarvestLevels; i++)
             {
                 int level = i + 1;
                 var def = new ResourceLevelDef
@@ -215,9 +274,11 @@ namespace DeNelle.Village.Buildings.Progression
                     YieldPerTick = baseYield + (level - 1) * yieldStep,
                 };
 
-                if (level < MaxLevel)
+                bool isTopHarvest = level == HarvestLevels;
+
+                if (!isTopHarvest)
                 {
-                    // Cost to go from this level to the next.
+                    // Ordinary harvestable upgrade to the next level.
                     int totalCost = Mathf.RoundToInt(baseCost * Mathf.Pow(costStep, level - 1));
                     var costs = new List<ResourceCost>(costResources.Length);
                     int per = Mathf.Max(1, totalCost / costResources.Length);
@@ -225,12 +286,35 @@ namespace DeNelle.Village.Buildings.Progression
                         costs.Add(new ResourceCost(res, per));
                     def.UpgradeCost = costs;
                 }
+                else if (hasMagic)
+                {
+                    // Top harvestable level → the MAGIC-GATED arcane tier (DEF-121).
+                    var mt = magicTier.Value;
+                    def.UpgradeCost = mt.HarvestCost;
+                    def.MagicCost = mt.MagicCost;
+                    def.UnlocksTechNode = mt.TechNodeId;
+                }
                 else
                 {
                     def.UpgradeCost = System.Array.Empty<ResourceCost>();
                 }
 
                 levels[i] = def;
+            }
+
+            // The appended arcane tier itself — the true max level (no further upgrade).
+            if (hasMagic)
+            {
+                int level = HarvestLevels + 1;
+                levels[HarvestLevels] = new ResourceLevelDef
+                {
+                    Level = level,
+                    Yields = yields,
+                    // A meaningful arcane yield bump over the previous top tier.
+                    YieldPerTick = baseYield + (level - 1) * yieldStep + yieldStep,
+                    UpgradeCost = System.Array.Empty<ResourceCost>(),
+                    MagicCost = 0,
+                };
             }
 
             return new ResourceBuildingDef
@@ -264,6 +348,17 @@ namespace DeNelle.Village.Buildings.Progression
     /// </summary>
     public static class ResourceLedger
     {
+        /// <summary>
+        /// Reads the current MAGIC tech-axis balance from GameState (0 when no service).
+        /// Magic is NOT a harvestable — it is the building-upgrade tech currency
+        /// (GameState.Magic). DEF-121.
+        /// </summary>
+        public static int MagicBalance()
+        {
+            var s = GameStateService.Instance?.State;
+            return s?.Magic ?? 0;
+        }
+
         /// <summary>Reads the current balance of <paramref name="r"/> from GameState (0 when no service).</summary>
         public static int Balance(HarvestResource r)
         {
@@ -320,6 +415,64 @@ namespace DeNelle.Village.Buildings.Progression
             service.Save();
             service.ResourcesChanged?.Invoke();
             return true;
+        }
+
+        /// <summary>
+        /// Atomically spends a harvestable cost list PLUS a Magic tech-axis cost
+        /// (DEF-121). Checks both are affordable first, then deducts harvestables
+        /// (via the struct/field path) AND Magic (GameState.Magic), persists once,
+        /// and raises <c>ResourcesChanged</c>. Returns false (spending nothing) when
+        /// either the harvestables or the Magic are short. <paramref name="magicCost"/>
+        /// of 0 makes this equivalent to <see cref="TrySpend"/>.
+        /// </summary>
+        public static bool TrySpendWithMagic(IReadOnlyList<ResourceCost> costs, int magicCost)
+        {
+            var service = GameStateService.Instance;
+            var s = service?.State;
+            if (s == null) return false;
+
+            if (!CanAfford(costs)) return false;
+            if (magicCost > 0 && MagicBalance() < magicCost) return false;
+
+            // Deduct harvestables.
+            var bal = s.Resources;
+            if (costs != null)
+            {
+                foreach (var c in costs)
+                {
+                    switch (c.Resource)
+                    {
+                        case HarvestResource.Crystals: bal.Crystals -= c.Amount; break;
+                        case HarvestResource.Food: bal.Food -= c.Amount; break;
+                        case HarvestResource.Wood: s.Wood -= c.Amount; break;
+                        case HarvestResource.Iron: s.Iron -= c.Amount; break;
+                    }
+                }
+            }
+            s.Resources = bal;
+
+            // Deduct Magic (the tech axis).
+            if (magicCost > 0)
+                s.Magic = Mathf.Max(0, s.Magic - magicCost);
+
+            service.Save();
+            service.ResourcesChanged?.Invoke();
+            return true;
+        }
+
+        /// <summary>
+        /// Credits <paramref name="amount"/> Magic tech-currency to GameState (boss /
+        /// dungeon tech reward — NOT a harvest). Persists + raises <c>ResourcesChanged</c>.
+        /// </summary>
+        public static void CreditMagic(int amount)
+        {
+            if (amount <= 0) return;
+            var service = GameStateService.Instance;
+            var s = service?.State;
+            if (s == null) return;
+            s.Magic += amount;
+            service.Save();
+            service.ResourcesChanged?.Invoke();
         }
 
         /// <summary>

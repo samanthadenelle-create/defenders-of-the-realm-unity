@@ -228,6 +228,17 @@ namespace DeNelle.Core.State
         /// </summary>
         public string PetName;
 
+        // ── Magic — building-upgrade TECH axis (DEF-121 / WO-230) ─────────────
+        /// <summary>
+        /// Magic — the tech-tree gating currency (DEF-121). NOT a harvestable: there
+        /// is no Magic MineNode / pickup. It is earned through progression (boss/dungeon
+        /// tech rewards) and spent on Magic-gated building-upgrade tiers that unlock
+        /// tech-tree nodes (see <c>ResourceBuildingProgression</c>'s Magic tier). Fresh = 0.
+        /// Clamped &gt;= 0. Round-trips through SaveSchema (v15) — append-only field at the
+        /// END so older saves load with Magic = 0.
+        /// </summary>
+        public int Magic = 0;
+
         /// <summary>A fresh List&lt;int&gt; of <paramref name="count"/> zeros.</summary>
         public static List<int> NewZeroed(int count)
         {

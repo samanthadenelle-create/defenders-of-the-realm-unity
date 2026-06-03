@@ -817,17 +817,26 @@ namespace DeNelle.DevTools
             SetStatus("Triggered the wave — countdown skipped.");
         }
 
-        /// <summary>Tops up the gathered build materials (Stone / Iron / Wood).</summary>
+        /// <summary>Tops up the gathered build materials + the four harvestables
+        /// (Wood/Food/Iron/Crystals) and the Magic tech axis (DEF-121) for testing
+        /// the resource-building upgrade loop incl. the Magic-gated arcane tier.</summary>
         private void GiveBuildMaterials()
         {
             var state = RequireState("give materials");
             if (state == null) return;
 
-            state.Stone += 500;
+            state.Stone += 500;   // legacy build material (BuildMenu costs)
             state.Iron += 500;
             state.Wood += 500;
+            // Four-harvestable wallet + Magic tech axis (DEF-121).
+            var bal = state.Resources;
+            bal.Food += 500;
+            bal.Crystals += 500;
+            state.Resources = bal;
+            state.Magic += 10;
             SaveAndNotifyResources();
-            SetStatus($"Materials topped up — Stone {state.Stone}, Iron {state.Iron}, Wood {state.Wood}.");
+            SetStatus($"Topped up — Wood {state.Wood}, Food {state.Resources.Food}, " +
+                      $"Iron {state.Iron}, Crystals {state.Resources.Crystals}, Magic {state.Magic}.");
         }
 
         // =====================================================================

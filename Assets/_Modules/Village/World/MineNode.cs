@@ -6,7 +6,7 @@
 // Assembly: DeNelle.Village   Namespace: DeNelle.Village
 //
 // Lean + self-contained: it does NOT depend on the (still-unbuilt) WO-141
-// ResourceNode SO pipeline — it banks directly into GameState (Iron/Wood/Stone/
+// ResourceNode SO pipeline — it banks directly into GameState (Iron/Wood/Food/
 // AetherCrystals) the same way the rest of the economy does, so it works today.
 // When WO-141's full HarvestNodeData lands, MineNode can be folded into it.
 //
@@ -19,8 +19,12 @@ using DeNelle.Core.World;
 
 namespace DeNelle.Village
 {
-    /// <summary>What a mine node yields. Maps 1:1 to a GameState wallet field.</summary>
-    public enum MineResource { Iron, Wood, Stone, AetherCrystal }
+    /// <summary>What a mine node yields. Maps 1:1 to a GameState wallet field.
+    /// DEF-121 / WO-230: the four harvestables are Wood / Food / Iron / Crystals.
+    /// Food replaces the retired "Stone" harvest axis and banks into
+    /// GameState.Resources.Food (the existing wallet field) — Stone is no longer a
+    /// player-facing harvestable (Magic is a building-upgrade tech axis, not a node).</summary>
+    public enum MineResource { Iron, Wood, Food, AetherCrystal }
 
     [DisallowMultipleComponent]
     public sealed class MineNode : MonoBehaviour
@@ -334,7 +338,15 @@ namespace DeNelle.Village
             {
                 case MineResource.Iron:          state.Iron += amount;          break;
                 case MineResource.Wood:          state.Wood += amount;          break;
-                case MineResource.Stone:         state.Stone += amount;         break;
+                case MineResource.Food:
+                {
+                    // Food banks into the wallet (Resources.Food) — a struct, so
+                    // read-whole / mutate / write-whole back.
+                    var bal = state.Resources;
+                    bal.Food += amount;
+                    state.Resources = bal;
+                    break;
+                }
                 case MineResource.AetherCrystal: state.AetherCrystals += amount; break;
             }
         }

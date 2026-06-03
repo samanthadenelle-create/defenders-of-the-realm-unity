@@ -264,6 +264,23 @@ namespace DeNelle.Core.State
             ResourcesChanged.Invoke();
         }
 
+        /// <summary>
+        /// Adds <paramref name="amount"/> food to the live state (negative to spend;
+        /// clamped &gt;= 0), persists, and raises <see cref="ResourcesChanged"/>.
+        /// DEF-121 — Food is one of the four harvestables (Wood/Food/Iron/Crystals);
+        /// it lives on the wallet struct (Resources.Food). Mirrors AddCrystals so
+        /// harvest/upgrade callers needn't reach into the Resources struct directly.
+        /// </summary>
+        public void AddFood(int amount)
+        {
+            if (_state == null) return;
+            var r = _state.Resources;
+            r.Food = Mathf.Max(0, r.Food + amount);
+            _state.Resources = r;
+            Save();
+            ResourcesChanged.Invoke();
+        }
+
         /// <summary>Snapshots the SO's 41 persisted fields into a <see cref="SaveSchema.PersistedState"/>.</summary>
         public SaveSchema.PersistedState Snapshot()
         {
@@ -317,6 +334,7 @@ namespace DeNelle.Core.State
                 AdSkipsUsedToday = s.AdSkipsUsedToday,
                 AdSkipDayKey = s.AdSkipDayKey,
                 BaseLayout = s.BaseLayout != null ? new List<PlacedStructureData>(s.BaseLayout) : null,
+                Magic = s.Magic,
             };
         }
 
@@ -375,6 +393,7 @@ namespace DeNelle.Core.State
             if (p.AdSkipsUsedToday.HasValue) s.AdSkipsUsedToday = (int)p.AdSkipsUsedToday.Value;
             if (p.AdSkipDayKey != null) s.AdSkipDayKey = p.AdSkipDayKey;
             if (p.BaseLayout != null) s.BaseLayout = p.BaseLayout;
+            if (p.Magic.HasValue) s.Magic = (int)p.Magic.Value;   // DEF-121 — tech-axis currency
         }
 
         // =====================================================================
@@ -560,6 +579,7 @@ namespace DeNelle.Core.State
             s.AdSkipsUsedToday = 0;
             s.AdSkipDayKey = null;
             s.BaseLayout = new List<PlacedStructureData>();   // WO-108 — New Game starts on the default village seed.
+            s.Magic = 0;                                      // DEF-121 — tech-axis currency resets on New Game.
             // NOTE: BoundWallet, BreachStyle and every social field are deliberately
             // left untouched — preferences and identity survive a New Game.
             s.SchemaVersion = SaveSchema.CurrentVersion;

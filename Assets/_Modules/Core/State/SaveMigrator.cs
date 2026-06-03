@@ -46,6 +46,9 @@ namespace DeNelle.Core.State
                 // v11→v13 were additive-default-on-read (aetherCrystals / lastHarvestClaimMs /
                 // buildJobs+adSkip): nullable fields defaulted on load, no Steps entry needed.
                 { 14, MigrateToV14 },
+                // v15 (DEF-121/WO-230) added `magic` — additive-default-on-read (a
+                // nullable field defaulted to 0 on load, like aetherCrystals v11), so
+                // NO Steps entry is needed.
             };
 
         /// <summary>

@@ -659,9 +659,89 @@ namespace DeNelle.Editor
                     InvokeConfigure(comp, "Configure", b.Type, b.Id, b.Label);
                     RegisterWith(controller, "RegisterBuilding", comp);
                 }
+
+                // DEF-220: the Forge building uses a generic house shell (PrefabM
+                // House_Medieval_Medium). Dress it with a working SMITHY so it reads
+                // as a forge — an anvil + hammer + sword-blank from the committed
+                // Blacksmith asset pack, set out front of the plot. (A dedicated forge
+                // BUILDING mesh does not exist in-repo; see report.)
+                if (string.Equals(b.Id, "workshop", StringComparison.OrdinalIgnoreCase))
+                    BuildForgeYard(go.transform);
+
                 count++;
             }
             return count;
+        }
+
+        // Committed Blacksmith asset pack (NOT gitignored, unlike polyperfect) — the
+        // only in-repo forge/anvil/hammer meshes. Used to dress the Forge plot.
+        private const string BlacksmithProps = "Assets/Models/People/Blacksmith/";
+
+        /// <summary>
+        /// DEF-220: a small smithy dressing in front of the Forge plot — an anvil,
+        /// a hammer and a sword blank — so the generic-house Forge shell reads as a
+        /// working forge. Props are the committed SM_* meshes (Assets/Models/People/
+        /// Blacksmith), instantiated DIRECTLY (not via InstantiateModel, which would
+        /// force the hex atlas onto them) with a clean dark-iron URP material so the
+        /// metal reads correctly. Colliders are stripped so they never block pathing.
+        /// On a missing mesh: a labelled placeholder cube (Debug.LogWarning), per §4.
+        /// </summary>
+        private static void BuildForgeYard(Transform plot)
+        {
+            if (plot == null) return;
+
+            var yard = new GameObject("ForgeYard");
+            yard.transform.SetParent(plot, false);
+            // In front of the building (plot local +Z), clear of the door.
+            yard.transform.localPosition = new Vector3(0f, 0f, 2.6f);
+
+            // Dark-iron URP material for the metal props (clean, de-glossed).
+            var lit = Shader.Find("Universal Render Pipeline/Lit");
+            Material iron = null;
+            if (lit != null)
+            {
+                iron = new Material(lit) { name = "ForgeIron" };
+                if (iron.HasProperty("_BaseColor"))
+                    iron.SetColor("_BaseColor", new Color(0.20f, 0.20f, 0.22f));
+                if (iron.HasProperty("_Smoothness")) iron.SetFloat("_Smoothness", 0.35f);
+                if (iron.HasProperty("_Metallic")) iron.SetFloat("_Metallic", 0.6f);
+            }
+
+            // (mesh file, local pos, yaw, target longest-edge size).
+            var props = new (string fbx, Vector3 pos, float yaw, float size)[]
+            {
+                ("SM_Anvil.fbx",       new Vector3( 0f,   0f, 0f),   20f, 1.1f),
+                ("SM_Hammed.fbx",      new Vector3( 0.55f,0f, 0.1f), 70f, 0.7f),
+                ("SM_Sword_Blank.fbx", new Vector3(-0.9f, 0f, 0.3f), -30f, 1.0f),
+            };
+
+            foreach (var (fbx, pos, yaw, size) in props)
+            {
+                var model = LoadModel(BlacksmithProps + fbx);
+                if (model == null)
+                {
+                    Debug.LogWarning($"[VillageSceneBuilder] DEF-220 forge prop '{fbx}' not found at " +
+                                     $"'{BlacksmithProps + fbx}' — skipped (smithy dressing incomplete).");
+                    continue;
+                }
+                var prop = (GameObject)PrefabUtility.InstantiatePrefab(model);
+                if (prop == null) continue;
+                prop.name = model.name;
+                prop.transform.SetParent(yard.transform, false);
+                prop.transform.localPosition = pos;
+                prop.transform.localRotation = Quaternion.Euler(0f, yaw, 0f);
+                NormalizeProp(prop, size);
+                if (iron != null)
+                {
+                    foreach (var rr in prop.GetComponentsInChildren<Renderer>(true))
+                        rr.sharedMaterial = iron;
+                }
+                StripColliders(prop);
+                StripRigidbodies(prop);
+            }
+
+            Debug.Log("[VillageSceneBuilder] DEF-220 ForgeYard: anvil + hammer + sword-blank " +
+                      "set out front of the Forge plot (committed Blacksmith pack meshes).");
         }
     }
 }

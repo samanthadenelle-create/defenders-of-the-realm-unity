@@ -6,7 +6,7 @@
 // Assembly: DeNelle.Village   Namespace: DeNelle.Village
 //
 // Resource buckets map 1:1 to MineNode.MineResource / the GameState wallet fields
-// (Iron / Wood / Stone / AetherCrystals) so the popup can render +N rows without
+// (Iron / Wood / Food / AetherCrystals) so the popup can render +N rows without
 // re-deriving anything. Pet harvest (WO-111 Phase 4) folds into the same buckets
 // when it lands — no shape change needed.
 // =============================================================================
@@ -23,8 +23,8 @@ namespace DeNelle.Village
         public int Iron;
         /// <summary>Wood banked this claim.</summary>
         public int Wood;
-        /// <summary>Stone banked this claim.</summary>
-        public int Stone;
+        /// <summary>Food banked this claim (the retired "Stone" axis, repurposed — DEF-121).</summary>
+        public int Food;
         /// <summary>Aether Crystals banked this claim.</summary>
         public int AetherCrystals;
 
@@ -34,7 +34,7 @@ namespace DeNelle.Village
         public bool WasCapped;
 
         /// <summary>Total units banked across every resource (popup-trigger gate: show only when &gt; 0).</summary>
-        public int Total => Iron + Wood + Stone + AetherCrystals;
+        public int Total => Iron + Wood + Food + AetherCrystals;
 
         /// <summary>A zero haul — nothing accrued, no popup.</summary>
         public static OfflineHarvestResult None => new OfflineHarvestResult();
@@ -47,7 +47,7 @@ namespace DeNelle.Village
             {
                 case MineResource.Iron:          Iron += amount;           break;
                 case MineResource.Wood:          Wood += amount;           break;
-                case MineResource.Stone:         Stone += amount;          break;
+                case MineResource.Food:          Food += amount;          break;
                 case MineResource.AetherCrystal: AetherCrystals += amount; break;
             }
         }

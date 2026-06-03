@@ -32,6 +32,7 @@
 
 using System.Text;
 using DeNelle.Core.State;
+using DeNelle.Core.UI;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -49,6 +50,8 @@ namespace DeNelle.Village.Buildings.Progression
         private VisualElement _cardList;
         private Label _walletLabel;
         private Label _toast;
+        // Modal arbiter handle (DEF-212): one panel open at a time.
+        private PanelHandle _panelHandle;
 
         // Palette — matches VillageCraftingPanel's amber-on-dark theme.
         private static readonly Color Gold = new Color(0.99f, 0.86f, 0.50f, 1f);
@@ -67,6 +70,7 @@ namespace DeNelle.Village.Buildings.Progression
             _doc = GetComponent<UIDocument>();
             if (Instance != null && Instance != this) { Destroy(gameObject); return; }
             Instance = this;
+            _panelHandle = PanelManager.Register("Upgrade Buildings", Close, () => IsOpen);
         }
 
         private void OnEnable()
@@ -96,6 +100,15 @@ namespace DeNelle.Village.Buildings.Progression
             if (_shell == null) Build();
             if (_shell == null) return;
             _shell.style.display = DisplayStyle.Flex;
+            // Show the scrim + capture input only while open (DEF-212 item 5: near-opaque
+            // so world-space labels don't bleed through behind the modal).
+            if (_root != null)
+            {
+                _root.style.backgroundColor = new StyleColor(new Color(0f, 0f, 0f, 0.92f));
+                _root.pickingMode = PickingMode.Position;
+            }
+            // Arbiter closes any other open panel first (DEF-212).
+            PanelManager.NotifyOpened(_panelHandle);
             Repaint();
         }
 
@@ -103,6 +116,13 @@ namespace DeNelle.Village.Buildings.Progression
         {
             if (_shell == null) return;
             _shell.style.display = DisplayStyle.None;
+            // Drop the scrim so a closed panel never darkens or blocks the HUD (DEF-212).
+            if (_root != null)
+            {
+                _root.style.backgroundColor = new StyleColor(new Color(0f, 0f, 0f, 0f));
+                _root.pickingMode = PickingMode.Ignore;
+            }
+            PanelManager.NotifyClosed(_panelHandle);
         }
 
         // ── Build ────────────────────────────────────────────────────────────
@@ -118,8 +138,10 @@ namespace DeNelle.Village.Buildings.Progression
             _root.style.top = 0; _root.style.bottom = 0;
             _root.style.alignItems = Align.Center;
             _root.style.justifyContent = Justify.Center;
-            _root.style.backgroundColor = new StyleColor(new Color(0f, 0f, 0f, 0.55f));
-            _root.pickingMode = PickingMode.Position;
+            // Start transparent + click-through; Open() turns the scrim on per-open, so a
+            // CLOSED panel never darkens / eats clicks on the HUD (DEF-212).
+            _root.style.backgroundColor = new StyleColor(new Color(0f, 0f, 0f, 0f));
+            _root.pickingMode = PickingMode.Ignore;
             _root.RegisterCallback<KeyDownEvent>(OnRootKey, TrickleDown.TrickleDown);
 
             _shell = new VisualElement { name = "UpgradeShell" };
@@ -219,7 +241,10 @@ namespace DeNelle.Village.Buildings.Progression
             int level = ResourceBuildingState.GetLevel(def.BuildingId);
             var lvlDef = def.LevelDef(level);
             bool maxed = lvlDef == null || lvlDef.IsMaxLevel;
-            bool affordable = !maxed && ResourceLedger.CanAfford(lvlDef.UpgradeCost);
+            bool magicGated = !maxed && lvlDef.IsMagicGated;
+            bool affordable = !maxed
+                && ResourceLedger.CanAfford(lvlDef.UpgradeCost)
+                && (!magicGated || ResourceLedger.MagicBalance() >= lvlDef.MagicCost);
 
             var card = new VisualElement { name = "Card_" + def.BuildingId };
             card.style.flexDirection = FlexDirection.Column;
@@ -273,14 +298,29 @@ namespace DeNelle.Village.Buildings.Progression
             }
             else
             {
+                // For a Magic-gated tier, surface the Magic requirement + the tech node
+                // it unlocks so the player sees WHY it differs from an ordinary tier.
+                var costColumn = new VisualElement();
+                costColumn.style.flexGrow = 1;
+                costColumn.style.flexDirection = FlexDirection.Column;
+                costRow.Add(costColumn);
+
                 var costLine = new Label("Next:  " + FormatCost(lvlDef));
                 costLine.style.color = new StyleColor(affordable ? Dim : Bad);
                 costLine.style.fontSize = 12;
-                costLine.style.flexGrow = 1;
                 costLine.style.whiteSpace = WhiteSpace.Normal;
-                costRow.Add(costLine);
+                costColumn.Add(costLine);
 
-                var upBtn = new Button(() => OnUpgradeClicked(def.BuildingId)) { text = "Upgrade" };
+                if (magicGated)
+                {
+                    var techLine = new Label("Unlocks tech: Arcane Forge");
+                    techLine.style.color = new StyleColor(new Color(0.70f, 0.55f, 0.95f, 1f));
+                    techLine.style.fontSize = 11;
+                    techLine.style.whiteSpace = WhiteSpace.Normal;
+                    costColumn.Add(techLine);
+                }
+
+                var upBtn = new Button(() => OnUpgradeClicked(def.BuildingId)) { text = magicGated ? "Empower" : "Upgrade" };
                 upBtn.style.minWidth = 110;
                 upBtn.style.height = 40; // tap-friendly target
                 upBtn.style.fontSize = 14;
@@ -305,14 +345,25 @@ namespace DeNelle.Village.Buildings.Progression
 
         private static string FormatCost(ResourceLevelDef lvlDef)
         {
-            if (lvlDef == null || lvlDef.UpgradeCost == null || lvlDef.UpgradeCost.Count == 0)
-                return "—";
+            if (lvlDef == null) return "—";
+            bool hasHarvest = lvlDef.UpgradeCost != null && lvlDef.UpgradeCost.Count > 0;
+            if (!hasHarvest && lvlDef.MagicCost <= 0) return "—";
+
             var sb = new StringBuilder();
-            for (int i = 0; i < lvlDef.UpgradeCost.Count; i++)
+            if (hasHarvest)
             {
-                var c = lvlDef.UpgradeCost[i];
-                if (i > 0) sb.Append("  ·  ");
-                sb.Append(c.Amount).Append(' ').Append(ResourceBuildingProgression.LabelFor(c.Resource));
+                for (int i = 0; i < lvlDef.UpgradeCost.Count; i++)
+                {
+                    var c = lvlDef.UpgradeCost[i];
+                    if (i > 0) sb.Append("  ·  ");
+                    sb.Append(c.Amount).Append(' ').Append(ResourceBuildingProgression.LabelFor(c.Resource));
+                }
+            }
+            // Magic is the tech axis (not a harvestable) — append it as the gating cost.
+            if (lvlDef.MagicCost > 0)
+            {
+                if (sb.Length > 0) sb.Append("  ·  ");
+                sb.Append(lvlDef.MagicCost).Append(" Magic");
             }
             return sb.ToString();
         }
@@ -324,7 +375,8 @@ namespace DeNelle.Village.Buildings.Progression
                 $"Have:  {ResourceLedger.Balance(HarvestResource.Crystals)} Crystals  ·  " +
                 $"{ResourceLedger.Balance(HarvestResource.Food)} Food  ·  " +
                 $"{ResourceLedger.Balance(HarvestResource.Wood)} Wood  ·  " +
-                $"{ResourceLedger.Balance(HarvestResource.Iron)} Iron";
+                $"{ResourceLedger.Balance(HarvestResource.Iron)} Iron  ·  " +
+                $"{ResourceLedger.MagicBalance()} Magic";
         }
 
         private void OnUpgradeClicked(string buildingId)
@@ -340,6 +392,9 @@ namespace DeNelle.Village.Buildings.Progression
                     break;
                 case UpgradeResult.Insufficient:
                     ShowToast($"Not enough resources to upgrade {label}.", Bad);
+                    break;
+                case UpgradeResult.NeedMagic:
+                    ShowToast($"{label}'s arcane tier needs Magic — earn it from bosses & dungeons.", Bad);
                     break;
                 case UpgradeResult.MaxLevel:
                     ShowToast($"{label} is already fully upgraded.", Good);
