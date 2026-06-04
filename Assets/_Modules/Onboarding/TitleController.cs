@@ -126,6 +126,12 @@ namespace DeNelle.Onboarding
         private int _reassertCount;
         private const int MaxReasserts = 8;
 
+        // Owner 2026-06-04: web-standard SPLASH GATE. Browsers block audio until a user
+        // gesture, and the auto-running boot was WebGL-fragile. So we open on a static
+        // "press any button to start" splash; the tap unlocks audio AND starts the
+        // StoryIntro WITH sound. _splashActive = the gate is up + awaiting the tap.
+        private bool _splashActive;
+
         // DEF-204: VerifyFourCardsEven now SELF-HEALS (rebuilds a malformed row)
         // instead of only logging. This guard prevents an infinite rebuild loop —
         // we only attempt the auto-correct once per build.
@@ -148,9 +154,57 @@ namespace DeNelle.Onboarding
         private void Start()
         {
             _arrivalStart = Time.unscaledTime;   // DEF-253 watchdog clock
-            // Owner 2026-06-04: cut ONLY the studio BUMPER (the Grok .m4v — can't decode
-            // on WebGL), KEEP the cold-open StoryIntro. RunArrival now skips the bumper
-            // stage and plays only the StoryIntro before the title.
+            // Owner 2026-06-04: open on a SPLASH GATE, not the auto-running intro. The
+            // tap is the browser's required audio-unlock gesture, so the StoryIntro then
+            // plays WITH sound; it also makes boot robust (a static splash renders
+            // reliably on WebGL). The bumper (Grok .m4v) stays cut; StoryIntro runs after the tap.
+            ShowSplashGate();
+        }
+
+        // ── Splash gate: press anywhere → unlock audio → StoryIntro → title ──────
+        private void ShowSplashGate()
+        {
+            var root = _titleDocument != null ? _titleDocument.rootVisualElement : null;
+            if (root == null) { RunArrival().Forget(); return; }   // no doc — fall back to direct arrival
+            _root = root;
+            BuildSplashInto(root);
+            SetTitleVisible(true);
+            _splashActive = true;
+        }
+
+        private void BuildSplashInto(VisualElement root)
+        {
+            root.Clear();
+            root.style.flexGrow = 1f;
+            root.style.flexDirection = FlexDirection.Column;
+            root.style.alignItems = Align.Center;
+            root.style.justifyContent = Justify.Center;
+            root.style.backgroundColor = ColBackground;
+            root.pickingMode = PickingMode.Position;   // whole screen catches the tap
+
+            var name = new Label("Defenders of the Realm");
+            name.style.color = ColTextBright;
+            name.style.fontSize = 40;
+            name.style.marginBottom = 16;
+            name.style.unityTextAlign = TextAnchor.MiddleCenter;
+            root.Add(name);
+
+            var prompt = new Label("Press any button to start");
+            prompt.style.color = ColAmber;
+            prompt.style.fontSize = 22;
+            prompt.style.unityTextAlign = TextAnchor.MiddleCenter;
+            root.Add(prompt);
+
+            root.RegisterCallback<PointerDownEvent>(OnSplashTap);
+        }
+
+        private void OnSplashTap(PointerDownEvent evt)
+        {
+            if (!_splashActive) return;
+            _splashActive = false;
+            if (_root != null) _root.UnregisterCallback<PointerDownEvent>(OnSplashTap);
+            // The tap is the user gesture that unlocks the browser AudioContext — the
+            // StoryIntro now plays WITH sound, then the title/hero-select builds.
             RunArrival().Forget();
         }
 
@@ -165,7 +219,7 @@ namespace DeNelle.Onboarding
             // never completes, an await that never resolves), the player is stuck on the
             // song screen forever. Force the title (hero select) up after the max wait,
             // independent of any UniTask await. Runs once (BuildTitleScreen sets _titleBuilt).
-            if (!_titleBuilt && Time.unscaledTime - _arrivalStart > MaxIntroSeconds)
+            if (!_titleBuilt && !_splashActive && Time.unscaledTime - _arrivalStart > MaxIntroSeconds)
             {
                 Debug.LogWarning("[TitleController] DEF-253 watchdog tripped — force-advancing past the intro to the title/hero-select.");
                 if (_storyIntro != null) _storyIntro.ForceHide();
@@ -178,15 +232,15 @@ namespace DeNelle.Onboarding
             // empty, WebGL recreated the rootVisualElement and detached the code-built
             // cards (console: rootChildCount=0, card-row worldBound=NaN). Rebuild into
             // the current root. Bounded (MaxReasserts) so a recreating panel can't loop.
-            if (_titleBuilt && _reassertCount < MaxReasserts)
+            if ((_splashActive || _titleBuilt) && _reassertCount < MaxReasserts)
             {
                 var liveRoot = _titleDocument != null ? _titleDocument.rootVisualElement : null;
                 if (liveRoot != null && liveRoot.childCount == 0)
                 {
                     _reassertCount++;
-                    Debug.LogWarning($"[TitleController] Title root orphaned (childCount=0) — rebuilding (#{_reassertCount}).");
-                    _titleBuilt = false;
-                    BuildTitleScreen();
+                    Debug.LogWarning($"[TitleController] Root orphaned (childCount=0) — rebuilding {(_splashActive ? "splash" : "title")} (#{_reassertCount}).");
+                    if (_splashActive) BuildSplashInto(liveRoot);
+                    else { _titleBuilt = false; BuildTitleScreen(); }
                     SetTitleVisible(true);
                     return;
                 }
