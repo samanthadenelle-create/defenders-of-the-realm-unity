@@ -89,20 +89,12 @@ namespace DeNelle.Onboarding
         private bool _hasSelection;
         private HeroClass _selectedHero;
 
-        // Auto-advance: selecting a hero IS the commit (DEF-230 — drop the extra
-        // "Next"/"Choose" tap). After a card is tapped we show a brief visual
-        // confirm beat, then route to PetSelect automatically. _advancing guards
-        // against a double-route; until the route actually fires, tapping a
-        // DIFFERENT card re-selects (and re-arms the beat) so a mis-tap is
-        // trivially recoverable. The "Choose this Hero →" button is kept as a
-        // belt-and-braces second path but is no longer required.
+        // DEF-263: selecting a hero routes to PetSelect IMMEDIATELY — one tap = go.
+        // The DEF-230 confirm-beat timer (_autoAdvanceArmed/_autoAdvanceAt + the
+        // Update branch) is gone; OnCardClicked now calls AdvanceToPetSelect()
+        // directly. _advancing still guards against a double-route (a late second
+        // tap before the scene actually swaps).
         private bool _advancing;
-        private bool _autoAdvanceArmed;   // only a user TAP arms the beat (not a save-preselect)
-        private float _autoAdvanceAt;
-        // How long to linger on the selected card before auto-advancing — long
-        // enough to register the pick + re-tap a different hero, short enough to
-        // feel like "select = go" (the owner wants fewer taps).
-        private const float AutoAdvanceDelay = 0.6f;
 
         // ── Inline palette (no USS dependency — WebGL-safe) ─────────────────
         private static readonly Color ColBackground  = new Color(0.024f, 0.016f, 0.047f, 1f);
@@ -174,16 +166,8 @@ namespace DeNelle.Onboarding
                 return;
             }
 
-            // DEF-230 auto-advance: once a hero is selected, route to PetSelect
-            // after a brief confirm beat — no "Choose this Hero" tap required.
-            // Re-selecting a different hero before this fires simply re-arms the
-            // timer (handled in OnCardClicked), so a mis-tap is recoverable.
-            if (_autoAdvanceArmed && _hasSelection && !_advancing && Time.unscaledTime >= _autoAdvanceAt)
-            {
-                _advancing = true;
-                AdvanceToPetSelect();
-                return;
-            }
+            // DEF-263: hero pick now routes IMMEDIATELY from OnCardClicked (one tap
+            // = go) — the DEF-230 confirm-beat timer that used to live here is gone.
 
             if (!_titleBuilt || _diagFrames < 0) return;
             if (++_diagFrames < 120) return;
@@ -766,10 +750,9 @@ namespace DeNelle.Onboarding
 
         /// <summary>
         /// A hero card was tapped — mark it active, refresh the detail card, and
-        /// ARM the auto-advance (DEF-230: selection IS the commit). Re-tapping a
-        /// different card before the beat elapses simply re-selects and re-arms,
-        /// so a mis-tap is recoverable. Once the route has fired (_advancing) we
-        /// ignore further taps.
+        /// route to PetSelect IMMEDIATELY (DEF-263: one tap = go; the DEF-230
+        /// confirm-beat delay is removed). Once the route has fired (_advancing)
+        /// further taps are ignored so a late second tap can't double-route.
         /// </summary>
         private void OnCardClicked(HeroClass hero)
         {
@@ -778,9 +761,9 @@ namespace DeNelle.Onboarding
             _hasSelection = true;
             RefreshSelectionVisuals();
 
-            // Arm (or re-arm) the brief confirm beat — selecting auto-advances.
-            _autoAdvanceArmed = true;
-            _autoAdvanceAt = Time.unscaledTime + AutoAdvanceDelay;
+            // DEF-263: selecting a hero IS the commit — go straight to PetSelect.
+            _advancing = true;
+            AdvanceToPetSelect();
         }
 
         /// <summary>Pre-selects the hero the save already records, if any.</summary>
@@ -983,7 +966,7 @@ namespace DeNelle.Onboarding
             RouteToPetSelect();
         }
 
-        /// <summary>Auto-advance entry (DEF-230): selection committed by the beat.</summary>
+        /// <summary>Immediate advance entry (DEF-263): selection IS the commit.</summary>
         private void AdvanceToPetSelect()
         {
             if (!_hasSelection) { _advancing = false; return; }

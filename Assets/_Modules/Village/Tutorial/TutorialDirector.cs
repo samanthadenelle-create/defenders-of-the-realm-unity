@@ -167,24 +167,50 @@ namespace DeNelle.Village
             await UniTask.Delay(TimeSpan.FromSeconds(1.25f));
 
             ResolveSceneRefs();
-            BuildSubComponents();
 
-            try
-            {
-                await SceneArrivalAndMeeting();
-                await SceneTourAndFirstTower();
-                await SceneSecondGateAndCombat();
-                await ScenePostBattleSupplies();
-                await SceneQuestsCallout();
-                await ScenePetIntroduction();
-                await SceneFreedom();
-            }
-            catch (Exception ex)
-            {
-                Debug.LogError($"[TutorialDirector] Tutorial sequence error — finishing onboarding anyway. {ex}");
-            }
+            // ─────────────────────────────────────────────────────────────────
+            // DEF-263 — NPC INTRO DIALOG REMOVED.
+            // The hardcoded seven-scene companion-meeting / tour / "they're here!"
+            // dialogue no longer fires on village entry. The owner directive is a
+            // streamlined hero→pet→village front-of-game with NO scripted NPC talk
+            // on arrival. The scene methods (SceneArrivalAndMeeting … SceneFreedom)
+            // and their sub-components are kept below for reference but are NO
+            // LONGER CALLED — the lead's Yarn narrative (DEF-251 / CompanionMeeting.
+            // yarn) replaces them via the progression-start hook.
+            //
+            // ↓↓↓ PROGRESSION-START HOOK ↓↓↓
+            // This is the SINGLE first-village-entry call site where progression /
+            // narrative kicks off. It does nothing yet — wire the Yarn narrative
+            // (CompanionMeeting.yarn) HERE. Removing the NPC dialog above does NOT
+            // orphan progression start: this hook is exactly where it now begins.
+            OnVillageProgressionStart();
+            // ↑↑↑ PROGRESSION-START HOOK ↑↑↑
 
             FinishTutorial();
+        }
+
+        /// <summary>
+        /// DEF-263 PROGRESSION-START HOOK — the single, canonical first-village-entry
+        /// call site for kicking off the opening narrative + first objective.
+        ///
+        /// It is intentionally EMPTY today: the streamlined onboarding (DEF-263) drops
+        /// the old hardcoded NPC intro dialogue, and the replacement is a Yarn-driven
+        /// narrative (DEF-251, CompanionMeeting.yarn) that the lead wires in next. Put
+        /// that kick-off RIGHT HERE — e.g. start the Yarn dialogue runner for the
+        /// companion-meeting node and/or set the first HUD objective — so progression
+        /// start is never orphaned by removing the old dialog.
+        ///
+        /// Fires exactly once per first run (ShouldRun gates Run()), on the village
+        /// scene only, after the scene has settled. Do NOT block the FinishTutorial
+        /// handoff below from here unless the narrative explicitly needs to hold the
+        /// wave loop — if it does, move the FinishTutorial() call into the narrative's
+        /// completion callback instead of leaving it inline in Run().
+        /// </summary>
+        private void OnVillageProgressionStart()
+        {
+            // INTENTIONALLY EMPTY (DEF-263). Yarn narrative kick-off goes here (DEF-251).
+            Debug.Log("[TutorialDirector] DEF-263 progression-start hook reached " +
+                      "(NPC intro dialog removed; awaiting Yarn narrative wire-up).");
         }
 
         // ── Scene 1: Arrival + Meeting ───────────────────────────────────────

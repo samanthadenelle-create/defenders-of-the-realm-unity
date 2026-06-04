@@ -96,16 +96,11 @@ namespace DeNelle.Onboarding
         private bool _hasSelection;
         private string _selectedPetId;
 
-        // Auto-advance: selecting a pet IS the commit (DEF-230 — drop the extra
-        // confirm tap). After a card is tapped we show a brief visual confirm
-        // beat, then route to the Village automatically. _advancing guards the
-        // single route; until it fires, tapping a DIFFERENT pet re-selects (and
-        // re-arms the beat), so a mis-tap is trivially recoverable. The confirm
-        // button is kept as a belt-and-braces second path but no longer required.
+        // DEF-263: selecting a pet routes to the Village IMMEDIATELY — one tap = go.
+        // The DEF-230 confirm-beat timer (_autoAdvanceArmed/_autoAdvanceAt + the
+        // Update branch) is gone; OnCardClicked now calls RouteToVillage() directly.
+        // _advancing still guards the single route against a late double-tap.
         private bool _advancing;
-        private bool _autoAdvanceArmed;
-        private float _autoAdvanceAt;
-        private const float AutoAdvanceDelay = 0.6f;
 
         // =====================================================================
         //  Lifecycle
@@ -135,21 +130,8 @@ namespace DeNelle.Onboarding
             _bound = false;
         }
 
-        /// <summary>
-        /// DEF-230 auto-advance: once a pet is selected, route to the Village after
-        /// a brief confirm beat — no confirm tap required. Re-selecting a different
-        /// pet before this fires re-arms the timer (see OnCardClicked), so a
-        /// mis-tap is recoverable.
-        /// </summary>
-        private void Update()
-        {
-            if (_autoAdvanceArmed && _hasSelection && !_advancing &&
-                Time.unscaledTime >= _autoAdvanceAt)
-            {
-                _advancing = true;
-                RouteToVillage();
-            }
-        }
+        // DEF-263: a pet pick now routes IMMEDIATELY from OnCardClicked (one tap =
+        // go), so the old DEF-230 confirm-beat Update timer is removed entirely.
 
         // =====================================================================
         //  Returning-player gate
@@ -397,10 +379,10 @@ namespace DeNelle.Onboarding
         // =====================================================================
 
         /// <summary>
-        /// A pet card was tapped — mark it active, clear the rest, and ARM the
-        /// auto-advance (DEF-230: selection IS the commit). Re-tapping a different
-        /// pet before the beat elapses re-selects and re-arms, so a mis-tap is
-        /// recoverable. Once the route has fired (_advancing) late taps are ignored.
+        /// A pet card was tapped — mark it active, clear the rest, and route to the
+        /// Village IMMEDIATELY (DEF-263: one tap = go; the DEF-230 confirm-beat
+        /// delay is removed). Once the route has fired (_advancing) late taps are
+        /// ignored so a second tap can't double-route.
         /// </summary>
         private void OnCardClicked(string petId)
         {
@@ -410,9 +392,9 @@ namespace DeNelle.Onboarding
             UpdateCardHighlight();
             RefreshConfirmEnabled();
 
-            // Arm (or re-arm) the brief confirm beat — selecting auto-advances.
-            _autoAdvanceArmed = true;
-            _autoAdvanceAt = Time.unscaledTime + AutoAdvanceDelay;
+            // DEF-263: selecting a pet IS the commit — go straight to the Village.
+            _advancing = true;
+            RouteToVillage();
         }
 
         /// <summary>
