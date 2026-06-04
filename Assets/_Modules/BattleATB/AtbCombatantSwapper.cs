@@ -53,7 +53,7 @@ namespace DeNelle.BattleATB
             var hero = GameObject.Find("HeroCapsule");
             var enemy = GameObject.Find("EnemyCapsule");
             if (hero != null) SwapHero(hero.transform);
-            if (enemy != null) TintEnemy(enemy.transform);
+            if (enemy != null) SwapEnemy(enemy.transform);
         }
 
         /// <summary>
@@ -147,7 +147,56 @@ namespace DeNelle.BattleATB
             return has ? b : new Bounds(go.transform.position, Vector3.one);
         }
 
-        // ── Enemy: tint the capsule (no runtime enemy model in Resources) ────
+        // ── Enemy: capsule pill → real enemy model (Resources/Enemies) ───────
+        // Mirrors SwapHero. Resources/Enemies now ships runtime-loadable models
+        // (Skeleton_*, Orc_*, Necromancer, Dragon — committed), so the "pill" enemy
+        // becomes a real foe. Falls back to the violet tint if no model loads.
+        private static void SwapEnemy(Transform capsule)
+        {
+            if (capsule.Find("AtbEnemyModel") != null) return;   // already swapped
+
+            var prefab = Resources.Load<GameObject>("Enemies/" + ResolveEnemySlug());
+            if (prefab == null) { TintEnemy(capsule); return; }  // no model -> keep the tinted pill
+
+            var capsuleRenderers = capsule.GetComponentsInChildren<Renderer>(true);
+            Bounds slot = default; bool haveSlot = false;
+            foreach (var r in capsuleRenderers)
+            {
+                if (r == null) continue;
+                if (!haveSlot) { slot = r.bounds; haveSlot = true; } else slot.Encapsulate(r.bounds);
+            }
+
+            var model = UnityEngine.Object.Instantiate(prefab, capsule);
+            model.name = "AtbEnemyModel";
+            model.transform.localPosition = Vector3.zero;
+            // Enemy stands on the RIGHT, facing the hero on the LEFT (-X). KayKit enemies'
+            // visual forward is +Z, so -90° yaw turns +Z to face -X toward the hero. Tunable.
+            model.transform.localRotation = Quaternion.Euler(0f, -90f, 0f);
+            StripCamerasAndColliders(model);
+
+            var fixer = FindType("DeNelle.Core.TripoMaterialFixer");
+            if (fixer != null) { try { model.AddComponent(fixer); } catch { } }
+
+            if (haveSlot)
+            {
+                NormalizeHeight(model, Mathf.Max(0.5f, slot.size.y));
+                Bounds mb = ModelBounds(model);
+                Vector3 d = new Vector3(slot.center.x - mb.center.x,
+                                        slot.min.y    - mb.min.y,
+                                        slot.center.z - mb.center.z);
+                model.transform.position += d;
+            }
+            else NormalizeHeight(model, 2f);
+
+            foreach (var r in capsuleRenderers) if (r != null) r.enabled = false;
+        }
+
+        // Which Resources/Enemies model to show. Default to the standard skeleton grunt
+        // (matches BattleController's "skeleton" fallback def). TODO: read the live encounter
+        // def to vary the model (necromancer/orc/dragon) per battle.
+        private static string ResolveEnemySlug() => "Skeleton_Warrior";
+
+        // ── Enemy: tint the capsule (fallback when no model in Resources) ────
         private static void TintEnemy(Transform capsule)
         {
             var r = capsule.GetComponent<Renderer>() ?? capsule.GetComponentInChildren<Renderer>();
