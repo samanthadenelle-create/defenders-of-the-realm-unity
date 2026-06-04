@@ -218,10 +218,30 @@ namespace DeNelle.Village
             return Physics.Raycast(ray, out hit, _rayDistance, ~0);
         }
 
+        /// <summary>
+        /// Read the place/select confirm intent for THIS frame, gated so a tap/click
+        /// that lands inside the on-screen move joystick's engage zone never confirms a
+        /// placement or selection (DEF-171). The hero locomotion stick stays live during
+        /// Build Mode, so without this guard a thumb-drag that starts on the stick would
+        /// also drop a structure under it. Shares VirtualJoystick.IsInZone — the SAME
+        /// circle the stick + CameraPanInput use — so the exclusion can't drift from the
+        /// live stick layout. IBuildInput.PlaceOrSelect is a single-frame latch, so we
+        /// must consume it (read once) even when suppressing, or a queued tap would leak
+        /// to the next frame.
+        /// </summary>
+        private bool PlaceConfirmedThisFrame()
+        {
+            bool confirmed = _input.PlaceOrSelect;   // consumes the latch (touch driver)
+            if (!confirmed) return false;
+            // Suppress confirms whose screen point sits in the move-stick zone.
+            if (VirtualJoystick.IsInZone(_input.ScreenPoint)) return false;
+            return true;
+        }
+
         /// <summary>Idle mode: a tap/click on a PlacedStructure selects it for edit.</summary>
         private void UpdateSelectLoop()
         {
-            if (!_input.PlaceOrSelect) return;
+            if (!PlaceConfirmedThisFrame()) return;
 
             if (!RaycastGround(out RaycastHit hit)) return;
 
@@ -261,7 +281,7 @@ namespace DeNelle.Village
             bool valid = IsValidPlacement(hit, snapped, _armed, out Vector2Int cell, out Vector2Int footprint);
             _ghost.SetValid(valid);
 
-            if (valid && _input.PlaceOrSelect)
+            if (PlaceConfirmedThisFrame() && valid)
                 Place(cell, footprint, snapped);
         }
 
@@ -298,7 +318,7 @@ namespace DeNelle.Village
                 out Vector2Int cell, out Vector2Int footprint, ignoreCost: true);
             _ghost.SetValid(valid);
 
-            if (valid && _input.PlaceOrSelect)
+            if (PlaceConfirmedThisFrame() && valid)
                 CommitMove(cell, footprint, snapped);
         }
 
