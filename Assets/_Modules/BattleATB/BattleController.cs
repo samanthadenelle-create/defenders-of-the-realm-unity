@@ -177,6 +177,18 @@ namespace DeNelle.BattleATB
             ATBCombatManager.Instance?.StartCombat();
         }
 
+        /// <summary>
+        /// DEF-259 #1 — drive the cosmetic ATB charge. The engine resolves turn order
+        /// discretely (it never fills bars over time), so without this the gauges read
+        /// as frozen. This animates the displayed bars only; it never calls the engine.
+        /// </summary>
+        private void Update()
+        {
+            if (!_bound || _hud == null || _runtimeState == null) return;
+            if (_runtimeState.Battle == null) return;
+            _hud.TickVisualAtb(_runtimeState, Time.deltaTime);
+        }
+
         /// <summary>Wires the runtime-state events + the attack button. Idempotent.</summary>
         private void Subscribe()
         {
@@ -210,10 +222,11 @@ namespace DeNelle.BattleATB
             var enemies = BuildEnemyRoster(handoff);
 
             HeroClass heroClass = ResolveHeroClass(); // owner: ATB ran as Mage even when you're an Archer
+            string heroName = ResolveHeroName(heroClass); // DEF-259 #7: was always "Blaise"
 
             // WO-169 P0 — surface a REAL party of up to 4 (hero + the player's pets),
             // each with its own per-member control mode. Was Pets = empty → forced 1v1.
-            List<PartyMemberSpec> party = BuildParty(heroClass);
+            List<PartyMemberSpec> party = BuildParty(heroClass, heroName);
 
             return new BattleSetup
             {
@@ -224,7 +237,7 @@ namespace DeNelle.BattleATB
                 // PartyMembers (and they keep the engine's legacy branch buildable).
                 PartyMembers = party,
                 HeroClass = heroClass,
-                HeroName = _fallbackHeroName,
+                HeroName = heroName,
                 Pets = new List<PartyPetSpec>(),
                 Enemies = enemies,
                 Inventory = BuildInventory(),
@@ -240,7 +253,7 @@ namespace DeNelle.BattleATB
         /// preference (AtbControlModeStore) wins over the default once set, and is
         /// seeded on first join so it persists.
         /// </summary>
-        private List<PartyMemberSpec> BuildParty(HeroClass heroClass)
+        private List<PartyMemberSpec> BuildParty(HeroClass heroClass, string heroName)
         {
             const int MaxParty = 4; // controller-level cap; engine MAX_PARTY untouched
             var party = new List<PartyMemberSpec>();
@@ -248,7 +261,7 @@ namespace DeNelle.BattleATB
             // Hero / Keeper — id "hero", default Player.
             party.Add(MakeMember(
                 id: "hero",
-                name: _fallbackHeroName,
+                name: heroName,
                 heroClass: heroClass,
                 species: null,
                 bondRank: 0,
@@ -383,6 +396,31 @@ namespace DeNelle.BattleATB
             }
             Debug.Log($"[BattleController] ATB hero class resolved to {cls} (GameState={opt}).");
             return cls;
+        }
+
+        /// <summary>
+        /// DEF-259 #7 — the ATB hero name was hard-wired to "Blaise" regardless of the
+        /// chosen hero. GameState carries no free-text hero name, so derive the canon
+        /// roster name from the selected class (matches HeroSelect / BattleHud portraits:
+        /// Mage→Thrain, Knight→Grom, Ranger→Sylas, Cleric→Elara). Falls back to the
+        /// inspector dev name only when there is no selection at all.
+        /// </summary>
+        private string ResolveHeroName(HeroClass heroClass)
+        {
+            var svc = DeNelle.Core.State.GameStateService.Instance;
+            var opt = (svc != null && svc.State != null)
+                ? svc.State.HeroClass
+                : DeNelle.Core.State.HeroClassOpt.None;
+            switch (opt)
+            {
+                case DeNelle.Core.State.HeroClassOpt.Mage:   return "Thrain";
+                case DeNelle.Core.State.HeroClassOpt.Knight: return "Grom";
+                case DeNelle.Core.State.HeroClassOpt.Ranger: return "Sylas";
+                case DeNelle.Core.State.HeroClassOpt.Cleric: return "Elara";
+                default:
+                    // No save / None — keep the dev fallback so direct-play still names someone.
+                    return string.IsNullOrEmpty(_fallbackHeroName) ? "Hero" : _fallbackHeroName;
+            }
         }
 
         /// <summary>
