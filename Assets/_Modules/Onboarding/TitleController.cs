@@ -328,11 +328,13 @@ namespace DeNelle.Onboarding
 
             // We own the tree now — wipe whatever the UXML did (or didn't) build.
             _root.Clear();
-            // DEF-211: also DETACH the source UXML at runtime so a later layout
-            // cycle can never re-instantiate the orphaned TitleScreen.uxml elements
-            // back over the code-built landing. (Runtime visualTreeAsset=null —
-            // chosen over editing the builder so the kill lives next to the Clear.)
-            if (_titleDocument != null) _titleDocument.visualTreeAsset = null;
+            // DEF-253: do NOT set _titleDocument.visualTreeAsset = null here. Assigning
+            // visualTreeAsset RECREATES the UIDocument's rootVisualElement on the next
+            // layout pass — which fired AFTER we build the cards into the OLD root,
+            // orphaning them (Player.log: cards=4 but doc rootChildCount=0, card-row
+            // worldBound=NaN → the blank/stuck title). _root.Clear() already removes any
+            // UXML content, and nothing re-instantiates it unless the doc is re-enabled
+            // (it isn't), so the DEF-211 detach is unnecessary and was the actual cause.
             _root.style.flexGrow = 1f;
             _root.style.flexDirection = FlexDirection.Column;
             _root.style.alignItems = Align.Stretch;
