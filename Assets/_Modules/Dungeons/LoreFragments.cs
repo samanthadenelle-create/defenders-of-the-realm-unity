@@ -110,13 +110,10 @@ namespace DeNelle.Dungeons
         {
             if (_cached != null) return _cached;
 
-            string fullPath = Path.Combine(
-                Application.streamingAssetsPath, LoreFragmentsRelativePath);
-
-            string json = await ReadTextAsync(fullPath);
+            string json = await ReadTextAsync(LoreFragmentsRelativePath);
             if (string.IsNullOrEmpty(json))
             {
-                Debug.LogError($"[LoreFragmentsLoader] Could not read '{fullPath}'.");
+                Debug.LogError($"[LoreFragmentsLoader] Could not read '{LoreFragmentsRelativePath}'.");
                 return null;
             }
 
@@ -147,19 +144,30 @@ namespace DeNelle.Dungeons
         }
 
         /// <summary>
-        /// Reads a text file. On platforms where StreamingAssets is a plain
-        /// directory (editor / Windows / macOS) it reads directly; on Android it
-        /// must go through <see cref="UnityWebRequest"/> because the file lives
-        /// inside the compressed APK. Same caveat as <see cref="DungeonLayoutLoader"/>.
+        /// Reads canonical JSON for a StreamingAssets-relative path. Tries the
+        /// WebGL-safe Resources copy FIRST (Resources.Load, synchronous on every
+        /// platform incl. WebGL — File.ReadAllText / a StreamingAssets URL is
+        /// unreliable in a browser). Falls back to a direct file read on desktop /
+        /// editor, then a UnityWebRequest for packed StreamingAssets (Android).
         /// </summary>
-        private static async UniTask<string> ReadTextAsync(string fullPath)
+        private static async UniTask<string> ReadTextAsync(string relativePath)
         {
+            // 1) Resources-first (WebGL-safe). Never throws.
+            string fromResources = DeNelle.Core.CanonicalJson.Read(relativePath);
+            if (!string.IsNullOrEmpty(fromResources)) return fromResources;
+
+            // 2) StreamingAssets fallback — desktop/editor plain file, else web request.
+            string fullPath = Path.Combine(Application.streamingAssetsPath, relativePath);
             bool needsWebRequest = fullPath.Contains("://") || fullPath.Contains(":///");
 
             if (!needsWebRequest)
             {
-                if (!File.Exists(fullPath)) return null;
-                return await File.ReadAllTextAsync(fullPath);
+                try
+                {
+                    if (!File.Exists(fullPath)) return null;
+                    return await File.ReadAllTextAsync(fullPath);
+                }
+                catch { return null; }
             }
 
             using var req = UnityWebRequest.Get(fullPath);

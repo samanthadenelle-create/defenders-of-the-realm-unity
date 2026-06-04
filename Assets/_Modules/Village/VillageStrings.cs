@@ -96,16 +96,17 @@ namespace DeNelle.Village
 
         private static Dictionary<string, string> LoadMap(string relativePath)
         {
-            var full = Path.Combine(Application.streamingAssetsPath, relativePath);
+            // WebGL-safe load via CanonicalJson (Resources first, StreamingAssets fallback).
             try
             {
-                if (File.Exists(full))
+                string json = DeNelle.Core.CanonicalJson.Read(relativePath);
+                if (!string.IsNullOrEmpty(json))
                 {
                     // Both canonical files are flat maps with some leading "_"
                     // metadata keys (e.g. "_comment") and a couple of nested
                     // "_sources" objects — deserialize loosely, keep only the
                     // string-valued entries (the CanonStrings.cs convention).
-                    var raw = JsonConvert.DeserializeObject<Dictionary<string, object>>(File.ReadAllText(full));
+                    var raw = JsonConvert.DeserializeObject<Dictionary<string, object>>(json);
                     var map = new Dictionary<string, string>();
                     if (raw != null)
                     {
@@ -114,11 +115,11 @@ namespace DeNelle.Village
                     }
                     return map;
                 }
-                Debug.LogError($"[VillageStrings] Canonical file not found at {full}.");
+                Debug.LogError($"[VillageStrings] Canonical file not found (Resources or StreamingAssets): {relativePath}.");
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[VillageStrings] Failed to read {full}: {ex.Message}");
+                Debug.LogError($"[VillageStrings] Failed to read {relativePath}: {ex.Message}");
             }
             return new Dictionary<string, string>();
         }

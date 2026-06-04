@@ -109,17 +109,18 @@ namespace DeNelle.Pets
         private static void EnsureLoaded()
         {
             if (_data != null) return;
-            var full = Path.Combine(Application.streamingAssetsPath, StreamingRelativePath);
+            // WebGL-safe load via CanonicalJson (Resources first, StreamingAssets fallback).
             try
             {
-                if (File.Exists(full))
+                string json = DeNelle.Core.CanonicalJson.Read(StreamingRelativePath);
+                if (!string.IsNullOrEmpty(json))
                 {
-                    var parsed = JsonConvert.DeserializeObject<PetSkillTreeData>(File.ReadAllText(full));
+                    var parsed = JsonConvert.DeserializeObject<PetSkillTreeData>(json);
                     if (parsed != null && parsed.Trees != null && parsed.Trees.Count > 0)
                     { _data = parsed; return; }
                     Debug.LogError($"[PetSkillTreeCatalog] {StreamingRelativePath} parsed empty.");
                 }
-                else Debug.LogError($"[PetSkillTreeCatalog] file not found at {full}.");
+                else Debug.LogError($"[PetSkillTreeCatalog] {StreamingRelativePath} not found (Resources or StreamingAssets).");
             }
             catch (Exception ex)
             {

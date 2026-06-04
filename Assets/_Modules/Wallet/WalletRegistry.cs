@@ -143,31 +143,28 @@ namespace DeNelle.Wallet
 
         private static WalletRegistryData LoadRegistry()
         {
-            // Canonical JSON lives under StreamingAssets so it is readable in a
-            // player build (spec Part 3 forbids Resources.Load). On the Editor,
-            // Windows and macOS streamingAssetsPath is a real directory, so a
-            // synchronous read is valid. ANDROID NOTE: on Android StreamingAssets
-            // is packed inside the APK and a UnityWebRequest read is required —
-            // to be added with the Week-7/8 Seeker build (same caveat as Theme.cs
-            // and PackCatalog.cs).
-            var full = Path.Combine(Application.streamingAssetsPath, StreamingRelativePath);
+            // WebGL-safe load via CanonicalJson: Resources.Load first (works in a
+            // browser, where File.ReadAllText(streamingAssetsPath) THROWS), then a
+            // StreamingAssets fallback on desktop/editor. wallets.json is mirrored
+            // into Assets/Resources/Data/Canonical/ so the Resources path resolves.
             try
             {
-                if (File.Exists(full))
+                string json = DeNelle.Core.CanonicalJson.Read(StreamingRelativePath);
+                if (!string.IsNullOrEmpty(json))
                 {
-                    var parsed = JsonConvert.DeserializeObject<WalletRegistryData>(File.ReadAllText(full));
+                    var parsed = JsonConvert.DeserializeObject<WalletRegistryData>(json);
                     if (parsed != null)
                         return Fill(parsed);
-                    Debug.LogError($"[WalletRegistry] wallets.json at {full} parsed empty.");
+                    Debug.LogError("[WalletRegistry] wallets.json parsed empty.");
                 }
                 else
                 {
-                    Debug.LogError($"[WalletRegistry] wallets.json not found at {full}.");
+                    Debug.LogError("[WalletRegistry] wallets.json not found (Resources or StreamingAssets).");
                 }
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[WalletRegistry] Failed to read {full}: {ex.Message}");
+                Debug.LogError($"[WalletRegistry] Failed to read wallets.json: {ex.Message}");
             }
 
             Debug.LogWarning("[WalletRegistry] Falling back to the canonical hard-coded PUBLIC addresses.");

@@ -1,0 +1,104 @@
+{
+  "_comment": "Canonical building catalogue for Defenders of the Realm — the five gameplay buildings the player raises in Elarion (Crystal Mine, Pet House, Arcane Tower, Workshop, Farm). Shared by the React v1 engine and the Unity v2 port. The Unity loader (BuildingCatalog.cs) deserializes each entry into a typed BuildingDef record and Building.cs consumes HP from it.",
+  "_sources": {
+    "buildingsOverhaulSpec": "defenders-of-the-realm/docs/village-buildings-overhaul-spec.md (§5 village map, §6 interactions, §4 scale)",
+    "buildingSpotsTs": "defenders-of-the-realm/src/modules/village/buildings/BUILDING_SPOTS.ts (ids, KayKit mesh urls, ring radii, resource yields, scale targets)",
+    "villageSliceTs": "defenders-of-the-realm/src/state/slices/villageSlice.ts (TOWER_TIER_COSTS — the only canonical crystal-cost reference; 120 crystals to build a tower)",
+    "canonStrings": "defenders-unity/Assets/StreamingAssets/Data/Canonical/canon-strings.json (displayName keys: crystalMine / petHouse / arcaneTower / workshop / farm)",
+    "enLocale": "defenders-unity/Assets/StreamingAssets/Data/Canonical/en.json (buildingDesc.* description keys)",
+    "portSpec": "defenders-unity/docs/v2-unity-port-spec.md (Part 4 buildings.json schema row, Week 4 Village systems)"
+  },
+  "_authoringNotes": {
+    "sourcedFromReactV1": "id, displayName (canon-strings key), descriptionKey (en.json key), model (KayKit medieval mesh name, stripped of the React 'building_*_color' prefix/suffix per village-buildings-overhaul-spec §3), footprint hex size category (derived from §4 scale convention).",
+    "authoredDefensible": "hp / maxHp and crystalCost are AUTHORED. React v1 has no per-building HP or build-cost table — its five buildings are FIXED map placements, not player-built, and only towers carry a crystal cost (TOWER_TIER_COSTS = 120 crystals build). Values below were authored: defensive structures (Arcane Tower) sit highest HP+cost; resource/economy buildings (Crystal Mine, Farm) lowest cost so the economy can bootstrap; Workshop/Pet House mid. All are tuning constants the owner may rebalance — flagged in docs/port-notes/week4-buildings.md and surfaced to the integrator. JSON wins over ScriptableObject (port spec Part 4).",
+    "footprint": "hex footprint size category — 'small' (1 hex tile), 'medium' (cluster), 'large' (the tall Arcane Tower silhouette). The build menu's hex-tile validity check reads this; large footprints need more clear neighbours.",
+    "displayName": "displayName is a KEY into canon-strings.json, NOT a literal — the build menu resolves it through BuildingCatalog/CanonStrings so the canon names are never typed inline (port spec Part 4)."
+  },
+  "version": 1,
+  "buildings": [
+    {
+      "id": "crystal-mine",
+      "type": "CrystalMine",
+      "displayName": "crystalMine",
+      "descriptionKey": "buildingDesc.crystalMine",
+      "hp": 140,
+      "maxHp": 140,
+      "crystalCost": 80,
+      "model": "mine_crystal",
+      "footprint": "small",
+      "buildMenuOrder": 0
+    },
+    {
+      "id": "farm",
+      "type": "Farm",
+      "displayName": "farm",
+      "descriptionKey": "buildingDesc.farm",
+      "hp": 120,
+      "maxHp": 120,
+      "crystalCost": 60,
+      "model": "windmill",
+      "footprint": "medium",
+      "buildMenuOrder": 1
+    },
+    {
+      "id": "pet-house",
+      "type": "PetHouse",
+      "displayName": "petHouse",
+      "descriptionKey": "buildingDesc.petHouse",
+      "hp": 160,
+      "maxHp": 160,
+      "crystalCost": 120,
+      "model": "home_B",
+      "footprint": "medium",
+      "buildMenuOrder": 2
+    },
+    {
+      "id": "workshop",
+      "type": "Workshop",
+      "displayName": "workshop",
+      "descriptionKey": "buildingDesc.workshop",
+      "hp": 180,
+      "maxHp": 180,
+      "crystalCost": 150,
+      "model": "workshop",
+      "footprint": "medium",
+      "buildMenuOrder": 3
+    },
+    {
+      "id": "arcane-tower",
+      "type": "ArcaneTower",
+      "displayName": "arcaneTower",
+      "descriptionKey": "buildingDesc.arcaneTower",
+      "hp": 240,
+      "maxHp": 240,
+      "crystalCost": 220,
+      "model": "tower_A",
+      "footprint": "large",
+      "buildMenuOrder": 4
+    },
+    {
+      "id": "lumbermill",
+      "type": "Lumbermill",
+      "displayName": "lumbermill",
+      "descriptionKey": "buildingDesc.lumbermill",
+      "hp": 130,
+      "maxHp": 130,
+      "crystalCost": 70,
+      "model": "lumbermill",
+      "footprint": "medium",
+      "buildMenuOrder": 5
+    },
+    {
+      "id": "forge",
+      "type": "Forge",
+      "displayName": "forge",
+      "descriptionKey": "buildingDesc.forge",
+      "hp": 190,
+      "maxHp": 190,
+      "crystalCost": 140,
+      "model": "blacksmith",
+      "footprint": "medium",
+      "buildMenuOrder": 6
+    }
+  ]
+}

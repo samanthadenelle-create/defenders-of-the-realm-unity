@@ -1,0 +1,83 @@
+{
+  "_comment": "Canonical lore fragments — Bryn's cottage-entry dialogue + the Healer's Cottage lore-stone journal texts. Port spec Part 4 lists data/lore-fragments.json as a shared canonical data file ('Lore-stone text, Alduin's journal fragments, Mira's letters — all canon-voice prose'). DATA ONLY — read by LoreFragments.cs and consumed by Bryn.cs + LoreStone.cs. ALL prose here is canon-verbatim and must NEVER be paraphrased. See _provenance below for the per-fragment source. Where a fragment has no verbatim canonical source it is flagged with \"placeholder\": true and MUST be replaced with sourced prose before ship — do not treat a placeholder as canon.",
+  "_provenance": {
+    "bryn-cottage-entry": "VERBATIM. defenders-of-the-realm/src/modules/dungeons/atmosphere/wandererCopy.ts HEALERS_COTTAGE_BRYN_LINE; docs/dungeon-3d-healers-cottage-design.md §4 Beat 1. Mirrors the firstEncounterLine already inlined in healers-cottage.json and WandererDialogue.HealersCottageLine.",
+    "journal-1": "VERBATIM. wandererCopy sibling healersCottage.lore.ts HEALERS_COTTAGE_LORE journal-1; docs/dungeon-3d-healers-cottage-design.md §4. Same body as healers-cottage.json loreStones[journal-1].",
+    "journal-2": "VERBATIM. healersCottage.lore.ts journal-2; design §4. Same body as healers-cottage.json.",
+    "journal-3": "VERBATIM. healersCottage.lore.ts journal-3; design §4 Beat 5 (quoted lines 198-202 of the design doc). Same body as healers-cottage.json.",
+    "journal-4": "VERBATIM. healersCottage.lore.ts journal-4; design §4 Beat 6 (quoted lines 234-238 of the design doc). Same body as healers-cottage.json.",
+    "journal-vault": "MIXED. Paragraph 1 (the M.M. + A.M. carving) is VERBATIM — design §4 Beat 5 line 206 ('a small carving on the windowsill — \"M.M. + A.M., 31st of Honeymonth\"'). Paragraph 2 (the struck-through draft) has NO verbatim canonical source: the Hidden Vault room is a Unity-side expansion from dungeons-3d-unity-layout-spec.md §9.3 / §16.2 and §10.5 references a 'Letter 3a redacted draft' for D6, not D1. Paragraph 2 is carried as a PLACEHOLDER (placeholder: true) — it must be sourced from the narrative team or cut before ship. It is NOT canon."
+  },
+  "version": 1,
+  "fragments": [
+    {
+      "id": "bryn-cottage-entry",
+      "kind": "dialogue",
+      "speaker": "Bryn the Wanderer",
+      "title": "Bryn — at the Garden Approach",
+      "placeholder": false,
+      "body": [
+        "The path opens easy, Keeper. But mind the rocks — they remember you. And don't walk it dark. The cottage keeps her shadows close."
+      ]
+    },
+    {
+      "id": "journal-1",
+      "kind": "lore-stone",
+      "speaker": "Alduin the Mournful",
+      "title": "Alduin's journal — entry 1",
+      "placeholder": false,
+      "body": [
+        "The folk came again today. The well at Carrow's edge is going bad. Crystals work on the early signs but the late ones — I don't know yet.",
+        "I came here to learn the green ways. I am still learning."
+      ]
+    },
+    {
+      "id": "journal-2",
+      "kind": "lore-stone",
+      "speaker": "Alduin the Mournful",
+      "title": "Alduin's journal — entry 2",
+      "placeholder": false,
+      "body": [
+        "The Folk who came from the village this week: Wren's boy, the miller's wife, the two children of Carrow. I told them what I had.",
+        "The well is poisoned, I know that now. It is not anything I can name. It is older than the names I have."
+      ]
+    },
+    {
+      "id": "journal-3",
+      "kind": "lore-stone",
+      "speaker": "Alduin the Mournful",
+      "title": "Alduin's journal — entry 3",
+      "placeholder": false,
+      "body": [
+        "The dreams are back. The Wound, calling. I am not the same in the mornings. Mira would have known what to say. I miss her hands.",
+        "If anyone reads this — I am going to the Wound. I am going to try one more thing. The Heart will hold while I am gone. The Heart always holds.",
+        "Forgive me."
+      ]
+    },
+    {
+      "id": "journal-4",
+      "kind": "lore-stone",
+      "speaker": "Alduin the Mournful",
+      "title": "Alduin's journal — entry 4 (the last one)",
+      "placeholder": false,
+      "body": [
+        "I am going. The Wound is louder than the Heart now. I have left a thing in the cellar for whoever is next — a seed. Plant it at the Folk's table, if there is anyone to plant it.",
+        "It will grow into something old and quiet. The Folk used to say there were trees like it once, before any of us. Maybe one of them will remember the song.",
+        "The Heart will hold. The Heart always holds.",
+        "Tend it, Keeper. I am sorry I could not."
+      ]
+    },
+    {
+      "id": "journal-vault",
+      "kind": "lore-stone",
+      "speaker": "Alduin the Mournful",
+      "title": "A carving, and a struck-through draft",
+      "placeholder": true,
+      "placeholderNote": "Paragraph 1 (the carving) is canon-verbatim from design §4 Beat 5 line 206. Paragraph 2 is NOT canon — it is a Unity layout-spec expansion (dungeons-3d-unity-layout-spec.md §9.3 Hidden Vault) with no verbatim narrative-bible source. Replace paragraph 2 with sourced prose or cut the Hidden Vault stone before ship.",
+      "body": [
+        "M.M. + A.M., 31st of Honeymonth",
+        "[PLACEHOLDER — NOT CANON] The struck-through draft text. The Hidden Vault is a Unity-side expansion room; this fragment has no verbatim source in the narrative bible. Source from the narrative team before ship, or cut the journal-vault stone."
+      ]
+    }
+  ]
+}
