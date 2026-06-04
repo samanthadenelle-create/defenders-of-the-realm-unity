@@ -56,10 +56,20 @@ namespace DeNelle.Village.World.Camps
         public event Action<ClaimableCamp> OnCleared;
         /// <summary>Raised when the camp is claimed. Arg = this camp.</summary>
         public event Action<ClaimableCamp> OnClaimed;
+        /// <summary>Raised when the post-build counterattack is repelled (camp secured).</summary>
+        public event Action<ClaimableCamp> OnDefended;
+        /// <summary>Raised when the post-build counterattack razes the outpost (defense lost).</summary>
+        public event Action<ClaimableCamp> OnDefenseLost;
+
+        /// <summary>True once the post-build counterattack has been repelled.</summary>
+        public bool Secured { get; private set; }
+        /// <summary>True while the post-build counterattack is in progress.</summary>
+        public bool UnderAttack => _defense != null && !_defense.Resolved;
 
         private CampVisual _visual;
         private bool _subscribed;
         private CampGuards _guards;
+        private CampDefenseWave _defense;
 
         // -- Clear reward (WO-216 / DEF-187) ----------------------------------
         // Granted ONCE when the camp transitions Hostile -> Cleared. Crystals bank
@@ -75,6 +85,7 @@ namespace DeNelle.Village.World.Camps
         // -- Persistence (PlayerPrefs only - schema untouched) ----------------
         private const string PrefClearedKey = "dotr-camp-cleared-";   // +CampId -> "1"
         private const string PrefClaimedKey = "dotr-camp-claimed-";   // +CampId -> outpost type int
+        private const string PrefSecuredKey = "dotr-camp-secured-";   // +CampId -> "1" (defended)
 
         /// <summary>Called by CampSystem immediately after AddComponent.</summary>
         public void Configure(RegionId region, int threat, int killsRequired, float radius)
@@ -270,7 +281,49 @@ namespace DeNelle.Village.World.Camps
             PlayerPrefs.Save();
 
             Debug.Log($"[ClaimableCamp] {CampId} built a {type} outpost - auto-harvest online.");
+
+            // STAGE 4 DEFEND: the displaced faction counterattacks the new outpost.
+            // (A camp already SECURED in a prior session resolves instantly inside Begin.)
+            StartDefense();
             return _outpost;
+        }
+
+        // =====================================================================
+        // STAGE 4 - DEFEND. After a build, spawn one counterattack on the outpost.
+        // Survive it -> camp SECURED (one-time reward + persisted). Outpost razed
+        // -> defense lost, camp stays claimed and is rebuildable.
+        // =====================================================================
+
+        private void StartDefense()
+        {
+            if (_outpost == null) return;
+            if (Secured) return;                       // already held - no re-raid
+            if (_defense != null && !_defense.Resolved) return;  // a raid is already live
+
+            _defense = gameObject.AddComponent<CampDefenseWave>();
+            _defense.OnDefended += HandleDefended;
+            _defense.OnLost += HandleDefenseLost;
+            _defense.Begin(Region, ThreatLevel, _outpost, CampId);
+        }
+
+        private void HandleDefended(CampDefenseWave wave)
+        {
+            if (wave != null) wave.OnDefended -= HandleDefended;
+            Secured = true;
+            PlayerPrefs.SetString(PrefSecuredKey + CampId, "1");
+            PlayerPrefs.Save();
+            Debug.Log($"[ClaimableCamp] {CampId} SECURED - counterattack repelled.");
+            OnDefended?.Invoke(this);
+        }
+
+        private void HandleDefenseLost(CampDefenseWave wave)
+        {
+            if (wave != null) wave.OnLost -= HandleDefenseLost;
+            // Outpost was razed (it Destroys itself at 0 HP). Camp stays claimed;
+            // building a fresh outpost re-triggers the counterattack.
+            _outpost = null;
+            Debug.LogWarning($"[ClaimableCamp] {CampId} defense lost - outpost razed, rebuild to retry.");
+            OnDefenseLost?.Invoke(this);
         }
 
         // =====================================================================
@@ -279,6 +332,9 @@ namespace DeNelle.Village.World.Camps
 
         private void RestoreFromPrefs()
         {
+            // A previously SECURED camp stays peaceful (no re-raid on reload).
+            Secured = PlayerPrefs.GetString(PrefSecuredKey + CampId, null) == "1";
+
             // Claimed (and possibly built) takes precedence over merely cleared.
             string claimedRaw = PlayerPrefs.GetString(PrefClaimedKey + CampId, null);
             if (!string.IsNullOrEmpty(claimedRaw))
@@ -293,6 +349,10 @@ namespace DeNelle.Village.World.Camps
                     go.transform.localPosition = Vector3.zero;
                     _outpost = go.AddComponent<Outpost>();
                     _outpost.Init(type, Region, ThreatLevel);
+
+                    // Restored with an outpost but NOT yet secured -> the counterattack
+                    // is still pending; re-arm it so the loop can complete after reload.
+                    if (!Secured) StartDefense();
                 }
                 return;
             }
