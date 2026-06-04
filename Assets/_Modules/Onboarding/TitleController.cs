@@ -207,13 +207,18 @@ namespace DeNelle.Onboarding
                 await SafeStage(_splash.Play(), "splash");
             Debug.Log("[TitleController] Arrival: splash stage done.");
 
-            // Stage 2 — cold open (story intro), same guard.
+            // Stage 2 — cold open (story intro), same guard. CRITICAL: the cold
+            // open is a 14-beat cinematic. If SafeStage merely STOPPED AWAITING on
+            // timeout, Play()'s beat loop would keep running and render beats ON TOP
+            // of the title (the recurring "intro on top" bug). So we pass
+            // ForceHide as the on-timeout/exception KILL: SafeStage now CANCELS the
+            // cinematic (not just stops awaiting it) the instant it times out, BEFORE
+            // proceeding. ForceHide cancels the CTS, blanks + detaches the overlay,
+            // and marks finished — so the loop breaks immediately and cannot overlay.
             if (_storyIntro != null)
-                await SafeStage(_storyIntro.Play(), "storyIntro");
-            // CRITICAL: SafeStage TIMES OUT the cold-open at 6s, but Play() is a
-            // 14-beat cinematic that keeps running its remaining beats afterwards —
-            // rendering them ON TOP of the title (the recurring "intro on top" bug).
-            // Force-kill the intro overlay here so it can never overlay the title.
+                await SafeStage(_storyIntro.Play(), "storyIntro", _storyIntro.ForceHide);
+            // Belt-and-braces: ForceHide is idempotent — ensure the overlay is down
+            // even on the success path (where SafeStage did not need to invoke it).
             if (_storyIntro != null) _storyIntro.ForceHide();
             Debug.Log("[TitleController] Arrival: storyIntro stage done.");
 
@@ -227,8 +232,16 @@ namespace DeNelle.Onboarding
         /// Awaits an arrival stage but never lets it hang the boot: on timeout or
         /// exception it logs and returns so the title screen is always reached.
         /// (WebGL: the bumper video / async stages can stall indefinitely.)
+        ///
+        /// ROOT-CAUSE FIX (DEF-211): a bare timeout only STOPS AWAITING the stage —
+        /// the underlying loop keeps running. For a cinematic stage that means its
+        /// remaining beats render OVER the title. <paramref name="onTimeout"/> is the
+        /// authoritative KILL for the stage: when the stage times out or throws, we
+        /// invoke it BEFORE returning so the stage is genuinely CANCELLED (CTS
+        /// cancelled, overlay torn down), not merely abandoned. Pass
+        /// <c>StoryIntroController.ForceHide</c> for the cold-open stage.
         /// </summary>
-        private static async UniTask SafeStage(UniTask stage, string name)
+        private static async UniTask SafeStage(UniTask stage, string name, System.Action onTimeout = null)
         {
             try
             {
@@ -236,8 +249,15 @@ namespace DeNelle.Onboarding
             }
             catch (System.Exception e)
             {
+                // Cancel the underlying stage NOW — do not just stop awaiting it,
+                // or its loop will keep rendering beats over the next screen.
+                try { onTimeout?.Invoke(); }
+                catch (System.Exception killEx)
+                {
+                    Debug.LogWarning($"[TitleController] Arrival stage '{name}' kill threw: {killEx.Message}");
+                }
                 Debug.LogWarning($"[TitleController] Arrival stage '{name}' skipped " +
-                                 $"(timeout/exception) — proceeding to title. {e.Message}");
+                                 $"(timeout/exception) — cancelled + proceeding to title. {e.Message}");
             }
         }
 
@@ -270,6 +290,11 @@ namespace DeNelle.Onboarding
 
             // We own the tree now — wipe whatever the UXML did (or didn't) build.
             _root.Clear();
+            // DEF-211: also DETACH the source UXML at runtime so a later layout
+            // cycle can never re-instantiate the orphaned TitleScreen.uxml elements
+            // back over the code-built landing. (Runtime visualTreeAsset=null —
+            // chosen over editing the builder so the kill lives next to the Clear.)
+            if (_titleDocument != null) _titleDocument.visualTreeAsset = null;
             _root.style.flexGrow = 1f;
             _root.style.flexDirection = FlexDirection.Column;
             _root.style.alignItems = Align.Stretch;
@@ -406,6 +431,17 @@ namespace DeNelle.Onboarding
         private void BuildCards()
         {
             if (_cardRow == null) return;
+
+            // DEF-211: a broken roster must SCREAM, not silently render an empty /
+            // merged card row. Log loudly (do NOT throw) and still build whatever
+            // heroes exist so the landing degrades gracefully rather than crashing.
+            if (HeroCatalog.Heroes == null || HeroCatalog.Heroes.Length != 4)
+            {
+                int count = HeroCatalog.Heroes != null ? HeroCatalog.Heroes.Length : 0;
+                Debug.LogError($"[TitleController] HERO ROSTER BROKEN — expected 4 heroes, " +
+                               $"HeroCatalog.Heroes has {count}. The hero-select row will be wrong.");
+            }
+
             _cardRow.Clear();
             for (int i = 0; i < HeroCatalog.Heroes.Length; i++)
             {

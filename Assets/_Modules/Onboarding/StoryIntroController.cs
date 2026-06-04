@@ -151,6 +151,13 @@ namespace DeNelle.Onboarding
                 var cinematic = ReactOpeningCinematic;
                 foreach (var beat in cinematic)
                 {
+                    // DEF-211: hard early-exit at the TOP of every beat. If the CTS
+                    // was cancelled (e.g. SafeStage timed out and ForceHide fired),
+                    // stop rendering THIS instant — never paint another beat over the
+                    // title. Awaits inside the beat also observe the token, but this
+                    // guard guarantees a cancelled loop cannot start a fresh beat.
+                    if (_cts == null || _cts.IsCancellationRequested) return;
+
                     if (_lineLabel != null)
                     {
                         _lineLabel.text = beat.Text;
@@ -217,7 +224,15 @@ namespace DeNelle.Onboarding
                 _root.style.display = DisplayStyle.None;
                 _root.pickingMode = PickingMode.Ignore;
             }
-            if (_document != null) _document.enabled = false;   // detach the panel from rendering entirely
+            if (_document != null)
+            {
+                _document.enabled = false;             // detach the panel from rendering
+                // DEF-211: also fully deactivate the overlay GameObject (the
+                // HideImmediate pattern) so it cannot render even one more frame —
+                // disabling the UIDocument alone has been observed to leave the root
+                // attached to the shared panel in this Unity 6 build.
+                _document.gameObject.SetActive(false);
+            }
             HasFinished = true;
         }
 
