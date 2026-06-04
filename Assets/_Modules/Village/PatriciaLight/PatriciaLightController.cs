@@ -121,6 +121,13 @@ namespace DeNelle.Village
         private EnemyDef _bossDef;
 
         private readonly List<Enemy> _liveEnemies = new List<Enemy>();
+        // DEF-260: enemies that have ALREADY landed their one-time arrival hit on the
+        // tower. ReachedHeart fires every frame an enemy sits inside the arrival radius
+        // (Enemy.DriveNav has no per-arrival latch), so without this guard a single
+        // enemy could drain several HeartHitDamage chunks in successive frames before
+        // its Kill() resolves — driving the tower "fallen" while the integrity bar had
+        // only just shown a healthy value. Now each enemy breaches the tower exactly once.
+        private readonly HashSet<Enemy> _breached = new HashSet<Enemy>();
         private readonly List<PetRepairAdapter> _pets = new List<PetRepairAdapter>();
         private DragonBoss _liveApexBoss;
 
@@ -1049,6 +1056,12 @@ namespace DeNelle.Village
                 enemy.gameObject.AddComponent<AirEnemyTag>(); // marks it for the air glide
             }
 
+            // DEF-260: the controller is the sole tower-HP authority — neutralise the
+            // enemy's own contact attack (set AFTER Configure/ApplyWaveScaling, which
+            // assign _contactDamage from the def) so tower HP only falls through the
+            // latched HandleEnemyReachedHeart breach hit.
+            ZeroEnemyContactDamage(enemy);
+
             enemy.Died += HandleEnemyDied;
             enemy.ReachedHeart += HandleEnemyReachedHeart;
             _liveEnemies.Add(enemy);
@@ -1103,8 +1116,19 @@ namespace DeNelle.Village
 
         private Enemy SpawnEnemy(EnemyDef def, Vector3 pos, bool ground, string modelName = null, float sizeScale = 1f)
         {
-            if (ground && NavMesh.SamplePosition(pos, out var hit, 8f, NavMesh.AllAreas))
-                pos = hit.position;
+            // DEF-260: ground-seat ground enemies onto the actual floor. Prefer a
+            // NavMesh sample (so they land where they can also path); if that misses
+            // (runtime bake failed / spawn point just off the mesh), fall back to a
+            // straight raycast DOWN onto the arena floor so they never spawn floating
+            // in mid-air or perched on top of a barricade. Air enemies keep their
+            // cruise altitude (they glide in via DriveAirEnemies).
+            if (ground)
+            {
+                if (NavMesh.SamplePosition(pos, out var hit, 8f, NavMesh.AllAreas))
+                    pos = hit.position;
+                else
+                    pos.y = SampleGroundY(pos);
+            }
 
             // Bare root carries gameplay (collider + Enemy + agent); the mesh is a
             // visual child fit to size. (Replaces the old placeholder capsule "pill".)
@@ -1131,6 +1155,33 @@ namespace DeNelle.Village
             var enemy = go.AddComponent<Enemy>();
             if (go.GetComponent<EnemyDamageable>() == null) go.AddComponent<EnemyDamageable>();
             return enemy;
+        }
+
+        /// <summary>Raycasts straight down (from well above) to find the floor Y under
+        /// <paramref name="pos"/>; falls back to the tower's ground plane (y=0) when no
+        /// collider is hit, so a ground enemy is never left floating.</summary>
+        private static float SampleGroundY(Vector3 pos)
+        {
+            Vector3 from = new Vector3(pos.x, pos.y + 50f, pos.z);
+            if (Physics.Raycast(from, Vector3.down, out RaycastHit floor, 200f,
+                    ~0, QueryTriggerInteraction.Ignore))
+                return floor.point.y;
+            return TowerPos.y;   // arena floor sits at the tower's ground plane
+        }
+
+        /// <summary>Disables an enemy's self-driven contact damage so the DTT controller
+        /// is the sole authority on tower HP. Uses the same private-field-write pattern
+        /// as <see cref="TrySetHeroEnemyMask"/>; non-fatal if the field moves.</summary>
+        private static void ZeroEnemyContactDamage(Enemy enemy)
+        {
+            if (enemy == null) return;
+            try
+            {
+                var f = typeof(Enemy).GetField("_contactDamage",
+                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                f?.SetValue(enemy, 0f);
+            }
+            catch { /* leave default contact damage — the breach-hit latch still bounds tower loss */ }
         }
 
         /// <summary>Instantiates a KayKit skeleton mesh under <paramref name="root"/>,
@@ -1224,6 +1275,7 @@ namespace DeNelle.Village
             {
                 boss.Configure(id, def, _towerTransform);
                 boss.transform.localScale *= 2.2f;   // visibly the boss
+                ZeroEnemyContactDamage(boss);        // DEF-260: controller owns tower HP
                 boss.Died += HandleEnemyDied;
                 boss.ReachedHeart += HandleEnemyReachedHeart;
                 boss.gameObject.AddComponent<AirEnemyTag>();
@@ -1267,6 +1319,12 @@ namespace DeNelle.Village
         {
             if (!_running || _heart == null) return;
 
+            // DEF-260: apply the breach hit ONCE per enemy. ReachedHeart can fire on
+            // multiple consecutive frames before Kill() resolves, so an unguarded
+            // SetHp(-HeartHitDamage) per call let one enemy gouge the tower for several
+            // chunks in a few frames — the "tower fell while the bar read 11" symptom.
+            if (enemy != null && !_breached.Add(enemy)) return;
+
             _heart.SetHp(_heart.Hp - HeartHitDamage);
             RefreshHud();
             FlashTowerHit(strong: false);   // red pulse + camera shake on every breach
@@ -1276,6 +1334,7 @@ namespace DeNelle.Village
                 enemy.Died -= HandleEnemyDied;
                 enemy.ReachedHeart -= HandleEnemyReachedHeart;
                 _liveEnemies.Remove(enemy);
+                _breached.Remove(enemy);
                 enemy.Kill(); // breached, not slain — no kill XP
             }
         }
@@ -1328,6 +1387,7 @@ namespace DeNelle.Village
             foreach (Enemy e in _liveEnemies)
                 if (e != null) e.Kill();
             _liveEnemies.Clear();
+            _breached.Clear();
             if (_liveApexBoss != null)
             {
                 _liveApexBoss.Died -= HandleApexBossDied;
