@@ -22,6 +22,7 @@
 using System;
 using UnityEngine;
 using DeNelle.Core.World;
+using DeNelle.Core.State;
 
 namespace DeNelle.Village.World.Camps
 {
@@ -58,6 +59,18 @@ namespace DeNelle.Village.World.Camps
 
         private CampVisual _visual;
         private bool _subscribed;
+        private CampGuards _guards;
+
+        // -- Clear reward (WO-216 / DEF-187) ----------------------------------
+        // Granted ONCE when the camp transitions Hostile -> Cleared. Crystals bank
+        // straight into GameState (the existing economy path); XP feeds the hero via
+        // HeroProgression. Scaled by threat tier so deadlier camps pay better.
+        /// <summary>Aether Crystals banked on clear (before the threat-tier bonus).</summary>
+        public int BaseClearCrystals { get; private set; } = 15;
+        /// <summary>Hero XP granted on clear (before the threat-tier bonus).</summary>
+        public int BaseClearXp { get; private set; } = 40;
+        /// <summary>True once the clear reward has been paid (prevents double-grant).</summary>
+        private bool _rewardPaid;
 
         // -- Persistence (PlayerPrefs only - schema untouched) ----------------
         private const string PrefClearedKey = "dotr-camp-cleared-";   // +CampId -> "1"
@@ -82,7 +95,17 @@ namespace DeNelle.Village.World.Camps
             RestoreFromPrefs();
 
             if (Stage == CampStage.Hostile)
+            {
+                // Primary clear path (WO-216): spawn a dedicated guard pack ON the camp.
+                // When ALL guards die the camp clears. The legacy proximity-kill counter
+                // below stays as a secondary path (e.g. a roaming mob killed inside the
+                // footprint also counts), so a camp can never get stuck un-clearable.
+                _guards = gameObject.AddComponent<CampGuards>();
+                _guards.AllCleared += Clear;
+                _guards.Spawn(Region, ThreatLevel);
+
                 SubscribeToKills();
+            }
         }
 
         private void OnDestroy() => UnsubscribeFromKills();
@@ -155,11 +178,48 @@ namespace DeNelle.Village.World.Camps
             if (Stage != CampStage.Hostile) return;
             Stage = CampStage.Cleared;
             UnsubscribeFromKills();
+            if (_guards != null) _guards.AllCleared -= Clear;
             _visual?.SetStage(CampStage.Cleared);
             PlayerPrefs.SetString(PrefClearedKey + CampId, "1");
             PlayerPrefs.Save();
-            Debug.Log($"[ClaimableCamp] {CampId} CLEARED ({KillCount}/{KillsRequired} kills). Approach to claim.");
+
+            GrantClearReward();
+
+            Debug.Log($"[ClaimableCamp] {CampId} CLEARED. Approach to claim.");
             OnCleared?.Invoke(this);
+        }
+
+        /// <summary>
+        /// Pay the one-time clear reward (WO-216 / DEF-187): Aether Crystals banked
+        /// into GameState (the existing economy wallet path) + hero XP via
+        /// HeroProgression. Both scale with the camp's threat tier so deadlier camps
+        /// pay better. Idempotent - the reward is paid at most once per camp/session.
+        /// Restored-as-already-cleared camps do NOT re-pay (RestoreFromPrefs marks it).
+        /// </summary>
+        private void GrantClearReward()
+        {
+            if (_rewardPaid) return;
+            _rewardPaid = true;
+
+            int crystals = BaseClearCrystals + ThreatLevel * 5;
+            int xp = BaseClearXp + ThreatLevel * 10;
+
+            // Crystals -> GameState wallet (null-conditional on the cross-module singleton).
+            var state = GameStateService.Instance?.State;
+            if (state != null)
+            {
+                state.AetherCrystals += crystals;
+                GameStateService.Instance?.ResourcesChanged?.Invoke();
+            }
+            else
+            {
+                Debug.LogWarning("[ClaimableCamp] GameState null - clear crystals not banked.");
+            }
+
+            // XP -> hero progression (same flat-XP path Enemy.Die uses on kill).
+            HeroProgression.Instance?.AddXp(xp);
+
+            Debug.Log($"[ClaimableCamp] {CampId} clear reward: +{crystals} crystals, +{xp} XP.");
         }
 
         // =====================================================================
