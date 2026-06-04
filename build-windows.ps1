@@ -45,6 +45,17 @@ $unity = Join-Path $chosen.FullName 'Editor\Unity.exe'
 Write-Host "[build] Editor: $($chosen.Name)  ->  $unity"
 
 # --- 2) Clean stale build output ---------------------------------------------
+# A running player holds open its Data\Plugins DLLs (e.g. lib_burst_generated.dll),
+# which blocks the wipe below. Stop the game player first so no manual "close the
+# game" step is needed. This only targets the built game EXE by name - never the
+# Unity editor or the licensing client (see memory: unity-license-kill-caution).
+$player = Get-Process -Name 'DefendersOfTheRealm' -ErrorAction SilentlyContinue
+if ($player) {
+    Write-Host "[build] Stopping running player (DefendersOfTheRealm) so the output can be wiped."
+    $player | Stop-Process -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Seconds 2   # let the OS release the file handles
+}
+
 $outDir = Join-Path $proj 'Builds\Windows'
 if (Test-Path $outDir) {
     Write-Host "[build] Removing stale output: $outDir"

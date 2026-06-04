@@ -28,6 +28,7 @@
 using System;
 using System.Threading;
 using Cysharp.Threading.Tasks;
+using DeNelle.Core;
 using DeNelle.Core.State;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -60,11 +61,17 @@ namespace DeNelle.Onboarding
         /// </summary>
         public event Action Finished;
 
+        [Tooltip("Seconds after the intro starts during which a root pointer-down is ignored, " +
+                 "so the launch / initial tap that carried the player into the scene cannot " +
+                 "instantly skip the whole cinematic. The explicit Skip button is never gated.")]
+        [SerializeField] private float _pointerSkipGraceSeconds = 1.25f;
+
         private UIDocument _document;
         private VisualElement _root;
         private VisualElement _imagePanel;
         private Label _lineLabel;
         private bool _skipRequested;
+        private float _overlayStartTime;
         private CancellationTokenSource _cts;
 
         /// <summary>True once <see cref="Play"/> has run to completion.</summary>
@@ -122,6 +129,17 @@ namespace DeNelle.Onboarding
             BuildOverlay();
             _skipRequested = false;
 
+            // Prime the intro score the instant the cinematic begins. Browsers
+            // legally block audio until the first user gesture, so this may not
+            // sound immediately on WebGL — WebGLAudioUnlock resumes the
+            // AudioContext on first touch and AudioService re-issues the current
+            // track, so the score lands the moment the player taps. Null-guarded:
+            // CoreServices.Audio is unset until AudioService registers itself.
+            // DEF-228: prime the TITLE theme (title.mp3) — the cold-open is part of the
+            // Title scene and title.mp3 is the opening music. This used to request
+            // Overworld, which stomped the title track ~3-6s in (the reported bug).
+            CoreServices.Audio?.PlayMusic(DeNelle.Core.Audio.MusicTrack.Title);
+
             try
             {
                 await Fade(0f, 1f, _fadeSeconds, token);
@@ -133,6 +151,13 @@ namespace DeNelle.Onboarding
                 var cinematic = ReactOpeningCinematic;
                 foreach (var beat in cinematic)
                 {
+                    // DEF-211: hard early-exit at the TOP of every beat. If the CTS
+                    // was cancelled (e.g. SafeStage timed out and ForceHide fired),
+                    // stop rendering THIS instant — never paint another beat over the
+                    // title. Awaits inside the beat also observe the token, but this
+                    // guard guarantees a cancelled loop cannot start a fresh beat.
+                    if (_cts == null || _cts.IsCancellationRequested) return;
+
                     if (_lineLabel != null)
                     {
                         _lineLabel.text = beat.Text;
@@ -180,6 +205,39 @@ namespace DeNelle.Onboarding
             Complete();
         }
 
+        /// <summary>
+        /// Hard-stops the cinematic and removes its overlay NOW. The arrival
+        /// sequence times the cold-open out at 6s (a WebGL hang-guard), but
+        /// <see cref="Play"/> is a 14-beat cinematic that keeps running its
+        /// remaining beats AFTER the timeout — rendering them on top of the
+        /// title/hero-select (the recurring "intro on top" bug). The orchestrator
+        /// calls this right before it reveals the title so the intro can never
+        /// overlay it: cancel the play loop, blank + detach the overlay panel, and
+        /// mark finished so a later Play() is a no-op.
+        /// </summary>
+        public void ForceHide()
+        {
+            _cts?.Cancel();
+            // SHARED-PANEL SAFE TEARDOWN (DEF-211 regression — "click Skip and every
+            // screen vanishes, never reaches hero-select"). The bumper, story-intro
+            // AND title UIDocuments all share ONE OnboardingPanelSettings panel
+            // (OnboardingSceneBuilder assigns the same asset to all three). Disabling
+            // THIS UIDocument / SetActive(false)-ing its GameObject / nulling its
+            // panelSettings tears down that SHARED panel mid-life, which blanks the
+            // title/hero-select rendering into the same panel. So hide ONLY this
+            // overlay's own subtree: stop the loop, empty the root, collapse it, make
+            // it un-pickable. An empty display:None root renders nothing and steals no
+            // picks — so the "intro on top" bug stays fixed WITHOUT killing the doc.
+            if (_root != null)
+            {
+                _root.Clear();
+                _root.style.opacity = 0f;
+                _root.style.display = DisplayStyle.None;
+                _root.pickingMode = PickingMode.Ignore;
+            }
+            HasFinished = true;
+        }
+
         // ── Overlay construction (runtime UI Toolkit, no .uxml needed) ───────
         private void BuildOverlay()
         {
@@ -194,8 +252,20 @@ namespace DeNelle.Onboarding
             _root.style.alignItems = Align.Center;
             _root.style.justifyContent = Justify.Center;
             _root.style.opacity = 0f;
-            // Tap anywhere advances to the next line / finishes.
-            _root.RegisterCallback<PointerDownEvent>(_ => _skipRequested = true);
+            // Stamp the start so the grace window below is measured from "intro
+            // began", not from scene load.
+            _overlayStartTime = Time.unscaledTime;
+            // Tap anywhere advances to the next line / finishes — BUT ignore the
+            // first ~1.25s. The pointer-down that LAUNCHED the player into the
+            // scene (the press on the previous screen / the browser's first
+            // gesture) otherwise arrives here on frame 1 and instantly skips the
+            // whole cinematic in ~1s — the recurring "intro cut short" bug. The
+            // explicit Skip button is never gated by this (separate handler).
+            _root.RegisterCallback<PointerDownEvent>(_ =>
+            {
+                if (Time.unscaledTime - _overlayStartTime < _pointerSkipGraceSeconds) return;
+                _skipRequested = true;
+            });
 
             // Per-line scene icon — Resources/Intro/intro-N.jpg from the
             // React asset pack. Owner direction 2026-05-20 (3rd pass): can use
@@ -225,9 +295,11 @@ namespace DeNelle.Onboarding
 
             // Owner 2026-05-20: the Skip button must jump straight to hero
             // selection, not just advance one beat (tap-anywhere already does
-            // that). Cancel the CTS — the foreach catches OperationCanceled
-            // and falls through to Complete(), which routes onward.
-            var skip = new Button(() => _cts?.Cancel()) { text = "Skip" };
+            // that). DEF-134: cancel alone left the intro lingering over the title
+            // because WaitBeatOrSkip loops on _skipRequested (not the token) and
+            // wouldn't break — so set BOTH; the loop breaks immediately and the
+            // teardown (HideImmediate + Complete) is reached at once.
+            var skip = new Button(() => { _skipRequested = true; _cts?.Cancel(); }) { text = "Skip" };
             skip.style.position = Position.Absolute;
             skip.style.top = 18;
             skip.style.right = 18;
@@ -280,30 +352,40 @@ namespace DeNelle.Onboarding
         }
 
         /// <summary>
-        /// Verbatim port of OPENING_CINEMATIC from React src/content/story.ts
-        /// (2026-05-20 owner direction). 14 beats, total ~73 seconds; players
-        /// can tap to skip ahead one beat at a time.
+        /// Stone Choir opening cinematic — canon-locked to STORYLINE.md (2026-05-27).
+        /// 14 beats, total ~73 seconds; players can tap to skip ahead one beat at a time.
+        ///
+        /// Canon anchors:
+        ///   - Town = Elarion. The Lantern motif is retired. No named heart.
+        ///   - The Heart-Tree burned a hundred winters ago; the Folk raised the
+        ///     Cathedral Spire over its ashes and bound its last song inside.
+        ///   - The spire holds one long note (the chord). While it sings, the
+        ///     valley holds. The Choir (Hollow Ones) come to silence it.
+        ///   - Three heroes wait: Sir Bram (Knight), Nessa (Ranger), and the
+        ///     youngest Chorister — who is you (the Keeper).
+        ///   - "That one is you" / "The chord is yours now" are the closing beats.
+        ///   - Class-agnostic: plays before HeroSelect, so it does not assume Mage.
         /// </summary>
         private static readonly CinematicBeat[] ReactOpeningCinematic = new[]
         {
-            new CinematicBeat("Long ago, the realm was kept warm by a single light —", 5.0f),
-            new CinematicBeat("the Lantern of Avalon, which never dimmed,", 4.8f, 1),
-            new CinematicBeat("and the Guardian whose quiet hands tended its flame.", 5.2f, 8),
-            new CinematicBeat("Avalon. A village. A promise. A home.", 5.4f, 5, true),
-            new CinematicBeat("But Guardians grow old, and old light grows thin.", 5.0f),
-            new CinematicBeat("Beneath the sleeping hills, something hollow began to wake.", 5.4f),
-            new CinematicBeat("They call it the Withering — it remembers no warmth,", 5.0f, 2),
+            new CinematicBeat("A hundred winters ago, the Heart-Tree burned.", 5.0f),
+            new CinematicBeat("Elarion watched from inside its walls.", 4.8f, 1),
+            new CinematicBeat("The court fled south. No king ever came back.", 5.2f, 8),
+            new CinematicBeat("Elarion. A village. A grief. A vow.", 5.4f, 5, true),
+            new CinematicBeat("So the Folk raised a spire of pale stone over the Tree's ashes,", 5.0f),
+            new CinematicBeat("and bound its last song inside. The spire has held the note ever since.", 5.4f),
+            new CinematicBeat("They call the dark the Withering — it remembers no warmth,", 5.0f, 2),
             new CinematicBeat("and it forgives no green and growing thing.", 4.8f),
-            new CinematicBeat("Now the old protectors keep a lonely watch —", 4.8f),
-            new CinematicBeat("Sir Bram the knight, Sela the archer, and three small sleeping spirits —", 5.8f),
-            new CinematicBeat("waiting for the one the Lantern will answer to.", 5.0f, 7),
+            new CinematicBeat("Three have kept watch over the spire's chord —", 4.8f),
+            // Class-agnostic phrasing per owner direction 2026-05-20 — the intro
+            // plays before HeroSelect so it does not lock the player to Mage.
+            // Sir Bram (Knight) and Nessa (Ranger) are named companions; the
+            // third watcher is the player — any of the three hero classes.
+            new CinematicBeat("Sir Bram the knight, Nessa the ranger, and one Chorister still learning the song —", 5.8f),
+            new CinematicBeat("waiting for the one the chord will answer to.", 5.0f, 7),
             new CinematicBeat("That one is you.", 4.5f, 3, true),
-            // Class-agnostic phrasing per owner direction 2026-05-20 — the
-            // intro plays before HeroSelect so it shouldn't assume Mage. The
-            // hero-class trio (mage / knight / ranger) is named earlier in
-            // beat 10 ("Sir Bram the knight, Sela the archer, and three…").
-            new CinematicBeat("Barely a recruit, scarcely tested — yet the flame brightens at your step.", 5.8f, 6),
-            new CinematicBeat("Welcome home, Guardian of the Lantern.", 5.4f, 4, true),
+            new CinematicBeat("Barely a Keeper, scarcely tested — yet the spire steadies when you step beneath it.", 5.8f, 6),
+            new CinematicBeat("Welcome home. The chord is yours now.", 5.4f, 4, true),
         };
 
         /// <summary>
@@ -385,23 +467,17 @@ namespace DeNelle.Onboarding
 
         private void HideImmediate()
         {
-            // Fully tear down the cold-open overlay so it cannot intercept picks
-            // on the Title screen. _document.enabled=false alone has been
-            // observed to leave the root attached on the shared panel in this
-            // Unity 6 build — same class of serialisation quirk that needed the
-            // YAML PanelSettings injection.
+            // SHARED-PANEL SAFE TEARDOWN — see ForceHide. The cold-open overlay shares
+            // ONE PanelSettings panel with the title/hero-select, so we must NOT
+            // disable this UIDocument or its GameObject (that blanks the shared panel
+            // and the title with it — the "Skip wipes every screen" regression).
+            // Hiding our own emptied, un-pickable, display:None root is enough — it
+            // renders nothing and steals no picks on the Title screen.
             if (_root != null)
             {
+                _root.Clear();
                 _root.style.display = DisplayStyle.None;
                 _root.pickingMode = PickingMode.Ignore;
-                _root.Clear();
-                _root.RemoveFromHierarchy();
-            }
-            if (_document != null)
-            {
-                _document.visualTreeAsset = null;
-                _document.enabled = false;
-                _document.gameObject.SetActive(false);
             }
         }
 

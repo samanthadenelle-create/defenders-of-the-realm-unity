@@ -1,0 +1,301 @@
+{
+  "meta": {
+    "doc": "Elarion City Manifest (WO-189a rev — freeze-2 quadrant reorg, DATA ONLY — do not edit any .cs to land).",
+    "authority": "DESIGN_VILLAGE_DISTRICTS.md ⭐ CANONICAL TEMPLATE + 'NOW (freeze 2)' reorg list. Four quadrant districts, sacred-center cleared, density halved.",
+    "see": "CityManifest.draft.README.md for schema + per-field assumptions CLI must verify.",
+    "grounding": {
+      "innerWall_WallHalfX": 28,
+      "innerWall_WallHalfZ": 21,
+      "southBowDepth": 4,
+      "southBowZ": -25,
+      "source_wall": "Assets/_Modules/Village/Walls/WallLayout.cs:126-135",
+      "gates": {
+        "north": [0, 0, 21],
+        "east": [28, 0, 0],
+        "south": [0, 0, -25],
+        "west": [-28, 0, 0],
+        "source": "WallLayout.cs gate table (GateAngles + run midpoints lines 246-275)"
+      },
+      "heart_authored": [0, 0, 1],
+      "source_heart": "VillageSceneBuilder.Content.cs:116",
+      "sacredClearingRadius": 14,
+      "visual_perimeter_outer": { "wallX": 42, "wallZ": 33, "source": "VillageSceneBuilder.Walls.cs:437-438", "note": "outer art ring; gameplay wall is 28/21" },
+      "gateClearanceMin": 6,
+      "quadrants": {
+        "NW": "Blacksmith / Craft — Forge(Blacksmith), Lumbermill, Barracks, Arcane Library",
+        "NE": "Commerce — Market, Crystal Mine (Commerce Hall/Jeweler/Pet Shop = FUTURE, not built)",
+        "SW": "Tavern / Social — Tavern",
+        "SE": "Residential — Houses (one = HeroHome), Pet House",
+        "bow": "Farm + Granary on the south bow apron / quadrant edge"
+      }
+    },
+    "prefabRoots": {
+      "polyperfect": "Assets/polyperfect/Low Poly Ultimate Pack/_M/Prefabs_M/",
+      "kaykit_hex": "Assets/Models/KayKit/KayKit Medieval Hexagon Pack 1.0.1/Assets/fbx(unity)/"
+    },
+    "counts": { "buildings": 19, "props": 38, "wardens": 6, "roads": 4, "bridges": 0, "note": "19 = 15 district/civic buildings (~14 target, incl. Heart) + 4 mandated KayKit corner watchtowers. Shrine + central Well + heart-set clutter REMOVED from sacred center per freeze-2. Bridges REMOVED from manifest — builder/CLI places stone bridges OUTSIDE the (widening) moat; fixed manifest coords won't align." }
+  },
+
+  "buildings": [
+    {
+      "id": "Forge",
+      "prefab": "polyperfect/Medieval_M/House_Medieval_Medium.prefab",
+      "prefabKind": "polyperfect",
+      "pos": [-12, 0, 14],
+      "rotY": 135,
+      "district": "NW",
+      "purpose": "Blacksmith / gear+upgrades — NW Craft quadrant anchor. Blacksmith Warden pinned at the anvil here with the hammer."
+    },
+    {
+      "id": "Lumbermill",
+      "prefab": "polyperfect/Medieval_M/House_Medieval_Medium.prefab",
+      "prefabKind": "polyperfect",
+      "pos": [-22, 0, 13],
+      "rotY": 250,
+      "district": "NW",
+      "purpose": "wood income — NW Craft quadrant; Timber/Axe props",
+      "secondaryPrefab": "polyperfect/Farm_M/Timber.prefab"
+    },
+    {
+      "id": "Barracks",
+      "prefab": "polyperfect/Medieval_M/House_Medieval_Big.prefab",
+      "prefabKind": "polyperfect",
+      "pos": [-22, 0, 4],
+      "rotY": 90,
+      "district": "NW",
+      "purpose": "train squads (food-capped army) — NW Craft quadrant, against the W wall"
+    },
+    {
+      "id": "ArcaneLibrary",
+      "prefab": "polyperfect/Medieval_M/Tower_Medieval_Big.prefab",
+      "prefabKind": "polyperfect",
+      "pos": [-17, 0, 17],
+      "rotY": 180,
+      "district": "NW",
+      "purpose": "talents/spells — NW Craft quadrant; moved OUT to clear the sacred Tree of Life (was at -8,6 = 9.4m from center, large mesh sprawled over tree). Now near the NW inner corner, ≥6m from Forge/Lumbermill and the N/W gate openings."
+    },
+
+    {
+      "id": "Market",
+      "prefab": "polyperfect/Medieval_M/House_Medieval_Large.prefab",
+      "prefabKind": "polyperfect",
+      "pos": [16, 0, 8],
+      "rotY": 250,
+      "district": "NE",
+      "purpose": "store / social — NE Commerce quadrant anchor + market stalls. (Commerce Hall/Jeweler/Pet Shop = FUTURE upgrade tiers, not built.)",
+      "secondaryPrefab": "polyperfect/Medieval_M/Marketplace_Stand_Simple.prefab"
+    },
+    {
+      "id": "CrystalMine",
+      "prefab": "polyperfect/Medieval_M/House_Medieval_Small.prefab",
+      "prefabKind": "polyperfect",
+      "pos": [22, 0, 13],
+      "rotY": 200,
+      "district": "NE",
+      "purpose": "crystal income (village-bound MVP) — NE Commerce quadrant; small structure + well as mine mouth",
+      "secondaryPrefab": "polyperfect/Medieval_M/Well.prefab"
+    },
+
+    {
+      "id": "Tavern",
+      "prefab": "polyperfect/Medieval_M/House_Medieval_Big.prefab",
+      "prefabKind": "polyperfect",
+      "pos": [-16, 0, -12],
+      "rotY": 45,
+      "district": "SW",
+      "purpose": "NPC hub, bonds — SW Tavern/Social quadrant anchor off the south road"
+    },
+
+    { "id": "HeroHome", "prefab": "polyperfect/Medieval_M/House_Medieval_Medium.prefab", "prefabKind": "polyperfect", "pos": [13, 0, -10], "rotY": 200, "district": "SE", "purpose": "the Hero's home (WO-161 placeholder) — SE Residential quadrant, nearest the plaza. Nudged out from 10,-8 (was 13.45m from the Tree, inside the 14m clear)." },
+    { "id": "House01", "prefab": "polyperfect/Medieval_M/House_Medieval_Small.prefab", "prefabKind": "polyperfect", "pos": [20, 0, -8], "rotY": 250, "district": "SE", "purpose": "population density — SE Residential" },
+    { "id": "House02", "prefab": "polyperfect/Medieval_M/House_Medieval_Medium.prefab", "prefabKind": "polyperfect", "pos": [16, 0, -16], "rotY": 20, "district": "SE", "purpose": "population density — SE Residential" },
+    { "id": "House03", "prefab": "polyperfect/Medieval_M/House_Medieval_Small.prefab", "prefabKind": "polyperfect", "pos": [9, 0, -16], "rotY": 0, "district": "SE", "purpose": "population density — SE Residential (south lane)" },
+    { "id": "PetHouse", "prefab": "polyperfect/Medieval_M/Stables_Medieval.prefab", "prefabKind": "polyperfect", "pos": [22, 0, -14], "rotY": 315, "district": "SE", "purpose": "companion / pet — SE Residential quadrant; Hay_Pile + Fence_Stone surround" },
+
+    {
+      "id": "Tower_NE",
+      "prefab": "kaykit_hex/buildings/blue/building_watchtower_blue.fbx",
+      "prefabKind": "kaykit_hex",
+      "pos": [25, 0, 18],
+      "rotY": 225,
+      "district": "wall-corner",
+      "purpose": "rampart anchor / archer post (KayKit watchtower). Just inside NE inner corner (28,21)."
+    },
+    {
+      "id": "Tower_SE",
+      "prefab": "kaykit_hex/buildings/blue/building_watchtower_blue.fbx",
+      "prefabKind": "kaykit_hex",
+      "pos": [25, 0, -18],
+      "rotY": 315,
+      "district": "wall-corner",
+      "purpose": "rampart anchor / archer post. Just inside SE inner corner."
+    },
+    {
+      "id": "Tower_SW",
+      "prefab": "kaykit_hex/buildings/blue/building_watchtower_blue.fbx",
+      "prefabKind": "kaykit_hex",
+      "pos": [-25, 0, -18],
+      "rotY": 45,
+      "district": "wall-corner",
+      "purpose": "rampart anchor / archer post. Just inside SW inner corner."
+    },
+    {
+      "id": "Tower_NW",
+      "prefab": "kaykit_hex/buildings/blue/building_watchtower_blue.fbx",
+      "prefabKind": "kaykit_hex",
+      "pos": [-25, 0, 18],
+      "rotY": 135,
+      "district": "wall-corner",
+      "purpose": "rampart anchor / archer post. Just inside NW inner corner."
+    },
+
+    {
+      "id": "Farm",
+      "prefab": "polyperfect/Farm_M/Farm_House.prefab",
+      "prefabKind": "polyperfect",
+      "pos": [-6, 0, -22],
+      "rotY": 0,
+      "district": "bow",
+      "purpose": "food -> army cap — relocated to the south bow apron it was shaped to frame; working windmill secondary",
+      "secondaryPrefab": "polyperfect/Medieval_M/Windmill_Medieval.prefab"
+    },
+    {
+      "id": "Granary",
+      "prefab": "polyperfect/Farm_M/Farm_Silo.prefab",
+      "prefabKind": "polyperfect",
+      "pos": [6, 0, -22],
+      "rotY": 0,
+      "district": "bow",
+      "purpose": "food store paired with Farm — silo + haystacks on the south bow apron"
+    }
+  ],
+
+  "props": [
+    { "prefab": "polyperfect/Tools_M/Anvil.prefab", "prefabKind": "polyperfect", "pos": [-10.4, 0, 12.4], "rotY": 135, "group": "forge" },
+    { "prefab": "polyperfect/Tools_M/Hammer.prefab", "prefabKind": "polyperfect", "pos": [-10.0, 0, 12.0], "rotY": 135, "group": "forge" },
+    { "prefab": "polyperfect/Fantasy_M/Table_Crafting_Wood.prefab", "prefabKind": "polyperfect", "pos": [-13.6, 0, 12.0], "rotY": 135, "group": "forge" },
+    { "prefab": "polyperfect/Fantasy_M/Crate_Box.prefab", "prefabKind": "polyperfect", "pos": [-9.4, 0, 15.0], "rotY": 0, "group": "forge" },
+
+    { "prefab": "polyperfect/Farm_M/Timber.prefab", "prefabKind": "polyperfect", "pos": [-20, 0, 15], "rotY": 0, "group": "lumbermill" },
+    { "prefab": "polyperfect/Tools_M/Axe.prefab", "prefabKind": "polyperfect", "pos": [-20.6, 0, 14.2], "rotY": 60, "group": "lumbermill" },
+    { "prefab": "polyperfect/Fantasy_M/Crate_Box.prefab", "prefabKind": "polyperfect", "pos": [-23.4, 0, 15.2], "rotY": 0, "group": "lumbermill" },
+
+    { "prefab": "polyperfect/Fantasy_M/Book_Open.prefab", "prefabKind": "polyperfect", "pos": [-16, 0, 18.4], "rotY": 0, "group": "arcane", "note": "moved with ArcaneLibrary out of the 14m sacred zone" },
+    { "prefab": "polyperfect/Fantasy_M/Books_Pile.prefab", "prefabKind": "polyperfect", "pos": [-18.2, 0, 18.2], "rotY": 40, "group": "arcane", "note": "moved with ArcaneLibrary out of the 14m sacred zone" },
+    { "prefab": "polyperfect/Fantasy_M/Candle_Big.prefab", "prefabKind": "polyperfect", "pos": [-18.6, 0, 16.5], "rotY": 0, "group": "arcane", "note": "moved with ArcaneLibrary out of the 14m sacred zone" },
+
+    { "prefab": "polyperfect/Medieval_M/Marketplace_Stand_Simple.prefab", "prefabKind": "polyperfect", "pos": [14, 0, 11], "rotY": 200, "group": "market" },
+    { "prefab": "polyperfect/Medieval_M/Marketplace_Stand_Simple.prefab", "prefabKind": "polyperfect", "pos": [18, 0, 12], "rotY": 250, "group": "market" },
+    { "prefab": "polyperfect/Fantasy_M/Crate_Box.prefab", "prefabKind": "polyperfect", "pos": [13, 0, 9], "rotY": 0, "group": "market" },
+    { "prefab": "polyperfect/Fantasy_M/Jar_Big.prefab", "prefabKind": "polyperfect", "pos": [19, 0, 9.5], "rotY": 0, "group": "market" },
+
+    { "prefab": "polyperfect/Fantasy_M/Bench_Wood.prefab", "prefabKind": "polyperfect", "pos": [-15, 0, -9.5], "rotY": 30, "group": "tavern" },
+    { "prefab": "polyperfect/Fantasy_M/Table_Wood.prefab", "prefabKind": "polyperfect", "pos": [-17, 0, -10], "rotY": 0, "group": "tavern" },
+    { "prefab": "polyperfect/Fantasy_M/Jar_Big.prefab", "prefabKind": "polyperfect", "pos": [-13, 0, -14.5], "rotY": 0, "group": "tavern" },
+
+    { "prefab": "polyperfect/Farm_M/Hay_Pile.prefab", "prefabKind": "polyperfect", "pos": [23.5, 0, -16], "rotY": 0, "group": "pet-house" },
+    { "prefab": "polyperfect/Buildings_M/parts/Building Fences_M/Fence_Stone.prefab", "prefabKind": "polyperfect", "pos": [24, 0, -12], "rotY": 0, "group": "pet-house" },
+    { "prefab": "polyperfect/Animals_M/Pig.prefab", "prefabKind": "polyperfect", "pos": [21, 0, -16], "rotY": 0, "group": "pet-house" },
+
+    { "prefab": "polyperfect/Farm_M/Haystack.prefab", "prefabKind": "polyperfect", "pos": [9, 0, -23], "rotY": 0, "group": "farm" },
+    { "prefab": "polyperfect/Farm_M/Scarecrow.prefab", "prefabKind": "polyperfect", "pos": [3, 0, -23.5], "rotY": 200, "group": "farm" },
+    { "prefab": "polyperfect/Farm_M/Farm_Flower_Bed.prefab", "prefabKind": "polyperfect", "pos": [-3, 0, -23.5], "rotY": 0, "group": "farm" },
+    { "prefab": "polyperfect/Animals_M/Cow.prefab", "prefabKind": "polyperfect", "pos": [-9, 0, -22.5], "rotY": 200, "group": "farm" },
+    { "prefab": "polyperfect/Animals_M/Hen.prefab", "prefabKind": "polyperfect", "pos": [-7.5, 0, -20.5], "rotY": 40, "group": "farm" },
+
+    { "prefab": "polyperfect/Medieval_M/Well.prefab", "prefabKind": "polyperfect", "pos": [15, 0, 5], "rotY": 0, "group": "well-relocated", "note": "town well moved OUT of the sacred center to the NE quadrant edge near the plaza road (pushed further out: 12,4 was 12.4m from the Tree, inside the 14m clear)" },
+
+    { "prefab": "polyperfect/Nature_M/Trees_M/Tree_Oak.prefab", "prefabKind": "polyperfect", "pos": [24, 0, 4], "rotY": 0, "group": "fill-trees" },
+    { "prefab": "polyperfect/Nature_M/Trees_M/Tree_Oak.prefab", "prefabKind": "polyperfect", "pos": [-24, 0, -8], "rotY": 0, "group": "fill-trees" },
+    { "prefab": "polyperfect/Nature_M/Trees_M/Tree_Birch.prefab", "prefabKind": "polyperfect", "pos": [24, 0, -4], "rotY": 0, "group": "fill-trees" },
+    { "prefab": "polyperfect/Nature_M/Trees_M/Tree_Little.prefab", "prefabKind": "polyperfect", "pos": [-16, 0, 18], "rotY": 0, "group": "fill-trees" },
+
+    { "prefab": "polyperfect/Fantasy_M/Torche_Wall.prefab", "prefabKind": "polyperfect", "pos": [3, 0, 16], "rotY": 0, "group": "torches-northroad", "note": "pushed out along N road; 3,14 was 13.3m from the Tree, inside the 14m clear" },
+    { "prefab": "polyperfect/Fantasy_M/Torche_Wall.prefab", "prefabKind": "polyperfect", "pos": [-3, 0, 16], "rotY": 0, "group": "torches-northroad", "note": "pushed out along N road; -3,14 was 13.3m from the Tree, inside the 14m clear" },
+    { "prefab": "polyperfect/Fantasy_M/Torche_Wall.prefab", "prefabKind": "polyperfect", "pos": [3, 0, -16], "rotY": 0, "group": "torches-southroad" },
+    { "prefab": "polyperfect/Fantasy_M/Torche_Wall.prefab", "prefabKind": "polyperfect", "pos": [-3, 0, -16], "rotY": 0, "group": "torches-southroad" },
+    { "prefab": "polyperfect/Fantasy_M/Torche_Wall.prefab", "prefabKind": "polyperfect", "pos": [14, 0, 3], "rotY": 90, "group": "torches-eastroad" },
+    { "prefab": "polyperfect/Fantasy_M/Torche_Wall.prefab", "prefabKind": "polyperfect", "pos": [-14, 0, 3], "rotY": 270, "group": "torches-westroad" },
+
+    { "prefab": "polyperfect/Medieval_M/Flag_Medieval_Big.prefab", "prefabKind": "polyperfect", "pos": [0, 0, 18], "rotY": 180, "group": "banners-gates", "note": "north gate inner approach" },
+    { "prefab": "polyperfect/Medieval_M/Flag_Medieval_Big.prefab", "prefabKind": "polyperfect", "pos": [0, 0, -19], "rotY": 0, "group": "banners-gates", "note": "south gate inner approach" }
+  ],
+
+  "wardens": [
+    {
+      "npc": "Blacksmith",
+      "prefab": "polyperfect/People_M/Man_Sir.prefab",
+      "prefabKind": "polyperfect",
+      "atBuilding": "Forge",
+      "heldProp": "polyperfect/Tools_M/Hammer.prefab",
+      "anim": "smithing",
+      "pos": [-10.4, 0, 12.8],
+      "rotY": 135,
+      "note": "PINNED at the Forge anvil (anvil prop at -10.4,12.4), facing the building, hammer in hand. Stationary. DESIGN freeze-2 + task spec."
+    },
+    {
+      "npc": "Quartermaster",
+      "prefab": "polyperfect/People_M/Man_Lord.prefab",
+      "prefabKind": "polyperfect",
+      "atBuilding": "Barracks",
+      "heldProp": "polyperfect/Medieval_M/Sword.prefab",
+      "anim": "idle_guard",
+      "pos": [-20.5, 0, 4],
+      "rotY": 90,
+      "note": "trains squads at the Barracks; stationary at the building"
+    },
+    {
+      "npc": "Archmage",
+      "prefab": "polyperfect/People_M/Man_Monk.prefab",
+      "prefabKind": "polyperfect",
+      "atBuilding": "ArcaneLibrary",
+      "heldProp": "polyperfect/Fantasy_M/Book_Open.prefab",
+      "anim": "reading",
+      "pos": [-16.5, 0, 18.5],
+      "rotY": 180,
+      "note": "tends the Arcane Library books/scrolls; stationary at the building. Moved with ArcaneLibrary out of the 14m sacred zone (was at -7.5,7.6 = 10m from the Tree)."
+    },
+    {
+      "npc": "Farmer",
+      "prefab": "polyperfect/People_M/Man_Farm.prefab",
+      "prefabKind": "polyperfect",
+      "atBuilding": "Farm",
+      "heldProp": "polyperfect/Tools_M/Axe.prefab",
+      "anim": "working",
+      "pos": [-6, 0, -20.5],
+      "rotY": 0,
+      "note": "works the orchard/granary at the south bow apron; stationary at the building"
+    },
+    {
+      "npc": "Merchant",
+      "prefab": "polyperfect/People_M/Man_Sir.prefab",
+      "prefabKind": "polyperfect",
+      "atBuilding": "Market",
+      "heldProp": null,
+      "anim": "idle_talk",
+      "pos": [15, 0, 10],
+      "rotY": 250,
+      "note": "minds the market stalls; stationary at the building"
+    },
+    {
+      "npc": "Innkeeper",
+      "prefab": "polyperfect/People_M/Man_Servant.prefab",
+      "prefabKind": "polyperfect",
+      "atBuilding": "Tavern",
+      "heldProp": null,
+      "anim": "idle_sweep",
+      "pos": [-15, 0, -10.5],
+      "rotY": 45,
+      "note": "tavern NPC hub; bond/quest giver; stationary at the building"
+    }
+  ],
+
+  "bridges": [],
+
+  "roads": [
+    { "id": "spine-north", "from": "plaza", "to": "north-gate", "tilePrefab": "polyperfect/Medieval_M/Stone_Brick.prefab", "notes": "cobbled main road, plaza edge to N gate (0,+21). Divides NW Craft from NE Commerce. Keep the gate opening clear of buildings." },
+    { "id": "spine-south", "from": "plaza", "to": "south-gate", "tilePrefab": "polyperfect/Medieval_M/Stone_Brick.prefab", "notes": "plaza edge to S gate on the bow (0,-25). Divides SW Tavern from SE Residential; runs out to the Farm/Granary apron." },
+    { "id": "cross-east", "from": "plaza", "to": "east-gate", "tilePrefab": "polyperfect/Medieval_M/Stone_Brick.prefab", "notes": "plaza edge to E gate (+28,0). Divides NE Commerce from SE Residential." },
+    { "id": "cross-west", "from": "plaza", "to": "west-gate", "tilePrefab": "polyperfect/Medieval_M/Stone_Brick.prefab", "notes": "plaza edge to W gate (-28,0). Divides NW Craft from SW Tavern." }
+  ]
+}

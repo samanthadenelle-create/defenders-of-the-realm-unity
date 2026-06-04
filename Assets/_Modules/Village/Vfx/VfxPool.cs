@@ -1,0 +1,358 @@
+// =============================================================================
+// VfxPool — pooled combat VFX (HitImpact / DeathBurst / Telegraph). DEF-52.
+// -----------------------------------------------------------------------------
+// Mobile-safe: all effects are code-built (no prefabs, no Instantiate per hit)
+// and return themselves to the pool when their duration expires. GC-allocation
+// is eliminated in steady-state; the pool expands on demand if drained.
+//
+// EFFECT TYPES
+//   HitImpact   — small pop at the enemy position when struck (0.45 s).
+//   DeathBurst  — larger burst when an enemy is killed (0.65 s).
+//   Telegraph   — a ring on the ground at a spawn point; held until
+//                 VfxPool.ReturnTelegraph() is called by the spawner.
+//
+// BOOTSTRAP: RuntimeInitializeOnLoadMethod — no scene wiring needed, mirrors
+// ProjectilePool. All VFX GameObjects are parented to this DontDestroyOnLoad
+// root so they survive scene loads.
+//
+// USAGE
+//   VfxPool.SpawnHitImpact(worldPosition);
+//   VfxPool.SpawnDeathBurst(worldPosition);
+//   var tel = VfxPool.GetTelegraph(spawnPoint);
+//   // ... later when the wave actually spawns:
+//   VfxPool.ReturnTelegraph(tel);
+// =============================================================================
+
+using System.Collections.Generic;
+using UnityEngine;
+
+namespace DeNelle.Village
+{
+    /// <summary>
+    /// Persistent object pool for the three combat VFX types (HitImpact,
+    /// DeathBurst, Telegraph). Self-bootstraps on load; call the static
+    /// spawn helpers from anywhere.
+    /// </summary>
+    public sealed class VfxPool : MonoBehaviour
+    {
+        // ── Singleton ────────────────────────────────────────────────────────
+
+        public static VfxPool Instance { get; private set; }
+
+        // ── Pool sizes ───────────────────────────────────────────────────────
+
+        [SerializeField] private int _hitPoolSize       = 30;
+        [SerializeField] private int _deathPoolSize     = 20;
+        [SerializeField] private int _telegraphPoolSize = 12;
+
+        // ── Internal pools ───────────────────────────────────────────────────
+
+        private readonly Queue<PooledVfx> _hitPool       = new Queue<PooledVfx>();
+        private readonly Queue<PooledVfx> _deathPool     = new Queue<PooledVfx>();
+        private readonly Queue<PooledVfx> _telegraphPool  = new Queue<PooledVfx>();
+
+        // =====================================================================
+        //  Bootstrap
+        // =====================================================================
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        private static void Bootstrap()
+        {
+            if (Instance != null) return;
+            new GameObject("VfxPool").AddComponent<VfxPool>();
+        }
+
+        private void Awake()
+        {
+            if (Instance != null && Instance != this) { Destroy(gameObject); return; }
+            Instance = this;
+            DontDestroyOnLoad(gameObject);
+
+            for (int i = 0; i < _hitPoolSize;       i++) _hitPool.Enqueue(CreateHit());
+            for (int i = 0; i < _deathPoolSize;     i++) _deathPool.Enqueue(CreateDeath());
+            for (int i = 0; i < _telegraphPoolSize; i++) _telegraphPool.Enqueue(CreateTelegraph());
+        }
+
+        private void OnDestroy() { if (Instance == this) Instance = null; }
+
+        // =====================================================================
+        //  Public API
+        // =====================================================================
+
+        /// <summary>
+        /// Plays a short hit-impact pop at <paramref name="position"/>.
+        /// Returns immediately after scheduling the effect.
+        /// </summary>
+        public static void SpawnHitImpact(Vector3 position)
+        {
+            if (Instance == null) return;
+            var vfx = Instance.GetFromPool(Instance._hitPool, Instance.CreateHit);
+            vfx.Play(position, duration: 0.45f, Instance._hitPool);
+        }
+
+        /// <summary>
+        /// Plays a larger death burst at <paramref name="position"/>.
+        /// </summary>
+        public static void SpawnDeathBurst(Vector3 position)
+        {
+            if (Instance == null) return;
+            var vfx = Instance.GetFromPool(Instance._deathPool, Instance.CreateDeath);
+            vfx.Play(position, duration: 0.65f, Instance._deathPool);
+        }
+
+        /// <summary>
+        /// Reserves a telegraph ring at <paramref name="position"/> and returns it.
+        /// Call <see cref="ReturnTelegraph"/> when the telegraph should disappear.
+        /// </summary>
+        public static PooledVfx GetTelegraph(Vector3 position)
+        {
+            if (Instance == null) return null;
+            var vfx = Instance.GetFromPool(Instance._telegraphPool, Instance.CreateTelegraph);
+            vfx.PlayHeld(position);
+            return vfx;
+        }
+
+        /// <summary>
+        /// Hides and returns a telegraph obtained via <see cref="GetTelegraph"/>.
+        /// Safe to call with null.
+        /// </summary>
+        public static void ReturnTelegraph(PooledVfx tel)
+        {
+            if (tel == null || Instance == null) return;
+            tel.ReturnToPool(Instance._telegraphPool);
+        }
+
+        // =====================================================================
+        //  Pool helpers
+        // =====================================================================
+
+        private PooledVfx GetFromPool(Queue<PooledVfx> pool, System.Func<PooledVfx> factory)
+        {
+            // Drain any destroyed/null entries first.
+            while (pool.Count > 0 && pool.Peek() == null) pool.Dequeue();
+
+            if (pool.Count > 0)
+            {
+                var entry = pool.Dequeue();
+                if (entry != null) return entry;
+            }
+            // Pool drained — expand.
+            return factory();
+        }
+
+        // =====================================================================
+        //  Factory — build code visuals
+        //  All GameObjects are parented to this root (DontDestroyOnLoad) so they
+        //  survive scene transitions.
+        // =====================================================================
+
+        /// <summary>
+        /// HitImpact — a bright yellow-white sphere that scales up then fades.
+        /// Small, snappy — reads as an impact flash.
+        /// </summary>
+        private PooledVfx CreateHit()
+        {
+            var go = new GameObject("VfxHit");
+            go.SetActive(false);
+            go.transform.SetParent(transform, false);
+
+            var inner = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            inner.name = "HitSphere";
+            DestroyImmediate(inner.GetComponent<Collider>());
+            inner.transform.SetParent(go.transform, false);
+            inner.transform.localScale = Vector3.one * 0.18f;
+            ApplyEmissiveMaterial(inner.GetComponent<Renderer>(),
+                new Color(1f, 0.95f, 0.40f), emissive: 3.5f);   // amber-white flash
+
+            return go.AddComponent<PooledVfx>().Init(maxScale: 0.55f, kind: VfxKind.Hit);
+        }
+
+        /// <summary>
+        /// DeathBurst — a violet-red sphere that bursts outward and fades.
+        /// Slightly larger and slower than HitImpact.
+        /// </summary>
+        private PooledVfx CreateDeath()
+        {
+            var go = new GameObject("VfxDeath");
+            go.SetActive(false);
+            go.transform.SetParent(transform, false);
+
+            var inner = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            inner.name = "DeathSphere";
+            DestroyImmediate(inner.GetComponent<Collider>());
+            inner.transform.SetParent(go.transform, false);
+            inner.transform.localScale = Vector3.one * 0.22f;
+            ApplyEmissiveMaterial(inner.GetComponent<Renderer>(),
+                new Color(0.75f, 0.20f, 0.80f), emissive: 4f);  // death violet
+
+            return go.AddComponent<PooledVfx>().Init(maxScale: 1.1f, kind: VfxKind.Death);
+        }
+
+        /// <summary>
+        /// Telegraph — a flat disc / ring on the ground that pulses before a spawn.
+        /// Red-amber, XZ-flat (Y scale ~0.02).
+        /// </summary>
+        private PooledVfx CreateTelegraph()
+        {
+            var go = new GameObject("VfxTelegraph");
+            go.SetActive(false);
+            go.transform.SetParent(transform, false);
+
+            var disc = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            disc.name = "TelegraphDisc";
+            DestroyImmediate(disc.GetComponent<Collider>());
+            disc.transform.SetParent(go.transform, false);
+            disc.transform.localScale = new Vector3(1.4f, 0.02f, 1.4f);
+            ApplyEmissiveMaterial(disc.GetComponent<Renderer>(),
+                new Color(0.95f, 0.35f, 0.10f), emissive: 2.5f);  // warning orange
+
+            return go.AddComponent<PooledVfx>().Init(maxScale: 1.4f, kind: VfxKind.Telegraph);
+        }
+
+        /// <summary>
+        /// Assigns an emissive-capable URP Unlit material to <paramref name="r"/>.
+        /// Falls back to a plain colour if the shader is absent.
+        /// </summary>
+        private static void ApplyEmissiveMaterial(Renderer r, Color colour, float emissive)
+        {
+            if (r == null) return;
+            Shader sh = Shader.Find("Universal Render Pipeline/Lit")
+                     ?? Shader.Find("Universal Render Pipeline/Unlit")
+                     ?? Shader.Find("Standard");
+            if (sh == null) return;
+            var mat = new Material(sh);
+            if (mat.HasProperty("_BaseColor"))  mat.SetColor("_BaseColor", colour);
+            if (mat.HasProperty("_Color"))      mat.SetColor("_Color", colour);
+            if (mat.HasProperty("_EmissionColor"))
+            {
+                mat.SetColor("_EmissionColor", colour * emissive);
+                mat.EnableKeyword("_EMISSION");
+            }
+            if (mat.HasProperty("_Surface")) mat.SetFloat("_Surface", 0f);  // opaque
+            r.sharedMaterial = mat;
+        }
+    }
+
+    // =========================================================================
+    //  VfxKind
+    // =========================================================================
+
+    /// <summary>Which pool entry type a <see cref="PooledVfx"/> belongs to.</summary>
+    public enum VfxKind { Hit, Death, Telegraph }
+
+    // =========================================================================
+    //  PooledVfx — drives a single effect instance
+    // =========================================================================
+
+    /// <summary>
+    /// Drives one pooled VFX instance. Attached to the same GameObject as the
+    /// visual. Call <see cref="Play"/> (auto-return) or <see cref="PlayHeld"/> +
+    /// <see cref="ReturnToPool"/> (manual lifetime) from <see cref="VfxPool"/>.
+    /// </summary>
+    public sealed class PooledVfx : MonoBehaviour
+    {
+        private float    _maxScale;
+        private VfxKind  _kind;
+        private float    _duration;
+        private float    _elapsed;
+        private bool     _playing;
+        private bool     _held;   // Telegraph holds indefinitely until ReturnToPool
+        private Queue<PooledVfx> _returnPool;
+
+        internal PooledVfx Init(float maxScale, VfxKind kind)
+        {
+            _maxScale = maxScale;
+            _kind     = kind;
+            return this;
+        }
+
+        // ── Public ───────────────────────────────────────────────────────────
+
+        /// <summary>Activates the effect at <paramref name="worldPos"/> and auto-returns after <paramref name="duration"/> seconds.</summary>
+        internal void Play(Vector3 worldPos, float duration, Queue<PooledVfx> pool)
+        {
+            _returnPool = pool;
+            _duration   = duration;
+            _elapsed    = 0f;
+            _playing    = true;
+            _held       = false;
+            transform.position = worldPos;
+            gameObject.SetActive(true);
+        }
+
+        /// <summary>Activates the telegraph ring at <paramref name="worldPos"/>; stays until <see cref="ReturnToPool"/>.</summary>
+        internal void PlayHeld(Vector3 worldPos)
+        {
+            _elapsed = 0f;
+            _playing = true;
+            _held    = true;
+            transform.position = worldPos;
+            gameObject.SetActive(true);
+        }
+
+        /// <summary>Deactivates the effect and returns it to <paramref name="pool"/>.</summary>
+        internal void ReturnToPool(Queue<PooledVfx> pool)
+        {
+            _playing = false;
+            _held    = false;
+            gameObject.SetActive(false);
+            pool?.Enqueue(this);
+        }
+
+        // ── Update ───────────────────────────────────────────────────────────
+
+        private void Update()
+        {
+            if (!_playing) return;
+
+            _elapsed += Time.deltaTime;
+
+            if (_held)
+            {
+                // Telegraph pulse — slowly pulsate opacity using sine wave.
+                float pulse = 0.55f + Mathf.Sin(_elapsed * 3.5f) * 0.30f;
+                ApplyAlpha(pulse);
+                return;
+            }
+
+            float t = Mathf.Clamp01(_elapsed / _duration);
+
+            // Scale curve: quick pop up (0→0.6 in first 30%) then shrink (0.6→1 of duration).
+            float scaleT = t < 0.3f
+                ? Mathf.SmoothStep(0f, 1f, t / 0.3f)
+                : Mathf.SmoothStep(1f, 0f, (t - 0.3f) / 0.7f);
+            transform.localScale = Vector3.one * (_maxScale * scaleT);
+
+            // Alpha fade — fully opaque for first 50%, then fade to 0.
+            float alpha = t < 0.5f ? 1f : Mathf.Lerp(1f, 0f, (t - 0.5f) / 0.5f);
+            ApplyAlpha(alpha);
+
+            if (t >= 1f && _returnPool != null)
+                ReturnToPool(_returnPool);
+        }
+
+        // ── Helpers ──────────────────────────────────────────────────────────
+
+        private void ApplyAlpha(float a)
+        {
+            foreach (var r in GetComponentsInChildren<Renderer>())
+            {
+                if (r == null || r.sharedMaterial == null) continue;
+                // Clone the material once per renderer to avoid cross-effect
+                // contamination via sharedMaterial (pool instances share factories).
+                // Cost is paid at pool creation time (Awake), not per frame.
+                var mat = r.material;   // auto-clones on first access
+                if (mat.HasProperty("_BaseColor"))
+                {
+                    var c = mat.GetColor("_BaseColor"); c.a = a;
+                    mat.SetColor("_BaseColor", c);
+                }
+                if (mat.HasProperty("_Color"))
+                {
+                    var c = mat.GetColor("_Color"); c.a = a;
+                    mat.SetColor("_Color", c);
+                }
+            }
+        }
+    }
+}

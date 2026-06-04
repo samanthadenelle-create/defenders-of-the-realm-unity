@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  JupiterSwapPanel.uxml — in-app SKR swap sheet (WO-43).
+  ========================================================================
+  Slides up as an overlay. Driven by JupiterSwapPanelController.
+
+  Binding contract (names must not change — JupiterSwapPanelController.cs
+  queries these by name):
+    swap-overlay        VisualElement — full-screen dimmer, tap-to-dismiss
+    swap-sheet          VisualElement — the visible panel
+    swap-close-btn      Button        — explicit close x
+    swap-input-amount   TextField     — user enters USDC amount
+    swap-input-token    Label         — "USDC" (static in v1)
+    swap-skr-out        Label         — "~ 420.00 SKR" updated on quote
+    swap-rate           Label         — "1 USDC = 12.34 SKR"
+    swap-platform-fee   Label         — "0.04 USDC (0.2 %)"
+    swap-network-fee    Label         — "~0.000005 SOL"
+    swap-status         Label         — loading / error / success messages
+    swap-confirm-btn    Button        — disabled until quote is fresh + wallet connected
+-->
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <Style src="JupiterSwapPanel.uss" />
+
+    <!-- Full-screen overlay dimmer -->
+    <ui:VisualElement name="swap-overlay" class="swap-overlay">
+
+        <!-- The bottom sheet -->
+        <ui:VisualElement name="swap-sheet" class="swap-sheet">
+
+            <!-- Header row -->
+            <ui:VisualElement name="swap-header" class="swap-header">
+                <ui:Label text="Swap to SKR" class="swap-title" />
+                <ui:Button name="swap-close-btn" text="×" class="swap-close-btn" />
+            </ui:VisualElement>
+
+            <!-- Input row -->
+            <ui:VisualElement name="swap-input-row" class="swap-input-row">
+                <ui:TextField name="swap-input-amount"
+                              value="0"
+                              class="swap-input-amount" />
+                <ui:Label name="swap-input-token"
+                          text="USDC"
+                          class="swap-input-token" />
+            </ui:VisualElement>
+
+            <!-- Output row -->
+            <ui:VisualElement name="swap-output-row" class="swap-output-row">
+                <ui:Label text="You receive" class="swap-output-label" />
+                <ui:Label name="swap-skr-out" text="—" class="swap-skr-out" />
+            </ui:VisualElement>
+
+            <!-- Fee breakdown -->
+            <ui:VisualElement name="swap-fee-block" class="swap-fee-block">
+                <ui:VisualElement class="swap-fee-row">
+                    <ui:Label text="Exchange rate" class="swap-fee-key" />
+                    <ui:Label name="swap-rate" text="—" class="swap-fee-val" />
+                </ui:VisualElement>
+                <ui:VisualElement class="swap-fee-row">
+                    <ui:Label text="Service fee" class="swap-fee-key" />
+                    <ui:Label name="swap-platform-fee" text="—" class="swap-fee-val" />
+                </ui:VisualElement>
+                <ui:VisualElement class="swap-fee-row">
+                    <ui:Label text="Network fee" class="swap-fee-key" />
+                    <ui:Label name="swap-network-fee" text="—" class="swap-fee-val" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+
+            <!-- Status / error line -->
+            <ui:Label name="swap-status" text="" class="swap-status" />
+
+            <!-- Confirm CTA -->
+            <ui:Button name="swap-confirm-btn"
+                       text="Swap Now"
+                       class="swap-confirm-btn swap-confirm-btn--disabled" />
+
+            <!-- Powered-by line -->
+            <ui:Label text="Powered by Jupiter Aggregator"
+                      class="swap-powered-by" />
+
+        </ui:VisualElement>
+
+    </ui:VisualElement>
+</ui:UXML>

@@ -1,5 +1,5 @@
 {
-  "_comment": "Canonical Realm Map data for Defenders of the Realm. The Realm Map is the region-progression overworld: the village (Avalon) is the home base; each region is a fog-shrouded node the player discovers (gate met) then clears (one-time main objective done). Mirrors the shape the React v1 regions system uses (src/contracts/region.ts RegionDef + src/state/slices/regionsSlice.ts RegionProgress) so both engines read the same source of truth. Realm Map is a later-week / v1.1 feature; this file is authored ahead of the Unity port of the regions system.",
+  "_comment": "Canonical Realm Map data for Defenders of the Realm. The Realm Map is the region-progression overworld: the village (Elarion) is the home base; each region is a fog-shrouded node the player discovers (gate met) then clears (one-time main objective done). Mirrors the shape the React v1 regions system uses (src/contracts/region.ts RegionDef + src/state/slices/regionsSlice.ts RegionProgress) so both engines read the same source of truth. Realm Map is a later-week / v1.1 feature; this file is authored ahead of the Unity port of the regions system.",
   "_sources": {
     "designDoc": "defenders-of-the-realm/docs/map-content-dungeons-design.md (§2 The Realm Map)",
     "regionsSpec": "defenders-of-the-realm/docs/realms-spec.md (Wintermere zone reference only — 'realm' there is the social-group system, NOT this map)",
@@ -20,9 +20,9 @@
   "version": 1,
   "homeBase": {
     "id": "avalon",
-    "title": "Avalon",
+    "title": "Elarion",
     "epithet": "the last green sanctuary",
-    "description": "The home base — the village the Keeper tends and the Heart, Elarion, at its centre. Not a region: it has no gate and is never cleared. All persistent buildings, the economy, towers, walls and pets live here, and the player always returns. The Realm Map is the world Avalon sits inside, reached from the village Wayshrine.",
+    "description": "The home base — the village the Keeper tends and the Heart, Elarion, at its centre. Not a region: it has no gate and is never cleared. All persistent buildings, the economy, towers, walls and pets live here, and the player always returns. The Realm Map is the world Elarion sits inside, reached from the village Wayshrine.",
     "mapPoint": { "x": 50, "y": 50 },
     "isRegion": false
   },
@@ -30,7 +30,7 @@
     {
       "id": "thornwood",
       "title": "The Thornwood",
-      "description": "Region 1 — the first region beyond Avalon. A deep, choked forest whose canopy keeps out the sun; its enemy mix skews nature and poison. A low bestWave gate means a player who has held the village for a few waves discovers the road out early. The Thornwood's main objective is a five-wave forest defense of a young Heart-sapling.",
+      "description": "Region 1 — the first region beyond Elarion. A deep, choked forest whose canopy keeps out the sun; its enemy mix skews nature and poison. A low bestWave gate means a player who has held the village for a few waves discovers the road out early. The Thornwood's main objective is a five-wave forest defense of a young Heart-sapling.",
       "biome": "forest",
       "propSet": "forest-thicket",
       "waveCount": 5,

@@ -112,16 +112,16 @@ namespace DeNelle.Onboarding
 
         private static Dictionary<string, string> LoadMap(string relativePath)
         {
-            var full = Path.Combine(Application.streamingAssetsPath, relativePath);
+            // WebGL-safe load via CanonicalJson (Resources first, StreamingAssets fallback).
+            // Boot-path catalog — must not throw in a browser (DEF-124 black screen).
             try
             {
-                if (File.Exists(full))
+                string json = DeNelle.Core.CanonicalJson.Read(relativePath);
+                if (!string.IsNullOrEmpty(json))
                 {
-                    // Both canonical files are flat maps with some leading "_"
-                    // metadata keys (e.g. "_comment"). JSON values are all
-                    // strings except a couple of nested "_sources" objects —
-                    // deserialize loosely, then keep only the string entries.
-                    var raw = JsonConvert.DeserializeObject<Dictionary<string, object>>(File.ReadAllText(full));
+                    // Both canonical files are flat maps with some leading "_" metadata
+                    // keys; deserialize loosely, then keep only the string entries.
+                    var raw = JsonConvert.DeserializeObject<Dictionary<string, object>>(json);
                     var map = new Dictionary<string, string>();
                     if (raw != null)
                     {
@@ -132,11 +132,11 @@ namespace DeNelle.Onboarding
                     }
                     return map;
                 }
-                Debug.LogError($"[CanonStrings] Canonical file not found at {full}.");
+                Debug.LogError($"[CanonStrings] Canonical file not found (Resources or StreamingAssets): {relativePath}.");
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[CanonStrings] Failed to read {full}: {ex.Message}");
+                Debug.LogError($"[CanonStrings] Failed to read {relativePath}: {ex.Message}");
             }
             return new Dictionary<string, string>();
         }

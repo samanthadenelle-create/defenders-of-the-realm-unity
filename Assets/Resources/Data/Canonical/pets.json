@@ -1,0 +1,70 @@
+{
+  "version": 1,
+  "_comment": "The three starter guardian pets. Sourced from the React v1 repo: src/modules/pets/petData.ts (PETS, petAttack, petHp, PET_HUNT_SPEED, PET_ATTACK_RANGE, PET_ATTACK_CD, BOND_STAGES, PET_PERKS, PET_PERK_DESC) and src/lib/aggression.ts (petMaxHp — per-species bond-scaled HP). bondRanks 0-4 mirror the five BOND_STAGES; the rank-0 row carries no perk. Per-species combat values (huntSpeed/attackRange/attackCd) and the bond-scaled maxHp curve are canonical from v1. attackDamage is petAttack(rank) = 9 + rank*5, same for all species. deploySlots: home posts ring The Heart at radius 11 (petPost() in petData.ts: angle = i/3 * 2PI + 0.5).",
+  "deployRadius": 11,
+  "pets": [
+    {
+      "id": "pet-aether-sprite",
+      "species": "aether-sprite",
+      "name": "Aether Sprite",
+      "element": "aether",
+      "archetype": "Heart-Ward",
+      "tint": "#b9a0ff",
+      "glowColor": "#9d6fff",
+      "particleColor": "#7dd3fc",
+      "huntSpeed": 4.4,
+      "attackRange": 2.7,
+      "attackCooldown": 0.75,
+      "slotIndex": 0,
+      "bondRanks": [
+        { "rank": 0, "stage": "Wandering", "maxHp": 60, "attackDamage": 9, "perk": "", "perkDescription": "" },
+        { "rank": 1, "stage": "Kindled", "maxHp": 80, "attackDamage": 14, "perk": "Twinspark", "perkDescription": "Attacks arc to a 2nd nearby enemy for half damage." },
+        { "rank": 2, "stage": "Attuned", "maxHp": 100, "attackDamage": 19, "perk": "Mana Tide", "perkDescription": "The hero regenerates mana faster while this pet is deployed." },
+        { "rank": 3, "stage": "Warden", "maxHp": 120, "attackDamage": 24, "perk": "Aether Veil", "perkDescription": "The Heart takes 15% less damage while this pet defends." },
+        { "rank": 4, "stage": "Heartsworn", "maxHp": 140, "attackDamage": 29, "perk": "Heartbloom", "perkDescription": "Every 5th attack releases an Aether nova around the pet." }
+      ]
+    },
+    {
+      "id": "pet-flame-pup",
+      "species": "flame-pup",
+      "name": "Flame Pup",
+      "element": "flame",
+      "archetype": "Hearth-Hound",
+      "tint": "#ff8a4c",
+      "glowColor": "#ff5630",
+      "particleColor": "#ffb454",
+      "huntSpeed": 4.4,
+      "attackRange": 2.7,
+      "attackCooldown": 0.75,
+      "slotIndex": 1,
+      "bondRanks": [
+        { "rank": 0, "stage": "Wandering", "maxHp": 80, "attackDamage": 9, "perk": "", "perkDescription": "" },
+        { "rank": 1, "stage": "Kindled", "maxHp": 105, "attackDamage": 14, "perk": "Emberbite", "perkDescription": "Attacks set enemies alight — a burn that lingers." },
+        { "rank": 2, "stage": "Attuned", "maxHp": 130, "attackDamage": 19, "perk": "Roaring Hearth", "perkDescription": "Attacks 25% faster." },
+        { "rank": 3, "stage": "Warden", "maxHp": 155, "attackDamage": 24, "perk": "Cinder Trail", "perkDescription": "Burns the ground it fights on — nearby enemies smoulder." },
+        { "rank": 4, "stage": "Heartsworn", "maxHp": 180, "attackDamage": 29, "perk": "Pyre Bond", "perkDescription": "On a kill, the pet bursts into flame, hitting nearby foes." }
+      ]
+    },
+    {
+      "id": "pet-ice-wolf",
+      "species": "ice-wolf",
+      "name": "Ice Wolf",
+      "element": "ice",
+      "archetype": "Frost-Warden",
+      "tint": "#cfe9ff",
+      "glowColor": "#7dd3fc",
+      "particleColor": "#e6f5ff",
+      "huntSpeed": 4.4,
+      "attackRange": 2.7,
+      "attackCooldown": 0.75,
+      "slotIndex": 2,
+      "bondRanks": [
+        { "rank": 0, "stage": "Wandering", "maxHp": 100, "attackDamage": 9, "perk": "", "perkDescription": "" },
+        { "rank": 1, "stage": "Kindled", "maxHp": 130, "attackDamage": 14, "perk": "Frostbite", "perkDescription": "Attacks briefly slow the enemy." },
+        { "rank": 2, "stage": "Attuned", "maxHp": 160, "attackDamage": 19, "perk": "Frostguard Hide", "perkDescription": "Sturdier hide — its cold presence slows enemies near it." },
+        { "rank": 3, "stage": "Warden", "maxHp": 190, "attackDamage": 24, "perk": "Biting Cold", "perkDescription": "Enemies near the Heart are chilled while this pet defends." },
+        { "rank": 4, "stage": "Heartsworn", "maxHp": 220, "attackDamage": 29, "perk": "Glacial Bond", "perkDescription": "Every few seconds, freezes the nearest enemy solid." }
+      ]
+    }
+  ]
+}

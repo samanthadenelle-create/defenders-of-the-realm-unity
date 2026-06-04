@@ -1,5 +1,5 @@
 // =============================================================================
-// ExteriorTerrainBuilder — Avalon EXTERIOR wilderness generator (Editor-only).
+// ExteriorTerrainBuilder — Elarion EXTERIOR wilderness generator (Editor-only).
 // -----------------------------------------------------------------------------
 // One static entry point that the main Unity session runs (manually via the
 // Defenders menu, or via the Unity -executeMethod flag):
@@ -56,7 +56,7 @@ using UnityEngine;
 namespace DeNelle.Editor
 {
     /// <summary>
-    /// Editor utility that builds the Avalon exterior wilderness -- a Unity
+    /// Editor utility that builds the Elarion exterior wilderness -- a Unity
     /// Terrain with four directional biomes, elevation, splatmaps, natural
     /// paths, instanced trees, scattered rock props, a dawn skybox and
     /// atmospheric fog -- around the walled village. Entry point:
@@ -67,10 +67,17 @@ namespace DeNelle.Editor
         // ── Project paths ────────────────────────────────────────────────────
         private const string ScenesDir = "Assets/Scenes";
         private const string VillageScenePath = ScenesDir + "/Village.unity";
+        // WO-173 Option A: the exterior terrain now belongs to OuterWorld.unity (loaded
+        // additively over Village by WorldSceneLoader) so a Village/castle rebake can't
+        // wipe the world ground again. Build order: BuildOuterWorld (regions+nodes) THEN
+        // BuildExterior (terrain) -- BuildExterior opens the existing OuterWorld and only
+        // nukes its own ExteriorRoot, preserving OuterWorldRoot.
+        private const string OuterWorldScenePath = ScenesDir + "/OuterWorld.unity";
         private const string GeneratedDir = "Assets/Generated";
         private const string TerrainAssetDir = GeneratedDir + "/Terrain";
         private const string TerrainDataPath = TerrainAssetDir + "/ExteriorTerrainData.asset";
         private const string SkyboxMatPath = TerrainAssetDir + "/AvalonDawnSkybox.mat";
+        private const string TerrainMaterialPath = TerrainAssetDir + "/ExteriorTerrainMaterial.mat";
 
         /// <summary>Root for everything this builder generates -- cleared + rebuilt each run.</summary>
         private const string ExteriorRootName = "ExteriorRoot";
@@ -156,7 +163,7 @@ namespace DeNelle.Editor
         // =====================================================================
 
         /// <summary>
-        /// Builds the Avalon exterior wilderness around the walled village.
+        /// Builds the Elarion exterior wilderness around the walled village.
         /// Runnable via
         /// <c>-executeMethod DeNelle.Editor.ExteriorTerrainBuilder.BuildExterior</c>.
         /// Idempotent -- re-running clears the generated ExteriorRoot + assets.
@@ -175,13 +182,15 @@ namespace DeNelle.Editor
             AssetDatabase.Refresh();
 
             // ── Open the Village scene (must exist -- interior agent owns it) ─
-            if (!File.Exists(VillageScenePath))
+            if (!File.Exists(OuterWorldScenePath))
             {
-                Debug.LogError("[ExteriorTerrainBuilder] Village.unity not found at " +
-                               VillageScenePath + " -- run the village builder first. Aborting.");
+                Debug.LogError("[ExteriorTerrainBuilder] OuterWorld.unity not found at " +
+                               OuterWorldScenePath + " -- run Defenders/World/Build Outer World " +
+                               "(OuterWorldBuilder.BuildOuterWorld) FIRST so the terrain composes " +
+                               "with the regions/nodes. Aborting.");
                 return;
             }
-            var scene = EditorSceneManager.OpenScene(VillageScenePath, OpenSceneMode.Single);
+            var scene = EditorSceneManager.OpenScene(OuterWorldScenePath, OpenSceneMode.Single);
 
             // ── Idempotency: nuke any prior generated exterior root ──────────
             foreach (var go in scene.GetRootGameObjects())
@@ -214,6 +223,15 @@ namespace DeNelle.Editor
             terrain.treeCrossFadeLength = 12f;
             terrain.treeMaximumFullLODCount = TreeTargetCount;
 
+            // WO-173/DEF-108: assign a URP TerrainLit material so the terrain SURFACE
+            // renders. With no explicit URP terrain material the Terrain falls back to a
+            // template that draws NOTHING under URP — the ground reads as a black VOID
+            // (the painted trees + the village's own hex-ground still draw via their own
+            // materials, which is why only the horizon tree-line + the centre patch showed).
+            // Create + persist the material as an asset so it's packaged into the build.
+            terrain.materialTemplate = EnsureTerrainMaterial();
+            EnsureTerrainShaderIncluded();   // pin URP terrain shader into the build (else BLACK terrain in player)
+
             // ── Texture the terrain (splatmaps) ──────────────────────────────
             PaintSplatmaps(terrainData);
 
@@ -234,7 +252,7 @@ namespace DeNelle.Editor
             ApplySkyAndFog();
 
             EditorSceneManager.MarkSceneDirty(scene);
-            EditorSceneManager.SaveScene(scene, VillageScenePath);
+            EditorSceneManager.SaveScene(scene, OuterWorldScenePath);
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
 
@@ -1207,6 +1225,80 @@ namespace DeNelle.Editor
         // =====================================================================
         //  Folder helper
         // =====================================================================
+
+        /// <summary>
+        /// WO-173/DEF-108: returns a persisted URP TerrainLit material so the terrain
+        /// SURFACE renders in the build. Without an explicit URP terrain material the
+        /// Terrain falls back to a template that draws nothing under URP (the black
+        /// void). Created once as an asset under Generated/Terrain so it is packaged
+        /// into the player build; reused (shader re-pinned) on subsequent bakes.
+        /// </summary>
+        private static Material EnsureTerrainMaterial()
+        {
+            // URP terrain shader; fall back to the built-in terrain shader so a
+            // non-URP project still bakes instead of throwing.
+            var shader = Shader.Find("Universal Render Pipeline/Terrain/Lit")
+                         ?? Shader.Find("Nature/Terrain/Standard");
+            if (shader == null)
+            {
+                Debug.LogWarning("[ExteriorTerrainBuilder] No terrain shader found " +
+                                 "(URP TerrainLit / built-in) -- terrain uses the engine default.");
+                return null;
+            }
+
+            Material mat = File.Exists(TerrainMaterialPath)
+                ? AssetDatabase.LoadAssetAtPath<Material>(TerrainMaterialPath)
+                : null;
+
+            if (mat == null)
+            {
+                mat = new Material(shader) { name = "ExteriorTerrainMaterial" };
+                AssetDatabase.CreateAsset(mat, TerrainMaterialPath);
+            }
+            else if (mat.shader != shader)
+            {
+                mat.shader = shader;
+            }
+            return mat;
+        }
+
+        /// <summary>
+        /// WO-173/DEF-108: pins the URP Terrain Lit shader into Graphics Settings'
+        /// Always Included Shaders so it is NOT stripped from the player build. Symptom
+        /// without this: terrain renders BLACK in the build (the shader is present in the
+        /// editor but URP's scriptable stripping drops it from the player) while simpler
+        /// objects render fine.
+        /// </summary>
+        [MenuItem("Defenders/World/Ensure Terrain Shader In Build")]
+        public static void EnsureTerrainShaderIncluded()
+        {
+            var shader = Shader.Find("Universal Render Pipeline/Terrain/Lit");
+            if (shader == null)
+            {
+                Debug.LogWarning("[ExteriorTerrainBuilder] URP Terrain Lit shader not found -- cannot pin it into the build.");
+                return;
+            }
+            var so = new SerializedObject(UnityEngine.Rendering.GraphicsSettings.GetGraphicsSettings());
+            var list = so.FindProperty("m_AlwaysIncludedShaders");
+            if (list == null)
+            {
+                Debug.LogWarning("[ExteriorTerrainBuilder] m_AlwaysIncludedShaders not found on GraphicsSettings.");
+                return;
+            }
+            for (int i = 0; i < list.arraySize; i++)
+            {
+                if (list.GetArrayElementAtIndex(i).objectReferenceValue == shader)
+                {
+                    Debug.Log("[ExteriorTerrainBuilder] URP Terrain Lit already in Always Included Shaders.");
+                    return;
+                }
+            }
+            list.InsertArrayElementAtIndex(list.arraySize);
+            list.GetArrayElementAtIndex(list.arraySize - 1).objectReferenceValue = shader;
+            so.ApplyModifiedProperties();
+            AssetDatabase.SaveAssets();
+            Debug.Log("[ExteriorTerrainBuilder] Pinned URP Terrain Lit into Always Included Shaders (no longer stripped from builds).");
+        }
 
         private static void EnsureFolder(string assetPath)
         {

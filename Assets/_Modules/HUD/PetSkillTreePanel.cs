@@ -24,6 +24,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using UnityEngine;
 using UnityEngine.UIElements;
+using DeNelle.Core.UI;
 
 namespace DeNelle.HUD
 {
@@ -40,6 +41,8 @@ namespace DeNelle.HUD
 
         private bool _open;
         private string _activeSpecies;
+        // Modal arbiter handle (DEF-212): one panel open at a time.
+        private PanelHandle _panelHandle;
 
         // Reflection cache — resolved lazily on first show.
         private static Type s_catalogType;
@@ -67,6 +70,9 @@ namespace DeNelle.HUD
             if (_doc.panelSettings == null) { enabled = false; return; }
             _doc.sortingOrder = 105; // above DailyQuestHud (80), below HelpMenu (?) but visible
 
+            _panelHandle = PanelManager.Register("Pet Skills", Close, () => _open);
+            // DEF-213: let the Pet House interaction open this panel by id.
+            PanelRouter.Register(PanelId.PetSkillTree, Open);
             BuildUi();
             SetOpen(false);
         }
@@ -83,6 +89,11 @@ namespace DeNelle.HUD
                 PetUnlockTracker.Instance.Changed -= Repaint;
         }
 
+        private void OnDestroy()
+        {
+            PanelRouter.Unregister(PanelId.PetSkillTree, Open);
+        }
+
         public bool IsOpen => _open;
 
         public void Toggle() => SetOpen(!_open);
@@ -95,6 +106,10 @@ namespace DeNelle.HUD
             _open = open;
             if (_overlay != null)
                 _overlay.style.display = open ? DisplayStyle.Flex : DisplayStyle.None;
+            // Route through the modal arbiter so opening this closes any other panel,
+            // and closing clears our slot (DEF-212).
+            if (open) PanelManager.NotifyOpened(_panelHandle);
+            else PanelManager.NotifyClosed(_panelHandle);
             if (open) Repaint();
         }
 
@@ -112,7 +127,9 @@ namespace DeNelle.HUD
             _overlay.style.position = Position.Absolute;
             _overlay.style.left = 0; _overlay.style.right = 0;
             _overlay.style.top = 0;  _overlay.style.bottom = 0;
-            _overlay.style.backgroundColor = new StyleColor(new Color(0f, 0f, 0f, 0.62f));
+            // DEF-212 item 5: near-opaque scrim so world-space labels don't bleed
+            // through behind the modal.
+            _overlay.style.backgroundColor = new StyleColor(new Color(0.02f, 0.02f, 0.03f, 0.97f));
             _overlay.style.flexDirection = FlexDirection.Column;
             _overlay.style.alignItems = Align.Center;
             _overlay.style.justifyContent = Justify.FlexStart;

@@ -1,0 +1,46 @@
+{
+  "_comment": "ISOLATED item-drops lane: consumable crafting recipes (combine N drop materials -> 1 consumable). Loaded by DeNelle.Village.Items.ConsumableCraftingCatalog via DeNelle.Core.CanonicalJson (Resources first, StreamingAssets fallback). This is a SEPARATE file from the dungeon-side crafting-recipes.json (which CraftingRecipeCatalog owns) so the two never collide. A recipe's 'output' is a consumable id from consumables.json AND the VillageInventory larder key it deposits. DARK by default (gated by ItemDropSystem.Enabled): the crafting service no-ops until the flag is on. Placeholder content - OWNER + CREATIVE finalise the real material roster, costs and output magnitudes.",
+  "_schemaNotes": {
+    "recipes": "Each recipe combines the listed ingredient materials (drop ids from loot-tables.json) into one output consumable (id from consumables.json). Craftable once the larder holds at least every listed count.",
+    "ingredients": "{ id, count } - id is a drop-material larder key; count is how many are consumed.",
+    "output": "The consumable id produced (deposited 1 into the larder)."
+  },
+  "version": 1,
+  "recipes": [
+    {
+      "id": "craft-minor-heal-potion",
+      "output": "minor-heal-potion",
+      "displayName": "Brew Minor Healing Draught",
+      "ingredients": [
+        { "id": "wild-herb", "count": 1 }
+      ]
+    },
+    {
+      "id": "craft-greater-heal-potion",
+      "output": "greater-heal-potion",
+      "displayName": "Brew Greater Healing Draught",
+      "ingredients": [
+        { "id": "wild-herb", "count": 3 },
+        { "id": "rare-essence", "count": 1 }
+      ]
+    },
+    {
+      "id": "craft-traveler-rations",
+      "output": "traveler-rations",
+      "displayName": "Pack Traveler's Rations",
+      "ingredients": [
+        { "id": "wild-herb", "count": 1 },
+        { "id": "monster-hide", "count": 1 }
+      ]
+    },
+    {
+      "id": "craft-scout-tent-kit",
+      "output": "scout-tent-kit",
+      "displayName": "Assemble Scout's Tent Kit",
+      "ingredients": [
+        { "id": "tattered-cloth", "count": 2 },
+        { "id": "monster-hide", "count": 1 }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,446 @@
+// =============================================================================
+// RegionMobSpawner (WO-155) — roaming region mobs, region-appropriate + threat-scaled.
+// -----------------------------------------------------------------------------
+// Assembly: DeNelle.Village   Namespace: DeNelle.Village
+//
+// The THREAT half of the open-world explore loop (the reward half is MineNode /
+// CrystalMineNode). As the player roams the outer world, this maintains a small
+// live population of roaming mobs AROUND them, each:
+//   • REGION-APPROPRIATE  — picked from RegionSpawnTable by ZoneManager.GetZone +
+//     depth band (Wildlands living in Goldfields/Stoneback; Wound-tied in Mirewood/
+//     Ashwood) — the owner's REGION_ENEMY_ROSTER.md assignment, as data.
+//   • THREAT-SCALED       — stats + level set from ZoneManager.ThreatLevel (danger
+//     tier × depth). Deeper in-region = tougher; Ashwood core is the deadliest.
+//   • RED-SKULL TELLED     — a ThreatSkullPlate nameplate shows a Fallout-style skull
+//     when the mob's ThreatLevel out-paces the player's level (risky / lethal).
+//
+// RECONCILIATION (no parallel spawn/enemy system — CLAUDE.md §9):
+//   • Reuses Enemy + Enemy.Configure (the SAME path as TribeManager / WaveManager /
+//     EnemyFamilyTestSpawner) — code-built capsules, NavMesh-seated, no prefab/SO.
+//   • Reuses ZoneManager (region classifier) + RegionSpawnTable (roster) + ThreatLevel
+//     (the single difficulty read) — does NOT re-implement any of them.
+//   • Self-bootstrapping DDOL (mirrors TribeManager / EnemyFamilyTestSpawner) so it
+//     needs NO scene edit and fires NO bake. Works the moment OuterWorld is loaded
+//     additively over Village (WorldSceneLoader) and a baked NavMesh exists.
+//
+// ROAMING vs RAIDING: TribeManager (WO-160) anchors raider BANDS to a camp that
+// raze SETTLEMENTS. This spawner is the ambient wilderness population that wanders
+// near the PLAYER and aggros them — a different, complementary layer. They never
+// march the Heart (the roam anchor overrides it) so they don't trickle into town.
+//
+// HOLLOW ONES are NOT spawned here (RegionSpawnTable omits them) — they stay the
+// village wave faction per the roster doc, pending owner confirm on the haunted seam.
+// =============================================================================
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.AI;
+using UnityEngine.SceneManagement;
+using DeNelle.Core.World;
+using DeNelle.Core.State;
+
+namespace DeNelle.Village
+{
+    /// <summary>
+    /// Maintains a small live population of region-appropriate, threat-scaled roaming
+    /// mobs around the player in the outer world. One self-bootstrapping DDOL singleton;
+    /// no prefab / SO / scene wiring, no bake.
+    /// </summary>
+    public sealed class RegionMobSpawner : MonoBehaviour
+    {
+        public static RegionMobSpawner Instance { get; private set; }
+
+        [Header("Population")]
+        [Tooltip("CAP on roaming mobs kept alive around the player at HIGH progress. The " +
+                 "EFFECTIVE target ramps up to this from a gentle early floor (see EarlyTargetFloor) " +
+                 "as the player progresses (BestWave) — a new player meets 1-2 wanderers, not a pack.")]
+        [Min(0)] public int TargetPopulation = 8;
+
+        [Tooltip("EFFECTIVE roaming-mob target for a brand-new player (BestWave 0). Ramps toward " +
+                 "TargetPopulation as progress climbs (WO-216: wandering primary, gentle onboarding).")]
+        [Min(0)] public int EarlyTargetFloor = 2;
+
+        [Tooltip("How many cleared waves it takes to add one more roamer to the effective target " +
+                 "(WO-216 ramp slope). Smaller = the wilderness fills in faster as you progress.")]
+        [Min(1)] public int WavesPerExtraMob = 2;
+
+        [Tooltip("Seconds between population/aggro maintenance passes (throttled — never per-frame heavy).")]
+        [Min(0.1f)] public float TickInterval = 1.0f;
+
+        [Header("Ranges (world units)")]
+        [Tooltip("Inner radius of the spawn ring around the player (don't pop in their face).")]
+        [Min(2f)] public float SpawnRingInner = 22f;
+        [Tooltip("Outer radius of the spawn ring around the player.")]
+        [Min(4f)] public float SpawnRingOuter = 38f;
+        [Tooltip("Beyond this distance from the player a live mob is culled (out of sight, save budget).")]
+        [Min(10f)] public float CullRadius = 70f;
+        [Tooltip("A roaming mob aggros (paths to) the player within this radius; beyond it, it wanders its anchor.")]
+        [Min(2f)] public float AggroRadius = 18f;
+        [Tooltip("A chasing mob GIVES UP and walks home if dragged this far from where it began the " +
+                 "chase — so running away actually breaks pursuit. It won't re-aggro until it's home.")]
+        [Min(4f)] public float LeashRadius = 28f;
+        [Tooltip("Radius a wandering mob picks new roam points within, around its spawn anchor.")]
+        [Min(1f)] public float WanderRadius = 8f;
+
+        [Header("Wander")]
+        [Tooltip("Seconds between a wandering (non-aggro) mob re-picking a roam point.")]
+        [Min(0.5f)] public float WanderRepathInterval = 4f;
+
+        // Region tints so mobs read at a glance in the placeholder-capsule build.
+        private static readonly Color LivingTint = new Color(0.38f, 0.55f, 0.28f);  // mossy green — Wildlands
+        private static readonly Color WoundTint  = new Color(0.52f, 0.18f, 0.42f);  // sickly violet — Wound-tied
+
+        private float _tickTimer;
+        private Transform _player;
+        private Transform _root;
+        private int _counter;
+
+        // One live roaming mob + its wander bookkeeping.
+        private sealed class Mob
+        {
+            public Enemy Enemy;
+            public Transform RoamAnchor;   // a child transform the mob wanders around / paths to when not aggroed
+            public float NextWanderAt;
+            public bool Aggroed;
+            public bool Leashing;        // walking home after being dragged past the leash; ignores aggro until back
+            public Vector3 LeashOrigin;  // home territory captured when the chase began
+        }
+
+        private readonly List<Mob> _live = new List<Mob>();
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        private static void Bootstrap()
+        {
+            if (Instance != null) return;
+            new GameObject("RegionMobSpawner").AddComponent<RegionMobSpawner>();
+        }
+
+        private void Awake()
+        {
+            // Destroy(this), not the host — this may share a GameObject (CLAUDE.md memory).
+            if (Instance != null && Instance != this) { Destroy(this); return; }
+            Instance = this;
+            DontDestroyOnLoad(gameObject);
+        }
+
+        private void OnDestroy()
+        {
+            if (Instance == this) Instance = null;
+        }
+
+        private void Update()
+        {
+            _tickTimer -= Time.deltaTime;
+            if (_tickTimer > 0f) return;
+            _tickTimer = TickInterval;
+
+            ResolvePlayer();
+            if (_player == null) return;
+
+            // Only run while the player is actually in an outer region. In the safe
+            // Village home zone we spawn nothing (and let any stragglers cull out).
+            Vector3 pp = _player.position;
+            bool playerOutside = RegionSpawnTable.HasRoster(ZoneManager.GetZone(pp));
+
+            PruneAndDrive(pp);
+
+            if (playerOutside)
+                TopUpPopulation(pp);
+        }
+
+        // ── Maintenance: cull dead/far mobs, drive wander vs aggro ────────────────
+
+        private void PruneAndDrive(Vector3 playerPos)
+        {
+            float cullSqr = CullRadius * CullRadius;
+            float aggroSqr = AggroRadius * AggroRadius;
+
+            for (int i = _live.Count - 1; i >= 0; i--)
+            {
+                var mob = _live[i];
+                if (mob == null || mob.Enemy == null || mob.Enemy.IsDead)
+                {
+                    Despawn(mob);
+                    _live.RemoveAt(i);
+                    continue;
+                }
+
+                float dSqr = (mob.Enemy.transform.position - playerPos).sqrMagnitude;
+                if (dSqr > cullSqr)
+                {
+                    // Too far — recycle the budget (the population tops up near the player).
+                    Despawn(mob);
+                    _live.RemoveAt(i);
+                    continue;
+                }
+
+                bool playerInRange = dSqr <= aggroSqr;
+
+                // Leash (owner 2026-06-01): a chasing mob keeps PACE, so player-distance de-aggro
+                // alone never triggers — it stuck to you forever. Add a HOME leash: once dragged
+                // past LeashRadius from where the chase began, it gives up, walks home, and ignores
+                // aggro until it's back. So running away actually breaks pursuit.
+                if (mob.Leashing &&
+                    (mob.Enemy.transform.position - mob.LeashOrigin).sqrMagnitude <= 9f)
+                    mob.Leashing = false;   // reached home — resume normal behaviour
+
+                bool wantAggro = playerInRange && !mob.Leashing;
+                if (wantAggro)
+                {
+                    if (!mob.Aggroed)
+                    {
+                        // Begin the chase — capture home territory for the leash.
+                        mob.Aggroed = true;
+                        mob.LeashOrigin = mob.RoamAnchor != null
+                            ? mob.RoamAnchor.position : mob.Enemy.transform.position;
+                        mob.Enemy.SetBrainTarget(_player);
+                        // "Spotted" tell — a one-shot "!" so the player feels the moment a
+                        // wanderer locks on instead of getting blindsided (owner 2026-06-02).
+                        EnemyAlertTell.Flash(mob.Enemy.transform);
+                    }
+                    else if ((mob.Enemy.transform.position - mob.LeashOrigin).sqrMagnitude
+                             > LeashRadius * LeashRadius)
+                    {
+                        // Dragged past the leash — disengage and head home.
+                        mob.Aggroed  = false;
+                        mob.Leashing = true;
+                        if (mob.RoamAnchor != null) mob.RoamAnchor.position = mob.LeashOrigin;
+                        mob.Enemy.SetBrainTarget(mob.RoamAnchor);
+                    }
+                }
+                else
+                {
+                    // Player out of range (or leashing home): wander the anchor.
+                    if (mob.Aggroed)
+                    {
+                        mob.Aggroed = false;
+                        mob.Enemy.SetBrainTarget(mob.RoamAnchor);
+                    }
+                    if (!mob.Leashing && Time.time >= mob.NextWanderAt)
+                    {
+                        RepickRoamPoint(mob);
+                        mob.NextWanderAt = Time.time + WanderRepathInterval;
+                    }
+                }
+            }
+        }
+
+        private void RepickRoamPoint(Mob mob)
+        {
+            if (mob.RoamAnchor == null) return;
+            Vector2 r = Random.insideUnitCircle * WanderRadius;
+            Vector3 want = mob.Enemy.transform.position + new Vector3(r.x, 0f, r.y);
+            if (NavMesh.SamplePosition(want, out NavMeshHit hit, WanderRadius, NavMesh.AllAreas))
+                mob.RoamAnchor.position = hit.position;
+        }
+
+        // ── Population top-up around the player ───────────────────────────────────
+
+        private void TopUpPopulation(Vector3 playerPos)
+        {
+            int deficit = EffectiveTarget() - _live.Count;
+            if (deficit <= 0) return;
+
+            if (_root == null) _root = new GameObject("[RegionMobs]").transform;
+
+            // Spawn at most a couple per tick so a fresh region fills in over a few
+            // seconds rather than popping a whole pack in one frame.
+            int spawnThisTick = Mathf.Min(deficit, 2);
+            for (int n = 0; n < spawnThisTick; n++)
+            {
+                if (!TryFindSpawnPoint(playerPos, out Vector3 pos)) continue;
+
+                RegionId region = ZoneManager.GetZone(pos);
+                if (!RegionSpawnTable.HasRoster(region)) continue;   // not an outer region
+
+                float depth = ZoneManager.Depth(pos);
+                int threat = ZoneManager.ThreatLevel(pos);
+                string enemyId = RegionSpawnTable.PickEnemyId(region, depth, Random.value);
+                if (string.IsNullOrEmpty(enemyId)) continue;
+
+                var mob = SpawnMob(enemyId, region, pos, threat);
+                if (mob != null) _live.Add(mob);
+            }
+        }
+
+        // ── Progress-ramped effective target (WO-216 / DEF-118) ──────────────────
+        // The flat TargetPopulation of 6 swarmed brand-new players the moment they
+        // stepped outside. Instead the EFFECTIVE target ramps with player progress:
+        // it starts at EarlyTargetFloor (1-2 wanderers to learn the fight on) and adds
+        // one mob per WavesPerExtraMob cleared waves, capped at TargetPopulation.
+        //
+        // PROGRESS SIGNAL = GameState.BestWave (highest village wave ever cleared). Chosen
+        // because it (a) already exists and is the canonical persisted "how far am I"
+        // field — no new persistence invented (WO-216 constraint), (b) is in Core so it
+        // reads cleanly from Village, (c) survives across runs (a returning veteran keeps
+        // their fuller wilderness), and (d) is the same notion of progress the wave siege
+        // cadence keys off, so the wandering layer and the siege layer ramp together.
+        // Hero level was the alternative but it's in-memory only (resets each run), so a
+        // veteran's outer world would reset to 1-2 mobs every session — wrong feel.
+        private int EffectiveTarget()
+        {
+            int bestWave = GameStateService.Instance?.State?.BestWave ?? 0;
+            int slope = Mathf.Max(1, WavesPerExtraMob);
+            int ramped = EarlyTargetFloor + bestWave / slope;
+            return Mathf.Clamp(ramped, EarlyTargetFloor, TargetPopulation);
+        }
+
+        // Find a NavMesh-valid point in the spawn ring around the player.
+        private bool TryFindSpawnPoint(Vector3 playerPos, out Vector3 pos)
+        {
+            for (int attempt = 0; attempt < 6; attempt++)
+            {
+                float ang = Random.value * Mathf.PI * 2f;
+                float rad = Random.Range(SpawnRingInner, SpawnRingOuter);
+                Vector3 want = playerPos + new Vector3(Mathf.Cos(ang) * rad, 0f, Mathf.Sin(ang) * rad);
+                if (NavMesh.SamplePosition(want, out NavMeshHit hit, 8f, NavMesh.AllAreas))
+                {
+                    pos = hit.position;
+                    return true;
+                }
+            }
+            pos = playerPos;
+            return false;
+        }
+
+        // ── Spawn one roaming mob (reuse Enemy, code-built capsule — TribeManager precedent) ──
+
+        private Mob SpawnMob(string enemyId, RegionId region, Vector3 pos, int threat)
+        {
+            var def = BuildRoamerDef(enemyId, threat);
+
+            // Overly-easy welcome (owner 2026-06-02: "the beginning should be overly easy" —
+            // "hello welcome to town... dead" is the opposite of the onboarding we want).
+            // Scale early-game enemy HP + contact damage WAY down for a brand-new player
+            // (BestWave 0 -> x0.35), ramping to full strength by ~BestWave 6. Threat-scaling
+            // still ramps the LATE game up; this only softens the first hours into a power
+            // fantasy so a fresh hero (or a grant reviewer) wins while they learn the controls.
+            float ease = Mathf.Lerp(0.35f, 1f,
+                Mathf.Clamp01((GameStateService.Instance?.State?.BestWave ?? 0) / 6f));
+            def.Hp = Mathf.Max(1f, def.Hp * ease);
+            def.ContactDamage = Mathf.Max(0f, def.ContactDamage * ease);
+
+            // One skinned enemy body via the shared EnemyFactory — no parallel spawn code
+            // (CLAUDE.md §9). The factory handles layer + collider + skin + animator + agent.
+            var enemy = EnemyFactory.Build(def, pos, Quaternion.identity, _root);
+            var go = enemy.gameObject;
+            go.name = $"RegionMob ({enemyId} · {region})";
+
+            // A per-mob roam anchor (child of the root) it wanders around when not aggroed.
+            // Using a Transform target keeps it OFF the Heart-march — these mobs never
+            // trickle into the village. SetBrainTarget(anchor) overrides the Heart fallback.
+            var anchorGo = new GameObject($"RoamAnchor-{enemyId}-{_counter}");
+            anchorGo.transform.SetParent(_root, false);
+            anchorGo.transform.position = pos;
+
+            enemy.Configure($"region-{region}-{enemyId}-{_counter++}", def, ResolveHeart());
+            enemy.SetBrainTarget(anchorGo.transform);   // roam, not Heart-march
+
+            // Red-skull readiness tell — code-built nameplate (no UXML).
+            ThreatSkullPlate.Attach(go, () => threat);
+
+            return new Mob
+            {
+                Enemy = enemy,
+                RoamAnchor = anchorGo.transform,
+                NextWanderAt = Time.time + Random.Range(0f, WanderRepathInterval),
+                Aggroed = false,
+            };
+        }
+
+        // Archetype -> skeleton model (the readable visual variety). Thematic note: the
+        // Wildlands roster names (orc/caveman/wolf) currently borrow the skeleton family —
+        // the only humanoid enemy models in Resources/Enemies — chosen by ROLE/SIZE so the
+        // silhouette reads the threat. Swap to bespoke models here (one line per id) when
+        // the new character packs land.
+        private static string ModelForRoamer(string enemyId)
+        {
+            switch (enemyId)
+            {
+                case "orc-raider":       return "Skeleton_Warrior"; // heavy melee
+                case "caveman":          return "Skeleton_Golem";   // big brute
+                case "feral-wolf":       return "Skeleton_Rogue";   // fast skirmisher
+                case "tiefling-cultist": return "Skeleton_Mage";    // caster
+                case "necromancer":      return "Necromancer";      // dedicated elite
+                default:                  return "Skeleton_Minion";
+            }
+        }
+
+        private static void Despawn(Mob mob)
+        {
+            if (mob == null) return;
+            if (mob.RoamAnchor != null) Destroy(mob.RoamAnchor.gameObject);
+            if (mob.Enemy != null) Destroy(mob.Enemy.gameObject);
+        }
+
+        // ── Synthesised, threat-scaled stat blocks (TribeManager precedent) ───────
+        // The Wildlands roster ids (orc-raider/caveman/feral-wolf) + tiefling-cultist
+        // are NOT in enemies.json yet (forward design in docs/enemy-codex.md). We
+        // synthesise a code-built EnemyDef per id here — this does NOT re-stat any
+        // JSON-owned enemy; it gives the not-yet-statted roamers a sensible body that
+        // ThreatLevel then scales. When enemies.json gains these ids, swap this for a
+        // catalog lookup with no other change. necromancer EXISTS in JSON — but as a
+        // 1700-HP village wave-boss; a roaming "lieutenant" reads it down to a tough
+        // caster body so the open world isn't gated behind a raid boss.
+        private static EnemyDef BuildRoamerDef(string enemyId, int threat)
+        {
+            float scale = 1f + 0.10f * Mathf.Max(0, threat);   // ThreatLevel-driven stat scaling
+
+            // Per-roster archetype base. Codex roles: Wolf = fast skirmisher, Caveman =
+            // brute walker, Orc Raider = heavy charger, Tiefling = demonic skirmisher,
+            // Necromancer = caster lieutenant.
+            string id = enemyId ?? "feral-wolf";
+            string name; string ai; float hp; float spd; float dmg; float interval; float height; int xp;
+            switch (id)
+            {
+                case "orc-raider":
+                    name = "Orc Raider";     ai = "charger";    hp = 95f;  spd = 3.1f; dmg = 12f; interval = 1.3f; height = 2.0f; xp = 22; break;
+                case "caveman":
+                    name = "Wildlands Caveman"; ai = "walker";  hp = 70f;  spd = 2.7f; dmg = 9f;  interval = 1.4f; height = 1.9f; xp = 16; break;
+                case "feral-wolf":
+                    name = "Feral Wolf";     ai = "skirmisher"; hp = 42f;  spd = 4.2f; dmg = 7f;  interval = 1.0f; height = 1.2f; xp = 12; break;
+                case "tiefling-cultist":
+                    name = "Tiefling Cultist"; ai = "skirmisher"; hp = 80f; spd = 3.4f; dmg = 11f; interval = 1.2f; height = 1.9f; xp = 20; break;
+                case "necromancer":
+                    name = "Wound Necromancer"; ai = "walker";  hp = 140f; spd = 2.2f; dmg = 15f; interval = 1.4f; height = 2.1f; xp = 34; break;
+                default:
+                    name = "Wildlands Beast"; ai = "walker";    hp = 55f;  spd = 3.0f; dmg = 8f;  interval = 1.3f; height = 1.7f; xp = 14; break;
+            }
+
+            return new EnemyDef
+            {
+                Id = id,
+                Name = name,
+                DisplayName = name,
+                Ai = ai,
+                Hp = hp * scale,
+                MoveSpeed = spd,
+                ContactDamage = dmg * scale,
+                AttackInterval = interval,
+                Height = height,
+                AggroRadius = 14f,
+                XpReward = xp + threat,
+                GlimmerReward = 3,
+            };
+        }
+
+        // ── Helpers ───────────────────────────────────────────────────────────────
+
+        private static bool IsWoundTied(RegionId region) =>
+            region == RegionId.Mirewood || region == RegionId.Ashwood;
+
+        private void ResolvePlayer()
+        {
+            if (_player != null) return;
+            var p = GameObject.FindWithTag("Player");
+            _player = p != null ? p.transform : null;
+        }
+
+        private static Transform ResolveHeart()
+        {
+            var hc = FindAnyObjectByType<HeartController>();
+            if (hc != null) return hc.transform;
+            var byName = GameObject.Find("HeartOfTown") ?? GameObject.Find("Tree of Life") ?? GameObject.Find("Heart");
+            return byName != null ? byName.transform : null;
+        }
+    }
+}

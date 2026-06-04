@@ -17,6 +17,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using UnityEngine;
 using UnityEngine.UIElements;
+using DeNelle.Core.UI;
 
 namespace DeNelle.HUD
 {
@@ -44,6 +45,9 @@ namespace DeNelle.HUD
         private bool _visible;
         private Delegate _changedHandler;
         private object _serviceInstanceCache;
+        // Modal arbiter handle (DEF-212): opening any panel closes the previously
+        // open one. Hide() is the close action; _visible is the is-open probe.
+        private PanelHandle _panelHandle;
 
         private static readonly string[] HeroOrder = { "mage", "knight", "ranger" };
         private static readonly string[] TierOrderTopDown = { "tier3", "tier2", "tier1" };
@@ -51,6 +55,10 @@ namespace DeNelle.HUD
         private void Awake()
         {
             _doc = GetComponent<UIDocument>();
+            _panelHandle = PanelManager.Register("Hero Talents", Hide, () => _visible);
+            // DEF-213: let building interactions (Arcane Tower) open this panel by id,
+            // without a cross-asmdef reference and without reflection.
+            PanelRouter.Register(PanelId.HeroTalents, Show);
             ResolveBridges();
             BuildUi();
             Hide();
@@ -59,6 +67,7 @@ namespace DeNelle.HUD
 
         private void OnDestroy()
         {
+            PanelRouter.Unregister(PanelId.HeroTalents, Show);
             UnsubscribeFromService();
         }
 
@@ -74,6 +83,8 @@ namespace DeNelle.HUD
             if (_overlay == null) return;
             _visible = true;
             _overlay.style.display = DisplayStyle.Flex;
+            // Tell the arbiter we're open; it closes any other panel first.
+            PanelManager.NotifyOpened(_panelHandle);
             Repaint();
         }
 
@@ -82,6 +93,8 @@ namespace DeNelle.HUD
             if (_overlay == null) return;
             _visible = false;
             _overlay.style.display = DisplayStyle.None;
+            // Clear our slot. No-op if the manager already swapped us out.
+            PanelManager.NotifyClosed(_panelHandle);
         }
 
         // -- UI build -----------------------------------------------------------
@@ -103,7 +116,10 @@ namespace DeNelle.HUD
             _overlay.style.position = Position.Absolute;
             _overlay.style.left = 0; _overlay.style.right = 0;
             _overlay.style.top = 0;  _overlay.style.bottom = 0;
-            _overlay.style.backgroundColor = new StyleColor(new Color(0f, 0f, 0f, 0.72f));
+            // DEF-212 item 5: world-space labels ("Arcane Tower") bled through the
+            // old 0.72 scrim. Use a near-opaque scrim so no 3D text shows behind the
+            // modal (the panel card on top is already opaque).
+            _overlay.style.backgroundColor = new StyleColor(new Color(0.02f, 0.02f, 0.03f, 0.97f));
             _overlay.style.alignItems = Align.Center;
             _overlay.style.justifyContent = Justify.Center;
             _overlay.pickingMode = PickingMode.Position;
@@ -122,6 +138,10 @@ namespace DeNelle.HUD
             panel.style.paddingRight = 22;
             panel.style.minWidth = 880;
             panel.style.maxWidth = 1100;
+            // Never let the sheet exceed the viewport — the columns scroll inside
+            // it instead of spilling past the screen edges (owner: "talent window
+            // extends outside box, needs a scrolling box to stay inside structure").
+            panel.style.maxHeight = Length.Percent(90);
             panel.style.borderTopLeftRadius = 12;
             panel.style.borderTopRightRadius = 12;
             panel.style.borderBottomLeftRadius = 12;
@@ -153,6 +173,11 @@ namespace DeNelle.HUD
             _wisdomLabel.style.color = new StyleColor(new Color(0.95f, 0.85f, 0.45f, 1f));
             _wisdomLabel.style.fontSize = 16;
             _wisdomLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
+            // DEF-212 item 6: Wisdom has no earn path in the current loop, so a
+            // permanent "Wisdom: 0" reads as broken. Hide the counter until heroes
+            // actually grant Wisdom (then flip this back on). The label is still
+            // built + updated by Repaint so re-enabling is a one-line change.
+            _wisdomLabel.style.display = DisplayStyle.None;
             headerRow.Add(_wisdomLabel);
 
             var closeBtn = new Button(Hide) { text = "Close (T)" };
@@ -164,11 +189,20 @@ namespace DeNelle.HUD
             closeBtn.style.borderBottomLeftRadius = 6; closeBtn.style.borderBottomRightRadius = 6;
             headerRow.Add(closeBtn);
 
+            // The columns live inside a vertical ScrollView so a tall tree (or a
+            // short window) scrolls within the capped panel rather than overflowing
+            // it. The header above stays pinned; only the columns scroll.
+            var scroll = new ScrollView(ScrollViewMode.Vertical);
+            scroll.style.flexGrow = 1f;
+            scroll.style.flexShrink = 1f;
+            scroll.style.marginRight = -6;   // tuck the scrollbar against the rim
+            panel.Add(scroll);
+
             _columnsRow = new VisualElement();
             _columnsRow.style.flexDirection = FlexDirection.Row;
             _columnsRow.style.justifyContent = Justify.SpaceBetween;
             _columnsRow.style.alignItems = Align.FlexStart;
-            panel.Add(_columnsRow);
+            scroll.Add(_columnsRow);
         }
 
         private Label _wisdomLabel;
@@ -276,6 +310,10 @@ namespace DeNelle.HUD
             string name = ReadString(node, "Name") ?? id ?? "?";
             string desc = ReadString(node, "Description") ?? "";
             int cost = ReadInt(node, "Cost");
+            // Phase 1 added numeric stat fields to the node DTO; surface them so
+            // players see an unlock's concrete effect before buying.
+            float damageBonus = ReadFloat(node, "DamageBonus");
+            float cdReduction = ReadFloat(node, "CdReduction");
             bool learned = unlocked != null && id != null && unlocked.Contains(id);
             bool canBuy = !learned && CanUnlock(id, wisdom, unlocked);
 
@@ -330,6 +368,23 @@ namespace DeNelle.HUD
             body.style.marginBottom = 6;
             card.Add(body);
 
+            // Talent impact line — a small bold readout of the node's concrete
+            // numbers (DamageBonus 0.10 -> "+10% damage", CdReduction 0.10 ->
+            // "-10% cooldown"). Only shown when at least one stat is non-zero, so
+            // pure-utility nodes stay clean. Sits between the description and the
+            // cost/Spend footer so players read the effect before buying.
+            string impact = BuildImpactText(damageBonus, cdReduction);
+            if (!string.IsNullOrEmpty(impact))
+            {
+                var impactLabel = new Label(impact);
+                impactLabel.style.color = new StyleColor(new Color(0.55f, 0.90f, 0.98f, 1f));
+                impactLabel.style.fontSize = 11;
+                impactLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
+                impactLabel.style.whiteSpace = WhiteSpace.Normal;
+                impactLabel.style.marginBottom = 6;
+                card.Add(impactLabel);
+            }
+
             var footer = new VisualElement();
             footer.style.flexDirection = FlexDirection.Row;
             footer.style.justifyContent = Justify.SpaceBetween;
@@ -360,6 +415,30 @@ namespace DeNelle.HUD
                 footer.Add(spend);
             }
             return card;
+        }
+
+        // Formats the node's numeric stat fields into a short impact string.
+        // DamageBonus is a positive fraction (0.10 -> "+10% damage"); CdReduction
+        // is a positive fraction representing how much cooldown is shaved
+        // (0.10 -> "-10% cooldown"). Multiple stats are joined with a middot.
+        // Returns "" when both are zero so utility nodes show no impact line.
+        private static string BuildImpactText(float damageBonus, float cdReduction)
+        {
+            var parts = new List<string>();
+            if (Mathf.Abs(damageBonus) > 0.0001f)
+            {
+                int pct = Mathf.RoundToInt(damageBonus * 100f);
+                string sign = pct >= 0 ? "+" : "";
+                parts.Add($"{sign}{pct}% damage");
+            }
+            if (Mathf.Abs(cdReduction) > 0.0001f)
+            {
+                // A positive reduction shortens the cooldown, so it reads as "-N%".
+                int pct = Mathf.RoundToInt(cdReduction * 100f);
+                string sign = pct >= 0 ? "-" : "+";
+                parts.Add($"{sign}{Mathf.Abs(pct)}% cooldown");
+            }
+            return string.Join("  ·  ", parts);
         }
 
         private static string TierDisplay(string tierKey) => tierKey switch
@@ -553,6 +632,27 @@ namespace DeNelle.HUD
                 return v is int i ? i : 0;
             }
             return 0;
+        }
+
+        private static float ReadFloat(object obj, string fieldOrProp)
+        {
+            if (obj == null) return 0f;
+            var t = obj.GetType();
+            var f = t.GetField(fieldOrProp);
+            if (f != null) return ToFloat(f.GetValue(obj));
+            var p = t.GetProperty(fieldOrProp);
+            if (p != null) return ToFloat(p.GetValue(obj, null));
+            return 0f;
+        }
+
+        // Boxed numeric values (the Phase-1 fields are floats, but be tolerant of
+        // a double/int author choice) → float; anything else → 0.
+        private static float ToFloat(object v)
+        {
+            if (v is float f) return f;
+            if (v is double d) return (float)d;
+            if (v is int i) return i;
+            return 0f;
         }
 
         private static List<object> ReadList(object obj, string fieldOrProp)

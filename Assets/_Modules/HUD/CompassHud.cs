@@ -132,7 +132,11 @@ namespace DeNelle.HUD
             else if (yaw < 247.5f)                  heading = "SW";
             else if (yaw < 292.5f)                  heading = "W";
             else                                    heading = "NW";
+#if UNITY_EDITOR
             _compassLabel.text = heading + "   (" + Mathf.RoundToInt(yaw) + "°)";
+#else
+            _compassLabel.text = heading;
+#endif
         }
 
         // ── Off-screen target arrows ────────────────────────────────────────

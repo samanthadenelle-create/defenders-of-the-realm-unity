@@ -49,6 +49,7 @@ namespace DeNelle.Core.State
         [EnumMember(Value = "mage")] Mage,
         [EnumMember(Value = "knight")] Knight,
         [EnumMember(Value = "ranger")] Ranger,
+        [EnumMember(Value = "cleric")] Cleric,
     }
 
     /// <summary>Pet species (gameDesign.ts).</summary>

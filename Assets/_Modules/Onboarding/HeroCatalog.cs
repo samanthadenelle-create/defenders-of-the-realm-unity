@@ -58,18 +58,21 @@ namespace DeNelle.Onboarding
     /// </summary>
     public static class HeroCatalog
     {
-        /// <summary>The hero cards in catalog order: Mage, Knight, Ranger.</summary>
+        /// <summary>The hero cards in catalog order: Mage, Knight, Ranger, Cleric.</summary>
         public static readonly HeroCardInfo[] Heroes =
         {
             new HeroCardInfo(
                 HeroClass.Mage, "hero.mage.name", "hero.mage.role", "hero.mage.blurb",
-                "M", new Color(0.486f, 0.349f, 1f)),      // arcane violet
+                "T", new Color(0.45f, 0.75f, 1.0f)),      // Thrain — icy blue
             new HeroCardInfo(
                 HeroClass.Knight, "hero.knight.name", "hero.knight.role", "hero.knight.blurb",
-                "K", new Color(0.961f, 0.769f, 0.353f)),  // steel-gold
+                "G", new Color(0.98f, 0.84f, 0.40f)),     // Grom — holy gold
             new HeroCardInfo(
                 HeroClass.Ranger, "hero.ranger.name", "hero.ranger.role", "hero.ranger.blurb",
-                "R", new Color(0.408f, 0.741f, 0.475f)),  // wood-green
+                "S", new Color(0.41f, 0.74f, 0.48f)),     // Sylas — wood-green
+            new HeroCardInfo(
+                HeroClass.Cleric, "hero.cleric.name", "hero.cleric.role", "hero.cleric.blurb",
+                "E", new Color(1.0f, 0.93f, 0.70f)),      // Elara — warm white-gold
         };
     }
 }

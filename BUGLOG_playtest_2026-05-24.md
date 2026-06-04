@@ -57,3 +57,11 @@ Status: pet movement (#2) FIXED in code (Pet.cs — eased accel/decel + arrival 
 - **HUD-click cluster (#1, #4, #5):** needs root-cause on UI-Toolkit click input; one fix likely resolves all three. **Pivotal:** does this reproduce in normal Title→HeroSelect→PetSelect play, or only via `-bootScene Village`? (`-bootScene` skips onboarding/integrator state and may falsely show dead HUD.)
 - **Scene/builder geometry → follow-up WOs (per owner direction):** #6 force-field box position, #7 gate-wall gap.
 - **Content → follow-up WO:** #3 dungeon stubs.
+
+## Playtest 2026-05-25 (clean Windows build, Builds/Windows)
+
+| # | Bug | Severity | Root-cause | Class | Plan |
+|---|---|---|---|---|---|
+| I | **Player hard-crashes loading Village** — `The file '.../level3' is corrupted! [Position out of bounds!] Crash!!!`, preceded by `d3d12: upload buffer was too small for the requested resource! Requested: ~37MB` | **CRITICAL** | Village instantiates raw un-decimated Tripo structure meshes (Cathedral 84MB, PetHome 54MB, LumberMill 52MB, Forge/Farm 29MB) — a single >35MB mesh overflows the D3D12 upload buffer, cascading into the level3-load corruption. NOT static batching (already off); not fixable by reverting Village. | **content / art (mesh size)** | decimate the TripoStructures + Cathedral meshes to game-res, OR swap to KayKit building meshes, OR (quick test) force D3D11 graphics API |
+| J | **Particle Velocity curves must all be in the same mode** — logged repeatedly during the intro/Title sequence | **MEDIUM** | A ParticleSystem in the intro/Title scene has its Velocity-over-Lifetime module X/Y/Z curves set to mismatched modes (e.g. one Constant, one Curve). Non-breaking warning, no gameplay impact. | **scene/builder (particle setup)** | open the intro/Title particle FX, set all three Velocity-over-Lifetime axes to the same curve mode (or normalize in the scene builder) |
+

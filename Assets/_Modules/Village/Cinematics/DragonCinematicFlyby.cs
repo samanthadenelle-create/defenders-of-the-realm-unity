@@ -181,13 +181,16 @@ namespace DeNelle.Village.Cinematics
             // Drive the wing animation by setting Speed on the Animator
             // (DragonAnimatorSetup blends Idle ↔ Fly off this parameter).
             var animator = dragon.GetComponentInChildren<Animator>();
-            if (animator != null)
+            // WO-163: only drive "Speed" if the controller declares it (driving an
+            // absent param logs an error — once here, and every frame in FlightDriver).
+            bool hasSpeed = DragonCinematicFlyby_AnimSpeed.Declares(animator);
+            if (animator != null && hasSpeed)
                 animator.SetFloat(AnimSpeed, _speed);
 
             // Attach the straight-line driver.
             float duration = _crossDistance / Mathf.Max(0.01f, _speed);
             var driver = dragon.AddComponent<FlightDriver>();
-            driver.Initialise(start, end, duration, animator, _speed);
+            driver.Initialise(start, end, duration, animator, _speed, hasSpeed);
 
             Debug.Log(string.Format(
                 "[DragonCinematicFlyby] Fly-by started: heading={0:0}deg duration={1:0.0}s",
@@ -287,18 +290,20 @@ namespace DeNelle.Village.Cinematics
         private Animator _animator;
         private float _speed;
         private bool _ready;
+        private bool _hasSpeed;   // WO-163: controller declares "Speed"?
 
         /// <summary>
         /// Configures the trajectory. <paramref name="duration"/> must be &gt; 0.
         /// </summary>
         public void Initialise(Vector3 start, Vector3 end, float duration,
-            Animator animator, float speed)
+            Animator animator, float speed, bool hasSpeed)
         {
             _start = start;
             _end = end;
             _duration = Mathf.Max(0.01f, duration);
             _animator = animator;
             _speed = speed;
+            _hasSpeed = hasSpeed;
             _elapsed = 0f;
             transform.position = _start;
             // Face travel direction.
@@ -317,7 +322,7 @@ namespace DeNelle.Village.Cinematics
             transform.position = Vector3.Lerp(_start, _end, t);
 
             // Keep the wings beating across the whole pass.
-            if (_animator != null)
+            if (_animator != null && _hasSpeed)
                 _animator.SetFloat(DragonCinematicFlyby_AnimSpeed.Hash, _speed);
 
             if (t >= 1f)
@@ -333,5 +338,18 @@ namespace DeNelle.Village.Cinematics
     internal static class DragonCinematicFlyby_AnimSpeed
     {
         public static readonly int Hash = Animator.StringToHash("Speed");
+
+        /// <summary>
+        /// WO-163: true when <paramref name="animator"/>'s controller declares the
+        /// "Speed" param. Driving an absent param logs "Parameter does not exist"
+        /// (every frame in FlightDriver). Scanned once at fly-by spawn.
+        /// </summary>
+        public static bool Declares(Animator animator)
+        {
+            if (animator == null || animator.runtimeAnimatorController == null) return false;
+            foreach (var p in animator.parameters)
+                if (p.nameHash == Hash) return true;
+            return false;
+        }
     }
 }

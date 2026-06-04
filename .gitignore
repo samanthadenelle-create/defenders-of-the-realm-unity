@@ -88,8 +88,17 @@ Thumbs.db
 # Assets/Editor/ are the source of truth — they reconstruct the scenes from
 # whatever KayKit models are present. (Owner instruction 2026-05-18:
 # "exclude not needed files from the assets during check in".)
-/Assets/Models/
-/Assets/Models.meta
+# EXCEPTION: the optimized People NPC pack (DEF-91) IS committed via LFS after a
+# source-shrink pass (~90 MB) - see NpcPackSourceCompressor / NpcPackTrimmer.
+/Assets/Models/*
+!/Assets/Models/People/
+# ...but not the redundant CGTrader mesh exports (Unity imports only the .fbx).
+/Assets/Models/People/**/*.obj
+/Assets/Models/People/**/*.obj.meta
+/Assets/Models/People/**/*.ma
+/Assets/Models/People/**/*.ma.meta
+/Assets/Models/People/**/*.mtl
+/Assets/Models/People/**/*.mtl.meta
 
 # Owner Tripo art — large FBX kept local (same policy as Models/). The builder
 # bakes them by path; on a fresh clone re-copy from the owner's source folder
@@ -98,6 +107,13 @@ Thumbs.db
 /Assets/Art/TripoStructures.meta
 /Assets/Resources/Structures/
 /Assets/Resources/Structures.meta
+
+# Low Poly Ultimate Pack (polyperfect) — 246MB asset pack kept LOCAL (owner
+# instruction 2026-05-29: "use what you like and we can not git the others").
+# Only the SPECIFIC prefabs/meshes we use are committed, copied into a tracked
+# Resources/ path; on a fresh clone re-import the pack from the Asset Store.
+/Assets/polyperfect/
+/Assets/polyperfect.meta
 
 # === Session-noise / dev workflow (added 2026-05-20) ===
 # Stale build logs left behind by batch Unity invocations.
@@ -128,3 +144,41 @@ portraits*.log
 # once Unity has imported the corrected .meta files and you've verified.
 *.meta.bak
 *.meta.bak.meta
+
+# ── Secrets (v2-unity-port-backend-spec Part 5.2) — added 2026-05-27 ──
+.env
+.env.local
+.env.*.local
+*.jks
+*.keystore
+*.p12
+keystore.properties
+
+# Generated config
+Assets/Generated/
+
+# Test wallets (devnet only, but still treat as secrets)
+Assets/Tests/Fixtures/DevnetTestWallet.*
+
+# Vercel CLI leftovers (Unity is not a Vercel project; these are stray)
+.vercel/
+.vercelignore
+
+# ── Vendor VFX packs (gate-stabilize 2026-05-31) ──
+# Bulky Asset-Store VFX packs kept LOCAL — same policy as KayKit/Tripo/polyperfect.
+# Only the specific effects we use are referenced by path; re-import on fresh clone.
+# (Mirza Beig = 3,426 files, Spells Pack = 2,037 — kept the tree out of git-add-all danger.)
+/Assets/Mirza Beig/
+/Assets/Mirza Beig.meta
+/Assets/Spells Pack/
+/Assets/Spells Pack.meta
+
+# Cross-repo implementation staging (defenders-unity-review deltas, *_delta.cs) —
+# NOT part of feat/tower-core-loop; kept local for reference only, never committed here.
+/CC_implementations/
+
+# UI-bounced files (compile-failed drafts returned for rework) — scratch, not tracked.
+/_ui_bounced/
+
+# Stray root-level scripts (must live under Assets/ to compile; kept out of git).
+/ColliderVisualizer.cs

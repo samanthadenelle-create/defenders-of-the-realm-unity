@@ -57,14 +57,31 @@ namespace DeNelle.Village
         [Tooltip("Character scale of the text — keep small so the bubble doesn't dominate.")]
         [SerializeField] private float _textScale = 0.07f;
 
+        [Header("Auto-hide")]
+        [Tooltip("Owner playtest 2026-06-03: a bubble shown while the Keeper stands still " +
+                 "next to a villager lingered forever (it only hid when the Keeper walked out " +
+                 "of the speak radius). Auto-hide the bubble this many seconds after it is shown " +
+                 "so lines read and then clear. Re-showing a new line resets the timer. " +
+                 "0 or less = never auto-hide (legacy behaviour).")]
+        [SerializeField] private float _autoHideSeconds = 4.5f;
+
         // ── Runtime ──────────────────────────────────────────────────────────
 
         private Transform _root;        // billboarded container for panel + text
         private TextMesh _text;
         private Renderer _panelRenderer;
+        private Transform _outlineTransform;   // scale-tracked alongside the panel
         private Camera _faceCamera;
         private bool _visible;
         private bool _built;
+        // TextMesh bounds aren't valid until it renders (a frame or two after .text is
+        // set), so a same-frame ResizePanelToText reads stale bounds and the text spills
+        // outside the panel (DEF-107). Re-measure for a few frames after Show to catch
+        // the real glyph extents once they exist.
+        private int _resizePending;
+        // Unscaled time at which the currently-shown bubble should auto-hide. <= 0 = no timeout
+        // armed (legacy / _autoHideSeconds disabled). Timestamp check — no per-frame alloc.
+        private float _autoHideAt;
 
         /// <summary>True while the bubble is currently shown.</summary>
         public bool IsVisible => _visible;
@@ -80,6 +97,24 @@ namespace DeNelle.Village
         private void LateUpdate()
         {
             if (!_visible || _root == null) return;
+
+            // Auto-hide after the timeout so a bubble shown next to a stationary Keeper
+            // clears instead of lingering forever (owner playtest 2026-06-03). Cheap
+            // unscaled-time stamp compare — no per-frame allocation. Re-showing a new
+            // line re-arms _autoHideAt in Show().
+            if (_autoHideAt > 0f && Time.unscaledTime >= _autoHideAt)
+            {
+                Hide();
+                return;
+            }
+
+            // Re-fit the panel once TextMesh bounds become valid (DEF-107) — a few
+            // frames of re-measure catches the real glyph extents post-render.
+            if (_resizePending > 0)
+            {
+                ResizePanelToText();
+                _resizePending--;
+            }
 
             // Billboard the bubble to the active camera so it stays readable
             // under the village's overhead-ish tilt.
@@ -113,17 +148,69 @@ namespace DeNelle.Village
                 ? body
                 : speakerName + "\n" + body;
 
+            // Resize the panel to fit the actual text so long lines are never
+            // clipped. TextMesh.GetComponent<Renderer>().bounds reflects the
+            // rendered glyph extents once .text is assigned (world space, so
+            // we convert back to panel-local units via _textScale).
+            ResizePanelToText();
+            _resizePending = 3;   // re-measure over the next frames once bounds are valid
+
             // Steal the active-bubble slot from whoever held it before.
             if (s_activeBubble != null && s_activeBubble != this)
                 s_activeBubble.SetVisible(false);
             s_activeBubble = this;
             SetVisible(true);
+
+            // (Re)arm the auto-hide timeout — a fresh line resets the clock.
+            _autoHideAt = _autoHideSeconds > 0f
+                ? Time.unscaledTime + _autoHideSeconds
+                : 0f;
+        }
+
+        /// <summary>
+        /// Measures the TextMesh renderer bounds and expands the bubble panel
+        /// quads to fit, preserving a padding margin. World-space positioning
+        /// is unchanged — only the quad scales (visual width/height) adjust.
+        /// </summary>
+        private void ResizePanelToText()
+        {
+            if (_text == null || _panelRenderer == null) return;
+
+            // TextMesh reports bounds in world space relative to _root. Since
+            // _root may be rotated (billboard), use localScale and the mesh
+            // renderer's bounds size — both are reliable immediately after
+            // assigning .text, with no layout frame needed.
+            var textRenderer = _text.GetComponent<Renderer>();
+            if (textRenderer == null) return;
+
+            // The text GameObject is scaled by _textScale, so world-space
+            // bounds are already in world-unit metres. Add horizontal and
+            // vertical padding so the text doesn't butt up against the edges.
+            const float PadX = 0.18f;
+            const float PadY = 0.16f;
+
+            float requiredWidth  = textRenderer.bounds.size.x + PadX * 2f;
+            float requiredHeight = textRenderer.bounds.size.y + PadY * 2f;
+
+            // Never shrink below the inspector-configured minimums so a single
+            // short word still produces a visible bubble.
+            float newWidth  = Mathf.Max(requiredWidth,  _panelWidth);
+            float newHeight = Mathf.Max(requiredHeight, _panelHeight);
+
+            // Rescale the panel quad (and the outline quad behind it).
+            _panelRenderer.transform.localScale =
+                new Vector3(newWidth, newHeight, 1f);
+
+            if (_outlineTransform != null)
+                _outlineTransform.localScale =
+                    new Vector3(newWidth + 0.06f, newHeight + 0.06f, 1f);
         }
 
         /// <summary>Hides the bubble.</summary>
         public void Hide()
         {
             if (s_activeBubble == this) s_activeBubble = null;
+            _autoHideAt = 0f;   // disarm so a later re-show isn't insta-hidden by a stale stamp
             SetVisible(false);
         }
 
@@ -148,6 +235,7 @@ namespace DeNelle.Village
             outline.transform.SetParent(_root, false);
             outline.transform.localPosition = new Vector3(0f, 0f, 0.005f);
             outline.transform.localScale = new Vector3(_panelWidth + 0.06f, _panelHeight + 0.06f, 1f);
+            _outlineTransform = outline.transform;   // retained for ResizePanelToText
             ApplyRoundedMaterial(outline.GetComponent<Renderer>(), _outlineColor, aspect, 0.28f);
 
             // Fill panel — cream chat-bubble face with SDF rounded corners.
@@ -180,7 +268,33 @@ namespace DeNelle.Village
             _text.characterSize = 0.32f;
             _text.richText = false;
 
+            // DEF-151 / owner playtest 2026-06-03 ("camera gets caught on word bubbles"):
+            // the whole bubble hierarchy goes on "Ignore Raycast" (layer 2). The bubble is a
+            // non-blocking visual — it must NEVER push the gameplay camera. The townsperson
+            // root is on Default, which SmartMobileCamera's occlusion spherecast mask
+            // (Default|Building|Tower) includes; a billboard quad swinging in front of the
+            // camera would otherwise let the occlusion pass catch on it and pull the view in.
+            // "Ignore Raycast" is excluded from that mask (it's a non-world-geometry layer), so
+            // real walls/buildings/towers still block the camera (DEF-151 holds) while the
+            // bubble never can. Quad colliders are already stripped above; this layer move is
+            // the belt-and-braces guarantee even if a collider ever survives on a bubble part.
+            SetLayerRecursively(_root.gameObject, IgnoreRaycastLayer);
+
             _built = true;
+        }
+
+        // "Ignore Raycast" is a Unity built-in layer (index 2) — always defined, and the one
+        // layer SmartMobileCamera's collision mask is documented to exclude.
+        private const int IgnoreRaycastLayer = 2;
+
+        /// <summary>Sets <paramref name="go"/> and every descendant onto <paramref name="layer"/>.</summary>
+        private static void SetLayerRecursively(GameObject go, int layer)
+        {
+            if (go == null) return;
+            go.layer = layer;
+            Transform t = go.transform;
+            for (int i = 0; i < t.childCount; i++)
+                SetLayerRecursively(t.GetChild(i).gameObject, layer);
         }
 
         /// <summary>Builds a flat unlit material for the outline + tail quads.</summary>

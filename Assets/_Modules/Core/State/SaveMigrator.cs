@@ -43,6 +43,12 @@ namespace DeNelle.Core.State
                 { 8, MigrateToV8 },
                 { 9, MigrateToV9 },
                 { 10, MigrateToV10 },
+                // v11→v13 were additive-default-on-read (aetherCrystals / lastHarvestClaimMs /
+                // buildJobs+adSkip): nullable fields defaulted on load, no Steps entry needed.
+                { 14, MigrateToV14 },
+                // v15 (DEF-121/WO-230) added `magic` — additive-default-on-read (a
+                // nullable field defaulted to 0 on load, like aetherCrystals v11), so
+                // NO Steps entry is needed.
             };
 
         /// <summary>
@@ -246,6 +252,18 @@ namespace DeNelle.Core.State
         private static PersistedState MigrateToV10(PersistedState s)
         {
             if (s.Regions == null) s.Regions = RegionProgress.Empty();
+            return s;
+        }
+
+        /// <summary>
+        /// v13→v14 (WO-108 player build mode): seed baseLayout ?? [] — an empty
+        /// base layout. Additive: an existing player keeps the default
+        /// VillageSceneBuilder village (the loader falls through on an empty layout)
+        /// until they first enter build mode and save their own layout.
+        /// </summary>
+        private static PersistedState MigrateToV14(PersistedState s)
+        {
+            if (s.BaseLayout == null) s.BaseLayout = new List<PlacedStructureData>();
             return s;
         }
 

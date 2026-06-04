@@ -22,9 +22,16 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
+using Cysharp.Threading.Tasks;
+using DeNelle.Core.Web3;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using UnityEngine;
 using UnityEngine.Events;
+using UnityEngine.Networking;
 
 namespace DeNelle.Core.State
 {
@@ -48,6 +55,13 @@ namespace DeNelle.Core.State
 
         /// <summary>The live persisted state. Never null after <see cref="Awake"/>.</summary>
         public GameState State => _state;
+
+        /// <summary>
+        /// Backend-controlled remote config. Populated on <see cref="LoadFromBackend"/>;
+        /// returns <see cref="ServerConfig.Default"/> until the first successful load.
+        /// Never null.
+        /// </summary>
+        public ServerConfig ServerConfig { get; private set; } = ServerConfig.Default;
 
         // ── Per-domain change events (improvement #1) ────────────────────────
         /// <summary>Raised when the resource wallet / materials / voidshards change.</summary>
@@ -93,11 +107,43 @@ namespace DeNelle.Core.State
 
             if (_loadOnAwake)
                 Load();
+
+            // WO1: ensure the PersistenceBridge is alive so wave-clear saves,
+            // scene-enter loads, and quit saves are all wired automatically.
+            if (Application.isPlaying)
+                PersistenceBridge.EnsureExists();
+
+            // WO2-4: analytics event tracker with batching, offline queue, circuit breaker.
+            if (Application.isPlaying)
+                DeNelle.Core.Analytics.EventTracker.EnsureExists();
         }
 
         private void OnDestroy()
         {
             if (_instance == this) _instance = null;
+        }
+
+        /// <summary>
+        /// Guarantees a live service exists in ANY scene — even one entered without
+        /// the boot flow (a dev direct-boot, or the Village as the first built
+        /// scene). No-op in normal play: the boot scene's GameStateService Awake
+        /// sets <see cref="_instance"/> first, so this never runs; and if a later
+        /// scene carries its own component it destroys itself against the existing
+        /// singleton (see Awake). A code-created instance still loads the same
+        /// PlayerPrefs save in its Awake, so progress is preserved, not reset.
+        ///
+        /// Without this, every scene where Instance is null silently breaks the
+        /// economy: dev resource grants no-op, the build menu falls back to a local
+        /// crystal balance, and wall repair can't spend — all of which read
+        /// GameStateService.State.Resources. (WisdomCurrencyService already
+        /// self-installs, which is why +Wisdom worked but +Crystals did not.)
+        /// </summary>
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        private static void EnsureInstance()
+        {
+            if (_instance != null) return;
+            var go = new GameObject("GameStateService (auto)");
+            go.AddComponent<GameStateService>();   // Awake sets _instance + DontDestroyOnLoad + loads the save
         }
 
         // =====================================================================
@@ -201,6 +247,40 @@ namespace DeNelle.Core.State
             }
         }
 
+        /// <summary>
+        /// Adds <paramref name="amount"/> crystals to the live state (negative to
+        /// spend; clamped &gt;= 0), persists, and raises <see cref="ResourcesChanged"/>.
+        /// The convenience seam AdminOverlay's reflective "+crystals" actions look
+        /// for ("if AddCrystals isn't defined, owner adds it"), so callers needn't
+        /// reach into the Resources struct directly.
+        /// </summary>
+        public void AddCrystals(int amount)
+        {
+            if (_state == null) return;
+            var r = _state.Resources;
+            r.Crystals = Mathf.Max(0, r.Crystals + amount);
+            _state.Resources = r;
+            Save();
+            ResourcesChanged.Invoke();
+        }
+
+        /// <summary>
+        /// Adds <paramref name="amount"/> food to the live state (negative to spend;
+        /// clamped &gt;= 0), persists, and raises <see cref="ResourcesChanged"/>.
+        /// DEF-121 — Food is one of the four harvestables (Wood/Food/Iron/Crystals);
+        /// it lives on the wallet struct (Resources.Food). Mirrors AddCrystals so
+        /// harvest/upgrade callers needn't reach into the Resources struct directly.
+        /// </summary>
+        public void AddFood(int amount)
+        {
+            if (_state == null) return;
+            var r = _state.Resources;
+            r.Food = Mathf.Max(0, r.Food + amount);
+            _state.Resources = r;
+            Save();
+            ResourcesChanged.Invoke();
+        }
+
         /// <summary>Snapshots the SO's 41 persisted fields into a <see cref="SaveSchema.PersistedState"/>.</summary>
         public SaveSchema.PersistedState Snapshot()
         {
@@ -215,6 +295,7 @@ namespace DeNelle.Core.State
                 OwnedItemIds = s.OwnedItemIds,
                 PetBonds = ToDoubleList(s.PetBonds),
                 Voidshards = s.Voidshards,
+                AetherCrystals = s.AetherCrystals,
                 Towers = ToDoubleList(s.Towers),
                 TowerAbilities = ToDoubleList(s.TowerAbilities),
                 WallLevel = s.WallLevel,
@@ -248,6 +329,12 @@ namespace DeNelle.Core.State
                 BlockedCodes = s.BlockedCodes,
                 Inbox = s.Inbox,
                 LastInboxSyncAt = s.LastInboxSyncAt,
+                LastHarvestClaimMs = s.LastHarvestClaimMs,
+                BuildJobs = s.BuildJobs != null ? new List<BuildJobData>(s.BuildJobs) : null,
+                AdSkipsUsedToday = s.AdSkipsUsedToday,
+                AdSkipDayKey = s.AdSkipDayKey,
+                BaseLayout = s.BaseLayout != null ? new List<PlacedStructureData>(s.BaseLayout) : null,
+                Magic = s.Magic,
             };
         }
 
@@ -267,6 +354,7 @@ namespace DeNelle.Core.State
             if (p.OwnedItemIds != null) s.OwnedItemIds = p.OwnedItemIds;
             if (p.PetBonds != null) s.PetBonds = ToIntList(p.PetBonds);
             if (p.Voidshards.HasValue) s.Voidshards = (int)p.Voidshards.Value;
+            if (p.AetherCrystals.HasValue) s.AetherCrystals = (int)p.AetherCrystals.Value;
             if (p.Towers != null) s.Towers = ToIntList(p.Towers);
             if (p.TowerAbilities != null) s.TowerAbilities = ToIntList(p.TowerAbilities);
             if (p.WallLevel.HasValue) s.WallLevel = (int)p.WallLevel.Value;
@@ -300,6 +388,12 @@ namespace DeNelle.Core.State
             if (p.BlockedCodes != null) s.BlockedCodes = p.BlockedCodes;
             if (p.Inbox != null) s.Inbox = p.Inbox;
             if (p.LastInboxSyncAt.HasValue) s.LastInboxSyncAt = p.LastInboxSyncAt.Value;
+            if (p.LastHarvestClaimMs.HasValue) s.LastHarvestClaimMs = p.LastHarvestClaimMs.Value;
+            if (p.BuildJobs != null) s.BuildJobs = p.BuildJobs;
+            if (p.AdSkipsUsedToday.HasValue) s.AdSkipsUsedToday = (int)p.AdSkipsUsedToday.Value;
+            if (p.AdSkipDayKey != null) s.AdSkipDayKey = p.AdSkipDayKey;
+            if (p.BaseLayout != null) s.BaseLayout = p.BaseLayout;
+            if (p.Magic.HasValue) s.Magic = (int)p.Magic.Value;   // DEF-121 — tech-axis currency
         }
 
         // =====================================================================
@@ -459,6 +553,7 @@ namespace DeNelle.Core.State
             s.OwnedItemIds = new List<string>();
             s.PetBonds = new List<int> { 0, 0, 0 };
             s.Voidshards = 5;
+            s.AetherCrystals = 0;
             s.Towers = GameState.NewZeroed(Constants.TowerSlots);
             s.TowerAbilities = GameState.NewZeroed(Constants.TowerSlots);
             s.WallLevel = 0;
@@ -479,12 +574,544 @@ namespace DeNelle.Core.State
             s.ActiveDungeonRun = null;
             s.Quests = QuestProgress.Empty();
             s.Regions = RegionProgress.Empty();
+            s.LastHarvestClaimMs = 0;   // New Game → reseed the accrual clock on next load (no haul).
+            s.BuildJobs = new List<BuildJobData>();   // WO-172 — clear in-flight construction timers.
+            s.AdSkipsUsedToday = 0;
+            s.AdSkipDayKey = null;
+            s.BaseLayout = new List<PlacedStructureData>();   // WO-108 — New Game starts on the default village seed.
+            s.Magic = 0;                                      // DEF-121 — tech-axis currency resets on New Game.
             // NOTE: BoundWallet, BreachStyle and every social field are deliberately
             // left untouched — preferences and identity survive a New Game.
             s.SchemaVersion = SaveSchema.CurrentVersion;
 
             StateReplaced.Invoke();
             Save();
+        }
+
+        // =====================================================================
+        //  Backend Delta Sync — JSON + Neon (Mobile-Optimised)
+        // =====================================================================
+        //
+        //  Architecture:
+        //    • Snapshot()    →  SaveSchema.PersistedState (already exists)
+        //    • Delta builder →  compares current snapshot vs _lastSyncedSnapshot
+        //    • SyncDeltaPayload — flat plain-C# class, JSON-serialised
+        //    • Offline queue →  PlayerPrefs "dotr-sync-queue" (JSON list)
+        //    • ResourceBalance fields: Crystals / Food / Coins  (NOT Gold/Gems/XP)
+        //
+        //  Required packages (already in project):
+        //    • Newtonsoft.Json     (com.unity.nuget.newtonsoft-json)
+        //    • UniTask             (com.cysharp.unitask)
+        // =====================================================================
+
+        // ── Config ───────────────────────────────────────────────────────────
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        private const string BackendBase = "https://defenders-of-the-realm-v2.vercel.app";
+#else
+        private const string BackendBase = "https://defenders-of-the-realm-v2.vercel.app";
+#endif
+        private const string SaveUrl       = BackendBase + "/api/game/save";
+        private const string LoadUrl       = BackendBase + "/api/game/load";
+        private const string NonceUrl      = BackendBase + "/api/auth/nonce";
+        private const string SyncQueueKey  = "dotr-sync-queue";
+        private const float  MinSyncDelay  = 8f;   // seconds between background syncs
+
+        // ── State ─────────────────────────────────────────────────────────
+        // The last snapshot the server acknowledged — null means never synced.
+        // Uses PersistedState (plain class) NOT the GameState ScriptableObject.
+        private SaveSchema.PersistedState _lastSyncedSnapshot;
+        private bool  _isSyncing;
+        private float _lastSyncTime = -999f;
+
+        // ── Lifecycle hooks ───────────────────────────────────────────────
+        private void OnApplicationPause(bool paused)
+        {
+            if (paused) SyncToBackend(highPriority: true).Forget();
+        }
+
+        private void OnApplicationQuit()
+        {
+            SyncToBackend(highPriority: true).Forget();
+        }
+
+        // ── Public API ────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Call after every wave is completed. Records the wave locally (via
+        /// <see cref="RecordRun"/>) then immediately pushes a high-priority
+        /// delta to the backend.
+        /// </summary>
+        public async UniTask SyncAfterWave(int completedWave)
+        {
+            RecordRun(completedWave);                     // local save inside RecordRun
+            await SyncToBackend(highPriority: true);
+        }
+
+        /// <summary>
+        /// Call before any scene transition. Ensures local + backend are both
+        /// flushed before Unity tears down the scene.
+        /// </summary>
+        public async UniTask SaveBeforeSceneChange()
+        {
+            Save();
+            await SyncToBackend(highPriority: true);
+        }
+
+        /// <summary>
+        /// Fetches this player's authoritative server record and merges it onto
+        /// the live SO. Merge policy: server wins on BestWave (anti-rollback);
+        /// local wins on Towers and Pets (last in-session layout stands).
+        /// </summary>
+        public async UniTask LoadFromBackend()
+        {
+            if (string.IsNullOrEmpty(_state?.BoundWallet)) return;
+
+            var url = $"{LoadUrl}?playerId={Uri.EscapeDataString(_state.BoundWallet)}";
+            using var req = UnityWebRequest.Get(url);
+            req.SetRequestHeader("Accept", "application/json");
+
+            // WO-121: attach wallet-signed auth headers when enforcement is on and
+            // a real signer is connected. A load has no body, so the payload tag is
+            // the literal "load" (matches api/_lib/wallet-auth.buildSignedMessage).
+            // When the flag is off or no real signer exists, this is a no-op and the
+            // request goes out exactly as before (offline-safe).
+            await TryAttachAuthHeaders(req, payloadHashOrLoadTag: "load");
+
+            await req.SendWebRequest();
+
+            if (req.result != UnityWebRequest.Result.Success)
+            {
+                Debug.LogWarning($"[Sync] Load failed: {req.error}");
+                return;
+            }
+
+            BackendLoadResponse resp;
+            try
+            {
+                resp = JsonConvert.DeserializeObject<BackendLoadResponse>(
+                    req.downloadHandler.text, SaveSchema.JsonSettings);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"[Sync] Load parse error: {ex.Message}");
+                return;
+            }
+
+            if (resp?.Success != true || resp.Data == null) return;
+
+            // Absorb remote config if present; keep existing config on null (older backend).
+            if (resp.Config != null)
+            {
+                ServerConfig = resp.Config;
+                Debug.Log("[Sync] ServerConfig refreshed from backend.");
+            }
+
+            var server = resp.Data;
+
+            // Server wins on BestWave only — never roll the player back.
+            if (server.BestWave.HasValue && server.BestWave > (_state.BestWave))
+                _state.BestWave = (int)server.BestWave.Value;
+
+            // Resources: take server value (authoritative for economy integrity).
+            if (server.Resources.HasValue)
+                _state.Resources = server.Resources.Value;
+            if (server.Voidshards.HasValue) _state.Voidshards = (int)server.Voidshards.Value;
+            if (server.AetherCrystals.HasValue) _state.AetherCrystals = (int)server.AetherCrystals.Value;
+            if (server.Stone.HasValue)      _state.Stone       = (int)server.Stone.Value;
+            if (server.Iron.HasValue)       _state.Iron        = (int)server.Iron.Value;
+            if (server.Wood.HasValue)       _state.Wood        = (int)server.Wood.Value;
+
+            // Advance ack marker and re-persist locally.
+            _lastSyncedSnapshot = Snapshot();
+            Save();
+            StateReplaced.Invoke();
+            Debug.Log("[Sync] Server state merged onto local SO.");
+        }
+
+        // ── Backend save-auth (WO-121) — wallet-signed nonce headers ──────────
+        //
+        //  Counterpart to the WO-120 backend gate (api/_lib/wallet-auth.js). On a
+        //  save/load the backend wants X-Wallet / X-Nonce / X-Signature, where the
+        //  client GETs a nonce, builds the canonical message and ed25519-signs it.
+        //
+        //  TWO INDEPENDENT GATES, both required to sign (offline-safe by design):
+        //    1. BackendAuthConfig.Enforced — the feature flag (off by default).
+        //    2. CoreServices.WalletSigner.CanSign — a REAL signer is connected
+        //       (the devnet stub registers but cannot sign).
+        //  If either gate is open, we SKIP the headers, log that signing is
+        //  stubbed, and the request goes out unauthed exactly as before. This is
+        //  what keeps current offline/unauthed play working until the flag flips
+        //  AND a real MWA signer (SolanaWalletProvider) lands.
+
+        /// <summary>
+        /// Attaches X-Wallet / X-Nonce / X-Signature to <paramref name="req"/> when
+        /// backend auth is enforced AND a real signer is connected. Otherwise a
+        /// no-op (the request stays unauthed). <paramref name="payloadHashOrLoadTag"/>
+        /// is the sha256-hex of the raw POST body, or the literal "load" for a GET.
+        /// </summary>
+        private async UniTask TryAttachAuthHeaders(UnityWebRequest req, string payloadHashOrLoadTag)
+        {
+            if (!BackendAuthConfig.Enforced)
+                return; // flag off — current behaviour, no auth headers.
+
+            var signer = CoreServices.WalletSigner;
+            if (signer == null || !signer.CanSign)
+            {
+                Debug.LogWarning(
+                    "[Sync] Backend auth enforced but no real wallet signer is available " +
+                    "(signing is stubbed) — sending save/load WITHOUT auth headers. " +
+                    "Connect a real wallet (SolanaWalletProvider) to sign.");
+                return;
+            }
+
+            var wallet = signer.WalletAddress;
+            if (string.IsNullOrEmpty(wallet))
+            {
+                Debug.LogWarning("[Sync] Wallet signer reports CanSign but has no address — skipping auth headers.");
+                return;
+            }
+
+            // 1. GET a fresh single-use nonce bound to this wallet.
+            var nonce = await FetchNonce(wallet);
+            if (string.IsNullOrEmpty(nonce))
+            {
+                Debug.LogWarning("[Sync] Could not obtain an auth nonce — sending without auth headers.");
+                return;
+            }
+
+            // 2. Build the EXACT canonical message the backend reconstructs, then sign.
+            //    dotr-save:v1:<wallet>:<nonce>:<sha256-hex-of-body | "load">
+            var message = $"dotr-save:v1:{wallet}:{nonce}:{payloadHashOrLoadTag}";
+
+            string signature;
+            try
+            {
+                signature = await signer.SignMessageBase58(message);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[Sync] Wallet signing failed ({ex.Message}) — sending without auth headers.");
+                return;
+            }
+
+            if (string.IsNullOrEmpty(signature))
+            {
+                Debug.LogWarning("[Sync] Wallet returned an empty signature — sending without auth headers.");
+                return;
+            }
+
+            // 3. Present the challenge response. Header names match the backend exactly.
+            req.SetRequestHeader("X-Wallet", wallet);
+            req.SetRequestHeader("X-Nonce", nonce);
+            req.SetRequestHeader("X-Signature", signature);
+        }
+
+        /// <summary>
+        /// GET /api/auth/nonce?wallet=&lt;base58&gt; → the issued one-time nonce, or
+        /// null on any failure (caller then sends unauthed rather than throwing).
+        /// </summary>
+        private async UniTask<string> FetchNonce(string wallet)
+        {
+            var url = $"{NonceUrl}?wallet={Uri.EscapeDataString(wallet)}";
+            using var req = UnityWebRequest.Get(url);
+            req.SetRequestHeader("Accept", "application/json");
+
+            await req.SendWebRequest();
+
+            if (req.result != UnityWebRequest.Result.Success)
+            {
+                Debug.LogWarning($"[Sync] Nonce fetch failed ({req.responseCode}): {req.error}");
+                return null;
+            }
+
+            try
+            {
+                var resp = JsonConvert.DeserializeObject<NonceResponse>(req.downloadHandler.text);
+                return resp != null && resp.Success ? resp.Nonce : null;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[Sync] Nonce parse error: {ex.Message}");
+                return null;
+            }
+        }
+
+        /// <summary>Lowercase hex SHA-256 of the raw bytes — matches Node's crypto sha256 hex digest.</summary>
+        private static string Sha256Hex(byte[] bytes)
+        {
+            using var sha = SHA256.Create();
+            var hash = sha.ComputeHash(bytes ?? Array.Empty<byte>());
+            var sb = new StringBuilder(hash.Length * 2);
+            foreach (var b in hash) sb.Append(b.ToString("x2"));
+            return sb.ToString();
+        }
+
+        private sealed class NonceResponse
+        {
+            [JsonProperty("success")]    public bool   Success    { get; set; }
+            [JsonProperty("nonce")]      public string Nonce      { get; set; }
+            [JsonProperty("expiresAt")]  public string ExpiresAt  { get; set; }
+            [JsonProperty("ttlSeconds")] public int    TtlSeconds { get; set; }
+        }
+
+        // ── Core sync pipeline ────────────────────────────────────────────
+
+        private async UniTask SyncToBackend(bool highPriority = false)
+        {
+            if (_isSyncing) return;
+            if (!highPriority && Time.time - _lastSyncTime < MinSyncDelay) return;
+            if (string.IsNullOrEmpty(_state?.BoundWallet)) return;   // wallet required
+
+            _isSyncing     = true;
+            _lastSyncTime  = Time.time;
+
+            try
+            {
+                // Drain queued failures first so the server sees events in order.
+                await FlushOfflineQueue();
+
+                var delta = BuildDeltaPayload();
+                if (delta == null)
+                {
+                    Debug.Log("[Sync] No changes since last sync — skipped.");
+                    return;
+                }
+
+                bool ok = await SendDelta(delta);
+                if (ok)
+                    _lastSyncedSnapshot = Snapshot();
+                else
+                    EnqueueOffline(delta);
+            }
+            finally
+            {
+                _isSyncing = false;
+            }
+        }
+
+        private async UniTask<bool> SendDelta(SyncDeltaPayload delta)
+        {
+            // `delta` is the "something changed" signal (BuildDeltaPayload gates it);
+            // we send the FULL snapshot so save/load round-trip through one shape.
+            byte[] body;
+            try
+            {
+                // Serialize the full PersistedState under the SAME camelCase keys
+                // LoadFromBackend reads (nested "resources", arrays, …), then add the
+                // backend's required lowercase "playerId". The deployed store is a
+                // merge-upsert, so strip null fields — never null-out a server value
+                // on a partial sync.
+                var snapshot = Snapshot();
+                var jo = JObject.FromObject(snapshot, JsonSerializer.Create(SaveSchema.JsonSettings));
+                foreach (var p in jo.Properties().Where(p => p.Value.Type == JTokenType.Null).ToList())
+                    jo.Remove(p.Name);
+                jo["playerId"] = _state.BoundWallet;
+                body = Encoding.UTF8.GetBytes(jo.ToString(Formatting.None));
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"[Sync] JSON serialize error: {ex.Message}");
+                return false;
+            }
+
+            using var req = new UnityWebRequest(SaveUrl, "POST")
+            {
+                uploadHandler   = new UploadHandlerRaw(body),
+                downloadHandler = new DownloadHandlerBuffer(),
+            };
+            req.SetRequestHeader("Content-Type", "application/json");
+
+            // WO-121: attach wallet-signed auth headers when enforcement is on and a
+            // real signer is connected. The signed payload tag is the sha256-hex of
+            // the EXACT raw body bytes we upload (binds the signature to this body,
+            // matches api/_lib/wallet-auth.buildSignedMessage). No-op (skips headers)
+            // when the flag is off or no real signer is available — offline-safe.
+            await TryAttachAuthHeaders(req, payloadHashOrLoadTag: Sha256Hex(body));
+
+            await req.SendWebRequest();
+
+            if (req.result == UnityWebRequest.Result.Success)
+            {
+                Debug.Log($"[Sync] Saved {body.Length} bytes (full snapshot).");
+                return true;
+            }
+
+            Debug.LogWarning($"[Sync] Save failed ({req.responseCode}): {req.error}");
+            return false;
+        }
+
+        // ── Delta builder — compares snapshots via PersistedState ─────────
+
+        private SyncDeltaPayload BuildDeltaPayload()
+        {
+            var cur  = Snapshot();
+            var prev = _lastSyncedSnapshot;   // null on first sync — sends everything
+            bool any = false;
+
+            var d = new SyncDeltaPayload
+            {
+                PlayerId      = _state.BoundWallet,
+                SchemaVersion = SaveSchema.CurrentVersion,
+            };
+
+            // Resources
+            if (ResourcesDiffer(cur, prev))
+            {
+                var r = cur.Resources ?? default;
+                d.Crystals  = r.Crystals;
+                d.Food      = r.Food;
+                d.Coins     = r.Coins;
+                d.Voidshards = (int?)cur.Voidshards;
+                d.Stone      = (int?)cur.Stone;
+                d.Iron       = (int?)cur.Iron;
+                d.Wood       = (int?)cur.Wood;
+                any = true;
+            }
+
+            // Towers
+            if (TowersDiffer(cur, prev))
+            {
+                d.Towers         = cur.Towers?.Select(v => (int)v).ToArray();
+                d.TowerAbilities = cur.TowerAbilities?.Select(v => (int)v).ToArray();
+                any = true;
+            }
+
+            // Wave
+            if (prev == null || cur.BestWave != prev.BestWave)
+            {
+                d.BestWave = (int?)cur.BestWave;
+                any = true;
+            }
+
+            // Pets — JSON-encoded; PetData/PetSpecies carry complex Unity types
+            // that would require full MessagePack attribute chains to serialize
+            // directly, so we embed them as a JSON string inside the MsgPack body.
+            if (PetsDiffer(cur, prev))
+            {
+                d.PetsJson     = JsonConvert.SerializeObject(cur.Pets,       SaveSchema.JsonSettings);
+                d.OwnedPetsJson = JsonConvert.SerializeObject(cur.OwnedPets, SaveSchema.JsonSettings);
+                d.StarterPetId  = cur.StarterPetId;
+                any = true;
+            }
+
+            return any ? d : null;
+        }
+
+        private static bool ResourcesDiffer(SaveSchema.PersistedState a, SaveSchema.PersistedState b)
+        {
+            if (b == null) return true;
+            var ar = a.Resources; var br = b.Resources;
+            return ar?.Crystals != br?.Crystals
+                || ar?.Food     != br?.Food
+                || ar?.Coins    != br?.Coins
+                || a.Voidshards != b.Voidshards
+                || a.Stone      != b.Stone
+                || a.Iron       != b.Iron
+                || a.Wood       != b.Wood;
+        }
+
+        private static bool TowersDiffer(SaveSchema.PersistedState a, SaveSchema.PersistedState b)
+        {
+            if (b == null) return true;
+            bool towersMatch   = a.Towers?.SequenceEqual(b.Towers ?? Enumerable.Empty<double>()) ?? b.Towers == null;
+            bool abilitiesMatch = a.TowerAbilities?.SequenceEqual(b.TowerAbilities ?? Enumerable.Empty<double>()) ?? b.TowerAbilities == null;
+            return !towersMatch || !abilitiesMatch;
+        }
+
+        private static bool PetsDiffer(SaveSchema.PersistedState a, SaveSchema.PersistedState b) =>
+            b == null
+            || (a.Pets?.Count ?? 0)      != (b.Pets?.Count ?? 0)
+            || (a.OwnedPets?.Count ?? 0) != (b.OwnedPets?.Count ?? 0)
+            || a.StarterPetId != b.StarterPetId;
+
+        // ── Offline queue ─────────────────────────────────────────────────
+
+        private void EnqueueOffline(SyncDeltaPayload delta)
+        {
+            var queue = LoadOfflineQueue();
+            queue.Add(delta);
+            PlayerPrefs.SetString(SyncQueueKey,
+                JsonConvert.SerializeObject(queue, SaveSchema.JsonSettings));
+            PlayerPrefs.Save();
+            Debug.LogWarning($"[Sync] Queued offline payload (queue depth: {queue.Count}).");
+        }
+
+        private async UniTask FlushOfflineQueue()
+        {
+            if (!PlayerPrefs.HasKey(SyncQueueKey)) return;
+            var queue = LoadOfflineQueue();
+            if (queue.Count == 0) return;
+
+            var remaining = new List<SyncDeltaPayload>();
+            foreach (var queued in queue)
+            {
+                if (!await SendDelta(queued)) remaining.Add(queued);
+            }
+
+            if (remaining.Count == 0) PlayerPrefs.DeleteKey(SyncQueueKey);
+            else
+            {
+                PlayerPrefs.SetString(SyncQueueKey,
+                    JsonConvert.SerializeObject(remaining, SaveSchema.JsonSettings));
+            }
+            PlayerPrefs.Save();
+        }
+
+        private List<SyncDeltaPayload> LoadOfflineQueue()
+        {
+            var raw = PlayerPrefs.GetString(SyncQueueKey, "[]");
+            try
+            {
+                return JsonConvert.DeserializeObject<List<SyncDeltaPayload>>(
+                    raw, SaveSchema.JsonSettings) ?? new List<SyncDeltaPayload>();
+            }
+            catch
+            {
+                return new List<SyncDeltaPayload>();
+            }
+        }
+
+        // ── Data types ────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Wire payload sent to /api/game/save. All fields nullable — null means
+        /// "no change in this domain, skip the DB column". Flat primitive-only
+        /// so MessagePack needs no custom resolvers.
+        /// Pets and OwnedPets are pre-serialized JSON strings to avoid nesting
+        /// complex Unity types in the delta object.
+        /// </summary>
+        public sealed class SyncDeltaPayload
+        {
+            public string PlayerId      { get; set; }
+            public int    SchemaVersion { get; set; }
+
+            // Resources — null = domain unchanged
+            public int? Crystals  { get; set; }
+            public int? Food      { get; set; }
+            public int? Coins     { get; set; }
+            public int? Voidshards { get; set; }
+            public int? Stone     { get; set; }
+            public int? Iron      { get; set; }
+            public int? Wood      { get; set; }
+
+            // Towers — null = no layout change
+            public int[] Towers         { get; set; }
+            public int[] TowerAbilities { get; set; }
+
+            // Wave
+            public int? BestWave { get; set; }
+
+            // Pets — JSON string (complex Unity types inside)
+            public string PetsJson      { get; set; }
+            public string OwnedPetsJson { get; set; }
+            public string StarterPetId  { get; set; }
+        }
+
+        private sealed class BackendLoadResponse
+        {
+            [JsonProperty("success")] public bool                       Success { get; set; }
+            [JsonProperty("data")]    public SaveSchema.PersistedState  Data    { get; set; }
+            [JsonProperty("config")]  public ServerConfig               Config  { get; set; }
         }
 
         // ── Conversions ──────────────────────────────────────────────────────

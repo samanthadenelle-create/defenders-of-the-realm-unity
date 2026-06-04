@@ -1,4 +1,4 @@
-# Avalon Village — Creative Review & Tweak Suggestions
+# Elarion Village — Creative Review & Tweak Suggestions
 
 **Reviewer:** Art Direction pass
 **Date:** 2026-05-19
@@ -47,11 +47,11 @@ Everything below is a *genuinely new* creative observation. The headline finding
 
 ---
 
-## C. Storytelling detail — making Avalon a defended home
+## C. Storytelling detail — making Elarion a defended home
 
 - [ ] **Dress the gates as guarded thresholds** *(storytelling detail)* — The four gates currently read as plain wall openings. Each gate is canon — the only way in, and the four points the Hollow Ones attack (§4.3). Flank each gate's *interior* side with a pair of props that say "watched": a `weaponrack`, a `barrel` or two, a banner, maybe a brazier-stand. Small touch, big narrative payoff — the town reads as actively defended, not decorative. `[quick]`
 
-- [ ] **Plant violet Avalon banners along the approach to the Heart** *(storytelling detail)* — Only the Keep has a banner. Line the N-S spine (plaza → north gate) with 2-3 recolored violet `flag` props. It draws the eye down the ceremonial axis toward Elarion and reinforces the "By lantern. By oath. By Heart." identity across the whole town, not just one corner. `[quick]`
+- [ ] **Plant violet banners along the approach to the Heart** *(storytelling detail)* — Line the N-S spine (plaza → north gate) with 2-3 recolored violet `flag` props. It draws the eye down the ceremonial axis toward Elarion and reinforces the "By lantern. By oath. By Heart." identity across the whole town, not just one corner. `[quick]` *(Note: renamed from "Avalon banners" — the village is Elarion (DESIGN-DECISIONS #1), and the original "Avalon Banner" pole prop is itself retired (DESIGN-DECISIONS #3); this item now means generic violet banners, not the retired prop.)*
 
 - [ ] **Add a wayside lantern motif along the main cross** *(storytelling detail / lighting)* — The tagline is literally "By lantern." Scatter a handful of small lantern/torch-post props down the N-S and E-W roads, ideally with a faint warm emissive. Even unlit they reinforce canon; lit, they pre-stage the dawn/dusk mood and give the night-defence fantasy a foothold. `[medium]`
 
@@ -83,7 +83,7 @@ Everything below is a *genuinely new* creative observation. The headline finding
 
 ## Summary
 
-The Avalon village is **structurally sound and faithful to the spec** — the shaped rectangle wall, four cardinal gates, the Heart-and-Keep twin centerpiece, the five named buildings in their correct quadrants, and the residential/market/workshop/orchard dressing are all present and correctly placed. The work that remains is **art direction, not layout**: the interior currently reads as scattered objects on a wide empty olive lawn. The highest-impact moves are *clustering* (tighten spacing, fill the dead NE/NW corners, build a real market scene on the plaza), *contrast* (make the plaza paving and dirt paths read distinctly from grass), and *lived-in storytelling detail* (guarded gates, banners on the ceremonial axis, lanterns, garden beats). All suggestions are buildable from the already-imported KayKit packs — no new assets required.
+The Elarion village is **structurally sound and faithful to the spec** — the shaped rectangle wall, four cardinal gates, the Heart-and-Keep twin centerpiece, the five named buildings in their correct quadrants, and the residential/market/workshop/orchard dressing are all present and correctly placed. The work that remains is **art direction, not layout**: the interior currently reads as scattered objects on a wide empty olive lawn. The highest-impact moves are *clustering* (tighten spacing, fill the dead NE/NW corners, build a real market scene on the plaza), *contrast* (make the plaza paving and dirt paths read distinctly from grass), and *lived-in storytelling detail* (guarded gates, banners on the ceremonial axis, lanterns, garden beats). All suggestions are buildable from the already-imported KayKit packs — no new assets required.
 
 **Suggestion count: 21**, grouped by effort:
 - `[quick]` — 12

@@ -7,6 +7,16 @@
 //
 // Gamepad face buttons: South=1, East=2, West=3, North=4.
 //
+// PRIMARY ATTACK (2026-06-02 playtest fix — "no targeting / couldn't hit him,
+// heal works"): slot Q is every class's basic strike (Mage Arcane Bolt, Ranger
+// Quick Shot, Knight Shield Bash — all 0-mana, short-cd, in abilities.json), but
+// it was only on the unintuitive '1' key while the HUD said "Q". So the player
+// pressed Q (nothing) and left-click (a 3.2 m melee whiff that never reaches a
+// ranged Mage). Heal needs no target, so ONLY heal seemed to work. Fix: bind the
+// primary attack (slot Q) to LEFT-CLICK and SPACE too — the universal "attack the
+// locked target" input. It resolves against HeroTargetIndicator's auto-lock aim
+// point, so clicking fires your main attack at the reticled enemy.
+//
 // Wiring: VillageSceneBuilder.BuildHero attaches this component alongside
 // HeroAbilities. The HUD ability buttons (VillageHudController) can also call
 // HeroAbilities.TryCast(slot) directly — both paths converge on the same
@@ -32,8 +42,31 @@ namespace DeNelle.Village
         private void Update()
         {
             if (_abilities == null) return;
+
+            // PRIMARY ATTACK: left-click / Space / gamepad-South fire slot Q (the
+            // class basic strike) at the auto-locked target. Universal, forgiving
+            // "attack the thing under the reticle" input — the fix for the player
+            // pressing 1 and nothing connecting at range.
+            if (PrimaryAttackPressed())
+            {
+                _abilities.TryCast(AbilitySlot.Q);
+                return;   // don't also double-fire from the number row this frame
+            }
+
             if (ReadSlot() is AbilitySlot slot)
                 _abilities.TryCast(slot);
+        }
+
+        /// <summary>True the frame the universal primary-attack input is pressed.</summary>
+        private static bool PrimaryAttackPressed()
+        {
+            var mouse = Mouse.current;
+            if (mouse != null && mouse.leftButton.wasPressedThisFrame) return true;
+            var kb = Keyboard.current;
+            if (kb != null && kb.spaceKey.wasPressedThisFrame) return true;
+            // Legacy fallback (left mouse).
+            if (UnityEngine.Input.GetMouseButtonDown(0)) return true;
+            return false;
         }
 
         /// <summary>

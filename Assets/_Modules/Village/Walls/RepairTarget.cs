@@ -77,6 +77,13 @@ namespace DeNelle.Village
         {
             if (hitCollider == null) return null;
 
+            // DEF-226: never wrap a hero / player-controlled object as a repair
+            // target. A repair highlight must never attach to or float over a hero
+            // (a screenshot showed the marker near a hero's head). Heroes are tagged
+            // Player (locomotion) / HeroTarget (enemy AI) per CLAUDE.md §7 — bail out
+            // if the hit object or any ancestor carries either tag.
+            if (IsHeroOrPlayer(hitCollider.transform)) return null;
+
             var wall = hitCollider.GetComponentInParent<WallSegment>();
             if (wall != null)
                 return new RepairTarget(RepairTargetKind.Wall, wall.gameObject, wall, null, null);
@@ -90,6 +97,22 @@ namespace DeNelle.Village
                 return new RepairTarget(RepairTargetKind.Building, building.gameObject, null, null, building);
 
             return null;
+        }
+
+        /// <summary>
+        /// DEF-226: true when <paramref name="t"/> or any ancestor is tagged as a
+        /// hero / player object (CLAUDE.md §7: "Player" for locomotion, "HeroTarget"
+        /// for enemy AI). Walks up the hierarchy so a hero's child collider is caught.
+        /// Used to exclude heroes from ever becoming a repair target.
+        /// </summary>
+        private static bool IsHeroOrPlayer(Transform t)
+        {
+            for (var cur = t; cur != null; cur = cur.parent)
+            {
+                if (cur.CompareTag("Player") || cur.CompareTag("HeroTarget"))
+                    return true;
+            }
+            return false;
         }
 
         /// <summary>True while the wrapped structure component still exists.</summary>

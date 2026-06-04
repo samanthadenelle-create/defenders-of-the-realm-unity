@@ -188,6 +188,23 @@ namespace DeNelle.Cosmetics
         }
 
         /// <summary>
+        /// Deducts <paramref name="amount"/> Glimmer from the balance.
+        /// Returns true when the balance was sufficient and the spend succeeded.
+        /// Returns false without mutating state when the balance is insufficient
+        /// or <paramref name="amount"/> is non-positive.
+        /// </summary>
+        public bool SpendGlimmer(int amount)
+        {
+            if (amount <= 0) return false;
+            EnsureState();
+            if (_state.Glimmer < amount) return false;
+            _state.Glimmer -= amount;
+            Save();
+            Changed?.Invoke();
+            return true;
+        }
+
+        /// <summary>
         /// Grants an achievement-gated cosmetic outside the Glimmer path. Used
         /// by milestone code once the free-path triggers ship (Section 9 of the
         /// spec). Returns true if the cosmetic was newly granted.

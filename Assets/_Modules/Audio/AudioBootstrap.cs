@@ -100,10 +100,24 @@ namespace DeNelle.Audio
             // AudioService's "no clip" guard handles them silently.
             TryAssignClip(service, MusicTrack.Title,   "title");
             TryAssignClip(service, MusicTrack.Village, "village");
-            TryAssignClip(service, MusicTrack.Battle,  "battle");
             TryAssignClip(service, MusicTrack.Victory, "victory");
-            TryAssignClip(service, MusicTrack.Defeat,  "defeat");
             TryAssignClip(service, MusicTrack.Dungeon, "dungeon");
+
+            // Game-over music (owner-supplied 2026-06-02): Resources/Audio/Music/GameOver.mp3.
+            // Load the legacy 'defeat' sting first as a fallback, then GameOver — the new clip
+            // wins when present (SetMusicClip overwrites), and it lives under a Resources/ path
+            // so it actually loads in the WebGL build (the old defeat.mp3 was outside Resources).
+            TryAssignClip(service, MusicTrack.Defeat,  "defeat");
+            TryAssignClip(service, MusicTrack.Defeat,  "Audio/Music/GameOver");
+
+            // Pooled tracks (WO-171) — the owner's NEW themes (2026-06-02), cycled by
+            // NextFromPool. Battle: 3 themes. Overworld: 2 themes ("a loop of either is fine"
+            // — owner). Assign the default, append the rest to the rotation pool.
+            TryAssignClip(service, MusicTrack.Battle,    "battle_theme_NEW");
+            TryAddClip(service,    MusicTrack.Battle,    "battle_theme2_NEW");
+            TryAddClip(service,    MusicTrack.Battle,    "battle_theme3_NEW");
+            TryAssignClip(service, MusicTrack.Overworld, "mainworld1_NEW");
+            TryAddClip(service,    MusicTrack.Overworld, "world_theme_NEW");
 
             // One-time mute-migration. Pre-2026-05-20 the schema default for
             // GameState.Muted was true, so saves persisted as muted even when
@@ -140,6 +154,17 @@ namespace DeNelle.Audio
         {
             var clip = Resources.Load<AudioClip>(resourceName);
             if (clip != null) service.SetMusicClip(track, clip);
+        }
+
+        /// <summary>
+        /// Appends a clip to a pooled track's rotation (WO-171), if the Resource
+        /// exists. Missing extras are silently skipped — the pool just rotates
+        /// over whatever landed.
+        /// </summary>
+        private static void TryAddClip(AudioService service, MusicTrack track, string resourceName)
+        {
+            var clip = Resources.Load<AudioClip>(resourceName);
+            if (clip != null) service.AddMusicClip(track, clip);
         }
     }
 }
