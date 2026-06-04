@@ -39,34 +39,62 @@ namespace DeNelle.Village.UI
         private Button _arcane;
         private Button _gathering;
 
+        // DEF-261 — a level-up that lands during the Defend-the-Tower fight is QUEUED
+        // (not silently dropped) so the spend screen surfaces the moment the fight ends.
+        private int _pendingLevel = -1;
+
         private void OnEnable()
         {
             BuildUiIfNeeded();
             Hide();
 
-            if (HeroProgression.Instance != null)
-                HeroProgression.Instance.OnLevelUp += Show;
+            // DEF-261 ROOT-CAUSE FIX: subscribe to the STATIC relay, not the instance
+            // event. ProgressionManager destroys the BeforeSceneLoad standalone
+            // HeroProgression and migrates XP onto the hero's own HeroProgression — an
+            // instance-event subscription would dangle on the destroyed bootstrap and
+            // never hear the hero's real level-ups. The static relay survives the swap.
+            HeroProgression.OnAnyLevelUp += Show;
             if (SkillSystem.Instance != null)
                 SkillSystem.Instance.OnSkillsChanged += UpdateUI;
 
             UpdateUI();
+
+            // If a point was already banked before this popup installed (the first-
+            // level-up gift, or a level-up that fired before the popup existed in this
+            // scene), surface it now so banked points are never stranded with no way
+            // to spend them. Show() itself defers if a fight is in progress.
+            if (SkillSystem.Instance != null && SkillSystem.Instance.AvailablePoints > 0)
+                Show(HeroProgression.Instance != null ? HeroProgression.Instance.Level : 1);
         }
 
         private void OnDisable()
         {
-            if (HeroProgression.Instance != null)
-                HeroProgression.Instance.OnLevelUp -= Show;
+            HeroProgression.OnAnyLevelUp -= Show;
             if (SkillSystem.Instance != null)
                 SkillSystem.Instance.OnSkillsChanged -= UpdateUI;
+        }
+
+        // DEF-261 — drain a level-up that arrived mid-fight once the fight is over.
+        private void Update()
+        {
+            if (_pendingLevel < 0) return;
+            if (FindAnyObjectByType<DeNelle.Village.PatriciaLightController>() != null) return;
+            int lvl = _pendingLevel;
+            _pendingLevel = -1;
+            Show(lvl);
         }
 
         /// <summary>Reveal the popup (arg = the level just reached — title text only).</summary>
         private void Show(int newLevel)
         {
             if (_overlay == null) return;
-            // Suppressed during the Defend-the-Tower battle — no skill-spend interrupt
-            // mid-fight (the popup belongs to the village/management flow).
-            if (FindAnyObjectByType<DeNelle.Village.PatriciaLightController>() != null) return;
+            // During the Defend-the-Tower battle, don't interrupt the fight — QUEUE the
+            // level so Update() surfaces the spend screen the instant the fight ends.
+            if (FindAnyObjectByType<DeNelle.Village.PatriciaLightController>() != null)
+            {
+                if (newLevel > _pendingLevel) _pendingLevel = newLevel;
+                return;
+            }
             if (_title != null) _title.text = $"Level {newLevel}!  Spend a skill point";
             _overlay.style.display = DisplayStyle.Flex;
             UpdateUI();

@@ -56,6 +56,18 @@ namespace DeNelle.Village
         /// <summary>Fired whenever XP changes — args = (current XP, XP needed for next level).</summary>
         public event Action<float, float> OnXpChanged;
 
+        /// <summary>
+        /// STATIC level-up relay (arg = new level). Fired in lock-step with the
+        /// instance <see cref="OnLevelUp"/> event. Subscribers that outlive a single
+        /// HeroProgression instance MUST use this: ProgressionManager destroys the
+        /// BeforeSceneLoad bootstrap instance and migrates XP onto the hero's own
+        /// HeroProgression (see Awake). A listener that subscribed to the instance
+        /// event of the standalone bootstrap is left dangling on a destroyed object
+        /// and never hears the hero's real level-ups (DEF-261 root cause). This
+        /// static relay is immune to that instance swap.
+        /// </summary>
+        public static event Action<int> OnAnyLevelUp;
+
         public string EarnerId => Id;
         public int Level => _level;
         public float Xp => _xp;
@@ -172,6 +184,9 @@ namespace DeNelle.Village
             }
 
             try { OnLevelUp?.Invoke(newLevel); } catch { }
+            // DEF-261 — also fire the instance-swap-proof static relay so listeners
+            // that outlive a HeroProgression instance (LevelUpSkillPopup) still hear it.
+            try { OnAnyLevelUp?.Invoke(newLevel); } catch { }
         }
     }
 }
