@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "source": "docs/clans-and-team-chat-design.md §6.4 + src/content/chat-phrases.ts + src/content/clan-phrases.ts (React repo)",
+  "categories": [
+    { "key": "greeting",      "label": "Greetings" },
+    { "key": "combat",        "label": "Combat" },
+    { "key": "gratitude",     "label": "Gratitude" },
+    { "key": "status",        "label": "Status" }
+  ],
+  "phrases": [
+    { "id": "phrase_1",  "category": "greeting",  "text": "Hey, friend!" },
+    { "id": "phrase_2",  "category": "greeting",  "text": "Welcome back, Guardian." },
+    { "id": "phrase_3",  "category": "greeting",  "text": "Welcome to the clan!" },
+    { "id": "phrase_4",  "category": "greeting",  "text": "Hello, clanmates.",          "emoji": "👋" },
+    { "id": "phrase_5",  "category": "greeting",  "text": "Defend well, all." },
+    { "id": "phrase_6",  "category": "greeting",  "text": "Good to have you, Guardian." },
+
+    { "id": "phrase_7",  "category": "combat",    "text": "Boss inbound.",              "emoji": "⚠️" },
+    { "id": "phrase_8",  "category": "combat",    "text": "Save your meteor." },
+    { "id": "phrase_9",  "category": "combat",    "text": "Pushing the east lane." },
+    { "id": "phrase_10", "category": "combat",    "text": "Pushing the west lane." },
+    { "id": "phrase_11", "category": "combat",    "text": "Watch the air lane." },
+    { "id": "phrase_12", "category": "combat",    "text": "Group on the Heart.",        "emoji": "🛡️" },
+    { "id": "phrase_13", "category": "combat",    "text": "Anyone got Frost Nova ready?" },
+    { "id": "phrase_14", "category": "combat",    "text": "Heal up before the next wave." },
+
+    { "id": "phrase_15", "category": "gratitude", "text": "Thanks for the help!" },
+    { "id": "phrase_16", "category": "gratitude", "text": "Thanks for the assist!" },
+    { "id": "phrase_17", "category": "gratitude", "text": "I'll pay it forward." },
+    { "id": "phrase_18", "category": "gratitude", "text": "Couldn't have held it without you.", "emoji": "🙏" },
+    { "id": "phrase_19", "category": "gratitude", "text": "The Lantern shines for you.",       "emoji": "🏮" },
+
+    { "id": "phrase_20", "category": "status",    "text": "Ready when you are." },
+    { "id": "phrase_21", "category": "status",    "text": "Falling back." },
+    { "id": "phrase_22", "category": "status",    "text": "We held the line!",         "emoji": "⚔️" },
+    { "id": "phrase_23", "category": "status",    "text": "Need help — big wave.",     "emoji": "🆘" },
+    { "id": "phrase_24", "category": "status",    "text": "Conserve your shards." }
+  ]
+}

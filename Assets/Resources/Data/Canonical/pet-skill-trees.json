@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "petMaxLevel": 20,
+  "petLoadoutSize": 3,
+  "trees": {
+    "aether-sprite": {
+      "species": "aether-sprite",
+      "element": "aether",
+      "displayName": "Aether Sprite",
+      "skills": [
+        { "id": "aether-sprite.healing-spark",     "name": "Healing Spark",      "type": "active",  "tier": "starter",  "description": "Heals nearby towers + player.",                                       "cooldownSeconds": 30, "unlockLevel": 1, "prerequisites": [] },
+        { "id": "aether-sprite.mystic-barrier",    "name": "Mystic Barrier",     "type": "active",  "tier": "tier1",    "description": "Grants shield to nearby towers.",                                     "cooldownSeconds": 25, "unlockLevel": 3, "prerequisites": ["aether-sprite.healing-spark"] },
+        { "id": "aether-sprite.arcane-infusion",   "name": "Arcane Infusion",    "type": "passive", "tier": "tier1",    "description": "Increases tower attack speed.",                                                              "unlockLevel": 3, "prerequisites": ["aether-sprite.healing-spark"] },
+        { "id": "aether-sprite.radiant-pulse",     "name": "Radiant Pulse",      "type": "active",  "tier": "tier2",    "description": "AoE heal + minor buff.",                                              "cooldownSeconds": 40, "unlockLevel": 9, "prerequisites": ["aether-sprite.mystic-barrier"] },
+        { "id": "aether-sprite.ethereal-grace",    "name": "Ethereal Grace",     "type": "passive", "tier": "tier2",    "description": "Pet dodges attacks + reduces damage taken.",                                                "unlockLevel": 9, "prerequisites": ["aether-sprite.arcane-infusion"] },
+        { "id": "aether-sprite.celestial-blessing","name": "Celestial Blessing", "type": "active",  "tier": "ultimate", "description": "Massive team-wide heal + powerful attack-speed and defense buff.",   "cooldownSeconds": 90, "unlockLevel": 9, "prerequisites": ["aether-sprite.radiant-pulse", "aether-sprite.ethereal-grace"] }
+      ]
+    },
+    "flame-pup": {
+      "species": "flame-pup",
+      "element": "flame",
+      "displayName": "Flame Pup",
+      "skills": [
+        { "id": "flame-pup.fire-blast",     "name": "Fire Blast",     "type": "active",  "tier": "starter",  "description": "AoE fireball + Burn DoT.",                  "cooldownSeconds": 25, "unlockLevel": 1, "prerequisites": [] },
+        { "id": "flame-pup.flame-trail",    "name": "Flame Trail",    "type": "passive", "tier": "tier1",    "description": "Leaves burning trail.",                                          "unlockLevel": 3, "prerequisites": ["flame-pup.fire-blast"] },
+        { "id": "flame-pup.ignite",         "name": "Ignite",         "type": "active",  "tier": "tier1",    "description": "Heavy single-target burn.",                  "cooldownSeconds": 20, "unlockLevel": 3, "prerequisites": ["flame-pup.fire-blast"] },
+        { "id": "flame-pup.heat-wave",      "name": "Heat Wave",      "type": "active",  "tier": "tier2",    "description": "Cone damage + slow.",                        "cooldownSeconds": 30, "unlockLevel": 9, "prerequisites": ["flame-pup.flame-trail"] },
+        { "id": "flame-pup.burning-fury",   "name": "Burning Fury",   "type": "passive", "tier": "tier2",    "description": "+Attack Speed near burning enemies.",                            "unlockLevel": 9, "prerequisites": ["flame-pup.ignite"] },
+        { "id": "flame-pup.inferno",        "name": "Inferno",        "type": "active",  "tier": "ultimate", "description": "Engulf in flames, massive burn AoE.",        "cooldownSeconds": 90, "unlockLevel": 9, "prerequisites": ["flame-pup.heat-wave", "flame-pup.burning-fury"] }
+      ]
+    },
+    "ice-wolf": {
+      "species": "ice-wolf",
+      "element": "ice",
+      "displayName": "Ice Wolf",
+      "skills": [
+        { "id": "ice-wolf.glacial-howl",     "name": "Glacial Howl",     "type": "active",  "tier": "starter",  "description": "Cone AoE damage + slow.",                       "cooldownSeconds": 28, "unlockLevel": 1, "prerequisites": [] },
+        { "id": "ice-wolf.chilling-aura",    "name": "Chilling Aura",    "type": "passive", "tier": "tier1",    "description": "Slows nearby enemies.",                                              "unlockLevel": 3, "prerequisites": ["ice-wolf.glacial-howl"] },
+        { "id": "ice-wolf.ice-fang",         "name": "Ice Fang",         "type": "active",  "tier": "tier1",    "description": "Strong single-target chill + damage.",          "cooldownSeconds": 22, "unlockLevel": 3, "prerequisites": ["ice-wolf.glacial-howl"] },
+        { "id": "ice-wolf.frost-nova",       "name": "Frost Nova",       "type": "active",  "tier": "tier2",    "description": "Medium AoE damage + freeze.",                   "cooldownSeconds": 35, "unlockLevel": 9, "prerequisites": ["ice-wolf.chilling-aura"] },
+        { "id": "ice-wolf.permafrost-hide",  "name": "Permafrost Hide",  "type": "passive", "tier": "tier2",    "description": "Damage reduction + reflect chill.",                                  "unlockLevel": 9, "prerequisites": ["ice-wolf.ice-fang"] },
+        { "id": "ice-wolf.absolute-zero",    "name": "Absolute Zero",    "type": "active",  "tier": "ultimate", "description": "Large AoE heavy damage + long freeze.",         "cooldownSeconds": 90, "unlockLevel": 9, "prerequisites": ["ice-wolf.frost-nova", "ice-wolf.permafrost-hide"] }
+      ]
+    }
+  },
+  "notes": "Ported verbatim from React src/data/gameDesign.ts PET_SKILL_TREES. Six skills per species across four tiers: starter, tier1 (two parallel branches), tier2 (each extends one tier1 branch), ultimate (requires both tier2 nodes)."
+}

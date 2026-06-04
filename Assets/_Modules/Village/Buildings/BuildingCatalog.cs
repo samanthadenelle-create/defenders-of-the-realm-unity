@@ -189,31 +189,28 @@ namespace DeNelle.Village
 
         private static BuildingCatalogData LoadCatalog()
         {
-            // Canonical JSON lives under StreamingAssets so it is readable in a
-            // player build (spec Part 3 forbids Resources.Load). On the Editor,
-            // Windows and macOS streamingAssetsPath is a real directory, so a
-            // synchronous read is valid. ANDROID NOTE: on Android StreamingAssets
-            // is packed inside the APK and a UnityWebRequest read is required —
-            // to be added with the Week-7/8 Seeker build (same caveat as
-            // Theme.cs / PackCatalog.cs).
-            var full = Path.Combine(Application.streamingAssetsPath, StreamingRelativePath);
+            // WebGL-safe load via CanonicalJson: Resources.Load first (works in a
+            // browser, where File.ReadAllText(streamingAssetsPath) THROWS), then a
+            // StreamingAssets fallback on desktop/editor. buildings.json is mirrored
+            // into Assets/Resources/Data/Canonical/ so the Resources path resolves.
             try
             {
-                if (File.Exists(full))
+                string json = DeNelle.Core.CanonicalJson.Read(StreamingRelativePath);
+                if (!string.IsNullOrEmpty(json))
                 {
-                    var parsed = JsonConvert.DeserializeObject<BuildingCatalogData>(File.ReadAllText(full));
+                    var parsed = JsonConvert.DeserializeObject<BuildingCatalogData>(json);
                     if (parsed != null && parsed.Buildings != null)
                         return parsed;
-                    Debug.LogError($"[BuildingCatalog] buildings.json at {full} parsed empty.");
+                    Debug.LogError("[BuildingCatalog] buildings.json parsed empty.");
                 }
                 else
                 {
-                    Debug.LogError($"[BuildingCatalog] buildings.json not found at {full}.");
+                    Debug.LogError("[BuildingCatalog] buildings.json not found (Resources or StreamingAssets).");
                 }
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[BuildingCatalog] Failed to read {full}: {ex.Message}");
+                Debug.LogError($"[BuildingCatalog] Failed to read buildings.json: {ex.Message}");
             }
 
             Debug.LogError("[BuildingCatalog] buildings.json could not be loaded — using an empty catalog.");

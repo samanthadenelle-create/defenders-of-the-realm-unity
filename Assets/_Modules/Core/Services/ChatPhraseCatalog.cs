@@ -90,12 +90,13 @@ namespace DeNelle.Core.Services
         private static void EnsureLoaded()
         {
             if (_data != null) return;
-            var full = Path.Combine(Application.streamingAssetsPath, StreamingRelativePath);
+            // WebGL-safe load via CanonicalJson (Resources first, StreamingAssets fallback).
             try
             {
-                if (File.Exists(full))
+                string json = DeNelle.Core.CanonicalJson.Read(StreamingRelativePath);
+                if (!string.IsNullOrEmpty(json))
                 {
-                    var parsed = JsonConvert.DeserializeObject<ChatPhraseCatalogData>(File.ReadAllText(full));
+                    var parsed = JsonConvert.DeserializeObject<ChatPhraseCatalogData>(json);
                     if (parsed != null && parsed.Phrases != null && parsed.Phrases.Count > 0)
                     {
                         _data = parsed;
@@ -106,7 +107,7 @@ namespace DeNelle.Core.Services
                 }
                 else
                 {
-                    Debug.LogError($"[ChatPhraseCatalog] file not found at {full}.");
+                    Debug.LogError($"[ChatPhraseCatalog] {StreamingRelativePath} not found (Resources or StreamingAssets).");
                 }
             }
             catch (Exception ex)

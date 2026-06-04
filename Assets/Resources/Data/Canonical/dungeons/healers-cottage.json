@@ -1,0 +1,351 @@
+{
+  "_comment": "Canonical layout for the first 3D dungeon — The Healer's Cottage (D1). EXPANDED per docs/dungeons-3d-unity-layout-spec.md §9: 3 levels, 12 rooms (§9.1 ground 6, §9.2 upper 2, §9.3 underground 4). The opener of 'The Healer's Garden' questline. Five lore stones (Alduin's journal entries 1-4 + the redacted Hidden-Vault draft), two checkpoint shrines, four scripted ATB encounters, one mini-boss, three treasure chests. DATA ONLY — DungeonController hydrates the scene from this. Lore prose + Bryn's line + the mini-boss spec are canon-verbatim from docs/dungeon-3d-healers-cottage-design.md — never paraphrase. Coordinates match Assets/Editor/DungeonSceneBuilder.cs.",
+  "_sources": {
+    "layoutSpec": "defenders-unity/docs/dungeons-3d-unity-layout-spec.md (§9 expanded Healer's Cottage)",
+    "design": "defenders-unity/docs/dungeon-3d-healers-cottage-design.md (§4 room beats, lore prose, mini-boss)",
+    "storyline": "defenders-of-the-realm/docs/dungeons-storyline.md (§4.1 The Healer's Garden beats)",
+    "sceneBuilder": "defenders-unity/Assets/Editor/DungeonSceneBuilder.cs"
+  },
+  "_schemaNotes": {
+    "coordinates": "X east(+)/west(-), Z south(+)/north(-), Y up. Levels: ground Y=0, upper Y=6, underground Y=-6. ~4u wall/floor cells. The Keeper enters the Garden Approach (SW, ground).",
+    "wallKind": "'solid' (collidable run) | 'doorway' (collidable frame, walk-through gap, wires room-to-room via leadsTo) | 'illusory' (renders as a normal wall but the scene builds NO collider — the Keeper walks through into the secret room named by leadsTo).",
+    "roomKind": "'entry' | 'standard' | 'checkpoint' | 'reward' | 'boss'. Random encounters never fire in 'checkpoint' or 'boss' rooms. v1 gates random encounters OFF (disableRandomEncounters) — the Cottage uses scripted, room-placed fights only.",
+    "loreFragments": "lore stone bodies key into data/lore-fragments.json under the same id. Reading all five advances the 'healers-garden' questline one beat."
+  },
+  "version": 2,
+  "id": "healers-cottage",
+  "title": "The Healer's Cottage",
+  "tier": 1,
+  "questlineId": "healers-garden",
+  "entryRoomId": "garden-approach",
+  "disableRandomEncounters": true,
+  "ambientBgm": "echoes-beneath-elarion",
+  "rooms": [
+    {
+      "id": "garden-approach",
+      "title": "Garden Approach",
+      "kind": "entry",
+      "bounds": { "min": { "x": -36, "z": -8 }, "max": { "x": -20, "z": 8 } },
+      "floorAssetKey": "floor_dirt_large",
+      "walls": [
+        { "kind": "solid", "start": { "x": -36, "z": -8 }, "end": { "x": -20, "z": -8 }, "assetKey": "wall_broken" },
+        { "kind": "solid", "start": { "x": -36, "z": 8 }, "end": { "x": -20, "z": 8 }, "assetKey": "wall_broken" },
+        { "kind": "solid", "start": { "x": -36, "z": -8 }, "end": { "x": -36, "z": 8 }, "assetKey": "wall_cracked" },
+        { "kind": "solid", "start": { "x": -20, "z": -8 }, "end": { "x": -20, "z": 4 }, "assetKey": "wall" },
+        { "kind": "doorway", "start": { "x": -20, "z": 4 }, "end": { "x": -20, "z": 8 }, "assetKey": "wall_doorway", "leadsTo": "entrance-room" }
+      ]
+    },
+    {
+      "id": "entrance-room",
+      "title": "Entrance Room",
+      "kind": "checkpoint",
+      "bounds": { "min": { "x": -20, "z": -8 }, "max": { "x": -4, "z": 8 } },
+      "floorAssetKey": "floor_wood_large",
+      "walls": [
+        { "kind": "solid", "start": { "x": -20, "z": -8 }, "end": { "x": -4, "z": -8 }, "assetKey": "wall" },
+        { "kind": "solid", "start": { "x": -20, "z": 8 }, "end": { "x": -4, "z": 8 }, "assetKey": "wall" },
+        { "kind": "doorway", "start": { "x": -20, "z": 4 }, "end": { "x": -20, "z": 8 }, "assetKey": "wall_doorway", "leadsTo": "garden-approach" },
+        { "kind": "solid", "start": { "x": -20, "z": -8 }, "end": { "x": -20, "z": 4 }, "assetKey": "wall" },
+        { "kind": "doorway", "start": { "x": -4, "z": 4 }, "end": { "x": -4, "z": 8 }, "assetKey": "wall_doorway", "leadsTo": "main-room" },
+        { "kind": "solid", "start": { "x": -4, "z": -8 }, "end": { "x": -4, "z": 4 }, "assetKey": "wall" }
+      ]
+    },
+    {
+      "id": "main-room",
+      "title": "Main Room / Hearth",
+      "kind": "standard",
+      "bounds": { "min": { "x": -4, "z": -10 }, "max": { "x": 16, "z": 10 } },
+      "floorAssetKey": "floor_wood_large",
+      "walls": [
+        { "kind": "solid", "start": { "x": -4, "z": -10 }, "end": { "x": 16, "z": -10 }, "assetKey": "wall" },
+        { "kind": "solid", "start": { "x": -4, "z": 10 }, "end": { "x": 16, "z": 10 }, "assetKey": "wall" },
+        { "kind": "doorway", "start": { "x": -4, "z": 6 }, "end": { "x": -4, "z": 10 }, "assetKey": "wall_doorway", "leadsTo": "entrance-room" },
+        { "kind": "solid", "start": { "x": -4, "z": -10 }, "end": { "x": -4, "z": 6 }, "assetKey": "wall" },
+        { "kind": "doorway", "start": { "x": 16, "z": 2 }, "end": { "x": 16, "z": 6 }, "assetKey": "wall_doorway", "leadsTo": "kitchen" },
+        { "kind": "solid", "start": { "x": 16, "z": -10 }, "end": { "x": 16, "z": 2 }, "assetKey": "wall" },
+        { "kind": "solid", "start": { "x": 16, "z": 6 }, "end": { "x": 16, "z": 10 }, "assetKey": "wall" }
+      ]
+    },
+    {
+      "id": "kitchen",
+      "title": "Kitchen",
+      "kind": "standard",
+      "bounds": { "min": { "x": 16, "z": -10 }, "max": { "x": 30, "z": 4 } },
+      "floorAssetKey": "floor_wood_large",
+      "walls": [
+        { "kind": "solid", "start": { "x": 16, "z": -10 }, "end": { "x": 30, "z": -10 }, "assetKey": "wall" },
+        { "kind": "doorway", "start": { "x": 16, "z": 2 }, "end": { "x": 16, "z": 6 }, "assetKey": "wall_doorway", "leadsTo": "main-room" },
+        { "kind": "solid", "start": { "x": 16, "z": -10 }, "end": { "x": 16, "z": 2 }, "assetKey": "wall" },
+        { "kind": "solid", "start": { "x": 30, "z": -10 }, "end": { "x": 30, "z": 4 }, "assetKey": "wall" },
+        { "kind": "doorway", "start": { "x": 21, "z": 4 }, "end": { "x": 25, "z": 4 }, "assetKey": "wall_doorway", "leadsTo": "pantry-alcove" },
+        { "kind": "solid", "start": { "x": 16, "z": 4 }, "end": { "x": 21, "z": 4 }, "assetKey": "wall" },
+        { "kind": "solid", "start": { "x": 25, "z": 4 }, "end": { "x": 30, "z": 4 }, "assetKey": "wall" }
+      ]
+    },
+    {
+      "id": "pantry-alcove",
+      "title": "Pantry Alcove",
+      "kind": "standard",
+      "bounds": { "min": { "x": 16, "z": 4 }, "max": { "x": 26, "z": 14 } },
+      "floorAssetKey": "floor_wood_large",
+      "walls": [
+        { "kind": "doorway", "start": { "x": 21, "z": 4 }, "end": { "x": 25, "z": 4 }, "assetKey": "wall_doorway", "leadsTo": "kitchen" },
+        { "kind": "solid", "start": { "x": 16, "z": 4 }, "end": { "x": 21, "z": 4 }, "assetKey": "wall" },
+        { "kind": "solid", "start": { "x": 25, "z": 4 }, "end": { "x": 26, "z": 4 }, "assetKey": "wall" },
+        { "kind": "solid", "start": { "x": 16, "z": 4 }, "end": { "x": 16, "z": 14 }, "assetKey": "wall" },
+        { "kind": "solid", "start": { "x": 16, "z": 14 }, "end": { "x": 26, "z": 14 }, "assetKey": "wall" },
+        { "kind": "doorway", "start": { "x": 26, "z": 7 }, "end": { "x": 26, "z": 11 }, "assetKey": "wall_doorway", "leadsTo": "workshop" },
+        { "kind": "solid", "start": { "x": 26, "z": 4 }, "end": { "x": 26, "z": 7 }, "assetKey": "wall" },
+        { "kind": "solid", "start": { "x": 26, "z": 11 }, "end": { "x": 26, "z": 14 }, "assetKey": "wall" }
+      ]
+    },
+    {
+      "id": "workshop",
+      "title": "Workshop",
+      "kind": "boss",
+      "bounds": { "min": { "x": 26, "z": -6 }, "max": { "x": 46, "z": 14 } },
+      "floorAssetKey": "floor_tile_large",
+      "walls": [
+        { "kind": "solid", "start": { "x": 26, "z": -6 }, "end": { "x": 46, "z": -6 }, "assetKey": "wall" },
+        { "kind": "solid", "start": { "x": 26, "z": 14 }, "end": { "x": 46, "z": 14 }, "assetKey": "wall" },
+        { "kind": "solid", "start": { "x": 46, "z": -6 }, "end": { "x": 46, "z": 14 }, "assetKey": "wall" },
+        { "kind": "doorway", "start": { "x": 26, "z": 7 }, "end": { "x": 26, "z": 11 }, "assetKey": "wall_doorway", "leadsTo": "pantry-alcove" },
+        { "kind": "solid", "start": { "x": 26, "z": -6 }, "end": { "x": 26, "z": 7 }, "assetKey": "wall" },
+        { "kind": "doorway", "start": { "x": 26, "z": 11 }, "end": { "x": 26, "z": 14 }, "assetKey": "wall_doorway", "leadsTo": "exit" }
+      ]
+    },
+    {
+      "id": "loft-bedroom",
+      "title": "Loft Bedroom",
+      "kind": "standard",
+      "bounds": { "min": { "x": -4, "z": -10 }, "max": { "x": 10, "z": 4 } },
+      "floorAssetKey": "floor_wood_large_dark",
+      "walls": [
+        { "kind": "solid", "start": { "x": -4, "z": -10 }, "end": { "x": 10, "z": -10 }, "assetKey": "wall" },
+        { "kind": "solid", "start": { "x": -4, "z": 4 }, "end": { "x": 10, "z": 4 }, "assetKey": "wall_half" },
+        { "kind": "solid", "start": { "x": -4, "z": -10 }, "end": { "x": -4, "z": 4 }, "assetKey": "wall" },
+        { "kind": "doorway", "start": { "x": 10, "z": 0 }, "end": { "x": 10, "z": 4 }, "assetKey": "wall_doorway", "leadsTo": "loft-study" },
+        { "kind": "solid", "start": { "x": 10, "z": -10 }, "end": { "x": 10, "z": 0 }, "assetKey": "wall" }
+      ]
+    },
+    {
+      "id": "loft-study",
+      "title": "Loft Study",
+      "kind": "standard",
+      "bounds": { "min": { "x": 10, "z": -10 }, "max": { "x": 22, "z": 4 } },
+      "floorAssetKey": "floor_wood_large_dark",
+      "walls": [
+        { "kind": "solid", "start": { "x": 10, "z": -10 }, "end": { "x": 22, "z": -10 }, "assetKey": "wall" },
+        { "kind": "solid", "start": { "x": 10, "z": 4 }, "end": { "x": 22, "z": 4 }, "assetKey": "wall_half" },
+        { "kind": "doorway", "start": { "x": 10, "z": 0 }, "end": { "x": 10, "z": 4 }, "assetKey": "wall_doorway", "leadsTo": "loft-bedroom" },
+        { "kind": "solid", "start": { "x": 10, "z": -10 }, "end": { "x": 10, "z": 0 }, "assetKey": "wall" },
+        { "kind": "solid", "start": { "x": 22, "z": -10 }, "end": { "x": 22, "z": 4 }, "assetKey": "wall_window_open" }
+      ]
+    },
+    {
+      "id": "root-cellar",
+      "title": "Root Cellar",
+      "kind": "reward",
+      "bounds": { "min": { "x": -20, "z": -8 }, "max": { "x": -4, "z": 8 } },
+      "floorAssetKey": "floor_tile_large",
+      "walls": [
+        { "kind": "solid", "start": { "x": -20, "z": -8 }, "end": { "x": -4, "z": -8 }, "assetKey": "wall_cracked" },
+        { "kind": "solid", "start": { "x": -20, "z": 8 }, "end": { "x": -4, "z": 8 }, "assetKey": "wall_cracked" },
+        { "kind": "solid", "start": { "x": -20, "z": -8 }, "end": { "x": -20, "z": 8 }, "assetKey": "wall_cracked" },
+        { "kind": "doorway", "start": { "x": -4, "z": 4 }, "end": { "x": -4, "z": 8 }, "assetKey": "wall_doorway", "leadsTo": "storage" },
+        { "kind": "solid", "start": { "x": -4, "z": -8 }, "end": { "x": -4, "z": 4 }, "assetKey": "wall_cracked" }
+      ]
+    },
+    {
+      "id": "storage",
+      "title": "Storage",
+      "kind": "reward",
+      "bounds": { "min": { "x": -4, "z": -8 }, "max": { "x": 12, "z": 8 } },
+      "floorAssetKey": "floor_tile_large",
+      "walls": [
+        { "kind": "solid", "start": { "x": -4, "z": -8 }, "end": { "x": 12, "z": -8 }, "assetKey": "wall_cracked" },
+        { "kind": "doorway", "start": { "x": -4, "z": 4 }, "end": { "x": -4, "z": 8 }, "assetKey": "wall_doorway", "leadsTo": "root-cellar" },
+        { "kind": "solid", "start": { "x": -4, "z": -8 }, "end": { "x": -4, "z": 4 }, "assetKey": "wall_cracked" },
+        { "kind": "solid", "start": { "x": 12, "z": -8 }, "end": { "x": 12, "z": 8 }, "assetKey": "wall_cracked" },
+        { "kind": "doorway", "start": { "x": 2, "z": 8 }, "end": { "x": 6, "z": 8 }, "assetKey": "wall_doorway", "leadsTo": "crypt-sublevel" },
+        { "kind": "solid", "start": { "x": -4, "z": 8 }, "end": { "x": 2, "z": 8 }, "assetKey": "wall_cracked" },
+        { "kind": "solid", "start": { "x": 6, "z": 8 }, "end": { "x": 12, "z": 8 }, "assetKey": "wall_cracked" }
+      ]
+    },
+    {
+      "id": "crypt-sublevel",
+      "title": "Crypt Sub-Level",
+      "kind": "checkpoint",
+      "bounds": { "min": { "x": -4, "z": 8 }, "max": { "x": 12, "z": 26 } },
+      "floorAssetKey": "floor_tile_large",
+      "walls": [
+        { "kind": "doorway", "start": { "x": 2, "z": 8 }, "end": { "x": 6, "z": 8 }, "assetKey": "wall_doorway", "leadsTo": "storage" },
+        { "kind": "solid", "start": { "x": -4, "z": 8 }, "end": { "x": 2, "z": 8 }, "assetKey": "wall_cracked" },
+        { "kind": "solid", "start": { "x": 6, "z": 8 }, "end": { "x": 12, "z": 8 }, "assetKey": "wall_cracked" },
+        { "kind": "solid", "start": { "x": -4, "z": 8 }, "end": { "x": -4, "z": 26 }, "assetKey": "wall_cracked" },
+        { "kind": "solid", "start": { "x": -4, "z": 26 }, "end": { "x": 12, "z": 26 }, "assetKey": "wall_cracked" },
+        { "kind": "illusory", "start": { "x": 12, "z": 15 }, "end": { "x": 12, "z": 21 }, "assetKey": "wall_cracked", "leadsTo": "hidden-vault" },
+        { "kind": "solid", "start": { "x": 12, "z": 8 }, "end": { "x": 12, "z": 15 }, "assetKey": "wall_cracked" },
+        { "kind": "solid", "start": { "x": 12, "z": 21 }, "end": { "x": 12, "z": 26 }, "assetKey": "wall_cracked" }
+      ]
+    },
+    {
+      "id": "hidden-vault",
+      "title": "Hidden Vault",
+      "kind": "reward",
+      "secret": true,
+      "bounds": { "min": { "x": 12, "z": 12 }, "max": { "x": 24, "z": 24 } },
+      "floorAssetKey": "floor_tile_large_rocks",
+      "walls": [
+        { "kind": "solid", "start": { "x": 12, "z": 12 }, "end": { "x": 24, "z": 12 }, "assetKey": "wall_broken" },
+        { "kind": "solid", "start": { "x": 12, "z": 24 }, "end": { "x": 24, "z": 24 }, "assetKey": "wall_broken" },
+        { "kind": "solid", "start": { "x": 24, "z": 12 }, "end": { "x": 24, "z": 24 }, "assetKey": "wall_broken" },
+        { "kind": "illusory", "start": { "x": 12, "z": 15 }, "end": { "x": 12, "z": 21 }, "assetKey": "wall_broken", "leadsTo": "crypt-sublevel" },
+        { "kind": "solid", "start": { "x": 12, "z": 12 }, "end": { "x": 12, "z": 15 }, "assetKey": "wall_broken" },
+        { "kind": "solid", "start": { "x": 12, "z": 21 }, "end": { "x": 12, "z": 24 }, "assetKey": "wall_broken" }
+      ]
+    }
+  ],
+  "spawn": { "roomId": "garden-approach", "position": { "x": -28, "y": 0, "z": 0 }, "facingY": 90 },
+  "loreStones": [
+    {
+      "id": "journal-1",
+      "roomId": "entrance-room",
+      "position": { "x": -12, "y": 0.8, "z": 0 },
+      "assetKey": "table_small",
+      "title": "Alduin's journal — entry 1",
+      "body": [
+        "The folk came again today. The well at Carrow's edge is going bad. Crystals work on the early signs but the late ones — I don't know yet. I came here to learn the green ways. I am still learning."
+      ]
+    },
+    {
+      "id": "journal-2",
+      "roomId": "main-room",
+      "position": { "x": 6, "y": 0.85, "z": 0 },
+      "assetKey": "table_long_decorated_A",
+      "title": "Alduin's journal — entry 2",
+      "body": [
+        "The Folk who came from the village this week: Wren's boy, the miller's wife, the two children of Carrow. I told them what I had. The well is poisoned, I know that now. It is not anything I can name. It is older than the names I have."
+      ]
+    },
+    {
+      "id": "journal-3",
+      "roomId": "loft-bedroom",
+      "position": { "x": 3, "y": 6.8, "z": -3 },
+      "assetKey": "table_small_decorated_B",
+      "title": "Alduin's journal — entry 3",
+      "body": [
+        "The dreams are back. The Wound, calling. I am not the same in the mornings. Mira would have known what to say. I miss her hands.",
+        "If anyone reads this — I am going to the Wound. I am going to try one more thing. The Heart will hold while I am gone. The Heart always holds.",
+        "Forgive me."
+      ]
+    },
+    {
+      "id": "journal-4",
+      "roomId": "workshop",
+      "position": { "x": 36, "y": 0.8, "z": 4 },
+      "assetKey": "table_small",
+      "title": "Alduin's journal — entry 4 (the last one)",
+      "body": [
+        "I am going. The Wound is louder than the Heart now. I have left a thing in the cellar for whoever is next — a seed. Plant it at the Folk's table, if there is anyone to plant it. It will grow into something old and quiet. The Folk used to say there were trees like it once, before any of us. Maybe one of them will remember the song.",
+        "The Heart will hold. The Heart always holds.",
+        "Tend it, Keeper. I am sorry I could not."
+      ]
+    },
+    {
+      "id": "journal-vault",
+      "roomId": "hidden-vault",
+      "position": { "x": 18, "y": -5.2, "z": 18 },
+      "assetKey": "table_small",
+      "title": "A carving, and a struck-through draft",
+      "body": [
+        "M.M. + A.M., 31st of Honeymonth",
+        "The seed is not the only thing I leave. There is a thing I have not written plainly anywhere, and I will not write it plainly here. If you have come this deep, you have read enough to know the shape of it. Mira walked the green ways first. I followed her into them. I am following her still."
+      ]
+    }
+  ],
+  "checkpoints": [
+    {
+      "id": "checkpoint-entrance",
+      "roomId": "entrance-room",
+      "position": { "x": -12, "y": 0, "z": -5 },
+      "radius": 2.5,
+      "toast": "The Folk have walked this way before, Keeper. Catch your breath."
+    },
+    {
+      "id": "checkpoint-crypt",
+      "roomId": "crypt-sublevel",
+      "position": { "x": 4, "y": -6, "z": 11 },
+      "radius": 2.5,
+      "toast": "Beyond this room, the last of him. Steady your light."
+    }
+  ],
+  "scriptedEncounters": [
+    {
+      "id": "garden-hollow-one",
+      "roomId": "garden-approach",
+      "triggerPosition": { "x": -28, "y": 0, "z": 0 },
+      "triggerRadius": 3,
+      "enemyTypes": ["hollow_villager_a"],
+      "waveLabel": "The Withering's Gardener"
+    },
+    {
+      "id": "main-room-hollow-pair",
+      "roomId": "main-room",
+      "triggerPosition": { "x": 6, "y": 0, "z": 0 },
+      "triggerRadius": 3,
+      "enemyTypes": ["hollow_villager_a", "hollow_villager_b"],
+      "waveLabel": "The Hollow Ones"
+    },
+    {
+      "id": "cellar-hollow-one",
+      "roomId": "root-cellar",
+      "triggerPosition": { "x": -12, "y": -6, "z": 0 },
+      "triggerRadius": 3,
+      "enemyTypes": ["hollow_apprentice_minor"],
+      "waveLabel": "The One Who Fled"
+    },
+    {
+      "id": "storage-hollow-one",
+      "roomId": "storage",
+      "triggerPosition": { "x": 4, "y": -6, "z": 0 },
+      "triggerRadius": 3,
+      "enemyTypes": ["hollow_villager_b"],
+      "waveLabel": "Bound to the Crates"
+    }
+  ],
+  "miniBoss": {
+    "id": "apprentice-of-the-apothecary",
+    "roomId": "workshop",
+    "position": { "x": 40, "y": 0, "z": 4 },
+    "enemyType": "hollow_apprentice_minor",
+    "displayName": "The Apprentice of the Apothecary"
+  },
+  "chests": [
+    { "id": "cellar-chest", "roomId": "root-cellar", "position": { "x": -7, "y": -6, "z": 5 }, "assetKey": "chest", "rewardKey": "lightbearer-cloak" },
+    { "id": "storage-chest", "roomId": "storage", "position": { "x": 9, "y": -6, "z": 5 }, "assetKey": "chest", "rewardKey": "secret-cache-embers" },
+    { "id": "vault-chest", "roomId": "hidden-vault", "position": { "x": 21, "y": -6, "z": 21 }, "assetKey": "chest_gold", "rewardKey": "rare-crafting-shard" }
+  ],
+  "encounterPool": {
+    "apprentice": ["hollow_villager_a", "hollow_villager_b"],
+    "veteran": ["hollow_healer"],
+    "cellar": ["hollow_apprentice_minor"]
+  },
+  "bryn": {
+    "npcId": "bryn-the-wanderer",
+    "roomId": "garden-approach",
+    "position": { "x": -31, "y": 0, "z": -2 },
+    "facingY": 90,
+    "speakRadius": 6,
+    "loreFragmentId": "bryn-cottage-entry",
+    "firstEncounterLine": "The path opens easy, Keeper. But mind the rocks — they remember you. And don't walk it dark. The cottage keeps her shadows close."
+  },
+  "lanternPosts": [
+    { "id": "lantern-post-garden", "roomId": "garden-approach", "position": { "x": -33, "y": 0, "z": -4 }, "assetKey": "lantern_post" }
+  ],
+  "oilStones": [
+    { "id": "oil-stone-entrance", "roomId": "entrance-room", "position": { "x": -16, "y": 0, "z": 5 }, "radius": 2 },
+    { "id": "oil-stone-main", "roomId": "main-room", "position": { "x": 12, "y": 0, "z": -6 }, "radius": 2 },
+    { "id": "oil-stone-crypt", "roomId": "crypt-sublevel", "position": { "x": 8, "y": -6, "z": 22 }, "radius": 2 }
+  ]
+}

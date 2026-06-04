@@ -187,29 +187,28 @@ namespace DeNelle.Pets
 
         private static PetCatalogData LoadCatalog()
         {
-            // Canonical JSON lives under StreamingAssets so it is readable in a
-            // player build (spec Part 3 forbids Resources.Load). ANDROID NOTE:
-            // on Android StreamingAssets is packed inside the APK and a
-            // UnityWebRequest read is required — to be added with the Week-7/8
-            // Seeker build (same caveat as PackCatalog.cs / Theme.cs).
-            var full = Path.Combine(Application.streamingAssetsPath, StreamingRelativePath);
+            // WebGL-safe load via CanonicalJson: Resources.Load first (works in a
+            // browser, where File.ReadAllText(streamingAssetsPath) THROWS), then a
+            // StreamingAssets fallback on desktop/editor. pets.json is mirrored into
+            // Assets/Resources/Data/Canonical/ so the Resources path resolves.
             try
             {
-                if (File.Exists(full))
+                string json = DeNelle.Core.CanonicalJson.Read(StreamingRelativePath);
+                if (!string.IsNullOrEmpty(json))
                 {
-                    var parsed = JsonConvert.DeserializeObject<PetCatalogData>(File.ReadAllText(full));
+                    var parsed = JsonConvert.DeserializeObject<PetCatalogData>(json);
                     if (parsed != null && parsed.Pets != null && parsed.Pets.Count > 0)
                         return parsed;
-                    Debug.LogError($"[PetCatalog] pets.json at {full} parsed empty.");
+                    Debug.LogError("[PetCatalog] pets.json parsed empty.");
                 }
                 else
                 {
-                    Debug.LogError($"[PetCatalog] pets.json not found at {full}.");
+                    Debug.LogError("[PetCatalog] pets.json not found (Resources or StreamingAssets).");
                 }
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[PetCatalog] Failed to read {full}: {ex.Message}");
+                Debug.LogError($"[PetCatalog] Failed to read pets.json: {ex.Message}");
             }
 
             Debug.LogError("[PetCatalog] pets.json could not be loaded — using an empty catalog.");

@@ -202,30 +202,28 @@ namespace DeNelle.Wallet
 
         private static PackCatalogData LoadCatalog()
         {
-            // Canonical JSON lives under StreamingAssets so it is readable in a
-            // player build (spec Part 3 forbids Resources.Load). On the Editor,
-            // Windows and macOS streamingAssetsPath is a real directory, so a
-            // synchronous read is valid. ANDROID NOTE: on Android StreamingAssets
-            // is packed inside the APK and a UnityWebRequest read is required —
-            // to be added with the Week-7/8 Seeker build (same caveat as Theme.cs).
-            var full = Path.Combine(Application.streamingAssetsPath, StreamingRelativePath);
+            // WebGL-safe load via CanonicalJson: Resources.Load first (works in a
+            // browser, where File.ReadAllText(streamingAssetsPath) THROWS), then a
+            // StreamingAssets fallback on desktop/editor. packs.json is mirrored into
+            // Assets/Resources/Data/Canonical/ so the Resources path resolves.
             try
             {
-                if (File.Exists(full))
+                string json = DeNelle.Core.CanonicalJson.Read(StreamingRelativePath);
+                if (!string.IsNullOrEmpty(json))
                 {
-                    var parsed = JsonConvert.DeserializeObject<PackCatalogData>(File.ReadAllText(full));
+                    var parsed = JsonConvert.DeserializeObject<PackCatalogData>(json);
                     if (parsed != null && parsed.Packs != null)
                         return parsed;
-                    Debug.LogError($"[PackCatalog] packs.json at {full} parsed empty.");
+                    Debug.LogError("[PackCatalog] packs.json parsed empty.");
                 }
                 else
                 {
-                    Debug.LogError($"[PackCatalog] packs.json not found at {full}.");
+                    Debug.LogError("[PackCatalog] packs.json not found (Resources or StreamingAssets).");
                 }
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[PackCatalog] Failed to read {full}: {ex.Message}");
+                Debug.LogError($"[PackCatalog] Failed to read packs.json: {ex.Message}");
             }
 
             Debug.LogError("[PackCatalog] packs.json could not be loaded — using an empty catalog.");
