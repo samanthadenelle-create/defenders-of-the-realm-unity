@@ -31,11 +31,42 @@ namespace DeNelle.Village
         private const string TargetScene = "Village2";
         private bool _built;
 
+        // DEF-258: these MineNodes are unstyled PLACEHOLDERS — tinted primitive cubes
+        // (incl. the cyan "Mine AetherCrystal" cube) with a code-built green fill bar
+        // (NodeFillIndicator, auto-attached by WorkerManager) that billboards toward the
+        // camera and reads in-game as a "green disc" floating on the node. The node-
+        // claiming / harvest UX (DEF-166/167) is not production-ready, so the placeholder
+        // SPAWN is disabled in the playable build. This kills the cyan cube, the green
+        // disc indicator, the "[G] Upgrade Mine" prompt, and any per-frame NullRef the
+        // half-built placeholder nodes were generating on Village2 load.
+        //
+        // The ECONOMY ITSELF IS UNTOUCHED: MineNode / CrystalMineNode / CrystalEconomy /
+        // the pet+worker harvest seams and the OuterWorld nodes all remain. Only this
+        // runtime placeholder DROP in Village2 is gated off. Flip to true (or pass
+        // -spawnPlaceholderMineNodes on the command line) to restore the dev placeholders
+        // when the node system is re-enabled with real art + mobile input.
+        private const bool SpawnPlaceholderNodes = false;
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
         {
             if (Instance != null) return;
+            // DEF-258: do not even create the bootstrap host when placeholder nodes are
+            // disabled — nothing to spawn, so no MonoBehaviour and no scene scan run.
+            if (!PlaceholderNodesEnabled()) return;
             new GameObject("PetHarvestBootstrap").AddComponent<PetHarvestBootstrap>();
+        }
+
+        /// <summary>Whether the dev placeholder mine nodes should spawn. Off by default
+        /// (DEF-258); opt back in via the const above or a command-line override.</summary>
+        private static bool PlaceholderNodesEnabled()
+        {
+            if (SpawnPlaceholderNodes) return true;
+            var args = System.Environment.GetCommandLineArgs();
+            if (args != null)
+                for (int i = 0; i < args.Length; i++)
+                    if (args[i] == "-spawnPlaceholderMineNodes") return true;
+            return false;
         }
 
         private void Awake()
@@ -63,6 +94,8 @@ namespace DeNelle.Village
         {
             if (_built) return;
             _built = true;
+            // DEF-258: never drop placeholder nodes unless explicitly re-enabled.
+            if (!PlaceholderNodesEnabled()) return;
             // Idempotent: if the village already has nodes (a future hand-placed pass), skip.
             if (Object.FindFirstObjectByType<MineNode>() != null) return;
 

@@ -99,8 +99,12 @@ namespace DeNelle.Village
                  "worker to it (the Phase-1 player verb). Disable when a proper UI drives dispatch.")]
         public bool ClickToDispatch = true;
 
-        [Tooltip("Auto-attach a code-built fill bar to every MineNode found at Start.")]
-        public bool AttachFillIndicators = true;
+        [Tooltip("Auto-attach a code-built fill bar to every MineNode found at Start. " +
+                 "DEF-258: DEFAULT OFF — the world-space fill bar billboards toward the " +
+                 "camera and reads in-game as a 'green disc' floating on the node (the " +
+                 "long-standing green-disc-following-the-hero artifact). Re-enable only " +
+                 "with the proper, production-ready node UX (DEF-166/167).")]
+        public bool AttachFillIndicators = false;
 
         private void Start()
         {
