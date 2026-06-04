@@ -118,6 +118,14 @@ namespace DeNelle.Onboarding
         private bool _titleBuilt;
         private int _diagFrames;
 
+        // DEF-253 hard auto-advance watchdog: if the arrival flow (bumper/cold-open)
+        // stalls — a WebGL video that never completes, an await that never resolves —
+        // the player gets stuck on the song screen forever. This plain-Update timer
+        // FORCE-shows the title (hero select) after a max wait, independent of any
+        // UniTask await. Belt-and-braces on top of RunArrival's SafeStage timeouts.
+        private float _arrivalStart;
+        private const float MaxIntroSeconds = 8f;
+
         // DEF-204: VerifyFourCardsEven now SELF-HEALS (rebuilds a malformed row)
         // instead of only logging. This guard prevents an infinite rebuild loop —
         // we only attempt the auto-correct once per build.
@@ -139,6 +147,7 @@ namespace DeNelle.Onboarding
 
         private void Start()
         {
+            _arrivalStart = Time.unscaledTime;   // DEF-253 watchdog clock
             // Fire-and-forget the arrival flow. RunArrival is a UniTask (not
             // async void); Forget() is the sanctioned way to launch a top-level
             // UniTask from a Unity lifecycle hook.
@@ -152,6 +161,19 @@ namespace DeNelle.Onboarding
         // attached to the shared panel they can intercept Title-button picks.
         private void Update()
         {
+            // DEF-253 BLOCKER watchdog: if the arrival flow stalled (WebGL video that
+            // never completes, an await that never resolves), the player is stuck on the
+            // song screen forever. Force the title (hero select) up after the max wait,
+            // independent of any UniTask await. Runs once (BuildTitleScreen sets _titleBuilt).
+            if (!_titleBuilt && Time.unscaledTime - _arrivalStart > MaxIntroSeconds)
+            {
+                Debug.LogWarning("[TitleController] DEF-253 watchdog tripped — force-advancing past the intro to the title/hero-select.");
+                if (_storyIntro != null) _storyIntro.ForceHide();
+                BuildTitleScreen();
+                SetTitleVisible(true);
+                return;
+            }
+
             // DEF-230 auto-advance: once a hero is selected, route to PetSelect
             // after a brief confirm beat — no "Choose this Hero" tap required.
             // Re-selecting a different hero before this fires simply re-arms the
@@ -284,6 +306,7 @@ namespace DeNelle.Onboarding
         /// </summary>
         private void BuildTitleScreen()
         {
+            if (_titleBuilt) return;   // build once — RunArrival or the DEF-253 watchdog, whichever first
             if (_titleDocument == null)
             {
                 Debug.LogError("[TitleController] No title UIDocument assigned — cannot build the title screen.");
