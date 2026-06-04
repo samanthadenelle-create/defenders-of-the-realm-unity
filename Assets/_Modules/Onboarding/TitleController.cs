@@ -118,6 +118,11 @@ namespace DeNelle.Onboarding
         private bool _titleBuilt;
         private int _diagFrames;
 
+        // DEF-204: VerifyFourCardsEven now SELF-HEALS (rebuilds a malformed row)
+        // instead of only logging. This guard prevents an infinite rebuild loop —
+        // we only attempt the auto-correct once per build.
+        private bool _cardHealAttempted;
+
         private void OnEnable()
         {
             // Hide the title screen until the arrival sequence has finished, so
@@ -301,6 +306,8 @@ namespace DeNelle.Onboarding
             _root.style.justifyContent = Justify.FlexStart;
             _root.style.backgroundColor = ColBackground;
 
+            _cardHealAttempted = false;   // fresh build — re-arm the self-heal
+
             BuildDragonStage();   // top half (acceptance #4)
             BuildRosterPanel();   // bottom half — title + 4 cards + detail
             BuildConnectWallet(); // top-right stub button
@@ -409,9 +416,15 @@ namespace DeNelle.Onboarding
             roster.Add(cta);
 
             // The four hero cards — an evenly distributed flex row (acceptance #2).
+            // DEF-204 ROOT FIX: SpaceBetween + per-card maxWidth:25%/flexBasis:0
+            // let the row collapse/wrap in portrait so two heroes shared one card
+            // ("Thrain + Grom"). Center + NoWrap forces all four onto ONE centred
+            // row that never wraps; equal flex-grow + symmetric margins keep them
+            // evenly sized.
             _cardRow = new VisualElement { name = "title-card-row" };
             _cardRow.style.flexDirection = FlexDirection.Row;
-            _cardRow.style.justifyContent = Justify.SpaceBetween; // even across full width
+            _cardRow.style.justifyContent = Justify.Center; // centred, single row
+            _cardRow.style.flexWrap = Wrap.NoWrap;          // never wrap to a 2nd line
             _cardRow.style.alignItems = Align.Stretch;
             _cardRow.style.flexGrow = 1f;
             _cardRow.style.flexShrink = 1f;
@@ -701,6 +714,14 @@ namespace DeNelle.Onboarding
             SetBorderColor(_connectWalletButton, ColVioletBorder);
             _connectWalletButton.style.backgroundColor = new Color(1f, 1f, 1f, 0.06f);
             _connectWalletButton.style.color = ColTextBright;
+
+            // DEF-204 ROOT FIX (paint order): older UI Toolkit has no z-index, so an
+            // absolute element paints in tree order. Add the Connect-Wallet button
+            // LAST to _root (after the dragon stage + roster panel) so it always
+            // paints on top and is never clipped by / hidden under the roster
+            // content or the Skip overlay.
+            if (_connectWalletButton.parent == _root)
+                _connectWalletButton.RemoveFromHierarchy();
             _root.Add(_connectWalletButton);
         }
 
@@ -809,14 +830,22 @@ namespace DeNelle.Onboarding
                 _cards[i].style.marginRight = gutter;
             }
 
+            // DEF-204 FIX 4: scale the detail card's top gap with orientation so the
+            // confirm bar's spacing reads correctly in both portrait (tighter) and
+            // landscape (looser).
+            if (_detailCard != null)
+                _detailCard.style.marginTop = portrait ? 6f : 10f;
+
             VerifyFourCardsEven();
         }
 
         /// <summary>
-        /// Regression guard: asserts the four hero cards exist and are laid out as
-        /// an even row (equal flex-grow, no fixed widths). If a future edit breaks
-        /// the contract this logs loudly so it is caught immediately rather than
-        /// shipping a broken landing again (the recurring-regression sentinel).
+        /// Regression guard that now SELF-HEALS (DEF-204): asserts the four hero
+        /// cards exist and are laid out as an even row (equal flex-grow, no fixed
+        /// widths). If the card COUNT is wrong it logs an error AND rebuilds the row
+        /// once (_cardHealAttempted guards against infinite recursion) so a
+        /// malformed layout auto-corrects in place rather than shipping broken — the
+        /// recurring-regression sentinel that now also repairs itself.
         /// </summary>
         private void VerifyFourCardsEven()
         {
@@ -826,6 +855,18 @@ namespace DeNelle.Onboarding
             {
                 Debug.LogError($"[TitleController] CARD ASSERT FAILED — expected {expected} " +
                                $"hero cards, found {actual}. The hero row is not evenly built.");
+
+                // Self-heal once: rebuild the card row and re-apply selection
+                // visuals. The guard flag stops this from looping forever if the
+                // rebuild still cannot produce the expected count.
+                if (_cardRow != null && !_cardHealAttempted)
+                {
+                    _cardHealAttempted = true;
+                    Debug.LogError("[TitleController] CARD ASSERT — auto-healing: rebuilding the card row.");
+                    _cardRow.Clear();
+                    BuildCards();
+                    RefreshSelectionVisuals();
+                }
                 return;
             }
             for (int i = 0; i < _cards.Length; i++)
