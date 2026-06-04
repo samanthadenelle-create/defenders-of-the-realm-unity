@@ -33,25 +33,80 @@ namespace DeNelle.Editor
             "Assets/polyperfect/Low Poly Ultimate Pack/_M/Prefabs_M/Pirates_M/Tower_Pirate_Stone.prefab",
         };
 
+        // DEF-244: real polyperfect _M medieval/castle tower meshes, indexed per
+        // upgrade tier (L1 / L2 / L3). Each roster tower swaps mesh on upgrade so the
+        // player FEELS the climb (watchtower -> keep -> crenellated bastion). Paths
+        // are LogWarning-safe on miss (pack is gitignored) -> procedural placeholder.
+        // Folder convention per docs/polyperfect-asset-catalog.md (_M/Prefabs_M/<Cat>_M/).
+        private const string MedievalDir =
+            "Assets/polyperfect/Low Poly Ultimate Pack/_M/Prefabs_M/Medieval_M";
+
+        // Archer (single-target ranged): wooden watchtower -> square keep -> round bastion.
+        private static readonly string[] ArcherModelPaths =
+        {
+            MedievalDir + "/Tower_Medieval_Wood.prefab",
+            MedievalDir + "/Tower_Castle_Square.prefab",
+            MedievalDir + "/Tower_Castle_Round.prefab",
+        };
+
+        // Mage (AoE arcane): the tall standalone spire reads as a ward-stone tower at every tier.
+        private static readonly string[] MageModelPaths =
+        {
+            MedievalDir + "/Tower_Medieval_Big.prefab",
+            MedievalDir + "/Tower_Medieval_Big.prefab",
+            MedievalDir + "/Tower_Castle_Round.prefab",
+        };
+
+        // Frost (slow / crowd control): wooden -> square -> round, distinct from Archer by stats/ability.
+        private static readonly string[] FrostModelPaths =
+        {
+            MedievalDir + "/Tower_Medieval_Wood.prefab",
+            MedievalDir + "/Tower_Castle_Square.prefab",
+            MedievalDir + "/Tower_Castle_Round.prefab",
+        };
+
         [MenuItem("Defenders/Seed Tower Data")]
         public static void Seed()
         {
             EnsureFolder();
 
+            // ---- DEF-244: 3 role-distinct demo towers, each with a 3-tier upgrade
+            //      path (escalating range/damage/cost + tier-specific SpecialAbility)
+            //      and real per-tier polyperfect _M meshes. DevTower/pirate paths are
+            //      intentionally untouched (leave them alone to avoid a merge conflict).
+
+            // 1) ARCHER TOWER — single-target ranged generalist. The first tower a
+            //    player builds: high rate of fire, no gate. T3 sharpens into a true
+            //    marksman bastion (long range + heavy hit).
             CreateTower("ArcherTower", "Archer Tower", 150,
                 new SkillRequirement { type = SkillType.None, minLevel = 0 },
-                ability: SpecialAbility.None,
-                baseRange: 10f, baseDamage: 8f, baseUpgradeCost: 100);
+                tierAbilities: new[] { SpecialAbility.None, SpecialAbility.None, SpecialAbility.None },
+                tierRange:  new[] { 18f, 20f, 22f },
+                tierDamage: new[] { 22f, 35f, 50f },
+                tierCost:   new[] { 0,   100,  220 },
+                modelPaths: ArcherModelPaths);
 
+            // 2) MAGE TOWER — AoE arcane caster. Lower fire rate, hits clusters; the
+            //    Arcane skill gate (Arcane Library, DEF-209) unlocks it. MagicalAffinity
+            //    from T2 up = the arcane AoE pulse.
             CreateTower("MageTower", "Mage Tower", 220,
                 new SkillRequirement { type = SkillType.Arcane, minLevel = 1 },
-                ability: SpecialAbility.MagicalAffinity,
-                baseRange: 8f, baseDamage: 12f, baseUpgradeCost: 140);
+                tierAbilities: new[] { SpecialAbility.None, SpecialAbility.MagicalAffinity, SpecialAbility.MagicalAffinity },
+                tierRange:  new[] { 14f, 16f, 18f },
+                tierDamage: new[] { 18f, 28f, 40f },
+                tierCost:   new[] { 0,   140,  300 },
+                modelPaths: MageModelPaths);
 
+            // 3) FROST TOWER — crowd control / slow. Modest damage but its value is the
+            //    SlowEnemies field (T2) escalating to a FrostNova burst (T3). Blacksmith
+            //    gate (forged frost-iron bolts, DEF-209).
             CreateTower("FrostTower", "Frost Tower", 200,
                 new SkillRequirement { type = SkillType.Blacksmith, minLevel = 1 },
-                ability: SpecialAbility.SlowEnemies,
-                baseRange: 9f, baseDamage: 6f, baseUpgradeCost: 130);
+                tierAbilities: new[] { SpecialAbility.None, SpecialAbility.SlowEnemies, SpecialAbility.FrostNova },
+                tierRange:  new[] { 12f, 14f, 16f },
+                tierDamage: new[] { 8f,  14f, 22f },
+                tierCost:   new[] { 0,   130,  280 },
+                modelPaths: FrostModelPaths);
 
             // Free, ungated tower wired with real KayKit hex models —
             // TowerLoopDevHarness loads this one ("Towers/DevTower") so the dev
@@ -60,12 +115,20 @@ namespace DeNelle.Editor
 
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
-            Debug.Log($"[TowerDataSeeder] Seeded 4 TowerData assets into {Dir} (incl. DevTower with models).");
+            Debug.Log($"[TowerDataSeeder] Seeded 4 TowerData assets into {Dir} " +
+                      "(Archer/Mage/Frost roster + DevTower, all with per-tier models).");
         }
 
+        /// <summary>
+        /// Creates one roster TowerData with an explicit per-tier upgrade chain:
+        /// distinct mesh, ability, range, damage, and upgrade-into cost at each of the
+        /// 3 levels. Arrays are indexed [0]=L1, [1]=L2, [2]=L3. Missing meshes fall back
+        /// to the procedural placeholder (LogWarning, not error — pack is gitignored).
+        /// </summary>
         private static void CreateTower(
             string assetName, string towerName, int cost, SkillRequirement req,
-            SpecialAbility ability, float baseRange, float baseDamage, int baseUpgradeCost)
+            SpecialAbility[] tierAbilities, float[] tierRange, float[] tierDamage,
+            int[] tierCost, string[] modelPaths)
         {
             string path = $"{Dir}/{assetName}.asset";
 
@@ -76,14 +139,22 @@ namespace DeNelle.Editor
             data.upgrades = new TowerUpgrade[3];
             for (int i = 0; i < 3; i++)
             {
+                GameObject model = null;
+                if (modelPaths != null && i < modelPaths.Length)
+                {
+                    model = AssetDatabase.LoadAssetAtPath<GameObject>(modelPaths[i]);
+                    if (model == null)
+                        Debug.LogWarning($"[TowerDataSeeder] {towerName} L{i + 1} model not found at " +
+                                         $"'{modelPaths[i]}' — Tower will use the procedural placeholder.");
+                }
+
                 data.upgrades[i] = new TowerUpgrade
                 {
-                    visualPrefab = null,                       // procedural placeholder
-                    ability      = i == 0 ? SpecialAbility.None : ability,
-                    range        = baseRange + i * 2f,
-                    damage       = baseDamage + i * 4f,
-                    // Level 1 has no upgrade-INTO cost; L2/L3 escalate.
-                    upgradeCost  = i == 0 ? 0 : baseUpgradeCost + (i - 1) * 80,
+                    visualPrefab = model,
+                    ability      = tierAbilities[i],
+                    range        = tierRange[i],
+                    damage       = tierDamage[i],
+                    upgradeCost  = tierCost[i],
                 };
             }
 
