@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 3a350826231a5419d92fbc84703cc1a6
+PrefabImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 267061
+  packageName: Yarn Spinner+ for Unity, the friendly dialogue and narrative tool
+  packageVersion: 3.2.4
+  assetPath: Packages/dev.yarnspinner.unity.addons.classicrpg/Runtime/Prefabs/Classic
+    RPG Dialogue System.prefab
+  uploadId: 927282

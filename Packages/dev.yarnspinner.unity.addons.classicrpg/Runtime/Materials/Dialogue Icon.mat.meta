@@ -1,0 +1,16 @@
+fileFormatVersion: 2
+guid: f232687f02eb4436e9177ec321d888c8
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 267061
+  packageName: Yarn Spinner+ for Unity, the friendly dialogue and narrative tool
+  packageVersion: 3.2.4
+  assetPath: Packages/dev.yarnspinner.unity.addons.classicrpg/Runtime/Materials/Dialogue
+    Icon.mat
+  uploadId: 927282

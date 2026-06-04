@@ -1,0 +1,16 @@
+fileFormatVersion: 2
+guid: c9561a438cac94b9f8d9b856438dc961
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 267061
+  packageName: Yarn Spinner+ for Unity, the friendly dialogue and narrative tool
+  packageVersion: 3.2.4
+  assetPath: Packages/dev.yarnspinner.unity.addons.classicrpg/Runtime/Materials/Scaling
+    Icon (Static).mat
+  uploadId: 927282

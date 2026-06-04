@@ -208,9 +208,23 @@ namespace DeNelle.Village
         /// </summary>
         private void OnVillageProgressionStart()
         {
-            // INTENTIONALLY EMPTY (DEF-263). Yarn narrative kick-off goes here (DEF-251).
-            Debug.Log("[TutorialDirector] DEF-263 progression-start hook reached " +
-                      "(NPC intro dialog removed; awaiting Yarn narrative wire-up).");
+            // DEF-251: kick off the Yarn companion-meeting narrative. The
+            // Resources/Dialogue/DialogueSystem prefab (paid ClassicRPG add-on, wired by
+            // 'Defenders > Yarn > Setup Dialogue System') carries a DialogueRunner set to
+            // autoStart the "CompanionMeeting" node from our compiled YarnProject — so
+            // simply instantiating it plays the intro dialogue + choices. No Yarn types
+            // referenced here (keeps DeNelle.Village free of a Yarn asmdef dependency).
+            var prefab = Resources.Load<GameObject>("Dialogue/DialogueSystem");
+            if (prefab != null)
+            {
+                Instantiate(prefab);
+                Debug.Log("[TutorialDirector] DEF-251 Yarn narrative started (CompanionMeeting via DialogueSystem).");
+            }
+            else
+            {
+                Debug.LogWarning("[TutorialDirector] Dialogue/DialogueSystem not in Resources — run " +
+                                 "'Defenders > Yarn > Setup Dialogue System'. Progression continues without narrative.");
+            }
         }
 
         // ── Scene 1: Arrival + Meeting ───────────────────────────────────────

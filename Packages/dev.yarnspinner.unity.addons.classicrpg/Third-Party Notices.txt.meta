@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: c06d3522a63bb42b1add337eb227609c
+TextScriptImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 267061
+  packageName: Yarn Spinner+ for Unity, the friendly dialogue and narrative tool
+  packageVersion: 3.2.4
+  assetPath: Packages/dev.yarnspinner.unity.addons.classicrpg/Third-Party Notices.txt
+  uploadId: 927282

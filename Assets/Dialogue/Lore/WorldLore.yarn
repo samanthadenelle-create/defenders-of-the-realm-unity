@@ -1,0 +1,227 @@
+title: Lore_HeartWood
+tags: lore worldbuilding
+---
+// Triggered when player first interacts with the Heartwood tree after tutorial
+
+{$companionName}: You feel that? The pulse beneath the bark?
+
+{$companionName}: The Heartwood isn't just a tree. It's the last root of the World Ash — the great tree that once held the sky above the earth.
+
+{$companionName}: Thousands of years ago, when the First Dragons still flew, the World Ash grew so tall its branches pierced the veil between realms. The gods walked its limbs. The Fae nested in its crown.
+
+-> What happened to it?
+    {$companionName}: The Sundering. The Orc King Varuuk the Flayed led his horde up the trunk, trying to reach the gods' realm. He burned his way through.
+    {$companionName}: The World Ash split. The sky cracked. Every branch fell — except one root. This one. It burrowed deep and survived.
+    {$companionName}: That's the Heartwood. The last living piece of something that once connected every world.
+-> Why do the enemies want it?
+    {$companionName}: Because it still has power. Old power. The kind that calls to dark things.
+    {$companionName}: The Orcs believe if they corrupt the Heartwood, they can reopen the wound Varuuk made — finish what he started.
+    {$companionName}: The Goblins just want to feed on its energy. They're scavengers — drawn to magic like moths to flame.
+    {$companionName}: And the Elementals... they're something else entirely. Fragments of the World Ash itself, gone feral. They don't serve anyone.
+
+{$companionName}: Every defender who's stood here — every wall, every tower, every life spent — has been about one thing: keeping this root alive.
+
+{$companionName}: If the Heartwood dies, the land dies with it. The magic that holds Elarion together unravels.
+
+{$companionName}: No pressure.
+===
+
+title: Lore_TheOrcs
+tags: lore worldbuilding enemies
+---
+// Triggered from Lore Fragment scroll or companion dialogue
+
+{$companionName}: The Orcs aren't mindless. That's what makes them dangerous.
+
+{$companionName}: They call themselves the Ash-Born — descended from the warriors who followed Varuuk up the World Ash. When the tree fell, so did they.
+
+{$companionName}: They believe the Sundering was a betrayal. That the gods burned the Ash to keep mortals from ascending. And they've been angry about it ever since.
+
+-> Are they organized?
+    {$companionName}: Very. They run in warbands, each led by a War Chief.
+    {$companionName}: The Grunts hit first — fast, reckless, testing your walls. Then the Brutes follow. Massive. They carry siege hammers that can crack stone.
+    {$companionName}: And their Shamans? They hang back and buff the whole warband. Speed, rage, fire resistance — whatever the fight needs.
+    {$companionName}: Kill the Shaman first. Always.
+-> What do they want with the Heartwood?
+    {$companionName}: They want to carve a new World Ash from its root. Force it to grow again — but under their control.
+    {$companionName}: They call it the "Second Ascent." Varuuk's unfinished work.
+    {$companionName}: If they reach the Heartwood and begin the ritual... well. Let's not find out.
+
+{$companionName}: You'll know when Orcs are coming. The ground shakes. War drums. The smell of smoke.
+{$companionName}: When you hear it — get to the walls.
+===
+
+title: Lore_TheGoblins
+tags: lore worldbuilding enemies
+---
+{$companionName}: Goblins are different from Orcs. Where Orcs fight for a cause, Goblins fight for scraps.
+
+{$companionName}: They're drawn to magic like leeches to blood. The Heartwood radiates it, so they swarm.
+
+{$companionName}: Small, fast, numerous. Individually weak — but they never come individually.
+
+-> How do they attack?
+    {$companionName}: In waves. Dozens at a time, pouring through any crack in the walls.
+    {$companionName}: Some carry crude bows — they'll pepper your towers from range while the rest rush the gates.
+    {$companionName}: And they breed Tunnel Crawlers — bloated things that burrow under walls. If you see the ground rippling, that's your warning.
+-> Are there Goblin leaders?
+    {$companionName}: Occasionally a Goblin Tinkerer rises up. Smart ones. They build siege contraptions from stolen parts — catapults made of bones and scrap metal.
+    {$companionName}: They also brew poisons. Green mist that weakens your towers' firing rate. Nasty stuff.
+    {$companionName}: The good news? Flame towers cook them. They hate fire more than anything.
+
+{$companionName}: Goblins are the first thing you'll face. Don't underestimate them — that's how villages fall.
+===
+
+title: Lore_TheDragons
+tags: lore worldbuilding
+---
+// Triggered later in game — after surviving 10+ waves
+
+{$companionName}: You've earned something rare — a dragon sighting.
+
+{$companionName}: See that shadow in the clouds? That's a Veildrake. Young one, probably.
+
+-> Dragons are real here?
+    {$companionName}: They're the oldest things alive. Born from the World Ash's highest branches before the Sundering.
+    {$companionName}: When the Ash fell, the dragons scattered. Most went dormant — sleeping in mountain peaks, beneath glaciers, inside volcanoes.
+    {$companionName}: But some still fly. And they remember.
+-> Are they allies or enemies?
+    {$companionName}: Neither. They're forces of nature. A dragon doesn't take sides — it follows the pull of ancient magic.
+    {$companionName}: The Heartwood draws them. If you prove yourself — if Elarion grows strong enough — a dragon might perch on your walls.
+    {$companionName}: But that's late-game. Very late-game.
+    {$companionName}: For now, just know they're watching.
+
+{$companionName}: There are four dragon bloodlines, one for each element:
+{$companionName}: The Cinderwyrms — fire and ash.
+{$companionName}: The Frostfangs — ice and storm.
+{$companionName}: The Thorndrakes — nature and poison.
+{$companionName}: The Stonebacks — earth and iron.
+
+{$companionName}: Each one tied to a region of the world. If you expand far enough... you might find their nesting grounds.
+===
+
+title: Lore_TheElementals
+tags: lore worldbuilding enemies
+---
+{$companionName}: Elementals are the hardest thing you'll face. And the strangest.
+
+{$companionName}: They're not invaders. They're fragments of the World Ash — raw magical energy that took physical form when the tree shattered.
+
+{$companionName}: Fire Elementals in the volcanic west. Ice Elementals in the frozen peaks. Earth Golems in the mountains. Storm Wraiths in the marshes.
+
+-> Why do they attack us?
+    {$companionName}: They don't attack "us" specifically. They attack anything near concentrated magic — and the Heartwood is the biggest source in the realm.
+    {$companionName}: Think of them as an immune response. The world's broken magic lashing out at anything trying to grow.
+    {$companionName}: They can't be reasoned with. Only fought or... absorbed.
+-> Absorbed?
+    {$companionName}: The Arcane Tower. If you study an Elemental's essence after defeating it, you can bind that energy into your towers.
+    {$companionName}: That's how you get elemental tower upgrades. Tier 3 Flame Tower? That's a Fire Elemental's core powering it.
+    {$companionName}: Same for frost effects, lightning strikes, stone armor on your walls.
+    {$companionName}: The things trying to destroy you become the tools you use to survive.
+
+{$companionName}: There's a certain poetry to it. The World Ash's own fragments defending what's left of itself.
+===
+
+title: Lore_Echoes
+tags: lore worldbuilding pets
+---
+// Triggered when player discovers their second Echo pet
+
+{$companionName}: Another Echo found you. You're building quite a pack.
+
+-> What exactly are Echoes?
+    {$companionName}: When the World Ash fell, not everything became violent. Some fragments became... gentle. Curious.
+    {$companionName}: The Echoes are animal spirits — memories of creatures that lived in the Ash's branches before the Sundering.
+    {$companionName}: A crow that nested in the canopy. A bear that slept in its roots. A deer that grazed on its fallen leaves.
+    {$companionName}: They're not quite alive, not quite spirit. Something in between.
+    {$companionName}: They're drawn to people who protect the Heartwood — because protecting the root is protecting their home.
+-> Why do they help us?
+    {$companionName}: Because you're doing what they can't. The Echoes can gather, scout, even fight — but they can't build. Can't plan. Can't hold a wall.
+    {$companionName}: They need a Defender. Someone with hands and will.
+    {$companionName}: In return, they give you something no soldier can — tireless loyalty. An Echo won't betray you, won't tire, won't give up.
+    {$companionName}: Treat them well. Craft good offerings. They respond to respect.
+
+{$companionName}: The rarer the Echo, the deeper its connection to the World Ash. A Starveil Stag? That's a piece of the Ash's crown — ancient, powerful, and very choosy about who it follows.
+===
+
+title: Lore_Elarion
+tags: lore worldbuilding village
+---
+// Triggered when player explores the village after tutorial
+
+{$companionName}: You're wondering about this place. I can tell.
+
+{$companionName}: Elarion wasn't always a village. It was a monastery — built by the Order of the Verdant Watch. Monks who swore to protect the last root of the World Ash.
+
+{$companionName}: For centuries they kept it hidden. Warded. Silent.
+
+-> What changed?
+    {$companionName}: The wards failed. About fifty years ago, a Goblin swarm found the root by accident — followed the magic like a scent trail.
+    {$companionName}: The monks fought. Most of them died. The survivors built walls. Then towers. Then homes.
+    {$companionName}: Elarion stopped being a monastery and became a fortress.
+    {$companionName}: People came — refugees, soldiers, craftsmen. They built the Forge. The Market. The Barracks.
+    {$companionName}: And the attacks never stopped. They just got worse.
+-> Who leads Elarion?
+    {$companionName}: No one, officially. The last Verdant Watch elder died years ago.
+    {$companionName}: The Blacksmith keeps the weapons sharp. The Merchant keeps supplies flowing. I keep the walls standing. Barely.
+    {$companionName}: But a leader? Someone the people rally behind?
+    {$companionName}: That's supposed to be you. The Heartwood doesn't call just anyone.
+
+{$companionName}: Elarion has survived on stubbornness and luck. But luck runs out.
+{$companionName}: We need walls that hold. Towers that kill. And a Defender who stays.
+===
+
+title: Companion_Idle_Combat
+tags: companion ambient
+---
+// Random lines during wave combat
+<<random>>
+    {$companionName}: Behind you!
+    {$companionName}: Push them back to the gate!
+    {$companionName}: Shaman in the back — take it out!
+    {$companionName}: {$petName} is holding the east side. We've got west.
+    {$companionName}: Tower's doing work — they're thinning out!
+    {$companionName}: Don't let the Brute reach the wall!
+    {$companionName}: More coming from the north!
+    {$companionName}: That was close. Stay sharp.
+<<endrandom>>
+===
+
+title: Companion_Idle_Peace
+tags: companion ambient
+---
+// Random lines during peaceful exploration
+<<random>>
+    {$companionName}: Quiet for now. Use this time well.
+    {$companionName}: The Forge could use some attention. Better gear means longer survival.
+    {$companionName}: Have you checked the outer nodes? Resources don't gather themselves.
+    {$companionName}: {$petName} brought something back. Check your inventory.
+    {$companionName}: The Heartwood's pulse is steady. That's good.
+    {$companionName}: I saw tracks near the east gate. Orc scouts, maybe.
+    {$companionName}: The villagers seem calmer with those towers up. Good work.
+    {$companionName}: Night's coming. Make sure the torches are lit.
+<<endrandom>>
+===
+
+title: Companion_LevelUp
+tags: companion progression
+---
+// Triggered on hero level up
+<<camera_focus heartwood>>
+
+{$companionName}: Do you feel that? The Heartwood is responding to you.
+
+<<if $heroLevel == 2>>
+    {$companionName}: Your connection is growing. The root recognizes a protector.
+    {$companionName}: You'll hit harder now. The Ash's strength flows through you.
+<<elseif $heroLevel == 5>>
+    {$companionName}: Five battles survived. The Verdant Watch monks would have called you "Rootbound" — one who draws power from the Ash.
+    {$companionName}: You've earned a new ability. The Heartwood gifted it — use it wisely.
+<<elseif $heroLevel == 10>>
+    {$companionName}: Ten levels. You're not just defending anymore — you're becoming part of this place.
+    {$companionName}: The Echoes sense it. The villagers trust you. Even the walls feel stronger.
+    {$companionName}: Whatever's coming next... we're ready for it.
+<<else>>
+    {$companionName}: Stronger. Good. We'll need every bit of it.
+<<endif>>
+===

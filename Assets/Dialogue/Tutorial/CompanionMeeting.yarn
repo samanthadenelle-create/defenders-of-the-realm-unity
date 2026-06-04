@@ -1,0 +1,221 @@
+title: CompanionMeeting
+tags: tutorial onboarding
+---
+// Companion runs up to hero at the Heartwood tree
+<<wait 1.5>>
+<<camera_focus companion>>
+
+{$companionName}: Hey — you're the one the Heartwood called?
+{$companionName}: Good. We need you.
+
+-> What's happening here?
+    {$companionName}: Short version? Elarion is under siege. Creatures from the wilds have been hitting our walls every night.
+    {$companionName}: The Heartwood — that tree behind you — it's the only thing keeping this village standing. If it falls, we lose everything.
+-> Who are you?
+    {$companionName}: I'm {$companionName}. I've been holding things together here, but I can't do it alone.
+    {$companionName}: The Heartwood called you for a reason. Let's find out what you can do.
+-> I'm ready. Show me.
+    {$companionName}: I like that. No questions, just action. We'll get along fine.
+
+{$companionName}: Come on — I'll show you around. Stay close.
+<<set $tutorialPhase to "tour">>
+<<start_autowalk village_tour>>
+===
+
+title: VillageTour
+tags: tutorial onboarding
+---
+// Walking through village — companion narrates buildings
+<<wait 2>>
+
+{$companionName}: This is Elarion. Small, but it's ours.
+
+// Pass the Forge
+<<camera_glance forge>>
+{$companionName}: That's the Forge. Our Blacksmith can reinforce weapons and armor — yours included, once you've proven yourself.
+
+// Pass the Arcane Tower
+<<camera_glance arcane_tower>>
+{$companionName}: The Arcane Tower. If you've got magic in you, that's where you sharpen it.
+
+// Pass the Pet House
+<<camera_glance pet_house>>
+{$companionName}: And the Pet House. The wild Echoes — spirit animals — sometimes wander in. If you earn their trust, they'll fight for you. Or gather for you. Your call.
+
+// Pass the Market
+<<camera_glance market>>
+{$companionName}: Market square. Trade, supplies, the occasional rare find.
+
+{$companionName}: But none of this matters if the walls fall. Come on — this way.
+<<start_autowalk gate_1>>
+===
+
+title: FirstTower
+tags: tutorial onboarding
+---
+// Arrived at Gate 1
+<<camera_focus gate_1>>
+<<stop_autowalk>>
+
+{$companionName}: See this gate? Last attack came right through here.
+{$companionName}: We need eyes on it. A watchtower — something to slow them down.
+
+// Teach tower placement
+{$companionName}: Hit that Build button. I've got enough materials for one tower — place it near the gate.
+
+<<highlight_ui build_button>>
+<<set $tutorialStep to "place_first_tower">>
+<<enable_player_input>>
+
+// Wait for player to place tower
+<<wait_for_event tower_placed>>
+
+<<unhighlight_ui build_button>>
+{$companionName}: Nice work. That'll buy us time when they come.
+{$companionName}: But one tower won't hold four gates. Let's check the others.
+
+<<set $towersBuilt to 1>>
+<<start_autowalk gate_2>>
+===
+
+title: SecondGateAmbush
+tags: tutorial onboarding
+---
+// Arrived at Gate 2
+<<camera_focus gate_2>>
+<<stop_autowalk>>
+
+{$companionName}: We should put one here too...
+<<wait 1>>
+{$companionName}: Hmm. Not enough materials. We'll need to gather more before—
+
+// HORN BLAST
+<<play_sfx horn_warning>>
+<<camera_shake 0.3>>
+<<wait 0.5>>
+
+{$companionName}: They're here. Defend this gate — NOW!
+
+<<spawn_wave_at_nearest 3>>
+<<set $tutorialStep to "first_combat">>
+<<enable_player_input>>
+
+// Companion fights alongside player — AI handles combat
+// Wait for wave clear
+<<wait_for_event wave_cleared>>
+
+<<play_sfx victory_sting>>
+<<wait 1>>
+
+{$companionName}: We held them.
+{$companionName}: Thanks for the help pushing them back.
+
+<<wait 0.5>>
+
+{$companionName}: But they'll be back. And next time it won't be three of them.
+
+===
+
+title: ResourceGrant
+tags: tutorial onboarding
+---
+// Companion hands over supplies
+{$companionName}: Here — I've been saving these. Take them.
+
+<<grant_resources_for_towers 3>>
+<<play_sfx resource_pickup>>
+
+{$companionName}: That's enough to build a watchtower at each of the other three gates.
+{$companionName}: Get them up before the next wave hits. Four gates, four towers — that's the minimum.
+
+<<set $tutorialStep to "build_remaining">>
+<<set_hud_objective "Build towers at the remaining 3 gates" 0 3>>
+===
+
+title: QuestCallout
+tags: tutorial onboarding
+---
+// Companion points at quest panel
+<<wait 1>>
+<<highlight_ui quest_panel>>
+
+{$companionName}: One more thing — see those tasks on the side?
+
+-> What are those?
+    {$companionName}: Jobs that need doing. Build, defend, explore — each one pays out. Resources, experience, sometimes something rarer.
+    {$companionName}: They change regularly, so check back.
+-> Got it.
+    {$companionName}: Good. Don't ignore them — the rewards add up.
+
+<<unhighlight_ui quest_panel>>
+===
+
+title: PetIntroduction
+tags: tutorial onboarding
+---
+// Pet runs up to hero
+<<spawn_starting_pet>>
+<<wait 2>>
+
+{$companionName}: Well — looks like you've already caught someone's attention.
+
+<<camera_focus pet>>
+
+{$companionName}: That's an Echo. A spirit animal tied to the Heartwood's energy. They choose who they follow.
+
+{$companionName}: This one's chosen you. What do you want to call them?
+
+<<show_pet_name_prompt>>
+<<wait_for_event pet_named>>
+
+{$companionName}: {$petName}. Good name.
+
+{$companionName}: Now — {$petName} can help in two ways.
+
+-> What do you mean?
+    {$companionName}: They can stay here and help defend the village when enemies attack. Extra teeth at the gates.
+    {$companionName}: Or they can go out and gather supplies from resource nodes. Wood, stone, food — whatever's nearby.
+    {$companionName}: Your call. You can always change it later at the Pet House.
+-> Just tell me the options.
+    {$companionName}: Defend the village or gather resources. Simple choice, big impact.
+
+<<show_pet_role_choice>>
+<<wait_for_event pet_role_chosen>>
+
+<<if $petRole == "defend">>
+    {$companionName}: {$petName} will hold the line. Smart.
+    {$companionName}: But we're going to need more resources soon. There's wood, iron, and more out beyond the gates — worth exploring when you're ready.
+    <<set_hud_hint "Explore beyond the gates to find resources">>
+<<else>>
+    {$companionName}: {$petName} will bring back what they find. Good instinct.
+    <<send_pet_to_harvest>>
+    {$companionName}: Keep your eyes open out there too. The best nodes are further from the village — and more dangerous.
+<<endif>>
+
+===
+
+title: TutorialComplete
+tags: tutorial onboarding
+---
+// Final beat — camera shows all 4 gates
+<<camera_show_all_gates>>
+<<wait 3>>
+
+{$companionName}: North, South, East, West. They can come from any direction.
+
+<<camera_return_to_hero>>
+
+{$companionName}: Get those towers built. Gather what you can. And when the next wave hits — we hold the line together.
+
+-> Let's do this.
+    {$companionName}: That's the spirit.
+-> Any other advice?
+    {$companionName}: Stay close to the walls during attacks. Explore during the quiet. And don't forget about {$petName} — they're part of your team now.
+    {$companionName}: Oh — and talk to the villagers. The Blacksmith, the merchants — they've got things you'll need.
+
+{$companionName}: I'll be right here if you need me. Good luck, Defender.
+
+<<set $tutorialComplete to true>>
+<<enable_full_controls>>
+<<save_game>>
+===
