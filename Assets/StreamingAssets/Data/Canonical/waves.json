@@ -46,10 +46,17 @@
         },
         {
           "type": "hollow-rogue",
-          "count": 1,
+          "count": 2,
           "spawnPoint": "spawn-1",
-          "delay": 6,
-          "interval": 1.4
+          "delay": 4,
+          "interval": 1.2
+        },
+        {
+          "type": "hollow-warrior",
+          "count": 1,
+          "spawnPoint": "spawn-0",
+          "delay": 8,
+          "interval": 1.8
         }
       ]
     },
