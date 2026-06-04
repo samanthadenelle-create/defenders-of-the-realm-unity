@@ -47,9 +47,23 @@ namespace DeNelle.Village
         // GetComponent<Enemy>() while Enemy doesn't exist yet, leaving _enemy null forever
         // and IsAlive permanently false (targeting + damage silently skip the enemy). Re-
         // resolve lazily so the cache self-heals regardless of component-add order.
-        private Enemy E => _enemy != null
-            ? _enemy
-            : (_enemy = GetComponent<Enemy>() ?? GetComponentInParent<Enemy>());
+        //
+        // 2026-06-04 DEF-268 NRE FIX: a hero ranged projectile's land-burst can read this
+        // adapter (IsAlive) AFTER the enemy GameObject was destroyed (the projectile killed
+        // it on impact, then the burst re-checks the now-destroyed target). On a destroyed
+        // MonoBehaviour `this == null` is true (Unity fake-null) and touching gameObject /
+        // GetComponent throws a real NRE — so bail to null FIRST. Also collapse a fake-null
+        // _enemy to a real null so callers' `E != null` guards behave correctly.
+        private Enemy E
+        {
+            get
+            {
+                if (this == null) return null;                 // adapter itself destroyed
+                if (_enemy == null)
+                    _enemy = GetComponent<Enemy>() ?? GetComponentInParent<Enemy>();
+                return _enemy != null ? _enemy : null;         // fake-null -> real null
+            }
+        }
 
         // --- pending status timers (consumed when Enemy models them) ---
         private float _slowUntil;
@@ -59,8 +73,9 @@ namespace DeNelle.Village
         /// <summary>Enemies are always hostile to the village's defenders.</summary>
         public CombatFaction Faction => CombatFaction.Hostile;
 
-        /// <summary>World position of the enemy — used by range / nearest queries.</summary>
-        public Vector3 WorldPosition => transform.position;
+        /// <summary>World position of the enemy — used by range / nearest queries.
+        /// Guarded for a destroyed adapter so a late land-burst query can't NRE.</summary>
+        public Vector3 WorldPosition => this != null ? transform.position : Vector3.zero;
 
         /// <summary>Current enemy HP.</summary>
         public float Hp => E != null ? E.Hp : 0f;
