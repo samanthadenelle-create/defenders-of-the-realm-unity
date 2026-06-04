@@ -18,17 +18,17 @@ MonoBehaviour:
     type: 1
     minLevel: 1
   upgrades:
-  - visualPrefab: {fileID: 919132149155446097, guid: ec15484a9fbba5f45aa22eea58c1fc94, type: 3}
+  - visualPrefab: {fileID: 0}
     ability: 0
     range: 9
     damage: 6
     upgradeCost: 0
-  - visualPrefab: {fileID: 919132149155446097, guid: ec15484a9fbba5f45aa22eea58c1fc94, type: 3}
+  - visualPrefab: {fileID: 0}
     ability: 1
     range: 11
     damage: 10
     upgradeCost: 130
-  - visualPrefab: {fileID: 919132149155446097, guid: ec15484a9fbba5f45aa22eea58c1fc94, type: 3}
+  - visualPrefab: {fileID: 0}
     ability: 1
     range: 13
     damage: 14
@@ -36,4 +36,11 @@ MonoBehaviour:
   scaffoldingPrefab: {fileID: 0}
   buildTime: 5
   workerHammerVFX: {fileID: 0}
+  empowerment:
+    abilityName: Empowerment
+    abilityDescription: Unlocks a unique ability for this tower.
+    crystalCost: 8
+    ability: 0
+    empowerNovaPrefab: {fileID: 0}
+    empowerAuraPrefab: {fileID: 0}
   upgradeUIPrefab: {fileID: 0}
