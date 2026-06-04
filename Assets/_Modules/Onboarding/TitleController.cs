@@ -118,6 +118,14 @@ namespace DeNelle.Onboarding
         private float _arrivalStart;
         private const float MaxIntroSeconds = 8f;
 
+        // DEF-253 WebGL orphan re-assert: on WebGL the UIDocument can recreate its
+        // rootVisualElement AFTER BuildTitleScreen runs, detaching the code-built cards
+        // (console: TitleScreen rootChildCount=0, card-row worldBound=NaN → blank screen).
+        // If the built title's live root is empty, we rebuild into it. Bounded so a
+        // perpetually-recreating panel can't loop forever.
+        private int _reassertCount;
+        private const int MaxReasserts = 8;
+
         // DEF-204: VerifyFourCardsEven now SELF-HEALS (rebuilds a malformed row)
         // instead of only logging. This guard prevents an infinite rebuild loop —
         // we only attempt the auto-correct once per build.
@@ -140,9 +148,9 @@ namespace DeNelle.Onboarding
         private void Start()
         {
             _arrivalStart = Time.unscaledTime;   // DEF-253 watchdog clock
-            // Fire-and-forget the arrival flow. RunArrival is a UniTask (not
-            // async void); Forget() is the sanctioned way to launch a top-level
-            // UniTask from a Unity lifecycle hook.
+            // Owner 2026-06-04: cut ONLY the studio BUMPER (the Grok .m4v — can't decode
+            // on WebGL), KEEP the cold-open StoryIntro. RunArrival now skips the bumper
+            // stage and plays only the StoryIntro before the title.
             RunArrival().Forget();
         }
 
@@ -164,6 +172,24 @@ namespace DeNelle.Onboarding
                 BuildTitleScreen();
                 SetTitleVisible(true);
                 return;
+            }
+
+            // DEF-253 WebGL orphan re-assert: if the title built but its LIVE root is
+            // empty, WebGL recreated the rootVisualElement and detached the code-built
+            // cards (console: rootChildCount=0, card-row worldBound=NaN). Rebuild into
+            // the current root. Bounded (MaxReasserts) so a recreating panel can't loop.
+            if (_titleBuilt && _reassertCount < MaxReasserts)
+            {
+                var liveRoot = _titleDocument != null ? _titleDocument.rootVisualElement : null;
+                if (liveRoot != null && liveRoot.childCount == 0)
+                {
+                    _reassertCount++;
+                    Debug.LogWarning($"[TitleController] Title root orphaned (childCount=0) — rebuilding (#{_reassertCount}).");
+                    _titleBuilt = false;
+                    BuildTitleScreen();
+                    SetTitleVisible(true);
+                    return;
+                }
             }
 
             // DEF-263: hero pick now routes IMMEDIATELY from OnCardClicked (one tap
@@ -209,17 +235,10 @@ namespace DeNelle.Onboarding
         {
             Debug.Log("[TitleController] Arrival: start.");
 
-            // Stage 1 — studio bumper. Timeout-guarded: the bumper VIDEO (or any
-            // await inside) can fail to complete in a WebGL build and would hang the
-            // whole boot at a black screen (older builds only "limped past" it because
-            // exceptions were disabled and silently swallowed). Never hang — always
-            // fall through to the title.
-            if (_splash != null)
-                await SafeStage(_splash.Play(), "splash");
-            Debug.Log("[TitleController] Arrival: splash stage done.");
-            // DEF-253: if the watchdog already force-built the title while the splash
-            // stalled, BAIL — the storyIntro teardown below Clear()s the SHARED panel
-            // root and would wipe the cards the watchdog placed (observed rootChildCount=0).
+            // Stage 1 — studio bumper: CUT (owner 2026-06-04). It was a Grok-made .m4v
+            // that "VideoPlayer cannot play" on WebGL and stalled the boot ~6s before the
+            // SafeStage timeout caught it. We skip straight to the cold-open StoryIntro
+            // (kept). The _splash SerializeField stays assigned but is never played.
             if (_titleBuilt) return;
 
             // Stage 2 — cold open (story intro), same guard. CRITICAL: the cold
