@@ -48,6 +48,8 @@ namespace DeNelle.Core.State
         public ResourceBalance Resources = ResourceBalance.Starter;
         /// <summary>#8 — rare Voidshard currency. Fresh = 5. Clamped ≥0.</summary>
         public int Voidshards = 5;
+        /// <summary>Aether Crystals — tower-empowerment currency (v11). Fresh = 0. Clamped >= 0.</summary>
+        public int AetherCrystals = 0;
         /// <summary>#12 — gathered Stone. Fresh = 20. Clamped ≥0.</summary>
         public int Stone = 20;
         /// <summary>#13 — gathered Iron. Fresh = 5. Clamped ≥0.</summary>
@@ -134,6 +136,108 @@ namespace DeNelle.Core.State
         public List<ChatMessage> Inbox = new List<ChatMessage>();
         /// <summary>#38c — unix ms of the last inbox sync. Fresh = 0.</summary>
         public double LastInboxSyncAt;
+
+        // ── Offline harvest accrual (WO-115) ─────────────────────────────────
+        /// <summary>
+        /// Unix-ms of the last offline-harvest accrual claim (WO-115). Fresh = 0
+        /// (never claimed → seeded to now on first load, no retroactive haul). The
+        /// accrual clock: OfflineHarvestService integrates each active harvest source's
+        /// rate over (now − this) on resume/load, banks the capped haul, then advances
+        /// this to now. Mirrors <see cref="LastInboxSyncAt"/> exactly (a double unix-ms
+        /// field that round-trips through the save layer). Append-only at the END so
+        /// older saves stay loadable.
+        /// </summary>
+        public double LastHarvestClaimMs;
+
+        // ── Build/upgrade timers + ad-skip (WO-172) ──────────────────────────
+        /// <summary>
+        /// In-flight construction/upgrade jobs (WO-172) — the CoC time-sink. Each
+        /// counts down in REAL wall-clock time (offline too), keyed by structure id;
+        /// the structure completes at job.FinishMs. Managed by BuildTimerService.
+        /// Mirrors <see cref="PendingBuilds"/>'s "small serializable struct in a list"
+        /// persistence shape. Append-only field at the END so older saves stay loadable.
+        /// </summary>
+        public List<BuildJobData> BuildJobs = new List<BuildJobData>();
+
+        /// <summary>
+        /// Rewarded-ad build-skips used in the current local day (WO-172 daily cap).
+        /// Reset to 0 when <see cref="AdSkipDayKey"/> rolls to a new day. Clamped ≥0.
+        /// </summary>
+        public int AdSkipsUsedToday;
+
+        /// <summary>
+        /// Local-day key ("yyyy-MM-dd", device-local) the <see cref="AdSkipsUsedToday"/>
+        /// counter belongs to. When today's key differs, the counter resets (daily cap).
+        /// </summary>
+        public string AdSkipDayKey;
+
+        // ── World / zones (WO-164) ────────────────────────────────────────────
+        /// <summary>Per-region zone records — discovery/clear flags, neighbor graph,
+        /// and City/Horde destination tag (WO-164). Seeded from
+        /// <see cref="DeNelle.Core.World.ZoneManager.DefaultZoneGraph"/> on a fresh save.
+        /// Append-only field — added at the END so older saves stay loadable. NOT yet
+        /// wired into SaveSchema/SaveMigrator; the save owner (Agent 3) must add its
+        /// (de)serialization + bump the schema version for it to round-trip to disk.</summary>
+        public List<DeNelle.Core.World.ZoneState> Zones = new List<DeNelle.Core.World.ZoneState>();
+
+        // ── World content (WO-159 settlements / WO-160 tribes) ───────────────
+        /// <summary>Per-tribe roaming-raider records (WO-160) — members remaining, cleared
+        /// flag, clear-count for reduced respawn, last-seen. Append-only field at the END so
+        /// older saves stay loadable. Like <see cref="Zones"/>, NOT yet wired into
+        /// SaveSchema/SaveMigrator — the save owner adds its (de)serialisation + bumps the
+        /// schema version for it to round-trip to disk. Lives correctly in-memory meanwhile.</summary>
+        public List<DeNelle.Core.World.TribeState> Tribes = new List<DeNelle.Core.World.TribeState>();
+
+        /// <summary>Per-site node-settlement records (WO-159) — claim phase, defence HP, and
+        /// the razed-site game-day lockout. Append-only field at the END. Same save-wiring note
+        /// as <see cref="Tribes"/>/<see cref="Zones"/>: in-memory now, schema round-trip is the
+        /// save owner's follow-up.</summary>
+        public List<DeNelle.Core.World.SettlementState> Settlements = new List<DeNelle.Core.World.SettlementState>();
+
+        /// <summary>Per-ward relight records (WO-112) — the earned exploration reach. Each
+        /// carries its ward id/region/granted-reach and whether the Keeper has relit it; the
+        /// set of lit wards drives per-march reach (WardReach) and the forgetting effect.
+        /// Append-only field at the END so older saves stay loadable. Same save-wiring note as
+        /// <see cref="Tribes"/>/<see cref="Settlements"/>/<see cref="Zones"/>: in-memory now,
+        /// the schema round-trip (SaveSchema/SaveMigrator + version bump) is the save owner's
+        /// follow-up.</summary>
+        public List<DeNelle.Core.World.WardStoneState> Wards = new List<DeNelle.Core.World.WardStoneState>();
+
+        // ── Build Mode — the player's base layout (WO-108 P0 data spine) ──────
+        /// <summary>
+        /// The player's placed-structure layout — the CREATE-verb spine (WO-108).
+        /// One <see cref="PlacedStructureData"/> per player-placed structure (grid
+        /// cell + discrete yaw + level). Empty on a fresh save → the runtime
+        /// <c>BaseLayoutLoader</c> falls through to the default VillageSceneBuilder
+        /// village (the seed), and the first build-mode entry seeds this from that
+        /// default so the player edits their familiar town, not a blank plot.
+        /// Round-trips through SaveSchema (v14) — additive at the END so older
+        /// saves load empty. This is exactly the payload that becomes
+        /// server-authoritative when async raids land (principle #2).
+        /// </summary>
+        public List<PlacedStructureData> BaseLayout = new List<PlacedStructureData>();
+
+        // ── Pets — onboarding-named starter pet (WO-277) ─────────────────────
+        /// <summary>
+        /// The player-chosen name for their starter pet, set in the tutorial's pet
+        /// introduction (WO-277). Empty/null until the player names it. Persisted via
+        /// <see cref="GameStateService.Save"/> directly (not yet in SaveSchema's
+        /// round-trip — like Zones/Tribes it lives in-memory + the PlayerPrefs SO
+        /// snapshot until the save owner threads it through SaveSchema). Append-only
+        /// field at the END of the class so older saves stay loadable.
+        /// </summary>
+        public string PetName;
+
+        // ── Magic — building-upgrade TECH axis (DEF-121 / WO-230) ─────────────
+        /// <summary>
+        /// Magic — the tech-tree gating currency (DEF-121). NOT a harvestable: there
+        /// is no Magic MineNode / pickup. It is earned through progression (boss/dungeon
+        /// tech rewards) and spent on Magic-gated building-upgrade tiers that unlock
+        /// tech-tree nodes (see <c>ResourceBuildingProgression</c>'s Magic tier). Fresh = 0.
+        /// Clamped &gt;= 0. Round-trips through SaveSchema (v15) — append-only field at the
+        /// END so older saves load with Magic = 0.
+        /// </summary>
+        public int Magic = 0;
 
         /// <summary>A fresh List&lt;int&gt; of <paramref name="count"/> zeros.</summary>
         public static List<int> NewZeroed(int count)

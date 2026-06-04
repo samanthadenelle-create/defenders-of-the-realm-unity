@@ -127,24 +127,30 @@ namespace DeNelle.Cosmetics
         private static void EnsureLoaded()
         {
             if (_data != null) return;
-            var full = Path.Combine(Application.streamingAssetsPath, StreamingRelativePath);
+            // DEF-212: the old path used File.ReadAllText(StreamingAssets), which
+            // THROWS in WebGL (no filesystem) → the shop loaded with ZERO items and
+            // showed "empty/broken". Route through DeNelle.Core.CanonicalJson
+            // (Resources.Load<TextAsset> first — WebGL-safe — then StreamingAssets on
+            // desktop). Dual copy lives at Assets/Resources/Data/Canonical/cosmetics.json;
+            // keep it in sync with the StreamingAssets source.
             try
             {
-                if (File.Exists(full))
+                var json = DeNelle.Core.CanonicalJson.Read(StreamingRelativePath);
+                if (!string.IsNullOrEmpty(json))
                 {
-                    var parsed = JsonConvert.DeserializeObject<CosmeticCatalogData>(File.ReadAllText(full));
+                    var parsed = JsonConvert.DeserializeObject<CosmeticCatalogData>(json);
                     if (parsed != null && parsed.Items != null && parsed.Items.Count > 0)
                     { _data = parsed; return; }
                     Debug.LogError($"[CosmeticCatalog] {StreamingRelativePath} parsed empty.");
                 }
                 else
                 {
-                    Debug.LogError($"[CosmeticCatalog] cosmetics.json not found at {full}.");
+                    Debug.LogError($"[CosmeticCatalog] {StreamingRelativePath} not found (Resources or StreamingAssets).");
                 }
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[CosmeticCatalog] Failed to read {full}: {ex.Message}");
+                Debug.LogError($"[CosmeticCatalog] Failed to read {StreamingRelativePath}: {ex.Message}");
             }
             _data = new CosmeticCatalogData { Items = new List<CosmeticDef>() };
         }

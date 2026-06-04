@@ -38,6 +38,7 @@ using System;
 using System.Collections.Generic;
 using Cysharp.Threading.Tasks;
 using DeNelle.Core;
+using DeNelle.Core.Audio;
 using DeNelle.Core.State;
 using UnityEngine;
 using UnityEngine.Audio;
@@ -52,7 +53,7 @@ namespace DeNelle.Audio
     /// automatically by <see cref="AudioBootstrap"/> — no scene wiring required.
     /// </summary>
     [DisallowMultipleComponent]
-    public sealed class AudioService : MonoBehaviour
+    public sealed class AudioService : MonoBehaviour, IAudioService
     {
         // ── Singleton ────────────────────────────────────────────────────────
         private static AudioService _instance;
@@ -102,6 +103,29 @@ namespace DeNelle.Audio
 
         [Tooltip("defeat.mp3 — battle-loss sting. Default mix volume 0.5, no loop.")]
         [SerializeField] private AudioClip _defeatClip;
+
+        // ── Rotating clip pools (WO-171) ─────────────────────────────────────
+        // Some contexts have MORE THAN ONE clip and rotate per request so the
+        // music varies (battle: 3 owner tracks; overworld: 2 tracks). The pools
+        // are populated by AudioBootstrap (Resources) or SetMusicClip/AddMusicClip.
+        // _battleClip / (the registry's Overworld asset) remain the FIRST entry so
+        // the single-clip fallback path still works when a pool is empty.
+
+        [Tooltip("Battle music pool (battle / battle2 / battle3). PlayMusic(Battle) " +
+                 "rotates through these so fights are not monotonous. Empty -> _battleClip.")]
+        [SerializeField] private List<AudioClip> _battlePool = new List<AudioClip>();
+
+        [Tooltip("Overworld (open-world) music pool (world / mainworld1). PlayMusic(Overworld) " +
+                 "rotates through these. Empty -> the single Overworld clip.")]
+        [SerializeField] private List<AudioClip> _overworldPool = new List<AudioClip>();
+
+        // The single Overworld clip (first/default), assignable like the others.
+        private AudioClip _overworldClip;
+
+        // Round-robin cursors for the pools — advanced each time the pooled track
+        // is (re)started, so successive battles / world visits get different music.
+        private int _battleCursor;
+        private int _overworldCursor;
 
         // ── Runtime ──────────────────────────────────────────────────────────
 
@@ -186,6 +210,7 @@ namespace DeNelle.Audio
 
             BuildAudioSources();
             ResolveMixerGroups();
+            CoreServices.RegisterAudio(this);
         }
 
         private void OnEnable()
@@ -200,6 +225,7 @@ namespace DeNelle.Audio
 
         private void OnDestroy()
         {
+            CoreServices.UnregisterAudio(this);
             if (_instance == this) _instance = null;
         }
 
@@ -220,6 +246,7 @@ namespace DeNelle.Audio
             // Settings menu can override these live; this just seeds the mixer
             // from GameState so launch audio matches the saved preference.
             ApplyPersistedSettings();
+            ApplyMobilePlatformRules();
 
             // Pick up whatever scene loaded before the service existed (the
             // bootstrap may have created us after the first scene's sceneLoaded
@@ -351,6 +378,23 @@ namespace DeNelle.Audio
             CrossfadeTo(track, def, clip).Forget();
         }
 
+        /// <summary>
+        /// WebGL mobile-audio gesture unlock. iOS Safari (and mobile Chrome) start the
+        /// AudioContext SUSPENDED until a user gesture, so music started at scene-load
+        /// is silent (owner 2026-06-02: "dont hear any audio on mobile"). Called once by
+        /// <see cref="WebGLAudioUnlock"/> on the first tap/click/key — un-pauses the
+        /// listener and re-asserts the current track so it actually plays now the context
+        /// is live. No-op when nothing is queued.
+        /// </summary>
+        public void ResumeAfterUnlock()
+        {
+            AudioListener.pause = false;
+            var t = CurrentTrack;
+            if (t == MusicTrack.None) return;
+            CurrentTrack = MusicTrack.None;   // clear the "already playing" short-circuit
+            PlayMusic(t);                     // restart so it sounds now the context is unlocked
+        }
+
         /// <summary>Fades the current music out to silence over its fade-out duration.</summary>
         public void StopMusic()
         {
@@ -379,7 +423,25 @@ namespace DeNelle.Audio
             fadeIn.clip = clip;
             fadeIn.loop = def.Loop;
             fadeIn.volume = 0f;
+
+            // Guard against clips that exist as an AudioClip object but whose
+            // underlying audio file is absent from the build (FMOD "File not found"
+            // crash that fires on every wave clear when "victory" is missing).
+            if (clip.loadState == AudioDataLoadState.Failed)
+            {
+                Debug.LogWarning($"[AudioService] Skipping Play for '{track}' — clip '{clip.name}' failed to load (file missing from build?).");
+                _fading = false;
+                return;
+            }
+
             fadeIn.Play();
+
+            // Diagnostic (DEF audio #8 "no sound"): confirms music actually starts +
+            // surfaces the mute/route state, so a smoke run / playtest can tell
+            // "track never played" from "playing but inaudible (device/route)".
+            Debug.Log($"[AudioService] ▶ music '{track}' clip='{clip.name}' " +
+                      $"muted={_muted} target={def.DefaultVolume:F2} " +
+                      $"mixer={(_mixer != null)} group={(fadeIn.outputAudioMixerGroup != null)}");
 
             // The fade target is always the track's owner-locked default volume.
             // Mute is a MIXER concern (the Master param) or, in the no-mixer
@@ -436,7 +498,12 @@ namespace DeNelle.Audio
             _fading = false;
         }
 
-        /// <summary>The inspector-assigned clip for a track, or null when not yet imported.</summary>
+        /// <summary>
+        /// The clip for a track, or null when not yet imported. Pooled tracks
+        /// (Battle / Overworld) pick the NEXT clip from their rotation pool so the
+        /// music varies per request (WO-171); they fall back to the single clip
+        /// when the pool is empty.
+        /// </summary>
         private AudioClip ClipFor(MusicTrack track)
         {
             switch (track)
@@ -444,11 +511,31 @@ namespace DeNelle.Audio
                 case MusicTrack.Title:   return _titleClip;
                 case MusicTrack.Village: return _villageClip;
                 case MusicTrack.Dungeon: return _dungeonClip;
-                case MusicTrack.Battle:  return _battleClip;
+                case MusicTrack.Battle:  return NextFromPool(_battlePool, ref _battleCursor) ?? _battleClip;
                 case MusicTrack.Victory: return _victoryClip;
                 case MusicTrack.Defeat:  return _defeatClip;
+                case MusicTrack.Overworld: return NextFromPool(_overworldPool, ref _overworldCursor) ?? _overworldClip;
                 default:                 return null;
             }
+        }
+
+        /// <summary>
+        /// Returns the next non-null clip from a rotation pool and advances the
+        /// cursor, or null when the pool is empty / all-null (caller falls back to
+        /// the single clip). One-entry pools just return that entry every time.
+        /// </summary>
+        private static AudioClip NextFromPool(List<AudioClip> pool, ref int cursor)
+        {
+            if (pool == null || pool.Count == 0) return null;
+            // Scan at most pool.Count entries so an all-null pool returns null
+            // rather than looping forever.
+            for (int i = 0; i < pool.Count; i++)
+            {
+                AudioClip clip = pool[cursor % pool.Count];
+                cursor = (cursor + 1) % pool.Count;
+                if (clip != null) return clip;
+            }
+            return null;
         }
 
         /// <summary>
@@ -464,9 +551,13 @@ namespace DeNelle.Audio
                 case MusicTrack.Title:   _titleClip = clip;   break;
                 case MusicTrack.Village: _villageClip = clip; break;
                 case MusicTrack.Dungeon: _dungeonClip = clip; break;
-                case MusicTrack.Battle:  _battleClip = clip;  break;
+                // Battle / Overworld are pooled: SetMusicClip assigns the FIRST /
+                // default entry (also the single-clip fallback) and seeds the pool
+                // with it; AddMusicClip appends the 2nd/3rd rotation entries.
+                case MusicTrack.Battle:  _battleClip = clip; SeedPool(_battlePool, clip); break;
                 case MusicTrack.Victory: _victoryClip = clip; break;
                 case MusicTrack.Defeat:  _defeatClip = clip;  break;
+                case MusicTrack.Overworld: _overworldClip = clip; SeedPool(_overworldPool, clip); break;
             }
 
             // If this track was requested but silent for want of a clip, start it.
@@ -475,6 +566,40 @@ namespace DeNelle.Audio
                 CurrentTrack = MusicTrack.None; // clear the short-circuit guard.
                 PlayMusic(track);
             }
+        }
+
+        /// <summary>
+        /// Appends a clip to a pooled track's rotation (WO-171) — the seam an
+        /// import pass uses to add the 2nd/3rd battle/overworld tracks. Only
+        /// <see cref="MusicTrack.Battle"/> and <see cref="MusicTrack.Overworld"/>
+        /// are pooled; other tracks fall through to <see cref="SetMusicClip"/>.
+        /// Null clips and duplicates are ignored.
+        /// </summary>
+        public void AddMusicClip(MusicTrack track, AudioClip clip)
+        {
+            if (clip == null) return;
+            switch (track)
+            {
+                case MusicTrack.Battle:
+                    if (_battleClip == null) _battleClip = clip;
+                    if (!_battlePool.Contains(clip)) _battlePool.Add(clip);
+                    break;
+                case MusicTrack.Overworld:
+                    if (_overworldClip == null) _overworldClip = clip;
+                    if (!_overworldPool.Contains(clip)) _overworldPool.Add(clip);
+                    break;
+                default:
+                    SetMusicClip(track, clip);
+                    break;
+            }
+        }
+
+        // Seeds a rotation pool with its first/default clip (idempotent — a clip
+        // already present is not duplicated; a null clip is ignored).
+        private static void SeedPool(List<AudioClip> pool, AudioClip clip)
+        {
+            if (pool == null || clip == null) return;
+            if (!pool.Contains(clip)) pool.Add(clip);
         }
 
         private bool IsAnyMusicPlaying()
@@ -509,6 +634,22 @@ namespace DeNelle.Audio
             PlayOneShotOn(_voiceGroup, clip, volume);
         }
 
+        /// <summary>
+        /// Fires a positional one-shot SFX by <see cref="SfxId"/>. The clip is resolved
+        /// from the <see cref="SfxClipLibrary"/> (or is a no-op when unassigned).
+        /// Passing <see cref="SfxId.None"/> is a safe no-op. WO-62.
+        /// </summary>
+        /// <param name="id">The SFX event identifier.</param>
+        /// <param name="worldPosition">World-space position — reserved for future 3-D source routing.</param>
+        /// <param name="volume">Pre-mixer volume, 0..1.</param>
+        public void PlaySfxAtPosition(SfxId id, Vector3 worldPosition, float volume = 1f)
+        {
+            if (id == SfxId.None) return;
+            AudioClip clip = _sfxLibrary?.GetClip(id);
+            // Guarded: a null clip is a silent no-op — missing SFX never throws.
+            PlayOneShotOn(_sfxGroup, clip, volume);
+        }
+
         private void PlayOneShotOn(AudioMixerGroup group, AudioClip clip, float volume)
         {
             if (clip == null) return; // guarded — a missing SFX is silent, not an error.
@@ -539,20 +680,21 @@ namespace DeNelle.Audio
             float v = Mathf.Clamp(linear01, 0f, max);
 
             if (_mixer != null)
-            {
                 _mixer.SetFloat(ParamNameFor(group), LinearToDecibels(v));
-                return;
-            }
 
-            // No-mixer fallback — only Master / Music can be honoured per-source.
-            if (group == MixerGroup.Master || group == MixerGroup.Music)
+            // ALSO scale the music source directly — not "mixer XOR source". The
+            // [AudioService] diagnostic shows the music sources can end up NOT
+            // routed through the mixer's Music group (group=False), so the mixer
+            // param has no effect on what's actually heard and the ♪ toggle /
+            // volume slider would do nothing. Driving the source makes the control
+            // affect playback either way. Guarded by !_fading so it never fights an
+            // in-flight crossfade; respects the current mute state.
+            if ((group == MixerGroup.Master || group == MixerGroup.Music)
+                && _activeSource != null && !_fading)
             {
-                if (_activeSource != null && !_fading && !_muted)
-                {
-                    MusicTrackDef def = MusicTrackRegistry.Get(CurrentTrack);
-                    float baseVol = def?.DefaultVolume ?? 1f;
-                    _activeSource.volume = Mathf.Clamp01(baseVol * v);
-                }
+                MusicTrackDef def = MusicTrackRegistry.Get(CurrentTrack);
+                float baseVol = def?.DefaultVolume ?? 1f;
+                _activeSource.volume = _muted ? 0f : Mathf.Clamp01(baseVol * v);
             }
         }
 
@@ -581,9 +723,12 @@ namespace DeNelle.Audio
             {
                 _mixer.SetFloat(MixerParams.Master, muted ? -80f : 0f);
             }
-            else
             {
-                // No-mixer fallback — snap every source's mute flag.
+                // ALWAYS snap every source's mute flag too (not just the no-mixer
+                // path). When routing to the mixer group failed (diagnostic
+                // group=False), the Master param can't silence the sources — this
+                // is what actually mutes/unmutes audible playback, so the ♪ toggle
+                // works regardless of mixer routing.
                 if (_musicA != null) _musicA.mute = muted;
                 if (_musicB != null) _musicB.mute = muted;
                 foreach (var v in _sfxVoices)
@@ -665,6 +810,18 @@ namespace DeNelle.Audio
         {
             MusicTrack track = TrackForScene(sceneName);
             if (track == MusicTrack.None) return; // unknown scene — leave music alone.
+
+            // The Village scene is the AMBIENT/EXPLORE context: route it through
+            // PlayAmbientContext so the player's chosen jukebox track (WO-162),
+            // if any, plays instead of the hard-coded village track. Combat /
+            // victory / defeat scenes/states still go straight to their track and
+            // OVERRIDE — player choice never bleeds into a dramatic cue.
+            if (track == MusicTrack.Village)
+            {
+                PlayAmbientContext(AmbientContext.Village);
+                return;
+            }
+
             PlayMusic(track);
         }
 
@@ -690,6 +847,210 @@ namespace DeNelle.Audio
                 return MusicTrack.Title;
 
             return MusicTrack.None; // unrecognised — caller leaves music as-is.
+        }
+
+        // =====================================================================
+        //  Ambient context + player music selection (WO-162 / WO-171)
+        // =====================================================================
+        //
+        // The "ambient/explore" context is the music that plays while the player
+        // is just existing in the world (Village or Overworld) — as opposed to a
+        // state cue (Battle / Victory / Defeat) which OVERRIDES it. WO-162 lets
+        // the player pick which ambient track they hear; WO-171 adds the Overworld
+        // context so crossing into the open world swaps Village -> Overworld music
+        // and combat still overrides, returning to the chosen ambient afterwards.
+        //
+        //   • The current ambient context is remembered (_ambientContext) so when
+        //     combat ends a caller can ReturnToAmbient() and get the RIGHT track
+        //     (village vs overworld) — and the player's CHOICE within it.
+        //   • The choice is persisted in PlayerPrefs (mirrors how audio volume
+        //     persists) keyed per context, so a "village jukebox" pick and an
+        //     "overworld jukebox" pick can differ.
+
+        /// <summary>The non-combat ambient contexts the player can be in (WO-171).</summary>
+        public enum AmbientContext
+        {
+            /// <summary>In/around the village (town, home). Default track: Village.</summary>
+            Village,
+            /// <summary>In the open world (OuterWorld regions). Default track: Overworld.</summary>
+            Overworld,
+        }
+
+        // The ambient context currently in effect — what ReturnToAmbient() restores
+        // once a Battle/Victory/Defeat cue finishes.
+        private AmbientContext _ambientContext = AmbientContext.Village;
+
+        /// <summary>The ambient context currently in effect (village vs overworld).</summary>
+        public AmbientContext CurrentAmbientContext => _ambientContext;
+
+        private const string AmbientChoicePrefKey = "dotr-ambient-music-choice-";
+
+        /// <summary>The default music track for an ambient context.</summary>
+        public static MusicTrack DefaultTrackFor(AmbientContext context)
+        {
+            return context == AmbientContext.Overworld ? MusicTrack.Overworld : MusicTrack.Village;
+        }
+
+        /// <summary>
+        /// Enters an ambient context and plays its music — the player's chosen
+        /// track for that context (WO-162) if one is set and available, otherwise
+        /// the context default (Village / Overworld). This is the ONE entry point
+        /// for "play the explore music": the Village scene loader, an OuterWorld
+        /// region trigger, and combat-end all route through here so the right track
+        /// (and the player's pick) always wins. Combat/Victory/Defeat call
+        /// PlayMusic directly and OVERRIDE — they never come through here.
+        /// </summary>
+        public void PlayAmbientContext(AmbientContext context)
+        {
+            _ambientContext = context;
+            MusicTrack chosen = GetAmbientChoice(context);
+            MusicTrack track = (chosen != MusicTrack.None && MusicTrackRegistry.Has(chosen))
+                ? chosen
+                : DefaultTrackFor(context);
+            PlayMusic(track);
+        }
+
+        /// <summary>
+        /// Re-enters the current ambient context's music — the call combat code
+        /// makes when a fight ends (instead of hard-coding "PlayMusic(Village)").
+        /// Restores the player's chosen ambient track for whatever context they
+        /// were in (village or overworld).
+        /// </summary>
+        public void ReturnToAmbient() => PlayAmbientContext(_ambientContext);
+
+        /// <summary>
+        /// Sets (and persists) the player's chosen ambient track for a context
+        /// (WO-162 jukebox). <see cref="MusicTrack.None"/> clears the choice (the
+        /// context falls back to its default). The choice survives sessions via
+        /// PlayerPrefs. If the player is currently IN that ambient context, the
+        /// new pick starts immediately.
+        /// </summary>
+        public void SetAmbientChoice(AmbientContext context, MusicTrack track)
+        {
+            PlayerPrefs.SetInt(AmbientChoicePrefKey + (int)context, (int)track);
+            PlayerPrefs.Save();
+
+            // Apply live if we're in this context and not mid-combat-cue.
+            if (_ambientContext == context && !IsStateCue(CurrentTrack))
+                PlayAmbientContext(context);
+        }
+
+        /// <summary>
+        /// The player's persisted ambient-track choice for a context, or
+        /// <see cref="MusicTrack.None"/> when unset / invalid (caller uses the
+        /// context default).
+        /// </summary>
+        public MusicTrack GetAmbientChoice(AmbientContext context)
+        {
+            int raw = PlayerPrefs.GetInt(AmbientChoicePrefKey + (int)context, (int)MusicTrack.None);
+            if (!Enum.IsDefined(typeof(MusicTrack), raw)) return MusicTrack.None;
+            return (MusicTrack)raw;
+        }
+
+        /// <summary>Clears the player's ambient choice for a context (back to default).</summary>
+        public void ClearAmbientChoice(AmbientContext context) => SetAmbientChoice(context, MusicTrack.None);
+
+        /// <summary>
+        /// True for the state cues that OVERRIDE ambient music and must never be
+        /// supplanted by a jukebox pick (Battle / Victory / Defeat). Used so
+        /// changing the ambient choice mid-fight doesn't stomp the combat track.
+        /// </summary>
+        private static bool IsStateCue(MusicTrack track)
+        {
+            return track == MusicTrack.Battle
+                || track == MusicTrack.Victory
+                || track == MusicTrack.Defeat;
+        }
+
+        /// <summary>
+        /// The curated set of tracks a player may pick for an ambient context
+        /// (WO-162). Authorable: add a clip + a MusicTrack + an entry here and it
+        /// appears in the jukebox — no other code changes. Combat-state tracks are
+        /// intentionally excluded (you can't pick "Battle" as your village ambient).
+        /// Overworld is offered in both contexts as a calm exploration option.
+        /// </summary>
+        public static IReadOnlyList<MusicChoice> AmbientChoicesFor(AmbientContext context)
+        {
+            // Village ambient: Village (the town theme) + the open-world themes as
+            // mellow alternatives + the title theme. Overworld ambient: the world
+            // themes + the village theme. Curated, expandable, licensing-safe.
+            if (context == AmbientContext.Overworld)
+            {
+                return new List<MusicChoice>
+                {
+                    new MusicChoice(MusicTrack.Overworld, "Wandering the Realm"),
+                    new MusicChoice(MusicTrack.Village,   "Elarion (Town Theme)"),
+                    new MusicChoice(MusicTrack.Title,     "Echoes of Elarion (Main Theme)"),
+                };
+            }
+
+            return new List<MusicChoice>
+            {
+                new MusicChoice(MusicTrack.Village,   "Elarion (Town Theme)"),
+                new MusicChoice(MusicTrack.Overworld, "Wandering the Realm"),
+                new MusicChoice(MusicTrack.Title,     "Echoes of Elarion (Main Theme)"),
+            };
+        }
+
+        // =====================================================================
+        //  SFX clip library (WO-62)
+        // =====================================================================
+
+        [Header("SFX Clip Library (WO-62)")]
+        [Tooltip("Assign a SfxClipLibrary ScriptableObject here to enable PlaySfxAtPosition. " +
+                 "When null, SFX triggered via SfxId are silent no-ops (no errors thrown).")]
+        [SerializeField] private SfxClipLibrary _sfxLibrary;
+
+        // =====================================================================
+        //  Mobile platform rules (WO-62)
+        // =====================================================================
+
+        /// <summary>
+        /// Applies mobile-specific audio rules on Awake (WO-62):
+        ///   • Reduces master SFX level by 4 dB to avoid harsh clipping on phone speakers.
+        ///   • Disables the reverb send bus (too expensive on mobile GPUs).
+        /// The AudioSource pool is already round-robin (8 voices) — no per-frame
+        /// AddComponent. On non-mobile platforms this method is a no-op.
+        /// </summary>
+        private void ApplyMobilePlatformRules()
+        {
+            if (!Application.isMobilePlatform) return;
+
+            if (_mixer != null)
+            {
+                // Reduce SFX bus slightly — phone speakers clip at full volume.
+                _mixer.SetFloat(MixerParams.Sfx, LinearToDecibels(1f) - 4f);
+
+                // Kill the reverb send — convolution reverb is too expensive on mobile.
+                // The exposed param name matches the mixer's "ReverbSend" parameter.
+                _mixer.SetFloat("ReverbSend", -80f);
+            }
+
+            // Mute flag is already respected by the voice pool; nothing extra needed.
+        }
+
+        // =====================================================================
+        //  IAudioService explicit implementation (WO-41)
+        // =====================================================================
+
+        /// <summary>
+        /// IAudioService.PlayMusic — maps the Core-side MusicTrack enum to the
+        /// Audio-side MusicTrack enum and delegates to the full PlayMusic method.
+        /// </summary>
+        void IAudioService.PlayMusic(DeNelle.Core.Audio.MusicTrack track)
+        {
+            switch (track)
+            {
+                case DeNelle.Core.Audio.MusicTrack.Village: PlayMusic(MusicTrack.Village); break;
+                case DeNelle.Core.Audio.MusicTrack.Battle:  PlayMusic(MusicTrack.Battle);  break;
+                case DeNelle.Core.Audio.MusicTrack.Victory: PlayMusic(MusicTrack.Victory); break;
+                case DeNelle.Core.Audio.MusicTrack.Dungeon: PlayMusic(MusicTrack.Dungeon); break;
+                case DeNelle.Core.Audio.MusicTrack.Overworld: PlayAmbientContext(AmbientContext.Overworld); break;
+                case DeNelle.Core.Audio.MusicTrack.Defeat:  PlayMusic(MusicTrack.Defeat);  break;
+                // DEF-228: the cold-open intro primes the title theme (title.mp3) so it
+                // is the opening music and the WebGL audio-unlock resumes THIS, not Overworld.
+                case DeNelle.Core.Audio.MusicTrack.Title:   PlayMusic(MusicTrack.Title);   break;
+            }
         }
     }
 }

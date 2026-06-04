@@ -19,9 +19,9 @@
 
 using System;
 using System.Collections.Generic;
-using System.IO;
 using Newtonsoft.Json;
 using UnityEngine;
+using DeNelle.Core;
 
 namespace DeNelle.Village.Crafting
 {
@@ -112,17 +112,22 @@ namespace DeNelle.Village.Crafting
         private static void EnsureLoaded()
         {
             if (_data != null) return;
-            var full = Path.Combine(Application.streamingAssetsPath, StreamingRelativePath);
+
+            // WebGL-safe read: Resources.Load first (works in browser builds),
+            // StreamingAssets File.ReadAllText fallback for desktop/editor.
+            // File.ReadAllText THROWS in WebGL, which is why recipes came up
+            // empty ("No recipes loaded") in the browser build.
             try
             {
-                if (File.Exists(full))
+                var json = CanonicalJson.Read(StreamingRelativePath);
+                if (!string.IsNullOrEmpty(json))
                 {
-                    var parsed = JsonConvert.DeserializeObject<CraftingRecipeData>(File.ReadAllText(full));
+                    var parsed = JsonConvert.DeserializeObject<CraftingRecipeData>(json);
                     if (parsed != null && parsed.Recipes != null && parsed.Recipes.Count > 0)
                     { _data = parsed; return; }
                     Debug.LogError($"[CraftingRecipeCatalog] {StreamingRelativePath} parsed empty.");
                 }
-                else Debug.LogError($"[CraftingRecipeCatalog] file not found at {full}.");
+                else Debug.LogError($"[CraftingRecipeCatalog] no Resources copy or StreamingAssets file for {StreamingRelativePath}.");
             }
             catch (Exception ex)
             {

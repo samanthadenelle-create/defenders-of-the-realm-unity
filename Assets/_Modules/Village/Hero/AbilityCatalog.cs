@@ -236,31 +236,28 @@ namespace DeNelle.Village
 
         private static AbilityCatalogData LoadCatalog()
         {
-            // Canonical JSON lives under StreamingAssets so it is readable in a
-            // player build (spec Part 3 forbids Resources.Load). On the Editor,
-            // Windows and macOS streamingAssetsPath is a real directory, so a
-            // synchronous read is valid. ANDROID NOTE: on Android StreamingAssets
-            // is packed inside the APK and a UnityWebRequest read is required —
-            // to be added with the Week-7/8 Seeker build (same caveat as
-            // PackCatalog.cs / Theme.cs).
-            var full = Path.Combine(Application.streamingAssetsPath, StreamingRelativePath);
+            // WebGL-safe load via CanonicalJson: Resources.Load first (works in a browser,
+            // where File.ReadAllText(streamingAssetsPath) THROWS), then a StreamingAssets
+            // fallback on desktop/editor. abilities.json is mirrored into
+            // Assets/Resources/Data/Canonical/ so the Resources path resolves.
             try
             {
-                if (File.Exists(full))
+                string json = DeNelle.Core.CanonicalJson.Read(StreamingRelativePath);
+                if (!string.IsNullOrEmpty(json))
                 {
-                    var parsed = JsonConvert.DeserializeObject<AbilityCatalogData>(File.ReadAllText(full));
+                    var parsed = JsonConvert.DeserializeObject<AbilityCatalogData>(json);
                     if (parsed != null && parsed.Classes != null && parsed.Classes.Count > 0)
                         return parsed;
-                    Debug.LogError($"[AbilityCatalog] abilities.json at {full} parsed empty.");
+                    Debug.LogError("[AbilityCatalog] abilities.json parsed empty.");
                 }
                 else
                 {
-                    Debug.LogError($"[AbilityCatalog] abilities.json not found at {full}.");
+                    Debug.LogError("[AbilityCatalog] abilities.json not found (Resources or StreamingAssets).");
                 }
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[AbilityCatalog] Failed to read {full}: {ex.Message}");
+                Debug.LogError($"[AbilityCatalog] Failed to read abilities.json: {ex.Message}");
             }
 
             Debug.LogError("[AbilityCatalog] abilities.json could not be loaded — using an empty catalog.");

@@ -107,7 +107,12 @@ namespace DeNelle.Village.Crafting
                 return;
             }
 
-            if (_panel == null || _panel.IsOpen) return;
+            if (_panel == null || _panel.IsOpen)
+            {
+                // Panel open (or none yet) — the panel owns its own close UI.
+                MobileInteractButton.Release(this);
+                return;
+            }
 
             // Resolve refs lazily — they may not exist at scene-load time.
             if (_hero == null)
@@ -130,13 +135,26 @@ namespace DeNelle.Village.Crafting
                 if (_workshop == null) return;
             }
 
-            if (!Input.GetKeyDown(KeyCode.F)) return;
-
             float distSqr = (_hero.position - _workshop.transform.position).sqrMagnitude;
-            if (distSqr <= WorkshopActivateRadius * WorkshopActivateRadius)
-            {
+            bool inRange = distSqr <= WorkshopActivateRadius * WorkshopActivateRadius;
+
+            // DEF-203: register the shared on-screen Interact button while in range so
+            // touch/mobile (no keyboard) can open crafting too. Desktop F + K unchanged.
+            if (inRange)
+                // DEF-217: priority 10 so on the Workshop this richer "Open Crafting" action
+                // wins the single shared button over BuildingInteractable's plain "Interact"
+                // (priority 0), instead of the two flickering frame-to-frame.
+                MobileInteractButton.Request(this, "Open: Workshop Crafting", _panel.Open, 10);
+            else
+                MobileInteractButton.Release(this);
+
+            if (inRange && Input.GetKeyDown(KeyCode.F))
                 _panel.Open();
-            }
+        }
+
+        private void OnDisable()
+        {
+            MobileInteractButton.Release(this);
         }
     }
 }

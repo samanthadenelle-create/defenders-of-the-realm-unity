@@ -27,6 +27,8 @@
 
 using System.Collections.Generic;
 using DeNelle.Core.Combat;
+using DeNelle.Core.State;     // WO-36: GameState backstop for hero class self-resolve
+using DeNelle.Village.Talents; // WO-36: talent -> ability-stat multipliers
 using UnityEngine;
 
 namespace DeNelle.Village
@@ -87,6 +89,13 @@ namespace DeNelle.Village
         /// <summary>Animator <c>Cast</c> trigger hash — matches AnimatorSetup.cs.</summary>
         private static readonly int AnimCast = Animator.StringToHash("Cast");
 
+        // WO-163: cached "Cast" param presence for the currently-resolved Animator.
+        // HeroBodySwapper assigns a fresh runtimeAnimatorController at runtime, so
+        // re-scan whenever the resolved Animator changes (same pattern as
+        // HeroLocomotion.RefreshParamCache). Driving an absent param logs an error.
+        private bool _hasCastParam;
+        private Animator _paramCheckedAnimator;
+
         /// <summary>Current mana, 0..<see cref="MaxMana"/>.</summary>
         public float Mana => _mana;
 
@@ -125,11 +134,50 @@ namespace DeNelle.Village
         /// <summary>Wires the Heart reference (the integrator calls this from VillageController).</summary>
         public void SetHeart(HeartController heart) => _heart = heart;
 
+        /// <summary>
+        /// Sets the hero class id that drives the abilities.json lookup (WO-36).
+        /// The field defaults to "mage" and was never reassigned, so a Knight or
+        /// Ranger cast the Mage loadout. HeroBodySwapper calls this after swapping
+        /// in the real class body so each hero casts its own kit. AbilityCatalog
+        /// normalises the id, but lower-case it here to be safe.
+        /// </summary>
+        public void SetHeroClass(string slug)
+        {
+            if (string.IsNullOrWhiteSpace(slug)) return;
+            _heroClass = slug.Trim().ToLowerInvariant();
+            Debug.Log($"[HeroAbilities] Hero class set to '{_heroClass}' (abilities will resolve from this loadout).");
+        }
+
         private void Awake()
         {
             _mana = _maxMana;
             // The Animator sits on the KayKit hero mesh child of the hero rig.
             _animator = GetComponentInChildren<Animator>();
+
+            // WO-36 (Bug 1 backstop): self-resolve hero class from GameState so the
+            // correct Q/W/E/R loadout is active even in test scenes where
+            // HeroBodySwapper is absent. HeroBodySwapper.Start() calls SetHeroClass()
+            // directly in the normal village flow (runs after Awake), so this only
+            // matters for stand-alone test scenes and editor play without a full rig.
+            var svc = GameStateService.Instance;
+            if (svc != null)
+            {
+                var opt = svc.State?.HeroClass.ToNullable();
+                if (opt.HasValue)
+                {
+                    _heroClass = opt.Value switch
+                    {
+                        // Fully-qualified: unqualified 'HeroClass' shadows to a string in this scope.
+                        DeNelle.Core.State.HeroClass.Knight => "knight",
+                        DeNelle.Core.State.HeroClass.Ranger => "ranger",
+                        DeNelle.Core.State.HeroClass.Mage   => "mage",
+                        // WO-226: the Cleric is a caster — reuse the Mage loadout.
+                        DeNelle.Core.State.HeroClass.Cleric => "mage",
+                        _                                   => AbilityCatalog.DefaultClass,
+                    };
+                    Debug.Log($"[HeroAbilities] Awake backstop: resolved class '{ _heroClass}' from GameState.");
+                }
+            }
         }
 
         private void Update()
@@ -161,13 +209,51 @@ namespace DeNelle.Village
             if (_cooldownRemaining[(int)slot] > 0f || _mana < def.ManaCost)
                 return false;
 
-            _cooldownRemaining[(int)slot] = def.Cooldown;
+            // WO-36 (talent -> stat): unlocked skill-tree talents shave cooldowns
+            // class-wide via CdReduction. CooldownMultiplier returns 1f when the
+            // hero has no cooldown talents unlocked, preserving the JSON baseline.
+            float scaledCooldown = def.Cooldown * HeroTalentModifiers.CooldownMultiplier(_heroClass);
+            _cooldownRemaining[(int)slot] = scaledCooldown;
             _mana -= def.ManaCost;
 
+            // WO-97 Bug 3: drive the per-slot cooldown fill overlay on the ability
+            // button. AbilityCooldownUI lives on the button GameObject; the ability
+            // HeroAbilities lives on the hero rig, so we broadcast to any registered
+            // listener via the HudBridge rather than a direct GetComponent. As a
+            // belt-and-braces fallback also check this GO (in case someone collocates).
+            GetComponent<AbilityCooldownUI>()?.StartCooldown(scaledCooldown);
+
             // Play the hero's cast animation in sync with the ability resolving.
-            if (_animator != null) _animator.SetTrigger(AnimCast);
+            // Self-heal the reference: Awake() caches it before HeroBodySwapper
+            // swaps the real FBX body in, so the Awake cache is stale/null.
+            // HeroBodySwapper re-caches this via reflection after the swap, but
+            // re-resolve here too as a backstop (only while null).
+            if (_animator == null)
+            {
+                var bodyT = transform.Find("HeroBody");
+                if (bodyT != null) _animator = bodyT.GetComponentInChildren<Animator>();
+            }
+            // WO-163: (re)scan the resolved controller for the "Cast" param so we
+            // never drive an absent param (a controller swap rebinds the animator).
+            if (_animator != null && _animator != _paramCheckedAnimator)
+            {
+                _paramCheckedAnimator = _animator;
+                _hasCastParam = false;
+                if (_animator.runtimeAnimatorController != null)
+                {
+                    foreach (var p in _animator.parameters)
+                        if (p.nameHash == AnimCast) { _hasCastParam = true; break; }
+                }
+            }
+            if (_animator != null && _hasCastParam) _animator.SetTrigger(AnimCast);
 
             Vector3 origin = transform.position;
+
+            // DEF-47: register the cast with the timing-bonus tracker. The returned
+            // multiplier (1.00–1.50× depending on chain depth) is stored and applied
+            // to outgoing damage inside ResolveEffect. Heals are unaffected.
+            _pendingTimingBonus = AttackTimingBonus.NotifyCast(origin);
+
             ResolveEffect(def, origin);
             return true;
         }
@@ -176,51 +262,183 @@ namespace DeNelle.Village
         //  Effect resolution — line-equivalent to castAbility.ts.
         // =====================================================================
 
+        // Cached level-progression on the hero (added at runtime by
+        // ProgressionManager). Its DamageMultiplier scales ability damage on top
+        // of the talent multiplier; resolved lazily so it survives the body swap.
+        private HeroProgression _progression;
+
+        // DEF (combat feel): lazily-attached ranged projectile launcher (arrow / spell orb).
+        private RangedAttackVFX _rangedVfx;
+
+        // Gear v1: lazily-attached equipped-gear loadout — its WeaponMult joins the damage chain.
+        private GearLoadout _gear;
+
+        // DEF-47: timing bonus captured by TryCast() from AttackTimingBonus,
+        // consumed by the next ResolveEffect() damage call, then reset to 1.
+        private float _pendingTimingBonus = 1f;
+
+        // ── Defend-the-Tower aim overrides (null in village → behaviour unchanged) ──
+        /// <summary>When set, offensive abilities resolve from this world point (the
+        /// turret player's crosshair / aim target) instead of the hero's feet — so a
+        /// stationary hero's spells reach the distant enemies. PatriciaLightController
+        /// sets it per cast; village mode leaves it null.</summary>
+        public Vector3? AimPointOverride;
+        /// <summary>When set by HeroTargetIndicator, single-target offensive abilities hit
+        /// THIS exact reticle-locked foe instead of re-searching via an OverlapSphere — so
+        /// the hero damages precisely what the ring shows (the registry target, the same one
+        /// companions hit), even if that enemy's collider isn't found by a physics sweep.
+        /// Null → fall back to NearestHostile.</summary>
+        public IDamageable LockedTarget;
+        /// <summary>When set, Heal effects route here (repair the tower) instead of
+        /// healing the caster. Returns true when it handled the heal. Null = heal hero.</summary>
+        public System.Func<float, bool> HealHandler;
+
         private void ResolveEffect(AbilityDef def, Vector3 origin)
         {
             DamageElement element = ElementOf(def);
 
+            // WO-36 (talent -> stat): scale outgoing enemy damage by the hero's
+            // unlocked DamageBonus talents (class-wide). DamageMultiplier returns
+            // 1f when nothing is unlocked, so the abilities.json baseline holds
+            // until the player learns a damage node. NOTE: the Heal case below
+            // deliberately uses raw def.Damage (heal amount), not this scalar.
+            // The level-progression multiplier stacks on top (1f until level 2+).
+            if (_progression == null) _progression = GetComponent<HeroProgression>();
+            float levelMult = _progression != null ? _progression.DamageMultiplier : 1f;
+            // DEF-47: apply the chain timing bonus captured in TryCast.
+            // _pendingTimingBonus is 1.00× when no chain is active, up to 1.50×
+            // at chain 4+. Reset to 1f so a missed follow-up can't carry over.
+            float dmg = def.Damage * HeroTalentModifiers.DamageMultiplier(_heroClass) * levelMult * _pendingTimingBonus * WeaponMult();
+            _pendingTimingBonus = 1f;
+
+            // DTT: offensive abilities resolve from the player's aim point (crosshair
+            // target) so a stationary turret hero's spells reach the distant enemies.
+            // Null override (village) keeps the original hero-centred behaviour.
+            Vector3 atk = AimPointOverride ?? origin;
+
             switch (def.EffectEnum)
             {
                 case AbilityEffect.Heal:
-                    // castAbility.ts: heartHp = min(heartMax, heartHp + power)
-                    if (_heart != null)
-                        _heart.SetHp(_heart.Hp + def.Damage);
-                    SpawnVfx(_heart != null ? _heart.transform.position : origin, def, 5f);
+                {
+                    // WO-220: the Heal branch never routes through SpawnVfx (where every
+                    // other ability fires its cast SFX), so the heal cast was silent.
+                    // Play the class-flavoured cast sting here directly so every ability
+                    // beat — offensive AND heal — has a sound. The bridge null-guards
+                    // CoreServices.Audio internally.
+                    AbilityAudioBridge.PlayForClassAndKind(_heroClass, def.EffectEnum);
+
+                    // DTT routes the heal to repair the TOWER (HealHandler). Otherwise
+                    // it heals the CASTER — executive call 2026-05-28: "heal hero is
+                    // correct — cannot heal a tree." def.Damage carries the amount.
+                    if (HealHandler == null || !HealHandler(def.Damage))
+                    {
+                        var heroHp = GetComponent<HeroHealth>() ?? HeroHealth.Instance;
+                        if (heroHp != null) heroHp.Heal(def.Damage);
+                        VFXManager.Play(VFXType.Cast_Heal, origin + Vector3.up * 1.2f);
+                    }
                     break;
+                }
 
                 case AbilityEffect.Strike:
                 case AbilityEffect.Snare:
                 {
-                    // nearest enemy within reach + ENEMY_HIT_R
-                    var foe = NearestHostile(origin, def.Range + _enemyHitRadius);
+                    // Prefer the reticle's locked target (registry — exactly what the ring
+                    // shows + companions hit); fall back to the OverlapSphere search. This
+                    // fixes "ring locks but my hits do 0" — the physics sweep was finding a
+                    // different/no enemy than the registry-locked one.
+                    var foe = (LockedTarget != null && LockedTarget.IsAlive)
+                        ? LockedTarget
+                        : NearestHostile(atk, def.Range + _enemyHitRadius);
+                    // WO-125 Bug 1: the apex dragon orbits at altitude ~22-34u — far
+                    // outside a short-slot sweep (Q ~13u) — so an OverlapSphere from the
+                    // hero's feet can never reach it. In village mode (no aim override),
+                    // when no ground enemy is in reach, let the single-target offensive
+                    // slots punch up at the live boss so the airborne apex is hittable
+                    // (not only during a low swoop). Ground targeting is untouched: a
+                    // reachable ground enemy is still preferred. Resolved through the
+                    // Core IDamageable seam via WaveManager — no concrete/HUD ref added.
+                    if (foe == null && AimPointOverride == null)
+                        foe = LiveBoss();
                     if (foe != null)
                     {
-                        foe.TakeDamage(def.Damage, element);
-                        if (def.EffectEnum == AbilityEffect.Snare)
-                            foe.ApplyStatus(StatusEffect.Slow, 2.5f); // castAbility.ts snare
+                        // DEF (combat feel): LAUNCH a visible projectile (Ranger arrow / Mage
+                        // orb) and land the damage WHEN it arrives — "seeing the arrow/spell go
+                        // is fun; click-button-instant-FX is sad." Capture the payload for the
+                        // arrival closure; the enemy's TakeDamage fires all the impact juice
+                        // (red flash + damage number + hit-stop) at the moment of connection.
+                        var hitFoe = foe;
+                        float hitDmg = dmg;
+                        var hitEl = element;
+                        bool snare = def.EffectEnum == AbilityEffect.Snare;
+                        LaunchProjectile(foe.WorldPosition, () =>
+                        {
+                            if (hitFoe == null || !hitFoe.IsAlive) return;
+                            hitFoe.TakeDamage(hitDmg, hitEl);
+                            DeNelle.Core.Combat.DamageAttribution.Record(hitFoe, HeroProgression.Id, hitDmg);
+                            if (snare) hitFoe.ApplyStatus(StatusEffect.Slow, 2.5f); // castAbility.ts snare
+                        });
                     }
-                    SpawnVfx(origin, def, 1.6f);
+                    // Cast beat only (origin SFX/VFX). Impact juice now comes from the projectile
+                    // ARRIVAL (enemy TakeDamage), so no target hint -> no premature impact flash.
+                    SpawnVfx(atk, def, 1.6f, null);
                     break;
                 }
 
                 case AbilityEffect.Aoe:
                 case AbilityEffect.Cleave:
-                    // blast centred on the caster
-                    Blast(origin, def.Range, def.Damage, element, def.Freeze);
-                    SpawnVfx(origin, def, def.Range);
+                    // blast centred on the aim point (the crosshair cluster)
+                    Blast(atk, def.Range, dmg, element, def.Freeze);
+                    SpawnVfx(atk, def, def.Range);
                     break;
 
                 case AbilityEffect.Meteor:
                 {
-                    // blast centred on the nearest enemy cluster (castAbility.ts)
-                    var foe = NearestHostile(origin, float.MaxValue);
-                    Vector3 target = foe != null ? foe.WorldPosition : origin;
-                    Blast(target, def.Range, def.Damage, element, 0f);
-                    SpawnVfx(target, def, def.Range);
+                    // blast centred on the nearest enemy cluster to the aim point
+                    var foe = NearestHostile(atk, float.MaxValue);
+                    // WO-125 Bug 1: Meteor's 1000u sweep already encloses the orbiting
+                    // dragon (it's a layer-8 IDamageable with a collider), so this is a
+                    // belt-and-braces fallback for the rare case the sweep misses it.
+                    if (foe == null && AimPointOverride == null)
+                        foe = LiveBoss();
+                    Vector3 target = foe != null ? foe.WorldPosition : atk;
+                    // DEF (combat feel): hurl a visible orb to the target, then EXPLODE on arrival
+                    // (blast + impact VFX), so the ultimate reads as a meteor streaking in and
+                    // landing rather than an instant area-pop. Same proven projectile pattern as
+                    // Strike/Snare; the RangedAttackVFX cast-burst covers the cast beat.
+                    LaunchProjectile(target, () =>
+                    {
+                        Blast(target, def.Range, dmg, element, 0f);
+                        SpawnVfx(target, def, def.Range);
+                    });
                     break;
                 }
             }
+        }
+
+        /// <summary>
+        /// DEF (combat feel): launches a VISIBLE projectile (Ranger arrow / Mage-or-other
+        /// spell orb) toward <paramref name="target"/> and invokes <paramref name="onArrive"/>
+        /// when it lands — so ranged hits read as the shot travelling + connecting rather than
+        /// an instant hit-scan ("seeing the arrow/spell go is fun"). Lazily attaches
+        /// <see cref="RangedAttackVFX"/> so it works on every hero without a builder change.
+        /// </summary>
+        private void LaunchProjectile(Vector3 target, System.Action onArrive)
+        {
+            if (_rangedVfx == null)
+                _rangedVfx = GetComponent<RangedAttackVFX>() ?? gameObject.AddComponent<RangedAttackVFX>();
+            if (_heroClass == "ranger") _rangedVfx.FireArrow(target, onArrive);
+            else                        _rangedVfx.FireSpellOrb(target, onArrive);
+        }
+
+        /// <summary>
+        /// Gear v1: the equipped weapon's damage multiplier (1.0 when none / no catalog).
+        /// Lazily attaches <see cref="GearLoadout"/> so every hero gets gear with no builder
+        /// change; graceful — a missing catalog leaves the multiplier at 1.0.
+        /// </summary>
+        private float WeaponMult()
+        {
+            if (_gear == null) _gear = GetComponent<GearLoadout>() ?? gameObject.AddComponent<GearLoadout>();
+            return _gear.WeaponMult;
         }
 
         /// <summary>
@@ -240,6 +458,7 @@ namespace DeNelle.Village
                 // OverlapSphere is centre-distance; castAbility.ts hypot()'s the
                 // same way, so no extra precision pass is needed.
                 target.TakeDamage(damage, element);
+                DeNelle.Core.Combat.DamageAttribution.Record(target, HeroProgression.Id, damage);
                 if (freezeSeconds > 0f)
                     target.ApplyStatus(StatusEffect.Freeze, freezeSeconds);
             }
@@ -279,6 +498,29 @@ namespace DeNelle.Village
             return dmg;
         }
 
+        // WO-125 Bug 1: cached WaveManager so the hero can reach the apex boss (which
+        // lives in WaveManager._liveApexBoss, NOT in the OverlapSphere-reachable enemy
+        // roster). Resolved lazily and re-resolved only while null — survives a body swap.
+        private WaveManager _wave;
+
+        /// <summary>
+        /// The live apex boss as a hostile <see cref="IDamageable"/>, or null when no
+        /// boss is up / it is dead. Lets the short-range offensive slots punch up at an
+        /// airborne boss they could never sweep. Talks only to the Core seam.
+        /// </summary>
+        private IDamageable LiveBoss()
+        {
+            if (_wave == null)
+            {
+                var found = FindObjectsByType<WaveManager>(FindObjectsSortMode.None);
+                _wave = found.Length > 0 ? found[0] : null;
+            }
+            var boss = _wave?.LiveApexBoss;
+            if (boss != null && boss.IsAlive && ((IDamageable)boss).Faction == CombatFaction.Hostile)
+                return boss;
+            return null;
+        }
+
         private static DamageElement ElementOf(AbilityDef def)
         {
             // Map the Mage kit's effect colours to elements for resist math.
@@ -294,16 +536,28 @@ namespace DeNelle.Village
         //  Placeholder VFX — Unity built-in particles (port spec Week 4).
         // =====================================================================
 
-        private void SpawnVfx(Vector3 at, AbilityDef def, float radius)
+        // WO-35: real per-ability VFX via AbilityVfxKit (was a single tinted dot
+        // burst — the "random dots"). An authored _castVfxPrefab still overrides.
+        // targetHint = the foe / impact point (drives the strike tracer + meteor fall).
+        private void SpawnVfx(Vector3 at, AbilityDef def, float radius, Vector3? targetHint = null)
         {
-            ParticleSystem ps = _castVfxPrefab != null
-                ? Instantiate(_castVfxPrefab, at, Quaternion.identity)
-                : BuildBuiltInBurst(at);
+            AbilityAudioBridge.PlayForClassAndKind(_heroClass, def.EffectEnum);   // class-flavoured SFX (WO-37)
+            if (_castVfxPrefab != null)
+            {
+                ParticleSystem ps = Instantiate(_castVfxPrefab, at, Quaternion.identity);
+                ps.Play();
+                // bug-triage P2: startLifetimeMultiplier is the curve multiplier, not seconds —
+                // use the actual max lifetime (matches VFXManager.DetectDuration) so longer
+                // prefab effects aren't destroyed before their particles finish.
+                float life = ps.main.duration + ps.main.startLifetime.constantMax;
+                Destroy(ps.gameObject, life + 0.5f);
+                return;
+            }
 
-            TintAndSize(ps, def.UnityColor, Mathf.Max(0.6f, radius));
-            ps.Play();
-            float life = ps.main.duration + ps.main.startLifetimeMultiplier;
-            Destroy(ps.gameObject, life + 0.5f);
+            // DEF-VFX-01: route through VFXManager so prefab-based art swaps require
+            // no code changes. Falls back to procedural if no prefab is wired.
+            AbilityVfxKit.PlayHeroAbility(def.EffectEnum, def.UnityColor, at,
+                                          Mathf.Max(0.6f, radius), targetHint ?? at, _heroClass);
         }
 
         /// <summary>
@@ -354,19 +608,6 @@ namespace DeNelle.Village
             }
 
             return ps;
-        }
-
-        /// <summary>Tints + scales a particle burst to an ability's colour / radius.</summary>
-        private static void TintAndSize(ParticleSystem ps, Color color, float radius)
-        {
-            var main = ps.main;
-            main.startColor = color;
-
-            var shape = ps.shape;
-            // Burst spread roughly matches the ability's blast radius so the
-            // placeholder reads at the right scale in the scene.
-            if (shape.enabled)
-                shape.radius = Mathf.Clamp(radius * 0.5f, 0.2f, 8f);
         }
     }
 }

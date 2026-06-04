@@ -1,0 +1,15 @@
+{
+  "name": "defenders-of-the-realm-backend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Vercel serverless functions (api/) for Defenders of the Realm — Neon Postgres save-sync, leaderboard/profile/social, promo/referral, wallet-nonce auth. CommonJS.",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^0.10.4",
+    "@msgpack/msgpack": "^2.8.0",
+    "tweetnacl": "^1.0.3",
+    "bs58": "^5.0.0"
+  }
+}

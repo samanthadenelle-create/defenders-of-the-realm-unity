@@ -17,10 +17,24 @@
 // strings are NOT typed inline in user-facing copy -- they flow through
 // data/canon-strings.json (port spec Part 4). This file only uses them in
 // code comments / non-user-facing identifiers.
+//
+// WO-99 NOTE — HeartHealth / Defend the Tower (DTT) wiring:
+//   A separate HeartHealth.cs is NOT needed for the Defend the Tower scene.
+//   PatriciaLightController instantiates a HeartController at TowerPos and
+//   drives tower HP directly via HeartController.SetHp() + the OnHealthChanged
+//   event (see PatriciaLightController.ApplyTowerDamage / UpdateTowerHpUi).
+//   HeartController already implements IDamageableStructure (IsAlive + ApplyContactDamage)
+//   which enemies use for contact attacks. The tower HP bar in DTT is a code-
+//   built UI-Toolkit slider bound to OnHealthChanged — no second MonoBehaviour
+//   required. If a dedicated HeartHealth component is needed in a future scene
+//   that cannot host a full HeartController (e.g. a lightweight arena), create
+//   HeartHealth.cs in this folder as a thin wrapper: expose Hp, SetHp, and the
+//   OnHealthChanged event, and have it implement IDamageableStructure.
 // =============================================================================
 
 using System;
 using UnityEngine;
+using DeNelle.Core.Combat;
 
 namespace DeNelle.Village
 {
@@ -73,7 +87,7 @@ namespace DeNelle.Village
     /// implementation order). Instantiated by <see cref="VillageController"/>.
     /// </summary>
     [DisallowMultipleComponent]
-    public sealed class HeartController : MonoBehaviour
+    public sealed class HeartController : MonoBehaviour, IDamageableStructure
     {
         [Header("Threat state")]
         [Tooltip("Current threat state. Week 3 = always Serene (no combat in the skeleton).")]
@@ -118,6 +132,34 @@ namespace DeNelle.Village
             new HeartStateVisual { Color = Hex("ffffff"), Emissive = 2.0f, PulseHz = 0.5f, PulseDepth = 0.00f, HaloOpacity = 1.00f }, // Victorious
         };
 
+        // ── Events ───────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Fired whenever <see cref="Hp"/> changes (including after a SetHp call
+        /// whose value is clamped to no-op). Subscribers receive the new HP (0-100).
+        /// <para>
+        /// DEF-54: four systems were forced to poll <c>Hp</c> every frame (TowerAudioController,
+        /// TowerRepairVisuals, HeartHudBridge, TowerVoiceController) because no change
+        /// notification existed. Subscribe here and unsubscribe in OnDisable/OnDestroy
+        /// to avoid stale-delegate leaks.
+        /// </para>
+        /// </summary>
+        public event System.Action<float> OnHealthChanged;
+
+        /// <summary>
+        /// Fired exactly once, the moment the Heart's HP first reaches 0 — the
+        /// village lose condition (WO-125 Bug 3). A subscriber (WaveManager) halts
+        /// the wave loop and surfaces the defeat outcome. Guarded by
+        /// <see cref="_destroyed"/> so repeat 0-HP <see cref="SetHp"/> calls (e.g. a
+        /// dragon striking an already-dead Heart) cannot re-fire it.
+        /// </summary>
+        public event System.Action OnHeartDestroyed;
+
+        /// <summary>True once <see cref="OnHeartDestroyed"/> has fired — fire-once guard.</summary>
+        private bool _destroyed;
+
+        // ── Properties ───────────────────────────────────────────────────────
+
         /// <summary>Current threat state of the Heart.</summary>
         public HeartState State => _state;
 
@@ -146,10 +188,60 @@ namespace DeNelle.Village
             _state = state;
         }
 
-        /// <summary>Sets Heart HP (0-100). Drives the tree's emotional visuals (Week 4+).</summary>
+        /// <summary>
+        /// Heals the Heart by <paramref name="amount"/> HP (0-100 clamp). Delegates to
+        /// <see cref="SetHp"/> so the crystal state, OnHealthChanged event and the
+        /// no-op guard are all handled in one place.
+        /// <para>
+        /// WO-98: SalveAbility routes here when the active scene is a Defend-the-Tower
+        /// mode so the E-slot heal repairs the tower instead of the hero.
+        /// </para>
+        /// </summary>
+        public void Heal(float amount)
+        {
+            if (amount <= 0f) return;
+            SetHp(_hp + amount);
+        }
+
+        /// <summary>
+        /// Sets Heart HP (0-100). Clamps the value, fires <see cref="OnHealthChanged"/>
+        /// on any change, and auto-derives the threat state from the new HP level so
+        /// the crystal colour / pulse track HP without external coordination.
+        /// <para>
+        /// WaveManager's explicit <see cref="SetState"/> calls (Boss, Victorious,
+        /// Breached) still override this derivation — they run AFTER combat events
+        /// and are not triggered by HP changes, so there is no race.
+        /// </para>
+        /// </summary>
         public void SetHp(float hp)
         {
-            _hp = Mathf.Clamp(hp, 0f, 100f);
+            float next = Mathf.Clamp(hp, 0f, 100f);
+            if (Mathf.Approximately(next, _hp)) return;   // no-op guard — avoids spurious events
+            _hp = next;
+            OnHealthChanged?.Invoke(_hp);
+            // Auto-derive a baseline state from HP so the crystal always tracks health.
+            // Boss / Victorious / Breached are set explicitly by WaveManager and should
+            // NOT be stomped here — only derive when in a "normal" HP-driven state.
+            if (_state != HeartState.Boss && _state != HeartState.Victorious)
+                _state = DeriveStateFromHp(_hp);
+
+            // WO-125 Bug 3: the Heart fell — raise the village lose condition once.
+            // The dragon (and any other source) drains HP through SetHp, but nothing
+            // reacted to it hitting 0; a subscriber now halts the loop + shows defeat.
+            if (_hp <= 0f && !_destroyed)
+            {
+                _destroyed = true;
+                OnHeartDestroyed?.Invoke();
+            }
+        }
+
+        /// <summary>Maps Heart HP (0-100) to a baseline <see cref="HeartState"/>.</summary>
+        private static HeartState DeriveStateFromHp(float hp)
+        {
+            if (hp < 25f) return HeartState.Critical;
+            if (hp < 50f) return HeartState.Danger;
+            if (hp < 75f) return HeartState.Warning;
+            return HeartState.Vigilant;
         }
 
         private void Awake()
@@ -162,7 +254,7 @@ namespace DeNelle.Village
 
             // Honor the authored transform when either:
             //  (a) _useAuthoredTransform is true (scene-builder flagged it), OR
-            //  (b) the heart is NOT at world origin (the canonical Avalon
+            //  (b) the heart is NOT at world origin (the canonical Elarion
             //      layout hosts Elarion at (-6, 0, 1) centre-west of the plaza).
             // Defensive heuristic (b) covers the case where _useAuthoredTransform
             // was set at scene-build time but the SerializedObject write didn't
@@ -192,6 +284,10 @@ namespace DeNelle.Village
             col.height = BlockerHeight;
             col.center = new Vector3(0f, BlockerHeight * 0.5f, 0f); // feet at y=0
         }
+
+        // ── IDamageableStructure ─────────────────────────────────────────────
+        bool IDamageableStructure.IsAlive => _hp > 0f;
+        void IDamageableStructure.ApplyContactDamage(float amount) => SetHp(_hp - amount);
 
         /// <summary>Parses a 6-digit hex string ("rrggbb") into a Color.</summary>
         private static Color Hex(string rrggbb)

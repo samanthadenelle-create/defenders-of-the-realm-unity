@@ -120,6 +120,12 @@ namespace DeNelle.Editor
         // Locomotion threshold — Speed above this counts as "moving".
         private const float MoveThreshold = 0.1f;
 
+        // WO-217: enemy attack snappiness — modest (Generic rigs, keep conservative).
+        // Speed multiplier on the Attack/Cast state + an earlier return-to-idle so
+        // the recovery window is shorter. Kept gentle vs the hero (1.3) on purpose.
+        private const float EnemyAttackSpeed = 1.15f;   // 1.1–1.2 band
+        private const float EnemyAttackExitTime = 0.75f; // return earlier than 0.85
+
         // Running tallies for the summary log.
         private static int _controllerCount;
         private static int _missingClipCount;
@@ -338,6 +344,7 @@ namespace DeNelle.Editor
 
             var attack = sm.AddState("Attack");
             attack.motion = attackClip;
+            attack.speed  = EnemyAttackSpeed;   // WO-217: snappier enemy swing
             ReportClip(assetName, "Attack", attackClip);
 
             var hit = sm.AddState("Hit");
@@ -353,6 +360,7 @@ namespace DeNelle.Editor
             {
                 cast = sm.AddState("Cast");
                 cast.motion = castClip;
+                cast.speed  = EnemyAttackSpeed;   // WO-217: snappier enemy cast
                 ReportClip(assetName, "Cast", castClip);
             }
 
@@ -372,7 +380,9 @@ namespace DeNelle.Editor
             // (hasExitTime) then returns to Idle (locomotion re-resolves itself).
             AddTriggerTransition(idle, attack, PAttack);
             AddTriggerTransition(move, attack, PAttack);
-            AddReturnToIdle(attack, idle);
+            // WO-217: snappier attack recovery — return to idle earlier than the
+            // shared 0.85 exit (Hit/Cast keep the default feel via AddReturnToIdle).
+            AddReturnToIdle(attack, idle, EnemyAttackExitTime);
 
             // Hit — a flinch interrupt from Idle / Move / Attack.
             AddTriggerTransition(idle, hit, PHit);
@@ -459,11 +469,12 @@ namespace DeNelle.Editor
         /// Adds a transition back to Idle that fires on clip completion
         /// (hasExitTime) — used by one-shot states (Attack / Hit / Cast).
         /// </summary>
-        private static void AddReturnToIdle(AnimatorState from, AnimatorState idle)
+        private static void AddReturnToIdle(
+            AnimatorState from, AnimatorState idle, float exitTime = 0.85f)
         {
             var t = from.AddTransition(idle);
             t.hasExitTime = true;
-            t.exitTime = 0.85f;       // most of the clip plays before returning
+            t.exitTime = exitTime;    // most of the clip plays before returning
             t.duration = 0.12f;
         }
 

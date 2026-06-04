@@ -59,6 +59,22 @@ namespace DeNelle.Core
             _hasFallbackTint = true;
         }
 
+        private bool _hasEmissionOverride;
+        private Color _emissionOverride = Color.black;
+        private const float EmissionOverrideIntensity = 0.30f; // owner: "very minimal"
+
+        /// <summary>
+        /// Owner 2026-05-25: the pets' "aura / light beams" was bright emission
+        /// preserved from their source materials. Replace it with a MINIMAL,
+        /// affinity-coloured glow instead (fire red / ice white / aether violet).
+        /// When set, this overrides any source emission on every rebuilt material.
+        /// </summary>
+        public void SetEmissionOverride(Color color)
+        {
+            _emissionOverride = color;
+            _hasEmissionOverride = true;
+        }
+
         // Start (not Awake): callers like PetDeployer add this component and
         // THEN set the fallback texture name + tint on the next line. Awake
         // fires synchronously inside AddComponent, so the setters would land
@@ -93,12 +109,15 @@ namespace DeNelle.Core
                 for (int i = 0; i < mats.Length; i++)
                 {
                     var src = mats[i];
-                    // Already URP — skip (unless force-rebuilding: the extracted
-                    // Tripo URP materials can still render wrong, so rebuild them
-                    // as plain URP/Lit from their basecolor).
-                    if (!_forceRebuild && src != null && src.shader != null && src.shader.name != null &&
-                        src.shader.name.StartsWith("Universal Render Pipeline/", System.StringComparison.Ordinal))
-                        continue;
+                    // WO-34 (2026-05-25): ALWAYS rebuild — do NOT skip already-URP
+                    // materials. The Tripo importer extracts materials AS URP, but
+                    // those extracted URP mats render washed-out/grey (buildings
+                    // were grey in ~90% of runs because their BAKED fixer had
+                    // _forceRebuild=false and skipped them). Rebuilding every
+                    // material as a clean URP/Lit from its real basecolor + maps is
+                    // what makes colour reliable. Normal + emission are preserved
+                    // below, so this is non-destructive for materials that already
+                    // rendered correctly (no regression on working models).
 
                     Texture tex = null;
                     Color col = Color.white;
@@ -132,6 +151,37 @@ namespace DeNelle.Core
                     {
                         if (newMat.HasProperty("_BaseMap")) newMat.SetTexture("_BaseMap", tex);
                         if (newMat.HasProperty("_MainTex")) newMat.SetTexture("_MainTex", tex);
+                    }
+                    // Preserve the normal map always (non-destructive).
+                    if (src != null && src.HasProperty("_BumpMap"))
+                    {
+                        Texture nrm = src.GetTexture("_BumpMap");
+                        if (nrm != null && newMat.HasProperty("_BumpMap"))
+                        {
+                            newMat.SetTexture("_BumpMap", nrm);
+                            newMat.EnableKeyword("_NORMALMAP");
+                        }
+                    }
+                    // Emission: a minimal affinity glow when overridden (pets), else
+                    // preserve the source emission (buildings keep their lit windows).
+                    if (_hasEmissionOverride)
+                    {
+                        if (newMat.HasProperty("_EmissionColor"))
+                            newMat.SetColor("_EmissionColor", _emissionOverride * EmissionOverrideIntensity);
+                        newMat.EnableKeyword("_EMISSION");
+                        newMat.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
+                    }
+                    else if (src != null)
+                    {
+                        Texture em = src.HasProperty("_EmissionMap") ? src.GetTexture("_EmissionMap") : null;
+                        Color emc = src.HasProperty("_EmissionColor") ? src.GetColor("_EmissionColor") : Color.black;
+                        if (em != null || emc.maxColorComponent > 0.01f)
+                        {
+                            if (em != null && newMat.HasProperty("_EmissionMap")) newMat.SetTexture("_EmissionMap", em);
+                            if (newMat.HasProperty("_EmissionColor")) newMat.SetColor("_EmissionColor", emc);
+                            newMat.EnableKeyword("_EMISSION");
+                            newMat.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
+                        }
                     }
                     if (newMat.HasProperty("_Smoothness")) newMat.SetFloat("_Smoothness", _smoothness);
                     if (newMat.HasProperty("_Metallic"))   newMat.SetFloat("_Metallic", _metallic);

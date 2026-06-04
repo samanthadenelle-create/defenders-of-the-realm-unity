@@ -1,6 +1,6 @@
 // =============================================================================
 // SceneScreenshot — batchmode build + review screenshots, for owner review
-// outside the Unity Editor. Builds the Avalon village (interior + exterior)
+// outside the Unity Editor. Builds the Elarion village (interior + exterior)
 // and the Healer's Cottage dungeon, and renders review PNGs into docs/.
 //   docs/screenshot-village-week3.png            — the walled town
 //   docs/screenshot-village-week3-exterior.png   — the wilderness around it

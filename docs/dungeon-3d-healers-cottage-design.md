@@ -246,7 +246,7 @@ The child's drawing on the wall is a scrawled crayon picture of a tree with a ti
 
 **Lantern emphasis:** the room is **deliberately dim** even with maximum lantern coverage. Some apothecary drawers can only be read by stepping close and lingering. This is the room where the player feels the value of upgrading their light radius.
 
-**Exit:** back door west → returns the Keeper to the village (Avalon) via the Hollowmouth gate. The dungeon does not loop; once cleared, it's marked complete in the questline tracker.
+**Exit:** back door west → returns the Keeper to the village (Elarion) via the Hollowmouth gate. The dungeon does not loop; once cleared, it's marked complete in the questline tracker.
 
 ---
 
@@ -355,7 +355,7 @@ ls public/kaykit/dungeon/*.gltf | head -50
 7. The seed-and-stone clay jar drops from the boss; on use at the Farm in the village, the unique tree grows.
 8. Reduced-motion respected (no jarring camera moves; lantern flicker disabled).
 9. FPS holds at 60 on Seeker baseline throughout the run.
-10. The dungeon does not loop; on exit, the player returns to Avalon and the questline beat completes.
+10. The dungeon does not loop; on exit, the player returns to Elarion and the questline beat completes.
 
 ---
 

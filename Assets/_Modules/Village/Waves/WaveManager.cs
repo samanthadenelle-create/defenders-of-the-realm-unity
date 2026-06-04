@@ -1,5 +1,5 @@
 // =============================================================================
-// WaveManager — the Avalon village wave loop (Week-4 slice).
+// WaveManager — the Elarion village wave loop (Week-4 slice).
 // -----------------------------------------------------------------------------
 // Port spec Part 3 row: src/modules/village/waves/ -> WaveManager.cs.
 // Port spec Part 5 Week 4: "countdown timer between waves, then spawn per
@@ -39,6 +39,7 @@ using DeNelle.Core;
 using DeNelle.Core.State;
 using UnityEngine;
 using UnityEngine.Events;
+using DeNelle.Data;       // WaveData SO — WO-86
 
 namespace DeNelle.Village
 {
@@ -55,6 +56,8 @@ namespace DeNelle.Village
         Breached = 3,
         /// <summary>Every wave in the schedule has been cleared.</summary>
         Complete = 4,
+        /// <summary>The Heart fell (HP 0) — the run is lost. Terminal; the loop halts here.</summary>
+        Defeated = 5,
     }
 
     /// <summary>A UnityEvent carrying the countdown seconds remaining (HUD binds this).</summary>
@@ -101,6 +104,30 @@ namespace DeNelle.Village
                  "logs an error and is treated as cleared (the loop never stalls).")]
         [SerializeField] private DragonBoss _apexBossPrefab;
 
+        [Header("Wave scaling (DEF-59)")]
+        [Tooltip("Optional SO that scales enemy HP/speed/damage as wave number increases. " +
+                 "Create via Assets → Create → Defenders/Waves/Wave Scaling Curve. " +
+                 "Left blank: all enemies spawn at their base stats from enemies.json.")]
+        [SerializeField] private WaveScalingCurve _scalingCurve;
+
+        [Header("Group spawner (DEF-21)")]
+        [Tooltip("Optional EnemyGroupSpawner component (child of this object). " +
+                 "When assigned alongside _waveGroupSequence, each wave also spawns " +
+                 "the matching WaveEnemyGroup asset — complementing (not replacing) " +
+                 "the JSON batch system. Leave blank to use JSON batches only.")]
+        [SerializeField] private EnemyGroupSpawner _groupSpawner;
+
+        [Tooltip("One WaveEnemyGroup asset per wave slot (index 0 = wave 1, index 1 = wave 2, …). " +
+                 "Shorter than the wave count is fine — missing slots are skipped. " +
+                 "Requires _groupSpawner to be wired.")]
+        [SerializeField] private System.Collections.Generic.List<WaveEnemyGroup> _waveGroupSequence
+            = new System.Collections.Generic.List<WaveEnemyGroup>();
+
+        [Header("Wave SO Authoring (WO-86)")]
+        [Tooltip("Optional list of WaveData ScriptableObjects for SO-driven authoring. The existing JSON-driven loop runs independently and is unaffected.")]
+        [SerializeField] private List<WaveData> _soWaves
+            = new List<WaveData>();
+
         [Header("Breach detection")]
         [Tooltip("Radius (world units) of the inner wall ring around the Heart. An enemy that " +
                  "crosses INSIDE this ring counts as a breach. Tune to sit just inside the " +
@@ -117,6 +144,12 @@ namespace DeNelle.Village
 
         [Tooltip("Start the loop from this wave id (1 = the first wave). Dev override.")]
         [SerializeField, Min(1)] private int _startWave = 1;
+
+        [Header("Performance budget (DEF-48)")]
+        [Tooltip("Hard cap on simultaneously live enemies. 0 = no cap. " +
+                 "SpawnBatch stalls until an enemy dies when the cap is hit. " +
+                 "Recommended values: 4 (early), 6 (mid), 8 (late), 5 (boss wave).")]
+        [SerializeField, Min(0)] private int _maxSimultaneousEnemies = 8;
 
         // ── Events — HUD / Heart subscribe in OnEnable, unsubscribe in OnDisable ──
 
@@ -137,6 +170,10 @@ namespace DeNelle.Village
                  "— bind the boss HP bar / camera framing / Heart threat state to it.")]
         public WaveBossEvent OnApexBossSpawned = new WaveBossEvent();
 
+        [Tooltip("Fires once when the Heart of Elarion falls (HP 0) — the village LOSE condition " +
+                 "(WO-125 Bug 3). The loop halts (phase Defeated); bind a defeat screen here.")]
+        public UnityEvent OnDefeat = new UnityEvent();
+
         // ── Runtime state ─────────────────────────────────────────────────────
 
         private WaveSchedule _schedule;
@@ -144,8 +181,19 @@ namespace DeNelle.Village
         private readonly List<Enemy> _liveEnemies = new List<Enemy>();
         private readonly List<Enemy> _breachRoster = new List<Enemy>();
 
+        // Failsafe against a stuck enemy freezing the wave's clear gate (the recurring
+        // "wave won't advance" bug — clear requires _liveEnemies.Count == 0). Tracks each
+        // enemy's best distance toward the Heart; culls one that makes no progress for
+        // StuckTimeout so an off-mesh / boxed-in Hollow One can't hang the wave forever.
+        private readonly Dictionary<Enemy, float> _enemyBestSqr   = new Dictionary<Enemy, float>();
+        private readonly Dictionary<Enemy, float> _enemyStuckTime = new Dictionary<Enemy, float>();
+        private const float StuckTimeout = 12f;
+
         /// <summary>The apex flying boss for the current wave (null when not an apex wave / dead).</summary>
         private DragonBoss _liveApexBoss;
+
+        /// <summary>True once we've subscribed to the Heart's OnHeartDestroyed — fire-once subscribe guard.</summary>
+        private bool _heartDeathHooked;
 
         private WavePhase _phase = WavePhase.Idle;
         private int _currentWaveId;
@@ -169,13 +217,135 @@ namespace DeNelle.Village
         /// <summary>The apex flying boss on the field, or null when no apex wave is live.</summary>
         public DragonBoss LiveApexBoss => _liveApexBoss;
 
+        /// <summary>The Heart the wave loop marches enemies at (resolved at BeginLoop).</summary>
+        public HeartController Heart => _heart;
+
+        // ── Patricia Light hooks (WO-47) ──────────────────────────────────────
+        // The breach-time "Defend the Tower" shooter (PatriciaLightMode) needs to
+        // spawn real Enemy instances using the SAME prefab + roster path the wave
+        // loop uses. These thin accessors + the public SpawnEnemyForExternalMode
+        // helper let it reuse SpawnOne's instantiate / NavMesh-sample / Configure
+        // logic without duplicating it or making fields public. PatriciaLightMode
+        // lives in DeNelle.Village too, so no asmdef boundary is crossed.
+
+        /// <summary>
+        /// The enemy prefab the wave loop instantiates (null = the loop builds a
+        /// primitive-capsule placeholder via <see cref="BuildPlaceholderEnemy"/>).
+        /// Exposed so the breach-time Defend-the-Tower mode can reuse the same body.
+        /// </summary>
+        public Enemy EnemyPrefab => _enemyPrefab;
+
+        /// <summary>
+        /// Loads the canonical enemy catalog if it is not already loaded and
+        /// returns it (null on load failure). PatriciaLightMode uses this to pull
+        /// an <see cref="EnemyDef"/> from the same enemies.json the wave loop uses.
+        /// </summary>
+        public async UniTask<EnemyCatalog> GetEnemyCatalogAsync()
+        {
+            if (_enemyCatalog == null)
+                _enemyCatalog = await WaveDataLoader.LoadEnemiesAsync();
+            return _enemyCatalog;
+        }
+
+        /// <summary>
+        /// Spawns one Enemy at <paramref name="worldPos"/> for an external mode
+        /// (the breach-time Defend-the-Tower shooter), reusing the wave loop's
+        /// instantiate / NavMesh-sample / Configure path. The caller owns the
+        /// returned enemy's lifecycle (this does NOT add it to the wave loop's
+        /// live-enemy roster or breach watch). Returns null if no def is given.
+        /// </summary>
+        /// <param name="def">The enemy stat block (from <see cref="GetEnemyCatalogAsync"/>).</param>
+        /// <param name="worldPos">Where to spawn — snapped to the nearest NavMesh.</param>
+        /// <param name="heart">The transform the enemy marches at.</param>
+        /// <param name="instanceId">Stable per-instance id for attribution / events.</param>
+        public Enemy SpawnEnemyForExternalMode(EnemyDef def, Vector3 worldPos, Transform heart, string instanceId)
+        {
+            if (def == null) return null;
+
+            Vector3 pos = worldPos;
+            if (UnityEngine.AI.NavMesh.SamplePosition(
+                    pos, out var hit, 8f, UnityEngine.AI.NavMesh.AllAreas))
+                pos = hit.position;
+
+            Vector3 toHeart = heart != null ? (heart.position - pos) : Vector3.forward;
+            toHeart.y = 0f;
+            Quaternion rot = Quaternion.LookRotation(
+                toHeart.sqrMagnitude > 0.0001f ? toHeart : Vector3.forward);
+
+            if (_enemyPrefab == null)
+            {
+                Debug.LogError($"[WaveManager] Prefab is null for enemy data: {def.Id}. Assign an enemy prefab to WaveManager._enemyPrefab in the inspector. Using primitive placeholder.");
+            }
+
+            Enemy enemy = _enemyPrefab != null
+                ? Instantiate(_enemyPrefab, pos, rot, _enemyRoot)
+                : EnemyFactory.Build(def, pos, rot, _enemyRoot);   // skinned, no more pill
+
+            // The hero/pet target sweeps find enemies via GetComponentInParent
+            // <IDamageable>, which resolves to EnemyDamageable. The placeholder
+            // capsule (and some prefabs) may not carry it — add it so the
+            // Defend-the-Tower hero can actually acquire + damage this enemy.
+            if (enemy.GetComponent<EnemyDamageable>() == null)
+                enemy.gameObject.AddComponent<EnemyDamageable>();
+
+            enemy.Configure(instanceId, def, heart);
+            return enemy;
+        }
+
         // =====================================================================
         //  Lifecycle
         // =====================================================================
 
         private void Start()
         {
-            if (_autoStart) BeginLoop().Forget();
+            // WO-133 (FTUE): on a FIRST run (GameState.Onboarded == false) the wave
+            // loop must NOT auto-start — the player is taught first and the
+            // tutorial's BeginWaveRequested is the SOLE kickoff (wired by
+            // OnboardingIntegrator → BeginLoop). Returning players (Onboarded
+            // already true) start normally. Core-not-bootstrapped (no service) is
+            // treated as a returning player so a missing Core never strands the
+            // loop. This also kills the "long silent first-wave countdown" (QA P2-K).
+            if (_autoStart && !IsFirstRun()) BeginLoop().Forget();
+        }
+
+        /// <summary>
+        /// True when this is a brand-new save still in onboarding
+        /// (<see cref="GameState.Onboarded"/> == false). Mirrors
+        /// <c>OnboardingFlow.ShouldRun</c> so the wave loop and the FTUE agree on
+        /// who is a first-run player. No Core service yet ⇒ NOT first-run, so the
+        /// loop is never blocked when Core has not bootstrapped.
+        /// </summary>
+        private static bool IsFirstRun()
+        {
+            var svc = GameStateService.Instance;
+            if (svc == null || svc.State == null) return false;
+            return !svc.State.Onboarded;
+        }
+
+        // Audit 2026-05-30 (WO-139 #4): unsubscribe from all live enemy/boss
+        // events so stale callbacks don't fire into a torn-down manager across
+        // the breach->reload loop. Mirrors the subs in SpawnEnemy/SpawnApexBoss.
+        private void OnDisable()
+        {
+            foreach (Enemy e in _liveEnemies)
+            {
+                if (e == null) continue;
+                e.Died -= HandleEnemyDied;
+                e.ReachedHeart -= HandleEnemyReachedHeart;
+            }
+            _liveEnemies.Clear();
+
+            if (_liveApexBoss != null)
+            {
+                _liveApexBoss.Died -= HandleApexBossDied;
+                _liveApexBoss = null;
+            }
+
+            // WO-125 Bug 3: drop the Heart lose-condition subscription so a stale
+            // delegate can't fire into a torn-down manager across the breach/reload loop.
+            if (_heart != null && _heartDeathHooked)
+                _heart.OnHeartDestroyed -= HandleHeartDestroyed;
+            _heartDeathHooked = false;
         }
 
         private void Update()
@@ -230,6 +400,15 @@ namespace DeNelle.Village
             if (_heart == null)
                 _heart = FindAnyObjectByType<HeartController>();
 
+            // WO-125 Bug 3: hook the Heart's lose condition once the Heart is known.
+            // Idempotent — BeginLoop can re-run (e.g. after a Defend-the-Tower return),
+            // and the guard keeps us from stacking duplicate handlers on the same Heart.
+            if (_heart != null && !_heartDeathHooked)
+            {
+                _heart.OnHeartDestroyed += HandleHeartDestroyed;
+                _heartDeathHooked = true;
+            }
+
             if (_spawnPoints == null || _spawnPoints.Count == 0)
             {
                 _spawnPoints = new List<WaveSpawnPoint>(
@@ -256,6 +435,8 @@ namespace DeNelle.Village
             }
 
             _currentWaveId = waveId;
+            _enemyBestSqr.Clear();    // fresh stuck-tracking per wave
+            _enemyStuckTime.Clear();
             // The between-wave build window scales with the player's chosen
             // difficulty: the canonical WaveDef.CountdownSeconds (45 s first
             // wave, 300 s later) is multiplied by the DifficultyTuning factor so
@@ -265,6 +446,7 @@ namespace DeNelle.Village
             _countdownRemaining = Mathf.Max(0f, ScaledCountdown(wave.CountdownSeconds));
             _phase = WavePhase.Countdown;
             OnCountdownTick.Invoke(_countdownRemaining);
+            WaveCountdownUI.Instance?.StartCountdown(_countdownRemaining);
         }
 
         /// <summary>
@@ -355,6 +537,39 @@ namespace DeNelle.Village
                 }
             }
 
+            // DEF-21: group spawner — if a WaveEnemyGroup asset is assigned for
+            // this wave slot, spawn it alongside the JSON batches. Both systems
+            // complement each other; leave waves.json entries empty for group-only waves.
+            int groupIdx = waveId - 1;
+            if (_groupSpawner != null
+                && _waveGroupSequence != null
+                && groupIdx >= 0
+                && groupIdx < _waveGroupSequence.Count
+                && _waveGroupSequence[groupIdx] != null)
+            {
+                WaveSpawnPoint pt = (_spawnPoints != null && _spawnPoints.Count > 0)
+                    ? _spawnPoints[0] : null;
+                Vector3 spawnPos = pt != null
+                    ? pt.transform.position
+                    : transform.position;
+
+                List<Enemy> groupEnemies = _groupSpawner.SpawnGroup(
+                    _waveGroupSequence[groupIdx],
+                    spawnPos,
+                    _heart != null ? _heart.transform : null,
+                    _enemyRoot,
+                    _currentWaveId,
+                    ref _spawnInstanceCounter);
+
+                foreach (Enemy e in groupEnemies)
+                {
+                    if (e == null) continue;
+                    e.Died          += HandleEnemyDied;
+                    e.ReachedHeart  += HandleEnemyReachedHeart;
+                    _liveEnemies.Add(e);
+                }
+            }
+
             // A boss, if the wave names one, releases immediately at the north spawn.
             if (!string.IsNullOrEmpty(wave.Boss))
             {
@@ -386,10 +601,20 @@ namespace DeNelle.Village
 
             if (_apexBossPrefab == null)
             {
-                Debug.LogError(
-                    "[WaveManager] Wave declares an apex boss but no _apexBossPrefab is wired — " +
-                    "the Boss_Dragon prefab must be assigned (see docs/port-notes/dragon-wave-wiring.md).");
-                return;
+                // The live Village.unity predates the builder's _apexBossPrefab wiring
+                // (WireApexBossPrefab), so the serialized reference is null and no dragon
+                // ever spawns. Corruption-safe fallback (no risky village rebake): load the
+                // Boss_Dragon prefab copied into Resources/Enemies.
+                _apexBossPrefab = Resources.Load<DragonBoss>("Enemies/Boss_Dragon");
+                if (_apexBossPrefab == null)
+                {
+                    Debug.LogError(
+                        "[WaveManager] Apex wave has no _apexBossPrefab AND no " +
+                        "Resources/Enemies/Boss_Dragon fallback — no dragon will spawn.");
+                    return;
+                }
+                Debug.Log("[WaveManager] _apexBossPrefab was null (stale scene) — using the " +
+                          "Resources/Enemies/Boss_Dragon fallback so the apex dragon flies.");
             }
 
             // Spawn the dragon at cruise height above the Heart so it begins its
@@ -437,14 +662,33 @@ namespace DeNelle.Village
                 return;
             }
 
+            // DEF-52: telegraph ring on the ground while the batch delay ticks so
+            // the player gets a "something's coming" warning at the spawn point.
+            // Only shown when there is a meaningful delay to warn about (≥0.5 s).
+            PooledVfx telegraph = null;
+            if (batch.Delay >= 0.5f)
+                telegraph = VfxPool.GetTelegraph(point.transform.position);
+
             if (batch.Delay > 0f)
                 await UniTask.Delay(System.TimeSpan.FromSeconds(batch.Delay));
+
+            VfxPool.ReturnTelegraph(telegraph);
+            telegraph = null;
 
             for (int i = 0; i < Mathf.Max(0, batch.Count); i++)
             {
                 // The wave may have been breached / cleared while this batch
                 // was still draining — stop releasing if so.
                 if (_phase != WavePhase.Active) return;
+
+                // DEF-48: simultaneous enemy cap — stall the spawn if we're at capacity.
+                // _liveEnemies is pruned in TickActiveWave so the count is current.
+                if (_maxSimultaneousEnemies > 0 && _liveEnemies.Count >= _maxSimultaneousEnemies)
+                {
+                    await UniTask.WaitUntil(
+                        () => _liveEnemies.Count < _maxSimultaneousEnemies || _phase != WavePhase.Active);
+                    if (_phase != WavePhase.Active) return;
+                }
 
                 SpawnOne(def, point);
 
@@ -456,9 +700,17 @@ namespace DeNelle.Village
         /// <summary>Instantiates + configures one enemy at <paramref name="point"/>.</summary>
         private void SpawnOne(EnemyDef def, WaveSpawnPoint point)
         {
-            Vector3 pos = point.transform.position;
-            Quaternion rot = Quaternion.LookRotation(
-                point.HeadingToGate.sqrMagnitude > 0.0001f ? point.HeadingToGate : Vector3.forward);
+            Vector3 heading = point.HeadingToGate.sqrMagnitude > 0.0001f
+                ? point.HeadingToGate.normalized : Vector3.forward;
+            Quaternion rot = Quaternion.LookRotation(heading);
+
+            // Spread each enemy around the spawn marker (lateral + a little depth) so a
+            // batch advances as a loose MOB toward the gate/tree instead of stacking on
+            // one point and marching single-file. Perpendicular = lateral to the heading.
+            Vector3 lateral = Vector3.Cross(Vector3.up, heading);
+            Vector3 pos = point.transform.position
+                        + lateral * UnityEngine.Random.Range(-4.5f, 4.5f)
+                        + heading * UnityEngine.Random.Range(-3f, 3f);
 
             // Snap the spawn position to the nearest NavMesh sample so a
             // slightly-off-mesh spawn point doesn't strand the enemy off-mesh
@@ -471,11 +723,27 @@ namespace DeNelle.Village
 
             Enemy enemy = _enemyPrefab != null
                 ? Instantiate(_enemyPrefab, pos, rot, _enemyRoot)
-                : BuildPlaceholderEnemy(pos, rot);
+                : EnemyFactory.Build(def, pos, rot, _enemyRoot);   // skinned, no more pill
+
+            // The hero/pet target sweeps find enemies via GetComponentInParent<IDamageable>,
+            // which resolves to EnemyDamageable. The placeholder capsule (and some prefabs)
+            // don't carry it — add it so the hero/pets can actually ACQUIRE + DAMAGE this
+            // wave enemy. Without it the enemy marches + attacks but is INVULNERABLE to you.
+            if (enemy.GetComponent<EnemyDamageable>() == null)
+                enemy.gameObject.AddComponent<EnemyDamageable>();
 
             string instanceId = $"wave{_currentWaveId}-{def.Id}-{_spawnInstanceCounter++}";
             Transform heartT = _heart != null ? _heart.transform : null;
             enemy.Configure(instanceId, def, heartT);
+
+            // DEF-59: apply wave-scaling multipliers if a curve SO is assigned.
+            if (_scalingCurve != null)
+            {
+                enemy.ApplyWaveScaling(
+                    _scalingCurve.HpMultiplier(_currentWaveId),
+                    _scalingCurve.SpeedMultiplier(_currentWaveId),
+                    _scalingCurve.DamageMultiplier(_currentWaveId));
+            }
 
             enemy.Died += HandleEnemyDied;
             enemy.ReachedHeart += HandleEnemyReachedHeart;
@@ -517,6 +785,38 @@ namespace DeNelle.Village
             // Prune destroyed enemies (Die() destroys the GameObject -> null ref).
             _liveEnemies.RemoveAll(e => e == null);
 
+            // FAILSAFE: cull a stuck enemy (off-mesh / boxed-in / unpathable) that makes
+            // no progress toward the Heart for StuckTimeout, so a single Hollow One can't
+            // hang the wave forever and block the next wave's countdown.
+            if (_heart != null)
+            {
+                Vector3 hpos = _heart.transform.position;
+                for (int i = _liveEnemies.Count - 1; i >= 0; i--)
+                {
+                    Enemy e = _liveEnemies[i];
+                    if (e == null || e.IsDead) continue;
+                    float sqr = Vector3.ProjectOnPlane(e.transform.position - hpos, Vector3.up).sqrMagnitude;
+                    if (!_enemyBestSqr.TryGetValue(e, out float best) || sqr < best - 0.25f)
+                    {
+                        _enemyBestSqr[e]   = sqr;   // got closer → reset the stuck timer
+                        _enemyStuckTime[e] = 0f;
+                    }
+                    else
+                    {
+                        float t = (_enemyStuckTime.TryGetValue(e, out float tv) ? tv : 0f) + Time.deltaTime;
+                        _enemyStuckTime[e] = t;
+                        if (t >= StuckTimeout)
+                        {
+                            Debug.LogWarning($"[WaveManager] Culling stuck enemy '{e.name}' (no progress to the Heart for {StuckTimeout:F0}s) so wave {_currentWaveId} can advance.");
+                            _enemyBestSqr.Remove(e);
+                            _enemyStuckTime.Remove(e);
+                            e.Kill();   // fires Died -> HandleEnemyDied removes it from _liveEnemies
+                        }
+                    }
+                }
+                _liveEnemies.RemoveAll(e => e == null);
+            }
+
             if (_breachArmed && _heart != null)
             {
                 Vector3 heartPos = _heart.transform.position;
@@ -554,13 +854,107 @@ namespace DeNelle.Village
         //  Wave clear
         // =====================================================================
 
-        /// <summary>Wave cleared without a breach — advance to the next countdown.</summary>
+        /// <summary>Wave cleared without a breach — award crystals then advance.</summary>
         private void CompleteWave()
         {
             int cleared = _currentWaveId;
             if (_heart != null) _heart.SetState(HeartState.Serene);
+
+            AwardWaveCrystals(cleared);
+
             OnWaveCleared.Invoke(cleared);
+
+            // WO2: analytics.
+            DeNelle.Core.Analytics.EventTracker.Track("wave_completed", new
+            {
+                waveId     = cleared,
+                liveEnemiesKilled = 0, // filled by future combat telemetry pass
+            });
+
             EnterCountdown(cleared + 1);
+        }
+
+        /// <summary>
+        /// Evaluates boss-wave drops and active-event bonuses from <see cref="ServerConfig"/>
+        /// and credits the won crystals to the BUILD-SPEND pool
+        /// (<see cref="GameState.Resources"/>.Crystals) via
+        /// <see cref="GameStateService.AddCrystals"/> — the exact balance the
+        /// BuildMenu spends from and the village HUD top-bar displays (WO-131
+        /// follow-up, owner decision (a): "win waves → build towers" on one
+        /// currency the player sees). This deliberately does NOT touch the
+        /// separate AetherCrystals empower pool (CrystalEconomy); every other
+        /// AetherCrystals source (CrystalMine, MineNode, tower-empower, TalentTree,
+        /// BattlePass, Referral, Promo) stays on AetherCrystals.
+        /// Drop chance and ranges are all backend-controlled — no rebuild needed to tune.
+        /// </summary>
+        private void AwardWaveCrystals(int waveId)
+        {
+            var cfg = GameStateService.Instance != null
+                ? GameStateService.Instance.ServerConfig
+                : ServerConfig.Default;
+
+            int totalAward = 0;
+
+            // ── Boss-wave drop (every Nth wave, chance-based) ─────────────────
+            if (waveId % cfg.BossInterval == 0)
+            {
+                if (UnityEngine.Random.value <= cfg.DropChance)
+                {
+                    int drop = UnityEngine.Random.Range(cfg.DropMin, cfg.DropMax + 1);
+                    totalAward += drop;
+                    Debug.Log($"[WaveManager] Boss-wave crystal drop — wave {waveId} awarded {drop} Crystal(s) to the build-spend pool. " +
+                              $"(chance={cfg.DropChance:P0}, range={cfg.DropMin}–{cfg.DropMax})");
+                }
+                else
+                {
+                    Debug.Log($"[WaveManager] Boss-wave crystal drop — wave {waveId} missed. " +
+                              $"(chance={cfg.DropChance:P0})");
+                }
+            }
+
+            // ── Special event bonus (every wave while event is active) ────────
+            if (cfg.IsEventActive() && cfg.EventBonus > 0)
+            {
+                totalAward += cfg.EventBonus;
+                Debug.Log($"[WaveManager] Event bonus '{cfg.ActiveEventName}' — +{cfg.EventBonus} crystal(s) on wave {waveId}.");
+            }
+
+            if (totalAward > 0)
+                GameStateService.Instance?.AddCrystals(totalAward);
+        }
+
+        // =====================================================================
+        //  Defeat — the Heart fell (village lose condition, WO-125 Bug 3)
+        // =====================================================================
+
+        /// <summary>
+        /// WO-125 Bug 3 — the Heart of Elarion fell (HP 0). This is the village's
+        /// real LOSE condition: the dragon (or any source) drained the Heart, and
+        /// previously nothing reacted. Halt the wave loop into the terminal
+        /// <see cref="WavePhase.Defeated"/> state (no further countdown/spawn ticks),
+        /// stop the live boss so it can't keep striking a dead Heart, and raise
+        /// <see cref="OnDefeat"/> so a bound defeat screen can present "Elarion has
+        /// fallen." Fires at most once (HeartController guards the source event).
+        /// </summary>
+        private void HandleHeartDestroyed()
+        {
+            if (_phase == WavePhase.Defeated) return;   // already lost — idempotent
+            _phase = WavePhase.Defeated;
+
+            // Stop the apex boss mid-encounter — a dead Heart should not keep taking
+            // swoop/breath hits, and the boss's death-fall would otherwise read oddly.
+            if (_liveApexBoss != null)
+            {
+                _liveApexBoss.Died -= HandleApexBossDied;
+                _liveApexBoss.Kill();
+                _liveApexBoss = null;
+            }
+
+            // Show the Heart at its terminal critical state for the defeat beat.
+            _heart?.SetState(HeartState.Critical);
+
+            Debug.Log("[WaveManager] The Heart of Elarion has fallen — village defeat. Wave loop halted.");
+            OnDefeat?.Invoke();
         }
 
         // =====================================================================
@@ -568,9 +962,11 @@ namespace DeNelle.Village
         // =====================================================================
 
         /// <summary>
-        /// One or more enemies crossed the inner ring. Pauses the loop, builds a
-        /// <see cref="BattleParams"/> from the breaching roster and hands off to
-        /// the ATB scene via the real <see cref="SceneRouter.GoBattle"/> API.
+        /// One or more enemies crossed the inner ring. Pauses the loop and offers
+        /// the breach CHOICE (WO-47): the player picks the ATB "Last Stand" or the
+        /// real-time "Defend the Tower" shooter (PatriciaLightMode). The choice
+        /// overlay is built in code; if it cannot be created the breach falls back
+        /// to the ATB hand-off so a breach is never a dead end.
         /// </summary>
         private void TriggerBreach()
         {
@@ -578,14 +974,99 @@ namespace DeNelle.Village
             OnBreach.Invoke(_currentWaveId);
             if (_heart != null) _heart.SetState(HeartState.Critical);
 
+            // Snapshot the breaching roster's count + the breaching enemy refs
+            // BEFORE either branch consumes them. PatriciaLightMode runs IN the
+            // village (no scene change), so it borrows the same Heart + a fresh
+            // assault rather than the ATB roster; the ATB branch keeps using the
+            // breach roster verbatim (see EnterAtbBattle).
+            int breachCount = _breachRoster.Count;
+
+            // WO-47 breach choice: show the code-built Last-Stand / Defend prompt.
+            // It returns false if it could not be created (no UIDocument host /
+            // missing PanelSettings) — in that case fall through to the ATB path
+            // immediately so the breach still resolves.
+            bool shown = BreachChoiceOverlay.Show(
+                heart: _heart,
+                onLastStand: EnterAtbBattle,
+                onDefendTower: EnterDefendTower);
+
+            if (!shown)
+            {
+                Debug.LogWarning(
+                    "[WaveManager] Breach choice overlay could not be created — " +
+                    "falling back to the ATB Last Stand so the breach is not a dead end.");
+                EnterAtbBattle();
+                return;
+            }
+
+            Debug.Log(
+                $"[WaveManager] Wave {_currentWaveId} breached with {breachCount} enemies — " +
+                "awaiting the player's Last-Stand / Defend-the-Tower choice.");
+        }
+
+        /// <summary>
+        /// WO-47 "Defend the Tower" (Phase 2): clears the rest of the wave off the
+        /// village field (the breaching enemies + any remaining live enemies + the
+        /// apex boss), stashes the breach context, and loads the DEDICATED
+        /// <see cref="SceneRouter.PatriciaLight"/> scene — the third-person tower-
+        /// defense shooter (driven by <c>PatriciaLightController</c>). On win/lose
+        /// that scene returns to the village via <see cref="SceneRouter.GoVillage"/>,
+        /// where a fresh WaveManager re-runs the loop — same lifecycle as the ATB
+        /// path. (Phase 1's in-place <c>PatriciaLightMode.Begin</c> is superseded.)
+        /// </summary>
+        private void EnterDefendTower()
+        {
+            // Clear the wave off the field so nothing lingers when we return from
+            // the dedicated scene (the shooter spawns its own assault there).
+            // Iterate a SNAPSHOT: Kill() -> Die() removes the enemy from _liveEnemies,
+            // which otherwise throws "Collection was modified" mid-enumeration and
+            // aborts the breach -> Defend-the-Tower transition (dev-log error at
+            // WaveManager.cs:722 / BreachChoiceOverlay.Resolve).
+            foreach (Enemy e in _liveEnemies.ToArray())
+                if (e != null) e.Kill();
+            _liveEnemies.Clear();
+            _breachRoster.Clear();
+
+            if (_liveApexBoss != null)
+            {
+                _liveApexBoss.Died -= HandleApexBossDied;
+                Destroy(_liveApexBoss.gameObject);
+                _liveApexBoss = null;
+            }
+
+            Debug.Log($"[WaveManager] Wave {_currentWaveId} breach — loading Defend the Tower (Patricia Light) scene.");
+
+            // Stash the breach context the way PendingBattle works, then load the
+            // dedicated scene. PatriciaLightController reads PendingPatriciaLight on
+            // the far side and returns to the village when it resolves.
+            var p = new PatriciaLightParams
+            {
+                Wave = _currentWaveId,
+                ReturnScene = SceneRouter.Village,
+            };
+            SceneRouter.GoPatriciaLight(p).Forget();
+        }
+
+        /// <summary>
+        /// Consumes the breaching roster and hands off to the ATB "Last Stand"
+        /// scene via the real <see cref="SceneRouter.GoBattle"/> API. This is the
+        /// unchanged pre-WO-47 breach behaviour, extracted so the breach choice
+        /// prompt (and its fallback) can invoke it directly.
+        /// </summary>
+        private void EnterAtbBattle()
+        {
             // BreachedIds: the 3D-layer ids of the breaching enemies. The ATB
             // BattleController maps these onto engine combatant defs (today via
             // its fallback; the per-enemy mapper is its own follow-up).
+            // BUG-009: hand the ATB the ENGINE def id per breacher (Enemy.EngineDefId
+            // → a valid ENEMY_DEFS key like "skeleton"/"necromancer"), not the
+            // per-instance EnemyId — so the battle roster matches who actually
+            // breached instead of always using the single fallback enemy.
             var breachedIds = new List<string>(_breachRoster.Count);
             foreach (Enemy e in _breachRoster)
             {
-                if (e != null && !string.IsNullOrEmpty(e.EnemyId))
-                    breachedIds.Add(e.EnemyId);
+                if (e != null && !string.IsNullOrEmpty(e.EngineDefId))
+                    breachedIds.Add(e.EngineDefId);
             }
 
             var battleParams = new BattleParams
@@ -637,6 +1118,8 @@ namespace DeNelle.Village
             {
                 enemy.Died -= HandleEnemyDied;
                 enemy.ReachedHeart -= HandleEnemyReachedHeart;
+                _enemyBestSqr.Remove(enemy);     // bug-triage P1: prune stuck-tracking on normal death (was leaking dead keys)
+                _enemyStuckTime.Remove(enemy);
             }
             _liveEnemies.Remove(enemy);
         }
@@ -673,9 +1156,19 @@ namespace DeNelle.Village
 
         private WaveSpawnPoint FindSpawnPoint(string spawnId)
         {
-            if (string.IsNullOrEmpty(spawnId) || _spawnPoints == null) return null;
+            if (_spawnPoints == null) return null;
+            if (!string.IsNullOrEmpty(spawnId))
+                foreach (WaveSpawnPoint p in _spawnPoints)
+                    if (p != null && p.SpawnId == spawnId) return p;
+            // Bug-fix (audit 2026-05-30): a missing named id (e.g. boss "spawn-0") used to skip the
+            // whole batch, so the boss/apex never spawned. Fall back to the first valid spawn point.
             foreach (WaveSpawnPoint p in _spawnPoints)
-                if (p != null && p.SpawnId == spawnId) return p;
+                if (p != null)
+                {
+                    if (!string.IsNullOrEmpty(spawnId))
+                        Debug.LogWarning($"[WaveManager] spawn '{spawnId}' not found — using first spawn point.");
+                    return p;
+                }
             return null;
         }
 

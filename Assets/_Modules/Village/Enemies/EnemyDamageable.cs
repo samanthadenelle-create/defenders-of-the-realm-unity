@@ -38,9 +38,18 @@ namespace DeNelle.Village
     /// </summary>
     [DisallowMultipleComponent]
     [RequireComponent(typeof(Enemy))]
-    public sealed class EnemyDamageable : MonoBehaviour, IDamageable
+    public sealed class EnemyDamageable : MonoBehaviour, IDamageable, IDamageTintable
     {
         private Enemy _enemy;
+
+        // 2026-06-02 ROOT FIX: Enemy has [RequireComponent(typeof(EnemyDamageable))], so a
+        // runtime AddComponent<Enemy>() adds THIS adapter FIRST — its Awake then caches
+        // GetComponent<Enemy>() while Enemy doesn't exist yet, leaving _enemy null forever
+        // and IsAlive permanently false (targeting + damage silently skip the enemy). Re-
+        // resolve lazily so the cache self-heals regardless of component-add order.
+        private Enemy E => _enemy != null
+            ? _enemy
+            : (_enemy = GetComponent<Enemy>() ?? GetComponentInParent<Enemy>());
 
         // --- pending status timers (consumed when Enemy models them) ---
         private float _slowUntil;
@@ -54,10 +63,10 @@ namespace DeNelle.Village
         public Vector3 WorldPosition => transform.position;
 
         /// <summary>Current enemy HP.</summary>
-        public float Hp => _enemy != null ? _enemy.Hp : 0f;
+        public float Hp => E != null ? E.Hp : 0f;
 
         /// <summary>True while the enemy is alive and a valid attack target.</summary>
-        public bool IsAlive => _enemy != null && !_enemy.IsDead && _enemy.Hp > 0f;
+        public bool IsAlive => E != null && !E.IsDead && E.Hp > 0f;
 
         /// <summary>True while a freeze status is still active (Frost Nova / Glacial Bond).</summary>
         public bool IsFrozen => Time.time < _freezeUntil;
@@ -70,7 +79,9 @@ namespace DeNelle.Village
 
         private void Awake()
         {
-            _enemy = GetComponent<Enemy>();
+            // Best-effort early cache; the E accessor self-heals if Enemy isn't on the
+            // object yet at Awake (RequireComponent add-order) or sits on a parent.
+            _enemy = GetComponent<Enemy>() ?? GetComponentInParent<Enemy>();
         }
 
         /// <summary>Routes ability / pet damage into the existing <see cref="Enemy.TakeDamage"/>.</summary>
@@ -78,10 +89,21 @@ namespace DeNelle.Village
         /// <param name="element">Element of the damage source (resist math is a later pass).</param>
         public void TakeDamage(float amount, DamageElement element)
         {
-            if (_enemy == null || !IsAlive) return;
+            if (E == null || !IsAlive) return;
+            // WO-219: stamp the element so Enemy.TakeDamageFrom can tint the impact
+            // burst (flame / ice / aether) for this one hit. None = melee/physical →
+            // Enemy keeps its existing grey-spark VfxPool path. Consumed once there.
+            E.SetNextImpactElement(element);
             // Element resist / bonus math is a later tuning pass — enemies.json
             // does not yet carry per-element resistances. Forward raw damage.
-            _enemy.TakeDamage(amount);
+            E.TakeDamage(amount);
+        }
+
+        /// <summary>Forwards the source tint to the Enemy, which colours the next
+        /// damage number it spawns (hero hits vs pet hits read differently).</summary>
+        public void SetNextDamageTint(Color color)
+        {
+            if (E != null) E.SetNextDamageTint(color);
         }
 
         /// <summary>

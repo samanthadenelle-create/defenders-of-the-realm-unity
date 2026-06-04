@@ -56,6 +56,10 @@ namespace DeNelle.BattleATB
         [Tooltip("The UIDocument carrying BattleHUD.uxml. Defaults to this GameObject's.")]
         [SerializeField] private UIDocument _hudDocument;
 
+        // WO-163: cached "Attack" trigger hash — guards SubmitPlayerAction's swing
+        // so it never drives an absent param (the placeholder capsule has none).
+        private static readonly int BattleControllerAttackHash = Animator.StringToHash("Attack");
+
         [Header("Placeholder combatants (capsule meshes)")]
         [Tooltip("Transform of the hero capsule.")]
         [SerializeField] private Transform _heroCapsule;
@@ -77,51 +81,51 @@ namespace DeNelle.BattleATB
         [SerializeField] private float _returnDelaySeconds = 2.5f;
 
         // ---------------------------------------------------------------------
-        // Cached UI element queries — bound in OnEnable
+        // Dynamic HUD — WO-169 P1 code-built party battle screen
         // ---------------------------------------------------------------------
 
-        private Label _statusBanner;
-        private VisualElement _heroCard;
-        private Label _heroName;
-        private VisualElement _heroHpFill;
-        private VisualElement _heroAtbFill;
-        private VisualElement _enemyCard;
-        private Label _enemyName;
-        private VisualElement _enemyHpFill;
-        private VisualElement _enemyAtbFill;
-        private Button _attackButton;
-        private ScrollView _battleLog;
-        private VisualElement _battleLogContent;
+        /// <summary>The dynamic, data-bound FF HUD (enemies left, party right). Owns
+        /// all combatant cards, the command menu, skill/item menus, and the target
+        /// picker. The controller wires its action callback to ChooseAction.</summary>
+        private BattleHud _hud;
 
-        /// <summary>How many log entries have already been rendered (append-only).</summary>
-        private int _renderedLogCount;
+        /// <summary>WO-170 — the retro 2D VFX presenter layered over the HUD. Pure
+        /// presentation: replays the battle log as hit-flashes / floating numbers /
+        /// elemental bursts / screen flash+shake. Never touches the engine.</summary>
+        private BattleVfx _vfx;
 
         /// <summary>True once the result hand-back has been kicked off (fire once).</summary>
         private bool _returnScheduled;
 
+        /// <summary>Where this battle came from — a village tree-breach "Last Stand"
+        /// (Village) vs a dungeon encounter (Dungeon). Gates Flee: you cannot flee
+        /// the Last Stand (owner). Defaults to Dungeon so the dev/direct-play path
+        /// stays fully testable (Flee available).</summary>
+        private BattleSource _source = BattleSource.Dungeon;
+
         // ---------------------------------------------------------------------
         // Lifecycle
         // ---------------------------------------------------------------------
+
+        private bool _bound;        // BindUi() succeeded (UI elements queried)
+        private bool _subscribed;   // runtime-state events + attack button wired
 
         private void Awake()
         {
             if (_hudDocument == null) _hudDocument = GetComponent<UIDocument>();
         }
 
+        // CRITICAL: UI binding + event subscription happen in Start(), NOT here.
+        // A UIDocument builds its rootVisualElement in its OWN OnEnable, and script
+        // execution order means THIS OnEnable can run first — so binding here read a
+        // null root, BindUi() failed, OnEnable bailed before ever subscribing, and
+        // the HUD never rendered. That is the long-standing "ATB shows only the
+        // capsule combatants, no 2D turn-based window" bug. By Start() the document
+        // root is guaranteed built. OnEnable only RE-subscribes on a later re-enable
+        // (once first-time binding in Start has happened).
         private void OnEnable()
         {
-            if (!BindUi()) return;
-            if (_runtimeState == null)
-            {
-                Debug.LogError("[BattleController] No ATBRuntimeState assigned — battle cannot run.");
-                return;
-            }
-
-            // Subscribe — the "subscribe in OnEnable" half of the Zustand parallel.
-            _runtimeState.OnBattleChanged.AddListener(HandleBattleChanged);
-            _runtimeState.OnActionSubmitted.AddListener(HandleActionSubmitted);
-            _runtimeState.OnOutcome.AddListener(HandleOutcome);
-            if (_attackButton != null) _attackButton.clicked += HandleAttackClicked;
+            if (_bound) Subscribe();
         }
 
         private void OnDisable()
@@ -130,24 +134,58 @@ namespace DeNelle.BattleATB
             {
                 _runtimeState.OnBattleChanged.RemoveListener(HandleBattleChanged);
                 _runtimeState.OnActionSubmitted.RemoveListener(HandleActionSubmitted);
+                _runtimeState.OnTurnResolved.RemoveListener(HandleTurnResolved);
                 _runtimeState.OnOutcome.RemoveListener(HandleOutcome);
             }
-            if (_attackButton != null) _attackButton.clicked -= HandleAttackClicked;
+            _subscribed = false;
         }
 
         private void Start()
         {
-            if (_runtimeState == null) return;
-            _renderedLogCount = 0;
+            // Bind the HUD now that UIDocument.rootVisualElement is built (see the
+            // OnEnable note). Without a bound HUD the battle would run invisibly.
+            if (!BindUi())
+            {
+                Debug.LogError("[BattleController] BattleHUD failed to bind in Start — HUD will not render.");
+                return;
+            }
+            _bound = true;
+            Subscribe();   // wire events AFTER binding
+
+            if (_runtimeState == null)
+            {
+                Debug.LogError("[BattleController] No ATBRuntimeState assigned — battle cannot run.");
+                return;
+            }
+            _hud?.ResetLog();
+            _vfx?.Reset();   // WO-170 — clear the VFX log-diff cursor for the new fight
             _returnScheduled = false;
 
             BattleSetup setup = BuildSetup();
-            // The handoff source: a wave > 0 from PendingBattle means a village
-            // breach; the dev fallback path is treated as a village battle too.
-            _runtimeState.StartBattle(setup, BattleSource.Village);
-            // StartBattle fires OnBattleChanged synchronously — but Start may run
-            // after that listener was wired, so render once explicitly to be safe.
+            // Tag the source from the handoff: Wave > 0 is a village tree-breach
+            // "Last Stand" (Heart consequences commit on close); Wave == 0 or no
+            // handoff (dungeon / dev) is a Dungeon encounter (no village damage).
+            // Previously hardcoded Village, which mis-tagged dungeon battles.
+            _source = ResolveSource();
+            _runtimeState.StartBattle(setup, _source);
+            // StartBattle fires OnBattleChanged synchronously — the listener is wired
+            // above, but render once explicitly as a belt-and-suspenders first paint.
             Render(_runtimeState.Battle);
+
+            // WO-68: arm the turn-timer now that the battle is live. Safe null-
+            // conditional — ATBCombatManager is optional (tests / direct-play paths).
+            ATBCombatManager.Instance?.StartCombat();
+        }
+
+        /// <summary>Wires the runtime-state events + the attack button. Idempotent.</summary>
+        private void Subscribe()
+        {
+            if (_subscribed || _runtimeState == null) return;
+            _runtimeState.OnBattleChanged.AddListener(HandleBattleChanged);
+            _runtimeState.OnActionSubmitted.AddListener(HandleActionSubmitted);
+            _runtimeState.OnTurnResolved.AddListener(HandleTurnResolved);
+            _runtimeState.OnOutcome.AddListener(HandleOutcome);
+            _subscribed = true;
         }
 
         // ---------------------------------------------------------------------
@@ -166,41 +204,257 @@ namespace DeNelle.BattleATB
             int wave = handoff != null && handoff.Wave > 0 ? handoff.Wave : 1;
             int seed = _fallbackSeed;
 
-            // Week-2 placeholder: one hero + one enemy. The full breach roster
-            // (handoff.BreachedIds → per-enemy BreachEnemySpec) lands with the
-            // Week-4 village breach wiring; for now a single enemy proves the loop.
-            string enemyDefId = ResolveEnemyDefId(handoff);
+            // BUG-009: build the real breach roster — one enemy per breaching id,
+            // each mapped to a valid engine def (was a single inspector-fallback
+            // enemy regardless of who actually breached).
+            var enemies = BuildEnemyRoster(handoff);
 
-            var enemies = new List<BreachEnemySpec>
-            {
-                new BreachEnemySpec { DefId = enemyDefId },
-            };
+            HeroClass heroClass = ResolveHeroClass(); // owner: ATB ran as Mage even when you're an Archer
+
+            // WO-169 P0 — surface a REAL party of up to 4 (hero + the player's pets),
+            // each with its own per-member control mode. Was Pets = empty → forced 1v1.
+            List<PartyMemberSpec> party = BuildParty(heroClass);
 
             return new BattleSetup
             {
                 Wave = wave,
                 Seed = seed,
-                HeroClass = HeroClass.Mage, // v2 foundation ships Mage / Blaise only
+                // Multi-member party is authoritative; the legacy HeroClass/Pets
+                // fields are left as a harmless fallback for any path that ignores
+                // PartyMembers (and they keep the engine's legacy branch buildable).
+                PartyMembers = party,
+                HeroClass = heroClass,
                 HeroName = _fallbackHeroName,
                 Pets = new List<PartyPetSpec>(),
                 Enemies = enemies,
-                Inventory = new Dictionary<ItemKind, int>(),
+                Inventory = BuildInventory(),
                 Reinforcements = false,
             };
         }
 
         /// <summary>
-        /// Pick the enemy def id. The Week-2 handoff carries 3D-layer ids in
-        /// <see cref="BattleParams.BreachedIds"/>, not engine def ids, so until the
-        /// breach mapper exists this always uses the inspector fallback.
+        /// WO-169 P0 — assemble the playable party from live game state, capped at 4
+        /// at the controller/setup level (NOT by touching the engine MAX_PARTY).
+        /// Member 0 is the Keeper/hero (defaults to Player control); up to 3 of the
+        /// player's pets follow (default AI). Each member's stored control-mode
+        /// preference (AtbControlModeStore) wins over the default once set, and is
+        /// seeded on first join so it persists.
         /// </summary>
-        private string ResolveEnemyDefId(BattleParams handoff)
+        private List<PartyMemberSpec> BuildParty(HeroClass heroClass)
         {
-            // BreachedIds are 3D-sim ids — mapping them to ENEMY_DEFS keys is the
-            // Week-4 breach trigger's job. Use the configured fallback for now.
-            string id = _fallbackEnemyDefId;
-            if (string.IsNullOrEmpty(id)) id = "skeleton";
-            return id;
+            const int MaxParty = 4; // controller-level cap; engine MAX_PARTY untouched
+            var party = new List<PartyMemberSpec>();
+
+            // Hero / Keeper — id "hero", default Player.
+            party.Add(MakeMember(
+                id: "hero",
+                name: _fallbackHeroName,
+                heroClass: heroClass,
+                species: null,
+                bondRank: 0,
+                aiMode: PetAiMode.Balanced,
+                defaultMode: ControlMode.Player));
+
+            // The player's collected pets → companion members (default AI).
+            var svc = DeNelle.Core.State.GameStateService.Instance;
+            var state = (svc != null) ? svc.State : null;
+            if (state != null && state.Pets != null)
+            {
+                int idx = 0;
+                foreach (var pet in state.Pets)
+                {
+                    if (party.Count >= MaxParty) break;
+                    PetSpecies species = MapPetSpecies(pet.Species);
+                    int bond = BondRankFor(state, pet.Species);
+                    string name = !string.IsNullOrEmpty(pet.Nickname) ? pet.Nickname : DefaultPetName(species);
+                    party.Add(MakeMember(
+                        id: $"pet-{idx}",
+                        name: name,
+                        heroClass: null,
+                        species: species,
+                        bondRank: bond,
+                        aiMode: PetAiMode.Balanced,
+                        defaultMode: ControlMode.AI));
+                    idx++;
+                }
+            }
+
+            Debug.Log($"[BattleController] ATB party surfaced: {party.Count} member(s) " +
+                      $"(hero {heroClass} + {party.Count - 1} pet(s)).");
+            return party;
+        }
+
+        /// <summary>Build one member, applying the persisted control-mode preference
+        /// (seeding the default on first join so the choice sticks).</summary>
+        private static PartyMemberSpec MakeMember(
+            string id, string name, HeroClass? heroClass, PetSpecies? species,
+            int bondRank, PetAiMode aiMode, ControlMode defaultMode)
+        {
+            if (!AtbControlModeStore.HasPreference(id))
+                AtbControlModeStore.Set(id, defaultMode);
+            ControlMode mode = AtbControlModeStore.Get(id, defaultMode);
+            return new PartyMemberSpec
+            {
+                Id = id,
+                Name = name,
+                HeroClass = heroClass,
+                Species = species,
+                BondRank = bondRank,
+                AiMode = aiMode,
+                ControlMode = mode,
+            };
+        }
+
+        /// <summary>Map the Core pet-species enum onto the engine's. Same three
+        /// species, same order — a 1:1 projection.</summary>
+        private static PetSpecies MapPetSpecies(DeNelle.Core.State.PetSpecies s)
+        {
+            switch (s)
+            {
+                case DeNelle.Core.State.PetSpecies.AetherSprite: return PetSpecies.AetherSprite;
+                case DeNelle.Core.State.PetSpecies.FlamePup: return PetSpecies.FlamePup;
+                case DeNelle.Core.State.PetSpecies.IceWolf: return PetSpecies.IceWolf;
+                default: return PetSpecies.AetherSprite;
+            }
+        }
+
+        /// <summary>Bond rank for a species from GameState.PetBonds [Aether,Flame,Ice].</summary>
+        private static int BondRankFor(DeNelle.Core.State.GameState state, DeNelle.Core.State.PetSpecies s)
+        {
+            if (state.PetBonds == null) return 0;
+            int i = (int)s; // enum order matches the [Aether, Flame, Ice] bond list
+            return (i >= 0 && i < state.PetBonds.Count) ? Mathf.Clamp(state.PetBonds[i], 0, 4) : 0;
+        }
+
+        private static string DefaultPetName(PetSpecies s)
+        {
+            switch (s)
+            {
+                case PetSpecies.FlamePup: return "Flame Pup";
+                case PetSpecies.IceWolf: return "Ice Wolf";
+                default: return "Aether Sprite";
+            }
+        }
+
+        /// <summary>The carried item inventory. Reads the player's ATB consumables
+        /// from GameState; seeds a few potions if the pouch is empty so Item is
+        /// usable in dev/direct-play (preserves the old behaviour).</summary>
+        private static Dictionary<ItemKind, int> BuildInventory()
+        {
+            var inv = new Dictionary<ItemKind, int>();
+            var svc = DeNelle.Core.State.GameStateService.Instance;
+            var state = (svc != null) ? svc.State : null;
+            if (state != null)
+            {
+                inv[ItemKind.Potion] = Mathf.Max(0, state.Inventory.Potions);
+                inv[ItemKind.ManaCrystal] = Mathf.Max(0, state.Inventory.ManaCrystals);
+                inv[ItemKind.Cleanse] = Mathf.Max(0, state.Inventory.Cleanses);
+            }
+            int total = 0;
+            foreach (var kv in inv) total += kv.Value;
+            if (total == 0) inv[ItemKind.Potion] = 3; // keep Item usable in dev
+            return inv;
+        }
+
+        /// <summary>
+        /// The hero's class for this battle, read from the live GameState so the ATB
+        /// hero matches the class the player chose (owner: "drops into the stub with
+        /// Mage — started as Archer"). GameState carries a Core HeroClassOpt; map it
+        /// to the engine HeroClass. Falls back to Mage when there is no save / None.
+        /// </summary>
+        private static HeroClass ResolveHeroClass()
+        {
+            var svc = DeNelle.Core.State.GameStateService.Instance;
+            var opt = (svc != null && svc.State != null)
+                ? svc.State.HeroClass
+                : DeNelle.Core.State.HeroClassOpt.None;
+            HeroClass cls;
+            switch (opt)
+            {
+                case DeNelle.Core.State.HeroClassOpt.Knight: cls = HeroClass.Knight; break;
+                case DeNelle.Core.State.HeroClassOpt.Ranger: cls = HeroClass.Ranger; break;
+                case DeNelle.Core.State.HeroClassOpt.Mage:   cls = HeroClass.Mage;   break;
+                // WO-226: the Cleric is a caster — it reuses the Mage archetype in the
+                // ATB engine (stats/abilities) until it gets its own kit. Mapping it
+                // here keeps the engine HeroClass enum 3-valued so HERO_STATS /
+                // HERO_ABILITIES lookups never miss a key.
+                case DeNelle.Core.State.HeroClassOpt.Cleric: cls = HeroClass.Mage;   break;
+                default:                                     cls = HeroClass.Mage;   break; // no save / None
+            }
+            Debug.Log($"[BattleController] ATB hero class resolved to {cls} (GameState={opt}).");
+            return cls;
+        }
+
+        /// <summary>
+        /// BUG-009: builds the ATB enemy roster from the breach handoff — one
+        /// <see cref="BreachEnemySpec"/> per breaching id, each mapped to a valid
+        /// <see cref="Defs.ENEMY_DEFS"/> key, capped so a huge breach stays a
+        /// playable battle. WaveManager now passes engine def ids (Enemy.EngineDefId)
+        /// in <see cref="BattleParams.BreachedIds"/>, so the roster matches who
+        /// actually breached. Empty / no handoff (dev / direct play) → one fallback.
+        /// </summary>
+        private List<BreachEnemySpec> BuildEnemyRoster(BattleParams handoff)
+        {
+            const int MaxEnemies = 6;
+            var roster = new List<BreachEnemySpec>();
+
+            string[] ids = handoff != null ? handoff.BreachedIds : null;
+            if (ids != null)
+            {
+                foreach (string raw in ids)
+                {
+                    if (roster.Count >= MaxEnemies) break;
+                    roster.Add(new BreachEnemySpec { DefId = MapToEngineDef(raw) });
+                }
+            }
+
+            if (roster.Count == 0)
+            {
+                string fb = string.IsNullOrEmpty(_fallbackEnemyDefId) ? "skeleton" : _fallbackEnemyDefId;
+                roster.Add(new BreachEnemySpec { DefId = MapToEngineDef(fb) });
+            }
+            return roster;
+        }
+
+        /// <summary>
+        /// Maps a breached-enemy id onto a valid <see cref="Defs.ENEMY_DEFS"/> key.
+        /// Exact engine keys (e.g. "skeleton", "necromancer") pass straight through;
+        /// village enemies.json ids ("hollow-walker", "hollow-warrior", "hollow-rogue")
+        /// are mapped to the closest ATB archetype (WO-94); anything unknown falls
+        /// back to "skeleton" so the battle always has a valid roster.
+        /// </summary>
+        private static string MapToEngineDef(string id)
+        {
+            if (string.IsNullOrEmpty(id)) return "skeleton";
+            if (Defs.ENEMY_DEFS.ContainsKey(id)) return id;          // already a valid engine key
+
+            string lower = id.ToLowerInvariant();
+
+            // WO-94: village enemies.json ids — map to ATB engine archetypes.
+            if (lower == "hollow-warrior") return "bruiser";     // heavy tank archetype
+            if (lower == "hollow-walker")  return "skeleton";    // standard grunt
+            if (lower == "hollow-rogue")   return "skeleton";    // fast skirmisher → grunt fallback
+
+            // Generic heuristics for dungeon / other 3D-layer tokens.
+            if (lower.Contains("necro"))   return "necromancer";
+            if (lower.Contains("warrior") || lower.Contains("tank") || lower.Contains("bruiser")
+                || lower.Contains("bulwark") || lower.Contains("boss")
+                || lower.Contains("dragon")) return "bruiser";
+            if (lower.Contains("goblin"))  return "goblin";
+            return "skeleton";
+        }
+
+        /// <summary>
+        /// The battle's source. A handoff with <c>Wave &gt; 0</c> is a village
+        /// tree-breach "Last Stand" (<see cref="BattleSource.Village"/>); <c>Wave == 0</c>
+        /// or no handoff (dungeon encounter / dev direct-play) is a
+        /// <see cref="BattleSource.Dungeon"/>. Gates Flee — you cannot abandon the
+        /// Last Stand, but a dungeon encounter is a clean escape.
+        /// </summary>
+        private static BattleSource ResolveSource()
+        {
+            BattleParams h = SceneRouter.PendingBattle;
+            return (h != null && h.Wave > 0) ? BattleSource.Village : BattleSource.Dungeon;
         }
 
         // ---------------------------------------------------------------------
@@ -214,14 +468,28 @@ namespace DeNelle.BattleATB
         }
 
         /// <summary>
-        /// The hero just submitted an action (before the AI drain). Used purely
-        /// for an immediate "resolving…" affordance — the full re-render arrives
-        /// via <see cref="HandleBattleChanged"/> right after.
+        /// The player just submitted an action (before the AI drain). The dynamic
+        /// HUD re-renders fully on the OnBattleChanged that follows; nothing extra
+        /// is needed here now that the command bar is rebuilt per snapshot.
         /// </summary>
         private void HandleActionSubmitted(BattleState state)
         {
-            if (_attackButton != null) _attackButton.SetEnabled(false);
-            if (_statusBanner != null) _statusBanner.text = "Resolving…";
+            // Render() (via HandleBattleChanged) rebuilds the command bar and disables
+            // it whenever it isn't a player-mode member's turn. WO-170: also play the
+            // acting unit's retro attack/cast lunge as the move is committed.
+            _vfx?.OnActionSubmitted(state);
+        }
+
+        /// <summary>
+        /// WO-170 — a turn fully resolved and the snapshot updated. Fires AFTER
+        /// OnBattleChanged (which rebinds the HUD cards), so the VFX presenter can
+        /// safely anchor effects to the freshly-bound cards. Replays every NEW battle-
+        /// log entry as a retro effect (hit-flash, floating number, elemental burst,
+        /// defeat, screen flash/shake). Read-only over the log — never mutates state.
+        /// </summary>
+        private void HandleTurnResolved(BattleState state)
+        {
+            _vfx?.OnTurnResolved(state);
         }
 
         /// <summary>Battle reached a final outcome — schedule the scene hand-back.</summary>
@@ -229,85 +497,61 @@ namespace DeNelle.BattleATB
         {
             if (result == null || _returnScheduled) return;
             _returnScheduled = true;
+            ATBCombatManager.Instance?.StopCombat(); // WO-68: halt the turn timer
             ReturnAfterResult(result).Forget();
         }
 
-        /// <summary>The "Attack" button — submit a basic attack on the lowest-HP foe.</summary>
-        private void HandleAttackClicked()
+        /// <summary>
+        /// WO-169 — single entry point for every player action the HUD commits
+        /// (attack / ability / item / defend). Routes through ATBRuntimeState, which
+        /// owns the engine call + clone-at-boundary. Guards on the awaiting-player
+        /// gate so a stale click can't submit. Triggers the hero swing animation +
+        /// idle-timer reset for parity with the old per-button handlers.
+        /// </summary>
+        private void SubmitPlayerAction(BattleAction action)
         {
-            if (_runtimeState == null || !_runtimeState.IsAwaitingPlayer()) return;
+            if (_runtimeState == null || !_runtimeState.IsAwaitingPlayer() || action == null) return;
 
-            // Attack auto-resolves vs. the lowest-HP living enemy (no picker) —
-            // mirrors AtbBattleScreen.tsx's command model for the basic attack.
-            BattleUnit target = BattleStateOps.LowestHpEnemy(_runtimeState.Battle);
-            if (target == null) return;
+            // WO-93: hero swing on the placeholder capsule / swapped model (no-op
+            // when there is no Animator). Only meaningful for an attack/ability.
+            // WO-163: only fire when the controller declares "Attack" — the
+            // placeholder capsule has no such param, so an unguarded SetTrigger
+            // logs a warning on every action.
+            if (_heroCapsule != null && action.Kind != ActionKind.Defend)
+            {
+                var heroAnim = _heroCapsule.GetComponentInChildren<Animator>();
+                if (heroAnim != null && heroAnim.runtimeAnimatorController != null)
+                {
+                    foreach (var p in heroAnim.parameters)
+                        if (p.nameHash == BattleControllerAttackHash) { heroAnim.SetTrigger(BattleControllerAttackHash); break; }
+                }
+            }
 
-            _runtimeState.ChooseAction(BattleAction.MakeAttack(target.Id));
+            ATBCombatManager.Instance?.OnPlayerActed(); // reset idle-pressure timer
+            _runtimeState.ChooseAction(action);
         }
 
         // ---------------------------------------------------------------------
-        // Rendering — HUD bars, log, capsule state
+        // Rendering — delegate to the dynamic HUD + drive the hero capsule
         // ---------------------------------------------------------------------
 
-        /// <summary>Re-draw the whole HUD + capsule state from a battle snapshot.</summary>
+        /// <summary>Re-bind the dynamic HUD + reflect the hero/first-enemy capsules.</summary>
         private void Render(BattleState state)
         {
             if (state == null) return;
+            _hud?.Render(_runtimeState);
+            RenderCapsules(state);
+        }
 
+        /// <summary>
+        /// Reflect death on the two placeholder capsules (the 3D layer kept for the
+        /// hero + first enemy; the full per-unit visuals are the deferred model-swap
+        /// follow-up). The 2D combatant cards are the authoritative per-unit display.
+        /// </summary>
+        private void RenderCapsules(BattleState state)
+        {
             BattleUnit hero = FirstUnit(state, UnitKind.Hero);
             BattleUnit enemy = FirstUnit(state, Side.Enemy);
-
-            RenderCombatant(hero, _heroCard, _heroName, _heroHpFill, _heroAtbFill, state);
-            RenderCombatant(enemy, _enemyCard, _enemyName, _enemyHpFill, _enemyAtbFill, state);
-            RenderCapsules(hero, enemy);
-            RenderLog(state);
-            RenderStatus(state);
-            RenderAttackButton(state);
-        }
-
-        /// <summary>Bind one combatant's name, HP bar, ATB bar and active highlight.</summary>
-        private static void RenderCombatant(
-            BattleUnit unit,
-            VisualElement card,
-            Label nameLabel,
-            VisualElement hpFill,
-            VisualElement atbFill,
-            BattleState state)
-        {
-            if (unit == null)
-            {
-                if (card != null) card.style.opacity = 0.35f;
-                return;
-            }
-
-            if (nameLabel != null) nameLabel.text = unit.Name;
-
-            float hpPct = unit.MaxHp > 0
-                ? Mathf.Clamp01((float)unit.Hp / unit.MaxHp)
-                : 0f;
-            float atbPct = Mathf.Clamp01((float)(unit.Atb / Defs.ATB_FULL));
-
-            SetBarWidth(hpFill, hpPct);
-            SetBarWidth(atbFill, atbPct);
-
-            // The ATB bar turns amber once the unit is ready to act.
-            if (atbFill != null)
-            {
-                bool ready = unit.Atb >= Defs.ATB_FULL;
-                atbFill.EnableInClassList("bar-fill--atb-ready", ready);
-            }
-
-            if (card != null)
-            {
-                card.style.opacity = unit.Alive ? 1f : 0.35f;
-                bool isActive = unit.Alive && state.ActiveUnitId == unit.Id;
-                card.EnableInClassList("combatant-card--active", isActive);
-            }
-        }
-
-        /// <summary>Reflect HP / death visually on the placeholder capsule meshes.</summary>
-        private void RenderCapsules(BattleUnit hero, BattleUnit enemy)
-        {
             ApplyCapsuleState(_heroCapsule, hero);
             ApplyCapsuleState(_enemyCapsule, enemy);
         }
@@ -320,82 +564,6 @@ namespace DeNelle.BattleATB
             capsule.localRotation = down
                 ? Quaternion.Euler(90f, capsule.localEulerAngles.y, 0f)
                 : Quaternion.Euler(0f, capsule.localEulerAngles.y, 0f);
-        }
-
-        /// <summary>Append any new battle-log entries and scroll to the latest.</summary>
-        private void RenderLog(BattleState state)
-        {
-            if (_battleLogContent == null || state.Log == null) return;
-
-            for (int i = _renderedLogCount; i < state.Log.Count; i++)
-            {
-                BattleLogEntry entry = state.Log[i];
-                var line = new Label(entry.Text);
-                line.AddToClassList("log-entry");
-                string variant = LogVariantClass(entry.Event);
-                if (variant != null) line.AddToClassList(variant);
-                _battleLogContent.Add(line);
-            }
-            _renderedLogCount = state.Log.Count;
-
-            // Scroll the newest entry into view.
-            if (_battleLog != null && _battleLogContent.childCount > 0)
-            {
-                VisualElement last = _battleLogContent[_battleLogContent.childCount - 1];
-                _battleLog.ScrollTo(last);
-            }
-        }
-
-        /// <summary>The accent USS class for a log event, or null for the default.</summary>
-        private static string LogVariantClass(BattleLogEvent ev)
-        {
-            switch (ev)
-            {
-                case BattleLogEvent.BattleStart: return "log-entry--start";
-                case BattleLogEvent.Victory: return "log-entry--victory";
-                case BattleLogEvent.Defeat: return "log-entry--defeat";
-                case BattleLogEvent.Death: return "log-entry--death";
-                default: return null;
-            }
-        }
-
-        /// <summary>Update the status banner from the current phase.</summary>
-        private void RenderStatus(BattleState state)
-        {
-            if (_statusBanner == null) return;
-
-            switch (state.Phase)
-            {
-                case BattlePhase.AwaitingInput:
-                    BattleUnit actor = _runtimeState != null ? _runtimeState.ActiveUnit() : null;
-                    _statusBanner.text = actor != null
-                        ? $"{actor.Name} — choose an action."
-                        : "Choose an action.";
-                    break;
-                case BattlePhase.Resolving:
-                case BattlePhase.Filling:
-                    _statusBanner.text = "Resolving…";
-                    break;
-                case BattlePhase.Ended:
-                    _statusBanner.text = state.Outcome == BattleOutcome.Victory
-                        ? "Victory — the breach is repelled."
-                        : "Defeat — the last stand is lost.";
-                    break;
-                default:
-                    _statusBanner.text = string.Empty;
-                    break;
-            }
-        }
-
-        /// <summary>Enable the Attack button only while the hero is choosing.</summary>
-        private void RenderAttackButton(BattleState state)
-        {
-            if (_attackButton == null) return;
-            bool canAct = state.Phase == BattlePhase.AwaitingInput
-                          && _runtimeState != null
-                          && !_runtimeState.Resolving
-                          && _runtimeState.Enemies().Count > 0;
-            _attackButton.SetEnabled(canAct);
         }
 
         // ---------------------------------------------------------------------
@@ -428,12 +596,28 @@ namespace DeNelle.BattleATB
         /// The scene to return to after the battle — the handoff's
         /// <see cref="BattleParams.ReturnScene"/>, defaulting to the village when
         /// no handoff was supplied or the field is blank.
+        ///
+        /// WO-94 Bug 2: explicitly refuses to return to ATBBattle itself — a
+        /// misconfigured ReturnScene that names "ATBBattle" would restart the same
+        /// fight instead of exiting, producing the "fight restarts after winning"
+        /// symptom. Falls back to Village in that case.
         /// </summary>
         private static string ResolveReturnScene()
         {
             BattleParams handoff = SceneRouter.PendingBattle;
             if (handoff != null && !string.IsNullOrEmpty(handoff.ReturnScene))
+            {
+                // Guard: never reload the battle scene itself.
+                if (string.Equals(handoff.ReturnScene, SceneRouter.ATBBattle,
+                        System.StringComparison.OrdinalIgnoreCase))
+                {
+                    Debug.LogWarning(
+                        "[BattleController] ReturnScene was set to ATBBattle — " +
+                        "this would restart the same fight. Falling back to Village. (WO-94)");
+                    return SceneRouter.Village;
+                }
                 return handoff.ReturnScene;
+            }
             return SceneRouter.Village;
         }
 
@@ -441,8 +625,12 @@ namespace DeNelle.BattleATB
         // UI binding helpers
         // ---------------------------------------------------------------------
 
-        /// <summary>Query every BattleHUD element by name. Returns false if the
-        /// document is missing so callers can bail cleanly.</summary>
+        /// <summary>
+        /// Build the dynamic, code-built HUD into the UIDocument root and wire its
+        /// action callback to the engine. WO-169 commits to code-built UI: the dead
+        /// BattleHUD.uxml is ignored entirely (it does not clone in builds, CLAUDE.md
+        /// §8). Returns false only if there is no document to draw into.
+        /// </summary>
         private bool BindUi()
         {
             if (_hudDocument == null) _hudDocument = GetComponent<UIDocument>();
@@ -455,33 +643,32 @@ namespace DeNelle.BattleATB
             VisualElement root = _hudDocument.rootVisualElement;
             if (root == null)
             {
-                Debug.LogError("[BattleController] UIDocument has no rootVisualElement — is BattleHUD.uxml assigned?");
+                Debug.LogError("[BattleController] UIDocument has no rootVisualElement.");
                 return false;
             }
 
-            _statusBanner = root.Q<Label>("status-banner");
-            _heroCard = root.Q<VisualElement>("hero-card");
-            _heroName = root.Q<Label>("hero-name");
-            _heroHpFill = root.Q<VisualElement>("hero-hp-fill");
-            _heroAtbFill = root.Q<VisualElement>("hero-atb-fill");
-            _enemyCard = root.Q<VisualElement>("enemy-card");
-            _enemyName = root.Q<Label>("enemy-name");
-            _enemyHpFill = root.Q<VisualElement>("enemy-hp-fill");
-            _enemyAtbFill = root.Q<VisualElement>("enemy-atb-fill");
-            _attackButton = root.Q<Button>("attack-button");
-            _battleLog = root.Q<ScrollView>("battle-log");
-            _battleLogContent = root.Q<VisualElement>("battle-log-content");
+            _hud = new BattleHud();
+            _hud.OnAction = SubmitPlayerAction;
+            _hud.OnControlModeToggled = HandleControlModeToggled;
+            _hud.Build(root);
 
-            if (_attackButton == null)
-                Debug.LogWarning("[BattleController] 'attack-button' not found in BattleHUD — input will be inert.");
+            // WO-170 — bind the retro VFX presenter to the freshly-built HUD. Pure
+            // view: it reads the battle log + card geometry, draws on the HUD's
+            // input-transparent VFX layer, and never calls into the engine.
+            _vfx = new BattleVfx();
+            _vfx.Bind(_hud);
             return true;
         }
 
-        /// <summary>Set a bar fill's width as a percentage (0..1) of its track.</summary>
-        private static void SetBarWidth(VisualElement fill, float pct)
+        /// <summary>
+        /// WO-169 P0 — the player flipped a member's Command/Auto toggle. Persist the
+        /// preference so it sticks; it takes effect from the NEXT battle build (the
+        /// engine snapshot's ControlMode is set at construction — we don't hot-swap a
+        /// unit mid-fight, which would risk a turn-phase race).
+        /// </summary>
+        private void HandleControlModeToggled(string memberId, ControlMode mode)
         {
-            if (fill == null) return;
-            fill.style.width = Length.Percent(Mathf.Clamp01(pct) * 100f);
+            AtbControlModeStore.Set(memberId, mode);
         }
 
         /// <summary>First unit on a side (party first, enemies after — engine order).</summary>

@@ -84,8 +84,9 @@ namespace DeNelle.HUD
             _root.style.left = 0; _root.style.right = 0;
             _root.style.top = 0;  _root.style.bottom = 0;
 
-            // The little "?" launcher button — top-right, below Wave indicator.
-            var launcher = new Button(ToggleOverlay) { text = "?" };
+            // The little launcher button — top-right, below the Wave indicator.
+            // Owner 2026-05-25: use a gear glyph (reads as settings) over "?".
+            var launcher = new Button(ToggleOverlay) { text = "⚙" };
             launcher.style.position = Position.Absolute;
             launcher.style.top = 80; launcher.style.right = 20;
             launcher.style.width = 36; launcher.style.height = 36;

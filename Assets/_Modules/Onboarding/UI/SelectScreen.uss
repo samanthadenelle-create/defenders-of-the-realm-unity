@@ -1,23 +1,26 @@
 /*
- * SelectScreen.uss — shared styling for the hero-select + pet-select screens.
- * ----------------------------------------------------------------------
- * Both intro-flow select screens (HeroSelectScreen.uxml / PetSelectScreen.uxml)
- * share this stylesheet — same backdrop, header, card row and confirm CTA.
+ * SelectScreen.uss — hero-select + pet-select screens.  WO-42 rev 2.
+ * -------------------------------------------------------------------------
+ * Hero-select: dragon-stage (transparent top, brand + wallet) +
+ *              hero-roster-panel (opaque bottom, nav arrows + cards).
+ * Pet-select:  single-stack layout (header -> card row -> footer), kept
+ *              visually as before via .select-stack on its root.
  *
  * Matches the project's UI Toolkit visual language (SettingsScreen.uss /
  * TitleScreen.uss): a dark Heart-Forest palette, violet for the Heart accent,
  * amber for the primary call-to-action. Values are inline — the project Theme
  * is C#-driven, not USS variables — the established convention.
  *
- * The three selection cards are built at runtime by the controllers; the USS
- * class names they apply:
+ * The selection cards are built at runtime by the controllers; the USS class
+ * names they apply:
  *   select-card / select-card--active   (the card root + chosen highlight)
  *   select-card__portrait               (the portrait / preview block)
- *   select-card__accent                 (a thin element-coloured strip)
+ *   select-card__accent                 (a thin element-coloured strip, tinted
+ *                                         inline per hero/pet by the controller)
  *   select-card__name / __role / __blurb (the card's three text rows)
  */
 
-/* ── Root — full-screen backdrop ────────────────────────────────────── */
+/* ── Root — full-screen, no padding, pure black base ────────────────── */
 .select-root {
     flex-grow: 1;
     position: absolute;
@@ -25,16 +28,306 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background-color: rgb(10, 8, 18);
-    align-items: center;
-    justify-content: center;
-    padding: 24px;
+    background-color: rgb(6, 4, 12);
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
 }
 
-/* ── Header ─────────────────────────────────────────────────────────── */
+/* ════════════════════════════════════════════════════════════════════════
+   HERO SELECT — two-panel layout
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* ── Dragon stage — top 55%, transparent so the 3D scene shows through ──
+   NB: size via an explicit percentage HEIGHT, not a `flex: 0 0 55%` shorthand.
+   UI Toolkit's USS parser does not accept a percentage flex-BASIS, so the
+   shorthand silently fails to apply and the panel collapses — the redesign
+   then renders as an unstyled stack. Percentage height + flex-shrink:0 is the
+   supported idiom (matches the rest of the project's USS). */
+.hero-dragon-stage {
+    height: 55%;
+    flex-grow: 0;
+    flex-shrink: 0;
+    background-color: rgba(0, 0, 0, 0);
+    flex-direction: column;
+    justify-content: space-between;   /* brand block top, wallet btn bottom */
+    align-items: center;
+    padding-bottom: 20px;
+}
+
+/* ── Brand block — top of the dragon stage ──────────────────────────── */
+.hero-brand-block {
+    align-items: center;
+    padding: 20px 32px 12px 32px;
+    /* Soft gradient wash so the title is legible against the dragon */
+    background-color: rgba(6, 4, 12, 0.55);
+    align-self: stretch;
+}
+
+.hero-brand-title {
+    font-size: 38px;
+    -unity-font-style: bold;
+    color: rgb(237, 233, 250);
+    -unity-text-align: middle-center;
+}
+
+.hero-brand-subtitle {
+    margin-top: 4px;
+    font-size: 13px;
+    -unity-font-style: bold;
+    color: rgb(245, 166, 35);
+    -unity-text-align: middle-center;
+    letter-spacing: 2px;
+    white-space: normal;
+}
+
+/* ── Wallet connect button — centred in the stage body ───────────────── */
+.hero-wallet-btn {
+    min-width: 200px;
+    height: 44px;
+    font-size: 14px;
+    -unity-font-style: bold;
+    border-radius: 22px;
+    border-width: 2px;
+    border-color: rgb(245, 166, 35);
+    background-color: rgba(245, 166, 35, 0.08);
+    color: rgb(245, 166, 35);
+    -unity-text-align: middle-center;
+}
+
+.hero-wallet-btn:hover {
+    background-color: rgba(245, 166, 35, 0.20);
+}
+
+/* ── Amber separator hairline ────────────────────────────────────────── */
+.hero-section-divider {
+    flex-grow: 0;
+    flex-shrink: 0;
+    height: 2px;
+    background-color: rgb(245, 166, 35);
+    align-self: stretch;
+}
+
+/* ── Hero roster panel — bottom 45%, opaque deep indigo ─────────────── */
+.hero-roster-panel {
+    flex-grow: 1;                   /* takes all remaining height */
+    flex-shrink: 1;
+    flex-basis: 0;
+    background-color: rgba(18, 12, 30, 0.97);
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 12px 20px 12px;
+}
+
+/* "— HERO SELECT —" eyebrow */
+.hero-roster-eyebrow {
+    font-size: 12px;
+    -unity-font-style: bold;
+    color: rgb(245, 166, 35);
+    -unity-text-align: middle-center;
+    letter-spacing: 3px;
+    margin-bottom: 10px;
+    align-self: stretch;
+}
+
+/* ── Card area: arrow | cards | arrow ───────────────────────────────── */
+.hero-card-area {
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    flex-grow: 1;
+    align-self: stretch;
+}
+
+/* Nav arrow buttons */
+.hero-nav-btn {
+    width: 40px;
+    height: 56px;
+    font-size: 28px;
+    -unity-font-style: bold;
+    border-radius: 8px;
+    border-width: 1px;
+    border-color: rgba(196, 181, 253, 0.25);
+    background-color: rgba(255, 255, 255, 0.04);
+    color: rgba(196, 181, 253, 0.60);
+    -unity-text-align: middle-center;
+    flex-shrink: 0;
+}
+
+.hero-nav-btn:hover {
+    border-color: rgba(245, 166, 35, 0.55);
+    color: rgb(245, 166, 35);
+    background-color: rgba(245, 166, 35, 0.06);
+}
+
+.hero-nav-btn--prev {
+    margin-right: 8px;
+}
+
+.hero-nav-btn--next {
+    margin-left: 8px;
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   CARD ROW  (shared hero-select + pet-select)
+   ════════════════════════════════════════════════════════════════════════ */
+
+.select-card-row {
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+    flex-grow: 1;
+}
+
+/* ── One selection card ──────────────────────────────────────────────── */
+.select-card {
+    width: 240px;
+    margin-left: 10px;
+    margin-right: 10px;
+    padding: 0;
+    border-radius: 14px;
+    border-width: 2px;
+    border-color: rgba(124, 58, 237, 0.30);
+    background-color: rgba(26, 18, 42, 0.98);
+    overflow: hidden;
+    flex-direction: column;
+}
+
+.select-card:hover {
+    border-color: rgba(196, 181, 253, 0.65);
+}
+
+/* Selected card — amber ring, portrait tint lifted */
+.select-card--active {
+    border-color: rgb(245, 166, 35);
+    background-color: rgba(38, 26, 52, 0.98);
+}
+
+/* Portrait block — large glyph / texture, element-tinted bg */
+.select-card__portrait {
+    height: 130px;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(124, 58, 237, 0.10);
+}
+
+/* Amber-tinted portrait when card is active */
+.select-card--active .select-card__portrait {
+    background-color: rgba(245, 166, 35, 0.12);
+}
+
+/* Large glyph inside portrait block (fallback when no portrait texture) */
+.select-card__glyph {
+    font-size: 72px;
+    -unity-font-style: bold;
+    color: rgb(196, 181, 253);
+}
+
+/* Thin element-coloured strip between portrait and text.
+   Background-color is set inline per card by the controller. */
+.select-card__accent {
+    height: 4px;
+}
+
+/* Text body */
+.select-card__body {
+    padding: 12px 14px 16px 14px;
+    flex-grow: 1;
+}
+
+.select-card__name {
+    font-size: 20px;
+    -unity-font-style: bold;
+    color: rgb(237, 233, 250);
+}
+
+/* Role tag — amber, uppercase-feel, tight spacing */
+.select-card__role {
+    margin-top: 3px;
+    font-size: 11px;
+    -unity-font-style: bold;
+    color: rgb(245, 166, 35);
+}
+
+/* Lore blurb — soft lavender, small, wrapping */
+.select-card__blurb {
+    margin-top: 8px;
+    font-size: 12px;
+    color: rgba(186, 178, 210, 0.85);
+    white-space: normal;
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   FOOTER + CONFIRM BUTTON  (shared)
+   ════════════════════════════════════════════════════════════════════════ */
+
+.select-footer {
+    margin-top: 14px;
+    align-items: center;
+    align-self: stretch;
+}
+
+/* Split footer — two CTAs side by side (hero-select entry paths). */
+.select-footer--split {
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+}
+
+.select-confirm {
+    min-width: 200px;
+    height: 52px;
+    font-size: 15px;
+    -unity-font-style: bold;
+    border-radius: 12px;
+    border-width: 0;
+    color: rgb(22, 14, 6);
+    background-color: rgb(245, 166, 35);
+    margin-left: 6px;
+    margin-right: 6px;
+}
+
+.select-confirm:hover {
+    background-color: rgb(255, 186, 70);
+}
+
+/* "Dive into Village" — secondary/outline style. */
+.select-confirm--secondary {
+    background-color: rgba(255, 255, 255, 0.05);
+    border-width: 2px;
+    border-color: rgba(196, 181, 253, 0.40);
+    color: rgb(196, 181, 253);
+}
+
+.select-confirm--secondary:hover {
+    background-color: rgba(196, 181, 253, 0.10);
+    border-color: rgba(196, 181, 253, 0.70);
+    color: rgb(237, 233, 250);
+}
+
+/* Before a card is chosen — visually muted (applied to both buttons). */
+.select-confirm--disabled {
+    color: rgba(237, 233, 250, 0.35);
+    background-color: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.08);
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   PET SELECT — single-stack layout (unchanged from pre-WO-42)
+   -------------------------------------------------------------------------
+   PetSelectScreen.uxml's root carries .select-root (above). The new hero
+   .select-root is a zero-padding stretch column, so pet-select layers its
+   own centred-stack styling through the .select-header / .select-card-row /
+   .select-footer it already uses. The card-row keeps centring/grow from the
+   shared rules above; the header + footer recover the pre-WO-42 spacing here.
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* Header — used by PetSelectScreen only (HeroSelect uses hero-brand-block) */
 .select-header {
     align-items: center;
     margin-bottom: 28px;
+    padding: 36px 24px 0 24px;
 }
 
 .select-title {
@@ -52,107 +345,4 @@
     -unity-text-align: middle-center;
     white-space: normal;
     max-width: 720px;
-}
-
-/* ── The row of selection cards ─────────────────────────────────────── */
-.select-card-row {
-    flex-direction: row;
-    justify-content: center;
-    align-items: stretch;
-}
-
-/* One selection card — built at runtime by the controller. */
-.select-card {
-    width: 280px;
-    margin-left: 14px;
-    margin-right: 14px;
-    padding: 0;
-    border-radius: 16px;
-    border-width: 2px;
-    border-color: rgba(124, 58, 237, 0.35);
-    background-color: rgba(20, 16, 32, 0.96);
-    overflow: hidden;
-}
-
-.select-card:hover {
-    border-color: rgba(196, 181, 253, 0.7);
-}
-
-/* The chosen card — amber ring + lift. */
-.select-card--active {
-    border-color: rgb(245, 196, 90);
-    background-color: rgba(32, 26, 44, 0.98);
-}
-
-/* Portrait / preview block at the top of the card. */
-.select-card__portrait {
-    height: 200px;
-    align-items: center;
-    justify-content: center;
-    background-color: rgba(124, 58, 237, 0.12);
-}
-
-/* The big glyph / initial shown in the portrait block. */
-.select-card__glyph {
-    font-size: 96px;
-    -unity-font-style: bold;
-    color: rgb(196, 181, 253);
-}
-
-/* A thin element-coloured strip between the portrait and the text. */
-.select-card__accent {
-    height: 5px;
-    background-color: rgb(124, 58, 237);
-}
-
-/* Card text region. */
-.select-card__body {
-    padding: 16px 18px 20px 18px;
-}
-
-.select-card__name {
-    font-size: 22px;
-    -unity-font-style: bold;
-    color: rgb(237, 233, 250);
-}
-
-.select-card__role {
-    margin-top: 2px;
-    font-size: 12px;
-    -unity-font-style: bold;
-    color: rgb(245, 196, 90);
-}
-
-.select-card__blurb {
-    margin-top: 10px;
-    font-size: 13px;
-    color: rgb(186, 178, 204);
-    white-space: normal;
-}
-
-/* ── Footer — the confirm CTA ───────────────────────────────────────── */
-.select-footer {
-    margin-top: 30px;
-    align-items: center;
-}
-
-.select-confirm {
-    min-width: 280px;
-    height: 56px;
-    font-size: 17px;
-    -unity-font-style: bold;
-    border-radius: 14px;
-    border-width: 0;
-    color: rgb(28, 22, 10);
-    background-color: rgb(245, 196, 90);
-}
-
-.select-confirm:hover {
-    background-color: rgb(255, 212, 120);
-}
-
-/* Confirm button before a card is chosen — dimmed + inert-looking. */
-.select-confirm--disabled {
-    color: rgba(237, 233, 250, 0.4);
-    background-color: rgba(255, 255, 255, 0.07);
 }

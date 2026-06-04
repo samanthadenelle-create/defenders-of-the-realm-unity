@@ -1,0 +1,64 @@
+{
+  "_comment": "Canonical crafting data for the v2 Unity dungeon crafting system (Workstream C). Defines the collectible ingredient items and the recipes a crafting pedestal can fulfil. DATA ONLY — DeNelle.Dungeons hydrates the crafting pedestal, the ingredient pickups and the crafting UI from this. The Healer's Cottage ships ONE recipe: the torch. Loaded the same way as lore-fragments.json / healers-cottage.json (Newtonsoft.Json, StreamingAssets/Data/Canonical, via UniTask).",
+  "_sources": {
+    "design": "defenders-unity/docs/dungeon-3d-healers-cottage-design.md (the cottage is a healer's workshop — herbs, oil, resin, cloth)",
+    "layoutSpec": "defenders-unity/docs/dungeons-3d-unity-layout-spec.md (the crafting shard pedestal in the Hidden Vault)",
+    "owner": "defenders-unity/docs/qa/owner-acceptance-checklist.md (Dungeon — lantern & crafting: GAP — craft a torch, recipe + items needed, legible)"
+  },
+  "_schemaNotes": {
+    "ingredients": "Collectible crafting materials. 'id' keys the pickup placements + recipe entries. 'glyph' is a single-char UI stand-in until item icon art lands. 'tint' is an RRGGBB hex used by the scene builder for the pickup mote.",
+    "recipes": "Each recipe lists the ingredients (by id) and counts the pedestal needs. A recipe is craftable once the inventory holds at least every listed count.",
+    "ingredientPlacements": "Where each ingredient pickup is dropped in the Healer's Cottage. position is X east(+)/west(-), Y up, Z south(+)/north(-) — same convention as healers-cottage.json.",
+    "pedestal": "The crafting pedestal placement — replaces the §5.4 'crafting shard pedestal' placeholder primitive in the Hidden Vault."
+  },
+  "version": 1,
+  "ingredients": [
+    {
+      "id": "dry-reed",
+      "displayName": "Dry Reed",
+      "description": "A bundle of brittle marsh reed from the garden's edge — the torch's haft.",
+      "glyph": "|",
+      "tint": "c9a86a"
+    },
+    {
+      "id": "oil-soaked-cloth",
+      "displayName": "Oil-Soaked Cloth",
+      "description": "A strip of linen steeped in lantern oil — it will hold a flame.",
+      "glyph": "~",
+      "tint": "d8b15a"
+    },
+    {
+      "id": "ember-resin",
+      "displayName": "Ember Resin",
+      "description": "Hardened sap that catches at a spark — the heart of any torch.",
+      "glyph": "*",
+      "tint": "e2683a"
+    }
+  ],
+  "recipes": [
+    {
+      "id": "torch",
+      "displayName": "Torch",
+      "description": "A hand-held torch — steady light that never runs dry. Bind reed, cloth and resin at the pedestal.",
+      "resultGlyph": "T",
+      "ingredients": [
+        { "ingredientId": "dry-reed", "count": 1 },
+        { "ingredientId": "oil-soaked-cloth", "count": 1 },
+        { "ingredientId": "ember-resin", "count": 1 }
+      ],
+      "craftedToast": "The torch catches. Its light is yours, Keeper — and it will not fade."
+    }
+  ],
+  "ingredientPlacements": [
+    { "ingredientId": "dry-reed", "pickupId": "reed-garden", "roomId": "garden-approach", "position": { "x": -24, "y": 0, "z": 5 } },
+    { "ingredientId": "oil-soaked-cloth", "pickupId": "cloth-entrance", "roomId": "entrance-room", "position": { "x": -8, "y": 0, "z": -5 } },
+    { "ingredientId": "ember-resin", "pickupId": "resin-main", "roomId": "main-room", "position": { "x": 11, "y": 0, "z": 6 } }
+  ],
+  "pedestal": {
+    "id": "crafting-pedestal-vault",
+    "roomId": "hidden-vault",
+    "position": { "x": 18, "y": -6, "z": 18 },
+    "radius": 3,
+    "recipeId": "torch"
+  }
+}

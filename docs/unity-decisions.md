@@ -29,6 +29,8 @@ of background work. Newest rows at the bottom of each week.
 
 ## Week 3 — Avalon village layout
 
+> **Naming note (2026-05-30):** "Avalon" is the retired town name (DESIGN-DECISIONS #1); the village is **Elarion**. This heading and the referenced spec filename are kept verbatim as a dated historical record. Treat "Avalon village" here as "Elarion village."
+
 Per `docs/avalon-village-layout-spec.md`; creative decisions logged per spec §13.
 
 | Date | Decision | Alternative considered | Reason chosen | Reversible? |
@@ -124,3 +126,21 @@ workstreams compile clean together (0 errors) and the five scene builders
 - **2026-05-19 — Grant-polish features built + compile-verified, not yet play-tested.** All four workstreams compile and the scenes build; runtime QA (the checklist's per-feature QA steps) is the next pass.
 - **2026-05-19 — Studio-bumper video disabled — it froze the build on launch (P0).** First desktop play-test hung right after the engine splash. The Player log showed Windows Media Foundation choking on `studio-bumper.mp4` ("Unexpected timestamp values… not encoded with the baseline profile", "Color primaries 0 unknown") — a non-baseline H.264 deadlocks the native video decoder on the main thread, so `SplashLoading`'s C# timeouts (which run on that same frozen thread) cannot recover. Fix: `SplashLoading._playBumperVideo` defaults `false`; the bumper now shows the static "DeNelle Studios presents" fallback card. Re-enable once the clip is re-encoded (H.264 baseline / yuv420p / bt709) or re-imported with VideoClip transcoding on.
 - **2026-05-19 — Bumper video: replacement clip + transcoding also crashed — video stays OFF.** The owner supplied a replacement 10s clip; it was imported with VideoClip transcoding enabled (`BumperVideoImport`) and `_playBumperVideo` re-enabled. The Windows player still crashed at the splash ("Color primaries 0 unknown… WindowsMediaFoundation", then shutdown). Confirmed conclusively: the video-OFF build runs; every video-ON build (raw or transcoded) crashes. `_playBumperVideo` is back to `false` — the build ships with the static "DeNelle Studios presents" card. The video bumper is parked: it needs a verified clean offline re-encode and must not gate the demo build.
+
+## Backend / Operational architecture
+
+Per `docs/v2-unity-port-backend-spec.md` (the operational contract, read end-to-end
+2026-05-27 by the Unity stream). Decisions about the backend-stream architecture
+under the React-client decommission.
+
+| Date | Decision | Alternative considered | Reason chosen | Reversible? |
+|------|----------|------------------------|---------------|-------------|
+| 2026-05-18 | **Option A — Vercel+Postgres backend preserved.** React *client* decommissioned; the backend (Vercel serverless `api/` + Vercel Postgres + Solana RPC + wallet-signed-nonce auth) continues unchanged. Unity is the canonical/only client, building the C# equivalent of every React service call — same endpoints, same auth, same `Result<T>`, same 200/400/401/404/500 status codes. | Migrate to UGS / PlayFab / Supabase. | Custom server logic (wallet auth, treasury verify, server-side honeypot anti-cheat, OFAC, rewards gating) doesn't fit BaaS feature modules; migration cost exceeds value and would fragment the architecture. | Reversible but expensive. |
+| 2026-05-27 | Backend spec read end-to-end + acknowledged. C# HTTP client (`Core/Services/ApiClient` + `Result<T>` + `ApiDtos`) + the endpoint contract confirmed on the **Week 7** build order, alongside the Solana SDK / `WalletService` (deferred to Week 7 per the Week-1 row). Auth-free chat/clan endpoints could land earlier if owner expands scope. UnityWebRequest first (BetterHttp later if boilerplate hurts), per spec 2.2. | Build the networking layer now. | Gameplay foundation is the live priority; networking pairs with the Week-7 wallet work; nothing in the spec is blocking. | Yes. |
+
+### Flags raised — backend spec vs already-built code (awaiting owner)
+
+- **2026-05-27 — `_Modules/Web3/JupiterSwapService` not covered by this spec.** A Jupiter token-swap feature (JupiterSwapService/Bootstrap + WO-43/44 swap-panel) exists in the Unity tree, but the backend spec's wallet/monetization model (Parts 4/9) is pack-purchase + server-verify only and never mentions in-game swaps. Confirm it is intended / covered by `monetization-v2-spec.md`; if kept, it MUST obey Part 4.4 (signing only via MWA, client never sees a key) and the 200/400/401/404/500 rule for any of our endpoints it calls.
+- **2026-05-27 — `_Modules/Village/Monetization/RewardedAdManager` (DEF-69) vs the cozy covenant.** Rewarded ads are not in the monetization spec, which is cosmetic-pack-only with an explicit "You are never required to spend anything. Ever." covenant + no in-game store pop-ups + SKR-yield-funded rewards (Parts 9/10). A watch-ad-for-currency mechanic reads as an ethos conflict — confirm scope before it ships (currently a stub, no live ad SDK).
+- **2026-05-27 — No conflict with the client gameplay economy.** EconomyService (Wood/Stone/Iron/Crystals) + Glimmer/XP-on-kill are *gameplay* currencies, offline-first + client-owned — distinct from the server-gated SKR rewards economy (Part 10). Consistent with the spec's offline-first model.
+- **2026-05-27 — Honeypot CI guard is clean.** No `honeypot` reference appears in any `Assets/` C# file (Part 11.2 / defensive-hardening §3.3); the future `check-no-honeypot-leak.sh` would pass today.

@@ -3,15 +3,17 @@
 --- !u!78 &1
 TagManager:
   serializedVersion: 3
-  tags: []
+  tags:
+  - Tower
+  - Building
   layers:
   - Default
   - TransparentFX
   - Ignore Raycast
-  -
+  - Tower
   - Water
   - UI
-  -
+  - Building
   -
   - Enemy
   -

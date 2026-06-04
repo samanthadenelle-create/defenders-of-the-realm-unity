@@ -23,6 +23,7 @@
 // Lives in DeNelle.Settings; references only UnityEngine.Audio + DeNelle.Core.
 // =============================================================================
 
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Audio;
 
@@ -61,6 +62,8 @@ namespace DeNelle.Settings
         private static AudioMixer _mixer;
         private static bool _resolveAttempted;
         private static bool _warnedMissing;
+        // Tracks params already warned about so each missing param warns only once.
+        private static readonly HashSet<string> _warnedParams = new HashSet<string>();
 
         /// <summary>
         /// True once a mixer has been resolved (assigned or found in Resources).
@@ -109,10 +112,14 @@ namespace DeNelle.Settings
             {
                 // The mixer exists but does not expose this parameter — likely a
                 // name drift between this bridge and the Audio agent's mixer.
-                Debug.LogWarning(
-                    $"[AudioMixerBridge] Mixer has no exposed parameter '{exposedParam}'. " +
-                    "Check the parameter names against the Audio-system mixer " +
-                    "(see docs/port-notes/settings-pause.md).");
+                // Warn only once per parameter name to avoid log spam on every call.
+                if (_warnedParams.Add(exposedParam))
+                {
+                    Debug.LogWarning(
+                        $"[AudioMixerBridge] Mixer has no exposed parameter '{exposedParam}'. " +
+                        "Check the parameter names against the Audio-system mixer " +
+                        "(see docs/port-notes/settings-pause.md). Further calls silenced.");
+                }
             }
         }
 
@@ -177,6 +184,7 @@ namespace DeNelle.Settings
             _mixer = null;
             _resolveAttempted = false;
             _warnedMissing = false;
+            _warnedParams.Clear();
         }
     }
 }

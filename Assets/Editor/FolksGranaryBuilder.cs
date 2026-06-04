@@ -73,6 +73,7 @@ namespace DeNelle.Editor
 
         // ── Dungeon / Village MonoBehaviour type names (resolved by reflection) ─
         private const string TypeEncounterTrigger = "DeNelle.Dungeons.EncounterTrigger";
+        private const string TypeDungeonStubEncounter = "DeNelle.Dungeons.DungeonStubEncounter";
         private const string TypeDungeonStubReturn = "DeNelle.Dungeons.DungeonStubReturn";
         private const string TypeDungeonHero = "DeNelle.Dungeons.DungeonHero";
         private const string TypeDungeonCameraRig = "DeNelle.Dungeons.DungeonCameraRig";
@@ -547,11 +548,18 @@ namespace DeNelle.Editor
             heroGo.transform.rotation = Quaternion.Euler(0f, 90f, 0f);
 
             var body = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-            body.name = "DungeonHeroBody";
+            // "HeroBody" so HeroBodySwapper (added below) replaces this capsule with
+            // the player's real animated class FBX at runtime (owner WO-35: no pill).
+            body.name = "HeroBody";
             body.transform.SetParent(heroGo.transform, false);
             body.transform.localPosition = new Vector3(0f, 0.95f, 0f);
             StripColliders(body);
-            ApplyTint(body, HexColor("e8d8b8"));
+            // PILL FIX (owner): e8d8b8 is near-white and reads as a glowing white
+            // "pill" under the granary's oil-lantern point lights whenever
+            // HeroBodySwapper fails to load the class FBX at run time. Tint the
+            // FALLBACK capsule an emissive warm amber so it always reads as a hero
+            // stand-in. On success HeroBodySwapper still destroys + replaces it.
+            ApplyEmissive(body, HexColor("c98a3a"), 0.6f);
 
             // CharacterController sized to a human ~1.9 m capsule — DungeonHero
             // [RequireComponent]s this and slides it along the wall colliders.
@@ -566,6 +574,8 @@ namespace DeNelle.Editor
             // The DungeonHero locomotion (WASD + tap-to-move). Added by
             // reflection — DeNelle.Editor doesn't reference DeNelle.Dungeons.
             AddComponentByName(heroGo, TypeDungeonHero);
+            // Real hero body at runtime (Mage/Knight/Ranger) instead of the capsule.
+            AddComponentByName(heroGo, "DeNelle.Village.HeroBodySwapper");
             return heroGo;
         }
 
@@ -600,7 +610,10 @@ namespace DeNelle.Editor
             body.transform.localPosition = new Vector3(0f, 1f, 0f);
             body.transform.localScale = new Vector3(0.8f, 1f, 0.8f);
             StripColliders(body);
-            ApplyTint(body, HexColor("6b7d8a"));
+            // PILL FIX (owner): a flat slate tint washes to near-white under the
+            // entrance corner lantern. Emissive teal-slate so the NPC always
+            // reads as a tinted body, not a blank white pill.
+            ApplyEmissive(body, HexColor("5a7a86"), 0.5f);
 
             // The HARD-LOCKED canned line — baked into a child GameObject name
             // so it survives any build (no Editor-only state required). The
@@ -649,12 +662,13 @@ namespace DeNelle.Editor
         }
 
         /// <summary>
-        /// One EncounterTrigger near the exit. The trigger raises its
-        /// EncounterFired UnityEvent the moment the Keeper steps onto it; the
-        /// scripted-roster wiring (the strongly-typed DungeonScriptedEncounter)
-        /// is left blank — the granary ships no authored encounter table yet,
-        /// so the trigger just fires its event and a future content pass can
-        /// hand it a roster via Configure() at run time.
+        /// One encounter zone near the exit. The granary ships NO DungeonController,
+        /// so the rich EncounterTrigger (which only ticks once a controller calls
+        /// ConfigureScripted + StartRun on a DungeonRuntimeState) would be inert —
+        /// stepping on it did nothing and the ATB battle "never loaded." Instead
+        /// this uses DungeonStubEncounter, the controller-free stub analog of
+        /// DungeonStubReturn: it launches SceneRouter.GoBattle on hero proximity
+        /// (with an F-key fallback) and round-trips back to this granary scene.
         /// </summary>
         private static void BuildEncounterTrigger(Transform parent)
         {
@@ -677,19 +691,34 @@ namespace DeNelle.Editor
             StripColliders(disc);
             ApplyEmissive(disc, HexColor("8a3a2a"), 0.6f);
 
-            Component comp = AddComponentByName(trigGo, TypeEncounterTrigger);
+            // A trigger volume so the hero's CharacterController also fires
+            // OnTriggerEnter (belt-and-braces with the component's proximity poll).
+            var trigger = trigGo.AddComponent<BoxCollider>();
+            trigger.isTrigger = true;
+            trigger.center = new Vector3(0f, 1.5f, 0f);
+            trigger.size = new Vector3(4.4f, 3f, 4.4f);
+
+            Component comp = AddComponentByName(trigGo, TypeDungeonStubEncounter);
             if (comp != null)
             {
                 _encounterCount++;
-                // Note: EncounterTrigger.ReturnScene is hardcoded inside the
-                // component itself (it routes back through SceneRouter, which
-                // is project-wide). The trigger exposes EncounterFired as a
-                // public UnityEvent — a future content pass can subscribe in
-                // a dungeon-specific MonoBehaviour. For now the trigger ships
-                // unwired; stepping on it will no-op until a roster is set
-                // via the runtime Configure() handshake.
+                // Wire the round-trip: the battle returns to THIS granary scene.
+                // _triggerRadius matches the visible disc footprint (~2.2 radius).
+                SetFloatField(comp, "_triggerRadius", 2.4f);
+                SetStringField(comp, "_returnScene", DungeonReturnScene);
+                SetStringArrayField(comp, "_enemyTypes",
+                    new[] { "hollow_villager_a", "hollow_villager_b" });
+            }
+            else
+            {
+                Debug.LogWarning(
+                    "[FolksGranaryBuilder] DungeonStubEncounter type not found — the " +
+                    "granary encounter zone will not launch a battle. Is DeNelle.Dungeons compiled?");
             }
         }
+
+        /// <summary>The scene the granary battle round-trips back to.</summary>
+        private const string DungeonReturnScene = "Dungeon_FolksGranary";
 
         /// <summary>
         /// The exit pad — a violet cylinder at the N-wall doorway, carrying a
@@ -1067,6 +1096,50 @@ namespace DeNelle.Editor
                 return;
             }
             prop.objectReferenceValue = value;
+            so.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        private static void SetFloatField(Component comp, string field, float value)
+        {
+            if (comp == null) return;
+            var so = new SerializedObject(comp);
+            var prop = so.FindProperty(field);
+            if (prop == null || prop.propertyType != SerializedPropertyType.Float)
+            {
+                Debug.LogWarning($"[FolksGranaryBuilder] Float field '{field}' not found / wrong type — skipped.");
+                return;
+            }
+            prop.floatValue = value;
+            so.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        private static void SetStringField(Component comp, string field, string value)
+        {
+            if (comp == null) return;
+            var so = new SerializedObject(comp);
+            var prop = so.FindProperty(field);
+            if (prop == null || prop.propertyType != SerializedPropertyType.String)
+            {
+                Debug.LogWarning($"[FolksGranaryBuilder] String field '{field}' not found / wrong type — skipped.");
+                return;
+            }
+            prop.stringValue = value;
+            so.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        private static void SetStringArrayField(Component comp, string field, string[] values)
+        {
+            if (comp == null) return;
+            var so = new SerializedObject(comp);
+            var prop = so.FindProperty(field);
+            if (prop == null || !prop.isArray)
+            {
+                Debug.LogWarning($"[FolksGranaryBuilder] Array field '{field}' not found / not an array — skipped.");
+                return;
+            }
+            prop.arraySize = values?.Length ?? 0;
+            for (int i = 0; i < prop.arraySize; i++)
+                prop.GetArrayElementAtIndex(i).stringValue = values[i];
             so.ApplyModifiedPropertiesWithoutUndo();
         }
 

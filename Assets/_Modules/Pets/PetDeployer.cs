@@ -55,6 +55,15 @@ namespace DeNelle.Pets
                  "calls DeployStarterPets() by hand once the scene context is ready.")]
         [SerializeField] private bool _autoDeployOnStart;
 
+        // WO-211 Phase 2 "lite pet visuals": the three starter pets' Tripo 3D
+        // models are ~208 MB — the dominant WebGL build bloat. While this flag is
+        // true the deployer NEVER loads a pet FBX (TryLoadPetMesh returns null)
+        // and instead renders each pet as a lightweight camera-facing sprite
+        // billboard from Resources/PetPortraits/<id>.png. Pet gameplay
+        // (deploy/fight/leash) is unchanged — only the visual swaps. Flip to
+        // false to restore the full 3D meshes once they're back in the build.
+        private const bool UseLitePetVisuals = true;
+
         private readonly List<Pet> _deployed = new List<Pet>();
 
         /// <summary>The pets currently deployed in the scene.</summary>
@@ -94,9 +103,20 @@ namespace DeNelle.Pets
         /// Wolf) at their deploy slots ringing the Heart. Safe to call once per
         /// village-scene load; clears any prior deployment first.
         /// </summary>
+        // TEMP DIAG 2026-05-25 (owner: "try with no pet"): hard-skip all pet
+        // deployment so the village has ZERO pets — isolates the camera/hero so
+        // there's nothing else on screen to mistake the follow target for.
+        // REVERT to false to restore the three starter pets.
+        private const bool DIAG_SKIP_ALL_PETS = false;
+
         public void DeployStarterPets()
         {
             ClearDeployed();
+            if (DIAG_SKIP_ALL_PETS)
+            {
+                Debug.Log("[PetDeployer] DIAG_SKIP_ALL_PETS — no pets deployed (camera/hero isolation test).");
+                return;
+            }
 
             var defs = PetCatalog.Pets;
             if (defs == null || defs.Count == 0)
@@ -105,17 +125,62 @@ namespace DeNelle.Pets
                 return;
             }
 
+            // WO-185: deploy the pet the player chose at the pet-select screen, not
+            // a hardcoded default. The onboarding flow writes the pick to
+            // GameState.StarterPetId; resolve that to a species here. Falls back to
+            // the ice-wolf (the original sole starter) when no choice is recorded —
+            // e.g. a pre-WO-185 save, or the Defend-the-Tower express path that
+            // skips pet-select.
+            string starterSpecies = ResolveStarterSpecies();
+
             foreach (var def in defs)
             {
                 if (def == null) continue;
+                // SINGLE starter pet until the others are EARNED (owner 2026-05-30) —
+                // only the player's chosen Warden deploys for now; unlock the rest
+                // via bond progression.
+                if (def.Species != starterSpecies) continue;
                 Vector3 slot = PetCatalog.DeploySlotPosition(def.SlotIndex, _heartPosition);
                 int bond = BondRankFor(def.SlotIndex);
 
                 Pet pet = SpawnPet(def, slot);
                 pet.Configure(def, bond, slot, _deployMode);
                 pet.SetEnemyMask(_enemyMask);
+
+                // Level progression: attach AFTER Configure so PetId is set when
+                // PetProgression enables and registers under it (XP system).
+                if (pet.GetComponent<PetProgression>() == null)
+                    pet.gameObject.AddComponent<PetProgression>();
+
                 _deployed.Add(pet);
             }
+        }
+
+        // Fallback starter species when GameState records no pick (pre-WO-185
+        // saves, or the express Defend-the-Tower path that skips pet-select).
+        private const string DefaultStarterSpecies = "ice-wolf";
+
+        /// <summary>
+        /// WO-185: resolves the species of the player's chosen starter pet from
+        /// <c>GameState.StarterPetId</c> (written by the onboarding pet-select
+        /// screen). The id space matches <see cref="PetCatalog"/>
+        /// ("pet-aether-sprite" etc.), so a <see cref="PetCatalog.Find"/> maps the
+        /// id to its <see cref="PetDef.Species"/>. Falls back to
+        /// <see cref="DefaultStarterSpecies"/> when no choice is recorded or the id
+        /// is unknown.
+        /// </summary>
+        private static string ResolveStarterSpecies()
+        {
+            var svc = DeNelle.Core.State.GameStateService.Instance;
+            string starterId = svc != null && svc.State != null ? svc.State.StarterPetId : null;
+            if (string.IsNullOrEmpty(starterId)) return DefaultStarterSpecies;
+
+            var def = PetCatalog.Find(starterId);
+            if (def != null && !string.IsNullOrEmpty(def.Species)) return def.Species;
+
+            Debug.LogWarning($"[PetDeployer] StarterPetId '{starterId}' did not resolve to a " +
+                             $"PetCatalog species — falling back to '{DefaultStarterSpecies}'.");
+            return DefaultStarterSpecies;
         }
 
         /// <summary>Destroys every deployed pet (e.g. on village-scene teardown).</summary>
@@ -148,13 +213,44 @@ namespace DeNelle.Pets
                 {
                     visual.transform.SetParent(go.transform, false);
                     visual.transform.localPosition = Vector3.zero;
-                    // Tripo FBXs export facing -Z (title-pose forward), so the
-                    // body needs a 180° yaw flip to align with Pet.FaceToward's
-                    // LookRotation (which assumes +Z forward). Owner ask
-                    // 2026-05-20: pets should "turn left when going left".
-                    visual.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
+                    // FORWARD CORRECTION (DEF-95, owner field-test: "pet travels in
+                    // reverse"). The pet meshes are Tripo exports (ice-wolf =
+                    // icecrystalfox3dmodel) of the SAME family as the hero bodies,
+                    // which import facing +X (EAST) in their bind pose — HeroBodySwapper
+                    // applies a constant -90° yaw (+X→+Z) to align them with the root's
+                    // +Z travel direction. Pet.FaceToward rotates the pet ROOT via
+                    // LookRotation(dir), i.e. root +Z points along travel. With the old
+                    // identity rotation the mesh's authored +X faced 90° off the travel
+                    // direction, reading as "moves/faces the wrong way" (DEF-95). Apply
+                    // the same single, consistent -90° yaw so visual forward == travel.
+                    const float PetForwardYaw = -90f;  // +X (authored forward) → +Z (root forward)
+                    visual.transform.localRotation = Quaternion.Euler(0f, PetForwardYaw, 0f);
                     NormalizePetHeight(visual, 1.1f);
                     StripPetColliders(visual);
+                    // Tripo FBXs embed a CAMERA node (and sometimes an
+                    // AudioListener). Left in, a pet's camera renders to the
+                    // screen FROM the pet, so the view "follows the pet" instead
+                    // of the hero's VillageCamera (root cause, 2026-05-25). Strip
+                    // them so only the hero camera ever drives the display.
+                    foreach (var cam in visual.GetComponentsInChildren<Camera>(true))
+                        if (cam != null) Destroy(cam);
+                    foreach (var al in visual.GetComponentsInChildren<AudioListener>(true))
+                        if (al != null) Destroy(al);
+                    // Strip any baked-in light / particle "aura" too — the affinity
+                    // glow below is the single controlled source (owner 2026-05-25).
+                    foreach (var lt in visual.GetComponentsInChildren<Light>(true))
+                    {
+                        if (lt == null) continue;
+                        // URP's UniversalAdditionalLightData has [RequireComponent(Light)],
+                        // so destroying the Light directly logs "Can't remove Light because
+                        // UniversalAdditionalLightData depends on it" (WO-28 §4). Remove the
+                        // dependent first. GetComponent(string) avoids a URP asmdef reference.
+                        var lightData = lt.GetComponent("UniversalAdditionalLightData");
+                        if (lightData != null) Destroy(lightData);
+                        Destroy(lt);
+                    }
+                    foreach (var ps in visual.GetComponentsInChildren<ParticleSystem>(true))
+                        if (ps != null) Destroy(ps);
                     // Tripo FBXs import with Phong materials URP can't render
                     // (owner 2026-05-20). The fixer rebuilds them as URP/Lit
                     // on Awake; if Tripo's embedded textures didn't extract,
@@ -166,24 +262,47 @@ namespace DeNelle.Pets
                     {
                         petFixer.SetFallbackTexture("Textures/" + def.Species);
                         petFixer.SetFallbackTint(def.TintColor);
+                        // Owner 2026-05-25: dim the pet "aura/beams" to a minimal
+                        // affinity-coloured glow (fire red / ice white / aether violet).
+                        petFixer.SetEmissionOverride(AffinityGlow(def.Element));
+                        // WO-34 (2026-05-25): TripoAssetPostprocessor extracts the
+                        // pet's materials as URP — but those extracted URP mats
+                        // render washed-out/grey, and the fixer SKIPS already-URP
+                        // materials by default, leaving them broken. Force a full
+                        // rebuild from each material's real _BaseMap so every pet
+                        // (incl. ice-wolf, which has no fallback PNG) gets its true
+                        // texture. This is why pets kept coming back grey.
+                        petFixer.ForceRebuildAll();
                     }
+
+                    // WO-184 (pet T-pose): the spawned pet FBX (e.g. ice-wolf) is
+                    // imported WITHOUT an AnimatorController assigned, so its
+                    // Animator has nothing to drive — it freezes in its bind/T-pose
+                    // regardless of the Speed float Pet.cs feeds. Load a per-species
+                    // controller from Resources/Pets/<species>.controller (built by
+                    // the editor pet-animator tool from the species' OWN embedded
+                    // clips — the ice-wolf is a Generic quadruped, so it needs its
+                    // own controller, NOT the KayKit Pet.controller whose Generic
+                    // clip bone-paths won't bind to this rig). If absent, fall back
+                    // to the shared Pet.controller in Resources, then warn so the
+                    // gap is visible rather than a silent statue.
+                    WirePetAnimator(visual, def);
                 }
                 else
                 {
-                    // Placeholder primitive — owner direction 2026-05-20: pets
-                    // were invisible because the 0.5x capsule sat 15m from the
-                    // hero. Bump to chest height and let HeroLeash drag them.
-                    var capsule = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-                    capsule.name = "Body";
-                    capsule.transform.SetParent(go.transform, false);
-                    capsule.transform.localScale = new Vector3(0.8f, 0.9f, 0.8f);
-                    var col = capsule.GetComponent<Collider>();
-                    if (col != null) col.isTrigger = true;
-                    TintPlaceholder(capsule, def);
+                    // WO-211 Phase 2 lite-pet visuals: render the pet as a single
+                    // camera-facing sprite billboard instead of its 3D mesh. A Quad
+                    // (collider stripped) at chest height carries the pet's portrait
+                    // on an unlit transparent material; PetBillboard turns it to face
+                    // the camera each frame. Falls back to a TintColor-tinted quad
+                    // when the portrait PNG isn't present yet.
+                    BuildSpriteBillboard(go, def);
                 }
 
                 pet = go.AddComponent<Pet>();
+#if UNITY_EDITOR
                 AddPetNameTag(go, def);
+#endif
             }
 
             // Attach the hero-leash so the pet trails the hero around the
@@ -191,8 +310,29 @@ namespace DeNelle.Pets
             // walk to it; Defend-mode pets snap back to it when no enemy.
             pet.gameObject.AddComponent<PetHeroLeash>();
 
+            // WO-229: auto-harvest. Added AFTER the leash so PetHarvester.Awake
+            // finds it (PetHarvester suspends the leash while gathering and restores
+            // it after). Always-on idle harvesting — the harvester self-yields to
+            // combat for Defend pets and falls back to the leash when no node is in
+            // range, so "pet gathers while you defend" needs no extra mode wiring.
+            if (pet.GetComponent<PetHarvester>() == null)
+                pet.gameObject.AddComponent<PetHarvester>();
+
             pet.name = $"Pet_{def.Species}";
             return pet;
+        }
+
+        // Affinity glow colour for a pet's minimal aura (owner 2026-05-25:
+        // "fire red, ice white"). Matches pets.json glow intent per element.
+        private static Color AffinityGlow(string element)
+        {
+            switch ((element ?? "").ToLowerInvariant())
+            {
+                case "flame": return new Color(1.00f, 0.33f, 0.16f); // fire red  (#ff5630)
+                case "ice":   return new Color(0.90f, 0.96f, 1.00f); // icy white (#e6f5ff)
+                case "aether":return new Color(0.62f, 0.44f, 1.00f); // violet    (#9d6fff)
+                default:      return Color.white;
+            }
         }
 
         /// <summary>
@@ -204,6 +344,10 @@ namespace DeNelle.Pets
         /// </summary>
         private static GameObject TryLoadPetMesh(PetDef def)
         {
+            // WO-211 Phase 2: lite-pet visuals path never loads the heavy Tripo
+            // FBX — the caller falls through to the sprite-billboard else-branch.
+            if (UseLitePetVisuals) return null;
+
             if (def == null || string.IsNullOrEmpty(def.Species)) return null;
 
             // Cosmetic pet skin (Glimmer shop) overrides the base mesh. The
@@ -257,6 +401,89 @@ namespace DeNelle.Pets
             }
         }
 
+        /// <summary>
+        /// WO-184: assign an AnimatorController to a freshly-spawned pet FBX so it
+        /// animates instead of standing in its bind/T-pose. Prefers a per-species
+        /// controller (Resources/Pets/&lt;species&gt;.controller) built from THAT
+        /// species' own clips, then the shared Resources/Pets/Pet.controller, then
+        /// warns. Also guarantees the Animator keeps a valid Avatar (Generic FBXs
+        /// occasionally instantiate without one) and rebinds so bones reconnect.
+        /// </summary>
+        private static void WirePetAnimator(GameObject visual, PetDef def)
+        {
+            if (visual == null) return;
+            var anim = visual.GetComponentInChildren<Animator>();
+            if (anim == null) return;   // no rig on this mesh — nothing to drive.
+
+            string species = def != null ? def.Species : null;
+            RuntimeAnimatorController ctrl = null;
+            if (!string.IsNullOrEmpty(species))
+                ctrl = Resources.Load<RuntimeAnimatorController>("Pets/" + species);
+            if (ctrl == null)
+                ctrl = Resources.Load<RuntimeAnimatorController>("Pets/Pet");
+
+            if (ctrl != null)
+            {
+                anim.runtimeAnimatorController = ctrl;
+                // Keep animating when the follow camera frames just past the pet,
+                // else Unity freezes the rig and it re-T-poses on re-entry to view.
+                anim.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+                anim.Rebind();
+                return;
+            }
+
+            // WO-184 FALLBACK — no .controller asset shipped for this species (the
+            // ice-wolf is the GAP-PRIMARY quadruped: Generic rig, can't bind the
+            // KayKit Rig_Medium Pet.controller). Rather than leave a T-pose statue,
+            // play the FBX's OWN embedded take directly via a PlayableGraph — no
+            // AnimatorController needed, fully build-safe. Only attach when the
+            // species mesh actually carries an embedded clip.
+            AnimationClip clip = TryLoadEmbeddedClip(species);
+            if (clip != null)
+            {
+                var player = anim.gameObject.GetComponent<PetClipPlayer>();
+                if (player == null) player = anim.gameObject.AddComponent<PetClipPlayer>();
+                player.Initialize(anim, clip);
+                Debug.Log(
+                    "[PetDeployer] No .controller for pet '" + (species ?? "?") +
+                    "' — playing its embedded clip '" + clip.name +
+                    "' via PetClipPlayer (WO-184 fallback). Author a per-species " +
+                    "controller for a proper idle<->walk blend.");
+            }
+            else
+            {
+                Debug.LogWarning(
+                    "[PetDeployer] No AnimatorController at Resources/Pets/" +
+                    (species ?? "<species>") + ".controller (nor Resources/Pets/Pet" +
+                    ".controller) AND no embedded clip on the FBX — pet '" +
+                    (species ?? "?") + "' will not animate (T-pose). Build a " +
+                    "per-species controller from its embedded clips.");
+            }
+        }
+
+        /// <summary>
+        /// WO-184: loads the first <see cref="AnimationClip"/> embedded in the
+        /// species' model at Resources/Pets/&lt;species&gt; (Tripo FBXs import their
+        /// take as a sub-asset even when no clipAnimations are authored). Skips the
+        /// editor-only "__preview__" clip Unity adds. Returns null if the species or
+        /// its mesh carries no clip.
+        /// </summary>
+        private static AnimationClip TryLoadEmbeddedClip(string species)
+        {
+            if (string.IsNullOrEmpty(species)) return null;
+            var all = Resources.LoadAll<AnimationClip>("Pets/" + species);
+            if (all == null) return null;
+            foreach (var c in all)
+            {
+                if (c == null) continue;
+                // Unity injects a hidden "__preview__<name>" clip for the inspector;
+                // never play that one.
+                if (c.name.StartsWith("__preview__")) continue;
+                return c;
+            }
+            return null;
+        }
+
         private static void NormalizePetHeight(GameObject go, float targetHeight)
         {
             var renderers = go.GetComponentsInChildren<Renderer>();
@@ -306,6 +533,96 @@ namespace DeNelle.Pets
             if (_bondRanks == null || slotIndex < 0 || slotIndex >= _bondRanks.Length)
                 return 0;
             return Mathf.Clamp(_bondRanks[slotIndex], 0, 4);
+        }
+
+        /// <summary>
+        /// WO-211 Phase 2 "lite pet visuals": builds a camera-facing sprite
+        /// billboard for the pet under <paramref name="root"/>. A Quad (collider
+        /// stripped) at chest height shows the pet's portrait
+        /// (Resources/PetPortraits/&lt;id&gt;.png, id = "pet-&lt;species&gt;") on an
+        /// unlit transparent material; <see cref="PetBillboard"/> keeps it turned
+        /// toward the camera. When the portrait is missing the quad is tinted with
+        /// the species TintColor so the pet is still visible.
+        /// </summary>
+        private static void BuildSpriteBillboard(GameObject root, PetDef def)
+        {
+            var quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            quad.name = "Body";
+            quad.transform.SetParent(root.transform, false);
+            quad.transform.localPosition = new Vector3(0f, 0.9f, 0f);
+            quad.transform.localScale = Vector3.one * 1.4f;
+
+            // No collider on a visual-only billboard (pets hunt via overlap sweeps,
+            // not this quad).
+            var col = quad.GetComponent<Collider>();
+            if (col != null) Destroy(col);
+
+            var renderer = quad.GetComponent<MeshRenderer>();
+            if (renderer != null)
+            {
+                // Prefer the URP unlit shader; fall back to the sprite/legacy
+                // transparent shaders so the quad renders in any pipeline.
+                Shader shader = Shader.Find("Universal Render Pipeline/Unlit")
+                                ?? Shader.Find("Sprites/Default")
+                                ?? Shader.Find("Unlit/Transparent");
+                var mat = shader != null ? new Material(shader) : null;
+
+                // id = "pet-<species>" — matches the PetCatalog id and the PNG the
+                // PetPortraitRenderer writes.
+                string id = "pet-" + (def != null ? def.Species : "");
+                var sprite = Resources.Load<Sprite>("PetPortraits/" + id);
+                Texture portraitTex = sprite != null
+                    ? sprite.texture
+                    : Resources.Load<Texture2D>("PetPortraits/" + id);
+
+                if (mat != null)
+                {
+                    EnableMaterialTransparency(mat);
+                    if (portraitTex != null)
+                    {
+                        if (mat.HasProperty("_BaseMap")) mat.SetTexture("_BaseMap", portraitTex);
+                        if (mat.HasProperty("_MainTex")) mat.SetTexture("_MainTex", portraitTex);
+                        // White base so the texture's own colours show through.
+                        if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", Color.white);
+                        if (mat.HasProperty("_Color"))     mat.SetColor("_Color", Color.white);
+                    }
+                    else
+                    {
+                        // Portrait not baked yet — tint the quad with the species
+                        // colour so the pet is at least visible (owner: keep the
+                        // loop playable while the render runs).
+                        Color tint = def != null ? def.TintColor : Color.white;
+                        if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", tint);
+                        if (mat.HasProperty("_Color"))     mat.SetColor("_Color", tint);
+                        Debug.LogWarning("[PetDeployer] No lite-pet portrait at " +
+                            "Resources/PetPortraits/" + id + " — using TintColor " +
+                            "quad. Run Defenders → Art → Render Pet Portraits.");
+                    }
+                    renderer.sharedMaterial = mat;
+                }
+            }
+
+            quad.AddComponent<PetBillboard>();
+        }
+
+        /// <summary>
+        /// Flips a URP/Unlit (or legacy) material into alpha-blended transparent
+        /// mode so the portrait's transparent background reads through.
+        /// </summary>
+        private static void EnableMaterialTransparency(Material mat)
+        {
+            if (mat == null) return;
+            // URP/Unlit surface keywords for transparent + alpha blend.
+            if (mat.HasProperty("_Surface")) mat.SetFloat("_Surface", 1f); // 1 = Transparent
+            if (mat.HasProperty("_Blend"))   mat.SetFloat("_Blend", 0f);   // 0 = Alpha
+            if (mat.HasProperty("_SrcBlend")) mat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            if (mat.HasProperty("_DstBlend")) mat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            if (mat.HasProperty("_ZWrite"))   mat.SetInt("_ZWrite", 0);
+            if (mat.HasProperty("_Cull"))     mat.SetInt("_Cull", (int)UnityEngine.Rendering.CullMode.Off); // double-sided
+            mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            mat.EnableKeyword("_ALPHABLEND_ON");
+            mat.EnableKeyword("_ALPHAPREMULTIPLY_ON");
+            mat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
         }
 
         private static void TintPlaceholder(GameObject go, PetDef def)

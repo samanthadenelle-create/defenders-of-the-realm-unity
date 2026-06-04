@@ -29,8 +29,12 @@ namespace DeNelle.Village
     [RequireComponent(typeof(Gate))]
     public sealed class GateProximityOpener : MonoBehaviour
     {
-        [Tooltip("Radius (world units) within which the hero opens this gate. Keep <= 6m so gates don't feel always-open.")]
-        [SerializeField, Range(1f, 6f)] private float _proximityRadius = 4f;
+        // WO-158: bumped 4→8 m. The drawbridge sits OUTSIDE the moat (~6 m past the
+        // gate line), so a 4 m radius opened the gate too late — the hero hit the
+        // blocker before triggering RequestOpen, reading as "gate won't let me out."
+        // 8 m opens the gate as the hero steps onto the approach/drawbridge.
+        [Tooltip("Radius (world units) within which the hero opens this gate. ~8m so the gate opens before the hero reaches the blocker across the drawbridge.")]
+        [SerializeField, Range(1f, 12f)] private float _proximityRadius = 8f;
 
         private Gate _gate;
         private int _heroesInside; // ref-count: robust to multi-collider heroes / re-entry
@@ -38,6 +42,11 @@ namespace DeNelle.Village
         private void Awake()
         {
             _gate = GetComponent<Gate>();
+            // WO-158: openers baked into Village.unity before this change froze
+            // _proximityRadius at 4 (too small — gate opened after the hero hit the
+            // blocker). Floor it to 8 at load so baked + new openers behave the same
+            // without needing a rebake.
+            if (_proximityRadius < 8f) _proximityRadius = 8f;
             EnsureTrigger();
         }
 

@@ -1,5 +1,5 @@
 {
-  "_comment": "Canonical wave-spawn schedule for the Avalon village defense loop (Defenders of the Realm v2 Unity port). Each wave is preceded by a calm Prepare Phase countdown; when the countdown hits zero the WaveManager spawns the wave's enemy batches at the named WaveSpawnPoints. Wave 1 is the v2-foundation acceptance wave: 8 Hollow Walkers entering from the NORTH gate (port spec Week 4 'Wave 1 = 8 Hollow Walkers from the north gate'). The countdown timings are sourced VERBATIM from the React v1 stream (src/modules/village/waves/waveConfig.ts — PREPARE_SECONDS=45 for the first wave, LATER_PREPARE_SECONDS=300 after). Per-wave enemy counts follow React src/data/battleScaling.ts waveScaling().enemyCount (wave 1 = 8, then 8 + steps*2 capped at 12). Waves 2-3 are AUTHORED here as a defensible continuation so the WaveManager has a multi-wave schedule to drive — the React stream only parameterises waves procedurally, it has no literal wave-2/3 table; flagged in docs/port-notes/week4-waves.md.",
+  "_comment": "Canonical wave-spawn schedule for the Elarion village defense loop (Defenders of the Realm v2 Unity port). Each wave is preceded by a calm Prepare Phase countdown; when the countdown hits zero the WaveManager spawns the wave's enemy batches at the named WaveSpawnPoints. Wave 1 is the v2-foundation acceptance wave: 8 Hollow Walkers entering from the NORTH gate (port spec Week 4 'Wave 1 = 8 Hollow Walkers from the north gate'). The countdown timings are sourced VERBATIM from the React v1 stream (src/modules/village/waves/waveConfig.ts — PREPARE_SECONDS=45 for the first wave, LATER_PREPARE_SECONDS=300 after). Per-wave enemy counts follow React src/data/battleScaling.ts waveScaling().enemyCount (wave 1 = 8, then 8 + steps*2 capped at 12). Waves 2-3 are AUTHORED here as a defensible continuation so the WaveManager has a multi-wave schedule to drive — the React stream only parameterises waves procedurally, it has no literal wave-2/3 table; flagged in docs/port-notes/week4-waves.md.",
   "_sources": {
     "reactWaveConfig": "defenders-of-the-realm/src/modules/village/waves/waveConfig.ts (PREPARE_SECONDS=45, LATER_PREPARE_SECONDS=300, prepSecondsForWave)",
     "reactScaling": "defenders-of-the-realm/src/data/battleScaling.ts (waveScaling().enemyCount: wave1=8, then min(8+steps*2,12))",
@@ -25,10 +25,10 @@
       "enemies": [
         {
           "type": "hollow-walker",
-          "count": 8,
+          "count": 2,
           "spawnPoint": "spawn-0",
           "delay": 0,
-          "interval": 1.1
+          "interval": 1.4
         }
       ]
     },
@@ -39,14 +39,14 @@
       "enemies": [
         {
           "type": "hollow-walker",
-          "count": 7,
+          "count": 3,
           "spawnPoint": "spawn-0",
           "delay": 0,
-          "interval": 1.0
+          "interval": 1.2
         },
         {
           "type": "hollow-rogue",
-          "count": 3,
+          "count": 1,
           "spawnPoint": "spawn-1",
           "delay": 6,
           "interval": 1.4
@@ -60,21 +60,21 @@
       "enemies": [
         {
           "type": "hollow-walker",
-          "count": 6,
+          "count": 3,
           "spawnPoint": "spawn-0",
           "delay": 0,
-          "interval": 1.0
+          "interval": 1.1
         },
         {
           "type": "hollow-warrior",
-          "count": 3,
+          "count": 1,
           "spawnPoint": "spawn-2",
           "delay": 4,
           "interval": 1.8
         },
         {
           "type": "hollow-rogue",
-          "count": 3,
+          "count": 2,
           "spawnPoint": "spawn-3",
           "delay": 9,
           "interval": 1.3

@@ -27,7 +27,7 @@ namespace DeNelle.Core.State
     {
         // ── Versioning ───────────────────────────────────────────────────────
         /// <summary>CURRENT_SCHEMA_VERSION — bumped whenever the persisted shape changes.</summary>
-        public const int CurrentVersion = 10;
+        public const int CurrentVersion = 15;  // v15 — added magic tech-axis currency (DEF-121/WO-230); v14 — baseLayout (WO-108); v13 — buildJobs + adSkip (WO-172)
         /// <summary>SaveExport.format — bumped only if the envelope shape changes.</summary>
         public const int FileFormat = 1;
 
@@ -140,6 +140,55 @@ namespace DeNelle.Core.State
             [JsonProperty("blockedCodes")] public List<string> BlockedCodes;
             [JsonProperty("inbox")] public List<ChatMessage> Inbox;
             [JsonProperty("lastInboxSyncAt")] public double? LastInboxSyncAt;
+
+            // ── v11 — Tower Empowerment ──────────────────────────────────────────
+            /// <summary>
+            /// Aether Crystals — the rare off-chain currency used for tower empowerment.
+            /// Earned via Crystal Mine (passive), wave bonuses, boss kills, and dungeon runs.
+            /// Local-only: never touches the SKR token or Solana wallet.
+            /// </summary>
+            [JsonProperty("aetherCrystals")] public double? AetherCrystals;
+
+            // ── v12 — Offline harvest accrual (WO-115) ───────────────────────────
+            /// <summary>
+            /// Unix-ms of the last offline-harvest accrual claim. Nullable per the
+            /// <c>.partial()</c> convention; absent on an older save → defaults to 0 on
+            /// load (no retroactive haul), so no explicit migration step is needed
+            /// (same additive-default-on-read pattern as <c>aetherCrystals</c>).
+            /// </summary>
+            [JsonProperty("lastHarvestClaimMs")] public double? LastHarvestClaimMs;
+
+            // ── v13 — Build/upgrade timers + ad-skip (WO-172) ────────────────────
+            /// <summary>
+            /// In-flight construction/upgrade jobs. Absent on an older save → defaults
+            /// to an empty list on load (no jobs), so no explicit migration step is
+            /// needed (same additive-default-on-read pattern as <c>lastHarvestClaimMs</c>).
+            /// </summary>
+            [JsonProperty("buildJobs")] public List<BuildJobData> BuildJobs;
+
+            /// <summary>Rewarded-ad build-skips used in the current local day (daily cap). Absent → 0.</summary>
+            [JsonProperty("adSkipsUsedToday")] public double? AdSkipsUsedToday;
+
+            /// <summary>Local-day key the ad-skip counter belongs to. Absent → null (counter resets on first claim).</summary>
+            [JsonProperty("adSkipDayKey")] public string AdSkipDayKey;
+
+            // ── v14 — Player build mode base layout (WO-108) ─────────────────────
+            /// <summary>
+            /// The player's placed-structure base layout. Nullable per the
+            /// <c>.partial()</c> convention; absent on an older save → the v13→v14
+            /// migration step seeds it to an empty list (existing players keep the
+            /// default VillageSceneBuilder village until they first build + save).
+            /// </summary>
+            [JsonProperty("baseLayout")] public List<PlacedStructureData> BaseLayout;
+
+            // ── v15 — Magic tech-axis currency (DEF-121 / WO-230) ────────────────
+            /// <summary>
+            /// Magic — the building-upgrade tech-tree gating currency (NOT a harvestable).
+            /// Nullable per the <c>.partial()</c> convention; absent on an older save →
+            /// defaults to 0 on load (no retroactive grant), so no explicit migration
+            /// step is needed (same additive-default-on-read pattern as <c>aetherCrystals</c>).
+            /// </summary>
+            [JsonProperty("magic")] public double? Magic;
         }
 
         // =====================================================================
@@ -211,6 +260,8 @@ namespace DeNelle.Core.State
                 if (raw.Wood.HasValue) raw.Wood = NonNegInt(raw.Wood.Value, "wood");
                 if (raw.WallLevel.HasValue) raw.WallLevel = NonNegInt(raw.WallLevel.Value, "wallLevel");
                 if (raw.AtbLossStreak.HasValue) raw.AtbLossStreak = NonNegInt(raw.AtbLossStreak.Value, "atbLossStreak");
+                if (raw.AetherCrystals.HasValue) raw.AetherCrystals = NonNegInt(raw.AetherCrystals.Value, "aetherCrystals");
+                if (raw.Magic.HasValue) raw.Magic = NonNegInt(raw.Magic.Value, "magic");
 
                 // ── Integer arrays → nonNegInt per entry ─────────────────────
                 ClampNonNegList(raw.PetBonds, "petBonds");
@@ -284,6 +335,22 @@ namespace DeNelle.Core.State
                 }
                 if (raw.LastInboxSyncAt.HasValue)
                     raw.LastInboxSyncAt = FiniteInt(raw.LastInboxSyncAt.Value, "lastInboxSyncAt");
+                if (raw.LastHarvestClaimMs.HasValue)
+                    raw.LastHarvestClaimMs = FiniteInt(raw.LastHarvestClaimMs.Value, "lastHarvestClaimMs");
+
+                // ── Build jobs (WO-172) → startMs/durationMs finiteInt; counter nonNegInt ─
+                if (raw.BuildJobs != null)
+                {
+                    for (var i = 0; i < raw.BuildJobs.Count; i++)
+                    {
+                        var j = raw.BuildJobs[i];
+                        j.StartMs = FiniteInt(j.StartMs, $"buildJobs.{i}.startMs");
+                        j.DurationMs = Math.Max(0, FiniteInt(j.DurationMs, $"buildJobs.{i}.durationMs"));
+                        raw.BuildJobs[i] = j;
+                    }
+                }
+                if (raw.AdSkipsUsedToday.HasValue)
+                    raw.AdSkipsUsedToday = NonNegInt(raw.AdSkipsUsedToday.Value, "adSkipsUsedToday");
 
                 // ── Volumes / joystick → finite-only (NOT clamped on load) ───
                 if (raw.JoystickSensitivity.HasValue)

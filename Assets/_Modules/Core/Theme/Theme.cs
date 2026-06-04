@@ -179,28 +179,25 @@ namespace DeNelle.Core.Theme
 
         private static ThemeCatalog LoadCatalog()
         {
-            // Canonical JSON lives under StreamingAssets so it is readable in a
-            // player build (spec Part 3 forbids Resources.Load). On the Week-1
-            // targets — Editor, Windows, macOS — streamingAssetsPath is a real
-            // directory, so a synchronous read is valid. ANDROID NOTE: on
-            // Android StreamingAssets is packed inside the APK; a UnityWebRequest
-            // read is required there — to be added with the Week-7/8 Seeker build.
-            var full = Path.Combine(Application.streamingAssetsPath, StreamingRelativePath);
+            // WebGL-safe load via CanonicalJson (Resources.Load first — works in a browser
+            // where File.ReadAllText(streamingAssetsPath) throws — then StreamingAssets
+            // fallback on desktop). themes.json is mirrored into Assets/Resources/Data/Canonical/.
             try
             {
-                if (File.Exists(full))
+                string json = DeNelle.Core.CanonicalJson.Read(StreamingRelativePath);
+                if (!string.IsNullOrEmpty(json))
                 {
-                    var parsed = Parse(File.ReadAllText(full));
+                    var parsed = Parse(json);
                     if (parsed != null) return parsed;
                 }
                 else
                 {
-                    Debug.LogError($"[Theme] themes.json not found at {full}.");
+                    Debug.LogError("[Theme] themes.json not found (Resources or StreamingAssets).");
                 }
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[Theme] Failed to read {full}: {ex.Message}");
+                Debug.LogError($"[Theme] Failed to read themes.json: {ex.Message}");
             }
 
             Debug.LogError("[Theme] themes.json could not be loaded — using an empty catalog.");
