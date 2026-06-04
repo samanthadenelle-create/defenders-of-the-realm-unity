@@ -18,21 +18,21 @@ MonoBehaviour:
     type: 1
     minLevel: 1
   upgrades:
-  - visualPrefab: {fileID: 0}
+  - visualPrefab: {fileID: 1000013291415910, guid: 42b8bf721a8194cfe8697148591a66f0, type: 3}
     ability: 0
-    range: 9
-    damage: 6
+    range: 12
+    damage: 8
     upgradeCost: 0
-  - visualPrefab: {fileID: 0}
+  - visualPrefab: {fileID: 1000012835821422, guid: e5e696a719a9d4328aeb96916e74a75a, type: 3}
     ability: 1
-    range: 11
-    damage: 10
-    upgradeCost: 130
-  - visualPrefab: {fileID: 0}
-    ability: 1
-    range: 13
+    range: 14
     damage: 14
-    upgradeCost: 210
+    upgradeCost: 130
+  - visualPrefab: {fileID: 126972, guid: f0e75fbaaa86f59498a7b63cedca938e, type: 3}
+    ability: 4
+    range: 16
+    damage: 22
+    upgradeCost: 280
   scaffoldingPrefab: {fileID: 0}
   buildTime: 5
   workerHammerVFX: {fileID: 0}
