@@ -35,6 +35,7 @@ public class Village2Generator : MonoBehaviour
     public GameObject balconyStraight;  // Balcony_Simple_Straight (rampart walkway)
     public GameObject balconyCorner;    // Balcony_Simple_Corner
     public GameObject stairsPrefab;     // Stairs_Exterior_Straight
+    public bool placeGateStairs = false; // OFF: auto-stairs landed disconnected ("spare steps in field"); rampart access is hand-designed
     public GameObject towerBase;        // Corner_ExteriorWide_Brick
     public GameObject gatePrefab;       // Wall_Arch
     public GameObject moatWaterPlane;
@@ -201,7 +202,9 @@ public class Village2Generator : MonoBehaviour
         Place(towerBase, pos + side, yRot, seat:true);
         Place(towerBase, pos - side, yRot, seat:true);
         Place(gatePrefab, pos, yRot, seat:true);   // gate arch base at ground, not submerged
-        if (stairsPrefab != null)
+        if (placeGateStairs && stairsPrefab != null)
+            // Opt-in only (default OFF — rampart access is hand-designed; auto-stairs scattered
+            // disconnected "spare steps" in the field).
             // DEF-254: stairs climb from INSIDE the wall (local -z) up to the rampart — they were
             // placed outward (+z) and landed in the moat ring.
             Place(stairsPrefab, pos + Quaternion.Euler(0, yRot, 0) * new Vector3(0, 0, -5f), yRot + 90f, seat:true);

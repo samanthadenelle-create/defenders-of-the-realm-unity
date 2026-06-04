@@ -39,6 +39,11 @@ namespace DeNelle.Village
 
         private bool _built;
 
+        // DISABLED for the Village2 redesign (2026-06-04): AccessX/LaneZ are the OLD
+        // VillageSceneBuilder rampart coords; in generated Village2 the lift lands nowhere.
+        // Rampart access is being hand-designed — re-enable once it's recipe/coord-driven.
+        private const bool EnabledForVillage2 = false;
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
         {
@@ -71,6 +76,11 @@ namespace DeNelle.Village
         {
             if (_built) return;
             _built = true;
+            if (!EnabledForVillage2)
+            {
+                Debug.Log("[RampartLiftInstaller] Disabled for Village2 redesign — lift skipped (hand-designed rampart access).");
+                return;
+            }
 
             // North + South access — same points the old ramps served.
             SpawnLift("RampartLift (North)", new Vector3(AccessX, 0f,  LaneZ));

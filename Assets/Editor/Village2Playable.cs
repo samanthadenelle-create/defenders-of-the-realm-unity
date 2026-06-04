@@ -860,7 +860,7 @@ namespace DeNelle.Editor
         // Names whose renderers must STAY walkable (NOT flagged obstacle): the gate
         // arch openings + the ground roads. Everything else under the village root
         // (walls, ramparts, corner towers, houses, the tree) becomes an obstacle.
-        static readonly string[] KeepWalkable = { "Wall_Arch", "Floor_Brick" };
+        static readonly string[] KeepWalkable = { "Wall_Arch", "Gate_Medieval", "Floor_Brick" };
 
         [MenuItem("Defenders/Village2/C. Bake Combined NavMesh")]
         public static void C_BakeNavMesh()
