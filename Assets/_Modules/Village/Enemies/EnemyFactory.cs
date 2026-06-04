@@ -28,6 +28,25 @@ namespace DeNelle.Village
             float height = def != null ? Mathf.Max(0.8f, def.Height) : 1.9f;
             float sizeScale = Mathf.Clamp(height / 1.9f, 0.55f, 1.6f);
 
+            // DEF-268: a NavMeshAgent AddComponent'd off the baked NavMesh logs
+            // "Failed to create agent because there is no valid NavMesh" and the agent
+            // never paths. Spawners (camp-defense raiders / roaming mobs / late-loaded
+            // waves) sometimes hand us a point just off the surface. Snap the spawn to
+            // the nearest navmesh point BEFORE we add the agent so it always lands on a
+            // valid surface. Only snaps when a navmesh is genuinely within reach; a far
+            // miss is logged once and the enemy still spawns (agent simply holds, exactly
+            // as Enemy.cs already degrades) rather than being silently dropped.
+            if (NavMesh.SamplePosition(pos, out NavMeshHit navHit, 6f, NavMesh.AllAreas))
+            {
+                pos = navHit.position;
+            }
+            else
+            {
+                Debug.LogWarning($"[EnemyFactory] No baked NavMesh within 6m of spawn {pos} " +
+                                 $"for '{(def != null ? def.Id : "enemy")}' — agent will hold position. " +
+                                 "Check the spawn point / bake.");
+            }
+
             var go = new GameObject(def != null ? $"Enemy ({def.Id})" : "Enemy");
             go.transform.SetParent(parent, false);
             go.transform.SetPositionAndRotation(pos, rot);
