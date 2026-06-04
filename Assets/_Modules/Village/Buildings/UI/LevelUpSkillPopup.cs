@@ -88,6 +88,14 @@ namespace DeNelle.Village.UI
         private void Show(int newLevel)
         {
             if (_overlay == null) return;
+            // DEF-266 — Level 1 is the baseline (account creation), not an achievement.
+            // The DEF-82 starting skill-point gift banks points at level 1, which would
+            // otherwise trip both the OnAnyLevelUp path and the OnEnable banked-points
+            // fallback into auto-opening a "Level 1!" popup the instant a hero is picked.
+            // Suppress the AUTO-popup below level 2 — the points are still granted and
+            // remain spendable via the skill panel; alerts just start at genuine
+            // level-UPs (2+). Guards on the level REACHED (not points-available).
+            if (newLevel < 2) return;
             // During the Defend-the-Tower battle, don't interrupt the fight — QUEUE the
             // level so Update() surfaces the spend screen the instant the fight ends.
             if (FindAnyObjectByType<DeNelle.Village.PatriciaLightController>() != null)
