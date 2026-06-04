@@ -49,7 +49,7 @@ namespace DeNelle.Village
 
     /// <summary>
     /// One village-enemy stat block — the deserialised shape of an
-    /// <c>enemies.json</c> entry. The Hollow Ones that march on Avalon.
+    /// <c>enemies.json</c> entry. The Hollow Ones that march on Elarion.
     /// </summary>
     [Serializable]
     public sealed class EnemyDef
@@ -78,6 +78,20 @@ namespace DeNelle.Village
         [JsonProperty("boss")] public bool Boss;
         /// <summary>Codex flavour line — narrative-bible voice.</summary>
         [JsonProperty("flavor")] public string Flavor;
+
+        // ── Tactical (DEF-83) ─────────────────────────────────────────────────
+        /// <summary>Override NavMeshAgent speed (world units/sec). Defaults to MoveSpeed when absent in JSON.</summary>
+        [Header("Tactical")]
+        [JsonProperty("aggroRadius")] public float AggroRadius = 8f;
+        /// <summary>Per-enemy stagger offset (seconds) the spawner reads when releasing a group.</summary>
+        [JsonProperty("groupStaggerDelay")] public float GroupStaggerDelay = 0.1f;
+
+        // ── Rewards (DEF-88 / DEF-32) ────────────────────────────────────────
+        /// <summary>XP awarded directly to the hero on killing this enemy.</summary>
+        [Header("Rewards")]
+        [JsonProperty("xpReward")]    public int XpReward    = 15;
+        /// <summary>Glimmer (cosmetic currency) awarded to the hero on kill.</summary>
+        [JsonProperty("glimmerReward")] public int GlimmerReward = 3;
 
         /// <summary>The <see cref="Ai"/> token parsed to the typed enum.</summary>
         public EnemyAiKind AiKind

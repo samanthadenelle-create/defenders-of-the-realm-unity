@@ -1,14 +1,23 @@
 // =============================================================================
-// PetHeroLeash — keeps the pet's HomePost anchored to a slot trailing the hero
-// so every deployed pet drifts toward (and around) the player as they roam the
-// village.
+// PetHeroLeash — gives each deployed pet a natural "exploring companion" feel:
+// it meanders around the hero on smooth, curving paths instead of sprinting in
+// straight lines between unrelated points (the old behaviour, which read as a
+// triangular ping-pong / yo-yo on a string).
 // -----------------------------------------------------------------------------
-// Owner direction 2026-05-20: "focus on pets as i cant see them and should be
-// on auto follow hero". The deploy slot ringing the Heart was 15+ metres from
-// the spawn position, so the wider camera never framed the pets. Pet.cs itself
-// only chases enemies — in Defend mode it returns to HomePost when the field
-// is clear. So we just re-anchor HomePost to a leash point behind the hero
-// every frame; the pet's existing kinematic drifter does the rest.
+// How it works (owner 2026-05-25 "should feel like natural exploration"):
+//   • A continuously-drifting wander HEADING (a slow random walk) — the pet
+//     never reverses sharply, so its path curves like an animal nosing around.
+//   • The pet's HomePost (which Pet.cs steers toward) is a "carrot" projected a
+//     few metres AHEAD of the pet along that heading, refreshed every frame.
+//     Because it stays > Pet.ArrivalDamp (1.6 m) ahead, Pet.cs never hits its
+//     arrival brake, so the pet cruises smoothly and never stop-starts.
+//   • When the pet drifts past the explore radius the heading is gently steered
+//     back toward the hero (a curve home, not a snap), scaling with how far out
+//     it is; beyond the hard leash it beelines home. A clamp keeps the carrot
+//     inside the leash at all times.
+//   • Occasional "stop and sniff" beats shorten the carrot so the pet eases to a
+//     near-stop and looks around, then resumes — adds life. Each pet has its own
+//     RNG seed, so the three explore independently instead of moving as a clump.
 //
 // Cross-module note: DeNelle.Pets cannot reference DeNelle.Village (asmdef
 // isolation), so HeroLocomotion is resolved by reflection — name-matched once,
@@ -26,27 +35,36 @@ namespace DeNelle.Pets
     public sealed class PetHeroLeash : MonoBehaviour
     {
         private const float ResolveRetrySeconds = 1.0f;
-        // Pets wander inside this donut around the hero — outer = how far
-        // they may stray, inner = how close they can crowd him.
-        private const float WanderRadiusInner = 2.0f;
-        private const float WanderRadiusOuter = 6.5f;
-        // If the hero strays this far from the current wander point, snap
-        // the point closer immediately so the pet doesn't get left behind.
-        private const float MaxLeashDistance = 11.0f;
-        // Range of "exploration time" between picking new wander points.
-        private const float MinThinkSeconds = 1.6f;
-        private const float MaxThinkSeconds = 4.5f;
-        // Distance at which the pet considers itself "arrived" at the
-        // current wander point and starts the next think timer.
-        private const float ArrivalRadius = 0.8f;
+
+        // Carrot distance ahead of the pet along its heading. Kept > Pet.cs's
+        // ArrivalDamp (1.6 m) so the pet cruises without ever braking → smooth,
+        // continuous motion instead of stop-start.
+        private const float LeadDistance = 3.5f;
+        // Pets keep AT LEAST this far from the hero — they ring him, never cruise
+        // through his centre-of-frame spot. Without this a smoothly-moving pet
+        // gliding through the (stationary, centred) hero reads as "the camera is
+        // following the pet" (owner 2026-05-25, persisted across camera fixes).
+        private const float InnerRadius = 4.5f;
+        // Pet roams freely out to this radius of the hero; past it the heading is
+        // steered back toward the hero so it curves home.
+        private const float ExploreRadius = 9f;
+        // Hard leash — the carrot is never placed beyond this; past it the pet
+        // beelines home.
+        private const float ReturnRadius = 13f;
+        // Max gentle bend of the wander heading while meandering (deg/sec).
+        private const float WanderTurnDegPerSec = 70f;
+        // How sharply it may curve home at the very edge of the leash (deg/sec).
+        private const float HomeSteerMaxDegPerSec = 200f;
 
         private Pet _pet;
         private Transform _heroT;
         private float _resolveTimer;
-        private Vector3 _currentWanderPoint;
-        private float _thinkTimer;
-        private bool _hasWanderPoint;
         private System.Random _rng;
+
+        private float _headingDeg;       // current wander heading (0 = +Z)
+        private float _turnIntentDeg;    // signed bend currently being applied
+        private float _turnIntentTimer;  // time until a new turn intent is rolled
+        private float _pauseTimer;       // >0 = a "stop and sniff" beat
 
         private static Type s_heroType;
 
@@ -54,8 +72,9 @@ namespace DeNelle.Pets
         {
             _pet = GetComponent<Pet>();
             // Stable per-pet rng so each pet has its own personality but a
-            // restart of the scene plays the same trail.
+            // restart of the scene replays the same trail.
             _rng = new System.Random(gameObject.GetInstanceID());
+            _headingDeg = (float)(_rng.NextDouble() * 360.0);
         }
 
         private void Update()
@@ -71,44 +90,57 @@ namespace DeNelle.Pets
                 if (_heroT == null) return;
             }
 
-            // Owner ask 2026-05-20: pets should "be busy exploring around but
-            // stay in proximity of hero" — not a tight orbit. Each pet picks
-            // its own wander point in a donut around the hero, walks toward
-            // it, then picks a new one after a randomised think delay so the
-            // pack reads as three distinct creatures going about their day.
-            _thinkTimer -= Time.deltaTime;
-            bool needPoint =
-                !_hasWanderPoint ||
-                _thinkTimer <= 0f ||
-                Vector3.Distance(transform.position, _currentWanderPoint) < ArrivalRadius ||
-                Vector3.Distance(_heroT.position, _currentWanderPoint) > MaxLeashDistance;
+            float dt = Time.deltaTime;
+            Vector3 petPos = transform.position;
+            Vector3 toHero = _heroT.position - petPos; toHero.y = 0f;
+            float distHero = toHero.magnitude;
 
-            if (needPoint)
+            // ── meander: re-roll a gentle turn intent periodically, and now and
+            //    then start a "stop and sniff" pause ───────────────────────────
+            _turnIntentTimer -= dt;
+            if (_turnIntentTimer <= 0f)
             {
-                _currentWanderPoint = PickWanderPoint(_heroT.position);
-                _thinkTimer = Mathf.Lerp(
-                    MinThinkSeconds, MaxThinkSeconds,
-                    (float)_rng.NextDouble());
-                _hasWanderPoint = true;
+                _turnIntentDeg = (float)(_rng.NextDouble() * 2.0 - 1.0) * WanderTurnDegPerSec;
+                _turnIntentTimer = 0.6f + (float)_rng.NextDouble() * 1.6f;
+                if (_pauseTimer <= 0f && _rng.NextDouble() < 0.22)
+                    _pauseTimer = 0.8f + (float)_rng.NextDouble() * 1.4f;
+            }
+            if (_pauseTimer > 0f) _pauseTimer -= dt;
+
+            // Gently bend the heading (smooth random walk → curving paths).
+            _headingDeg += _turnIntentDeg * dt;
+
+            // Steer back toward the hero past the explore radius — a curve home,
+            // its strength rising the further out we are (never a hard snap).
+            if (distHero > ExploreRadius && distHero > 0.01f)
+            {
+                float homeDeg = Mathf.Atan2(toHero.x, toHero.z) * Mathf.Rad2Deg;
+                if (distHero > ReturnRadius)
+                {
+                    _headingDeg = homeDeg; // beyond the leash → head straight home
+                }
+                else
+                {
+                    float urgency = Mathf.Clamp01(
+                        (distHero - ExploreRadius) / Mathf.Max(0.01f, ReturnRadius - ExploreRadius));
+                    float steer = Mathf.Lerp(WanderTurnDegPerSec, HomeSteerMaxDegPerSec, urgency) * dt;
+                    _headingDeg = Mathf.MoveTowardsAngle(_headingDeg, homeDeg, steer);
+                }
             }
 
-            _pet.SetHomePost(_currentWanderPoint);
-        }
+            // Project the carrot ahead along the heading. Shorten it during a
+            // pause so the pet eases down (Pet.cs arrival brake) and looks around.
+            float lead = _pauseTimer > 0f ? 0.25f : LeadDistance;
+            float rad = _headingDeg * Mathf.Deg2Rad;
+            Vector3 carrot = petPos + new Vector3(Mathf.Sin(rad), 0f, Mathf.Cos(rad)) * lead;
 
-        private Vector3 PickWanderPoint(Vector3 heroPos)
-        {
-            // Random angle 0..2π; random radius in [inner, outer].
-            float angle = (float)(_rng.NextDouble() * Math.PI * 2.0);
-            float radius = Mathf.Lerp(
-                WanderRadiusInner, WanderRadiusOuter,
-                (float)_rng.NextDouble());
-            Vector3 offset = new Vector3(
-                Mathf.Sin(angle) * radius,
-                0f,
-                Mathf.Cos(angle) * radius);
-            Vector3 p = heroPos + offset;
-            p.y = Mathf.Max(0f, p.y);
-            return p;
+            // Hard clamp inside the leash so the pet is never sent past the limit.
+            Vector3 fromHero = carrot - _heroT.position; fromHero.y = 0f;
+            if (fromHero.magnitude > ReturnRadius)
+                carrot = _heroT.position + fromHero.normalized * ReturnRadius;
+            carrot.y = Mathf.Max(0f, carrot.y);
+
+            _pet.SetHomePost(carrot);
         }
 
         private static Transform ResolveHeroTransform()

@@ -101,6 +101,9 @@ namespace DeNelle.Dungeons
 
         /// <summary>Animator <c>Speed</c> float hash — matches AnimatorSetup.cs.</summary>
         private static readonly int AnimSpeed = Animator.StringToHash("Speed");
+        // WO-163: cached once — whether the controller declares "Speed". The
+        // per-frame SetFloat below logs an error every frame if it doesn't.
+        private bool _hasSpeedParam;
 
         /// <summary>The current horizontal velocity (XZ), eased toward the input.</summary>
         private Vector3 _planarVelocity;
@@ -136,6 +139,11 @@ namespace DeNelle.Dungeons
             if (_moveCamera == null) _moveCamera = Camera.main;
             // The Animator sits on the KayKit Keeper mesh child of the hero rig.
             _animator = GetComponentInChildren<Animator>();
+            if (_animator != null && _animator.runtimeAnimatorController != null)
+            {
+                foreach (var p in _animator.parameters)
+                    if (p.nameHash == AnimSpeed) { _hasSpeedParam = true; break; }
+            }
         }
 
         /// <summary>
@@ -207,7 +215,7 @@ namespace DeNelle.Dungeons
 
             // Feed the Animator's Speed float from the planar move speed so the
             // Keeper rig blends idle <-> walk. Null-guarded — no-op without a rig.
-            if (_animator != null)
+            if (_animator != null && _hasSpeedParam)
                 _animator.SetFloat(AnimSpeed, _planarVelocity.magnitude);
         }
 
@@ -358,7 +366,9 @@ namespace DeNelle.Dungeons
             heading.y = 0f;
             if (heading.sqrMagnitude < 0.0025f) return;
 
-            Quaternion target = Quaternion.LookRotation(heading, Vector3.up);
+            // DEF-7: Tripo FBX exports have a 90° model offset — same fix as HeroLocomotion.cs
+            Quaternion target = Quaternion.LookRotation(heading, Vector3.up)
+                                * Quaternion.Euler(0f, -90f, 0f);
             transform.rotation = Quaternion.RotateTowards(
                 transform.rotation, target, _turnSpeed * Time.deltaTime);
         }

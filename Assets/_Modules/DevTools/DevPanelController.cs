@@ -126,10 +126,21 @@ namespace DeNelle.DevTools
         private bool _bound;
         private bool _isOpen;
 
+        // ── Live metrics readout (the "decked-out" telemetry; dev-only) ───────
+        // A code-built panel of label:value rows refreshed a few times a second
+        // while the console is open. Keyed by a short id so UpdateMetrics() can
+        // set each value without re-querying the visual tree.
+        private VisualElement _metricsPanel;
+        private readonly Dictionary<string, Label> _metricValues = new Dictionary<string, Label>();
+        private float _fpsSmoothed;
+        private float _metricsTimer;
+        private const float MetricsInterval = 0.2f;   // ~5 refreshes / second
+
         // ── Live typed-action input values ───────────────────────────────────
         private string _packIdInput;
         private int _waveInput;
         private double _mockBalanceInput;
+        private int _levelInput = 10;
 
         // ── God-mode / instant-win toggles ───────────────────────────────────
         // DevTools owns these flags; the integrator reads them from gameplay
@@ -199,6 +210,25 @@ namespace DeNelle.DevTools
             // route a dev console through the Input System action maps.
             if (Input.GetKeyDown(_toggleKey))
                 SetOpen(!_isOpen);
+
+            // Smooth FPS every frame (unscaled so it reads true during slow-mo).
+            float dt = Time.unscaledDeltaTime;
+            if (dt > 0f)
+            {
+                float inst = 1f / dt;
+                _fpsSmoothed = _fpsSmoothed <= 0f ? inst : Mathf.Lerp(_fpsSmoothed, inst, 0.1f);
+            }
+
+            // Refresh the readout a few times a second while open (cheap for a dev tool).
+            if (_isOpen)
+            {
+                _metricsTimer += dt;
+                if (_metricsTimer >= MetricsInterval)
+                {
+                    _metricsTimer = 0f;
+                    UpdateMetrics();
+                }
+            }
         }
 
         // =====================================================================
@@ -214,23 +244,60 @@ namespace DeNelle.DevTools
                 return;
             }
 
-            _cornerTap = _root.Q<VisualElement>(CornerTapName);
-            _window = _root.Q<VisualElement>(WindowName);
-            _closeButton = _root.Q<Button>(CloseButtonName);
-            _status = _root.Q<Label>(StatusName);
-            _groupList = _root.Q<VisualElement>(GroupListName);
+            // ── Code-built scaffold (NOT bound from DevPanel.uxml) ────────────
+            // This project's UXML templates render EMPTY in player builds (the same
+            // trap that blanked BattleHUD / BuildMenu / PackStore). To guarantee the
+            // console draws in a development build, the whole UI is constructed here
+            // in C# with inline styles — no dependency on the .uxml/.uss assets.
+            _root.Clear();
+            _root.style.flexGrow = 1f;
+            _root.pickingMode = PickingMode.Ignore;   // never eat gameplay input
 
-            if (_closeButton != null)
-            {
-                _closeButton.clicked -= Close; // guard a double OnEnable
-                _closeButton.clicked += Close;
-            }
+            // Always-visible corner chip — toggles the console (touch-friendly).
+            _cornerTap = new Label("DEV") { name = CornerTapName };
+            StyleCornerChip(_cornerTap);
+            _cornerTap.RegisterCallback<ClickEvent>(OnCornerTapped);
+            _root.Add(_cornerTap);
 
-            if (_cornerTap != null)
-            {
-                _cornerTap.UnregisterCallback<ClickEvent>(OnCornerTapped);
-                _cornerTap.RegisterCallback<ClickEvent>(OnCornerTapped);
-            }
+            // The console window — hidden until opened.
+            _window = new VisualElement { name = WindowName };
+            StyleWindow(_window);
+            _root.Add(_window);
+
+            // Header row: title + close (✕).
+            var header = new VisualElement();
+            header.style.flexDirection = FlexDirection.Row;
+            header.style.justifyContent = Justify.SpaceBetween;
+            header.style.alignItems = Align.Center;
+            header.style.marginBottom = 6;
+            var title = new Label("◆ DEV CONSOLE");
+            title.style.unityFontStyleAndWeight = FontStyle.Bold;
+            title.style.fontSize = 15;
+            title.style.color = new Color(0.85f, 0.92f, 1f);
+            header.Add(title);
+            _closeButton = new Button { text = "✕", name = CloseButtonName };
+            StyleChromeButton(_closeButton);
+            _closeButton.clicked += Close;
+            header.Add(_closeButton);
+            _window.Add(header);
+
+            // Live metrics readout — the decked-out telemetry block.
+            BuildMetricsPanel(_window);
+
+            // Status line.
+            _status = new Label("Ready.") { name = StatusName };
+            _status.style.color = new Color(0.7f, 0.85f, 0.7f);
+            _status.style.fontSize = 11;
+            _status.style.marginTop = 4;
+            _status.style.marginBottom = 4;
+            _status.style.whiteSpace = WhiteSpace.Normal;
+            _window.Add(_status);
+
+            // Scrollable action-group list (the existing code-built groups).
+            var scroll = new ScrollView(ScrollViewMode.Vertical);
+            scroll.style.flexGrow = 1f;
+            _window.Add(scroll);
+            _groupList = scroll.contentContainer;
 
             BuildActionGroups();
             _bound = true;
@@ -243,12 +310,261 @@ namespace DeNelle.DevTools
         {
             _isOpen = open;
             if (_window != null)
-                _window.EnableInClassList(WindowOpenClass, open);
-            if (open) RefreshToggleButtons();
+                _window.style.display = open ? DisplayStyle.Flex : DisplayStyle.None;
+            // Hide the corner chip while open (the window covers that corner anyway).
+            if (_cornerTap != null)
+                _cornerTap.style.display = open ? DisplayStyle.None : DisplayStyle.Flex;
+            if (open)
+            {
+                RefreshToggleButtons();
+                UpdateMetrics();
+            }
         }
 
         /// <summary>Closes the panel.</summary>
         public void Close() => SetOpen(false);
+
+        // =====================================================================
+        //  Live metrics readout — built once, refreshed ~5x/sec while open
+        // =====================================================================
+
+        /// <summary>Builds the telemetry block (label:value rows by category).</summary>
+        private void BuildMetricsPanel(VisualElement parent)
+        {
+            _metricsPanel = new VisualElement();
+            _metricsPanel.style.backgroundColor = new Color(0.04f, 0.05f, 0.08f, 0.92f);
+            SetRadius(_metricsPanel, 6);
+            SetPadding(_metricsPanel, 7);
+            _metricsPanel.style.marginBottom = 6;
+
+            AddMetricSection(_metricsPanel, "PERFORMANCE");
+            AddMetricRow(_metricsPanel, "fps", "FPS");
+            AddMetricRow(_metricsPanel, "frame", "Frame ms");
+
+            AddMetricSection(_metricsPanel, "WAVE / ENEMIES");
+            AddMetricRow(_metricsPanel, "wave", "Wave #");
+            AddMetricRow(_metricsPanel, "phase", "Phase");
+            AddMetricRow(_metricsPanel, "countdown", "Countdown");
+            AddMetricRow(_metricsPanel, "enemies", "Live enemies");
+            AddMetricRow(_metricsPanel, "boss", "Apex boss");
+
+            AddMetricSection(_metricsPanel, "HERO");
+            AddMetricRow(_metricsPanel, "level", "Level");
+            AddMetricRow(_metricsPanel, "xp", "XP → next");
+            AddMetricRow(_metricsPanel, "dmg", "Dmg mult");
+
+            AddMetricSection(_metricsPanel, "HEART");
+            AddMetricRow(_metricsPanel, "heart", "HP");
+            AddMetricRow(_metricsPanel, "heartstate", "State");
+
+            AddMetricSection(_metricsPanel, "ECONOMY");
+            AddMetricRow(_metricsPanel, "crystals", "Crystals");
+            AddMetricRow(_metricsPanel, "food", "Food");
+            AddMetricRow(_metricsPanel, "coins", "Coins");
+            AddMetricRow(_metricsPanel, "materials", "Stone / Iron / Wood");
+            AddMetricRow(_metricsPanel, "wisdom", "Wisdom");
+
+            AddMetricSection(_metricsPanel, "FLAGS");
+            AddMetricRow(_metricsPanel, "cheats", "Cheats");
+
+            parent.Add(_metricsPanel);
+        }
+
+        /// <summary>Adds a small caption that heads a metric category.</summary>
+        private static void AddMetricSection(VisualElement parent, string caption)
+        {
+            var l = new Label(caption);
+            l.style.unityFontStyleAndWeight = FontStyle.Bold;
+            l.style.fontSize = 9;
+            l.style.color = new Color(0.45f, 0.6f, 0.85f);
+            l.style.marginTop = 4;
+            l.style.letterSpacing = 1f;
+            parent.Add(l);
+        }
+
+        /// <summary>Adds a label:value row and registers its value label under <paramref name="key"/>.</summary>
+        private void AddMetricRow(VisualElement parent, string key, string caption)
+        {
+            var row = new VisualElement();
+            row.style.flexDirection = FlexDirection.Row;
+            row.style.justifyContent = Justify.SpaceBetween;
+            row.style.alignItems = Align.Center;
+
+            var cap = new Label(caption);
+            cap.style.color = new Color(0.66f, 0.7f, 0.78f);
+            cap.style.fontSize = 11;
+
+            var val = new Label("—");
+            val.style.color = new Color(0.95f, 0.97f, 1f);
+            val.style.fontSize = 11;
+            val.style.unityFontStyleAndWeight = FontStyle.Bold;
+            val.style.whiteSpace = WhiteSpace.Normal;
+            val.style.unityTextAlign = TextAnchor.MiddleRight;
+            val.style.flexShrink = 1f;
+
+            row.Add(cap);
+            row.Add(val);
+            parent.Add(row);
+            _metricValues[key] = val;
+        }
+
+        /// <summary>Pulls live values from the loaded scene's systems into the readout.</summary>
+        private void UpdateMetrics()
+        {
+            if (_metricValues.Count == 0) return;
+
+            SetMetric("fps", _fpsSmoothed.ToString("0"));
+            SetMetric("frame", (_fpsSmoothed > 0f ? 1000f / _fpsSmoothed : 0f).ToString("0.0"));
+
+            // ── Wave ──────────────────────────────────────────────────────────
+            var wm = FindFirst<WaveManager>();
+            if (wm != null)
+            {
+                SetMetric("wave", wm.CurrentWaveId.ToString());
+                SetMetric("phase", wm.Phase.ToString());
+                SetMetric("countdown", wm.Phase == WavePhase.Countdown
+                    ? wm.CountdownRemaining.ToString("0.0") + "s" : "—");
+            }
+            else { SetMetric("wave", "—"); SetMetric("phase", "no WaveManager"); SetMetric("countdown", "—"); }
+
+            // ── Live enemies + family breakdown ────────────────────────────────
+            var enemies = UnityEngine.Object.FindObjectsByType<Enemy>(FindObjectsSortMode.None);
+            if (enemies == null || enemies.Length == 0)
+            {
+                SetMetric("enemies", "0");
+            }
+            else
+            {
+                var byId = new Dictionary<string, int>();
+                foreach (var e in enemies)
+                {
+                    if (e == null) continue;
+                    string id = string.IsNullOrEmpty(e.EnemyDefId) ? "?" : e.EnemyDefId;
+                    byId.TryGetValue(id, out int n);
+                    byId[id] = n + 1;
+                }
+                var sb = new System.Text.StringBuilder();
+                sb.Append(enemies.Length).Append("  (");
+                bool first = true;
+                foreach (var kv in byId)
+                {
+                    if (!first) sb.Append(", ");
+                    first = false;
+                    sb.Append(kv.Value).Append('×').Append(kv.Key);
+                }
+                sb.Append(')');
+                SetMetric("enemies", sb.ToString());
+            }
+
+            var boss = FindFirst<DragonBoss>();
+            SetMetric("boss", boss == null ? "—" : (boss.IsDead ? "dead" : "ALOFT — " + boss.BossId));
+
+            // ── Hero ──────────────────────────────────────────────────────────
+            var hero = HeroProgression.Instance;
+            if (hero != null)
+            {
+                SetMetric("level", hero.Level.ToString());
+                float pct = hero.XpToNext > 0f ? (hero.Xp / hero.XpToNext) * 100f : 0f;
+                SetMetric("xp", $"{hero.Xp:0} / {hero.XpToNext:0}  ({pct:0}%)");
+                SetMetric("dmg", "×" + hero.DamageMultiplier.ToString("0.00"));
+            }
+            else { SetMetric("level", "—"); SetMetric("xp", "no hero"); SetMetric("dmg", "—"); }
+
+            // ── Heart ─────────────────────────────────────────────────────────
+            var heart = FindHeart();
+            if (heart != null)
+            {
+                SetMetric("heart", heart.Hp.ToString("0") + "%");
+                SetMetric("heartstate", heart.State.ToString());
+            }
+            else { SetMetric("heart", "—"); SetMetric("heartstate", "no Heart"); }
+
+            // ── Economy ───────────────────────────────────────────────────────
+            var svc = GameStateService.Instance;
+            if (svc != null && svc.State != null)
+            {
+                var st = svc.State;
+                var r = st.Resources;
+                SetMetric("crystals", r.Crystals.ToString("N0"));
+                SetMetric("food", r.Food.ToString("N0"));
+                SetMetric("coins", r.Coins.ToString("N0"));
+                SetMetric("materials", $"{st.Stone} / {st.Iron} / {st.Wood}");
+            }
+            else { SetMetric("crystals", "—"); SetMetric("food", "—"); SetMetric("coins", "—"); SetMetric("materials", "—"); }
+
+            var wis = DeNelle.Village.Talents.WisdomCurrencyService.Instance;
+            SetMetric("wisdom", wis != null ? wis.Wisdom.ToString() : "—");
+
+            // ── Flags ─────────────────────────────────────────────────────────
+            string flags = (GodMode ? "GOD-MODE  " : "") + (InstantWinWave ? "INSTANT-WIN" : "");
+            SetMetric("cheats", string.IsNullOrEmpty(flags) ? "off" : flags.Trim());
+        }
+
+        /// <summary>Sets a metric value label by key (no-op if the row is missing).</summary>
+        private void SetMetric(string key, string value)
+        {
+            if (_metricValues.TryGetValue(key, out var lbl) && lbl != null) lbl.text = value;
+        }
+
+        // =====================================================================
+        //  Inline style helpers (no USS dependency — renders in dev builds)
+        // =====================================================================
+
+        private static void StyleWindow(VisualElement w)
+        {
+            w.style.position = Position.Absolute;
+            w.style.top = 8;
+            w.style.right = 8;
+            w.style.width = 360;
+            w.style.maxHeight = Length.Percent(94);
+            w.style.backgroundColor = new Color(0.07f, 0.08f, 0.11f, 0.97f);
+            SetPadding(w, 10);
+            SetRadius(w, 8);
+            w.style.display = DisplayStyle.None;
+            var bc = new Color(0.30f, 0.40f, 0.62f, 0.85f);
+            w.style.borderLeftWidth = 1; w.style.borderRightWidth = 1;
+            w.style.borderTopWidth = 1; w.style.borderBottomWidth = 1;
+            w.style.borderLeftColor = bc; w.style.borderRightColor = bc;
+            w.style.borderTopColor = bc; w.style.borderBottomColor = bc;
+        }
+
+        private static void StyleCornerChip(VisualElement chip)
+        {
+            chip.style.position = Position.Absolute;
+            chip.style.top = 8;
+            chip.style.right = 8;
+            chip.style.paddingLeft = 9; chip.style.paddingRight = 9;
+            chip.style.paddingTop = 3; chip.style.paddingBottom = 3;
+            chip.style.backgroundColor = new Color(0.15f, 0.20f, 0.35f, 0.92f);
+            chip.style.color = new Color(0.82f, 0.90f, 1f);
+            chip.style.unityFontStyleAndWeight = FontStyle.Bold;
+            chip.style.fontSize = 11;
+            SetRadius(chip, 4);
+        }
+
+        private static void StyleChromeButton(Button b)
+        {
+            b.style.backgroundColor = new Color(0.18f, 0.20f, 0.28f);
+            b.style.color = new Color(0.9f, 0.92f, 0.96f);
+            b.style.unityFontStyleAndWeight = FontStyle.Bold;
+            b.style.fontSize = 13;
+            b.style.paddingLeft = 8; b.style.paddingRight = 8;
+            b.style.paddingTop = 1; b.style.paddingBottom = 1;
+            b.style.marginLeft = 0; b.style.marginRight = 0;
+            SetRadius(b, 4);
+        }
+
+        private static void SetPadding(VisualElement e, float p)
+        {
+            e.style.paddingLeft = p; e.style.paddingRight = p;
+            e.style.paddingTop = p; e.style.paddingBottom = p;
+        }
+
+        private static void SetRadius(VisualElement e, float r)
+        {
+            e.style.borderTopLeftRadius = r; e.style.borderTopRightRadius = r;
+            e.style.borderBottomLeftRadius = r; e.style.borderBottomRightRadius = r;
+        }
 
         // =====================================================================
         //  Action-group construction — built once into "dev-group-list"
@@ -266,11 +582,18 @@ namespace DeNelle.DevTools
 
             // ── RESOURCES ────────────────────────────────────────────────────
             var resources = AddGroup("Resources");
-            AddButton(resources, $"+{_crystalSmallGrant} Crystals",
-                () => GiveCrystals(_crystalSmallGrant));
-            AddButton(resources, $"+{_crystalLargeGrant} Crystals",
-                () => GiveCrystals(_crystalLargeGrant));
+            AddButton(resources, "+100 Crystals", () => GiveCrystals(100));
+            AddButton(resources, "+1000 Crystals", () => GiveCrystals(1000));
             AddButton(resources, "+500 Stone/Iron/Wood", GiveBuildMaterials);
+            AddButton(resources, "+5 Wisdom (talents)", () => GiveWisdom(5));
+            AddButton(resources, "+25 Wisdom (talents)", () => GiveWisdom(25));
+            AddButton(resources, "+150 XP (hero)", () => GiveHeroXp(150f));
+            AddButton(resources, "+10,000 XP (hero)", () => GiveHeroXp(10000f));
+            AddButton(resources, "Level up hero", LevelHero);
+            AddTextField(resources, _levelInput.ToString(),
+                v => { if (int.TryParse(v, out var n)) _levelInput = Mathf.Max(1, n); });
+            AddButton(resources, "Set hero to level N", SetHeroLevel);
+            AddButton(resources, "Trigger wave (skip countdown)", TriggerWave);
 
             // ── ENTITLEMENTS ─────────────────────────────────────────────────
             var entitlements = AddGroup("Grant pack / entitlement");
@@ -327,13 +650,20 @@ namespace DeNelle.DevTools
         {
             var group = new VisualElement { name = $"dev-group-{caption}" };
             group.AddToClassList(GroupClass);
+            group.style.marginTop = 6;
 
             var captionLabel = new Label(caption);
             captionLabel.AddToClassList(GroupCaptionClass);
+            captionLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
+            captionLabel.style.fontSize = 10;
+            captionLabel.style.color = new Color(0.55f, 0.68f, 0.9f);
+            captionLabel.style.marginBottom = 2;
             group.Add(captionLabel);
 
             var row = new VisualElement { name = "dev-group-row" };
             row.AddToClassList(GroupRowClass);
+            row.style.flexDirection = FlexDirection.Row;
+            row.style.flexWrap = Wrap.Wrap;
             group.Add(row);
 
             _groupList.Add(group);
@@ -345,6 +675,15 @@ namespace DeNelle.DevTools
         {
             var button = new Button { text = label };
             button.AddToClassList(ActionButtonClass);
+            button.style.backgroundColor = new Color(0.16f, 0.19f, 0.27f);
+            button.style.color = new Color(0.88f, 0.91f, 0.96f);
+            button.style.fontSize = 11;
+            button.style.paddingLeft = 7; button.style.paddingRight = 7;
+            button.style.paddingTop = 3; button.style.paddingBottom = 3;
+            button.style.marginLeft = 2; button.style.marginRight = 2;
+            button.style.marginTop = 2; button.style.marginBottom = 2;
+            button.style.borderTopLeftRadius = 4; button.style.borderTopRightRadius = 4;
+            button.style.borderBottomLeftRadius = 4; button.style.borderBottomRightRadius = 4;
             button.clicked += () =>
             {
                 try { onClick?.Invoke(); }
@@ -385,6 +724,9 @@ namespace DeNelle.DevTools
         {
             var field = new TextField { value = initial ?? string.Empty };
             field.AddToClassList(TextFieldClass);
+            field.style.minWidth = 60;
+            field.style.marginLeft = 2; field.style.marginRight = 2;
+            field.style.marginTop = 2; field.style.marginBottom = 2;
             field.RegisterValueChangedCallback(evt => onChange?.Invoke(evt.newValue));
             row.Add(field);
         }
@@ -419,17 +761,82 @@ namespace DeNelle.DevTools
             SetStatus($"Gave {amount} crystals — now {r.Crystals}.");
         }
 
-        /// <summary>Tops up the gathered build materials (Stone / Iron / Wood).</summary>
+        /// <summary>Grants Wisdom (hero talent currency) for fast skill-tree testing.</summary>
+        private void GiveWisdom(int amount)
+        {
+            var svc = DeNelle.Village.Talents.WisdomCurrencyService.Instance;
+            if (svc == null) { SetStatus("WisdomCurrencyService not in scene yet."); return; }
+            svc.Grant(amount);
+            SetStatus($"Gave {amount} Wisdom — now {svc.Wisdom}.");
+        }
+
+        /// <summary>Grants the hero raw XP for fast level/progression testing.</summary>
+        private void GiveHeroXp(float amount)
+        {
+            var hp = UnityEngine.Object.FindAnyObjectByType<DeNelle.Village.HeroProgression>();
+            if (hp == null) { SetStatus("HeroProgression not in scene yet."); return; }
+            int levels = hp.AddXp(amount);
+            if (levels > 0)
+                DeNelle.Village.DamageNumberSpawner.SpawnLabel(
+                    $"LEVEL UP!  Lv.{hp.Level}", hp.WorldPosition, new Color(0.45f, 1f, 0.55f, 1f), 1.4f);
+            SetStatus($"Gave {amount:0} XP — hero is Lv.{hp.Level}"
+                      + (levels > 0 ? $" (+{levels} level)" : "") + ".");
+        }
+
+        /// <summary>Forces one hero level (also grants its Wisdom + stat bonus).</summary>
+        private void LevelHero()
+        {
+            var hp = UnityEngine.Object.FindAnyObjectByType<DeNelle.Village.HeroProgression>();
+            if (hp == null) { SetStatus("HeroProgression not in scene yet."); return; }
+            hp.AddXp(hp.XpToNext + 1f);
+            DeNelle.Village.DamageNumberSpawner.SpawnLabel(
+                $"LEVEL UP!  Lv.{hp.Level}", hp.WorldPosition, new Color(0.45f, 1f, 0.55f, 1f), 1.4f);
+            SetStatus($"Hero leveled to Lv.{hp.Level}.");
+        }
+
+        /// <summary>Levels the hero up to the typed target level (repeated AddXp until reached).</summary>
+        private void SetHeroLevel()
+        {
+            var hp = UnityEngine.Object.FindAnyObjectByType<DeNelle.Village.HeroProgression>();
+            if (hp == null) { SetStatus("HeroProgression not in scene yet."); return; }
+            int target = Mathf.Max(1, _levelInput);
+            int guard = 0;
+            while (hp.Level < target && guard++ < 500)
+                hp.AddXp(hp.XpToNext + 1f);
+            DeNelle.Village.DamageNumberSpawner.SpawnLabel(
+                $"LEVEL {hp.Level}", hp.WorldPosition, new Color(0.45f, 1f, 0.55f, 1f), 1.4f);
+            SetStatus($"Set hero to Lv.{hp.Level} (target {target}).");
+        }
+
+        /// <summary>Skips the prep countdown and starts the wave now (WaveManager.ForceBeginNextWave).</summary>
+        private void TriggerWave()
+        {
+            var wm = UnityEngine.Object.FindAnyObjectByType<DeNelle.Village.WaveManager>();
+            if (wm == null) { SetStatus("WaveManager not in scene yet."); return; }
+            wm.ForceBeginNextWave();
+            SetStatus("Triggered the wave — countdown skipped.");
+        }
+
+        /// <summary>Tops up the gathered build materials + the four harvestables
+        /// (Wood/Food/Iron/Crystals) and the Magic tech axis (DEF-121) for testing
+        /// the resource-building upgrade loop incl. the Magic-gated arcane tier.</summary>
         private void GiveBuildMaterials()
         {
             var state = RequireState("give materials");
             if (state == null) return;
 
-            state.Stone += 500;
+            state.Stone += 500;   // legacy build material (BuildMenu costs)
             state.Iron += 500;
             state.Wood += 500;
+            // Four-harvestable wallet + Magic tech axis (DEF-121).
+            var bal = state.Resources;
+            bal.Food += 500;
+            bal.Crystals += 500;
+            state.Resources = bal;
+            state.Magic += 10;
             SaveAndNotifyResources();
-            SetStatus($"Materials topped up — Stone {state.Stone}, Iron {state.Iron}, Wood {state.Wood}.");
+            SetStatus($"Topped up — Wood {state.Wood}, Food {state.Resources.Food}, " +
+                      $"Iron {state.Iron}, Crystals {state.Resources.Crystals}, Magic {state.Magic}.");
         }
 
         // =====================================================================

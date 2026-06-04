@@ -35,27 +35,11 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.InputSystem;
 using UnityEngine.UIElements;
 using DeNelle.Core.State;
 
 namespace DeNelle.Village
 {
-    /// <summary>
-    /// One building's placeable prefab, paired with its <see cref="BuildingType"/>.
-    /// The build menu instantiates the prefab matched to the armed building's
-    /// type. Set up in the inspector by the integrator.
-    /// </summary>
-    [Serializable]
-    public struct BuildingPrefabEntry
-    {
-        [Tooltip("Which of the five canonical buildings this prefab is.")]
-        public BuildingType Type;
-
-        [Tooltip("The prefab instantiated when this building is placed. Should carry a Building component.")]
-        public GameObject Prefab;
-    }
-
     /// <summary>
     /// The village build-menu controller. Builds a card per building from the
     /// canonical <see cref="BuildingCatalog"/>, runs the floating-panel + tap-
@@ -67,29 +51,6 @@ namespace DeNelle.Village
         [Header("UI")]
         [Tooltip("UIDocument hosting BuildMenu.uxml. Falls back to the component on this GameObject.")]
         [SerializeField] private UIDocument _document;
-
-        [Header("Placement")]
-        [Tooltip("Camera used to raycast the build cursor into the world. Defaults to Camera.main.")]
-        [SerializeField] private Camera _buildCamera;
-
-        [Tooltip("Layer mask for the buildable ground. The placement raycast hits only these layers.")]
-        [SerializeField] private LayerMask _groundMask = ~0;
-
-        [Tooltip("Hex-tile edge-to-edge size (world units). Tap positions snap to this grid.")]
-        [SerializeField, Min(0.1f)] private float _hexSize = 4f;
-
-        [Tooltip("Half-extent (world units) of the square buildable area, centred on the Heart at origin.")]
-        [SerializeField, Min(1f)] private float _buildAreaHalfExtent = 26f;
-
-        [Tooltip("Minimum clear distance to any existing building / wall for a tile to be valid.")]
-        [SerializeField, Min(0f)] private float _minClearRadius = 2.5f;
-
-        [Tooltip("Optional ghost-preview prefab shown at the snapped tile while a building is armed.")]
-        [SerializeField] private GameObject _ghostPrefab;
-
-        [Header("Building prefabs (wired by the integrator)")]
-        [Tooltip("One placeable prefab per BuildingType. The placed prefab should carry a Building component.")]
-        [SerializeField] private List<BuildingPrefabEntry> _buildingPrefabs = new List<BuildingPrefabEntry>();
 
         [Header("Crystal balance")]
         [Tooltip("When true, the menu spends from GameState.Resources.Crystals via GameStateService. " +
@@ -126,19 +87,61 @@ namespace DeNelle.Village
         private Button _closeButton;
 
         private bool _isOpen;
-        private BuildingDef _armed;          // the building the player picked, or null
-        private GameObject _ghost;           // live ghost-preview instance
-        private bool _hasValidTile;          // is the cursor over a valid tile this frame?
-        private Vector3 _snappedTile;        // snapped hex-tile centre under the cursor
+
+        // ── WO-31: multi-screen build/upgrade flow ───────────────────────────
+        // The menu now has three screens: a Root chooser (Build Tower / Upgrade
+        // Tower / Repair Wall), a Build-Tower screen (element radio + cost +
+        // timing), and an Upgrade-Tower screen (placed-tower list + upgrade info).
+        private enum MenuScreen { Root, BuildTower, UpgradeTower }
+        private MenuScreen _screen = MenuScreen.Root;
+
+        // Local element enum — deliberately NOT DeNelle.BattleATB's ElementType:
+        // DeNelle.Village must not take a dependency on BattleATB (WO-31 §Files).
+        private enum TowerElement { Flame, Ice, Aether, Physical }
+        private TowerElement _selectedElement = TowerElement.Flame;
+        // WO-127: the manage/upgrade screen tracks a LIVE Tower (not a Building) so
+        // its level reads correctly and the Upgrade button calls Tower.Upgrade().
+        private Tower _selectedTowerForUpgrade;
+
+        // USS classes for the WO-31 sub-screens (styled in BuildMenu.uss).
+        private const string OptionTileClass = "build-option-tile";
+        private const string BackBtnClass = "build-menu-back-btn";
+        private const string RadioGroupClass = "element-radio-group";
+        private const string RadioRowClass = "element-radio-row";
+        private const string RadioRowSelectedClass = "element-radio-row--selected";
+        private const string CostRowClass = "cost-row";
+        private const string CostCheckClass = "cost-check";
+        private const string CostFailClass = "cost-fail";
+        private const string ConfirmBtnClass = "build-confirm-btn";
+        private const string TowerRowClass = "tower-row";
+        private const string TowerRowSelectedClass = "tower-row--selected";
+
+        /// <summary>One element tower's stub costs/timing (WO-31 — Week 6 moves these to JSON).</summary>
+        private struct TowerVariantDef
+        {
+            public TowerElement Element;
+            public string DisplayName;
+            public int CrystalCost;
+            public int Wood, Stone;
+            public int BuildTimeSec;
+            public int UpgradeCrystalCost, UpgradeStone, UpgradeTimeSec;
+            public int Dps, Hp;
+        }
+
+        // STUB — Week 6: hard-coded variant table until tower-variants.json lands.
+        private static readonly TowerVariantDef[] Variants =
+        {
+            new TowerVariantDef { Element = TowerElement.Flame,    DisplayName = "Flame Tower",  CrystalCost = 150, Wood = 20, Stone = 5,  BuildTimeSec = 150, UpgradeCrystalCost = 200, UpgradeStone = 15, UpgradeTimeSec = 300, Dps = 30, Hp = 200 },
+            new TowerVariantDef { Element = TowerElement.Ice,      DisplayName = "Ice Tower",    CrystalCost = 150, Wood = 20, Stone = 5,  BuildTimeSec = 150, UpgradeCrystalCost = 200, UpgradeStone = 15, UpgradeTimeSec = 300, Dps = 26, Hp = 220 },
+            new TowerVariantDef { Element = TowerElement.Aether,   DisplayName = "Aether Tower", CrystalCost = 180, Wood = 20, Stone = 8,  BuildTimeSec = 180, UpgradeCrystalCost = 240, UpgradeStone = 18, UpgradeTimeSec = 360, Dps = 34, Hp = 190 },
+            new TowerVariantDef { Element = TowerElement.Physical, DisplayName = "Stone Tower",  CrystalCost = 120, Wood = 15, Stone = 10, BuildTimeSec = 120, UpgradeCrystalCost = 160, UpgradeStone = 12, UpgradeTimeSec = 240, Dps = 24, Hp = 260 },
+        };
 
         /// <summary>Raised when a building is successfully placed — carries the new Building + its def.</summary>
         public event Action<Building, BuildingDef> BuildingPlaced;
 
         /// <summary>True while the menu is open.</summary>
         public bool IsOpen => _isOpen;
-
-        /// <summary>The currently-armed building definition, or null when nothing is picked.</summary>
-        public BuildingDef ArmedBuilding => _armed;
 
         // =====================================================================
         //  Lifecycle
@@ -147,7 +150,6 @@ namespace DeNelle.Village
         private void Awake()
         {
             if (_document == null) _document = GetComponent<UIDocument>();
-            if (_buildCamera == null) _buildCamera = Camera.main;
             EnsurePanelSettings();
         }
 
@@ -160,16 +162,34 @@ namespace DeNelle.Village
         /// </summary>
         private void EnsurePanelSettings()
         {
-            if (_document == null || _document.panelSettings != null) return;
+            if (_document == null) return;
+            // Owner 2026-05-25 ("nothing triggers on build"): Open() fired but the
+            // menu never rendered. The builder bakes the FIRST project PanelSettings
+            // onto this doc (WirePanelSettings), which can render off-screen / at the
+            // wrong scale. ALWAYS adopt a live sibling's PanelSettings instead —
+            // preferring the HUD's — so the menu renders on the same on-screen panel
+            // as everything else. (Awake runs before OnEnable's BindElements, so the
+            // root reflects the correct panel by the time we query it.)
+            UIDocument hud = null, any = null;
             foreach (var doc in FindObjectsByType<UIDocument>(FindObjectsInactive.Include, FindObjectsSortMode.None))
             {
                 if (doc == null || doc == _document || doc.panelSettings == null) continue;
-                _document.panelSettings = doc.panelSettings;
-                _document.sortingOrder = doc.sortingOrder + 5; // render above the HUD
-                Debug.Log("[BuildMenu] Borrowed PanelSettings from '" + doc.name + "' so the build menu renders.");
-                return;
+                if (any == null) any = doc;
+                if (doc.gameObject.name.IndexOf("Hud", System.StringComparison.OrdinalIgnoreCase) >= 0) { hud = doc; break; }
             }
-            Debug.LogWarning("[BuildMenu] No PanelSettings in scene — build menu will not render.");
+            var src = hud ?? any;
+            if (src != null)
+            {
+                if (_document.panelSettings != src.panelSettings)
+                    Debug.Log("[BuildMenu] Adopted PanelSettings '" + src.panelSettings.name + "' from '" +
+                              src.name + "' (was " + (_document.panelSettings != null ? _document.panelSettings.name : "NULL") + ").");
+                _document.panelSettings = src.panelSettings;
+                _document.sortingOrder = src.sortingOrder + 5; // render above the HUD
+            }
+            else if (_document.panelSettings == null)
+            {
+                Debug.LogWarning("[BuildMenu] No sibling PanelSettings found — build menu will not render.");
+            }
         }
 
         private void OnEnable()
@@ -182,7 +202,14 @@ namespace DeNelle.Village
         private void OnDisable()
         {
             if (_closeButton != null) _closeButton.clicked -= Close;
-            DestroyGhost();
+            var svc = GameStateService.Instance;
+            if (svc != null) svc.ResourcesChanged.RemoveListener(OnResourcesChanged);
+        }
+
+        /// <summary>Re-render the open menu when crystals change (dev grant, wave reward).</summary>
+        private void OnResourcesChanged()
+        {
+            if (_isOpen) Render();
         }
 
         // =====================================================================
@@ -201,6 +228,9 @@ namespace DeNelle.Village
             _closeButton = _root.Q<Button>(CloseButtonName);
 
             if (_closeButton != null) _closeButton.clicked += Close;
+
+            // Start pass-through so the closed menu's root never blocks HUD clicks.
+            _root.pickingMode = PickingMode.Ignore;
         }
 
         // =====================================================================
@@ -215,9 +245,48 @@ namespace DeNelle.Village
         public void Open()
         {
             _isOpen = true;
+            // FIX (owner 2026-05-25 "build does nothing"): the runtime log showed
+            // panel=False — BindElements() ran in OnEnable BEFORE the UIDocument
+            // finished cloning its UXML (component order on this GameObject), so
+            // _panel was null and SetPanelVisible had nothing to show. By the time
+            // Open() is clicked the document is fully built, so re-bind here.
+            if (_panel == null) BindElements();
+            // DIAG: dump the render prereqs (panel should now be True).
+            Debug.Log("[BuildMenu] Open: doc=" + (_document != null) +
+                      " panelSettings=" + (_document != null && _document.panelSettings != null ? _document.panelSettings.name : "NULL") +
+                      " sort=" + (_document != null ? _document.sortingOrder : -1) +
+                      " uxml=" + (_document != null && _document.visualTreeAsset != null ? _document.visualTreeAsset.name : "NULL") +
+                      " root=" + (_root != null) + " panel=" + (_panel != null) + " list=" + (_list != null));
+
+            // KNOWN BUILD ISSUE (uxml-uidocuments-dont-render-in-builds): in player
+            // builds BuildMenu.uxml does not clone, so _panel/_list are null and the
+            // menu opens EMPTY. Fall back to driving the new TowerPlacementSystem
+            // directly, so the HUD Build button still arms the (viking) tower. The
+            // full code-built menu UI is the follow-up; this makes Build work today.
+            if (_panel == null)
+            {
+                // UXML didn't clone (the player-build issue the Player.log confirmed:
+                // panel=False). CODE UIElements DO render in builds, so show a small
+                // code-built window instead of the empty .uxml one.
+                ShowCodeFallbackMenu();
+                return;
+            }
+
             SetPanelVisible(true);
+            _screen = MenuScreen.Root;            // always open on the chooser
+            _selectedTowerForUpgrade = null;
             Disarm();
             Render();
+
+            // Live-refresh the balance + affordability while the menu is open if
+            // crystals change (a dev grant, a wave reward). Remove-then-add guards
+            // against a double subscription.
+            var svc = GameStateService.Instance;
+            if (svc != null)
+            {
+                svc.ResourcesChanged.RemoveListener(OnResourcesChanged);
+                svc.ResourcesChanged.AddListener(OnResourcesChanged);
+            }
         }
 
         /// <summary>
@@ -229,6 +298,8 @@ namespace DeNelle.Village
             _isOpen = false;
             Disarm();
             SetPanelVisible(false);
+            var svc = GameStateService.Instance;
+            if (svc != null) svc.ResourcesChanged.RemoveListener(OnResourcesChanged);
         }
 
         /// <summary>Toggles the menu open/closed.</summary>
@@ -242,6 +313,126 @@ namespace DeNelle.Village
         {
             if (_panel != null)
                 _panel.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
+
+            // NON-MODAL (owner 2026-05-26 "click the build button -> everything else
+            // stops working"): this UIDocument's full-screen ROOT renders ABOVE the
+            // HUD. Flipping it to PickingMode.Position while open made it a screen-
+            // wide modal that SWALLOWED every world/HUD/camera click — and worse, ate
+            // the world tile-taps needed to actually place a tower. Keep the root
+            // click-through (Ignore) at ALL times: PickingMode.Ignore affects only
+            // the root itself, NOT its descendants, so the _panel and its buttons
+            // (default PickingMode.Position) still receive clicks, while the
+            // transparent area outside the panel passes through to the world + HUD.
+            if (_root != null)
+                _root.pickingMode = PickingMode.Ignore;
+        }
+
+        // =====================================================================
+        //  Code-built fallback menu — renders in player builds, unlike the .uxml
+        //  (which clones empty: panel=False in the Player.log). Built straight into
+        //  _root with code UIElements. Replace with a full code menu in DEF-86.
+        // =====================================================================
+        private VisualElement _codePanel;
+
+        private void ShowCodeFallbackMenu()
+        {
+            if (_root == null) return;
+            if (_codePanel == null)
+            {
+                _codePanel = new VisualElement { name = "buildmenu-code-fallback" };
+                var s = _codePanel.style;
+                s.position = Position.Absolute;
+                // DEF-134: was left:20, top:90 — that overlapped the HUD's top-left
+                // column (the "⊕ Skills" button sits at left:16, top:110, and the
+                // vitals cards above it), so the menu covered the Skills control.
+                // Drop it BELOW that column (skills ends ~top:150) and indent it so it
+                // clears the left HUD chrome while staying well left of the bottom-
+                // right ability diamond + Build button cluster.
+                s.left = 16f; s.top = 158f; s.minWidth = 220f;
+                s.paddingTop = 14f; s.paddingBottom = 14f; s.paddingLeft = 16f; s.paddingRight = 16f;
+                s.backgroundColor = new Color(0.08f, 0.10f, 0.16f, 0.96f);
+                s.borderTopLeftRadius = 10f; s.borderTopRightRadius = 10f;
+                s.borderBottomLeftRadius = 10f; s.borderBottomRightRadius = 10f;
+
+                var title = new Label("Build");
+                title.style.color = Color.white; title.style.fontSize = 18f;
+                title.style.unityFontStyleAndWeight = FontStyle.Bold; title.style.marginBottom = 10f;
+                _codePanel.Add(title);
+
+                _codePanel.Add(CodeMenuButton("Build Tower", new Color(0.16f, 0.40f, 0.62f, 0.95f), () =>
+                {
+                    var t = Resources.Load<DeNelle.Core.Data.TowerData>("Towers/DevTower");
+                    if (t != null)
+                    {
+                        if (TowerPlacementSystem.Instance == null)
+                            new GameObject("TowerPlacementSystem").AddComponent<TowerPlacementSystem>();
+                        TowerPlacementSystem.Instance.StartPlacing(t);
+                        SetStatus("Click a clear tile to raise the tower.");
+                    }
+                    HideCodeFallbackMenu();
+                }));
+
+                _codePanel.Add(CodeMenuButton("Upgrade Last Tower", new Color(0.30f, 0.52f, 0.34f, 0.95f), () =>
+                {
+                    var towers = UnityEngine.Object.FindObjectsByType<Tower>(FindObjectsSortMode.None);
+                    if (towers.Length > 0)
+                    {
+                        var t = towers[towers.Length - 1];
+                        bool ok = t.Upgrade();
+                        SetStatus(ok ? $"Upgraded the last tower to L{t.CurrentLevel}." : "Tower already at max level.");
+                    }
+                    else SetStatus("No towers to upgrade.");
+                    HideCodeFallbackMenu();
+                }));
+
+                _codePanel.Add(CodeMenuButton("Raze Last Tower", new Color(0.62f, 0.20f, 0.20f, 0.95f), () =>
+                {
+                    var towers = UnityEngine.Object.FindObjectsByType<Tower>(FindObjectsSortMode.None);
+                    if (towers.Length > 0) { Destroy(towers[towers.Length - 1].gameObject); SetStatus("Razed the last tower."); }
+                    else SetStatus("No towers to raze.");
+                    HideCodeFallbackMenu();
+                }));
+
+                _codePanel.Add(CodeMenuButton("Manage Towers", new Color(0.20f, 0.30f, 0.50f, 0.95f), () =>
+                {
+                    HideCodeFallbackMenu();
+                    DeNelle.Village.UI.TowerManagerPanel.Instance?.Show();   // or press M
+                }));
+
+                // WO-108 — the CREATE verb: enter the player Build Mode (catalog
+                // palette + grid placement + persisted BaseLayout). EnsureExists()
+                // self-installs the controller; Enter() freezes waves + shows the palette.
+                _codePanel.Add(CodeMenuButton("Build Mode", new Color(0.42f, 0.30f, 0.58f, 0.95f), () =>
+                {
+                    HideCodeFallbackMenu();
+                    BuildModeController.EnsureExists().Enter();
+                }));
+
+                _codePanel.Add(CodeMenuButton("Close", new Color(0.30f, 0.30f, 0.36f, 0.95f), HideCodeFallbackMenu));
+
+                _root.Add(_codePanel);
+            }
+            _codePanel.style.display = DisplayStyle.Flex;
+            _isOpen = true;
+        }
+
+        private void HideCodeFallbackMenu()
+        {
+            if (_codePanel != null) _codePanel.style.display = DisplayStyle.None;
+            _isOpen = false;
+        }
+
+        private static Button CodeMenuButton(string label, Color bg, System.Action onClick)
+        {
+            var b = new Button(onClick) { text = label };
+            var s = b.style;
+            s.height = 40f; s.marginTop = 4f; s.marginBottom = 4f;
+            s.fontSize = 15f; s.unityFontStyleAndWeight = FontStyle.Bold;
+            s.unityTextAlign = TextAnchor.MiddleCenter; s.color = Color.white;
+            s.backgroundColor = bg;
+            s.borderTopLeftRadius = 8f; s.borderTopRightRadius = 8f;
+            s.borderBottomLeftRadius = 8f; s.borderBottomRightRadius = 8f;
+            return b;
         }
 
         // =====================================================================
@@ -249,31 +440,343 @@ namespace DeNelle.Village
         // =====================================================================
 
         /// <summary>
-        /// Rebuilds the menu. Owner direction 2026-05-20 ("when click build
-        /// should get two options one for tower one for repair") — Option A
-        /// chosen: replace the five-building grid with exactly two cards:
-        /// Build Tower (ArcaneTower from the canon catalogue) and Repair
-        /// Wall (fires the existing WallRepairController via reflection).
+        /// Rebuilds the menu for the current <see cref="_screen"/>. WO-31 turned
+        /// the flat two-card menu into a three-screen flow: Root chooser →
+        /// Build-Tower (element radio + costs + timing) or Upgrade-Tower
+        /// (placed-tower list + upgrade info). All screens build into the same
+        /// runtime <c>build-menu-list</c> container — no UXML structure change.
         /// </summary>
         public void Render()
         {
             if (_list == null) return;
             _list.Clear();
-
             UpdateBalanceLabel();
 
-            // Card 1 — Build Tower (the existing ArcaneTower def).
-            BuildingDef tower = null;
-            foreach (var def in BuildingCatalog.Buildings)
+            switch (_screen)
             {
-                if (def == null) continue;
-                if (def.Id == "arcane-tower") { tower = def; break; }
+                case MenuScreen.BuildTower:   RenderBuildTower();   break;
+                case MenuScreen.UpgradeTower: RenderUpgradeTower(); break;
+                default:                      RenderRoot();         break;
             }
-            if (tower != null) _list.Add(BuildCard(tower));
+        }
 
-            // Card 2 — Repair Wall (no building cost; routes the repair
-            // confirm through WallRepairController by reflection).
+        // ── Root chooser ─────────────────────────────────────────────────────
+
+        /// <summary>
+        /// The top-level chooser: three big tiles — Build Tower, Upgrade Tower,
+        /// Repair Wall. (Owner WO-31: "dialog or option to select tower or build
+        /// tower … maybe upgrade tower popup".)
+        /// </summary>
+        private void RenderRoot()
+        {
+            _list.Add(BuildOptionTile("🏗  Build Tower",
+                "Raise a new elemental defence tower.",
+                () => { _screen = MenuScreen.BuildTower; Render(); }));
+
+            _list.Add(BuildOptionTile("⬆  Upgrade Tower",
+                "Spend crystals + stone to level up a placed tower.",
+                () => { _screen = MenuScreen.UpgradeTower; _selectedTowerForUpgrade = null; Render(); }));
+
             _list.Add(BuildRepairCard());
+        }
+
+        /// <summary>A large tappable tile used by the Root chooser.</summary>
+        private VisualElement BuildOptionTile(string title, string subtitle, Action onClick)
+        {
+            var tile = new Button(() => onClick?.Invoke());
+            tile.AddToClassList(OptionTileClass);
+
+            var t = new Label(title);
+            t.AddToClassList(CardNameClass);
+            tile.Add(t);
+
+            var s = new Label(subtitle);
+            s.AddToClassList(CardDescClass);
+            s.style.whiteSpace = WhiteSpace.Normal;
+            tile.Add(s);
+
+            return tile;
+        }
+
+        /// <summary>The "← Back" row shown on every sub-screen; returns to Root.</summary>
+        private VisualElement BuildBackButton()
+        {
+            var back = new Button(() => { _screen = MenuScreen.Root; _selectedTowerForUpgrade = null; Disarm(); Render(); })
+            {
+                text = "← Back"
+            };
+            back.AddToClassList(BackBtnClass);
+            return back;
+        }
+
+        // ── Build Tower screen ────────────────────────────────────────────────
+
+        /// <summary>
+        /// Element radio (Flame / Ice / Aether / Physical) + the selected
+        /// variant's crystal + material costs (each with a ✓/✗) + build time +
+        /// a Build button greyed out when anything is unaffordable.
+        /// </summary>
+        private void RenderBuildTower()
+        {
+            _list.Add(BuildBackButton());
+
+            var heading = new Label("BUILD TOWER");
+            heading.AddToClassList(CardNameClass);
+            _list.Add(heading);
+
+            var elementLabel = new Label("Element:");
+            elementLabel.AddToClassList(CardDescClass);
+            _list.Add(elementLabel);
+
+            var radioGroup = new VisualElement();
+            radioGroup.AddToClassList(RadioGroupClass);
+            foreach (TowerElement el in new[] { TowerElement.Flame, TowerElement.Ice,
+                                                TowerElement.Aether, TowerElement.Physical })
+                radioGroup.Add(BuildElementRadioRow(el));
+            _list.Add(radioGroup);
+
+            var variant = VariantFor(_selectedElement);
+            _list.Add(BuildCostBlock(variant));
+            _list.Add(BuildTimingLabel("Build time: " + FormatTime(variant.BuildTimeSec)));
+
+            bool canBuild = CanAfford(variant);
+            var btn = new Button(() => OnConfirmBuild(variant)) { text = "Build" };
+            btn.AddToClassList(ConfirmBtnClass);
+            btn.SetEnabled(canBuild);
+            _list.Add(btn);
+        }
+
+        /// <summary>A toggle-style radio row that selects an element on click.</summary>
+        private VisualElement BuildElementRadioRow(TowerElement el)
+        {
+            bool selected = el == _selectedElement;
+            var row = new Button(() => { _selectedElement = el; Render(); });
+            row.AddToClassList(RadioRowClass);
+            row.EnableInClassList(RadioRowSelectedClass, selected);
+            row.text = (selected ? "◉  " : "○  ") + el;
+            return row;
+        }
+
+        /// <summary>Crystal row + one row per material, each with a ✓ (afford) / ✗ (short).</summary>
+        private VisualElement BuildCostBlock(TowerVariantDef v)
+        {
+            var block = new VisualElement();
+            block.Add(BuildCostRow("◆ Crystals", v.CrystalCost, CrystalBalance));
+            if (v.Wood > 0)  block.Add(BuildCostRow("Wood",  v.Wood,  GetMaterialCount("wood")));
+            if (v.Stone > 0) block.Add(BuildCostRow("Stone", v.Stone, GetMaterialCount("stone")));
+            return block;
+        }
+
+        private VisualElement BuildCostRow(string label, int required, int have)
+        {
+            var row = new VisualElement();
+            row.AddToClassList(CostRowClass);
+
+            var name = new Label($"{label}: {required}");
+            name.AddToClassList(CardCostClass);
+            row.Add(name);
+
+            bool ok = have >= required;
+            var mark = new Label(ok ? $"✓ {have}" : $"✗ {have}");
+            mark.AddToClassList(ok ? CostCheckClass : CostFailClass);
+            row.Add(mark);
+            return row;
+        }
+
+        private Label BuildTimingLabel(string text)
+        {
+            var l = new Label(text);
+            l.AddToClassList(CardHpClass);
+            return l;
+        }
+
+        /// <summary>
+        /// Arms the canonical arcane-tower def for tap-to-place (the placement
+        /// pipeline is shared) and returns to Root with a placement hint. The
+        /// chosen element is remembered for when the variant system goes live.
+        /// </summary>
+        private void OnConfirmBuild(TowerVariantDef v)
+        {
+            if (!CanAfford(v))
+            {
+                SetStatus("Not enough crystals or materials for the " + v.DisplayName + ".", isError: true);
+                return;
+            }
+
+            var data = Resources.Load<DeNelle.Core.Data.TowerData>("Towers/DevTower");
+            if (data == null)
+            {
+                SetStatus("Tower definition asset missing (Towers/DevTower).", isError: true);
+                return;
+            }
+
+            // WO-131 — SINGLE AUTHORITATIVE CRYSTAL SPEND for tower placement.
+            // Deduct the DISPLAYED cost (v.CrystalCost) from the SAME store the menu
+            // and the village HUD read: GameState.Resources.Crystals (via
+            // GameStateService.AddCrystals, which clamps >= 0, persists, and raises
+            // ResourcesChanged). This is the one and only place a placement charges
+            // crystals — TowerPlacementSystem no longer touches the economy, so a
+            // placement can never double-charge or charge a divergent (Wood / Aether)
+            // pool. CanAfford(v) above re-checked the live balance one statement ago.
+            var gss = GameStateService.Instance;
+            if (gss == null)
+            {
+                SetStatus("Game state unavailable — cannot charge crystals.", isError: true);
+                return;
+            }
+            gss.AddCrystals(-v.CrystalCost);   // negative = spend; persisted + HUD-synced
+
+            if (TowerPlacementSystem.Instance == null)
+                new GameObject("TowerPlacementSystem").AddComponent<TowerPlacementSystem>();
+            // Pass the already-paid cost so TowerPlacementSystem does NOT charge again.
+            TowerPlacementSystem.Instance.StartPlacing(data, prepaid: true);
+            Close();   // hide the menu so the world click lands the placement
+            SetStatus($"Click a clear tile to raise the {v.DisplayName}.");
+        }
+
+        // ── Upgrade Tower screen ──────────────────────────────────────────────
+
+        /// <summary>
+        /// WO-127: lists every LIVE placed <see cref="Tower"/> (not Building), so the
+        /// row level matches the tower's actual <c>CurrentLevel</c>. Selecting one
+        /// shows its upgrade info; the Upgrade button performs a real
+        /// <see cref="Tower.Upgrade"/> and is hidden at <see cref="Tower.MaxLevel"/>.
+        /// </summary>
+        private void RenderUpgradeTower()
+        {
+            _list.Add(BuildBackButton());
+
+            var heading = new Label("UPGRADE TOWER");
+            heading.AddToClassList(CardNameClass);
+            _list.Add(heading);
+
+            // WO-127 root cause: enumerate LIVE Tower components (the type whose
+            // _currentLevel actually upgrades), not the separate Building type whose
+            // serialized Level never mutates.
+            var towers = UnityEngine.Object.FindObjectsByType<Tower>(FindObjectsSortMode.None);
+
+            // Drop a selection that no longer exists in the scene.
+            if (_selectedTowerForUpgrade == null ||
+                System.Array.IndexOf(towers, _selectedTowerForUpgrade) < 0)
+                _selectedTowerForUpgrade = null;
+
+            var list = new VisualElement();
+            bool any = false;
+            foreach (var t in towers)
+            {
+                if (t == null) continue;
+                list.Add(BuildTowerSelectRow(t));
+                any = true;
+            }
+            if (!any)
+            {
+                var none = new Label("No towers placed yet.");
+                none.AddToClassList(CardDescClass);
+                list.Add(none);
+            }
+            _list.Add(list);
+
+            if (_selectedTowerForUpgrade != null)
+                _list.Add(BuildUpgradeInfoBlock(_selectedTowerForUpgrade));
+        }
+
+        private VisualElement BuildTowerSelectRow(Tower t)
+        {
+            bool selected = ReferenceEquals(t, _selectedTowerForUpgrade);
+            var row = new Button(() => { _selectedTowerForUpgrade = t; Render(); });
+            row.AddToClassList(TowerRowClass);
+            row.EnableInClassList(TowerRowSelectedClass, selected);
+            // WO-127: print the LIVE level (1..MaxLevel) via the null-conditional, so
+            // it always matches TowerManagerPanel's t.CurrentLevel for the same tower.
+            int level = t != null ? t.CurrentLevel : 1;
+            string label = t != null ? t.name.Replace("Tower-", "").Replace("Tower_", "") : "Tower";
+            row.text = (selected ? "◉  " : "○  ") + label
+                       + "  (Lvl " + level + "/" + Tower.MaxLevel + ")";
+            return row;
+        }
+
+        /// <summary>
+        /// WO-127: upgrade info + a REAL upgrade action for the selected live tower.
+        /// Reads <c>t.CurrentLevel</c> for the result line; the Upgrade button calls
+        /// <see cref="Tower.Upgrade"/> then re-renders, and is hidden once the tower
+        /// is at <see cref="Tower.MaxLevel"/>.
+        /// </summary>
+        private VisualElement BuildUpgradeInfoBlock(Tower t)
+        {
+            var block = new VisualElement();
+
+            int level = t != null ? t.CurrentLevel : 1;
+            bool atMax = level >= Tower.MaxLevel;
+
+            // Cost block kept as the element-variant stub (economy gating is optional
+            // per the WO — the minimum viable fix is correct display + a real upgrade).
+            var v = VariantFor(_selectedElement);
+            block.Add(BuildCostRow("◆ Crystals", v.UpgradeCrystalCost, CrystalBalance));
+            if (v.UpgradeStone > 0) block.Add(BuildCostRow("Stone", v.UpgradeStone, GetMaterialCount("stone")));
+            block.Add(BuildTimingLabel("Upgrade time: " + FormatTime(v.UpgradeTimeSec)));
+
+            if (atMax)
+            {
+                var maxed = new Label($"Lvl {level}/{Tower.MaxLevel} — fully upgraded.");
+                maxed.AddToClassList(CardDescClass);
+                maxed.style.whiteSpace = WhiteSpace.Normal;
+                block.Add(maxed);
+                return block;   // no Upgrade button at max level (WO-127)
+            }
+
+            var result = new Label($"Result: Lvl {level + 1}/{Tower.MaxLevel}  (+{v.Dps} DPS, +{v.Hp / 4} HP)");
+            result.AddToClassList(CardDescClass);
+            result.style.whiteSpace = WhiteSpace.Normal;
+            block.Add(result);
+
+            var upgrade = new Button(() =>
+            {
+                // WO-127: real upgrade — mutate the live tower, then re-render so the
+                // screen re-reads CurrentLevel immediately (mirrors TowerManagerPanel).
+                bool ok = _selectedTowerForUpgrade?.Upgrade() ?? false;
+                SetStatus(ok
+                    ? $"Upgraded to Lvl {_selectedTowerForUpgrade?.CurrentLevel}."
+                    : "Tower already at max level.", isError: false);
+                Render();
+            })
+            { text = "Upgrade" };
+            upgrade.AddToClassList(ConfirmBtnClass);
+            block.Add(upgrade);
+            return block;
+        }
+
+        // ── WO-31 helpers ─────────────────────────────────────────────────────
+
+        private static TowerVariantDef VariantFor(TowerElement el)
+        {
+            foreach (var v in Variants) if (v.Element == el) return v;
+            return Variants[0];
+        }
+
+        private bool CanAfford(TowerVariantDef v)
+        {
+            return CrystalBalance >= v.CrystalCost
+                   && GetMaterialCount("wood") >= v.Wood
+                   && GetMaterialCount("stone") >= v.Stone;
+        }
+
+        // STUB — Week 6: material inventory is not tracked yet, so report fixed
+        // on-hand counts. Crystals come from the live GameState (CrystalBalance).
+        private static int GetMaterialCount(string id)
+        {
+            switch (id)
+            {
+                case "wood":  return 20;
+                case "stone": return 5;
+                default:      return 0;
+            }
+        }
+
+        /// <summary>Formats seconds as "Xm Ys" (or "Ys" under a minute).</summary>
+        private static string FormatTime(int seconds)
+        {
+            int m = seconds / 60, s = seconds % 60;
+            return m > 0 ? $"{m}m {s}s" : $"{s}s";
         }
 
         private VisualElement BuildRepairCard()
@@ -331,8 +834,6 @@ namespace DeNelle.Village
             var card = new VisualElement { name = $"build-card-{def.Id}" };
             card.AddToClassList(CardClass);
             if (!affordable) card.AddToClassList(CardUnaffordableClass);
-            if (_armed != null && _armed.Id == def.Id) card.AddToClassList(CardSelectedClass);
-
             // Name — resolved through VillageStrings (canon strings, never inline).
             var nameLabel = new Label(VillageStrings.BuildingName(def));
             nameLabel.AddToClassList(CardNameClass);
@@ -377,16 +878,29 @@ namespace DeNelle.Village
                 return;
             }
 
-            // Toggle: tapping the armed card again disarms it.
-            if (_armed != null && _armed.Id == def.Id)
+            var data = Resources.Load<DeNelle.Core.Data.TowerData>("Towers/DevTower");
+            if (data == null)
             {
-                Disarm();
-                Render();
+                SetStatus("Tower definition asset missing (Towers/DevTower).", isError: true);
                 return;
             }
 
-            Arm(def);
-            Render();
+            // WO-131 — charge the DISPLAYED cost from the single crystal store
+            // (GameState.Resources.Crystals) exactly once, then hand a PREPAID
+            // placement to TowerPlacementSystem (refunded on cancel, never re-charged).
+            var gss = GameStateService.Instance;
+            if (gss == null)
+            {
+                SetStatus("Game state unavailable — cannot charge crystals.", isError: true);
+                return;
+            }
+            gss.AddCrystals(-def.CrystalCost);   // negative = spend; persisted + HUD-synced
+
+            if (TowerPlacementSystem.Instance == null)
+                new GameObject("TowerPlacementSystem").AddComponent<TowerPlacementSystem>();
+            TowerPlacementSystem.Instance.StartPlacing(data, prepaid: true);
+            Close();   // hide the menu so the world click lands the placement
+            SetStatus($"Click a clear tile to raise the {VillageStrings.BuildingName(def)}.");
         }
 
         private void UpdateBalanceLabel()
@@ -406,250 +920,11 @@ namespace DeNelle.Village
         //  Arming a building
         // =====================================================================
 
-        private void Arm(BuildingDef def)
-        {
-            _armed = def;
-            SpawnGhost();
-            SetStatus($"Tap a clear tile to raise {VillageStrings.BuildingName(def)}.");
-        }
-
         private void Disarm()
         {
-            _armed = null;
-            _hasValidTile = false;
-            DestroyGhost();
             SetStatus("Pick a building, then tap a clear tile to raise it.");
         }
 
-        private void SpawnGhost()
-        {
-            DestroyGhost();
-            if (_ghostPrefab == null) return;
-            _ghost = Instantiate(_ghostPrefab);
-            _ghost.name = "BuildMenu_Ghost";
-            _ghost.SetActive(false);
-        }
-
-        private void DestroyGhost()
-        {
-            if (_ghost != null)
-            {
-                Destroy(_ghost);
-                _ghost = null;
-            }
-        }
-
-        // =====================================================================
-        //  Tap-to-place — frame-driven
-        // =====================================================================
-
-        private void Update()
-        {
-            if (!_isOpen || _armed == null) return;
-
-            // Track the build cursor and refresh the ghost preview.
-            _hasValidTile = ResolveCursorTile(out _snappedTile, out var blockedReason);
-            UpdateGhost();
-
-            if (!_hasValidTile && !string.IsNullOrEmpty(blockedReason))
-                SetStatus(blockedReason, isError: true);
-
-            // A tap (mouse click or touch) commits the placement.
-            if (TapPressedThisFrame() && !IsPointerOverUi())
-            {
-                if (_hasValidTile) TryPlace(_snappedTile);
-                else SetStatus(string.IsNullOrEmpty(blockedReason)
-                        ? "That tile is not buildable."
-                        : blockedReason, isError: true);
-            }
-        }
-
-        /// <summary>
-        /// Raycasts the build cursor into the world, snaps the hit to the
-        /// nearest hex-tile centre and validates the tile. Returns true and the
-        /// snapped position when the tile is buildable; false + a reason when not.
-        /// </summary>
-        private bool ResolveCursorTile(out Vector3 tile, out string reason)
-        {
-            tile = Vector3.zero;
-            reason = null;
-
-            var cam = _buildCamera != null ? _buildCamera : Camera.main;
-            if (cam == null) { reason = "No build camera."; return false; }
-
-            var screen = PointerScreenPosition();
-            var ray = cam.ScreenPointToRay(screen);
-            if (!Physics.Raycast(ray, out var hit, 500f, _groundMask))
-            {
-                reason = "Aim at the ground to place a building.";
-                return false;
-            }
-
-            tile = SnapToHex(hit.point);
-
-            // Inside the buildable square (centred on the Heart at origin)?
-            if (Mathf.Abs(tile.x) > _buildAreaHalfExtent || Mathf.Abs(tile.z) > _buildAreaHalfExtent)
-            {
-                reason = "Outside the village grounds.";
-                return false;
-            }
-
-            // Clear of any existing building / wall?
-            if (!IsTileClear(tile))
-            {
-                reason = "That tile is too close to another structure.";
-                return false;
-            }
-
-            // Owner 2026-05-20: never let the player wall off a gate. Reject
-            // placement within GateClearRadius m of any Gate component in the
-            // scene so the four cardinal openings stay walkable.
-            if (!IsClearOfGates(tile))
-            {
-                reason = "Too close to a gate — keep the entrance clear.";
-                return false;
-            }
-
-            return true;
-        }
-
-        /// <summary>Buffer (m) the player can't build inside, centred on each gate.</summary>
-        private const float GateClearRadius = 5.5f;
-        private Gate[] _cachedGates;
-        private float _cachedGatesAt;
-
-        /// <summary>True when no Gate sits within <see cref="GateClearRadius"/> of the tile.</summary>
-        private bool IsClearOfGates(Vector3 tile)
-        {
-            // Cache the gate list for 2 s so we don't FindObjectsByType every
-            // placement update. Cheap enough for the 4 gates the scene has.
-            if (_cachedGates == null || Time.unscaledTime - _cachedGatesAt > 2f)
-            {
-                _cachedGates = UnityEngine.Object.FindObjectsByType<Gate>(
-                    FindObjectsInactive.Exclude, FindObjectsSortMode.None);
-                _cachedGatesAt = Time.unscaledTime;
-            }
-            if (_cachedGates == null || _cachedGates.Length == 0) return true;
-            float r2 = GateClearRadius * GateClearRadius;
-            foreach (var g in _cachedGates)
-            {
-                if (g == null) continue;
-                Vector3 p = g.transform.position;
-                float dx = p.x - tile.x;
-                float dz = p.z - tile.z;
-                if (dx * dx + dz * dz < r2) return false;
-            }
-            return true;
-        }
-
-        /// <summary>
-        /// Snaps a world point to the nearest hex-tile centre. Pointy-top
-        /// axial layout: rows offset by half a tile (the village's flat-ground
-        /// hex grid). Y is taken from the snapped ground sample.
-        /// </summary>
-        private Vector3 SnapToHex(Vector3 world)
-        {
-            float row = Mathf.Round(world.z / _hexSize);
-            // Odd rows are offset by half a tile — the classic hex stagger.
-            float colOffset = (Mathf.Abs((int)row) % 2 == 1) ? _hexSize * 0.5f : 0f;
-            float col = Mathf.Round((world.x - colOffset) / _hexSize);
-            float x = col * _hexSize + colOffset;
-            float z = row * _hexSize;
-            return new Vector3(x, world.y, z);
-        }
-
-        /// <summary>True when no building / wall sits within <see cref="_minClearRadius"/> of the tile.</summary>
-        private bool IsTileClear(Vector3 tile)
-        {
-            var hits = Physics.OverlapSphere(tile, _minClearRadius);
-            foreach (var col in hits)
-            {
-                if (col == null) continue;
-                if (col.GetComponentInParent<Building>() != null) return false;
-                if (col.GetComponentInParent<WallSegment>() != null) return false;
-                if (col.GetComponentInParent<Gate>() != null) return false;
-            }
-            return true;
-        }
-
-        private void UpdateGhost()
-        {
-            if (_ghost == null) return;
-            if (_hasValidTile)
-            {
-                _ghost.SetActive(true);
-                _ghost.transform.position = _snappedTile;
-            }
-            else
-            {
-                _ghost.SetActive(false);
-            }
-        }
-
-        // =====================================================================
-        //  Placement — instantiate + deduct crystals
-        // =====================================================================
-
-        /// <summary>
-        /// Commits the armed building at the given tile: deducts the crystal
-        /// cost, instantiates the matching prefab, calls
-        /// <see cref="Building.Configure(BuildingDef)"/>, and disarms.
-        /// </summary>
-        private void TryPlace(Vector3 tile)
-        {
-            if (_armed == null) return;
-
-            var cost = _armed.CrystalCost;
-            if (CrystalBalance < cost)
-            {
-                SetStatus($"Not enough crystals (needs {cost}).", isError: true);
-                return;
-            }
-
-            var prefab = PrefabFor(_armed.ResolvedType);
-            if (prefab == null)
-            {
-                Debug.LogWarning($"[BuildMenu] No prefab wired for building type '{_armed.ResolvedType}'.");
-                SetStatus("That building has no prefab yet.", isError: true);
-                return;
-            }
-
-            // Deduct first so a failed spawn never gives a free building.
-            if (!SpendCrystals(cost))
-            {
-                SetStatus("Could not spend crystals.", isError: true);
-                return;
-            }
-
-            var go = Instantiate(prefab, tile, Quaternion.identity);
-            go.name = $"Building_{_armed.Id}";
-
-            var building = go.GetComponent<Building>();
-            if (building == null) building = go.GetComponentInChildren<Building>();
-            if (building != null)
-            {
-                building.Configure(_armed);
-            }
-            else
-            {
-                Debug.LogWarning($"[BuildMenu] Placed prefab for '{_armed.Id}' has no Building component.");
-            }
-
-            SetStatus($"{VillageStrings.BuildingName(_armed)} raised.");
-            BuildingPlaced?.Invoke(building, _armed);
-
-            // After a placement: disarm, then refresh the cards so the new
-            // balance re-evaluates affordability.
-            Disarm();
-            Render();
-        }
-
-        private GameObject PrefabFor(BuildingType type)
-        {
-            foreach (var entry in _buildingPrefabs)
-                if (entry.Type == type && entry.Prefab != null) return entry.Prefab;
-            return null;
-        }
 
         // =====================================================================
         //  Crystal balance — GameState-backed or local (standalone testing)
@@ -660,84 +935,18 @@ namespace DeNelle.Village
         {
             get
             {
-                if (_useGameState)
-                {
-                    var service = GameStateService.Instance;
-                    if (service != null && service.State != null)
-                        return service.State.Resources.Crystals;
-                    // No service in a standalone test — fall back to the local int.
-                }
-                return _localCrystalBalance;
-            }
-        }
-
-        /// <summary>
-        /// Spends <paramref name="amount"/> crystals. Mirrors the PackStore.cs
-        /// pattern — mutates <see cref="GameState.Resources"/> (a struct, so it
-        /// is written back whole), persists through <see cref="GameStateService.Save"/>,
-        /// and raises the service's <c>ResourcesChanged</c> event so the HUD
-        /// resource bar updates. Returns false when the balance is short.
-        /// </summary>
-        private bool SpendCrystals(int amount)
-        {
-            if (amount <= 0) return true;
-
-            if (_useGameState)
-            {
+                // Prefer the live GameState whenever it exists — it always does now
+                // that GameStateService self-bootstraps — so the menu shares ONE
+                // crystal store with the HUD and the dev grants. Keying off the
+                // _useGameState serialized flag was the trap: if it was left off on
+                // the scene instance, dev "+Crystals" updated GameState but the menu
+                // still read its local int (owner: "balance doesn't reflect the grant").
                 var service = GameStateService.Instance;
                 if (service != null && service.State != null)
-                {
-                    var r = service.State.Resources;
-                    if (r.Crystals < amount) return false;
-                    r.Crystals -= amount;
-                    service.State.Resources = r;
-                    service.Save();
-                    service.ResourcesChanged.Invoke();
-                    return true;
-                }
-                // Fall through to the local balance when there is no service.
+                    return service.State.Resources.Crystals;
+                return _localCrystalBalance;   // true standalone test only (no service)
             }
-
-            if (_localCrystalBalance < amount) return false;
-            _localCrystalBalance -= amount;
-            return true;
         }
 
-        // =====================================================================
-        //  Input helpers — Unity Input System (port spec Part 2)
-        // =====================================================================
-
-        private static Vector2 PointerScreenPosition()
-        {
-            if (Touchscreen.current != null && Touchscreen.current.primaryTouch.press.isPressed)
-                return Touchscreen.current.primaryTouch.position.ReadValue();
-            if (Mouse.current != null)
-                return Mouse.current.position.ReadValue();
-            return Vector2.zero;
-        }
-
-        private static bool TapPressedThisFrame()
-        {
-            if (Touchscreen.current != null && Touchscreen.current.primaryTouch.press.wasPressedThisFrame)
-                return true;
-            if (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame)
-                return true;
-            return false;
-        }
-
-        /// <summary>
-        /// True when the pointer is over a UI Toolkit element of this document —
-        /// so a tap on the build-menu panel is not also read as a world tap.
-        /// </summary>
-        private bool IsPointerOverUi()
-        {
-            if (_root == null || _root.panel == null) return false;
-            var screen = PointerScreenPosition();
-            // UI Toolkit panel space is top-left origin; screen space is bottom-left.
-            var panelPos = RuntimePanelUtils.ScreenToPanel(
-                _root.panel, new Vector2(screen.x, Screen.height - screen.y));
-            var picked = _root.panel.Pick(panelPos);
-            return picked != null && picked != _root;
-        }
     }
 }

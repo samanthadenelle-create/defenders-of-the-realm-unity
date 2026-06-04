@@ -1,5 +1,5 @@
 // =============================================================================
-// TownsfolkController — the ambient-townsfolk registry for Avalon (D).
+// TownsfolkController — the ambient-townsfolk registry for Elarion (D).
 // -----------------------------------------------------------------------------
 // A tiny scene-level coordinator for the village's ambient NPCs. It is NOT
 // required for an AmbientNPC to function — each NPC resolves its own Keeper

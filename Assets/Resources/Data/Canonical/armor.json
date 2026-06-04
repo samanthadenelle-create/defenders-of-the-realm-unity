@@ -1,0 +1,9 @@
+{
+  "_note": "Gear v1 armor catalog. defense = fractional incoming-damage reduction (0.04 = 4%). hpBonus is carried for a later pass (v1 applies defense only, to avoid HeroHealth maxHp surgery untested). job 'any' = all classes. req level-gated like weapons.",
+  "armor": [
+    { "id": "armor_cloth",   "name": "Wanderer's Cloth", "icon": "🧥", "job": "any", "rarity": "common",   "defense": 0.04, "hpBonus": 10, "req": { "level": 1 } },
+    { "id": "armor_leather", "name": "Tanned Leather",    "icon": "🧥", "job": "any", "rarity": "uncommon", "defense": 0.08, "hpBonus": 25, "req": { "level": 3 } },
+    { "id": "armor_chain",   "name": "Chainmail Vest",    "icon": "🛡️", "job": "any", "rarity": "rare",     "defense": 0.14, "hpBonus": 45, "req": { "level": 6 } },
+    { "id": "armor_plate",   "name": "Elarion Plate",     "icon": "🛡️", "job": "any", "rarity": "epic",     "defense": 0.20, "hpBonus": 75, "req": { "level": 10 } }
+  ]
+}

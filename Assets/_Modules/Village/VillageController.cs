@@ -1,5 +1,5 @@
 // =============================================================================
-// VillageController — the Avalon village scene orchestrator (Week-3 skeleton).
+// VillageController — the Elarion village scene orchestrator (Week-3 skeleton).
 // -----------------------------------------------------------------------------
 // Port spec Part 3 row: src/modules/village/Village3D.tsx -> VillageController.cs.
 //
@@ -23,7 +23,7 @@ using UnityEngine;
 namespace DeNelle.Village
 {
     /// <summary>
-    /// Orchestrates the Avalon village scene. Holds references to the wall ring,
+    /// Orchestrates the Elarion village scene. Holds references to the wall ring,
     /// the four cardinal gates, the Heart and the five buildings; in Week 3 it
     /// owns the assemble pass that places the wall sections + gates against
     /// <see cref="WallLayout"/>. Wave manager / build menu / hero rig / camera
@@ -143,6 +143,41 @@ namespace DeNelle.Village
             EnsureGateProximityOpeners();
             EnsureHeartHudBridge();
             EnsureDungeonEntrances();
+            EnsureOnboardingIntegrator();
+        }
+
+        // ── WO-133: first-run tutorial (FTUE) ─────────────────────────────────
+
+        /// <summary>
+        /// WO-133 — called when the first-run tutorial ends (completed OR skipped),
+        /// wired from <c>OnboardingFlow.TutorialClosed</c> by the
+        /// <see cref="OnboardingIntegrator"/>. The cold-open / Onboarded persistence
+        /// is already handled inside OnboardingFlow.Finish — this hook is the seam
+        /// for re-enabling any HUD / input the coach-marks suppressed. Today the
+        /// village HUD is never suppressed, so this is intentionally a light no-op
+        /// kept as the documented integration point (mirrors OnboardingFlow's
+        /// integrator note §3). Returning players (Onboarded already true) also
+        /// reach this immediately via OnboardingFlow.TryRun, which is harmless.
+        /// </summary>
+        public void OnOnboardingClosed()
+        {
+            // No HUD/input is suppressed during the FTUE in this build — nothing to
+            // restore. Logged so the close seam is observable in playtest logs.
+            Debug.Log("[VillageController] Onboarding closed — FTUE complete (or skipped).");
+        }
+
+        /// <summary>
+        /// Attaches the <see cref="OnboardingIntegrator"/> at runtime (WO-133) so the
+        /// first-run tutorial's Core-seam UnityEvents are wired to the village
+        /// gameplay (BuildMenu / WaveManager) and gameplay events feed back to the
+        /// tutorial's Notify* hooks. Runtime-attached for the same reason as the gate
+        /// openers / Heart HUD bridge: the scene is builder-baked. Idempotent
+        /// (OnboardingIntegrator is [DisallowMultipleComponent]).
+        /// </summary>
+        private void EnsureOnboardingIntegrator()
+        {
+            if (GetComponent<OnboardingIntegrator>() == null)
+                gameObject.AddComponent<OnboardingIntegrator>();
         }
 
         /// <summary>
@@ -153,8 +188,12 @@ namespace DeNelle.Village
         /// </summary>
         private void EnsureDungeonEntrances()
         {
-            if (GetComponent<DungeonEntranceBootstrap>() == null)
-                gameObject.AddComponent<DungeonEntranceBootstrap>();
+            // DISABLED (owner 2026-05-27): this WO-19 runtime ring placed a SECOND
+            // set of dungeon entrances (the "(F) to enter" doorways) at radius 25m
+            // OUTSIDE the gate, duplicating the baked DungeonPortals (disc + arch +
+            // "Healer's Cottage" label) inside the village. The SW ring entrance also
+            // routed to a broken "hero vs 2 pills" encounter. Keep only the baked
+            // portals; re-enable this only if those are ever removed.
         }
 
         /// <summary>

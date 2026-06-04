@@ -102,6 +102,15 @@ namespace DeNelle.DevTools
         {
             return _inner.SendPayment(packSku, currency, amount, network);
         }
+
+        /// <inheritdoc/>
+        // Delegates to the stub — the dev probe holds no real key, so it cannot
+        // sign (WO-121). Backend save-auth headers stay skipped under the probe.
+        public bool CanSignMessages => _inner.CanSignMessages;
+
+        /// <inheritdoc/>
+        public UniTask<string> SignMessageBase58(string utf8Message) =>
+            _inner.SignMessageBase58(utf8Message);
     }
 }
 

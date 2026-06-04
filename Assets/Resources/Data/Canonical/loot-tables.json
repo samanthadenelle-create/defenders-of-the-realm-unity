@@ -1,0 +1,35 @@
+{
+  "_comment": "PLACEHOLDER loot tables for the ISOLATED item-drops lane (gear/crafting + item drops + consumables). Loaded by DeNelle.Village.Items.LootTableCatalog via DeNelle.Core.CanonicalJson (Resources first, StreamingAssets fallback). DARK by default: nothing rolls unless ItemDropSystem.Enabled is flipped on (define DOTR_ITEM_DROPS or set the flag at runtime). Material ids below double as VillageInventory larder keys and as crafting-recipe ingredient ids - the OWNER + CREATIVE must finalise the real material taxonomy, drop rates, and per-enemy tables before this goes live. This file is example scaffolding only.",
+  "_schemaNotes": {
+    "tables": "Each table maps an enemy/boss kind to weighted drops. 'id' matches an enemy def id (enemies.json) for a specific table, or one of the 'defaults' ids for the fallback. 'source' is documentation only (enemy/boss/dungeon).",
+    "drops": "Each line is rolled INDEPENDENTLY: roll 'chance' (0..1); on a hit award a random count in [minCount, maxCount]. materialId is deposited into VillageInventory (the village larder).",
+    "defaults": "Fallback table ids used when a slain enemy/boss has no table of its own (enemy = any common mob, boss = the dragon)."
+  },
+  "version": 1,
+  "tables": [
+    {
+      "id": "common-grunt",
+      "source": "enemy",
+      "drops": [
+        { "materialId": "monster-hide", "chance": 0.35, "minCount": 1, "maxCount": 2 },
+        { "materialId": "wild-herb", "chance": 0.25, "minCount": 1, "maxCount": 1 },
+        { "materialId": "tattered-cloth", "chance": 0.20, "minCount": 1, "maxCount": 1 }
+      ]
+    },
+    {
+      "id": "boss-hoard",
+      "source": "boss",
+      "drops": [
+        { "materialId": "monster-hide", "chance": 1.0, "minCount": 3, "maxCount": 5 },
+        { "materialId": "wild-herb", "chance": 1.0, "minCount": 2, "maxCount": 4 },
+        { "materialId": "ember-resin", "chance": 0.75, "minCount": 1, "maxCount": 2 },
+        { "materialId": "rare-essence", "chance": 0.50, "minCount": 1, "maxCount": 1 }
+      ]
+    }
+  ],
+  "defaults": {
+    "enemy": "common-grunt",
+    "boss": "boss-hoard",
+    "dungeon": "common-grunt"
+  }
+}

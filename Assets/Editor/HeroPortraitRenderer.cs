@@ -30,15 +30,36 @@ namespace DeNelle.Editor
         private const int PortraitWidth = 512;
         private const int PortraitHeight = 700;
 
-        [MenuItem("Defenders/Heroes/Render Knight + Ranger Portraits")]
+        [MenuItem("Defenders/Heroes/Render Hero Portraits (transparent)")]
         public static void RenderBoth()
         {
             RenderOne("Assets/Resources/Heroes/Knight.fbx", "knight.png");
             RenderOne("Assets/Resources/Heroes/Ranger.fbx", "ranger.png");
+            RenderOne("Assets/Resources/Heroes/Mage.fbx", "mage.png");
+            // 4th hero — Elara the Cleric shares the Mage body (SlugFor Cleric->Mage);
+            // a warm white-gold tint sets her apart from Thrain's icy-blue Mage portrait.
+            RenderOne("Assets/Resources/Heroes/Mage.fbx", "cleric.png", new Color(1f, 0.93f, 0.70f));
             AssetDatabase.Refresh();
         }
 
-        private static void RenderOne(string fbxPath, string pngName)
+        /// <summary>Multiplies every renderer's base colour by <paramref name="tint"/> — used
+        /// to recolour Elara's shared Mage body to a warm healer gold so her portrait reads
+        /// distinct from Thrain's icy-blue Mage.</summary>
+        private static void ApplyTint(GameObject body, Color tint)
+        {
+            foreach (var r in body.GetComponentsInChildren<Renderer>())
+            {
+                if (r == null) continue;
+                foreach (var m in r.materials)
+                {
+                    if (m == null) continue;
+                    if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", m.GetColor("_BaseColor") * tint);
+                    else if (m.HasProperty("_Color")) m.SetColor("_Color", m.color * tint);
+                }
+            }
+        }
+
+        private static void RenderOne(string fbxPath, string pngName, Color? tint = null)
         {
             var fbx = AssetDatabase.LoadAssetAtPath<GameObject>(fbxPath);
             if (fbx == null) { Debug.LogError($"[HeroPortraitRenderer] FBX not found: {fbxPath}"); return; }
@@ -52,6 +73,7 @@ namespace DeNelle.Editor
             body.transform.localRotation = Quaternion.Euler(0f, 200f, 0f); // 3/4 view
             RetargetToUrp(body);
             NormalizeHeight(body, 1.7f);
+            if (tint.HasValue) ApplyTint(body, tint.Value);
 
             // Three-point-ish light: a strong key light, a softer fill.
             var keyLightGo = new GameObject("KeyLight");
@@ -78,8 +100,12 @@ namespace DeNelle.Editor
             camGo.transform.localPosition = new Vector3(0f, 1.05f, -2.4f);
             camGo.transform.localRotation = Quaternion.Euler(2f, 0f, 0f);
             var cam = camGo.AddComponent<Camera>();
+            // Owner 2026-05-25: hero-select portraits need a TRANSPARENT
+            // background so each hero reads on the card's own styling instead
+            // of a baked dark box. A SolidColor clear at alpha 0 + the ARGB32
+            // RenderTexture + EncodeToPNG carries the alpha through.
             cam.clearFlags = CameraClearFlags.SolidColor;
-            cam.backgroundColor = new Color(0.06f, 0.04f, 0.12f, 1f);
+            cam.backgroundColor = new Color(0f, 0f, 0f, 0f);
             cam.orthographic = false;
             cam.fieldOfView = 28f;
             cam.nearClipPlane = 0.1f;
@@ -88,7 +114,17 @@ namespace DeNelle.Editor
             // Render to a RenderTexture, read back, encode PNG, save.
             var rt = new RenderTexture(PortraitWidth, PortraitHeight, 24, RenderTextureFormat.ARGB32);
             cam.targetTexture = rt;
-            cam.Render();
+            // CRITICAL (owner 2026-05-25: portraits came out blank): the legacy
+            // Camera.Render() does NOT draw under URP in batchmode — the camera
+            // only emitted its transparent clear colour, so every portrait was an
+            // empty PNG. Use the SRP render-request API (Unity 2022.2+/6) which
+            // actually runs the URP pipeline into the target. Fall back to the
+            // legacy call if a render request isn't supported (non-SRP project).
+            var request = new UnityEngine.Rendering.RenderPipeline.StandardRequest { destination = rt };
+            if (UnityEngine.Rendering.RenderPipeline.SupportsRenderRequest(cam, request))
+                UnityEngine.Rendering.RenderPipeline.SubmitRenderRequest(cam, request);
+            else
+                cam.Render();
 
             RenderTexture prev = RenderTexture.active;
             RenderTexture.active = rt;
@@ -102,6 +138,18 @@ namespace DeNelle.Editor
             string outPath = ResourcesDir + "/" + pngName;
             File.WriteAllBytes(outPath, pngBytes);
             Debug.Log("[HeroPortraitRenderer] Wrote " + outPath + " (" + pngBytes.Length + " bytes)");
+
+            // Remove any stale opaque .jpg of the same slug — HeroSelectController
+            // loads the portrait by name (Resources.Load("HeroPortraits/<slug>")),
+            // so a leftover knight.jpg/ranger.jpg alongside the new .png makes the
+            // load ambiguous and can win over the transparent .png.
+            string slug = Path.GetFileNameWithoutExtension(pngName);
+            string staleJpg = ResourcesDir + "/" + slug + ".jpg";
+            if (File.Exists(staleJpg))
+            {
+                AssetDatabase.DeleteAsset(staleJpg);
+                Debug.Log("[HeroPortraitRenderer] Removed stale opaque portrait " + staleJpg);
+            }
 
             cam.targetTexture = null;
             Object.DestroyImmediate(rt);
@@ -154,10 +202,17 @@ namespace DeNelle.Editor
             for (int i = 1; i < renderers.Length; i++) b.Encapsulate(renderers[i].bounds);
             if (b.size.y <= 0.01f) return;
             body.transform.localScale *= (target / b.size.y);
-            // After scaling, re-centre so feet land at y=0 in the camera frame.
-            var pivot = body.transform.position;
-            float bottom = b.min.y;
-            body.transform.position = new Vector3(pivot.x, pivot.y - bottom, pivot.z);
+
+            // Re-measure AFTER scaling, then raise the body in LOCAL space so its feet land
+            // on the parent (stage) plane. BUG FIX (2026-06-02, blank portraits): the old
+            // code used the WORLD bounds bottom (~1000, since the stage sits off at y=1000)
+            // and yanked the body to world y≈0 — 1000 units BELOW the camera (which lives on
+            // the stage at y≈1000), so the hero rendered out of frame and every PNG came out
+            // empty. Local-space re-centre is stage-position-independent.
+            b = renderers[0].bounds;
+            for (int i = 1; i < renderers.Length; i++) b.Encapsulate(renderers[i].bounds);
+            float parentY = body.transform.parent != null ? body.transform.parent.position.y : 0f;
+            body.transform.localPosition += new Vector3(0f, parentY - b.min.y, 0f);
         }
     }
 }

@@ -25,6 +25,58 @@ namespace DeNelle.Editor
     {
         private const string OutputDir = "Builds/Windows";
         private const string ExeName = "DefendersOfTheRealm.exe";
+        private const string WebOutputDir = "Builds/WebGL";
+
+        // WebGL build for the Vercel "Dreams" deploy (owner WO-35). Run headless:
+        //   run-unity-method.ps1 -Method DeNelle.Editor.DesktopBuild.BuildWebGL -LogName webgl.log
+        // Output: Builds/WebGL/ (index.html + Build/). Deploy that folder to Vercel.
+        [MenuItem("Defenders/Build/WebGL Player")]
+        public static void BuildWebGL()
+        {
+            string[] scenes = EditorBuildSettings.scenes.Where(s => s.enabled).Select(s => s.path).ToArray();
+            if (scenes.Length == 0)
+            {
+                Debug.LogError("[DesktopBuild] No enabled scenes in Build Settings — aborting WebGL.");
+                EditorApplication.Exit(1);
+                return;
+            }
+            if (!BuildPipeline.IsBuildTargetSupported(BuildTargetGroup.WebGL, BuildTarget.WebGL))
+            {
+                Debug.LogError("[DesktopBuild] WebGL build support is NOT installed — add the WebGL module in Unity Hub, then re-run.");
+                EditorApplication.Exit(2);
+                return;
+            }
+
+            string dir = Path.GetFullPath(WebOutputDir);
+            Directory.CreateDirectory(dir);
+
+            // The reflection bridges (audio / pets / dungeon) need their reflected
+            // types preserved under IL2CPP stripping (link.xml was removed); keep
+            // stripping minimal so WebGL doesn't strip them. Gzip = Vercel-friendly.
+            try { PlayerSettings.SetManagedStrippingLevel(BuildTargetGroup.WebGL, ManagedStrippingLevel.Minimal); } catch (System.Exception e) { Debug.LogWarning("[DesktopBuild] stripping-level set failed: " + e.Message); }
+            try { PlayerSettings.WebGL.compressionFormat = WebGLCompressionFormat.Gzip; } catch (System.Exception e) { Debug.LogWarning("[DesktopBuild] WebGL compression set failed: " + e.Message); }
+            try { PlayerSettings.WebGL.exceptionSupport = WebGLExceptionSupport.None; } catch { }
+
+            var options = new BuildPlayerOptions
+            {
+                scenes = scenes,
+                locationPathName = dir,
+                target = BuildTarget.WebGL,
+                targetGroup = BuildTargetGroup.WebGL,
+                options = BuildOptions.None,
+            };
+
+            Debug.Log($"[DesktopBuild] WebGL build -> {dir} ({scenes.Length} scenes). This can take many minutes.");
+            BuildReport webReport = BuildPipeline.BuildPlayer(options);
+            BuildSummary webSummary = webReport.summary;
+            if (webSummary.result == BuildResult.Succeeded)
+                Debug.Log($"[DesktopBuild] WebGL SUCCEEDED — {webSummary.totalSize / (1024 * 1024)} MB in {webSummary.totalTime}. Deploy Builds/WebGL/ to Vercel.");
+            else
+            {
+                Debug.LogError($"[DesktopBuild] WebGL FAILED — result={webSummary.result}, errors={webSummary.totalErrors}.");
+                EditorApplication.Exit(1);
+            }
+        }
 
         [MenuItem("Defenders/Build/Windows x64 Player")]
         public static void BuildWindows()
@@ -77,6 +129,43 @@ namespace DeNelle.Editor
             catch (System.Exception e)
             {
                 Debug.LogWarning($"[DesktopBuild] Could not toggle static batching: {e.Message}");
+            }
+
+            // D3D12 upload-buffer crash mitigation (2026-05-25): Village instantiates
+            // raw un-decimated Tripo structure meshes (Cathedral 84MB, PetHome 54MB,
+            // LumberMill 52MB, Forge/Farm 29MB). A single >35MB mesh overflows the
+            // D3D12 staging upload heap ("d3d12: upload buffer was too small for the
+            // requested resource!"), which cascades into a corrupt level3 / "Position
+            // out of bounds!" hard-crash on Village load. Force Direct3D11 for the
+            // standalone player — its mesh upload path has no equivalent fixed staging
+            // limit. (Real long-term fix is to decimate those meshes.)
+            try
+            {
+                PlayerSettings.SetUseDefaultGraphicsAPIs(BuildTarget.StandaloneWindows64, false);
+                PlayerSettings.SetGraphicsAPIs(BuildTarget.StandaloneWindows64,
+                    new[] { UnityEngine.Rendering.GraphicsDeviceType.Direct3D11 });
+                Debug.Log("[DesktopBuild] Graphics API forced to Direct3D11 for StandaloneWindows64 (D3D12 upload-buffer crash mitigation).");
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning($"[DesktopBuild] Could not force Direct3D11 graphics API: {e.Message}");
+            }
+
+            // Windowed by default (owner 2026-05-27): the player opened in exclusive
+            // fullscreen, which is awkward to alt-tab out of mid-playtest. Ship a
+            // resizable 1600x900 window instead. Players can still toggle fullscreen
+            // at runtime with Alt+Enter.
+            try
+            {
+                PlayerSettings.fullScreenMode      = FullScreenMode.Windowed;
+                PlayerSettings.defaultScreenWidth  = 1600;
+                PlayerSettings.defaultScreenHeight = 900;
+                PlayerSettings.resizableWindow     = true;
+                Debug.Log("[DesktopBuild] Default display mode set to Windowed 1600x900 (resizable; Alt+Enter toggles fullscreen).");
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning($"[DesktopBuild] Could not set windowed mode: {e.Message}");
             }
 
             var options = new BuildPlayerOptions

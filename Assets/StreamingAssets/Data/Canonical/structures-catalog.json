@@ -1,0 +1,217 @@
+{
+  "version": 2,
+  "notes": "Build-mode structure catalog — DATA-DRIVEN. Add a row here (+ keep the Resources/Data/Canonical copy byte-equal) and it flows into CatalogRegistry at startup via CatalogBootstrap. 'type' / 'mustSitOn' / 'navSurface' / 'element' are enum NAMES (StringEnumConverter). 'visualPrefabPath' is a Resources-relative path (LogWarning-safe on miss per CLAUDE.md §4). 'behaviorId' is resolved to a Village component by StructureFactory.AttachBehavior — only DefenseTower / WallSegment / CrystalMine / Gate are wired; null = inert decoration. S4: 'repo.cost' is the multi-resource build cost (wood/food/iron/crystals); it is charged + refunded through the persisted ResourceLedger (EconomyService). When 'cost' is omitted / all-zero, placement falls back to charging 'buildCost' Crystals (back-compat). S5 (the CoC upgrade sink): 'repo.maxLevel' (default 1 = not upgradeable; ceiling 3 = the StructureTierVisual tier cap) is the highest level the UPGRADE verb can reach; 'repo.upgradeCost' is an optional per-step multi-resource table indexed by the level being upgraded TO minus 2 (entry [0] = L1->L2, [1] = L2->L3). When 'upgradeCost' is omitted, the upgrade cost falls back to the build 'cost' scaled by the level being left (L1->L2 = 1x, L2->L3 = 2x). StructureTierVisual steps the look (scale + bronze/silver/gold accent); DefenseTower range/damage and WallSegment toughness step the stats.",
+  "entries": [
+    {
+      "id": "tower_ground_archer",
+      "displayName": "Archer Tower",
+      "type": "Tower",
+      "kind": "Cell",
+      "visualPrefabPath": "PatriciaLight/tower2",
+      "repo": {
+        "behaviorId": "DefenseTower",
+        "buildCost": 100,
+        "cost": { "wood": 60, "food": 0, "iron": 30, "crystals": 20 },
+        "maxLevel": 3,
+        "navSurface": "Blocker",
+        "visualHeight": 5.0,
+        "range": 16.0,
+        "damage": 6.0,
+        "fireRate": 2.5,
+        "canHitAir": false,
+        "element": "None",
+        "placement": {
+          "mustSitOn": "Ground",
+          "footprint": 2.5,
+          "noOverlap": true,
+          "checkAffordable": true
+        }
+      }
+    },
+    {
+      "id": "tower_wall_wizard",
+      "displayName": "Wizard Tower",
+      "type": "Tower",
+      "kind": "Cell",
+      "visualPrefabPath": "PatriciaLight/tower2",
+      "repo": {
+        "behaviorId": "DefenseTower",
+        "buildCost": 150,
+        "cost": { "wood": 40, "food": 0, "iron": 20, "crystals": 60 },
+        "maxLevel": 3,
+        "navSurface": "Blocker",
+        "visualHeight": 5.0,
+        "range": 55.0,
+        "damage": 14.0,
+        "fireRate": 1.0,
+        "canHitAir": true,
+        "element": "Aether",
+        "placement": {
+          "mustSitOn": "WallWalk",
+          "footprint": 2.0,
+          "noOverlap": true,
+          "requiresSupport": true,
+          "checkAffordable": true
+        }
+      }
+    },
+    {
+      "id": "tower_siege_tower",
+      "displayName": "Siege Tower",
+      "type": "Tower",
+      "kind": "Cell",
+      "visualPrefabPath": "PatriciaLight/Tower",
+      "repo": {
+        "behaviorId": "DefenseTower",
+        "buildCost": 140,
+        "cost": { "wood": 80, "food": 0, "iron": 50, "crystals": 0 },
+        "maxLevel": 3,
+        "navSurface": "Blocker",
+        "visualHeight": 6.0,
+        "range": 20.0,
+        "damage": 18.0,
+        "fireRate": 1.5,
+        "canHitAir": false,
+        "element": "None",
+        "placement": {
+          "mustSitOn": "Ground",
+          "footprint": 3.0,
+          "noOverlap": true,
+          "checkAffordable": true
+        }
+      }
+    },
+    {
+      "id": "tower_catapult",
+      "displayName": "Catapult",
+      "type": "Tower",
+      "kind": "Cell",
+      "visualPrefabPath": "PatriciaLight/Tower",
+      "repo": {
+        "behaviorId": "DefenseTower",
+        "buildCost": 180,
+        "cost": { "wood": 90, "food": 0, "iron": 60, "crystals": 30 },
+        "maxLevel": 3,
+        "navSurface": "Blocker",
+        "visualHeight": 6.0,
+        "range": 28.0,
+        "damage": 24.0,
+        "fireRate": 0.8,
+        "canHitAir": false,
+        "element": "None",
+        "placement": {
+          "mustSitOn": "Ground",
+          "footprint": 3.5,
+          "noOverlap": true,
+          "checkAffordable": true
+        }
+      }
+    },
+    {
+      "id": "wall_wood",
+      "displayName": "Wooden Palisade",
+      "type": "Wall",
+      "kind": "Cell",
+      "visualPrefabPath": "polyperfect/Wall_Wood_Horizontal_3x3m",
+      "repo": {
+        "behaviorId": "WallSegment",
+        "buildCost": 40,
+        "cost": { "wood": 20, "food": 0, "iron": 0, "crystals": 0 },
+        "maxLevel": 3,
+        "upgradeCost": [
+          { "wood": 20, "food": 0, "iron": 20, "crystals": 0 },
+          { "wood": 10, "food": 0, "iron": 40, "crystals": 10 }
+        ],
+        "navSurface": "Blocker",
+        "placement": {
+          "mustSitOn": "Ground",
+          "footprint": 3.0,
+          "noOverlap": true,
+          "checkAffordable": true
+        }
+      }
+    },
+    {
+      "id": "wall_stone",
+      "displayName": "Stone Wall",
+      "type": "Wall",
+      "kind": "Cell",
+      "visualPrefabPath": "polyperfect/Wall_Medieval_Stone",
+      "repo": {
+        "behaviorId": "WallSegment",
+        "buildCost": 90,
+        "cost": { "wood": 30, "food": 40, "iron": 20, "crystals": 0 },
+        "maxLevel": 3,
+        "upgradeCost": [
+          { "wood": 30, "food": 0, "iron": 40, "crystals": 0 },
+          { "wood": 20, "food": 0, "iron": 60, "crystals": 20 }
+        ],
+        "navSurface": "Blocker",
+        "placement": {
+          "mustSitOn": "Ground",
+          "footprint": 3.0,
+          "noOverlap": true,
+          "checkAffordable": true
+        }
+      }
+    },
+    {
+      "id": "gate_stone",
+      "displayName": "Stone Gate",
+      "type": "Gate",
+      "kind": "Cell",
+      "visualPrefabPath": "polyperfect/Gate_Medieval_Medium",
+      "repo": {
+        "behaviorId": "Gate",
+        "buildCost": 120,
+        "cost": { "wood": 50, "food": 0, "iron": 40, "crystals": 20 },
+        "navSurface": "Blocker",
+        "placement": {
+          "mustSitOn": "Ground",
+          "footprint": 4.0,
+          "noOverlap": true,
+          "minDistanceFromGate": 8.0,
+          "checkAffordable": true
+        }
+      }
+    },
+    {
+      "id": "mine_crystal",
+      "displayName": "Crystal Mine",
+      "type": "Resource",
+      "kind": "Cell",
+      "visualPrefabPath": "polyperfect/House_Medieval_Small",
+      "repo": {
+        "behaviorId": "CrystalMine",
+        "buildCost": 200,
+        "cost": { "wood": 70, "food": 0, "iron": 30, "crystals": 100 },
+        "navSurface": "Blocker",
+        "placement": {
+          "mustSitOn": "Ground",
+          "footprint": 3.0,
+          "noOverlap": true,
+          "checkAffordable": true
+        }
+      }
+    },
+    {
+      "id": "deco_torch",
+      "displayName": "Wall Torch",
+      "type": "Decoration",
+      "kind": "Cell",
+      "visualPrefabPath": "polyperfect/Torche_Wall",
+      "repo": {
+        "behaviorId": null,
+        "buildCost": 10,
+        "cost": { "wood": 5, "food": 0, "iron": 0, "crystals": 0 },
+        "navSurface": "None",
+        "placement": {
+          "mustSitOn": "AnyTerrain",
+          "footprint": 1.0,
+          "noOverlap": false,
+          "checkAffordable": true
+        }
+      }
+    }
+  ]
+}

@@ -17,6 +17,12 @@
 # ANSI; non-ASCII chars corrupt and break parse).
 # =============================================================================
 
+param(
+    # WO-126: itch.io can't serve Brotli (.br) payloads (no Content-Encoding: br
+    # header). Pass -NoBrotli to build uncompressed files itch.io can host.
+    [switch]$NoBrotli
+)
+
 $ErrorActionPreference = 'Stop'
 $proj       = $PSScriptRoot
 $hubEditors = 'C:\Program Files\Unity\Hub\Editor'
@@ -69,6 +75,10 @@ $unityArgs = @(
     '-executeMethod', 'DeNelle.Editor.WebGLBuild.BuildWebGL',
     '-logFile', $log
 )
+if ($NoBrotli) {
+    $unityArgs += '-noBrotli'
+    Write-Host "[webgl] -NoBrotli: building UNCOMPRESSED payloads (itch.io-compatible, larger first load)."
+}
 if (Get-Process -Name 'Unity' -ErrorAction SilentlyContinue) {
     Write-Error "A 'Unity' editor process is already running - close it before batchmode (project lock)."
     exit 3
@@ -102,7 +112,32 @@ if (Test-Path $log) {
 $index = Join-Path $outDir 'index.html'
 if (Test-Path $index) {
     $mb = [math]::Round(((Get-ChildItem $outDir -Recurse -File | Measure-Object Length -Sum).Sum) / 1MB, 1)
-    Write-Host "[webgl] SUCCESS -> $index (build dir ~$mb MB on disk; check Brotli .data payload against the 300 MB cap)"
+    Write-Host "[webgl] SUCCESS -> $index (build dir ~$mb MB on disk)"
+
+    if ($NoBrotli) {
+        # itch.io packaging: no .br payloads, no Vercel header file, zip the folder.
+        $br = Get-ChildItem $outDir -Recurse -File -Filter '*.br' -ErrorAction SilentlyContinue
+        if ($br) {
+            Write-Warning "[webgl] -NoBrotli set but $($br.Count) .br file(s) still present - compression flag did not take:"
+            $br | ForEach-Object { Write-Host "    $($_.FullName)" }
+        } else {
+            Write-Host "[webgl] Verified: 0 .br files in output."
+        }
+
+        $vercel = Join-Path $outDir 'vercel.json'
+        if (Test-Path $vercel) {
+            Remove-Item $vercel -Force
+            Write-Host "[webgl] Removed vercel.json (not used by itch.io static host)."
+        }
+
+        $zip = Join-Path $proj 'Builds\WebGL_noBrotli.zip'
+        if (Test-Path $zip) { Remove-Item $zip -Force }
+        Compress-Archive -Path (Join-Path $outDir '*') -DestinationPath $zip -Force
+        $zipMb = [math]::Round((Get-Item $zip).Length / 1MB, 1)
+        Write-Host "[webgl] Packaged -> $zip (~$zipMb MB) - upload this to itch.io."
+    } else {
+        Write-Host "[webgl] (Brotli build; check .data payload against the 300 MB cap. For itch.io re-run with -NoBrotli.)"
+    }
     exit 0
 }
 

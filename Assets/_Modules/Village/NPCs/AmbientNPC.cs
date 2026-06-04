@@ -1,5 +1,5 @@
 // =============================================================================
-// AmbientNPC — an ambient townsperson of Avalon village (Workstream D).
+// AmbientNPC — an ambient townsperson of Elarion village (Workstream D).
 // -----------------------------------------------------------------------------
 // One ambient villager: a KayKit civilian model that either WANDERS the village
 // on the baked NavMesh or stands IDLE at an authored spot, and shows an
@@ -101,6 +101,16 @@ namespace DeNelle.Village
         /// <summary>True while the Keeper is close enough that this villager is speaking.</summary>
         public bool Speaking { get; private set; }
 
+        // ── Animator (DEF-91: purchased NPC model pack — walk / idle / talk clips) ─
+        private Animator _animator;
+        private static readonly int SpeedHash   = Animator.StringToHash("Speed");
+        private static readonly int TalkingHash = Animator.StringToHash("IsTalking");
+        // WO-163: cached once at init — whether THIS NPC's controller actually
+        // declares the param. Driving an absent param logs an error EVERY frame
+        // (3,351-error spam). Guard the SetFloat/SetBool with these.
+        private bool _hasSpeedParam;
+        private bool _hasTalkingParam;
+
         // ── Configuration ────────────────────────────────────────────────────
 
         /// <summary>
@@ -148,6 +158,14 @@ namespace DeNelle.Village
             _seedPhase = Random.value * Mathf.PI * 2f;
             _lineCursor = Random.Range(0, 64);   // varied opening line per villager
 
+            // WO-29: when this villager's KayKit civilian model is absent (the
+            // Models packs are gitignored, so a clone / this machine may not have
+            // them) the builder leaves a default-white placeholder primitive — the
+            // "white pill" the owner saw. Tint any such untinted body by archetype
+            // at runtime so a missing model still reads as a person, never a blank
+            // capsule. Skips real textured meshes (only recolours the white default).
+            EnsureBodyTinted();
+
             // Resolve the Keeper if the builder did not hand one over — a tagged
             // "Player" GameObject, else the Hero rig the village builder names.
             if (_hero == null) _hero = ResolveHeroFallback();
@@ -174,6 +192,22 @@ namespace DeNelle.Village
             }
 
             _bubble?.Hide();
+
+            // Grab the Animator from the mesh child (if the NPC model pack prefab is present).
+            // Null-safe: locomotion and speech still work without it.
+            _animator = GetComponentInChildren<Animator>();
+
+            // WO-163: cache which params the controller actually has, so UpdateAnimator
+            // never drives an absent param (was spamming 3,351 errors/run). A controller
+            // with no runtimeAnimatorController has no parameters → both stay false.
+            if (_animator != null && _animator.runtimeAnimatorController != null)
+            {
+                foreach (var p in _animator.parameters)
+                {
+                    if (p.nameHash == SpeedHash)   _hasSpeedParam   = true;
+                    if (p.nameHash == TalkingHash) _hasTalkingParam = true;
+                }
+            }
         }
 
         private void Update()
@@ -181,6 +215,7 @@ namespace DeNelle.Village
             UpdateProximity();
             UpdateRoaming();
             UpdateIdleMotion();
+            UpdateAnimator();
         }
 
         // ── Proximity speech ─────────────────────────────────────────────────
@@ -309,6 +344,93 @@ namespace DeNelle.Village
             // they are near, so engaging feels deliberate.
             if (Speaking && !(_hasNavMesh && _agent != null && _agent.enabled))
                 FaceHero();
+        }
+
+        // ── Animator driver (DEF-91) ─────────────────────────────────────────
+
+        /// <summary>
+        /// Drives the NPC model pack Animator's Speed and IsTalking parameters
+        /// from live agent velocity and the Speaking flag. No-ops gracefully when
+        /// no Animator is present (placeholder primitives have none).
+        /// </summary>
+        private void UpdateAnimator()
+        {
+            if (_animator == null) return;
+
+            // Speed: agent velocity magnitude when moving, 0 when idle/stopped.
+            // WO-163: only drive params the controller actually declares.
+            if (_hasSpeedParam)
+            {
+                float speed = 0f;
+                if (_agent != null && _agent.enabled && !_agent.isStopped)
+                    speed = _agent.velocity.magnitude;
+                _animator.SetFloat(SpeedHash, speed, 0.08f, Time.deltaTime);
+            }
+
+            // IsTalking: mirrors the Speaking state so the talk clip plays while
+            // the bubble is visible.
+            if (_hasTalkingParam)
+                _animator.SetBool(TalkingHash, Speaking);
+        }
+
+        // ── Body tint (WO-29 white-pill safety-net) ──────────────────────────
+
+        /// <summary>
+        /// Recolours any default-white / untextured placeholder body this villager
+        /// carries (a primitive left when the KayKit model is missing) with an
+        /// archetype tint, so it never renders as a blank white capsule. Real
+        /// textured meshes are left untouched — only Unity's built-in
+        /// "Default-Material" (or a null material) is replaced.
+        /// </summary>
+        private void EnsureBodyTinted()
+        {
+            var renderers = GetComponentsInChildren<Renderer>(true);
+            if (renderers == null || renderers.Length == 0) return;
+
+            Material tinted = null;   // built lazily, shared across any placeholder parts
+            foreach (var r in renderers)
+            {
+                if (r == null) continue;
+                var mat = r.sharedMaterial;
+                bool isDefault = mat == null ||
+                                 mat.name.StartsWith("Default-Material") ||
+                                 mat.name.StartsWith("Lit");   // bare URP/Lit instance
+                if (!isDefault) continue;
+
+                if (tinted == null)
+                {
+                    var shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+                    if (shader == null) return;
+                    tinted = new Material(shader) { name = "AmbientNPC_" + _archetype };
+                    Color c = ArchetypeTint(_archetype);
+                    if (tinted.HasProperty("_BaseColor")) tinted.SetColor("_BaseColor", c);
+                    if (tinted.HasProperty("_Color")) tinted.SetColor("_Color", c);
+                }
+                r.sharedMaterial = tinted;
+            }
+        }
+
+        /// <summary>Warm, distinguishable tint per townsfolk archetype (WO-29).</summary>
+        private static Color ArchetypeTint(TownsfolkDialogue.Archetype a)
+        {
+            switch (a)
+            {
+                case TownsfolkDialogue.Archetype.Trader:        return Hex("c2925a"); // amber
+                case TownsfolkDialogue.Archetype.Guard:         return Hex("8a6b5a"); // earthy brown
+                case TownsfolkDialogue.Archetype.Child:         return Hex("7fa8c9"); // soft blue
+                case TownsfolkDialogue.Archetype.Elder:         return Hex("a09890"); // grey-white
+                // WO-116 wardens — each reads at a glance even as a placeholder body.
+                case TownsfolkDialogue.Archetype.Blacksmith:    return Hex("5a5048"); // soot/iron grey
+                case TownsfolkDialogue.Archetype.Quartermaster: return Hex("9c7b3f"); // ledger-brown ochre
+                case TownsfolkDialogue.Archetype.Archmage:      return Hex("8a6fb0"); // ward-violet
+                case TownsfolkDialogue.Archetype.Farmer:        return Hex("8a9a52"); // field green
+                default:                                        return Hex("c2a882"); // Villager warm tan
+            }
+        }
+
+        private static Color Hex(string rrggbb)
+        {
+            return ColorUtility.TryParseHtmlString("#" + rrggbb, out var c) ? c : Color.white;
         }
 
         // ── Helpers ──────────────────────────────────────────────────────────

@@ -38,6 +38,10 @@ namespace DeNelle.Core.Quests
         [JsonProperty("weight")] public float Weight = 1f;
         [JsonProperty("requiresHero")] public string RequiresHero;
         [JsonProperty("requiresFeature")] public string RequiresFeature;
+        // DEF-223: when true this template is force-selected for its slot on a
+        // brand-new player's first day (until they complete it once) so the
+        // tutorial-aligned "Build 4 defensive towers" quest is always present.
+        [JsonProperty("day1Guaranteed")] public bool Day1Guaranteed;
     }
 
     [Serializable]
@@ -102,21 +106,24 @@ namespace DeNelle.Core.Quests
         private static void EnsureLoaded()
         {
             if (_data != null) return;
-            var full = Path.Combine(Application.streamingAssetsPath, StreamingRelativePath);
+            // WebGL-safe: CanonicalJson reads the Resources dual-copy first
+            // (works in a browser build) and falls back to StreamingAssets on
+            // desktop. Raw File.ReadAllText would throw in WebGL → empty panel.
             try
             {
-                if (File.Exists(full))
+                string text = CanonicalJson.Read(StreamingRelativePath);
+                if (!string.IsNullOrEmpty(text))
                 {
-                    var parsed = JsonConvert.DeserializeObject<DailyQuestCatalogData>(File.ReadAllText(full));
+                    var parsed = JsonConvert.DeserializeObject<DailyQuestCatalogData>(text);
                     if (parsed != null && parsed.Templates != null && parsed.Templates.Count > 0)
                     { _data = parsed; return; }
-                    Debug.LogError($"[DailyQuestCatalog] daily-quests.json at {full} parsed empty.");
+                    Debug.LogError("[DailyQuestCatalog] daily-quests.json parsed empty.");
                 }
-                else Debug.LogError($"[DailyQuestCatalog] daily-quests.json not found at {full}.");
+                else Debug.LogError($"[DailyQuestCatalog] daily-quests.json not found ({StreamingRelativePath}).");
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[DailyQuestCatalog] Failed to read {full}: {ex.Message}");
+                Debug.LogError($"[DailyQuestCatalog] Failed to read daily-quests.json: {ex.Message}");
             }
             _data = new DailyQuestCatalogData();
         }
@@ -161,9 +168,19 @@ namespace DeNelle.Core.Quests
     public sealed class DailyQuestService : MonoBehaviour
     {
         private const string PrefKey = "dotr-daily-quests-v1";
+        // Sticky flag: set the first time the Day-1 build-towers quest completes,
+        // so the guaranteed-quest override stops forcing it on subsequent days.
+        private const string Day1DonePrefKey = "dotr-daily-quests-day1-done-v1";
 
         public static DailyQuestService Instance { get; private set; }
         public event Action SetChanged;
+        /// <summary>
+        /// Fired once per quest the moment it transitions to Completed. A reward
+        /// bridge in the Village assembly listens for this to dispense the slot's
+        /// crystal / wisdom reward (Core cannot reference the Village wallet, so
+        /// the grant happens on the other side of the event — DEF-223).
+        /// </summary>
+        public event Action<DailyQuestInstance> QuestCompleted;
 
         private DailyQuestSet _today;
         private System.Random _rng;
@@ -205,18 +222,39 @@ namespace DeNelle.Core.Quests
             if (string.IsNullOrEmpty(eventId) || amount <= 0) return;
             EnsureToday();
             bool changed = false;
+            // Collect newly-completed quests and fire QuestCompleted AFTER the
+            // loop + save, so a reward handler sees a consistent persisted set.
+            List<DailyQuestInstance> justCompleted = null;
             foreach (var q in _today.Quests)
             {
                 if (q == null || q.Completed) continue;
                 if (q.TemplateId == eventId || q.TemplateId.StartsWith(eventId + "."))
                 {
                     q.Progress = Mathf.Min(q.Target, q.Progress + amount);
-                    if (q.Progress >= q.Target) q.Completed = true;
+                    if (q.Progress >= q.Target)
+                    {
+                        q.Completed = true;
+                        (justCompleted ??= new List<DailyQuestInstance>()).Add(q);
+                    }
                     changed = true;
                 }
             }
             if (changed) { Save(); SetChanged?.Invoke(); }
+            if (justCompleted != null)
+            {
+                foreach (var q in justCompleted)
+                {
+                    // Latch the Day-1 build-towers completion so the guaranteed
+                    // override stops on later days.
+                    if (q.TemplateId == Day1QuestTemplateId)
+                    { PlayerPrefs.SetInt(Day1DonePrefKey, 1); PlayerPrefs.Save(); }
+                    QuestCompleted?.Invoke(q);
+                }
+            }
         }
+
+        /// <summary>Template id of the tutorial-aligned Day-1 guaranteed quest.</summary>
+        public const string Day1QuestTemplateId = "combat.build-towers";
 
         /// <summary>
         /// Spends a re-roll on the given slot (free up to RerollsFreePerDay,
@@ -285,6 +323,17 @@ namespace DeNelle.Core.Quests
                 if (exclude != null && t.Id == exclude) continue;
                 // Skip templates whose required feature isn't shipped (week-7).
                 if (!string.IsNullOrEmpty(t.RequiresFeature) && !FeatureShipped(t.RequiresFeature)) continue;
+                // DEF-223: a Day-1-guaranteed template (build-towers) is force-
+                // selected for its slot for a player who has never completed it,
+                // making the tutorial-aligned quest deterministic on day one. It
+                // is otherwise excluded from the random pool so it doesn't keep
+                // re-appearing after completion.
+                if (t.Day1Guaranteed)
+                {
+                    if (!Day1QuestDone && exclude != t.Id)
+                        return MakeInstance(t);
+                    continue;
+                }
                 pool.Add(t);
                 totalWeight += Mathf.Max(0.01f, t.Weight);
             }
@@ -298,18 +347,23 @@ namespace DeNelle.Core.Quests
                 if (pick <= 0f) { chosen = t; break; }
             }
 
-            return new DailyQuestInstance
-            {
-                Id = chosen.Id + "@" + LocalDateString(),
-                TemplateId = chosen.Id,
-                Slot = chosen.Slot,
-                Target = chosen.Target,
-                Progress = 0,
-                Completed = false,
-                ClaimedAtUnix = 0,
-                Label = chosen.Label,
-            };
+            return MakeInstance(chosen);
         }
+
+        private static DailyQuestInstance MakeInstance(DailyQuestTemplate t) => new DailyQuestInstance
+        {
+            Id = t.Id + "@" + LocalDateString(),
+            TemplateId = t.Id,
+            Slot = t.Slot,
+            Target = t.Target,
+            Progress = 0,
+            Completed = false,
+            ClaimedAtUnix = 0,
+            Label = t.Label,
+        };
+
+        /// <summary>True once the Day-1 build-towers quest has ever been completed.</summary>
+        public static bool Day1QuestDone => PlayerPrefs.GetInt(Day1DonePrefKey, 0) == 1;
 
         private static bool FeatureShipped(string feature) => feature switch
         {

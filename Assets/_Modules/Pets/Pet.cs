@@ -26,7 +26,9 @@
 // =============================================================================
 
 using DeNelle.Core.Combat;
+using DeNelle.Data;       // PetData SO — WO-86
 using UnityEngine;
+using UnityEngine.AI;     // WO-187 — constrain pet to the shared NavMesh
 
 namespace DeNelle.Pets
 {
@@ -60,6 +62,10 @@ namespace DeNelle.Pets
         [Tooltip("Bond rank 0–4 — drives max HP and per-hit damage.")]
         [SerializeField, Range(0, 4)] private int _bondRank;
 
+        [Header("Data (WO-86)")]
+        [Tooltip("Optional PetData ScriptableObject. When assigned, overrides attack stats in Configure(). Falls back to PetDef JSON values when null.")]
+        [SerializeField] private PetData _petData;
+
         [Header("Behaviour")]
         [Tooltip("Deploy mode — Idle follows the hero, Defend hunts, Fortify holds a wall.")]
         [SerializeField] private PetMode _mode = PetMode.Defend;
@@ -89,6 +95,13 @@ namespace DeNelle.Pets
 
         private float _attackCdRemaining;
 
+        // ── Level progression (PetProgression drives these) ──────────────────
+        // Stat multipliers from the pet's level. Default 1 (level 1 = base def
+        // stats). _baseMaxHp captures the configured max so HP scaling is applied
+        // off the base, not compounded each level.
+        private float _progressionDmgMult = 1f;
+        private float _baseMaxHp;
+
         // ── Natural locomotion (additive) ────────────────────────────────────
         // MoveToward eases speed up/down through _currentSpeed instead of
         // snapping to the full step, so pets accelerate out of rest, coast,
@@ -102,6 +115,17 @@ namespace DeNelle.Pets
 
         // Reusable overlap buffer — avoids per-frame GC (OverlapSphereNonAlloc).
         private readonly Collider[] _overlap = new Collider[48];
+
+        // ── Navigation (WO-187: pet clipped through walls) ───────────────────
+        // The pet used to move by raw transform translation, so nothing stopped
+        // it walking through the castle walls (there's no collider/agent on it).
+        // Mirror HeroLocomotion: drive a NavMeshAgent via Move() so the agent
+        // constrains the pet to the SAME baked NavMesh the hero + enemies use —
+        // walls/buildings have no NavMesh under them, so the agent can't enter
+        // them, and it follows the walkable surface height (stairs/ramparts).
+        // We keep our own eased-speed kinematics (MoveToward) and only feed the
+        // resulting step through the agent; rotation stays manual (FaceToward).
+        private NavMeshAgent _agent;
 
         // ── Animation ─────────────────────────────────────────────────────────
         // The KayKit pet rig carries an Animator (the AnimatorSetup editor script
@@ -119,6 +143,11 @@ namespace DeNelle.Pets
         private static readonly int AnimAttack = Animator.StringToHash("Attack");
         private static readonly int AnimHit    = Animator.StringToHash("Hit");
         private static readonly int AnimDead   = Animator.StringToHash("Dead");
+        // WO-163: cached once — whether the resolved controller actually declares
+        // each param. The ice-wolf (Tripo/CC5 FBX, not a KayKit Rig_Medium) has no
+        // controller with these params, so driving them spammed per-frame errors
+        // (same bug as AmbientNPC). Guard every drive with the matching flag.
+        private bool _hasSpeed, _hasAttack, _hasHit, _hasDead;
 
         /// <summary>Stable pet id — e.g. <c>pet-aether-sprite</c>.</summary>
         public string PetId => _petId;
@@ -147,6 +176,15 @@ namespace DeNelle.Pets
 
         /// <summary>The pet's home post — its deploy slot ringing the Heart.</summary>
         public Vector3 HomePost => _homePost;
+
+        /// <summary>
+        /// True when a living hostile is within the pet's hunt-scan radius right now.
+        /// Reuses the SAME enemy discovery the combat loop uses
+        /// (<see cref="NearestHostile"/>), so callers (e.g. PetHarvester's
+        /// combat-priority check) don't duplicate the overlap sweep / faction filter.
+        /// Cheap: one OverlapSphereNonAlloc against the cached enemy mask.
+        /// </summary>
+        public bool HasHostileInRange => NearestHostile() != null;
 
         /// <summary>
         /// Re-anchors the pet's home post. Used by the leash integrator so an
@@ -197,15 +235,62 @@ namespace DeNelle.Pets
                 }
             }
 
+            // WO-86: overlay with PetData SO stats if assigned — SO wins over JSON.
+            if (_petData != null)
+            {
+                _attackRange    = _petData.attackRange;
+                _attackCooldown = _petData.attackCooldown;
+                if (_petData.damage > 0f)
+                    _attackDamage = _petData.damage;
+            }
+
             _hp = _maxHp;
-            transform.position = _homePost;
+            // WO-187: snap to the deploy slot. Use Warp() when the agent is live so
+            // the NavMeshAgent's internal position stays in sync (a raw transform set
+            // would desync it → it'd snap back / refuse to Move). Warp also lands the
+            // pet on the nearest walkable point if the slot is slightly off-mesh.
+            if (_agent != null && _agent.isOnNavMesh)
+                _agent.Warp(_homePost);
+            else
+                transform.position = _homePost;
         }
 
         private void Awake()
         {
             // The Animator sits on the KayKit pet mesh child of the pet rig.
             _animator = GetComponentInChildren<Animator>();
+            // WO-163: cache which params the controller actually has (Tripo pets like
+            // ice-wolf lack the KayKit Speed/Attack/Hit/Dead set → don't drive absent
+            // params, which spammed per-frame errors).
+            if (_animator != null && _animator.runtimeAnimatorController != null)
+            {
+                foreach (var p in _animator.parameters)
+                {
+                    if (p.nameHash == AnimSpeed)  _hasSpeed  = true;
+                    if (p.nameHash == AnimAttack) _hasAttack = true;
+                    if (p.nameHash == AnimHit)    _hasHit    = true;
+                    if (p.nameHash == AnimDead)   _hasDead   = true;
+                }
+            }
             _lastPosition = transform.position;
+
+            // WO-187: unify pet navigation onto the SAME NavMesh the hero + enemies
+            // use, so the pet can't pass through walls/buildings (no NavMesh there)
+            // and follows the walkable surface height. We drive it via Move() below
+            // from our own eased kinematics; the agent only constrains + grounds us.
+            _agent = GetComponent<NavMeshAgent>();
+            if (_agent == null) _agent = gameObject.AddComponent<NavMeshAgent>();
+            _agent.radius = 0.35f;
+            _agent.height = 1.1f;
+            _agent.baseOffset = 0f;
+            _agent.speed = 30f;            // we drive via Move(); keep high so it never caps us
+            _agent.acceleration = 200f;
+            _agent.angularSpeed = 0f;
+            _agent.updateRotation = false; // facing handled manually (FaceToward)
+            _agent.updateUpAxis = false;
+            _agent.autoBraking = false;
+            _agent.stoppingDistance = 0f;
+            _agent.obstacleAvoidanceType = ObstacleAvoidanceType.NoObstacleAvoidance;
 
             // +/-12% stable per-pet cruise-speed variation so the pack doesn't
             // travel in perfect lockstep. Seeded by instance id (matches the
@@ -222,7 +307,7 @@ namespace DeNelle.Pets
             // Feed the Animator's Speed float from the actual per-frame
             // displacement — Pet moves kinematically (no agent / rigidbody to
             // read a velocity from). Null-guarded; no-op without a rig.
-            if (_animator != null && dt > 0f)
+            if (_animator != null && _hasSpeed && dt > 0f)
             {
                 float moved = (transform.position - _lastPosition).magnitude / dt;
                 _animator.SetFloat(AnimSpeed, moved);
@@ -272,9 +357,10 @@ namespace DeNelle.Pets
 
             if (_animator != null)
             {
-                // Latch the down state at zero HP, else play the flinch.
-                if (_hp <= 0f) _animator.SetBool(AnimDead, true);
-                else _animator.SetTrigger(AnimHit);
+                // Latch the down state at zero HP, else play the flinch. Guarded:
+                // skip params the controller lacks (WO-163).
+                if (_hp <= 0f) { if (_hasDead) _animator.SetBool(AnimDead, true); }
+                else if (_hasHit) _animator.SetTrigger(AnimHit);
             }
         }
 
@@ -316,20 +402,65 @@ namespace DeNelle.Pets
             return best;
         }
 
+        /// <summary>
+        /// Applies a level-progression stat bonus (called by PetProgression on
+        /// level-up). Damage scales the per-hit damage; HP scales max HP off the
+        /// configured base, preserving the current HP fraction so a level-up does
+        /// not heal or hurt the pet.
+        /// </summary>
+        public void SetProgressionMultipliers(float damageMult, float hpMult)
+        {
+            _progressionDmgMult = Mathf.Max(1f, damageMult);
+
+            if (_baseMaxHp <= 0f) _baseMaxHp = _maxHp;   // capture the configured max once
+            float newMax = _baseMaxHp * Mathf.Max(1f, hpMult);
+            float frac = _maxHp > 0f ? _hp / _maxHp : 1f;
+            _maxHp = newMax;
+            _hp = newMax * frac;
+        }
+
+        // Pet hits tint their floating damage number green (the hero's read cyan).
+        private static readonly Color PetDamageColor = new Color(0.55f, 1.00f, 0.55f);
+
         /// <summary>Lands one attack on <paramref name="foe"/> and resets the attack cooldown.</summary>
         private void Attack(IDamageable foe)
         {
             _attackCdRemaining = _attackCooldown;
-            foe.TakeDamage(_attackDamage, _element);
+            float dealt = _attackDamage * _progressionDmgMult;
+            // Source-tint this hit green so its floating number reads as PET damage,
+            // distinct from the hero's cyan hits (IDamageTintable lives in Core).
+            (foe as IDamageTintable)?.SetNextDamageTint(PetDamageColor);
+            foe.TakeDamage(dealt, _element);
+
+            // Kill-XP attribution: credit this pet's damage so it earns its share
+            // of the enemy's XP when it dies (DamageAttribution lives in Core, so
+            // Pets writes to it without referencing Village).
+            DeNelle.Core.Combat.DamageAttribution.Record(foe, _petId, dealt);
+
+            // Small element-coloured hit spark, reusing the hero ability VFX kit
+            // via reflection (owner WO-35: pet hits had no VFX).
+            PetAttackVfxBridge.Strike(ElementColor(_element), foe.WorldPosition);
 
             // Fire the strike animation in sync with the damage tick.
-            if (_animator != null) _animator.SetTrigger(AnimAttack);
+            if (_animator != null && _hasAttack) _animator.SetTrigger(AnimAttack);   // WO-163: guard absent param
 
             // Ice Wolf's Frostbite (bond rank 1+) — attacks briefly slow the foe.
             // The other species' rank perks (burn, novas) are deeper Week-4+
             // wiring; the slow is the one with a clean IDamageable hook today.
             if (_element == DamageElement.Ice && _bondRank >= 1)
                 foe.ApplyStatus(StatusEffect.Slow, 1.0f);
+        }
+
+        /// <summary>Hit-spark colour for a pet's element (WO-35).</summary>
+        private static Color ElementColor(DamageElement e)
+        {
+            switch (e)
+            {
+                case DamageElement.Flame:  return new Color(1.00f, 0.44f, 0.26f); // #ff7043
+                case DamageElement.Ice:    return new Color(0.49f, 0.83f, 0.99f); // #7dd3fc
+                case DamageElement.Aether: return new Color(0.70f, 0.53f, 1.00f); // #b388ff
+                default:                   return Color.white;
+            }
         }
 
         // =====================================================================
@@ -355,7 +486,21 @@ namespace DeNelle.Pets
 
             // Step, capped at the distance left so we never overshoot.
             float step = Mathf.Min(_currentSpeed * dt, remaining);
-            transform.position = Vector3.MoveTowards(transform.position, flatTarget, step);
+
+            // WO-187: move on the shared NavMesh — the agent clamps the step to the
+            // walkable surface (so the pet can't cross walls/buildings) and follows
+            // its height. Build the displacement vector ourselves (toTarget is the
+            // flat direction) and hand it to Move(). Fall back to a raw transform
+            // move when the pet isn't on a NavMesh yet (scene without a bake, or
+            // spawned just off-mesh) so movement never breaks.
+            if (remaining > 0.0001f)
+            {
+                Vector3 displacement = (toTarget / remaining) * step;
+                if (_agent != null && _agent.isOnNavMesh)
+                    _agent.Move(displacement);
+                else
+                    transform.position = Vector3.MoveTowards(transform.position, flatTarget, step);
+            }
 
             FaceToward(target);
         }

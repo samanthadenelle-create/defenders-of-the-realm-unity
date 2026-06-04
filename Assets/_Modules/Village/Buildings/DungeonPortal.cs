@@ -21,7 +21,13 @@ namespace DeNelle.Village
     [DisallowMultipleComponent]
     public sealed class DungeonPortal : MonoBehaviour
     {
-        private const float ActivateRadius = 5.5f;
+        // DEF-26 (2026-05-27): tightened from 5.5 → 3.0 m so the [F] prompt
+        // only fires when the hero is at the portal arch entrance. 5.5 m was
+        // activating from ~2 m before the portal disc edge, which looked like
+        // the prompt was firing in the open field when the hero was still clearly
+        // approaching. 3.0 m matches ~the disc radius (3.5 m) and the "~2–3 m
+        // from the door" spec in DEF-26.
+        private const float ActivateRadius = 3.0f;
         private const float PromptHeight = 4.4f;
 
         [SerializeField] private string _dungeonId = "Dungeon_HealersCottage";
@@ -38,19 +44,37 @@ namespace DeNelle.Village
         private Renderer _shimmer;
         private float _t;
         private bool _loading;
+        private PortalVFXController _portalVfx;
 
-        private void Start() => ResolveHero();
+        // DEF-40: perf — throttle distance checks; cache in-range state so
+        // GetKeyDown can still fire every frame without regression.
+        private bool _heroFound;
+        private bool _isInRange;
+        private float _nextProximityCheck;
+        private const float CheckInterval = 0.15f;
+
+        private void Start()
+        {
+            ResolveHero();
+            // DEF-100: the controller is self-sufficient (builds its own glow/light/
+            // vortex in code) — ensure one exists even if the portal wasn't authored
+            // with it, so the interior glow always renders + reacts to the hero.
+            _portalVfx = GetComponent<PortalVFXController>();
+            if (_portalVfx == null) _portalVfx = gameObject.AddComponent<PortalVFXController>();
+        }
 
         private void ResolveHero()
         {
+            if (_heroFound) return;
             var hero = UnityEngine.Object.FindObjectOfType<HeroLocomotion>();
-            if (hero != null) _hero = hero.transform;
+            if (hero != null) { _hero = hero.transform; _heroFound = true; }
         }
 
         private void Update()
         {
-            // Slow pulse on the shimmer sheet so the portal reads as live.
-            if (_shimmer != null)
+            // Shimmer pulse — gated to in-range so distant portals don't burn
+            // a SetColor + material property lookup every frame.
+            if (_shimmer != null && _isInRange)
             {
                 _t += Time.deltaTime;
                 float pulse = 0.55f + Mathf.Sin(_t * 2.0f) * 0.18f;
@@ -62,17 +86,50 @@ namespace DeNelle.Village
                 }
             }
 
-            if (_hero == null) { ResolveHero(); return; }
+            if (!_heroFound) { ResolveHero(); return; }
             if (_loading) return;
 
-            float distSqr = (_hero.position - transform.position).sqrMagnitude;
-            bool inRange = distSqr <= ActivateRadius * ActivateRadius;
+            // The cached hero ref can go null if the village rebuilds/replaces the
+            // hero rig after we first found it. Re-resolve rather than dereferencing
+            // a destroyed Transform — otherwise the line below NREs EVERY FRAME and
+            // the exception/stack-trace spam tanks the framerate (reads to the player
+            // as "frozen, can't move"). DEF-40 regression: the _heroFound cache
+            // removed the per-frame re-resolve that used to mask this.
+            if (_hero == null) { _heroFound = false; return; }
 
-            if (inRange && _promptGo == null) ShowPrompt();
-            else if (!inRange && _promptGo != null) HidePrompt();
+            // Throttled proximity check (0.15 s) — prompt show/hide.
+            if (Time.time >= _nextProximityCheck)
+            {
+                _nextProximityCheck = Time.time + CheckInterval;
+                float distSqr = (_hero.position - transform.position).sqrMagnitude;
+                bool nowInRange = distSqr <= ActivateRadius * ActivateRadius;
+                if (nowInRange != _isInRange)
+                {
+                    _isInRange = nowInRange;
+                    if (_isInRange) ShowPrompt();
+                    else           HidePrompt();
+                }
+            }
 
-            if (inRange && Input.GetKeyDown(KeyCode.F))
+            // DEF-203: register the shared on-screen Interact button while in range so
+            // touch/mobile (no keyboard) can enter too. Desktop F + walk-in unchanged.
+            if (_isInRange)
+                MobileInteractButton.Request(this, "Enter: " + _displayName, EnterDungeon);
+            else
+                MobileInteractButton.Release(this);
+
+            // DEF-217: the shared button is the single canonical prompt — drop the
+            // redundant world-space bubble while it is showing.
+            if (_promptGo != null && MobileInteractButton.IsActive) HidePrompt();
+
+            // F-key check every frame so no keypress is ever dropped.
+            if (_isInRange && Input.GetKeyDown(KeyCode.F))
                 EnterDungeon();
+        }
+
+        private void OnDisable()
+        {
+            MobileInteractButton.Release(this);
         }
 
         /// <summary>
@@ -90,6 +147,7 @@ namespace DeNelle.Village
             var hero = other.GetComponentInParent<HeroLocomotion>();
             if (hero == null) return;
             Debug.Log("[DungeonPortal] Trigger entered by hero — routing to " + _dungeonId);
+            _portalVfx?.OnHeroApproach();
             EnterDungeon();
         }
 
@@ -98,7 +156,7 @@ namespace DeNelle.Village
         private void ShowPrompt()
         {
             _promptGo = BuildBubble(
-                "〔 F 〕 " + _displayName,
+                "〔 Tap / F 〕 " + _displayName,
                 PromptHeight,
                 new Color(0.10f, 0.04f, 0.20f, 0.96f),
                 new Color(0.78f, 0.55f, 1f, 1f));
@@ -123,6 +181,7 @@ namespace DeNelle.Village
             // path to side-step the fader entirely.
             try
             {
+                _portalVfx?.OnHeroEnter();
                 UnityEngine.SceneManagement.SceneManager.LoadScene(sceneName);
             }
             catch (System.Exception ex)

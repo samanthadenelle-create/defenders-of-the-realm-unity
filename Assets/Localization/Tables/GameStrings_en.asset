@@ -226,7 +226,7 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 1081073701
-    m_Localized: The walls are thinning. Avalon calls for you.
+    m_Localized: The walls are thinning. Elarion calls for you.
     m_Metadata:
       m_Items: []
   - m_Id: 1081073702
@@ -254,7 +254,7 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 1081073708
-    m_Localized: The song rises. Avalon holds.
+    m_Localized: The song rises. Elarion holds.
     m_Metadata:
       m_Items: []
   - m_Id: 1081073709
@@ -340,7 +340,7 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 1081073729
-    m_Localized: The wind cools. Avalon remembers your name.
+    m_Localized: The wind cools. Elarion remembers your name.
     m_Metadata:
       m_Items: []
   - m_Id: 1081073730
@@ -484,7 +484,7 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 1081073762
-    m_Localized: Avalon kept your hearth warm. Welcome back, Guardian.
+    m_Localized: Elarion kept your hearth warm. Welcome back, Guardian.
     m_Metadata:
       m_Items: []
   - m_Id: 1081073763
@@ -809,7 +809,7 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 1081073835
-    m_Localized: "The realm beyond Avalon stirs. Visit the Wayshrine \u2014 the pale
+    m_Localized: "The realm beyond Elarion stirs. Visit the Wayshrine \u2014 the pale
       standing stone \u2014 to set out across the Realm Map."
     m_Metadata:
       m_Items: []

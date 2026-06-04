@@ -24,6 +24,7 @@ namespace DeNelle.Core.State
         Mage = 1,
         Knight = 2,
         Ranger = 3,
+        Cleric = 4,
     }
 
     /// <summary>Conversions between <see cref="HeroClassOpt"/> and <c>HeroClass?</c>.</summary>
@@ -37,6 +38,7 @@ namespace DeNelle.Core.State
                 case HeroClassOpt.Mage: return HeroClass.Mage;
                 case HeroClassOpt.Knight: return HeroClass.Knight;
                 case HeroClassOpt.Ranger: return HeroClass.Ranger;
+                case HeroClassOpt.Cleric: return HeroClass.Cleric;
                 default: return null;
             }
         }
@@ -50,6 +52,7 @@ namespace DeNelle.Core.State
                 case HeroClass.Mage: return HeroClassOpt.Mage;
                 case HeroClass.Knight: return HeroClassOpt.Knight;
                 case HeroClass.Ranger: return HeroClassOpt.Ranger;
+                case HeroClass.Cleric: return HeroClassOpt.Cleric;
                 default: return HeroClassOpt.None;
             }
         }

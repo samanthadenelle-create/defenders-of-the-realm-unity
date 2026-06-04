@@ -145,6 +145,25 @@ namespace DeNelle.Wallet
         }
 
         // =====================================================================
+        //  Message signing (WO-121) — the stub holds no key, so it CANNOT sign
+        // =====================================================================
+
+        /// <inheritdoc/>
+        // The devnet stub has no real ed25519 key, so it can never produce a
+        // signature the backend would accept. Returning false here is what makes
+        // GameStateService SKIP the auth headers and keep the unauthed save path
+        // working until a real SolanaWalletProvider is connected.
+        public bool CanSignMessages => false;
+
+        /// <inheritdoc/>
+        public UniTask<string> SignMessageBase58(string utf8Message)
+        {
+            Debug.LogWarning("[StubWalletProvider] SignMessageBase58 called — the devnet stub cannot sign. " +
+                             "Returning null (auth headers will be skipped).");
+            return UniTask.FromResult<string>(null);
+        }
+
+        // =====================================================================
         //  Mock-value generation
         // =====================================================================
 

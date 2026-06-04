@@ -70,6 +70,19 @@ namespace DeNelle.Core.Combat
         void ApplyStatus(StatusEffect effect, float seconds);
     }
 
+    /// <summary>
+    /// Optional companion to <see cref="IDamageable"/>: lets a damage SOURCE tint the
+    /// next floating damage number this target spawns, so the player can tell their
+    /// own hits from a pet's. The implementor applies the tint to the next number,
+    /// then clears it. Cross-module (Core) so hero (DeNelle.Village) and pets
+    /// (DeNelle.Pets) can both stamp without referencing each other.
+    /// </summary>
+    public interface IDamageTintable
+    {
+        /// <summary>Tint the next damage number spawned for this target.</summary>
+        void SetNextDamageTint(Color color);
+    }
+
     /// <summary>Elemental flavour of a damage source — Mage / pet element wheel.</summary>
     public enum DamageElement
     {
