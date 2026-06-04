@@ -49,6 +49,17 @@ namespace DeNelle.Editor
         const string HeroAnimatorPath      = "Assets/Resources/Heroes/Mage.controller";
         const int    EnemyLayer            = 8;
 
+        // Wave/combat-core types + enemy prefab (B5 — the missing WaveManager that drives
+        // waves, the Heart-breach -> Last Stand/Defend-the-Tower choice, and the ATB hand-off).
+        const string TypeWaveManager       = "DeNelle.Village.WaveManager";
+        const string TypeWaveSpawnPoint    = "DeNelle.Village.WaveSpawnPoint";
+        const string TypeEnemy             = "DeNelle.Village.Enemy";
+        const string TypeWaveHudBridge     = "DeNelle.Village.WaveHudBridge";
+        const string EnemyPrefabPath       = "Assets/Prefabs/Village/Generated/Enemy_HollowWalker.prefab";
+        // Village2 footprint (generator townHalfWidth/Depth) -> spawns 12 m outside each gate (DEF-256).
+        const float  TownHalfWidth         = 42f;
+        const float  TownHalfDepth         = 33f;
+
         // =====================================================================
         // PHASE A - promote the generated shell to a real, build-registered scene
         // =====================================================================
@@ -531,6 +542,127 @@ namespace DeNelle.Editor
         }
 
         // =====================================================================
+        // PHASE B5 - the COMBAT CORE: WaveSpawnPoints (12 m outside each gate) +
+        // WaveManager (wired to Heart + enemy prefab) + WaveHudBridge. Village2 had
+        // the HUD START WAVE button but NO WaveManager behind it, so: no wave ran, the
+        // Heart died undefended ("boom tree died, game over"), and the Heart-breach
+        // choice (Last Stand / Defend the Tower) + ATB hand-off — all owned by
+        // WaveManager — never fired. Mirrors VillageSceneBuilder.Systems.BuildWaveManager
+        // + Dressing spawn points. Needs the Phase C combined navmesh bake so enemies path.
+        // =====================================================================
+        [MenuItem("Defenders/Village2/B5. Wire Waves (WaveManager + spawns)")]
+        public static void B5_WireWaves()
+        {
+            Log("=== PHASE B5: Wire waves (combat core) START ===");
+            if (!OpenVillage2(out Scene scene)) return;
+            GameObject root = FindRoot(scene, "Village2");
+            if (root == null) { Err("No 'Village2' root. Aborting."); return; }
+
+            var heartType = FindType(TypeHeartController);
+            Component heart = heartType != null ? Object.FindFirstObjectByType(heartType) as Component : null;
+
+            ImportSpawnPoints(root.transform);
+            ImportWaveManager(root.transform, heart);
+            WireWaveHud();
+
+            EditorSceneManager.MarkSceneDirty(scene);
+            EditorSceneManager.SaveScene(scene, Village2ScenePath);
+            Log("=== PHASE B5 DONE — needs Phase C bake so enemies path spawn->gate->Heart ===");
+        }
+
+        // 4 WaveSpawnPoints, 12 m OUTSIDE each gate (enemies spawn here + path through the gate
+        // to the Heart). Derived from the town footprint (DEF-256: 42/33 -> N/S ±45, E/W ±54).
+        public static void ImportSpawnPoints(Transform cityRoot)
+        {
+            var spType = FindType(TypeWaveSpawnPoint);
+            if (spType == null) { Err("WaveSpawnPoint type not found (DeNelle.Village compiled?)."); return; }
+
+            (string dir, Vector3 gate, Vector3 spawn)[] gates =
+            {
+                ("N", new Vector3(0f, 0f,  TownHalfDepth), new Vector3(0f, 0f,  TownHalfDepth + 12f)),
+                ("S", new Vector3(0f, 0f, -TownHalfDepth), new Vector3(0f, 0f, -TownHalfDepth - 12f)),
+                ("E", new Vector3( TownHalfWidth, 0f, 0f), new Vector3( TownHalfWidth + 12f, 0f, 0f)),
+                ("W", new Vector3(-TownHalfWidth, 0f, 0f), new Vector3(-TownHalfWidth - 12f, 0f, 0f)),
+            };
+            int i = 0, made = 0;
+            foreach (var g in gates)
+            {
+                string name = $"WaveSpawnPoint-{g.dir}";
+                Transform existing = cityRoot.Find(name);
+                if (existing != null) Object.DestroyImmediate(existing.gameObject);
+                var go = new GameObject(name);
+                go.transform.SetParent(cityRoot, false);
+                go.transform.position = g.spawn;
+                try { go.tag = "SpawnPoint"; } catch { Warn("'SpawnPoint' tag missing in TagManager — spawn left untagged."); }
+                var sp = go.AddComponent(spType);
+                InvokeMethod(sp, "Configure", $"spawn-{i}", i, g.dir, g.gate);   // (spawnId, gateIndex, direction, gatePosition)
+                made++; i++;
+            }
+            Log($"Imported {made} WaveSpawnPoints (12 m outside N/S/E/W gates).");
+        }
+
+        public static Component ImportWaveManager(Transform cityRoot, Component heart)
+        {
+            var wmType = FindType(TypeWaveManager);
+            if (wmType == null) { Err("WaveManager type not found (DeNelle.Village compiled?)."); return null; }
+
+            Transform existing = cityRoot.Find("WaveManager");
+            GameObject go = existing != null ? existing.gameObject : new GameObject("WaveManager");
+            if (existing == null) go.transform.SetParent(cityRoot, false);
+            Component wm = go.GetComponent(wmType) ?? go.AddComponent(wmType);
+
+            var so = new SerializedObject(wm);
+            if (heart != null) SetObjectField(so, "_heart", heart);
+            Transform er = cityRoot.Find("WaveEnemies");
+            if (er == null) { var erGo = new GameObject("WaveEnemies"); erGo.transform.SetParent(cityRoot, false); er = erGo.transform; }
+            SetObjectField(so, "_enemyRoot", er);
+
+            var enemyPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(EnemyPrefabPath);
+            var enemyType = FindType(TypeEnemy);
+            if (enemyPrefab != null && enemyType != null)
+            {
+                var ec = enemyPrefab.GetComponent(enemyType);
+                if (ec != null) SetObjectField(so, "_enemyPrefab", ec);
+                else Warn($"Enemy prefab '{EnemyPrefabPath}' has no Enemy component — waves spawn nothing.");
+            }
+            else Warn($"Enemy prefab not found at '{EnemyPrefabPath}' — waves spawn nothing until set.");
+            so.ApplyModifiedPropertiesWithoutUndo();
+
+            Log("Imported WaveManager (_heart + _enemyRoot + _enemyPrefab wired; spawn points auto-found at Start).");
+            return wm;
+        }
+
+        // WaveManager -> VillageHudController via WaveHudBridge (wave timer + START WAVE actually run).
+        static void WireWaveHud()
+        {
+            var wmType = FindType(TypeWaveManager);
+            var hudType = FindType(TypeVillageHud);
+            var bridgeType = FindType(TypeWaveHudBridge);
+            if (wmType == null || hudType == null || bridgeType == null) { Warn("WaveHudBridge wiring skipped — a type was missing."); return; }
+            var wm = Object.FindFirstObjectByType(wmType) as Component;
+            if (wm == null) { Warn("WaveHudBridge wiring skipped — WaveManager missing."); return; }
+            var bridge = wm.GetComponent(bridgeType) ?? wm.gameObject.AddComponent(bridgeType);
+            var so = new SerializedObject(bridge);
+            SetObjectField(so, "_wave", wm);   // HUD resolved at runtime via CoreServices.Hud — no _hud field
+            so.ApplyModifiedPropertiesWithoutUndo();
+            _ = hudType;
+            Log("Wired WaveHudBridge (_wave; HUD via CoreServices.Hud at runtime).");
+        }
+
+        // Invokes a public method by name (matched on arg count) via reflection. Mirrors InvokeConfigure.
+        static void InvokeMethod(Component target, string method, params object[] args)
+        {
+            if (target == null) return;
+            foreach (var m in target.GetType().GetMethods())
+            {
+                if (m.Name != method || m.GetParameters().Length != args.Length) continue;
+                try { m.Invoke(target, args); } catch (System.Exception e) { Warn($"InvokeMethod '{method}' threw: {e.Message}"); }
+                return;
+            }
+            Warn($"Method '{method}' (x{args.Length} args) not found on {target.GetType().Name}.");
+        }
+
+        // =====================================================================
         // ORCHESTRATOR - "pass the layout -> wired city". Runs every gameplay phase in
         // order against the already-generated Village2 shell. THIS is the factory proof:
         // open scene -> run the generic-component importers in sequence -> a playable
@@ -564,6 +696,7 @@ namespace DeNelle.Editor
             B2_WireCoreSystems();
             B3_WireHud();
             B4_BuildHero();
+            B5_WireWaves();
             Log("=== BUILD PLAYABLE CITY DONE — open Village2.unity and press Play ===");
         }
 

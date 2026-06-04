@@ -219,7 +219,11 @@ namespace DeNelle.Editor
             GameObject houseC2 = LoadBuilding("HouseC2");
             GameObject houseD  = LoadBuilding("HouseD");
             GameObject kitTower = LoadBuilding("KitTower");
-            GameObject treeOfLife = LoadAt(TreeOfLifePrefabPath, "TreeOfLife");
+            // Centrepiece tree: the Tree_Of_Life.fbx ships with NO materials (renders untextured
+            // blue — owner: "blue go away!!!"). Use a green/textured polyperfect tree as the
+            // centrepiece instead; fall back to the old prefab only if polyperfect isn't imported.
+            GameObject treeOfLife = LoadByName("SM_Tree_Round") ?? LoadByName("SM_Tree_Oak")
+                                    ?? LoadByName("SM_Tree_Baobab") ?? LoadAt(TreeOfLifePrefabPath, "TreeOfLife");
 
             GameObject wallStraight = LoadPiece("Wall_UnevenBrick_Straight.prefab");
             GameObject gatePrefab   = LoadPiece("Wall_Arch.prefab");
@@ -250,6 +254,9 @@ namespace DeNelle.Editor
             // ---- Assign public slot fields via reflection -----------------------
             SetField(gen, "villageParent", host.transform);
             SetField(gen, "treeOfLife", treeOfLife);
+            // Polyperfect trees are authored UPRIGHT, so no corrective rotation (the -90 X default
+            // was for the lying Tree_Of_Life.fbx). Identity keeps the green centrepiece standing.
+            SetField(gen, "treeUprightEuler", Vector3.zero);
 
             // Specialty buildings reuse harvested houses (re-skin later).
             SetField(gen, "blacksmithForge", houseA);
@@ -323,13 +330,15 @@ namespace DeNelle.Editor
             // DEPTH: a wood encircling the town (procedural scatter, gate lanes kept clear).
             // Pull from whatever nature packs are imported — polyperfect Nature_M (gitignored but
             // present) + KayKit Forest. LoadMany drops any that aren't on this machine.
+            // Polyperfect SM_Tree/Bush/Rock only — they render green/textured. The KayKit
+            // "_Color1" set is a WHITE/snow palette (the white pines in the playtest) — dropped.
             SetField(gen, "trees", LoadMany(
                 "SM_Tree_Beech", "SM_Tree_Oak", "SM_Tree_Birch", "SM_Tree_Maple", "SM_Tree_Conifer",
-                "SM_Tree_Fir", "SM_Tree_Round", "Tree_1_A_Color1", "Tree_2_A_Color1"));
+                "SM_Tree_Fir", "SM_Tree_Round", "SM_Tree_Lime", "SM_Tree_Poplar"));
             SetField(gen, "bushes", LoadMany(
-                "SM_Bush_Big", "SM_Bush_Medium", "SM_Bush_Small", "Bush_1_A_Color1", "Bush_2_A_Color1"));
+                "SM_Bush_Big", "SM_Bush_Medium", "SM_Bush_Small", "SM_Shrub", "SM_Shrub_Round"));
             SetField(gen, "rocks", LoadMany(
-                "SM_Rock_Large", "SM_Rocks_Small", "SM_Stone", "Rock_1_A_Color1", "Rock_2_A_Color1"));
+                "SM_Rock_Large", "SM_Rocks_Small", "SM_Stone", "SM_Rock_Sharp"));
 
             // ---- Invoke GenerateVillage() ---------------------------------------
             MethodInfo generate = genType.GetMethod("GenerateVillage",
