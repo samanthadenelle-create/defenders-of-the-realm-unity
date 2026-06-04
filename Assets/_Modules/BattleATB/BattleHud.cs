@@ -111,6 +111,19 @@ namespace DeNelle.BattleATB
 
         private int _renderedLogCount;
 
+        // ── DEF-259 #1: real-time visual ATB charge ──────────────────────────
+        // The engine resolves turn order DISCRETELY (Turn.AdvanceToNextTurn jumps
+        // every bar straight to the readiness threshold in a single step), so the
+        // raw u.Atb value never visibly "fills" between renders — the bar looked
+        // frozen. To restore the ATB *feel* without touching the deterministic
+        // engine, the controller drives TickVisualAtb() every frame: each living,
+        // non-acting unit's displayed bar climbs toward full at a speed-scaled rate;
+        // the active unit is pinned full. Purely cosmetic — never feeds the engine.
+        private readonly Dictionary<string, float> _visualAtb = new Dictionary<string, float>();
+
+        // Seconds for an average-speed (Speed≈1) unit to charge from empty to full.
+        private const float VisualAtbChargeSeconds = 3.0f;
+
         // ─────────────────────────────────────────────────────────────────────
         // Build — one-time construction of the static frame
         // ─────────────────────────────────────────────────────────────────────
@@ -151,16 +164,20 @@ namespace DeNelle.BattleATB
             field.style.marginTop = 10;
             root.Add(field);
 
-            _enemyColumn = MakeColumn("— Enemies —", Align.FlexStart);
-            field.Add(_enemyColumn);
+            // DEF-259 #4 — sides match the 3D stage + mobile readability: the hero/party
+            // stands on the LEFT (AtbCombatantSwapper seats the hero at -X), the enemy on
+            // the RIGHT (+X). So the PARTY panel goes LEFT and ENEMIES go RIGHT — each
+            // stats panel on the same side as its model. (Was reversed.)
+            _partyColumn = MakeColumn("— Party —", Align.FlexStart);
+            field.Add(_partyColumn);
 
             // Spacer keeps the two sides apart on wide screens.
             var spacer = new VisualElement();
             spacer.style.flexGrow = 1;
             field.Add(spacer);
 
-            _partyColumn = MakeColumn("— Party —", Align.FlexEnd);
-            field.Add(_partyColumn);
+            _enemyColumn = MakeColumn("— Enemies —", Align.FlexEnd);
+            field.Add(_enemyColumn);
 
             // Battle log — a slim strip above the command bar.
             _battleLog = new ScrollView(ScrollViewMode.Vertical);
@@ -236,6 +253,7 @@ namespace DeNelle.BattleATB
         {
             var col = new VisualElement();
             col.style.width = 280;
+            col.style.flexShrink = 0;            // DEF-259 #6: never squeeze the column…
             col.style.flexDirection = FlexDirection.Column;
             col.style.alignItems = align;
 
@@ -244,6 +262,11 @@ namespace DeNelle.BattleATB
             label.style.fontSize = 12;
             label.style.unityFontStyleAndWeight = FontStyle.Bold;
             label.style.marginBottom = 6;
+            // DEF-259 #6: the header read "Pa…" — it was being clipped. Let it take the
+            // width it needs and never wrap/ellipsis the short heading.
+            label.style.whiteSpace = WhiteSpace.NoWrap;
+            label.style.flexShrink = 0;
+            label.style.textOverflow = TextOverflow.Clip;
             col.Add(label);
 
             return col;
@@ -389,7 +412,7 @@ namespace DeNelle.BattleATB
             return card;
         }
 
-        private static void BindCard(Card card, BattleUnit u, BattleState state)
+        private void BindCard(Card card, BattleUnit u, BattleState state)
         {
             card.Name.text = u.Name;
 
@@ -402,9 +425,16 @@ namespace DeNelle.BattleATB
             card.MpRow.style.display = hasMp ? DisplayStyle.Flex : DisplayStyle.None;
             if (hasMp) SetWidth(card.MpFill, Mathf.Clamp01((float)u.Resource / u.MaxResource));
 
-            float atbPct = Mathf.Clamp01((float)(u.Atb / Defs.ATB_FULL));
+            // DEF-259 #1: show the smoothed VISUAL atb (driven by TickVisualAtb), not
+            // the raw discrete engine value (which only ever reads 0 or full between
+            // renders). The acting/ready unit shows full; the dead show empty.
+            bool isActiveUnit = u.Alive && state.ActiveUnitId == u.Id;
+            float atbPct;
+            if (!u.Alive) atbPct = 0f;
+            else if (isActiveUnit || u.Atb >= Defs.ATB_FULL) atbPct = 1f;
+            else atbPct = _visualAtb.TryGetValue(u.Id, out float v) ? Mathf.Clamp01(v) : 0f;
             SetWidth(card.AtbFill, atbPct);
-            bool ready = u.Atb >= Defs.ATB_FULL;
+            bool ready = atbPct >= 0.999f;
             card.AtbFill.style.backgroundColor = new StyleColor(ready ? AtbReady : AtbFill);
 
             card.Box.style.opacity = u.Alive ? 1f : 0.35f;
@@ -643,6 +673,32 @@ namespace DeNelle.BattleATB
 
         private void BeginTargetPick(ATBRuntimeState runtime, Side side, Action<string> commit)
         {
+            BattleState s0 = runtime != null ? runtime.Battle : null;
+
+            // DEF-259 #5 — auto-target when there is exactly ONE legal target. Showing
+            // a "Choose a target." prompt for a single foe is pure friction, so commit
+            // straight to it and skip the picker entirely. The prompt only appears when
+            // 2+ valid targets exist (a real choice).
+            if (s0 != null && s0.Units != null)
+            {
+                string onlyId = null; int legalCount = 0;
+                foreach (BattleUnit u in s0.Units)
+                {
+                    if (u != null && u.Alive && u.Side == side)
+                    {
+                        legalCount++;
+                        onlyId = u.Id;
+                        if (legalCount > 1) break;
+                    }
+                }
+                if (legalCount == 1)
+                {
+                    _pendingKind = PickKind.None;
+                    commit(onlyId);
+                    return;
+                }
+            }
+
             _picking = true;
             _pickSide = side;
             CloseOverlay();
@@ -901,6 +957,68 @@ namespace DeNelle.BattleATB
         }
 
         /// <summary>Reset the append-only log cursor (called when a new battle starts).</summary>
-        public void ResetLog() => _renderedLogCount = 0;
+        public void ResetLog()
+        {
+            _renderedLogCount = 0;
+            _visualAtb.Clear();
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // DEF-259 #1 — real-time visual ATB charge
+        // ─────────────────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Advance the cosmetic ATB bars one frame. Called by BattleController.Update.
+        /// Each living unit (except the one whose turn it currently is) charges toward
+        /// full at a speed-scaled rate; the acting unit is pinned full. Purely visual —
+        /// it NEVER feeds back into the engine, so determinism is untouched. Only the
+        /// ATB fills are repainted (cheap), not the whole HUD.
+        /// </summary>
+        public void TickVisualAtb(ATBRuntimeState runtime, float deltaTime)
+        {
+            BattleState state = runtime != null ? runtime.Battle : null;
+            if (state == null || state.Units == null) return;
+
+            string activeId = state.ActiveUnitId;
+            bool resolving = runtime.Resolving || state.Phase == BattlePhase.Resolving
+                             || state.Phase == BattlePhase.Filling;
+
+            foreach (BattleUnit u in state.Units)
+            {
+                if (u == null) continue;
+
+                float target;
+                if (!u.Alive)
+                {
+                    target = 0f;
+                }
+                else if (u.Id == activeId || u.Atb >= Defs.ATB_FULL)
+                {
+                    // The unit on the clock sits at full until it acts.
+                    target = 1f;
+                }
+                else
+                {
+                    // Charge upward. Faster units fill faster (Speed≈1 → ~3s to full).
+                    float rate = (float)(u.Speed <= 0 ? 1.0 : u.Speed) / VisualAtbChargeSeconds;
+                    float cur = _visualAtb.TryGetValue(u.Id, out float v) ? v : 0f;
+                    // Don't visually exceed 'full' for a non-acting unit — the engine
+                    // decides who actually goes; hold just under the ready line.
+                    target = Mathf.Min(0.985f, cur + rate * deltaTime);
+                    // While the engine is mid-resolution, hold steady (the snapshot
+                    // re-render will reseat values) to avoid a flicker.
+                    if (resolving) target = cur;
+                }
+
+                _visualAtb[u.Id] = target;
+
+                if (_cards.TryGetValue(u.Id, out Card card) && card != null && card.AtbFill != null)
+                {
+                    SetWidth(card.AtbFill, target);
+                    bool ready = target >= 0.999f;
+                    card.AtbFill.style.backgroundColor = new StyleColor(ready ? AtbReady : AtbFill);
+                }
+            }
+        }
     }
 }

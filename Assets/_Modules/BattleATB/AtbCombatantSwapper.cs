@@ -169,10 +169,17 @@ namespace DeNelle.BattleATB
             var model = UnityEngine.Object.Instantiate(prefab, capsule);
             model.name = "AtbEnemyModel";
             model.transform.localPosition = Vector3.zero;
-            // Enemy stands on the RIGHT, facing the hero on the LEFT (-X). KayKit enemies'
-            // visual forward is +Z, so -90° yaw turns +Z to face -X toward the hero. Tunable.
-            model.transform.localRotation = Quaternion.Euler(0f, -90f, 0f);
+            // DEF-259: Enemy stands on the RIGHT, facing the hero on the LEFT (-X). KayKit
+            // enemies' visual forward is +Z, so +90° yaw turns +Z to face -X toward the
+            // hero (mirror of the hero on the left). Tunable.
+            model.transform.localRotation = Quaternion.Euler(0f, 90f, 0f);
             StripCamerasAndColliders(model);
+
+            // DEF-259 #2: the swapped Skeleton imported with no animator → T-pose. Stamp
+            // the shared KayKit enemy controller (idle/attack/hit/death) so it idles + can
+            // swing, mirroring EnemyAnimatorFactory (which lives in DeNelle.Village and we
+            // cannot reference here). No-op-safe if the controller asset is absent.
+            ApplyEnemyAnimator(model, ResolveEnemySlug());
 
             var fixer = FindType("DeNelle.Core.TripoMaterialFixer");
             if (fixer != null) { try { model.AddComponent(fixer); } catch { } }
@@ -195,6 +202,40 @@ namespace DeNelle.BattleATB
         // (matches BattleController's "skeleton" fallback def). TODO: read the live encounter
         // def to vary the model (necromancer/orc/dragon) per battle.
         private static string ResolveEnemySlug() => "Skeleton_Warrior";
+
+        // ── Enemy animator (DEF-259 #2: no-T-pose) ───────────────────────────
+        // Mirror of DeNelle.Village.EnemyAnimatorFactory's rig→controller map. We
+        // duplicate the tiny mapping here because BattleATB does not (and must not)
+        // reference DeNelle.Village. The shared controllers live in Resources/Enemies
+        // (built by EnemyAnimatorSetup), so a Resources.Load reaches them at runtime.
+        private static void ApplyEnemyAnimator(GameObject model, string modelName)
+        {
+            if (model == null) return;
+            try
+            {
+                var anim = model.GetComponentInChildren<Animator>() ?? model.AddComponent<Animator>();
+                anim.applyRootMotion = false; // turn-based stage: no locomotion drift
+                var ctrl = Resources.Load<RuntimeAnimatorController>("Enemies/" + EnemyControllerFor(modelName));
+                if (ctrl != null) anim.runtimeAnimatorController = ctrl;
+                else Debug.LogWarning("[AtbCombatantSwapper] No enemy controller for '" + modelName +
+                                      "' — enemy will stay in T-pose. Run EnemyAnimatorSetup.");
+            }
+            catch { /* never block the swap */ }
+        }
+
+        private static string EnemyControllerFor(string modelName)
+        {
+            switch (modelName)
+            {
+                case "Skeleton_Golem":  return "LargeEnemy";
+                case "Necromancer":     return "Boss";
+                case "Dragon":          return "Dragon";
+                case "Orc_Berserker":
+                case "Orc_Shaman":
+                case "Orc_Necromancer": return "OrcWarband";
+                default:                return "HumanoidEnemy"; // Warrior/Minion/Rogue/Mage
+            }
+        }
 
         // ── Enemy: tint the capsule (fallback when no model in Resources) ────
         private static void TintEnemy(Transform capsule)
