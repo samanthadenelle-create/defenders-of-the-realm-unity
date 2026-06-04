@@ -628,6 +628,49 @@ namespace DeNelle.Audio
             PlayOneShotOn(_uiGroup, clip, volume);
         }
 
+        // Cached UI-click blip — generated once, or an authored CC0 clip if dropped
+        // at Resources/Sfx/UiClick (drop-in upgrade path, same convention as the
+        // Village ProceduralSfx/EnemyCombatAudio fallbacks). DEF-183.
+        private AudioClip _uiClickClip;
+
+        /// <summary>
+        /// DEF-183: plays the shared UI button-click blip on the UI mixer group.
+        /// This is the IAudioService seam DeNelle.HUD calls (HUD references Core
+        /// only) so buttons click without the HUD touching the Audio assembly. The
+        /// clip is an authored Resources/Sfx/UiClick if present, otherwise a short
+        /// generated tick — so it works fresh-clone with no asset wiring.
+        /// </summary>
+        public void PlayUiClick()
+        {
+            if (_uiClickClip == null)
+                _uiClickClip = Resources.Load<AudioClip>("Sfx/UiClick") ?? GenerateUiClick();
+            PlayUiSfx(_uiClickClip, 0.5f);
+        }
+
+        // A short, clean "tick" — high-ish sine with a fast exp decay, no noise, tail
+        // tapered to avoid a click artifact. ~40 ms, mixed quietly by the caller.
+        private static AudioClip GenerateUiClick()
+        {
+            const int rate = 44100;
+            int n = Mathf.Max(16, (int)(0.04f * rate));
+            var data = new float[n];
+            float attack = 0.002f * rate;   // 2 ms attack
+            double phase = 0;
+            for (int i = 0; i < n; i++)
+            {
+                float t = (float)i / n;
+                float hz = Mathf.Lerp(900f, 700f, t);
+                phase += 2.0 * System.Math.PI * hz / rate;
+                float s = (float)System.Math.Sin(phase);
+                float env = i < attack ? (i / attack) : Mathf.Exp(-9f * t);
+                if (i > n - 48) env *= (n - i) / 48f;
+                data[i] = s * env * 0.6f;
+            }
+            var clip = AudioClip.Create("sfx_ui_click", n, 1, rate, false);
+            clip.SetData(data, 0);
+            return clip;
+        }
+
         /// <summary>Fires a one-shot routed to the Voice mixer group (NPC speech / VO).</summary>
         public void PlayVoice(AudioClip clip, float volume = 1f)
         {

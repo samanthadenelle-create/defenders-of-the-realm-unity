@@ -282,6 +282,9 @@ namespace DeNelle.Village
             if (TowerConstructionQueue.Instance != null)
                 TowerConstructionQueue.Instance.AddToQueue(_selectedTower, pos);
 
+            // DEF-183: tower-place confirm "thunk" (via CoreServices.Audio, guarded).
+            GameSfx.PlayTowerPlace();
+
             OnTowerPlaced?.Invoke(_selectedTower);
             CancelPlacing();   // one tower per StartPlacing; HUD re-arms for the next
         }
