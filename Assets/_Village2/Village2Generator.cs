@@ -11,6 +11,10 @@ public class Village2Generator : MonoBehaviour
 
     [Header("Center")]
     public GameObject treeOfLife;
+    // The Tree-of-Life FBX imports lying down; AutoUpright's auto-detect skips it (roundish).
+    // DIAL THIS to the exact upright rotation (owner reads it off the Transform after standing
+    // the tree by hand). -90 X is the common Z-up->Y-up fix; confirm/correct by eye.
+    public Vector3 treeUprightEuler = new Vector3(-90f, 0f, 0f);
 
     [Header("Main Buildings")]
     public GameObject blacksmithForge;
@@ -69,13 +73,21 @@ public class Village2Generator : MonoBehaviour
         var tree = Place(treeOfLife, Vector3.zero, 0f);
         if (tree != null)
         {
-            AutoUpright(tree);                 // DEF-96: the FBX imports lying on its side
+            // Explicit upright (auto-detect skips the roundish Tree-of-Life). Dial treeUprightEuler.
+            tree.transform.localRotation = Quaternion.Euler(treeUprightEuler);
             ScaleToHeight(tree, targetTreeHeight);
             SeatOnGround(tree, 0f);
             // Decorative centrepiece — the gameplay blocker is HeartController's clean capsule
             // (B1). A lying/scaled tree's mesh colliders walled off the whole plaza; strip them
             // so the centre is walkable regardless of the tree's final pose.
             StripColliders(tree);
+            var trr = tree.GetComponentsInChildren<Renderer>();
+            if (trr.Length > 0)
+            {
+                Bounds tb = trr[0].bounds;
+                for (int i = 1; i < trr.Length; i++) tb.Encapsulate(trr[i].bounds);
+                Debug.Log($"[Village2] Tree-of-Life upright check: bounds size={tb.size} (UPRIGHT = Y is the largest).");
+            }
         }
 
         // Quadrants pulled outward (±23/±18) so the Tree of Life keeps a clear ~13 m plaza.
@@ -291,7 +303,10 @@ public class Village2Generator : MonoBehaviour
         Bounds b = rends[0].bounds;
         for (int i = 1; i < rends.Length; i++) b.Encapsulate(rends[i].bounds);
         Vector3 s = b.size;
-        if (s.y >= s.x && s.y >= s.z) return;           // already tallest on Y
+        float maxHoriz = Mathf.Max(s.x, s.z);
+        // Only correct a CLEARLY lying model — guard so an upright-but-bushy tree
+        // (canopy wider than trunk is tall) isn't mistakenly tipped on its side.
+        if (maxHoriz <= s.y * 1.3f) return;
         if (s.x >= s.z) go.transform.Rotate(0f, 0f, -90f, Space.World);  // X longest -> bring to Y
         else            go.transform.Rotate(-90f, 0f, 0f, Space.World);  // Z longest -> bring to Y
     }
@@ -340,6 +355,7 @@ public class Village2Generator : MonoBehaviour
 
             var go = Place(prefab, pos, UnityEngine.Random.Range(0f, 360f), nature);
             if (go == null) continue;
+            AutoUpright(go);              // stand tipped tree/bush FBXes up ("trees off 90 Z" — pack imports lying down)
             ScaleToHeight(go, targetH);   // sane size regardless of native scale
             SeatOnGround(go, 0f);
             StripColliders(go);           // decorative — never blocks the hero

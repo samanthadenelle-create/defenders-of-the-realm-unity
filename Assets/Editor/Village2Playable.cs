@@ -142,6 +142,7 @@ namespace DeNelle.Editor
                 light.shadows = LightShadows.Soft;
                 light.shadowStrength = 0.6f;
                 lightGo.transform.rotation = Quaternion.Euler(42f, -35f, 0f); // mid-morning sun
+                lightGo.transform.position = new Vector3(0f, 40f, 0f);        // off-origin so its gizmo isn't dead-center (directional: position is cosmetic only)
                 Log("Added Directional Light (warm mid-morning sun, soft shadows) — mirrors live village.");
             }
             else Log($"Light already present ('{existingLight.name}') — idempotent skip.");
