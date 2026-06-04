@@ -47,7 +47,7 @@ public sealed class NightTorchLightSystem : MonoBehaviour
 {
         public static NightTorchLightSystem Instance { get; private set; }
 
-        private const string TargetScene = "Village";
+        private const string TargetScene = "Village2";
 
         // ── Tunables (warm, mobile-cheap) ─────────────────────────────────────
         // ~3000K incandescent torch glow.

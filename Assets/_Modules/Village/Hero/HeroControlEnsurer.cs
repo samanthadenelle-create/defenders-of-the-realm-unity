@@ -27,7 +27,7 @@ namespace DeNelle.Village
     public sealed class HeroControlEnsurer : MonoBehaviour
     {
         public static HeroControlEnsurer Instance { get; private set; }
-        private const string TargetScene = "Village";
+        private const string TargetScene = "Village2";
         private const int MaxEmergencySpawns = 8;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -160,7 +160,7 @@ namespace DeNelle.Village
             // Diagnostic retired: the hero-deletion bug is fixed, and this fired
             // (harmlessly) on every normal scene-unload. Only warn if the hero dies
             // while the Village is still the active scene (i.e. an unexpected delete).
-            if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().name == "Village")
+            if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().name == "Village2")
                 Debug.LogWarning($"[HeroDeathLogger] '{gameObject.name}' destroyed while in Village " +
                                  $"(frame={Time.frameCount}) — unexpected; investigate.");
         }

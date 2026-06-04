@@ -55,7 +55,7 @@ namespace DeNelle.Core.State
 
         private static readonly HashSet<string> _loadOnEnterScenes = new HashSet<string>
         {
-            "Village",
+            "Village2",
             "ATBBattle",
             "PatriciaLight_TD",
         };

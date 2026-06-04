@@ -27,7 +27,7 @@ namespace DeNelle.Village
     {
         public static VillageNpcInjector Instance { get; private set; }
 
-        private const string TargetScene = "Village";
+        private const string TargetScene = "Village2";
 
         private struct Def
         {

@@ -34,7 +34,7 @@ namespace DeNelle.Village.World
 
         public static GateIntelHud Instance { get; private set; }
 
-        private const string TargetScene = "Village";
+        private const string TargetScene = "Village2";
 
         // The gate objects VillageSceneBuilder.Walls.cs names. Cached once per scene
         // load so the per-frame path never touches Find/FindObjectsOfType.

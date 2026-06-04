@@ -90,7 +90,7 @@ namespace DeNelle.Core
         /// </summary>
         public const string PetSelect = "PetSelect";
         /// <summary>The village tower-defense scene (React `/village`).</summary>
-        public const string Village = "Village";
+        public const string Village = "Village2";
         /// <summary>The ATB Last-Stand battle scene (React global AtbBattleHost).</summary>
         public const string ATBBattle = "ATBBattle";
 

@@ -17,6 +17,7 @@ using System.Reflection;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.AI;
 using UnityEngine.SceneManagement;
 
 namespace DeNelle.Editor
@@ -207,6 +208,224 @@ namespace DeNelle.Editor
                 if (mb != null) Log($"VERIFY: Heart on '{mb.gameObject.name}' at {mb.transform.position} scale {mb.transform.lossyScale}.");
             }
             Log("=== PHASE B1 DONE ===");
+        }
+
+        // =====================================================================
+        // PHASE C - combined Village2 + OuterWorld navmesh (the walled-in risk)
+        // Mirrors OuterWorldBuilder.BakeWorldNavMesh but for Village2: flags
+        // Village2 walls/houses/towers NavigationStatic as OBSTACLES, keeps gate
+        // arches + roads walkable, levels the OuterWorld terrain to Y=0 flush, and
+        // bakes ONE surface so the hero walks Village2 <-> terrain through the gates.
+        // =====================================================================
+        const string OuterWorldScenePath = "Assets/Scenes/OuterWorld.unity";
+
+        // Names whose renderers must STAY walkable (NOT flagged obstacle): the gate
+        // arch openings + the ground roads. Everything else under the village root
+        // (walls, ramparts, corner towers, houses, the tree) becomes an obstacle.
+        static readonly string[] KeepWalkable = { "Wall_Arch", "Floor_Brick" };
+
+        [MenuItem("Defenders/Village2/C. Bake Combined NavMesh")]
+        public static void C_BakeNavMesh()
+        {
+            Log("=== PHASE C: Bake combined Village2 + OuterWorld navmesh START ===");
+            if (!System.IO.File.Exists(Village2ScenePath) || !System.IO.File.Exists(OuterWorldScenePath))
+            {
+                Err($"Missing {Village2ScenePath} or {OuterWorldScenePath}. Run Phase A + the world build first. Aborting.");
+                return;
+            }
+
+            // Open Village2 (active) + OuterWorld additive — both contribute to one bake.
+            Scene village2 = EditorSceneManager.OpenScene(Village2ScenePath, OpenSceneMode.Single);
+            Scene outer = EditorSceneManager.OpenScene(OuterWorldScenePath, OpenSceneMode.Additive);
+            Log($"Opened '{Village2ScenePath}' (active) + '{OuterWorldScenePath}' (additive).");
+
+            // --- Flag Village2 obstacle geometry NavigationStatic --------------------
+            GameObject root = FindRoot(village2, "Village2");
+            int obstacles = 0, skipped = 0;
+            if (root != null)
+            {
+                foreach (var r in root.GetComponentsInChildren<Renderer>(true))
+                {
+                    if (r == null) continue;
+                    if (NameOrAncestorContainsAny(r.transform, KeepWalkable)) { skipped++; continue; }
+                    var flags = GameObjectUtility.GetStaticEditorFlags(r.gameObject);
+                    GameObjectUtility.SetStaticEditorFlags(r.gameObject, flags | StaticEditorFlags.NavigationStatic);
+                    obstacles++;
+                }
+            }
+            Log($"Flagged {obstacles} Village2 renderer(s) NavigationStatic (obstacles); kept {skipped} walkable (gate arches/roads).");
+
+            // --- Level the OuterWorld terrain to Y=0 (flush) + flag it static --------
+            const float villageFloorY = 0f;
+            int terrains = 0;
+            foreach (var go in outer.GetRootGameObjects())
+                foreach (var terr in go.GetComponentsInChildren<Terrain>(true))
+                {
+                    float edgeSurface = terr.transform.position.y + terr.SampleHeight(new Vector3(42f, 0f, 0f));
+                    float delta = villageFloorY - edgeSurface;
+                    terr.transform.position += new Vector3(0f, delta, 0f);
+                    var flags = GameObjectUtility.GetStaticEditorFlags(terr.gameObject);
+                    GameObjectUtility.SetStaticEditorFlags(terr.gameObject, flags | StaticEditorFlags.NavigationStatic);
+                    EditorUtility.SetDirty(terr.gameObject);
+                    terrains++;
+                    Log($"Terrain '{terr.name}' leveled by {delta:F3} -> Y=0 flush; flagged NavigationStatic.");
+                }
+            if (terrains == 0)
+                Err("No Terrain found in OuterWorld — the hero will have NO walkable ground outside the gates. " +
+                    "Run Defenders/World/Build Outer World + Build Exterior Terrain first.");
+
+            // --- Bake ONE combined surface ------------------------------------------
+            UnityEditor.AI.NavMeshBuilder.ClearAllNavMeshes();
+            UnityEditor.AI.NavMeshBuilder.BuildNavMesh();
+
+            EditorSceneManager.MarkSceneDirty(village2);
+            EditorSceneManager.MarkSceneDirty(outer);
+            EditorSceneManager.SaveScene(village2, Village2ScenePath);
+            EditorSceneManager.SaveScene(outer, OuterWorldScenePath);
+            AssetDatabase.SaveAssets();
+
+            Log($"VERIFY: obstacles={obstacles} walkableKept={skipped} terrains={terrains}. " +
+                "Baked ONE combined navmesh across Village2 + OuterWorld; saved both scenes.");
+            Log("=== PHASE C DONE ===");
+        }
+
+        // =====================================================================
+        // PHASE D - THE SWAP (Option 2, owner-approved 2026-06-04): keep the scene
+        // NAMED "Village" so the 15+ systems that gate on scene.name=="Village" all
+        // keep working with ZERO code edits. Back up the live hand-authored
+        // Village.unity -> Village_Legacy.unity (rollback, kept on disk), then write
+        // the generated Village2 content (Heart + nav flags already in it) into
+        // Village.unity. NEVER deletes; backup is verified BEFORE the overwrite.
+        // After this: run OuterWorldBuilder.BakeWorldNavMesh (targets Village.unity)
+        // then D2 verify.
+        // =====================================================================
+        const string LegacyScenePath = "Assets/Scenes/Village_Legacy.unity";
+
+        [MenuItem("Defenders/Village2/D. Swap Generated Village Into Village.unity")]
+        public static void D_SwapIntoLiveVillage()
+        {
+            Log("=== PHASE D: Swap generated village INTO Village.unity START ===");
+
+            // Guard 1: source must exist AND be wired (has a Heart) — never swap a bare shell.
+            if (!File.Exists(Village2ScenePath)) { Err($"{Village2ScenePath} missing. Aborting."); return; }
+            if (!File.Exists(VillageScenePath)) { Err($"{VillageScenePath} missing — nothing to back up. Aborting."); return; }
+
+            Scene src = EditorSceneManager.OpenScene(Village2ScenePath, OpenSceneMode.Single);
+            System.Type heartType = FindType(TypeHeartController);
+            int srcHearts = heartType != null ? Object.FindObjectsByType(heartType, FindObjectsSortMode.None).Length : 0;
+            GameObject srcRoot = FindRoot(src, "Village2");
+            int srcObjs = srcRoot != null ? srcRoot.transform.childCount : 0;
+            if (srcHearts < 1) { Err($"Source {Village2ScenePath} has no HeartController — refusing to swap a bare shell. Run B1 first. Aborting."); return; }
+            Log($"Source verified: {srcObjs} objects, {srcHearts} Heart. OK to swap.");
+
+            // Guard 2: BACK UP the live Village.unity FIRST and confirm the copy exists.
+            if (File.Exists(LegacyScenePath))
+            {
+                Log($"{LegacyScenePath} already exists (prior backup) — leaving it as the original rollback, not overwriting it.");
+            }
+            else
+            {
+                bool copied = AssetDatabase.CopyAsset(VillageScenePath, LegacyScenePath);
+                AssetDatabase.SaveAssets();
+                if (!copied || !File.Exists(LegacyScenePath))
+                {
+                    Err($"Backup CopyAsset {VillageScenePath} -> {LegacyScenePath} FAILED. Refusing to overwrite Village.unity without a rollback. Aborting.");
+                    return;
+                }
+                Log($"BACKED UP live village -> {LegacyScenePath} (rollback preserved).");
+            }
+
+            // Now safe: write the generated content into Village.unity (keeps its GUID/path,
+            // so Build Settings + every asset reference stay valid; scene.name stays "Village").
+            bool ok = EditorSceneManager.SaveScene(src, VillageScenePath, /*saveAsCopy:*/ false);
+            if (!ok) { Err($"SaveScene to {VillageScenePath} FAILED. Aborting (Village_Legacy.unity holds the original)."); return; }
+            Log($"Wrote generated village -> {VillageScenePath} (scene.name stays 'Village').");
+
+            // Remove the now-redundant Village2.unity from Build Settings (keep Village.unity).
+            var scenes = new System.Collections.Generic.List<EditorBuildSettingsScene>(EditorBuildSettings.scenes);
+            int removed = scenes.RemoveAll(s => s.path == Village2ScenePath);
+            if (removed > 0) { EditorBuildSettings.scenes = scenes.ToArray(); Log($"Removed redundant {Village2ScenePath} from Build Settings."); }
+
+            // Verify Village.unity now holds the generated village.
+            Scene check = EditorSceneManager.OpenScene(VillageScenePath, OpenSceneMode.Single);
+            int liveHearts = heartType != null ? Object.FindObjectsByType(heartType, FindObjectsSortMode.None).Length : -1;
+            GameObject liveRoot = FindRoot(check, "Village2");
+            Log($"VERIFY: Village.unity scene='{check.name}' rootObj='{(liveRoot != null ? liveRoot.name : "?")}' heart={liveHearts}. Village_Legacy.unity = rollback.");
+            Log("=== PHASE D DONE — next: OuterWorldBuilder.BakeWorldNavMesh, then D2 verify ===");
+        }
+
+        [MenuItem("Defenders/Village2/D2. Verify Live Village Walkable")]
+        public static void D2_VerifyLiveVillage()
+        {
+            Log("=== PHASE D2: Verify Village.unity navmesh connectivity START ===");
+            EditorSceneManager.OpenScene(VillageScenePath, OpenSceneMode.Single);
+            EditorSceneManager.OpenScene(OuterWorldScenePath, OpenSceneMode.Additive);
+            VerifyConnectivityFromPlaza();
+            Log("=== PHASE D2 DONE ===");
+        }
+
+        // =====================================================================
+        // PHASE C-verify - headless walled-in check. Opens the baked scenes, samples
+        // the navmesh in the plaza + far out on the terrain in all 4 directions, and
+        // runs CalculatePath. A COMPLETE path = the hero can walk village -> terrain
+        // through that side. Confirms the owner-flagged risk WITHOUT a playtest.
+        // =====================================================================
+        [MenuItem("Defenders/Village2/C2. Verify Walkable (navmesh connectivity)")]
+        public static void C2_VerifyWalkable()
+        {
+            Log("=== PHASE C2: Verify navmesh connectivity START ===");
+            EditorSceneManager.OpenScene(Village2ScenePath, OpenSceneMode.Single);
+            EditorSceneManager.OpenScene(OuterWorldScenePath, OpenSceneMode.Additive);
+            VerifyConnectivityFromPlaza();
+            Log("=== PHASE C2 DONE ===");
+        }
+
+        // Samples the navmesh near the plaza + far out on the terrain in all 4 cardinals,
+        // runs CalculatePath, logs how many sides are COMPLETE (hero can walk out). Assumes
+        // the village scene + OuterWorld are already open with the combined navmesh baked.
+        static void VerifyConnectivityFromPlaza()
+        {
+            if (!NavMesh.SamplePosition(new Vector3(6f, 0f, 0f), out NavMeshHit plaza, 12f, NavMesh.AllAreas))
+            {
+                Err("No navmesh near the village plaza (sample @ (6,0,0) r=12 failed). Bake produced no walkable ground inside.");
+                return;
+            }
+            Log($"Plaza navmesh point: {plaza.position}");
+
+            (string dir, Vector3 p)[] farPoints =
+            {
+                ("EAST",  new Vector3( 90f, 0f,   0f)),
+                ("WEST",  new Vector3(-90f, 0f,   0f)),
+                ("NORTH", new Vector3(  0f, 0f,  90f)),
+                ("SOUTH", new Vector3(  0f, 0f, -90f)),
+            };
+
+            int complete = 0;
+            foreach (var (dir, p) in farPoints)
+            {
+                if (!NavMesh.SamplePosition(p, out NavMeshHit far, 30f, NavMesh.AllAreas))
+                {
+                    Warn($"  {dir}: no terrain navmesh near {p} (r=30) — terrain may not extend here.");
+                    continue;
+                }
+                var path = new NavMeshPath();
+                bool ok = NavMesh.CalculatePath(plaza.position, far.position, NavMesh.AllAreas, path);
+                Log($"  {dir}: target {far.position} -> path status={path.status} corners={path.corners.Length} (ok={ok})");
+                if (path.status == NavMeshPathStatus.PathComplete) complete++;
+            }
+
+            Log($"VERIFY: {complete}/4 cardinal directions reachable village -> terrain (COMPLETE path).");
+            if (complete == 0) Err("WALLED IN: hero cannot reach the terrain on any side. Gate openings/terrain bake need work.");
+            else if (complete < 4) Warn($"Partial: {complete}/4 sides open — usable, but some gates may be sealed.");
+            else Log("ALL 4 sides open — hero can walk out every gate onto the terrain.");
+        }
+
+        static bool NameOrAncestorContainsAny(Transform t, string[] fragments)
+        {
+            for (Transform cur = t; cur != null; cur = cur.parent)
+                foreach (var f in fragments)
+                    if (cur.name.Contains(f)) return true;
+            return false;
         }
 
         // =====================================================================

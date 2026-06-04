@@ -23,7 +23,7 @@ namespace DeNelle.Village
 {
     public static class WorldSceneLoader
     {
-        private const string VillageSceneName    = "Village";
+        private const string VillageSceneName    = "Village2";
         private const string OuterWorldSceneName  = "OuterWorld";
 
         // BUILD FIX (WO-173/DEF-108): a one-shot AfterSceneLoad check FAILED in player

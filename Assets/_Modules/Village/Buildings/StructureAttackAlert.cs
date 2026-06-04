@@ -202,7 +202,7 @@ namespace DeNelle.Village
     /// </summary>
     public static class StructureAttackAlertInstaller
     {
-        private const string TargetScene = "Village";
+        private const string TargetScene = "Village2";
         private static bool s_hooked;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]

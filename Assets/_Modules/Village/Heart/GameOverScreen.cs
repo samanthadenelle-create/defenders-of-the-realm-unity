@@ -29,7 +29,7 @@ namespace DeNelle.Village
     public sealed class GameOverScreen : MonoBehaviour
     {
         public static GameOverScreen Instance { get; private set; }
-        private const string TargetScene = "Village";
+        private const string TargetScene = "Village2";
 
         private HeartController _heart;
         private HeroHealth _hero;

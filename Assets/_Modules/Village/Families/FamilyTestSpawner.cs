@@ -28,7 +28,7 @@ namespace DeNelle.Village
     {
         public static FamilyTestSpawner Instance { get; private set; }
 
-        private const string  TargetScene = "Village";
+        private const string  TargetScene = "Village2";
         private const KeyCode SpawnKey    = KeyCode.K;
         private const KeyCode CycleKey    = KeyCode.L;
         private const int     FollowerCount = 5;

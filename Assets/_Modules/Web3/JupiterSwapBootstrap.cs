@@ -49,7 +49,7 @@ namespace DeNelle.Web3
         // Village are the natural homes. An unknown scene is skipped.
         private static readonly string[] AllowedScenes =
         {
-            "Title", "HeroSelect", "PetSelect", "Village"
+            "Title", "HeroSelect", "PetSelect", "Village2"
         };
 
         private static bool _warnedNoUxml;

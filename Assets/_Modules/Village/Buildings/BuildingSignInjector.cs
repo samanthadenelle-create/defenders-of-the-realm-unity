@@ -18,7 +18,7 @@ namespace DeNelle.Village
     public sealed class BuildingSignInjector : MonoBehaviour
     {
         public static BuildingSignInjector Instance { get; private set; }
-        private const string TargetScene = "Village";
+        private const string TargetScene = "Village2";
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()

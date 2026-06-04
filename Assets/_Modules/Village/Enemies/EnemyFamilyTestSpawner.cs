@@ -36,7 +36,7 @@ namespace DeNelle.Village
     {
         public static EnemyFamilyTestSpawner Instance { get; private set; }
 
-        private const string  TargetScene = "Village";
+        private const string  TargetScene = "Village2";
         private const KeyCode SpawnKey    = KeyCode.J;
 
         private static readonly Color GruntTint  = new Color(0.58f, 0.58f, 0.64f); // grey

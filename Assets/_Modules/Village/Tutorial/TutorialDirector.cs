@@ -65,7 +65,7 @@ namespace DeNelle.Village
         /// <summary>Dev override — skip the tutorial entirely (still marks onboarded + kicks waves).</summary>
         public static bool ForceSkip;
 
-        private const string TargetScene = "Village";
+        private const string TargetScene = "Village2";
         private static bool s_ranThisSession;   // belt-and-braces: one run per session
 
         // 3× a Level-1 tower cost — the post-battle supply grant (WO-277 economy).

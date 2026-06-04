@@ -60,7 +60,7 @@ namespace DeNelle.Village
     public sealed class SylasFirstMeeting : MonoBehaviour
     {
         // ── Tuning ───────────────────────────────────────────────────────────
-        private const string TargetScene = "Village";
+        private const string TargetScene = "Village2";
 
         /// <summary>The one-shot SeenTutorials key — once set the beat never replays.</summary>
         private const string SeenKey = "sylas_first_meeting";

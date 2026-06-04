@@ -33,7 +33,7 @@ namespace DeNelle.Village
         private float _nextSnapshot;
 
         private const float SnapshotInterval = 0.6f;
-        private const string TowerSceneName = "Village";   // the scene placed towers live in
+        private const string TowerSceneName = "Village2";   // the scene placed towers live in
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()

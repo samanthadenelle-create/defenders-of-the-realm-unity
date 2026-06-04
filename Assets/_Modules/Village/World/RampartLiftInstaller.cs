@@ -28,7 +28,7 @@ namespace DeNelle.Village
     public sealed class RampartLiftInstaller : MonoBehaviour
     {
         public static RampartLiftInstaller Instance { get; private set; }
-        private const string TargetScene = "Village";
+        private const string TargetScene = "Village2";
 
         // Rampart geometry (VillageSceneBuilder.Fortify.cs).
         private const float DeckTopY   = 5.4f;

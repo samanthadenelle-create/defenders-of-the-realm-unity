@@ -28,7 +28,7 @@ namespace DeNelle.Village
     public sealed class PetHarvestBootstrap : MonoBehaviour
     {
         public static PetHarvestBootstrap Instance { get; private set; }
-        private const string TargetScene = "Village";
+        private const string TargetScene = "Village2";
         private bool _built;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]

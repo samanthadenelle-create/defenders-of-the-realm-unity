@@ -29,7 +29,7 @@ namespace DeNelle.Village
     {
         public static StoryCompanionInjector Instance { get; private set; }
 
-        private const string TargetScene = "Village";
+        private const string TargetScene = "Village2";
 
         // The live companion, so a re-load replaces rather than duplicates it.
         private StoryCompanion _companion;
