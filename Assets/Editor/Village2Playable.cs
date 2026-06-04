@@ -19,6 +19,7 @@ using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.AI;
 using UnityEngine.SceneManagement;
+using UnityEngine.UIElements;
 
 namespace DeNelle.Editor
 {
@@ -28,8 +29,25 @@ namespace DeNelle.Editor
         const string Village2ScenePath = "Assets/Scenes/Village2.unity";
         const string VillageScenePath  = "Assets/Scenes/Village.unity";
 
-        // Runtime gameplay types (Assembly-CSharp / DeNelle.Village) resolved by reflection.
-        const string TypeHeartController = "DeNelle.Village.HeartController";
+        // Runtime gameplay types (Assembly-CSharp / DeNelle.Village / DeNelle.HUD)
+        // resolved by reflection (build tooling exemption, same as VillageSceneBuilder).
+        const string TypeHeartController   = "DeNelle.Village.HeartController";
+        const string TypeVillageCamera     = "DeNelle.Village.VillageCamera";
+        const string TypeSmartMobileCamera = "DeNelle.Village.SmartMobileCamera";
+        const string TypeVillageController = "DeNelle.Village.VillageController";
+        const string TypeVillageHud        = "DeNelle.HUD.VillageHudController";
+        const string TypeEventSystem       = "UnityEngine.EventSystems.EventSystem";
+        const string TypeInputUIModule     = "UnityEngine.InputSystem.UI.InputSystemUIInputModule";
+        const string VillageHudUxmlPath    = "Assets/_Modules/HUD/VillageHud.uxml";
+
+        // Hero rig types + assets (mirror VillageSceneBuilder.Characters.BuildHero).
+        const string TypeHeroBodySwapper   = "DeNelle.Village.HeroBodySwapper";
+        const string TypeHeroLocomotion    = "DeNelle.Village.HeroLocomotion";
+        const string TypeHeroAbilities     = "DeNelle.Village.HeroAbilities";
+        const string TypeHeroAbilityInput  = "DeNelle.Village.HeroAbilityInput";
+        const string HeroMeshPath          = "Assets/Resources/Heroes/Mage.fbx";
+        const string HeroAnimatorPath      = "Assets/Resources/Heroes/Mage.controller";
+        const int    EnemyLayer            = 8;
 
         // =====================================================================
         // PHASE A - promote the generated shell to a real, build-registered scene
@@ -68,6 +86,87 @@ namespace DeNelle.Editor
             EnsureInBuildSettings(Village2ScenePath, afterPath: VillageScenePath);
 
             Log("=== PHASE A DONE - Village2.unity exists, in Build Settings, Village.unity untouched ===");
+        }
+
+        // =====================================================================
+        // PHASE B0 - scene defaults the generator skipped. Village2 was generated
+        // into an EMPTY scene (NewSceneSetup.EmptyScene), so unlike a normal new
+        // scene it has NO Main Camera and NO Directional Light -> black Game view +
+        // unlit geometry (owner 2026-06-04: "we built on a blank scene, defaults
+        // are missing"). This adds them in C#, MIRRORING the live VillageSceneBuilder
+        // (Scene.cs CreateCamera / Wiring.cs CreateDirectionalLight +
+        // ConfigureSceneLighting) so the Phase D swap into Village.unity carries the
+        // SAME smart camera + lighting the live village shipped with ("we used a
+        // smart camera"). Idempotent: skips anything already present.
+        // =====================================================================
+        [MenuItem("Defenders/Village2/B0. Add Scene Defaults (Camera + Light)")]
+        public static void B0_AddSceneDefaults()
+        {
+            Log("=== PHASE B0: Add scene defaults (camera + light + ambient) START ===");
+            if (!OpenVillage2(out Scene scene)) return;
+
+            // --- Main Camera (mirror VillageSceneBuilder.Scene.cs CreateCamera) ---
+            var existingCam = Object.FindFirstObjectByType<Camera>();
+            if (existingCam == null)
+            {
+                var cameraGo = new GameObject("Main Camera");
+                var camera = cameraGo.AddComponent<Camera>();
+                camera.clearFlags = CameraClearFlags.SolidColor;
+                camera.backgroundColor = new Color(0.74f, 0.66f, 0.72f); // dawn pink-violet horizon
+                camera.farClipPlane = 600f;
+                camera.fieldOfView = 60f;
+                cameraGo.tag = "MainCamera";
+                cameraGo.transform.position = new Vector3(2.8f, 2.6f, 1.9f);
+                cameraGo.transform.rotation = Quaternion.Euler(12f, 0f, 0f);
+                cameraGo.AddComponent<AudioListener>();
+                // The live village uses the adaptive follow camera ("we used a smart
+                // camera"). Attach both exactly like live; the hero target is wired in
+                // the later gameplay-wiring phase (WO-280). At Play, SmartMobileCamera's
+                // EnforceSoleCamera disables VillageCamera and takes over.
+                AddByType(cameraGo, TypeVillageCamera);
+                AddByType(cameraGo, TypeSmartMobileCamera);
+                Log("Added Main Camera (SolidColor dawn tint, FOV 60, far 600, AudioListener, " +
+                    "VillageCamera + SmartMobileCamera) — mirrors live village.");
+            }
+            else Log($"Camera already present ('{existingCam.name}') — idempotent skip.");
+
+            // --- Directional Light (mirror Wiring.cs CreateDirectionalLight, DEF-109) ---
+            var existingLight = Object.FindFirstObjectByType<Light>();
+            if (existingLight == null)
+            {
+                var lightGo = new GameObject("Directional Light");
+                var light = lightGo.AddComponent<Light>();
+                light.type = LightType.Directional;
+                light.color = new Color(1f, 0.96f, 0.89f);
+                light.intensity = 1.55f;
+                light.shadows = LightShadows.Soft;
+                light.shadowStrength = 0.6f;
+                lightGo.transform.rotation = Quaternion.Euler(42f, -35f, 0f); // mid-morning sun
+                Log("Added Directional Light (warm mid-morning sun, soft shadows) — mirrors live village.");
+            }
+            else Log($"Light already present ('{existingLight.name}') — idempotent skip.");
+
+            // --- Gradient ambient + linear fog (mirror Wiring.cs ConfigureSceneLighting) ---
+            RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Trilight;
+            RenderSettings.ambientSkyColor     = new Color(0.62f, 0.66f, 0.74f);
+            RenderSettings.ambientEquatorColor = new Color(0.52f, 0.52f, 0.50f);
+            RenderSettings.ambientGroundColor  = new Color(0.34f, 0.33f, 0.30f);
+            RenderSettings.ambientIntensity = 1.0f;
+            RenderSettings.fog = true;
+            RenderSettings.fogMode = FogMode.Linear;
+            RenderSettings.fogColor = new Color(0.70f, 0.74f, 0.80f);
+            RenderSettings.fogStartDistance = 80f;
+            RenderSettings.fogEndDistance   = 220f;
+            Log("Configured gradient ambient + linear fog — matches live village lighting.");
+
+            EditorSceneManager.MarkSceneDirty(scene);
+            EditorSceneManager.SaveScene(scene, Village2ScenePath);
+
+            int camCount   = Object.FindObjectsByType<Camera>(FindObjectsSortMode.None).Length;
+            int lightCount = Object.FindObjectsByType<Light>(FindObjectsSortMode.None).Length;
+            Log($"VERIFY: cameras={camCount} (expect 1), directional lights={lightCount} (expect >=1). " +
+                $"Saved {Village2ScenePath}.");
+            Log("=== PHASE B0 DONE — open Village2.unity and the Game view should now render (no longer black) ===");
         }
 
         // =====================================================================
@@ -208,6 +307,411 @@ namespace DeNelle.Editor
                 if (mb != null) Log($"VERIFY: Heart on '{mb.gameObject.name}' at {mb.transform.position} scale {mb.transform.lossyScale}.");
             }
             Log("=== PHASE B1 DONE ===");
+        }
+
+        // =====================================================================
+        // PHASE B2 - core systems: EventSystem (UI input routing) + VillageController
+        // (the orchestrator). The Import* methods below are GENERIC, scene-agnostic
+        // component importers — the menu phase just wraps them (open scene -> import
+        // -> save). The SAME methods are what a future CityFactory calls to wire a
+        // city from a layout/recipe ("pass the layout -> new city, already wired").
+        // =====================================================================
+        [MenuItem("Defenders/Village2/B2. Wire Core Systems (EventSystem + Controller)")]
+        public static void B2_WireCoreSystems()
+        {
+            Log("=== PHASE B2: Wire core systems START ===");
+            if (!OpenVillage2(out Scene scene)) return;
+            GameObject root = FindRoot(scene, "Village2");
+            if (root == null) { Err("No 'Village2' root. Aborting."); return; }
+
+            ImportEventSystem();
+            ImportVillageController(root.transform);
+
+            EditorSceneManager.MarkSceneDirty(scene);
+            EditorSceneManager.SaveScene(scene, Village2ScenePath);
+            Log("=== PHASE B2 DONE ===");
+        }
+
+        /// Generic importer: ensures ONE EventSystem (+ the new-Input-System UI module)
+        /// in the active scene. Without it, UI Toolkit button clicks are dead.
+        /// Idempotent. Mirrors VillageSceneBuilder.EnsureEventSystem.
+        public static void ImportEventSystem()
+        {
+            var esType = FindType(TypeEventSystem);
+            if (esType == null) { Warn("EventSystem type not resolvable — UI clicks will be dead."); return; }
+            if (Object.FindFirstObjectByType(esType) != null) { Log("EventSystem already present — idempotent skip."); return; }
+
+            var go = new GameObject("EventSystem");
+            go.AddComponent(esType);
+            var moduleType = FindType(TypeInputUIModule);
+            if (moduleType != null) go.AddComponent(moduleType);
+            else Warn("InputSystemUIInputModule not resolvable — falling back to EventSystem-only routing.");
+            Log("Imported EventSystem (+ InputSystemUIInputModule).");
+        }
+
+        /// Generic importer: the VillageController orchestrator under the city root,
+        /// with `_heart` wired to the HeartController (lose condition). Wall/gate/
+        /// building roots are left for the mesh->role mapping pass (wiring a wrong
+        /// group is worse than null; the controller null-guards them). Idempotent.
+        public static Component ImportVillageController(Transform cityRoot)
+        {
+            var ctrlType = FindType(TypeVillageController);
+            if (ctrlType == null) { Err("VillageController type not found (is DeNelle.Village compiled?)."); return null; }
+
+            Transform existing = cityRoot.Find("VillageController");
+            GameObject go = existing != null ? existing.gameObject : new GameObject("VillageController");
+            if (existing == null) go.transform.SetParent(cityRoot, false);
+            Component controller = go.GetComponent(ctrlType) ?? go.AddComponent(ctrlType);
+
+            var so = new SerializedObject(controller);
+            var heartType = FindType(TypeHeartController);
+            Component heart = heartType != null ? Object.FindFirstObjectByType(heartType) as Component : null;
+            if (heart != null) SetObjectField(so, "_heart", heart);
+            else Warn("No HeartController in scene — run B1 (Wire Heart) first; controller _heart left null.");
+            so.ApplyModifiedPropertiesWithoutUndo();
+
+            Log($"Imported VillageController on '{go.name}' (_heart {(heart != null ? "wired" : "NULL")}).");
+            return controller;
+        }
+
+        // =====================================================================
+        // PHASE B3 - the HUD (VillageHudController on its own UIDocument). The HUD
+        // hosts the wave timer, build button, ability bar + repair prompt. Bridges
+        // (build/ability/wave) are wired in later phases once their partners exist
+        // (BuildMenu / hero / WaveManager). Mirrors WallRepairSceneSetup.BuildVillageHud.
+        // =====================================================================
+        [MenuItem("Defenders/Village2/B3. Wire HUD (VillageHudController)")]
+        public static void B3_WireHud()
+        {
+            Log("=== PHASE B3: Wire HUD START ===");
+            if (!OpenVillage2(out Scene scene)) return;
+            GameObject root = FindRoot(scene, "Village2");
+            if (root == null) { Err("No 'Village2' root. Aborting."); return; }
+
+            ImportVillageHud(root.transform);
+
+            EditorSceneManager.MarkSceneDirty(scene);
+            EditorSceneManager.SaveScene(scene, Village2ScenePath);
+            Log("=== PHASE B3 DONE ===");
+        }
+
+        /// Generic importer: a "VillageHud" GameObject = UIDocument (VillageHud.uxml +
+        /// a PanelSettings) + VillageHudController with `_document` wired. Idempotent:
+        /// reuses an existing HUD. Mirrors WallRepairSceneSetup.BuildVillageHud.
+        public static Component ImportVillageHud(Transform cityRoot)
+        {
+            var hudType = FindType(TypeVillageHud);
+            if (hudType == null) { Err("VillageHudController not found (is DeNelle.HUD compiled?)."); return null; }
+            var existing = Object.FindFirstObjectByType(hudType) as Component;
+            if (existing != null) { Log("VillageHudController already present — idempotent skip."); return existing; }
+
+            var go = new GameObject("VillageHud");
+            go.transform.SetParent(cityRoot, false);
+
+            var uiDoc = go.AddComponent<UIDocument>();
+            var uxml = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(VillageHudUxmlPath);
+            if (uxml != null) uiDoc.visualTreeAsset = uxml;
+            else Warn($"VillageHud.uxml not found at '{VillageHudUxmlPath}' — assign the HUD source by hand.");
+            WirePanelSettings(uiDoc);
+
+            Component hud = go.AddComponent(hudType);
+            var so = new SerializedObject(hud);
+            SetObjectField(so, "_document", uiDoc);
+            so.ApplyModifiedPropertiesWithoutUndo();
+            Log("Imported VillageHud (UIDocument + VillageHudController).");
+            return hud;
+        }
+
+        // =====================================================================
+        // PHASE B4 - the hero rig (keystone: the smart camera needs a target and you
+        // can't walk/test without it). Mirrors VillageSceneBuilder.Characters.BuildHero:
+        // People Mage body (Resources/Heroes/Mage.fbx) + Mage.controller, then
+        // HeroBodySwapper/Locomotion/Abilities/AbilityInput, _heart + _enemyMask wired,
+        // then the camera's VillageCamera + SmartMobileCamera _target -> the hero.
+        // =====================================================================
+        [MenuItem("Defenders/Village2/B4. Build Hero + Camera Target")]
+        public static void B4_BuildHero()
+        {
+            Log("=== PHASE B4: Build hero + wire camera target START ===");
+            if (!OpenVillage2(out Scene scene)) return;
+            GameObject root = FindRoot(scene, "Village2");
+            if (root == null) { Err("No 'Village2' root. Aborting."); return; }
+
+            var heartType = FindType(TypeHeartController);
+            Component heart = heartType != null ? Object.FindFirstObjectByType(heartType) as Component : null;
+
+            GameObject hero = ImportHero(root.transform, heart);
+            WireCameraTargetToHero(hero);
+
+            EditorSceneManager.MarkSceneDirty(scene);
+            EditorSceneManager.SaveScene(scene, Village2ScenePath);
+            Log($"VERIFY: hero='{(hero != null ? hero.name : "NULL")}' tag={(hero != null ? hero.tag : "?")}.");
+            Log("=== PHASE B4 DONE ===");
+        }
+
+        /// Generic importer: the player hero rig under the city root. Idempotent —
+        /// reuses an existing "Player"-tagged hero. Mirrors BuildHero.
+        public static GameObject ImportHero(Transform cityRoot, Component heart)
+        {
+            var existing = GameObject.FindWithTag("Player");
+            if (existing != null) { Log("Hero ('Player' tag) already present — idempotent skip."); return existing; }
+
+            var go = new GameObject("Hero (Blaise)");
+            go.transform.SetParent(cityRoot, false);
+            go.tag = "Player";
+            go.transform.position = new Vector3(6f, 0f, 4f);   // open-plaza spot near centre
+
+            var collider = go.AddComponent<CapsuleCollider>();
+            collider.height = 2f;
+            collider.radius = 0.4f;
+            collider.center = new Vector3(0f, 1f, 0f);
+
+            var heroModel = LoadModel(HeroMeshPath);
+            GameObject body;
+            if (heroModel != null)
+                body = (GameObject)PrefabUtility.InstantiatePrefab(heroModel);
+            else
+            {
+                Warn($"Hero mesh '{HeroMeshPath}' not found — capsule placeholder.");
+                body = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            }
+            body.name = "HeroBody";
+            body.transform.SetParent(go.transform, false);
+            body.transform.localPosition = Vector3.zero;
+            if (heroModel != null) NormalizeToHeight(body, 2.0f);
+            StripColliders(body);     // hero-root capsule is the sole collision source
+            StripRigidbodies(body);   // a stray Rigidbody dropped the hero through the floor
+
+            if (heroModel != null)
+            {
+                var ctrl = AssetDatabase.LoadAssetAtPath<RuntimeAnimatorController>(HeroAnimatorPath);
+                var anim = body.GetComponentInChildren<Animator>();
+                if (ctrl != null && anim != null) { anim.runtimeAnimatorController = ctrl; anim.applyRootMotion = false; }
+                else if (ctrl == null) Warn($"Mage.controller not found at '{HeroAnimatorPath}' — hero won't animate.");
+            }
+
+            go.transform.rotation = Quaternion.identity;   // face +Z toward the open plaza
+
+            AddByType(go, TypeHeroBodySwapper);   // swaps to the chosen class body at runtime
+            AddByType(go, TypeHeroLocomotion);    // WASD / stick movement
+            var abilities = AddByType(go, TypeHeroAbilities);
+            AddByType(go, TypeHeroAbilityInput);  // 1/2/3/4 -> TryCast
+
+            if (abilities != null)
+            {
+                var so = new SerializedObject(abilities);
+                if (heart != null) SetObjectField(so, "_heart", heart);       // Healing Beacon target
+                SetLayerMaskField(so, "_enemyMask", 1 << EnemyLayer);          // ability hit-tests the Enemy layer
+                so.ApplyModifiedPropertiesWithoutUndo();
+            }
+            Log($"Imported hero rig '{go.name}' at {go.transform.position} " +
+                $"(body={(heroModel != null ? "Mage.fbx" : "placeholder")}).");
+            return go;
+        }
+
+        /// Wires the Main Camera's VillageCamera + SmartMobileCamera `_target` to the
+        /// hero so the adaptive follow camera tracks it. Mirrors WireVillageCameraTarget.
+        static void WireCameraTargetToHero(GameObject hero)
+        {
+            if (hero == null) return;
+            var cam = Camera.main;
+            if (cam == null) { Warn("No Camera.main — run B0 first; camera target not wired."); return; }
+            foreach (var typeName in new[] { TypeVillageCamera, TypeSmartMobileCamera })
+            {
+                var t = FindType(typeName);
+                if (t == null) continue;
+                var follow = cam.GetComponent(t);
+                if (follow == null) continue;
+                var so = new SerializedObject(follow);
+                SetObjectField(so, "_target", hero.transform);
+                so.ApplyModifiedPropertiesWithoutUndo();
+            }
+            Log("Wired camera _target -> hero (VillageCamera + SmartMobileCamera).");
+        }
+
+        // =====================================================================
+        // ORCHESTRATOR - "pass the layout -> wired city". Runs every gameplay phase in
+        // order against the already-generated Village2 shell. THIS is the factory proof:
+        // open scene -> run the generic-component importers in sequence -> a playable
+        // city. Each phase is idempotent + saves, so re-running is safe.
+        // =====================================================================
+        // =====================================================================
+        // REBUILD ALL — the owner's "fix in script, simply rerun" entry point. ONE
+        // command: regenerate the shell from the (fixed) generator -> promote ->
+        // wire the playable city. Never hand-edit the scene; change the generator/
+        // importers and re-run this. (This is the dev/build-time path; clear-rebuild
+        // is deterministic — the runtime player-camp path is the idempotent replay.)
+        // =====================================================================
+        [MenuItem("Defenders/Village2/REBUILD ALL (generate + promote + wire)")]
+        public static void RebuildAll()
+        {
+            Log("=== REBUILD ALL: regenerate shell -> promote -> wire playable city ===");
+            // Fresh empty scene so the generator builds clean (it saves the active scene as Village2Test).
+            EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            Village2Build.SetupAndGenerateVillage2();   // regenerate Village2Test from the fixed generator
+            A_PromoteScene();                            // Village2Test -> Village2.unity
+            B_BuildPlayableCity();                       // B0..B4 gameplay wiring
+            Log("=== REBUILD ALL DONE — open Village2.unity and press Play ===");
+        }
+
+        [MenuItem("Defenders/Village2/B. Build Playable City (all phases)")]
+        public static void B_BuildPlayableCity()
+        {
+            Log("=== BUILD PLAYABLE CITY: running all gameplay phases ===");
+            B0_AddSceneDefaults();
+            B1_WireHeart();
+            B2_WireCoreSystems();
+            B3_WireHud();
+            B4_BuildHero();
+            Log("=== BUILD PLAYABLE CITY DONE — open Village2.unity and press Play ===");
+        }
+
+        // ── Mesh helpers (mirror VillageSceneBuilder.Helpers) ────────────────
+        static GameObject LoadModel(string assetPath)
+        {
+            var model = AssetDatabase.LoadAssetAtPath<GameObject>(assetPath);
+            if (model != null) return model;
+            string asPrefab = Path.ChangeExtension(assetPath, ".prefab")?.Replace('\\', '/');
+            if (!string.IsNullOrEmpty(asPrefab))
+                model = AssetDatabase.LoadAssetAtPath<GameObject>(asPrefab);
+            return model;
+        }
+
+        static void NormalizeToHeight(GameObject go, float target)
+        {
+            if (go == null || target <= 0.001f) return;
+            var rends = go.GetComponentsInChildren<Renderer>();
+            if (rends.Length == 0) return;
+            Bounds b = rends[0].bounds;
+            foreach (var r in rends) b.Encapsulate(r.bounds);
+            float maxExtent = Mathf.Max(b.size.x, Mathf.Max(b.size.y, b.size.z));
+            if (maxExtent < 0.0001f) return;
+            float factor = Mathf.Clamp(target / maxExtent, 0.05f, 40f);
+            go.transform.localScale *= factor;
+        }
+
+        static void StripColliders(GameObject go)
+        {
+            foreach (var c in go.GetComponentsInChildren<Collider>()) Object.DestroyImmediate(c);
+        }
+
+        static void StripRigidbodies(GameObject go)
+        {
+            foreach (var r in go.GetComponentsInChildren<Rigidbody>()) Object.DestroyImmediate(r);
+        }
+
+        static void SetLayerMaskField(SerializedObject so, string field, int mask)
+        {
+            var prop = so.FindProperty(field);
+            if (prop == null)
+            {
+                Warn($"LayerMask field '{field}' not found on {so.targetObject.GetType().Name} — not set.");
+                return;
+            }
+            prop.intValue = mask;
+        }
+
+        // =====================================================================
+        // CAPTURE-AUTHORED PLACEMENT (owner 2026-06-04: "spatial awareness is the one
+        // part AI gets wrong — let me correct the Z in-editor and capture the exact
+        // position so it always matches"). YOU position/correct pieces by hand in the
+        // scene; Capture records their EXACT prefab + world transform to a JSON recipe;
+        // Replay re-instantiates them verbatim. Human does the spatial dial ONCE → the
+        // recipe is canonical → the factory replays it (every city, player camps).
+        // For PRECISE pieces (gate↔wall fit, building anchors); procedural scatter
+        // (nature/props) stays in the generator.
+        // =====================================================================
+        const string RecipePath = "Assets/_Village2/Village2PlacementRecipe.json";
+
+        [System.Serializable]
+        class PlacementEntry { public string prefab; public Vector3 pos; public Vector3 euler; public Vector3 scale; }
+        [System.Serializable]
+        class PlacementRecipe { public System.Collections.Generic.List<PlacementEntry> entries = new System.Collections.Generic.List<PlacementEntry>(); }
+
+        [MenuItem("Defenders/Village2/Capture Selected -> Recipe")]
+        public static void CaptureSelectedToRecipe()
+        {
+            var sel = Selection.gameObjects;
+            if (sel == null || sel.Length == 0) { Warn("Capture: nothing selected. Select the pieces you positioned, then Capture."); return; }
+
+            var recipe = LoadRecipe();
+            int added = 0, skipped = 0;
+            foreach (var go in sel)
+            {
+                string prefabPath = ResolvePrefabPath(go);
+                if (string.IsNullOrEmpty(prefabPath))
+                {
+                    Warn($"Capture: '{go.name}' has no prefab source — skipped (select a prefab instance, not a plain GameObject).");
+                    skipped++; continue;
+                }
+                var t = go.transform;
+                recipe.entries.Add(new PlacementEntry { prefab = prefabPath, pos = t.position, euler = t.eulerAngles, scale = t.localScale });
+                added++;
+            }
+            SaveRecipe(recipe);
+            Log($"Capture: +{added} placement(s) (skipped {skipped}) -> {RecipePath}. Total now {recipe.entries.Count}.");
+        }
+
+        [MenuItem("Defenders/Village2/Replay Recipe Into Scene")]
+        public static void ReplayRecipeIntoScene()
+        {
+            var recipe = LoadRecipe();
+            if (recipe.entries.Count == 0) { Warn($"Replay: recipe is empty ({RecipePath})."); return; }
+            if (!OpenVillage2(out Scene scene)) return;
+            GameObject root = FindRoot(scene, "Village2");
+
+            var holderExisting = root != null ? root.transform.Find("CapturedPlacements") : null;
+            if (holderExisting != null) Object.DestroyImmediate(holderExisting.gameObject);   // idempotent re-replay
+            var holder = new GameObject("CapturedPlacements").transform;
+            if (root != null) holder.SetParent(root.transform, false);
+
+            int placed = 0;
+            foreach (var e in recipe.entries)
+            {
+                var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(e.prefab);
+                if (prefab == null) { Warn($"Replay: prefab not found '{e.prefab}' — skipped."); continue; }
+                var go = (GameObject)PrefabUtility.InstantiatePrefab(prefab, holder);
+                go.transform.position = e.pos;
+                go.transform.eulerAngles = e.euler;
+                go.transform.localScale = e.scale;
+                placed++;
+            }
+            EditorSceneManager.MarkSceneDirty(scene);
+            EditorSceneManager.SaveScene(scene, Village2ScenePath);
+            Log($"Replay: instantiated {placed}/{recipe.entries.Count} captured placement(s) under 'CapturedPlacements' — exact transforms.");
+        }
+
+        [MenuItem("Defenders/Village2/Clear Placement Recipe")]
+        public static void ClearPlacementRecipe()
+        {
+            SaveRecipe(new PlacementRecipe());
+            Log($"Cleared placement recipe: {RecipePath}.");
+        }
+
+        static string ResolvePrefabPath(GameObject go)
+        {
+            var src = PrefabUtility.GetCorrespondingObjectFromSource(go);
+            return src != null ? AssetDatabase.GetAssetPath(src) : null;
+        }
+
+        static PlacementRecipe LoadRecipe()
+        {
+            if (File.Exists(RecipePath))
+            {
+                try
+                {
+                    var r = JsonUtility.FromJson<PlacementRecipe>(File.ReadAllText(RecipePath));
+                    if (r != null) { if (r.entries == null) r.entries = new System.Collections.Generic.List<PlacementEntry>(); return r; }
+                }
+                catch (System.Exception e) { Warn($"Recipe parse failed ({e.Message}) — starting fresh."); }
+            }
+            return new PlacementRecipe();
+        }
+
+        static void SaveRecipe(PlacementRecipe recipe)
+        {
+            File.WriteAllText(RecipePath, JsonUtility.ToJson(recipe, true));
+            AssetDatabase.Refresh();
         }
 
         // =====================================================================
@@ -487,6 +991,49 @@ namespace DeNelle.Editor
                 if (t != null) return t;
             }
             return null;
+        }
+
+        // Adds a runtime gameplay component by full type name (resolved by reflection,
+        // same exemption as VillageSceneBuilder — build tooling, not a runtime bridge).
+        // Idempotent: returns the existing component if already attached.
+        static Component AddByType(GameObject go, string fullTypeName)
+        {
+            var t = FindType(fullTypeName);
+            if (t == null)
+            {
+                Warn($"Type '{fullTypeName}' not found (is DeNelle.Village compiled?) — skipping that component.");
+                return null;
+            }
+            var existing = go.GetComponent(t);
+            return existing != null ? existing : go.AddComponent(t);
+        }
+
+        // Wires a serialized object-reference field by name (no compile-time dep on
+        // the target type). Mirrors VillageSceneBuilder.SetObjectField.
+        static void SetObjectField(SerializedObject so, string field, Object value)
+        {
+            var prop = so.FindProperty(field);
+            if (prop == null)
+            {
+                Warn($"Serialized field '{field}' not found on {so.targetObject.GetType().Name} — not wired.");
+                return;
+            }
+            prop.objectReferenceValue = value;
+        }
+
+        // Assigns the first PanelSettings asset in the project to a UIDocument so its
+        // UXML actually renders. Mirrors WallRepairSceneSetup.WirePanelSettings.
+        static void WirePanelSettings(UIDocument uiDoc)
+        {
+            if (uiDoc == null || uiDoc.panelSettings != null) return;
+            var guids = AssetDatabase.FindAssets("t:PanelSettings");
+            if (guids != null && guids.Length > 0)
+            {
+                var path = AssetDatabase.GUIDToAssetPath(guids[0]);
+                var panel = AssetDatabase.LoadAssetAtPath<PanelSettings>(path);
+                if (panel != null) { uiDoc.panelSettings = panel; return; }
+            }
+            Warn("No PanelSettings asset found — the HUD UIDocument will not render until one is assigned.");
         }
 
         static void Log(string m)  => Debug.Log("[Village2Playable] " + m);

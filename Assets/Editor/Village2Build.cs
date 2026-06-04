@@ -296,6 +296,41 @@ namespace DeNelle.Editor
             SetField(gen, "wallStep", wallW);
             Debug.Log($"[Village2Build] measured wall: height={wallH:F2} width={wallW:F2}");
 
+            // DEF-254: measure the gate arch so the opening EXACTLY spans it — walls butt
+            // against the arch (the "gate doesn't touch the walls" gap). gateHalf =
+            // (archWidth + wallStep)/2 puts the innermost wall's inner edge on the arch edge.
+            float archW = 4f;
+            if (gatePrefab != null)
+            {
+                var aProbe = (GameObject)PrefabUtility.InstantiatePrefab(gatePrefab);
+                if (aProbe != null)
+                {
+                    var ar = aProbe.GetComponentsInChildren<Renderer>();
+                    if (ar.Length > 0)
+                    {
+                        Bounds ab = ar[0].bounds;
+                        for (int i = 1; i < ar.Length; i++) ab.Encapsulate(ar[i].bounds);
+                        archW = Mathf.Max(ab.size.x, ab.size.z);   // span along the wall run
+                    }
+                    Object.DestroyImmediate(aProbe);
+                }
+            }
+            float gateHalf = (archW + wallW) * 0.5f;
+            SetField(gen, "gateHalfNorth", gateHalf);
+            SetField(gen, "gateHalfOther", gateHalf);
+            Debug.Log($"[Village2Build] measured gate arch: width={archW:F2} -> gateHalf={gateHalf:F2} (walls meet the arch)");
+
+            // DEPTH: a wood encircling the town (procedural scatter, gate lanes kept clear).
+            // Pull from whatever nature packs are imported — polyperfect Nature_M (gitignored but
+            // present) + KayKit Forest. LoadMany drops any that aren't on this machine.
+            SetField(gen, "trees", LoadMany(
+                "SM_Tree_Beech", "SM_Tree_Oak", "SM_Tree_Birch", "SM_Tree_Maple", "SM_Tree_Conifer",
+                "SM_Tree_Fir", "SM_Tree_Round", "Tree_1_A_Color1", "Tree_2_A_Color1"));
+            SetField(gen, "bushes", LoadMany(
+                "SM_Bush_Big", "SM_Bush_Medium", "SM_Bush_Small", "Bush_1_A_Color1", "Bush_2_A_Color1"));
+            SetField(gen, "rocks", LoadMany(
+                "SM_Rock_Large", "SM_Rocks_Small", "SM_Stone", "Rock_1_A_Color1", "Rock_2_A_Color1"));
+
             // ---- Invoke GenerateVillage() ---------------------------------------
             MethodInfo generate = genType.GetMethod("GenerateVillage",
                 BindingFlags.Public | BindingFlags.Instance);
@@ -397,6 +432,31 @@ namespace DeNelle.Editor
             }
             Debug.LogWarning($"[Village2Build] Quaternius piece '{fileName}' NOT FOUND in any known root — slot will be null.");
             return null;
+        }
+
+        // Finds a GameObject/FBX/prefab by asset name ANYWHERE in the project (robust to pack
+        // location). Exact filename match preferred, else first partial. Null if absent.
+        static GameObject LoadByName(string name)
+        {
+            string exact = null;
+            foreach (var guid in AssetDatabase.FindAssets($"{name} t:GameObject"))
+            {
+                var path = AssetDatabase.GUIDToAssetPath(guid);
+                var file = System.IO.Path.GetFileNameWithoutExtension(path);
+                if (string.Equals(file, name, System.StringComparison.OrdinalIgnoreCase))
+                    return AssetDatabase.LoadAssetAtPath<GameObject>(path);
+                if (exact == null) exact = path;   // remember first partial as fallback
+            }
+            return exact != null ? AssetDatabase.LoadAssetAtPath<GameObject>(exact) : null;
+        }
+
+        // Loads many by name, dropping any that aren't imported (graceful — packs are gitignored).
+        static GameObject[] LoadMany(params string[] names)
+        {
+            var list = new List<GameObject>();
+            foreach (var n in names) { var g = LoadByName(n); if (g != null) list.Add(g); }
+            Debug.Log($"[Village2Build] LoadMany resolved {list.Count}/{names.Length} ({string.Join(",", names)}).");
+            return list.ToArray();
         }
 
         static GameObject[] NonNull(params GameObject[] items)

@@ -41,6 +41,13 @@ public class Village2Generator : MonoBehaviour
     [Header("Lighting")]
     public GameObject torchPrefab;
 
+    [Header("Depth — Nature ring (encircling wood)")]
+    public GameObject[] trees;
+    public GameObject[] bushes;
+    public GameObject[] rocks;
+    public int natureCount = 110;     // total scatter density (tunable)
+    public int seed = 1337;           // deterministic scatter — same seed = same wood
+
     [Header("Settings (plus/minus 42/33 spec)")]
     public float townHalfWidth = 42f;
     public float townHalfDepth = 33f;
@@ -57,8 +64,19 @@ public class Village2Generator : MonoBehaviour
         for (int i = villageParent.childCount - 1; i >= 0; i--)
             DestroyImmediate(villageParent.GetChild(i).gameObject);
 
+        UnityEngine.Random.InitState(seed);   // deterministic scatter — same seed = same wood
+
         var tree = Place(treeOfLife, Vector3.zero, 0f);
-        if (tree != null) ScaleToHeight(tree, targetTreeHeight);
+        if (tree != null)
+        {
+            AutoUpright(tree);                 // DEF-96: the FBX imports lying on its side
+            ScaleToHeight(tree, targetTreeHeight);
+            SeatOnGround(tree, 0f);
+            // Decorative centrepiece — the gameplay blocker is HeartController's clean capsule
+            // (B1). A lying/scaled tree's mesh colliders walled off the whole plaza; strip them
+            // so the centre is walkable regardless of the tree's final pose.
+            StripColliders(tree);
+        }
 
         // Quadrants pulled outward (±23/±18) so the Tree of Life keeps a clear ~13 m plaza.
         CreateQuadrant("NE_Crafting",    new Vector3( 23, 0,  18), Quad.Crafting);
@@ -70,6 +88,7 @@ public class Village2Generator : MonoBehaviour
         CreateWalls();
         CreateMoat();
         PlaceLighting();
+        ScatterNatureRing();   // depth: a wood encircling the town (procedural scatter — exact pos irrelevant)
 
         Debug.Log("[Village2] Generated. children=" + villageParent.childCount);
     }
@@ -83,16 +102,16 @@ public class Village2Generator : MonoBehaviour
 
         if (kind == Quad.Crafting)
         {
-            Place(blacksmithForge, center + new Vector3(  9, 0,   9), 35f, quad);
-            Place(armorerShop,     center + new Vector3(  9, 0,  -9), -40f, quad);
-            Place(lumbermill,      center + new Vector3(-11, 0,   0), 90f, quad);
+            Place(blacksmithForge, center + new Vector3(  9, 0,   9), 35f, quad, seat:true);
+            Place(armorerShop,     center + new Vector3(  9, 0,  -9), -40f, quad, seat:true);
+            Place(lumbermill,      center + new Vector3(-11, 0,   0), 90f, quad, seat:true);
         }
         else if (kind == Quad.Market)
         {
-            Place(tavern, center + new Vector3( -9, 0,  9), 25f, quad);
-            Place(church, center + new Vector3( 10, 0, -8), 160f, quad);
+            Place(tavern, center + new Vector3( -9, 0,  9), 25f, quad, seat:true);
+            Place(church, center + new Vector3( 10, 0, -8), 160f, quad, seat:true);
             if (marketStalls != null && marketStalls.Length > 0)
-                Place(marketStalls[0], center + new Vector3(0, 0, 0), 0f, quad);
+                Place(marketStalls[0], center + new Vector3(0, 0, 0), 0f, quad, seat:true);
         }
         else // Residential — 4 houses on a wide ring, 90° apart so they never overlap
         {
@@ -104,7 +123,7 @@ public class Village2Generator : MonoBehaviour
                 var pos = center + new Vector3(Mathf.Cos(ang * Mathf.Deg2Rad) * ringDist, 0f, Mathf.Sin(ang * Mathf.Deg2Rad) * ringDist);
                 var pool = (i % 2 == 0) ? mediumHouses : smallHouses;
                 var house = Pick(pool, i);
-                Place(house, pos, ang + 180f, quad);   // face the house toward the quadrant centre
+                Place(house, pos, ang + 180f, quad, seat:true);   // face the house toward the quadrant centre
             }
         }
     }
@@ -122,16 +141,16 @@ public class Village2Generator : MonoBehaviour
         float hw = townHalfWidth, hd = townHalfDepth;
         // North wall (z=+hd), gate gap at x=0 (12 m); rampart on top.
         WallRun(new Vector3(0, 0, hd), hw * 2f, 0f, gateHalfNorth);
-        GateTowers(new Vector3(0, 0, hd), 0f);
+        GateTowers(new Vector3(0, 0, hd), 0f, gateHalfNorth);
         // South (z=-hd)
         WallRun(new Vector3(0, 0, -hd), hw * 2f, 180f, gateHalfOther);
-        GateTowers(new Vector3(0, 0, -hd), 180f);
+        GateTowers(new Vector3(0, 0, -hd), 180f, gateHalfOther);
         // East (x=+hw)
         WallRun(new Vector3(hw, 0, 0), hd * 2f, 90f, gateHalfOther);
-        GateTowers(new Vector3(hw, 0, 0), 90f);
+        GateTowers(new Vector3(hw, 0, 0), 90f, gateHalfOther);
         // West (x=-hw)
         WallRun(new Vector3(-hw, 0, 0), hd * 2f, -90f, gateHalfOther);
-        GateTowers(new Vector3(-hw, 0, 0), -90f);
+        GateTowers(new Vector3(-hw, 0, 0), -90f, gateHalfOther);
 
         CreateCornerTowers();
     }
@@ -150,40 +169,54 @@ public class Village2Generator : MonoBehaviour
             if (Mathf.Abs(off) < gateHalf) continue; // gate opening
             var pos = center;
             if (alongX) pos.x = center.x + off; else pos.z = center.z + off;
-            Place(wallStraight, pos, yRot);
-            if (balconyStraight != null)
-                Place(balconyStraight, pos + Vector3.up * wallHeight, yRot);
+            var w = Place(wallStraight, pos, yRot, seat:true);   // DEF-254: seat wall base at Y=0
+            // DEF-254: stack the rampart walkway on the wall's ACTUAL measured top, not a
+            // guessed wallHeight (which floated/sank the balcony when the mesh differed).
+            if (balconyStraight != null && w != null)
+            {
+                float top = WorldTopY(w);
+                var bal = Place(balconyStraight, new Vector3(pos.x, top, pos.z), yRot);
+                if (bal != null) SeatOnGround(bal, top);
+            }
         }
     }
 
-    private void GateTowers(Vector3 pos, float yRot)
+    private void GateTowers(Vector3 pos, float yRot, float gateHalf)
     {
-        var side = Quaternion.Euler(0, yRot, 0) * new Vector3(gateHalfOther + 2f, 0, 0);
-        Place(towerBase, pos + side, yRot);
-        Place(towerBase, pos - side, yRot);
-        Place(gatePrefab, pos, yRot);
+        // DEF-254: flank the ACTUAL opening (gateHalf per side) so towers meet the wall ends
+        // instead of standing inside the gap. +2 m clears the gate arch.
+        var side = Quaternion.Euler(0, yRot, 0) * new Vector3(gateHalf + 2f, 0, 0);
+        Place(towerBase, pos + side, yRot, seat:true);
+        Place(towerBase, pos - side, yRot, seat:true);
+        Place(gatePrefab, pos, yRot, seat:true);   // gate arch base at ground, not submerged
         if (stairsPrefab != null)
-            Place(stairsPrefab, pos + Quaternion.Euler(0, yRot, 0) * new Vector3(0, 0, 5f), yRot + 90f);
+            // DEF-254: stairs climb from INSIDE the wall (local -z) up to the rampart — they were
+            // placed outward (+z) and landed in the moat ring.
+            Place(stairsPrefab, pos + Quaternion.Euler(0, yRot, 0) * new Vector3(0, 0, -5f), yRot + 90f, seat:true);
     }
 
     private void CreateCornerTowers()
     {
         if (towerBase == null) return;
         float hw = townHalfWidth + 1f, hd = townHalfDepth + 1f;
-        Place(towerBase, new Vector3( hw, 0,  hd), 0f);
-        Place(towerBase, new Vector3(-hw, 0,  hd), 0f);
-        Place(towerBase, new Vector3( hw, 0, -hd), 0f);
-        Place(towerBase, new Vector3(-hw, 0, -hd), 0f);
+        Place(towerBase, new Vector3( hw, 0,  hd), 0f, seat:true);
+        Place(towerBase, new Vector3(-hw, 0,  hd), 0f, seat:true);
+        Place(towerBase, new Vector3( hw, 0, -hd), 0f, seat:true);
+        Place(towerBase, new Vector3(-hw, 0, -hd), 0f, seat:true);
     }
 
     private void CreateMoat()
     {
         if (moatWaterPlane == null) return;
-        float hw = townHalfWidth, hd = townHalfDepth, off = 7f, w = 9f;
-        var n = Place(moatWaterPlane, new Vector3(0, -0.3f, hd + off), 0f); if (n) n.transform.localScale = new Vector3(hw * 2.2f, 1, w);
-        var s = Place(moatWaterPlane, new Vector3(0, -0.3f, -hd - off), 0f); if (s) s.transform.localScale = new Vector3(hw * 2.2f, 1, w);
-        var e = Place(moatWaterPlane, new Vector3(hw + off, -0.3f, 0), 90f); if (e) e.transform.localScale = new Vector3(hd * 2.2f, 1, w);
-        var west = Place(moatWaterPlane, new Vector3(-hw - off, -0.3f, 0), 90f); if (west) west.transform.localScale = new Vector3(hd * 2.2f, 1, w);
+        // DEF-254: water sits BELOW ground (Y=-0.6) and the ring is pushed OUT to off=10 so its
+        // inner edge clears the corner towers (hd+1) — no longer floods the wall/stair base.
+        // NOTE: a true sunken moat needs a carved terrain channel (separate pass); this keeps the
+        // water as a clean ring outside the walls so nothing reads as "flooded".
+        float hw = townHalfWidth, hd = townHalfDepth, off = 10f, w = 9f, y = -0.6f;
+        var n = Place(moatWaterPlane, new Vector3(0, y, hd + off), 0f); if (n) n.transform.localScale = new Vector3(hw * 2.2f, 1, w);
+        var s = Place(moatWaterPlane, new Vector3(0, y, -hd - off), 0f); if (s) s.transform.localScale = new Vector3(hw * 2.2f, 1, w);
+        var e = Place(moatWaterPlane, new Vector3(hw + off, y, 0), 90f); if (e) e.transform.localScale = new Vector3(hd * 2.2f, 1, w);
+        var west = Place(moatWaterPlane, new Vector3(-hw - off, y, 0), 90f); if (west) west.transform.localScale = new Vector3(hd * 2.2f, 1, w);
     }
 
     private void PlaceLighting()
@@ -213,10 +246,121 @@ public class Village2Generator : MonoBehaviour
         return pool[i % pool.Length];
     }
 
-    private GameObject Place(GameObject prefab, Vector3 pos, float yRot, Transform parent = null)
+    private GameObject Place(GameObject prefab, Vector3 pos, float yRot, Transform parent = null, bool seat = false)
     {
         if (prefab == null) return null;
-        return Instantiate(prefab, pos, Quaternion.Euler(0, yRot, 0), parent != null ? parent : villageParent);
+        var go = Instantiate(prefab, pos, Quaternion.Euler(0, yRot, 0), parent != null ? parent : villageParent);
+        // DEF-254: seat the piece so its renderer-bounds BOTTOM lands at pos.y, regardless of
+        // the prefab's pivot (Quaternius kit pivots vary — raw placement floats/sinks pieces).
+        if (seat) SeatOnGround(go, pos.y);
+        return go;
+    }
+
+    // DEF-254 height hierarchy: shift a placed object vertically so the bottom of its combined
+    // renderer bounds sits exactly at groundY. The single source of truth for "on the ground".
+    private void SeatOnGround(GameObject go, float groundY)
+    {
+        if (go == null) return;
+        var rends = go.GetComponentsInChildren<Renderer>();
+        if (rends == null || rends.Length == 0) return;
+        Bounds b = rends[0].bounds;
+        for (int i = 1; i < rends.Length; i++) b.Encapsulate(rends[i].bounds);
+        go.transform.position += new Vector3(0f, groundY - b.min.y, 0f);
+    }
+
+    // World-space TOP Y of a placed object's combined renderer bounds (for stacking the
+    // rampart walkway on the wall's ACTUAL top instead of a guessed wallHeight).
+    private float WorldTopY(GameObject go)
+    {
+        if (go == null) return 0f;
+        var rends = go.GetComponentsInChildren<Renderer>();
+        if (rends == null || rends.Length == 0) return go.transform.position.y;
+        Bounds b = rends[0].bounds;
+        for (int i = 1; i < rends.Length; i++) b.Encapsulate(rends[i].bounds);
+        return b.max.y;
+    }
+
+    // DEF-96: stand an object up regardless of which way its FBX imported. Measures the
+    // combined bounds; if the longest axis is horizontal (lying down), rotates that axis
+    // to vertical. Self-correcting — no need to know the model's authored orientation.
+    private void AutoUpright(GameObject go)
+    {
+        if (go == null) return;
+        var rends = go.GetComponentsInChildren<Renderer>();
+        if (rends == null || rends.Length == 0) return;
+        Bounds b = rends[0].bounds;
+        for (int i = 1; i < rends.Length; i++) b.Encapsulate(rends[i].bounds);
+        Vector3 s = b.size;
+        if (s.y >= s.x && s.y >= s.z) return;           // already tallest on Y
+        if (s.x >= s.z) go.transform.Rotate(0f, 0f, -90f, Space.World);  // X longest -> bring to Y
+        else            go.transform.Rotate(-90f, 0f, 0f, Space.World);  // Z longest -> bring to Y
+    }
+
+    // Strips colliders from a placed object (decorative props/centrepiece shouldn't block
+    // the hero or wall off walkable space — gameplay blockers are added deliberately).
+    private void StripColliders(GameObject go)
+    {
+        if (go == null) return;
+        foreach (var c in go.GetComponentsInChildren<Collider>(true)) DestroyImmediate(c);
+    }
+
+    // DEPTH: scatters a wood ring OUTSIDE the walls — the single biggest "alive" lever for a
+    // bare town. Procedural is correct here (organic scatter; exact position is irrelevant, so
+    // it sidesteps the spatial-awareness problem that captured-authoring solves for structures).
+    // Skips the 4 cardinal gate LANES so trees never block a gate exit. Height-normalized so
+    // size reads right regardless of each pack's native scale. Deterministic via the seed.
+    private void ScatterNatureRing()
+    {
+        bool any = (trees != null && trees.Length > 0)
+                || (bushes != null && bushes.Length > 0)
+                || (rocks != null && rocks.Length > 0);
+        if (!any) { Debug.Log("[Village2] Nature ring skipped — no tree/bush/rock prefabs assigned."); return; }
+
+        var nature = new GameObject("Nature").transform;
+        nature.SetParent(villageParent, false);
+
+        float innerW = townHalfWidth + 8f, innerD = townHalfDepth + 8f;  // clear of walls/towers
+        float band = 22f;                                                // ring thickness
+        const float laneHalf = 9f;                                       // keep gate corridors clear
+        int placed = 0;
+
+        for (int i = 0; i < natureCount; i++)
+        {
+            float ang = UnityEngine.Random.Range(0f, Mathf.PI * 2f);
+            float rW = innerW + UnityEngine.Random.Range(0f, band);
+            float rD = innerD + UnityEngine.Random.Range(0f, band);
+            var pos = new Vector3(Mathf.Cos(ang) * rW, 0f, Mathf.Sin(ang) * rD);
+
+            // Don't drop anything into a cardinal gate lane (N/S corridor at x~0, E/W at z~0).
+            if (Mathf.Abs(pos.x) < laneHalf || Mathf.Abs(pos.z) < laneHalf) continue;
+
+            GameObject prefab; float targetH;
+            PickNature(out prefab, out targetH);
+            if (prefab == null) continue;
+
+            var go = Place(prefab, pos, UnityEngine.Random.Range(0f, 360f), nature);
+            if (go == null) continue;
+            ScaleToHeight(go, targetH);   // sane size regardless of native scale
+            SeatOnGround(go, 0f);
+            StripColliders(go);           // decorative — never blocks the hero
+            placed++;
+        }
+        Debug.Log($"[Village2] Nature ring: placed {placed} trees/bushes/rocks (of {natureCount} tries, gate lanes kept clear).");
+    }
+
+    // Weighted pick: mostly trees, some bushes, a few rocks — with a sensible target height each.
+    private void PickNature(out GameObject prefab, out float targetH)
+    {
+        int r = UnityEngine.Random.Range(0, 10);
+        if (r < 6 && trees != null && trees.Length > 0)
+        { prefab = trees[UnityEngine.Random.Range(0, trees.Length)]; targetH = UnityEngine.Random.Range(5f, 8.5f); return; }
+        if (r < 8 && bushes != null && bushes.Length > 0)
+        { prefab = bushes[UnityEngine.Random.Range(0, bushes.Length)]; targetH = UnityEngine.Random.Range(1f, 2f); return; }
+        if (rocks != null && rocks.Length > 0)
+        { prefab = rocks[UnityEngine.Random.Range(0, rocks.Length)]; targetH = UnityEngine.Random.Range(0.8f, 1.8f); return; }
+        if (trees != null && trees.Length > 0)
+        { prefab = trees[UnityEngine.Random.Range(0, trees.Length)]; targetH = UnityEngine.Random.Range(5f, 8.5f); return; }
+        prefab = null; targetH = 1f;
     }
 
     [ContextMenu("Clear Village2")]
