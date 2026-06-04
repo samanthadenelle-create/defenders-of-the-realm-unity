@@ -26,12 +26,11 @@ namespace DeNelle.Editor
         // Missing paths fall back to the procedural placeholder (null is safe).
         private static readonly string[] DevTowerModelPaths =
         {
-            // Owner's real model (viking watch tower). One model across all three
-            // levels for now — the upgrade still bumps stats + fires the VFX; vary
-            // the mesh/scale per level later if desired.
-            "Assets/Art/Towers/VikingWatchTower/Tower.fbx",
-            "Assets/Art/Towers/VikingWatchTower/Tower.fbx",
-            "Assets/Art/Towers/VikingWatchTower/Tower.fbx",
+            // Owner pick 2026-06-04: lightweight polyperfect PIRATE towers (match the pirate
+            // rampart platform). Wood (L1) -> Stone (L2/L3); upgrade bumps stats + grows the mesh.
+            "Assets/polyperfect/Low Poly Ultimate Pack/_M/Prefabs_M/Pirates_M/Tower_Pirate_Wood.prefab",
+            "Assets/polyperfect/Low Poly Ultimate Pack/_M/Prefabs_M/Pirates_M/Tower_Pirate_Stone.prefab",
+            "Assets/polyperfect/Low Poly Ultimate Pack/_M/Prefabs_M/Pirates_M/Tower_Pirate_Stone.prefab",
         };
 
         [MenuItem("Defenders/Seed Tower Data")]
