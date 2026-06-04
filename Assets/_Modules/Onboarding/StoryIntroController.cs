@@ -218,20 +218,22 @@ namespace DeNelle.Onboarding
         public void ForceHide()
         {
             _cts?.Cancel();
+            // SHARED-PANEL SAFE TEARDOWN (DEF-211 regression — "click Skip and every
+            // screen vanishes, never reaches hero-select"). The bumper, story-intro
+            // AND title UIDocuments all share ONE OnboardingPanelSettings panel
+            // (OnboardingSceneBuilder assigns the same asset to all three). Disabling
+            // THIS UIDocument / SetActive(false)-ing its GameObject / nulling its
+            // panelSettings tears down that SHARED panel mid-life, which blanks the
+            // title/hero-select rendering into the same panel. So hide ONLY this
+            // overlay's own subtree: stop the loop, empty the root, collapse it, make
+            // it un-pickable. An empty display:None root renders nothing and steals no
+            // picks — so the "intro on top" bug stays fixed WITHOUT killing the doc.
             if (_root != null)
             {
+                _root.Clear();
                 _root.style.opacity = 0f;
                 _root.style.display = DisplayStyle.None;
                 _root.pickingMode = PickingMode.Ignore;
-            }
-            if (_document != null)
-            {
-                _document.enabled = false;             // detach the panel from rendering
-                // DEF-211: also fully deactivate the overlay GameObject (the
-                // HideImmediate pattern) so it cannot render even one more frame —
-                // disabling the UIDocument alone has been observed to leave the root
-                // attached to the shared panel in this Unity 6 build.
-                _document.gameObject.SetActive(false);
             }
             HasFinished = true;
         }
@@ -465,23 +467,17 @@ namespace DeNelle.Onboarding
 
         private void HideImmediate()
         {
-            // Fully tear down the cold-open overlay so it cannot intercept picks
-            // on the Title screen. _document.enabled=false alone has been
-            // observed to leave the root attached on the shared panel in this
-            // Unity 6 build — same class of serialisation quirk that needed the
-            // YAML PanelSettings injection.
+            // SHARED-PANEL SAFE TEARDOWN — see ForceHide. The cold-open overlay shares
+            // ONE PanelSettings panel with the title/hero-select, so we must NOT
+            // disable this UIDocument or its GameObject (that blanks the shared panel
+            // and the title with it — the "Skip wipes every screen" regression).
+            // Hiding our own emptied, un-pickable, display:None root is enough — it
+            // renders nothing and steals no picks on the Title screen.
             if (_root != null)
             {
+                _root.Clear();
                 _root.style.display = DisplayStyle.None;
                 _root.pickingMode = PickingMode.Ignore;
-                _root.Clear();
-                _root.RemoveFromHierarchy();
-            }
-            if (_document != null)
-            {
-                _document.visualTreeAsset = null;
-                _document.enabled = false;
-                _document.gameObject.SetActive(false);
             }
         }
 
