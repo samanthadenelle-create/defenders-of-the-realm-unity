@@ -223,6 +223,7 @@ namespace DeNelle.Village
                     for (int i = 0; i < 3; i++)
                         FireSingleProjectile(target, burstDmg, DamageElement.Aether, firePos);
                     VFXManager.Play(VFXType.Cast_MageCharge, firePos);
+                    GameSfx.PlayTowerFire();   // DEF-183: burst is not silent
                     HitStopManager.DoImpact(HitTier.Medium);
                     return;  // burst REPLACES the standard shot this tick
                 }
@@ -251,6 +252,11 @@ namespace DeNelle.Village
                 ? VFXType.Cast_MageCharge
                 : VFXType.Projectile_TowerArcane;
             VFXManager.Play(muzzleType, firePos);
+
+            // DEF-183: tower fire SFX through the existing audio surface
+            // (CoreServices.Audio, null-guarded inside). Mixed low — many towers
+            // fire at once.
+            GameSfx.PlayTowerFire();
 
             HitStopManager.DoImpact(_isEmpowered ? HitTier.Medium : HitTier.Light);
         }

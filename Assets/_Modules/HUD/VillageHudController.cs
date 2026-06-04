@@ -518,6 +518,7 @@ namespace DeNelle.HUD
         // bridge needed). Keeps parity with the T hotkey, which also calls Toggle().
         private void OnSkillsClicked()
         {
+            CoreServices.Audio?.PlayUiClick();   // DEF-183: UI click feedback
             var panel = UnityEngine.Object.FindAnyObjectByType<HeroTalentPanel>();
             if (panel == null)
             {
@@ -1080,6 +1081,7 @@ namespace DeNelle.HUD
         private static System.Type s_waveManagerType;
         private void OnTriggerWaveClicked()
         {
+            CoreServices.Audio?.PlayUiClick();   // DEF-183: UI click feedback
             try
             {
                 if (s_waveManagerType == null)
@@ -1455,6 +1457,7 @@ namespace DeNelle.HUD
         /// <summary>Forwards the Build button click to the BuildRequested event.</summary>
         private void OnBuildClicked()
         {
+            CoreServices.Audio?.PlayUiClick();   // DEF-183: UI click feedback
             int listeners = BuildRequested?.GetPersistentEventCount() ?? 0;
             Debug.Log("[VillageHud] Build CLICK — persistent listeners: " + listeners);
             BuildRequested?.Invoke();
@@ -1466,12 +1469,14 @@ namespace DeNelle.HUD
         /// <summary>Forwards the repair-prompt Repair button to RepairConfirmRequested.</summary>
         private void OnRepairConfirmClicked()
         {
+            CoreServices.Audio?.PlayUiClick();   // DEF-183: UI click feedback
             RepairConfirmRequested?.Invoke();
         }
 
         /// <summary>Forwards the repair-prompt Cancel button to RepairCancelRequested.</summary>
         private void OnRepairCancelClicked()
         {
+            CoreServices.Audio?.PlayUiClick();   // DEF-183: UI click feedback
             HideRepairPrompt();
             RepairCancelRequested?.Invoke();
         }

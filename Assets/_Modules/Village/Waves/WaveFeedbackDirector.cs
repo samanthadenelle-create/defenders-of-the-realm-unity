@@ -144,6 +144,13 @@ namespace DeNelle.Village
         // ── WO-40: wave imminent ─────────────────────────────────────────────
         private void OnWaveStarted(int waveId)
         {
+            // DEF-183: a distinct wave-START battle horn ("here they come"), played
+            // through the existing audio surface (CoreServices.Audio, guarded). This
+            // is separate from the countdown-phase danger sting fired by
+            // FireImminentAlert below — the horn lands the moment a wave actually
+            // begins, the sting telegraphs it during the countdown.
+            GameSfx.PlayWaveStart();
+
             // FAIL #6 cause (a): the owner starts waves with the HUD "START WAVE"
             // button -> WaveManager.ForceBeginNextWave snaps the countdown straight
             // to 0 and only ever ticks OnCountdownTick(0f), so the 0 < x <= threshold
