@@ -177,35 +177,80 @@ namespace DeNelle.Onboarding
             root.Clear();
             root.style.flexGrow = 1f;
             root.style.flexDirection = FlexDirection.Column;
+            root.style.justifyContent = Justify.FlexEnd;   // buttons sit at the bottom over the art
             root.style.alignItems = Align.Center;
-            root.style.justifyContent = Justify.Center;
-            root.style.backgroundColor = ColBackground;
-            root.pickingMode = PickingMode.Position;   // whole screen catches the tap
+            root.pickingMode = PickingMode.Position;
 
-            var name = new Label("Defenders of the Realm");
-            name.style.color = ColTextBright;
-            name.style.fontSize = 40;
-            name.style.marginBottom = 16;
-            name.style.unityTextAlign = TextAnchor.MiddleCenter;
-            root.Add(name);
+            // Background art — landscape (Title_L) on wide screens, portrait (Title_H) on tall;
+            // re-applied on resize so it swaps with orientation. Title text is baked into the art.
+            ApplySplashBackground(root);
+            root.RegisterCallback<GeometryChangedEvent>(_ => ApplySplashBackground(root));
 
-            var prompt = new Label("Press any button to start");
-            prompt.style.color = ColAmber;
-            prompt.style.fontSize = 22;
-            prompt.style.unityTextAlign = TextAnchor.MiddleCenter;
-            root.Add(prompt);
-
-            root.RegisterCallback<PointerDownEvent>(OnSplashTap);
+            // Bottom button row: Play Intro / Start New / Continue (any click unlocks WebGL audio).
+            var row = new VisualElement();
+            row.style.flexDirection = FlexDirection.Row;
+            row.style.justifyContent = Justify.Center;
+            row.style.alignItems = Align.Center;
+            row.style.marginBottom = 40;
+            row.Add(MakeMenuButton("Play Intro", OnPlayIntro));
+            row.Add(MakeMenuButton("Start New",  OnStartNew));
+            row.Add(MakeMenuButton("Continue",   OnContinue));
+            root.Add(row);
         }
 
-        private void OnSplashTap(PointerDownEvent evt)
+        private void ApplySplashBackground(VisualElement root)
+        {
+            bool landscape = Screen.width >= Screen.height;
+            var tex = Resources.Load<Texture2D>(landscape ? "Title/Title_L" : "Title/Title_H");
+            if (tex != null)
+            {
+                root.style.backgroundImage = new StyleBackground(tex);
+                root.style.unityBackgroundScaleMode = ScaleMode.ScaleAndCrop;
+            }
+            else root.style.backgroundColor = ColBackground;
+        }
+
+        private Button MakeMenuButton(string label, System.Action onClick)
+        {
+            var b = new Button(() => onClick?.Invoke()) { text = label };
+            b.style.marginLeft = 12; b.style.marginRight = 12;
+            b.style.paddingLeft = 26; b.style.paddingRight = 26;
+            b.style.paddingTop = 12;  b.style.paddingBottom = 12;
+            b.style.fontSize = 22;
+            b.style.color = ColTextBright;
+            b.style.backgroundColor = ColPanelDark;
+            b.style.unityFontStyleAndWeight = FontStyle.Bold;
+            b.style.borderTopWidth = 1; b.style.borderBottomWidth = 1;
+            b.style.borderLeftWidth = 1; b.style.borderRightWidth = 1;
+            b.style.borderTopColor = ColAmber; b.style.borderBottomColor = ColAmber;
+            b.style.borderLeftColor = ColAmber; b.style.borderRightColor = ColAmber;
+            return b;
+        }
+
+        // Start New: skip to the hero-select cards (the title IS the hero-select).
+        private void OnStartNew()
         {
             if (!_splashActive) return;
             _splashActive = false;
-            if (_root != null) _root.UnregisterCallback<PointerDownEvent>(OnSplashTap);
-            // The tap is the user gesture that unlocks the browser AudioContext — the
-            // StoryIntro now plays WITH sound, then the title/hero-select builds.
+            _titleBuilt = false;
+            BuildTitleScreen();
+            SetTitleVisible(true);
+        }
+
+        // Play Intro: run the StoryIntro cold-open (now WITH audio, post-gesture) → then the title.
+        private void OnPlayIntro()
+        {
+            if (!_splashActive) return;
+            _splashActive = false;
             RunArrival().Forget();
+        }
+
+        // Continue: resume into the village (loads the save). No-save falls into a fresh village.
+        private void OnContinue()
+        {
+            if (!_splashActive) return;
+            _splashActive = false;
+            SceneRouter.GoVillage();
         }
 
         // Temporary panel-render diagnostic — logs the title panel's state a
