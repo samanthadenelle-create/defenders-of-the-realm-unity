@@ -59,6 +59,16 @@ namespace DeNelle.Core.UI
         private static readonly Dictionary<PanelId, Action> _openers =
             new Dictionary<PanelId, Action>();
 
+        // DEF-186: optional context-aware openers. A panel that can FOCUS on a
+        // specific subject (e.g. the BuildingUpgrade panel scrolling to / highlighting
+        // the exact building the player interacted with) registers an Action<string>
+        // here in ADDITION to its plain Action above. Callers that know the subject id
+        // (BuildingInteractable knows which building was tapped) route through
+        // Open(id, context); callers that don't keep using Open(id). Kept as a SEPARATE
+        // map so the reflection-free plain-Action contract above is untouched.
+        private static readonly Dictionary<PanelId, Action<string>> _contextOpeners =
+            new Dictionary<PanelId, Action<string>>();
+
         /// <summary>
         /// Register (or replace) the open action for <paramref name="id"/>. Panels
         /// call this in Awake/OnEnable. Null actions are ignored. Idempotent: a
@@ -82,8 +92,33 @@ namespace DeNelle.Core.UI
                 _openers.Remove(id);
         }
 
+        /// <summary>
+        /// Register (or replace) a CONTEXT-aware open action for <paramref name="id"/>
+        /// (DEF-186). The string arg is a subject id — e.g. the building id the player
+        /// interacted with — letting the panel focus on / highlight that subject. A
+        /// panel typically registers BOTH this and the plain <see cref="Register(PanelId, Action)"/>
+        /// (the plain one is the "open with no particular focus" fallback). Idempotent.
+        /// </summary>
+        public static void Register(PanelId id, Action<string> openWithContext)
+        {
+            if (openWithContext == null) return;
+            _contextOpeners[id] = openWithContext;
+        }
+
+        /// <summary>
+        /// Remove the context-aware open action for <paramref name="id"/> if it is
+        /// exactly <paramref name="openWithContext"/> (mirrors the plain Unregister).
+        /// </summary>
+        public static void Unregister(PanelId id, Action<string> openWithContext)
+        {
+            if (openWithContext == null) return;
+            if (_contextOpeners.TryGetValue(id, out var current) && current == openWithContext)
+                _contextOpeners.Remove(id);
+        }
+
         /// <summary>True when a panel is registered for <paramref name="id"/>.</summary>
-        public static bool IsRegistered(PanelId id) => _openers.ContainsKey(id);
+        public static bool IsRegistered(PanelId id) =>
+            _openers.ContainsKey(id) || _contextOpeners.ContainsKey(id);
 
         /// <summary>
         /// Open the panel registered for <paramref name="id"/>. Returns false (and
@@ -107,6 +142,34 @@ namespace DeNelle.Core.UI
                     "[PanelRouter] opening '" + id + "' threw: " + ex.Message);
                 return false;
             }
+        }
+
+        /// <summary>
+        /// Open the panel registered for <paramref name="id"/>, focusing it on
+        /// <paramref name="context"/> (a subject id — DEF-186). Prefers the context-aware
+        /// opener if the panel registered one; otherwise falls back to the plain
+        /// <see cref="Open(PanelId)"/> (so a panel that ignores context still opens).
+        /// Returns false only when NEITHER opener is registered. Exceptions are
+        /// swallowed (logged) exactly like the plain Open.
+        /// </summary>
+        public static bool Open(PanelId id, string context)
+        {
+            if (_contextOpeners.TryGetValue(id, out var openCtx) && openCtx != null)
+            {
+                try
+                {
+                    openCtx.Invoke(context);
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    UnityEngine.Debug.LogWarning(
+                        "[PanelRouter] context-opening '" + id + "' threw: " + ex.Message);
+                    return false;
+                }
+            }
+            // No context-aware opener — fall back to the plain open (ignores context).
+            return Open(id);
         }
     }
 }

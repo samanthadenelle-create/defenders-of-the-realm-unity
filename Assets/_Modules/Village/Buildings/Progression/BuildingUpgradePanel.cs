@@ -52,6 +52,10 @@ namespace DeNelle.Village.Buildings.Progression
         private Label _toast;
         // Modal arbiter handle (DEF-212): one panel open at a time.
         private PanelHandle _panelHandle;
+        // DEF-186: the building the player interacted with — its card is highlighted +
+        // scrolled into view when the panel opens. Null = no focus (dev U-key / generic).
+        private string _focusBuildingId;
+        private ScrollView _scroll;
 
         // Palette — matches VillageCraftingPanel's amber-on-dark theme.
         private static readonly Color Gold = new Color(0.99f, 0.86f, 0.50f, 1f);
@@ -73,6 +77,8 @@ namespace DeNelle.Village.Buildings.Progression
             _panelHandle = PanelManager.Register("Upgrade Buildings", Close, () => IsOpen);
             // DEF-213: let resource-building / Armorer interactions open this panel by id.
             PanelRouter.Register(PanelId.BuildingUpgrade, Open);
+            // DEF-186: context-aware open — focus the card for the building tapped.
+            PanelRouter.Register(PanelId.BuildingUpgrade, (System.Action<string>)OpenFocused);
         }
 
         private void OnEnable()
@@ -90,6 +96,7 @@ namespace DeNelle.Village.Buildings.Progression
             if (svc != null) svc.ResourcesChanged.RemoveListener(Repaint);
             if (Instance == this) Instance = null;
             PanelRouter.Unregister(PanelId.BuildingUpgrade, Open);
+            PanelRouter.Unregister(PanelId.BuildingUpgrade, (System.Action<string>)OpenFocused);
         }
 
         private void OnLevelChanged(string _) => Repaint();
@@ -97,6 +104,19 @@ namespace DeNelle.Village.Buildings.Progression
         // ── Public open/close ───────────────────────────────────────────────
 
         public void Toggle() { if (IsOpen) Close(); else Open(); }
+
+        /// <summary>
+        /// DEF-186: open the panel focused on a specific resource building (the one the
+        /// player interacted with) — its card is highlighted and scrolled into view.
+        /// Routed via PanelRouter's context-aware opener from BuildingInteractable.
+        /// </summary>
+        public void OpenFocused(string buildingId)
+        {
+            _focusBuildingId = ResourceBuildingProgression.IsResourceBuilding(buildingId)
+                ? buildingId
+                : null;
+            Open();
+        }
 
         public void Open()
         {
@@ -126,6 +146,9 @@ namespace DeNelle.Village.Buildings.Progression
                 _root.pickingMode = PickingMode.Ignore;
             }
             PanelManager.NotifyClosed(_panelHandle);
+            // DEF-186: drop the focus so the NEXT generic open (dev U / mobile button)
+            // doesn't inherit a stale highlight from a prior building interaction.
+            _focusBuildingId = null;
         }
 
         // ── Build ────────────────────────────────────────────────────────────
@@ -159,11 +182,17 @@ namespace DeNelle.Village.Buildings.Progression
 
             BuildHeader(_shell);
 
-            _cardList = new VisualElement { name = "CardList" };
+            // DEF-186: a ScrollView so a focused card can be scrolled into view and the
+            // stacked list never overflows the shell. The cards live in its content.
+            _scroll = new ScrollView(ScrollViewMode.Vertical) { name = "CardScroll" };
+            _scroll.style.flexGrow = 1;
+            _scroll.style.minHeight = 0; // allow it to shrink within the flex column
+            _shell.Add(_scroll);
+
+            _cardList = _scroll.contentContainer;
             _cardList.style.flexDirection = FlexDirection.Column;
             _cardList.style.paddingLeft = 12; _cardList.style.paddingRight = 12;
             _cardList.style.paddingTop = 8; _cardList.style.paddingBottom = 8;
-            _shell.Add(_cardList);
 
             // Wallet footer.
             var footer = new VisualElement { name = "Footer" };
@@ -230,16 +259,32 @@ namespace DeNelle.Village.Buildings.Progression
             if (_cardList == null) return;
             _cardList.Clear();
 
+            VisualElement focusCard = null;
             foreach (var id in ResourceBuildingProgression.OrderedIds)
             {
                 var def = ResourceBuildingProgression.Find(id);
-                if (def != null) _cardList.Add(BuildCard(def));
+                if (def == null) continue;
+                bool focused = !string.IsNullOrEmpty(_focusBuildingId) && id == _focusBuildingId;
+                var card = BuildCard(def, focused);
+                _cardList.Add(card);
+                if (focused) focusCard = card;
             }
 
             RefreshWallet();
+
+            // DEF-186: scroll the focused (interacted) building's card into view. Deferred
+            // one layout pass so the ScrollView has measured its content before scrolling.
+            if (focusCard != null && _scroll != null)
+            {
+                var target = focusCard;
+                focusCard.schedule.Execute(() =>
+                {
+                    if (_scroll != null && target != null) _scroll.ScrollTo(target);
+                }).StartingIn(0);
+            }
         }
 
-        private VisualElement BuildCard(ResourceBuildingDef def)
+        private VisualElement BuildCard(ResourceBuildingDef def, bool focused)
         {
             int level = ResourceBuildingState.GetLevel(def.BuildingId);
             var lvlDef = def.LevelDef(level);
@@ -256,7 +301,12 @@ namespace DeNelle.Village.Buildings.Progression
             card.style.paddingTop = 10; card.style.paddingBottom = 10;
             card.style.backgroundColor = new StyleColor(CardBg);
             Round(card, 8);
-            Border(card, new Color(0.85f, 0.66f, 0.30f, 0.35f), 1);
+            // DEF-186: the interacted building's card gets a bright gold rim so the
+            // player sees the panel opened ON that building (the Lumbermill, say).
+            if (focused)
+                Border(card, new Color(1f, 0.80f, 0.34f, 1f), 2);
+            else
+                Border(card, new Color(0.85f, 0.66f, 0.30f, 0.35f), 1);
 
             // Title row: name + level badge.
             var titleRow = new VisualElement();

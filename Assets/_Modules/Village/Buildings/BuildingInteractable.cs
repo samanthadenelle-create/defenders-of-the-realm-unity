@@ -152,9 +152,17 @@ namespace DeNelle.Village
             // routes through PanelManager, so opening it closes any other panel.
             if (TryPanelFor(_building, out PanelId panelId))
             {
-                if (PanelRouter.Open(panelId))
+                // DEF-186: for the shared Building Upgrade panel, pass the SPECIFIC
+                // building's id as context so the panel opens focused on the building
+                // the player actually tapped (e.g. the Lumbermill) instead of a generic
+                // list. Other panels ignore context (plain-Open fallback in PanelRouter).
+                string context = ContextIdFor(_building);
+                bool opened = string.IsNullOrEmpty(context)
+                    ? PanelRouter.Open(panelId)
+                    : PanelRouter.Open(panelId, context);
+                if (opened)
                 {
-                    Debug.Log($"[BuildingInteractable] {_building.Type} → opened {panelId}.");
+                    Debug.Log($"[BuildingInteractable] {_building.Type} → opened {panelId} (focus='{context}').");
                     return;
                 }
 
@@ -216,6 +224,36 @@ namespace DeNelle.Village
             }
 
             return false;
+        }
+
+        /// <summary>
+        /// Resolves the FOCUS subject id for the upgrade panel (DEF-186): the resource
+        /// building progression id (farm / lumbermill / forge) the panel should scroll
+        /// to / highlight. Prefers the explicit Building.BuildingId, then maps the
+        /// BuildingType for the resource buildings, else null (no focus — generic open).
+        /// </summary>
+        private static string ContextIdFor(Building building)
+        {
+            if (building == null) return null;
+
+            string id = building.BuildingId;
+            if (!string.IsNullOrEmpty(id))
+            {
+                string lower = id.ToLowerInvariant();
+                if (lower.Contains("lumbermill")) return Progression.ResourceBuildingProgression.LumbermillId;
+                if (lower.Contains("forge") || lower.Contains("armorer")) return Progression.ResourceBuildingProgression.ForgeId;
+                if (lower.Contains("farm")) return Progression.ResourceBuildingProgression.FarmId;
+                // Pass any other explicit id through verbatim (panel resolves/ignores it).
+                if (Progression.ResourceBuildingProgression.IsResourceBuilding(id)) return id;
+            }
+
+            switch (building.Type)
+            {
+                case BuildingType.Lumbermill: return Progression.ResourceBuildingProgression.LumbermillId;
+                case BuildingType.Forge:      return Progression.ResourceBuildingProgression.ForgeId;
+                case BuildingType.Farm:       return Progression.ResourceBuildingProgression.FarmId;
+            }
+            return null; // CrystalMine / non-resource: no focus, generic open.
         }
 
         private void ShowFloatingNote(string text)
