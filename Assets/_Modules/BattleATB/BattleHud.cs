@@ -79,6 +79,7 @@ namespace DeNelle.BattleATB
         private sealed class Card
         {
             public VisualElement Box;
+            public VisualElement ReadyGlow;  // DEF-270: pulsing halo behind the active unit's turn
             public VisualElement Portrait;   // hero character icon (WO-213); hidden for non-heroes
             public Label Name;
             public VisualElement HpFill;
@@ -88,7 +89,15 @@ namespace DeNelle.BattleATB
             public VisualElement TargetCursor;
             public Button PickButton;   // overlaid during target-pick mode
             public Action PickHandler;  // current tap handler, so it can be detached
+            public bool GlowActive;     // true while this card's ready-glow pulse is scheduled
+            public IVisualElementScheduledItem GlowPulse; // the running pulse ticker (paused when not active)
         }
+
+        // DEF-270 — the "ready" glow palette + pulse cadence. A warm gold halo so the
+        // player KNOWS whose turn it is (owner: "know you're alive without looking at
+        // the health bar") — clearer than the thin gold border alone.
+        private static readonly Color ReadyGlowColor = new Color(1f, 0.82f, 0.32f, 1f);
+        private const long ReadyGlowPulseMs = 520;   // one breath of the halo
 
         private readonly Dictionary<string, Card> _cards = new Dictionary<string, Card>();
 
@@ -351,6 +360,22 @@ namespace DeNelle.BattleATB
             Round(box, 8);
             card.Box = box;
 
+            // DEF-270 — "ready" glow: a soft gold halo that sits BEHIND the card and
+            // pulses while it is this unit's turn, then clears. Added as the FIRST child
+            // so UI Toolkit paints it under the card content; it bleeds a few px past
+            // the box edges and is input-transparent so it never eats a tap. Hidden by
+            // default — BindCard shows + pulses it only for the active combatant.
+            var glow = new VisualElement();
+            glow.pickingMode = PickingMode.Ignore;
+            glow.style.position = Position.Absolute;
+            glow.style.left = -7; glow.style.right = -7; glow.style.top = -7; glow.style.bottom = -7;
+            glow.style.backgroundColor = new StyleColor(ReadyGlowColor);
+            Round(glow, 12);
+            glow.style.display = DisplayStyle.None;
+            glow.style.opacity = 0f;
+            box.Add(glow);
+            card.ReadyGlow = glow;
+
             // Target cursor — a gold left-edge marker shown during pick mode.
             var cursor = new VisualElement();
             cursor.style.position = Position.Absolute;
@@ -445,6 +470,56 @@ namespace DeNelle.BattleATB
             var border = new StyleColor(isActive ? Gold : new Color(0, 0, 0, 0));
             card.Box.style.borderTopColor = border; card.Box.style.borderBottomColor = border;
             card.Box.style.borderLeftColor = border; card.Box.style.borderRightColor = border;
+
+            // DEF-270 — light up the ready-glow for the active unit, clear it otherwise.
+            SetReadyGlow(card, isActive);
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // DEF-270 — "ready" glow: a pulsing gold halo behind the active unit's card
+        // so the player always knows whose turn it is. Pooled per card (one glow
+        // element + one paused scheduler), toggled by BindCard on every Render — no
+        // per-frame allocation and never more than one glowing card at a time.
+        // ─────────────────────────────────────────────────────────────────────
+
+        private static void SetReadyGlow(Card card, bool active)
+        {
+            if (card == null || card.ReadyGlow == null) return;
+
+            if (active)
+            {
+                if (card.GlowActive) return;   // already pulsing — don't re-arm
+                card.GlowActive = true;
+                card.ReadyGlow.style.display = DisplayStyle.Flex;
+
+                // Soft breathing pulse between a low and a high opacity. A single
+                // repeating ticker toggles the target; the layout engine eases the
+                // opacity. Paused (not killed) when the turn ends so we reuse it.
+                bool[] up = { true };
+                if (card.GlowPulse == null)
+                {
+                    VisualElement glow = card.ReadyGlow;
+                    card.GlowPulse = glow.schedule.Execute(() =>
+                    {
+                        if (glow == null || !card.GlowActive) return;
+                        up[0] = !up[0];
+                        glow.style.opacity = up[0] ? 0.55f : 0.22f;
+                    }).Every(ReadyGlowPulseMs);
+                }
+                else
+                {
+                    card.GlowPulse.Resume();
+                }
+                card.ReadyGlow.style.opacity = 0.55f;
+            }
+            else
+            {
+                if (!card.GlowActive && card.ReadyGlow.style.display == DisplayStyle.None) return;
+                card.GlowActive = false;
+                card.GlowPulse?.Pause();
+                card.ReadyGlow.style.opacity = 0f;
+                card.ReadyGlow.style.display = DisplayStyle.None;
+            }
         }
 
         // ─────────────────────────────────────────────────────────────────────

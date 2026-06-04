@@ -38,8 +38,10 @@ namespace DeNelle.Village
     {
         // ── Animation tuning ──────────────────────────────────────────────────
 
-        /// <summary>Total seconds the number lives before it is destroyed.</summary>
-        private const float Lifetime = 0.8f;
+        /// <summary>Total seconds the number lives before it is destroyed.
+        /// DEF-260 #6: shortened from 0.8s so the number pops and clears faster
+        /// (owner: "fade faster").</summary>
+        private const float Lifetime = 0.55f;
 
         /// <summary>World-units the number rises over its <see cref="Lifetime"/>.</summary>
         private const float RiseDistance = 1.0f;
@@ -47,8 +49,10 @@ namespace DeNelle.Village
         /// <summary>
         /// Base character size of the TextMesh (matches the village's other
         /// world-space text). Scaled up a little for bigger hits.
+        /// DEF-260 #6: reduced from 0.18 — the prior "18" read as oversized on the
+        /// PatriciaLight stage; this keeps numbers legible but no longer dominant.
         /// </summary>
-        private const float BaseCharacterSize = 0.18f;
+        private const float BaseCharacterSize = 0.11f;
 
         /// <summary>Damage value that maps to a "full size" number (caps the scale ramp).</summary>
         private const float BigHitDamage = 40f;
@@ -147,7 +151,9 @@ namespace DeNelle.Village
             // the ramp; a buffed ability hit pushes toward the big end.
             float t = Mathf.Clamp01(amount / BigHitDamage);
 
-            _baseScale = Mathf.Lerp(0.85f, 1.5f, t);
+            // DEF-260 #6: gentler scale ramp (was 0.85→1.5) so even a big hit no
+            // longer balloons across the screen; bigger hits still read a touch larger.
+            _baseScale = Mathf.Lerp(0.8f, 1.2f, t);
             _tf.localScale = Vector3.one * _baseScale;
 
             _startColor = Color.Lerp(NormalColor, BigColor, t);
@@ -222,8 +228,9 @@ namespace DeNelle.Village
             float rise = (1f - (1f - k) * (1f - k)) * _rise;
             _tf.position = _startPos + Vector3.up * rise;
 
-            // Fade: hold full opacity for the first third, then fade to zero.
-            float alpha = k < 0.33f ? 1f : Mathf.InverseLerp(1f, 0.33f, k);
+            // Fade: DEF-260 #6 — hold full opacity only briefly, then fade to zero
+            // (owner: "fade faster"). Was holding for the first third of life.
+            float alpha = k < 0.18f ? 1f : Mathf.InverseLerp(1f, 0.18f, k);
             Color c = _startColor;
             c.a = alpha;
             _text.color = c;

@@ -45,9 +45,13 @@ namespace DeNelle.BattleATB
     {
         // ── Retro palette (flat, bold, readable — FF/Chrono throwback) ──────────
 
-        private static readonly Color NumNormal = new Color(0.96f, 0.96f, 1f, 1f);     // white-cyan
-        private static readonly Color NumCrit = new Color(1f, 0.86f, 0.20f, 1f);       // bright yellow
-        private static readonly Color NumHeal = new Color(0.45f, 0.95f, 0.50f, 1f);    // green
+        // DEF-270 (owner: "RED for damage, GREEN for heals"). Normal damage now reads
+        // RED so a hit is unmistakable at a glance; a crit stays a hotter yellow-orange
+        // so the two still read apart; heals stay green. Honest contrast over the old
+        // white-cyan numerals, which didn't say "damage" at a glance.
+        private static readonly Color NumNormal = new Color(1f, 0.30f, 0.26f, 1f);      // red
+        private static readonly Color NumCrit = new Color(1f, 0.82f, 0.16f, 1f);        // hot yellow
+        private static readonly Color NumHeal = new Color(0.45f, 0.95f, 0.50f, 1f);     // green
         private static readonly Color FlashWhite = new Color(1f, 1f, 1f, 0.85f);
 
         // ── Effect catalog — data-driven, keyed by effect id. ───────────────────
