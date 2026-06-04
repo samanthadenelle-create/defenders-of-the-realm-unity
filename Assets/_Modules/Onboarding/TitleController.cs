@@ -233,6 +233,10 @@ namespace DeNelle.Onboarding
             if (_splash != null)
                 await SafeStage(_splash.Play(), "splash");
             Debug.Log("[TitleController] Arrival: splash stage done.");
+            // DEF-253: if the watchdog already force-built the title while the splash
+            // stalled, BAIL — the storyIntro teardown below Clear()s the SHARED panel
+            // root and would wipe the cards the watchdog placed (observed rootChildCount=0).
+            if (_titleBuilt) return;
 
             // Stage 2 — cold open (story intro), same guard. CRITICAL: the cold
             // open is a 14-beat cinematic. If SafeStage merely STOPPED AWAITING on
@@ -243,7 +247,9 @@ namespace DeNelle.Onboarding
             // proceeding. ForceHide cancels the CTS, blanks + detaches the overlay,
             // and marks finished — so the loop breaks immediately and cannot overlay.
             if (_storyIntro != null)
-                await SafeStage(_storyIntro.Play(), "storyIntro", _storyIntro.ForceHide);
+                await SafeStage(_storyIntro.Play(), "storyIntro",
+                                () => { if (!_titleBuilt) _storyIntro.ForceHide(); });
+            if (_titleBuilt) return;   // watchdog won mid-storyIntro — don't clear its title
             // Belt-and-braces: ForceHide is idempotent — ensure the overlay is down
             // even on the success path (where SafeStage did not need to invoke it).
             if (_storyIntro != null) _storyIntro.ForceHide();
@@ -272,7 +278,11 @@ namespace DeNelle.Onboarding
         {
             try
             {
-                await stage.Timeout(System.TimeSpan.FromSeconds(6f));
+                // UNSCALED timeout (DEF-253): a scaled .Timeout never elapses if anything
+                // set Time.timeScale=0 during the bumper/loading — the splash await then
+                // hangs forever (observed: only the unscaled watchdog fired, never this).
+                await stage.Timeout(System.TimeSpan.FromSeconds(6f),
+                                    Cysharp.Threading.Tasks.DelayType.UnscaledDeltaTime);
             }
             catch (System.Exception e)
             {
