@@ -83,6 +83,17 @@ namespace DeNelle.Village
             string id = def != null ? def.Id : null;
             switch (id)
             {
+                // DEF-250: the three HOLLOW wave archetypes get DISTINCT silhouettes so a
+                // mixed wave reads as a varied fight, not clones. Previously all three fell
+                // through to the height-based default (every one → Skeleton_Minion), so the
+                // grunt/brute/skirmisher were visually identical despite different stats.
+                //   grunt      → Skeleton_Minion  (lean, basic — the numerous rusher)
+                //   brute/tank → Skeleton_Golem   (big, LargeEnemy rig — slow heavy wall)
+                //   skirmisher → Skeleton_Rogue   (low, quick — the flanker)
+                case "hollow-walker":    return "Skeleton_Minion";   // grunt
+                case "hollow-warrior":   return "Skeleton_Golem";    // brute / tank
+                case "hollow-rogue":     return "Skeleton_Rogue";    // fast skirmisher
+
                 case "orc-raider":       return "Skeleton_Warrior";  // heavy melee
                 case "caveman":          return "Skeleton_Golem";    // big brute
                 case "feral-wolf":       return "Skeleton_Rogue";    // fast skirmisher
