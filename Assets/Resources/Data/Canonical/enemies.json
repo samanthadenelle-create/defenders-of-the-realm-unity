@@ -141,6 +141,23 @@
       "height": 2.2,
       "boss": false,
       "flavor": "The elite that holds a Warband camp. Clear it and the node it squats on is yours to reclaim."
+    },
+    {
+      "id": "troll",
+      "name": "Cave Troll",
+      "displayName": "Cave Troll",
+      "family": "troll",
+      "role": "brute",
+      "spawn": ["wave", "world"],
+      "modelKey": "Troll",
+      "ai": "charger",
+      "hp": 320,
+      "moveSpeed": 1.8,
+      "contactDamage": 14,
+      "attackInterval": 1.8,
+      "height": 2.6,
+      "boss": false,
+      "flavor": "A lumbering brute of the deep places - slow, but each blow lands like a falling oak."
     }
   ]
 }

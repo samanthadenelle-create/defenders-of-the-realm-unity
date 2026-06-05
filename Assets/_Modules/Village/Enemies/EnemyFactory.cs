@@ -123,6 +123,9 @@ namespace DeNelle.Village
                 case "orc-berserker":    return "Orc_Berserker";     // brute / charger
                 case "orc-shaman":       return "Orc_Shaman";        // caster
                 case "orc-necromancer":  return "Orc_Necromancer";   // camp elite
+                // 'troll' family — Tripo Cave Troll (Resources/Enemies/Troll). Falls back
+                // to the tinted capsule if the model isn't imported yet (LogWarning, not error).
+                case "troll":            return "Troll";             // brute / mini
             }
             // Unmapped roster (wave / tribe / ward) → pick by body size.
             if (def != null && def.Height >= 2.3f) return "Skeleton_Golem";

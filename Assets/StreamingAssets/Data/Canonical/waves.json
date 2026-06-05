@@ -57,6 +57,13 @@
           "spawnPoint": "spawn-0",
           "delay": 8,
           "interval": 1.8
+        },
+        {
+          "type": "orc-berserker",
+          "count": 1,
+          "spawnPoint": "spawn-2",
+          "delay": 10,
+          "interval": 2.0
         }
       ]
     },
@@ -85,6 +92,20 @@
           "spawnPoint": "spawn-3",
           "delay": 9,
           "interval": 1.3
+        },
+        {
+          "type": "orc-shaman",
+          "count": 1,
+          "spawnPoint": "spawn-1",
+          "delay": 7,
+          "interval": 2.0
+        },
+        {
+          "type": "troll",
+          "count": 1,
+          "spawnPoint": "spawn-0",
+          "delay": 14,
+          "interval": 2.5
         }
       ]
     },
