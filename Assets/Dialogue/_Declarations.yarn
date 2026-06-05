@@ -1,0 +1,41 @@
+title: _Declarations
+tags: system
+---
+// =============================================================================
+// Project-wide Yarn variable declarations.
+//
+// Yarn Spinner v3 requires EVERY variable used in interpolation ({$x}) or an
+// expression to be DECLARED with a type. If even one is undeclared the WHOLE project
+// fails to compile ("Can't determine the type of the expression $x") -> zero compiled
+// nodes -> the runtime error "Cannot load node ...: No nodes have been loaded."
+//
+// Defaults live here so the project always compiles; the game (the dialogue bridge /
+// GameState) sets the real live values at runtime. This node is never played or jumped
+// to — it exists ONLY to declare types so the dialogue compiles and plays.
+// =============================================================================
+
+// — Strings: names / roles / phases (game overrides at runtime) —
+<<declare $companionName = "Companion">>
+<<declare $petName = "Pet">>
+<<declare $petRole = "Defender">>
+<<declare $petMode = "Defend">>
+<<declare $tutorialPhase = "intro">>
+
+// — Numbers: counts / levels / resources —
+<<declare $heroLevel = 1>>
+<<declare $towersBuilt = 0>>
+<<declare $tutorialStep = 0>>
+<<declare $soulsFreed = 0>>
+<<declare $wood = 0>>
+<<declare $stone = 0>>
+
+// — Bools: progression + soul-freed flags —
+<<declare $tutorialComplete = false>>
+<<declare $postTutorialGuidanceGiven = false>>
+<<declare $elderBlessingActive = false>>
+<<declare $aldricFreed = false>>
+<<declare $miraFreed = false>>
+<<declare $elowenFreed = false>>
+<<declare $sennaFreed = false>>
+<<declare $varenFreed = false>>
+===
