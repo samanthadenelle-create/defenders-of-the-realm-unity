@@ -1586,9 +1586,12 @@ namespace DeNelle.Village
         /// <summary>Styles one ability slot button: name on top, glyph below, tinted to the ability colour.</summary>
         private static void StyleAbilityButton(Button btn, AbilityDef def)
         {
-            string glyph = !string.IsNullOrEmpty(def.Icon)
-                ? def.Icon
-                : (!string.IsNullOrEmpty(def.Name) ? def.Name.Substring(0, 1).ToUpperInvariant() : "?");
+            // DEF blank-buttons: abilities.json supplies pretty dingbats (✦ ❄ ✚ ☄)
+            // that the base build font can't render (blank glyph line). Translate to
+            // an ASCII-safe stand-in so each button always shows a symbol; the colour
+            // tint (def.UnityColor) below carries the element. Real icon art can swap
+            // in later via a sprite background.
+            string glyph = AsciiGlyph(def);
             string name = !string.IsNullOrEmpty(def.Name) ? def.Name : def.SlotEnum.ToString();
             btn.text = $"{glyph}\n{name}";
 
@@ -1603,6 +1606,34 @@ namespace DeNelle.Village
             btn.style.backgroundColor = new StyleColor(c);
             RoundCorners(btn, 12f);
             ZeroBorders(btn);
+        }
+
+        // Maps an ability to a symbol that renders in the BASE UI Toolkit font (no
+        // dingbat coverage in WebGL builds — the "blank spell buttons" root cause).
+        // Prefers a per-effect ASCII symbol, then the icon if it's already ASCII,
+        // then the ability name's first letter. Never returns an unrenderable glyph.
+        private static string AsciiGlyph(AbilityDef def)
+        {
+            if (def == null) return "*";
+            switch (def.EffectEnum)
+            {
+                case AbilityEffect.Strike: return "*";  // bolt / quick strike
+                case AbilityEffect.Snare:  return "x";  // trap / snare
+                case AbilityEffect.Aoe:    return "*";  // burst
+                case AbilityEffect.Cleave: return "/";  // sweep
+                case AbilityEffect.Heal:   return "+";  // heal cross
+                case AbilityEffect.Meteor: return "^";  // falling blast
+                default: break;
+            }
+
+            if (!string.IsNullOrEmpty(def.Icon))
+            {
+                char c = def.Icon[0];
+                if (c >= 0x20 && c < 0x7f) return def.Icon;  // already ASCII-safe
+            }
+            return !string.IsNullOrEmpty(def.Name)
+                ? def.Name.Substring(0, 1).ToUpperInvariant()
+                : "*";
         }
 
         private static void RoundCorners(VisualElement ve, float r)

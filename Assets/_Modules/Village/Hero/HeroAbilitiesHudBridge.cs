@@ -28,9 +28,11 @@ namespace DeNelle.Village
         private MethodInfo _setMana;        // SetMana(float current, float max)
         private MethodInfo _setCooldown;    // SetAbilityCooldown(int slot, float remaining, float total)
         private MethodInfo _setSlot;        // SetAbilitySlot(int slot, string key, string glyph, string name, string description) — WO-36 visual
+        private MethodInfo _setSlotColor;   // SetAbilitySlot(int,string,string,string,string,string accentHex) — DEF blank-buttons (rune-disc tint)
         private readonly object[] _manaArgs = new object[2];
         private readonly object[] _cdArgs = new object[3];
         private readonly object[] _slotArgs = new object[5];
+        private readonly object[] _slotColorArgs = new object[6];
 
         // WO-36 (visual half): the Q/W/E/R cells are built once showing the Mage
         // kit. Re-target them to the active hero's loadout whenever the class
@@ -58,6 +60,12 @@ namespace DeNelle.Village
             _setSlot = _hud.GetType().GetMethod("SetAbilitySlot",
                 BindingFlags.Public | BindingFlags.Instance, null,
                 new[] { typeof(int), typeof(string), typeof(string), typeof(string), typeof(string) }, null);
+            // DEF blank-buttons: the 6-arg overload also pushes the ability's accent
+            // colour so the HUD tints the code-built rune disc per ability. Optional —
+            // a HUD without it (older build) still gets symbols via the 5-arg path.
+            _setSlotColor = _hud.GetType().GetMethod("SetAbilitySlot",
+                BindingFlags.Public | BindingFlags.Instance, null,
+                new[] { typeof(int), typeof(string), typeof(string), typeof(string), typeof(string), typeof(string) }, null);
             if (_setSlot == null)
                 Debug.LogWarning("[HeroAbilitiesHudBridge] VillageHudController.SetAbilitySlot" +
                                  "(int,string,string,string,string) not found via reflection — " +
@@ -146,13 +154,27 @@ namespace DeNelle.Village
                 string glyph = GlyphFor(def);
                 string name = def != null ? def.Name : null;
                 string description = DescriptionFor(def);
+                string accentHex = AccentFor(def, i);
 
-                _slotArgs[0] = i;
-                _slotArgs[1] = key;
-                _slotArgs[2] = glyph;
-                _slotArgs[3] = name;
-                _slotArgs[4] = description;
-                _setSlot.Invoke(_hud, _slotArgs);
+                if (_setSlotColor != null)
+                {
+                    _slotColorArgs[0] = i;
+                    _slotColorArgs[1] = key;
+                    _slotColorArgs[2] = glyph;
+                    _slotColorArgs[3] = name;
+                    _slotColorArgs[4] = description;
+                    _slotColorArgs[5] = accentHex;
+                    _setSlotColor.Invoke(_hud, _slotColorArgs);
+                }
+                else
+                {
+                    _slotArgs[0] = i;
+                    _slotArgs[1] = key;
+                    _slotArgs[2] = glyph;
+                    _slotArgs[3] = name;
+                    _slotArgs[4] = description;
+                    _setSlot.Invoke(_hud, _slotArgs);
+                }
 
                 if (i > 0) pushed.Append(", ");
                 pushed.Append(string.IsNullOrEmpty(name) ? "(none)" : name);
@@ -187,6 +209,25 @@ namespace DeNelle.Village
                 : $"{Mathf.RoundToInt(def.Damage)} dmg";
 
             return $"{action} — {amount} ({def.Cooldown:0.##}s cd)";
+        }
+
+        // The ability's accent colour hex (abilities.json 'color', e.g. "#b388ff")
+        // used by the HUD to tint the code-built rune disc so each spell button reads
+        // as a distinct coloured symbol (DEF blank-buttons fix). Falls back to a
+        // per-slot element colour (Q arcane / W frost / E heal / R fire) so a def
+        // missing its colour still gets a sensible tint.
+        private static string AccentFor(AbilityDef def, int slot)
+        {
+            if (def != null && !string.IsNullOrEmpty(def.Color))
+                return def.Color;
+
+            switch (slot)
+            {
+                case 0: return "#b388ff";  // arcane violet
+                case 1: return "#7dd3fc";  // frost blue
+                case 2: return "#ffd27a";  // heal gold
+                default: return "#ff7043"; // fire orange
+            }
         }
 
         private static string DefaultKey(int slot)
