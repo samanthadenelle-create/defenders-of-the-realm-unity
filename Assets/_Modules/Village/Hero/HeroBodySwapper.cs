@@ -399,13 +399,39 @@ namespace DeNelle.Village
         /// </summary>
         private static void ApplyExtractedTexture(GameObject body, HeroClass cls)
         {
+            // DEF-267: separate the two body pipelines.
+            //  • CC5 bodies (Ranger / Cleric) = ONE combined mesh + ONE baked PBR atlas, imported
+            //    with materialImportMode=None → renderer slots come in null/default. The right fix
+            //    is to build ONE URP/Lit from the single atlas and REPLACE every slot.
+            //  • Legacy Tripo bodies (Mage / Knight) = multi-material exports whose slots DO import
+            //    (materialImportMode=2) but with NO base-color texture bound, so they render GREY in
+            //    the build (the DEF-267 symptom: "URP-but-untextured"). Their Send-To-Unity diffuse
+            //    PNG lives in Resources/Heroes/Textures/*. PAINT that diffuse onto the EXISTING slots
+            //    in place — replacing them all with one shared material would collapse the body's
+            //    separate UV islands onto a single material and mis-sample. Each slot already maps
+            //    its own region of the single Tripo atlas, so painting the same atlas onto each is
+            //    correct and preserves the per-slot setup.
+            bool isCc5Combined = (cls == HeroClass.Ranger || cls == HeroClass.Cleric);
             string texPath = cls switch
             {
-                // WO-35: Knight removed. Both available Knight atlases (Resources
-                // Textures/Knight.png AND the FBM knight_basecolor.JPEG) are the same
-                // red-splatter Tripo grunge variant — binding either gives the dirty
-                // blood-spattered armour the owner flagged. Returning null lets
-                // ApplyClassTint paint the clean steel tint (0.78,0.80,0.86) instead.
+                // DEF-267: the Mage is a LEGACY Tripo body. The build log showed Mage rendering
+                // GREY because (a) its FBX material remap points at an EXTERNAL material that
+                // doesn't resolve in the build → no _BaseMap, and (b) NO texPath existed here so
+                // ApplyExtractedTexture returned early and never bound a diffuse. Bind the Mage's
+                // basecolor atlas from the NORMAL Resources/Heroes/Textures/ folder. We use a
+                // normal folder (not the sibling *.fbm/ extraction) deliberately: the working
+                // Ranger/Cleric pipeline copies its atlas into a plain Heroes/<x>_tex/ folder
+                // because textures inside an FBX's *.fbm import-artifact folder are NOT reliably
+                // Resources.Load-able in a player build. Heroes/Textures/* is a guaranteed-loadable
+                // plain folder. This is the same wizard atlas, just from the reliable location.
+                HeroClass.Mage => "Heroes/Textures/fantasywizard3dmodel_basecolor",
+                // DEF-267: the Knight is also a LEGACY Tripo body whose FBX material remap doesn't
+                // resolve → grey. WO-35 had returned null (to dodge a blood-splatter look the owner
+                // disliked), but that left the Knight GREY in the build, which is worse. Bind the
+                // clean medieval-knight atlas from the plain (reliably loadable) Heroes/Textures/
+                // folder — textured beats grey for go-live. ApplyClassTint's steel fallback now
+                // only fires on any slot this atlas genuinely doesn't cover.
+                HeroClass.Knight => "Heroes/Textures/medievalknight3dmodel_basecolor",
                 // DEF-229 (2026-06-03): the Ranger body is now the CC5/CC_Base adult
                 // archer (InstaLOD-remeshed: ONE combined mesh + ONE baked PBR atlas),
                 // imported Humanoid by PeopleCharacterImporter.ImportRangerCC5 into
@@ -428,21 +454,18 @@ namespace DeNelle.Village
             var tex = Resources.Load<Texture2D>(texPath);
             if (tex == null)
             {
-                Debug.LogWarning("[HeroBodySwapper] DEF-229 baked diffuse not found at Resources/" +
+                Debug.LogWarning("[HeroBodySwapper] DEF-267 baked/basecolor diffuse not found at Resources/" +
                                  texPath + " for " + cls + " — body will fall back to a class tint.");
                 return;
             }
 
-            // DEF-229: the CC5 bodies import with materialImportMode=None, which leaves the
-            // renderer slots NULL/default — so the old "SetTexture on the existing material"
-            // path had nothing to paint and the hero rendered GREY. Build ONE URP/Lit material
-            // from the single baked atlas (these bodies are one combined mesh + one bake, so one
-            // material is correct) and ASSIGN it to every slot, replacing whatever the import
-            // left. Runtime-built URP/Lit renders in WebGL (RetargetMaterialsToUrp uses the same).
+            // For CC5 combined bodies: build ONE URP/Lit from the single baked atlas and assign it
+            // to every slot (slots came in null/default). Runtime-built URP/Lit renders in WebGL
+            // (RetargetMaterialsToUrp uses the same path).
             Shader lit = Shader.Find("Universal Render Pipeline/Lit")
                          ?? Shader.Find("Universal Render Pipeline/Simple Lit")
                          ?? Shader.Find("Sprites/Default");
-            Material baked = lit != null ? new Material(lit) { name = cls + " (CC5 baked)" } : null;
+            Material baked = (isCc5Combined && lit != null) ? new Material(lit) { name = cls + " (CC5 baked)" } : null;
             if (baked != null)
             {
                 if (baked.HasProperty("_BaseMap"))   baked.SetTexture("_BaseMap", tex);
@@ -464,12 +487,15 @@ namespace DeNelle.Village
                 {
                     if (baked != null)
                     {
-                        // Replace the null/default/broken import slot with the baked material.
+                        // CC5: replace the null/default/broken import slot with the baked material.
                         mats[i] = baked;
                     }
                     else if (mats[i] != null)
                     {
-                        // No URP/Lit shader available (unexpected) — best-effort paint in place.
+                        // Legacy Tripo (Mage/Knight): paint the diffuse onto the EXISTING URP slot.
+                        // These slots are already URP/Lit (RetargetMaterialsToUrp ran first) but with
+                        // no _BaseMap bound → grey. Bind the atlas and clear any dark/zero _BaseColor
+                        // so the texture (not a leftover tint) drives the look.
                         if (mats[i].HasProperty("_BaseMap")) mats[i].SetTexture("_BaseMap", tex);
                         if (mats[i].HasProperty("_MainTex")) mats[i].SetTexture("_MainTex", tex);
                         if (mats[i].HasProperty("_BaseColor")) mats[i].SetColor("_BaseColor", Color.white);
@@ -478,6 +504,8 @@ namespace DeNelle.Village
                 }
                 r.sharedMaterials = mats;
             }
+            Debug.Log("[HeroBodySwapper] DEF-267 ApplyExtractedTexture: " + cls +
+                      " diffuse '" + texPath + "' bound (mode=" + (isCc5Combined ? "CC5-replace" : "Tripo-paint") + ").");
         }
 
         /// <summary>

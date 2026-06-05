@@ -82,6 +82,13 @@ public class Village2Generator : MonoBehaviour
             // (B1). A lying/scaled tree's mesh colliders walled off the whole plaza; strip them
             // so the centre is walkable regardless of the tree's final pose.
             StripColliders(tree);
+            // DEF-267: the Tree_Of_Life FBX ships with ZERO usable materials → it renders flat
+            // grey. Attach the runtime fixer so a freshly generated town's tree paints itself with
+            // the ready Resources/Structures/Materials/TreeofLife_basecolor URP material on Start.
+            // (The already-baked live Village2 scene is covered separately by the fixer's
+            // [RuntimeInitializeOnLoadMethod] scan, which needs no scene edit.)
+            if (tree.GetComponent<DeNelle.Core.TreeOfLifeMaterialFixer>() == null)
+                tree.AddComponent<DeNelle.Core.TreeOfLifeMaterialFixer>();
             var trr = tree.GetComponentsInChildren<Renderer>();
             if (trr.Length > 0)
             {
