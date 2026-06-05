@@ -13,7 +13,7 @@ Its roots held the earth together. Its branches held the sky.
 
 In its shade, civilizations rose. Kingdoms flourished. The people of Elarion built their lives in its light.
 
-<<wait 3>>
+<<wait 0.5>>
 <<play_sfx heartbeat_slow>>
 <<jump Intro_Screen2>>
 ===
@@ -32,7 +32,7 @@ He set the World Ash on fire.
 The sky cracked. The branches fell. Every kingdom built in its shade was buried in ash.
 
 <<play_sfx deep_rumble>>
-<<wait 3>>
+<<wait 0.5>>
 <<jump Intro_Screen3>>
 ===
 
@@ -47,11 +47,11 @@ Their cities. Their history. Their faith.
 
 The World Ash — the heart of their world — was gone.
 
-<<wait 2>>
+<<wait 0.5>>
 
 Almost.
 
-<<wait 1>>
+<<wait 0.5>>
 <<jump Intro_Screen4>>
 ===
 
@@ -64,11 +64,11 @@ The enemy was unrelenting. Wave after wave. No end.
 
 The people of Elarion knew they could not survive.
 
-<<wait 2>>
+<<wait 0.5>>
 
 So they made a choice.
 
-<<wait 1>>
+<<wait 0.5>>
 <<jump Intro_Screen5>>
 ===
 
@@ -86,15 +86,15 @@ Every man, woman, and child pressed their hands to the bark and let go.
 
 They imbued their spirits into the last root of the World Ash.
 
-<<wait 2>>
+<<wait 0.5>>
 
 Not to escape. To wait.
 
-<<wait 1>>
+<<wait 0.5>>
 
 To wait for someone brave enough to bring them back.
 
-<<wait 3>>
+<<wait 0.5>>
 <<jump Intro_Screen6>>
 ===
 
@@ -113,7 +113,7 @@ Every faint pulse is a voice. Every glow is a life waiting to be reborn.
 
 They are the Echoes of Elarion.
 
-<<wait 3>>
+<<wait 0.5>>
 <<jump Intro_Screen7>>
 ===
 
@@ -130,12 +130,12 @@ The Heartwood grew weaker. The whispers grew quieter.
 
 But it never went silent.
 
-<<wait 2>>
+<<wait 0.5>>
 
 It was calling.
 
 <<play_sfx war_drums_distant>>
-<<wait 2>>
+<<wait 0.5>>
 <<jump Intro_Screen8>>
 ===
 
@@ -151,7 +151,7 @@ Not a king. Not a chosen one. Just someone who heard the call and came.
 
 The Heartwood recognized you. The souls inside stirred for the first time in a hundred years.
 
-<<wait 1>>
+<<wait 0.5>>
 
 They don't need a savior. They need a defender.
 
@@ -159,7 +159,7 @@ Someone who will stay. Build. Fight. Endure.
 
 Someone who will restore the tree — and in restoring it, set them free.
 
-<<wait 2>>
+<<wait 0.5>>
 <<jump Intro_Screen9>>
 ===
 
@@ -168,7 +168,7 @@ tags: intro cinematic final
 ---
 // Screen: the Heartwood erupts with golden light. Silhouettes of people visible inside the bark — faces, hands, reaching. Alive. Waiting.
 <<fade_to_white 1>>
-<<wait 1>>
+<<wait 0.5>>
 <<fade_from_white 2>>
 
 // DEFENDERS OF THE REALM logo — large, centered
@@ -176,16 +176,16 @@ tags: intro cinematic final
 
 DEFENDERS OF THE REALM
 
-<<wait 1>>
+<<wait 0.5>>
 
 Echoes of Elarion
 
-<<wait 2>>
+<<wait 0.5>>
 
 // Subtitle fades in below
 
 They gave their souls to survive. Now they need you to bring them back.
 
-<<wait 3>>
+<<wait 0.5>>
 <<transition_to hero_select>>
 ===
