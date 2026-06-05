@@ -20,11 +20,11 @@ tags: system
 <<declare $petRole = "Defender">>
 <<declare $petMode = "Defend">>
 <<declare $tutorialPhase = "intro">>
+<<declare $tutorialStep = "intro">>   // string steps: "place_first_tower", "first_combat", etc.
 
 // — Numbers: counts / levels / resources —
 <<declare $heroLevel = 1>>
 <<declare $towersBuilt = 0>>
-<<declare $tutorialStep = 0>>
 <<declare $soulsFreed = 0>>
 <<declare $wood = 0>>
 <<declare $stone = 0>>
