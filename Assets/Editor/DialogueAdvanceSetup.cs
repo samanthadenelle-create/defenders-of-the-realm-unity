@@ -206,16 +206,18 @@ namespace DeNelle.Editor
             var imgComp = img.objectReferenceValue as Component;
             if (imgComp == null) return;
 
-            // Shrink uniformly (robust regardless of RectTransform anchoring) so the
-            // big blue "Next" becomes a small, subtle "there's more" cue.
+            // FULLY HIDE the blue "Next" continue bubble (owner: "BLUE BUBBLE STILL
+            // ON SCREEN"). Softening (white tint @0.72) left the blue sprite ~72%
+            // visible — the tint can't recolour it away. Zero the alpha so it never
+            // shows; the LineAdvancer <Pointer>/press still advances, and the object
+            // stays present so the presenter's [MustNotBeNull] toggle is satisfied.
             imgComp.transform.localScale = new Vector3(0.5f, 0.5f, 1f);
 
-            // Soften it a touch (alpha) so it reads as a hint, not a button.
             var iso = new SerializedObject(imgComp);
             SerializedProperty color = iso.FindProperty("m_Color");
             if (color != null)
             {
-                color.colorValue = new Color(1f, 1f, 1f, 0.72f);
+                color.colorValue = new Color(1f, 1f, 1f, 0f);   // invisible
                 iso.ApplyModifiedPropertiesWithoutUndo();
             }
             EditorUtility.SetDirty(imgComp);

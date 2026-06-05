@@ -43,6 +43,7 @@ namespace DeNelle.Village
         private static AudioClip s_towerFire;
         private static AudioClip s_towerPlace;
         private static AudioClip s_waveStart;
+        private static AudioClip s_lookoutHorn;
 
         /// <summary>
         /// Plays the tower-fire "pew" through CoreServices.Audio. Quiet by design —
@@ -79,6 +80,20 @@ namespace DeNelle.Village
             if (s_waveStart == null)
                 s_waveStart = Resources.Load<AudioClip>("Sfx/WaveStart") ?? GenerateWaveStart();
             CoreServices.Audio?.PlaySfx(s_waveStart, 0.8f);
+        }
+
+        /// <summary>
+        /// The lookout's horn — the "a raid is incoming" warning blown when a wave
+        /// enters its countdown (and previewed by the FTUE's horn line). Real
+        /// recorded clip at Resources/Sfx/LookoutHorn; no-op if absent or the audio
+        /// service isn't up yet.
+        /// </summary>
+        public static void PlayLookoutHorn()
+        {
+            if (s_lookoutHorn == null)
+                s_lookoutHorn = Resources.Load<AudioClip>("Sfx/LookoutHorn");
+            if (s_lookoutHorn != null)
+                CoreServices.Audio?.PlaySfx(s_lookoutHorn, 0.85f);
         }
 
         // ── Procedural generation (fresh-clone-safe) ─────────────────────────

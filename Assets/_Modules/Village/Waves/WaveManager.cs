@@ -437,6 +437,11 @@ namespace DeNelle.Village
             _currentWaveId = waveId;
             _enemyBestSqr.Clear();    // fresh stuck-tracking per wave
             _enemyStuckTime.Clear();
+
+            // The lookout spots the incoming raid — blow the horn. This is the very
+            // warning the FTUE teaches ("when you hear the horn, get to the gate").
+            GameSfx.PlayLookoutHorn();
+
             // The between-wave build window scales with the player's chosen
             // difficulty: the canonical WaveDef.CountdownSeconds (45 s first
             // wave, 300 s later) is multiplied by the DifficultyTuning factor so

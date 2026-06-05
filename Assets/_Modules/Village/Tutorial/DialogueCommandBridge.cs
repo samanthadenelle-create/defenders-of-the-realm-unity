@@ -183,9 +183,17 @@ namespace DeNelle.Village
 
         private void CmdPlaySfx(string id)
         {
-            // No string→clip table yet; a UI blip gives audible punctuation without
-            // mis-mapping. (Real SFX mapping is a follow-up, not a soft-lock risk.)
-            CoreServices.Audio?.PlayUiClick();
+            // Map the named Yarn SFX to real cues where we have them; fall back to a
+            // UI blip so an unmapped name is audible punctuation, never a soft-lock.
+            switch (id)
+            {
+                case "horn_warning":
+                    GameSfx.PlayLookoutHorn();   // the FTUE previews the real lookout horn
+                    break;
+                default:
+                    CoreServices.Audio?.PlayUiClick();
+                    break;
+            }
         }
 
         private void CmdPlayMusic(string id)
