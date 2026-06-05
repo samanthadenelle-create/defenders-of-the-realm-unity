@@ -29,17 +29,36 @@ namespace DeNelle.Village
         private float _scan;
         private readonly List<IDamageable> _hostiles = new List<IDamageable>();
 
+        // ── Targeting indicator (cheap persistent LineRenderer aim-beam) ──────
+        // A single, reused LineRenderer drawn from the muzzle to the locked
+        // target while one is acquired. Created lazily, never per-shot — towers
+        // fire often, so this stays allocation-free in the hot loop. Hidden
+        // (disabled) whenever there is no valid target.
+        private LineRenderer _aimBeam;
+        private Material      _aimBeamMat;
+
         private void Update()
         {
             _scan -= Time.deltaTime;
             if (_scan <= 0f) { Rescan(); _scan = 0.4f; }   // refresh target list a few times/sec
 
+            // Acquire once per frame so the aim-beam tracks the current target
+            // even between shots (the indicator reads "this tower is locked on").
+            var target = Acquire();
+            UpdateAimBeam(target);
+
             _cd -= Time.deltaTime;
             if (_cd > 0f) return;
-            var target = Acquire();
             if (target == null) return;
             _cd = 1f / Mathf.Max(0.1f, FireRate);
             Fire(target);
+        }
+
+        private void OnDisable()
+        {
+            // Don't leave a stale beam pointing at a dead target when the tower
+            // is disabled (pooled, swapped, destroyed-soon).
+            if (_aimBeam != null) _aimBeam.enabled = false;
         }
 
         private void Rescan()
@@ -107,7 +126,92 @@ namespace DeNelle.Village
             bolt.transform.position = muzzle;
             bolt.AddComponent<ProjectileMover>().Launch(target.WorldPosition + Vector3.up * 1f, 40f, CanHitAir ? 0.1f : 0.35f);
 
+            // ── Muzzle flash ──────────────────────────────────────────────────
+            // Brief pooled burst at the fire point each shot. Reuses the shared
+            // VFXManager (object-pooled, quality-gated) — element-tinted so a
+            // Flame tower reads orange, Ice pale-blue, Aether/None violet.
+            // Null-safe via the static API: a no-op if VFXManager isn't booted.
+            VFXManager.Play(MuzzleVfxFor(Element), muzzle);
+
             target.TakeDamage(Damage, Element);   // hitscan damage on fire (bolt is the feel)
+        }
+
+        /// <summary>Maps the tower's damage element to its tower-bolt muzzle VFXType.</summary>
+        private static VFXType MuzzleVfxFor(DamageElement element)
+        {
+            switch (element)
+            {
+                case DamageElement.Flame: return VFXType.Projectile_TowerFire;
+                case DamageElement.Ice:   return VFXType.Projectile_TowerIce;
+                default:                  return VFXType.Projectile_TowerArcane;   // None / Aether
+            }
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // Targeting indicator — a thin aim-beam from the muzzle to the locked
+        // target. Cheap (one reused LineRenderer + one emissive material), and
+        // readable (faint, element-tinted, slightly transparent so it doesn't
+        // clutter the screen when many towers are firing).
+        // ─────────────────────────────────────────────────────────────────────
+        private void UpdateAimBeam(IDamageable target)
+        {
+            if (target == null || !target.IsAlive)
+            {
+                if (_aimBeam != null) _aimBeam.enabled = false;
+                return;
+            }
+
+            EnsureAimBeam();
+            if (_aimBeam == null) return;   // (defensive — EnsureAimBeam always builds it)
+
+            Vector3 muzzle = transform.position + Vector3.up * 2f;
+            Vector3 hit    = target.WorldPosition + Vector3.up * 1f;
+            _aimBeam.enabled = true;
+            _aimBeam.SetPosition(0, muzzle);
+            _aimBeam.SetPosition(1, hit);
+        }
+
+        private void EnsureAimBeam()
+        {
+            if (_aimBeam != null) return;
+
+            var beamGo = new GameObject("AimBeam");
+            beamGo.transform.SetParent(transform, false);
+            _aimBeam = beamGo.AddComponent<LineRenderer>();
+            _aimBeam.useWorldSpace   = true;
+            _aimBeam.positionCount   = 2;
+            _aimBeam.numCapVertices  = 0;
+            _aimBeam.alignment       = LineAlignment.View;
+            _aimBeam.textureMode     = LineTextureMode.Stretch;
+            _aimBeam.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            _aimBeam.receiveShadows  = false;
+
+            // Thin, tapered, subtle — a hint of a lock-on laser, not a fat beam.
+            _aimBeam.startWidth = 0.05f;
+            _aimBeam.endWidth   = 0.02f;
+
+            var sh = Shader.Find("Universal Render Pipeline/Unlit");
+            if (sh == null) sh = Shader.Find("Sprites/Default");
+            if (sh != null)
+            {
+                _aimBeamMat = new Material(sh);
+                Color tint = BoltColor; tint.a = 0.35f;   // faint, see-through
+                if (_aimBeamMat.HasProperty("_BaseColor")) _aimBeamMat.SetColor("_BaseColor", tint);
+                if (_aimBeamMat.HasProperty("_Color"))     _aimBeamMat.SetColor("_Color", tint);
+                _aimBeam.sharedMaterial = _aimBeamMat;
+            }
+
+            Color c = BoltColor; c.a = 0.45f;
+            _aimBeam.startColor = c;
+            Color e = BoltColor; e.a = 0.15f;   // fades toward the target end
+            _aimBeam.endColor = e;
+
+            _aimBeam.enabled = false;   // off until a target is locked
+        }
+
+        private void OnDestroy()
+        {
+            if (_aimBeamMat != null) Destroy(_aimBeamMat);
         }
     }
 }
