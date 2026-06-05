@@ -59,6 +59,31 @@ namespace DeNelle.Village
         private static readonly Color FireColor = new Color(0.30f, 1f, 0.40f, 1f); // green = fired
         private static readonly Color LandColor = new Color(1f, 0.25f, 0.20f, 1f); // red   = landed
 
+        // WO-280 / DEF-274: the code-built placeholder projectiles are raw URP primitives
+        // — most visibly the BLUE emissive "SpellOrbPlaceholder" SPHERE the Mage fires.
+        // It reads as a stray debug sphere in the playable build, so the placeholder
+        // VISUAL is suppressed by default. The projectile's gameplay payload (damage +
+        // on-arrive status, and the green-fire / red-land cast bursts) is UNTOUCHED — when
+        // the placeholder visual is suppressed and no authored prefab is assigned, the
+        // arrival callback fires after the same flight time via a timed coroutine, so the
+        // shot still "connects" exactly as before. Assigning a real _arrowPrefab /
+        // _spellOrbPrefab always wins regardless of this flag. Mirrors the established
+        // PetHarvestBootstrap placeholder-gate pattern (const default + command-line opt-in).
+        private const bool ShowPlaceholderProjectiles = false;
+
+        /// <summary>Whether the code-built placeholder projectile visuals should spawn.
+        /// Off by default (WO-280); opt back in via the const above or the
+        /// <c>-showPlaceholderProjectiles</c> command-line flag (dev iteration).</summary>
+        private static bool PlaceholderProjectilesEnabled()
+        {
+            if (ShowPlaceholderProjectiles) return true;
+            var args = System.Environment.GetCommandLineArgs();
+            if (args != null)
+                for (int i = 0; i < args.Length; i++)
+                    if (args[i] == "-showPlaceholderProjectiles") return true;
+            return false;
+        }
+
         // ── Public API ────────────────────────────────────────────────────────
 
         /// <summary>
@@ -69,6 +94,14 @@ namespace DeNelle.Village
         {
             Vector3 origin = LaunchOrigin();
             StartCoroutine(PlayCastBurst(origin, FireColor, 0.15f));   // GREEN: fired
+
+            // WO-280: no authored prefab + placeholder visuals suppressed → fire the
+            // payload after the same flight time, no debug primitive in the scene.
+            if (_arrowPrefab == null && !PlaceholderProjectilesEnabled())
+            {
+                DeliverWithoutProjectile(origin, targetWorldPos, _arrowSpeed, onArrive);
+                return;
+            }
 
             var go = _arrowPrefab != null
                 ? Instantiate(_arrowPrefab, origin, Quaternion.identity)
@@ -87,12 +120,38 @@ namespace DeNelle.Village
             Vector3 origin = LaunchOrigin();
             StartCoroutine(PlayCastBurst(origin, FireColor, 0.35f));   // GREEN: fired
 
+            // WO-280: the blue "SpellOrbPlaceholder" SPHERE is the stray debug primitive.
+            // With no authored prefab and placeholders suppressed, skip the visual but
+            // still land the payload after the same flight time (no debug sphere ships).
+            if (_spellOrbPrefab == null && !PlaceholderProjectilesEnabled())
+            {
+                DeliverWithoutProjectile(origin, targetWorldPos, _orbSpeed, onArrive);
+                return;
+            }
+
             var go = _spellOrbPrefab != null
                 ? Instantiate(_spellOrbPrefab, origin, Quaternion.identity)
                 : BuildPlaceholderOrb(origin);
 
             var mover = go.GetComponent<ProjectileMover>() ?? go.AddComponent<ProjectileMover>();
             mover.Launch(targetWorldPos, _orbSpeed, 0f, WithLandBurst(targetWorldPos, onArrive));
+        }
+
+        /// <summary>WO-280: deliver a projectile's on-arrival payload + red land-burst after
+        /// the time the projectile would have taken to travel, WITHOUT spawning any visual
+        /// (used when placeholder primitives are suppressed and no authored prefab exists).
+        /// Keeps the "damage lands when the shot connects" timing the projectile gave.</summary>
+        private void DeliverWithoutProjectile(Vector3 origin, Vector3 targetWorldPos, float speed, System.Action onArrive)
+        {
+            float dist  = Vector3.Distance(origin, targetWorldPos);
+            float delay = dist / Mathf.Max(0.1f, speed);
+            StartCoroutine(DeliverAfter(delay, WithLandBurst(targetWorldPos, onArrive)));
+        }
+
+        private IEnumerator DeliverAfter(float delay, System.Action payload)
+        {
+            if (delay > 0f) yield return new WaitForSeconds(delay);
+            if (this != null) payload?.Invoke();
         }
 
         /// <summary>Wraps the arrival callback so a RED burst pops where the projectile
