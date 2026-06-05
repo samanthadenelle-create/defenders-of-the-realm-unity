@@ -88,6 +88,13 @@ namespace DeNelle.Village
         private NavMeshAgent _agent;
         private TownsfolkBubble _bubble;
 
+        // Animator locomotion (same "Speed" blend the hero/AmbientNPC use). Guarded
+        // by _hasSpeedParam so we never spam errors on a controller without it.
+        private Animator _animator;
+        private static readonly int SpeedHash = Animator.StringToHash("Speed");
+        private bool _hasSpeedParam;
+        private Vector3 _lastPos;
+
         private float _resolveTimer;
         private float _speakTimer;
         private bool  _introSpoken;
@@ -173,6 +180,13 @@ namespace DeNelle.Village
             if (_bubble == null) _bubble = GetComponentInChildren<TownsfolkBubble>();
             _bubble?.Hide();
 
+            // Cache the mesh Animator + whether its controller declares "Speed".
+            _animator = GetComponentInChildren<Animator>();
+            if (_animator != null && _animator.runtimeAnimatorController != null)
+                foreach (var p in _animator.parameters)
+                    if (p.nameHash == SpeedHash) { _hasSpeedParam = true; break; }
+            _lastPos = transform.position;
+
             if (_heroT == null) _heroT = ResolveHeroFallback();
 
             _speakTimer = IntroDelay;
@@ -185,6 +199,28 @@ namespace DeNelle.Village
             if (!UpdateCombat())
                 UpdateFollow();
             UpdateSpeech();
+            DriveAnimator();
+        }
+
+        /// <summary>
+        /// Feeds the locomotion blend tree: agent velocity when pathing, else the
+        /// per-frame transform delta (lerp fallback). 0 → Idle, higher → Walk/Run.
+        /// Guarded so it never touches a controller that lacks the param.
+        /// </summary>
+        private void DriveAnimator()
+        {
+            if (_animator == null || !_hasSpeedParam) return;
+
+            float speed;
+            if (_agent != null && _agent.enabled && _agent.isOnNavMesh && !_agent.isStopped)
+                speed = _agent.velocity.magnitude;
+            else
+                speed = Time.deltaTime > 0f
+                    ? (transform.position - _lastPos).magnitude / Time.deltaTime
+                    : 0f;
+            _lastPos = transform.position;
+
+            _animator.SetFloat(SpeedHash, speed, 0.08f, Time.deltaTime);
         }
 
         // ── Combat (engage the shared registry's nearest hostile) ────────────

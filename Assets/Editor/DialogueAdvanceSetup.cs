@@ -91,7 +91,7 @@ namespace DeNelle.Editor
 
                 so.ApplyModifiedPropertiesWithoutUndo();
 
-                RestyleContinueIndicator(root);
+                TameChrome(root);
 
                 PrefabUtility.SaveAsPrefabAsset(root, DstPrefab);
                 Debug.Log("[DialogueAdvanceSetup] DONE — tap/click advance wired (<Pointer>/press) + continue " +
@@ -139,16 +139,32 @@ namespace DeNelle.Editor
 
         // ── Continue indicator restyle (shrink + soften, no fork) ────────────
 
-        static void RestyleContinueIndicator(GameObject root)
+        static void TameChrome(GameObject root)
         {
             Component presenter = FindByBaseType(root, "Yarn.Unity.DialoguePresenterBase", "Yarn.Unity.LineAdvancer");
             if (presenter == null)
             {
-                Debug.LogWarning("[DialogueAdvanceSetup] No RPGDialoguePresenter found — skipping indicator restyle.");
+                Debug.LogWarning("[DialogueAdvanceSetup] No RPGDialoguePresenter found — skipping chrome restyle.");
                 return;
             }
 
             var pso = new SerializedObject(presenter);
+
+            // Turn OFF the ClassicRPG chrome the owner doesn't want, via the package's
+            // OWN feature-flag booleans (the documented override — no fork). The
+            // backing fields are [ShowIf(useX)] so disabling the flag also suppresses
+            // their [MustNotBeNull] validation.
+            //   useActionButton — the blue "Next / Decide / Return" prompt bar up top
+            //                     (redundant now that tap/click advances via LineAdvancer)
+            //   useIcons        — the speaker icon slot (the decorative hearts)
+            SetPresenterBool(pso, "useActionButton", false);
+            SetPresenterBool(pso, "useIcons", false);
+            pso.ApplyModifiedPropertiesWithoutUndo();
+
+            // Belt-and-suspenders: deactivate the leftover decorative "Heart" objects
+            // the sample box ships with, in case any sit outside the icon container.
+            DeactivateByNamePrefix(root, "Heart");
+
             SerializedProperty img = pso.FindProperty("lineCompleteImage");
             if (img == null || img.objectReferenceValue == null)
             {
@@ -172,6 +188,32 @@ namespace DeNelle.Editor
                 iso.ApplyModifiedPropertiesWithoutUndo();
             }
             EditorUtility.SetDirty(imgComp);
+        }
+
+        // ── Chrome helpers ───────────────────────────────────────────────────
+
+        static void SetPresenterBool(SerializedObject pso, string prop, bool val)
+        {
+            var p = pso.FindProperty(prop);
+            if (p != null) p.boolValue = val;
+            else Debug.LogWarning($"[DialogueAdvanceSetup] RPGDialoguePresenter.{prop} not found " +
+                                  "(ClassicRPG version changed?) — skipped.");
+        }
+
+        // Deactivate every GameObject under root whose name starts with prefix.
+        static void DeactivateByNamePrefix(GameObject root, string prefix)
+        {
+            int n = 0;
+            foreach (var t in root.GetComponentsInChildren<Transform>(true))
+            {
+                if (t == null || t == root.transform) continue;
+                if (t.name.StartsWith(prefix) && t.gameObject.activeSelf)
+                {
+                    t.gameObject.SetActive(false);
+                    n++;
+                }
+            }
+            if (n > 0) Debug.Log($"[DialogueAdvanceSetup] Deactivated {n} '{prefix}*' decoration object(s).");
         }
 
         // ── SerializedObject helpers ─────────────────────────────────────────

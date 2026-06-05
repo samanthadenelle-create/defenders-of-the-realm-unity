@@ -178,6 +178,11 @@ namespace DeNelle.Village
                 var anim = vis.GetComponent<Animator>() ?? vis.AddComponent<Animator>();
                 var ctrl = Resources.Load<RuntimeAnimatorController>("Heroes/" + slug);
                 if (ctrl != null) anim.runtimeAnimatorController = ctrl;   // idle/walk, not a T-pose
+                // CRITICAL: same as HeroBodySwapper — the Idle/Walk clips carry baked
+                // root curves; with applyRootMotion ON the companion drives itself in a
+                // slow circle ("that circle thing the hero does"). StoryCompanion moves
+                // the transform itself (NavMeshAgent / lerp), so root motion must be OFF.
+                anim.applyRootMotion = false;
 
                 // The Tripo/CC5 FBX slots import with NO basecolor bound (materialImportMode
                 // leaves _BaseMap empty), so without this the Mage/Cleric body renders as a
@@ -199,9 +204,11 @@ namespace DeNelle.Village
                 TintBody(body.GetComponent<Renderer>(), hero);
             }
 
-            // Speech bubble — self-building world-space bubble (same class the
-            // ambient townsfolk use). It builds its panel/text in its own Awake.
-            go.AddComponent<TownsfolkBubble>();
+            // No speech bubble on the story companion (owner: remove his text
+            // bubble). The ambient townsfolk keep theirs via AmbientNPC; the story
+            // companion speaks through the Yarn dialogue system instead. The
+            // GetComponentInChildren<TownsfolkBubble> in Inject() is null-guarded,
+            // so SetBubble simply no-ops now.
 
             // NavMeshAgent so it paths the baked village NavMesh. StoryCompanion
             // disables it on Start if we are not on a NavMesh (plain-lerp fallback).

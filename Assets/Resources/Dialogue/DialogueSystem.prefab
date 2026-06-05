@@ -134,7 +134,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &8081983179960541723
 RectTransform:
   m_ObjectHideFlags: 0
@@ -601,7 +601,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &4748574898995399859
 RectTransform:
   m_ObjectHideFlags: 0
@@ -1041,9 +1041,9 @@ MonoBehaviour:
   changeOptionSelection: {fileID: 8300000, guid: b9a0d33381c334b93a5a7252a2b6cc49, type: 3}
   useAudio: 1
   useOptions: 1
-  useIcons: 1
+  useIcons: 0
   useAppearanceAnimation: 1
-  useActionButton: 1
+  useActionButton: 0
   useLetterbox: 1
   useSkipping: 1
   useBackgroundStyles: 1
@@ -1679,7 +1679,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &449439672771314808
 RectTransform:
   m_ObjectHideFlags: 0
