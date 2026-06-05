@@ -39,8 +39,22 @@ namespace DeNelle.Village
         // 2026-06-02: the registry (TargetManager) makes the lock range FREE to widen
         // (no physics-buffer overflow), so push it well past the open-world spawn ring
         // so roaming mobs in OuterWorld lock from a comfortable distance.
+        // DEF-269 (owner playtest): 70m let the hero snipe-from-distance and made the
+        // flee-and-spam exploit reach far. Dialed back to 45m (~36% shorter) so combat
+        // is up-close and committed. Manual Tab-cycle still reaches anything in this range.
         [Tooltip("Radius (m) within which hostiles can be targeted.")]
-        [SerializeField, Min(1f)] private float _acquireRange = 70f;
+        [SerializeField, Min(1f)] private float _acquireRange = 45f;
+
+        // DEF-269: forward-arc facing gate for AUTO target acquisition. The hero may only
+        // auto-acquire/auto-fire on a hostile roughly IN FRONT of them (Vector3.Dot of the
+        // hero's forward vs the to-target direction > this cos threshold). 0.35 ≈ within a
+        // ~70° half-angle (~140° total arc) of facing. Kills "flee and spam a target behind
+        // you" — run away and the engagement ends. A MANUAL Tab/shoulder lock bypasses this
+        // (deliberate player intent to hold a specific foe). Null-safe: degrades to "always
+        // in front" if the hero transform has no meaningful forward.
+        [Tooltip("Forward-arc dot threshold for AUTO targeting. 0.35 ≈ within ~70° of the " +
+                 "hero's facing. Higher = tighter front cone; manual Tab-lock ignores this.")]
+        [SerializeField, Range(-1f, 1f)] private float _facingDot = 0.35f;
 
         [Tooltip("Seconds between target re-scans (the reticle follows every frame).")]
         [SerializeField, Min(0.02f)] private float _scanInterval = 0.12f;
@@ -247,8 +261,32 @@ namespace DeNelle.Village
                 (a.WorldPosition - me).sqrMagnitude.CompareTo((b.WorldPosition - me).sqrMagnitude));
         }
 
+        // DEF-269: the AUTO target is the nearest candidate the hero is FACING. _candidates
+        // is sorted nearest-first, so walk it and return the first one inside the forward arc.
+        // Returns null when every hostile in range is behind the hero — so running away ends
+        // the engagement instead of letting the hero spam attacks at a target at their back.
+        // (Manual Tab-locks are applied in Update/LateUpdate before this is ever consulted.)
         private IDamageable NearestCandidate()
-            => _candidates.Count > 0 ? _candidates[0] : null;
+        {
+            Vector3 me = transform.position;
+            Vector3 fwd = transform.forward;
+            fwd.y = 0f;
+            // Degenerate forward (hero hasn't oriented yet) → don't gate, fall back to nearest.
+            bool gate = fwd.sqrMagnitude > 0.0001f;
+            if (gate) fwd.Normalize();
+
+            for (int i = 0; i < _candidates.Count; i++)
+            {
+                var cand = _candidates[i];
+                if (cand == null || !cand.IsAlive) continue;
+                if (!gate) return cand;   // can't determine facing → nearest wins
+                Vector3 to = cand.WorldPosition - me;
+                to.y = 0f;
+                if (to.sqrMagnitude < 0.0001f) return cand;   // on top of the hero → in range
+                if (Vector3.Dot(fwd, to.normalized) >= _facingDot) return cand;
+            }
+            return null;
+        }
 
         private void SetVisible(bool on)
         {
