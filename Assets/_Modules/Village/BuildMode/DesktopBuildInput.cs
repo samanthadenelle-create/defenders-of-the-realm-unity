@@ -3,36 +3,45 @@
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.Village   Namespace: DeNelle.Village
 //
-// The desktop placement path, preserved 1:1 from the old BuildModeController
-// Update loops so in-editor / Windows-build iteration is UNCHANGED:
-//   ScreenPoint   = Input.mousePosition
-//   PlaceOrSelect = Input.GetMouseButtonDown(0)            (left-click)
-//   Cancel        = Input.GetMouseButtonDown(1) || Escape  (right-click / Escape)
-//   Rotate        = Input.GetKeyDown(KeyCode.R)
+// Reads the NEW Input System (Mouse.current / Keyboard.current):
+//   ScreenPoint   = Mouse.current.position
+//   PlaceOrSelect = Mouse.current.leftButton.wasPressedThisFrame   (left-click)
+//   Cancel        = right-click || Escape
+//   Rotate        = R key
 //
-// This is the controller's DEFAULT input source. The Lean.Touch driver replaces
-// it on a touch device via BuildModeController.SetInput(); when it is absent the
-// behaviour is exactly what it was before the seam was extracted.
+// WHY NOT legacy Input.*: this project runs the Input System package with the
+// legacy Input Manager DISABLED, so Input.GetMouseButtonDown(0) / Input.mousePosition
+// silently no-op on desktop + WebGL. That was the "build grid shows but a click never
+// LOCKS IN a placement" bug — the ghost could follow but nothing ever constructed.
+// Reading the new devices restores click-to-place / click-to-confirm on desktop + web.
+//
+// This is the controller's DEFAULT input source; the Lean.Touch driver replaces it on
+// a touch device via BuildModeController.SetInput().
 // =============================================================================
 
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 namespace DeNelle.Village
 {
     /// <summary>
-    /// Plain mouse+keyboard <see cref="IBuildInput"/>. Reads the legacy
-    /// <c>Input.*</c> the old placement loops used, so the desktop path is byte-for-
-    /// byte identical. Pure (no MonoBehaviour, no allocations) — the controller holds
-    /// one instance.
+    /// Plain mouse+keyboard <see cref="IBuildInput"/> via the new Input System.
+    /// Pure (no MonoBehaviour, no allocations) — the controller holds one instance.
+    /// Every device read is null-guarded so a missing mouse/keyboard never throws.
     /// </summary>
     public sealed class DesktopBuildInput : IBuildInput
     {
-        public Vector2 ScreenPoint => Input.mousePosition;
+        public Vector2 ScreenPoint =>
+            Mouse.current != null ? Mouse.current.position.ReadValue() : Vector2.zero;
 
-        public bool PlaceOrSelect => Input.GetMouseButtonDown(0);
+        public bool PlaceOrSelect =>
+            Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame;
 
-        public bool Cancel => Input.GetMouseButtonDown(1) || Input.GetKeyDown(KeyCode.Escape);
+        public bool Cancel =>
+            (Mouse.current != null && Mouse.current.rightButton.wasPressedThisFrame) ||
+            (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame);
 
-        public bool Rotate => Input.GetKeyDown(KeyCode.R);
+        public bool Rotate =>
+            Keyboard.current != null && Keyboard.current.rKey.wasPressedThisFrame;
     }
 }
