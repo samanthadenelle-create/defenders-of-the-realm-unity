@@ -176,6 +176,11 @@ namespace DeNelle.Editor
             //                         (resolved by the subclass; was the placeholder hearts)
             SetPresenterBool(pso, "useActionButton", false);
             SetPresenterBool(pso, "useIcons", true);
+            // OFF: the full-screen "Background" image was a screen-wide backdrop that
+            // visually COVERED the whole battle/HUD behind the dialogue (owner: "that
+            // ui covered everything"). Disabling backgroundStyles leaves a clean
+            // bottom dialogue panel that doesn't blanket the scene.
+            SetPresenterBool(pso, "useBackgroundStyles", false);
             pso.ApplyModifiedPropertiesWithoutUndo();
 
             // The sample's standalone decorative "Heart" objects are separate from the

@@ -62,21 +62,14 @@ tags: tutorial onboarding
 {$companionName}: See this gate? Last attack came right through here.
 {$companionName}: We need eyes on it. A watchtower — something to slow them down.
 
-// Teach tower placement
-{$companionName}: Hit that Build button. I've got enough materials for one tower — place it near the gate.
+// Verbal guidance — no hard gate. The player builds when they're ready with full
+// controls; the HUD objective keeps the goal in front of them. (Was a blocking
+// wait_for_event on a build button the dialogue box was covering — owner 2026-06-05.)
+{$companionName}: That Build button at the bottom of your screen? Tap it whenever you're ready and drop a watchtower right by this gate — I've left you materials for one.
+{$companionName}: Get it up before they come. One tower won't hold four gates, though — let's check the others.
 
-<<highlight_ui build_button>>
 <<set $tutorialStep to "place_first_tower">>
-<<enable_player_input>>
-
-// Wait for player to place tower
-<<wait_for_event tower_placed>>
-
-<<unhighlight_ui build_button>>
-{$companionName}: Nice work. That'll buy us time when they come.
-{$companionName}: But one tower won't hold four gates. Let's check the others.
-
-<<set $towersBuilt to 1>>
+<<set_hud_objective "Build a watchtower at the gate" 0 1>>
 <<start_autowalk gate_2>>
 <<jump SecondGateAmbush>>
 ===
@@ -84,39 +77,18 @@ tags: tutorial onboarding
 title: SecondGateAmbush
 tags: tutorial onboarding
 ---
-// Arrived at Gate 2
+// Arrived at Gate 2 — EXPLANATION only (MVP). The live ambush + wait-for-clear
+// gate was removed; the companion teaches the defend mechanic and the player
+// fights real waves after the tutorial ends. Tune the choreography later.
 <<camera_focus gate_2>>
 <<stop_autowalk>>
 
-{$companionName}: We should put one here too...
-<<wait 1>>
-{$companionName}: Hmm. Not enough materials. We'll need to gather more before—
-
-// HORN BLAST
+{$companionName}: Same story at every gate — this one, and the two on the far side.
+{$companionName}: When night falls, creatures hit the walls. Towers thin them out, but you and I hold the line up close.
 <<play_sfx horn_warning>>
-<<camera_shake 0.3>>
-<<wait 0.5>>
+{$companionName}: That horn? That's the warning. When you hear it, get to whichever gate they're swarming and fight them back.
 
-{$companionName}: They're here. Defend this gate — NOW!
-
-<<spawn_wave_at_nearest 3>>
 <<set $tutorialStep to "first_combat">>
-<<enable_player_input>>
-
-// Companion fights alongside player — AI handles combat
-// Wait for wave clear
-<<wait_for_event wave_cleared>>
-
-<<play_sfx victory_sting>>
-<<wait 1>>
-
-{$companionName}: We held them.
-{$companionName}: Thanks for the help pushing them back.
-
-<<wait 0.5>>
-
-{$companionName}: But they'll be back. And next time it won't be three of them.
-
 <<jump ResourceGrant>>
 ===
 
@@ -159,7 +131,9 @@ tags: tutorial onboarding
 title: PetIntroduction
 tags: tutorial onboarding
 ---
-// Pet runs up to hero
+// Pet runs up to hero — EXPLANATION only (MVP). The name prompt + role-choice
+// gates were removed; the player names + assigns the Echo at the Pet House after
+// the tutorial. Restore the in-line naming moment when tuning later.
 <<spawn_starting_pet>>
 <<wait 2>>
 
@@ -167,37 +141,13 @@ tags: tutorial onboarding
 
 <<camera_focus pet>>
 
-{$companionName}: That's an Echo. A spirit animal tied to the Heartwood's energy. They choose who they follow.
+{$companionName}: That's an Echo. A spirit animal tied to the Heartwood's energy. They choose who they follow — and this one's chosen you.
 
-{$companionName}: This one's chosen you. What do you want to call them?
+{$companionName}: They can help two ways: stay and defend the village, or head out and gather resources from the nodes beyond the gates.
 
-<<show_pet_name_prompt>>
-<<wait_for_event pet_named>>
+{$companionName}: Stop by the Pet House whenever you like — name them, and pick how they help. You can change it any time.
 
-{$companionName}: {$petName}. Good name.
-
-{$companionName}: Now — {$petName} can help in two ways.
-
--> What do you mean?
-    {$companionName}: They can stay here and help defend the village when enemies attack. Extra teeth at the gates.
-    {$companionName}: Or they can go out and gather supplies from resource nodes. Wood, stone, food — whatever's nearby.
-    {$companionName}: Your call. You can always change it later at the Pet House.
--> Just tell me the options.
-    {$companionName}: Defend the village or gather resources. Simple choice, big impact.
-
-<<show_pet_role_choice>>
-<<wait_for_event pet_role_chosen>>
-
-<<if $petRole == "defend">>
-    {$companionName}: {$petName} will hold the line. Smart.
-    {$companionName}: But we're going to need more resources soon. There's wood, iron, and more out beyond the gates — worth exploring when you're ready.
-    <<set_hud_hint "Explore beyond the gates to find resources">>
-<<else>>
-    {$companionName}: {$petName} will bring back what they find. Good instinct.
-    <<send_pet_to_harvest>>
-    {$companionName}: Keep your eyes open out there too. The best nodes are further from the village — and more dangerous.
-<<endif>>
-
+<<set_hud_hint "Visit the Pet House to name your Echo and set its role">>
 <<jump TutorialComplete>>
 ===
 
@@ -217,7 +167,7 @@ tags: tutorial onboarding
 -> Let's do this.
     {$companionName}: That's the spirit.
 -> Any other advice?
-    {$companionName}: Stay close to the walls during attacks. Explore during the quiet. And don't forget about {$petName} — they're part of your team now.
+    {$companionName}: Stay close to the walls during attacks. Explore during the quiet. And don't forget about your Echo — they're part of your team now.
     {$companionName}: Oh — and talk to the villagers. The Blacksmith, the merchants — they've got things you'll need.
 
 {$companionName}: I'll be right here if you need me. Good luck, Defender.

@@ -1046,7 +1046,7 @@ MonoBehaviour:
   useActionButton: 0
   useLetterbox: 1
   useSkipping: 1
-  useBackgroundStyles: 1
+  useBackgroundStyles: 0
 --- !u!82 &446895333741573470
 AudioSource:
   m_ObjectHideFlags: 0
