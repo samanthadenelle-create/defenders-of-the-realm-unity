@@ -38,8 +38,20 @@ namespace DeNelle.Village
         private float _radius;
         private bool _tracking;
         private float _visTimer;       // throttles the hero-presence visibility check
+        private float _lateTouchTimer; // one-shot late re-check (Touchscreen.current can init late on mobile)
         private static Texture2D _disc;
         private static Sprite _discSprite;
+
+        /// <summary>
+        /// True only on a touch/mobile target. Desktop (WASD/mouse) never shows the stick.
+        /// Robust gate: <see cref="Application.isMobilePlatform"/> OR a live touchscreen
+        /// device (covers mobile WebGL, where isMobilePlatform alone is unreliable).
+        /// </summary>
+        private static bool IsTouchTarget()
+        {
+            return Application.isMobilePlatform
+                || UnityEngine.InputSystem.Touchscreen.current != null;
+        }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
@@ -69,9 +81,10 @@ namespace DeNelle.Village
 
         private void ApplyVisibility()
         {
-            // Show whenever there's a hero to drive (covers Village + OuterWorld + any
-            // gameplay scene, and survives the hero spawning a frame after scene-load).
-            bool show = FindFirstObjectByType<HeroLocomotion>() != null;
+            // Show only on a touch/mobile target AND when there's a hero to drive (covers
+            // Village + OuterWorld + any gameplay scene, and survives the hero spawning a
+            // frame after scene-load). Desktop uses WASD/mouse — never show the stick there.
+            bool show = IsTouchTarget() && FindFirstObjectByType<HeroLocomotion>() != null;
             if (_canvas != null && _canvas.gameObject.activeSelf != show)
                 _canvas.gameObject.SetActive(show);
             if (!show) { Move = Vector2.zero; _tracking = false; }
@@ -83,6 +96,14 @@ namespace DeNelle.Village
             // a scene swap may not have fired our handler yet).
             _visTimer -= Time.unscaledDeltaTime;
             if (_visTimer <= 0f) { _visTimer = 0.5f; ApplyVisibility(); }
+
+            // One-shot late re-check: Touchscreen.current can initialize a frame or two
+            // after startup on mobile, so re-evaluate visibility once shortly after launch.
+            if (_lateTouchTimer < 1.5f)
+            {
+                _lateTouchTimer += Time.unscaledDeltaTime;
+                if (_lateTouchTimer >= 1.5f) ApplyVisibility();
+            }
 
             if (_canvas == null || !_canvas.gameObject.activeSelf) return;
 
@@ -143,6 +164,12 @@ namespace DeNelle.Village
         /// </summary>
         public static bool IsInZone(Vector2 screenPos)
         {
+            // If the joystick isn't actually shown (desktop), its zone must NOT claim the
+            // bottom-left corner — otherwise it would silently eat desktop build-placement
+            // clicks there. Gate on the same touch/mobile + live-instance condition.
+            if (!IsTouchTarget() || Instance == null
+                || Instance._canvas == null || !Instance._canvas.gameObject.activeSelf)
+                return false;
             ComputeZone(out float radius, out Vector2 center);
             return (screenPos - center).magnitude <= radius * 1.7f;
         }
