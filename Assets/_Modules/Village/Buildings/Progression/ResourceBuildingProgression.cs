@@ -189,14 +189,14 @@ namespace DeNelle.Village.Buildings.Progression
                 FarmId, "Farm", HarvestResource.Food,
                 baseYield: 20, yieldStep: 12,
                 costResources: new[] { HarvestResource.Wood, HarvestResource.Crystals },
-                baseCost: 40, costStep: 1.6f);
+                baseCost: 85, costStep: 1.9f);
 
             // Lumbermill — produces Wood. Upgraded with Food + Crystals. 5 levels.
             dict[LumbermillId] = MakeBuilding(
                 LumbermillId, "Lumbermill", HarvestResource.Wood,
                 baseYield: 15, yieldStep: 10,
                 costResources: new[] { HarvestResource.Food, HarvestResource.Crystals },
-                baseCost: 35, costStep: 1.6f);
+                baseCost: 80, costStep: 1.9f);
 
             // Forge — produces Iron. Upgraded with Wood + Crystals. 5 harvestable
             // levels PLUS a 6th MAGIC-GATED tier (DEF-121): the Arcane Forge. Reaching
@@ -207,7 +207,7 @@ namespace DeNelle.Village.Buildings.Progression
                 ForgeId, "Forge", HarvestResource.Iron,
                 baseYield: 8, yieldStep: 6,
                 costResources: new[] { HarvestResource.Wood, HarvestResource.Crystals },
-                baseCost: 60, costStep: 1.7f,
+                baseCost: 130, costStep: 2.0f,
                 magicTier: new MagicTier(
                     magicCost: 3,
                     techNodeId: TechTree.ArcaneForgeNodeId,
