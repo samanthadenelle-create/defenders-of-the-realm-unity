@@ -246,20 +246,43 @@ namespace DeNelle.Village
         // ── Resolution ───────────────────────────────────────────────────────
 
         /// <summary>
-        /// The player's CHOSEN hero class (not the playable downgrade Patricia uses).
-        /// Reads GameStateService; defaults to Knight when no class is chosen yet.
+        /// The class the COMPANION spawns as. The companion is a comrade, NOT a mirror
+        /// of the player (WO-280), so by default we map the player's chosen hero class
+        /// to a DIFFERENT companion class via the canon mapping. A tutorial / story-beat
+        /// override (e.g. "meet Sylas") wins when set.
         /// </summary>
         private static HeroClass ResolveChosenHero()
         {
-            // WO-277: the tutorial override wins so the companion is the mapped
-            // (different) class while the FTUE plays.
+            // WO-277: a tutorial / story-beat override wins so the companion is the
+            // exact mapped (different) class that beat wants while it plays.
             if (s_heroClassOverride.HasValue) return s_heroClassOverride.Value;
 
+            // WO-280: default companion = a DIFFERENT class from the player's hero
+            // (the canon hero→companion mapping), so it never spawns as a hero clone.
+            return CompanionClassFor(ResolvePlayerHero());
+        }
+
+        /// <summary>
+        /// The player's CHOSEN hero class (not the playable downgrade Patricia uses).
+        /// Reads GameStateService; defaults to Knight when no class is chosen yet.
+        /// </summary>
+        private static HeroClass ResolvePlayerHero()
+        {
             var svc = GameStateService.Instance;
             if (svc != null && svc.State != null)
                 return svc.State.HeroClass.ToNullable() ?? HeroClass.Knight;
             return HeroClass.Knight;
         }
+
+        /// <summary>
+        /// Canon hero→companion mapping (WO-280) — the companion is always a DIFFERENT
+        /// class from the player's hero. Delegates to the single source of truth in
+        /// <see cref="CompanionSpawner.CompanionClassFor"/> so the FTUE, the Sylas beat
+        /// and the default spawn all agree:
+        ///   Mage→Knight(Grom) · Knight→Ranger(Sylas) · Ranger→Cleric(Elara) · Cleric→Mage(Thrain).
+        /// </summary>
+        private static HeroClass CompanionClassFor(HeroClass player)
+            => CompanionSpawner.CompanionClassFor(player);
 
         // Name-based hero lookup (matches AmbientNPC / VillageNpcInjector).
         private static Transform ResolveHero()

@@ -394,7 +394,7 @@ namespace DeNelle.Village
             _autoWalk?.Stop();
             _hero?.ClearAutoWalk();
             RestoreCompanionSpeech();
-            _companionSpawner?.ClearOverride();   // companion stays, now player-class
+            _companionSpawner?.ClearOverride();   // companion stays the mapped (different) class — WO-280, never a hero clone
 
             SkipToGameplay();
         }
