@@ -182,6 +182,15 @@ namespace DeNelle.Editor
             // portrait slot — deactivate them so only the portrait shows.
             DeactivateByNamePrefix(root, "Heart");
 
+            // BLOCKER FIX (owner playtest 2026-06-05): the box's full-screen "Background"
+            // + "Label" graphics have raycastTarget ON, so the dialogue blankets the whole
+            // screen and eats clicks — the FTUE's "Hit the Build button" step couldn't be
+            // clicked (the build button is a UI-Toolkit doc UNDER this UGUI canvas).
+            // Advancing is the LineAdvancer <Pointer>/press InputAction (not a UI raycast),
+            // so dropping raycastTarget on the full-screen graphics frees HUD/world clicks
+            // while keeping option buttons (their own raycast) clickable.
+            DisableFullScreenRaycasts(root);
+
             SerializedProperty img = pso.FindProperty("lineCompleteImage");
             if (img == null || img.objectReferenceValue == null)
             {
@@ -228,6 +237,34 @@ namespace DeNelle.Editor
             if (p != null) p.boolValue = val;
             else Debug.LogWarning($"[DialogueAdvanceSetup] RPGDialoguePresenter.{prop} not found " +
                                   "(ClassicRPG version changed?) — skipped.");
+        }
+
+        // Turn OFF raycastTarget on any full-screen-stretched UGUI graphic so the
+        // dialogue box never intercepts clicks meant for the HUD / world. Found via
+        // RectTransform anchoring (no UnityEngine.UI asmdef ref) + the m_RaycastTarget
+        // serialized field that every Graphic shares.
+        static void DisableFullScreenRaycasts(GameObject root)
+        {
+            int n = 0;
+            foreach (var rt in root.GetComponentsInChildren<RectTransform>(true))
+            {
+                if (rt == null) continue;
+                if (rt.anchorMin != Vector2.zero || rt.anchorMax != Vector2.one) continue; // not full-screen
+                foreach (var comp in rt.GetComponents<Component>())
+                {
+                    if (comp == null) continue;
+                    var so = new SerializedObject(comp);
+                    var p = so.FindProperty("m_RaycastTarget");
+                    if (p != null && p.boolValue)
+                    {
+                        p.boolValue = false;
+                        so.ApplyModifiedPropertiesWithoutUndo();
+                        n++;
+                    }
+                }
+            }
+            if (n > 0) Debug.Log($"[DialogueAdvanceSetup] Cleared raycastTarget on {n} full-screen dialogue graphic(s) " +
+                                 "so the box no longer blocks HUD/world clicks.");
         }
 
         // Deactivate every GameObject under root whose name starts with prefix.

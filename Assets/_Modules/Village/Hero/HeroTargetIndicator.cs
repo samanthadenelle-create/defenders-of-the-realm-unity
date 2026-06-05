@@ -62,8 +62,12 @@ namespace DeNelle.Village
         [Tooltip("Height (m) above the target's position to float the reticle.")]
         [SerializeField] private float _headHeight = 2.2f;
 
+        // DEF (owner playtest 2026-06-05): 1.6m read as a "giant circle" over mobs.
+        // Dialed to 0.8m for a small, focused reticle that pinpoints the target
+        // instead of haloing it. Runtime-attached (HeroControlEnsurer), so the code
+        // default is what ships — no prefab override to chase.
         [Tooltip("Reticle world size (m).")]
-        [SerializeField, Min(0.1f)] private float _size = 1.6f;
+        [SerializeField, Min(0.1f)] private float _size = 0.8f;
 
         [Tooltip("Reticle tint when auto-tracking the nearest hostile.")]
         [SerializeField] private Color _autoTint = new Color(1f, 0.88f, 0.30f, 0.95f);

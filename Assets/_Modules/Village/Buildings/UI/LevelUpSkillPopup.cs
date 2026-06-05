@@ -160,14 +160,21 @@ namespace DeNelle.Village.UI
             var os = _overlay.style;
             os.position = Position.Absolute;
             os.top = 0f; os.left = 0f; os.right = 0f; os.bottom = 0f;
-            os.alignItems = Align.Center;
-            os.justifyContent = Justify.Center;
+            // Owner (2026-06-05): the level-up panel must be SUBTLE — tuck it into the
+            // top-right corner so it never covers the battle area (was centered + nearly
+            // opaque, blanketing the fight). Picking is Ignore on the overlay, so combat
+            // stays clickable; the card itself stays interactive.
+            os.alignItems = Align.FlexEnd;
+            os.justifyContent = Justify.FlexStart;
 
             var card = new VisualElement { name = "levelup-card" };
             var cs = card.style;
-            cs.minWidth = 300f;
-            cs.paddingTop = 18f; cs.paddingBottom = 18f; cs.paddingLeft = 20f; cs.paddingRight = 20f;
-            cs.backgroundColor = new Color(0.10f, 0.12f, 0.18f, 0.97f);
+            cs.minWidth = 240f; cs.maxWidth = 280f;
+            // Inset from the top-right corner, clear of the top HUD.
+            cs.marginTop = 84f; cs.marginRight = 14f;
+            cs.paddingTop = 14f; cs.paddingBottom = 14f; cs.paddingLeft = 16f; cs.paddingRight = 16f;
+            // Softer + semi-transparent so the fight reads through behind it.
+            cs.backgroundColor = new Color(0.10f, 0.12f, 0.18f, 0.82f);
             cs.borderTopLeftRadius = 12f; cs.borderTopRightRadius = 12f;
             cs.borderBottomLeftRadius = 12f; cs.borderBottomRightRadius = 12f;
 
