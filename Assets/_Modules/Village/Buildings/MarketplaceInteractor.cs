@@ -83,43 +83,22 @@ namespace DeNelle.Village
             if (!_heroFound) { ResolveHero(); return; }
             if (_hero == null) { _heroFound = false; return; }
 
-            // ── Escape to close ───────────────────────────────────────────────
+            // Store open: its own close button + Escape handle it (kept in case the
+            // monetization Realm Store is opened from another entry point).
             if (_storeOpen)
             {
-                MobileInteractButton.Release(this); // the store's own close button takes over
-                if (Input.GetKeyDown(KeyCode.Escape)) CloseStore();
-                return; // skip proximity logic while store is open
-            }
-
-            // ── Throttled proximity check ─────────────────────────────────────
-            if (Time.time >= _nextProximityCheck)
-            {
-                _nextProximityCheck = Time.time + CheckInterval;
-                float distSqr = (_hero.position - transform.position).sqrMagnitude;
-                bool nowInRange = distSqr <= _activateRadius * _activateRadius;
-                if (nowInRange != _isInRange)
-                {
-                    _isInRange = nowInRange;
-                    if (_isInRange) ShowPrompt();
-                    else            HidePrompt();
-                }
-            }
-
-            // DEF-203: register the shared on-screen Interact button while in range so
-            // touch/mobile (no keyboard) can open the store too. Desktop F unchanged.
-            if (_isInRange)
-                MobileInteractButton.Request(this, "Open: The Realm Store", OpenStore);
-            else
                 MobileInteractButton.Release(this);
+                if (Input.GetKeyDown(KeyCode.Escape)) CloseStore();
+                return;
+            }
 
-            // DEF-217: the shared button is the single canonical prompt — drop the
-            // redundant world-space bubble while it is showing (it only survives as a
-            // fallback if the button host failed to spawn).
-            if (_promptGo != null && MobileInteractButton.IsActive) HidePrompt();
-
-            // ── F-key fires every frame (no dropped keypresses) ───────────────
-            if (_isInRange && Input.GetKeyDown(KeyCode.F))
-                OpenStore();
+            // PROXIMITY-F OPEN REMOVED: the market building routes through
+            // BuildingInteractable's parameterized Yarn hook (merchant NPC) now, so this
+            // legacy watcher no longer grabs F / the shared button / shows a prompt (that
+            // would double-open with the hook). The Realm Store keeps its own entry points.
+            _isInRange = false;
+            HidePrompt();
+            MobileInteractButton.Release(this);
         }
 
         // ── Store open / close ────────────────────────────────────────────────

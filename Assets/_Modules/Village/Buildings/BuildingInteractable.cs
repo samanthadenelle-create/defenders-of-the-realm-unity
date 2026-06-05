@@ -209,12 +209,17 @@ namespace DeNelle.Village
                 if (id.Contains("farm")) return "farm";
                 if (id.Contains("market")) return "market";
                 if (id.Contains("pet")) return "pet-house";
+                if (id.Contains("workshop")) return "workshop";
+                if (id.Contains("arcane")) return "arcane-tower";
             }
             switch (building.Type)   // buildings authored without an explicit id
             {
                 case BuildingType.Farm: return "farm";
                 case BuildingType.Lumbermill: return "lumbermill";
                 case BuildingType.Forge: return "forge";
+                case BuildingType.Workshop: return "workshop";
+                case BuildingType.ArcaneTower: return "arcane-tower";
+                case BuildingType.PetHouse: return "pet-house";
             }
             return null;
         }

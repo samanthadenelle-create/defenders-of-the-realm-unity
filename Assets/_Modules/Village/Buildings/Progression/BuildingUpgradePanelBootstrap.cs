@@ -85,13 +85,7 @@ namespace DeNelle.Village.Buildings.Progression
     [DisallowMultipleComponent]
     internal sealed class BuildingUpgradePanelInput : MonoBehaviour
     {
-        private const float ActivateRadius = 6f;
-        private const float ProximityCheckInterval = 0.15f;
-
         private BuildingUpgradePanel _panel;
-        private Transform _hero;
-        private float _nextProximityCheck;
-        private bool _inRangeOfResourceBuilding;
 
         private void Awake()
         {
@@ -100,82 +94,21 @@ namespace DeNelle.Village.Buildings.Progression
 
         private void Update()
         {
-            // Dev shortcut — works anywhere in the village.
-            if (Input.GetKeyDown(KeyCode.U))
-            {
-                if (_panel != null) _panel.Toggle();
-                return;
-            }
+            // DEV-ONLY shortcut now. The proximity-F open + shared-button request were
+            // REMOVED: BuildingInteractable is the single interaction authority and routes
+            // resource buildings to the parameterized Yarn hook (DialogueService.PlayStructure).
+            // This legacy watcher used to hijack F near farm/lumbermill/forge (mobile priority
+            // 10) and open the old multi-building panel, so only Pet House (not a resource
+            // building) reached the new hook. U still opens the dev panel for quick balance checks.
+            if (Input.GetKeyDown(KeyCode.U) && _panel != null)
+                _panel.Toggle();
 
-            if (_panel == null || _panel.IsOpen)
-            {
-                // Panel open (or none yet) — the panel owns its own close UI.
-                MobileInteractButton.Release(this);
-                return;
-            }
-
-            if (_hero == null)
-            {
-                var hero = Object.FindObjectOfType<HeroLocomotion>();
-                if (hero == null) return;
-                _hero = hero.transform;
-            }
-
-            // Throttle the building scan — it walks every Building each tick, so
-            // don't run it per-frame (mirrors the proximity throttle the other
-            // structure interactions use).
-            if (Time.time >= _nextProximityCheck)
-            {
-                _nextProximityCheck = Time.time + ProximityCheckInterval;
-                _inRangeOfResourceBuilding = HeroNearResourceBuilding();
-            }
-
-            // DEF-203: register the shared on-screen Interact button while in range so
-            // touch/mobile (no keyboard) can open upgrades too. Desktop F + U unchanged.
-            if (_inRangeOfResourceBuilding)
-                // DEF-217: priority 10 so on a resource building this richer "Open Upgrades"
-                // action wins the single shared button over BuildingInteractable's plain
-                // "Interact" (priority 0) instead of the two flickering frame-to-frame.
-                MobileInteractButton.Request(this, "Open: Building Upgrades", _panel.Open, 10);
-            else
-                MobileInteractButton.Release(this);
-
-            if (_inRangeOfResourceBuilding && Input.GetKeyDown(KeyCode.F))
-                _panel.Open();
+            MobileInteractButton.Release(this);   // never request the shared button
         }
 
         private void OnDisable()
         {
             MobileInteractButton.Release(this);
-        }
-
-        /// <summary>True when the hero is within range of ANY resource building.</summary>
-        private bool HeroNearResourceBuilding()
-        {
-            if (_hero == null) return false;
-            foreach (var b in Object.FindObjectsByType<Building>(
-                         FindObjectsInactive.Exclude, FindObjectsSortMode.None))
-            {
-                if (b == null) continue;
-                if (!IsResourceBuilding(b)) continue;
-                float distSqr = (_hero.position - b.transform.position).sqrMagnitude;
-                if (distSqr <= ActivateRadius * ActivateRadius)
-                    return true;
-            }
-            return false;
-        }
-
-        /// <summary>
-        /// True when the building is one of the three resource buildings. Matches
-        /// by BuildingId first (lumbermill / forge are id-only), then falls back
-        /// to BuildingType.Farm (the one resource building that has an enum value).
-        /// </summary>
-        private static bool IsResourceBuilding(Building b)
-        {
-            if (!string.IsNullOrEmpty(b.BuildingId) &&
-                ResourceBuildingProgression.IsResourceBuilding(b.BuildingId))
-                return true;
-            return b.Type == BuildingType.Farm;
         }
     }
 }

@@ -85,13 +85,7 @@ namespace DeNelle.Village.Crafting
     [DisallowMultipleComponent]
     internal sealed class VillageCraftingPanelInput : MonoBehaviour
     {
-        // Same radius as BuildingInteractable's prompt so the F press lines up
-        // with the visible "〔 F 〕 Workshop" cue.
-        private const float WorkshopActivateRadius = 6f;
-
         private VillageCraftingPanel _panel;
-        private Transform _hero;
-        private Building _workshop;
 
         private void Awake()
         {
@@ -100,56 +94,15 @@ namespace DeNelle.Village.Crafting
 
         private void Update()
         {
-            // Dev shortcut — works anywhere in the village.
-            if (Input.GetKeyDown(KeyCode.K))
-            {
-                if (_panel != null) _panel.Toggle();
-                return;
-            }
+            // DEV-ONLY now. The Workshop proximity-F open + shared-button request were
+            // REMOVED — BuildingInteractable is the single interaction authority and routes
+            // the Workshop to the parameterized Yarn hook. This watcher used to hijack F at
+            // the Workshop (priority 10) and open the Crafting panel (which has no content
+            // yet → "can't exit"). K still toggles the dev panel.
+            if (Input.GetKeyDown(KeyCode.K) && _panel != null)
+                _panel.Toggle();
 
-            if (_panel == null || _panel.IsOpen)
-            {
-                // Panel open (or none yet) — the panel owns its own close UI.
-                MobileInteractButton.Release(this);
-                return;
-            }
-
-            // Resolve refs lazily — they may not exist at scene-load time.
-            if (_hero == null)
-            {
-                var hero = UnityEngine.Object.FindObjectOfType<HeroLocomotion>();
-                if (hero == null) return;
-                _hero = hero.transform;
-            }
-            if (_workshop == null)
-            {
-                foreach (var b in UnityEngine.Object.FindObjectsByType<Building>(
-                             FindObjectsInactive.Exclude, FindObjectsSortMode.None))
-                {
-                    if (b != null && b.Type == BuildingType.Workshop)
-                    {
-                        _workshop = b;
-                        break;
-                    }
-                }
-                if (_workshop == null) return;
-            }
-
-            float distSqr = (_hero.position - _workshop.transform.position).sqrMagnitude;
-            bool inRange = distSqr <= WorkshopActivateRadius * WorkshopActivateRadius;
-
-            // DEF-203: register the shared on-screen Interact button while in range so
-            // touch/mobile (no keyboard) can open crafting too. Desktop F + K unchanged.
-            if (inRange)
-                // DEF-217: priority 10 so on the Workshop this richer "Open Crafting" action
-                // wins the single shared button over BuildingInteractable's plain "Interact"
-                // (priority 0), instead of the two flickering frame-to-frame.
-                MobileInteractButton.Request(this, "Open: Workshop Crafting", _panel.Open, 10);
-            else
-                MobileInteractButton.Release(this);
-
-            if (inRange && Input.GetKeyDown(KeyCode.F))
-                _panel.Open();
+            MobileInteractButton.Release(this);   // never request the shared button
         }
 
         private void OnDisable()
