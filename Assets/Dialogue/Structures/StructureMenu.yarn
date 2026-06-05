@@ -1,0 +1,28 @@
+title: StructureMenu
+tags: structure interaction
+---
+// The ONE parameterized building-interaction node. The caller sets $structureId
+// (DialogueService.PlayStructure); everything below is data-driven from that id —
+// the portrait (Portraits/<id>), the name/level/yield, and the upgrade cost — so a
+// building can only ever surface its OWN domain (no out-of-domain options).
+//   Buy / Sell  = silo-scoped stubs (empty sets for now, extensible).
+//   Upgrade     = the live option (levels + perks via the economy backend).
+//   Talk        = narrative/questline seed (e.g. the Forge's "forgotten hammer").
+<<portrait Portraits/{$structureId}>>
+<<structure_status $structureId>>
+
+{$structureName}: Need something?
+
+-> Upgrade — {$upgradeCostText} <<if !$structureMaxed>>
+    <<structure_upgrade $structureId>>
+    {$structureName}: {$upgradeResult}
+-> Buy
+    {$structureName}: Nothing in stock just yet — come back soon.
+-> Sell
+    {$structureName}: I'm not buying at the moment.
+-> Talk
+    <<structure_talk $structureId>>
+    {$structureName}: Always work to be done around here. Stick around and I might have a task for you.
+-> Leave
+    {$structureName}: Safe travels.
+===

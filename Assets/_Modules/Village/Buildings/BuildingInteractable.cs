@@ -147,6 +147,18 @@ namespace DeNelle.Village
         // ── Action dispatch ─────────────────────────────────────────────────
         private void Interact()
         {
+            // PARAMETERIZED BUILDING HOOK: the economy buildings (farm/lumbermill/forge/
+            // market/pet-house) open the ONE shared Yarn dialogue (portrait + Buy/Sell/
+            // Upgrade/Talk), scoped to their own domain by $structureId. One node, the
+            // parameter differs. Falls through to the legacy panels for the rest
+            // (ArcaneTower → Hero Talents, Workshop → Crafting).
+            string hookId = StructureHookIdFor(_building);
+            if (hookId != null && DialogueService.PlayStructure(hookId))
+            {
+                Debug.Log($"[BuildingInteractable] {_building.Type} → structure dialogue '{hookId}'.");
+                return;
+            }
+
             // DEF-213: open the ONE panel this specific building owns, by id, through
             // the reflection-free PanelRouter. Each panel's registered open action
             // routes through PanelManager, so opening it closes any other panel.
@@ -184,6 +196,29 @@ namespace DeNelle.Village
         /// note). Matches the upgrade buildings by BuildingType first, then by the
         /// id-only resource buildings (Lumbermill / Forge have no enum value).
         /// </summary>
+        // The structure id for buildings that use the parameterized Yarn hook (the
+        // economy buildings that have a Portraits/<id> NPC), else null → legacy panel.
+        private static string StructureHookIdFor(Building building)
+        {
+            if (building == null) return null;
+            string id = (building.BuildingId ?? "").ToLowerInvariant();
+            if (id.Length > 0)
+            {
+                if (id.Contains("lumbermill")) return "lumbermill";
+                if (id == "forge" || id.Contains("armorer")) return "forge";
+                if (id.Contains("farm")) return "farm";
+                if (id.Contains("market")) return "market";
+                if (id.Contains("pet")) return "pet-house";
+            }
+            switch (building.Type)   // buildings authored without an explicit id
+            {
+                case BuildingType.Farm: return "farm";
+                case BuildingType.Lumbermill: return "lumbermill";
+                case BuildingType.Forge: return "forge";
+            }
+            return null;
+        }
+
         private static bool TryPanelFor(Building building, out PanelId panelId)
         {
             panelId = default;

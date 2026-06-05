@@ -28,8 +28,17 @@ tags: system
 <<declare $soulsFreed = 0>>
 <<declare $wood = 0>>
 <<declare $stone = 0>>
+<<declare $structureLevel = 0>>
+<<declare $structureYield = 0>>
+
+// — Structure interaction (the parameterized building hook; bridge sets these live) —
+<<declare $structureId = "">>
+<<declare $structureName = "Building">>
+<<declare $upgradeCostText = "">>
+<<declare $upgradeResult = "">>
 
 // — Bools: progression + soul-freed flags —
+<<declare $structureMaxed = false>>
 <<declare $tutorialComplete = false>>
 <<declare $postTutorialGuidanceGiven = false>>
 <<declare $elderBlessingActive = false>>

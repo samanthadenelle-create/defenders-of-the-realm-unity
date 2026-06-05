@@ -34,6 +34,7 @@ using DeNelle.Core.State;
 using DeNelle.Pets;
 using UnityEngine;
 using Yarn.Unity;
+using Prog = DeNelle.Village.Buildings.Progression;
 
 namespace DeNelle.Village
 {
@@ -95,6 +96,12 @@ namespace DeNelle.Village
             // Audio
             Reg("play_sfx",   (Action<string>)CmdPlaySfx);
             Reg("play_music", (Action<string>)CmdPlayMusic);
+
+            // Structure interaction (the parameterized building hook — one node, $structureId)
+            Reg("portrait",          (Action<string>)CmdPortrait);
+            Reg("structure_status",  (Action<string>)CmdStructureStatus);
+            Reg("structure_upgrade", (Action<string>)CmdStructureUpgrade);
+            Reg("structure_talk",    (Action<string>)CmdStructureTalk);
 
             // Movement / control
             Reg("start_autowalk",      (Action<string>)CmdStartAutowalk);
@@ -201,6 +208,84 @@ namespace DeNelle.Village
             // Intentionally inert: the village music track is already playing and a
             // mismatched swap would be worse than leaving it. Logged for visibility.
             Debug.Log($"[DialogueCommandBridge] play_music '{id}' — keeping current village track.");
+        }
+
+        // ── Structure interaction (parameterized building hook) ──────────────
+        // <<portrait Portraits/{$structureId}>> — show the building's NPC portrait.
+        private void CmdPortrait(string path) => DeNelle.Core.DialoguePortrait.Forced = path;
+
+        // <<structure_status $structureId>> — seed the Yarn vars the StructureMenu node
+        // reads, scoped to THIS building's own domain data (so it can never show
+        // out-of-domain options). Resource buildings (farm/lumbermill/forge) get a live
+        // upgrade line; others (market/pet-house) fall back to name-only (no upgrade).
+        private void CmdStructureStatus(string structureId)
+        {
+            var vs = _runner != null ? _runner.VariableStorage : null;
+            if (vs == null) return;
+
+            var def = Prog.ResourceBuildingProgression.Find(structureId);
+            if (def == null)
+            {
+                vs.SetValue("$structureName", Titleize(structureId));
+                vs.SetValue("$structureLevel", 0f);
+                vs.SetValue("$structureYield", 0f);
+                vs.SetValue("$upgradeCostText", "");
+                vs.SetValue("$structureMaxed", true);   // non-resource building → no upgrade option
+                return;
+            }
+
+            int level = Prog.ResourceBuildingState.GetLevel(structureId);
+            bool maxed = Prog.ResourceBuildingState.IsMaxLevel(structureId);
+            var lvlDef = Prog.ResourceBuildingState.CurrentDef(structureId);
+
+            vs.SetValue("$structureName", def.DisplayName);
+            vs.SetValue("$structureLevel", level);
+            vs.SetValue("$structureYield", Prog.ResourceBuildingState.CurrentYield(structureId));
+            vs.SetValue("$upgradeCostText", maxed || lvlDef == null ? "" : FormatCost(lvlDef.UpgradeCost, lvlDef.MagicCost));
+            vs.SetValue("$structureMaxed", maxed);
+        }
+
+        // <<structure_upgrade $structureId>> — spend + level up via the existing economy
+        // backend (ResourceBuildingState/ResourceLedger). Sets $upgradeResult for the node.
+        private void CmdStructureUpgrade(string structureId)
+        {
+            var vs = _runner != null ? _runner.VariableStorage : null;
+            if (vs == null) return;
+
+            var result = Prog.ResourceBuildingState.TryUpgrade(structureId);
+            string msg;
+            switch (result)
+            {
+                case Prog.UpgradeResult.Upgraded:
+                    msg = $"Upgraded to Level {Prog.ResourceBuildingState.GetLevel(structureId)}.";
+                    break;
+                case Prog.UpgradeResult.Insufficient: msg = "You can't afford that yet."; break;
+                case Prog.UpgradeResult.MaxLevel:     msg = "This is already at its highest level."; break;
+                case Prog.UpgradeResult.NeedMagic:    msg = "That tier needs Magic to unlock."; break;
+                default:                          msg = "Nothing to upgrade here."; break;
+            }
+            vs.SetValue("$upgradeResult", msg);
+        }
+
+        // <<structure_talk $structureId>> — narrative/questline seed (stub for now).
+        private void CmdStructureTalk(string structureId)
+            => Debug.Log($"[DialogueCommandBridge] structure_talk '{structureId}' — questline hook (stub).");
+
+        private static string Titleize(string id)
+        {
+            if (string.IsNullOrEmpty(id)) return "Building";
+            id = id.Replace('-', ' ').Replace('_', ' ');
+            return char.ToUpper(id[0]) + (id.Length > 1 ? id.Substring(1) : "");
+        }
+
+        private static string FormatCost(System.Collections.Generic.IReadOnlyList<Prog.ResourceCost> costs, int magic)
+        {
+            var parts = new System.Collections.Generic.List<string>();
+            if (costs != null)
+                foreach (var c in costs)
+                    parts.Add($"{c.Amount} {Prog.ResourceBuildingProgression.LabelFor(c.Resource)}");
+            if (magic > 0) parts.Add($"{magic} Magic");
+            return parts.Count > 0 ? string.Join(", ", parts) : "free";
         }
 
         // ── Movement / control ───────────────────────────────────────────────

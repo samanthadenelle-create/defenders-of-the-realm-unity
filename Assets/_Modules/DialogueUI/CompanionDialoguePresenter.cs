@@ -48,24 +48,39 @@ namespace DeNelle.DialogueUI
             await base.RunLineAsync(line, token);
         }
 
-        // Append `icon:HeroPortraits/<CharacterName>` to the line metadata when the
-        // line has a speaker, no icon tag already, and a portrait actually exists.
-        // The base presenter then resolves + shows it through its own icon path.
+        // Inject an `icon:<path>` so the base presenter shows a portrait. Priority:
+        //   1. DeNelle.Core.DialoguePortrait.Forced (set by the <<portrait>> command —
+        //      e.g. "Portraits/forge" for a building NPC, keyed by structure id).
+        //   2. else HeroPortraits/<CharacterName> (the companion-by-name convention).
+        // No-ops if the line already has an icon tag or no portrait art exists.
         private static void TryInjectPortraitTag(LocalizedLine line)
         {
-            if (line == null || string.IsNullOrEmpty(line.CharacterName)) return;
+            if (line == null) return;
 
             string[] meta = line.Metadata ?? System.Array.Empty<string>();
             foreach (string m in meta)
                 if (m != null && m.StartsWith(IconTagPrefix)) return;   // line already specifies an icon
 
-            string path = PortraitFolder + line.CharacterName;
-            if (!PortraitCache.Has(path)) return;                       // no art for this speaker — leave it
+            string path = null;
+            string forced = DeNelle.Core.DialoguePortrait.Forced;
+            if (!string.IsNullOrEmpty(forced) && PortraitCache.Has(forced))
+                path = forced;
+            else if (!string.IsNullOrEmpty(line.CharacterName) && PortraitCache.Has(PortraitFolder + line.CharacterName))
+                path = PortraitFolder + line.CharacterName;
+
+            if (path == null) return;
 
             var grown = new string[meta.Length + 1];
             System.Array.Copy(meta, grown, meta.Length);
             grown[meta.Length] = IconTagPrefix + path;                  // base will Resources.Load this
             line.Metadata = grown;
+        }
+
+        // Clear any forced portrait when the conversation ends so it never leaks to the next.
+        public override YarnTask OnDialogueCompleteAsync()
+        {
+            DeNelle.Core.DialoguePortrait.Forced = null;
+            return base.OnDialogueCompleteAsync();
         }
     }
 }

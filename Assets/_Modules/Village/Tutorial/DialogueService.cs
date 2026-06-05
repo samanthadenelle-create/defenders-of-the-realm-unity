@@ -78,6 +78,32 @@ namespace DeNelle.Village
             return true;
         }
 
+        /// <summary>
+        /// Opens the ONE parameterized building-interaction node (StructureMenu) for
+        /// <paramref name="structureId"/> — sets the $structureId Yarn variable, then
+        /// plays. The node + commands scope everything to that building's own data, so
+        /// the same flow serves every structure ("rinse and repeat, just the parameter").
+        /// </summary>
+        public static bool PlayStructure(string structureId)
+        {
+            if (string.IsNullOrEmpty(structureId)) return false;
+
+            DialogueRunner runner = Current ?? Host();
+            if (runner == null) return false;
+            if (runner.IsDialogueRunning) return false;   // don't interrupt an active line
+            if (!NodeExists(runner, "StructureMenu"))
+            {
+                Debug.LogError("[DialogueService] 'StructureMenu' node missing — building hook can't open.");
+                return false;
+            }
+
+            if (runner.VariableStorage != null)
+                runner.VariableStorage.SetValue("$structureId", structureId);
+            runner.StartDialogue("StructureMenu").Forget();
+            Debug.Log($"[DialogueService] Structure menu for '{structureId}'.");
+            return true;
+        }
+
         // Instantiate the shared dialogue prefab, suppress its CompanionMeeting
         // autostart (the caller picks the node), and install the command bridge
         // BEFORE the runner's Start() runs (we are post-Instantiate / pre-Start).
