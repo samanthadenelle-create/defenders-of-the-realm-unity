@@ -3,6 +3,11 @@
 This file is read by every agent (UI and CLI) before starting work.
 Rules here are **non-negotiable**. Do not skip them to ship faster.
 
+**Navigation:** before grepping or exploring, check the README system —
+`PROJECT_INDEX.md` (root files), `Assets/README.md` (asset folders),
+`Assets/_Modules/README.md` (code module map; each module has its own README),
+`docs/README.md` (docs index). Keep these updated when you add/move files.
+
 ---
 
 ## 0. CRITICAL: Linux Mount ↔ Windows Sync Is Unreliable
