@@ -186,7 +186,18 @@ namespace DeNelle.Village
             OnVillageProgressionStart();
             // ↑↑↑ PROGRESSION-START HOOK ↑↑↑
 
-            FinishTutorial();
+            // Yarn owns the FTUE→gameplay handoff now: CompanionMeetingTrigger hosts the
+            // CompanionMeeting narrative and its <<enable_full_controls>> calls
+            // FinishOnboarding (opening the wave loop) at the END of the dialogue. We must
+            // NOT FinishTutorial inline here — that would start the REAL wave loop on top
+            // of the dialogue's own scripted tutorial wave. FALLBACK ONLY: if no narrative
+            // hosted (prefab/pack absent), finish so a dialogue-less build still proceeds.
+            await UniTask.Delay(TimeSpan.FromSeconds(0.75f));
+            if (!CompanionMeetingTrigger.Hosted)
+            {
+                Debug.Log("[TutorialDirector] No FTUE narrative hosted — finishing tutorial inline (fallback).");
+                FinishTutorial();
+            }
         }
 
         /// <summary>
@@ -214,17 +225,13 @@ namespace DeNelle.Village
             // autoStart the "CompanionMeeting" node from our compiled YarnProject — so
             // simply instantiating it plays the intro dialogue + choices. No Yarn types
             // referenced here (keeps DeNelle.Village free of a Yarn asmdef dependency).
-            var prefab = Resources.Load<GameObject>("Dialogue/DialogueSystem");
-            if (prefab != null)
-            {
-                Instantiate(prefab);
-                Debug.Log("[TutorialDirector] DEF-251 Yarn narrative started (CompanionMeeting via DialogueSystem).");
-            }
-            else
-            {
-                Debug.LogWarning("[TutorialDirector] Dialogue/DialogueSystem not in Resources — run " +
-                                 "'Defenders > Yarn > Setup Dialogue System'. Progression continues without narrative.");
-            }
+            // DEF-265: CompanionMeetingTrigger is now the SOLE host of the Yarn
+            // CompanionMeeting narrative — it self-bootstraps on every village load AND
+            // installs the FTUE command bridge (DialogueCommandBridge) onto the runner
+            // before it starts. Instantiating Dialogue/DialogueSystem HERE too would
+            // double-host the dialogue, so this hook no longer loads the prefab. It
+            // remains the canonical progression-start beat.
+            Debug.Log("[TutorialDirector] Progression start — Yarn narrative hosted by CompanionMeetingTrigger.");
         }
 
         // ── Scene 1: Arrival + Meeting ───────────────────────────────────────

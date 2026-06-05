@@ -1171,7 +1171,7 @@ RectTransform:
   m_GameObject: {fileID: 5701344039824126999}
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalScale: {x: 0.5, y: 0.5, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 1295114124555897937}
@@ -1202,7 +1202,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_Material: {fileID: 2100000, guid: f232687f02eb4436e9177ec321d888c8, type: 2}
-  m_Color: {r: 1, g: 1, b: 1, a: 1}
+  m_Color: {r: 1, g: 1, b: 1, a: 0.72}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -1935,7 +1935,7 @@ PrefabInstance:
     - target: {fileID: 3859336324316773513, guid: 52571f68872914e24837210513edea1d, type: 3}
       propertyPath: hurryUpLineAction
       value: 
-      objectReference: {fileID: -6966891696229643446, guid: 5b991f93b283a4285bc1a7ca5f4a8919, type: 3}
+      objectReference: {fileID: -9097711399926526950, guid: 6514cb7988948f0459e2fca962f607df, type: 3}
     - target: {fileID: 3859336324316773513, guid: 52571f68872914e24837210513edea1d, type: 3}
       propertyPath: cancelDialogueKeyCode
       value: 27

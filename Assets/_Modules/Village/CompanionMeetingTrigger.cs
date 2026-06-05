@@ -48,7 +48,7 @@ namespace DeNelle.Village
         private const string SeenKey = "yarn.companionMeeting.seen";
 
         // Resources path (no extension) to the wired ClassicRPG dialogue prefab.
-        private const string PrefabResourcePath = "Dialogue/DialogueSystem";
+        private const string CompanionMeetingNode = "CompanionMeeting";
 
         // Dev escape hatch — pass this on the command line to fire on every village load.
         private const string AlwaysFlag = "-yarnAlways";
@@ -56,6 +56,10 @@ namespace DeNelle.Village
         // Guard so a single play session never double-hosts within one process,
         // even if the village scene is loaded more than once.
         private static bool _hostedThisSession;
+
+        /// <summary>True once the FTUE dialogue has been hosted this session. Read by
+        /// TutorialDirector to defer its wave-loop handoff to the Yarn narrative.</summary>
+        public static bool Hosted { get; private set; }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
@@ -93,25 +97,35 @@ namespace DeNelle.Village
             // First-village-entry-per-save gate (skipped when the dev flag is set).
             if (!always && PlayerPrefs.GetInt(SeenKey, 0) != 0) return;
 
-            var prefab = Resources.Load<GameObject>(PrefabResourcePath);
-            if (prefab == null)
+            // If a dialogue is already hosted (e.g. a redundant caller), don't double up.
+            if (DialogueService.Current != null)
             {
-                Debug.LogWarning($"[CompanionMeetingTrigger] Resources/{PrefabResourcePath} " +
-                                 "not found — CompanionMeeting dialogue cannot play. " +
-                                 "(The dialogue prefab/pack may be missing from this build.)");
+                _hostedThisSession = true;
+                Hosted = true;
                 return;
             }
 
-            UnityEngine.Object.Instantiate(prefab).name = "DialogueSystem (CompanionMeeting)";
+            // Single launch path for ALL dialogue (host-or-reuse + command-bridge
+            // install + node validation) — see DialogueService. "CompanionMeeting"
+            // is the FTUE opener.
+            bool started = DialogueService.Play(CompanionMeetingNode);
+            if (!started)
+            {
+                // Prefab/project/node missing — DialogueService already logged why.
+                // Do NOT mark the save seen so the FTUE can retry on a later entry.
+                return;
+            }
+
             _hostedThisSession = true;
+            Hosted = true;
 
             // Mark the save so it doesn't replay. NOTE: when -yarnAlways is set we still
             // record it (harmless), but the flag short-circuits the gate on every load.
             PlayerPrefs.SetInt(SeenKey, 1);
             PlayerPrefs.Save();
 
-            Debug.Log("[CompanionMeetingTrigger] Hosted Resources/" + PrefabResourcePath +
-                      " — CompanionMeeting Yarn dialogue should now play. " +
+            Debug.Log("[CompanionMeetingTrigger] Started '" + CompanionMeetingNode +
+                      "' via DialogueService. " +
                       (always ? "(-yarnAlways set: fires every village entry.)"
                               : "(Gated once per save via PlayerPrefs '" + SeenKey + "'.)"));
         }
