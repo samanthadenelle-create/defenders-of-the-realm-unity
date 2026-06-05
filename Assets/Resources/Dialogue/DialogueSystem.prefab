@@ -1039,7 +1039,7 @@ MonoBehaviour:
   endDialogueSound: {fileID: 8300000, guid: be560f32d1c6b4fd69cac495263fd427, type: 3}
   leaveDialogueSound: {fileID: 8300000, guid: fa95001b88c014aa98b28ad456d0bdb4, type: 3}
   changeOptionSelection: {fileID: 8300000, guid: b9a0d33381c334b93a5a7252a2b6cc49, type: 3}
-  useAudio: 1
+  useAudio: 0
   useOptions: 1
   useIcons: 1
   useAppearanceAnimation: 1

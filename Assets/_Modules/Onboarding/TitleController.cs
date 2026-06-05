@@ -116,6 +116,7 @@ namespace DeNelle.Onboarding
         // FORCE-shows the title (hero select) after a max wait, independent of any
         // UniTask await. Belt-and-braces on top of RunArrival's SafeStage timeouts.
         private float _arrivalStart;
+        private bool _introPlaying;   // the 9-screen cinematic owns the screen (suppresses the watchdog)
         private const float MaxIntroSeconds = 8f;
 
         // DEF-253 WebGL orphan re-assert: on WebGL the UIDocument can recreate its
@@ -247,9 +248,17 @@ namespace DeNelle.Onboarding
             if (!_splashActive) return;
             _splashActive = false;
             if (DeNelle.Core.IntroLauncher.Play != null)
+            {
+                // The cinematic owns the screen until it transitions to hero select;
+                // hide any title UI under it and stop the watchdog/reassert (Update).
+                _introPlaying = true;
+                SetTitleVisible(false);
                 DeNelle.Core.IntroLauncher.Play.Invoke();
+            }
             else
+            {
                 RunArrival().Forget();
+            }
         }
 
         // Continue: resume into the village (loads the save). No-save falls into a fresh village.
@@ -267,6 +276,12 @@ namespace DeNelle.Onboarding
         // attached to the shared panel they can intercept Title-button picks.
         private void Update()
         {
+            // While the 9-screen cinematic intro is playing it OWNS the screen and ends
+            // by loading the hero-select scene itself — so suppress the title watchdog +
+            // reassert, which would otherwise force the hero-select cards up on top of
+            // the intro after MaxIntroSeconds (the "intro on top" bug, inverted).
+            if (_introPlaying) return;
+
             // DEF-253 BLOCKER watchdog: if the arrival flow stalled (WebGL video that
             // never completes, an await that never resolves), the player is stuck on the
             // song screen forever. Force the title (hero select) up after the max wait,

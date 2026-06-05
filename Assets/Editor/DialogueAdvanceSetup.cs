@@ -176,6 +176,10 @@ namespace DeNelle.Editor
             //                         (resolved by the subclass; was the placeholder hearts)
             SetPresenterBool(pso, "useActionButton", false);
             SetPresenterBool(pso, "useIcons", true);
+            // OFF: the per-line "ding" the presenter plays on every advance (owner:
+            // "whatever that sound is needs to GO"). Intro music/SFX go through
+            // IntroCommandBridge, not this, so they're unaffected.
+            SetPresenterBool(pso, "useAudio", false);
             // OFF: the full-screen "Background" image was a screen-wide backdrop that
             // visually COVERED the whole battle/HUD behind the dialogue (owner: "that
             // ui covered everything"). Disabling backgroundStyles leaves a clean
