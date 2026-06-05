@@ -161,10 +161,29 @@ namespace DeNelle.Village
                 });
             if (vis != null)
             {
+                // DEF-275 BLUE-ORB / STRAY-LIGHT FIX: the hero FBXs at Resources/Heroes/*
+                // import with importCameras:1 + importLights:1 (see their .meta), so the
+                // instantiated mesh carries the FBX's EMBEDDED camera, audio listener and
+                // any embedded lights/emissive helper nodes. The player's HeroBodySwapper
+                // strips those after Skin — but the companion path did NOT, so the live
+                // companion dragged a stray Camera (renders a second view), an extra
+                // AudioListener (Unity warns + audio breaks) and embedded Light nodes into
+                // the scene. Those embedded helpers are exactly the "big blue orb" + "3
+                // hearts" the owner saw appear the moment the companion started working
+                // (DEF-275) — they were never the capsule fallback (the mesh loads fine).
+                // Strip them here, mirroring the hero, so the companion is JUST the body.
+                StripEmbeddedFbxArtifacts(vis);
+
                 SetLayerRecursive(vis, 2);   // Ignore Raycast — never blocks gameplay rays
                 var anim = vis.GetComponent<Animator>() ?? vis.AddComponent<Animator>();
                 var ctrl = Resources.Load<RuntimeAnimatorController>("Heroes/" + slug);
                 if (ctrl != null) anim.runtimeAnimatorController = ctrl;   // idle/walk, not a T-pose
+
+                // The Tripo/CC5 FBX slots import with NO basecolor bound (materialImportMode
+                // leaves _BaseMap empty), so without this the Mage/Cleric body renders as a
+                // flat blue/grey blob — the OTHER half of the "blue orb". Bind the same
+                // per-class diffuse the player hero uses so the companion reads as a person.
+                BindClassDiffuse(vis, hero);
             }
             else
             {
@@ -223,7 +242,10 @@ namespace DeNelle.Village
             }
         }
 
-        /// <summary>HeroClass → Resources/Heroes FBX slug (Cleric shares the Mage body).</summary>
+        /// <summary>HeroClass → Resources/Heroes FBX slug. DEF-275: the Cleric now has its
+        /// OWN dedicated body (Resources/Heroes/Cleric.fbx + Cleric.controller), matching the
+        /// player's HeroBodySwapper.SlugFor — so the Cleric companion (Thrain → no; Elara)
+        /// renders the textured cleric body, not the untextured blue Mage robe.</summary>
         private static string SlugFor(HeroClass hero)
         {
             switch (hero)
@@ -231,7 +253,7 @@ namespace DeNelle.Village
                 case HeroClass.Knight: return "Knight";
                 case HeroClass.Ranger: return "Ranger";
                 case HeroClass.Mage:   return "Mage";
-                case HeroClass.Cleric: return "Mage";
+                case HeroClass.Cleric: return "Cleric";
                 default:               return "Knight";
             }
         }
@@ -241,6 +263,85 @@ namespace DeNelle.Village
             if (root == null) return;
             root.layer = layer;
             foreach (Transform child in root.transform) SetLayerRecursive(child.gameObject, layer);
+        }
+
+        /// <summary>
+        /// DEF-275: defensive strip of helper components a character FBX can carry. The
+        /// Heroes FBXs import with importCameras:1 + importLights:1, so any future re-export
+        /// that DOES embed a camera/light node would drag a stray Camera, AudioListener,
+        /// Light or Rigidbody into the live scene (camera-soup / stray-render). The player's
+        /// HeroBodySwapper already strips Camera+AudioListener after Skin; the companion path
+        /// did NOT, so it mirrors that here (plus Light + Rigidbody for safety). Null-safe and
+        /// visual-only — the SkinnedMeshRenderers (the actual body) are untouched.
+        /// </summary>
+        private static void StripEmbeddedFbxArtifacts(GameObject vis)
+        {
+            if (vis == null) return;
+            foreach (var cam in vis.GetComponentsInChildren<Camera>(true))
+                if (cam != null) Object.Destroy(cam);
+            foreach (var al in vis.GetComponentsInChildren<AudioListener>(true))
+                if (al != null) Object.Destroy(al);
+            foreach (var lt in vis.GetComponentsInChildren<Light>(true))
+                if (lt != null) Object.Destroy(lt);
+            foreach (var rb in vis.GetComponentsInChildren<Rigidbody>(true))
+                if (rb != null) Object.Destroy(rb);
+        }
+
+        /// <summary>
+        /// DEF-275: binds the per-class basecolor diffuse onto the companion body so it
+        /// reads textured instead of a flat blue/grey blob (the imported FBX slots have no
+        /// _BaseMap bound). Paths mirror HeroBodySwapper.ApplyExtractedTexture — the same
+        /// reliable plain Resources/Heroes/* folders. Falls back to the signature class tint
+        /// (TintFor) when no diffuse is found, so the body is never left solid white/blue.
+        /// </summary>
+        private static void BindClassDiffuse(GameObject vis, HeroClass hero)
+        {
+            if (vis == null) return;
+
+            string texPath = hero switch
+            {
+                HeroClass.Mage   => "Heroes/Textures/fantasywizard3dmodel_basecolor",
+                HeroClass.Knight => "Heroes/Textures/medievalknight3dmodel_basecolor",
+                HeroClass.Ranger => "Heroes/Ranger_tex/remesh_12_combined_Bake_Diffuse",
+                HeroClass.Cleric => "Heroes/Cleric_tex/HumanCleric_basecolor",
+                _                => null,
+            };
+            Texture2D tex = string.IsNullOrEmpty(texPath) ? null : Resources.Load<Texture2D>(texPath);
+            Color tint = TintFor(hero);
+
+            foreach (var r in vis.GetComponentsInChildren<Renderer>(true))
+            {
+                if (r == null) continue;
+                var mats = r.sharedMaterials;
+                if (mats == null) continue;
+                for (int i = 0; i < mats.Length; i++)
+                {
+                    var m = mats[i];
+                    if (m == null) continue;
+
+                    // Already has a real diffuse? Leave it (preserve any working texture).
+                    Texture existing = null;
+                    if (m.HasProperty("_BaseMap")) existing = m.GetTexture("_BaseMap");
+                    if (existing == null && m.HasProperty("_MainTex")) existing = m.GetTexture("_MainTex");
+                    if (existing != null) continue;
+
+                    if (tex != null)
+                    {
+                        if (m.HasProperty("_BaseMap")) m.SetTexture("_BaseMap", tex);
+                        if (m.HasProperty("_MainTex")) m.SetTexture("_MainTex", tex);
+                        if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", Color.white);
+                        if (m.HasProperty("_Color"))     m.SetColor("_Color", Color.white);
+                    }
+                    else
+                    {
+                        // No diffuse available → paint the signature class tint so the body
+                        // reads coloured instead of a flat blue/grey blob.
+                        if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", tint);
+                        if (m.HasProperty("_Color"))     m.SetColor("_Color", tint);
+                    }
+                }
+                r.sharedMaterials = mats;
+            }
         }
 
         // ── Resolution ───────────────────────────────────────────────────────
