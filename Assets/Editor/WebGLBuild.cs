@@ -97,7 +97,10 @@ namespace DeNelle.Editor
                 locationPathName = dir,   // WebGL outputs a DIRECTORY, not a single file
                 target = BuildTarget.WebGL,
                 targetGroup = BuildTargetGroup.WebGL,
-                options = BuildOptions.None,
+                // DEV verification build: BuildOptions.Development enables the DevTools
+                // QA panel (gear / F1 force-wave) + readable C# stack traces in the F12
+                // console. *** FLIP BACK TO BuildOptions.None FOR THE LAUNCH BUILD. ***
+                options = BuildOptions.Development,
             };
 
             BuildReport report = BuildPipeline.BuildPlayer(options);
