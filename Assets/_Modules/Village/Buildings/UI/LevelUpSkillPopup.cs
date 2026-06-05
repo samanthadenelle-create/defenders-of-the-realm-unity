@@ -31,13 +31,17 @@ namespace DeNelle.Village.UI
     [RequireComponent(typeof(UIDocument))]
     public class LevelUpSkillPopup : MonoBehaviour
     {
-        private VisualElement _overlay;   // full-screen centering layer (this is what we show/hide)
+        private VisualElement _overlay;   // full-screen layer (anchors the corner UI)
+        private VisualElement _card;      // the expanded spend panel
+        private Button _pill;             // collapsed persistent "N points — Spend" indicator
         private Label _title;
         private Label _points;
         private Button _blacksmith;
         private Button _woodworking;
         private Button _arcane;
         private Button _gathering;
+
+        private int _lastLevel = 1;       // remembered for the pill → re-open path
 
         // DEF-261 — a level-up that lands during the Defend-the-Tower fight is QUEUED
         // (not silently dropped) so the spend screen surfaces the moment the fight ends.
@@ -103,9 +107,38 @@ namespace DeNelle.Village.UI
                 if (newLevel > _pendingLevel) _pendingLevel = newLevel;
                 return;
             }
+            _lastLevel = newLevel;
             if (_title != null) _title.text = $"Level {newLevel}!  Spend a skill point";
-            _overlay.style.display = DisplayStyle.Flex;
+            ShowCard();
             UpdateUI();
+        }
+
+        // Expanded spend panel visible, pill hidden.
+        private void ShowCard()
+        {
+            if (_overlay == null) return;
+            _overlay.style.display = DisplayStyle.Flex;
+            if (_card != null) _card.style.display = DisplayStyle.Flex;
+            if (_pill != null) _pill.style.display = DisplayStyle.None;
+        }
+
+        // Close/collapse: if points remain, fall back to the persistent pill so the
+        // spend screen is ALWAYS findable again (DEF — owner: "once it loses focus
+        // you can't find it again"). With no points left, hide everything.
+        private void Collapse()
+        {
+            var sys = SkillSystem.Instance;
+            if (sys != null && sys.AvailablePoints > 0)
+            {
+                if (_overlay != null) _overlay.style.display = DisplayStyle.Flex;
+                if (_card != null) _card.style.display = DisplayStyle.None;
+                if (_pill != null) _pill.style.display = DisplayStyle.Flex;
+                UpdateUI();
+            }
+            else
+            {
+                Hide();
+            }
         }
 
         private void Hide()
@@ -120,11 +153,25 @@ namespace DeNelle.Village.UI
 
             int pts = sys.AvailablePoints;
             if (_points != null) _points.text = $"Available points: {pts}";
+            if (_pill != null) _pill.text = pts == 1 ? "1 skill point — Spend" : $"{pts} skill points — Spend";
 
             SetSkillButton(_blacksmith,  "Blacksmith",  SkillType.Blacksmith,     pts);
             SetSkillButton(_woodworking, "Woodworking", SkillType.Woodworking,    pts);
             SetSkillButton(_arcane,      "Arcane",      SkillType.Arcane,         pts);
             SetSkillButton(_gathering,   "Gathering",   SkillType.GatheringSpeed, pts);
+
+            // Keep the persistent indicator honest: if points exist but nothing is on
+            // screen, surface the pill so they can never be stranded; if they hit zero,
+            // clear everything.
+            if (pts <= 0)
+            {
+                Hide();
+            }
+            else if (_overlay != null && _overlay.style.display == DisplayStyle.None
+                     && (HeroProgression.Instance == null || HeroProgression.Instance.Level >= 2))
+            {
+                Collapse();
+            }
         }
 
         private void SetSkillButton(Button b, string label, SkillType type, int pts)
@@ -188,7 +235,8 @@ namespace DeNelle.Village.UI
             _arcane      = MakeSkillButton(SkillType.Arcane);
             _gathering   = MakeSkillButton(SkillType.GatheringSpeed);
 
-            var close = new Button(Hide) { text = "Close" };
+            // Collapse (not Hide) so closing parks the points on the persistent pill.
+            var close = new Button(Collapse) { text = "Later" };
             StyleButton(close, new Color(0.30f, 0.30f, 0.36f, 0.95f));
             close.style.marginTop = 8f;
 
@@ -199,8 +247,25 @@ namespace DeNelle.Village.UI
             card.Add(_arcane);
             card.Add(_gathering);
             card.Add(close);
-
+            _card = card;
             _overlay.Add(card);
+
+            // Persistent collapsed indicator: a gold "N skill points — Spend" pill in
+            // the same corner. Tapping it re-opens the full card, so banked points are
+            // always reachable after the level-up popup is dismissed.
+            _pill = new Button(ShowCard) { name = "levelup-pill", text = "Skill points — Spend" };
+            var ps = _pill.style;
+            ps.marginTop = 84f; ps.marginRight = 14f;
+            ps.paddingTop = 8f; ps.paddingBottom = 8f; ps.paddingLeft = 14f; ps.paddingRight = 14f;
+            ps.fontSize = 14f;
+            ps.unityFontStyleAndWeight = FontStyle.Bold;
+            ps.color = new Color(0.12f, 0.10f, 0.05f, 1f);
+            ps.backgroundColor = new Color(0.95f, 0.80f, 0.32f, 0.96f);   // gold = "reward waiting"
+            ps.borderTopLeftRadius = 10f; ps.borderTopRightRadius = 10f;
+            ps.borderBottomLeftRadius = 10f; ps.borderBottomRightRadius = 10f;
+            ps.display = DisplayStyle.None;
+            _overlay.Add(_pill);
+
             root.Add(_overlay);
         }
 
