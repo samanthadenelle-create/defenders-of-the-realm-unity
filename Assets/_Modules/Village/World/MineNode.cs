@@ -73,6 +73,13 @@ namespace DeNelle.Village
         [Tooltip("How close the player must be to press [F].")]
         [Min(0.5f)] public float InteractRadius = 2.5f;
 
+        [Header("Visual")]
+        [Tooltip("Auto-attach a MineNodeVisual so the node renders a DISTINCT, readable " +
+                 "silhouette per resource (log/ore/grain/crystal) instead of a bare tinted " +
+                 "primitive. Turn OFF only if the node's GameObject already supplies its own " +
+                 "art (e.g. a placed prefab). Visual-only — never affects harvest/banking.")]
+        public bool AutoBuildVisual = true;
+
         private float _cooldown;
         private int   _extractsLeft;
         private float _respawnTimer;
@@ -86,6 +93,19 @@ namespace DeNelle.Village
             InitReserve();
             var p = GameObject.FindWithTag("Player");
             _player = p != null ? p.transform : null;
+            EnsureVisual();
+        }
+
+        // Give the node a distinct, readable per-resource look (the owner's "we need an
+        // image for the nodes" gap). Visual-only: MineNodeVisual hides any placeholder
+        // primitive on this GameObject and builds a log/ore/grain/crystal silhouette (or a
+        // real Resources prop if one is present). Never touches collider/radius/harvest.
+        private void EnsureVisual()
+        {
+            if (!AutoBuildVisual) return;
+            var vis = GetComponent<MineNodeVisual>();
+            if (vis == null) vis = gameObject.AddComponent<MineNodeVisual>();
+            vis.Resource = Resource;   // MineNodeVisual.Start() reads this and builds.
         }
 
         // =====================================================================

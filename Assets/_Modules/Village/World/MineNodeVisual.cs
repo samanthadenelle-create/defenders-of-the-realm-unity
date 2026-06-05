@@ -1,0 +1,265 @@
+// =============================================================================
+// MineNodeVisual — gives every harvestable MineNode a DISTINCT, readable look so a
+// player can tell at a glance what a node yields (the owner's "we need an image for
+// the nodes still" gap: nodes were rendering as a bare tinted Cube / a primitive
+// sphere — indistinguishable placeholders).
+// -----------------------------------------------------------------------------
+// Assembly: DeNelle.Village   Namespace: DeNelle.Village
+//
+// ONE visual source of truth for ALL MineNodes, however they were placed:
+//   • OuterWorldBuilder bakes a tinted Cube + MineNode  → this hides the Cube and
+//     builds the real silhouette over it.
+//   • RareCrystalSpawner builds a crystal bloom at runtime → reuses this too.
+//   • Build-mode placed nodes (later)                    → same path.
+//
+// MineNode attaches this in Awake (auto), so there is NO scene edit and NO prefab to
+// wire — it just works on the existing scene + on anything spawned at runtime.
+//
+// ART-FORWARD, FALLBACK-SAFE (CLAUDE.md §4):
+//   1. First it TRIES to load a real low-poly prop from Resources via the project's
+//      proven VisualFactory.Skin (the same loader towers/enemies use). Drop a matching
+//      prefab at the per-resource Resources path below and the node auto-upgrades to it.
+//   2. If no prop is present (fresh clone, pack not imported), it builds a DISTINCT
+//      procedural low-poly silhouette from primitives per resource — a stacked log for
+//      Wood, a jagged ore boulder for Iron, a grain mound for Food, a faceted crystal
+//      cluster for AetherCrystal — tinted + (crystal) emissive. Readable, not a single
+//      bright primitive. LogWarning on a missing prop, never an error.
+//
+// VISUAL-ONLY: it never touches MineNode's collider / radius / harvest / banking. The
+// node's interaction is a distance check (MineNode.InteractRadius), independent of any
+// mesh — so swapping the look can't break harvesting.
+// =============================================================================
+
+using UnityEngine;
+
+namespace DeNelle.Village
+{
+    /// <summary>Builds a distinct, readable visual for a <see cref="MineNode"/> per
+    /// <see cref="MineResource"/>. Tries a real Resources prop first, then falls back to
+    /// a procedural low-poly silhouette. Pure cosmetic — never touches harvest logic.</summary>
+    [DisallowMultipleComponent]
+    public sealed class MineNodeVisual : MonoBehaviour
+    {
+        [Tooltip("Which resource look to build. Set by MineNode when it attaches this.")]
+        public MineResource Resource = MineResource.Iron;
+
+        [Tooltip("Optional: try to load a real low-poly prop from Resources first " +
+                 "(auto-upgrades the node when matching art is imported). Falls back to a " +
+                 "procedural silhouette if absent.")]
+        public bool TryResourcesProp = true;
+
+        private GameObject _visual;
+
+        // Per-resource Resources prop path tried FIRST (drop a prefab here to upgrade the
+        // look). These are intentionally optional — none ship today, so the procedural
+        // fallback is what renders until matching art lands. Keep in sync with the catalog.
+        private static string PropPath(MineResource res) => res switch
+        {
+            MineResource.Wood          => "Props/Nodes/LumberNode",
+            MineResource.Iron          => "Props/Nodes/IronOreNode",
+            MineResource.Food          => "Props/Nodes/GrainNode",
+            MineResource.AetherCrystal => "Props/Nodes/CrystalNode",
+            _                          => null,
+        };
+
+        // Readable tints per resource (used by the procedural fallback + as the prop's
+        // accent). Lumber=bark brown, Iron=cold steel-grey, Food=wheat gold, Crystal=aether.
+        private static Color Tint(MineResource res) => res switch
+        {
+            MineResource.Wood          => new Color(0.42f, 0.28f, 0.15f),
+            MineResource.Iron          => new Color(0.52f, 0.54f, 0.58f),
+            MineResource.Food          => new Color(0.85f, 0.70f, 0.28f),
+            MineResource.AetherCrystal => new Color(0.35f, 0.78f, 1.00f),
+            _                          => Color.gray,
+        };
+
+        private void Start()
+        {
+            // Pull the FINAL resource from the sibling MineNode at Start: callers like
+            // RareCrystalSpawner set MineNode.Resource AFTER AddComponent (post-Awake), and
+            // CrystalMineNode may flip it to AetherCrystal in its own Awake. Reading here (a
+            // frame after all Awakes) guarantees the look matches the node's real resource.
+            var node = GetComponent<MineNode>();
+            if (node != null) Resource = node.Resource;
+            Build();
+        }
+
+        /// <summary>Builds (or rebuilds) the node visual for the current Resource. Safe to
+        /// call again after changing Resource — it tears the old visual down first.</summary>
+        public void Build()
+        {
+            if (_visual != null) { Destroy(_visual); _visual = null; }
+
+            // Hide any placeholder mesh sitting on the node's OWN GameObject (e.g. the
+            // tinted Cube OuterWorldBuilder bakes, or a primitive sphere) — we replace it.
+            // We disable rather than destroy so the host transform/colliders are untouched.
+            var hostRenderer = GetComponent<MeshRenderer>();
+            if (hostRenderer != null) hostRenderer.enabled = false;
+
+            _visual = new GameObject("NodeVisual");
+            _visual.transform.SetParent(transform, false);
+            _visual.transform.localPosition = Vector3.zero;
+
+            // 1) Try a real low-poly prop (auto-upgrade when art lands).
+            if (TryResourcesProp)
+            {
+                string path = PropPath(Resource);
+                if (!string.IsNullOrEmpty(path) && Resources.Load<GameObject>(path) != null)
+                {
+                    var skinned = VisualFactory.Skin(
+                        _visual.transform, path, SkinOptions.Prop(2.0f));
+                    if (skinned != null) return;
+                }
+            }
+
+            // 2) Procedural low-poly silhouette fallback (distinct per resource).
+            BuildProcedural(_visual.transform, Resource);
+        }
+
+        // ── Procedural silhouettes ───────────────────────────────────────────────────
+        private static void BuildProcedural(Transform parent, MineResource res)
+        {
+            switch (res)
+            {
+                case MineResource.Wood:          BuildLog(parent);     break;
+                case MineResource.Iron:          BuildOre(parent);     break;
+                case MineResource.Food:          BuildGrain(parent);   break;
+                case MineResource.AetherCrystal: BuildCrystal(parent); break;
+                default:                         BuildOre(parent);     break;
+            }
+        }
+
+        // Lumber: a short stacked log pile — two horizontal logs + a low stump, bark brown.
+        private static void BuildLog(Transform parent)
+        {
+            Color bark = Tint(MineResource.Wood);
+            Color end  = new Color(0.62f, 0.46f, 0.28f); // pale cut-end
+
+            // Stump base.
+            var stump = Cyl(parent, "Stump", new Vector3(0f, 0.35f, 0f),
+                Quaternion.identity, new Vector3(0.9f, 0.35f, 0.9f), bark);
+            // Two crossed logs lying on top (rotated on their side via Z-euler).
+            var logA = Cyl(parent, "LogA", new Vector3(-0.18f, 0.95f, 0f),
+                Quaternion.Euler(0f, 0f, 90f), new Vector3(0.32f, 0.95f, 0.32f), bark);
+            var logB = Cyl(parent, "LogB", new Vector3(0.20f, 0.95f, 0.10f),
+                Quaternion.Euler(0f, 28f, 90f), new Vector3(0.30f, 0.85f, 0.30f), bark);
+            // A bright cut-end so it reads as cut timber, not a rock.
+            Cube(parent, "CutEnd", new Vector3(-0.92f, 0.95f, 0f),
+                Quaternion.identity, new Vector3(0.06f, 0.34f, 0.34f), end);
+            _ = stump; _ = logA; _ = logB;
+        }
+
+        // Iron: a jagged ore boulder — a faceted rock cluster, cold steel-grey, with a
+        // couple of brighter "ore vein" nuggets so it reads as a mineable deposit.
+        private static void BuildOre(Transform parent)
+        {
+            Color rock = Tint(MineResource.Iron);
+            Color vein = new Color(0.78f, 0.66f, 0.42f); // rusty ore glint
+
+            Cube(parent, "Boulder", new Vector3(0f, 0.55f, 0f),
+                Quaternion.Euler(18f, 22f, 12f), new Vector3(1.25f, 1.05f, 1.15f), rock);
+            Cube(parent, "Chunk1", new Vector3(0.55f, 0.40f, 0.45f),
+                Quaternion.Euler(34f, 12f, 28f), new Vector3(0.7f, 0.6f, 0.65f), rock);
+            Cube(parent, "Chunk2", new Vector3(-0.55f, 0.35f, -0.35f),
+                Quaternion.Euler(20f, 48f, 16f), new Vector3(0.6f, 0.55f, 0.6f), rock);
+            // Ore veins (small bright nuggets embedded in the rock).
+            Cube(parent, "Vein1", new Vector3(0.18f, 0.85f, 0.42f),
+                Quaternion.Euler(30f, 20f, 15f), new Vector3(0.22f, 0.22f, 0.22f), vein);
+            Cube(parent, "Vein2", new Vector3(-0.25f, 0.62f, 0.5f),
+                Quaternion.Euler(10f, 40f, 25f), new Vector3(0.18f, 0.18f, 0.18f), vein);
+        }
+
+        // Food: a wheat/grain mound — a rounded golden heap with a couple of sheaf spikes.
+        private static void BuildGrain(Transform parent)
+        {
+            Color grain = Tint(MineResource.Food);
+            Color sheaf = new Color(0.92f, 0.80f, 0.40f);
+
+            // Low wide mound (squashed sphere reads as a heap, not a ball).
+            Sphere(parent, "Mound", new Vector3(0f, 0.45f, 0f),
+                new Vector3(1.3f, 0.7f, 1.3f), grain);
+            // A few upright sheaf spikes so it isn't mistaken for a stone.
+            Cyl(parent, "Sheaf1", new Vector3(0.25f, 0.95f, 0.1f),
+                Quaternion.Euler(0f, 0f, 8f), new Vector3(0.10f, 0.55f, 0.10f), sheaf);
+            Cyl(parent, "Sheaf2", new Vector3(-0.2f, 0.9f, -0.15f),
+                Quaternion.Euler(0f, 0f, -10f), new Vector3(0.10f, 0.50f, 0.10f), sheaf);
+            Cyl(parent, "Sheaf3", new Vector3(0.05f, 1.0f, 0.28f),
+                Quaternion.Euler(6f, 0f, 2f), new Vector3(0.09f, 0.6f, 0.09f), sheaf);
+        }
+
+        // Crystal/Magic: a faceted aether crystal cluster — angled shards of different
+        // heights, emissive, with the project's CrystalVisual driver layered on so it
+        // slowly spins + pulses (the owner's "slowly spinning and pulsing" crystal).
+        private static void BuildCrystal(Transform parent)
+        {
+            Color aether = Tint(MineResource.AetherCrystal);
+
+            // Central tall shard + flanking smaller shards, all faceted (cube on point).
+            CrystalShard(parent, "ShardMain", new Vector3(0f, 0.9f, 0f),
+                Quaternion.Euler(8f, 20f, 6f), new Vector3(0.55f, 1.7f, 0.55f), aether);
+            CrystalShard(parent, "ShardL", new Vector3(-0.45f, 0.6f, 0.15f),
+                Quaternion.Euler(-14f, 35f, -18f), new Vector3(0.38f, 1.0f, 0.38f), aether);
+            CrystalShard(parent, "ShardR", new Vector3(0.42f, 0.55f, -0.2f),
+                Quaternion.Euler(16f, -25f, 22f), new Vector3(0.34f, 0.9f, 0.34f), aether);
+            CrystalShard(parent, "ShardFront", new Vector3(0.1f, 0.5f, 0.45f),
+                Quaternion.Euler(24f, 10f, 10f), new Vector3(0.3f, 0.75f, 0.3f), aether);
+
+            // Layer the cosmetic spin + colour-pulse driver onto the cluster (reuses the
+            // project's CrystalVisual — no new behaviour). Reflection-free: same assembly.
+            if (parent.GetComponent<CrystalVisual>() == null)
+                parent.gameObject.AddComponent<CrystalVisual>();
+        }
+
+        // ── Primitive helpers (flat URP-lit, collider stripped — visual only) ─────────
+        private static GameObject Cube(Transform parent, string name, Vector3 pos,
+            Quaternion rot, Vector3 scale, Color colour)
+            => Prim(PrimitiveType.Cube, parent, name, pos, rot, scale, colour, false);
+
+        private static GameObject Cyl(Transform parent, string name, Vector3 pos,
+            Quaternion rot, Vector3 scale, Color colour)
+            => Prim(PrimitiveType.Cylinder, parent, name, pos, rot, scale, colour, false);
+
+        private static GameObject Sphere(Transform parent, string name, Vector3 pos,
+            Vector3 scale, Color colour)
+            => Prim(PrimitiveType.Sphere, parent, name, pos, Quaternion.identity, scale, colour, false);
+
+        // A crystal shard: a cube tipped on point (45° lean) reads as a faceted gem, with
+        // emission so it glows like the aether crystals elsewhere.
+        private static GameObject CrystalShard(Transform parent, string name, Vector3 pos,
+            Quaternion rot, Vector3 scale, Color colour)
+            => Prim(PrimitiveType.Cube, parent, name, pos, rot, scale, colour, true);
+
+        private static GameObject Prim(PrimitiveType type, Transform parent, string name,
+            Vector3 pos, Quaternion rot, Vector3 scale, Color colour, bool emissive)
+        {
+            var go = GameObject.CreatePrimitive(type);
+            go.name = name;
+            var col = go.GetComponent<Collider>();
+            if (col != null) Destroy(col);   // visual only — MineNode owns interaction.
+            go.transform.SetParent(parent, false);
+            go.transform.localPosition = pos;
+            go.transform.localRotation = rot;
+            go.transform.localScale = scale;
+            ApplyFlat(go.GetComponent<Renderer>(), colour, emissive);
+            return go;
+        }
+
+        private static void ApplyFlat(Renderer renderer, Color colour, bool emissive)
+        {
+            if (renderer == null) return;
+            Shader s = Shader.Find("Universal Render Pipeline/Lit")
+                       ?? Shader.Find("Universal Render Pipeline/Simple Lit")
+                       ?? Shader.Find("Standard");
+            if (s == null) return;
+            var mat = new Material(s);
+            if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", colour);
+            if (mat.HasProperty("_Color"))     mat.SetColor("_Color",     colour);
+            if (emissive && mat.HasProperty("_EmissionColor"))
+            {
+                mat.EnableKeyword("_EMISSION");
+                mat.SetColor("_EmissionColor", colour * 0.8f);
+            }
+            renderer.sharedMaterial = mat;
+        }
+    }
+}

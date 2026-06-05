@@ -89,15 +89,6 @@ namespace DeNelle.Village
         [Tooltip("How close the player must be to harvest the bloom (passed to the MineNode).")]
         [Min(1f)] public float HarvestRadius = 3.5f;
 
-        // Visual tints by grade so a bloom reads its rarity at a glance (placeholder art).
-        private static readonly Color[] GradeTints =
-        {
-            new Color(0.55f, 0.85f, 1.00f),  // Aether  — pale blue
-            new Color(0.45f, 1.00f, 0.60f),  // Verdant — green
-            new Color(0.80f, 0.40f, 1.00f),  // Mire    — violet
-            new Color(1.00f, 0.35f, 0.55f),  // Wraith  — crimson (rarest)
-        };
-
         private float _nextAttempt;
         private Transform _player;
         private Transform _root;
@@ -223,7 +214,7 @@ namespace DeNelle.Village
             CrystalGrade grade = CrystalRegion.TopGradeFor(tier);
             int payout = BasePayout + PayoutPerTier * tier;   // MineNode adds its own per-tier %.
 
-            var bloom = BuildBloom(pos, tier, grade, payout);
+            var bloom = BuildBloom(pos, grade, payout);
             if (bloom != null)
             {
                 _live.Add(bloom);
@@ -234,7 +225,7 @@ namespace DeNelle.Village
 
         // Build a one-shot crystal MineNode "bloom" — code-built primitive marker so it
         // needs no art/prefab, harvested with the SAME [F] verb + banking path as any mine.
-        private Bloom BuildBloom(Vector3 pos, int tier, CrystalGrade grade, int payout)
+        private Bloom BuildBloom(Vector3 pos, CrystalGrade grade, int payout)
         {
             if (_root == null) _root = new GameObject("[RareCrystalBlooms]").transform;
 
@@ -242,17 +233,9 @@ namespace DeNelle.Village
             go.transform.SetParent(_root, false);
             go.transform.position = pos;
 
-            // A small floating crystal cluster (placeholder visual — readable by grade tint).
-            var crystal = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            crystal.name = "Crystal";
-            // Drop the auto box collider — the MineNode uses a radius check, not trigger.
-            var autoCol = crystal.GetComponent<Collider>();
-            if (autoCol != null) Destroy(autoCol);
-            crystal.transform.SetParent(go.transform, false);
-            crystal.transform.localPosition = new Vector3(0f, 1.0f, 0f);
-            crystal.transform.localScale = new Vector3(0.6f, 1.4f, 0.6f);
-            crystal.transform.localRotation = Quaternion.Euler(20f, 35f, 12f);
-            ApplyCrystalTint(crystal.GetComponent<Renderer>(), grade);
+            // The crystal cluster look is built by MineNodeVisual (auto-attached by MineNode
+            // below) — the same faceted, spinning, emissive aether-crystal silhouette every
+            // crystal node uses, so a bloom reads as a real crystal vein, not a tinted cube.
 
             // The harvestable. One rich extract, NO respawn — a fleeting bloom. Banking
             // flows through MineNode.Extract -> BankYield -> GameState.AetherCrystals
@@ -273,28 +256,6 @@ namespace DeNelle.Village
                 WitherAt = Time.time + BloomLifetime,
                 Harvested = false,
             };
-        }
-
-        private static void ApplyCrystalTint(Renderer renderer, CrystalGrade grade)
-        {
-            if (renderer == null) return;
-            int idx = Mathf.Clamp((int)grade, 0, GradeTints.Length - 1);
-            Color colour = GradeTints[idx];
-
-            Shader s = Shader.Find("Universal Render Pipeline/Lit")
-                       ?? Shader.Find("Universal Render Pipeline/Unlit")
-                       ?? Shader.Find("Standard");
-            if (s == null) return;
-            var mat = new Material(s);
-            if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", colour);
-            if (mat.HasProperty("_Color"))     mat.SetColor("_Color",     colour);
-            // A faint emissive glow so a bloom catches the eye across a region.
-            if (mat.HasProperty("_EmissionColor"))
-            {
-                mat.EnableKeyword("_EMISSION");
-                mat.SetColor("_EmissionColor", colour * 0.6f);
-            }
-            renderer.sharedMaterial = mat;
         }
 
         // ── Placement helper: a NavMesh-valid point in the ring around the player ─────
