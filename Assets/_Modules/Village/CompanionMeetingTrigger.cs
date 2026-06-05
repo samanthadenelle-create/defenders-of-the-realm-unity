@@ -85,11 +85,10 @@ namespace DeNelle.Village
 
         private static void TryHost()
         {
-            // Dev builds (BuildOptions.Development) ALWAYS replay so the owner can step
-            // through the Yarn dialogue on EVERY village entry — the -yarnAlways flag is
-            // desktop-only (no command line on WebGL). Release builds keep the
-            // once-per-save gate so players see it a single time.
-            bool always = HasAlwaysFlag() || Debug.isDebugBuild;
+            // Once-per-save gate applies in ALL builds now (owner: the FTUE must NOT
+            // re-trigger on retry). Only the explicit -yarnAlways desktop flag forces a
+            // replay for testing — dev builds no longer auto-replay every entry.
+            bool always = HasAlwaysFlag();
 
             // Once per process, regardless of gate (avoid double-hosting on re-load).
             if (_hostedThisSession && !always) return;
