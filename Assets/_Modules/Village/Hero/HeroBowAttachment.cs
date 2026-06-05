@@ -12,15 +12,14 @@
 //   exists. If the rig is generic / the bone is missing, we LogWarning and skip —
 //   never crash, never block the hero.
 //
-// WHY A CODE-MESH BOW (not a KayKit/polyperfect asset):
-//   The project DOES contain KayKit bows (Assets/Models/KayKit/.../bow_withString.fbx)
-//   but that pack is GITIGNORED and lives OUTSIDE any Resources/ folder, so it is
-//   NOT Resources.Load-able at runtime and is absent on fresh clones / in builds.
-//   Rather than reference a path that resolves on one machine and 404s everywhere
-//   else, this builds a lightweight procedural low-poly bow (curved riser + two
-//   limbs + a thin string) at runtime — it always renders, in every build, with no
-//   asset dependency. If the owner later drops a real bow FBX into
-//   Resources/Heroes/Props/Bow.prefab, set _resourcesBowPath and it is used instead.
+// BOW SOURCE (KayKit, committed under Resources):
+//   The KayKit Adventurers bow (bow_withString) was copied into the COMMITTED,
+//   Resources-loadable folder Assets/Resources/Heroes/Props/ (the KayKit pack
+//   itself is gitignored under /Assets/Models/*, so a committed copy is the only
+//   build-safe path). BowPropBuilder turns it into Bow.prefab with a URP/Lit atlas
+//   material. LoadBowPrefab() loads "Heroes/Props/Bow" FIRST; the procedural
+//   low-poly bow below remains only as a fresh-clone / missing-asset fallback so
+//   the archer always reads as an archer even if the prefab is absent.
 //
 // HOOK-UP:
 //   HeroBodySwapper.Start() calls AttachTo(heroRoot, bodyRoot) for the Ranger
@@ -44,12 +43,15 @@ namespace DeNelle.Village
         // today (see file header), so LoadBowPrefab() simply returns null then.
         private const string _resourcesBowPath = "Heroes/Props/Bow";
 
-        // Local transform of the bow under the LEFT-hand bone. Tuned so the riser
-        // sits in the closed fist with the limbs running vertically (bow held
-        // upright in the off hand). Units are bone-local metres / degrees.
-        private static readonly Vector3 GripLocalPosition = new Vector3(0.02f, 0.0f, 0.04f);
-        private static readonly Vector3 GripLocalEuler    = new Vector3(0f, 0f, 90f);
-        private static readonly Vector3 GripLocalScale    = new Vector3(1f, 1f, 1f);
+        // Local transform of the bow under the LEFT-hand bone. Tuned for the KayKit
+        // bow_withString prop (Resources/Heroes/Props/Bow): its limbs run along local
+        // Z and it is ~2 m long, so we rotate Z->vertical and scale it down to a ~1.3 m
+        // held longbow. NOTE: the exact rotation depends on the hand-bone axes and is
+        // the most likely value to need a visual nudge in-editor — tweak these three.
+        // Units are bone-local metres / degrees.
+        private static readonly Vector3 GripLocalPosition = new Vector3(0f, 0f, 0f);
+        private static readonly Vector3 GripLocalEuler    = new Vector3(90f, 0f, 0f);
+        private static readonly Vector3 GripLocalScale    = new Vector3(0.65f, 0.65f, 0.65f);
 
         private Animator _animator;
         private GameObject _bow;
