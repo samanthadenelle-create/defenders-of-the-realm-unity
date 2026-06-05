@@ -46,13 +46,29 @@ namespace DeNelle.Editor
             var parentGo = GameObject.Find("GameplayBuildings");
             if (parentGo == null) parentGo = new GameObject("GameplayBuildings");
 
-            int placed = 0, skipped = 0;
+            int placed = 0, skipped = 0, reseated = 0;
             foreach (var b in Buildings)
             {
-                // DELTA GUARD: never re-place an existing building — re-importing would
-                // re-trigger the FBX Z-axis rotation bug on the already-correct objects.
-                if (Village2HasBuilding(b.Id)) { skipped++; continue; }
-                PlaceBuilding(parentGo.transform, b, controller, seatToGround: true);
+                var existing = FindVillage2Building(b.Id);
+                if (existing != null)
+                {
+                    // DELTA GUARD: never re-import an existing building — that would
+                    // re-trigger the FBX Z-axis rotation bug. Only correct the Y so it
+                    // sits on the ground (Village2 ground is Y=0; a bad earlier ground-
+                    // seat floated some plots on top of walls/houses). Position-only =
+                    // no re-import, no Z-rotation.
+                    var p = existing.transform.position;
+                    if (Mathf.Abs(p.y) > 0.05f)
+                    {
+                        existing.transform.position = new Vector3(p.x, 0f, p.z);
+                        reseated++;
+                    }
+                    else skipped++;
+                    continue;
+                }
+                // New plot: place flat at the spec Y=0 (NO raycast seat — it hit other
+                // structures and floated the buildings).
+                PlaceBuilding(parentGo.transform, b, controller, seatToGround: false);
                 placed++;
             }
 
@@ -65,19 +81,20 @@ namespace DeNelle.Editor
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
 
-            Debug.Log($"[Village2Inject] DONE — placed {placed} new building(s), skipped {skipped} existing. " +
-                      "NavMesh re-bake still needed for enemy pathing around them. VILLAGE2_INJECT_OK");
+            Debug.Log($"[Village2Inject] DONE — placed {placed} new, reseated {reseated} to ground, " +
+                      $"skipped {skipped} already-good. NavMesh re-bake still needed for enemy pathing. " +
+                      "VILLAGE2_INJECT_OK");
         }
 
-        /// <summary>True if a "Building-{id} (...)" plot already exists in the open scene.</summary>
-        private static bool Village2HasBuilding(string id)
+        /// <summary>The "Building-{id} (...)" plot in the open scene, or null.</summary>
+        private static GameObject FindVillage2Building(string id)
         {
             string prefix = "Building-" + id + " ";
             foreach (var go in UnityEngine.Object.FindObjectsByType<GameObject>(
                          FindObjectsInactive.Include, FindObjectsSortMode.None))
                 if (go != null && go.name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-                    return true;
-            return false;
+                    return go;
+            return null;
         }
     }
 }
