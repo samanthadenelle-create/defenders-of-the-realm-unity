@@ -131,8 +131,28 @@ namespace DeNelle.HUD
 
         // The Q/W/E/R hotkey labels + placeholder glyphs for the four slots.
         // Glyphs are visual stand-ins until ability icon art lands (Week 4+).
+        // IMPORTANT (DEF blank-buttons fix): the default UI Toolkit font has NO
+        // dingbat coverage (✦ ❄ ✚ ☄ etc render as blank/.notdef boxes in WebGL
+        // builds — the "no symbols on the spell buttons" report). So the ability
+        // bar no longer relies on the glyph FONT to read: each cell draws a
+        // CODE-BUILT coloured rune disc (StyleAbilityIcon) tinted by the ability's
+        // element, and the glyph text uses an ASCII-safe symbol that ALWAYS renders
+        // in the base font. The disc + colour is the real signal; the letter is a
+        // bonus. SlotGlyphs are the default (Mage) ASCII symbols before the bridge
+        // pushes the per-class loadout in.
         private static readonly string[] SlotKeys = { "Q", "W", "E", "R" };
-        private static readonly string[] SlotGlyphs = { "✦", "❄", "✚", "☄" };
+        private static readonly string[] SlotGlyphs = { "*", "*", "+", "^" };
+
+        // Per-slot fallback accent colours (Q arcane / W frost / E heal / R fire),
+        // used to tint the rune disc before the bridge pushes the real per-ability
+        // colour from abilities.json. Mirrors the Mage kit's accent hexes.
+        private static readonly Color[] SlotAccent =
+        {
+            new Color(0.70f, 0.53f, 1f,    1f),  // Q — arcane violet (#b388ff)
+            new Color(0.49f, 0.83f, 0.99f, 1f),  // W — frost blue   (#7dd3fc)
+            new Color(1f,    0.82f, 0.48f, 1f),  // E — heal gold    (#ffd27a)
+            new Color(1f,    0.44f, 0.26f, 1f),  // R — fire orange  (#ff7043)
+        };
 
         // ── Elarion HUD palette (DEF-105) ─────────────────────────────────────
         // Shared with FloatingHealthBar, which documents the same values as "echoes
@@ -475,7 +495,9 @@ namespace DeNelle.HUD
             if (_root == null) return;
             if (_startWaveButton != null) { _startWaveButton.RemoveFromHierarchy(); _startWaveButton = null; }
 
-            var btn = new Button(OnTriggerWaveClicked) { text = "⚔ START WAVE" };
+            // No leading dingbat — the base build font has no ⚔ glyph (renders
+            // blank). A plain bold label reads clearly on mobile (DEF blank-buttons).
+            var btn = new Button(OnTriggerWaveClicked) { text = "START WAVE" };
             btn.name = "StartWaveButton";
             btn.pickingMode = PickingMode.Position;
             var s = btn.style;
@@ -507,7 +529,10 @@ namespace DeNelle.HUD
             if (_root == null) return;
             if (_skillsButton != null) { _skillsButton.RemoveFromHierarchy(); _skillsButton = null; }
 
-            var btn = new Button(OnSkillsClicked) { text = "⊕ Skills" };
+            // No leading dingbat — the base build font has no ⊕ glyph (renders
+            // blank). A "+ Skills" reads as 'add/spend skill points' and the '+'
+            // IS in the base font (DEF blank-buttons fix).
+            var btn = new Button(OnSkillsClicked) { text = "+ Skills" };
             btn.name = "SkillsButton";
             btn.pickingMode = PickingMode.Position;
             var s = btn.style;
@@ -1135,6 +1160,12 @@ namespace DeNelle.HUD
 
                 var icon = new Label(SlotGlyphs[i]) { name = "ability-icon" };
                 icon.AddToClassList(AbilityIconClass);
+                icon.pickingMode = PickingMode.Ignore;
+                // Code-built coloured rune disc so the cell reads as a symbol even
+                // when the glyph font misses the dingbat (USS doesn't render in
+                // builds — CLAUDE.md §8). Tinted to the slot's default element until
+                // the bridge pushes the real per-ability accent via SetAbilitySlot.
+                StyleAbilityIcon(icon, SlotAccent[i]);
                 slot.Add(icon);
 
                 // Cooldown sweep — drawn over the icon, height driven 0..100%.
@@ -1208,6 +1239,20 @@ namespace DeNelle.HUD
         /// </summary>
         public void SetAbilitySlot(int slot, string key, string glyph, string name, string description)
         {
+            SetAbilitySlot(slot, key, glyph, name, description, null);
+        }
+
+        /// <summary>
+        /// Accent-aware overload (DEF blank-buttons fix). <paramref name="accentHex"/>
+        /// is the ability's colour from abilities.json (e.g. "#b388ff"); it tints the
+        /// code-built rune disc so each cell reads as a distinct coloured symbol even
+        /// when the dingbat glyph isn't in the build font. A null/blank hex keeps the
+        /// slot's existing element tint. The 5-arg overload above stays the public
+        /// reflection target the HeroAbilitiesHudBridge already binds, and the bridge
+        /// also resolves THIS 6-arg overload to push the per-ability colour.
+        /// </summary>
+        public void SetAbilitySlot(int slot, string key, string glyph, string name, string description, string accentHex)
+        {
             if (slot < 0 || slot >= AbilitySlotCount) return;
             AbilityCell cell = _abilityCells[slot];
             if (cell.Slot == null) return;
@@ -1216,7 +1261,16 @@ namespace DeNelle.HUD
                 cell.KeyLabel.text = key;
 
             if (cell.IconLabel != null && !string.IsNullOrEmpty(glyph))
-                cell.IconLabel.text = glyph;
+                cell.IconLabel.text = SymbolFor(glyph);
+
+            // Re-tint the rune disc to the ability's accent colour so the cell is a
+            // recognisable coloured badge regardless of glyph-font coverage.
+            if (cell.IconLabel != null &&
+                !string.IsNullOrEmpty(accentHex) &&
+                ColorUtility.TryParseHtmlString(accentHex, out var accent))
+            {
+                StyleAbilityIcon(cell.IconLabel, accent);
+            }
 
             // FAIL #2 fix: surface the ability NAME on a visible label (not just the
             // invisible-in-build tooltip), so each cell reads differently per class.
@@ -1229,6 +1283,66 @@ namespace DeNelle.HUD
                 cell.Slot.tooltip = description;
             else if (!string.IsNullOrEmpty(name))
                 cell.Slot.tooltip = name;
+        }
+
+        // Draws the code-built "rune disc" behind an ability glyph: a rounded,
+        // accent-tinted, ringed circle so the cell reads as a coloured symbol badge
+        // even when the dingbat glyph isn't in the build font (USS doesn't render in
+        // builds — CLAUDE.md §8; the "blank spell buttons" root cause). The glyph
+        // text is forced to a high-contrast colour on top of the tint. Idempotent —
+        // safe to call on build and on every per-class retint.
+        private static void StyleAbilityIcon(Label icon, Color accent)
+        {
+            if (icon == null) return;
+            var s = icon.style;
+
+            // Disc fill: a darkened wash of the accent so the symbol stays legible;
+            // ring: the accent at full strength so the colour reads at a glance.
+            Color fill = new Color(accent.r * 0.45f + 0.06f, accent.g * 0.45f + 0.06f, accent.b * 0.45f + 0.06f, 0.96f);
+            s.backgroundColor = fill;
+
+            s.borderTopWidth = 2f; s.borderRightWidth = 2f;
+            s.borderBottomWidth = 2f; s.borderLeftWidth = 2f;
+            s.borderTopColor = accent; s.borderRightColor = accent;
+            s.borderBottomColor = accent; s.borderLeftColor = accent;
+
+            // Big radius → reads as a disc inside the square cell.
+            s.borderTopLeftRadius = 28f; s.borderTopRightRadius = 28f;
+            s.borderBottomLeftRadius = 28f; s.borderBottomRightRadius = 28f;
+
+            // Inset the disc a touch from the cell edge + centre the glyph.
+            s.marginTop = 6f; s.marginBottom = 6f; s.marginLeft = 6f; s.marginRight = 6f;
+            s.unityTextAlign = TextAnchor.MiddleCenter;
+            s.unityFontStyleAndWeight = FontStyle.Bold;
+            s.fontSize = 26f;
+
+            // High-contrast glyph: white on the dark wash so the ASCII symbol pops.
+            s.color = new Color(0.98f, 0.97f, 1f, 1f);
+        }
+
+        // Maps an ability glyph to a symbol guaranteed to render in the BASE UI
+        // Toolkit font (no dingbat coverage in builds). The canonical abilities.json
+        // supplies pretty dingbats (✦ ❄ ✚ ☄ …) that come up blank in WebGL; we keep
+        // their MEANING by translating each to an ASCII-safe stand-in. Unknown / safe
+        // input passes through unchanged (so a future real-font icon set still works).
+        private static string SymbolFor(string glyph)
+        {
+            if (string.IsNullOrEmpty(glyph)) return "*";
+            switch (glyph)
+            {
+                case "✦": case "✧": case "✶": case "✷": return "*";  // arcane / strike spark
+                case "❄": case "❅": case "❆":            return "*";  // frost burst
+                case "✚": case "✛": case "✝": case "+":  return "+";  // heal cross
+                case "☄": case "✸": case "✹":            return "^";  // meteor / blast
+                case "⚔": case "⚒":                      return "/";  // melee
+                default:
+                    // Already ASCII-printable? keep it. Otherwise fall back to the
+                    // first letter (e.g. an unmapped dingbat) so the cell is never
+                    // a blank .notdef box.
+                    char c = glyph[0];
+                    if (c >= 0x20 && c < 0x7f) return glyph;
+                    return "*";
+            }
         }
 
         // =====================================================================
