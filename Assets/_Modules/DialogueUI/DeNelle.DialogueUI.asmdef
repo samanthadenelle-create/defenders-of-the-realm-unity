@@ -4,7 +4,8 @@
     "references": [
         "YarnSpinner.Unity",
         "YarnSpinner.Addons.ClassicRPG",
-        "UniTask"
+        "UniTask",
+        "DeNelle.Core"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

@@ -237,12 +237,19 @@ namespace DeNelle.Onboarding
             SetTitleVisible(true);
         }
 
-        // Play Intro: run the StoryIntro cold-open (now WITH audio, post-gesture) → then the title.
+        // Play Intro: the full 9-screen cinematic intro (Yarn, on the dialogue spine)
+        // which ends by transitioning to hero select. Routed via Core.IntroLauncher so
+        // Onboarding stays decoupled from the dialogue stack. Falls back to the 3-line
+        // StoryIntro cold-open if the intro player isn't registered (e.g. a build
+        // without the dialogue assets).
         private void OnPlayIntro()
         {
             if (!_splashActive) return;
             _splashActive = false;
-            RunArrival().Forget();
+            if (DeNelle.Core.IntroLauncher.Play != null)
+                DeNelle.Core.IntroLauncher.Play.Invoke();
+            else
+                RunArrival().Forget();
         }
 
         // Continue: resume into the village (loads the save). No-save falls into a fresh village.

@@ -15,6 +15,7 @@ In its shade, civilizations rose. Kingdoms flourished. The people of Elarion bui
 
 <<wait 3>>
 <<play_sfx heartbeat_slow>>
+<<jump Intro_Screen2>>
 ===
 
 title: Intro_Screen2
@@ -32,6 +33,7 @@ The sky cracked. The branches fell. Every kingdom built in its shade was buried 
 
 <<play_sfx deep_rumble>>
 <<wait 3>>
+<<jump Intro_Screen3>>
 ===
 
 title: Intro_Screen3
@@ -50,6 +52,7 @@ The World Ash — the heart of their world — was gone.
 Almost.
 
 <<wait 1>>
+<<jump Intro_Screen4>>
 ===
 
 title: Intro_Screen4
@@ -66,6 +69,7 @@ The people of Elarion knew they could not survive.
 So they made a choice.
 
 <<wait 1>>
+<<jump Intro_Screen5>>
 ===
 
 title: Intro_Screen5
@@ -91,6 +95,7 @@ Not to escape. To wait.
 To wait for someone brave enough to bring them back.
 
 <<wait 3>>
+<<jump Intro_Screen6>>
 ===
 
 title: Intro_Screen6
@@ -109,6 +114,7 @@ Every faint pulse is a voice. Every glow is a life waiting to be reborn.
 They are the Echoes of Elarion.
 
 <<wait 3>>
+<<jump Intro_Screen7>>
 ===
 
 title: Intro_Screen7
@@ -130,6 +136,7 @@ It was calling.
 
 <<play_sfx war_drums_distant>>
 <<wait 2>>
+<<jump Intro_Screen8>>
 ===
 
 title: Intro_Screen8
@@ -153,6 +160,7 @@ Someone who will stay. Build. Fight. Endure.
 Someone who will restore the tree — and in restoring it, set them free.
 
 <<wait 2>>
+<<jump Intro_Screen9>>
 ===
 
 title: Intro_Screen9
