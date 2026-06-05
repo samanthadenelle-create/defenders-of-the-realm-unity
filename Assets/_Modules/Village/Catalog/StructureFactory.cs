@@ -87,6 +87,15 @@ namespace DeNelle.Village
                 if (visual == null)
                     Debug.LogWarning($"[StructureFactory] '{entry.id}': visual '{entry.visualPrefabPath}' " +
                                      "not found — structure created without a mesh.");
+                else if (entry.orientation != null && entry.orientation.manual)
+                {
+                    // Apply ONLY human-verified (Inspector) orientation corrections — auto-baked
+                    // ones are advisory (a bounds heuristic can't be trusted to not tip good assets).
+                    visual.transform.localRotation = Quaternion.Euler(entry.orientation.Euler) * visual.transform.localRotation;
+                    visual.transform.localPosition += entry.orientation.Offset;
+                    if (entry.orientation.scale > 0f && !Mathf.Approximately(entry.orientation.scale, 1f))
+                        visual.transform.localScale *= entry.orientation.scale;
+                }
             }
 
             // BEHAVIOR — resolve the Core string id to a real Village component.

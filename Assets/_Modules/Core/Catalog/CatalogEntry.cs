@@ -41,5 +41,30 @@ namespace DeNelle.Core.Catalog
 
         /// <summary>Composites only: the cell set to drop as a bundle. Null for cells.</summary>
         public CellPlacement[] composite = null;
+
+        /// <summary>
+        /// Orientation correction (CatalogOrientationBaker / the future Orientation
+        /// Inspector). Auto-baked entries are ADVISORY (manual=false) and are NOT
+        /// applied — a bounds heuristic can't tell an authored-flat-but-skinned-upright
+        /// model (e.g. tower2: Y=0.37, Z=1.00) from a genuinely tipped one, so auto-
+        /// rotating would tip good assets. Only HUMAN-verified (manual=true) corrections
+        /// are applied by StructureFactory.
+        /// </summary>
+        public OrientationFix orientation = null;
+    }
+
+    /// <summary>A stored keep-vertical correction for a catalog entry's visual.</summary>
+    [System.Serializable]
+    public sealed class OrientationFix
+    {
+        public bool    corrected;
+        public bool    manual;        // true = human-verified (Inspector) → applied; false = advisory
+        public float[] euler;         // [x,y,z] degrees
+        public float[] offset;        // [x,y,z] metres
+        public float   scale = 1f;
+        public string  note;
+
+        public Vector3 Euler  => euler  != null && euler.Length  == 3 ? new Vector3(euler[0],  euler[1],  euler[2])  : Vector3.zero;
+        public Vector3 Offset => offset != null && offset.Length == 3 ? new Vector3(offset[0], offset[1], offset[2]) : Vector3.zero;
     }
 }

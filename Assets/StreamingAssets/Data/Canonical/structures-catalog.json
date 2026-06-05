@@ -11,7 +11,12 @@
       "repo": {
         "behaviorId": "DefenseTower",
         "buildCost": 100,
-        "cost": { "wood": 60, "food": 0, "iron": 30, "crystals": 20 },
+        "cost": {
+          "wood": 60,
+          "food": 0,
+          "iron": 30,
+          "crystals": 20
+        },
         "maxLevel": 3,
         "navSurface": "Blocker",
         "visualHeight": 5.0,
@@ -26,6 +31,22 @@
           "noOverlap": true,
           "checkAffordable": true
         }
+      },
+      "orientation": {
+        "corrected": true,
+        "manual": false,
+        "euler": [
+          270.0,
+          0.0,
+          0.0
+        ],
+        "offset": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scale": 1.0,
+        "note": "lying flat (Y shortest 0.37m, longest Z 1.00m) - stood up to +Y"
       }
     },
     {
@@ -37,7 +58,12 @@
       "repo": {
         "behaviorId": "DefenseTower",
         "buildCost": 150,
-        "cost": { "wood": 40, "food": 0, "iron": 20, "crystals": 60 },
+        "cost": {
+          "wood": 40,
+          "food": 0,
+          "iron": 20,
+          "crystals": 60
+        },
         "maxLevel": 3,
         "navSurface": "Blocker",
         "visualHeight": 5.0,
@@ -53,6 +79,22 @@
           "requiresSupport": true,
           "checkAffordable": true
         }
+      },
+      "orientation": {
+        "corrected": true,
+        "manual": false,
+        "euler": [
+          270.0,
+          0.0,
+          0.0
+        ],
+        "offset": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scale": 1.0,
+        "note": "lying flat (Y shortest 0.37m, longest Z 1.00m) - stood up to +Y"
       }
     },
     {
@@ -64,7 +106,12 @@
       "repo": {
         "behaviorId": "DefenseTower",
         "buildCost": 140,
-        "cost": { "wood": 80, "food": 0, "iron": 50, "crystals": 0 },
+        "cost": {
+          "wood": 80,
+          "food": 0,
+          "iron": 50,
+          "crystals": 0
+        },
         "maxLevel": 3,
         "navSurface": "Blocker",
         "visualHeight": 6.0,
@@ -79,6 +126,22 @@
           "noOverlap": true,
           "checkAffordable": true
         }
+      },
+      "orientation": {
+        "corrected": true,
+        "manual": false,
+        "euler": [
+          270.0,
+          0.0,
+          0.0
+        ],
+        "offset": [
+          0.0,
+          0.001,
+          0.0
+        ],
+        "scale": 1.0,
+        "note": "lying flat (Y shortest 0.44m, longest Z 1.00m) - stood up to +Y"
       }
     },
     {
@@ -90,7 +153,12 @@
       "repo": {
         "behaviorId": "DefenseTower",
         "buildCost": 180,
-        "cost": { "wood": 90, "food": 0, "iron": 60, "crystals": 30 },
+        "cost": {
+          "wood": 90,
+          "food": 0,
+          "iron": 60,
+          "crystals": 30
+        },
         "maxLevel": 3,
         "navSurface": "Blocker",
         "visualHeight": 6.0,
@@ -105,6 +173,22 @@
           "noOverlap": true,
           "checkAffordable": true
         }
+      },
+      "orientation": {
+        "corrected": true,
+        "manual": false,
+        "euler": [
+          270.0,
+          0.0,
+          0.0
+        ],
+        "offset": [
+          0.0,
+          0.001,
+          0.0
+        ],
+        "scale": 1.0,
+        "note": "lying flat (Y shortest 0.44m, longest Z 1.00m) - stood up to +Y"
       }
     },
     {
@@ -116,11 +200,26 @@
       "repo": {
         "behaviorId": "WallSegment",
         "buildCost": 40,
-        "cost": { "wood": 20, "food": 0, "iron": 0, "crystals": 0 },
+        "cost": {
+          "wood": 20,
+          "food": 0,
+          "iron": 0,
+          "crystals": 0
+        },
         "maxLevel": 3,
         "upgradeCost": [
-          { "wood": 20, "food": 0, "iron": 20, "crystals": 0 },
-          { "wood": 10, "food": 0, "iron": 40, "crystals": 10 }
+          {
+            "wood": 20,
+            "food": 0,
+            "iron": 20,
+            "crystals": 0
+          },
+          {
+            "wood": 10,
+            "food": 0,
+            "iron": 40,
+            "crystals": 10
+          }
         ],
         "navSurface": "Blocker",
         "placement": {
@@ -129,6 +228,22 @@
           "noOverlap": true,
           "checkAffordable": true
         }
+      },
+      "orientation": {
+        "corrected": false,
+        "manual": false,
+        "euler": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scale": 1.0,
+        "note": "prefab 'polyperfect/Wall_Wood_Horizontal_3x3m' not found — no correction computed"
       }
     },
     {
@@ -140,11 +255,26 @@
       "repo": {
         "behaviorId": "WallSegment",
         "buildCost": 90,
-        "cost": { "wood": 30, "food": 40, "iron": 20, "crystals": 0 },
+        "cost": {
+          "wood": 30,
+          "food": 40,
+          "iron": 20,
+          "crystals": 0
+        },
         "maxLevel": 3,
         "upgradeCost": [
-          { "wood": 30, "food": 0, "iron": 40, "crystals": 0 },
-          { "wood": 20, "food": 0, "iron": 60, "crystals": 20 }
+          {
+            "wood": 30,
+            "food": 0,
+            "iron": 40,
+            "crystals": 0
+          },
+          {
+            "wood": 20,
+            "food": 0,
+            "iron": 60,
+            "crystals": 20
+          }
         ],
         "navSurface": "Blocker",
         "placement": {
@@ -153,6 +283,22 @@
           "noOverlap": true,
           "checkAffordable": true
         }
+      },
+      "orientation": {
+        "corrected": false,
+        "manual": false,
+        "euler": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scale": 1.0,
+        "note": "prefab 'polyperfect/Wall_Medieval_Stone' not found — no correction computed"
       }
     },
     {
@@ -164,7 +310,12 @@
       "repo": {
         "behaviorId": "Gate",
         "buildCost": 120,
-        "cost": { "wood": 50, "food": 0, "iron": 40, "crystals": 20 },
+        "cost": {
+          "wood": 50,
+          "food": 0,
+          "iron": 40,
+          "crystals": 20
+        },
         "navSurface": "Blocker",
         "placement": {
           "mustSitOn": "Ground",
@@ -173,6 +324,22 @@
           "minDistanceFromGate": 8.0,
           "checkAffordable": true
         }
+      },
+      "orientation": {
+        "corrected": false,
+        "manual": false,
+        "euler": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scale": 1.0,
+        "note": "prefab 'polyperfect/Gate_Medieval_Medium' not found — no correction computed"
       }
     },
     {
@@ -184,7 +351,12 @@
       "repo": {
         "behaviorId": "CrystalMine",
         "buildCost": 200,
-        "cost": { "wood": 70, "food": 0, "iron": 30, "crystals": 100 },
+        "cost": {
+          "wood": 70,
+          "food": 0,
+          "iron": 30,
+          "crystals": 100
+        },
         "navSurface": "Blocker",
         "placement": {
           "mustSitOn": "Ground",
@@ -192,6 +364,22 @@
           "noOverlap": true,
           "checkAffordable": true
         }
+      },
+      "orientation": {
+        "corrected": false,
+        "manual": false,
+        "euler": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scale": 1.0,
+        "note": "prefab 'polyperfect/House_Medieval_Small' not found — no correction computed"
       }
     },
     {
@@ -203,7 +391,12 @@
       "repo": {
         "behaviorId": null,
         "buildCost": 10,
-        "cost": { "wood": 5, "food": 0, "iron": 0, "crystals": 0 },
+        "cost": {
+          "wood": 5,
+          "food": 0,
+          "iron": 0,
+          "crystals": 0
+        },
         "navSurface": "None",
         "placement": {
           "mustSitOn": "AnyTerrain",
@@ -211,6 +404,22 @@
           "noOverlap": false,
           "checkAffordable": true
         }
+      },
+      "orientation": {
+        "corrected": false,
+        "manual": false,
+        "euler": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scale": 1.0,
+        "note": "prefab 'polyperfect/Torche_Wall' not found — no correction computed"
       }
     }
   ]
