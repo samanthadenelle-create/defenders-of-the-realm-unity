@@ -164,6 +164,17 @@ namespace DeNelle.HUD
         private Label _manaLabel;
         private Button _buildButton;
 
+        // ── Resource bar (DEF: on-screen Wood/Iron/Food/Gems) ────────────────
+        // Code-built compact wallet readout, top-left, sitting just under the
+        // heart card. Shows the four build-economy resources players spend on
+        // building/tower upgrades. Gems REUSE the existing _crystalCount label
+        // (never duplicated). Fed by HeartHudBridge.SetResources via reflection,
+        // sourced from EconomyService.Snapshot (the real banked totals).
+        private VisualElement _resourceBar;
+        private Label _woodCount;
+        private Label _ironCount;
+        private Label _foodCount;
+
         // Repair-prompt elements (Workstream B — player wall-repair mechanic).
         private VisualElement _repairPrompt;
         private Label _repairPromptSubtitle;
@@ -450,6 +461,7 @@ namespace DeNelle.HUD
             MoveActionBarToRight();   // mobile thumb layout: actions bottom-RIGHT (opposite the joystick)
             ApplyElarionTheme();   // DEF-105: code-built styling for the vitals bars (USS doesn't render in builds)
             EnsureCompassRose();   // DEF-104: build the direction rose up-front so it's always on screen
+            BuildResourceBar();    // DEF: on-screen Wood/Iron/Food/Gems wallet readout (code-built — USS doesn't render in builds)
             _bound = true;
             Debug.Log($"[VillageHudController] Bound. root={_root != null}, heart={_heartHpFill != null}, mana={_manaFill != null}, abilityBar={_abilityBar != null}");
         }
@@ -1264,6 +1276,105 @@ namespace DeNelle.HUD
             if (_crystalCount != null)
                 _crystalCount.text = Mathf.Max(0, amount).ToString();
         }
+
+        // ── On-screen resource bar (DEF: Wood/Iron/Food/Gems) ────────────────
+        // Themed-glyph chips for the three build resources the HUD never showed
+        // before. Crystals/Gems stay on the existing crystal-panel counter
+        // (_crystalCount) so the gem total is never duplicated. Sourced from the
+        // real EconomyService wallet via HeartHudBridge — these are the banked
+        // totals players spend on building/tower upgrades.
+
+        // Resource chip glyphs (themed letters; no icon art needed yet).
+        private const string WoodGlyph = "🪵"; // wood log
+        private const string IronGlyph = "⛏"; // pick → iron/ore
+        private const string FoodGlyph = "🍖"; // food
+        private static readonly Color ResourceChipBg  = new Color(0.10f, 0.08f, 0.16f, 0.88f); // arcane-violet card
+        private static readonly Color ResourceChipRim = new Color(1f,    0.86f, 0.45f, 0.70f); // themed gold rim
+        private static readonly Color ResourceValueTxt = new Color(0.96f, 0.93f, 0.82f, 1f);    // parchment-cream
+
+        /// <summary>
+        /// Builds the compact Wood/Iron/Food chip row once, top-left under the
+        /// heart card. Idempotent — re-finds an existing bar and never duplicates
+        /// it. Gems are shown by the separate crystal counter, so they're not
+        /// added here. Code-built (USS doesn't render in builds — CLAUDE.md §8).
+        /// </summary>
+        private void BuildResourceBar()
+        {
+            if (_root == null) return;
+            if (_resourceBar != null) { _resourceBar.RemoveFromHierarchy(); _resourceBar = null; }
+
+            var bar = new VisualElement { name = "resource-bar" };
+            bar.pickingMode = PickingMode.Ignore;   // passive readout — never eats input
+            var s = bar.style;
+            s.position = Position.Absolute;
+            s.top = 40f;     // just under the heart-hp card (top-left column)
+            s.left = 16f;
+            s.flexDirection = FlexDirection.Row;
+            s.alignItems = Align.Center;
+
+            _woodCount = MakeResourceChip(bar, "wood-count", WoodGlyph);
+            _ironCount = MakeResourceChip(bar, "iron-count", IronGlyph);
+            _foodCount = MakeResourceChip(bar, "food-count", FoodGlyph);
+
+            _root.Add(bar);
+            _resourceBar = bar;
+        }
+
+        /// <summary>Builds one glyph + count chip into <paramref name="bar"/> and returns its count label.</summary>
+        private static Label MakeResourceChip(VisualElement bar, string countName, string glyph)
+        {
+            var chip = new VisualElement { name = countName + "-chip" };
+            chip.pickingMode = PickingMode.Ignore;
+            var cs = chip.style;
+            cs.flexDirection = FlexDirection.Row;
+            cs.alignItems = Align.Center;
+            cs.marginRight = 6f;
+            cs.paddingLeft = 6f; cs.paddingRight = 8f; cs.paddingTop = 2f; cs.paddingBottom = 2f;
+            cs.backgroundColor = ResourceChipBg;
+            cs.borderTopWidth = 1f; cs.borderBottomWidth = 1f;
+            cs.borderLeftWidth = 1f; cs.borderRightWidth = 1f;
+            cs.borderTopColor = ResourceChipRim; cs.borderBottomColor = ResourceChipRim;
+            cs.borderLeftColor = ResourceChipRim; cs.borderRightColor = ResourceChipRim;
+            cs.borderTopLeftRadius = 7f; cs.borderTopRightRadius = 7f;
+            cs.borderBottomLeftRadius = 7f; cs.borderBottomRightRadius = 7f;
+
+            var glyphLbl = new Label(glyph) { name = countName + "-glyph" };
+            glyphLbl.pickingMode = PickingMode.Ignore;
+            var gs = glyphLbl.style;
+            gs.fontSize = 14f;
+            gs.marginRight = 3f;
+            gs.unityTextAlign = TextAnchor.MiddleCenter;
+
+            var countLbl = new Label("0") { name = countName };
+            countLbl.pickingMode = PickingMode.Ignore;
+            var vs = countLbl.style;
+            vs.color = ResourceValueTxt;
+            vs.fontSize = 13f;
+            vs.unityFontStyleAndWeight = FontStyle.Bold;
+
+            chip.Add(glyphLbl);
+            chip.Add(countLbl);
+            bar.Add(chip);
+            return countLbl;
+        }
+
+        /// <summary>
+        /// Updates the on-screen resource bar with the live wallet. Wood/Iron/Food
+        /// fill the chip row; Gems are routed to the existing crystal counter so
+        /// the gem total isn't duplicated. Negative values clamp to zero. Called
+        /// each economy tick by HeartHudBridge from EconomyService.Snapshot.
+        /// </summary>
+        public void SetResources(int wood, int iron, int food, int gems)
+        {
+            if (_woodCount != null) _woodCount.text = Mathf.Max(0, wood).ToString();
+            if (_ironCount != null) _ironCount.text = Mathf.Max(0, iron).ToString();
+            if (_foodCount != null) _foodCount.text = Mathf.Max(0, food).ToString();
+            // Gems reuse the existing crystal counter — keep the two in lockstep.
+            SetCrystals(gems);
+        }
+        // Note: this public SetResources(int,int,int,int) implicitly satisfies
+        // IVillageHud.SetResources — no separate explicit impl needed (mirrors how
+        // the public SetCrystals(int) satisfies IVillageHud.SetCrystals).
 
         /// <summary>
         /// Sets the wave indicator. <paramref name="number"/> is the 1-based wave

@@ -6,6 +6,15 @@ namespace DeNelle.Core.HUD
         void SetCountdown(float secondsRemaining);
         void SetHeartHp(float normalisedHp);
         void SetCrystals(int amount);
+
+        /// <summary>
+        /// Pushes the full build-economy wallet onto the on-screen resource bar:
+        /// Wood / Iron / Food / Gems(Crystals). Mirrors <see cref="SetCrystals"/> but
+        /// for all four banked totals players spend on building/tower upgrades — fed
+        /// by the Village-side HeartHudBridge from EconomyService.Snapshot. The Gems
+        /// slot reuses the existing crystal counter (so it never double-counts).
+        /// </summary>
+        void SetResources(int wood, int iron, int food, int gems);
         void SetAttackDirections(bool north, bool east, bool south, bool west);
         void SetWaveImminent(bool imminent);
         void ShowWaveClearBanner(int waveNumber, int enemiesDefeated, string flavourLine);

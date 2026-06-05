@@ -16,6 +16,15 @@
 //   no change event on GameStateService so they remain on a 0.5 s throttled poll —
 //   cheap and correct. Update() now only runs the crystal throttle + deferred
 //   Resolve() retries; it exits immediately once fully resolved + subscribed.
+//
+// DEF (resource bar): also pushes the full Wood/Iron/Food/Gems wallet onto the
+//   HUD resource bar via VillageHudController.SetResources(int,int,int,int). The
+//   numbers are the REAL banked totals from EconomyService.Snapshot (the same
+//   wallet TowerUpgrade / BuildingUpgradePanel spend from), so what shows on
+//   screen is exactly what the player can spend. EconomyService is in this same
+//   assembly (DeNelle.Village), so it's read directly and subscribed to its
+//   OnChanged event for live updates; the throttled poll re-pushes as a safety
+//   net (covers EconomyService bootstrapping after this bridge resolves).
 // =============================================================================
 
 using System.Reflection;
@@ -33,9 +42,16 @@ namespace DeNelle.Village
         private Object _hud;                 // VillageHudController (held as Object — no DeNelle.HUD ref)
         private MethodInfo _setHeartHp;      // SetHeartHp(float current, float max)
         private MethodInfo _setCrystals;     // SetCrystals(int amount)
+        private MethodInfo _setResources;    // SetResources(int wood, int iron, int food, int gems)
         private HeartController _heart;
         private readonly object[] _hpArgs = new object[2];
         private readonly object[] _crystalArgs = new object[1];
+        private readonly object[] _resourceArgs = new object[4];
+
+        // DEF (resource bar): live wallet feed. EconomyService is in THIS assembly,
+        // so it's read directly + subscribed to its OnChanged event (no reflection
+        // for the read; only the HUD push crosses the asmdef seam).
+        private EconomyService _subscribedEconomy;
 
         // The bridge is attached after the scene (incl. the HUD) loads, so it
         // resolves on the first frame in practice. The cap is a pure safety net:
@@ -56,10 +72,12 @@ namespace DeNelle.Village
         {
             Resolve();
             TrySubscribeHeart();
-            // Push the initial HP and crystals immediately so the HUD is correct
-            // on enable without waiting for the first event or poll interval.
+            TrySubscribeEconomy();
+            // Push the initial HP, crystals and wallet immediately so the HUD is
+            // correct on enable without waiting for the first event or poll interval.
             PushHp(_heart != null ? _heart.Hp : 0f);
             PushCrystals();
+            PushResources();
         }
 
         private void OnDisable()
@@ -68,6 +86,11 @@ namespace DeNelle.Village
             {
                 _subscribedHeart.OnHealthChanged -= OnHeartHpChanged;
                 _subscribedHeart = null;
+            }
+            if (_subscribedEconomy != null)
+            {
+                _subscribedEconomy.OnChanged -= OnEconomyChanged;
+                _subscribedEconomy = null;
             }
         }
 
@@ -96,9 +119,27 @@ namespace DeNelle.Village
                     new[] { typeof(float), typeof(float) }, null);
                 _setCrystals = t.GetMethod("SetCrystals", BindingFlags.Public | BindingFlags.Instance, null,
                     new[] { typeof(int) }, null);
+                _setResources = t.GetMethod("SetResources", BindingFlags.Public | BindingFlags.Instance, null,
+                    new[] { typeof(int), typeof(int), typeof(int), typeof(int) }, null);
             }
             if (_heart == null) _heart = FindAnyObjectByType<HeartController>();
         }
+
+        /// <summary>
+        /// Subscribes to <see cref="EconomyService.OnChanged"/> once the service
+        /// exists, so the resource bar updates the moment wood/iron/food/crystals
+        /// change (harvest, wave reward, upgrade spend). Idempotent.
+        /// </summary>
+        private void TrySubscribeEconomy()
+        {
+            if (_subscribedEconomy != null) return;       // already subscribed
+            var econ = EconomyService.Instance;
+            if (econ == null) return;                     // service not bootstrapped yet
+            _subscribedEconomy = econ;
+            _subscribedEconomy.OnChanged += OnEconomyChanged;
+        }
+
+        private void OnEconomyChanged(ResourceSnapshot snapshot) => PushResources(snapshot);
 
         /// <summary>
         /// Subscribes to <see cref="HeartController.OnHealthChanged"/> once the heart
@@ -130,6 +171,28 @@ namespace DeNelle.Village
             _setCrystals.Invoke(_hud, _crystalArgs);
         }
 
+        /// <summary>Pushes the current EconomyService wallet to the HUD resource bar.</summary>
+        private void PushResources()
+        {
+            var econ = EconomyService.Instance;
+            if (econ == null) return;
+            PushResources(econ.Snapshot);
+        }
+
+        /// <summary>
+        /// Pushes a specific wallet snapshot to the HUD's SetResources(int,int,int,int).
+        /// Order matches the HUD signature: wood, iron, food, gems(crystals).
+        /// </summary>
+        private void PushResources(ResourceSnapshot snapshot)
+        {
+            if (_setResources == null || _hud == null) return;
+            _resourceArgs[0] = snapshot.Wood;
+            _resourceArgs[1] = snapshot.Iron;
+            _resourceArgs[2] = snapshot.Food;
+            _resourceArgs[3] = snapshot.Crystals;
+            _setResources.Invoke(_hud, _resourceArgs);
+        }
+
         private void Update()
         {
             // Deferred resolution — exits immediately once fully wired.
@@ -139,22 +202,28 @@ namespace DeNelle.Village
                 if (_hud == null || _heart == null) return;
                 // Resolved this frame — subscribe and push the current state now.
                 TrySubscribeHeart();
+                TrySubscribeEconomy();
                 PushHp(_heart.Hp);
                 PushCrystals();
+                PushResources();
                 _crystalPollTimer = 0f;
                 return;
             }
 
-            // If subscription was deferred (e.g. heart resolved before Awake race),
-            // pick it up here.
+            // If subscription was deferred (e.g. heart resolved before Awake race,
+            // or EconomyService bootstrapped after this bridge), pick it up here.
             TrySubscribeHeart();
+            TrySubscribeEconomy();
 
             // Crystal poll — GameStateService has no change event; throttle to 0.5s.
+            // The wallet is event-driven (EconomyService.OnChanged) but is re-pushed
+            // here too as a safety net for the bootstrap-order race above.
             _crystalPollTimer -= Time.deltaTime;
             if (_crystalPollTimer <= 0f)
             {
                 _crystalPollTimer = CrystalPollInterval;
                 PushCrystals();
+                PushResources();
             }
         }
 
