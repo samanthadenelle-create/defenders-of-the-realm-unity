@@ -20,6 +20,7 @@ tags: tutorial onboarding
 {$companionName}: Come on — I'll show you around. Stay close.
 <<set $tutorialPhase to "tour">>
 <<start_autowalk village_tour>>
+<<jump VillageTour>>
 ===
 
 title: VillageTour
@@ -48,6 +49,7 @@ tags: tutorial onboarding
 
 {$companionName}: But none of this matters if the walls fall. Come on — this way.
 <<start_autowalk gate_1>>
+<<jump FirstTower>>
 ===
 
 title: FirstTower
@@ -76,6 +78,7 @@ tags: tutorial onboarding
 
 <<set $towersBuilt to 1>>
 <<start_autowalk gate_2>>
+<<jump SecondGateAmbush>>
 ===
 
 title: SecondGateAmbush
@@ -114,6 +117,7 @@ tags: tutorial onboarding
 
 {$companionName}: But they'll be back. And next time it won't be three of them.
 
+<<jump ResourceGrant>>
 ===
 
 title: ResourceGrant
@@ -130,6 +134,7 @@ tags: tutorial onboarding
 
 <<set $tutorialStep to "build_remaining">>
 <<set_hud_objective "Build towers at the remaining 3 gates" 0 3>>
+<<jump QuestCallout>>
 ===
 
 title: QuestCallout
@@ -148,6 +153,7 @@ tags: tutorial onboarding
     {$companionName}: Good. Don't ignore them — the rewards add up.
 
 <<unhighlight_ui quest_panel>>
+<<jump PetIntroduction>>
 ===
 
 title: PetIntroduction
@@ -192,6 +198,7 @@ tags: tutorial onboarding
     {$companionName}: Keep your eyes open out there too. The best nodes are further from the village — and more dangerous.
 <<endif>>
 
+<<jump TutorialComplete>>
 ===
 
 title: TutorialComplete
