@@ -34,7 +34,7 @@
       },
       "orientation": {
         "corrected": true,
-        "manual": false,
+        "manual": true,
         "euler": [
           270.0,
           0.0,
@@ -46,7 +46,7 @@
           0.0
         ],
         "scale": 1.0,
-        "note": "lying flat (Y shortest 0.37m, longest Z 1.00m) - stood up to +Y"
+        "note": "manual: -90/270 X to stand tower2 upright (Z->+Y); +90 inverts. owner 2026-06-05"
       }
     },
     {
@@ -82,7 +82,7 @@
       },
       "orientation": {
         "corrected": true,
-        "manual": false,
+        "manual": true,
         "euler": [
           270.0,
           0.0,
@@ -94,7 +94,7 @@
           0.0
         ],
         "scale": 1.0,
-        "note": "lying flat (Y shortest 0.37m, longest Z 1.00m) - stood up to +Y"
+        "note": "manual: -90/270 X to stand tower2 upright (Z->+Y); +90 inverts. owner 2026-06-05"
       }
     },
     {
@@ -129,7 +129,7 @@
       },
       "orientation": {
         "corrected": true,
-        "manual": false,
+        "manual": true,
         "euler": [
           270.0,
           0.0,
@@ -137,11 +137,11 @@
         ],
         "offset": [
           0.0,
-          0.001,
+          0.0,
           0.0
         ],
         "scale": 1.0,
-        "note": "lying flat (Y shortest 0.44m, longest Z 1.00m) - stood up to +Y"
+        "note": "manual: -90/270 X to stand tower2 upright (Z->+Y); +90 inverts. owner 2026-06-05"
       }
     },
     {
@@ -176,7 +176,7 @@
       },
       "orientation": {
         "corrected": true,
-        "manual": false,
+        "manual": true,
         "euler": [
           270.0,
           0.0,
@@ -184,11 +184,11 @@
         ],
         "offset": [
           0.0,
-          0.001,
+          0.0,
           0.0
         ],
         "scale": 1.0,
-        "note": "lying flat (Y shortest 0.44m, longest Z 1.00m) - stood up to +Y"
+        "note": "manual: -90/270 X to stand tower2 upright (Z->+Y); +90 inverts. owner 2026-06-05"
       }
     },
     {
