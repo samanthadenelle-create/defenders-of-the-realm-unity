@@ -223,10 +223,12 @@ namespace DeNelle.Village
             var vs = _runner != null ? _runner.VariableStorage : null;
             if (vs == null) return;
 
+            // NOTE: $structureName is seeded by DialogueService.PlayStructure from the
+            // building's sign label (DisplayLabel) and intentionally NOT overwritten here,
+            // so the dialogue title matches the world sign. We only fill yield/cost/level.
             var def = Prog.ResourceBuildingProgression.Find(structureId);
             if (def == null)
             {
-                vs.SetValue("$structureName", Titleize(structureId));
                 vs.SetValue("$structureLevel", 0f);
                 vs.SetValue("$structureYield", 0f);
                 vs.SetValue("$upgradeCostText", "");
@@ -238,7 +240,6 @@ namespace DeNelle.Village
             bool maxed = Prog.ResourceBuildingState.IsMaxLevel(structureId);
             var lvlDef = Prog.ResourceBuildingState.CurrentDef(structureId);
 
-            vs.SetValue("$structureName", def.DisplayName);
             vs.SetValue("$structureLevel", level);
             vs.SetValue("$structureYield", Prog.ResourceBuildingState.CurrentYield(structureId));
             vs.SetValue("$upgradeCostText", maxed || lvlDef == null ? "" : FormatCost(lvlDef.UpgradeCost, lvlDef.MagicCost));

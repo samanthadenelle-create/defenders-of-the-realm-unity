@@ -84,7 +84,13 @@ namespace DeNelle.Village
         /// plays. The node + commands scope everything to that building's own data, so
         /// the same flow serves every structure ("rinse and repeat, just the parameter").
         /// </summary>
-        public static bool PlayStructure(string structureId)
+        /// <summary>Stops the current dialogue immediately (used by walk-away auto-close).</summary>
+        public static void Stop()
+        {
+            if (Current != null && Current.IsDialogueRunning) Current.Stop();
+        }
+
+        public static bool PlayStructure(string structureId, string displayName = null)
         {
             if (string.IsNullOrEmpty(structureId)) return false;
 
@@ -98,9 +104,17 @@ namespace DeNelle.Village
             }
 
             if (runner.VariableStorage != null)
+            {
                 runner.VariableStorage.SetValue("$structureId", structureId);
+                // Seed the player-facing name from the building's OWN sign label so the
+                // dialogue title matches the big-letters sign (e.g. "Forge", not the
+                // titleized id "Workshop"). CmdStructureStatus keeps it and only fills in
+                // yield/cost from the progression data.
+                if (!string.IsNullOrEmpty(displayName))
+                    runner.VariableStorage.SetValue("$structureName", displayName);
+            }
             runner.StartDialogue("StructureMenu").Forget();
-            Debug.Log($"[DialogueService] Structure menu for '{structureId}'.");
+            Debug.Log($"[DialogueService] Structure menu for '{structureId}' ('{displayName}').");
             return true;
         }
 

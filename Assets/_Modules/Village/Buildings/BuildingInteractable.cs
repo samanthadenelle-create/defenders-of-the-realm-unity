@@ -42,11 +42,16 @@ namespace DeNelle.Village
     {
         private const float ActivateRadius = 6f;
         private const float ProximityHeightAboveBuilding = 3.2f;
+        // Walk-away auto-close: once the hero is this far from the building, close the
+        // structure dialogue it opened (generous buffer past ActivateRadius so it only
+        // closes on a clear walk-away, not at the edge).
+        private const float StructureCloseRadius = ActivateRadius + 4f;
 
         private Building _building;
         private Transform _hero;
         private GameObject _promptGo;
         private TextMesh _promptText;
+        private bool _openedStructure;   // this building opened the shared structure dialogue
 
         private void Awake()
         {
@@ -71,6 +76,19 @@ namespace DeNelle.Village
 
             float distSqr = (_hero.position - transform.position).sqrMagnitude;
             bool inRange = distSqr <= ActivateRadius * ActivateRadius;
+
+            // Walk-away auto-close: if this building opened the structure dialogue and the
+            // hero has wandered off (or the dialogue already ended), close + clear.
+            if (_openedStructure)
+            {
+                if (!DialogueService.IsRunning)
+                    _openedStructure = false;
+                else if (distSqr > StructureCloseRadius * StructureCloseRadius)
+                {
+                    DialogueService.Stop();
+                    _openedStructure = false;
+                }
+            }
 
             // DEF-203: register the shared on-screen Interact button while in range so
             // touch/mobile (no keyboard) can fire the same action. Desktop F unchanged.
@@ -153,10 +171,18 @@ namespace DeNelle.Village
             // parameter differs. Falls through to the legacy panels for the rest
             // (ArcaneTower → Hero Talents, Workshop → Crafting).
             string hookId = StructureHookIdFor(_building);
-            if (hookId != null && DialogueService.PlayStructure(hookId))
+            if (hookId != null)
             {
-                Debug.Log($"[BuildingInteractable] {_building.Type} → structure dialogue '{hookId}'.");
-                return;
+                // Pass the building's OWN sign label so the dialogue title matches the
+                // big-letters world sign (DisplayLabel = "Forge"), not the titleized id.
+                string label = !string.IsNullOrEmpty(_building.DisplayLabel)
+                    ? _building.DisplayLabel : LabelFor(_building.Type);
+                if (DialogueService.PlayStructure(hookId, label))
+                {
+                    _openedStructure = true;   // walk-away auto-close watches this
+                    Debug.Log($"[BuildingInteractable] {_building.Type} → structure dialogue '{hookId}' ('{label}').");
+                    return;
+                }
             }
 
             // DEF-213: open the ONE panel this specific building owns, by id, through
