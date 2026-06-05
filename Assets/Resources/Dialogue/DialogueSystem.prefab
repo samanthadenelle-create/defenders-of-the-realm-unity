@@ -1000,7 +1000,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 5376235608711673741}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: c1408e1ce69e8401280cd9cad77ff96d, type: 3}
+  m_Script: {fileID: 11500000, guid: ac6c766c5d7acaa4cbae1ab6b2c88088, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
   canvasGroup: {fileID: 9064126791240372875}
@@ -1041,7 +1041,7 @@ MonoBehaviour:
   changeOptionSelection: {fileID: 8300000, guid: b9a0d33381c334b93a5a7252a2b6cc49, type: 3}
   useAudio: 1
   useOptions: 1
-  useIcons: 0
+  useIcons: 1
   useAppearanceAnimation: 1
   useActionButton: 0
   useLetterbox: 1

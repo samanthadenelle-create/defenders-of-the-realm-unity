@@ -150,19 +150,36 @@ namespace DeNelle.Editor
 
             var pso = new SerializedObject(presenter);
 
-            // Turn OFF the ClassicRPG chrome the owner doesn't want, via the package's
-            // OWN feature-flag booleans (the documented override — no fork). The
-            // backing fields are [ShowIf(useX)] so disabling the flag also suppresses
-            // their [MustNotBeNull] validation.
-            //   useActionButton — the blue "Next / Decide / Return" prompt bar up top
-            //                     (redundant now that tap/click advances via LineAdvancer)
-            //   useIcons        — the speaker icon slot (the decorative hearts)
+            // Swap the presenter to our portrait-aware subclass so the icon slot
+            // shows the SPEAKER's portrait (keyed off the line's CharacterName).
+            // Found by type name so THIS editor assembly needs no hard reference to
+            // DeNelle.DialogueUI — same reflection-light pattern as the finders.
+            // The subclass inherits every serialized field, so the swap preserves
+            // all the prefab's wiring; if it's missing we keep the base presenter.
+            MonoScript portrait = FindMonoScript("DeNelle.DialogueUI.CompanionDialoguePresenter");
+            if (portrait != null)
+            {
+                var sp = pso.FindProperty("m_Script");
+                if (sp != null) sp.objectReferenceValue = portrait;
+            }
+            else
+            {
+                Debug.LogWarning("[DialogueAdvanceSetup] CompanionDialoguePresenter not found — speaker " +
+                                 "portraits NOT wired (using the base ClassicRPG presenter).");
+            }
+
+            // Chrome via the package's OWN feature-flag booleans (documented override,
+            // no fork; [ShowIf(useX)] gates suppress [MustNotBeNull] when off):
+            //   useActionButton OFF — the blue "Next / Decide / Return" prompt bar up
+            //                         top (tap/click advance via LineAdvancer replaces it)
+            //   useIcons        ON  — the icon slot now shows the SPEAKER PORTRAIT
+            //                         (resolved by the subclass; was the placeholder hearts)
             SetPresenterBool(pso, "useActionButton", false);
-            SetPresenterBool(pso, "useIcons", false);
+            SetPresenterBool(pso, "useIcons", true);
             pso.ApplyModifiedPropertiesWithoutUndo();
 
-            // Belt-and-suspenders: deactivate the leftover decorative "Heart" objects
-            // the sample box ships with, in case any sit outside the icon container.
+            // The sample's standalone decorative "Heart" objects are separate from the
+            // portrait slot — deactivate them so only the portrait shows.
             DeactivateByNamePrefix(root, "Heart");
 
             SerializedProperty img = pso.FindProperty("lineCompleteImage");
@@ -191,6 +208,19 @@ namespace DeNelle.Editor
         }
 
         // ── Chrome helpers ───────────────────────────────────────────────────
+
+        // Find the MonoScript asset for a type by full name (no asmdef reference).
+        static MonoScript FindMonoScript(string typeFullName)
+        {
+            string simple = typeFullName.Substring(typeFullName.LastIndexOf('.') + 1);
+            foreach (string guid in AssetDatabase.FindAssets(simple + " t:MonoScript"))
+            {
+                var ms = AssetDatabase.LoadAssetAtPath<MonoScript>(AssetDatabase.GUIDToAssetPath(guid));
+                var c = ms != null ? ms.GetClass() : null;
+                if (c != null && c.FullName == typeFullName) return ms;
+            }
+            return null;
+        }
 
         static void SetPresenterBool(SerializedObject pso, string prop, bool val)
         {
