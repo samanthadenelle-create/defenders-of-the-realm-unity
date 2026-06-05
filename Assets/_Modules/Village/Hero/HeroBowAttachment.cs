@@ -43,15 +43,15 @@ namespace DeNelle.Village
         // today (see file header), so LoadBowPrefab() simply returns null then.
         private const string _resourcesBowPath = "Heroes/Props/Bow";
 
-        // Local transform of the bow under the LEFT-hand bone. Tuned for the KayKit
-        // bow_withString prop (Resources/Heroes/Props/Bow): its limbs run along local
-        // Z and it is ~2 m long, so we rotate Z->vertical and scale it down to a ~1.3 m
-        // held longbow. NOTE: the exact rotation depends on the hand-bone axes and is
-        // the most likely value to need a visual nudge in-editor — tweak these three.
-        // Units are bone-local metres / degrees.
+        // The bow is first NORMALIZED (NormalizeInto) to the owner's spec — longest axis
+        // (limbs) on local +Y, narrowest on +X, grip at the centre of the longest part,
+        // scaled to BowHeldLength. These then place that normalized bow in the hand bone;
+        // because the bow is normalized, GripLocalEuler is a single predictable hand-
+        // orientation tweak (not a guess against an arbitrary FBX). Bone-local m / deg.
         private static readonly Vector3 GripLocalPosition = new Vector3(0f, 0f, 0f);
-        private static readonly Vector3 GripLocalEuler    = new Vector3(90f, 0f, 0f);
-        private static readonly Vector3 GripLocalScale    = new Vector3(0.65f, 0.65f, 0.65f);
+        private static readonly Vector3 GripLocalEuler    = new Vector3(0f, 0f, 0f);
+        // Target held length of the longest (limb) axis, in metres.
+        private const float BowHeldLength = 1.3f;
 
         private Animator _animator;
         private GameObject _bow;
@@ -131,15 +131,78 @@ namespace DeNelle.Village
             foreach (var c in prop.GetComponentsInChildren<Collider>(true)) if (c != null) Destroy(c);
             foreach (var rb in prop.GetComponentsInChildren<Rigidbody>(true)) if (rb != null) Destroy(rb);
 
-            prop.transform.SetParent(leftHand, false);
-            prop.transform.localPosition = GripLocalPosition;
-            prop.transform.localRotation = Quaternion.Euler(GripLocalEuler);
-            prop.transform.localScale = GripLocalScale;
+            // Auto-orient the bow to the owner's spec inside a grip root (deterministic,
+            // FBX-orientation-independent): longest axis -> +Y, narrowest -> +X, centred.
+            var bowRoot = new GameObject("BowProp");
+            NormalizeInto(prop, bowRoot.transform, BowHeldLength);
 
-            _bow = prop;
-            Debug.Log("[HeroBowAttachment] Bow attached to LeftHand bone '" + leftHand.name +
-                      "' (local pos " + GripLocalPosition + ", euler " + GripLocalEuler + ").");
+            bowRoot.transform.SetParent(leftHand, false);
+            bowRoot.transform.localPosition = GripLocalPosition;
+            bowRoot.transform.localRotation = Quaternion.Euler(GripLocalEuler);
+
+            _bow = bowRoot;
+            Debug.Log("[HeroBowAttachment] Bow attached + auto-oriented (long axis vertical, narrow X, " +
+                      "grip-centred) to LeftHand bone '" + leftHand.name + "'.");
             enabled = false;
+        }
+
+        /// <summary>
+        /// Parents <paramref name="prop"/> under <paramref name="parent"/> and orients it to
+        /// the owner's spec: the model's LONGEST axis -> parent +Y (vertical limbs), its
+        /// NARROWEST axis -> parent +X (thin left-right; curve depth falls to +Z), the bounds
+        /// CENTRE at the parent origin (hand grips the middle of the longest part), scaled so
+        /// the longest axis is <paramref name="targetLength"/> m. Deterministic from renderer
+        /// bounds — any bow/weapon FBX lands right without hand-guessed Euler angles.
+        /// </summary>
+        private static void NormalizeInto(GameObject prop, Transform parent, float targetLength)
+        {
+            prop.transform.SetParent(parent, false);
+            prop.transform.localPosition = Vector3.zero;
+            prop.transform.localRotation = Quaternion.identity;
+            prop.transform.localScale = Vector3.one;
+
+            if (!TryLocalBounds(prop, parent, out Bounds b0)) return;
+            Vector3 sz = b0.size;
+            int lng = (sz.x >= sz.y && sz.x >= sz.z) ? 0 : (sz.y >= sz.z ? 1 : 2);
+            int sht = (sz.x <= sz.y && sz.x <= sz.z) ? 0 : (sz.y <= sz.z ? 1 : 2);
+            if (sht == lng) sht = (lng + 1) % 3;
+
+            // Longest axis -> +Y.
+            Quaternion alignLong = Quaternion.FromToRotation(Axis(lng), Vector3.up);
+            prop.transform.localRotation = alignLong;
+
+            // Shortest axis -> +X (yaw only).
+            Vector3 shortAfter = alignLong * Axis(sht); shortAfter.y = 0f;
+            if (shortAfter.sqrMagnitude > 1e-5f)
+                prop.transform.localRotation =
+                    Quaternion.FromToRotation(shortAfter.normalized, Vector3.right) * alignLong;
+
+            // Scale longest (now Y) to the target held length.
+            if (TryLocalBounds(prop, parent, out Bounds b1) && b1.size.y > 1e-4f)
+                prop.transform.localScale = Vector3.one * (targetLength / b1.size.y);
+
+            // Recentre so the grip is the middle of the longest part.
+            if (TryLocalBounds(prop, parent, out Bounds b2))
+                prop.transform.localPosition -= b2.center;
+        }
+
+        private static Vector3 Axis(int i) => i == 0 ? Vector3.right : i == 1 ? Vector3.up : Vector3.forward;
+
+        /// <summary>Combined renderer bounds of <paramref name="prop"/> in <paramref name="parent"/>'s local space.</summary>
+        private static bool TryLocalBounds(GameObject prop, Transform parent, out Bounds bounds)
+        {
+            bounds = new Bounds();
+            bool any = false;
+            foreach (var r in prop.GetComponentsInChildren<Renderer>(true))
+            {
+                if (r == null) continue;
+                Bounds wb = r.bounds;
+                Vector3 c = parent.InverseTransformPoint(wb.center);
+                Vector3 e = parent.InverseTransformVector(wb.extents);
+                var lb = new Bounds(c, new Vector3(Mathf.Abs(e.x), Mathf.Abs(e.y), Mathf.Abs(e.z)) * 2f);
+                if (!any) { bounds = lb; any = true; } else bounds.Encapsulate(lb);
+            }
+            return any;
         }
 
         /// <summary>Loads an optional committed bow prefab from Resources; null when absent.</summary>
