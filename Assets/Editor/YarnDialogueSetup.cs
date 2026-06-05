@@ -58,6 +58,14 @@ namespace DeNelle.Editor
             if (!AssetDatabase.IsValidFolder(DstDir))
                 AssetDatabase.CreateFolder("Assets/Resources", "Dialogue");
 
+            // FORCE-REIMPORT the .yarnproject FIRST. Unity does NOT auto-reimport a
+            // .yarnproject when its referenced .yarn files change (no declared asset
+            // dependency), so it can sit with an EMPTY compiled program — the root cause
+            // of the runtime "No nodes have been loaded" error. A forced reimport
+            // recompiles the .yarn sources into the project before we load + validate it.
+            AssetDatabase.ImportAsset(ProjectPath, ImportAssetOptions.ForceUpdate);
+            AssetDatabase.Refresh();
+
             var project = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(ProjectPath);
             if (project == null)
             {
