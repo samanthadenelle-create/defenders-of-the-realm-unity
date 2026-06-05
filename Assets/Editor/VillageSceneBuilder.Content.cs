@@ -516,6 +516,22 @@ namespace DeNelle.Editor
             int count = 0;
             foreach (var b in Buildings)
             {
+                PlaceBuilding(parent, b, controller, seatToGround: false);
+                count++;
+            }
+            return count;
+        }
+
+        /// <summary>
+        /// Places ONE building (KayKit/poly/Tripo model + footprint collider + Building
+        /// component + forge yard) under <paramref name="parent"/> at its spec position.
+        /// Extracted from BuildBuildings so the Village2 injector can reuse the EXACT
+        /// placement (if-not-exists, delta-only). <paramref name="seatToGround"/>
+        /// raycasts the plot down onto the scene ground (Village2's terrain Y may differ
+        /// from the legacy Village's Y=0). Returns the plot root GameObject.
+        /// </summary>
+        private static GameObject PlaceBuilding(Transform parent, BuildingPlacement b, Component controller, bool seatToGround)
+        {
                 var go = new GameObject($"Building-{b.Id} ({b.Label})");
                 go.transform.SetParent(parent, false);
                 go.transform.position = new Vector3(b.X, 0f, b.Z);
@@ -668,9 +684,29 @@ namespace DeNelle.Editor
                 if (string.Equals(b.Id, "workshop", StringComparison.OrdinalIgnoreCase))
                     BuildForgeYard(go.transform);
 
-                count++;
-            }
-            return count;
+                // Village2 injection: drop the plot onto the scene ground (its terrain
+                // Y may differ from the legacy Village's Y=0). No-op for the legacy path.
+                if (seatToGround) SeatBuildingOnGround(go);
+                return go;
+        }
+
+        /// <summary>
+        /// Raycasts a building plot straight down onto the scene ground/terrain and sets
+        /// its Y so it sits flush (used by the Village2 injector). Falls back to Y=0 if
+        /// nothing is hit. Temporarily ignores the plot's own footprint collider so the
+        /// ray doesn't hit itself.
+        /// </summary>
+        private static void SeatBuildingOnGround(GameObject go)
+        {
+            if (go == null) return;
+            var ownCols = go.GetComponentsInChildren<Collider>(true);
+            foreach (var c in ownCols) if (c != null) c.enabled = false;
+            Vector3 p = go.transform.position;
+            float y = 0f;
+            if (Physics.Raycast(new Vector3(p.x, 200f, p.z), Vector3.down, out var hit, 1000f))
+                y = hit.point.y;
+            go.transform.position = new Vector3(p.x, y, p.z);
+            foreach (var c in ownCols) if (c != null) c.enabled = true;
         }
 
         // Committed Blacksmith asset pack (NOT gitignored, unlike polyperfect) — the
