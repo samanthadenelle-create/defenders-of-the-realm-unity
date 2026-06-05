@@ -253,6 +253,12 @@ namespace DeNelle.Village
             // Safety net: if Tripo's embedded textures didn't extract, paint
             // the body with a class tint so the mesh isn't solid white.
             ApplyClassTint(body, cls);
+            // DEF: the Ranger/Archer fires arrows via the projectile system but held
+            // NOTHING — give him a visible bow. Bow goes in the LEFT (off/bow) hand
+            // since HeroAimIK draws with the RightHand IK goal. Cosmetic only; the
+            // component null-guards a missing bone and never blocks the hero.
+            if (cls == HeroClass.Ranger)
+                HeroBowAttachment.AttachTo(gameObject, body);
             Debug.Log("[HeroBodySwapper] Swapped hero body to " + slug + ".fbx");
         }
 
