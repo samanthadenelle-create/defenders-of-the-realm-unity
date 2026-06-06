@@ -45,6 +45,18 @@ namespace DeNelle.Village
         private static AudioClip s_waveStart;
         private static AudioClip s_lookoutHorn;
 
+        // WO-111 Chunk 10: New combat / world SFX (procedural generated for no-asset safety;
+        // drop-in Resources/Sfx/ overrides supported like existing). Routed exclusively
+        // through CoreServices.Audio?.PlaySfx (mixer groups for mobile volume/perf).
+        private static AudioClip s_swordClash;
+        private static AudioClip s_spellCast;
+        private static AudioClip s_towerArrowHit;
+        private static AudioClip s_petHarvest;
+        private static AudioClip s_buildingUpgrade;
+        private static AudioClip s_levelUp;
+        private static AudioClip s_enemyDeath;
+        private static AudioClip s_heroHit;
+
         /// <summary>
         /// Plays the tower-fire "pew" through CoreServices.Audio. Quiet by design —
         /// many towers can fire at once, so this is mixed low to avoid a wall of
@@ -94,6 +106,64 @@ namespace DeNelle.Village
                 s_lookoutHorn = Resources.Load<AudioClip>("Sfx/LookoutHorn");
             if (s_lookoutHorn != null)
                 CoreServices.Audio?.PlaySfx(s_lookoutHorn, 0.85f);
+        }
+
+        // WO-111 new SFX (combat / world / progression). All via CoreServices.Audio
+        // (mixer for mobile). Generated or Resources/Sfx/ override.
+        public static void PlaySwordClash()
+        {
+            if (s_swordClash == null)
+                s_swordClash = Resources.Load<AudioClip>("Sfx/SwordClash") ?? GenerateSwordClash();
+            CoreServices.Audio?.PlaySfx(s_swordClash, 0.65f);
+        }
+
+        public static void PlaySpellCast()
+        {
+            if (s_spellCast == null)
+                s_spellCast = Resources.Load<AudioClip>("Sfx/SpellCast") ?? GenerateSpellCast();
+            CoreServices.Audio?.PlaySfx(s_spellCast, 0.55f);
+        }
+
+        public static void PlayTowerArrowHit()
+        {
+            if (s_towerArrowHit == null)
+                s_towerArrowHit = Resources.Load<AudioClip>("Sfx/TowerArrowHit") ?? GenerateTowerArrowHit();
+            CoreServices.Audio?.PlaySfx(s_towerArrowHit, 0.4f);
+        }
+
+        public static void PlayPetHarvest()
+        {
+            if (s_petHarvest == null)
+                s_petHarvest = Resources.Load<AudioClip>("Sfx/PetHarvest") ?? GeneratePetHarvest();
+            CoreServices.Audio?.PlaySfx(s_petHarvest, 0.5f);
+        }
+
+        public static void PlayBuildingUpgrade()
+        {
+            if (s_buildingUpgrade == null)
+                s_buildingUpgrade = Resources.Load<AudioClip>("Sfx/BuildingUpgrade") ?? GenerateBuildingUpgrade();
+            CoreServices.Audio?.PlaySfx(s_buildingUpgrade, 0.75f);
+        }
+
+        public static void PlayLevelUp()
+        {
+            if (s_levelUp == null)
+                s_levelUp = Resources.Load<AudioClip>("Sfx/LevelUp") ?? GenerateLevelUp();
+            CoreServices.Audio?.PlaySfx(s_levelUp, 0.9f);
+        }
+
+        public static void PlayEnemyDeath()
+        {
+            if (s_enemyDeath == null)
+                s_enemyDeath = Resources.Load<AudioClip>("Sfx/EnemyDeath") ?? GenerateEnemyDeath();
+            CoreServices.Audio?.PlaySfx(s_enemyDeath, 0.6f);
+        }
+
+        public static void PlayHeroHit()
+        {
+            if (s_heroHit == null)
+                s_heroHit = Resources.Load<AudioClip>("Sfx/HeroHit") ?? GenerateHeroHit();
+            CoreServices.Audio?.PlaySfx(s_heroHit, 0.5f);
         }
 
         // ── Procedural generation (fresh-clone-safe) ─────────────────────────
@@ -163,6 +233,48 @@ namespace DeNelle.Village
             var clip = AudioClip.Create(name, n, 1, Rate, false);
             clip.SetData(data, 0);
             return clip;
+        }
+
+        // ── WO-111 missing generators (called from the Play* methods) ────────
+
+        private static AudioClip GenerateSwordClash()
+        {
+            return Synth("sfx_sword_clash", dur: 0.12f, f0: 900f, f1: 350f, noise: 0.55f, amp: 0.85f, seed: 0xA2C3, decay: 3.2f);
+        }
+
+        private static AudioClip GenerateSpellCast()
+        {
+            return Synth("sfx_spell_cast", dur: 0.28f, f0: 420f, f1: 780f, noise: 0.25f, amp: 0.6f, seed: 0x7E3B, decay: 2.8f);
+        }
+
+        private static AudioClip GenerateTowerArrowHit()
+        {
+            return Synth("sfx_arrow_hit", dur: 0.09f, f0: 1100f, f1: 520f, noise: 0.35f, amp: 0.7f, seed: 0x4D1F, decay: 4.5f);
+        }
+
+        private static AudioClip GeneratePetHarvest()
+        {
+            return Synth("sfx_pet_harvest", dur: 0.18f, f0: 310f, f1: 180f, noise: 0.45f, amp: 0.55f, seed: 0xB9E2, decay: 2.1f);
+        }
+
+        private static AudioClip GenerateBuildingUpgrade()
+        {
+            return Synth("sfx_build_upgrade", dur: 0.22f, f0: 260f, f1: 620f, noise: 0.18f, amp: 0.75f, seed: 0x3C8A, decay: 3.0f);
+        }
+
+        private static AudioClip GenerateLevelUp()
+        {
+            return Synth("sfx_level_up", dur: 0.35f, f0: 520f, f1: 980f, noise: 0.08f, amp: 0.65f, seed: 0xF1D4, decay: 1.8f);
+        }
+
+        private static AudioClip GenerateEnemyDeath()
+        {
+            return Synth("sfx_enemy_death", dur: 0.55f, f0: 180f, f1: 95f, noise: 0.30f, amp: 0.8f, seed: 0x2E6C, decay: 1.6f);
+        }
+
+        private static AudioClip GenerateHeroHit()
+        {
+            return Synth("sfx_hero_hit", dur: 0.11f, f0: 380f, f1: 210f, noise: 0.40f, amp: 0.9f, seed: 0x9A1B, decay: 3.8f);
         }
     }
 }

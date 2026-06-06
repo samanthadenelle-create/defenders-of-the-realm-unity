@@ -105,7 +105,6 @@ namespace DeNelle.Village
             labelGo.transform.SetParent(canvasGo.transform, false);
             _label = labelGo.AddComponent<Text>();
             _label.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            if (_label.font == null) _label.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
             _label.alignment = TextAnchor.MiddleCenter;
             _label.horizontalOverflow = HorizontalWrapMode.Overflow;
             _label.verticalOverflow   = VerticalWrapMode.Overflow;

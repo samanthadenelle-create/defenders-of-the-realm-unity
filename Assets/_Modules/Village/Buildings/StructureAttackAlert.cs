@@ -99,11 +99,23 @@ namespace DeNelle.Village
             }
         }
 
+        // Global cooldown so a swarm hitting MANY structures blasts ONE warning horn,
+        // not a wall of overlapping horns — reads as an alarm, not spam.
+        private static float s_lastHornTime = -999f;
+        private const float HornCooldown = 8f;
+
         private void OnHit()
         {
             _lastHitTime    = Time.time;
             _flashIntensity = FlashPeak;
             if (_flash != null) { _flash.enabled = true; _flash.intensity = FlashPeak; }
+
+            // "Structure under attack" warning — the lookout horn, globally debounced.
+            if (Time.time - s_lastHornTime >= HornCooldown)
+            {
+                s_lastHornTime = Time.time;
+                GameSfx.PlayLookoutHorn();
+            }
         }
 
         // ── Build the transient red flash light ───────────────────────────────
@@ -164,8 +176,7 @@ namespace DeNelle.Village
             tm.anchor = TextAnchor.MiddleCenter;
             tm.alignment = TextAlignment.Center;
             tm.color = Color.white;
-            Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf")
-                        ?? Resources.GetBuiltinResource<Font>("Arial.ttf");
+            Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             if (font != null)
             {
                 tm.font = font;
