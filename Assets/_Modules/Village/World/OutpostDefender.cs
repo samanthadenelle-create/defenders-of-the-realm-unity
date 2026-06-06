@@ -31,6 +31,8 @@ namespace DeNelle.Village.World
         private float _hp;
         private float _nextAttack;
         private Transform _currentTarget;
+        private int _enemyMask;
+        private static readonly Collider[] _scanBuf = new Collider[48];
 
         public bool IsAlive => _hp > 0f;
 
@@ -49,6 +51,8 @@ namespace DeNelle.Village.World
         {
             _hp = MaxHp;
             if (GuardPost == Vector3.zero) GuardPost = transform.position;
+            _enemyMask = LayerMask.GetMask("Enemy");
+            if (_enemyMask == 0) _enemyMask = ~0;   // Enemy layer undefined -> fall back to all
         }
 
         private void Update()
@@ -116,20 +120,22 @@ namespace DeNelle.Village.World
 
         private Transform FindNearestHostile(float radius)
         {
-            // Very broad — looks for anything tagged Enemy or with an Enemy component, or our own raider proxies.
-            var all = Physics.OverlapSphere(transform.position, radius);
+            // NonAlloc scan of the Enemy layer (was a full-scene OverlapSphere with no mask +
+            // a per-call array alloc). Nearest valid hostile by sqrMagnitude.
+            int n = Physics.OverlapSphereNonAlloc(transform.position, radius, _scanBuf, _enemyMask, QueryTriggerInteraction.Collide);
             Transform best = null;
-            float bestDist = float.MaxValue;
+            float bestSqr = float.MaxValue;
 
-            foreach (var hit in all)
+            for (int i = 0; i < n; i++)
             {
+                var hit = _scanBuf[i];
                 if (hit == null || hit.transform == transform) continue;
                 if (!IsValidTarget(hit.transform)) continue;
 
-                float d = Vector3.Distance(transform.position, hit.transform.position);
-                if (d < bestDist)
+                float sqr = (hit.transform.position - transform.position).sqrMagnitude;
+                if (sqr < bestSqr)
                 {
-                    bestDist = d;
+                    bestSqr = sqr;
                     best = hit.transform;
                 }
             }
@@ -139,9 +145,10 @@ namespace DeNelle.Village.World
         private bool IsValidTarget(Transform t)
         {
             if (t == null) return false;
-            // Hostile if tagged Enemy, has Enemy component, or is one of our HarvestSiteRaider proxies.
+            // The scan is masked to the Enemy layer, so a hit on that layer already qualifies.
+            // Keep tag + raider-name as fallbacks (drops the slow string-based GetComponent).
+            if (((1 << t.gameObject.layer) & _enemyMask) != 0) return true;
             if (t.CompareTag("Enemy")) return true;
-            if (t.GetComponent("Enemy") != null) return true;
             if (t.name.Contains("Raider") || t.name.Contains("HarvestRaider")) return true;
             return false;
         }
