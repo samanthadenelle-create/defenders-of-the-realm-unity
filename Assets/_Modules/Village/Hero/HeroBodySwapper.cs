@@ -430,14 +430,20 @@ namespace DeNelle.Village
                 // because textures inside an FBX's *.fbm import-artifact folder are NOT reliably
                 // Resources.Load-able in a player build. Heroes/Textures/* is a guaranteed-loadable
                 // plain folder. This is the same wizard atlas, just from the reliable location.
-                HeroClass.Mage => "Heroes/Textures/fantasywizard3dmodel_basecolor",
+                // WO-286: the re-rigged Mage mesh's own basecolor is the "witch" atlas
+                // (it shipped base-color only); the old "wizard" path bound a different
+                // mesh's texture → wrong colors. Point at the mesh's own basecolor.
+                HeroClass.Mage => "Heroes/Textures/fantasywitch3dmodel_basecolor",
                 // DEF-267: the Knight is also a LEGACY Tripo body whose FBX material remap doesn't
                 // resolve → grey. WO-35 had returned null (to dodge a blood-splatter look the owner
                 // disliked), but that left the Knight GREY in the build, which is worse. Bind the
                 // clean medieval-knight atlas from the plain (reliably loadable) Heroes/Textures/
                 // folder — textured beats grey for go-live. ApplyClassTint's steel fallback now
                 // only fires on any slot this atlas genuinely doesn't cover.
-                HeroClass.Knight => "Heroes/Textures/medievalknight3dmodel_basecolor",
+                // WO-286: the re-rigged Knight mesh ships TWO sets — its real
+                // knight_basecolor and a stray remesh_12_combined_Bake raw bake. Bind the
+                // knight basecolor (the old medievalknight path was a different mesh).
+                HeroClass.Knight => "Heroes/Textures/knight_basecolor",
                 // DEF-229 (2026-06-03): the Ranger body is now the CC5/CC_Base adult
                 // archer (InstaLOD-remeshed: ONE combined mesh + ONE baked PBR atlas),
                 // imported Humanoid by PeopleCharacterImporter.ImportRangerCC5 into
@@ -457,7 +463,9 @@ namespace DeNelle.Village
                 // PeopleCharacterImporter.ImportClericCC5 with its baked basecolor copied
                 // to Resources/Heroes/Cleric_tex/. Bind that diffuse so the Cleric reads
                 // textured (was falling through to a flat class tint before).
-                HeroClass.Cleric => "Heroes/Cleric_tex/HumanCleric_basecolor",
+                // WO-286: the re-rigged Cleric is the only clean set — its own basecolor
+                // is Cleric_basecolor (the old HumanCleric_tex path was the prior CC5 body).
+                HeroClass.Cleric => "Heroes/Textures/Cleric_basecolor",
                 _ => null,
             };
             if (string.IsNullOrEmpty(texPath)) return;
