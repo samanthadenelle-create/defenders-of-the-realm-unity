@@ -447,7 +447,11 @@ namespace DeNelle.Village
                 // correct — each slot samples its UV region. Repointed off the retired
                 // Tripo "archer v2" basecolor (Textures/Ranger) to the CC5 bake so the
                 // selected archer reads as the adult ranger, not the old spiky youth.
-                HeroClass.Ranger => "Heroes/Ranger_tex/remesh_12_combined_Bake_Diffuse",
+                // WO-286: the 2026-06-06 FBX swap removed Resources/Heroes/Ranger_tex/
+                // (the old CC5 bake) → the diffuse no longer loaded → Ranger fell back to
+                // the green species tint. Repoint to the canonical, reliably-loadable
+                // ranger diffuse that DOES exist in the plain Heroes/Textures/ folder.
+                HeroClass.Ranger => "Heroes/Textures/Archer_basecolor",
                 // DEF-232/229 (2026-06-03): the Cleric (Healer/Elara body) is now the
                 // owner's fresh CC5/CC_Base adult cleric, imported Humanoid by
                 // PeopleCharacterImporter.ImportClericCC5 with its baked basecolor copied
