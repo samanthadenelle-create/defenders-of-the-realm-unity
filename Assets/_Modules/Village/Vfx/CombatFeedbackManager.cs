@@ -83,6 +83,20 @@ namespace DeNelle.Village
         /// </summary>
         [SerializeField, Range(0f, 0.5f)] private float _hitStopMinIntervalSeconds = 0.12f;
 
+        // ── Kill slo-mo (the "death blow" beat) ───────────────────────────────
+        /// <summary>Time scale during a kill slo-mo dip — deeper + longer than the hit-stop,
+        /// so a finishing blow reads as a dramatic slow-time moment.</summary>
+        [Header("Kill Slo-Mo (death blow)")]
+        [SerializeField, Range(0.05f, 0.6f)] private float _killSloMoTimescale = 0.3f;
+        /// <summary>Real-time seconds the kill slo-mo lasts.</summary>
+        [SerializeField, Range(0.1f, 1f)] private float _killSloMoDurationSeconds = 0.45f;
+        /// <summary>Minimum REAL seconds between kill slo-mos so it stays a SPECIAL beat (one
+        /// per window) instead of a constant stutter when a swarm dies together. 0 = every kill.</summary>
+        [SerializeField, Range(0f, 12f)] private float _killSloMoMinIntervalSeconds = 6f;
+        /// <summary>Heavier camera kick on the slo-mo'd finisher.</summary>
+        [SerializeField, Range(0f, 1f)] private float _killSloMoShake = 0.18f;
+        [SerializeField, Range(0f, 0.6f)] private float _killSloMoShakeDuration = 0.35f;
+
         /// <summary>
         /// Lighter camera shake intensity on a surviving hit (landing-blow feel).
         /// Set to 0 to disable per-hit shake — death kills already shake harder via
@@ -121,6 +135,9 @@ namespace DeNelle.Village
 
         /// <summary>DEF-178: unscaled time the last hit-stop was allowed to start (rate cap).</summary>
         private float _lastHitStopTime = -999f;
+
+        private Coroutine _killSloMoRoutine;
+        private float _lastKillSloMoTime = -999f;
 
         // ── Events ────────────────────────────────────────────────────────────
 
@@ -225,7 +242,7 @@ namespace DeNelle.Village
             // per _hitStopMinIntervalSeconds so a multi-enemy AoE wave doesn't re-freeze
             // every frame. Extra hits inside the window still drive combo + shake + VFX
             // below; they just don't restart the time-freeze. Cap 0 = legacy uncapped.
-            if (Time.unscaledTime - _lastHitStopTime >= _hitStopMinIntervalSeconds)
+            if (_killSloMoRoutine == null && Time.unscaledTime - _lastHitStopTime >= _hitStopMinIntervalSeconds)
             {
                 _lastHitStopTime = Time.unscaledTime;
                 if (_hitStopRoutine != null) StopCoroutine(_hitStopRoutine);
@@ -247,6 +264,19 @@ namespace DeNelle.Village
             _killStreak++;
             _killStreakTimer = _killStreakWindowSeconds;
             OnKillStreakChanged?.Invoke(_killStreak);
+
+            // The "death blow" slo-mo beat — rate-capped so it lands as a SPECIAL moment
+            // (one per window), not a stutter when a swarm dies at once. The killing hit
+            // also fired a brief hit-stop; supersede it so the slow-time wins cleanly.
+            if (_killSloMoTimescale < 1f
+                && Time.unscaledTime - _lastKillSloMoTime >= _killSloMoMinIntervalSeconds)
+            {
+                _lastKillSloMoTime = Time.unscaledTime;
+                if (_hitStopRoutine != null) { StopCoroutine(_hitStopRoutine); _hitStopRoutine = null; }
+                if (_killSloMoRoutine != null) StopCoroutine(_killSloMoRoutine);
+                _killSloMoRoutine = StartCoroutine(KillSloMoRoutine());
+                if (_killSloMoShake > 0f) CameraShakeBridge.Shake(_killSloMoShake, _killSloMoShakeDuration);
+            }
         }
 
         private IEnumerator HitStopRoutine()
@@ -262,6 +292,22 @@ namespace DeNelle.Village
                 // MonoBehaviour destruction, scene unload).
                 Time.timeScale = 1f;
                 _hitStopRoutine = null;
+            }
+        }
+
+        // The deeper/longer slow-time dip for a finishing blow (see RegisterKill). Same
+        // safe pattern as HitStopRoutine — timeScale always restored in the finally.
+        private IEnumerator KillSloMoRoutine()
+        {
+            Time.timeScale = _killSloMoTimescale;
+            try
+            {
+                yield return new WaitForSecondsRealtime(_killSloMoDurationSeconds);
+            }
+            finally
+            {
+                Time.timeScale = 1f;
+                _killSloMoRoutine = null;
             }
         }
     }

@@ -245,6 +245,7 @@ namespace DeNelle.Village
 
             Collider[] hits = Physics.OverlapSphere(transform.position, EffectiveRange(), _enemyLayer);
 
+            bool anyHit = false;
             foreach (var col in hits)
             {
                 if (col == null) continue;
@@ -265,9 +266,20 @@ namespace DeNelle.Village
                 // entry point. (Non-Enemy IDamageable targets simply skip the extra feel,
                 // which is acceptable — only enemies are hostile melee targets.)
                 damageable.TakeDamage(damage, DamageElement.None);
+                anyHit = true;
 
                 if (isPerfect)
                     TriggerPerfectHitFeedback(hitPos);
+            }
+
+            // Impact audio — the meaty "connect" the swing was missing. Melee classes get a
+            // weapon clash; casters get a spell-hit zap. (TakeDamageFrom already plays the
+            // enemy's own hit grunt + the central hit-stop/shake; this is the WEAPON sound.)
+            if (anyHit)
+            {
+                string cls = _abilities != null ? _abilities.HeroClass : null;
+                if (cls == "mage" || cls == "cleric") GameSfx.PlaySpellCast();
+                else GameSfx.PlaySwordClash();
             }
 
             _isInSwing = false;
