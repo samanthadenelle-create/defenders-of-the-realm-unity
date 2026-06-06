@@ -219,11 +219,14 @@ namespace DeNelle.Editor
             GameObject houseC2 = LoadBuilding("HouseC2");
             GameObject houseD  = LoadBuilding("HouseD");
             GameObject kitTower = LoadBuilding("KitTower");
-            // Centrepiece tree: the Tree_Of_Life.fbx ships with NO materials (renders untextured
-            // blue — owner: "blue go away!!!"). Use a green/textured polyperfect tree as the
-            // centrepiece instead; fall back to the old prefab only if polyperfect isn't imported.
-            GameObject treeOfLife = LoadByName("SM_Tree_Round") ?? LoadByName("SM_Tree_Oak")
-                                    ?? LoadByName("SM_Tree_Baobab") ?? LoadAt(TreeOfLifePrefabPath, "TreeOfLife");
+            // Centrepiece tree: the enchanted Tree_Of_Life now HAS its basecolor
+            // (enchantedtree3dmodel_basecolor copied to Resources/Structures/TreeofLife_basecolor,
+            // auto-bound at runtime by TreeOfLifeMaterialFixer), so it no longer renders the
+            // untextured "blue" that forced the polyperfect placeholder. Prefer the real
+            // enchanted prefab; fall back to a polyperfect tree only if it's somehow missing.
+            GameObject treeOfLife = LoadAt(TreeOfLifePrefabPath, "TreeOfLife")
+                                    ?? LoadByName("SM_Tree_Round") ?? LoadByName("SM_Tree_Oak")
+                                    ?? LoadByName("SM_Tree_Baobab");
 
             GameObject wallStraight = LoadPiece("Wall_UnevenBrick_Straight.prefab");
             GameObject gatePrefab   = LoadPiece("Wall_Arch.prefab");

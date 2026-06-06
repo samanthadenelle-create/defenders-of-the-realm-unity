@@ -67,7 +67,7 @@ namespace DeNelle.Village
         // instead of haloing it. Runtime-attached (HeroControlEnsurer), so the code
         // default is what ships — no prefab override to chase.
         [Tooltip("Reticle world size (m).")]
-        [SerializeField, Min(0.1f)] private float _size = 0.8f;
+        [SerializeField, Min(0.1f)] private float _size = 0.5f;  // 2026-06-06: smaller, focused target
 
         [Tooltip("Reticle tint when auto-tracking the nearest hostile.")]
         [SerializeField] private Color _autoTint = new Color(1f, 0.88f, 0.30f, 0.95f);
@@ -364,7 +364,10 @@ namespace DeNelle.Village
             const int S = 64;
             var t = new Texture2D(S, S, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
             float c = (S - 1) * 0.5f;
-            const float outer = 30f, inner = 23f;
+            // Small "target" reticle: a THIN outer ring + a solid centre pip — reads as a
+            // crosshair/target that pinpoints the foe, not a big filled halo.
+            const float ringOuter = 30f, ringInner = 27f;  // thin rim band
+            const float dotRadius = 6f;                     // centre pip
             var clear = new Color(1f, 1f, 1f, 0f);
             for (int y = 0; y < S; y++)
             {
@@ -372,8 +375,10 @@ namespace DeNelle.Village
                 {
                     float dx = x - c, dy = y - c;
                     float r = Mathf.Sqrt(dx * dx + dy * dy);
-                    float band = Mathf.InverseLerp(outer, outer - 2f, r) * Mathf.InverseLerp(inner, inner + 2f, r);
-                    t.SetPixel(x, y, band > 0f ? new Color(1f, 1f, 1f, Mathf.Clamp01(band)) : clear);
+                    float ring = Mathf.InverseLerp(ringOuter, ringOuter - 2f, r) * Mathf.InverseLerp(ringInner, ringInner + 2f, r);
+                    float dot  = Mathf.InverseLerp(dotRadius, dotRadius - 2f, r);
+                    float a = Mathf.Clamp01(Mathf.Max(ring, dot));
+                    t.SetPixel(x, y, a > 0f ? new Color(1f, 1f, 1f, a) : clear);
                 }
             }
             t.Apply();
