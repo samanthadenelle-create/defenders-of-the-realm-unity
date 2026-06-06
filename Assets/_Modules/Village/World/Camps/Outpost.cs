@@ -111,16 +111,33 @@ namespace DeNelle.Village.World.Camps
             BankTrickle(EffectiveYield);
         }
 
-        // Bank into GameState via the SAME public path MineNode.BankYield uses
-        // (Village references Core, so the direct call is valid). Null-conditional
-        // on the cross-module singleton per CLAUDE.md. We do NOT edit GameState.
+        // Route through EconomyService (the central Economy class) so outpost passive
+        // trickle keeps Wood/Iron in-session in sync and fires OnChanged for any HUD
+        // listeners. Grant also handles the persisted Food/Crystals side. Matches the
+        // path now used by MineNode (pet + player harvest). Fallback to direct only if
+        // EconomyService is absent very early in bootstrap.
         private void BankTrickle(int amount)
         {
             if (amount <= 0) return;
+
+            var econ = EconomyService.Instance;
+            if (econ != null)
+            {
+                switch (Yields)
+                {
+                    case MineResource.Iron:          econ.Grant(iron: amount); break;
+                    case MineResource.Wood:          econ.Grant(wood: amount); break;
+                    case MineResource.Food:          econ.Grant(food: amount); break;
+                    case MineResource.AetherCrystal: econ.Grant(crystals: amount); break;
+                }
+                return;
+            }
+
+            // Fallback (rare): keep persistence even if EconomyService not yet up.
             var state = DeNelle.Core.State.GameStateService.Instance?.State;
             if (state == null)
             {
-                Debug.LogWarning("[Outpost] GameStateService.State null - harvest tick dropped.");
+                Debug.LogWarning("[Outpost] EconomyService null and GameStateService.State null - harvest tick dropped.");
                 return;
             }
             switch (Yields)

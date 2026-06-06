@@ -16,6 +16,7 @@
 // =============================================================================
 using UnityEngine;
 using DeNelle.Core.World;
+using DeNelle.Village.World;
 
 namespace DeNelle.Village
 {
@@ -237,6 +238,29 @@ namespace DeNelle.Village
         /// <summary>Claim (or release) the node for a worker. Idempotent.</summary>
         public void SetWorkerClaim(bool claimed) => _claimedByWorker = claimed;
 
+        /// <summary>
+        /// WO-106 continuation: convenience to turn this raw MineNode into a
+        /// claimed HarvestSite (visual structure + pet-assignable + Economy-routed
+        /// income). Returns the created site (or existing one if already wrapped).
+        /// All future income from this node position should prefer the site.
+        /// </summary>
+        public HarvestSite ClaimAsHarvestSite()
+        {
+            var existing = GetComponent<HarvestSite>();
+            if (existing != null) return existing;
+
+            var site = gameObject.AddComponent<HarvestSite>();
+            site.ResourceType = Resource;           // map MineResource 1:1
+            site.BaseYield = Mathf.Max(3, YieldPerExtract);
+            site.HarvestInterval = Mathf.Max(3f, ExtractCooldown * 0.7f);
+            site.ApplyWorldScaling = true;
+            site.Claim();
+
+            // Link back so the site can optionally drain us (finite nodes).
+            // The site will also route all its yields through EconomyService.AddResource.
+            return site;
+        }
+
         /// <summary>Worker-driven collect. Banks one extract IF the node is ready
         /// (not depleted, cooldown elapsed); returns the amount banked (0 if not ready).
         /// Reuses the exact same Extract() path as the manual [F] tap, so there is no
@@ -342,16 +366,35 @@ namespace DeNelle.Village
                       (_depleted ? ", depleted." : "."));
         }
 
-        // Core can't reference Village; we reach GameState by reflection-free direct
-        // call IF the type is accessible. GameState lives in DeNelle.Core.State and
-        // DeNelle.Village references DeNelle.Core, so the direct path is valid.
+        // Route through EconomyService (the Economy class) so:
+        // - In-session Wood/Iron mirrors stay in sync for CanAfford/build.
+        // - OnChanged fires for HUD / resource listeners.
+        // - Pet harvest (via TryAutoExtract) and player/ worker taps all use one faucet.
+        // Grant handles the GameState mutation for persisted (Food/Crystals) + ResourcesChanged.
+        // We still tolerate a direct state path as fallback for very early bootstrap.
         private void BankYield(int amount)
         {
+            if (amount <= 0) return;
+
+            var econ = EconomyService.Instance;
+            if (econ != null)
+            {
+                switch (Resource)
+                {
+                    case MineResource.Iron:          econ.Grant(iron: amount); break;
+                    case MineResource.Wood:          econ.Grant(wood: amount); break;
+                    case MineResource.Food:          econ.Grant(food: amount); break;
+                    case MineResource.AetherCrystal: econ.Grant(crystals: amount); break;
+                }
+                return;
+            }
+
+            // Fallback (should be rare): direct to GameState so persistence isn't lost.
             var state = DeNelle.Core.State.GameStateService.Instance != null
                 ? DeNelle.Core.State.GameStateService.Instance.State : null;
             if (state == null)
             {
-                Debug.LogWarning("[MineNode] GameStateService.Instance.State null — yield dropped.");
+                Debug.LogWarning("[MineNode] EconomyService null and GameStateService.State null — yield dropped.");
                 return;
             }
             switch (Resource)
@@ -360,8 +403,6 @@ namespace DeNelle.Village
                 case MineResource.Wood:          state.Wood += amount;          break;
                 case MineResource.Food:
                 {
-                    // Food banks into the wallet (Resources.Food) — a struct, so
-                    // read-whole / mutate / write-whole back.
                     var bal = state.Resources;
                     bal.Food += amount;
                     state.Resources = bal;
@@ -369,6 +410,7 @@ namespace DeNelle.Village
                 }
                 case MineResource.AetherCrystal: state.AetherCrystals += amount; break;
             }
+            DeNelle.Core.State.GameStateService.Instance?.ResourcesChanged?.Invoke();
         }
 
 #if UNITY_EDITOR

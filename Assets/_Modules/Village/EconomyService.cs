@@ -144,6 +144,35 @@ namespace DeNelle.Village
 
         public ResourceSnapshot Snapshot => new ResourceSnapshot(_wood, Food, _iron, Crystals);
 
+        // ── Pet / Outpost territory (WO-106: pet resource farming + outpost system) ──
+        // These let the economy be the single source for passive rates, secured count,
+        // and a simple difficulty/scaling multiplier consumed by wave systems later.
+        // Incremented by ClaimableCamp on successful defense secure. Pet harvest and
+        // outpost trickle both route through Grant so in-session mirrors + listeners
+        // (HUD) stay consistent with GameState.
+
+        /// <summary>Number of outposts successfully claimed + defended (secured) this run/save.</summary>
+        public int SecuredOutpostCount { get; private set; }
+
+        /// <summary>
+        /// Simple territory control multiplier for difficulty scaling and passive
+        /// economy power. Starts at 1.0; each secured outpost adds a small bonus.
+        /// Tune via code or later ProgressionConstants. Read-only for consumers
+        /// (WaveManager, enemy spawners, offline accrual).
+        /// </summary>
+        public float TerritoryMultiplier => 1f + 0.05f * SecuredOutpostCount;
+
+        /// <summary>
+        /// Call when an outpost camp is successfully defended and secured.
+        /// Increments the count (and thus the multiplier) and notifies listeners.
+        /// Idempotent per camp via the caller (ClaimableCamp persists the secured flag).
+        /// </summary>
+        public void OnOutpostSecured()
+        {
+            SecuredOutpostCount = Mathf.Max(0, SecuredOutpostCount + 1);
+            NotifyChanged();
+        }
+
         // ── Events ────────────────────────────────────────────────────────────
 
         /// <summary>Fires after any resource change with the new totals.</summary>
@@ -219,6 +248,61 @@ namespace DeNelle.Village
         public void Grant(int wood = 0, int food = 0, int iron = 0, int crystals = 0)
         {
             Grant(new ResourceCost(wood, food, iron, crystals));
+        }
+
+        // ── Unified resource income API (WO-106 continuation) ─────────────────
+        // All new pet harvesting, outpost ticks, node claims, troop rewards, etc.
+        // MUST go through here (or the Grant overloads) so in-session mirrors,
+        // persisted GameState, and OnChanged listeners stay consistent.
+        // This is the single source of truth for the entire resource economy.
+
+        /// <summary>
+        /// Preferred unified entry point for all harvesting / passive income.
+        /// Maps the Core-canonical ResourceType (Iron/Wood/Food/AetherCrystal) to
+        /// the correct bucket and calls Grant. Negative amounts are clamped.
+        /// </summary>
+        public void AddResource(DeNelle.Core.ResourceType type, int amount)
+        {
+            if (amount <= 0) return;
+            switch (type)
+            {
+                case DeNelle.Core.ResourceType.Iron:
+                    Grant(iron: amount);
+                    break;
+                case DeNelle.Core.ResourceType.Wood:
+                    Grant(wood: amount);
+                    break;
+                case DeNelle.Core.ResourceType.Food:
+                    Grant(food: amount);
+                    break;
+                case DeNelle.Core.ResourceType.AetherCrystal:
+                    Grant(crystals: amount);
+                    break;
+            }
+        }
+
+        /// <summary>
+        /// Overload accepting the local MineResource enum (used by MineNode/Outpost)
+        /// so existing harvest code can migrate to the single AddResource style.
+        /// </summary>
+        public void AddResource(MineResource type, int amount)
+        {
+            if (amount <= 0) return;
+            switch (type)
+            {
+                case MineResource.Iron:
+                    Grant(iron: amount);
+                    break;
+                case MineResource.Wood:
+                    Grant(wood: amount);
+                    break;
+                case MineResource.Food:
+                    Grant(food: amount);
+                    break;
+                case MineResource.AetherCrystal:
+                    Grant(crystals: amount);
+                    break;
+            }
         }
 
         // ── Backwards-compatible single-resource API (Wood only) ─────────────

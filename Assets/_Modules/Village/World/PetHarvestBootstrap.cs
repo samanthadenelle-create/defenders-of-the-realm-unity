@@ -18,9 +18,12 @@
 // real model can swap in later via the catalog/VisualFactory.
 // =============================================================================
 
+using System;
 using UnityEngine;
 using UnityEngine.AI;
 using UnityEngine.SceneManagement;
+using DeNelle.Village;
+using DeNelle.Village.World;
 
 namespace DeNelle.Village
 {
@@ -28,6 +31,12 @@ namespace DeNelle.Village
     public sealed class PetHarvestBootstrap : MonoBehaviour
     {
         public static PetHarvestBootstrap Instance { get; private set; }
+        // Support both the main Village scene and the Village2 test scene so the
+        // pet resource farming loop (WO-106 / PetHarvester + MineNode) is exercisable
+        // without requiring OuterWorld. When SpawnPlaceholderNodes (or -spawn flag)
+        // is enabled the 4 starter nodes (one per harvestable) appear near centre
+        // inside the pet detect radius. Combat priority in PetHarvester still yields
+        // to enemies. EconomyService.Grant is the faucet (nodes now route through it).
         private const string TargetScene = "Village2";
         private bool _built;
 
@@ -87,7 +96,8 @@ namespace DeNelle.Village
 
         private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
         {
-            if (scene.name == TargetScene) { _built = false; Build(); }
+            var n = scene.name;
+            if (n == TargetScene || n == "Village") { _built = false; Build(); }
         }
 
         private void Build()
@@ -97,19 +107,37 @@ namespace DeNelle.Village
             // DEF-258: never drop placeholder nodes unless explicitly re-enabled.
             if (!PlaceholderNodesEnabled()) return;
             // Idempotent: if the village already has nodes (a future hand-placed pass), skip.
-            if (Object.FindFirstObjectByType<MineNode>() != null) return;
+            if (UnityEngine.Object.FindFirstObjectByType<MineNode>() != null) return;
 
             // A small cluster near the village centre — inside the pet's ~28m harvest detect
             // (PetHarvester) so the deployed Warden finds + works them. One node per
             // harvestable (DEF-121: Wood / Food / Iron / Crystals) so pet auto-harvest
             // raises ALL FOUR resource counts in GameState, visibly.
-            SpawnNode("Wood",     MineResource.Wood,         new Vector3( 11f, 0f,  11f), new Color(0.45f, 0.30f, 0.16f));
-            SpawnNode("Iron",     MineResource.Iron,         new Vector3(-12f, 0f,   9f), new Color(0.55f, 0.57f, 0.62f));
-            SpawnNode("Food",     MineResource.Food,         new Vector3(  9f, 0f, -12f), new Color(0.70f, 0.62f, 0.28f));
-            SpawnNode("Crystals", MineResource.AetherCrystal, new Vector3(-9f, 0f, -11f), new Color(0.45f, 0.72f, 0.95f));
+            //
+            // WO-106+: We also create HarvestSite wrappers on these nodes. This gives:
+            //   • Themed visual harvest structure (platform + resource top)
+            //   • Pet assignment support (AssignPet) → scaled harvest over time
+            //   • All income routed through EconomyService.AddResource (single source of truth)
+            //   • Floating "+X Resource" popups
+            // The raw MineNodes remain for autonomous PetHarvester fallbacks.
+            MineNode woodNode = SpawnNode("Wood",     MineResource.Wood,         new Vector3( 11f, 0f,  11f), new Color(0.45f, 0.30f, 0.16f));
+            MineNode ironNode = SpawnNode("Iron",     MineResource.Iron,         new Vector3(-12f, 0f,   9f), new Color(0.55f, 0.57f, 0.62f));
+            MineNode foodNode = SpawnNode("Food",     MineResource.Food,         new Vector3(  9f, 0f, -12f), new Color(0.70f, 0.62f, 0.28f));
+            MineNode crystalNode = SpawnNode("Crystals", MineResource.AetherCrystal, new Vector3(-9f, 0f, -11f), new Color(0.45f, 0.72f, 0.95f));
+
+            // Wrap them as proper HarvestSites (priority 1) so claiming + assigned-pet
+            // harvesting + Economy.AddResource + floating text are demonstrated.
+            TryWrapAsHarvestSite(woodNode, "Lumber Harvest");
+            TryWrapAsHarvestSite(ironNode, "Ore Harvest");
+            TryWrapAsHarvestSite(foodNode, "Farm Harvest");
+            TryWrapAsHarvestSite(crystalNode, "Crystal Harvest");
+
+            // Auto-assign any already-deployed pets (from PetDeployer) to the new sites
+            // for an immediate "pets harvesting while you defend" demo.
+            AutoAssignDeployedPetsToSites();
         }
 
-        private static void SpawnNode(string label, MineResource res, Vector3 pos, Color tint)
+        private static MineNode SpawnNode(string label, MineResource res, Vector3 pos, Color tint)
         {
             // Snap onto the baked NavMesh so the pet can path to it.
             if (NavMesh.SamplePosition(pos, out var hit, 8f, NavMesh.AllAreas)) pos = hit.position;
@@ -147,6 +175,69 @@ namespace DeNelle.Village
             node.RespawnSeconds   = 0f;
             node.UseFiniteReserve = false;
             node.InteractRadius   = 2.5f;  // player can also [F]-tap them
+            return node;
+        }
+
+        private static void TryWrapAsHarvestSite(MineNode node, string label)
+        {
+            if (node == null) return;
+            var site = node.ClaimAsHarvestSite();
+            if (site != null)
+            {
+                site.name = $"HarvestSite-{label}";
+                // Slightly richer base for the demo (pets make it better).
+                site.BaseYield = 5;
+            }
+        }
+
+        private static void AutoAssignDeployedPetsToSites()
+        {
+            // Find deployed pets (PetDeployer populates them). We use a loose
+            // tag / component search to stay decoupled from Pets asmdef.
+            var petObjects = GameObject.FindGameObjectsWithTag("Pet");
+            if (petObjects.Length == 0)
+            {
+                // Fallback: any object with a component whose name contains "Pet"
+                petObjects = FindObjectsByType<GameObject>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+                // (In real code a proper Pet registry or event would be better.)
+            }
+
+            var sites = FindObjectsByType<HarvestSite>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+            if (sites.Length == 0 || petObjects.Length == 0) return;
+
+            int assigned = 0;
+            foreach (var site in sites)
+            {
+                foreach (var po in petObjects)
+                {
+                    if (po == null) continue;
+                    // Only assign if it looks like a real pet (has Pet or PetHarvester or is named like one).
+                    bool looksLikePet = po.name.IndexOf("Pet", System.StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                        po.GetComponent("Pet") != null ||
+                                        po.GetComponent("PetHarvester") != null;
+                    if (!looksLikePet) continue;
+
+                    if (site.AssignPet(po.transform))
+                    {
+                        assigned++;
+                        // Steer the pet toward the site (Pet.SetHomePost if the method exists via reflection or direct).
+                        // For now we just set a simple target position the existing leash/harvester can respect.
+                        // A full assignment manager would live in the Pets module.
+                        if (site.transform != null)
+                        {
+                            // Best-effort: many pet movement systems look at "home" or a target.
+                            // The PetHarvester already respects HomePost when active.
+                            var petComp = po.GetComponent("Pet");
+                            if (petComp != null)
+                            {
+                                // Use SendMessage to avoid hard asmdef reference.
+                                petComp.SendMessage("SetHomePost", site.transform.position, SendMessageOptions.DontRequireReceiver);
+                            }
+                        }
+                        if (assigned >= 4) return; // limit for demo
+                    }
+                }
+            }
         }
     }
 }
