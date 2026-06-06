@@ -120,21 +120,23 @@ namespace DeNelle.Village
         // active window (+ a short linger). Lazily built on the resolved trail origin.
         private TrailRenderer _swingTrail;
 
-        private static readonly int AnimAttack = Animator.StringToHash("Attack");
-        // WO-163: cached once — whether the controller declares "Attack". Driving an
-        // absent param logs "Parameter does not exist" on each swing.
-        private bool _hasAttackParam;
+        // WO-284/285: animation now routes through the canonical ActorAnimator driver
+        // (no local StringToHash). PlayAttack cycles a combo for melee classes; casters
+        // route to PlayCast so they cast instead of swinging.
+        private ActorAnimator _actor;
+        private HeroAbilities _abilities;   // class source (knight = combo, casters = cast)
+        private int   _comboIndex;
+        private float _lastSwingTime;
+        private const int   ComboLength    = 3;     // Knight melee combo swings
+        private const float ComboResetGap  = 1.1f;  // seconds idle before the combo resets to 0
 
         // ── Lifecycle ─────────────────────────────────────────────────────────
 
         private void Awake()
         {
             _animator    = GetComponentInChildren<Animator>();
-            if (_animator != null && _animator.runtimeAnimatorController != null)
-            {
-                foreach (var p in _animator.parameters)
-                    if (p.nameHash == AnimAttack) { _hasAttackParam = true; break; }
-            }
+            _actor       = GetComponent<ActorAnimator>() ?? gameObject.AddComponent<ActorAnimator>();
+            _abilities   = GetComponent<HeroAbilities>();
             _audioSource = GetComponent<AudioSource>();
             if (_audioSource == null)
                 _audioSource = gameObject.AddComponent<AudioSource>();
@@ -163,6 +165,35 @@ namespace DeNelle.Village
 
             if (attackPressed && !_isInSwing && Time.time >= _nextAttackTime)
                 StartAttack();
+
+            UpdateBlock();
+        }
+
+        // WO-285 (D): shield classes (Knight) hold a block while RMB / Left-Shift is
+        // held. Routed through the canonical driver (Block bool); a guarded no-op for
+        // classes/controllers without a Block state. Resolved live so it follows the
+        // body swap. Only the Knight blocks (sword-and-shield); casters/ranged don't.
+        private bool _blocking;
+        private void UpdateBlock()
+        {
+            string cls = _abilities != null ? _abilities.HeroClass : null;
+            bool canBlock = cls == "knight";
+
+            bool held = false;
+            if (canBlock)
+            {
+                var kb = Keyboard.current;
+                if (kb != null && (kb.leftShiftKey.isPressed || kb.rightShiftKey.isPressed)) held = true;
+                if (!held && UnityEngine.Input.GetMouseButton(1)) held = true;   // RMB
+                var gp = Gamepad.current;
+                if (!held && gp != null && gp.leftTrigger.isPressed) held = true;
+            }
+
+            if (held != _blocking)
+            {
+                _blocking = held;
+                _actor.SetBlocking(_blocking);
+            }
         }
 
         // ── Attack flow ───────────────────────────────────────────────────────
@@ -173,7 +204,23 @@ namespace DeNelle.Village
             _swingStartTime = Time.time;
             _isInSwing      = true;
 
-            if (_animator != null && _hasAttackParam) _animator.SetTrigger(AnimAttack);
+            // WO-285: melee classes swing a cycling combo; casters (Mage/Cleric) cast
+            // instead of swinging. Class resolved live from HeroAbilities (set after the
+            // body swap). The combo index resets after a short idle gap so consecutive
+            // hits flow Attack0→1→2 but a paused-then-resumed attack starts fresh.
+            string cls = _abilities != null ? _abilities.HeroClass : null;
+            bool caster = cls == "mage" || cls == "cleric";
+            if (caster)
+            {
+                _actor.PlayCast();
+            }
+            else
+            {
+                if (Time.time - _lastSwingTime > ComboResetGap) _comboIndex = 0;
+                _actor.PlayAttack(_comboIndex);
+                _comboIndex    = (_comboIndex + 1) % ComboLength;
+                _lastSwingTime = Time.time;
+            }
             PlayWhoosh();
 
             // WO-219: light up the swing trail for the duration of the swing arc.

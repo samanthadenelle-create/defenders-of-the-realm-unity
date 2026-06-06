@@ -21,6 +21,7 @@
 
 using System.Collections;
 using UnityEngine;
+using DeNelle.Core.Combat;   // WO-285: ActorAnimator hit-reaction driver
 
 namespace DeNelle.Village
 {
@@ -47,6 +48,10 @@ namespace DeNelle.Village
         private float _lastHp = -1f;
         private bool  _diedHandled;
 
+        // WO-285: plays the body hit-reaction clip on damage (the screen flash was the
+        // only "I got hit" read before). Resolved on the hero root; guarded internally.
+        private ActorAnimator _actor;
+
         private static readonly Color FlashColor = new Color(0.8f, 0.05f, 0.05f);
 
         private void OnEnable()
@@ -57,6 +62,7 @@ namespace DeNelle.Village
             if (_health == null) return;
 
             _lastHp = _health.Hp;
+            _actor = GetComponent<ActorAnimator>() ?? gameObject.AddComponent<ActorAnimator>();
             _health.OnHealthChanged += HandleHealthChanged;
             _health.OnDied         += HandleDied;
         }
@@ -74,7 +80,13 @@ namespace DeNelle.Village
         {
             // Flash only on a decrease (ignore heals / the initial broadcast).
             if (_lastHp >= 0f && current < _lastHp)
+            {
                 _flashAlpha = _flashPeak;
+                // WO-285: play the body flinch — but NOT on the killing blow (the death
+                // anim owns that beat; HandleDied fires for it). No attacker bearing is
+                // available here, so use a generic front/gut flinch.
+                if (current > 0f) _actor?.PlayHit(HitDirection.Gut);
+            }
             _lastHp = current;
         }
 

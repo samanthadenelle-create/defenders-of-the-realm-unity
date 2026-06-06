@@ -70,12 +70,10 @@ namespace DeNelle.Village
         private Vector3 _spawnPosition;          // captured in Awake — respawn anchor
         private float   _invulnUntil;            // Time.time at which post-respawn invuln ends
 
-        // Hero animator — used only to play a death pose IF the live controller
-        // declares a matching trigger. Guarded with HasParameter so a controller
-        // without a death state (the current hero controllers declare Speed/Cast/
-        // Victory only) is a silent no-op — never the per-frame param-spam pitfall.
-        private Animator _animator;
-        private static readonly string[] DeathTriggerNames = { "Die", "Death", "Defeated", "Dying" };
+        // WO-284/285: death/revive animation routes through the canonical ActorAnimator
+        // driver (Dead bool latch + DeathDir). Guarded internally — a controller without
+        // a Death state is a silent no-op, never the per-frame param-spam pitfall.
+        private ActorAnimator _actor;
 
         // Cached siblings for death-stop + haptics. All optional — resolved in
         // Awake and only used through null-safe calls, so a hero missing any of
@@ -104,7 +102,7 @@ namespace DeNelle.Village
             _locomotion     = GetComponent<HeroLocomotion>();
             _abilities      = GetComponent<HeroAbilities>();
             _impactFeedback = GetComponent<HeroImpactFeedback>();
-            _animator       = GetComponentInChildren<Animator>();
+            _actor          = GetComponent<ActorAnimator>() ?? gameObject.AddComponent<ActorAnimator>();
 
             // Capture the spawn point as the respawn anchor. Resolved later in
             // HandleDeath against the Heart if the recorded point is unsafe.
@@ -265,41 +263,14 @@ namespace DeNelle.Village
                       $"invuln={_respawnInvulnSeconds:F1}s).");
         }
 
-        // ── Death animation (optional, fully guarded) ─────────────────────────
-        // Plays a death pose only when the live hero controller actually declares
-        // one of the recognised triggers. The current hero controllers declare
-        // Speed/Cast/Victory only, so this is a silent no-op today — wired ahead
-        // so adding a "Die"/"Death" state to the controller activates it with no
-        // code change, while never spamming "param not found" every frame.
-        private void PlayDeathAnim()
-        {
-            if (_animator == null) _animator = GetComponentInChildren<Animator>();
-            if (_animator == null || _animator.runtimeAnimatorController == null) return;
-            foreach (var name in DeathTriggerNames)
-            {
-                if (HasParameter(name, AnimatorControllerParameterType.Trigger))
-                {
-                    _animator.SetTrigger(name);
-                    return;
-                }
-            }
-        }
+        // ── Death animation (WO-284/285, fully guarded) ───────────────────────
+        // Latches the hero controller's Death state via the canonical Dead bool
+        // (ActorAnimator). The death clip holds its last frame and never flickers
+        // back to idle; Revive() clears it on respawn. Safe no-op on a controller
+        // with no Death state.
+        private void PlayDeathAnim() => _actor?.Die(DeathDirection.Fall);
 
-        private void ClearDeathAnim()
-        {
-            if (_animator == null || _animator.runtimeAnimatorController == null) return;
-            foreach (var name in DeathTriggerNames)
-                if (HasParameter(name, AnimatorControllerParameterType.Trigger))
-                    _animator.ResetTrigger(name);
-        }
-
-        private bool HasParameter(string name, AnimatorControllerParameterType type)
-        {
-            if (_animator == null || _animator.runtimeAnimatorController == null) return false;
-            foreach (var p in _animator.parameters)
-                if (p.type == type && p.name == name) return true;
-            return false;
-        }
+        private void ClearDeathAnim() => _actor?.Revive();
 
         /// <summary>Heals up to max (for repair pads / potions / wave-clear).</summary>
         public void Heal(float amount)

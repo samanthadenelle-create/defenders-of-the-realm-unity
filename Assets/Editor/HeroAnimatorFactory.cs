@@ -49,12 +49,18 @@ namespace DeNelle.Editor
         private const string RunClip       = "Shared_Run_Forward";
         private const string VictoryClip   = "Shared_Victory_Pose";
 
+        // WO-284/285 shared combat clips — every hero retargets these from Shared/.
+        private const string HitClip       = "Shared_Hit_Reaction";
+        private const string DeathClip     = "Shared_Death";
+        private const string BlockClip     = "Shared_Block";
+
         private struct HeroSpec
         {
             public string slug;            // Knight | Ranger | Mage | Cleric
             public string controllerPath;  // Resources/Heroes/<slug>.controller
-            public string castClip;        // per-class attack clip basename
+            public string castClip;        // per-class spell/cast clip basename
             public string castClipFallback;// used + warned if the primary is absent
+            public string[] attackClips;   // WO-285: melee combo (Knight = 3, else 1)
             public string[] searchRoots;   // WO-283: type folder first, then Shared/
         }
 
@@ -69,21 +75,28 @@ namespace DeNelle.Editor
                 controllerPath = "Assets/Resources/Heroes/Knight.controller",
                 castClip = "standing melee attack horizontal",
                 castClipFallback = "standing melee combo attack ver. 1",
+                // WO-285: 3-swing melee combo cycled by the Combo int.
+                attackClips = new[] { "standing melee attack horizontal",
+                                      "standing melee combo attack ver. 1",
+                                      "standing melee combo attack ver. 2" },
                 searchRoots = KnightRoots },
             new HeroSpec { slug = "Mage",
                 controllerPath = "Assets/Resources/Heroes/Mage.controller",
                 castClip = "Wizard_Spell_Cast", castClipFallback = "Standing 1H Magic Attack 01",
+                attackClips = new[] { "Wizard_Spell_Cast" },   // caster: basic attack = cast
                 searchRoots = WizardRoots },
             // Ranger now HAS a real aim pose (WO-283); arrows fly via the projectile
             // system, so the aim/idle is the visible "cast" (bow gap is cosmetic-only).
             new HeroSpec { slug = "Ranger",
                 controllerPath = "Assets/Resources/Heroes/Ranger.controller",
                 castClip = "Ranger_Aim_Idle", castClipFallback = "Shared_Combat_Idle",
+                attackClips = new[] { "Ranger_Aim_Idle" },
                 searchRoots = RangerRoots },
             // Cleric (caster) shares the Wizard set; Heal is its primary cast.
             new HeroSpec { slug = "Cleric",
                 controllerPath = "Assets/Resources/Heroes/Cleric.controller",
                 castClip = "Wizard_Heal", castClipFallback = "Wizard_Spell_Cast",
+                attackClips = new[] { "Wizard_Heal" },
                 searchRoots = WizardRoots },
         };
 
@@ -102,6 +115,9 @@ namespace DeNelle.Editor
             AnimationClip walk    = LoadClip(WalkClip,    spec.searchRoots);
             AnimationClip run     = LoadClip(RunClip,     spec.searchRoots);
             AnimationClip victory = LoadClip(VictoryClip, spec.searchRoots);
+            AnimationClip hit     = LoadClip(HitClip,   spec.searchRoots);
+            AnimationClip death   = LoadClip(DeathClip, spec.searchRoots);
+            AnimationClip block   = LoadClip(BlockClip, spec.searchRoots);
             AnimationClip cast    = LoadClip(spec.castClip, spec.searchRoots);
             if (cast == null && !string.IsNullOrEmpty(spec.castClipFallback))
             {
@@ -115,9 +131,21 @@ namespace DeNelle.Editor
             AssetDatabase.DeleteAsset(spec.controllerPath);
             var ctrl = AnimatorController.CreateAnimatorControllerAtPath(spec.controllerPath);
 
-            ctrl.AddParameter("Speed",   AnimatorControllerParameterType.Float);
-            ctrl.AddParameter("Cast",    AnimatorControllerParameterType.Trigger);
-            ctrl.AddParameter("Victory", AnimatorControllerParameterType.Trigger);
+            // Canonical AnimParams set (WO-284) — declared on every hero controller so
+            // ActorAnimator's guarded verbs all resolve. States exist for the ones with
+            // clips; the rest are declared-but-unused (a safe no-op) for future polish.
+            ctrl.AddParameter("Speed",    AnimatorControllerParameterType.Float);
+            ctrl.AddParameter("InCombat", AnimatorControllerParameterType.Bool);
+            ctrl.AddParameter("Attack",   AnimatorControllerParameterType.Trigger);
+            ctrl.AddParameter("Combo",    AnimatorControllerParameterType.Int);
+            ctrl.AddParameter("Cast",     AnimatorControllerParameterType.Trigger);
+            ctrl.AddParameter("WindUp",   AnimatorControllerParameterType.Trigger);
+            ctrl.AddParameter("Block",    AnimatorControllerParameterType.Bool);
+            ctrl.AddParameter("Hit",      AnimatorControllerParameterType.Trigger);
+            ctrl.AddParameter("HitDir",   AnimatorControllerParameterType.Int);
+            ctrl.AddParameter("Dead",     AnimatorControllerParameterType.Bool);
+            ctrl.AddParameter("DeathDir", AnimatorControllerParameterType.Int);
+            ctrl.AddParameter("Victory",  AnimatorControllerParameterType.Trigger);
 
             var sm = ctrl.layers[0].stateMachine;
 
@@ -187,19 +215,108 @@ namespace DeNelle.Editor
                 vicBack.hasExitTime = true; vicBack.exitTime = 0.95f; vicBack.duration = 0.15f;
             }
 
+            // ── WO-285: Attack (melee combo) — Any → AttackN on Attack + Combo==N ──
+            // Knight cycles a 3-swing combo (Combo 0/1/2); other classes get a single
+            // Attack state. Mirrors the snappy Cast timing (WO-217). Casters mostly
+            // route through Cast at runtime, but the state exists so PlayAttack always
+            // animates. Returns to Locomotion after the swing.
+            int attackStates = BuildAttackStates(ctrl, sm, locoState, spec);
+
+            // ── WO-285: Hit reaction — Any → Hit on the Hit trigger, back to Loco ──
+            if (hit != null)
+            {
+                var hitState = sm.AddState("Hit");
+                hitState.motion = hit;
+                var toHit = sm.AddAnyStateTransition(hitState);
+                toHit.hasExitTime = false; toHit.duration = 0.04f;
+                toHit.canTransitionToSelf = false;
+                toHit.AddCondition(AnimatorConditionMode.If, 0f, "Hit");
+                var hitBack = hitState.AddTransition(locoState);
+                hitBack.hasExitTime = true; hitBack.exitTime = 0.7f; hitBack.duration = 0.1f;
+            }
+
+            // ── WO-285: Death — Any → Death on Dead==true (latched), Revive clears ─
+            // Dead is a BOOL latch (canonical, WO-284): the death clip holds its last
+            // frame and never flickers back to idle. Revive() sets Dead=false →
+            // Death → Locomotion so a respawned hero animates normally again.
+            if (death != null)
+            {
+                var deathState = sm.AddState("Death");
+                deathState.motion = death;
+                var toDeath = sm.AddAnyStateTransition(deathState);
+                toDeath.hasExitTime = false; toDeath.duration = 0.06f;
+                toDeath.canTransitionToSelf = false;
+                toDeath.AddCondition(AnimatorConditionMode.If, 0f, "Dead");
+                var deathBack = deathState.AddTransition(locoState);
+                deathBack.hasExitTime = false; deathBack.duration = 0.12f;
+                deathBack.AddCondition(AnimatorConditionMode.IfNot, 0f, "Dead");
+            }
+
+            // ── WO-285: Block — Locomotion ⇄ Block on the Block bool ───────────────
+            if (block != null)
+            {
+                var blockState = sm.AddState("Block");
+                blockState.motion = block;
+                var toBlock = locoState.AddTransition(blockState);
+                toBlock.hasExitTime = false; toBlock.duration = 0.1f;
+                toBlock.AddCondition(AnimatorConditionMode.If, 0f, "Block");
+                var blockBack = blockState.AddTransition(locoState);
+                blockBack.hasExitTime = false; blockBack.duration = 0.12f;
+                blockBack.AddCondition(AnimatorConditionMode.IfNot, 0f, "Block");
+            }
+
             // ── WO-218: Upper-Body attack layer ────────────────────────────────
             // A second Override layer (weight 1) masked to arms+torso, driven by the
-            // SAME "Cast" trigger. Base layer keeps idle/walk/run on the legs; the
-            // upper layer overrides the upper body with the attack/cast clip, so the
-            // hero can swing while running. Empty default state = no override when
-            // not attacking (legs+arms both come from the base layer).
+            // SAME "Cast"/"Attack" triggers. Base layer keeps idle/walk/run on the
+            // legs; the upper layer overrides the upper body with the attack/cast clip,
+            // so the hero can swing while running. Empty default state = no override
+            // when not attacking (legs+arms both come from the base layer).
             if (cast != null)
                 AddUpperBodyLayer(ctrl, cast);
 
             EditorUtility.SetDirty(ctrl);
             Debug.Log($"[HeroAnimatorFactory] {spec.slug} built — Locomotion({added.Count} clips)" +
-                      $"{(cast != null ? " + Cast(+UpperBody)" : "")}{(victory != null ? " + Victory" : "")} " +
-                      $"→ {spec.controllerPath}");
+                      $"{(cast != null ? " + Cast(+UpperBody)" : "")}{(attackStates > 0 ? $" + Attack({attackStates})" : "")}" +
+                      $"{(hit != null ? " + Hit" : "")}{(death != null ? " + Death" : "")}{(block != null ? " + Block" : "")}" +
+                      $"{(victory != null ? " + Victory" : "")} → {spec.controllerPath}");
+        }
+
+        /// <summary>
+        /// WO-285: builds the melee Attack state(s). A single clip → one "Attack"
+        /// state fired by the Attack trigger. Multiple clips (Knight combo) → one
+        /// state per clip ("Attack0/1/2"), each entered when the Attack trigger fires
+        /// AND Combo == that index, so PlayerAttackController cycling Combo plays a
+        /// different swing each hit. Every state returns to Locomotion (snappy, WO-217).
+        /// Returns the number of attack states built (0 = no clips found).
+        /// </summary>
+        private static int BuildAttackStates(AnimatorController ctrl, AnimatorStateMachine sm,
+                                             AnimatorState locoState, HeroSpec spec)
+        {
+            if (spec.attackClips == null || spec.attackClips.Length == 0) return 0;
+
+            int built = 0;
+            bool combo = spec.attackClips.Length > 1;
+            for (int i = 0; i < spec.attackClips.Length; i++)
+            {
+                var clip = LoadClip(spec.attackClips[i], spec.searchRoots);
+                if (clip == null) continue;
+
+                var state = sm.AddState(combo ? $"Attack{i}" : "Attack");
+                state.motion = clip;
+                state.speed  = AttackSpeed;   // WO-217: snappier swing
+
+                var toAttack = sm.AddAnyStateTransition(state);
+                toAttack.hasExitTime = false; toAttack.duration = 0.05f;
+                toAttack.canTransitionToSelf = false;
+                toAttack.AddCondition(AnimatorConditionMode.If, 0f, "Attack");
+                if (combo)
+                    toAttack.AddCondition(AnimatorConditionMode.Equals, i, "Combo");
+
+                var back = state.AddTransition(locoState);
+                back.hasExitTime = true; back.exitTime = CastExitTime; back.duration = CastExitDur;
+                built++;
+            }
+            return built;
         }
 
         /// <summary>
@@ -229,6 +346,13 @@ namespace DeNelle.Editor
             toCast.hasExitTime = false; toCast.duration = 0.05f;
             toCast.canTransitionToSelf = false;
             toCast.AddCondition(AnimatorConditionMode.If, 0f, "Cast");
+
+            // WO-285: the same overlay also fires on the melee Attack trigger, so a
+            // Knight swing plays on the upper body while the legs keep walking/running.
+            var toAttack = sm.AddAnyStateTransition(upperCast);
+            toAttack.hasExitTime = false; toAttack.duration = 0.05f;
+            toAttack.canTransitionToSelf = false;
+            toAttack.AddCondition(AnimatorConditionMode.If, 0f, "Attack");
 
             var back = upperCast.AddTransition(empty);
             back.hasExitTime = true;
