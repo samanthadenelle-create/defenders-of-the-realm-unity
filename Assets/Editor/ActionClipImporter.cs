@@ -37,6 +37,15 @@ namespace DeNelle.Editor
 
             // These are motion clips, not art — keep imports lean.
             importer.materialImportMode = ModelImporterMaterialImportMode.None;
+
+            // WO-283: enforce Optimal keyframe-reduction compression on the whole
+            // Action library (current + every future drop) so the convention lives in
+            // code, not manual Inspector clicks. Sensible error tolerances keep motion
+            // faithful while shrinking the clips.
+            importer.animationCompression = ModelImporterAnimationCompression.Optimal;
+            importer.animationRotationError = 0.5f;
+            importer.animationPositionError = 0.5f;
+            importer.animationScaleError    = 0.5f;
         }
 
         private void OnPreprocessAnimation()
@@ -102,6 +111,7 @@ namespace DeNelle.Editor
                 importer.animationType = ModelImporterAnimationType.Human;
                 importer.avatarSetup   = ModelImporterAvatarSetup.CreateFromThisModel;
                 importer.materialImportMode = ModelImporterMaterialImportMode.None;
+                importer.animationCompression = ModelImporterAnimationCompression.Optimal; // WO-283
                 importer.SaveAndReimport();
                 if (wasLegacy) flipped++;
             }
@@ -152,6 +162,7 @@ namespace DeNelle.Editor
                     clips[i] = c;
                 }
                 importer.clipAnimations = clips;
+                importer.animationCompression = ModelImporterAnimationCompression.Optimal; // WO-283
                 importer.SaveAndReimport();
                 n++;
             }
