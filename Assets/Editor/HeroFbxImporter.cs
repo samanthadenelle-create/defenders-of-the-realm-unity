@@ -53,6 +53,17 @@ namespace DeNelle.Editor
             importer.animationType = ModelImporterAnimationType.Human;
             importer.avatarSetup   = ModelImporterAvatarSetup.CreateFromThisModel;
 
+            // WO-286: WIPE the stale humanDescription inherited from the preserved old
+            // .meta. A re-rigged mesh has a new bone hierarchy (e.g. root's parent is
+            // 'Cleric', not the old 'Armature'), and Unity validates CreateFromThisModel
+            // against the stored map → "Parent for 'root' differs from one found in
+            // HumanDescription" → avatar fails. Clearing the human/skeleton arrays forces
+            // a fresh auto-map from the new rig; self-heals on every future swap too.
+            var hd = importer.humanDescription;
+            hd.human    = new HumanBone[0];
+            hd.skeleton = new SkeletonBone[0];
+            importer.humanDescription = hd;
+
             // These are visible meshes — keep their materials/textures importing
             // (only fix a fully-stripped slot; never strip a hero like a motion clip).
             if (importer.materialImportMode == ModelImporterMaterialImportMode.None)
