@@ -16,6 +16,7 @@ namespace DeNelle.Village
     {
         [SerializeField] private UnityEngine.Object _hud;
         private HeroAbilities _abilities;
+        private HeroHealth _health; // same GameObject — drives the HUD hero-HP bar
         private UnityEvent<int> _abilityRequestedEvent;
         private UnityAction<int> _onAbilityRequested;
 
@@ -26,10 +27,12 @@ namespace DeNelle.Village
         // are resolved by reflection — DeNelle.Village cannot reference DeNelle.HUD
         // (same asmdef-isolation seam as the AbilityRequested wiring above).
         private MethodInfo _setMana;        // SetMana(float current, float max)
+        private MethodInfo _setHeroHp;      // SetHeroHp(float current, float max)
         private MethodInfo _setCooldown;    // SetAbilityCooldown(int slot, float remaining, float total)
         private MethodInfo _setSlot;        // SetAbilitySlot(int slot, string key, string glyph, string name, string description) — WO-36 visual
         private MethodInfo _setSlotColor;   // SetAbilitySlot(int,string,string,string,string,string accentHex) — DEF blank-buttons (rune-disc tint)
         private readonly object[] _manaArgs = new object[2];
+        private readonly object[] _heroHpArgs = new object[2];
         private readonly object[] _cdArgs = new object[3];
         private readonly object[] _slotArgs = new object[5];
         private readonly object[] _slotColorArgs = new object[6];
@@ -43,6 +46,7 @@ namespace DeNelle.Village
         private void Awake()
         {
             _abilities = GetComponent<HeroAbilities>();
+            _health = GetComponent<HeroHealth>(); // optional — HUD HP bar stays full if absent
         }
 
         private void OnEnable()
@@ -52,6 +56,9 @@ namespace DeNelle.Village
             // Resolve the state-out push methods first so they bind even if the
             // AbilityRequested click event is absent.
             _setMana = _hud.GetType().GetMethod("SetMana",
+                BindingFlags.Public | BindingFlags.Instance, null,
+                new[] { typeof(float), typeof(float) }, null);
+            _setHeroHp = _hud.GetType().GetMethod("SetHeroHp",
                 BindingFlags.Public | BindingFlags.Instance, null,
                 new[] { typeof(float), typeof(float) }, null);
             _setCooldown = _hud.GetType().GetMethod("SetAbilityCooldown",
@@ -113,6 +120,13 @@ namespace DeNelle.Village
                 _manaArgs[0] = _abilities.Mana;
                 _manaArgs[1] = _abilities.MaxMana;
                 _setMana.Invoke(_hud, _manaArgs);
+            }
+
+            if (_setHeroHp != null && _health != null)
+            {
+                _heroHpArgs[0] = _health.Hp;
+                _heroHpArgs[1] = _health.MaxHp;
+                _setHeroHp.Invoke(_hud, _heroHpArgs);
             }
 
             if (_setCooldown != null)
