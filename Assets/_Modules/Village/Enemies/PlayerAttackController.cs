@@ -174,6 +174,17 @@ namespace DeNelle.Village
         // classes/controllers without a Block state. Resolved live so it follows the
         // body swap. Only the Knight blocks (sword-and-shield); casters/ranged don't.
         private bool _blocking;
+
+        // ── Perfect parry / riposte ───────────────────────────────────────────
+        // Raising block opens a brief PARRY WINDOW; an enemy hit landing inside it is negated
+        // (see HeroHealth) → a slow-time beat + the next swing becomes a big RIPOSTE. OpenParryWindow()
+        // is the public seam a caster's magical deflect spell reuses for the same payoff.
+        private float _parryWindowUntil;
+        private float _riposteArmedUntil;
+        private const float ParryWindow       = 0.25f;  // sec after block-raise a hit is parried
+        private const float RiposteWindow     = 2.0f;   // sec after a parry the next swing is empowered
+        private const float RiposteMultiplier = 3.0f;   // counter-swing damage multiplier
+
         private void UpdateBlock()
         {
             string cls = _abilities != null ? _abilities.HeroClass : null;
@@ -193,7 +204,34 @@ namespace DeNelle.Village
             {
                 _blocking = held;
                 _actor.SetBlocking(_blocking);
+                if (held) _parryWindowUntil = Time.time + ParryWindow; // raising block opens the parry window
             }
+        }
+
+        // ── Parry API (HeroHealth calls these on incoming hits; the deflect seam is public) ──
+
+        /// <summary>True (and consumes the window) if an enemy hit lands during the parry window.</summary>
+        public bool TryConsumeParry()
+        {
+            if (Time.time > _parryWindowUntil) return false;
+            _parryWindowUntil = 0f;   // consume so one block-raise parries one hit
+            return true;
+        }
+
+        /// <summary>Open a parry window NOW — the seam a caster's magical deflect spell calls so it
+        /// routes through the same parry → slo-mo → riposte payoff (just with magic VFX/anim).</summary>
+        public void OpenParryWindow(float seconds = ParryWindow)
+        {
+            _parryWindowUntil = Time.time + Mathf.Max(0.05f, seconds);
+        }
+
+        /// <summary>Payoff for a successful parry: slow-time beat + deflect clang + arm the riposte.</summary>
+        public void OnParrySuccess(Vector3 pos)
+        {
+            CombatFeedbackManager.Parry(pos);
+            GameSfx.PlaySwordClash();   // metallic deflect clang
+            _riposteArmedUntil = Time.time + RiposteWindow;
+            DamageNumberSpawner.SpawnLabel("PARRY!", pos + Vector3.up * 1.4f, new Color(0.6f, 0.9f, 1f), 1.4f);
         }
 
         // ── Attack flow ───────────────────────────────────────────────────────
@@ -242,6 +280,7 @@ namespace DeNelle.Village
             float elapsed   = Time.time - _swingStartTime;
             bool isPerfect  = elapsed >= _perfectHitWindowStart
                            && elapsed <= _perfectHitWindowEnd;
+            bool riposte    = Time.time <= _riposteArmedUntil;   // empowered counter after a parry
 
             Collider[] hits = Physics.OverlapSphere(transform.position, EffectiveRange(), _enemyLayer);
 
@@ -255,6 +294,7 @@ namespace DeNelle.Village
 
                 float damage = _baseDamage;
                 if (isPerfect) damage *= _perfectHitMultiplier;
+                if (riposte)   damage *= RiposteMultiplier;   // parry counter — big hit on the tank
 
                 Vector3 hitPos = col.transform.position + Vector3.up;
 
@@ -280,6 +320,13 @@ namespace DeNelle.Village
                 string cls = _abilities != null ? _abilities.HeroClass : null;
                 if (cls == "mage" || cls == "cleric") GameSfx.PlaySpellCast();
                 else GameSfx.PlaySwordClash();
+
+                if (riposte)
+                {
+                    DamageNumberSpawner.SpawnLabel("RIPOSTE!", transform.position + Vector3.up * 1.8f,
+                        new Color(1f, 0.85f, 0.2f), 1.6f);
+                    _riposteArmedUntil = 0f;   // one empowered counter per parry
+                }
             }
 
             _isInSwing = false;

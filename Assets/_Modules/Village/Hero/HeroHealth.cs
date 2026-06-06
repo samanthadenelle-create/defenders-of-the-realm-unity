@@ -81,6 +81,7 @@ namespace DeNelle.Village
         private HeroLocomotion     _locomotion;
         private HeroAbilities      _abilities;
         private HeroImpactFeedback _impactFeedback;
+        private PlayerAttackController _pac;   // perfect-parry source (same GameObject)
 
         public float MaxHp    => _maxHp;
         public float Hp       => _hp;
@@ -159,6 +160,16 @@ namespace DeNelle.Village
             // DEF-102: post-respawn grace — ignore damage during the invuln window
             // so a hero respawning into a lingering melee isn't instantly re-killed.
             if (Time.time < _invulnUntil) return;
+
+            // Perfect parry — a hit landing inside the player's parry window is NEGATED and turned
+            // into the riposte payoff (Knight block now; the caster's magical deflect reuses the
+            // same OpenParryWindow seam). Same-GameObject lookup, lazily cached.
+            if (_pac == null) _pac = GetComponent<PlayerAttackController>();
+            if (_pac != null && _pac.TryConsumeParry())
+            {
+                _pac.OnParrySuccess(transform.position + Vector3.up);
+                return;   // fully negate the parried hit
+            }
 
             // Gear v1: equipped armor reduces incoming damage (fractional). Lazily-resolved;
             // graceful — no GearLoadout / no armor = no reduction, so combat is unchanged.

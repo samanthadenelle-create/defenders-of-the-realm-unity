@@ -272,11 +272,29 @@ namespace DeNelle.Village
                 && Time.unscaledTime - _lastKillSloMoTime >= _killSloMoMinIntervalSeconds)
             {
                 _lastKillSloMoTime = Time.unscaledTime;
-                if (_hitStopRoutine != null) { StopCoroutine(_hitStopRoutine); _hitStopRoutine = null; }
-                if (_killSloMoRoutine != null) StopCoroutine(_killSloMoRoutine);
-                _killSloMoRoutine = StartCoroutine(KillSloMoRoutine());
-                if (_killSloMoShake > 0f) CameraShakeBridge.Shake(_killSloMoShake, _killSloMoShakeDuration);
+                StartSloMo();
             }
+        }
+
+        /// <summary>
+        /// A perfect parry/deflect beat — ALWAYS gets the slow-time moment (skill-gated, so no
+        /// rate-cap) + a heavier camera kick. Used by both the Knight's physical parry and the
+        /// caster's magical deflect (PlayerAttackController.OnParrySuccess).
+        /// </summary>
+        public static void Parry(Vector3 worldPos)
+        {
+            if (Instance == null) return;
+            Instance._lastKillSloMoTime = Time.unscaledTime; // so a kill right after doesn't double-dip
+            Instance.StartSloMo();
+        }
+
+        // Shared slow-time starter: supersede any hit-stop so the slow-time wins cleanly.
+        private void StartSloMo()
+        {
+            if (_hitStopRoutine != null) { StopCoroutine(_hitStopRoutine); _hitStopRoutine = null; }
+            if (_killSloMoRoutine != null) StopCoroutine(_killSloMoRoutine);
+            _killSloMoRoutine = StartCoroutine(KillSloMoRoutine());
+            if (_killSloMoShake > 0f) CameraShakeBridge.Shake(_killSloMoShake, _killSloMoShakeDuration);
         }
 
         private IEnumerator HitStopRoutine()
