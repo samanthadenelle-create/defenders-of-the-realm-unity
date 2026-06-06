@@ -19,10 +19,27 @@ Each class gets one signature timing move on this same seam.
   "RIPOSTE!" next swing. Big payoff vs a heavy tank. Public seam: `PlayerAttackController.OpenParryWindow(seconds)`.
 
 ## 🟡 NEXT — class variants (all reuse the seam above)
-1. **Mage — magical parry / deflect.** A deflect ability calls `OpenParryWindow()` → same
-   negate + slo-mo + riposte payoff, but with a **magic shield/deflect VFX + cast anim**
-   (deflects projectiles/spells). Wire from `HeroAbilities` (a defensive ability slot) into the
-   existing parry path; swap the clang for a shimmer/ward sound, "DEFLECT!" label.
+
+0. **Parry TELL (do this FIRST — it's what makes parry usable).** Like Zelda/soulslikes,
+   show the player WHEN to parry. **Enemies already telegraph** — `Enemy.cs` has `_telegraphing`
+   + a `WindUp` animator trigger + `TelegraphThenAttack(duration)` (DEF-48) with per-type
+   `EnemyTypeVfxSet.TelegraphDuration`. Hook the tell onto that windup: a brief **flash/glint +
+   cue sound** (near the enemy or a hero-side prompt) during the telegraph so the player knows a
+   parryable strike is coming. Align `ParryWindow` to the telegraph→strike timing. Without this,
+   the parry is frustrating; with it, it's the addictive "see it → nail it" loop.
+   - **WindUp animation per creature:** the timing system is there, but the telegraph only
+     READS if the creature's controller has a `WindUp` state (code guards with `_hasWindUpParam`
+     — safe no-op without one). New creatures (wraith/ogre/ogre-mage/troll) just need a **wind-up
+     anticipation pose** added to their controller (easy to author from the kit's poses; build it
+     in via `EnemyAnimatorFactory`). A clear, readable wind-up pose IS the visual tell.
+
+1. **Mage — magical parry / deflect (skill-gated so it's RARE, not spammy).** A deflect ability
+   calls `OpenParryWindow()` → same negate + slo-mo + riposte payoff, but with a **magic
+   shield/deflect VFX + cast anim**. Owner refinement: success is gated on the incoming
+   projectile's **angle + range + velocity** (a "perfect deflect" cone/timing) — only a well-
+   aimed deflect at the right moment works, so it stays a skill flex. On success: a 1-sec
+   **deflect flash** + shimmer/ward sound + "DEFLECT!" label (optionally reflect the projectile
+   back). Wire from `HeroAbilities` (a defensive slot) into the existing parry path.
 2. **Ranger — barrage / perfect shot.** Either (a) a **multi-arrow barrage** ability, or (b) a
    **perfect-release** timing on the bow draw (release in a window → a power shot: bonus damage +
    pierce + a brief slo-mo). Reuses the perfect-hit-window pattern already in PlayerAttackController.
