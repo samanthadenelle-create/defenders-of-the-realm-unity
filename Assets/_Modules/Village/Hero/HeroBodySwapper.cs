@@ -14,6 +14,7 @@
 // hand-imported Tripo FBXs).
 // =============================================================================
 
+using DeNelle.Core.Combat; // ActorAnimator for post-swap battle ready / full anim drive (Village + World)
 using DeNelle.Core.State;
 using UnityEngine;
 
@@ -22,7 +23,7 @@ namespace DeNelle.Village
     [DisallowMultipleComponent]
     public sealed class HeroBodySwapper : MonoBehaviour
     {
-        private const float TargetHeightMeters = 2.0f;
+        private const float TargetHeightMeters = 1.75f;
         // Global animator playback multiplier for the hero (Mixamo clips run fast).
         // 0.5 = half speed. Tune here.
         private const float HeroAnimSpeed = 0.5f;
@@ -70,10 +71,10 @@ namespace DeNelle.Village
             // Instantiate + FitHeight + SeatOnGround (feet at the root, supersedes the
             // old NormalizeHeight) + StripColliders. Hero-specific wiring (forward yaw,
             // animator, ability kit, class texture/tint) layers on top below.
-            // Knight stands 20% taller than the 2 m baseline (owner 2026-05-30). The hero
-            // keeps its OWN material pass (RetargetMaterialsToUrp + ApplyExtractedTexture
+            // Knight stands slightly taller (~1.80m) than the 1.75m human baseline (was 20% on old 2m).
+            // The hero keeps its OWN material pass (RetargetMaterialsToUrp + ApplyExtractedTexture
             // + ApplyClassTint), so the factory's Tripo fix stays OFF (no double-process).
-            float targetH = (cls == HeroClass.Knight) ? TargetHeightMeters * 1.2f : TargetHeightMeters;
+            float targetH = (cls == HeroClass.Knight) ? TargetHeightMeters * 1.0286f : TargetHeightMeters;
             // FORWARD CORRECTION (WO-174): every hero body imports facing +X; rotate the
             // authored +X onto the root's +Z so facing == heading (no moonwalk).
             // DEF-232: pass the yaw to Skin as LocalRotation so it is applied BEFORE the
@@ -82,19 +83,13 @@ namespace DeNelle.Village
             // side of the root. The camera follows the ROOT, so the body appeared offset to her
             // right and "pivoted in place" instead of translating. Rotating first, then seating,
             // centres the visible body dead-on over the root the camera follows.
-            // FORWARD-YAW is PER-PIPELINE (owner 2026-06-03): legacy Tripo bodies export
-            // facing +X and need -90 to face the root's +Z; the new CC5/AccuRIG bodies
-            // (Tripo mesh + AccuRIG rig) already export facing +Z, so they need NO yaw.
-            // One -90 constant for all left the CC5 heroes "turned 90 degrees". As each
-            // class migrates to the CC5 pipeline, flip its entry here to 0.
-            // (If a CC5 hero comes out BACKWARDS instead of correct, it's 180f, not 0f.)
-            // WO-286: ALL four heroes are now the SAME pipeline (re-rigged Tripo mesh +
-            // AccuRIG, 2026-06-06), so they share ONE forward correction. The old per-class
-            // split (Ranger/Cleric 0, Mage/Knight -90) was for the now-replaced bodies and
-            // left every hero "off 90 on movement" (sidestepping). The Tripo mesh geometry
-            // exports facing +X, so -90 rotates that onto the root's +Z (= heading).
-            // IF STILL OFF after this: sidestep the OTHER way → +90f; facing BACKWARDS → 180f.
-            float forwardYaw = -90f;
+            // FORWARD-YAW for current Tripo + AccuRIG pipeline (all classes re-rigged 2026-06-06).
+            // The meshes export facing +X; +90f (or -90f — trial both) rotates the authored
+            // forward onto the locomotion root's +Z so that when HeroLocomotion does
+            // LookRotation(velocity) the visual faces the travel direction (no sidestep/moonwalk).
+            // Current value chosen because -90 produced "faces left when walking up".
+            // IF STILL OFF: try the opposite sign (-90f) or 180f for backwards.
+            float forwardYaw = 90f;
             var body = VisualFactory.Skin(transform, prefab, new SkinOptions
             {
                 FitHeight = targetH,
@@ -258,8 +253,32 @@ namespace DeNelle.Village
             // NOTHING — give him a visible bow. Bow goes in the LEFT (off/bow) hand
             // since HeroAimIK draws with the RightHand IK goal. Cosmetic only; the
             // component null-guards a missing bone and never blocks the hero.
+            // Attachment: uses LeftHand bone (via GetBoneTransform); sizing via
+            // HeroBowAttachment.BowHeldLength + NormalizeInto (reviewed/fixed to 0.92m).
             if (cls == HeroClass.Ranger)
                 HeroBowAttachment.AttachTo(gameObject, body);
+
+            // Default gear + visuals (Chunk default gear + shop): ensure GearLoadout so
+            // level-1 catalog entries (knight sword+plate, ranger bow+leather, mage staff+robes,
+            // cleric mace+light) are applied at spawn. Then attach visuals via the applier
+            // (sword/staff/mace on RightHand; bow skipped in applier -- ranger uses the
+            // dedicated HeroBowAttachment on LeftHand to avoid duplicate back+held).
+            // Re-apply later from shop equip flows. Applier now uses corrected scales/pos/euler
+            // proportional to ~1.8m hero (see GearVisualApplier for exact values).
+            var loadout = GetComponent<GearLoadout>() ?? gameObject.AddComponent<GearLoadout>();
+            loadout.Refresh();
+            GearVisualApplier.Apply(body.transform, loadout);
+
+            // Ensure the guarded ActorAnimator is on the hero root (finds the Animator on the
+            // new "HeroBody" child). This wires the full shared animation pipeline (same as
+            // DTT/PatriciaLight): SetLocomotion (speed for idle/move), SetCombatStance (battle
+            // ready idle stance vs casual), PlayAttack/PlayCast (class-specific), PlayHit,
+            // Die. HeroLocomotion/Abilities already resolve and drive it; re-attach here post-swap
+            // so Village + World scenes get correct hero anims (Idle/BattleReady, Movement,
+            // Attack/Cast per class, Hit, Death) without falling back to T-pose or legacy only.
+            var actor = GetComponent<ActorAnimator>() ?? gameObject.AddComponent<ActorAnimator>();
+            actor.SetCombatStance(true); // battle ready / engagement stance for village threats/waves
+
             Debug.Log("[HeroBodySwapper] Swapped hero body to " + slug + ".fbx");
         }
 
@@ -444,7 +463,11 @@ namespace DeNelle.Village
                 // WO-286: the re-rigged Mage mesh's own basecolor is the "witch" atlas
                 // (it shipped base-color only); the old "wizard" path bound a different
                 // mesh's texture → wrong colors. Point at the mesh's own basecolor.
-                HeroClass.Mage => "Heroes/Textures/fantasywitch3dmodel_basecolor",
+                // FIX (2026-06-06): the PROJECT Mage is a legacy Tripo mesh — its UV-matched
+                // atlas is its OWN embedded diffuse (Mage.fbm/tripo_mat_9b343081, copied into
+                // Textures/), NOT the actors/ dwarf basecolor (a different mesh). CC5 heroes
+                // (Ranger/Cleric) use the actors originals; Tripo heroes use their own.
+                HeroClass.Mage => "Heroes/Textures/tripo_mat_9b343081_Pbr_Diffuse",
                 // DEF-267: the Knight is also a LEGACY Tripo body whose FBX material remap doesn't
                 // resolve → grey. WO-35 had returned null (to dodge a blood-splatter look the owner
                 // disliked), but that left the Knight GREY in the build, which is worse. Bind the
@@ -454,7 +477,13 @@ namespace DeNelle.Village
                 // WO-286: the re-rigged Knight mesh ships TWO sets — its real
                 // knight_basecolor and a stray remesh_12_combined_Bake raw bake. Bind the
                 // knight basecolor (the old medievalknight path was a different mesh).
-                HeroClass.Knight => "Heroes/Textures/knight_basecolor",
+                // PARKED (2026-06-06): the Knight FBX is a broken combo — its mesh material
+                // is 'tripo_mat_18e58c3e', which has NO matching atlas in-project (tripo_1afe2e5e,
+                // remesh_12, knight_basecolor, HumanTank all read wrong). This needs a CLEAN
+                // Knight model re-import, not a texture pick. Until then return null so the body
+                // falls through to ApplyClassTint's clean steel placeholder (presentable, not
+                // garbled). TODO: re-import a matching Knight mesh+atlas, then bind it here.
+                HeroClass.Knight => null,
                 // DEF-229 (2026-06-03): the Ranger body is now the CC5/CC_Base adult
                 // archer (InstaLOD-remeshed: ONE combined mesh + ONE baked PBR atlas),
                 // imported Humanoid by PeopleCharacterImporter.ImportRangerCC5 into
@@ -464,11 +493,10 @@ namespace DeNelle.Village
                 // correct — each slot samples its UV region. Repointed off the retired
                 // Tripo "archer v2" basecolor (Textures/Ranger) to the CC5 bake so the
                 // selected archer reads as the adult ranger, not the old spiky youth.
-                // WO-286: the 2026-06-06 FBX swap removed Resources/Heroes/Ranger_tex/
-                // (the old CC5 bake) → the diffuse no longer loaded → Ranger fell back to
-                // the green species tint. Repoint to the canonical, reliably-loadable
-                // ranger diffuse that DOES exist in the plain Heroes/Textures/ folder.
-                HeroClass.Ranger => "Heroes/Textures/Archer_basecolor",
+                // FIX (2026-06-06): bind the Ranger's ORIGINAL basecolor from the source actor's
+                // .fbm (ranger.fbm/ranger_basecolor) copied into Textures/ — the model's own
+                // shipped atlas. (Archer_basecolor read dark; it was a different/old archer bake.)
+                HeroClass.Ranger => "Heroes/Textures/ranger_basecolor",
                 // DEF-232/229 (2026-06-03): the Cleric (Healer/Elara body) is now the
                 // owner's fresh CC5/CC_Base adult cleric, imported Humanoid by
                 // PeopleCharacterImporter.ImportClericCC5 with its baked basecolor copied
@@ -501,6 +529,13 @@ namespace DeNelle.Village
                 if (baked.HasProperty("_MainTex"))   baked.SetTexture("_MainTex", tex);
                 if (baked.HasProperty("_BaseColor")) baked.SetColor("_BaseColor", Color.white);
                 if (baked.HasProperty("_Color"))     baked.SetColor("_Color", Color.white);
+
+                // Make Knight metallic armor as specified (vibrant steel).
+                if (cls == HeroClass.Knight)
+                {
+                    if (baked.HasProperty("_Metallic"))   baked.SetFloat("_Metallic", 0.7f);
+                    if (baked.HasProperty("_Smoothness")) baked.SetFloat("_Smoothness", 0.5f);
+                }
             }
 
             foreach (var r in body.GetComponentsInChildren<Renderer>(true))
@@ -516,7 +551,11 @@ namespace DeNelle.Village
                 {
                     if (baked != null)
                     {
-                        // CC5: replace the null/default/broken import slot with the baked material.
+                        // For all (unified CC5 path): always replace slots with the baked material that has
+                        // the correct class basecolor atlas bound to _BaseMap and white _BaseColor.
+                        // This ensures vibrant correct textures regardless of what the FBX import remapped
+                        // (or left null). Stray metallic/normal from import are discarded (they were causing
+                        // color artefacts like patchy red/purple).
                         mats[i] = baked;
                     }
                     else if (mats[i] != null)

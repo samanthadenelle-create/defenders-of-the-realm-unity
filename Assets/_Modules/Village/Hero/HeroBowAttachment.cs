@@ -45,13 +45,22 @@ namespace DeNelle.Village
 
         // The bow is first NORMALIZED (NormalizeInto) to the owner's spec — longest axis
         // (limbs) on local +Y, narrowest on +X, grip at the centre of the longest part,
-        // scaled to BowHeldLength. These then place that normalized bow in the hand bone;
-        // because the bow is normalized, GripLocalEuler is a single predictable hand-
-        // orientation tweak (not a guess against an arbitrary FBX). Bone-local m / deg.
+        // scaled to BowHeldLength. Because NormalizeInto already does that bounds-based
+        // deterministic fit (longest/limbs -> +Y, narrowest -> +X, grip centred, scaled to
+        // target) independent of the FBX's own pivot/orient/scale, the bow arrives in the
+        // hand ALREADY oriented to spec — so GripLocalEuler stays ZERO. A previous +91 Z
+        // tweak rotated that correct bow ~90 deg sideways, tipping the long axis off +Y —
+        // that was the "bow is turned" bug, removed. If a small hand-fit nudge is ever
+        // needed, tune these against a screenshot rather than guessing.
         private static readonly Vector3 GripLocalPosition = new Vector3(0f, 0f, 0f);
         private static readonly Vector3 GripLocalEuler    = new Vector3(0f, 0f, 0f);
         // Target held length of the longest (limb) axis, in metres.
-        private const float BowHeldLength = 1.3f;
+        // Reviewed + fixed: 1.3f was massively oversized vs ~1.8-2m hero (ranger body
+        // TargetHeightMeters=2.0f base). Realistic held bow (nock-to-nock) is 0.9-1.0m.
+        // NormalizeInto measures renderer bounds post-load (works for both KayKit Bow.prefab
+        // and the procedural fallback), orients longest axis to +Y, narrowest to +X, centres
+        // grip at origin, then scales Y to this target. Grip* applied after on the LeftHand bone.
+        private const float BowHeldLength = 0.92f;
 
         private Animator _animator;
         private GameObject _bow;
@@ -216,7 +225,8 @@ namespace DeNelle.Village
         /// <summary>
         /// Builds a simple low-poly bow: a curved wooden riser+limbs (an arc swept
         /// into a thin ribbon) plus a straight string spanning the limb tips. One
-        /// GameObject, one MeshRenderer, no asset dependency. ~0.9 m tall.
+        /// GameObject, one MeshRenderer, no asset dependency. Native arc ~0.9m; the
+        /// caller (NormalizeInto) forces exact BowHeldLength (0.92m) via bounds scale.
         /// </summary>
         private static GameObject BuildProceduralBow()
         {
