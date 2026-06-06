@@ -119,6 +119,12 @@ namespace DeNelle.Village
             _hero = hero;
         }
 
+        /// <summary>Which hero's companion this is (drives the party-frame label).</summary>
+        public HeroClass Hero => _hero;
+
+        /// <summary>The companion's display name, for the HUD party frame.</summary>
+        public string DisplayName => CompanionDialogue.NameFor(_hero);
+
         /// <summary>Assigns the speech bubble (the injector wires this).</summary>
         public void SetBubble(TownsfolkBubble bubble)
         {
