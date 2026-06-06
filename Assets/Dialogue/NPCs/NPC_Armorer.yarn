@@ -1,0 +1,14 @@
+title: TalkToArmorer
+---
+The armorer's shop. I can help with protection.
+-> Browse wares (buy / sell gear).
+    <<command: OpenShop "armorer">>
+-> Upgrade my armor.
+    <<command: OpenUpgrade "armorer">>
+-> Craft some gear.
+    <<command: OpenCraft "armorer">>
+-> Manage my equipment.
+    <<command: OpenEquip>>
+-> That's all.
+    Stay safe out there.
+===

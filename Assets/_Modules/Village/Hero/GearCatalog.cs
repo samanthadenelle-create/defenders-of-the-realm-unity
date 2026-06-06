@@ -52,6 +52,12 @@ namespace DeNelle.Village
         // this 0, so their reach is unaffected.
         public float reach = 0f;
         public GearReq req;
+
+        // Shop integration (basic): resource costs. Populated from canonical JSON.
+        public int buyWood;
+        public int buyFood;
+        public int buyIron;
+        public int buyCrystals;
     }
 
     /// <summary>A piece of armor: defense = fractional incoming-damage reduction (0.04 = 4%).</summary>
@@ -66,6 +72,12 @@ namespace DeNelle.Village
         public float defense;     // 0..0.9 fractional damage reduction
         public float hpBonus;     // carried for a later pass; v1 applies defense only
         public GearReq req;
+
+        // Shop integration (basic): resource costs. Populated from canonical JSON.
+        public int buyWood;
+        public int buyFood;
+        public int buyIron;
+        public int buyCrystals;
     }
 
     [Serializable] public sealed class WeaponCatalogData { public List<WeaponDef> weapons; }
@@ -122,6 +134,60 @@ namespace DeNelle.Village
                 }
             }
             return best;
+        }
+
+        /// <summary>Find exact weapon by id (case-insensitive), or null. Used by shop/equip flows.</summary>
+        public static WeaponDef FindWeapon(string id)
+        {
+            if (string.IsNullOrEmpty(id)) return null;
+            EnsureLoaded();
+            if (_weapons == null) return null;
+            foreach (var w in _weapons)
+            {
+                if (w != null && string.Equals(w.id, id, StringComparison.OrdinalIgnoreCase)) return w;
+            }
+            return null;
+        }
+
+        /// <summary>Find exact armor by id (case-insensitive), or null. Used by shop/equip flows.</summary>
+        public static ArmorDef FindArmor(string id)
+        {
+            if (string.IsNullOrEmpty(id)) return null;
+            EnsureLoaded();
+            if (_armor == null) return null;
+            foreach (var a in _armor)
+            {
+                if (a != null && string.Equals(a.id, id, StringComparison.OrdinalIgnoreCase)) return a;
+            }
+            return null;
+        }
+
+        /// <summary>All loaded weapon defs (for vendor stock enumeration). Never null.</summary>
+        public static IReadOnlyList<WeaponDef> AllWeapons()
+        {
+            EnsureLoaded();
+            return _weapons ?? (IReadOnlyList<WeaponDef>)System.Array.Empty<WeaponDef>();
+        }
+
+        /// <summary>All loaded armor defs (for vendor stock enumeration). Never null.</summary>
+        public static IReadOnlyList<ArmorDef> AllArmors()
+        {
+            EnsureLoaded();
+            return _armor ?? (IReadOnlyList<ArmorDef>)System.Array.Empty<ArmorDef>();
+        }
+
+        /// <summary>Build ResourceCost from a weapon def's buy* fields (for Economy.TrySpend).</summary>
+        public static DeNelle.Village.ResourceCost GetBuyCost(WeaponDef w)
+        {
+            if (w == null) return default;
+            return new DeNelle.Village.ResourceCost(w.buyWood, w.buyFood, w.buyIron, w.buyCrystals);
+        }
+
+        /// <summary>Build ResourceCost from an armor def's buy* fields (for Economy.TrySpend).</summary>
+        public static DeNelle.Village.ResourceCost GetBuyCost(ArmorDef a)
+        {
+            if (a == null) return default;
+            return new DeNelle.Village.ResourceCost(a.buyWood, a.buyFood, a.buyIron, a.buyCrystals);
         }
 
         private static bool JobMatches(string itemJob, string heroJob)

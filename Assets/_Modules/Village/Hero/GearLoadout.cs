@@ -1,5 +1,5 @@
 // =============================================================================
-// GearLoadout — Gear v1 equip model on the hero (auto-equip best eligible).
+// GearLoadout — Gear v1 equip model on the hero (auto-equip best + manual shop/equip).
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.Village   Namespace: DeNelle.Village
 //
@@ -37,6 +37,9 @@ namespace DeNelle.Village
         public WeaponDef EquippedWeapon { get; private set; }
         public ArmorDef  EquippedArmor  { get; private set; }
 
+        /// <summary>Fired after any manual or auto equip change (shop/equip UI can subscribe to refresh lists or HUD).</summary>
+        public event System.Action OnGearChanged;
+
         private HeroAbilities   _abilities;
         private HeroProgression _progression;
 
@@ -73,6 +76,40 @@ namespace DeNelle.Village
 
             WeaponMult   = EquippedWeapon != null ? Mathf.Max(0.1f, EquippedWeapon.damageMult) : 1f;
             ArmorDefense = EquippedArmor  != null ? Mathf.Clamp(EquippedArmor.defense, 0f, 0.9f) : 0f;
+
+            OnGearChanged?.Invoke();
+        }
+
+        /// <summary>
+        /// Manual equip support for shop / EquipmentPanel flows. Forces a specific piece
+        /// the player has purchased (or crafted). Updates stats immediately and triggers
+        /// visuals re-apply (sword on hand, bow on back, armor accents, knight shield).
+        /// </summary>
+        public void EquipWeaponById(string id)
+        {
+            var w = GearCatalog.FindWeapon(id);
+            if (w == null) return;
+            EquippedWeapon = w;
+            WeaponMult = Mathf.Max(0.1f, w.damageMult);
+            OnGearChanged?.Invoke();
+            TryReapplyVisuals();
+        }
+
+        public void EquipArmorById(string id)
+        {
+            var a = GearCatalog.FindArmor(id);
+            if (a == null) return;
+            EquippedArmor = a;
+            ArmorDefense = Mathf.Clamp(a.defense, 0f, 0.9f);
+            OnGearChanged?.Invoke();
+            TryReapplyVisuals();
+        }
+
+        private void TryReapplyVisuals()
+        {
+            var body = transform.Find("HeroBody");
+            if (body != null)
+                GearVisualApplier.Apply(body, this);
         }
     }
 }

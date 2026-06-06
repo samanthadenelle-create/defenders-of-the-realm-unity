@@ -1,0 +1,26 @@
+title: TalkToForge
+---
+<<if $firstForgeTalk is not true>>
+<<set $firstForgeTalk = true>>
+Ah, a new face at the forge. I can teach you to craft basic weapons if you bring the iron and wood.
+-> Show me how to craft a sword.
+    <<command: LearnRecipe "basic_sword">>
+    Good. Bring the materials and I'll forge it for you. Use the workshop.
+    -> Open the forge now.
+        <<command: OpenCraft "forge">>
+    -> Maybe later.
+        Come back when you're ready.
+<<else>>
+Back for more? The forge is hot.
+-> Craft a basic sword.
+    <<command: OpenCraft "forge">>
+-> Browse the forge wares (buy/sell).
+    <<command: OpenShop "forge">>
+-> Equip what I have.
+    <<command: OpenEquip>>
+-> Upgrade my gear instead.
+    <<command: OpenUpgrade "armorer">>
+-> Never mind.
+    Safe travels.
+<<endif>>
+===
