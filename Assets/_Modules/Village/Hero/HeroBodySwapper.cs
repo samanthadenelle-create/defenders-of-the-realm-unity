@@ -88,12 +88,13 @@ namespace DeNelle.Village
             // One -90 constant for all left the CC5 heroes "turned 90 degrees". As each
             // class migrates to the CC5 pipeline, flip its entry here to 0.
             // (If a CC5 hero comes out BACKWARDS instead of correct, it's 180f, not 0f.)
-            float forwardYaw = cls switch
-            {
-                HeroClass.Ranger => 0f,   // CC5/AccuRIG (adult archer)
-                HeroClass.Cleric => 0f,   // CC5/AccuRIG (adult cleric / Elara)
-                _ => -90f,                // legacy Tripo (Mage, Knight)
-            };
+            // WO-286: ALL four heroes are now the SAME pipeline (re-rigged Tripo mesh +
+            // AccuRIG, 2026-06-06), so they share ONE forward correction. The old per-class
+            // split (Ranger/Cleric 0, Mage/Knight -90) was for the now-replaced bodies and
+            // left every hero "off 90 on movement" (sidestepping). The Tripo mesh geometry
+            // exports facing +X, so -90 rotates that onto the root's +Z (= heading).
+            // IF STILL OFF after this: sidestep the OTHER way → +90f; facing BACKWARDS → 180f.
+            float forwardYaw = -90f;
             var body = VisualFactory.Skin(transform, prefab, new SkinOptions
             {
                 FitHeight = targetH,
@@ -417,7 +418,17 @@ namespace DeNelle.Village
             //    separate UV islands onto a single material and mis-sample. Each slot already maps
             //    its own region of the single Tripo atlas, so painting the same atlas onto each is
             //    correct and preserves the per-slot setup.
-            bool isCc5Combined = (cls == HeroClass.Ranger || cls == HeroClass.Cleric);
+            // WO-286: ALL four heroes are now re-rigged single-atlas meshes (AccuRIG,
+            // 2026-06-06). Each FBX shipped EXTRA texture sets (Knight a stray
+            // remesh_*_Bake, Ranger a Motion_Dummy_Female PBR set) plus metallic/normal
+            // maps the import bound into the slots — that's the blotchy purple-camo Mage +
+            // patchy-red Knight (wrong albedo + a normal/metallic read as colour). The
+            // "paint _BaseMap onto existing slots" path LEFT those stray maps in place, so
+            // it never cleaned up. Build ONE fresh URP/Lit from JUST the real basecolor and
+            // REPLACE every slot (no metallic/normal assigned → no colour-space artefact).
+            // Each slot's own UVs still sample the single atlas correctly. So: combined
+            // path for ALL classes now, not only the old CC5 Ranger/Cleric.
+            bool isCc5Combined = true;
             string texPath = cls switch
             {
                 // DEF-267: the Mage is a LEGACY Tripo body. The build log showed Mage rendering
