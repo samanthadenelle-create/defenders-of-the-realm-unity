@@ -242,23 +242,71 @@ namespace DeNelle.Village
 
             if (_root == null) _root = new GameObject("[RegionMobs]").transform;
 
-            // Spawn at most a couple per tick so a fresh region fills in over a few
-            // seconds rather than popping a whole pack in one frame.
-            int spawnThisTick = Mathf.Min(deficit, 2);
-            for (int n = 0; n < spawnThisTick; n++)
+            // WO-316: spawn a small FAMILY PACK per top-up rather than one lone mob —
+            // a lead (brute/charger), a fast skirmisher DPS, and (room permitting) a
+            // caster support, clustered around one anchor so they roam + aggro as a
+            // group. Capped by the remaining deficit so the population target holds.
+            if (!TryFindSpawnPoint(playerPos, out Vector3 packPos)) return;
+
+            RegionId region = ZoneManager.GetZone(packPos);
+            if (!RegionSpawnTable.HasRoster(region)) return;   // not an outer region
+
+            float depth = ZoneManager.Depth(packPos);
+            int threat  = ZoneManager.ThreatLevel(packPos);
+
+            SpawnPack(region, packPos, depth, threat, deficit);
+        }
+
+        // ── WO-316: compose + spawn a small region family pack ────────────────────
+        // Tank lead + skirmisher DPS + (optional) caster support, picked from the
+        // region roster and clustered around the pack origin. Each member gets an
+        // EnemyBrain ROLE so the pack reads as a squad (tank screens, DPS flanks,
+        // support hangs back). Reuses SpawnMob for the per-body build (one enemy-
+        // creation path) and only adds the role assignment + clustering on top.
+        private void SpawnPack(RegionId region, Vector3 origin, float depth, int threat, int budget)
+        {
+            // Pack size scales gently with the remaining deficit (2-3), never more
+            // than budget so a top-up can't overshoot the population target.
+            int packSize = Mathf.Clamp(budget, 1, 3);
+
+            for (int i = 0; i < packSize; i++)
             {
-                if (!TryFindSpawnPoint(playerPos, out Vector3 pos)) continue;
+                // Cluster members within a couple metres of the pack origin.
+                Vector2 jitter = i == 0 ? Vector2.zero : Random.insideUnitCircle * 3.5f;
+                Vector3 want = origin + new Vector3(jitter.x, 0f, jitter.y);
+                Vector3 pos = want;
+                if (NavMesh.SamplePosition(want, out NavMeshHit hit, 6f, NavMesh.AllAreas))
+                    pos = hit.position;
 
-                RegionId region = ZoneManager.GetZone(pos);
-                if (!RegionSpawnTable.HasRoster(region)) continue;   // not an outer region
-
-                float depth = ZoneManager.Depth(pos);
-                int threat = ZoneManager.ThreatLevel(pos);
+                // Member 0 = the lead (any roster pick → tends to the brute/charger);
+                // later members fill complementary roles for a real squad mix.
                 string enemyId = RegionSpawnTable.PickEnemyId(region, depth, Random.value);
                 if (string.IsNullOrEmpty(enemyId)) continue;
 
                 var mob = SpawnMob(enemyId, region, pos, threat);
-                if (mob != null) _live.Add(mob);
+                if (mob == null) continue;
+
+                // Stamp a tactical role so the pack behaves as tank + DPS + support.
+                // EnemyFactory builds a plain body (no brain) — add one for the role.
+                var brain = mob.Enemy.GetComponent<EnemyBrain>();
+                if (brain == null) brain = mob.Enemy.gameObject.AddComponent<EnemyBrain>();
+                brain.Role = PackRoleForIndex(enemyId, i);
+
+                _live.Add(mob);
+            }
+        }
+
+        // Pack role by slot: lead = Tank (screens), then a Ranged skirmisher (DPS),
+        // then a Healer support. Casters always read as Healer regardless of slot.
+        private static EnemyRole PackRoleForIndex(string enemyId, int index)
+        {
+            if (enemyId == "tiefling-cultist" || enemyId == "orc-shaman" || enemyId == "necromancer")
+                return EnemyRole.Healer;
+            switch (index)
+            {
+                case 0:  return EnemyRole.Tank;
+                case 1:  return EnemyRole.Ranged;
+                default: return EnemyRole.Healer;
             }
         }
 

@@ -58,6 +58,25 @@ namespace DeNelle.Village
         [JsonProperty("id")] public string Id;
         /// <summary>Short canon name (e.g. "Hollow Walker").</summary>
         [JsonProperty("name")] public string Name;
+
+        // ── Family / role / spawn (WO-316) ───────────────────────────────────
+        /// <summary>
+        /// Faction the enemy belongs to ("hollow" / "orc" / "troll"). Drives the
+        /// runtime group composition — WaveManager builds a role-mix squad from the
+        /// members of a family. Absent in JSON ⇒ "hollow" (back-compat default).
+        /// </summary>
+        [JsonProperty("family")] public string Family = "hollow";
+        /// <summary>
+        /// Combat archetype within the family ("grunt" / "brute" / "skirmisher" /
+        /// "caster" / "elite"). Read by <see cref="EnemyRoleKind"/> to assign the
+        /// spawned enemy's <see cref="EnemyRole"/>. Absent ⇒ "grunt".
+        /// </summary>
+        [JsonProperty("role")] public string Role = "grunt";
+        /// <summary>
+        /// Where this enemy appears ("wave" / "roam" / "camp" / "world"). A list;
+        /// an enemy can do more than one. Absent ⇒ ["wave"] for back-compat.
+        /// </summary>
+        [JsonProperty("spawn")] public List<string> Spawn = new List<string> { "wave" };
         /// <summary>Display name shown on the HP bar / codex.</summary>
         [JsonProperty("displayName")] public string DisplayName;
         /// <summary>KayKit mesh key — resolved to Assets/Models/KayKit/enemies/&lt;key&gt;.glb.</summary>
@@ -106,6 +125,28 @@ namespace DeNelle.Village
                 }
             }
         }
+
+        /// <summary>
+        /// WO-316: the JSON <see cref="Role"/> token mapped to the tactical
+        /// <see cref="EnemyRole"/> the spawner assigns to <c>EnemyBrain.Role</c>.
+        /// brute → Tank (soaks + screens), caster → Healer (the support to kill
+        /// first), skirmisher → Ranged (fast flanker), elite → MiniBoss, everything
+        /// else (grunt / unknown) → DPS. Drives the "tank + healer + DPS" mix.
+        /// </summary>
+        public EnemyRole RoleKind
+        {
+            get
+            {
+                switch ((Role ?? "grunt").Trim().ToLowerInvariant())
+                {
+                    case "brute":      return EnemyRole.Tank;
+                    case "caster":     return EnemyRole.Healer;
+                    case "skirmisher": return EnemyRole.Ranged;
+                    case "elite":      return EnemyRole.MiniBoss;
+                    default:           return EnemyRole.DPS;   // grunt / warrior / unknown
+                }
+            }
+        }
     }
 
     /// <summary>The deserialised root of <c>enemies.json</c>.</summary>
@@ -121,6 +162,57 @@ namespace DeNelle.Village
             if (string.IsNullOrEmpty(id) || Enemies == null) return null;
             foreach (var e in Enemies)
                 if (e != null && e.Id == id) return e;
+            return null;
+        }
+
+        // ── WO-316: family / role composition helpers ─────────────────────────
+
+        /// <summary>
+        /// WO-316: every enemy def belonging to <paramref name="family"/> (case-
+        /// insensitive). Used by WaveManager to compose a runtime role-mix squad —
+        /// a tank + healer + a few DPS drawn from the same faction. Optionally
+        /// filters to a given <paramref name="spawnContext"/> ("wave" / "roam" /
+        /// "camp") so the village siege never pulls a camp-only elite. Never null.
+        /// </summary>
+        public List<EnemyDef> MembersOf(string family, string spawnContext = null)
+        {
+            var result = new List<EnemyDef>();
+            if (Enemies == null || string.IsNullOrEmpty(family)) return result;
+
+            foreach (var e in Enemies)
+            {
+                if (e == null) continue;
+                string fam = string.IsNullOrEmpty(e.Family) ? "hollow" : e.Family;
+                if (!string.Equals(fam, family, System.StringComparison.OrdinalIgnoreCase)) continue;
+
+                if (!string.IsNullOrEmpty(spawnContext))
+                {
+                    bool ok = false;
+                    var spawn = e.Spawn ?? new List<string> { "wave" };
+                    foreach (var s in spawn)
+                        if (string.Equals(s, spawnContext, System.StringComparison.OrdinalIgnoreCase)) { ok = true; break; }
+                    if (!ok) continue;
+                }
+
+                result.Add(e);
+            }
+            return result;
+        }
+
+        /// <summary>
+        /// WO-316: the first member of <paramref name="family"/> whose JSON role
+        /// matches <paramref name="role"/> (e.g. brute → the tank, caster → the
+        /// healer), or null when the family fields no such role. Lets a composer
+        /// ask "give me this family's healer" without hard-coding ids.
+        /// </summary>
+        public EnemyDef FindByRole(string family, string role)
+        {
+            if (Enemies == null || string.IsNullOrEmpty(role)) return null;
+            foreach (var e in MembersOf(family))
+            {
+                string r = string.IsNullOrEmpty(e.Role) ? "grunt" : e.Role;
+                if (string.Equals(r, role, System.StringComparison.OrdinalIgnoreCase)) return e;
+            }
             return null;
         }
     }

@@ -123,6 +123,16 @@ namespace DeNelle.Village
         [SerializeField] private System.Collections.Generic.List<WaveEnemyGroup> _waveGroupSequence
             = new System.Collections.Generic.List<WaveEnemyGroup>();
 
+        [Tooltip("WO-316: COMPOSE each wave's batches into runtime role-mix FAMILY squads " +
+                 "(a tank + healer + a few DPS, advancing + charging together via the " +
+                 "EnemyGroupSpawner / EnemyGroupCoordinator) instead of releasing the flat " +
+                 "single-type batch stream. ON = composed groups (auto-builds a spawner if " +
+                 "none is wired); OFF = legacy flat WaveBatch spawning (back-compat).")]
+        [SerializeField] private bool _composeFamilyGroups = true;
+
+        [Tooltip("WO-316: the formation runtime-composed family squads spawn in.")]
+        [SerializeField] private SpawnFormation _composedFormation = SpawnFormation.Wedge;
+
         [Header("Wave SO Authoring (WO-86)")]
         [Tooltip("Optional list of WaveData ScriptableObjects for SO-driven authoring. The existing JSON-driven loop runs independently and is unaffected.")]
         [SerializeField] private List<WaveData> _soWaves
@@ -533,9 +543,18 @@ namespace DeNelle.Village
             if (_heart != null)
                 _heart.SetState(wave.IsApexBossWave ? HeartState.Boss : HeartState.Vigilant);
 
-            // Each batch spawns on its own delayed coroutine-equivalent UniTask.
-            if (wave.Enemies != null)
+            // WO-316: compose the wave's batches into runtime role-mix FAMILY squads
+            // (tank + healer + a few DPS that hold then charge together) routed through
+            // the EnemyGroupSpawner / EnemyGroupCoordinator. Falls back to the flat
+            // per-batch SpawnBatch stream when composition is off or yields nothing
+            // (so the legacy path is always available for back-compat).
+            bool composed = false;
+            if (_composeFamilyGroups && wave.Enemies != null && wave.Enemies.Count > 0)
+                composed = SpawnComposedFamilyGroups(wave);
+
+            if (!composed && wave.Enemies != null)
             {
+                // Legacy flat path: each batch spawns on its own delayed UniTask.
                 foreach (WaveBatch batch in wave.Enemies)
                 {
                     if (batch != null) SpawnBatch(batch).Forget();
@@ -590,6 +609,109 @@ namespace DeNelle.Village
             // the dragon is aloft the moment the apex wave begins.
             if (wave.IsApexBossWave)
                 SpawnApexBoss(wave.ApexBoss);
+        }
+
+        /// <summary>
+        /// WO-316: composes the wave's flat batches into runtime role-mix FAMILY
+        /// squads and releases each as ONE coordinated group via the existing
+        /// <see cref="EnemyGroupSpawner.SpawnComposedGroup"/> (formation spread,
+        /// NavMesh snap, per-member <see cref="EnemyRole"/>, and the
+        /// <see cref="EnemyGroupCoordinator"/> "hold then charge together" release).
+        ///
+        /// Each batch's <c>type</c> resolves to an <see cref="EnemyDef"/>; the def's
+        /// <see cref="EnemyDef.Family"/> buckets the batch, its <see cref="EnemyDef.RoleKind"/>
+        /// assigns the tactical role, and its <c>count</c> sets how many. So a wave
+        /// of "3 hollow-walker + 1 hollow-warrior + 2 hollow-rogue" becomes ONE
+        /// Hollow squad of 3 DPS + 1 Tank + 2 Ranged that advance and charge as a
+        /// unit, instead of three single-type conga lines.
+        ///
+        /// Returns true if at least one group was spawned (caller skips the flat
+        /// path); false when nothing resolved (caller falls back to flat batches).
+        /// </summary>
+        private bool SpawnComposedFamilyGroups(WaveDef wave)
+        {
+            if (wave?.Enemies == null || _enemyCatalog == null) return false;
+
+            // Lazily build a spawner so composition works even when the inspector
+            // left _groupSpawner blank (the common case on the live scene).
+            if (_groupSpawner == null)
+            {
+                _groupSpawner = GetComponentInChildren<EnemyGroupSpawner>();
+                if (_groupSpawner == null)
+                {
+                    var go = new GameObject("[EnemyGroupSpawner]");
+                    go.transform.SetParent(transform, false);
+                    _groupSpawner = go.AddComponent<EnemyGroupSpawner>();
+                }
+            }
+
+            // Bucket the batches by family, preserving the first spawn point seen
+            // for each family so the squad materialises at the gate its batch named.
+            var byFamily   = new Dictionary<string, List<ComposedGroupMember>>();
+            var familySpawn = new Dictionary<string, string>();
+
+            foreach (WaveBatch batch in wave.Enemies)
+            {
+                if (batch == null) continue;
+                EnemyDef def = _enemyCatalog.Find(batch.Type);
+                if (def == null)
+                {
+                    Debug.LogWarning($"[WaveManager] WO-316 compose: unknown enemy '{batch.Type}' in wave {wave.WaveId} — skipped.");
+                    continue;
+                }
+
+                string family = string.IsNullOrEmpty(def.Family) ? "hollow" : def.Family;
+                if (!byFamily.TryGetValue(family, out var members))
+                {
+                    members = new List<ComposedGroupMember>();
+                    byFamily[family] = members;
+                    familySpawn[family] = batch.SpawnPoint;
+                }
+                members.Add(new ComposedGroupMember(def, def.RoleKind, Mathf.Max(1, batch.Count)));
+            }
+
+            if (byFamily.Count == 0) return false;
+
+            Transform heartT = _heart != null ? _heart.transform : null;
+            bool spawnedAny = false;
+
+            foreach (var kv in byFamily)
+            {
+                WaveSpawnPoint pt = FindSpawnPoint(familySpawn[kv.Key]);
+                Vector3 spawnPos = pt != null ? pt.transform.position
+                                 : (_spawnPoints != null && _spawnPoints.Count > 0 && _spawnPoints[0] != null
+                                        ? _spawnPoints[0].transform.position
+                                        : transform.position);
+
+                List<Enemy> squad = _groupSpawner.SpawnComposedGroup(
+                    kv.Value,
+                    spawnPos,
+                    heartT,
+                    _enemyRoot,
+                    _composedFormation,
+                    $"{kv.Key}-squad",
+                    _currentWaveId,
+                    ref _spawnInstanceCounter);
+
+                foreach (Enemy e in squad)
+                {
+                    if (e == null) continue;
+
+                    // DEF-59: apply wave-scaling parity with the flat SpawnOne path.
+                    if (_scalingCurve != null)
+                        e.ApplyWaveScaling(
+                            _scalingCurve.HpMultiplier(_currentWaveId),
+                            _scalingCurve.SpeedMultiplier(_currentWaveId),
+                            _scalingCurve.DamageMultiplier(_currentWaveId));
+
+                    e.Died         += HandleEnemyDied;
+                    e.ReachedHeart += HandleEnemyReachedHeart;
+                    _liveEnemies.Add(e);
+                    spawnedAny = true;
+                }
+            }
+
+            return spawnedAny;
         }
 
         /// <summary>

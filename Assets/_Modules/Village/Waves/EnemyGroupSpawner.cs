@@ -39,6 +39,27 @@ using UnityEngine.AI;
 namespace DeNelle.Village
 {
     /// <summary>
+    /// WO-316: one composed member of a RUNTIME role-mix group — a stat block
+    /// (<see cref="EnemyDef"/>), the tactical <see cref="EnemyRole"/> to stamp on
+    /// the spawned EnemyBrain, and how many to spawn. Built at runtime by
+    /// WaveManager / RegionMobSpawner from a family's catalog members, so no
+    /// hand-authored <see cref="WaveEnemyGroup"/> asset is required.
+    /// </summary>
+    public struct ComposedGroupMember
+    {
+        public EnemyDef  Def;
+        public EnemyRole Role;
+        public int       Count;
+
+        public ComposedGroupMember(EnemyDef def, EnemyRole role, int count)
+        {
+            Def   = def;
+            Role  = role;
+            Count = Mathf.Max(0, count);
+        }
+    }
+
+    /// <summary>
     /// Instantiates a <see cref="WaveEnemyGroup"/> at a world position in the
     /// group's chosen formation. Call <see cref="SpawnGroup"/> from
     /// <see cref="WaveManager"/> when a wave starts.
@@ -156,6 +177,106 @@ namespace DeNelle.Village
                 $"[EnemyGroupSpawner] Wave {waveId} — spawned {spawned.Count} enemies " +
                 $"from group '{group.GroupName}' (ThreatValue {group.ThreatValue}) " +
                 $"in {group.Formation} formation.");
+
+            return spawned;
+        }
+
+        /// <summary>
+        /// WO-316: spawns a RUNTIME-composed role-mix group (tank + healer + DPS,
+        /// etc.) built from <see cref="EnemyDef"/> stat blocks instead of a hand-
+        /// authored <see cref="WaveEnemyGroup"/> asset. Each body is built by the
+        /// shared <see cref="EnemyFactory"/> (skinned, NavMesh-snapped, on the
+        /// Enemy layer), <see cref="Enemy.Configure"/>'d from its REAL def stats,
+        /// spread by <paramref name="formation"/>, given its <see cref="EnemyRole"/>
+        /// via EnemyBrain, and registered with one <see cref="EnemyGroupCoordinator"/>
+        /// so the whole squad holds then charges together. Same tactical wiring as
+        /// the prefab path — just composed at runtime, no SO required.
+        /// </summary>
+        /// <param name="members">The composed role-mix (def + role + count per entry).</param>
+        /// <param name="spawnPos">World origin of the group formation.</param>
+        /// <param name="heart">The Heart transform enemies march toward (may be null for roamers).</param>
+        /// <param name="enemyRoot">Parent transform; keeps the hierarchy tidy. May be null.</param>
+        /// <param name="formation">How the squad is spread at the spawn point.</param>
+        /// <param name="groupLabel">Human-readable label for logs / coordinator name.</param>
+        /// <param name="waveId">Wave number — used to build stable instance ids.</param>
+        /// <param name="instanceCounter">Shared, by-ref unique-id counter.</param>
+        /// <returns>Every <see cref="Enemy"/> spawned (caller hooks Died / ReachedHeart).</returns>
+        public List<Enemy> SpawnComposedGroup(
+            IReadOnlyList<ComposedGroupMember> members,
+            Vector3        spawnPos,
+            Transform      heart,
+            Transform      enemyRoot,
+            SpawnFormation formation,
+            string         groupLabel,
+            int            waveId,
+            ref int        instanceCounter)
+        {
+            var spawned = new List<Enemy>();
+            if (members == null || members.Count == 0) return spawned;
+
+            // Flat total so formation offsets spread across the whole squad.
+            int total = 0;
+            foreach (var m in members) total += Mathf.Max(0, m.Count);
+            if (total <= 0) return spawned;
+
+            int globalIndex = 0;
+
+            // One coordinator per group — holds suppressed members until the whole
+            // squad has spawned, then releases simultaneously (the "charge together"
+            // beat). Same lifecycle as the prefab SpawnGroup path.
+            var coordGo = new GameObject($"[EnemyGroupCoordinator] {groupLabel} W{waveId}");
+            if (enemyRoot != null) coordGo.transform.SetParent(enemyRoot);
+            var coordinator = coordGo.AddComponent<EnemyGroupCoordinator>();
+            coordinator.Initialise(total);
+
+            foreach (ComposedGroupMember member in members)
+            {
+                if (member.Def == null || member.Count <= 0) continue;
+
+                for (int i = 0; i < member.Count; i++)
+                {
+                    Vector3 offset = WaveEnemyGroup.GetFormationOffset(globalIndex++, total, formation);
+                    Vector3 rawPos = spawnPos + offset;
+
+                    // Snap to the NavMesh (EnemyFactory also snaps, but face the Heart
+                    // from a valid point so the first step reads right).
+                    Vector3 pos = rawPos;
+                    if (NavMesh.SamplePosition(rawPos, out NavMeshHit hit, 8f, NavMesh.AllAreas))
+                        pos = hit.position;
+
+                    Vector3 toHeart = heart != null ? (heart.position - pos) : Vector3.forward;
+                    toHeart.y = 0f;
+                    Quaternion rot = toHeart.sqrMagnitude > 0.001f
+                        ? Quaternion.LookRotation(toHeart)
+                        : Quaternion.identity;
+
+                    // Build the body via the shared factory (skinned, hittable, agent).
+                    Enemy enemy = EnemyFactory.Build(member.Def, pos, rot, enemyRoot);
+                    if (enemy == null) continue;
+
+                    string instanceId = $"grp-w{waveId}-{member.Role}-{instanceCounter++}";
+                    enemy.Configure(instanceId, member.Def, heart);   // REAL stats from the def
+
+                    // Stamp the tactical role + register with the coordinator. The
+                    // shared EnemyFactory builds a plain Enemy body (no brain — the
+                    // wave/roam path uses Enemy's own Heart-march), so a composed
+                    // role-mix squad ADDS an EnemyBrain here to drive role targeting
+                    // (Tank charges threats, Healer mends allies, DPS focus-fires).
+                    var brain = enemy.GetComponent<EnemyBrain>();
+                    if (brain == null) brain = enemy.gameObject.AddComponent<EnemyBrain>();
+                    brain.Role = member.Role;
+                    coordinator.RegisterMember(brain);
+
+                    spawned.Add(enemy);
+                }
+            }
+
+            coordinator.FinaliseGroup();
+
+            Debug.Log(
+                $"[EnemyGroupSpawner] Wave {waveId} — spawned {spawned.Count} enemies " +
+                $"from RUNTIME group '{groupLabel}' in {formation} formation " +
+                $"(composed role-mix, no SO).");
 
             return spawned;
         }
