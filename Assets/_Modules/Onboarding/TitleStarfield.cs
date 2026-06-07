@@ -40,7 +40,11 @@ namespace DeNelle.Onboarding
             var renderer = go.GetComponent<ParticleSystemRenderer>();
             ApplyAdditiveMaterial(renderer);
 
+            // AddComponent auto-plays the system; MainModule.duration can't be set
+            // while playing. Stop first, configure, then Play() at the end.
+            ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
             var main = ps.main;
+            main.playOnAwake = false;
             main.duration = 10f;
             main.loop = true;
             main.startLifetime = new ParticleSystem.MinMaxCurve(3.5f, 7.0f);
@@ -108,7 +112,11 @@ namespace DeNelle.Onboarding
             var renderer = go.GetComponent<ParticleSystemRenderer>();
             ApplyAdditiveMaterial(renderer);
 
+            // AddComponent auto-plays the system; MainModule.duration can't be set
+            // while playing. Stop first, configure, then Play() at the end.
+            ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
             var main = ps.main;
+            main.playOnAwake = false;
             main.duration = 16f;
             main.loop = true;
             main.startLifetime = new ParticleSystem.MinMaxCurve(2.8f, 4.2f);

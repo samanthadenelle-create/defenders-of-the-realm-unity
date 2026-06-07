@@ -496,6 +496,14 @@ namespace DeNelle.Village
             go.transform.SetParent(host.transform, false);
             go.transform.position = worldPos;
             var ps = go.AddComponent<ParticleSystem>();
+            // AddComponent starts the system playing this frame REGARDLESS of the
+            // playOnAwake flag we set below, and MainModule.duration cannot change
+            // on a playing system ("Setting the duration while system is still
+            // playing is not supported"). Stop it first so every property below —
+            // and any duration set by the caller after NewPS returns (e.g. Heal) —
+            // is applied while stopped. The system is (re)played later in bulk via
+            // GetComponentsInChildren<ParticleSystem>().Play().
+            ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
             var main = ps.main;
             main.loop = false;
             main.playOnAwake = false;
