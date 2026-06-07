@@ -100,6 +100,321 @@ namespace DeNelle.Editor
             Debug.Log(log.ToString());
         }
 
+        // ==================================================================================
+        //  ProceduralCastleBuilder tester (NEW) — builds the owner's thick inner/outer-wall
+        //  castle into a SEPARATE scene (CastleTest2.unity) with a real ground plane (the
+        //  procedural script builds NO floor), then makes it walkable with the SAME village
+        //  hero/camera wiring CastleWalkable uses.
+        //    Defenders/Sandbox/Test ProceduralCastle
+        //    batchmode -executeMethod DeNelle.Editor.CastleBuilderTester.TestBuildProceduralCastle
+        // ==================================================================================
+
+        private const string ProScenePath = "Assets/Scenes/CastleTest2.unity";
+
+        [MenuItem("Defenders/Sandbox/Test ProceduralCastle")]
+        public static void TestBuildProceduralCastle()
+        {
+            var log = new StringBuilder();
+            log.AppendLine("=== Test ProceduralCastle START ===");
+
+            // 1. Fresh empty scene.
+            var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+
+            // 2. Host GameObject + component.
+            var hostGo = new GameObject("ProceduralCastleTest");
+            hostGo.transform.position = Vector3.zero;
+            var castle = hostGo.AddComponent<ProceduralCastleBuilder>();
+
+            // 3. Resolve prefabs.
+            var resolved = new List<string>();
+            var missing = new List<string>();
+
+            castle.wallPrefab = Resolve("wallPrefab", log, resolved, missing,
+                "Wall_Stone_3x3_A", "Wall_Stone_3x3", "Wall_Stone", "Wall_Medieval_Stone");
+
+            castle.damagedWallPrefab = Resolve("damagedWallPrefab", log, resolved, missing,
+                "Wall_Stone_3x3_B", "Wall_Stone_Damaged", "Wall_Stone_Broken");
+            if (castle.damagedWallPrefab == null && castle.wallPrefab != null)
+            {
+                castle.damagedWallPrefab = castle.wallPrefab;
+                missing.Remove("damagedWallPrefab");
+                resolved.Add("damagedWallPrefab (=wallPrefab fallback)");
+                log.AppendLine("  damagedWallPrefab: FALLBACK to wallPrefab (no damaged variant).");
+            }
+
+            // barricadeWindow is OPTIONAL — leave null if nothing matches (don't flag missing).
+            castle.barricadeWindow = ResolveOptional("barricadeWindow", log, resolved,
+                "Wall_Stone_Window", "Window", "Crenel", "Battlement");
+
+            castle.platformPrefab = Resolve("platformPrefab", log, resolved, missing,
+                "Floor_Stone_3x3m_A", "Floor_Stone_3x3m", "Floor_Stone", "Floor_Medieval");
+
+            castle.gatePrefab = Resolve("gatePrefab", log, resolved, missing,
+                "Gate_Medieval_Medium", "Gate_Medieval", "Gate");
+
+            // stairs: prefer a STRAIGHT (walkable) stairs; spiral is a last resort.
+            bool straightStairs;
+            castle.stairsPrefab = ResolveStairs(log, resolved, missing, out straightStairs);
+
+            // debris: OPTIONAL — assign whatever Apocalypse_M items resolve; empty is fine.
+            castle.debrisPrefabs = ResolveDebris(log, resolved);
+
+            // 4. Ground plane covering the castle footprint (+ margin). The procedural
+            //    script builds NO floor, so the base needs one to walk on.
+            AddGroundPlane(castle, log);
+
+            // 5. Build (auto-bakes navmesh internally).
+            castle.BuildCastle();
+
+            // 6. Make it walkable — SAME wiring as CastleWalkable: scene defaults (camera +
+            //    light + ambient/fog), EventSystem, village hero, camera->hero, re-bake.
+            Village2Playable.AddSceneDefaultsToActiveScene();
+            Village2Playable.ImportEventSystem();
+
+            GameObject hero = Village2Playable.ImportHero(hostGo.transform, /*heart:*/ null);
+            Vector3 heroPos = Vector3.zero;
+            if (hero == null)
+            {
+                log.AppendLine("WARN: ImportHero returned null — hero not built.");
+            }
+            else
+            {
+                // Spawn the hero on the ground near the gate. The gate sits at
+                // (length*unitSize*0.5, 0, 0); drop the hero a few metres in front (+Z),
+                // grounded on the plane top (Y=0).
+                float gateX = castle.length * castle.unitSize * 0.5f;
+                heroPos = new Vector3(gateX, 0f, 4f);
+                hero.transform.position = heroPos;
+                hero.transform.rotation = Quaternion.Euler(0f, 0f, 0f); // face +Z into the castle
+
+                Village2Playable.WireCameraTargetToHero(hero);
+                EnsureHeroControllable(hero, log);
+            }
+
+            // 7. Re-bake the NavMesh now that the ground + hero are in place (mark the
+            //    ground + floor/stairs walkable, walls/towers/gate obstacles).
+            BakeWalkable(scene, log);
+
+            // 8. Count children + save.
+            int childCount = hostGo.GetComponentsInChildren<Transform>(true).Length - 1;
+            EditorSceneManager.MarkSceneDirty(scene);
+            bool saved = EditorSceneManager.SaveScene(scene, ProScenePath);
+
+            log.AppendLine("---- Prefab resolution ----");
+            log.AppendLine("RESOLVED: " + (resolved.Count > 0 ? string.Join(", ", resolved) : "(none)"));
+            log.AppendLine("MISSING:  " + (missing.Count > 0 ? string.Join(", ", missing) : "(none)"));
+            log.AppendLine("Straight (walkable) stairs found: " + (straightStairs ? "YES" : "NO (spiral/none)"));
+            log.AppendLine($"Scene saved={saved} @ {ProScenePath}");
+            log.AppendLine($"PROCASTLE_TEST_OK childCount={childCount} heroAt=({heroPos.x:F2}, {heroPos.y:F2}, {heroPos.z:F2})");
+            log.AppendLine("=== Test ProceduralCastle DONE ===");
+
+            Debug.Log(log.ToString());
+        }
+
+        // Adds a flat ground plane at Y=0 covering the castle footprint + margin, with a real
+        // collider, a neutral material, and NavigationStatic so the hero can walk on it.
+        private static void AddGroundPlane(ProceduralCastleBuilder castle, StringBuilder log)
+        {
+            float footprintX = castle.length * castle.unitSize;
+            float footprintZ = castle.width * castle.unitSize;
+            const float margin = 8f;
+
+            // Unity's built-in Plane is 10x10 units at scale 1 → scale = size / 10.
+            var ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
+            ground.name = "CastleGround";
+            // Centre under the castle (castle spans x:[0..footprintX], z:[0..footprintZ]).
+            ground.transform.position = new Vector3(footprintX * 0.5f, 0f, footprintZ * 0.5f);
+            ground.transform.localScale = new Vector3((footprintX + margin) / 10f, 1f, (footprintZ + margin) / 10f);
+            ground.transform.SetParent(castle.transform, true);
+
+            // Neutral material (URP/Lit if available, else default).
+            var mat = MakeNeutralMaterial();
+            if (mat != null)
+            {
+                var mr = ground.GetComponent<MeshRenderer>();
+                if (mr != null) mr.sharedMaterial = mat;
+            }
+
+            // Mark NavigationStatic (collider is already present from the primitive).
+            var flags = GameObjectUtility.GetStaticEditorFlags(ground);
+            GameObjectUtility.SetStaticEditorFlags(ground, flags | StaticEditorFlags.NavigationStatic);
+
+            log.AppendLine($"  ground: CastleGround plane @ ({ground.transform.position.x:F1},0,{ground.transform.position.z:F1}) " +
+                $"covering ~{footprintX + margin:F0}x{footprintZ + margin:F0}m (collider + NavigationStatic).");
+        }
+
+        private static Material MakeNeutralMaterial()
+        {
+            Shader shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+            if (shader == null) return null;
+            var mat = new Material(shader) { name = "CastleGround_Neutral" };
+            if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", new Color(0.45f, 0.45f, 0.42f));
+            if (mat.HasProperty("_Color")) mat.SetColor("_Color", new Color(0.45f, 0.45f, 0.42f));
+            return mat;
+        }
+
+        // Walkable bake mirroring CastleWalkable: ground/floor/stairs/rampart = walkable,
+        // walls/towers/gate = obstacle, then a synchronous editor bake.
+        private static readonly string[] ProWalkable = { "CastleGround", "Floor", "Ground", "Stairs", "Stair", "Rampart", "Platform" };
+        private static readonly string[] ProObstacle = { "Wall", "Tower", "Gate" };
+
+        private static void BakeWalkable(Scene scene, StringBuilder log)
+        {
+            int walkable = 0, obstacle = 0;
+            foreach (var root in scene.GetRootGameObjects())
+            {
+                foreach (var r in root.GetComponentsInChildren<Renderer>(true))
+                {
+                    if (r == null) continue;
+                    bool isWalkable = NameOrAncestorContainsAny(r.transform, ProWalkable);
+                    bool isObstacle = !isWalkable && NameOrAncestorContainsAny(r.transform, ProObstacle);
+                    if (!isWalkable && !isObstacle) continue;
+
+                    var flags = GameObjectUtility.GetStaticEditorFlags(r.gameObject);
+                    GameObjectUtility.SetStaticEditorFlags(r.gameObject, flags | StaticEditorFlags.NavigationStatic);
+                    if (isWalkable) walkable++; else obstacle++;
+                }
+            }
+            UnityEditor.AI.NavMeshBuilder.ClearAllNavMeshes();
+            UnityEditor.AI.NavMeshBuilder.BuildNavMesh();
+            log.AppendLine($"  navmesh re-baked: {walkable} walkable + {obstacle} obstacle renderer(s) marked NavigationStatic.");
+            if (walkable == 0)
+                log.AppendLine("  WARN: no walkable renderers matched — navmesh may be empty.");
+        }
+
+        private static bool NameOrAncestorContainsAny(Transform t, string[] fragments)
+        {
+            for (Transform cur = t; cur != null; cur = cur.parent)
+                foreach (var f in fragments)
+                    if (cur.name.Contains(f)) return true;
+            return false;
+        }
+
+        // Guarantee the hero is active + its HeroLocomotion is enabled (reflection — editor
+        // asmdef can't reference DeNelle.Village). Same intent as CastleWalkable.EnsureHeroControllable.
+        private static void EnsureHeroControllable(GameObject hero, StringBuilder log)
+        {
+            if (hero == null) return;
+            if (!hero.activeSelf) { hero.SetActive(true); log.AppendLine("  hero was inactive — activated."); }
+
+            System.Type locoType = System.Type.GetType("DeNelle.Village.HeroLocomotion, Assembly-CSharp");
+            if (locoType == null)
+            {
+                foreach (var asm in System.AppDomain.CurrentDomain.GetAssemblies())
+                {
+                    var t = asm.GetType("DeNelle.Village.HeroLocomotion", false);
+                    if (t != null) { locoType = t; break; }
+                }
+            }
+            if (locoType == null)
+            {
+                log.AppendLine("  WARN: HeroLocomotion type not resolvable — cannot verify it is enabled.");
+                return;
+            }
+            var loco = hero.GetComponent(locoType) as Behaviour;
+            if (loco == null) { log.AppendLine("  WARN: hero has NO HeroLocomotion component."); return; }
+            if (!loco.enabled) { loco.enabled = true; log.AppendLine("  HeroLocomotion was DISABLED — re-enabled."); }
+            else log.AppendLine("  HeroLocomotion present + enabled.");
+        }
+
+        // Optional resolve: returns the first match or null, never flags missing.
+        private static GameObject ResolveOptional(string fieldName, StringBuilder log,
+            List<string> resolved, params string[] candidates)
+        {
+            foreach (var c in candidates)
+            {
+                var guids = AssetDatabase.FindAssets("t:Prefab " + c);
+                foreach (var guid in guids)
+                {
+                    var path = AssetDatabase.GUIDToAssetPath(guid);
+                    var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+                    if (prefab != null)
+                    {
+                        log.AppendLine($"  {fieldName}: RESOLVED '{prefab.name}' (matched '{c}') @ {path}");
+                        resolved.Add(fieldName);
+                        return prefab;
+                    }
+                }
+            }
+            log.AppendLine($"  {fieldName}: none found (optional — left null).");
+            return null;
+        }
+
+        // Stairs resolve preferring a STRAIGHT walkable stairs; spiral is last resort.
+        private static GameObject ResolveStairs(StringBuilder log, List<string> resolved,
+            List<string> missing, out bool straight)
+        {
+            // Straight-stairs candidates first (avoid spiral so the hero can climb tier-2).
+            string[] straightCandidates = { "Stairs_Stone", "Stairs_House_A", "Stairs_House_B", "Stairs_House_C", "Stairs_Medieval", "Staircase" };
+            foreach (var c in straightCandidates)
+            {
+                var guids = AssetDatabase.FindAssets("t:Prefab " + c);
+                foreach (var guid in guids)
+                {
+                    var path = AssetDatabase.GUIDToAssetPath(guid);
+                    var name = System.IO.Path.GetFileNameWithoutExtension(path);
+                    if (name.ToLowerInvariant().Contains("spiral")) continue; // skip spiral here
+                    var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+                    if (prefab != null)
+                    {
+                        log.AppendLine($"  stairsPrefab: RESOLVED STRAIGHT '{prefab.name}' (matched '{c}') @ {path}");
+                        resolved.Add("stairsPrefab (straight)");
+                        straight = true;
+                        return prefab;
+                    }
+                }
+            }
+            // Fallback: spiral.
+            string[] spiral = { "Stairs_House_Spiral_2m", "Spiral", "Stairs_House", "Stairs" };
+            foreach (var c in spiral)
+            {
+                var guids = AssetDatabase.FindAssets("t:Prefab " + c);
+                foreach (var guid in guids)
+                {
+                    var path = AssetDatabase.GUIDToAssetPath(guid);
+                    var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+                    if (prefab != null)
+                    {
+                        log.AppendLine($"  stairsPrefab: RESOLVED SPIRAL fallback '{prefab.name}' (matched '{c}') @ {path}");
+                        resolved.Add("stairsPrefab (spiral fallback)");
+                        straight = false;
+                        return prefab;
+                    }
+                }
+            }
+            log.AppendLine("  stairsPrefab: MISSING (no straight or spiral stairs).");
+            missing.Add("stairsPrefab");
+            straight = false;
+            return null;
+        }
+
+        // Debris resolve — collect a few Apocalypse_M items; empty array is acceptable.
+        private static GameObject[] ResolveDebris(StringBuilder log, List<string> resolved)
+        {
+            string[] names = { "Barrel", "Barrel_Empty", "Blood_A", "Bed_Large_Frame_Broken", "Bath_Broken", "Bed_Broken" };
+            var found = new List<GameObject>();
+            foreach (var n in names)
+            {
+                var guids = AssetDatabase.FindAssets("t:Prefab " + n);
+                foreach (var guid in guids)
+                {
+                    var path = AssetDatabase.GUIDToAssetPath(guid);
+                    // Prefer Apocalypse_M pack items.
+                    if (path.IndexOf("Apocalypse", System.StringComparison.OrdinalIgnoreCase) < 0) continue;
+                    var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+                    if (prefab != null && !found.Contains(prefab))
+                    {
+                        found.Add(prefab);
+                        log.AppendLine($"  debris: + '{prefab.name}' @ {path}");
+                        break; // one per name fragment
+                    }
+                }
+            }
+            if (found.Count > 0) resolved.Add($"debrisPrefabs ({found.Count})");
+            else log.AppendLine("  debrisPrefabs: none found (Apocalypse_M absent — debris optional, left empty).");
+            return found.ToArray();
+        }
+
         /// <summary>
         /// Finds the first prefab whose asset name matches one of the candidate name
         /// fragments (tried in order). Logs the resolved path or marks the field MISSING.
