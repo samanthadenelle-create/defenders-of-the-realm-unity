@@ -58,6 +58,39 @@ not deliberate work; leave it / handle in the lean pass.
 
 ---
 
+## 🛰️ Overnight recon (5-agent fan-out) — results
+
+**Committed for you (13 agent-verified-safe, `afd66a0`):** IVillageHud (HEAD-compile fix),
+PlacedStructureData+BaseLayoutLoader (yawOffset), EnemyFactory/HeroAbilities/HeroControlEnsurer
+(additive animator+gear), 5 font-fallback cleanups, PatriciaLightSceneBuilder, VirtualDPadLean.
+
+**🔴 Needs YOUR eyes before commit (12 — all felt/gameplay, playtest first):**
+`PatriciaLightController` (major DTT loop rework), `HeroOverShoulderCamera` + `FirstPersonTowerCamera`
+(camera tuning), `HeroLocomotion` (facing+stance+reflection D-Pad input), `HeroAnimatorFactory`
+(attack/cast timing — needs re-bake), `EnemyBrain` (focus-fire-healer targeting), `Enemy.cs`
+(agent.updateRotation flip), `BuildModeController` (new modal place step), `ClaimableCamp`
+(⚠ spawns placeholder CUBE props — visible junk), `DarkFantasyMobileHUD`/`MasterAssetCatalog`/`HUDManager`.
+
+**🗑️ Delete candidate:** `Editor/Village2Generator.cs` — duplicate of `_Village2/Village2Generator.cs`.
+
+## 🎯 Grant-critical path (agent-prioritized, first-5-min polish)
+1. **WO-286 hero rig / `Build Hero Animators`** — DEP/BLOCKER. A T-posing hero kills the whole
+   combat hook; everything in Lane 3 sits on this. **Do this first.**
+2. **Anim smoke-test** — confirm idle/walk/run + attack/cast/hit/death actually fire (the slo-mo /
+   parry only read if the clips play).
+3. **WO-217 animation polish** (anticipation→impact→recovery) — makes the impact/slo-mo feel weighty.
+4. Defer the foundational "do early" keystones (164 zone / wallet merge / 290 QuestService) — not
+   first-5-min-visible; they don't move a reviewer in minute one.
+
+## ⚠️ Design reconciliations the agents flagged (decide before building)
+- **Pets:** `DESIGN_PET_SYSTEM.md`'s 8-species *taming* roster is greenfield/aspirational. Shipped
+  code is a **3-species Bond model** (aether-sprite/flame-pup/ice-wolf, 0–4 Bond rank in GameState).
+  Recommend: build acquisition as bond-quest unlocks of the existing 3 + generic egg/rescue — **don't
+  greenfield 8 species** (8 meshes/controllers = out of scope for the grant).
+- **Crafting:** rarity field exists (common/uncommon/rare/epic) but **no tier enum**; ships ONE recipe
+  ("torch"); `VillageInventory.CanCraft/TryCraft` are **stubs that always return true** (no real
+  ingredient consume, session-only). Real crafting tiers (WO-293) need that plumbing first.
+
 ## 📋 Captured specs (in-repo, ready to build)
 - **WO-288** — class signature moves: parry TELL (rides the existing enemy telegraph + wind-up
   poses), Mage magical deflect (angle/velocity-gated → free slo-mo), Ranger barrage/perfect-shot,
