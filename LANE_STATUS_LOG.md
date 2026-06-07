@@ -50,7 +50,7 @@ Run it yourself anytime: `powershell -ExecutionPolicy Bypass -File .\run-tests.p
 - ACTION: roundtable triage → fix the real data/security issues, repair/mark stale tests, drive to green so the harness becomes a true pre-push gate.
 
 ## ⏭️ Queued for the runner (safe lanes)
-- **WO-328** (HIGH, Lane 0) root NRE spam — ⚠ **needs the Console stack trace from your playtest** (which script + line throws). Prime per-frame suspects already ruled clean (HUD bridges, HeroLocomotion). **ACTION for you:** on your retest, copy the first NullReferenceException's stack trace from the Console → I'll fix it precisely (a blind guard would just move the bug).
+- ~~**WO-328** (HIGH, Lane 0) root NRE spam~~ — ✅ **CLOSED as NOT REPRODUCIBLE** (owner call 2026-06-07). Did not surface across multiple play sessions today (green dot / enemy turn / farm node / DTT). Prime per-frame suspects ruled clean (HUD bridges, HeroLocomotion). **Re-open if it recurs** — capture the first Console NullReferenceException stack + screen and it becomes a 1-line hand-off.
 - **WO-309** Gems→Crystals + resource icons (rename is safe).
 - **WO-310** companion green tint (mirrors the hero-color fix).
 - **WO-323** trees render white (URP material).
