@@ -12,10 +12,10 @@
         "behaviorId": "DefenseTower",
         "buildCost": 100,
         "cost": {
-          "wood": 60,
+          "wood": 70,
           "food": 0,
-          "iron": 30,
-          "crystals": 20
+          "iron": 40,
+          "crystals": 0
         },
         "maxLevel": 3,
         "navSurface": "Blocker",
@@ -154,10 +154,10 @@
         "behaviorId": "DefenseTower",
         "buildCost": 180,
         "cost": {
-          "wood": 90,
+          "wood": 100,
           "food": 0,
-          "iron": 60,
-          "crystals": 30
+          "iron": 80,
+          "crystals": 0
         },
         "maxLevel": 3,
         "navSurface": "Blocker",
@@ -215,10 +215,10 @@
             "crystals": 0
           },
           {
-            "wood": 10,
+            "wood": 15,
             "food": 0,
-            "iron": 40,
-            "crystals": 10
+            "iron": 45,
+            "crystals": 0
           }
         ],
         "navSurface": "Blocker",
@@ -270,10 +270,10 @@
             "crystals": 0
           },
           {
-            "wood": 20,
+            "wood": 30,
             "food": 0,
-            "iron": 60,
-            "crystals": 20
+            "iron": 70,
+            "crystals": 0
           }
         ],
         "navSurface": "Blocker",
@@ -311,10 +311,10 @@
         "behaviorId": "Gate",
         "buildCost": 120,
         "cost": {
-          "wood": 50,
+          "wood": 60,
           "food": 0,
-          "iron": 40,
-          "crystals": 20
+          "iron": 50,
+          "crystals": 0
         },
         "navSurface": "Blocker",
         "placement": {
@@ -352,10 +352,10 @@
         "behaviorId": "CrystalMine",
         "buildCost": 200,
         "cost": {
-          "wood": 70,
+          "wood": 120,
           "food": 0,
-          "iron": 30,
-          "crystals": 100
+          "iron": 80,
+          "crystals": 0
         },
         "navSurface": "Blocker",
         "placement": {
