@@ -133,6 +133,7 @@ namespace DeNelle.Village
                 case "hollow-walker":    return "Skeleton_Minion";   // grunt
                 case "hollow-warrior":   return "Skeleton_Golem";    // brute / tank
                 case "hollow-rogue":     return "Skeleton_Rogue";    // fast skirmisher
+                case "hollow-acolyte":   return "Skeleton_Mage";     // caster / healer (WO-316 family healer)
 
                 case "orc-raider":       return "Skeleton_Warrior";  // heavy melee
                 case "caveman":          return "Skeleton_Golem";    // big brute

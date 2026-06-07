@@ -19,6 +19,7 @@
   "version": 1,
   "waves": [
     {
+      "_comment": "WO-316 FAMILY COMPOSITION: each wave is authored as ONE Hollow squad with a ROLE MIX (tank + healer + a few DPS), not a clone-swarm. WaveManager.SpawnComposedFamilyGroups buckets these batches by enemies.json 'family', stamps each member's EnemyRole from its 'role' (brute->Tank, caster->Healer, skirmisher->Ranged, grunt->DPS), and releases the whole squad as ONE coordinated group (formation spread + 'hold then charge together'). Keep all batches in a wave on the SAME family + SAME spawnPoint so they compose into a single cohesive squad. Counts scale up per wave.",
       "waveId": 1,
       "name": "First Light",
       "countdownSeconds": 300,
@@ -26,6 +27,20 @@
         {
           "type": "hollow-walker",
           "count": 2,
+          "spawnPoint": "spawn-0",
+          "delay": 0,
+          "interval": 1.4
+        },
+        {
+          "type": "hollow-warrior",
+          "count": 1,
+          "spawnPoint": "spawn-0",
+          "delay": 0,
+          "interval": 1.4
+        },
+        {
+          "type": "hollow-acolyte",
+          "count": 1,
           "spawnPoint": "spawn-0",
           "delay": 0,
           "interval": 1.4
@@ -47,23 +62,23 @@
         {
           "type": "hollow-rogue",
           "count": 2,
-          "spawnPoint": "spawn-1",
-          "delay": 4,
+          "spawnPoint": "spawn-0",
+          "delay": 0,
           "interval": 1.2
         },
         {
           "type": "hollow-warrior",
           "count": 1,
           "spawnPoint": "spawn-0",
-          "delay": 8,
-          "interval": 1.8
+          "delay": 0,
+          "interval": 1.2
         },
         {
-          "type": "orc-berserker",
+          "type": "hollow-acolyte",
           "count": 1,
-          "spawnPoint": "spawn-2",
-          "delay": 10,
-          "interval": 2.0
+          "spawnPoint": "spawn-0",
+          "delay": 0,
+          "interval": 1.2
         }
       ]
     },
@@ -74,38 +89,31 @@
       "enemies": [
         {
           "type": "hollow-walker",
-          "count": 3,
+          "count": 4,
+          "spawnPoint": "spawn-0",
+          "delay": 0,
+          "interval": 1.1
+        },
+        {
+          "type": "hollow-rogue",
+          "count": 2,
           "spawnPoint": "spawn-0",
           "delay": 0,
           "interval": 1.1
         },
         {
           "type": "hollow-warrior",
-          "count": 1,
-          "spawnPoint": "spawn-2",
-          "delay": 4,
-          "interval": 1.8
-        },
-        {
-          "type": "hollow-rogue",
           "count": 2,
-          "spawnPoint": "spawn-3",
-          "delay": 9,
-          "interval": 1.3
+          "spawnPoint": "spawn-0",
+          "delay": 0,
+          "interval": 1.1
         },
         {
-          "type": "orc-shaman",
-          "count": 1,
-          "spawnPoint": "spawn-1",
-          "delay": 7,
-          "interval": 2.0
-        },
-        {
-          "type": "troll",
+          "type": "hollow-acolyte",
           "count": 1,
           "spawnPoint": "spawn-0",
-          "delay": 14,
-          "interval": 2.5
+          "delay": 0,
+          "interval": 1.1
         }
       ]
     },

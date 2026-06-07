@@ -75,6 +75,23 @@
       "flavor": "Quick and low to the ground - it slips the line and goes for the weakest ward."
     },
     {
+      "id": "hollow-acolyte",
+      "name": "Hollow Acolyte",
+      "displayName": "Hollow Acolyte",
+      "family": "hollow",
+      "role": "caster",
+      "spawn": ["wave"],
+      "modelKey": "Skeleton_Mage",
+      "ai": "walker",
+      "hp": 90,
+      "moveSpeed": 2.2,
+      "contactDamage": 4,
+      "attackInterval": 1.4,
+      "height": 1.8,
+      "boss": false,
+      "flavor": "A robed thing that hums the dirge of the Wound — it mends the bone of its kin faster than you can break it. Cut it down first."
+    },
+    {
       "id": "necromancer",
       "name": "Alduin's Necromancer",
       "displayName": "Necromancer of the Wound",
