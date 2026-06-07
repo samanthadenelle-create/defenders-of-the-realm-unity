@@ -225,6 +225,7 @@ namespace DeNelle.Core.State
         public void Save()
         {
             if (_state == null) return;
+            EnsureAccount("local save");   // mint a guest identity if not logged in (offline-first)
 
             var file = new SaveSchema.SaveFile
             {
@@ -627,6 +628,32 @@ namespace DeNelle.Core.State
         private SaveSchema.PersistedState _lastSyncedSnapshot;
         private bool  _isSyncing;
         private float _lastSyncTime = -999f;
+        private static bool _warnedGuestAccount;   // log the guest-wallet assignment once, not every sync
+        private const string GuestWalletPrefix = "guest-local-";
+
+        /// <summary>Robustness (owner 2026-06-07): if no real wallet/account is connected, assign a
+        /// deterministic LOCAL guest wallet so the save/load-state flow always has an identity and
+        /// runs end-to-end instead of silently skipping. Logged ONCE so we can confirm the path is
+        /// exercised without digging. A real login later overwrites it via BindWallet.</summary>
+        private void EnsureAccount(string op)
+        {
+            if (_state == null) return;
+            if (!string.IsNullOrEmpty(_state.BoundWallet)) return;
+            _state.BoundWallet = GuestWalletPrefix + SystemInfo.deviceUniqueIdentifier;
+            if (!_warnedGuestAccount)
+            {
+                _warnedGuestAccount = true;
+                Debug.LogWarning($"[Persistence] No account connected — assigned LOCAL guest wallet " +
+                                 $"'{_state.BoundWallet}' so {op} can run (offline-first). Connect a real wallet to sync to cloud.");
+            }
+        }
+
+        /// <summary>True only when a REAL (non-guest) wallet is connected — the gate for actual cloud
+        /// load/save NETWORK calls. A guest/local wallet or none returns false (local-save-only),
+        /// which is expected and must not be treated as an error.</summary>
+        private bool IsRealWalletConnected()
+            => !string.IsNullOrEmpty(_state?.BoundWallet)
+               && !_state.BoundWallet.StartsWith(GuestWalletPrefix);
 
         // ── Lifecycle hooks ───────────────────────────────────────────────
         private void OnApplicationPause(bool paused)
@@ -669,7 +696,11 @@ namespace DeNelle.Core.State
         /// </summary>
         public async UniTask LoadFromBackend()
         {
-            if (string.IsNullOrEmpty(_state?.BoundWallet)) return;
+            if (!IsRealWalletConnected())
+            {
+                Debug.Log("[Persistence] No wallet connected — skipping cloud load (local save only; expected).");
+                return;
+            }
 
             var url = $"{LoadUrl}?playerId={Uri.EscapeDataString(_state.BoundWallet)}";
             using var req = UnityWebRequest.Get(url);
@@ -865,7 +896,11 @@ namespace DeNelle.Core.State
         {
             if (_isSyncing) return;
             if (!highPriority && Time.time - _lastSyncTime < MinSyncDelay) return;
-            if (string.IsNullOrEmpty(_state?.BoundWallet)) return;   // wallet required
+            if (!IsRealWalletConnected())
+            {
+                Debug.Log("[Persistence] No wallet connected — skipping cloud sync (local save only; expected).");
+                return;
+            }
 
             _isSyncing     = true;
             _lastSyncTime  = Time.time;
