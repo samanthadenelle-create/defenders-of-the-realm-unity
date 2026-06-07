@@ -292,11 +292,18 @@ namespace DeNelle.Village
 
         private void Update()
         {
-            // WO-159 finite-reserve nodes are worked by a Settlement (DrainReserve),
-            // NOT the per-tap [F] verb or the worker cooldown loop — so the legacy
-            // Update interaction is skipped entirely for them. The node just sits as a
-            // persistent reserve until a settlement drains it empty.
-            if (UseFiniteReserve) return;
+            // WO-325 — finite-reserve nodes (WO-159) are ALSO auto-drained by a
+            // Settlement (DrainReserve), but the settlement loop isn't always present in
+            // the live OuterWorld, which left these nodes with NO player verb at all (a
+            // tap/[F] did nothing). So instead of skipping Update entirely we keep a
+            // MANUAL harvest verb for them: in-range prompt + tap/[F] on the same
+            // ExtractCooldown, routed to DrainReserve(EffectiveYield) (→ BankYield, the
+            // single banking path). The auto settlement-drain path is unchanged.
+            if (UseFiniteReserve)
+            {
+                UpdateFiniteReserveInteraction();
+                return;
+            }
 
             if (_cooldown > 0f) _cooldown -= Time.deltaTime;
 
@@ -330,6 +337,60 @@ namespace DeNelle.Village
                  (Keyboard_FPressed())))
             {
                 Extract();
+            }
+        }
+
+        // WO-325 — manual harvest verb for finite-reserve nodes. Mirrors the legacy
+        // non-finite interaction (in-range prompt + tap/[F], gated by ExtractCooldown)
+        // but drains the persistent reserve instead of the per-tap extract count. The
+        // reserve auto-drain (DrainReserve from a settlement) path is untouched; this
+        // just gives the PLAYER a verb so a tap on a finite node banks resources.
+        private void UpdateFiniteReserveInteraction()
+        {
+            if (_cooldown > 0f) _cooldown -= Time.deltaTime;
+
+            // No prompt / no-op once the reserve is mined empty (the node usually
+            // despawns via DrainReserve, but guard the marker case too).
+            if (ReserveRemaining <= 0)
+            {
+                MobileInteractButton.Release(this);
+                return;
+            }
+
+            if (_player == null)
+            {
+                var p = GameObject.FindWithTag("Player");
+                _player = p != null ? p.transform : null;
+                if (_player == null) return;
+            }
+
+            bool inRange = (_player.position - transform.position).sqrMagnitude
+                           <= InteractRadius * InteractRadius;
+
+            if (inRange && _cooldown <= 0f)
+                MobileInteractButton.Request(this, "Mine " + Resource, ExtractReserve);
+            else
+                MobileInteractButton.Release(this);
+
+            if (inRange && _cooldown <= 0f &&
+                (UnityEngine.Input.GetKeyDown(KeyCode.F) ||
+                 (Keyboard_FPressed())))
+            {
+                ExtractReserve();
+            }
+        }
+
+        // WO-325 — one manual tap on a finite-reserve node: drain EffectiveYield from
+        // the reserve (region-danger-scaled, same dial as Extract) through DrainReserve
+        // → BankYield, then arm the cooldown. DrainReserve handles depletion + despawn.
+        private void ExtractReserve()
+        {
+            int banked = DrainReserve(EffectiveYield);
+            if (banked > 0)
+            {
+                GameSfx.PlayPetHarvest();   // same harvest "ding" as the legacy tap
+                _cooldown = ExtractCooldown;
+                MobileInteractButton.Release(this);
             }
         }
 
