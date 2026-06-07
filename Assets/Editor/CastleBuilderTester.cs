@@ -759,6 +759,223 @@ namespace DeNelle.Editor
             return found.ToArray();
         }
 
+        // ==================================================================================
+        //  DeepDungeonBuilder tester (NEW) — builds the Grok multi-level "Elden Ring style"
+        //  deep dungeon into Assets/Scenes/DungeonTest.unity. Resolves KayKit DUNGEON prefabs
+        //  FIRST, then falls back to our medieval/stone pack. Builds ALL `levels`, then makes
+        //  only LEVEL 0 (top, heightOffset 0) walkable with the SAME village hero/camera/light
+        //  wiring CastleWalkable uses. Multi-level descent across the -7 drops is OUT OF SCOPE
+        //  (single-surface NavMesh only) — flagged for lift into a real DungeonSceneBuilder.
+        //    Defenders/Sandbox/Test Dungeon
+        //    batchmode -executeMethod DeNelle.Editor.CastleBuilderTester.TestBuildDungeon
+        // ==================================================================================
+
+        private const string DungeonScenePath = "Assets/Scenes/DungeonTest.unity";
+
+        [MenuItem("Defenders/Sandbox/Test Dungeon")]
+        public static void TestBuildDungeon()
+        {
+            var log = new StringBuilder();
+            log.AppendLine("=== Test Dungeon START ===");
+
+            // 1. Fresh empty scene.
+            var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+
+            // 2. Host GameObject + component, at origin.
+            var hostGo = new GameObject("DungeonTest");
+            hostGo.transform.position = Vector3.zero;
+            var dungeon = hostGo.AddComponent<DeepDungeonBuilder>();
+            log.AppendLine($"  dims: width={dungeon.width} depth={dungeon.depth} levels={dungeon.levels} unitSize={dungeon.unitSize}");
+
+            // 3. Resolve prefabs — KayKit DUNGEON pack FIRST, then our medieval/stone pack.
+            var resolved = new List<string>();
+            var missing = new List<string>();
+
+            // floorTile → KayKit dungeon floor, then *Floor*Dungeon*, then our stone floor.
+            dungeon.floorTile = Resolve("floorTile", log, resolved, missing,
+                "floor_dungeon", "Floor_Dungeon", "Dungeon_Floor", "floor_tile_large",
+                "Floor_Stone_3x3m_A", "Floor_Stone_3x3m", "Floor_Stone");
+
+            // wallStraight / barrier → KayKit dungeon wall, then *Wall*Dungeon*, then stone wall.
+            dungeon.wallStraight = Resolve("wallStraight", log, resolved, missing,
+                "wall_dungeon", "Wall_Dungeon", "Dungeon_Wall", "wall",
+                "Wall_Stone_3x3_A", "Wall_Stone");
+            // The Grok builder uses `barrier` (not wallStraight) for the actual outer/room walls.
+            // Resolve it to the same dungeon-wall family so walls actually spawn.
+            dungeon.barrier = Resolve("barrier", log, resolved, missing,
+                "wall_dungeon", "Wall_Dungeon", "Dungeon_Wall",
+                "Wall_Stone_3x3_A", "Wall_Stone");
+            if (dungeon.barrier == null && dungeon.wallStraight != null)
+            {
+                dungeon.barrier = dungeon.wallStraight;
+                missing.Remove("barrier");
+                resolved.Add("barrier (=wallStraight fallback)");
+                log.AppendLine("  barrier: FALLBACK to wallStraight.");
+            }
+
+            // damagedBarrier → KayKit broken dungeon wall, then our Wall_Stone_3x3_B.
+            dungeon.damagedBarrier = Resolve("damagedBarrier", log, resolved, missing,
+                "wall_dungeon_broken", "Wall_Dungeon_Broken", "wall_broken",
+                "Wall_Stone_3x3_B", "Wall_Stone_Damaged");
+            if (dungeon.damagedBarrier == null && dungeon.barrier != null)
+            {
+                dungeon.damagedBarrier = dungeon.barrier;
+                missing.Remove("damagedBarrier");
+                resolved.Add("damagedBarrier (=barrier fallback)");
+                log.AppendLine("  damagedBarrier: FALLBACK to barrier.");
+            }
+
+            // wallCorner → corner mesh, else fall back to the straight wall.
+            dungeon.wallCorner = Resolve("wallCorner", log, resolved, missing,
+                "wall_corner_dungeon", "Wall_Dungeon_Corner", "Wall_Stone_Corner_A", "Corner");
+            if (dungeon.wallCorner == null && dungeon.wallStraight != null)
+            {
+                dungeon.wallCorner = dungeon.wallStraight;
+                missing.Remove("wallCorner");
+                resolved.Add("wallCorner (=wallStraight fallback)");
+                log.AppendLine("  wallCorner: FALLBACK to wallStraight.");
+            }
+
+            // archway → a dungeon arch / archway, else a medieval gate.
+            dungeon.archway = Resolve("archway", log, resolved, missing,
+                "archway", "arch", "Gate_Medieval_Medium", "Gate_Medieval", "Gate");
+
+            // stairsDown → a STRAIGHT walkable stairs, prefer dungeon/stone.
+            bool straightStairs;
+            dungeon.stairsDown = ResolveStairs(log, resolved, missing, out straightStairs);
+
+            // pillar → any dungeon/ionic pillar (optional-ish; flag missing but harmless).
+            dungeon.pillar = Resolve("pillar", log, resolved, missing,
+                "pillar_dungeon", "Pillar_Ionic", "Pillar", "Column");
+
+            // debrisPrefabs[] → Apocalypse_M scatter; optional, empty array is fine.
+            dungeon.debrisPrefabs = ResolveDebris(log, resolved);
+
+            // healthItem / magicItem → optional small props; skip if nothing matches.
+            dungeon.healthItem = ResolveOptional("healthItem", log, resolved,
+                "Potion", "HealthPotion", "Health", "Apple", "Bottle");
+            dungeon.magicItem = ResolveOptional("magicItem", log, resolved,
+                "Crystal", "Gem", "MagicPotion", "Scroll", "Orb");
+
+            // 4. Build ALL levels.
+            dungeon.BuildDeepDungeon();
+
+            // 5. Ground plane under LEVEL 0 (top, Y=0) so the hero has a guaranteed walk
+            //    surface even if the floor pieces seat slightly off. Sized to the footprint.
+            AddDungeonGroundPlane(dungeon, log);
+
+            // 6. Make LEVEL 0 walkable — SAME wiring as CastleWalkable.
+            Village2Playable.AddSceneDefaultsToActiveScene();
+            Village2Playable.ImportEventSystem();
+
+            GameObject hero = Village2Playable.ImportHero(hostGo.transform, /*heart:*/ null);
+            Vector3 heroPos = Vector3.zero;
+            if (hero == null)
+            {
+                log.AppendLine("WARN: ImportHero returned null — hero not built.");
+            }
+            else
+            {
+                // Spawn the hero in the centre of level 0's interior, grounded on Y=0.
+                float cx = dungeon.width * dungeon.unitSize * 0.5f;
+                float cz = dungeon.depth * dungeon.unitSize * 0.5f;
+                heroPos = new Vector3(cx, 0f, cz);
+                hero.transform.position = heroPos;
+                hero.transform.rotation = Quaternion.identity;
+
+                Village2Playable.WireCameraTargetToHero(hero);
+                EnsureHeroControllable(hero, log);
+            }
+
+            // 7. Bake the NavMesh for LEVEL 0 ONLY (ground plane + Level_0 floor walkable,
+            //    Level_0 walls obstacle). Lower levels are excluded from the bake.
+            BakeDungeonLevel0Walkable(scene, log);
+
+            // 8. Count children + save.
+            int childCount = hostGo.GetComponentsInChildren<Transform>(true).Length - 1;
+            EditorSceneManager.MarkSceneDirty(scene);
+            bool saved = EditorSceneManager.SaveScene(scene, DungeonScenePath);
+
+            log.AppendLine("---- Prefab resolution ----");
+            log.AppendLine("RESOLVED: " + (resolved.Count > 0 ? string.Join(", ", resolved) : "(none)"));
+            log.AppendLine("MISSING:  " + (missing.Count > 0 ? string.Join(", ", missing) : "(none)"));
+            log.AppendLine("Straight (walkable) stairs found: " + (straightStairs ? "YES" : "NO (spiral/none)"));
+            log.AppendLine("NOTE: multi-level descent across the -7 drops is OUT OF SCOPE — only " +
+                "LEVEL 0 is walkable (single-surface NavMesh). Lift into DungeonSceneBuilder for " +
+                "OffMeshLinks / per-level NavMeshSurfaces.");
+            log.AppendLine($"Scene saved={saved} @ {DungeonScenePath}");
+            log.AppendLine($"DUNGEON_TEST_OK levels={dungeon.levels} childCount={childCount} " +
+                $"heroAt=({heroPos.x:F2}, {heroPos.y:F2}, {heroPos.z:F2})");
+            log.AppendLine("=== Test Dungeon DONE ===");
+
+            Debug.Log(log.ToString());
+        }
+
+        // Flat ground plane at Y=0 covering LEVEL 0's footprint (+ margin), collider +
+        // NavigationStatic, neutral material. Level 0 spans x:[0..(width-1)*unitSize],
+        // z:[0..(depth-1)*unitSize].
+        private static void AddDungeonGroundPlane(DeepDungeonBuilder dungeon, StringBuilder log)
+        {
+            float footprintX = (dungeon.width - 1) * dungeon.unitSize;
+            float footprintZ = (dungeon.depth - 1) * dungeon.unitSize;
+            const float margin = 6f;
+
+            var ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
+            ground.name = "DungeonGround";
+            ground.transform.position = new Vector3(footprintX * 0.5f, 0f, footprintZ * 0.5f);
+            ground.transform.localScale = new Vector3((footprintX + margin) / 10f, 1f, (footprintZ + margin) / 10f);
+            ground.transform.SetParent(dungeon.transform, true);
+
+            var mat = MakeNeutralMaterial();
+            if (mat != null)
+            {
+                var mr = ground.GetComponent<MeshRenderer>();
+                if (mr != null) mr.sharedMaterial = mat;
+            }
+
+            var flags = GameObjectUtility.GetStaticEditorFlags(ground);
+            GameObjectUtility.SetStaticEditorFlags(ground, flags | StaticEditorFlags.NavigationStatic);
+
+            log.AppendLine($"  ground: DungeonGround plane @ ({ground.transform.position.x:F1},0,{ground.transform.position.z:F1}) " +
+                $"covering ~{footprintX + margin:F0}x{footprintZ + margin:F0}m (collider + NavigationStatic).");
+        }
+
+        // Bake NavMesh for LEVEL 0 ONLY. Marks the ground plane + Level_0 floors walkable and
+        // Level_0 walls as obstacles; deliberately ignores Level_1+ so the bake stays on the
+        // single top surface (multi-level descent is out of scope — see TestBuildDungeon note).
+        private static readonly string[] DungeonWalkable = { "DungeonGround", "floor", "Floor", "Ground" };
+        private static readonly string[] DungeonObstacle = { "wall", "Wall", "barrier", "Barrier", "pillar", "Pillar" };
+
+        private static void BakeDungeonLevel0Walkable(Scene scene, StringBuilder log)
+        {
+            int walkable = 0, obstacle = 0;
+            foreach (var root in scene.GetRootGameObjects())
+            {
+                foreach (var r in root.GetComponentsInChildren<Renderer>(true))
+                {
+                    if (r == null) continue;
+
+                    // Only consider the ground plane or pieces under "Level_0". Skip Level_1+.
+                    bool isGround = NameOrAncestorContainsAny(r.transform, new[] { "DungeonGround" });
+                    bool onLevel0 = NameOrAncestorContainsAny(r.transform, new[] { "Level_0" });
+                    if (!isGround && !onLevel0) continue;
+
+                    bool isWalkable = isGround || NameOrAncestorContainsAny(r.transform, DungeonWalkable);
+                    bool isObstacle = !isWalkable && NameOrAncestorContainsAny(r.transform, DungeonObstacle);
+                    if (!isWalkable && !isObstacle) continue;
+
+                    var flags = GameObjectUtility.GetStaticEditorFlags(r.gameObject);
+                    GameObjectUtility.SetStaticEditorFlags(r.gameObject, flags | StaticEditorFlags.NavigationStatic);
+                    if (isWalkable) walkable++; else obstacle++;
+                }
+            }
+            UnityEditor.AI.NavMeshBuilder.ClearAllNavMeshes();
+            UnityEditor.AI.NavMeshBuilder.BuildNavMesh();
+            log.AppendLine($"  navmesh (LEVEL 0 only) baked: {walkable} walkable + {obstacle} obstacle renderer(s) marked NavigationStatic.");
+            if (walkable == 0)
+                log.AppendLine("  WARN: no walkable renderers matched on level 0 — navmesh may be empty.");
+        }
+
         /// <summary>
         /// Finds the first prefab whose asset name matches one of the candidate name
         /// fragments (tried in order). Logs the resolved path or marks the field MISSING.

@@ -1,7 +1,10 @@
 {
     "name": "DeNelle.Sandbox",
     "rootNamespace": "DeNelle.Sandbox",
-    "references": [],
+    "references": [
+        "DeNelle.Core",
+        "UniTask"
+    ],
     "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,
