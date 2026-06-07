@@ -25,13 +25,13 @@ namespace DeNelle.Village.Defend
         public Transform Target;
 
         [Header("Over-the-shoulder placement (hero-relative: +X right, +Y up, -Z behind)")]
-        [SerializeField] private Vector3 _shoulderOffset = new Vector3(0.9f, 2.0f, -3.7f); // nudged slightly forward
+        [SerializeField] private Vector3 _shoulderOffset = new Vector3(1.2f, 1.6f, -7.0f); // OTS: hero in foreground (see bow/pose/animations), camera looks past him at the distant tower and enemies attacking it
 
         [Header("Aim")]
-        [Tooltip("How far ahead of the hero (along its forward) the camera looks.")]
-        [SerializeField] private float _lookAhead = 12f;
-        [Tooltip("How far below that point to bias the look, so the field/enemies fill the frame.")]
-        [SerializeField] private float _lookDown = 3.0f; // tilted down a touch so the ground/feet come into frame
+        [Tooltip("How far ahead of the hero (along its forward) the camera looks. Larger for afar sniping view of the tower battle.")]
+        [SerializeField] private float _lookAhead = 50f;
+        [Tooltip("How far below that point to bias the look so you see the tower base, ground around it (enemies attacking), while keeping sky in the upper frame for surveying.")]
+        [SerializeField] private float _lookDown = 5.0f; // moderate down bias for afar view of the defensive structure and attacking waves, with sky visible
 
         [Tooltip("Position smoothing time (bigger = lazier). 0 = rigid.")]
         [SerializeField] private float _smoothTime = 0.10f;

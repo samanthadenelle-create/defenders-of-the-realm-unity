@@ -25,9 +25,14 @@ namespace DeNelle.Village
         [Tooltip("The hero the camera rides. Assigned at runtime by PatriciaLightController.")]
         public Transform Target;
 
-        [SerializeField] private float _eyeHeight    = 1.8f;
-        [SerializeField] private float _forwardNudge  = 0.6f;   // past the hero's own mesh/weapon
-        [SerializeField] private float _pitchDown     = 35f;    // look down at the field/enemies below
+        /// <summary>Optional world-space point the camera should look directly at (set by controller from the current reticle/target).
+        /// When set, the camera orients to look exactly at this point (great for FP surveying ground or sky by moving the reticle).
+        /// Falls back to the hero-forward + pitch logic if not set.</summary>
+        public Vector3? AimLookPoint;
+
+        [SerializeField] private float _eyeHeight    = 1.85f;   // eyes on the high tower perch
+        [SerializeField] private float _forwardNudge  = 0.75f;  // bring the glowing bow nicely into the lower FP frame for animation feedback
+        [SerializeField] private float _pitchDown     = 18f;    // base pitch when no explicit AimLookPoint (see ground + sky balance)
 
         private float _shakeAmplitude, _shakeTimeLeft, _shakeDuration;
 
@@ -42,12 +47,28 @@ namespace DeNelle.Village
         {
             if (Target == null) return;
 
-            Vector3 fwd = Target.forward; fwd.y = 0f;
-            if (fwd.sqrMagnitude < 0.0001f) fwd = Vector3.forward;
-            fwd.Normalize();
+            Vector3 pos = Target.position + Vector3.up * _eyeHeight + Target.forward * _forwardNudge + ShakeOffset();
 
-            transform.rotation = Quaternion.LookRotation(fwd, Vector3.up) * Quaternion.Euler(_pitchDown, 0f, 0f);
-            transform.position = Target.position + Vector3.up * _eyeHeight + fwd * _forwardNudge + ShakeOffset();
+            if (AimLookPoint.HasValue)
+            {
+                // Direct look-at the current survey/target point (reticle projected or locked enemy).
+                // This gives true first-person "move reticle to look around ground and sky" feel
+                // while perched on the tower. Perfect for fast targeting.
+                Vector3 dir = (AimLookPoint.Value - pos);
+                if (dir.sqrMagnitude > 0.001f)
+                    transform.rotation = Quaternion.LookRotation(dir.normalized, Vector3.up);
+                else
+                    transform.rotation = Target.rotation * Quaternion.Euler(_pitchDown, 0f, 0f);
+            }
+            else
+            {
+                Vector3 fwd = Target.forward; fwd.y = 0f;
+                if (fwd.sqrMagnitude < 0.0001f) fwd = Vector3.forward;
+                fwd.Normalize();
+                transform.rotation = Quaternion.LookRotation(fwd, Vector3.up) * Quaternion.Euler(_pitchDown, 0f, 0f);
+            }
+
+            transform.position = pos;
         }
 
         private Vector3 ShakeOffset()
