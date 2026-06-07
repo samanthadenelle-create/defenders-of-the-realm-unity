@@ -185,8 +185,7 @@ namespace DeNelle.Village
             var txtGo = new GameObject("Text");
             txtGo.transform.SetParent(_overlay.transform, false);
             var txt = txtGo.AddComponent<Text>();
-            txt.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf")
-                       ?? Resources.GetBuiltinResource<Font>("Arial.ttf");
+            txt.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             txt.alignment = TextAnchor.MiddleCenter;
             txt.color = new Color(1f, 0.86f, 0.55f);
             txt.fontSize = 38;
@@ -221,8 +220,7 @@ namespace DeNelle.Village
             var lblGo = new GameObject("Label");
             lblGo.transform.SetParent(go.transform, false);
             var lbl = lblGo.AddComponent<Text>();
-            lbl.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf")
-                       ?? Resources.GetBuiltinResource<Font>("Arial.ttf");
+            lbl.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             lbl.alignment = TextAnchor.MiddleCenter;
             lbl.color = Color.white;
             lbl.fontSize = 30;

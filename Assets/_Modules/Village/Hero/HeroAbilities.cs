@@ -247,6 +247,19 @@ namespace DeNelle.Village
             }
             if (_animator != null && _hasCastParam) _animator.SetTrigger(AnimCast);
 
+            // Core fix: also drive the guarded ActorAnimator (IActorAnimator) so the
+            // DTT Patricia hero (and village) get the Cast/Attack states from the
+            // HeroAnimatorFactory controllers (upper-body layer + base). The legacy
+            // direct _animator is kept for any direct listeners; ActorAnimator
+            // re-resolves on body swap and guards missing params.
+            var actor = GetComponent<ActorAnimator>();
+            if (actor == null) actor = GetComponentInChildren<ActorAnimator>(true);
+            // Class-specific attack/cast per factory controllers: Knight uses melee Attack
+            // clip/stance, Ranger (aim), Mage/Cleric (cast). Call both; per-class controller
+            // maps the right one (or no-op if param missing).
+            actor?.PlayAttack(0);
+            actor?.PlayCast();
+
             Vector3 origin = transform.position;
 
             // DEF-47: register the cast with the timing-bonus tracker. The returned

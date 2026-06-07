@@ -88,6 +88,9 @@ namespace DeNelle.Village
             // swing anim (their animators lack the Attack trigger — damage still lands). Restrict to
             // Knight later if desired.
             if (hero.GetComponent<PlayerAttackController>() == null) hero.AddComponent<PlayerAttackController>();
+            // Default gear stats (even for emergency capsule or non-swapped heroes): GearLoadout
+            // pulls level-1 starters from GearCatalog (now populated) and drives WeaponMult/ArmorDefense.
+            if (hero.GetComponent<GearLoadout>() == null) hero.AddComponent<GearLoadout>();
             // DEF-205: the always-on blue ground "reach ring" read as a mystery indicator
             // while walking (players couldn't tell what it meant). Removed — do NOT attach
             // HeroReachRing. The class is kept (HeroReachRing.cs) in case a gated, opt-in

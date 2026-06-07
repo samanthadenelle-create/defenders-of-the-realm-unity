@@ -14,6 +14,7 @@
 
 using UnityEngine;
 using UnityEngine.AI;
+using DeNelle.Core.Combat; // ActorAnimator (attached so Enemy drives work)
 
 namespace DeNelle.Village
 {
@@ -91,12 +92,20 @@ namespace DeNelle.Village
             var enemy = go.AddComponent<Enemy>();                          // RequireComponent pulls EnemyDamageable
             if (go.GetComponent<EnemyDamageable>() == null)
                 go.AddComponent<EnemyDamageable>();
+
+            // Ensure ActorAnimator on the logical root (it finds the Animator on the
+            // skinned vis child set by EnemyAnimatorFactory.Apply). This makes
+            // Enemy.cs drives (SetLocomotion/PlayAttack/Die) work for skeleton/orc/troll etc.
+            if (go.GetComponent<ActorAnimator>() == null)
+                go.AddComponent<ActorAnimator>();
             return enemy;
         }
 
-        /// <summary>Enemy id/role → skeleton model. The only humanoid enemy models in
-        /// Resources/Enemies today; chosen by role/size so the silhouette reads the
-        /// threat. Swap to bespoke models here (one line per id) when the packs land.</summary>
+        /// <summary>Enemy id/role → skeleton model. Grouped by family (Hollow/Skeleton Legion,
+        /// Orc Warband, Troll/Stonebelly, etc.) with class variety (Tank=brute/golem,
+        /// DPS=rogue/warrior, Healer=mage/shaman). Basic strategy in EnemyBrain (DPS
+        /// focus-fire healers first, Tank protects, Healer prioritizes allies).
+        /// Chosen by role/size for silhouette. Swap to bespoke when packs land.</summary>
         public static string ModelForEnemy(EnemyDef def)
         {
             string id = def != null ? def.Id : null;

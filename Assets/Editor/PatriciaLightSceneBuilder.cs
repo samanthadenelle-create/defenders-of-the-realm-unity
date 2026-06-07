@@ -70,7 +70,24 @@ namespace DeNelle.Editor
         {
             EnsureFolder(ScenesDir);
 
+            // Clean any previously serialized huge unwanted KayKit factory/platformer
+            // structures (e.g. "StandPlatform" from Platformer Pack or stray large
+            // authored arena dressing) out of the scene asset. Running this builder
+            // guarantees a clean PatriciaLightMode.unity without the junk.
+            if (File.Exists(ScenePath))
+            {
+                var openScene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
+                CleanStrayHugePlatformStructures();
+                EditorSceneManager.SaveScene(openScene);
+            }
+
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+
+            // Remove/disable any huge unwanted KayKit factory/platformer structures
+            // (e.g. StandPlatform or Platformer Pack assets) that may have been
+            // serialized into the scene from prior bakes or manual placement.
+            // This guarantees the main DTT battle scene is clean for characters.
+            CleanStrayHugePlatformStructures();
 
             // ── Main Camera + third-person follow ────────────────────────────
             var camGo = new GameObject("Main Camera");
@@ -388,6 +405,54 @@ namespace DeNelle.Editor
             if (string.IsNullOrEmpty(parent) || string.IsNullOrEmpty(leaf)) return;
             if (!AssetDatabase.IsValidFolder(parent)) EnsureFolder(parent);
             AssetDatabase.CreateFolder(parent, leaf);
+        }
+
+        /// <summary>
+        /// Removes or disables huge unwanted KayKit factory/platformer structures
+        /// (e.g. "StandPlatform" authored from Platformer Pack, any oversized
+        /// "Factory" or platform objects) from the DTT battle scene. This is the
+        /// code fix (no hand-edit of .unity) so re-running the builder menu yields
+        /// a clean scene for character animation/turning work.
+        /// </summary>
+        private static void CleanStrayHugePlatformStructures()
+        {
+            var scene = EditorSceneManager.GetActiveScene();
+            if (!scene.IsValid()) return;
+            var roots = scene.GetRootGameObjects();
+            int removed = 0;
+            foreach (var root in roots)
+            {
+                var candidates = new List<Transform>();
+                foreach (var t in root.GetComponentsInChildren<Transform>(true))
+                {
+                    if (t == null) continue;
+                    string n = t.name;
+                    bool suspicious = n.IndexOf("StandPlatform", StringComparison.OrdinalIgnoreCase) >= 0
+                                   || n.IndexOf("Platformer", StringComparison.OrdinalIgnoreCase) >= 0
+                                   || n.IndexOf("Factory", StringComparison.OrdinalIgnoreCase) >= 0
+                                   || (n.IndexOf("Platform", StringComparison.OrdinalIgnoreCase) >= 0
+                                       && n.IndexOf("Balcony", StringComparison.OrdinalIgnoreCase) < 0
+                                       && n.IndexOf("HeroStand", StringComparison.OrdinalIgnoreCase) < 0
+                                       && n.IndexOf("StandSide", StringComparison.OrdinalIgnoreCase) < 0);
+                    if (!suspicious) continue;
+
+                    var s = t.localScale;
+                    bool huge = Mathf.Max(Mathf.Abs(s.x), Mathf.Abs(s.y), Mathf.Abs(s.z)) > 6f;
+                    if (suspicious || huge)
+                        candidates.Add(t);
+                }
+                for (int i = candidates.Count - 1; i >= 0; i--)
+                {
+                    if (candidates[i] != null && candidates[i].gameObject != null)
+                    {
+                        Debug.LogWarning($"[PatriciaLightSceneBuilder] Removing stray huge KayKit/platformer structure: {candidates[i].name}");
+                        UnityEngine.Object.DestroyImmediate(candidates[i].gameObject);
+                        removed++;
+                    }
+                }
+            }
+            if (removed > 0)
+                Debug.Log($"[PatriciaLightSceneBuilder] CleanStrayHugePlatformStructures removed {removed} junk object(s) from scene.");
         }
     }
 }

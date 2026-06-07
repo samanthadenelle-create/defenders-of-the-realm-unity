@@ -262,7 +262,6 @@ namespace DeNelle.Village.World
         }
 
         private static Font BuiltinFont() =>
-            Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf")
-            ?? Resources.GetBuiltinResource<Font>("Arial.ttf");
+            Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
     }
 }

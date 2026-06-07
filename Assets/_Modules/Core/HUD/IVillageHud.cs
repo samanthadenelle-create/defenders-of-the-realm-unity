@@ -4,7 +4,7 @@ namespace DeNelle.Core.HUD
     {
         void SetWave(int waveNumber);
         void SetCountdown(float secondsRemaining);
-        void SetHeartHp(float normalisedHp);
+        void SetHeartHp(float current, float maxHp);
         void SetCrystals(int amount);
 
         /// <summary>

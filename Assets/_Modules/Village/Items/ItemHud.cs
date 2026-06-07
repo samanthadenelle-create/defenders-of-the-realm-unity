@@ -314,8 +314,7 @@ namespace DeNelle.Village.Items
         }
 
         private static Font BuiltinFont() =>
-            Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf")
-            ?? Resources.GetBuiltinResource<Font>("Arial.ttf");
+            Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
 
         /// <summary>First-touch / mouse-down screen position this frame (no EventSystem).</summary>
         private static bool TryGetTap(out Vector2 pos)

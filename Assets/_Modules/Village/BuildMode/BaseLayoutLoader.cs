@@ -163,7 +163,7 @@ namespace DeNelle.Village
 
             var cell = new Vector2Int(data.cellX, data.cellZ);
             Vector3 pos = grid.CellToWorld(cell);
-            var rot = Quaternion.Euler(0f, data.yawSteps * 90f, 0f);
+            var rot = Quaternion.Euler(0f, data.yawSteps * 90f + data.yawOffset, 0f);
 
             var go = StructureFactory.Create(entry, new Pose(pos, rot), Root);
             if (go == null) return null;

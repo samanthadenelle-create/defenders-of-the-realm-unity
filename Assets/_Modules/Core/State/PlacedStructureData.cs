@@ -51,13 +51,18 @@ namespace DeNelle.Core.State
         /// <summary>Upgrade level (1-based). Fresh-placed structures are level 1.</summary>
         public int level;
 
-        public PlacedStructureData(string itemId, int cellX, int cellZ, int yawSteps, int level)
+        /// <summary>Free rotation offset in degrees (from preview modal UX). Added for
+        /// 90° or free rotate confirmation; applied on top of yawSteps at spawn.</summary>
+        public float yawOffset;
+
+        public PlacedStructureData(string itemId, int cellX, int cellZ, int yawSteps, int level, float yawOffset = 0f)
         {
             this.itemId = itemId;
             this.cellX = cellX;
             this.cellZ = cellZ;
             this.yawSteps = yawSteps;
             this.level = level;
+            this.yawOffset = yawOffset;
         }
     }
 }
