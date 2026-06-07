@@ -60,6 +60,13 @@ namespace DeNelle.Village
         private Camera _camera;
         private CatalogEntry _armed;
         private int _armedYawSteps;
+        private float _armedYawOffset; // from preview modal (free or 90deg)
+
+        // Pending place data while modal is open for rotation confirmation.
+        private bool _pendingPlace;
+        private Vector2Int _pendingCell;
+        private Vector2Int _pendingFootprint;
+        private Vector3 _pendingSnapped;
 
         // ── Input seam (Build Mode S6) ────────────────────────────────────────
         // The place/move/select loops poll high-level intents from this source
@@ -282,6 +289,9 @@ namespace DeNelle.Village
             _ghost.SetValid(valid);
 
             if (PlaceConfirmedThisFrame() && valid)
+                // Direct placement. The old BuildPreviewModal place-step was REMOVED
+                // (it threw a CreateButton NRE + rendered white). WO-334's
+                // TowerPlacementRotateMenu replaces it and is wired in once verified.
                 Place(cell, footprint, snapped);
         }
 
@@ -397,7 +407,7 @@ namespace DeNelle.Village
             }
 
             var loader = BaseLayoutLoader.EnsureExists();
-            var data = new PlacedStructureData(_armed.id, cell.x, cell.y, _armedYawSteps, 1);
+            var data = new PlacedStructureData(_armed.id, cell.x, cell.y, _armedYawSteps, 1, _armedYawOffset);
 
             var ps = loader.Spawn(data, _grid);
             if (ps == null)
@@ -433,6 +443,8 @@ namespace DeNelle.Village
             ClearSelection();
             _armed = entry;
             _armedYawSteps = 0;
+            _armedYawOffset = 0;
+            _pendingPlace = false;
             if (_ghost == null) _ghost = new GameObject("GhostPreview").AddComponent<GhostPreview>();
             _ghost.SetEntry(entry);
         }
