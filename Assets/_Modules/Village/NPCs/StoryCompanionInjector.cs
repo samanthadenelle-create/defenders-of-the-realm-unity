@@ -307,10 +307,13 @@ namespace DeNelle.Village
 
             string texPath = hero switch
             {
-                HeroClass.Mage   => "Heroes/Textures/fantasywizard3dmodel_basecolor",
+                // WO-310: repointed to MATCH HeroBodySwapper (WO-286 authoritative). The old
+                // Ranger_tex/Cleric_tex folders don't exist → Resources.Load null → green tint
+                // fallback (the reported bug). All four atlases live in Heroes/Textures/.
+                HeroClass.Mage   => "Heroes/Textures/tripo_mat_9b343081_Pbr_Diffuse",
                 HeroClass.Knight => "Heroes/Textures/medievalknight3dmodel_basecolor",
-                HeroClass.Ranger => "Heroes/Ranger_tex/remesh_12_combined_Bake_Diffuse",
-                HeroClass.Cleric => "Heroes/Cleric_tex/HumanCleric_basecolor",
+                HeroClass.Ranger => "Heroes/Textures/ranger_basecolor",
+                HeroClass.Cleric => "Heroes/Textures/Cleric_basecolor",
                 _                => null,
             };
             Texture2D tex = string.IsNullOrEmpty(texPath) ? null : Resources.Load<Texture2D>(texPath);
