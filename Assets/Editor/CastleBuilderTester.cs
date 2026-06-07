@@ -125,6 +125,17 @@ namespace DeNelle.Editor
             hostGo.transform.position = Vector3.zero;
             var castle = hostGo.AddComponent<ProceduralCastleBuilder>();
 
+            // 2b. Dimensions are settable without editing code via EditorPrefs keys
+            //     (castle.length / castle.width / castle.rampartWidth). Defaults match v3.
+            int prefLength = EditorPrefs.GetInt("castle.length", 28);
+            int prefWidth = EditorPrefs.GetInt("castle.width", 18);
+            int prefRampart = EditorPrefs.GetInt("castle.rampartWidth", 4);
+            castle.length = prefLength;
+            castle.width = prefWidth;
+            castle.rampartWidth = prefRampart;
+            log.AppendLine($"  dims (from EditorPrefs): length={prefLength} width={prefWidth} rampartWidth={prefRampart} " +
+                "(keys: castle.length / castle.width / castle.rampartWidth)");
+
             // 3. Resolve prefabs.
             var resolved = new List<string>();
             var missing = new List<string>();
@@ -205,7 +216,8 @@ namespace DeNelle.Editor
             log.AppendLine("MISSING:  " + (missing.Count > 0 ? string.Join(", ", missing) : "(none)"));
             log.AppendLine("Straight (walkable) stairs found: " + (straightStairs ? "YES" : "NO (spiral/none)"));
             log.AppendLine($"Scene saved={saved} @ {ProScenePath}");
-            log.AppendLine($"PROCASTLE_TEST_OK childCount={childCount} heroAt=({heroPos.x:F2}, {heroPos.y:F2}, {heroPos.z:F2})");
+            log.AppendLine($"PROCASTLE_TEST_OK childCount={childCount} heroAt=({heroPos.x:F2}, {heroPos.y:F2}, {heroPos.z:F2}) " +
+                $"dims={castle.length}x{castle.width}x{castle.rampartWidth}");
             log.AppendLine("=== Test ProceduralCastle DONE ===");
 
             Debug.Log(log.ToString());
@@ -400,6 +412,299 @@ namespace DeNelle.Editor
                 {
                     var path = AssetDatabase.GUIDToAssetPath(guid);
                     // Prefer Apocalypse_M pack items.
+                    if (path.IndexOf("Apocalypse", System.StringComparison.OrdinalIgnoreCase) < 0) continue;
+                    var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+                    if (prefab != null && !found.Contains(prefab))
+                    {
+                        found.Add(prefab);
+                        log.AppendLine($"  debris: + '{prefab.name}' @ {path}");
+                        break; // one per name fragment
+                    }
+                }
+            }
+            if (found.Count > 0) resolved.Add($"debrisPrefabs ({found.Count})");
+            else log.AppendLine("  debrisPrefabs: none found (Apocalypse_M absent — debris optional, left empty).");
+            return found.ToArray();
+        }
+
+        // ==================================================================================
+        //  UpgradableOutpostBuilder tester (NEW) — builds the Grok outpost (with the added
+        //  one-door front gap) into Assets/Scenes/OutpostTest.unity on a flat ground plane,
+        //  upgradeLevel=1 (ramparts + stairs), then makes it walkable with the SAME village
+        //  hero/camera/light wiring. Hero spawns OUTSIDE the door, facing IN (+Z).
+        //    Defenders/Sandbox/Test Outpost
+        //    batchmode -executeMethod DeNelle.Editor.CastleBuilderTester.TestBuildOutpost
+        // ==================================================================================
+
+        private const string OutpostScenePath = "Assets/Scenes/OutpostTest.unity";
+
+        [MenuItem("Defenders/Sandbox/Test Outpost")]
+        public static void TestBuildOutpost()
+        {
+            var log = new StringBuilder();
+            log.AppendLine("=== Test Outpost START ===");
+
+            // 1. Fresh empty scene.
+            var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+
+            // 2. Host GameObject + component, at origin.
+            var hostGo = new GameObject("OutpostTest");
+            hostGo.transform.position = Vector3.zero;
+            var outpost = hostGo.AddComponent<UpgradableOutpostBuilder>();
+            outpost.upgradeLevel = 1; // ramparts + stairs
+            log.AppendLine($"  dims: gridWidth={outpost.gridWidth} gridDepth={outpost.gridDepth} " +
+                $"unitSize={outpost.unitSize} upgradeLevel={outpost.upgradeLevel}");
+
+            // 3. Resolve prefabs.
+            var resolved = new List<string>();
+            var missing = new List<string>();
+
+            // wallPrefab = a WOOD wall (wood default).
+            outpost.wallPrefab = Resolve("wallPrefab", log, resolved, missing,
+                "Wall_Wood", "Wall_Medieval_Wood", "Wall_Wooden", "Wall");
+            // platformPrefab = a flat stone floor for the rampart walkway.
+            outpost.platformPrefab = Resolve("platformPrefab", log, resolved, missing,
+                "Floor_Stone_3x3m_A", "Floor_Stone_3x3m", "Floor_Stone", "Floor_Medieval");
+            // towerPrefab = wooden tower first, big medieval tower as fallback.
+            outpost.towerPrefab = Resolve("towerPrefab", log, resolved, missing,
+                "Tower_Medieval_Wood", "Tower_Wood", "Tower_Medieval_Big", "Tower_Medieval", "Tower");
+            // stairsPrefab = a STRAIGHT (walkable) stairs, prefer stone, skip spiral.
+            bool straightStairs;
+            outpost.stairsPrefab = ResolveStairs(log, resolved, missing, out straightStairs);
+
+            // 4. Flat ground plane (Y=0, collider, NavigationStatic) sized to grid + margin.
+            AddOutpostGroundPlane(outpost, log);
+
+            // 5. Build.
+            outpost.BuildOutpost();
+
+            // 6. Make it walkable — SAME wiring as CastleWalkable.
+            Village2Playable.AddSceneDefaultsToActiveScene();
+            Village2Playable.ImportEventSystem();
+
+            GameObject hero = Village2Playable.ImportHero(hostGo.transform, /*heart:*/ null);
+            Vector3 heroPos = Vector3.zero;
+            if (hero == null)
+            {
+                log.AppendLine("WARN: ImportHero returned null — hero not built.");
+            }
+            else
+            {
+                // The door gap is at the front-center of the bottom row: x == gridWidth/2,
+                // z == 0 → world (gridWidth/2 * unitSize, _, 0). Spawn the hero a few metres
+                // OUTSIDE the door (-Z), grounded on the plane top (Y=0), facing IN (+Z).
+                float doorX = (outpost.gridWidth / 2) * outpost.unitSize;
+                heroPos = new Vector3(doorX, 0f, -4f);
+                hero.transform.position = heroPos;
+                hero.transform.rotation = Quaternion.Euler(0f, 0f, 0f); // face +Z into the outpost
+
+                Village2Playable.WireCameraTargetToHero(hero);
+                EnsureHeroControllable(hero, log);
+            }
+
+            // 7. Re-bake the NavMesh now that the ground + hero are in place.
+            BakeWalkable(scene, log);
+
+            // 8. Count children + save.
+            int childCount = hostGo.GetComponentsInChildren<Transform>(true).Length - 1;
+            EditorSceneManager.MarkSceneDirty(scene);
+            bool saved = EditorSceneManager.SaveScene(scene, OutpostScenePath);
+
+            log.AppendLine("---- Prefab resolution ----");
+            log.AppendLine("RESOLVED: " + (resolved.Count > 0 ? string.Join(", ", resolved) : "(none)"));
+            log.AppendLine("MISSING:  " + (missing.Count > 0 ? string.Join(", ", missing) : "(none)"));
+            log.AppendLine("Straight (walkable) stairs found: " + (straightStairs ? "YES" : "NO (spiral/none)"));
+            log.AppendLine($"Scene saved={saved} @ {OutpostScenePath}");
+            log.AppendLine($"OUTPOST_TEST_OK childCount={childCount} " +
+                $"heroAt=({heroPos.x:F2}, {heroPos.y:F2}, {heroPos.z:F2}) " +
+                $"dims={outpost.gridWidth}x{outpost.gridDepth} level=1");
+            log.AppendLine("=== Test Outpost DONE ===");
+
+            Debug.Log(log.ToString());
+        }
+
+        // Flat ground plane at Y=0 covering the outpost footprint (+ margin), collider +
+        // NavigationStatic, neutral material. Outpost spans x:[0..(gridWidth-1)*unitSize],
+        // z:[0..(gridDepth-1)*unitSize]; extend the plane to cover the door-side approach too.
+        private static void AddOutpostGroundPlane(UpgradableOutpostBuilder outpost, StringBuilder log)
+        {
+            float footprintX = (outpost.gridWidth - 1) * outpost.unitSize;
+            float footprintZ = (outpost.gridDepth - 1) * outpost.unitSize;
+            const float margin = 16f; // generous: hero spawns ~4m outside the door
+
+            var ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
+            ground.name = "OutpostGround";
+            ground.transform.position = new Vector3(footprintX * 0.5f, 0f, footprintZ * 0.5f);
+            ground.transform.localScale = new Vector3((footprintX + margin) / 10f, 1f, (footprintZ + margin) / 10f);
+            ground.transform.SetParent(outpost.transform, true);
+
+            var mat = MakeNeutralMaterial();
+            if (mat != null)
+            {
+                var mr = ground.GetComponent<MeshRenderer>();
+                if (mr != null) mr.sharedMaterial = mat;
+            }
+
+            var flags = GameObjectUtility.GetStaticEditorFlags(ground);
+            GameObjectUtility.SetStaticEditorFlags(ground, flags | StaticEditorFlags.NavigationStatic);
+
+            log.AppendLine($"  ground: OutpostGround plane @ ({ground.transform.position.x:F1},0,{ground.transform.position.z:F1}) " +
+                $"covering ~{footprintX + margin:F0}x{footprintZ + margin:F0}m (collider + NavigationStatic).");
+        }
+
+        // ==================================================================================
+        //  EnemyOutpostBuilder tester (NEW) — builds the Grok ENEMY-outpost generator into
+        //  Assets/Scenes/EnemyOutpostTest.unity on a flat ground plane. The variation is
+        //  chosen by EditorPref "enemyOutpost.type" (0..3, default 0). Resolves the post-
+        //  apocalyptic Apocalypse_M wall/barrier prefabs FIRST, then falls back to our
+        //  medieval pack. Then makes it walkable with the SAME village hero/camera/light
+        //  wiring CastleWalkable uses; hero spawns just OUTSIDE the outpost, facing IN.
+        //    Defenders/Sandbox/Test Enemy Outpost
+        //    batchmode -executeMethod DeNelle.Editor.CastleBuilderTester.TestBuildEnemyOutpost
+        // ==================================================================================
+
+        private const string EnemyOutpostScenePath = "Assets/Scenes/EnemyOutpostTest.unity";
+
+        [MenuItem("Defenders/Sandbox/Test Enemy Outpost")]
+        public static void TestBuildEnemyOutpost()
+        {
+            var log = new StringBuilder();
+            log.AppendLine("=== Test Enemy Outpost START ===");
+
+            // 1. Fresh empty scene.
+            var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+
+            // 2. Host GameObject + component, at origin.
+            var hostGo = new GameObject("EnemyOutpostTest");
+            hostGo.transform.position = Vector3.zero;
+            var outpost = hostGo.AddComponent<EnemyOutpostBuilder>();
+
+            // Variation from EditorPref (0=Barricade, 1=Ruined, 2=Watchtower, 3=Citadel).
+            int type = Mathf.Clamp(EditorPrefs.GetInt("enemyOutpost.type", 0), 0, 3);
+            outpost.outpostType = type;
+            log.AppendLine($"  outpostType={type} (EditorPref key: enemyOutpost.type) " +
+                $"gridWidth={outpost.gridWidth} gridDepth={outpost.gridDepth} unitSize={outpost.unitSize}");
+
+            // 3. Resolve prefabs — Apocalypse_M FIRST, then fall back to our medieval pack.
+            var resolved = new List<string>();
+            var missing = new List<string>();
+
+            outpost.wallPrefab = Resolve("wallPrefab", log, resolved, missing,
+                "Barrier_Concrete", "Barrier", "Wall_Stone_3x3_A", "Wall_Stone");
+            outpost.damagedWall = Resolve("damagedWall", log, resolved, missing,
+                "Barrier_Concrete_Demaged", "Barrier_Concrete_Damaged", "Barrier_Dam",
+                "Wall_Stone_3x3_B", "Wall_Stone_Damaged");
+            if (outpost.damagedWall == null && outpost.wallPrefab != null)
+            {
+                outpost.damagedWall = outpost.wallPrefab;
+                missing.Remove("damagedWall");
+                resolved.Add("damagedWall (=wallPrefab fallback)");
+                log.AppendLine("  damagedWall: FALLBACK to wallPrefab (no damaged variant).");
+            }
+
+            // barricadeWindow is OPTIONAL — leave null if nothing matches.
+            outpost.barricadeWindow = ResolveOptional("barricadeWindow", log, resolved,
+                "Barrier_Window", "Window", "Barricade", "Crenel");
+
+            outpost.platformPrefab = Resolve("platformPrefab", log, resolved, missing,
+                "Floor_Stone_3x3m_A", "Floor_Stone_3x3m", "Floor_Stone", "Floor_Medieval");
+
+            // stairsPrefab — only the Citadel variant uses it; prefer straight (walkable).
+            bool straightStairs;
+            outpost.stairsPrefab = ResolveStairs(log, resolved, missing, out straightStairs);
+
+            // debris — OPTIONAL Apocalypse_M scatter; empty array is fine.
+            outpost.debrisPrefabs = ResolveEnemyDebris(log, resolved);
+
+            // 4. Flat ground plane (Y=0, collider, NavigationStatic) sized to grid + margin.
+            AddEnemyOutpostGroundPlane(outpost, log);
+
+            // 5. Build.
+            outpost.BuildOutpost();
+
+            // 6. Make it walkable — SAME wiring as CastleWalkable.
+            Village2Playable.AddSceneDefaultsToActiveScene();
+            Village2Playable.ImportEventSystem();
+
+            GameObject hero = Village2Playable.ImportHero(hostGo.transform, /*heart:*/ null);
+            Vector3 heroPos = Vector3.zero;
+            if (hero == null)
+            {
+                log.AppendLine("WARN: ImportHero returned null — hero not built.");
+            }
+            else
+            {
+                // Spawn just OUTSIDE the front (bottom, z==0) edge, centered on X, facing IN (+Z).
+                float frontX = (outpost.gridWidth / 2) * outpost.unitSize;
+                heroPos = new Vector3(frontX, 0f, -6f);
+                hero.transform.position = heroPos;
+                hero.transform.rotation = Quaternion.Euler(0f, 0f, 0f); // face +Z into the outpost
+
+                Village2Playable.WireCameraTargetToHero(hero);
+                EnsureHeroControllable(hero, log);
+            }
+
+            // 7. Re-bake the NavMesh now the ground + hero are in place.
+            BakeWalkable(scene, log);
+
+            // 8. Count children + save.
+            int childCount = hostGo.GetComponentsInChildren<Transform>(true).Length - 1;
+            EditorSceneManager.MarkSceneDirty(scene);
+            bool saved = EditorSceneManager.SaveScene(scene, EnemyOutpostScenePath);
+
+            log.AppendLine("---- Prefab resolution ----");
+            log.AppendLine("RESOLVED: " + (resolved.Count > 0 ? string.Join(", ", resolved) : "(none)"));
+            log.AppendLine("MISSING:  " + (missing.Count > 0 ? string.Join(", ", missing) : "(none)"));
+            log.AppendLine("Straight (walkable) stairs found: " + (straightStairs ? "YES" : "NO (spiral/none)"));
+            log.AppendLine($"Scene saved={saved} @ {EnemyOutpostScenePath}");
+            log.AppendLine($"ENEMY_OUTPOST_OK type={type} childCount={childCount} " +
+                $"heroAt=({heroPos.x:F2}, {heroPos.y:F2}, {heroPos.z:F2}) " +
+                $"dims={outpost.gridWidth}x{outpost.gridDepth}");
+            log.AppendLine("=== Test Enemy Outpost DONE ===");
+
+            Debug.Log(log.ToString());
+        }
+
+        // Flat ground plane at Y=0 covering the outpost footprint (+ margin), collider +
+        // NavigationStatic, neutral material. Outpost spans x:[0..(gridWidth-1)*unitSize],
+        // z:[0..(gridDepth-1)*unitSize]; extend to cover the front approach (hero ~6m out).
+        private static void AddEnemyOutpostGroundPlane(EnemyOutpostBuilder outpost, StringBuilder log)
+        {
+            float footprintX = (outpost.gridWidth - 1) * outpost.unitSize;
+            float footprintZ = (outpost.gridDepth - 1) * outpost.unitSize;
+            const float margin = 20f; // generous: hero spawns ~6m outside the front edge
+
+            var ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
+            ground.name = "OutpostGround";
+            ground.transform.position = new Vector3(footprintX * 0.5f, 0f, footprintZ * 0.5f);
+            ground.transform.localScale = new Vector3((footprintX + margin) / 10f, 1f, (footprintZ + margin) / 10f);
+            ground.transform.SetParent(outpost.transform, true);
+
+            var mat = MakeNeutralMaterial();
+            if (mat != null)
+            {
+                var mr = ground.GetComponent<MeshRenderer>();
+                if (mr != null) mr.sharedMaterial = mat;
+            }
+
+            var flags = GameObjectUtility.GetStaticEditorFlags(ground);
+            GameObjectUtility.SetStaticEditorFlags(ground, flags | StaticEditorFlags.NavigationStatic);
+
+            log.AppendLine($"  ground: OutpostGround plane @ ({ground.transform.position.x:F1},0,{ground.transform.position.z:F1}) " +
+                $"covering ~{footprintX + margin:F0}x{footprintZ + margin:F0}m (collider + NavigationStatic).");
+        }
+
+        // Debris resolve for the enemy outpost — Apocalypse_M scatter items; empty is OK.
+        private static GameObject[] ResolveEnemyDebris(StringBuilder log, List<string> resolved)
+        {
+            string[] names = { "Barrel", "Blood_A", "Blood", "Bed_Large_Frame_Broken", "Bed_Broken", "Bath_Broken", "Bike" };
+            var found = new List<GameObject>();
+            foreach (var n in names)
+            {
+                var guids = AssetDatabase.FindAssets("t:Prefab " + n);
+                foreach (var guid in guids)
+                {
+                    var path = AssetDatabase.GUIDToAssetPath(guid);
                     if (path.IndexOf("Apocalypse", System.StringComparison.OrdinalIgnoreCase) < 0) continue;
                     var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
                     if (prefab != null && !found.Contains(prefab))
