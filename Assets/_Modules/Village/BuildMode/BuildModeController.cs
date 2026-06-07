@@ -41,10 +41,10 @@ namespace DeNelle.Village
         public bool IsActive { get; private set; }
 
         [Header("Camera overview")]
-        [Tooltip("Camera height (Y) while in build mode — pulled back top-down.")]
-        [SerializeField] private float _buildModeHeight = 55f;
-        [Tooltip("Top-down pitch (degrees) while in build mode.")]
-        [SerializeField] private float _buildModePitch = 70f;
+        [Tooltip("Camera height (Y) while in build mode — angled 3D overview so structures read as upright.")]
+        [SerializeField] private float _buildModeHeight = 35f;
+        [Tooltip("Pitch (degrees) while in build mode — angled, not top-down, so 3D orientation is visible.")]
+        [SerializeField] private float _buildModePitch = 45f;
 
         [Header("Placement")]
         [SerializeField] private float _rayDistance = 800f;
@@ -1221,7 +1221,7 @@ namespace DeNelle.Village
             Vector3 centre = _grid != null
                 ? _grid.CellToWorld(new Vector2Int(_grid.gridWidth / 2, _grid.gridHeight / 2))
                 : Vector3.zero;
-            _camera.transform.position = new Vector3(centre.x, _buildModeHeight, centre.z - 1f);
+            _camera.transform.position = new Vector3(centre.x, _buildModeHeight, centre.z - _buildModeHeight);
             _camera.transform.rotation = Quaternion.Euler(_buildModePitch, 0f, 0f);
         }
 

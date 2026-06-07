@@ -377,20 +377,21 @@ namespace DeNelle.HUD
         }
 
         // ── "Defend!" / Start-Wave button — centred above the skill bar. ───────
-        // Large mobile touch target (≈18% screen width). Shown ONLY between waves
-        // (countdown / idle / cleared); hidden while a wave is active. The click
-        // raises StartWaveRequested, which the Village-side StartWaveHudBridge
-        // forwards to WaveManager.ForceBeginNextWave().
+        // Minimal compact button anchored near the wave timer at the TOP. Shown
+        // ONLY between waves (countdown / idle / cleared); hidden while a wave is
+        // active. The click raises StartWaveRequested, which the Village-side
+        // StartWaveHudBridge forwards to WaveManager.ForceBeginNextWave().
+        // Initial anchors are placeholders; ApplyResponsiveLayout positions it.
         private void BuildStartWaveButton(Transform parent)
         {
-            _startWaveBtn = NewRect("StartWaveBtn", parent, new Vector2(0.34f, 0.165f), new Vector2(0.66f, 0.255f));
+            _startWaveBtn = NewRect("StartWaveBtn", parent, new Vector2(0.40f, 0.815f), new Vector2(0.60f, 0.86f));
             var bimg = _startWaveBtn.gameObject.AddComponent<Image>();
             bimg.color = HudTheme.GoldButton;
             bimg.sprite = HudTheme.RoundedFrame;
             bimg.type = Image.Type.Sliced;
             var btn = _startWaveBtn.gameObject.AddComponent<Button>();
             btn.onClick.AddListener(() => StartWaveRequested?.Invoke());
-            var t = AddText(_startWaveBtn, "DEFEND!", 26, HudTheme.Ink, TextAlignmentOptions.Center);
+            var t = AddText(_startWaveBtn, "DEFEND!", 16, HudTheme.Ink, TextAlignmentOptions.Center);
             t.fontStyle = FontStyles.Bold;
             // Hidden until the bridge reports a wave is ready to start.
             _startWaveBtn.gameObject.SetActive(false);
@@ -455,7 +456,8 @@ namespace DeNelle.HUD
                 // Bottom tray a little taller for big thumb targets.
                 SetAnchors(_skillBar,       new Vector2(0.06f, 0.0f), new Vector2(0.94f, 0.145f));
                 SetAnchors(_buildBtn,       new Vector2(0.84f, 0.155f), new Vector2(0.99f, 0.235f));
-                SetAnchors(_startWaveBtn,   new Vector2(0.30f, 0.165f), new Vector2(0.70f, 0.255f));
+                // Minimal — small tap target just under the top wave timer (top-center).
+                SetAnchors(_startWaveBtn,   new Vector2(0.40f, 0.815f), new Vector2(0.60f, 0.865f));
             }
             else
             {
@@ -469,7 +471,8 @@ namespace DeNelle.HUD
                 // Skill bar narrower & centred; build button bottom-right.
                 SetAnchors(_skillBar,       new Vector2(0.22f, 0.0f), new Vector2(0.78f, 0.16f));
                 SetAnchors(_buildBtn,       new Vector2(0.90f, 0.18f), new Vector2(0.995f, 0.28f));
-                SetAnchors(_startWaveBtn,   new Vector2(0.40f, 0.18f), new Vector2(0.60f, 0.28f));
+                // Minimal — small tap target just under the top wave timer (top-center).
+                SetAnchors(_startWaveBtn,   new Vector2(0.44f, 0.785f), new Vector2(0.56f, 0.84f));
             }
         }
 
