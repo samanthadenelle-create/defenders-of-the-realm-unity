@@ -391,15 +391,34 @@ namespace DeNelle.Village
             // rig or a runtime rescale can never re-inflate the bar into a giant pill.
             ApplyScaleCompensation();
 
-            // Billboard toward the camera.
+            // Billboard toward the camera — but PINNED UPRIGHT (WO-302 follow-on).
+            // The old LookRotation(dir) with no up-vector let the quad tip edge-on
+            // when the camera looked DOWN at a bar floating above an enemy, so the
+            // near-top-down / over-shoulder view saw the bar in profile and it read
+            // as a thin green oval/disc instead of a horizontal HP bar. Supplying
+            // WORLD-UP as the up vector keeps the bar's local-up locked to world +Y,
+            // so the quad always stays vertical (a true upright billboard) and the
+            // bar reads as a flat horizontal HP bar from any camera angle, including
+            // near-top-down. (Camera-facing on yaw; never tips flat.)
             if (_cam == null)
             {
                 var cm = Camera.main;
                 _cam = cm != null ? cm.transform : null;
             }
             if (_cam != null)
-                _canvas.transform.rotation =
-                    Quaternion.LookRotation(_canvas.transform.position - _cam.position);
+            {
+                Vector3 toCam = _canvas.transform.position - _cam.position;
+                // Guard the degenerate near-vertical case (camera straight overhead):
+                // a look-direction nearly parallel to world-up makes LookRotation's
+                // up reference unstable. Fall back to the camera's own up then.
+                if (toCam.sqrMagnitude > 1e-6f)
+                {
+                    Vector3 flat = new Vector3(toCam.x, 0f, toCam.z);
+                    Vector3 fwd  = flat.sqrMagnitude > 1e-6f ? flat : toCam;
+                    _canvas.transform.rotation =
+                        Quaternion.LookRotation(fwd, Vector3.up);
+                }
+            }
         }
     }
 }
