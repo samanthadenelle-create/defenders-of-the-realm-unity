@@ -49,14 +49,14 @@
           "slot": "r",
           "key": "R",
           "name": "Meteor Strike",
-          "description": "Ultimate — 80 dmg meteor over a 6m blast (45s cd).",
+          "description": "Ultimate — 160 dmg meteor over a 9m blast (45s cd).",
           "icon": "☄",
           "color": "#ff7043",
           "effect": "meteor",
           "cooldown": 45,
           "manaCost": 7,
-          "damage": 80,
-          "range": 6
+          "damage": 160,
+          "range": 9
         }
       }
     },
