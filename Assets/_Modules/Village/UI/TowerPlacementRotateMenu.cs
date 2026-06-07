@@ -69,6 +69,8 @@ namespace DeNelle.Village
         private VisualElement _root;
 
         private TowerData          _towerData;
+        private GameObject         _previewPrefab;   // resolved preview model (TowerData→upgrades[0] OR caller-supplied)
+        private string             _displayName;     // caller-supplied name (prefab overload); null → derive from _towerData
         private double             _costSkr;
         private Quaternion         _initialRotation;
         private Vector3            _initialEuler;
@@ -118,7 +120,48 @@ namespace DeNelle.Village
             Action<Quaternion> onConfirm,
             Action onCancel)
         {
-            _towerData       = towerData;
+            _towerData = towerData;
+            // The TowerData Level-1 visual is upgrades[0].visualPrefab — resolve it once
+            // here so the shared core path is prefab-driven for BOTH overloads.
+            GameObject prefab = towerData != null
+                                && towerData.upgrades != null
+                                && towerData.upgrades.Length > 0
+                ? towerData.upgrades[0]?.visualPrefab
+                : null;
+            string name = towerData != null ? towerData.towerName : "Tower";
+
+            OpenCore(prefab, name, costSkr, initialRotation, onConfirm, onCancel);
+        }
+
+        /// <summary>
+        /// Prefab overload — drive the same Preview &amp; Rotate UI directly off a
+        /// loaded visual prefab + display name (used by Build Mode, which arms a
+        /// CatalogEntry with a visualPrefab PATH, not a TowerData SO). Shares the
+        /// same UI/preview core as the TowerData overload.
+        /// </summary>
+        public void Open(
+            GameObject previewPrefab,
+            string displayName,
+            double costSkr,
+            Quaternion initialRotation,
+            Action<Quaternion> onConfirm,
+            Action onCancel)
+        {
+            _towerData = null;   // prefab path — no SO; tier label falls back to "TIER I"
+            OpenCore(previewPrefab, displayName, costSkr, initialRotation, onConfirm, onCancel);
+        }
+
+        /// <summary>Shared open path for both overloads — builds the panel + preview off a prefab.</summary>
+        private void OpenCore(
+            GameObject previewPrefab,
+            string displayName,
+            double costSkr,
+            Quaternion initialRotation,
+            Action<Quaternion> onConfirm,
+            Action onCancel)
+        {
+            _previewPrefab   = previewPrefab;
+            _displayName     = displayName;
             _costSkr         = costSkr;
             _initialRotation = initialRotation;
             _initialEuler    = NormalizeEuler(initialRotation.eulerAngles);
@@ -129,14 +172,17 @@ namespace DeNelle.Village
             _yDeg = _initialEuler.y;
             _zDeg = _initialEuler.z;
 
+            Debug.Log($"[Orient] OpenCore: {displayName} prefab={(previewPrefab != null ? previewPrefab.name : "<none>")}");
             BuildPanel();
             BeginPreview();
+            Debug.Log($"[Orient] panel built; preview valid={(_preview != null && _preview.IsValid)}");
             ShowPanel();
         }
 
         /// <summary>Close the panel and tear down the preview rig. Fires NO callback.</summary>
         public void Close()
         {
+            Debug.Log("[Orient] Close.");
             DisposePreview();
             if (_root != null) _root.style.display = DisplayStyle.None;
             if (_document != null) _document.enabled = false;
@@ -327,7 +373,9 @@ namespace DeNelle.Village
             thumb.Add(thumbIcon);
             left.Add(thumb);
 
-            string towerName = _towerData != null ? _towerData.towerName : "Tower";
+            string towerName = !string.IsNullOrEmpty(_displayName)
+                ? _displayName
+                : (_towerData != null ? _towerData.towerName : "Tower");
             var nameLabel = new Label($"{towerName}  ·  {TierLabel()}");
             nameLabel.style.fontSize = 12;
             nameLabel.style.color    = ConfirmTxt;
@@ -526,11 +574,7 @@ namespace DeNelle.Village
         private void BeginPreview()
         {
             DisposePreview();
-            GameObject prefab = _towerData != null
-                                && _towerData.upgrades != null
-                                && _towerData.upgrades.Length > 0
-                ? _towerData.upgrades[0]?.visualPrefab
-                : null;
+            GameObject prefab = _previewPrefab;
 
             _preview = new TowerPreviewCamera();
             bool ok = _preview.Begin(prefab);
