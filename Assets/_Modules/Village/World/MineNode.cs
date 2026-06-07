@@ -350,6 +350,7 @@ namespace DeNelle.Village
             int amount = Mathf.RoundToInt(YieldPerExtract * (1f + 0.25f * tier));
 
             BankYield(amount);
+            if (amount > 0) GameSfx.PlayPetHarvest();   // harvest "ding" on a successful extract
             _cooldown = ExtractCooldown;
 
             if (TotalExtracts > 0)

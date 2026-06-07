@@ -186,6 +186,7 @@ namespace DeNelle.Village
             // tier (shake only, no time-freeze) so the 1 s cadence never stutters.
             VFXManager.Play(VFXType.Impact_Physical, transform.position + Vector3.up * 1.0f);
             _impactFeedback?.PlayHaptic(0.25f, 0.12f);
+            GameSfx.PlayHeroHit();   // hero took a hit — audible grunt/impact (was silent)
 
             if (_hp <= 0f && !_isDead)
             {
