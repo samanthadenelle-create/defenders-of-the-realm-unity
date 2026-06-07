@@ -53,6 +53,15 @@ Each class gets one signature timing move on this same seam.
 Parry: `ParryWindow` (0.25s), `RiposteWindow` (2s), `RiposteMultiplier` (3×) — consts in
 PlayerAttackController; promote to SerializeField if live-tuning is wanted.
 
+## Reuse: weapon-in-hand orientation via the preview tool
+Equipped weapons (sword/bow/staff/axe) attach to a hand socket and each needs a per-weapon
+GRIP correction (the bow proved this — see HeroBowAttachment.NormalizeInto + GripLocalEuler).
+The build-preview tool already solves the identical problem for structures: rotate in a 3D
+preview → save a per-id yaw. So reuse it for GEAR: a "weapon orient" mode of BuildPreviewModal
+that previews the equipped weapon in-hand, lets you rotate it, and saves the correction per
+weapon id (mirror RotationCorrectionRegistry) — then GearVisualApplier applies that saved grip
+on equip. Keeps every weapon landing right without per-weapon code. Tool committed in 33f827a.
+
 ## Notes
 - Keep slo-mo SPECIAL (rate-capped / skill-gated) so it doesn't become constant stutter.
 - All `Time.timeScale` dips restore in a `finally` (safe); `CombatFeedbackManager.OnDestroy` resets too.
