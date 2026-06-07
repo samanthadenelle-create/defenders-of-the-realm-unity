@@ -54,6 +54,10 @@ namespace DeNelle.HUD
         public AbilitySlotEvent AbilityRequested = new AbilitySlotEvent();
         public UnityEvent RepairConfirmRequested = new UnityEvent();
         public UnityEvent RepairCancelRequested = new UnityEvent();
+        // Player presses the "Defend!" button to begin the next wave immediately
+        // (skip the Prepare-Phase countdown). Read by the Village-side
+        // StartWaveHudBridge, which calls WaveManager.ForceBeginNextWave().
+        public UnityEvent StartWaveRequested = new UnityEvent();
 
         [System.Serializable] public sealed class AbilitySlotEvent : UnityEvent<int> { }
 
@@ -105,6 +109,8 @@ namespace DeNelle.HUD
         private RectTransform _partyStack;
         private RectTransform _skillBar;
         private RectTransform _buildBtn;
+        private RectTransform _startWaveBtn;     // "Defend!" — begin the next wave
+        private bool _startWaveAvailable;         // last pushed availability (between waves)
         private bool _isPortrait = true;
         private int _lastScreenW, _lastScreenH;
 
@@ -158,6 +164,7 @@ namespace DeNelle.HUD
             BuildPartyFrames(go.transform);
             BuildSkillBar(go.transform);
             BuildBuildButton(go.transform);
+            BuildStartWaveButton(go.transform);
             BuildRepairPrompt(go.transform);
         }
 
@@ -369,6 +376,26 @@ namespace DeNelle.HUD
             t.fontStyle = FontStyles.Bold;
         }
 
+        // ── "Defend!" / Start-Wave button — centred above the skill bar. ───────
+        // Large mobile touch target (≈18% screen width). Shown ONLY between waves
+        // (countdown / idle / cleared); hidden while a wave is active. The click
+        // raises StartWaveRequested, which the Village-side StartWaveHudBridge
+        // forwards to WaveManager.ForceBeginNextWave().
+        private void BuildStartWaveButton(Transform parent)
+        {
+            _startWaveBtn = NewRect("StartWaveBtn", parent, new Vector2(0.34f, 0.165f), new Vector2(0.66f, 0.255f));
+            var bimg = _startWaveBtn.gameObject.AddComponent<Image>();
+            bimg.color = HudTheme.GoldButton;
+            bimg.sprite = HudTheme.RoundedFrame;
+            bimg.type = Image.Type.Sliced;
+            var btn = _startWaveBtn.gameObject.AddComponent<Button>();
+            btn.onClick.AddListener(() => StartWaveRequested?.Invoke());
+            var t = AddText(_startWaveBtn, "DEFEND!", 26, HudTheme.Ink, TextAlignmentOptions.Center);
+            t.fontStyle = FontStyles.Bold;
+            // Hidden until the bridge reports a wave is ready to start.
+            _startWaveBtn.gameObject.SetActive(false);
+        }
+
         private void BuildRepairPrompt(Transform parent)
         {
             var p = NewRect("RepairPrompt", parent, new Vector2(0.28f, 0.42f), new Vector2(0.72f, 0.58f));
@@ -428,6 +455,7 @@ namespace DeNelle.HUD
                 // Bottom tray a little taller for big thumb targets.
                 SetAnchors(_skillBar,       new Vector2(0.06f, 0.0f), new Vector2(0.94f, 0.145f));
                 SetAnchors(_buildBtn,       new Vector2(0.84f, 0.155f), new Vector2(0.99f, 0.235f));
+                SetAnchors(_startWaveBtn,   new Vector2(0.30f, 0.165f), new Vector2(0.70f, 0.255f));
             }
             else
             {
@@ -441,6 +469,7 @@ namespace DeNelle.HUD
                 // Skill bar narrower & centred; build button bottom-right.
                 SetAnchors(_skillBar,       new Vector2(0.22f, 0.0f), new Vector2(0.78f, 0.16f));
                 SetAnchors(_buildBtn,       new Vector2(0.90f, 0.18f), new Vector2(0.995f, 0.28f));
+                SetAnchors(_startWaveBtn,   new Vector2(0.40f, 0.18f), new Vector2(0.60f, 0.28f));
             }
         }
 
@@ -558,6 +587,19 @@ namespace DeNelle.HUD
         // =====================================================================
         //  Bridge-reflected extras (not on IVillageHud — resolved by name)
         // =====================================================================
+
+        /// <summary>
+        /// Shows / hides the "Defend!" start-wave button. Pushed by the Village-side
+        /// StartWaveHudBridge: true between waves (Countdown / Idle / cleared) so the
+        /// player can begin the next wave on demand; false while a wave is Active (or
+        /// the run is over). Not on IVillageHud — resolved by name like SetMana.
+        /// </summary>
+        public void SetStartWaveAvailable(bool available)
+        {
+            _startWaveAvailable = available;
+            if (_startWaveBtn != null && _startWaveBtn.gameObject.activeSelf != available)
+                _startWaveBtn.gameObject.SetActive(available);
+        }
 
         /// <summary>Live mana bar — pushed every frame by HeroAbilitiesHudBridge.</summary>
         public void SetMana(float current, float max)

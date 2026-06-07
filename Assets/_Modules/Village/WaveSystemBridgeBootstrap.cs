@@ -56,6 +56,10 @@ namespace DeNelle.Village
             Ensure<CampaignManager>(go);
             Ensure<WaveMusicController>(go);
             Ensure<TowerVoiceController>(go);
+            // Player-facing "Defend!" start-wave button hook (owner ask). Self-wires
+            // via GetComponent<WaveManager>() + reflects the HUD through CoreServices,
+            // so attaching it here is all that's needed (no Village.unity re-save).
+            Ensure<StartWaveHudBridge>(go);
         }
 
         private static void Ensure<T>(GameObject go) where T : Component
