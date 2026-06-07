@@ -16,6 +16,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.Rendering.Universal; // URP: configure the preview camera to actually render to the RT
 using DeNelle.Core.Catalog;
 
 namespace DeNelle.Village
@@ -42,6 +43,12 @@ namespace DeNelle.Village
         private bool _closing;    // WO-314: idempotent close guard (prevents double-fire + post-close NRE)
         private readonly List<Material> _tempMaterials = new List<Material>(); // WO-314: runtime mats to free on close
 
+        // Manual hit-test targets — this project's builds have no reliable EventSystem/
+        // GraphicRaycaster, so Button.onClick never fires (documented recurring issue,
+        // see GameOverScreen). We poll these rects against taps in Update() instead.
+        private RectTransform _previewImageRT; // the drag-rotate area (taps here = drag, NOT a button)
+        private readonly List<(RectTransform rect, Action action)> _buttons = new List<(RectTransform, Action)>();
+
         private const int RT_SIZE = 384; // larger for proper 3D model viewer experience (still mobile friendly)
         private const string PLANE_NAME = "PreviewPlane";
         private const string VISUAL_NAME = "PreviewVisual";
@@ -64,6 +71,11 @@ namespace DeNelle.Village
 
             SetupUI();
             SetupPreview3D();
+
+            // Belt-and-suspenders: ensure an EventSystem exists so the uGUI Buttons COULD
+            // route clicks. But builds here often lack a working one, so the authoritative
+            // input path is the manual rect hit-test in Update() below.
+            EventSystemEnsurer.EnsureEventSystem();
 
             gameObject.SetActive(true);
         }
@@ -112,10 +124,7 @@ namespace DeNelle.Village
             imgRT.sizeDelta = Vector2.zero;
             _previewImage = imgGO.GetComponent<RawImage>();
             _previewImage.color = Color.white;
-
-            // Add drag handler for free rotate on the image area.
-            var dragHandler = imgGO.AddComponent<PreviewDragHandler>();
-            dragHandler.modal = this;
+            _previewImageRT = imgRT; // drag-rotate area for the manual hit-test in Update()
 
             // Live yaw readout (premium intuitive feedback — player always sees the exact offset being chosen).
             var yawGO = new GameObject("YawReadout", typeof(RectTransform), typeof(Text));
@@ -171,8 +180,12 @@ namespace DeNelle.Village
             txt.fontSize = 12;
             txt.color = new Color(0.95f, 0.9f, 0.75f);
 
+            // uGUI onClick is registered as a best-effort path, but is NOT relied upon —
+            // builds here lack a working EventSystem/GraphicRaycaster, so the manual rect
+            // hit-test in Update() is the authoritative input. Register the rect for it.
             var btn = btnGO.GetComponent<Button>();
             btn.onClick.AddListener(() => onClick());
+            _buttons.Add((btnRT, onClick));
         }
 
         private void SetupPreview3D()
@@ -233,6 +246,16 @@ namespace DeNelle.Village
             {
                 try { skinned = VisualFactory.Skin(_previewVisual.transform, _entry.visualPrefabPath, SkinOptions.Prop(2.5f)); }
                 catch (Exception e) { Debug.LogWarning($"[BuildPreviewModal] preview skin failed for {_entry.id}: {e.Message}"); skinned = null; }
+                // If Skin returned null the viewer falls back to a disc and looks "broken" —
+                // surface WHY so missing/mis-pathed Resources prefabs are diagnosable.
+                if (skinned == null)
+                    Debug.LogWarning($"[BuildPreviewModal] VisualFactory.Skin returned null for id='{_entry.id}' " +
+                                     $"visualPrefabPath='{_entry.visualPrefabPath}' — showing fallback disc. " +
+                                     "Verify the prefab exists under a Resources/ folder at that path.");
+            }
+            else
+            {
+                Debug.LogWarning($"[BuildPreviewModal] entry has no visualPrefabPath (id='{(_entry != null ? _entry.id : "<null>")}') — showing fallback disc.");
             }
             if (skinned == null)
             {
@@ -251,23 +274,30 @@ namespace DeNelle.Village
                 }
             }
 
-            // Preview camera (orthographic for clean object view, or perspective).
+            // Preview camera (orthographic for a clean object view).
             var camGO = new GameObject("PreviewCam");
             camGO.transform.SetParent(_previewRoot.transform, false);
             _previewCam = camGO.AddComponent<Camera>();
             _previewCam.clearFlags = CameraClearFlags.SolidColor;
             _previewCam.backgroundColor = new Color(0.15f, 0.15f, 0.18f);
             _previewCam.orthographic = true;
-            _previewCam.orthographicSize = 2.2f;
             _previewCam.nearClipPlane = 0.1f;
-            _previewCam.farClipPlane = 20f;
+            _previewCam.farClipPlane = 10000f; // rig is at y=-5000; far must reach the camera→object span
             _previewCam.targetTexture = _rt;
-            // Position for 3/4 view of object on plane.
-            camGO.transform.localPosition = new Vector3(3f, 3f, -3f);
-            camGO.transform.LookAt(_previewVisual.transform.position + Vector3.up * 0.5f);
+
+            // URP: a runtime-created Camera needs UniversalAdditionalCameraData to render
+            // (the SRP only walks cameras it knows about). Mark it a self-contained Base
+            // camera with no overlay stack so it draws the rig into the RT under URP.
+            // (DeNelle.Village already references Unity.RenderPipelines.Universal.Runtime.)
+            var urp = camGO.AddComponent<UniversalAdditionalCameraData>();
+            urp.renderType = CameraRenderType.Base;
+            urp.renderPostProcessing = false;
+            urp.requiresColorOption = CameraOverrideOption.Off;
+            urp.requiresDepthOption = CameraOverrideOption.Off;
 
             // ISOLATE: put the whole rig on PREVIEW_LAYER and mask the camera + lights to it,
-            // so nothing here renders into — or lights — the live village scene.
+            // so nothing here renders into — or lights — the live village scene. Do this
+            // BEFORE framing so bounds are measured on the final rig.
             SetLayerRecursive(_previewRoot.transform, PREVIEW_LAYER);
             _previewCam.cullingMask = 1 << PREVIEW_LAYER;
             light1.cullingMask = 1 << PREVIEW_LAYER;
@@ -277,9 +307,40 @@ namespace DeNelle.Village
             if (_previewVisual != null)
                 _previewVisual.transform.localRotation = Quaternion.Euler(0, _currentYaw, 0);
 
+            // Frame the camera on the actual rendered bounds of the rig (object + plane) so
+            // the object is guaranteed in-shot regardless of its fitted size / seat position.
+            // Without this the fixed orthoSize + LookAt-on-the-empty-root could leave the
+            // model outside the frustum → RT clears to the bg colour → "blank" viewer.
+            FrameCameraOnRig(camGO.transform);
+
             // Seed the live yaw readout with the (possibly saved) starting value so the viewer
             // shows the correct number immediately on open.
             UpdateYawReadout();
+        }
+
+        /// <summary>Points the (orthographic) preview camera at the rig's combined renderer
+        /// bounds from a 3/4 angle and sizes the ortho frustum to contain it with margin.</summary>
+        private void FrameCameraOnRig(Transform cam)
+        {
+            Bounds b;
+            var rends = _previewRoot != null ? _previewRoot.GetComponentsInChildren<Renderer>() : null;
+            if (rends != null && rends.Length > 0)
+            {
+                b = rends[0].bounds;
+                for (int i = 1; i < rends.Length; i++) b.Encapsulate(rends[i].bounds);
+            }
+            else
+            {
+                // No renderers (shouldn't happen — disc fallback always adds one) — frame the root.
+                b = new Bounds(_previewRoot != null ? _previewRoot.transform.position : Vector3.zero, Vector3.one * 4f);
+            }
+
+            float radius = Mathf.Max(0.5f, b.extents.magnitude);
+            // 3/4 viewing direction, distance scaled to the object's radius.
+            Vector3 dir = new Vector3(1f, 0.9f, -1f).normalized;
+            cam.position = b.center + dir * (radius * 2.5f);
+            cam.LookAt(b.center);
+            _previewCam.orthographicSize = radius * 1.15f; // a little margin around the object
         }
 
         private void Update()
@@ -289,61 +350,93 @@ namespace DeNelle.Village
             // Apply current yaw to visual (for buttons + drag).
             _previewVisual.transform.localRotation = Quaternion.Euler(0, _currentYaw, 0);
 
-            // Simple free drag on the preview image area (approximates pointer over RawImage).
-            // For full mobile, would use IPointerHandler; this works for desktop + basic touch.
-            if (Input.GetMouseButtonDown(0))
+            // ── Manual input (NO EventSystem) ───────────────────────────────────
+            // This project's builds do not have a reliable EventSystem/GraphicRaycaster,
+            // so uGUI Button.onClick never fires (documented recurring issue — see
+            // GameOverScreen.cs). We hit-test each control's RectTransform against the
+            // pointer ourselves, using the SAME proven pattern. A press that lands on a
+            // button fires that button; a press inside the preview image becomes a drag;
+            // everything else is ignored. This guarantees Confirm / Cancel / ±90 / Reset
+            // and drag-rotate all work in the player build.
+
+            // 1) Press: button taps take priority over starting a drag.
+            if (TryGetPressDown(out Vector2 pressPos))
             {
-                // Check rough screen rect of the image (assumes centered modal).
-                Vector2 mp = Input.mousePosition;
-                // Rough check: if in center 1/3 of screen vertically/horizontally (modal area).
-                if (mp.x > Screen.width * 0.35f && mp.x < Screen.width * 0.65f &&
-                    mp.y > Screen.height * 0.35f && mp.y < Screen.height * 0.75f)
+                bool hitButton = false;
+                for (int i = 0; i < _buttons.Count; i++)
+                {
+                    var b = _buttons[i];
+                    if (b.rect != null &&
+                        RectTransformUtility.RectangleContainsScreenPoint(b.rect, pressPos, null))
+                    {
+                        hitButton = true;
+                        // Cancel/Confirm Destroy this object — guard against running another
+                        // action afterwards by breaking immediately.
+                        b.action?.Invoke();
+                        break;
+                    }
+                }
+
+                // Only begin a drag if the press was inside the preview image and NOT on a button.
+                if (!hitButton && _previewImageRT != null &&
+                    RectTransformUtility.RectangleContainsScreenPoint(_previewImageRT, pressPos, null))
                 {
                     _dragging = true;
-                    _lastDragPos = mp;
+                    _lastDragPos = pressPos;
                 }
-            }
-            if (_dragging && Input.GetMouseButton(0))
-            {
-                Vector2 mp = Input.mousePosition;
-                float dx = mp.x - _lastDragPos.x;
-                _currentYaw += dx * 0.5f; // sensitivity for free rotate
-                _currentYaw = Mathf.Repeat(_currentYaw, 360f);
-                _lastDragPos = mp;
-                UpdateYawReadout(); // live update during drag for premium viewer feel
-            }
-            if (Input.GetMouseButtonUp(0))
-            {
-                _dragging = false;
+                if (_closing) return; // a button (Confirm/Cancel) tore us down
             }
 
-            // Touch support basic (first touch as drag).
+            // 2) Drag-rotate (held). Stops when the press is released.
+            if (_dragging && TryGetHeldPos(out Vector2 heldPos))
+            {
+                float dx = heldPos.x - _lastDragPos.x;
+                _currentYaw = Mathf.Repeat(_currentYaw + dx * 0.5f, 360f); // sensitivity for free rotate
+                _lastDragPos = heldPos;
+                UpdateYawReadout(); // live update during drag for premium viewer feel
+            }
+
+            // 3) Release.
+            if (TryGetPressUp())
+                _dragging = false;
+        }
+
+        /// <summary>True on the frame a mouse-down or touch-begin happens; outputs the screen pos.</summary>
+        private static bool TryGetPressDown(out Vector2 pos)
+        {
             if (Input.touchCount > 0)
             {
                 var t = Input.GetTouch(0);
-                if (t.phase == TouchPhase.Began)
-                {
-                    Vector2 tp = t.position;
-                    if (tp.x > Screen.width * 0.35f && tp.x < Screen.width * 0.65f &&
-                        tp.y > Screen.height * 0.35f && tp.y < Screen.height * 0.75f)
-                    {
-                        _dragging = true;
-                        _lastDragPos = tp;
-                    }
-                }
-                else if (_dragging && (t.phase == TouchPhase.Moved || t.phase == TouchPhase.Stationary))
-                {
-                    float dx = t.position.x - _lastDragPos.x;
-                    _currentYaw += dx * 0.5f;
-                    _currentYaw = Mathf.Repeat(_currentYaw, 360f);
-                    _lastDragPos = t.position;
-                    UpdateYawReadout(); // live update during drag for premium viewer feel
-                }
-                else if (t.phase == TouchPhase.Ended)
-                {
-                    _dragging = false;
-                }
+                if (t.phase == TouchPhase.Began) { pos = t.position; return true; }
+                pos = default; return false;
             }
+            if (Input.GetMouseButtonDown(0)) { pos = (Vector2)Input.mousePosition; return true; }
+            pos = default; return false;
+        }
+
+        /// <summary>True while a press is held; outputs the current screen pos.</summary>
+        private static bool TryGetHeldPos(out Vector2 pos)
+        {
+            if (Input.touchCount > 0)
+            {
+                var t = Input.GetTouch(0);
+                if (t.phase == TouchPhase.Moved || t.phase == TouchPhase.Stationary)
+                { pos = t.position; return true; }
+                pos = default; return false;
+            }
+            if (Input.GetMouseButton(0)) { pos = (Vector2)Input.mousePosition; return true; }
+            pos = default; return false;
+        }
+
+        /// <summary>True on the frame the press is released.</summary>
+        private static bool TryGetPressUp()
+        {
+            if (Input.touchCount > 0)
+            {
+                var t = Input.GetTouch(0);
+                return t.phase == TouchPhase.Ended || t.phase == TouchPhase.Canceled;
+            }
+            return Input.GetMouseButtonUp(0);
         }
 
         private void RotatePreview(float delta)
@@ -426,13 +519,6 @@ namespace DeNelle.Village
             root.gameObject.layer = layer;
             for (int i = 0; i < root.childCount; i++)
                 SetLayerRecursive(root.GetChild(i), layer);
-        }
-
-        /// <summary>Helper for drag on the RawImage area (attached in SetupUI).</summary>
-        private class PreviewDragHandler : MonoBehaviour
-        {
-            public BuildPreviewModal modal;
-            // The Update in modal handles the actual drag; this is marker for area.
         }
     }
 }

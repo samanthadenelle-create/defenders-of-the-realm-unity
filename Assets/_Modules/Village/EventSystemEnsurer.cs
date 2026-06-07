@@ -47,7 +47,7 @@ namespace DeNelle.Village
             SceneManager.sceneLoaded += (_, __) => EnsureEventSystem();
         }
 
-        private static void EnsureEventSystem()
+        public static void EnsureEventSystem()
         {
             // Already present anywhere in the loaded scenes? Nothing to do.
             if (EventSystem.current != null) return;
