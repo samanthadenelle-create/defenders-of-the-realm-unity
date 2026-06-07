@@ -113441,21 +113441,22 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d7b772fed2be63442a5850f8e6f4e85e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: DeNelle.HUD::DeNelle.HUD.VillageHudController
-  _document: {fileID: 733802509}
-  _heartWarningFraction: 0.5
-  _heartCriticalFraction: 0.25
-  _countdownUrgentSeconds: 3
-  _repairToastSeconds: 2.5
   BuildRequested:
+    m_PersistentCalls:
+      m_Calls: []
+  SkillsRequested:
+    m_PersistentCalls:
+      m_Calls: []
+  ShopRequested:
+    m_PersistentCalls:
+      m_Calls: []
+  AbilityRequested:
     m_PersistentCalls:
       m_Calls: []
   RepairConfirmRequested:
     m_PersistentCalls:
       m_Calls: []
   RepairCancelRequested:
-    m_PersistentCalls:
-      m_Calls: []
-  AbilityRequested:
     m_PersistentCalls:
       m_Calls: []
 --- !u!114 &733802509

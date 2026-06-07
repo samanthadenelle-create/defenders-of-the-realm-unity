@@ -382,25 +382,13 @@ namespace DeNelle.Village
                 if (hero.GetComponent<HeroHitReaction>() == null)
                     hero.gameObject.AddComponent<HeroHitReaction>();
 
-                // WO-178: floating world-space HP bar over the hero, matching the
-                // enemy bars so the field reads as one themed combat-HUD set. The
-                // top-left IMGUI bar (HeroHealth.OnGUI) stays as the screen readout;
-                // this is the over-the-head bar. Always shown (hideAtFull:false) so
-                // the player can always locate their hero in a melee.
-                float headOffset = 2.2f;
-                Renderer rend = hero.GetComponentInChildren<Renderer>();
-                if (rend != null)
-                {
-                    float worldTop = rend.bounds.max.y - hero.transform.position.y;
-                    if (worldTop > 0.1f) headOffset = worldTop + 0.4f;
-                }
-                FloatingHealthBar.Attach(
-                    hero.gameObject,
-                    fraction: () => health.Fraction,
-                    isDead:   () => !health.IsAlive,
-                    heightOffset: headOffset,
-                    hideAtFull: false,
-                    destroyOnDead: false);
+                // NOTE: the hero deliberately gets NO over-the-head FloatingHealthBar.
+                // The hero's HP is already shown in the HUD (VillageHudController hero
+                // HP bar) plus the top-left IMGUI readout (HeroHealth.OnGUI), so a
+                // floating world-space bar over the player just rendered as a green
+                // pill edge-on from the over-shoulder camera. FloatingHealthBar is for
+                // enemies/units only (Enemy.EnsureHealthBar) — the hero is excluded
+                // here on purpose. Do not re-add an Attach() call for the hero.
             }
         }
     }
