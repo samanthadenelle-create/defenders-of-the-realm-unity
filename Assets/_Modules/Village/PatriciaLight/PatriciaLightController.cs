@@ -679,6 +679,31 @@ namespace DeNelle.Village
             }
             _heroTransform = heroRoot.transform;
 
+            // WO-317 follow-on (hero stands on "nothing"): give the grounded hero a small
+            // visible stone-ish stand UNDER his feet. The body is SeatOnGround'd so its
+            // bounds-bottom sits at the root origin (local y=0) — so a short cylinder whose
+            // TOP face is flush with y=0 reads as "standing on a platform". We DO NOT touch
+            // the hero's grounded position; the platform is a sibling visual only.
+            {
+                const float standHeight = 0.22f;   // short stone disc
+                const float standRadius = 0.55f;   // a touch wider than the footprint
+                var stand = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                stand.name = "HeroStandPlatform";
+                stand.transform.SetParent(heroRoot.transform, false);
+                // Unity cylinder is 2m tall (1m half-height) at scale 1 → scale Y by half the
+                // desired height. Top face flush with feet (y=0) ⇒ centre at y = -standHeight/2.
+                stand.transform.localScale = new Vector3(standRadius, standHeight * 0.5f, standRadius);
+                stand.transform.localPosition = new Vector3(0f, -standHeight * 0.5f, 0f);
+                // Render in the DTT view: inherit the hero root's layer so the OTS camera
+                // (which sees the hero) also sees the stand.
+                stand.layer = heroRoot.layer;
+                // Non-blocking: this is decorative — strip/disable the auto collider so it
+                // never fights the hero/aim raycasts or NavMesh.
+                if (stand.TryGetComponent(out Collider standCol)) Destroy(standCol);
+                // Tasteful weathered-stone grey.
+                TintUrp(stand, new Color(0.34f, 0.34f, 0.33f));
+            }
+
             // The "turret lock" is now a base facing for camera stability; we still allow
             // combat slerp toward targets in Tick (see previous facing-to-target fix).
             _heroFacing = heroRoot.transform.rotation;
