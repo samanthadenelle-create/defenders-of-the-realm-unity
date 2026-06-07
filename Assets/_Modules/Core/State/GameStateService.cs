@@ -544,6 +544,11 @@ namespace DeNelle.Core.State
         /// </summary>
         public void Reset()
         {
+            // Lazy-init mirrors Awake: Reset() is "New Game" and must work even when called
+            // before Awake has run — EditMode tests AddComponent without the MonoBehaviour
+            // lifecycle, and a reset-before-load path would otherwise null-deref here (every
+            // other accessor guards _state; Reset() must too). Fixes 16 save/reset tests.
+            if (_state == null) _state = ScriptableObject.CreateInstance<GameState>();
             var s = _state;
             s.Pets = new List<PetData>();
             s.StarterPetId = null;

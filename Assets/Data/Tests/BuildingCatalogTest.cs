@@ -31,18 +31,22 @@ namespace DeNelle.Data.Tests
         // =====================================================================
 
         [Test]
-        public void buildings_json_loads_exactly_five_buildings()
+        public void buildings_json_loads_exactly_seven_buildings()
         {
             Assert.That(BuildingCatalog.Buildings, Is.Not.Null,
                 "BuildingCatalog.Buildings must never be null.");
-            Assert.That(BuildingCatalog.Buildings.Count, Is.EqualTo(5),
-                "buildings.json must hydrate the five canonical gameplay buildings.");
+            // Canon grew to 7: original 5 + lumbermill + forge (food/economy stations).
+            // NOTE (owner roundtable 2026-06-07): intent is mill/granary/armorer + farm->node;
+            // data currently has lumbermill+forge and farm still present — granary not yet added,
+            // farm not yet moved out. Update this count if the canonical set changes.
+            Assert.That(BuildingCatalog.Buildings.Count, Is.EqualTo(7),
+                "buildings.json must hydrate the seven canonical gameplay buildings.");
         }
 
         [Test]
-        public void all_five_canonical_building_ids_are_present()
+        public void all_seven_canonical_building_ids_are_present()
         {
-            foreach (var id in new[] { "crystal-mine", "farm", "pet-house", "workshop", "arcane-tower" })
+            foreach (var id in new[] { "crystal-mine", "farm", "pet-house", "workshop", "arcane-tower", "lumbermill", "forge" })
             {
                 Assert.That(BuildingCatalog.Find(id), Is.Not.Null,
                     $"buildings.json must contain the '{id}' building.");
