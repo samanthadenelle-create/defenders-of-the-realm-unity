@@ -202,10 +202,64 @@ namespace DeNelle.Village
                     root.AddComponent<CrystalMine>();
                     break;
 
+                // GameplayBuilding — Phase 2: the village's economy/upgrade buildings
+                // (pet-house / workshop / market / mill / lumbermill / forge / arcane-
+                // tower) as first-class droppable catalog entries. Mirrors the hard-coded
+                // VillageSceneBuilder.Buildings[] inject (which stays as the parity
+                // fallback): attach + Configure a Building from the catalog row, add the
+                // proximity-prompt BuildingInteractable, and register the building with
+                // the scene's VillageController so it shows in the roster / wave damage
+                // accounting exactly like a baked one.
+                //
+                // The catalog 'id' MUST equal Building.Id verbatim (pet flow / gear /
+                // talents key on it) — BuildingType is derived from the id so a Type
+                // enum collision (Market & Lumbermill both ordinal 5) stays benign:
+                // identity is by id, the enum only steers the default panel route.
+                case "GameplayBuilding":
+                {
+                    var b = root.AddComponent<Building>();
+                    b.Configure(BuildingTypeForId(entry.id), entry.id,
+                                string.IsNullOrEmpty(entry.displayName) ? entry.id : entry.displayName);
+
+                    // Proximity F-prompt / mobile interact button (RequireComponent(Building)).
+                    root.AddComponent<BuildingInteractable>();
+
+                    // Register with the live scene controller so the placed building joins
+                    // the roster (null-safe: a headless / controller-less scene just skips it).
+                    var controller = Object.FindObjectOfType<VillageController>();
+                    if (controller != null) controller.RegisterBuilding(b);
+                    break;
+                }
+
                 default:
                     Debug.LogWarning($"[StructureFactory] '{entry.id}': unknown behaviorId " +
                                      $"'{behaviorId}' — no behaviour attached.");
                     break;
+            }
+        }
+
+        /// <summary>
+        /// Maps a catalog building id to its <see cref="BuildingType"/>, matching the
+        /// hard-coded VillageSceneBuilder.Buildings[] Type assignments so a catalog-placed
+        /// building routes its interaction panel the same as a baked one. Identity is by
+        /// id (Building.Id), not by this enum — Market and Lumbermill share ordinal 5 in
+        /// the Buildings[] table, which is benign (the enum only picks the default panel;
+        /// BuildingInteractable re-resolves the actual route from the id first). Unknown
+        /// ids fall back to CrystalMine (ordinal 0 / Upgrade panel), never throwing.
+        /// </summary>
+        private static BuildingType BuildingTypeForId(string id)
+        {
+            switch ((id ?? "").ToLowerInvariant())
+            {
+                case "pet-house":    return BuildingType.PetHouse;
+                case "arcane-tower": return BuildingType.ArcaneTower;
+                case "workshop":     return BuildingType.Workshop;   // labelled "Forge" in-world
+                case "farm":
+                case "mill":         return BuildingType.Farm;
+                case "market":       return BuildingType.Lumbermill; // matches Buildings[] Type=5
+                case "lumbermill":   return BuildingType.Lumbermill;
+                case "forge":        return BuildingType.Forge;      // the Armorer
+                default:             return BuildingType.CrystalMine;
             }
         }
     }

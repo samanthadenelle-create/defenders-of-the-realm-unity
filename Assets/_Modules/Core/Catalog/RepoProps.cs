@@ -75,6 +75,15 @@ namespace DeNelle.Core.Catalog
         /// <summary>Village resolves this string -> the actual behaviour component (Core stays pure).</summary>
         public string behaviorId = null;
 
+        /// <summary>
+        /// Phase 2 (owner): true = at most ONE of these may exist in the village (pet-house,
+        /// forge, mill, arcane-tower, Heart). Pure-data flag only for now — the enforce /
+        /// auto-find-existing wiring is a follow-up; this just carries the intent so build /
+        /// designer mode and the placement validator can consult it later. Default false
+        /// (most structures — towers, walls, decorations — are freely repeatable).
+        /// </summary>
+        public bool singleton = false;
+
         /// <summary>Placement conditions, evaluated at the free cursor.</summary>
         public PlacementRules placement = new PlacementRules();
 

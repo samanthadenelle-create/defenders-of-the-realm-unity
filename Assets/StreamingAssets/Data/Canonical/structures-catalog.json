@@ -421,6 +421,290 @@
         "scale": 1.0,
         "note": "prefab 'polyperfect/Torche_Wall' not found — no correction computed"
       }
+    },
+    {
+      "id": "pet-house",
+      "displayName": "Pet House",
+      "type": "Resource",
+      "kind": "Cell",
+      "visualPrefabPath": "polyperfect/Stables_Medieval",
+      "repo": {
+        "behaviorId": "GameplayBuilding",
+        "singleton": true,
+        "buildCost": 120,
+        "cost": {
+          "wood": 80,
+          "food": 0,
+          "iron": 30,
+          "crystals": 0
+        },
+        "navSurface": "Blocker",
+        "placement": {
+          "mustSitOn": "Ground",
+          "footprint": 3.4,
+          "noOverlap": true,
+          "checkAffordable": true
+        }
+      },
+      "orientation": {
+        "corrected": true,
+        "manual": true,
+        "euler": [
+          270.0,
+          0.0,
+          0.0
+        ],
+        "offset": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scale": 1.0,
+        "note": "manual: -90/270 X re-applies the upright correction PlaceBuilding's Tripo CustomFbx path uses (Euler(-90,0,0)). id == Building.Id (pet flow keys on it)."
+      }
+    },
+    {
+      "id": "workshop",
+      "displayName": "Forge",
+      "type": "Resource",
+      "kind": "Cell",
+      "visualPrefabPath": "polyperfect/House_Medieval_Medium",
+      "repo": {
+        "behaviorId": "GameplayBuilding",
+        "buildCost": 100,
+        "cost": {
+          "wood": 60,
+          "food": 0,
+          "iron": 40,
+          "crystals": 0
+        },
+        "navSurface": "Blocker",
+        "placement": {
+          "mustSitOn": "Ground",
+          "footprint": 3.4,
+          "noOverlap": true,
+          "checkAffordable": true
+        }
+      },
+      "orientation": {
+        "corrected": true,
+        "manual": true,
+        "euler": [
+          270.0,
+          0.0,
+          0.0
+        ],
+        "offset": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scale": 1.0,
+        "note": "manual: -90/270 X re-applies PlaceBuilding's Tripo upright correction. id 'workshop' == Building.Id; in-world label 'Forge' (crafting/gear keys on the id)."
+      }
+    },
+    {
+      "id": "market",
+      "displayName": "Market",
+      "type": "Resource",
+      "kind": "Cell",
+      "visualPrefabPath": "polyperfect/House_Medieval_Large",
+      "repo": {
+        "behaviorId": "GameplayBuilding",
+        "buildCost": 110,
+        "cost": {
+          "wood": 70,
+          "food": 0,
+          "iron": 30,
+          "crystals": 0
+        },
+        "navSurface": "Blocker",
+        "placement": {
+          "mustSitOn": "Ground",
+          "footprint": 3.4,
+          "noOverlap": true,
+          "checkAffordable": true
+        }
+      },
+      "orientation": {
+        "corrected": true,
+        "manual": true,
+        "euler": [
+          270.0,
+          0.0,
+          0.0
+        ],
+        "offset": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scale": 1.0,
+        "note": "manual: -90/270 X re-applies PlaceBuilding's upright correction. id 'market' == Building.Id. PrefabM2 (Marketplace_Stand) dressing dropped — single-entry row; Composite follow-up flagged."
+      }
+    },
+    {
+      "id": "mill",
+      "displayName": "Mill",
+      "type": "Resource",
+      "kind": "Cell",
+      "visualPrefabPath": "polyperfect/Farm_House",
+      "repo": {
+        "behaviorId": "GameplayBuilding",
+        "singleton": true,
+        "buildCost": 100,
+        "cost": {
+          "wood": 70,
+          "food": 0,
+          "iron": 20,
+          "crystals": 0
+        },
+        "navSurface": "Blocker",
+        "placement": {
+          "mustSitOn": "Ground",
+          "footprint": 3.4,
+          "noOverlap": true,
+          "checkAffordable": true
+        }
+      },
+      "orientation": {
+        "corrected": true,
+        "manual": true,
+        "euler": [
+          270.0,
+          0.0,
+          0.0
+        ],
+        "offset": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scale": 1.0,
+        "note": "manual: -90/270 X re-applies PlaceBuilding's upright correction. The food building (replaces 'farm'); id 'mill' maps to BuildingType.Farm. PrefabM2 (Windmill) dressing dropped — Composite follow-up flagged."
+      }
+    },
+    {
+      "id": "lumbermill",
+      "displayName": "Sawmill",
+      "type": "Resource",
+      "kind": "Cell",
+      "visualPrefabPath": "polyperfect/House_Medieval_Small",
+      "repo": {
+        "behaviorId": "GameplayBuilding",
+        "buildCost": 90,
+        "cost": {
+          "wood": 50,
+          "food": 0,
+          "iron": 40,
+          "crystals": 0
+        },
+        "navSurface": "Blocker",
+        "placement": {
+          "mustSitOn": "Ground",
+          "footprint": 3.4,
+          "noOverlap": true,
+          "checkAffordable": true
+        }
+      },
+      "orientation": {
+        "corrected": true,
+        "manual": true,
+        "euler": [
+          270.0,
+          0.0,
+          0.0
+        ],
+        "offset": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scale": 1.0,
+        "note": "manual: -90/270 X re-applies PlaceBuilding's upright correction. id 'lumbermill' == Building.Id (sign 'Sawmill'); maps to BuildingType.Lumbermill. No polyperfect PrefabM in Buildings[] — visual is the small-house stand-in."
+      }
+    },
+    {
+      "id": "forge",
+      "displayName": "Armorer",
+      "type": "Resource",
+      "kind": "Cell",
+      "visualPrefabPath": "polyperfect/House_Medieval_Medium",
+      "repo": {
+        "behaviorId": "GameplayBuilding",
+        "singleton": true,
+        "buildCost": 130,
+        "cost": {
+          "wood": 60,
+          "food": 0,
+          "iron": 70,
+          "crystals": 0
+        },
+        "navSurface": "Blocker",
+        "placement": {
+          "mustSitOn": "Ground",
+          "footprint": 3.4,
+          "noOverlap": true,
+          "checkAffordable": true
+        }
+      },
+      "orientation": {
+        "corrected": true,
+        "manual": true,
+        "euler": [
+          270.0,
+          0.0,
+          0.0
+        ],
+        "offset": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scale": 1.0,
+        "note": "manual: -90/270 X re-applies PlaceBuilding's upright correction. id 'forge' == Building.Id (sign 'Armorer'); maps to BuildingType.Forge. ForgeYard smithy dressing (anvil/hammer/blank) dropped — single-entry row; Composite follow-up flagged."
+      }
+    },
+    {
+      "id": "arcane-tower",
+      "displayName": "Arcane Tower",
+      "type": "Resource",
+      "kind": "Cell",
+      "visualPrefabPath": "polyperfect/Tower_Medieval_Big",
+      "repo": {
+        "behaviorId": "GameplayBuilding",
+        "singleton": true,
+        "buildCost": 140,
+        "cost": {
+          "wood": 60,
+          "food": 0,
+          "iron": 60,
+          "crystals": 0
+        },
+        "navSurface": "Blocker",
+        "placement": {
+          "mustSitOn": "Ground",
+          "footprint": 3.4,
+          "noOverlap": true,
+          "checkAffordable": true
+        }
+      },
+      "orientation": {
+        "corrected": true,
+        "manual": true,
+        "euler": [
+          270.0,
+          0.0,
+          0.0
+        ],
+        "offset": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scale": 1.0,
+        "note": "manual: -90/270 X re-applies PlaceBuilding's upright correction. id 'arcane-tower' == Building.Id (Hero Talents panel keys on it); maps to BuildingType.ArcaneTower."
+      }
     }
   ]
 }
