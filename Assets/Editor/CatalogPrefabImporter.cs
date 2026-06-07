@@ -25,24 +25,49 @@ namespace DeNelle.Editor
 {
     public static class CatalogPrefabImporter
     {
-        // Source pack folder (gitignored — owner re-imports). Trailing slash matters.
-        private const string SrcDir =
-            "Assets/polyperfect/Low Poly Ultimate Pack/_M/Prefabs_M/Medieval_M/";
+        // Source pack root (gitignored — owner re-imports). Trailing slash matters.
+        // Prefabs live under per-category folders, e.g. .../Prefabs_M/Medieval_M/<Name>.prefab.
+        private const string SrcRoot =
+            "Assets/polyperfect/Low Poly Ultimate Pack/_M/Prefabs_M/";
 
         // Destination Resources folder (so visualPrefabPath = "Structures/<Name>" loads).
         private const string DstDir = "Assets/Resources/Structures/";
 
-        // The defensive-kit prefabs the catalog references (owner's prefab map, WO).
-        // Tower L1/L2 + walls + gate + mill. Names are the prefab file stems (no .prefab).
-        private static readonly string[] KitPrefabs =
+        // One kit prefab: file stem (no .prefab) + the _M category folder it lives in.
+        private readonly struct KitPrefab
         {
-            "Tower_Medieval_Wood",   // tower_ground_archer L1
-            "Tower_Castle_Round",    // tower_ground_archer L2
-            "Tower_Medieval_Big",    // tower_wall_wizard   L2
-            "Windmill_Medieval",     // mill
-            "Wall_Medieval_Wood",    // wall_wood
-            "Wall_Medieval_Stone",   // wall_stone
-            "Gate_Medieval_Medium",  // gate_stone
+            public readonly string Name;
+            public readonly string Category; // folder under Prefabs_M (no trailing slash)
+            public KitPrefab(string name, string category) { Name = name; Category = category; }
+        }
+
+        // The defensive-kit prefabs the catalog references (owner's prefab map, WO).
+        // Most live in Medieval_M; a few primitives live in other category folders.
+        private static readonly KitPrefab[] KitPrefabs =
+        {
+            // --- already copied / verified (keep) ---
+            new KitPrefab("Tower_Medieval_Wood",       "Medieval_M"),  // tower_ground_archer L1
+            new KitPrefab("Tower_Castle_Round",        "Medieval_M"),  // tower_ground_archer L2
+            new KitPrefab("Tower_Medieval_Big",        "Medieval_M"),  // tower_wall_wizard
+            new KitPrefab("Windmill_Medieval",         "Medieval_M"),  // mill
+            new KitPrefab("Wall_Medieval_Wood",        "Medieval_M"),  // wall_wood
+            new KitPrefab("Wall_Medieval_Stone",       "Medieval_M"),  // wall_stone
+            new KitPrefab("Gate_Medieval_Medium",      "Medieval_M"),  // gate_stone
+
+            // --- new (WO prefab-match table) ---
+            new KitPrefab("Catapult",                  "Medieval_M"),  // tower_catapult
+            new KitPrefab("Ballista",                  "Medieval_M"),  // tower_siege_tower
+            new KitPrefab("Stables_Medieval",          "Medieval_M"),  // pet-house
+            new KitPrefab("House_Medieval_Medium",     "Medieval_M"),  // workshop / forge
+            new KitPrefab("House_Medieval_Large",      "Medieval_M"),  // market
+            new KitPrefab("House_Medieval_Small",      "Medieval_M"),  // composite mine_crystal / Healer's Cottage
+            new KitPrefab("Watermill_Medieval",        "Medieval_M"),  // lumbermill
+            new KitPrefab("Well",                      "Medieval_M"),  // mine_crystal
+            new KitPrefab("Marketplace_Stand_Simple",  "Medieval_M"),  // composite market
+            new KitPrefab("Torche_Wall",               "Fantasy_M"),   // deco_torch
+            new KitPrefab("Anvil",                     "Tools_M"),     // composite forge
+            new KitPrefab("Altar",                     "Fantasy_M"),   // composite Heart of Elarion
+            new KitPrefab("Pillar_Ionic",              "Roman_M"),     // composite Heart of Elarion
         };
 
         [MenuItem("Defenders/Catalog/Copy Kit Prefabs To Resources")]
@@ -52,9 +77,10 @@ namespace DeNelle.Editor
                 Directory.CreateDirectory(DstDir);
 
             int copied = 0, skipped = 0, missing = 0;
-            foreach (var name in KitPrefabs)
+            foreach (var kit in KitPrefabs)
             {
-                string src = SrcDir + name + ".prefab";
+                string name = kit.Name;
+                string src = SrcRoot + kit.Category + "/" + name + ".prefab";
                 string dst = DstDir + name + ".prefab";
 
                 // Idempotent — already in Resources, leave it.

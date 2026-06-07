@@ -57,7 +57,7 @@
    "displayName": "Wizard Tower",
    "type": "Tower",
    "kind": "Cell",
-   "visualPrefabPath": "PatriciaLight/tower2",
+   "visualPrefabPath": "Structures/Tower_Medieval_Big",
    "repo": {
     "behaviorId": "DefenseTower",
     "buildCost": 150,
@@ -108,7 +108,7 @@
    "displayName": "Siege Tower",
    "type": "Tower",
    "kind": "Cell",
-   "visualPrefabPath": "PatriciaLight/Tower",
+   "visualPrefabPath": "Structures/Ballista",
    "repo": {
     "behaviorId": "DefenseTower",
     "buildCost": 140,
@@ -155,7 +155,7 @@
    "displayName": "Catapult",
    "type": "Tower",
    "kind": "Cell",
-   "visualPrefabPath": "PatriciaLight/Tower",
+   "visualPrefabPath": "Structures/Catapult",
    "repo": {
     "behaviorId": "DefenseTower",
     "buildCost": 180,
@@ -353,7 +353,7 @@
    "displayName": "Crystal Mine",
    "type": "Resource",
    "kind": "Cell",
-   "visualPrefabPath": "polyperfect/House_Medieval_Small",
+   "visualPrefabPath": "Structures/Well",
    "repo": {
     "behaviorId": "CrystalMine",
     "buildCost": 200,
@@ -393,7 +393,7 @@
    "displayName": "Wall Torch",
    "type": "Decoration",
    "kind": "Cell",
-   "visualPrefabPath": "polyperfect/Torche_Wall",
+   "visualPrefabPath": "Structures/Torche_Wall",
    "repo": {
     "behaviorId": null,
     "buildCost": 10,
@@ -433,7 +433,7 @@
    "displayName": "Echo Hollow",
    "type": "Resource",
    "kind": "Cell",
-   "visualPrefabPath": "polyperfect/Stables_Medieval",
+   "visualPrefabPath": "Structures/Stables_Medieval",
    "repo": {
     "behaviorId": "GameplayBuilding",
     "singleton": true,
@@ -474,7 +474,7 @@
    "displayName": "Forge",
    "type": "Resource",
    "kind": "Cell",
-   "visualPrefabPath": "polyperfect/House_Medieval_Medium",
+   "visualPrefabPath": "Structures/House_Medieval_Medium",
    "repo": {
     "behaviorId": "GameplayBuilding",
     "buildCost": 100,
@@ -514,7 +514,7 @@
    "displayName": "Market",
    "type": "Resource",
    "kind": "Cell",
-   "visualPrefabPath": "polyperfect/House_Medieval_Large",
+   "visualPrefabPath": "Structures/House_Medieval_Large",
    "repo": {
     "behaviorId": "GameplayBuilding",
     "buildCost": 110,
@@ -595,7 +595,7 @@
    "displayName": "Sawmill",
    "type": "Resource",
    "kind": "Cell",
-   "visualPrefabPath": "polyperfect/House_Medieval_Small",
+   "visualPrefabPath": "Structures/Watermill_Medieval",
    "repo": {
     "behaviorId": "GameplayBuilding",
     "buildCost": 90,
@@ -635,7 +635,7 @@
    "displayName": "Armorer",
    "type": "Resource",
    "kind": "Cell",
-   "visualPrefabPath": "polyperfect/House_Medieval_Medium",
+   "visualPrefabPath": "Structures/House_Medieval_Medium",
    "repo": {
     "behaviorId": "GameplayBuilding",
     "singleton": true,
@@ -676,7 +676,7 @@
    "displayName": "Arcane Tower",
    "type": "Resource",
    "kind": "Cell",
-   "visualPrefabPath": "polyperfect/Tower_Medieval_Big",
+   "visualPrefabPath": "Structures/Tower_Medieval_Big",
    "repo": {
     "behaviorId": "GameplayBuilding",
     "singleton": true,
