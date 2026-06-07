@@ -16,6 +16,11 @@
 // (Debug.LogWarning) instead of throwing — matches project convention for absent prefabs.
 
 using UnityEngine;
+using UnityEngine.AI;
+using System.Collections.Generic;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 namespace DeNelle.Sandbox
 {
@@ -35,6 +40,12 @@ namespace DeNelle.Sandbox
         public GameObject platformPrefab;    // flat platform / floor tile (watch platforms)
         public GameObject stairsPrefab;      // straight stairs (used by the citadel variant)
         public GameObject[] debrisPrefabs;   // scatter props (barrels, blood, broken furniture)
+
+        // Guard patrol — spawn NavMeshAgent guards that walk a waypoint patrol around the
+        // outpost interior/perimeter. Bodies resolve from an enemy prefab if one is found,
+        // else fall back to a tinted primitive capsule. See SpawnGuards().
+        public bool spawnGuards = true;
+        public int guardCount = 4;
 
         // Surface seating — drop the WHOLE outpost root onto whatever surface it's placed on
         // (any terrain elevation), rather than assuming Y=0. See SeatRootOnSurface().
@@ -63,6 +74,321 @@ namespace DeNelle.Sandbox
             // its renderer-bounds base so ground pieces sit ON the ground and elevated tiers
             // sit AT their tier height. Same bounds-bottom seat used in VisualFactory.
             SeatAllPieces();
+
+            // STAIRS PASS — after every piece is grounded/tiered, bridge the floating stairs
+            // dynamically (bounds-measured, NO hardcoded heights) from the ground up to the
+            // nearest elevated deck so the citadel tiers are actually climbable.
+            ConnectStairsToDecks();
+
+            // GUARD PASS — last, after all geometry is seated/tiered and the navmesh-relevant
+            // content exists. Spawns waypoints + patrol guards on the ground. Guards spawn
+            // BEFORE the tester's navmesh re-bake; that's fine — GuardPatrol.Start runs at Play
+            // (after the bake is saved) and is navmesh-guarded, so it can't NRE off-navmesh.
+            SpawnGuards();
+        }
+
+        // ================================================================
+        // GUARD PATROL PASS — waypoints + NavMeshAgent guards
+        // ================================================================
+        // Creates a "Waypoints" child holding empty waypoint transforms at grounded grid
+        // positions around the interior/perimeter, then spawns guardCount guard GameObjects
+        // (enemy prefab if resolvable, else a dark-tinted capsule fallback), each with a
+        // NavMeshAgent + GuardPatrol fed the shared waypoint list. Patrol only starts once a
+        // NavMesh is baked (GuardPatrol is navmesh-safe); no-ops cleanly if not.
+        void SpawnGuards()
+        {
+            if (!spawnGuards || guardCount <= 0) return;
+
+            // --- 1) Build the waypoint ring (grounded, parented under "Waypoints") ---
+            var waypointHolder = new GameObject("Waypoints");
+            waypointHolder.transform.SetParent(transform, false);
+
+            var waypoints = new List<Transform>();
+
+            // Patrol an inset rectangle one cell in from the perimeter, sampling its four edges.
+            int minX = 1, maxX = Mathf.Max(1, gridWidth - 2);
+            int minZ = 1, maxZ = Mathf.Max(1, gridDepth - 2);
+
+            // Collect perimeter grid cells of the inset rectangle, every other cell, clockwise.
+            var cells = new List<Vector2Int>();
+            for (int x = minX; x <= maxX; x += 2) cells.Add(new Vector2Int(x, minZ));      // bottom edge →
+            for (int z = minZ + 2; z <= maxZ; z += 2) cells.Add(new Vector2Int(maxX, z));  // right edge ↑
+            for (int x = maxX - 2; x >= minX; x -= 2) cells.Add(new Vector2Int(x, maxZ));  // top edge ←
+            for (int z = maxZ - 2; z > minZ; z -= 2) cells.Add(new Vector2Int(minX, z));   // left edge ↓
+
+            if (cells.Count == 0) cells.Add(new Vector2Int(minX, minZ));
+
+            foreach (var c in cells)
+            {
+                Vector3 wp = new Vector3(c.x * unitSize, 0f, c.y * unitSize);
+                wp.y = GroundedY(wp);
+                var t = new GameObject($"WP_{waypoints.Count}").transform;
+                t.SetParent(waypointHolder.transform, true);
+                t.position = wp;
+                waypoints.Add(t);
+            }
+
+            // --- 2) Resolve a guard body prefab (enemy prefab → else capsule fallback) ---
+            GameObject bodyPrefab = ResolveGuardBodyPrefab();
+            bool usingFallback = bodyPrefab == null;
+
+            // --- 3) Spawn the guards spread across the waypoints ---
+            var guardHolder = new GameObject("Guards");
+            guardHolder.transform.SetParent(transform, false);
+
+            int spawned = 0;
+            for (int i = 0; i < guardCount; i++)
+            {
+                Transform spawnWp = waypoints.Count > 0 ? waypoints[(i * waypoints.Count / Mathf.Max(1, guardCount)) % waypoints.Count] : null;
+                Vector3 spawnPos = spawnWp != null ? spawnWp.position : transform.position;
+
+                GameObject guard;
+                if (bodyPrefab != null)
+                {
+                    guard = Instantiate(bodyPrefab, spawnPos, Quaternion.identity, guardHolder.transform);
+                }
+                else
+                {
+                    // Fallback: a dark-tinted primitive capsule, grounded by half its height.
+                    guard = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+                    guard.transform.SetParent(guardHolder.transform, true);
+                    Vector3 p = spawnPos; p.y += 1f; // capsule pivot is centre; half-height ≈ 1
+                    guard.transform.position = p;
+                    var rend = guard.GetComponent<Renderer>();
+                    if (rend != null && rend.sharedMaterial != null)
+                    {
+                        var mat = new Material(rend.sharedMaterial);
+                        mat.color = new Color(0.18f, 0.18f, 0.22f); // dark slate
+                        rend.sharedMaterial = mat;
+                    }
+                }
+
+                if (guard == null) continue;
+                guard.name = $"Guard_{i}";
+
+                // Ensure a NavMeshAgent (enemy prefab may already have one).
+                var navAgent = guard.GetComponent<NavMeshAgent>();
+                if (navAgent == null) navAgent = guard.AddComponent<NavMeshAgent>();
+
+                var patrol = guard.GetComponent<GuardPatrol>();
+                if (patrol == null) patrol = guard.AddComponent<GuardPatrol>();
+                patrol.SetPatrolPoints(waypoints);
+
+                spawned++;
+            }
+
+            Debug.Log($"[EnemyOutpostBuilder] SpawnGuards: {waypoints.Count} waypoint(s), {spawned}/{guardCount} guard(s) — body={(usingFallback ? "primitive-capsule FALLBACK" : bodyPrefab.name + " (resolved prefab)")}. Patrol begins once NavMesh is baked.");
+        }
+
+        // Grounded Y for a world XZ via downward raycast against surfaceMask (same logic as
+        // SeatRootOnSurface); falls back to the root's Y if nothing is hit.
+        float GroundedY(Vector3 worldXZ)
+        {
+            Vector3 origin = new Vector3(worldXZ.x, transform.position.y + 500f, worldXZ.z);
+            if (Physics.Raycast(origin, Vector3.down, out RaycastHit hit, 1000f,
+                                 surfaceMask, QueryTriggerInteraction.Ignore))
+                return hit.point.y;
+            return transform.position.y;
+        }
+
+        // Try to resolve an enemy body prefab for guards: Resources first (runtime-safe),
+        // then AssetDatabase by name (editor-only). Returns null → caller uses the capsule
+        // fallback. Names tried match the project's committed enemy art.
+        GameObject ResolveGuardBodyPrefab()
+        {
+            string[] candidates =
+            {
+                "Enemy_HollowWalker",
+                "Skeleton_Warrior",
+                "Skeleton_Minion",
+                "Skeleton_Mage",
+                "Skeleton_Rogue",
+            };
+
+            // 1) Resources/Enemies/<name> (enemies are committed + runtime-loaded per project memory).
+            foreach (var name in candidates)
+            {
+                var fromRes = Resources.Load<GameObject>("Enemies/" + name);
+                if (fromRes == null) fromRes = Resources.Load<GameObject>(name);
+                if (fromRes != null) return fromRes;
+            }
+
+#if UNITY_EDITOR
+            // 2) Editor: search the project for a prefab matching any candidate name.
+            foreach (var name in candidates)
+            {
+                string[] guids = AssetDatabase.FindAssets($"{name} t:Prefab");
+                if (guids != null && guids.Length > 0)
+                {
+                    string path = AssetDatabase.GUIDToAssetPath(guids[0]);
+                    var go = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+                    if (go != null) return go;
+                }
+            }
+            // 3) Editor: last resort — any prefab whose name starts with "Skeleton" or "Enemy".
+            foreach (var prefix in new[] { "Skeleton", "Enemy_" })
+            {
+                string[] guids = AssetDatabase.FindAssets($"{prefix} t:Prefab");
+                if (guids != null && guids.Length > 0)
+                {
+                    string path = AssetDatabase.GUIDToAssetPath(guids[0]);
+                    var go = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+                    if (go != null) return go;
+                }
+            }
+#endif
+            return null;
+        }
+
+        // ================================================================
+        // STAIRS → DECK CONNECTOR (dynamic, bounds-measured)
+        // ================================================================
+        // The hardcoded stair Y-positions (0.1 / 4.1) leave each stairs piece floating with
+        // a gap between its top step and the deck it should reach. This pass MEASURES, from
+        // the actually-seated platform pieces, the deck top heights present in the build, then
+        // for every stairs piece:
+        //   1. grounds its bounds.min.y on the ground (Y = root surface, i.e. 0 in local terms),
+        //   2. picks the nearest deck top ABOVE the ground that the stairs should reach,
+        //   3. SCALES the stairs vertically so its bounds span ground → that deck top
+        //      (accepts mild step-stretch — simplest reliable visual bridge), and
+        //   4. nudges it flush against the closest deck edge so it isn't floating mid-air.
+        // Finally it tags the stairs "Stairs" so BakeWalkable marks the incline walkable, and
+        // adds a NavMesh-friendly note. Null/empty-safe; no-op when there are no stairs or no
+        // decks (e.g. non-citadel variants).
+        void ConnectStairsToDecks()
+        {
+            // 1) Gather seated stairs + platform (deck) pieces by name.
+            var stairs = new System.Collections.Generic.List<Transform>();
+            var decks  = new System.Collections.Generic.List<Bounds>();
+            for (int i = 0; i < transform.childCount; i++)
+            {
+                Transform piece = transform.GetChild(i);
+                if (piece == null) continue;
+                string n = piece.name;
+                bool isStairs   = n.IndexOf("Stair", System.StringComparison.OrdinalIgnoreCase) >= 0;
+                bool isPlatform = !isStairs && (n.IndexOf("Floor", System.StringComparison.OrdinalIgnoreCase) >= 0
+                                             || n.IndexOf("Platform", System.StringComparison.OrdinalIgnoreCase) >= 0);
+                if (!isStairs && !isPlatform) continue;
+
+                if (!TryGetPieceBounds(piece, out Bounds b)) continue;
+                if (isStairs) stairs.Add(piece);
+                else          decks.Add(b);
+            }
+
+            if (stairs.Count == 0) return;            // nothing to connect (non-citadel)
+            if (decks.Count == 0)
+            {
+                Debug.LogWarning("[EnemyOutpostBuilder] ConnectStairsToDecks: no deck/platform pieces found — stairs left as-is.");
+                return;
+            }
+
+            // 2) Ground reference = lowest deck base (the root surface the build sits on).
+            float groundY = float.MaxValue;
+            foreach (var d in decks) groundY = Mathf.Min(groundY, d.min.y);
+
+            int connected = 0;
+            foreach (var s in stairs)
+            {
+                if (!TryGetPieceBounds(s, out Bounds sb)) continue;
+
+                // 2a) Ground the stair base first.
+                float dropToGround = groundY - sb.min.y;
+                if (Mathf.Abs(dropToGround) > 0.0001f)
+                {
+                    Vector3 p = s.position; p.y += dropToGround; s.position = p;
+                    if (TryGetPieceBounds(s, out Bounds rb)) sb = rb;
+                }
+
+                // 2b) Find the nearest deck whose top is ABOVE the ground (the one this stair
+                //     should reach), by horizontal proximity then height.
+                Bounds? target = null;
+                float bestDist = float.MaxValue;
+                Vector3 sCenterXZ = new Vector3(sb.center.x, 0f, sb.center.z);
+                foreach (var d in decks)
+                {
+                    float deckTop = d.max.y;
+                    if (deckTop <= groundY + 0.25f) continue; // skip ground-level decks
+                    float dist = Vector3.Distance(sCenterXZ, new Vector3(d.center.x, 0f, d.center.z));
+                    if (dist < bestDist) { bestDist = dist; target = d; }
+                }
+                if (target == null) continue; // no elevated deck to reach
+
+                Bounds deck = target.Value;
+                float deckTopY = deck.max.y;
+                float rise = deckTopY - groundY;
+                if (rise <= 0.01f) continue;
+
+                // 2c) SCALE the stairs vertically so its bounds span ground → deck top.
+                //     (Bounds-driven, no hardcoded heights; mild step-stretch accepted.)
+                float curHeight = Mathf.Max(0.001f, sb.size.y);
+                float yScale = rise / curHeight;
+                Vector3 ls = s.localScale;
+                ls.y *= yScale;
+                s.localScale = ls;
+
+                // Re-measure + re-ground after scaling (scaling about pivot shifts bounds).
+                if (TryGetPieceBounds(s, out Bounds sb2))
+                {
+                    float reDrop = groundY - sb2.min.y;
+                    if (Mathf.Abs(reDrop) > 0.0001f)
+                    {
+                        Vector3 p = s.position; p.y += reDrop; s.position = p;
+                        if (TryGetPieceBounds(s, out Bounds sb3)) sb2 = sb3;
+                    }
+
+                    // 2d) Slide the stairs flush against the nearest deck EDGE on the dominant
+                    //     horizontal axis, so the top step meets the deck instead of floating
+                    //     in open air. Move along whichever axis (X/Z) the stairs are further
+                    //     from the deck centre on, until the stair's near face touches the deck.
+                    float dx = deck.center.x - sb2.center.x;
+                    float dz = deck.center.z - sb2.center.z;
+                    Vector3 pos = s.position;
+                    if (Mathf.Abs(dx) >= Mathf.Abs(dz))
+                    {
+                        // Approach along X — park the stair just outside the deck's X face.
+                        float deckEdgeX = deck.center.x - Mathf.Sign(dx) * (deck.size.x * 0.5f);
+                        float stairHalfX = sb2.size.x * 0.5f;
+                        float desiredCenterX = deckEdgeX - Mathf.Sign(dx) * stairHalfX;
+                        pos.x += desiredCenterX - sb2.center.x;
+                    }
+                    else
+                    {
+                        float deckEdgeZ = deck.center.z - Mathf.Sign(dz) * (deck.size.z * 0.5f);
+                        float stairHalfZ = sb2.size.z * 0.5f;
+                        float desiredCenterZ = deckEdgeZ - Mathf.Sign(dz) * stairHalfZ;
+                        pos.z += desiredCenterZ - sb2.center.z;
+                    }
+                    s.position = pos;
+                }
+
+                // 2e) Ensure the bake marks this incline walkable. BakeWalkable matches the
+                //     "Stairs"/"Stair" name fragment, so guarantee it's present on the piece.
+                if (s.name.IndexOf("Stair", System.StringComparison.OrdinalIgnoreCase) < 0)
+                    s.name = "Stairs_" + s.name;
+
+                connected++;
+            }
+
+            // NavMesh note: BakeWalkable (CastleBuilderTester) marks "Stairs" NavigationStatic,
+            // and a single vertically-scaled straight stair gives a continuous gentle-enough
+            // incline that the baked NavMesh links ground→deck WITHOUT an explicit OffMeshLink.
+            // If a deck top exceeds the agent's max climb after scaling, the bake simply won't
+            // connect that span — add a manual OffMeshLink there (left to the scene wiring, as
+            // the editor asmdef owns NavMesh, not this runtime builder).
+            Debug.Log($"[EnemyOutpostBuilder] ConnectStairsToDecks: bridged {connected}/{stairs.Count} stair piece(s) ground(Y={groundY:F2})→deck.");
+        }
+
+        // Combined world-space renderer bounds for a piece; false if it has no renderers.
+        bool TryGetPieceBounds(Transform piece, out Bounds bounds)
+        {
+            bounds = default;
+            if (piece == null) return false;
+            var renderers = piece.GetComponentsInChildren<Renderer>();
+            if (renderers == null || renderers.Length == 0) return false;
+            bounds = renderers[0].bounds;
+            for (int r = 1; r < renderers.Length; r++)
+                bounds.Encapsulate(renderers[r].bounds);
+            return true;
         }
 
         // ================================================================

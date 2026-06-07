@@ -257,11 +257,35 @@ namespace DeNelle.Editor
 
         private static Material MakeNeutralMaterial()
         {
-            Shader shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
-            if (shader == null) return null;
+            var grey = new Color(0.45f, 0.45f, 0.42f);
+
+            // The project is URP. Under URP the built-in "Standard" shader renders MAGENTA
+            // (incompatible) — that was the pink ground. ALWAYS use a URP-compatible shader:
+            // prefer URP/Lit, then URP/Simple Lit, then the active pipeline's own default
+            // material shader. NEVER fall back to "Standard".
+            Shader shader = Shader.Find("Universal Render Pipeline/Lit")
+                         ?? Shader.Find("Universal Render Pipeline/Simple Lit")
+                         ?? Shader.Find("Universal Render Pipeline/Unlit");
+
+            if (shader == null)
+            {
+                // Last resort: clone the render pipeline's default material (guaranteed valid
+                // for whatever pipeline is active) and just recolour it.
+                var rp = UnityEngine.Rendering.GraphicsSettings.currentRenderPipeline;
+                if (rp != null && rp.defaultMaterial != null)
+                {
+                    var clone = new Material(rp.defaultMaterial) { name = "CastleGround_Neutral" };
+                    if (clone.HasProperty("_BaseColor")) clone.SetColor("_BaseColor", grey);
+                    if (clone.HasProperty("_Color")) clone.SetColor("_Color", grey);
+                    return clone;
+                }
+                Debug.LogWarning("[CastleBuilderTester] No URP shader found and no pipeline default material — ground may render pink.");
+                return null;
+            }
+
             var mat = new Material(shader) { name = "CastleGround_Neutral" };
-            if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", new Color(0.45f, 0.45f, 0.42f));
-            if (mat.HasProperty("_Color")) mat.SetColor("_Color", new Color(0.45f, 0.45f, 0.42f));
+            if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", grey);
+            if (mat.HasProperty("_Color")) mat.SetColor("_Color", grey);
             return mat;
         }
 
