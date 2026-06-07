@@ -7,7 +7,7 @@
       "displayName": "Archer Tower",
       "type": "Tower",
       "kind": "Cell",
-      "visualPrefabPath": "PatriciaLight/tower2",
+      "visualPrefabPath": "Structures/Tower_Medieval_Wood",
       "repo": {
         "behaviorId": "DefenseTower",
         "buildCost": 100,
@@ -18,6 +18,9 @@
           "crystals": 0
         },
         "maxLevel": 3,
+        "upgradeVisualPath": [
+          "Structures/Tower_Castle_Round"
+        ],
         "navSurface": "Blocker",
         "visualHeight": 5.0,
         "range": 16.0,
@@ -65,6 +68,9 @@
           "crystals": 60
         },
         "maxLevel": 3,
+        "upgradeVisualPath": [
+          "Structures/Tower_Medieval_Big"
+        ],
         "navSurface": "Blocker",
         "visualHeight": 5.0,
         "range": 55.0,
@@ -196,7 +202,7 @@
       "displayName": "Wooden Palisade",
       "type": "Wall",
       "kind": "Cell",
-      "visualPrefabPath": "polyperfect/Wall_Wood_Horizontal_3x3m",
+      "visualPrefabPath": "Structures/Wall_Medieval_Wood",
       "repo": {
         "behaviorId": "WallSegment",
         "buildCost": 40,
@@ -251,7 +257,7 @@
       "displayName": "Stone Wall",
       "type": "Wall",
       "kind": "Cell",
-      "visualPrefabPath": "polyperfect/Wall_Medieval_Stone",
+      "visualPrefabPath": "Structures/Wall_Medieval_Stone",
       "repo": {
         "behaviorId": "WallSegment",
         "buildCost": 90,
@@ -306,7 +312,7 @@
       "displayName": "Stone Gate",
       "type": "Gate",
       "kind": "Cell",
-      "visualPrefabPath": "polyperfect/Gate_Medieval_Medium",
+      "visualPrefabPath": "Structures/Gate_Medieval_Medium",
       "repo": {
         "behaviorId": "Gate",
         "buildCost": 120,
@@ -548,7 +554,7 @@
       "displayName": "Mill",
       "type": "Resource",
       "kind": "Cell",
-      "visualPrefabPath": "polyperfect/Farm_House",
+      "visualPrefabPath": "Structures/Windmill_Medieval",
       "repo": {
         "behaviorId": "GameplayBuilding",
         "singleton": true,

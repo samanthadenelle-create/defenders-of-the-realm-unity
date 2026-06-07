@@ -72,6 +72,19 @@ namespace DeNelle.Core.Catalog
         /// </summary>
         public ResourceCost[] upgradeCost = null;
 
+        /// <summary>
+        /// S5 visual — OPTIONAL per-level model swap, indexed the SAME way as
+        /// <see cref="upgradeCost"/>: <c>upgradeVisualPath[0]</c> = the Resources-relative
+        /// prefab shown at L2, <c>upgradeVisualPath[1]</c> = at L3, … The base
+        /// <see cref="CatalogEntry.visualPrefabPath"/> is always L1. NULL / empty / too-short
+        /// for the requested level means "keep the previous level's model" (StructureTierVisual
+        /// still steps scale + the bronze/silver/gold accent), so a row opts into a distinct
+        /// upgraded silhouette (archer tower → round keep) with just this array and the rest
+        /// of the progression stays the graceful data/tint fallback. JSON deserializes the
+        /// optional "upgradeVisualPath" string array straight into this.
+        /// </summary>
+        public string[] upgradeVisualPath = null;
+
         /// <summary>Village resolves this string -> the actual behaviour component (Core stays pure).</summary>
         public string behaviorId = null;
 
