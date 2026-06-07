@@ -184,13 +184,17 @@ namespace DeNelle.Village
             _group.blocksRaycasts = false;
             var crt = _canvas.GetComponent<RectTransform>();
             crt.sizeDelta = _barSize;
-            // Keep the bar a constant ~1.5m wide regardless of the host's scale —
-            // enemies are imported at wildly different scales, so divide it out.
-            // Clamp the host-scale we divide by: a near-zero (or absurd) lossyScale
-            // — common on mis-imported / displaced meshes — would otherwise blow the
-            // bar up to fill the screen ("HUGE green bar floating mid-screen").
-            float hostScale = Mathf.Clamp(transform.lossyScale.x, 0.05f, 50f);
-            canvasGo.transform.localScale = Vector3.one / hostScale;
+            // Keep the bar a constant on-screen size regardless of the host's scale.
+            // WO-302: enemies (scaled Humanoid orc/troll family) are imported at
+            // wildly different — and NON-UNIFORM — scales. The old fix divided only
+            // by lossyScale.X and set the canvas localScale to that uniform value, so
+            // the canvas's WORLD scale on Y/Z stayed equal to the host's Y/Z scale.
+            // The RectTransform lives in the XY plane → the bar's HEIGHT inflated by
+            // the host's Y scale, giving the "giant green pill/oval" (a fat oval, not
+            // a slim chip). Cancel the host scale PER-AXIS so the canvas world scale
+            // is ~1 on every axis. ApplyScaleCompensation also re-runs each frame so
+            // a late-settling rig or a runtime rescale can never re-inflate the bar.
+            ApplyScaleCompensation();
 
             // DEF-206: a soft rounded-rect sprite gives the chip rounded corners +
             // a subtle inner softness so it reads as a styled bar, not a raw quad.
@@ -233,6 +237,32 @@ namespace DeNelle.Village
             _fillRect.offsetMin = Vector2.zero;
             _fillRect.offsetMax = Vector2.zero;
             _fillRect.sizeDelta = new Vector2(_barSize.x, 0f);
+        }
+
+        // WO-302: cancel the host transform's (possibly non-uniform, possibly huge
+        // or near-zero) world scale PER-AXIS so the world-space canvas — and hence
+        // the bar — renders at a constant on-screen size. Each component is the
+        // inverse of the host's lossyScale on that axis, clamped to a sane band and
+        // guarded against zero / NaN / Inf (mis-imported & displaced meshes report
+        // these). Cheap enough to run every LateUpdate, which also fixes rigs whose
+        // final scale isn't settled until after Start.
+        private void ApplyScaleCompensation()
+        {
+            if (_canvas == null) return;
+            Vector3 host = transform.lossyScale;
+            _canvas.transform.localScale = new Vector3(
+                InvAxis(host.x), InvAxis(host.y), InvAxis(host.z));
+        }
+
+        // Inverse of one lossyScale axis, made safe: a non-finite or near-zero scale
+        // collapses to 1 (no compensation) instead of dividing toward infinity and
+        // blowing the bar up to fill the screen.
+        private static float InvAxis(float s)
+        {
+            if (float.IsNaN(s) || float.IsInfinity(s)) return 1f;
+            float a = Mathf.Abs(s);
+            if (a < 0.01f) return 1f;                 // degenerate → don't amplify
+            return 1f / Mathf.Clamp(a, 0.05f, 50f);
         }
 
         // Stretches a child rect to fill the canvas, optionally inset (negative
@@ -356,6 +386,10 @@ namespace DeNelle.Village
                 }
                 _fillImg.color = c;
             }
+
+            // WO-302: keep cancelling the host scale every frame so a late-settling
+            // rig or a runtime rescale can never re-inflate the bar into a giant pill.
+            ApplyScaleCompensation();
 
             // Billboard toward the camera.
             if (_cam == null)
