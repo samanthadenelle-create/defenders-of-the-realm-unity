@@ -74,6 +74,18 @@ namespace DeNelle.Village
         {
             if (_hero == null) { ResolveHero(); return; }
 
+            // Build mode: the player is AUTHORING (placing structures), not interacting.
+            // Release the shared button, hide our world bubble, and skip the in-range
+            // re-show + the desktop [F] press for the whole session. Restored on exit
+            // automatically because s_buildModeActive flips back to false (the button's
+            // BuildModeChanged hook), so this Update resumes showing the prompt again.
+            if (MobileInteractButton.Suppressed)
+            {
+                MobileInteractButton.Release(this);
+                if (_promptGo != null) HidePrompt();
+                return;
+            }
+
             float distSqr = (_hero.position - transform.position).sqrMagnitude;
             bool inRange = distSqr <= ActivateRadius * ActivateRadius;
 

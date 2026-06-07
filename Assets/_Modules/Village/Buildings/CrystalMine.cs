@@ -113,6 +113,15 @@ namespace DeNelle.Village
             if (!_heroFound) { ResolveHero(); return; }
             if (_hero == null) { _heroFound = false; return; }
 
+            // Build mode: the player is authoring, not interacting — release the shared
+            // button, hide the world bubble, and skip the [F] press. Restored on exit.
+            if (MobileInteractButton.Suppressed)
+            {
+                MobileInteractButton.Release(this);
+                if (_promptGo != null) HidePrompt();
+                return;
+            }
+
             if (_uiOpen)
             {
                 // bug-triage P1: simple-mode upgrade now requires a 2nd, deliberate F press

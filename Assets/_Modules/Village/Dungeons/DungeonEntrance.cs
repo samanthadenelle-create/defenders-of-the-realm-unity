@@ -99,6 +99,15 @@ namespace DeNelle.Village
 
         private void Update()
         {
+            // Build mode: authoring, not interacting — release the button, hide the
+            // world prompt, and skip the [F] press. Restored on build exit.
+            if (MobileInteractButton.Suppressed)
+            {
+                MobileInteractButton.Release(this);
+                if (_prompt != null) _prompt.gameObject.SetActive(false);
+                return;
+            }
+
             if (!_heroInRange || _def == null)
             {
                 MobileInteractButton.Release(this);

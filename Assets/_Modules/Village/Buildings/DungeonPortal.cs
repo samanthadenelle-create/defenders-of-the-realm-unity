@@ -97,6 +97,15 @@ namespace DeNelle.Village
             // removed the per-frame re-resolve that used to mask this.
             if (_hero == null) { _heroFound = false; return; }
 
+            // Build mode: authoring, not interacting — release the button, hide the
+            // bubble, skip the [F] press. Restored automatically on build exit.
+            if (MobileInteractButton.Suppressed)
+            {
+                MobileInteractButton.Release(this);
+                if (_promptGo != null) HidePrompt();
+                return;
+            }
+
             // Throttled proximity check (0.15 s) — prompt show/hide.
             if (Time.time >= _nextProximityCheck)
             {

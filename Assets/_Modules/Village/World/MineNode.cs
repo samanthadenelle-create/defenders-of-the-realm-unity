@@ -292,6 +292,15 @@ namespace DeNelle.Village
 
         private void Update()
         {
+            // Build mode: the player is authoring, not interacting — release the shared
+            // button and skip both the prompt request and the [F] extract press for the
+            // whole session. Restored automatically when build mode exits.
+            if (MobileInteractButton.Suppressed)
+            {
+                MobileInteractButton.Release(this);
+                return;
+            }
+
             // WO-325 — finite-reserve nodes (WO-159) are ALSO auto-drained by a
             // Settlement (DrainReserve), but the settlement loop isn't always present in
             // the live OuterWorld, which left these nodes with NO player verb at all (a

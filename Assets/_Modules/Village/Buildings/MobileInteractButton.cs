@@ -39,6 +39,52 @@ namespace DeNelle.Village
     {
         private static MobileInteractButton _instance;
 
+        // WO build-mode suppression: while the player is AUTHORING in build mode they
+        // are placing structures, not interacting with them, so EVERY proximity
+        // interaction prompt (this shared touch button + the world-space bubbles that
+        // key off it + the desktop [F] presses that consult Suppressed) must be
+        // silenced. Fed by BuildModeController.BuildModeChanged (static Action<bool>,
+        // true on Enter / false on Exit), mirroring BuildModeHudBridge's hook. The
+        // flag is the single chokepoint: gating Request()/Update() here hides the
+        // button for all 8 interactor callers at once and, because the bubbles
+        // suppress themselves when IsActive/IsShowingFor is false, hides those too.
+        private static bool s_buildModeActive;
+        private static bool s_buildHooked;
+
+        /// <summary>
+        /// True while build mode is active — proximity interaction (button, world
+        /// bubble, and the callers' desktop [F] press) must be suppressed. Null-safe
+        /// static; F-key interactors consult this to skip their press while building.
+        /// </summary>
+        public static bool Suppressed => s_buildModeActive;
+
+        // Subscribe once, before any scene MonoBehaviour, so the flag is correct even
+        // if the player enters build mode before the button host exists. Idempotent.
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        private static void HookBuildMode()
+        {
+            if (s_buildHooked) return;
+            s_buildHooked = true;
+            BuildModeController.BuildModeChanged -= OnBuildModeChanged;
+            BuildModeController.BuildModeChanged += OnBuildModeChanged;
+        }
+
+        /// <summary>Enter build → suppress + drop any showing prompt; exit → restore.</summary>
+        private static void OnBuildModeChanged(bool building)
+        {
+            s_buildModeActive = building;
+            if (building && _instance != null)
+            {
+                // Hide any prompt that's currently up the instant build mode opens so
+                // the "Interact: <Building>" prompt can't linger over the palette.
+                _instance._owner = null;
+                _instance._onTap = null;
+                _instance._requestedThisFrame = false;
+                _instance._priority = 0;
+                _instance.HideButton();
+            }
+        }
+
         private Canvas _canvas;
         private RectTransform _btnRect;
         private Text _label;
@@ -72,6 +118,9 @@ namespace DeNelle.Village
         public static void Request(object owner, string label, Action onTap, int priority)
         {
             if (onTap == null) return;
+            // Build mode: the player is authoring, not interacting — ignore every
+            // request so no "Interact" prompt shows while placing structures.
+            if (s_buildModeActive) return;
             // DEF-212 item 3: while a modal panel owns the screen, no world
             // interaction prompt should show — ignore all requests this frame so the
             // button stays hidden (PanelManager.AnyOpen is the single source of truth).
@@ -146,9 +195,9 @@ namespace DeNelle.Village
 
         private void Update()
         {
-            // DEF-212 item 3: a modal panel suppresses the prompt entirely — drop any
-            // pending request and keep the button hidden while a panel is open.
-            if (PanelManager.AnyOpen)
+            // Build mode + modal panel both suppress the prompt entirely — drop any
+            // pending request and keep the button hidden for the duration.
+            if (s_buildModeActive || PanelManager.AnyOpen)
             {
                 _owner = null;
                 _onTap = null;
