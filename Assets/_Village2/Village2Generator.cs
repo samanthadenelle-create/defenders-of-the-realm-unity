@@ -217,10 +217,9 @@ public class Village2Generator : MonoBehaviour
         var mr = ground.GetComponent<MeshRenderer>();
         if (mr != null) mr.sharedMaterial = groundMaterial;
 
-        // Decorative surface only — let the hero/NavMesh own collision (a plane collider here would
-        // double up with the baked terrain seam). Strip it so it never interferes.
-        var col = ground.GetComponent<Collider>();
-        if (col != null) DestroyImmediate(col);
+        // KEEP the collider — Build Mode positions the placement ghost (and tap-to-select) by raycasting
+        // a ground collider; with none the ray misses and NO ghost ever shows. A flat plane collider at
+        // Y=0 is just the floor and does not conflict with the NavMesh bake (NavMesh still owns walkability).
 
         Debug.Log($"[Village2] Ground plane laid at Y=0 (half-size {groundHalfSize}m) with material '{groundMaterial.name}'.");
     }

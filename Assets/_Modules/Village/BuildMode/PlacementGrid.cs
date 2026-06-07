@@ -200,30 +200,35 @@ namespace DeNelle.Village
 
         private GameObject BuildOverlay()
         {
-            var go = GameObject.CreatePrimitive(PrimitiveType.Quad);
-            go.name = "PlacementGridOverlay";
-            var col = go.GetComponent<Collider>();
-            if (col != null) Destroy(col);   // overlay must never catch the placement ray
-
+            // EDGES ONLY (owner: "no fill, just edges") — a boundary outline of the buildable area,
+            // NOT a solid fill, so the ground + the placement ghost stay visible underneath.
+            var go = new GameObject("PlacementGridOverlay");
             go.transform.SetParent(transform, false);
-            go.transform.position = new Vector3(
-                origin.x + gridWidth * cellSize * 0.5f,
-                origin.y + 0.05f,
-                origin.z + gridHeight * cellSize * 0.5f);
-            go.transform.rotation = Quaternion.Euler(90f, 0f, 0f);   // lie flat on XZ
-            go.transform.localScale = new Vector3(gridWidth * cellSize, gridHeight * cellSize, 1f);
 
-            var rend = go.GetComponent<Renderer>();
-            if (rend != null)
+            float y  = origin.y + 0.05f;
+            float x0 = origin.x,                         x1 = origin.x + gridWidth  * cellSize;
+            float z0 = origin.z,                         z1 = origin.z + gridHeight * cellSize;
+
+            var lr = go.AddComponent<LineRenderer>();
+            lr.useWorldSpace    = true;
+            lr.loop             = true;
+            lr.positionCount    = 4;
+            lr.SetPositions(new[]
             {
-                var shader = Shader.Find("Universal Render Pipeline/Unlit")
-                             ?? Shader.Find("Sprites/Default");
-                var mat = new Material(shader);
-                if (mat.HasProperty("_BaseColor"))
-                    mat.SetColor("_BaseColor", new Color(0.25f, 0.7f, 1f, 0.10f));
-                if (mat.HasProperty("_Surface")) mat.SetFloat("_Surface", 1f);
-                rend.sharedMaterial = mat;
-            }
+                new Vector3(x0, y, z0), new Vector3(x1, y, z0),
+                new Vector3(x1, y, z1), new Vector3(x0, y, z1),
+            });
+            lr.widthMultiplier   = 0.35f;
+            lr.numCornerVertices = 2;
+            lr.alignment         = LineAlignment.TransformZ;   // ribbon lies flat on the ground
+            lr.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
+            lr.shadowCastingMode  = UnityEngine.Rendering.ShadowCastingMode.Off;
+            lr.receiveShadows     = false;
+
+            var shader = Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Sprites/Default");
+            var mat = new Material(shader);
+            if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", new Color(0.25f, 0.7f, 1f, 0.9f));
+            lr.sharedMaterial = mat;
             return go;
         }
     }

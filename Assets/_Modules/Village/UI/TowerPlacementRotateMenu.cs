@@ -246,7 +246,14 @@ namespace DeNelle.Village
         private void BuildPanel()
         {
             if (_document == null) return;
+            _document.enabled = true;            // enable BEFORE reading root (Awake/Close disable it → rootVisualElement is null)
+            AdoptPanelSettings();                 // retry adopting a live PanelSettings (a sibling may exist now in Play)
             var rootVE = _document.rootVisualElement;
+            if (rootVE == null)
+            {
+                Debug.LogWarning("[Orient] rootVisualElement null (no PanelSettings adopted) — aborting BuildPanel.");
+                return;
+            }
             rootVE.Clear();
 
             // Full-screen dimmer + centred card.
