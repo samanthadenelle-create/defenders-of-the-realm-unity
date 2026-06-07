@@ -728,6 +728,13 @@ namespace DeNelle.Editor
 
             var so = new SerializedObject(wm);
             if (heart != null) SetObjectField(so, "_heart", heart);
+            // DEFEND-GATED START: the wave must NOT pre-spawn / pre-countdown at load.
+            // Force _autoStart OFF on the wired scene so the manager sits Idle (zero
+            // enemies) until the player presses the HUD DEFEND button (StartWaveHudBridge
+            // -> WaveManager.ForceBeginNextWave). Set explicitly here so a previously-baked
+            // scene that serialized _autoStart=true is corrected on the next B5 wiring pass.
+            var autoStartProp = so.FindProperty("_autoStart");
+            if (autoStartProp != null) autoStartProp.boolValue = false;
             Transform er = cityRoot.Find("WaveEnemies");
             if (er == null) { var erGo = new GameObject("WaveEnemies"); erGo.transform.SetParent(cityRoot, false); er = erGo.transform; }
             SetObjectField(so, "_enemyRoot", er);

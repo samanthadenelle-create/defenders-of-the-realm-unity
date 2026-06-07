@@ -149,8 +149,12 @@ namespace DeNelle.Village
         [SerializeField] private float _breachArmDelay = 0.5f;
 
         [Header("Loop control")]
-        [Tooltip("Start the wave loop automatically on Start(). Off: call BeginLoop() yourself.")]
-        [SerializeField] private bool _autoStart = true;
+        [Tooltip("Start the wave loop automatically on Start(). OFF by default: the wave " +
+                 "must NOT pre-spawn / pre-countdown at scene load — the player gets a calm " +
+                 "build/prep phase first, then presses the HUD DEFEND button, which kicks " +
+                 "the loop via ForceBeginNextWave() -> BeginLoop(). On: legacy auto-countdown " +
+                 "at load (dev/standalone-wave-scene use only).")]
+        [SerializeField] private bool _autoStart = false;
 
         [Tooltip("Start the loop from this wave id (1 = the first wave). Dev override.")]
         [SerializeField, Min(1)] private int _startWave = 1;
@@ -308,13 +312,18 @@ namespace DeNelle.Village
 
         private void Start()
         {
-            // WO-133 (FTUE): on a FIRST run (GameState.Onboarded == false) the wave
-            // loop must NOT auto-start — the player is taught first and the
-            // tutorial's BeginWaveRequested is the SOLE kickoff (wired by
-            // OnboardingIntegrator → BeginLoop). Returning players (Onboarded
-            // already true) start normally. Core-not-bootstrapped (no service) is
-            // treated as a returning player so a missing Core never strands the
-            // loop. This also kills the "long silent first-wave countdown" (QA P2-K).
+            // DEFEND-GATED START: the wave loop must NOT pre-spawn or pre-countdown at
+            // scene load. At load there are ZERO enemies and the manager sits Idle; the
+            // player gets the calm build/prep phase, then presses the HUD DEFEND button
+            // (VillageHudController.StartWaveRequested -> StartWaveHudBridge ->
+            // ForceBeginNextWave() -> BeginLoop()), which is the SOLE kickoff. _autoStart
+            // therefore defaults OFF and stays off on the live village scene.
+            //
+            // WO-133 (FTUE): even with _autoStart left ON (dev / standalone wave scene),
+            // a FIRST run (GameState.Onboarded == false) still must NOT auto-start — the
+            // tutorial's BeginWaveRequested is the kickoff there. Core-not-bootstrapped
+            // (no service) is treated as a returning player so a missing Core never
+            // strands a dev auto-start.
             if (_autoStart && !IsFirstRun()) BeginLoop().Forget();
         }
 
