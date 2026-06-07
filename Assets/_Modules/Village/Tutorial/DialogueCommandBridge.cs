@@ -121,6 +121,7 @@ namespace DeNelle.Village
 
             // Pets
             Reg("spawn_starting_pet",   (Action)CmdSpawnStartingPet);
+            Reg("spawn_named_pet",      (Action<string>)CmdSpawnNamedPet);
             Reg("show_pet_name_prompt", (Action)CmdShowPetNamePrompt);
             Reg("show_pet_role_choice", (Action)CmdShowPetRoleChoice);
             Reg("send_pet_to_harvest",  (Action)CmdSendPetToHarvest);
@@ -360,9 +361,68 @@ namespace DeNelle.Village
 
         private void CmdSpawnStartingPet()
         {
-            var deployer = FindObjectOfType<PetDeployer>();
+            var deployer = EnsurePetDeployer();
             if (deployer != null) deployer.DeployStarterPets();
-            else Debug.Log("[DialogueCommandBridge] spawn_starting_pet — no PetDeployer in scene.");
+            else Debug.LogWarning("[DialogueCommandBridge] spawn_starting_pet — could not create a PetDeployer.");
+        }
+
+        // <<spawn_named_pet "species">> — pet-house "name + select your pet" flow.
+        // Deploys the CHOSEN species via the self-healed deployer (records the pick
+        // to GameState.StarterPetId so it persists). The deploy-once guard makes a
+        // repeat call a safe no-op, so re-visiting the pet house never respawns.
+        // TODO: free-text pet name UI — Yarn can't capture text, so the player picks
+        // a species (and gets the catalog name) for now; a code-built name prompt
+        // (cf. PetIntroduction) would write GameState.PetName before DeployChosen.
+        private void CmdSpawnNamedPet(string species)
+        {
+            var deployer = EnsurePetDeployer();
+            if (deployer == null)
+            {
+                Debug.LogWarning("[DialogueCommandBridge] spawn_named_pet — could not create a PetDeployer.");
+                return;
+            }
+            deployer.DeployChosen(species);
+            Debug.Log($"[DialogueCommandBridge] spawn_named_pet '{species}' → deployed via PetDeployer.");
+        }
+
+        // Self-heal (GAP 1): Village2 ships no PetDeployer + no runtime bootstrap, so
+        // FindObjectOfType returned null and the spawn no-op'd. Reuse the existing one
+        // if present; otherwise build it exactly like PatriciaLightController.SpawnPets
+        // — new GameObject("PetDeployer") + SetHeartPosition(Heart/origin) + SetEnemyMask
+        // (project "Enemy" layer). The deployer's own deploy-once guard keeps repeat
+        // FTUE calls (spawn_starting_pet fires at start AND end) safe.
+        private PetDeployer EnsurePetDeployer()
+        {
+            var deployer = FindObjectOfType<PetDeployer>();
+            if (deployer != null) return deployer;
+
+            var go = new GameObject("PetDeployer");
+            deployer = go.AddComponent<PetDeployer>();
+
+            // Heart position = centre of the deploy ring. Use the live HeartController
+            // if the village has one; otherwise the scene origin (Heart sits at 0,0,0).
+            Vector3 heartPos = Vector3.zero;
+            var heart = FindObjectOfType<HeartController>();
+            if (heart != null) heartPos = heart.transform.position;
+            deployer.SetHeartPosition(heartPos);
+
+            // Enemy LayerMask — project layer "Enemy" (mirrors PatriciaLight + VillageSceneBuilder).
+            int enemyLayer = LayerMask.NameToLayer("Enemy");
+            deployer.SetEnemyMask(enemyLayer >= 0 ? (1 << enemyLayer) : ~0);
+
+            // Per-species bond ranks from the save (indexed [aether, flame, ice]).
+            var svc = GameStateService.Instance;
+            if (svc != null && svc.State != null && svc.State.PetBonds != null)
+            {
+                var b = svc.State.PetBonds;
+                int aether = b.Count > 0 ? b[0] : 0;
+                int flame  = b.Count > 1 ? b[1] : 0;
+                int ice    = b.Count > 2 ? b[2] : 0;
+                deployer.SetBondRanks(aether, flame, ice);
+            }
+
+            Debug.Log($"[DialogueCommandBridge] Self-healed a PetDeployer (heart={heartPos}).");
+            return deployer;
         }
 
         private void CmdShowPetNamePrompt()

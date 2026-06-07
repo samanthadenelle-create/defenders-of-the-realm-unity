@@ -1,10 +1,10 @@
 title: CompanionMeeting
 tags: tutorial onboarding
 ---
-// Deploy the starter pet at TUTORIAL START (robust): fires regardless of which later
-// nodes the click-through reaches. DeployStarterPets() clears+redeploys, so the existing
-// <<spawn_starting_pet>> in the PetIntroduction node is harmless (no double pets).
-<<spawn_starting_pet>>
+// WO-329: pet deploy is now SOLELY the Pet House selection (PetHouse node →
+// <<spawn_named_pet>> → PetDeployer.DeployChosen). The tutorial no longer
+// auto-deploys a default pet — doing so pre-empted + blocked the player's
+// later pet-house pick via the deploy-once guard. (was <<spawn_starting_pet>>)
 // Companion runs up to hero at the Heartwood tree
 <<wait 1.5>>
 <<camera_focus companion>>
@@ -138,7 +138,9 @@ tags: tutorial onboarding
 // Pet runs up to hero — EXPLANATION only (MVP). The name prompt + role-choice
 // gates were removed; the player names + assigns the Echo at the Pet House after
 // the tutorial. Restore the in-line naming moment when tuning later.
-<<spawn_starting_pet>>
+// WO-329: no auto-deploy here — the Echo is deployed only when the player picks
+// it at the Pet House (PetHouse node → <<spawn_named_pet>>). This node is now
+// pure EXPLANATION; it just tells the player to visit the Pet House.
 <<wait 2>>
 
 {$companionName}: Well — looks like you've already caught someone's attention.
@@ -178,6 +180,8 @@ tags: tutorial onboarding
 
 <<set $tutorialComplete to true>>
 <<enable_full_controls>>
-<<spawn_starting_pet>>   // belt-and-suspenders: guarantee the pet is deployed by tutorial END (idempotent w/ the start-of-tutorial call). See WO pet-deploy-timing to pick the canonical trigger.
+// WO-329: tutorial end no longer deploys the pet. The player's Echo deploys
+// ONLY when they select it at the Pet House (PetHouse node → <<spawn_named_pet>>).
+// (was <<spawn_starting_pet>> — removed so it can't pre-empt the pet-house pick.)
 <<save_game>>
 ===

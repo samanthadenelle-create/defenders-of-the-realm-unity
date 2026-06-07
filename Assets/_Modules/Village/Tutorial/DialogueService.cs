@@ -97,9 +97,16 @@ namespace DeNelle.Village
             DialogueRunner runner = Current ?? Host();
             if (runner == null) return false;
             if (runner.IsDialogueRunning) return false;   // don't interrupt an active line
-            if (!NodeExists(runner, "StructureMenu"))
+
+            // The pet house gets its OWN "name + select your pet" flow (PetHouse node)
+            // instead of the generic buy/sell/upgrade StructureMenu. Every other
+            // building shares the parameterized StructureMenu. Fall back to StructureMenu
+            // if the PetHouse node isn't compiled in this build.
+            string node = (structureId == "pet-house" && NodeExists(runner, "PetHouse"))
+                ? "PetHouse" : "StructureMenu";
+            if (!NodeExists(runner, node))
             {
-                Debug.LogError("[DialogueService] 'StructureMenu' node missing — building hook can't open.");
+                Debug.LogError($"[DialogueService] '{node}' node missing — building hook can't open.");
                 return false;
             }
 
@@ -113,8 +120,8 @@ namespace DeNelle.Village
                 if (!string.IsNullOrEmpty(displayName))
                     runner.VariableStorage.SetValue("$structureName", displayName);
             }
-            runner.StartDialogue("StructureMenu").Forget();
-            Debug.Log($"[DialogueService] Structure menu for '{structureId}' ('{displayName}').");
+            runner.StartDialogue(node).Forget();
+            Debug.Log($"[DialogueService] Structure '{structureId}' → node '{node}' ('{displayName}').");
             return true;
         }
 

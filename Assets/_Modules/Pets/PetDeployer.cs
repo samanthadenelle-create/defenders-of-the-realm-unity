@@ -162,6 +162,44 @@ namespace DeNelle.Pets
             }
         }
 
+        /// <summary>
+        /// Pet-house "name + select your pet" flow: deploy the species the player
+        /// CHOSE in the pet-house dialogue. Records the pick to
+        /// <c>GameState.StarterPetId</c> (so it persists + drives every later
+        /// <see cref="DeployStarterPets"/>), then deploys via the normal path.
+        ///
+        /// Pass a species id ("ice-wolf" / "flame-pup" / "aether-sprite") OR the
+        /// PetCatalog id ("pet-ice-wolf" …) — both resolve. Honors the deploy-once
+        /// guard: if a pet is already live this is a safe no-op (does NOT respawn).
+        /// </summary>
+        public void DeployChosen(string species)
+        {
+            if (!string.IsNullOrEmpty(species))
+            {
+                // Normalise either a bare species or a catalog id to the canonical
+                // PetCatalog id ("pet-<species>") that GameState.StarterPetId expects
+                // (ResolveStarterSpecies() maps the id back to a species via Find()).
+                var def = PetCatalog.Find(species);
+                if (def == null)
+                {
+                    foreach (var d in (PetCatalog.Pets ?? new List<PetDef>()))
+                        if (d != null && d.Species == species) { def = d; break; }
+                }
+                if (def != null && !string.IsNullOrEmpty(def.Id))
+                {
+                    var svc = DeNelle.Core.State.GameStateService.Instance;
+                    if (svc != null && svc.State != null)
+                        svc.State.StarterPetId = def.Id;
+                }
+                else
+                {
+                    Debug.LogWarning($"[PetDeployer] DeployChosen('{species}') — no PetCatalog " +
+                                     "match; falling back to the recorded/ default starter.");
+                }
+            }
+            DeployStarterPets();
+        }
+
         // Fallback starter species when GameState records no pick (pre-WO-185
         // saves, or the express Defend-the-Tower path that skips pet-select).
         private const string DefaultStarterSpecies = "ice-wolf";

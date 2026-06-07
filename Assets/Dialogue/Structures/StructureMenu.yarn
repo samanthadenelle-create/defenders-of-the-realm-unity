@@ -26,3 +26,30 @@ tags: structure interaction
 -> Leave
     {$structureName}: Safe travels.
 ===
+
+title: PetHouse
+tags: structure interaction pet
+---
+// The pet house's OWN flow: "visit the pet house to name and select your pet."
+// The player selects a guardian SPECIES via Yarn options; <<spawn_named_pet>>
+// deploys the chosen species through the self-healed PetDeployer (DialogueCommandBridge).
+// DialogueService.PlayStructure("pet-house", …) routes here (not the generic StructureMenu).
+//
+// TODO: free-text pet NAMING — Yarn options can't capture typed text, so the pet
+// takes its catalog name for now (Aether Sprite / Flame Pup / Ice Wolf). A code-built
+// name-entry UI (cf. PetIntroduction) would write GameState.PetName before deploy.
+<<portrait Portraits/pet-house>>
+{$structureName}: Welcome to the Pet House. Choose a guardian to stand with you — they'll fight at your side and gather while you defend.
+
+-> A frost-warden — the Ice Wolf. Steady and tough.
+    <<spawn_named_pet "ice-wolf">>
+    {$structureName}: The Ice Wolf is yours. It'll chill any foe that nears the Heart.
+-> A hearth-hound — the Flame Pup. Fierce and fast.
+    <<spawn_named_pet "flame-pup">>
+    {$structureName}: The Flame Pup answers your call. Its embers will scorch the enemy.
+-> A heart-ward — the Aether Sprite. Quick and arcane.
+    <<spawn_named_pet "aether-sprite">>
+    {$structureName}: The Aether Sprite flits to your side. It'll ward the Heart with arcane light.
+-> Not yet — I'll come back.
+    {$structureName}: The pen's always open when you're ready.
+===
