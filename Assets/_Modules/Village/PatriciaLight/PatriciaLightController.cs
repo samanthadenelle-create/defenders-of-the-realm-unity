@@ -37,6 +37,7 @@ using DeNelle.Core.State;
 using DeNelle.Pets;
 using UnityEngine;
 using UnityEngine.AI;
+using UnityEngine.SceneManagement;   // WO-320: reload the active DTT scene on Retry
 using UnityEngine.UIElements;
 
 namespace DeNelle.Village
@@ -59,7 +60,7 @@ namespace DeNelle.Village
         private const float AirSpawnDist        = 26f;     // metres left/right (air lanes)
         private const float AirHeight           = 9f;      // cruise height for flying enemies
         private const float HeartHitDamage      = 9f;      // tower HP lost per enemy arrival
-        private const float HeroFireCooldown    = 0.14f;   // fast auto-fire — waves come in hard here
+        private const float HeroFireCooldown    = 0.07f;   // snappier for fast button presses / rapid engagement while on the tower perch
         private const float HeroFireRange       = 90f;     // direct-fire fallback reach
         private const float HeroFireDamage      = 18f;     // direct-fire fallback damage
         private const int   WisdomReward        = 8;       // Phase-2 win bonus (bigger than Phase-1's 3)
@@ -108,11 +109,14 @@ namespace DeNelle.Village
         // Source-coded damage-number tint: the hero's own hits read cyan-white (pets
         // tint their hits green in Pet.cs) so the player can tell their damage apart.
         private static readonly Color HeroDamageColor = new Color(0.55f, 0.90f, 1.00f);
-        private DeNelle.Village.Defend.HeroOverShoulderCamera _camFollow;
+        // Active follow camera (OTS for the afar sniping vision: see the hero on the distant
+        // structure/hill + the tower battle in the background).
+        private MonoBehaviour _camFollow;
         private DeNelle.Village.Defend.TowerAimSystem _aim;   // manual-aim reticle + aim-assisted targeting
 
         private HeroAbilities _hero;
         private Transform _heroTransform;
+        private ActorAnimator _heroActor;   // wired in SpawnHero for DTT anim + turning fixes
         private float _fireCooldown;
         private readonly Collider[] _overlap = new Collider[64];
 
@@ -220,7 +224,16 @@ namespace DeNelle.Village
         {
             BuildMusic();
             BuildArena();
+            // Disable any leftover huge KayKit platformer/factory "StandPlatform"
+            // (the unwanted structure reported in the DTT battle scene). Safe even
+            // if the editor-authored baked arena serialized one in.
+            DisableStrayHugePlatformStructures();
             BuildTower();
+
+            // The distant HeroStand platform (built far back and elevated in BuildHeroStand)
+            // is the "hill or another structure" the hero stands on while sniping from afar.
+            // Keep it visible as the vantage point.
+
             ResolveEnemyMask();
 
             // NavMesh under the arena so ground enemies can march (Enemy needs it).
@@ -517,12 +530,12 @@ namespace DeNelle.Village
         /// </summary>
         private void BuildHeroStand()
         {
-            // A raised WOODEN STAND set BACK from the tower (+Z), facing it. The hero
-            // defends from here in first person, looking out across the field at
-            // tower2 (owner: "first person view from a stand facing the tower2 so we
-            // have a better landscape view of everything").
-            const float standTop = 7f;                                   // platform-top height
-            float standZ = _hasSpire ? _spireBounds.max.z + 14f : 18f;   // distance back from the tower
+            // A raised platform/structure set FAR BACK from the tower (+Z), acting as
+            // the "hill or another structure" the hero stands on while sniping from afar.
+            // The hero is distant, looking towards the tower to defeat the enemies
+            // attacking the defensive structure (Heart/tower).
+            const float standTop = 12f;                                  // elevated like a hill/structure
+            float standZ = _hasSpire ? _spireBounds.max.z + 30f : 40f;   // significantly afar for distant vantage point
 
             Color wood     = new Color(0.45f, 0.30f, 0.16f);
             Color woodDark = new Color(0.30f, 0.20f, 0.10f);
@@ -636,28 +649,38 @@ namespace DeNelle.Village
 
             var heroRoot = new GameObject($"Hero ({slug})");
             heroRoot.transform.SetParent(transform, false);
-            // Stand the hero on the ledge built in front of the tower, facing OUT
-            // over the field (+Z). The hero strafes left/right along it.
-            heroRoot.transform.position = _heroLedgePos;
-            // Facing: use the baked HeroSpawn marker's rotation when present (so you
-            // aim the hero/FP view by rotating that marker in the editor); otherwise
-            // default to facing the tower across the field.
+
+            // Place the hero AFAR on the distant platform/hill/structure (the "HeroStand"
+            // built far back and elevated in BuildHeroStand). The ranger stands on a hill
+            // or another structure far from the tower, using his bow to defeat the enemies
+            // attacking the defensive structure (tower/Heart below).
+            // The baked HeroSpawn marker (if present) can be placed afar by the user
+            // in the editor arena for custom hill positioning.
+            Vector3 perchPos = _heroLedgePos;  // far position from the distant stand
+            heroRoot.transform.position = perchPos;
+
+            // Facing: face the tower / defensive structure (the Heart at center).
+            // User request: "the ranger to face the tower not to the right".
+            // This orients the root forward toward the tower so the character (after body correction)
+            // has its front (not the side) pointing at the structure it is defending.
+            // The camera (over-shoulder) will look in this direction (toward the tower + down bias
+            // for waves). Combat slerp in TickHeroStrafe/TickHeroFire can still turn toward
+            // specific targets temporarily for engagement.
             if (_hasSpawnRot)
             {
                 heroRoot.transform.rotation = _heroSpawnRot;
             }
             else
             {
-                Vector3 toTower = TowerPos - _heroLedgePos; toTower.y = 0f;
+                Vector3 toTower = TowerPos - perchPos; toTower.y = 0f;
                 heroRoot.transform.rotation = toTower.sqrMagnitude > 0.01f
                     ? Quaternion.LookRotation(toTower.normalized, Vector3.up)
                     : Quaternion.identity;
             }
             _heroTransform = heroRoot.transform;
-            // Lock this as the turret's facing. TickHeroStrafe re-asserts it every
-            // frame so neither a cast (FaceNearestHostile) nor HeroLocomotion's
-            // turn-toward-velocity can swing the over-shoulder camera off-axis and
-            // leave it stuck — the view stays a stable forward shot of the field.
+
+            // The "turret lock" is now a base facing for camera stability; we still allow
+            // combat slerp toward targets in Tick (see previous facing-to-target fix).
             _heroFacing = heroRoot.transform.rotation;
             _hasHeroFacing = true;
 
@@ -671,10 +694,23 @@ namespace DeNelle.Village
             // and the extra camera/AudioListener/Rigidbody strip layer on top below.
             var body = VisualFactory.Skin(heroRoot.transform, "Heroes/" + slug, new SkinOptions
             {
-                FitHeight = 2.0f,
+                FitHeight = 1.75f,
                 StripColliders = true,
-                // DEF-232: orient the body via Skin BEFORE fit/seat (was a post-Skin rotate).
-                // +90° here: rotate the hero 90° left so it faces the field + fires the right way.
+                // WO-317 (hero floats): without SeatOnGround the body is only height-fit and
+                // its pivot keeps the feet above the perch platform. SeatOnGround drops the
+                // body so its bounds-bottom sits on the root origin (the platform surface).
+                // NOTE: if a residual foot offset remains after this, it's the FBX pivot
+                // (authored above the mesh bottom) — do NOT add a hand-tuned Y nudge here;
+                // re-pivot the FBX or address in the factory. SeatOnGround is the right fix.
+                SeatOnGround = true,
+                // Rig correction so the visual Ranger body faces the same direction as the root.
+                // Root is now set to face the tower (per user: "face the tower not to the right").
+                // The +/- 90° (or 0/180) compensates for how the Ranger.fbx was authored/exported
+                // (often characters import with model-forward on +X or -X instead of +Z).
+                // Current value (+90) is the original correction used with toTower logic.
+                // If the ranger still appears turned 90° (facing right relative to the tower),
+                // change this number to -90f or 0f and re-test. The goal is the character's
+                // front (chest/bow side) points toward the tower/Heart, not sideways.
                 LocalRotation = Quaternion.Euler(0f, 90f, 0f),
             });
             if (body != null)
@@ -684,6 +720,33 @@ namespace DeNelle.Village
                 // AudioListener would fight the OTS rig, so clear those (+ rigidbodies)
                 // on top — the spawn-specific layering the factory stays out of.
                 StripCollidersAndCameras(body);
+
+                // Fix: ensure the (Humanoid) Animator on the body has the correct
+                // controller built by HeroAnimatorFactory (Knight/Mage/Ranger/Cleric).
+                // Without this, models stay in T-pose or play nothing even if FBX is Humanoid.
+                var bodyAnim = body.GetComponent<Animator>();
+                if (bodyAnim != null)
+                {
+                    var ctrl = Resources.Load<RuntimeAnimatorController>("Heroes/" + slug);
+                    if (ctrl != null)
+                        bodyAnim.runtimeAnimatorController = ctrl;
+                    else
+                        Debug.LogWarning($"[PatriciaLight] No controller Resources/Heroes/{slug}.controller — run Defenders/Animation/Build Hero Animators.");
+                    bodyAnim.applyRootMotion = false; // code/Nav + strafe drive position/rot
+                }
+
+                // Equip the bow for the Ranger so it visibly matches the concept art (Sylas
+                // with drawn glowing bow). HeroBowAttachment handles LeftHand placement + auto
+                // normalize for the rig. Only for ranger slug in this mode.
+                if (slug.Equals("Ranger", System.StringComparison.OrdinalIgnoreCase))
+                {
+                    HeroBowAttachment.AttachTo(heroRoot, body);
+                }
+
+                // Tint the entire hero (armor, cloak, details) + bow to the dark moody green
+                // palette with strong emerald glow from the reference image. This makes the
+                // in-game ranger evoke "Sylas" even on the current model/FBX.
+                TintHeroToConceptArt(body);
             }
             else
             {
@@ -697,6 +760,13 @@ namespace DeNelle.Village
                 TintUrp(stand, new Color(0.45f, 0.55f, 0.85f));
             }
 
+            // Ensure ActorAnimator (guarded driver for Speed/Cast/Attack/Dead params
+            // matching the controllers from HeroAnimatorFactory). Other Hero* scripts
+            // do the same (HeroHealth, HeroHitReaction). This makes SetLocomotion etc.
+            // work for idle/walk/attack without param spam.
+            var actor = heroRoot.GetComponent<ActorAnimator>() ?? heroRoot.AddComponent<ActorAnimator>();
+            _heroActor = actor; // cached for Tick drives (see TickHeroFire + strafe)
+
             // HeroAbilities — the SAME kit the village HUD trigger uses. Wire its
             // class so a Ranger fires arrows, not the Mage loadout, and hand it
             // the tower so Healing Beacon (E) tops up tower HP.
@@ -704,6 +774,16 @@ namespace DeNelle.Village
             _hero.SetHeroClass(slug);
             _hero.SetHeart(_heart);
             TrySetHeroEnemyMask(_hero, _enemyMask);
+
+            // Default gear + visuals (exact match to village HeroBodySwapper path for consistency):
+            // GearLoadout pulls level-1 per-class (bow for Ranger, sword+plate Knight, staff+robes Mage, mace+light Cleric)
+            // for stats (PlayerAttackController.WeaponMult etc.). GearVisualApplier attaches sized visuals
+            // (bow hand/back, sword/staff/mace in RightHand, armor accents/shield/pauldron) using the body bones.
+            // Ensures "default hero spawns with proper equipment (weapon + armor)" in DTT too.
+            var loadout = heroRoot.GetComponent<GearLoadout>() ?? heroRoot.AddComponent<GearLoadout>();
+            loadout.Refresh();
+            if (body != null)
+                GearVisualApplier.Apply(body.transform, loadout);
 
             // DTT: route heal/ward spells to REPAIR the tower (the thing you're
             // defending) — the turret hero is invulnerable, so heal-the-hero is moot
@@ -735,32 +815,35 @@ namespace DeNelle.Village
                 foreach (var tp in cam.GetComponents<ThirdPersonCameraFollow>())            tp.enabled = false;
                 foreach (var fp in cam.GetComponents<FirstPersonTowerCamera>())             fp.enabled = false;
                 foreach (var dt in cam.GetComponents<DeNelle.Village.Defend.DefendTowerCamera>()) dt.enabled = false;
-                _camFollow = cam.GetComponent<DeNelle.Village.Defend.HeroOverShoulderCamera>()
+
+                // Over-the-shoulder for the "standing afar on a hill/structure" vision.
+                // OTS plays best: you see the hero (bow, full pose matching the art, animation
+                // cycles) in the near frame, while the camera looks past him at the distant
+                // tower and the enemies attacking it on the ground. Perfect for sniping from
+                // afar while surveying the battle. The reticle + turn logic lets you target
+                // specific enemies fast.
+                var otsCam = cam.GetComponent<DeNelle.Village.Defend.HeroOverShoulderCamera>()
                           ?? cam.gameObject.AddComponent<DeNelle.Village.Defend.HeroOverShoulderCamera>();
+                _camFollow = otsCam;
+                otsCam.enabled = true;
+                otsCam.Target = _heroTransform;
+
+                // Manual-aim reticle (input-agnostic core).
+                if (_aim == null) _aim = gameObject.AddComponent<DeNelle.Village.Defend.TowerAimSystem>();
+                _aim.Cam = cam;
+                _aim.AimOrigin = _heroTransform;
+                _aim.Range = HeroFireRange;
+
+                // Mobile touch driver (Lean Touch): drag = aim, hold-right = fire, pinch = zoom.
+                var touch = gameObject.GetComponent<DeNelle.Village.Defend.LeanTouchAimDriver>()
+                         ?? gameObject.AddComponent<DeNelle.Village.Defend.LeanTouchAimDriver>();
+                touch.Aim = _aim;
+                touch.Cam = otsCam;
             }
             else
             {
                 _camFollow = UnityEngine.Object.FindAnyObjectByType<DeNelle.Village.Defend.HeroOverShoulderCamera>();
             }
-            if (_camFollow != null)
-            {
-                _camFollow.enabled = true;
-                _camFollow.Target  = _heroTransform;
-            }
-
-            // Manual-aim reticle (input-agnostic core).
-            if (_aim == null) _aim = gameObject.AddComponent<DeNelle.Village.Defend.TowerAimSystem>();
-            _aim.Cam       = cam;
-            _aim.AimOrigin = _heroTransform;
-            _aim.Range     = HeroFireRange;
-
-            // Mobile touch driver (Lean Touch): drag = aim, hold-right = fire, pinch = zoom.
-            // The only Lean-dependent piece; the desktop mouse/keyboard fallback in
-            // TowerAimSystem stays active in the editor / Windows build for iteration.
-            var touch = gameObject.GetComponent<DeNelle.Village.Defend.LeanTouchAimDriver>()
-                     ?? gameObject.AddComponent<DeNelle.Village.Defend.LeanTouchAimDriver>();
-            touch.Aim = _aim;
-            touch.Cam = _camFollow;
         }
 
         private static HeroClass ResolvePlayableClass(out bool defaulted)
@@ -797,9 +880,79 @@ namespace DeNelle.Village
         {
             if (_heroTransform == null) return;
 
-            // Hold the locked turret facing so the OTS camera never gets stuck off-axis
-            // (a cast or HeroLocomotion may have nudged the hero's rotation this frame).
-            if (_hasHeroFacing) _heroTransform.rotation = _heroFacing;
+            // Over-the-shoulder camera "surveying the ground and sky to target enemies":
+            // Drive the hero's rotation from the current aim/reticle so the OTS camera
+            // naturally swings with the player's targeting. This lets you survey the
+            // battlefield (ground with waves + sky for awareness/targeting) by moving
+            // the reticle, then attack fast while the camera stays in the perfect
+            // over-shoulder position.
+            // Base "face the tower" lock (from spawn) is only used when not actively
+            // providing aim input. When aiming or firing, we turn toward the target
+            // or the free-aim world point under the reticle (supports ground and sky).
+            // In this perched turret mode the player surveys with the reticle to target
+            // enemies on the ground or in the sky. As long as the aim system is active,
+            // we drive the hero rotation (and thus the OTS camera) toward the current
+            // reticle world point (or locked target). This gives the over-the-shoulder
+            // "surveying" feel the user requested. The initial spawn facing (tower) is
+            // used only as the starting orientation before the player begins aiming.
+            bool activelyAiming = _aim != null;
+
+            if (activelyAiming && _aim != null)
+            {
+                Vector3 targetWorld;
+                if (_aim.CurrentTarget != null && _aim.CurrentTarget.IsAlive)
+                {
+                    // Reticle aim wins: when the player has acquired a target (or is
+                    // sweeping the reticle over one), that REFINES/OVERRIDES the auto-track.
+                    targetWorld = _aim.CurrentTarget.WorldPosition;
+                }
+                else
+                {
+                    // WO-318 (aim stuck north): with the reticle resting at screen-centre the
+                    // old path raycast straight ahead and the body never turned — the turret
+                    // appeared frozen facing north. Auto-track the nearest INCOMING hostile so
+                    // the turret swings to face the threat on its own; reticle aim above still
+                    // overrides the instant the player acquires a target. Prefer one in the
+                    // forward cone (smooth follow), else the nearest anywhere (acquire new).
+                    IDamageable auto =
+                        NearestHostileInCone(_heroTransform.position, _heroTransform.forward, HeroFireRange, 100f)
+                        ?? NearestHostile(_heroTransform.position, HeroFireRange);
+
+                    if (auto != null && auto.IsAlive)
+                    {
+                        targetWorld = auto.WorldPosition;
+                    }
+                    else if (_aim.Cam != null)
+                    {
+                        // No hostiles in range — survey the battlefield via the reticle so the
+                        // OTS camera can still pan over ground/sky while waiting for the wave.
+                        Ray ray = _aim.Cam.ScreenPointToRay(_aim.Reticle);
+                        if (Physics.Raycast(ray, out RaycastHit hit, 350f, ~0, QueryTriggerInteraction.Ignore))
+                            targetWorld = hit.point;
+                        else
+                            targetWorld = ray.GetPoint(180f); // far point for sky / distant targets
+                    }
+                    else
+                    {
+                        targetWorld = _heroTransform.position + _heroTransform.forward * 60f;
+                    }
+                }
+
+                Vector3 dir = targetWorld - _heroTransform.position;
+                dir.y = 0f; // yaw only for the character body; camera lookDown bias handles seeing ground vs sky in frame
+                if (dir.sqrMagnitude > 0.25f)
+                {
+                    Quaternion desired = Quaternion.LookRotation(dir.normalized, Vector3.up);
+                    float turnRate = _aim.FireHeld ? 20f : 12f; // snappier when committing to an attack
+                    _heroTransform.rotation = Quaternion.Slerp(_heroTransform.rotation, desired, turnRate * Time.deltaTime);
+                }
+            }
+            else if (_hasHeroFacing)
+            {
+                // No active aiming: hold the base "face the tower" orientation requested previously.
+                // Camera stays stable looking toward the defensive structure until player starts surveying.
+                _heroTransform.rotation = _heroFacing;
+            }
 
             float x = 0f;
             var kb = UnityEngine.InputSystem.Keyboard.current;
@@ -811,15 +964,23 @@ namespace DeNelle.Village
             var gp = UnityEngine.InputSystem.Gamepad.current;
             if (gp != null) x += gp.leftStick.ReadValue().x;
 
-            if (Mathf.Abs(x) < 0.01f) return;
+            float speed = 0f;
+            if (Mathf.Abs(x) >= 0.01f)
+            {
+                const float strafeSpeed = 9f;
+                var p = _heroTransform.position;
+                // Negated: left/right reads correctly from the over-the-shoulder view.
+                p.x = Mathf.Clamp(
+                    p.x - Mathf.Clamp(x, -1f, 1f) * strafeSpeed * Time.deltaTime,
+                    _strafeCenterX - StrafeHalfWidth, _strafeCenterX + StrafeHalfWidth);
+                _heroTransform.position = p;
+                speed = Mathf.Abs(x) * strafeSpeed;
+            }
 
-            const float strafeSpeed = 9f;
-            var p = _heroTransform.position;
-            // Negated: left/right reads correctly from the over-the-shoulder view.
-            p.x = Mathf.Clamp(
-                p.x - Mathf.Clamp(x, -1f, 1f) * strafeSpeed * Time.deltaTime,
-                _strafeCenterX - StrafeHalfWidth, _strafeCenterX + StrafeHalfWidth);
-            _heroTransform.position = p;
+            // Drive animation (core fix: without SetLocomotion the blendtree stays at
+            // Speed=0 and only idles even when strafing/moving). ActorAnimator is
+            // null-guarded inside.
+            _heroActor?.SetLocomotion(speed);
         }
 
         private void TickHeroFire()
@@ -840,6 +1001,38 @@ namespace DeNelle.Village
             _fireCooldown = HeroFireCooldown;
             Vector3 muzzle = _heroTransform.position + Vector3.up * 1.3f + _heroTransform.forward * 0.6f;
             StartCoroutine(FireProjectile(muzzle, target, HeroFireDamage));
+
+            // Drive attack animation on the hero body (Cast for casters, Attack for
+            // melee). This + the controller wiring in SpawnHero fixes "no animations".
+            _heroActor?.PlayCast(); // works for both (upper-body layer + base Cast/Attack states exist)
+            // For Knight melee feel one could cycle Combo and PlayAttack, but PlayCast
+            // hits the states for all classes in the HeroAnimatorFactory controllers.
+        }
+
+        /// <summary>
+        /// Runtime safety net: disable (rather than destroy, to avoid nulling baked
+        /// references) any huge unwanted KayKit platformer/factory "StandPlatform"
+        /// that may still be in a baked arena. Complements the builder cleanup.
+        /// </summary>
+        private void DisableStrayHugePlatformStructures()
+        {
+            foreach (var go in FindObjectsByType<GameObject>(FindObjectsSortMode.None))
+            {
+                if (go == null) continue;
+                string n = go.name;
+                bool suspicious = n.IndexOf("StandPlatform", StringComparison.OrdinalIgnoreCase) >= 0
+                               || n.IndexOf("Platformer", StringComparison.OrdinalIgnoreCase) >= 0
+                               || n.IndexOf("Factory", StringComparison.OrdinalIgnoreCase) >= 0;
+                if (!suspicious) continue;
+
+                var s = go.transform.localScale;
+                bool huge = Mathf.Max(Mathf.Abs(s.x), Mathf.Abs(s.y), Mathf.Abs(s.z)) > 6f;
+                if (suspicious || huge)
+                {
+                    Debug.LogWarning($"[PatriciaLight] Disabling stray huge KayKit/platformer structure at runtime: {n}");
+                    go.SetActive(false);
+                }
+            }
         }
 
         /// <summary>Spawns a visible VFX projectile that flies from <paramref name="from"/>
@@ -1378,8 +1571,29 @@ namespace DeNelle.Village
             _running = false;
 
             SetStatus("The tower has fallen…");
-            Debug.Log("[PatriciaLight] LOSE — tower integrity reached 0. Returning home.");
-            FinishAndReturn().Forget();
+            Debug.Log("[PatriciaLight] LOSE — tower integrity reached 0.");
+
+            // WO-320 (losing has no impact): route through the shared defeat panel
+            // (pause + Retry/Leave) instead of the old silent label + auto-return.
+            // GameOverScreen stays Village2-gated for its own hooks; we use its
+            // scene-agnostic ShowDefeat entry with DTT-specific wiring:
+            //   Retry → reload THIS defend scene (a fresh assault), not the village.
+            //   Leave → return home (the scene the player came from / village).
+            // Null-guarded: if the panel can't show (shouldn't happen — it self-
+            // bootstraps), fall back to the original auto-return so a loss still ends.
+            try
+            {
+                GameOverScreen.ShowDefeat(
+                    "THE TOWER HAS FALLEN",
+                    "The dark breaks through the perch you swore to hold,\nbut Elarion remembers those who rise again.",
+                    onRetry: () => SceneRouter.LoadScene(SceneManager.GetActiveScene().name),
+                    onLeave: ReturnHome);
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning($"[PatriciaLight] GameOverScreen.ShowDefeat failed ({e.Message}); falling back to auto-return.");
+                FinishAndReturn().Forget();
+            }
         }
 
         private void RepelAll()
@@ -1908,7 +2122,13 @@ namespace DeNelle.Village
 
         private void ShakeCamera(float intensity, float duration)
         {
-            if (_camFollow != null) _camFollow.Shake(intensity, duration);
+            if (_camFollow != null)
+            {
+                // Works for both the old OTS and the current FirstPersonTowerCamera
+                // (both expose public void Shake(float intensity, float duration)).
+                var m = _camFollow.GetType().GetMethod("Shake", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+                m?.Invoke(_camFollow, new object[] { intensity, duration });
+            }
         }
 
         /// <summary>
@@ -1980,6 +2200,131 @@ namespace DeNelle.Village
             if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", color);
             if (mat.HasProperty("_Color"))     mat.SetColor("_Color", color);
             r.sharedMaterial = mat;
+        }
+
+        /// <summary>
+        /// Runtime visual pass to make the spawned Ranger hero match the "Sylas" concept
+        /// art reference: dark moody green/black leather + armor with strong glowing
+        /// emerald energy (bow, details, "runes"). Loops all child renderers, forces
+        /// dark base + bright emission where supported. Also tints any attached bow prop
+        /// (from HeroBowAttachment) to have the glowing green energy look. This is
+        /// cosmetic only and survives the existing URP materials on the FBX.
+        /// </summary>
+        private void TintHeroToConceptArt(GameObject body)
+        {
+            if (body == null) return;
+
+            // Dark forest / black leather palette from the reference (very low value,
+            // desaturated green-black for armor/cloak, with skin/metal accents slightly lighter).
+            Color darkBase = new Color(0.07f, 0.09f, 0.07f);
+            Color darkAccent = new Color(0.12f, 0.15f, 0.10f);
+
+            // Vibrant glowing emerald to match the bow energy, floating runes, and eye glow.
+            Color glowGreen = new Color(0.0f, 0.95f, 0.45f);
+
+            var rends = body.GetComponentsInChildren<Renderer>(true);
+            foreach (var r in rends)
+            {
+                if (r == null) continue;
+                foreach (var mat in r.materials)   // instance the mats so we don't mutate shared
+                {
+                    if (mat == null) continue;
+
+                    // Base color to dark theme.
+                    if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", darkBase);
+                    else if (mat.HasProperty("_Color")) mat.SetColor("_Color", darkBase);
+
+                    // Strong emission for the "glowing green energy" signature of the art.
+                    if (mat.HasProperty("_EmissionColor"))
+                    {
+                        mat.EnableKeyword("_EMISSION");
+                        mat.SetColor("_EmissionColor", glowGreen * 1.8f);
+                    }
+
+                    // Slight metallic/smoothness tweak to read as dark leather/metal rather than bright plastic.
+                    if (mat.HasProperty("_Metallic")) mat.SetFloat("_Metallic", 0.15f);
+                    if (mat.HasProperty("_Smoothness")) mat.SetFloat("_Smoothness", 0.35f);
+                }
+            }
+
+            // Also tint the bow (if HeroBowAttachment just parented one) to match the glowing energy bow in the image.
+            Transform bow = body.transform.Find("BowProp");
+            if (bow == null && _heroTransform != null) bow = _heroTransform.Find("BowProp");
+            if (bow != null)
+            {
+                foreach (var r in bow.GetComponentsInChildren<Renderer>(true))
+                {
+                    if (r == null) continue;
+                    foreach (var mat in r.materials)
+                    {
+                        if (mat == null) continue;
+                        // Dark riser with bright green energy "string" and limb glow.
+                        if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", new Color(0.05f, 0.08f, 0.04f));
+                        if (mat.HasProperty("_EmissionColor"))
+                        {
+                            mat.EnableKeyword("_EMISSION");
+                            mat.SetColor("_EmissionColor", glowGreen * 2.2f);
+                        }
+                    }
+                }
+            }
+
+            // Optional: add a few floating green energy orbs around the hero to echo the
+            // glowing circular runes in the concept art (simple, cheap, loops).
+            CreateFloatingGreenEnergyOrbs(body.transform);
+        }
+
+        private void CreateFloatingGreenEnergyOrbs(Transform parent)
+        {
+            // Very lightweight: 3-4 small emissive spheres that slowly orbit the upper body
+            // with a green glow, matching the floating energy motifs in the reference.
+            // Destroyed when the hero root is (end of round).
+            if (parent == null) return;
+
+            Color g = new Color(0.1f, 1f, 0.5f);
+            for (int i = 0; i < 4; i++)
+            {
+                var orb = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                orb.name = "SylasEnergyOrb";
+                Destroy(orb.GetComponent<Collider>());
+                orb.transform.SetParent(parent, false);
+                orb.transform.localScale = Vector3.one * 0.12f;
+
+                var mr = orb.GetComponent<MeshRenderer>();
+                if (mr != null)
+                {
+                    var m = new Material(Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard"));
+                    m.SetColor("_BaseColor", g);
+                    if (m.HasProperty("_EmissionColor")) { m.EnableKeyword("_EMISSION"); m.SetColor("_EmissionColor", g * 3f); }
+                    mr.sharedMaterial = m;
+                }
+
+                // Simple slow orbit script (anonymous behaviour for zero new files).
+                var orbit = orb.AddComponent<SylasEnergyOrb>();
+                orbit.radius = 0.7f + i * 0.15f;
+                orbit.speed = 0.6f + i * 0.2f;
+                orbit.phase = i * 1.57f;
+                orbit.height = 1.6f + (i % 2) * 0.4f;
+            }
+        }
+
+        // Tiny helper behaviour for the floating orbs (self-contained, no extra .cs).
+        private class SylasEnergyOrb : MonoBehaviour
+        {
+            public float radius = 0.8f;
+            public float speed = 0.8f;
+            public float phase = 0f;
+            public float height = 1.8f;
+            private Transform _center;
+            private void Start() { _center = transform.parent; }
+            private void Update()
+            {
+                if (_center == null) return;
+                float t = Time.time * speed + phase;
+                Vector3 p = new Vector3(Mathf.Cos(t) * radius, height + Mathf.Sin(t * 1.3f) * 0.15f, Mathf.Sin(t) * radius * 0.6f);
+                transform.position = _center.position + _center.rotation * p;
+                transform.LookAt(_center.position + Vector3.up * height);
+            }
         }
 
         private static void NormalizeHeight(GameObject go, float targetHeight)

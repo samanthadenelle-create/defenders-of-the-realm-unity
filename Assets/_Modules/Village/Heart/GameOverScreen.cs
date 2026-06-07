@@ -39,6 +39,13 @@ namespace DeNelle.Village
         private RectTransform _exitBtn;    // mobile tap target — Leave to Title
         private float _lastHookAttempt;    // DEF-136: throttle the per-frame Hook() scene search
 
+        // WO-320: scene-agnostic defeat entry. When non-null these are invoked on
+        // Retry / Leave instead of the Village2 SceneRouter defaults, so callers in
+        // OTHER scenes (e.g. Defend-the-Tower) can reuse this exact panel with their
+        // own return-scene wiring. Village2's hooked path leaves these null.
+        private System.Action _onRetry;
+        private System.Action _onLeave;
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
         {
@@ -70,6 +77,7 @@ namespace DeNelle.Village
             Time.timeScale = 1f;
             _heart = null;
             _hero = null;
+            ClearCustomActions(); // WO-320: don't let a DTT retry/leave action survive the scene swap
             if (scene.name == TargetScene) Hook();
         }
 
@@ -118,8 +126,20 @@ namespace DeNelle.Village
                 else if (_exitBtn != null && RectTransformUtility.RectangleContainsScreenPoint(_exitBtn, tap, null)) exit = true;
             }
 
-            if (retry)     { Time.timeScale = 1f; SceneRouter.LoadScene(SceneRouter.Village); }
-            else if (exit) { Time.timeScale = 1f; SceneRouter.LoadScene(SceneRouter.Title); }
+            if (retry)
+            {
+                Time.timeScale = 1f;
+                // WO-320: prefer the caller-supplied retry (e.g. reload the DTT scene);
+                // fall back to the Village2 reload when no custom action was provided.
+                if (_onRetry != null) { var a = _onRetry; ClearCustomActions(); a(); }
+                else SceneRouter.LoadScene(SceneRouter.Village);
+            }
+            else if (exit)
+            {
+                Time.timeScale = 1f;
+                if (_onLeave != null) { var a = _onLeave; ClearCustomActions(); a(); }
+                else SceneRouter.LoadScene(SceneRouter.Title);
+            }
         }
 
         /// <summary>First-touch / mouse-down screen position this frame (no EventSystem).</summary>
@@ -141,6 +161,36 @@ namespace DeNelle.Village
             "THE ROOT WENT SILENT",
             "The root went silent.\nThe dark poured in where the light had been,\nbut Elarion remembers those who rise again.",
             isHeartDestroyed: true);
+
+        /// <summary>
+        /// WO-320: scene-agnostic defeat panel. Any scene (e.g. Defend-the-Tower) can
+        /// call this to show the SAME pause + Retry/Leave overlay with its OWN wiring,
+        /// without depending on the Village2 hook gate. Retry/Leave run the supplied
+        /// callbacks (e.g. reload the DTT/return scene) instead of the Village defaults.
+        /// Self-bootstraps the singleton if a scene calls before AfterSceneLoad.
+        /// </summary>
+        public static void ShowDefeat(string title, string body,
+                                      System.Action onRetry, System.Action onLeave)
+        {
+            if (Instance == null) Bootstrap();
+            Instance?.ShowDefeatInstance(title, body, onRetry, onLeave);
+        }
+
+        private void ShowDefeatInstance(string title, string body,
+                                        System.Action onRetry, System.Action onLeave)
+        {
+            _onRetry = onRetry;
+            _onLeave = onLeave;
+            // Defeat context = "the thing you defended fell" → play the somber track,
+            // matching the Heart/root branch (hero death is silence, but a DTT loss is
+            // a structure loss). isHeartDestroyed routes the music in Show().
+            Show(title, string.IsNullOrEmpty(body)
+                    ? "The dark poured in where the light had been,\nbut Elarion remembers those who rise again."
+                    : body,
+                 isHeartDestroyed: true);
+        }
+
+        private void ClearCustomActions() { _onRetry = null; _onLeave = null; }
 
         private void ShowHeroFell() => Show(
             "YOU HAVE FALLEN",
