@@ -22,5 +22,22 @@ The companion renders with its correct material/texture, matching the other hero
 - [ ] No regression to the other heroes' materials.
 - [ ] Brace check; CompileGate OK; Windows build SUCCESS; verify in a play session.
 
+## Root cause (triage 2026-06-06)
+**Confidence: Confirmed.** The green companion is the **Ranger (Sylas)** and the green is a fallback tint, not
+a shader fault:
+- `StoryCompanionInjector.BindClassDiffuse` loads the Ranger diffuse from Resources path
+  `"Heroes/Ranger_tex/remesh_12_combined_Bake_Diffuse"` (`Assets/_Modules/Village/NPCs/StoryCompanionInjector.cs:312`).
+- **That path does not exist.** The actual Ranger textures live at `Resources/Heroes/Ranger.fbm/`
+  (`archer_basecolor.PNG`, `archerv2_basecolor.JPEG`, …) — there is no `Heroes/Ranger_tex/` folder.
+- `Resources.Load<Texture2D>(...)` therefore returns null → the method's else branch paints the signature
+  class tint `TintFor(Ranger)` = `new Color(0.41f, 0.74f, 0.48f)` = **wood-green** (`:245`, `:342-347`). That is
+  exactly the green the owner saw. (The Ranger companion spawns when the player is Knight, via the
+  Knight→Ranger(Sylas) mapping, `:390`.)
+
+**Suggested minimal fix:** repoint the Ranger `texPath` (`:312`) to a real loadable diffuse (e.g. the
+`Heroes/Ranger.fbm/archer_basecolor` family, mirroring the WO-286 HeroBodySwapper repoint). While here,
+verify the Mage/Knight (`Heroes/Textures/...`) and Cleric (`Heroes/Cleric_tex/...`) paths at `:310-313` also
+resolve, or they will hit the same green/grey fallback. Don't fork HeroBodySwapper.
+
 ## Do NOT touch
 - No `.unity` edits. Reuse the WO-286 diffuse-repoint pattern; don't fork HeroBodySwapper.

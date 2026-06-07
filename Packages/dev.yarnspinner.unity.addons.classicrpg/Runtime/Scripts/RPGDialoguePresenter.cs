@@ -643,6 +643,17 @@ namespace Yarn.Unity.Addons.ClassicRPG
             // showing options
             lineCompleteImage.gameObject.SetActive(false);
 
+            // WO-337 fix: hide the standalone line panel before showing options.
+            // If the line that preceded these options was rendered through the
+            // line view (i.e. it did NOT carry the #lastline tag, which is the
+            // common case for our structure / Echo Hollow dialogue), that line
+            // panel is still active here. Without hiding it, the option list
+            // draws ON TOP of the body text and both are unreadable. The line
+            // text that should accompany options lives in optionLineText inside
+            // optionComponents, so the standalone lineComponents must always be
+            // hidden while options are on screen.
+            lineComponents.gameObject.SetActive(false);
+
             // Show the option components
             optionComponents.gameObject.SetActive(true);
 

@@ -164,7 +164,7 @@ namespace DeNelle.HUD
             headerRow.style.marginBottom = 10;
             card.Add(headerRow);
 
-            _headerLabel = new Label("Pet Skill Trees");
+            _headerLabel = new Label("Echo Skill Trees");
             _headerLabel.style.color = new StyleColor(new Color(0.97f, 0.92f, 0.74f, 1f));
             _headerLabel.style.fontSize = 16;
             _headerLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
@@ -208,7 +208,7 @@ namespace DeNelle.HUD
 
             if (!ResolveBridge())
             {
-                var note = new Label("Pet catalog is not available. Try restarting the scene.");
+                var note = new Label("Echo catalog is not available. Try restarting the scene.");
                 note.style.color = new StyleColor(new Color(0.95f, 0.65f, 0.55f, 1f));
                 note.style.fontSize = 12;
                 _treeColumn.Add(note);

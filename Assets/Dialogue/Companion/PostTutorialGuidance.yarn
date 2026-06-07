@@ -52,7 +52,7 @@ tags: companion guidance defense
     {$companionName}: Survive ten? The Heartwood's healing aura covers the whole village.
     {$companionName}: Twenty waves... well. Let's get there first.
 -> Can {$petName} help defend?
-    {$companionName}: Absolutely. Set {$petName} to Defend mode at the Pet House. They'll patrol near your towers and attack anything that gets close.
+    {$companionName}: Absolutely. Set {$petName} to Defend mode at the Echo Hollow. They'll patrol near your towers and attack anything that gets close.
     {$companionName}: But that means {$petName} isn't gathering resources. Trade-off.
     {$companionName}: Later, when you tame more Echoes, you can split them — some defend, some gather. Build a proper war pack.
 
@@ -194,7 +194,7 @@ tags: companion ambient contextual
 ---
 // Triggers when pet is idle (not defending or gathering)
 <<if $petMode == "idle">>
-{$companionName}: {$petName} is just sitting around. You could set them to Defend or Gather at the Pet House. Every Echo should earn their keep.
+{$companionName}: {$petName} is just sitting around. You could set them to Defend or Gather at the Echo Hollow. Every Echo should earn their keep.
 <<endif>>
 ===
 

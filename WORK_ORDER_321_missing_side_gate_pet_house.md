@@ -27,5 +27,16 @@ opening, aligned spawn point.
 - [ ] Built via `VillageSceneBuilder.BuildVillage` (no hand-edited .unity); NavMesh rebaked.
 - [ ] Brace check on any .cs touched; CompileGate OK; build SUCCESS.
 
+## Root cause (triage 2026-06-06)
+**Confidence: Likely.** `VillageSceneBuilder.BuildGates` places the cardinal gates and reports a `gateCount`
+(`Assets/Editor/VillageSceneBuilder.cs:356`, summary `:494`); the perimeter is "continuous wall with cardinal
+gates the only breaks" per the builder header (`:15`). The bare arch near the Pet House is a wall opening that
+is NOT matched by a placed gatehouse — i.e. the gate prefab/piers/doors aren't emitted for that side, or an
+extra opening exists beyond the 4 cardinal gates.
+**Suggested minimal fix:** in `BuildGates`/wall layout, ensure the Pet-House-side opening gets a full
+gatehouse (piers + arch/doors) matching the other gates, confirm all four cardinal gates are present (no
+extra bare arch), the opening is NavMesh-passable, and the WaveSpawnPoint sits 12–15 m outside aligned.
+Lane-1 single-writer; bake via CLI. Builder work, not a code-logic bug.
+
 ## Do NOT touch
 - Never hand-edit `Village.unity`. Lane 1 single-writer — coordinate with WO-311/312/313 (same builder).

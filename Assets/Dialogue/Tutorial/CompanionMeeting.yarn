@@ -45,7 +45,7 @@ tags: tutorial onboarding
 
 // Pass the Pet House
 <<camera_glance pet_house>>
-{$companionName}: And the Pet House. The wild Echoes — spirit animals — sometimes wander in. If you earn their trust, they'll fight for you. Or gather for you. Your call.
+{$companionName}: And the Echo Hollow. The wild Echoes — spirit animals — sometimes wander in. If you earn their trust, they'll fight for you. Or gather for you. Your call.
 
 // Pass the Market
 <<camera_glance market>>
@@ -151,9 +151,9 @@ tags: tutorial onboarding
 
 {$companionName}: They can help two ways: stay and defend the village, or head out and gather resources from the nodes beyond the gates.
 
-{$companionName}: Stop by the Pet House whenever you like — name them, and pick how they help. You can change it any time.
+{$companionName}: Stop by the Echo Hollow whenever you like — name them, and pick how they help. You can change it any time.
 
-<<set_hud_hint "Visit the Pet House to name your Echo and set its role">>
+<<set_hud_hint "Visit the Echo Hollow to name your Echo and set its role">>
 <<jump TutorialComplete>>
 ===
 

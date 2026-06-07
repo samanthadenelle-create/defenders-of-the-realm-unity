@@ -29,5 +29,25 @@ empty bottom bar) — confirm placement with the HUD shell (WO-307).
 - [ ] Swapping active hero updates the bar.
 - [ ] HUD→Core only; code-built; brace check; CompileGate OK; build SUCCESS.
 
+## Root cause (triage 2026-06-06)
+**Confidence: Likely.** The ability bar + radial cooldown rings ALREADY EXIST and are functional in code —
+this is not a greenfield build:
+- `VillageHudController.BuildSkillBar` builds 4 cells, each with a radial cooldown overlay
+  (`_slotCooldown[i]` = `Image.FillMethod.Radial360`, `Assets/_Modules/HUD/VillageHudController.cs:266-273`),
+  per-class glyph + accent disc.
+- It is fed live by `HeroAbilitiesHudBridge.Update` → `SetAbilityCooldown` / `SetAbilitySlot`
+  (`Assets/_Modules/Village/Hero/HeroAbilitiesHudBridge.cs:132-143`, `VillageHudController.cs:421-445`).
+
+So "empty black boxes" is a WIRING/visibility problem, two likely roots:
+1. **`HUDManager` overlaps it** (WO-307) — its Canvas at sortingOrder 200 sits above the real bar.
+2. **`HeroAbilitiesHudBridge._hud` is an UNSET serialized field** (`HeroAbilitiesHudBridge.cs:17`). Unlike the
+   other bridges (which `FindObjectsByType`/`CoreServices.Hud`), this one relies on a baked inspector ref; if
+   it's null, `OnEnable` returns early (`:54`) and NOTHING pushes mana/cooldown/glyphs → bar stays at default
+   Mage glyphs with no cooldown sweep.
+
+**Suggested minimal fix:** resolve `_hud` the same way the other bridges do (CoreServices.Hud /
+FindObjectsByType) instead of a serialized ref, and resolve the HUDManager overlap (WO-307). Then relocate per
+WO-307. Largely a verification + wiring WO, not new code.
+
 ## Do NOT touch
 - No `.unity` edits. Don't fork HeroAbilities — read it through a bridge.

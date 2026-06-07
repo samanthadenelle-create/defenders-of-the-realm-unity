@@ -424,7 +424,7 @@
     },
     {
       "id": "pet-house",
-      "displayName": "Pet House",
+      "displayName": "Echo Hollow",
       "type": "Resource",
       "kind": "Cell",
       "visualPrefabPath": "polyperfect/Stables_Medieval",

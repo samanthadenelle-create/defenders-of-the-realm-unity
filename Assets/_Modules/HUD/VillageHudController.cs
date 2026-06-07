@@ -116,6 +116,13 @@ namespace DeNelle.HUD
         private bool _isPortrait = true;
         private int _lastScreenW, _lastScreenH;
 
+        // WO — combat-cluster visibility (hidden in Build Mode so the bottom-middle
+        // HP/mana/XP bars + the Q/W/E/R skill bar don't overlap the build palette).
+        // The skill bar (_skillBar) HOSTS both the hero status bars AND the 4 ability
+        // cells (see BuildSkillBar), so toggling its root hides the whole bottom-middle
+        // combat cluster together. Data bindings are untouched — visibility only.
+        private bool _combatHudVisible = true;
+
         private void Awake()
         {
             CoreServices.RegisterHud(this);
@@ -139,6 +146,12 @@ namespace DeNelle.HUD
             // (orientation flip / window resize). No per-frame layout cost.
             if (Screen.width != _lastScreenW || Screen.height != _lastScreenH)
                 ApplyResponsiveLayout(force: false);
+
+            // Manual backup toggle (H): show/hide the bottom-middle combat cluster
+            // on demand — useful outside Build Mode (the build-mode bridge drives it
+            // automatically). Polled like the other HUD inputs.
+            if (Input.GetKeyDown(KeyCode.H))
+                SetCombatHudVisible(!_combatHudVisible);
         }
 
         // =====================================================================
@@ -628,6 +641,24 @@ namespace DeNelle.HUD
             _startWaveAvailable = available;
             if (_startWaveBtn != null && _startWaveBtn.gameObject.activeSelf != available)
                 _startWaveBtn.gameObject.SetActive(available);
+        }
+
+        /// <summary>
+        /// Show / hide the bottom-middle COMBAT cluster together — the hero status bars
+        /// (HP red / mana-XP blue) AND the 4-slot Q/W/E/R ability/skill bar. Both live
+        /// inside the single <see cref="_skillBar"/> root (see BuildSkillBar), so toggling
+        /// that container's GameObject active state hides the whole combat HUD in one shot.
+        /// Driven by the Village-side BuildModeHudBridge (false on Build Enter so the bar
+        /// doesn't overlap the build palette; true on Exit) and by the manual H hotkey.
+        /// VISIBILITY ONLY — all data bindings (SetHeroHp / SetMana / SetAbilityCooldown /
+        /// SetAbilitySlot) keep writing to the cached widgets while hidden; nothing rebinds.
+        /// Resolved by name (not on IVillageHud) like SetStartWaveAvailable.
+        /// </summary>
+        public void SetCombatHudVisible(bool visible)
+        {
+            _combatHudVisible = visible;
+            if (_skillBar != null && _skillBar.gameObject.activeSelf != visible)
+                _skillBar.gameObject.SetActive(visible);
         }
 
         /// <summary>Live mana bar — pushed every frame by HeroAbilitiesHudBridge.</summary>

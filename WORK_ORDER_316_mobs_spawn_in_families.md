@@ -26,5 +26,20 @@ Waves/region spawns produce **family groups** — a themed family spawning toget
 - [ ] Uses existing EnemyFactory family/role defs + EnemyBrain role behavior (no duplicate systems).
 - [ ] Brace check; CompileGate `COMPILE_GATE_OK`; Windows build SUCCESS; verify in a play session.
 
+## Root cause (triage 2026-06-06)
+**Confidence: Likely.** The family/role data exists but nothing composes a group at spawn:
+- `EnemyFactory` maps enemy id/role → model **grouped by family** (Orc Warband, Hollow/Skeleton, Troll, with
+  Tank/DPS/Healer) — but only for MODEL/silhouette selection per single id
+  (`Assets/_Modules/Village/Enemies/EnemyFactory.cs:104-135`).
+- `WaveManager` spawns per-id batches via `EnemyFactory.Build(...)` (`Assets/_Modules/Village/Waves/WaveManager.cs:282`).
+  There IS a group path — `EnemyGroupSpawner` + a per-wave `WaveEnemyGroup` asset list `_waveGroupSequence`
+  (`:113-124`, spawned at `:548-558`) — but it only fires when those assets are authored and assigned. By
+  default they are empty, so waves emit loose singletons.
+
+**Suggested minimal fix (two options):** (a) author/assign `WaveEnemyGroup` assets to `_waveGroupSequence`
+(data-only, no code) so the existing DEF-21 group path composes families; OR (b) add a small data-driven
+family→role-count composer that `WaveManager` calls to spawn a cohesive group at a spawn point. Reuse
+EnemyFactory family/role defs + EnemyBrain role behaviour — don't fork. Coordinate with WO-146/WO-155.
+
 ## Do NOT touch
 - No `.unity` edits. Don't fork EnemyFactory/WaveManager — extend. Coordinate with WO-146 (formations) and WO-155 (region spawn).

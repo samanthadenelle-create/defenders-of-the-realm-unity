@@ -262,7 +262,7 @@ namespace DeNelle.Village
             {
                 _dialogue?.Say(speaker,
                     "Walk with me. That's the Forge — where steel is mended.",
-                    "The Arcane Tower, and the Pet House beyond it. Your Echoes rest there.");
+                    "The Arcane Tower, and the Echo Hollow beyond it. Your Echoes rest there.");
                 await WaitForDialogue();
 
                 _autoWalk.WalkTo(gate.transform.position);

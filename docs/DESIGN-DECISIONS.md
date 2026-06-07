@@ -167,6 +167,16 @@ the foot of the file link the longer-form storyline and dragon-boss notes.
 
 ---
 
+### 21. Echo Hollow (formerly "Pet House")
+
+- **What:** Rename the "Pet House" building to **Echo Hollow**. Pets are canonically **Echoes** — spirit-bound companions attuned through the Heart of Elarion, not tamed animals. The verb for acquiring is **attune** (not adopt); the building's keeper NPC is the **Echo Warden**. The building name, all NPC dialogue, and player-facing UI strings use the new terminology. Tone is reverent, not cozy.
+- **When:** 2026-06-07 (WO-338, approved by owner).
+- **Why:** Naming polish that aligns the building with the established "Echoes" lore already used in the companion dialogue; "Pet House" read as pet-shop-mundane.
+- **Where:** Building label in `Assets/Editor/VillageSceneBuilder.Content.cs`; `Assets/Dialogue/Structures/StructureMenu.yarn` (PetHouse node), `CompanionMeeting.yarn`, `PostTutorialGuidance.yarn`; canon-strings / structures-catalog / en.json / cosmetics.json (Resources + StreamingAssets copies); `BuildingInteractable.LabelFor`, `PetSkillTreePanel` header, `TutorialDirector` narration. Full glossary in `WORK_ORDER_338_echo_hollow_rebrand.md`.
+- **NOT changed (deliberate):** The INTERNAL `pet-house` building id, the `BuildingType.PetHouse` enum value (=1), the `"PetHouse"` Yarn node title, and the `$pet*` Yarn variables / echo species ids (`ice-wolf` / `flame-pup` / `aether-sprite`) stay as-is — they are cross-keyed by the catalog JSON (`"type": "PetHouse"`), CityManifest, DialogueService routing, and PetDeployer. These are never shown to the player; renaming them carries breakage risk with zero player-visible benefit. Display/lore text only was rebranded.
+
+---
+
 ## Cross-references
 
 - `docs/STORYLINE.md` — full Stone-Choir narrative; supersedes `docs/narrative-bible.md`.

@@ -79,7 +79,7 @@ Each maps to one of the five gameplay buildings in `VillageSceneBuilder`.
 | Building (code) | Polyperfect FBX | Notes |
 |---|---|---|
 | Crystal Mine | `House_Medieval_Small` + `Well` | Small structure + well as mine entrance |
-| Pet House | `Stables_Medieval` | Direct match — stables for pet companions |
+| Echo Hollow (id `pet-house`) | `Stables_Medieval` | Direct match — hollow where Echoes rest |
 | Arcane Tower | `Tower_Medieval_Big` | Tall standalone tower |
 | Workshop | `House_Medieval_Medium` | Mid-size house, dress with crafting props |
 | Farm | `Farm_House` + `Windmill_Medieval` | Farmhouse + working windmill |
@@ -100,7 +100,7 @@ Each maps to one of the five gameplay buildings in `VillageSceneBuilder`.
 `Farm_Silo`, `Haystack` (Farm_M), `Hay_Pile` (Farm_M), `Scarecrow` (Farm_M),
 `Farm_Flower_Bed` (Farm_M), `Fence_Picket`, `Cow` or `Hen` (Animals_M)
 
-**Pet House / Stables:**
+**Echo Hollow / Stables (id `pet-house`):**
 `Fence_Stone` surround, `Hay_Pile`, `Bucket_Milk` (Farm_M),
 `Bench_Wood` (Fantasy_M), `Torche_Wall` (×2)
 

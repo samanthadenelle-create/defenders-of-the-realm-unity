@@ -24,5 +24,19 @@ DTT is a fixed-position turret-style stance: camera/aim locked facing **north**;
 - [ ] Targeting/firing still resolves to the looked-at target within the arc.
 - [ ] Brace check; CompileGate `COMPILE_GATE_OK`; Windows build SUCCESS; verify in a play session.
 
+## Root cause (triage 2026-06-06)
+**Confidence: Likely.** DTT currently turns the **whole body** to targets and has no head-only clamp or
+locked-north camera:
+- `SpawnHero` sets a base facing toward the tower and explicitly notes "Combat slerp in
+  TickHeroStrafe/TickHeroFire can still turn toward specific targets temporarily"
+  (`Assets/_Modules/Village/PatriciaLight/PatriciaLightController.cs:661-683`) — i.e. the root rotates to
+  targets, not a clamped head bone.
+- Aim is driven via `HeroAimIK` (RightHand IK, `Assets/_Modules/Village/Hero/HeroAimIK.cs`) — there is no
+  head-yaw clamp, and nothing pins the camera/aim to north during the stance.
+
+**Suggested minimal fix:** for the DTT stance, (1) lock the camera/aim to a fixed north facing (constrain the
+OTS/turret rig, don't fork it), (2) stop the body slerp toward targets in `TickHeroStrafe/TickHeroFire`, and
+(3) drive a clamped head-yaw look (±60–80°) toward the current target instead. Same controller as WO-317/319.
+
 ## Do NOT touch
 - No `.unity` edits. Don't fork the camera rig — constrain it for the DTT stance. Coordinate with WO-317 (same controller).

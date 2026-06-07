@@ -25,5 +25,16 @@ harvest → banks Food via EconomyService).
 - [ ] Reuses HarvestSite/MineNode (no duplicate harvest logic); placed via the builder (no .unity hand-edit).
 - [ ] Brace check; CompileGate OK; build SUCCESS.
 
+## Root cause (triage 2026-06-06)
+**Confidence: Likely (where-to-look correct).** Not a bug — additive builder + component-attach work. The
+harvest-node machinery the WO wants to reuse already exists and is correct:
+- `MineNode` is a self-contained harvestable that banks via `EconomyService.Grant` (one faucet), with
+  Food support (`MineResource.Food`) and player [F] / pet auto-harvest
+  (`Assets/_Modules/Village/World/MineNode.cs:28`, `BankYield` `:376-415`, interact `:318-334`).
+- `HarvestSite` is the Economy-routed claimed variant.
+**Suggested minimal fix:** in `VillageSceneBuilder`, replace the oversized Farm building prefab with a small
+farm-plot tile and attach `MineNode` (Resource = Food, AutoBuildVisual off if the tile supplies its own art).
+No new economy. Lane-1 single-writer — serialize with WO-311/313.
+
 ## Do NOT touch
 - Never hand-edit `Village.unity`. Lane 1 single-writer (coordinate w/ WO-311/313). Don't fork EconomyService.

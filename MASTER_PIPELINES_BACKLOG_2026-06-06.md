@@ -6,7 +6,7 @@ this session's live findings, and the design docs (see §"Story → WO mapping")
 
 **WO-NUMBERING AUTHORITY = THIS doc (+ `CLI_LANES_WO_NUMBERS.md`), not the filesystem max.** Reserved new
 block **290–305** (minted today). Pre-block: **287** (Threat Intel, L2), **288** (Signature Combat Moves,
-L3) used by CLI today; **289 free**. **Next free WO = 329** (306–328 now used). Every new WO must be slotted into a lane here.
+L3) used by CLI today; **289 free**. **Next free WO = 330** (306–329 now used). Every new WO must be slotted into a lane here.
 
 **Legend:** ✓ done · ◐ in progress · ▶ ready · ⏸ held · ★ new this session · ⚠ blocked/dep
 **Parallel rule (CLAUDE.md §9):** `VillageSceneBuilder.cs` = ONE writer (Lane 1 serial). `GameState.cs` /
@@ -23,9 +23,10 @@ L3) used by CLI today; **289 free**. **Next free WO = 329** (306–328 now used)
 4. ★ **WO-303** — Wire combat party HUD (`HUDManager`) to live party/combat data (replace demo values).
 5. ▶ Smoke-test the hero anim chain (WO-283/284/285) — visual checks (no T-pose/slide; idle/walk/run + attack/cast/hit/death/victory).
 6. ▶ Build-verify WO-107–111 — `QA_CHECKLIST_FILLED` marks them wired but that's code-inspection only; gate + write RESULT files.
-7. ▶ Dedupe numbering collisions: two WO-106, two WO-282, duplicate WO-110. (Next free WO = 329.)
+7. ▶ Dedupe numbering collisions: two WO-106, two WO-282, duplicate WO-110. (Next free WO = 330.)
 8. ★ **WO-301** — Party persistence (now spec'd; lives in Lane 7).
-9. ★ **WO-328** — **HIGH:** recurring NullReferenceException spam (per-frame null) — likely root of WO-314/317/325/327; get stack from Player.log, fix at source.
+9. ~~★ **WO-328**~~ — **CLOSED** (ambiguous / non-reproducible; CLI confirmed no repro). WO-314/317/325/327 tracked independently.
+10. ◐ **WO-329** — Check-in regression test suite (UI static gate + CLI Unity tests + manual QA) — agent authoring; CLI build-verifies the C# tests.
 
 ## Lane 1 — World / Environment  (VillageSceneBuilder — SINGLE-WRITER, serialize in order)
 
@@ -62,6 +63,10 @@ L3) used by CLI today; **289 free**. **Next free WO = 329** (306–328 now used)
 15. ★ **WO-320** — Defend the Tower: losing has no impact — defeat screen (WO-235) + tunable penalty + Retry/Return.
 16. ★ **WO-326** — Hero walks north but model/anim 90° to the right (rig forward-axis offset; shared facing fix w/ WO-255/315).
 17. ★ **WO-327** — Admin "Trigger next wave" no-op — add/wire public `WaveManager.ForceBeginNextWave()`.
+18. ★ **WO-330** — **DTT hero cyan silhouette** — hero renders as solid bright-cyan unlit shape; fix URP material assignment in HeroBodySwapper / hero prefab (see screenshot docs/screenshots/dtt_bugs.png).
+19. ★ **WO-331** — **DTT keyboard hotkeys** — ability bar buttons (Snare Trap/Mercury Salve/Storm of Arrows/ATTACK) have no key bindings; add 1/2/3/Space hotkeys, serialized inspector fields, shown as labels on buttons.
+20. ★ **WO-332** — **DTT aim sensitivity** — mouse rotation far too fast; add serialized `_aimSensitivity` field (default 0.8), clamp vertical ±40°. Coordinate with WO-318 (aim-north fix).
+21. ★ **WO-333** — **Tree of Life <30% HP → defense modal broken** (**HIGH**) — logic existed and worked; modal (Defend the Tower / Enter Battle ATB) no longer fires when HeartController drops ≤30% HP. Most likely: scene reference to modal went null after a VillageSceneBuilder rebuild. FIX the wiring — do NOT rewrite. Secondary: skill-point panel stays open behind death screen — force-close all HUD panels on `HeartController.OnHeartDestroyed`.
 
 ## Lane 3 — Combat Feel / Animation  (sequential within — biggest UX gain)
 
@@ -244,7 +249,7 @@ legendary set + ward **WO-295** (L3) · Heart-vs-regions reforge choice **WO-296
 | 305 | Relic-recovery quests | 5 | 290 |
 
 **Pre-290 block (CLI, today):** WO-287 Threat-Assessment Intel → Lane 2 (SPEC) · WO-288 Class Signature
-Combat Moves → Lane 3 (in progress). 289 free; 306–328 used. Next free WO = 329.
+Combat Moves → Lane 3 (in progress). 289 free; 306–329 used. Next free WO = 330.
 
 ---
 

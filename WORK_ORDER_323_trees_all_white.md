@@ -23,6 +23,17 @@ Trees render with correct materials/textures (foliage + trunk), URP-lit, no whit
 - [ ] No regression to other environment materials.
 - [ ] Brace check on any .cs touched; CompileGate OK; build SUCCESS; verify in play.
 
+## Root cause (triage 2026-06-06)
+**Confidence: Likely (where-to-look correct).** White trees = materials not resolved to URP (no base map /
+non-URP shader) on the imported tree prefabs — the classic gitignored-pack re-import issue (CLAUDE.md §4).
+There is an existing fixer for the Heart tree only (`Assets/_Modules/Core/TreeOfLifeMaterialFixer.cs`); the
+environment trees are not covered by it. This is a material/import fix, not a scene tweak.
+**Suggested minimal fix:** run/extend `Defenders/Art/Fix Polyperfect URP Materials` to assign
+`Universal Render Pipeline/Lit` + bind the foliage/trunk base maps on the env tree materials (if the trees are
+Quaternius/KayKit rather than Polyperfect, apply the equivalent URP assignment). Make it re-runnable at the
+material/import level. If it does not touch `VillageSceneBuilder.cs` it can run parallel to Lane 1; if it does,
+serialize with the builder. Missing pack → re-import per §4, LogWarning not error.
+
 ## Do NOT touch
 - No `.unity` hand-edits. This is a material/import fix — if it doesn't touch `VillageSceneBuilder.cs` it can
   run parallel to Lane 1; if it does, serialize with the builder. Missing pack → re-import per §4, LogWarning not error.

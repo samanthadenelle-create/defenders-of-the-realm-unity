@@ -26,5 +26,21 @@ The hero is correctly grounded on the tower platform (feet on the surface), stab
 - [ ] No NullReferenceException spam in the DTT console on entry/play.
 - [ ] Brace check; CompileGate `COMPILE_GATE_OK`; Windows build SUCCESS; verify in a play session.
 
+## Root cause (triage 2026-06-06)
+**Confidence: Likely.** The hero spawn has **no ground-snap**:
+- `PatriciaLightController.SpawnHero` places the hero at `_heroLedgePos`
+  (`Assets/_Modules/Village/PatriciaLight/PatriciaLightController.cs:658-659`).
+- `_heroLedgePos` = the baked `"HeroSpawn"` marker position if present, else the fixed fallback
+  `TowerPos + _balconyPos` where `_balconyPos.y = BalconyHeight = 8 m` (`:517-518`, `:77-81`).
+- There is **no down-raycast** to seat the hero's feet on the platform collider. If the baked HeroSpawn marker
+  Y (or the balcony top) doesn't exactly match the actual platform surface, the hero floats — exactly the
+  reported symptom.
+- The file already has a down-raycast floor finder used for enemies (`:1327-1333`).
+
+**Suggested minimal fix:** after computing `perchPos`, raycast straight down onto the platform/arena collider
+and snap the hero root so feet rest on the surface (reuse the existing down-raycast at `:1327-1333`).
+**On the secondary NRE note:** `PatriciaLightController.Update` is guarded (`:267` `if(!_running) return;`); the
+plausible DTT throw is in the spawn path (`VisualFactory.Skin` on a missing class resource, `:694`) — see WO-328.
+
 ## Do NOT touch
 - No `.unity` edits (DTT scene changes via its builder/controller). Don't fork HeroBodySwapper.

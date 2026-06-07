@@ -90,6 +90,18 @@ namespace DeNelle.Village
                 }
             }
 
+            // WO-337: while a dialogue is on screen, the proximity "Interact" prompt
+            // (shared button + world bubble) must NOT linger behind / over the dialogue
+            // panel — it stacks under the choice options and reads as a third layer.
+            // Release the button and hide the bubble for the duration of the dialogue,
+            // and skip the in-range re-show below so it can't immediately reappear.
+            if (DialogueService.IsRunning)
+            {
+                MobileInteractButton.Release(this);
+                if (_promptGo != null) HidePrompt();
+                return;
+            }
+
             // DEF-203: register the shared on-screen Interact button while in range so
             // touch/mobile (no keyboard) can fire the same action. Desktop F unchanged.
             if (inRange)
@@ -460,7 +472,7 @@ namespace DeNelle.Village
         private static string LabelFor(BuildingType t) => t switch
         {
             BuildingType.CrystalMine => "Mine",
-            BuildingType.PetHouse    => "Pet House",
+            BuildingType.PetHouse    => "Echo Hollow",
             BuildingType.ArcaneTower => "Tower",
             BuildingType.Workshop    => "Workshop",
             BuildingType.Farm        => "Farm",

@@ -104,8 +104,8 @@ namespace DeNelle.Village
         // ── Starting amounts (Inspector) ──────────────────────────────────────
 
         [Header("Starting Resources (Wood/Iron — in-session)")]
-        [SerializeField, Min(0)] private int _wood     = 200;
-        [SerializeField, Min(0)] private int _iron     = 80;
+        [SerializeField, Min(0)] private int _wood     = 999999; // DEV/PoC: tons for free authoring — REVERT to 200 for real balance
+        [SerializeField, Min(0)] private int _iron     = 999999; // DEV/PoC: tons for free authoring — REVERT to 80 for real balance
         // NOTE (WO-131 / DEF-121): crystals AND food are NOT in-session fields here.
         // Both are backed by GameState.Resources — see the Crystals/Food properties.
 

@@ -37,6 +37,16 @@ namespace DeNelle.Village
     {
         public static BuildModeController Instance { get; private set; }
 
+        /// <summary>
+        /// Broadcast whenever build mode is entered (true) or exited (false). Lets
+        /// cross-assembly listeners react without referencing DeNelle.Village types
+        /// directly — the BuildModeHudBridge subscribes to this to hide the bottom-middle
+        /// combat HUD (which otherwise overlaps the build palette) on Enter and restore it
+        /// on Exit. Static so a listener can subscribe before any controller instance
+        /// exists (EnsureExists creates it lazily).
+        /// </summary>
+        public static event System.Action<bool> BuildModeChanged;
+
         /// <summary>True while a build session is active.</summary>
         public bool IsActive { get; private set; }
 
@@ -159,6 +169,10 @@ namespace DeNelle.Village
 
             EnsureTouchInput();   // install the Lean.Touch driver on a touch device (S6)
 
+            // Notify cross-assembly listeners (BuildModeHudBridge hides the combat HUD
+            // so the bottom-middle bars don't overlap the build palette).
+            BuildModeChanged?.Invoke(true);
+
             Debug.Log("[BuildMode] Entered build mode.");
         }
 
@@ -189,6 +203,9 @@ namespace DeNelle.Village
 
             RestoreCamera();
             ResumeWaves();
+
+            // Restore the combat HUD now that the build palette is gone.
+            BuildModeChanged?.Invoke(false);
 
             Debug.Log("[BuildMode] Exited build mode — layout saved.");
         }

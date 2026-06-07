@@ -421,9 +421,10 @@ namespace DeNelle.Editor
             //     PrefabM  = PolyMedievalDir + "House_Medieval_Small.prefab",
             //     PrefabM2 = PolyMedievalDir + "Well.prefab",
             //     PlaceholderColor = new Color(0.38f, 0.65f, 0.98f), FenceKind = "stone" },
-            // Pet House — WO-101: SM_Stables_Medieval.
+            // Echo Hollow (WO-338: rebranded from "Pet House") — WO-101: SM_Stables_Medieval.
+            // Internal id stays "pet-house" (keyed by catalog/PetDeployer/DialogueService/Yarn node).
             // DEF-101: position (+20, 0, +10) — safe clearance from all gates.
-            new BuildingPlacement { Type = 1, Id = "pet-house", Label = "Pet House",
+            new BuildingPlacement { Type = 1, Id = "pet-house", Label = "Echo Hollow",
                 X = 20f, Z = 10f, YawDeg = 55f, Fbx = "building_stables",
                 CustomFbx = "Assets/Art/TripoStructures/PetHome.fbx",
                 PrefabM = PolyMedievalDir + "Stables_Medieval.prefab",

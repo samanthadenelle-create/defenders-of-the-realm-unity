@@ -30,26 +30,34 @@ tags: structure interaction
 title: PetHouse
 tags: structure interaction pet
 ---
-// The pet house's OWN flow: "visit the pet house to name and select your pet."
-// The player selects a guardian SPECIES via Yarn options; <<spawn_named_pet>>
-// deploys the chosen species through the self-healed PetDeployer (DialogueCommandBridge).
+// The Echo Hollow's OWN flow: "visit the hollow to attune and select an echo."
+// (WO-338 rebrand: pet→Echo, Pet House→Echo Hollow, adopt→attune, NPC = Echo Warden.
+//  INTERNAL ids unchanged — node title "PetHouse", structureId "pet-house", and the
+//  echo species ids "ice-wolf"/"flame-pup"/"aether-sprite" are keyed by code; only the
+//  player-facing TEXT is rebranded.)
+// The player attunes an echo SPECIES via Yarn options; <<spawn_named_pet>> deploys the
+// chosen species through the self-healed PetDeployer (DialogueCommandBridge).
 // DialogueService.PlayStructure("pet-house", …) routes here (not the generic StructureMenu).
 //
-// TODO: free-text pet NAMING — Yarn options can't capture typed text, so the pet
+// The opening line carries #lastline so it renders inside the options view (alongside
+// the choices) instead of the standalone line panel — see WO-337: the standalone line
+// panel would otherwise stay on screen UNDER the option list and read as overlapping text.
+//
+// TODO: free-text echo NAMING — Yarn options can't capture typed text, so the echo
 // takes its catalog name for now (Aether Sprite / Flame Pup / Ice Wolf). A code-built
 // name-entry UI (cf. PetIntroduction) would write GameState.PetName before deploy.
 <<portrait Portraits/pet-house>>
-{$structureName}: Welcome to the Pet House. Choose a guardian to stand with you — they'll fight at your side and gather while you defend.
+Echo Warden: Welcome to the Echo Hollow. The echoes here seek a bond. Choose one — they will fight at your side, guard Elarion, and return to you always. #lastline
 
 -> A frost-warden — the Ice Wolf. Steady and tough.
     <<spawn_named_pet "ice-wolf">>
-    {$structureName}: The Ice Wolf is yours. It'll chill any foe that nears the Heart.
+    Echo Warden: The Ice Wolf is attuned to you. It will chill any foe that nears the Heart.
 -> A hearth-hound — the Flame Pup. Fierce and fast.
     <<spawn_named_pet "flame-pup">>
-    {$structureName}: The Flame Pup answers your call. Its embers will scorch the enemy.
+    Echo Warden: The Flame Pup answers your call. Its embers will scorch the enemy.
 -> A heart-ward — the Aether Sprite. Quick and arcane.
     <<spawn_named_pet "aether-sprite">>
-    {$structureName}: The Aether Sprite flits to your side. It'll ward the Heart with arcane light.
--> Not yet — I'll come back.
-    {$structureName}: The pen's always open when you're ready.
+    Echo Warden: The Aether Sprite flits to your side. It will ward the Heart with arcane light.
+-> Not yet — I will return.
+    Echo Warden: The hollow is always open when you are ready.
 ===

@@ -1,0 +1,144 @@
+{
+    "buildings": [
+        {
+            "id": "pet-house",
+            "label": "Echo Hollow",
+            "type": 1,
+            "x": 20.0,
+            "z": 10.0,
+            "yawDeg": 55.0,
+            "prefabM": "Assets/polyperfect/Low Poly Ultimate Pack/_M/Prefabs_M/Medieval_M/Stables_Medieval.prefab",
+            "prefabM2": "",
+            "customFbx": "Assets/Art/TripoStructures/PetHome.fbx",
+            "fbx": "building_stables",
+            "baseColorTex": "",
+            "fenceKind": "wood",
+            "placeholderColor": {
+                "r": 0.9800000190734863,
+                "g": 0.8199999928474426,
+                "b": 0.47999998927116396,
+                "a": 1.0
+            }
+        },
+        {
+            "id": "arcane-tower",
+            "label": "Arcane Tower",
+            "type": 2,
+            "x": -20.0,
+            "z": -10.0,
+            "yawDeg": 0.0,
+            "prefabM": "Assets/polyperfect/Low Poly Ultimate Pack/_M/Prefabs_M/Medieval_M/Tower_Medieval_Big.prefab",
+            "prefabM2": "",
+            "customFbx": "Assets/Art/TripoStructures/BuildTower.fbx",
+            "fbx": "building_tower_A",
+            "baseColorTex": "Assets/Art/TripoStructures/BuildTower.fbm/build_tower_basecolor.JPEG",
+            "fenceKind": "stone",
+            "placeholderColor": {
+                "r": 0.6499999761581421,
+                "g": 0.550000011920929,
+                "b": 0.9800000190734863,
+                "a": 1.0
+            }
+        },
+        {
+            "id": "workshop",
+            "label": "Forge",
+            "type": 3,
+            "x": 20.0,
+            "z": -10.0,
+            "yawDeg": 215.0,
+            "prefabM": "Assets/polyperfect/Low Poly Ultimate Pack/_M/Prefabs_M/Medieval_M/House_Medieval_Medium.prefab",
+            "prefabM2": "",
+            "customFbx": "Assets/Art/TripoStructures/Forge.fbx",
+            "fbx": "building_workshop",
+            "baseColorTex": "Assets/Art/TripoStructures/Forge.fbm/Forge_basecolor.JPEG",
+            "fenceKind": "wood",
+            "placeholderColor": {
+                "r": 1.0,
+                "g": 0.6000000238418579,
+                "b": 0.3199999928474426,
+                "a": 1.0
+            }
+        },
+        {
+            "id": "farm",
+            "label": "Farm",
+            "type": 4,
+            "x": -15.0,
+            "z": 14.0,
+            "yawDeg": 270.0,
+            "prefabM": "Assets/polyperfect/Low Poly Ultimate Pack/_M/Prefabs_M/Farm_M/Farm_House.prefab",
+            "prefabM2": "Assets/polyperfect/Low Poly Ultimate Pack/_M/Prefabs_M/Medieval_M/Windmill_Medieval.prefab",
+            "customFbx": "Assets/Art/TripoStructures/Farm.fbx",
+            "fbx": "building_windmill",
+            "baseColorTex": "Assets/Art/TripoStructures/Farm.fbm/farm_basecolor.JPEG",
+            "fenceKind": "wood",
+            "placeholderColor": {
+                "r": 1.0,
+                "g": 0.8500000238418579,
+                "b": 0.5400000214576721,
+                "a": 1.0
+            }
+        },
+        {
+            "id": "market",
+            "label": "Market",
+            "type": 5,
+            "x": 15.0,
+            "z": -20.0,
+            "yawDeg": 0.0,
+            "prefabM": "Assets/polyperfect/Low Poly Ultimate Pack/_M/Prefabs_M/Medieval_M/House_Medieval_Large.prefab",
+            "prefabM2": "Assets/polyperfect/Low Poly Ultimate Pack/_M/Prefabs_M/Medieval_M/Marketplace_Stand_Simple.prefab",
+            "customFbx": "",
+            "fbx": "building_market",
+            "baseColorTex": "",
+            "fenceKind": "stone",
+            "placeholderColor": {
+                "r": 0.7799999713897705,
+                "g": 0.550000011920929,
+                "b": 0.30000001192092898,
+                "a": 1.0
+            }
+        },
+        {
+            "id": "lumbermill",
+            "label": "Sawmill",
+            "type": 5,
+            "x": -22.0,
+            "z": -22.0,
+            "yawDeg": 45.0,
+            "prefabM": "",
+            "prefabM2": "",
+            "customFbx": "",
+            "fbx": "building_lumbermill",
+            "baseColorTex": "",
+            "fenceKind": "wood",
+            "placeholderColor": {
+                "r": 0.6200000047683716,
+                "g": 0.44999998807907107,
+                "b": 0.2800000011920929,
+                "a": 1.0
+            }
+        },
+        {
+            "id": "forge",
+            "label": "Armorer",
+            "type": 6,
+            "x": 22.0,
+            "z": 22.0,
+            "yawDeg": 225.0,
+            "prefabM": "",
+            "prefabM2": "",
+            "customFbx": "",
+            "fbx": "building_blacksmith",
+            "baseColorTex": "",
+            "fenceKind": "stone",
+            "placeholderColor": {
+                "r": 0.5799999833106995,
+                "g": 0.5799999833106995,
+                "b": 0.6200000047683716,
+                "a": 1.0
+            }
+        }
+    ]
+}

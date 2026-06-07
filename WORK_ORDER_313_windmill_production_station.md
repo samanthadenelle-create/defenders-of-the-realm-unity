@@ -25,5 +25,15 @@ production crafter exactly like lumbermill/armorer/forge (interactable NPC stati
 - [ ] Hooks to Wren's dialogue/quest path (WO-291/294) where present.
 - [ ] Placed via the builder (no .unity hand-edit); catalog/READMEs updated; brace check; CompileGate OK; build SUCCESS.
 
+## Root cause (triage 2026-06-06)
+**Confidence: Confirmed (genuinely absent).** A repo-wide search for `windmill`/`Windmill` finds **no
+reference anywhere** in code or `VillageSceneBuilder` (only `Core/TreeOfLifeMaterialFixer.cs` matched "tree").
+So the Windmill structure + Mother Wren station simply do not exist yet — pure additive work.
+**Suggested minimal fix:** in `VillageSceneBuilder` place a Windmill prefab from the catalog in the Artisan
+district, then wire it like the existing crafters — stationed NPC + `NPCUpgradeStation` (that component exists,
+`Assets/_Modules/Village/Buildings/NPCUpgradeStation.cs`) + interact → station UI, costs/income via
+`EconomyService`. Verify the chosen prefab exists in `docs/polyperfect-asset-catalog.md`; missing prefab →
+LogWarning, not error. Lane-1 single-writer — serialize with WO-311/312.
+
 ## Do NOT touch
 - Never hand-edit `Village.unity`. Lane 1 single-writer (coordinate w/ WO-311/312). Missing prefab → LogWarning, not error.

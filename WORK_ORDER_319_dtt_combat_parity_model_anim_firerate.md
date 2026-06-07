@@ -26,5 +26,21 @@ at the target on each shot, and supports a faster spam fire rate.
 - [ ] Fire rate is noticeably faster (spam-capable), tuned via a configurable cooldown value.
 - [ ] No T-pose/missing-clip; brace check; CompileGate `COMPILE_GATE_OK`; Windows build SUCCESS; verify in play.
 
+## Root cause (triage 2026-06-06)
+**Confidence: Likely (model divergence confirmed).** The DTT hero is built on a **separate path** from town:
+- `SpawnHero` skins the body via `VisualFactory.Skin("Heroes/"+slug, ...)` **directly**, NOT through
+  `HeroBodySwapper` (`Assets/_Modules/Village/PatriciaLight/PatriciaLightController.cs:694`).
+- `ResolvePlayableClass` forces a non-melee class — a Knight save is defaulted to Ranger/Mage here
+  (`:644-647`) — so the DTT hero can be a DIFFERENT class than the town hero.
+- It then applies `TintHeroToConceptArt` (dark-green "Sylas" tint, `:741`) so even the same class reads
+  differently from town. Together these are the "different/old model."
+- Firing anim: the body's Animator gets the class controller (`:719-728`, `applyRootMotion=false`); whether
+  each shot triggers `ActorAnimator.PlayAttack/PlayCast` should be confirmed in `TickHeroFire` (the actor is
+  cached at `:759-760`). Fire rate is a data/cooldown value (no hardcode found blocking a faster cadence).
+
+**Suggested minimal fix:** spawn the DTT hero through the same `HeroBodySwapper` path as town for exact
+model/skin parity (drop the bespoke Skin+tint), drive `ActorAnimator.PlayAttack/PlayCast` per shot, and expose
+the attack cadence as a configurable cooldown. Coordinate with WO-317/318 (same controller).
+
 ## Do NOT touch
 - No `.unity` edits. Reuse HeroBodySwapper + ActorAnimator (don't fork). Coordinate with WO-317/318 (same mode/controller).

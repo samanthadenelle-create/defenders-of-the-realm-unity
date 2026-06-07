@@ -24,5 +24,22 @@ player can orient at the town exits (e.g. the Pet-House-side gate).
 - [ ] Readable on web + mobile; consistent with the HUD theme (coordinate with WO-307).
 - [ ] HUD→Core only; code-built; brace check; CompileGate OK; build SUCCESS.
 
+## Root cause (triage 2026-06-06)
+**Confidence: Likely.** The compass is a **UI Toolkit (UIDocument) overlay**, but the HUD has migrated to
+code-built uGUI — so the compass has no PanelSettings to attach to and **self-disables**:
+- `CompassHud.Awake` requires a `UIDocument.panelSettings`; it tries to borrow one from any other UIDocument in
+  the scene, and if none is found it does `enabled = false; return;`
+  (`Assets/_Modules/HUD/CompassHud.cs:51-61`).
+- The main HUD is now `VillageHudController` — pure uGUI Canvas, NO UIDocument/PanelSettings
+  (`Assets/_Modules/HUD/VillageHudController.cs:23-24`, the file explicitly dropped UXML). So in a scene whose
+  only HUD is VillageHudController, there is no PanelSettings to borrow → CompassHud disables → invisible.
+- Secondary: `CompassHudBootstrap` only spawns the compass if it resolves a `HeroLocomotion` by reflection
+  (`Assets/_Modules/HUD/CompassHudBootstrap.cs:37-38, 56-62`) — fine if a hero exists.
+
+**Suggested minimal fix:** either (a) rebuild the compass as a code-built uGUI overlay (mirror
+VillageHudController) so it no longer needs PanelSettings, or (b) guarantee a PanelSettings-bearing UIDocument
+exists in the scene. Option (a) is consistent with the WO-307 uGUI HUD and PIPELINE_STATE §8 (UXML doesn't
+render in builds). Coordinate placement with WO-307. Don't fork CompassHud's math.
+
 ## Do NOT touch
 - No `.unity` edits. Don't fork CompassHud — fix the bootstrap/visibility. Gate-destination intel = DEF-152 (separate).

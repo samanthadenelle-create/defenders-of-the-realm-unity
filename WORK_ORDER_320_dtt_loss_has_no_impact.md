@@ -27,5 +27,18 @@ path to retry/return — so the mode has stakes.
 - [ ] Winning still pays out normally (no regression to the win path).
 - [ ] Costs/penalties via EconomyService; brace check; CompileGate OK; build SUCCESS; verify in play.
 
+## Root cause (triage 2026-06-06)
+**Confidence: Confirmed.** Losing DTT silently returns to town exactly as reported:
+- `PatriciaLightController.Lose()` only sets a status string ("The tower has fallen…"), logs, and calls
+  `FinishAndReturn()` (`Assets/_Modules/Village/PatriciaLight/PatriciaLightController.cs:1541-1550`).
+- `FinishAndReturn` waits 1.8 s then `ReturnHome()` → `SceneRouter.GoVillage()` (`:1566-1576`). No defeat
+  screen, no penalty, no Retry/Return choice — an auto-bounce.
+- Loss is detected fine (Update: `if (_heart != null && _heart.Hp <= 0f) { Lose(); }`, `:281`).
+
+**Suggested minimal fix:** in `Lose()`, instead of the timed auto-return, show a defeat screen (reuse WO-235 /
+`Assets/_Modules/Village/Heart/GameOverScreen.cs`), apply a configurable penalty via `EconomyService`
+(forfeit run rewards / cost — no permanent loss), and offer Retry / Return-to-town buttons. Keep the win path
+untouched. Additive — no fork.
+
 ## Do NOT touch
 - No `.unity` edits. Reuse WO-235 screens + EconomyService (don't fork). Coordinate with WO-317/318/319 (same mode).

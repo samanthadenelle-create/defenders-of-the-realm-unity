@@ -25,5 +25,20 @@ Enemies face and animate in their direction of travel — no moonwalking.
 - [ ] Turning toward hero/target still works; no spin/jitter.
 - [ ] Brace check; CompileGate `COMPILE_GATE_OK`; Windows build SUCCESS; verify in a play session.
 
+## Root cause (triage 2026-06-06)
+**Confidence: Confirmed.** Enemies have **no path-direction facing at all**:
+- `Enemy.Configure` sets `_agent.updateRotation = false` with the comment "we control facing (to target on
+  attack, or path dir)" (`Assets/_Modules/Village/Enemies/Enemy.cs:390`).
+- But `DriveNav()` (`:572-643`) only ever calls `SetDestination` — it **never sets `transform.rotation`
+  toward the agent's velocity/path**. The only rotation in the file is `RangedAttack` →
+  `Quaternion.LookRotation(toTarget)` (`:854`), i.e. facing is set only when attacking.
+- Result: the enemy keeps a stale orientation while the agent slides it along the path, and the visual rig's
+  authored forward axis (+X, same as the heroes) is never corrected — reads as backwards/sideways/moonwalk.
+
+**Suggested minimal fix:** in `DriveNav`, when moving, slerp `transform.rotation` toward
+`LookRotation(_agent.velocity)` (or re-enable `updateRotation`), AND apply the same visual-child forward-axis
+correction the heroes use. **Shared root with WO-255 + WO-326** — fix the facing convention once (see WO-326:
+heroes apply it in `HeroBodySwapper.forwardYaw`; enemies need the equivalent on the enemy visual child).
+
 ## Do NOT touch
 - No `.unity` edits. Reuse the hero facing-correction convention (WO-255); don't fork Enemy locomotion.

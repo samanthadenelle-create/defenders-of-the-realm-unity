@@ -25,5 +25,22 @@ The hero model + walk animation face the actual direction of travel (north looks
 - [ ] Fix is a shared facing-correction convention (reused by WO-255/315), not a one-off per class.
 - [ ] Brace check; CompileGate `COMPILE_GATE_OK`; Windows build SUCCESS; verify in a play session.
 
+## Root cause (triage 2026-06-06)
+**Confidence: Confirmed (root) / Likely (exact value).** The forward-axis correction value is wrong:
+- `HeroLocomotion` does pure root `LookRotation(Velocity.normalized)` and defers the rig forward-axis
+  correction to `HeroBodySwapper` (`Assets/_Modules/Village/Hero/HeroLocomotion.cs:350-358`).
+- `HeroBodySwapper` applies a child `LocalRotation` of `forwardYaw = 90f`
+  (`Assets/_Modules/Village/Hero/HeroBodySwapper.cs:92`, applied at `:99`). The meshes export forward on +X;
+  +90f over-rotates, so walking north the body reads ~90° to the right. The file's own comment says
+  "IF STILL OFF: try the opposite sign (-90f) or 180f" (`:91`).
+- **Strong corroboration:** the companion path applies **-90f** for the SAME hero FBXs
+  (`Assets/_Modules/Village/NPCs/StoryCompanionInjector.cs:160`) — the hero's +90f is inconsistent with it,
+  which strongly implies the hero value should be **-90f**.
+
+**Suggested minimal fix:** change `HeroBodySwapper.forwardYaw` (`:92`) to `-90f` (verify in play). Make this the
+**single shared facing convention** reused by WO-255 (hero backwards) and WO-315 (enemies have NO correction
+AND no path-facing — they need the equivalent on the enemy visual child + a face-velocity in `Enemy.DriveNav`).
+Fix once; don't add per-class hacks.
+
 ## Do NOT touch
 - No `.unity` edits. Don't fork HeroLocomotion — fix the facing correction. Coordinate/merge with WO-255 + WO-315.

@@ -38,6 +38,23 @@ lighting; nothing leaks into the world; open/close is clean with no leftover obj
 - [ ] **Closing the Build tab** (not just Confirm/Cancel) tears down the modal + preview root immediately — nothing persists in the world.
 - [ ] Brace check; CompileGate `COMPILE_GATE_OK`; Windows build SUCCESS; verify in a play session.
 
+## Root cause (triage 2026-06-06)
+**Confidence: Confirmed (with a correction).** The "renders into the world" symptom is **already fixed in
+current source** — do not re-do it:
+- `BuildPreviewModal.SetupPreview3D` parks the whole preview rig at `y = -5000` (`Assets/_Modules/Village/BuildMode/BuildPreviewModal.cs:189`),
+  puts it all on `PREVIEW_LAYER = 31` (`:48`, `:262`), sets the preview cam `cullingMask = 1<<31` (`:263`) and
+  masks both lights to layer 31 (`:264-265`), with a Screen-Space-Overlay Canvas (`:73`) showing the RT via
+  RawImage. So the grey panel/white square in the world should NOT recur in this build; verify in play first.
+
+**Remaining valid issues:**
+1. **Teardown gap (Confirmed).** Cleanup only runs on Confirm/Cancel/OnDestroy (`:376-398`). There is no
+   "close on Build-tab-close" path → if the player closes the Build tab without Confirm/Cancel, the modal GO +
+   RT persist. Fix: have `BuildModeController` destroy the live modal when the tab/build mode closes.
+2. **NRE-on-open (Hypothesis).** The modal's own `Update` is guarded (`:278`). The most plausible open-path
+   throw is inside `VisualFactory.Skin(...)` called from `SetupPreview3D` (`:231`) when `_entry.visualPrefabPath`
+   resolves to a missing/!-loadable prefab. This is the ONE build-path NRE worth re-checking under WO-328 —
+   capture the stack on Build-tab open. Null-guard the `_entry`/`visualPrefabPath` path.
+
 ## Do NOT touch
 - No `.unity` edits. Don't fork BuildPreviewModal/BuildModeController — fix in place. WO-282 (per-prefab yaw
   persistence) builds on this; keep the existing `PlacedStructureData.yawOffset` path intact.

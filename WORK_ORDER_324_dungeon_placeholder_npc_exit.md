@@ -24,5 +24,15 @@ The dungeon's lantern NPC uses a real character/lantern prefab, and the exit use
 - [ ] Wired via dungeon builder/bootstrap; reuses existing portal VFX (no fork).
 - [ ] Brace check; CompileGate OK; build SUCCESS; verify in a play session.
 
+## Root cause (triage 2026-06-06)
+**Confidence: Likely (where-to-look correct).** Placeholder primitives never swapped for real prefab/VFX — the
+systems to reuse already exist: `DungeonEntranceBootstrap` (`Assets/_Modules/Village/Dungeons/DungeonEntranceBootstrap.cs`)
+and `PortalVFXController` (`Assets/_Modules/Village/Dungeon/PortalVFXController.cs`). The lantern NPC renders as
+a capsule and the exit as two circles because the dungeon builder/bootstrap is emitting primitive stand-ins
+rather than instantiating the character-pack NPC + the portal VFX path. Additive wiring, not a logic bug.
+**Suggested minimal fix:** in the dungeon builder/bootstrap, replace the lantern-NPC capsule with the intended
+character prefab + lantern prop, and replace the "2 circles" exit with a single `PortalVFXController` portal
+visual + correct exit trigger. Missing prefab → LogWarning, not error. Reuse the existing portal VFX (no fork).
+
 ## Do NOT touch
 - No hand-edited `.unity`. Reuse the character pack + PortalVFXController; don't greenfield a new portal system.

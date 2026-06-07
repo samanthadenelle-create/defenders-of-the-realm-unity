@@ -27,5 +27,25 @@ applies the tier change + feedback), and harvest/interact generally functions �
 - [ ] Harvest/interact at nodes works generally (not just upgrade).
 - [ ] Costs via EconomyService; brace check; CompileGate OK; build SUCCESS; verify in play.
 
+## Root cause (triage 2026-06-06)
+**Confidence: Likely (with two corrections).**
+- **Correction 1 — source of the prompt.** "[G] Upgrade Mine T1→2 (25 ✦)" comes from **`CrystalMineNode`**,
+  not `MineNode`. `CrystalMineNode` owns the [G] upgrade verb + that exact bubble string
+  (`Assets/_Modules/Village/World/CrystalMineNode.cs:243`, key `:87`, Update `:147-173`). `MineNode` uses [F]
+  to harvest and has no upgrade (`Assets/_Modules/Village/World/MineNode.cs:329`).
+- **Correction 2 — economy service.** It spends via **`CrystalEconomy.TrySpend`**, not `EconomyService.TrySpend`
+  (`CrystalMineNode.cs:197-207`).
+- **Root of "does nothing":** the [G] handler is already null-guarded — `TryUpgrade` requires
+  `CrystalEconomy.Instance`; if null it logs a warning and returns (`:197-202`), and if the player's transform
+  isn't tagged `"Player"` (`ResolvePlayer` `:235`) `_inRange` never becomes true so [G] is ignored. So the most
+  likely cause is **`CrystalEconomy.Instance` is null in the scene** (no bootstrap) or the player tag mismatch —
+  not a thrown exception in this handler.
+- **On the reported NRE:** the interact handler does NOT throw — the NRE spam the owner saw is the ambient
+  WO-328 flood, which makes the (silent) failed upgrade look like a crash. **WO-328 will NOT fix this** — its
+  root is separate.
+
+**Suggested minimal fix:** verify/ensure `CrystalEconomy` is bootstrapped in the world scene; confirm the
+player is tagged `Player`; add a "can't afford / no economy" feedback path so the press is never silent.
+
 ## Do NOT touch
 - No `.unity` edits. Don't fork MineNode/EconomyService — fix the wiring + null-guard. Ties WO-228/229/266.
