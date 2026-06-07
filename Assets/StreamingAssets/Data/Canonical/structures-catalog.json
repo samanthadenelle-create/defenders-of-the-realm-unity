@@ -263,8 +263,8 @@
         "buildCost": 90,
         "cost": {
           "wood": 30,
-          "food": 40,
-          "iron": 20,
+          "food": 0,
+          "iron": 60,
           "crystals": 0
         },
         "maxLevel": 3,
