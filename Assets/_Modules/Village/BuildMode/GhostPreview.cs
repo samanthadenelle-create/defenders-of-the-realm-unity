@@ -31,6 +31,10 @@ namespace DeNelle.Village
 
         private GameObject _visual;
         private string _builtForId;
+        // The armed entry's upright correction (StructureFactory applies the SAME at
+        // build time). Applied UNDER the ghost's yaw so the ghost stands upright exactly
+        // like the placed structure (WYSIWYG) — yaw outermost, orientation inner.
+        private OrientationFix _orientation;
         private readonly List<Renderer> _renderers = new List<Renderer>();
         private MaterialPropertyBlock _mpb;
 
@@ -45,6 +49,7 @@ namespace DeNelle.Village
 
             Clear();
             _builtForId = entry.id;
+            _orientation = entry.orientation;   // applied UNDER the yaw on the skinned model
             _mpb = new MaterialPropertyBlock();
 
             _visual = new GameObject("BuildGhost");
@@ -58,6 +63,19 @@ namespace DeNelle.Village
             if (!string.IsNullOrEmpty(entry.visualPrefabPath))
                 skinned = VisualFactory.Skin(_visual.transform, entry.visualPrefabPath,
                     SkinOptions.Structure(fit));
+
+            // WYSIWYG — apply the entry's human-verified upright correction to the skinned
+            // model the SAME way StructureFactory.Create does (StructureFactory.cs:90-98),
+            // so the ghost stands upright exactly like the placed result. _visual carries
+            // the player's yaw (MoveTo), so this composes UNDER it (yaw outermost).
+            if (skinned != null && _orientation != null && _orientation.manual)
+            {
+                var t = skinned.transform;
+                t.localRotation = Quaternion.Euler(_orientation.Euler) * t.localRotation;
+                t.localPosition += _orientation.Offset;
+                if (_orientation.scale > 0f && !Mathf.Approximately(_orientation.scale, 1f))
+                    t.localScale *= _orientation.scale;
+            }
 
             if (skinned == null)
             {
@@ -112,6 +130,7 @@ namespace DeNelle.Village
             if (_visual != null) Destroy(_visual);
             _visual = null;
             _builtForId = null;
+            _orientation = null;
         }
 
         private void OnDestroy() => Clear();

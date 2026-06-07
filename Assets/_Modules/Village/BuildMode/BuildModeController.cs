@@ -299,16 +299,15 @@ namespace DeNelle.Village
 
             if (PlaceConfirmedThisFrame() && valid)
             {
-                // WO-335 — towers route through the simple PLAYER yaw-only Rotate Model
-                // panel so the player dials in the placement rotation before committing;
-                // every other catalog type (walls / floors / decorations / gates /
-                // resources) keeps the original instant CoC-style drop, where free 90°
-                // R-rotation is enough. This now runs on ALL platforms (incl. web) — it's
-                // the player UI, not an editor authoring tool.
-                if (IsTowerEntry(_armed))
-                    OpenRotateMenu(cell, footprint, snapped);
-                else
-                    Place(cell, footprint, snapped);
+                // PIVOT (owner decision) — placement is now IN-WORLD for ALL types: the
+                // ghost shows the model upright (GhostPreview applies the entry's
+                // OrientationFix) and the player rotates in-world via the R key / touch
+                // Rotate button before tapping to drop. The old modal Preview & Rotate
+                // panel (OpenRotateMenu/OnRotateConfirmed/OnRotateCancelled/_rotateMenu)
+                // is now dormant — no longer called from placement. Direct place leaves
+                // _armedYawOffset = 0, so PlacedStructureData yaw = yawSteps × 90 only
+                // (this also retires the latent double-rotation).
+                Place(cell, footprint, snapped);
             }
         }
 
@@ -345,8 +344,12 @@ namespace DeNelle.Village
             // Seed the panel from the ghost's current free-rotate yaw step (R key steps).
             int initialYawSteps = _armedYawSteps & 3;
 
-            Debug.Log($"[Orient] open: id={_armed.id} prefab={(prefab != null ? prefab.name : "<none>")} yaw0={initialYawSteps * 90}");
-            _rotateMenu.Open(prefab, name, costSkr, initialYawSteps, OnRotateConfirmed, OnRotateCancelled);
+            // WO-335 FIX — forward the armed entry's upright correction so the preview
+            // matches the placed result (StructureFactory applies entry.orientation at
+            // build time; the preview must apply the SAME correction or towers show
+            // sideways in the panel but stand up when placed).
+            Debug.Log($"[Orient] open: id={_armed.id} prefab={(prefab != null ? prefab.name : "<none>")} yaw0={initialYawSteps * 90} orient={(_armed.orientation != null && _armed.orientation.manual ? "manual" : "none")}");
+            _rotateMenu.Open(prefab, name, costSkr, initialYawSteps, OnRotateConfirmed, OnRotateCancelled, _armed.orientation);
         }
 
         /// <summary>
@@ -431,10 +434,24 @@ namespace DeNelle.Village
             //    cells were freed on enter, so they read as free and never self-block.)
             if (!_grid.CanPlace(cell, footprint)) return false;
 
-            // 3. Gate-lane clearance — never wall off the spawn→Heart corridor.
-            if (_gateClearance > 0f && IsTooCloseToGate(snapped)) return false;
+            // The footprint's world-space AABB on the XZ plane (cellSize × footprint
+            // cells, centred on the snapped cell-block). Used by the world-overlap +
+            // gate-clearance tests below, which catch SCENE objects the cell grid does
+            // not track (gates + the default-village structures are placed by the
+            // scene builder, never Occupy()'d — so CanPlace can't see them).
+            Bounds footprintAabb = FootprintWorldBounds(cell, footprint, snapped.y);
 
-            // 4. Affordable from the persisted multi-resource ledger (EconomyService —
+            // 3. World overlap — reject if the footprint overlaps an existing placed
+            //    structure or a gate collider in the scene (NOT just the cell grid).
+            if (OverlapsExistingStructure(footprintAabb)) return false;
+
+            // 4. Gate-lane clearance — never wall off the spawn→Heart corridor. Tests
+            //    the whole footprint AABB against each gate's real bounds (expanded by
+            //    the clearance), so a structure whose body overlaps the gate is caught
+            //    even when its origin cell is just outside the radius.
+            if (_gateClearance > 0f && IsTooCloseToGate(footprintAabb)) return false;
+
+            // 5. Affordable from the persisted multi-resource ledger (EconomyService —
             //    the GameState-backed Wood/Food/Iron/Crystals surface). Crystals-only
             //    entries fall back to a Crystals cost. A move is free, so the cost gate
             //    is skipped for it.
@@ -447,23 +464,106 @@ namespace DeNelle.Village
             return true;
         }
 
-        /// <summary>True when the point is within the gate-clearance radius of any Gate tagged collider.</summary>
-        private bool IsTooCloseToGate(Vector3 worldPos)
+        /// <summary>
+        /// The world-space XZ bounding box of a footprint at <paramref name="cell"/>:
+        /// the block of <paramref name="footprint"/> cells, each cellSize wide, with a
+        /// thin Y extent at the placement height. Pure over the grid. This is the
+        /// real area the structure will occupy, so the world-overlap + gate tests can
+        /// reason about the whole structure, not just its origin cell centre.
+        /// </summary>
+        private Bounds FootprintWorldBounds(Vector2Int cell, Vector2Int footprint, float y)
         {
-            // Gates are tagged "Building" in this project's clearance rule; check by
-            // name to avoid coupling to the Gate type. A missing gate set = no rule.
-            // FindGameObjectsWithTag throws if the tag is undefined — guard it.
-            GameObject[] gates;
-            try { gates = GameObject.FindGameObjectsWithTag("Building"); }
-            catch (UnityException) { return false; }
-            foreach (var g in gates)
+            float cs = _grid != null ? _grid.cellSize : 3f;
+            int fw = Mathf.Max(1, footprint.x);
+            int fh = Mathf.Max(1, footprint.y);
+
+            // Min/max cell corners → world. CellToWorld returns the cell CENTRE, so
+            // expand by half a cell on each side to cover the full block.
+            Vector3 minC = _grid.CellToWorld(new Vector2Int(cell.x, cell.y));
+            Vector3 maxC = _grid.CellToWorld(new Vector2Int(cell.x + fw - 1, cell.y + fh - 1));
+            Vector3 min = new Vector3(Mathf.Min(minC.x, maxC.x) - cs * 0.5f, y - 0.5f, Mathf.Min(minC.z, maxC.z) - cs * 0.5f);
+            Vector3 max = new Vector3(Mathf.Max(minC.x, maxC.x) + cs * 0.5f, y + 0.5f, Mathf.Max(minC.z, maxC.z) + cs * 0.5f);
+
+            var b = new Bounds();
+            b.SetMinMax(min, max);
+            return b;
+        }
+
+        /// <summary>
+        /// True when the placement footprint overlaps a structure already in the scene
+        /// (player-placed OR default-village) on the XZ plane. The cell grid only
+        /// tracks structures that were Occupy()'d (loader + player placements); the
+        /// default-village buildings + gates are scene objects the grid never saw, so
+        /// CanPlace alone cannot reject overlapping them. We test the footprint AABB
+        /// against every live PlacedStructure's renderer bounds — using RENDERER bounds
+        /// (centre + extents in world) sidesteps the scaled-pivot displacement trap
+        /// where transform.position sits far from the visible mesh. During a MOVE the
+        /// selected structure is excluded so it never blocks its own re-placement.
+        /// </summary>
+        private bool OverlapsExistingStructure(Bounds footprintAabb)
+        {
+            var all = FindObjectsByType<PlacedStructure>(FindObjectsSortMode.None);
+            foreach (var ps in all)
             {
-                if (g == null) continue;
-                if (g.name.IndexOf("gate", System.StringComparison.OrdinalIgnoreCase) < 0) continue;
-                Vector3 gp = g.transform.position; gp.y = worldPos.y;
-                if (Vector3.Distance(gp, worldPos) < _gateClearance) return true;
+                if (ps == null) continue;
+                if (_movingSelected && ps == _selected) continue;   // don't self-block a move
+
+                Bounds wb;
+                if (!TryWorldBounds(ps.gameObject, out wb)) continue;
+                if (OverlapsXZ(footprintAabb, wb)) return true;
             }
             return false;
+        }
+
+        /// <summary>
+        /// True when the footprint AABB comes within the gate clearance of any live
+        /// <see cref="Gate"/>. Finds gates by COMPONENT (every gate has one) rather than
+        /// a fragile tag+name match — the old check searched tag "Building" + name
+        /// "gate", so a gate that wasn't tagged that way was never found and the lane
+        /// was never protected. Uses each gate's renderer/collider bounds (centre +
+        /// extents), avoiding the displacement trap, and expands them by the clearance,
+        /// then tests against the whole footprint AABB.
+        /// </summary>
+        private bool IsTooCloseToGate(Bounds footprintAabb)
+        {
+            var gates = FindObjectsByType<Gate>(FindObjectsSortMode.None);
+            foreach (var gate in gates)
+            {
+                if (gate == null) continue;
+                Bounds gb;
+                if (!TryWorldBounds(gate.gameObject, out gb)) gb = new Bounds(gate.transform.position, Vector3.one);
+                gb.Expand(new Vector3(_gateClearance * 2f, 0f, _gateClearance * 2f));   // grow by clearance on each side
+                if (OverlapsXZ(footprintAabb, gb)) return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// World-space renderer bounds of <paramref name="go"/> (centre + extents in
+        /// world). Renderer bounds are robust to the scaled/off-pivot mesh trap; falls
+        /// back to a collider, then false when neither exists.
+        /// </summary>
+        private static bool TryWorldBounds(GameObject go, out Bounds bounds)
+        {
+            bounds = default;
+            if (go == null) return false;
+            var rends = go.GetComponentsInChildren<Renderer>(true);
+            if (rends != null && rends.Length > 0)
+            {
+                bounds = rends[0].bounds;
+                for (int i = 1; i < rends.Length; i++) bounds.Encapsulate(rends[i].bounds);
+                return true;
+            }
+            var col = go.GetComponentInChildren<Collider>(true);
+            if (col != null) { bounds = col.bounds; return true; }
+            return false;
+        }
+
+        /// <summary>True when two bounds overlap on the XZ plane (Y is ignored — placement is a flat planner).</summary>
+        private static bool OverlapsXZ(Bounds a, Bounds b)
+        {
+            return a.min.x < b.max.x && a.max.x > b.min.x
+                && a.min.z < b.max.z && a.max.z > b.min.z;
         }
 
         /// <summary>

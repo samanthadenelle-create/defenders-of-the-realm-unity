@@ -37,6 +37,7 @@
 using System;
 using UnityEngine;
 using UnityEngine.UI;
+using DeNelle.Core.Catalog;
 
 namespace DeNelle.Village
 {
@@ -79,6 +80,12 @@ namespace DeNelle.Village
         /// seeds the readout/preview (0..3 → 0/90/180/270°). On Confirm,
         /// <paramref name="onConfirm"/> fires with the chosen yawSteps; on Cancel,
         /// <paramref name="onCancel"/> fires. The panel closes itself either way.
+        ///
+        /// <paramref name="orientation"/> is the armed entry's upright correction
+        /// (CatalogEntry.orientation). It is forwarded to the preview rig so the
+        /// preview shows the SAME orientation StructureFactory builds at placement
+        /// (WO-335 FIX — preview was rendering the raw prefab, so towers that get an
+        /// upright correction looked sideways in the preview but stood up when placed).
         /// </summary>
         public void Open(
             GameObject previewPrefab,
@@ -86,7 +93,8 @@ namespace DeNelle.Village
             double cost,
             int initialYawSteps,
             Action<int> onConfirm,
-            Action onCancel)
+            Action onCancel,
+            OrientationFix orientation = null)
         {
             Close(); // never stack two panels
 
@@ -96,7 +104,7 @@ namespace DeNelle.Village
 
             // --- 3D preview rig (manual-render RT) --------------------------------
             _preview = new TowerPreviewCamera();
-            bool previewValid = _preview.Begin(previewPrefab);
+            bool previewValid = _preview.Begin(previewPrefab, orientation);
             Debug.Log($"[Orient] preview rig: valid={previewValid} prefab={(previewPrefab != null ? previewPrefab.name : "<none>")}");
 
             BuildPanel(displayName, cost, previewValid);

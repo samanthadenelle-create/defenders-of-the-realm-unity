@@ -19,6 +19,7 @@
 // =============================================================================
 
 using UnityEngine;
+using DeNelle.Core.Catalog;
 
 namespace DeNelle.Village
 {
@@ -44,6 +45,13 @@ namespace DeNelle.Village
         private int            _previewLayer = -1;
         private bool           _disposed;
 
+        // WO-335 FIX — the catalog entry's upright correction, so the preview shows
+        // the SAME orientation StructureFactory builds at placement. The base
+        // correction rotation is composed UNDER the player's yaw (yaw outermost,
+        // matching placement: root carries yaw, visual carries the correction). The
+        // offset + scale are applied once to the model in Begin().
+        private Quaternion     _baseCorrection = Quaternion.identity;
+
         /// <summary>The render texture the menu binds as a VisualElement background. Null if Begin failed.</summary>
         public RenderTexture Texture => _rt;
 
@@ -54,8 +62,16 @@ namespace DeNelle.Village
         /// Build the preview rig for <paramref name="prefab"/>. Returns true on
         /// success. If the prefab is null (a data-only TowerData with no Level-1
         /// visual) this returns false and the menu should use its icon fallback.
+        ///
+        /// <paramref name="orientation"/> is the catalog entry's upright correction.
+        /// When it is human-verified (manual=true) the preview applies it so the
+        /// preview matches the PLACED result exactly: the Euler correction becomes
+        /// the model's base rotation (composed under the player's yaw), and the
+        /// offset + scale are applied once to the model here — mirroring
+        /// StructureFactory.Create. Auto-baked/advisory corrections are ignored, same
+        /// as placement.
         /// </summary>
-        public bool Begin(GameObject prefab, int textureSize = 512)
+        public bool Begin(GameObject prefab, OrientationFix orientation = null, int textureSize = 512)
         {
             if (prefab == null) return false;
 
@@ -79,6 +95,22 @@ namespace DeNelle.Village
             _model.name = "PreviewModel";
             SetLayerRecursive(_model, _previewLayer);
             StripGameplayBehaviours(_model);
+
+            // WO-335 FIX — apply the entry's upright correction so the preview is the
+            // SAME shape placement builds (StructureFactory.Create lines 90-98). Only
+            // human-verified (manual=true) corrections are applied — auto-baked ones
+            // are advisory and placement ignores them too. The rotation half is stored
+            // as _baseCorrection (composed under the yaw in SetRotation); the offset +
+            // scale are applied once here, before bounds, so the camera frames the
+            // corrected model.
+            if (orientation != null && orientation.manual)
+            {
+                _baseCorrection = Quaternion.Euler(orientation.Euler);
+                _model.transform.localRotation = _baseCorrection;
+                _model.transform.localPosition += orientation.Offset;
+                if (orientation.scale > 0f && !Mathf.Approximately(orientation.scale, 1f))
+                    _model.transform.localScale *= orientation.scale;
+            }
 
             Bounds bounds = ComputeBounds(_model);
 
@@ -119,14 +151,21 @@ namespace DeNelle.Village
         }
 
         /// <summary>
-        /// Apply <paramref name="rotation"/> to the preview model and MANUALLY
-        /// render the camera into the RenderTexture (URP will not auto-render an
-        /// off-screen Base camera). Call this every frame the panel is open.
+        /// Apply <paramref name="rotation"/> (the player's yaw) to the preview model
+        /// and MANUALLY render the camera into the RenderTexture (URP will not
+        /// auto-render an off-screen Base camera). Call this every frame the panel is
+        /// open.
+        ///
+        /// WO-335 FIX — the yaw is composed OUTERMOST over the stored base correction
+        /// (<c>localRotation = yaw * _baseCorrection</c>), exactly matching placement
+        /// where the root carries the yaw and the visual carries the upright
+        /// correction (StructureFactory). With no correction _baseCorrection is
+        /// identity, so the legacy yaw-only behaviour is unchanged.
         /// </summary>
         public void SetRotation(Quaternion rotation)
         {
             if (!IsValid) return;
-            _model.transform.localRotation = rotation;
+            _model.transform.localRotation = rotation * _baseCorrection;
             _cam.Render();
         }
 
