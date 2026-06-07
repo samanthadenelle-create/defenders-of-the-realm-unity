@@ -64,7 +64,7 @@ work order goes back to the queue.
 - Save to project root as `WORK_ORDER_NNN_short_name.md`
 - Mark **Status: READY TO IMPLEMENT** when spec is complete
 - Include files to edit, acceptance criteria, and what NOT to touch
-- **WO-numbering authority = `MASTER_PIPELINES_BACKLOG_2026-06-06.md` + `CLI_LANES_WO_NUMBERS.md`, NOT the filesystem max.** Reserved new block **290–305** (minted 2026-06-06: quests, crafting, pets, persistence, HUD). 287–288 also used; 289 free. **Next free WO = 329** (306–328 now used). Always slot a new WO into a lane in the master doc.
+- **WO-numbering authority = `MASTER_PIPELINES_BACKLOG_2026-06-06.md` + `CLI_LANES_WO_NUMBERS.md`, NOT the filesystem max.** Reserved new block **290–305** (minted 2026-06-06: quests, crafting, pets, persistence, HUD). 287–288 also used; 289 free. **Next free WO = 330** (306–329 now used). Always slot a new WO into a lane in the master doc.
 - **LIVE BOARD (source of truth mirror) = Notion "Work Orders" DB** in *Defenders of the Realm — Pipelines*: https://app.notion.com/p/f3115f05ecf940cf8968bd82bbbdff9f (data source `5f66b263-c732-4075-b94a-f5f4de9f8087`). The git docs + Notion are kept in sync; full WO spec files stay in the repo. We migrated off Linear (free-tier 250-issue cap). See `NOTION_SOURCE_OF_TRUTH.md`.
 
 ### Completing work orders
@@ -162,3 +162,27 @@ touches it at a time. Coordinate through work orders.
 - [ ] `using DeNelle.Core.Combat;` present in any file implementing `IDamageableStructure`
 - [ ] Null-conditional operators (`?.`) used on all cross-module service calls
 - [ ] Work order acceptance criteria reviewed line by line
+
+---
+
+## 11. Orchestration & Delegation (how we work — non-negotiable)
+
+The lead session is the **ORCHESTRATOR**, not a solo worker. Division of labor:
+
+- **Orchestrator (lead session):** triage each issue + form the hypothesis **flow-first** — what
+  *should* happen given the state (is this state even expected?), NOT culprit-hunting through stack
+  traces. Route each focused task to its own agent. **Batch-gate**, **sole-commit** by explicit path,
+  push only on owner OK. Hold the through-line + roundtable with the owner. Do **NOT** do the deep
+  digging yourself — orchestrate; let the agents go deep.
+- **Agents:** each does **ONE** focused task (one diagnosis OR one fix). Run them in **parallel**.
+
+**Parallelize despite the single Unity gate + sole-committer:**
+- Read-only **diagnosis/verify** agents are gate-free → fan out many at once.
+- For **implementation**, fan out **edit-only** agents on **file-disjoint silos** (§9 lanes; same-file
+  work = one agent). Tell them NOT to gate/commit. Then the orchestrator **batch-gates the combined
+  tree once** (`COMPILE_GATE_OK`) and **commits each lane by explicit path**. The single Unity gate +
+  the one committer are the coordination point, kept by the orchestrator — so no agent stands idle.
+
+**Discipline:** flow-first triage → an agent verifies AND does it. Commit local; **push only after the
+owner retests/confirms** (felt/gameplay) or a regression passes (data/logic) — "push the ones that
+passed." Ambiguous tickets (no repro / screen / stack) **bounce back for detail** — never work blind.
