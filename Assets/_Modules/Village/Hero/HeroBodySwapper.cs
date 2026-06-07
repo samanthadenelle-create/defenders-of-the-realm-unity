@@ -87,9 +87,10 @@ namespace DeNelle.Village
             // The meshes export facing +X; +90f (or -90f — trial both) rotates the authored
             // forward onto the locomotion root's +Z so that when HeroLocomotion does
             // LookRotation(velocity) the visual faces the travel direction (no sidestep/moonwalk).
-            // Current value chosen because -90 produced "faces left when walking up".
-            // IF STILL OFF: try the opposite sign (-90f) or 180f for backwards.
-            float forwardYaw = 90f;
+            // WO-326: -90f is the proven value — the companion path skins the SAME
+            // Resources/Heroes FBXs with -90f (StoryCompanionInjector.cs:160) and reads
+            // correct. +90f put the hero ~90 degrees right of travel.
+            float forwardYaw = -90f;
             var body = VisualFactory.Skin(transform, prefab, new SkinOptions
             {
                 FitHeight = targetH,

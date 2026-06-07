@@ -66,7 +66,19 @@ namespace DeNelle.Village
             // Skin (load -> fit -> strip colliders) + animator; tinted-capsule fallback
             // only if the model is genuinely missing (so an enemy still spawns hittable).
             string model = modelOverride ?? ModelForEnemy(def);
-            var vis = VisualFactory.Skin(go.transform, "Enemies/" + model, SkinOptions.Enemy(height));
+
+            // WO-315: rig-forward correction. The +X-forward Tripo/People families (the
+            // Orc Warband — same export convention as the heroes, which use -90f) need a
+            // -90 yaw on the visual child so the authored forward aligns to the root's +Z
+            // that Enemy.DriveNav's face-velocity drives. The KayKit Skeleton_* / Boss /
+            // Dragon rigs already face +Z and must NOT be rotated. Family is resolved by
+            // the single authoritative source (EnemyAnimatorFactory.RigFor) so we never
+            // blanket-rotate. ⚠ "Troll" is mapped but RigFor falls it to KayKit
+            // (HumanoidMedium) → 0 rotation here; playtest if a Tripo Troll lands.
+            var skinOpts = SkinOptions.Enemy(height);
+            if (EnemyAnimatorFactory.RigFor(model) == EnemyRig.OrcWarband)
+                skinOpts.LocalRotation = Quaternion.Euler(0f, -90f, 0f);
+            var vis = VisualFactory.Skin(go.transform, "Enemies/" + model, skinOpts);
             if (vis != null)
             {
                 EnemyAnimatorFactory.Apply(vis, model);   // walk/attack/die controller

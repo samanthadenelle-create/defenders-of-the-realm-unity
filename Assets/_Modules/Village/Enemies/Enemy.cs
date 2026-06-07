@@ -117,6 +117,8 @@ namespace DeNelle.Village
         private bool _telegraphing;   // DEF-48: true during wind-up — blocks double-trigger
         private IDamageableStructure _currentTarget;
 
+        private ActorAnimator _actor; // guarded driver (Core) for Speed/Attack/Hit/Dead on the visual child controller
+
         // ── DEF-21 / DEF-72: EnemyBrain nav-target override ──────────────────
         // DEF-21: EnemyBrain.Update() calls SetBrainTarget each frame with a role-
         //   specific Transform destination. When non-null DriveNav() follows this
@@ -377,6 +379,17 @@ namespace DeNelle.Village
             _attackCooldown = 0f;
             _navWarned = false;
 
+            // Animation + turning fixes for core TD battle characters.
+            // Attach guarded driver (so Enemy.cs can call SetLocomotion/PlayAttack/Die
+            // and the HeroAnimatorFactory-style or Enemy shared controllers play).
+            var actor = GetComponent<ActorAnimator>() ?? gameObject.AddComponent<ActorAnimator>();
+            _actor = actor;
+
+            if (_agent != null)
+            {
+                _agent.updateRotation = false; // we control facing (to target on attack, or path dir)
+            }
+
             // DEF-56: reset path throttle and stagger the initial SetDestination
             // call through NavPathCoordinator so a 20-enemy spawn doesn't spike
             // NavMesh pathing in a single frame.
@@ -532,7 +545,19 @@ namespace DeNelle.Village
             float speed = (_agent != null && _agent.isOnNavMesh)
                 ? _agent.velocity.magnitude
                 : 0f;
+
+            // Drive the (new) ActorAnimator for locomotion (idle/walk/run blendtree in the
+            // shared enemy controllers). Also keep the legacy direct _animator.SetFloat
+            // for any old listeners. Guarded inside ActorAnimator.
+            _actor?.SetLocomotion(speed);
             _animator.SetFloat(AnimSpeed, speed);
+
+            // Battle idle / ready when stopped with target (for family enemies in combat).
+            // Combined with speed drive gives Idle (0 no target), Movement, Engagement/BattleReady.
+            // Hit/Death/Attack driven from damage/contact (PlayHit/PlayAttack/Die on _actor
+            // in TickContactAttack / OnDamage hooks if wired; see EnemyHitReaction).
+            if (speed < 0.1f && _currentTarget != null)
+                _actor?.SetCombatStance(true);
         }
 
         // ---------------------------------------------------------------------
@@ -569,6 +594,22 @@ namespace DeNelle.Village
             }
 
             if (_agent.isStopped) _agent.isStopped = false;
+
+            // WO-315: face the travel direction. _agent.updateRotation is OFF (so
+            // RangedAttack / contact facing can override), but with no driver the
+            // enemy kept its spawn orientation and "walked backwards". We are here
+            // only when NOT locked to a contact target (that path returns above), so
+            // slerp the root toward flattened agent velocity. Guard near-zero velocity
+            // so a stopped/arriving enemy doesn't jitter. Mirrors HeroLocomotion's
+            // root-facing (LookRotation on velocity, no extra Euler — the visual child's
+            // rig-forward correction is applied at skin time in EnemyFactory).
+            Vector3 vel = _agent.velocity; vel.y = 0f;
+            if (vel.sqrMagnitude > 0.1f * 0.1f)
+            {
+                Quaternion face = Quaternion.LookRotation(vel.normalized);
+                transform.rotation = Quaternion.Slerp(
+                    transform.rotation, face, 10f * Time.deltaTime);
+            }
 
             // DEF-72 / DEF-21 / DEF-224: resolve the nav destination in priority order:
             //   1. _brainPositionOverride  — tactical Vector3 (flank, retreat, etc.)
@@ -1011,6 +1052,9 @@ namespace DeNelle.Village
             if (_agent != null && _agent.isOnNavMesh) _agent.isStopped = true;
             _currentTarget = null;
             TargetManager.Unregister(this);   // drop from targeting the instant it dies
+
+            // Drive death anim (latches Dead bool so last frame holds; see ActorAnimator + controllers).
+            _actor?.Die();
             Died?.Invoke(this);
 
             // DEF-52 / DEF-46: death burst VFX + audio + micro screen shake.
