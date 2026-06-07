@@ -336,6 +336,7 @@ namespace DeNelle.Core.State
                 AdSkipDayKey = s.AdSkipDayKey,
                 BaseLayout = s.BaseLayout != null ? new List<PlacedStructureData>(s.BaseLayout) : null,
                 Magic = s.Magic,
+                PartyMemberIds = s.PartyMemberIds != null ? new List<string>(s.PartyMemberIds) : null,
             };
         }
 
@@ -395,6 +396,7 @@ namespace DeNelle.Core.State
             if (p.AdSkipDayKey != null) s.AdSkipDayKey = p.AdSkipDayKey;
             if (p.BaseLayout != null) s.BaseLayout = p.BaseLayout;
             if (p.Magic.HasValue) s.Magic = (int)p.Magic.Value;   // DEF-121 — tech-axis currency
+            if (p.PartyMemberIds != null) s.PartyMemberIds = p.PartyMemberIds;   // WO-301 — party roster
         }
 
         // =====================================================================
@@ -405,8 +407,80 @@ namespace DeNelle.Core.State
         public void FinishOnboarding()
         {
             _state.Onboarded = true;
+
+            // WO-301 — the canonical JOIN MOMENT: completing the tutorial enrols the
+            // first companion into the persisted party (Sylas at beat-1). This is the
+            // single chokepoint both FTUE completion paths funnel through (the Yarn
+            // <<enable_full_controls>> command and the dialogue-less inline fallback),
+            // so the companion "knows it's in the party" from here on — every spawn
+            // reads the roster, and a party UI frame shows. The companion is always a
+            // DIFFERENT class from the player's hero (canon hero→companion mapping),
+            // computed Core-side so Core never references DeNelle.Village (circular ref).
+            AddToParty(FirstCompanionId());   // AddToParty fires PlayerChanged + Save (idempotent)
+
             PlayerChanged.Invoke();
             Save();
+        }
+
+        /// <summary>
+        /// WO-301 — the id of the first companion who joins on tutorial complete. The
+        /// companion is always a DIFFERENT class from the player's chosen hero (the
+        /// canon hero→companion mapping — Mage→Knight·Knight→Ranger·Ranger→Cleric·
+        /// Cleric→Mage; mirrors DeNelle.Village.CompanionSpawner.CompanionClassFor),
+        /// so it never spawns as a hero clone. The id is the companion's HeroClass name.
+        /// </summary>
+        private string FirstCompanionId()
+        {
+            HeroClass player = _state != null ? (_state.HeroClass.ToNullable() ?? HeroClass.Knight) : HeroClass.Knight;
+            HeroClass companion;
+            switch (player)
+            {
+                case HeroClass.Mage:   companion = HeroClass.Knight; break;  // → Grom
+                case HeroClass.Knight: companion = HeroClass.Ranger; break;  // → Sylas
+                case HeroClass.Ranger: companion = HeroClass.Cleric; break;  // → Elara
+                case HeroClass.Cleric: companion = HeroClass.Mage;   break;  // → Thrain
+                default:               companion = HeroClass.Ranger; break;  // → Sylas (beat-1 default)
+            }
+            return companion.ToString();
+        }
+
+        // ── Party roster mutators (WO-301) ────────────────────────────────────
+
+        /// <summary>
+        /// WO-301 — add a companion <paramref name="id"/> to the persisted party
+        /// roster (in join order), persist, and raise <see cref="PlayerChanged"/> so
+        /// spawn + party-UI refresh. Idempotent: a member already in the party is a
+        /// no-op (no duplicate frame, no extra save). The id is the companion's
+        /// <see cref="HeroClass"/> name (e.g. "Ranger").
+        /// </summary>
+        public void AddToParty(string id)
+        {
+            if (_state == null || string.IsNullOrEmpty(id)) return;
+            if (_state.PartyMemberIds == null) _state.PartyMemberIds = new List<string>();
+            if (_state.PartyMemberIds.Contains(id)) return;   // already in the party
+            _state.PartyMemberIds.Add(id);
+            PlayerChanged.Invoke();
+            Save();
+        }
+
+        /// <summary>
+        /// WO-301 — remove a companion <paramref name="id"/> from the party roster,
+        /// persist, and raise <see cref="PlayerChanged"/>. No-op when not present.
+        /// </summary>
+        public void RemoveFromParty(string id)
+        {
+            if (_state == null || string.IsNullOrEmpty(id)) return;
+            if (_state.PartyMemberIds == null) return;
+            if (!_state.PartyMemberIds.Remove(id)) return;   // wasn't in the party
+            PlayerChanged.Invoke();
+            Save();
+        }
+
+        /// <summary>WO-301 — true when companion <paramref name="id"/> is in the party roster.</summary>
+        public bool IsInParty(string id)
+        {
+            if (_state == null || string.IsNullOrEmpty(id) || _state.PartyMemberIds == null) return false;
+            return _state.PartyMemberIds.Contains(id);
         }
 
         /// <summary>
@@ -586,6 +660,7 @@ namespace DeNelle.Core.State
             s.AdSkipDayKey = null;
             s.BaseLayout = new List<PlacedStructureData>();   // WO-108 — New Game starts on the default village seed.
             s.Magic = 0;                                      // DEF-121 — tech-axis currency resets on New Game.
+            s.PartyMemberIds = new List<string>();            // WO-301 — start alone; the first companion joins on tutorial complete.
             // NOTE: BoundWallet, BreachStyle and every social field are deliberately
             // left untouched — preferences and identity survive a New Game.
             s.SchemaVersion = SaveSchema.CurrentVersion;

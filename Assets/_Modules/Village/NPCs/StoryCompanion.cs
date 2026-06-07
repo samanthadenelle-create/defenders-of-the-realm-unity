@@ -57,6 +57,14 @@ namespace DeNelle.Village
         private const float CatchUpRange  = 9f;
         private const float WalkSpeed     = 3.0f;
         private const float SprintSpeed   = 5.5f;
+        // WO-301: beyond this the companion has stranded (e.g. across the village →
+        // OuterWorld seam, where the agent can't path to the off-navmesh hero) — it
+        // teleports to the hero's shoulder so it never gets left behind. Models the
+        // pet/PetHeroLeash transform-follow (no NavMesh dependency).
+        private const float TeleportRange = 28f;
+        // How far from the hero we still trust the NavMeshAgent to path. Past this
+        // (or when the hero is off the baked mesh) we drop to the plain lerp follow.
+        private const float AgentReachRange = 18f;
         // Side offset so it walks AT the hero's shoulder rather than dead behind
         // (reads as a companion, not a shadow). Sign flips per-instance via seed.
         private const float SideOffset    = 1.4f;
@@ -359,7 +367,29 @@ namespace DeNelle.Village
             bool tooClose = distHero <= InnerRing;
             float speed = distHero > CatchUpRange ? SprintSpeed : WalkSpeed;
 
-            if (_agent != null && _agent.enabled && _agent.isOnNavMesh)
+            // WO-301 — CATCH-UP TELEPORT: when the companion has been left far behind
+            // (typically the village → OuterWorld seam, where the agent can't path to
+            // the off-navmesh hero), snap to the hero's shoulder so it never strands.
+            if (distHero > TeleportRange)
+            {
+                WarpTo(target, self.y);
+                FaceHero();
+                return;
+            }
+
+            // WO-301 — choose the locomotion mode DYNAMICALLY each frame (not just once
+            // at Start). Trust the NavMeshAgent only while we AND the hero are on the
+            // baked mesh and within reach; otherwise fall through to the plain lerp so
+            // the companion keeps following across the seam (mirrors PetHeroLeash, which
+            // has no NavMesh dependency). This is the fix for the agent-locked-at-Start
+            // stranding: the agent was kept enabled in the village even after the hero
+            // walked off-navmesh into OuterWorld.
+            bool useAgent =
+                _agent != null && _agent.enabled && _agent.isOnNavMesh &&
+                distHero <= AgentReachRange &&
+                NavMesh.SamplePosition(heroPos, out _, 2.5f, NavMesh.AllAreas);
+
+            if (useAgent)
             {
                 _agent.speed = speed;
                 if (tooClose)
@@ -378,8 +408,13 @@ namespace DeNelle.Village
             }
             else
             {
-                // Plain lerp fallback (no NavMesh): glide toward the trail point,
-                // keep our own Y so we don't sink/float.
+                // Plain lerp fallback (off-navmesh / out of agent reach): glide toward
+                // the trail point, keeping our own Y so we don't sink/float. We pause
+                // the agent so it doesn't fight the transform move while we drive it
+                // manually (it resumes automatically when reachability returns).
+                if (_agent != null && _agent.enabled && _agent.isOnNavMesh)
+                    _agent.isStopped = true;
+
                 if (!tooClose)
                 {
                     Vector3 flatTarget = new Vector3(target.x, self.y, target.z);
@@ -387,6 +422,26 @@ namespace DeNelle.Village
                         Vector3.MoveTowards(self, flatTarget, speed * Time.deltaTime);
                 }
                 FaceHero();
+            }
+        }
+
+        /// <summary>
+        /// WO-301 — snap the companion to <paramref name="target"/> (catch-up after
+        /// stranding). Warps the NavMeshAgent when it can land on the mesh near the
+        /// target (keeps it agent-valid), else moves the transform directly so the
+        /// teleport still works off-navmesh (across the seam). Keeps <paramref
+        /// name="keepY"/> so it doesn't sink/float when there's no mesh under it.
+        /// </summary>
+        private void WarpTo(Vector3 target, float keepY)
+        {
+            if (_agent != null && _agent.enabled && _agent.isOnNavMesh &&
+                NavMesh.SamplePosition(target, out var hit, 4f, NavMesh.AllAreas))
+            {
+                _agent.Warp(hit.position);
+            }
+            else
+            {
+                transform.position = new Vector3(target.x, keepY, target.z);
             }
         }
 

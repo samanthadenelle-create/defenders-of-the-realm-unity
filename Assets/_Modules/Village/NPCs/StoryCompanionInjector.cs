@@ -78,6 +78,13 @@ namespace DeNelle.Village
 
             SceneManager.sceneLoaded -= OnSceneLoaded;
             SceneManager.sceneLoaded += OnSceneLoaded;
+
+            // WO-301 — re-spawn from the roster the moment a companion joins (the
+            // tutorial-complete AddToParty fires PlayerChanged), so the companion
+            // appears immediately rather than only on the next scene load.
+            var svc = GameStateService.Instance;
+            if (svc != null) svc.PlayerChanged.AddListener(OnRosterMaybeChanged);
+
             if (SceneManager.GetActiveScene().name == TargetScene) Spawn();
         }
 
@@ -85,6 +92,16 @@ namespace DeNelle.Village
         {
             if (Instance == this) Instance = null;
             SceneManager.sceneLoaded -= OnSceneLoaded;
+            var svc = GameStateService.Instance;
+            if (svc != null) svc.PlayerChanged.RemoveListener(OnRosterMaybeChanged);
+        }
+
+        // WO-301 — the party roster changed (a companion joined/left). Re-evaluate the
+        // spawn against the roster while we're in the village (Spawn itself gates on
+        // the roster + replaces any prior companion, so this is idempotent).
+        private void OnRosterMaybeChanged()
+        {
+            if (SceneManager.GetActiveScene().name == TargetScene) Spawn();
         }
 
         private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
@@ -100,6 +117,20 @@ namespace DeNelle.Village
             if (_companion != null) { Destroy(_companion.gameObject); _companion = null; }
 
             HeroClass hero = ResolveChosenHero();
+
+            // WO-301 — spawn keys off the PERSISTED PARTY ROSTER, not a one-off. The
+            // companion only appears once it has actually joined the party (tutorial
+            // complete → GameStateService.AddToParty). This is what makes the companion
+            // "know it's in the party" on EVERY spawn (village / open-world / re-load),
+            // and keeps a never-joined companion from showing up pre-tutorial. The
+            // tutorial override (s_heroClassOverride) wins for the FTUE beat so the
+            // companion can be framed during onboarding before the roster is written.
+            if (!s_heroClassOverride.HasValue && !IsCompanionInParty(hero))
+            {
+                Debug.Log($"[StoryCompanionInjector] {CompanionDialogue.NameFor(hero)} not in party yet (roster empty) — no spawn.");
+                return;
+            }
+
             Transform heroT = ResolveHero();
 
             // Place a couple of metres off the hero's shoulder; snap onto the
@@ -371,6 +402,18 @@ namespace DeNelle.Village
             // WO-280: default companion = a DIFFERENT class from the player's hero
             // (the canon hero→companion mapping), so it never spawns as a hero clone.
             return CompanionClassFor(ResolvePlayerHero());
+        }
+
+        /// <summary>
+        /// WO-301 — true when the companion of class <paramref name="companion"/> is in
+        /// the persisted party roster (id = the companion's HeroClass name). The roster
+        /// is the single source of truth for "is this companion deployed", so spawn keys
+        /// off it rather than a one-off flag. No service / empty roster ⇒ not in party.
+        /// </summary>
+        private static bool IsCompanionInParty(HeroClass companion)
+        {
+            var svc = GameStateService.Instance;
+            return svc != null && svc.IsInParty(companion.ToString());
         }
 
         /// <summary>

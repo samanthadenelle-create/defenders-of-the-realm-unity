@@ -27,7 +27,7 @@ namespace DeNelle.Core.State
     {
         // ── Versioning ───────────────────────────────────────────────────────
         /// <summary>CURRENT_SCHEMA_VERSION — bumped whenever the persisted shape changes.</summary>
-        public const int CurrentVersion = 15;  // v15 — added magic tech-axis currency (DEF-121/WO-230); v14 — baseLayout (WO-108); v13 — buildJobs + adSkip (WO-172)
+        public const int CurrentVersion = 16;  // v16 — added party roster (WO-301); v15 — magic tech-axis currency (DEF-121/WO-230); v14 — baseLayout (WO-108); v13 — buildJobs + adSkip (WO-172)
         /// <summary>SaveExport.format — bumped only if the envelope shape changes.</summary>
         public const int FileFormat = 1;
 
@@ -189,6 +189,16 @@ namespace DeNelle.Core.State
             /// step is needed (same additive-default-on-read pattern as <c>aetherCrystals</c>).
             /// </summary>
             [JsonProperty("magic")] public double? Magic;
+
+            // ── v16 — Party roster (WO-301) ──────────────────────────────────────
+            /// <summary>
+            /// The persisted party roster — companion ids in join order. Nullable per
+            /// the <c>.partial()</c> convention; absent on an older save → defaults to an
+            /// empty party on load (no companions until one joins), so no explicit
+            /// migration step is needed (same additive-default-on-read pattern as
+            /// <c>baseLayout</c>/<c>magic</c>).
+            /// </summary>
+            [JsonProperty("partyMemberIds")] public List<string> PartyMemberIds;
         }
 
         // =====================================================================

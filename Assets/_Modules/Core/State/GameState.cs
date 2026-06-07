@@ -239,6 +239,23 @@ namespace DeNelle.Core.State
         /// </summary>
         public int Magic = 0;
 
+        // ── Party — persisted companion roster (WO-301) ───────────────────────
+        /// <summary>
+        /// The persisted party roster (WO-301) — companion ids in JOIN ORDER (the
+        /// canon roster is Sylas→Elara→Grom→Thrain; ids are the companion's
+        /// <see cref="HeroClass"/> name, e.g. "Ranger"). This is the backbone the
+        /// companion spawn, follow and party-UI all read: a spawn reads the roster
+        /// to know WHO to place with the hero, and the HUD shows one party frame per
+        /// member. Mutated via <see cref="GameStateService.AddToParty"/> /
+        /// <c>RemoveFromParty</c>; round-trips through SaveSchema (v16) — append-only
+        /// field at the END so older saves load with an empty party. The hero itself
+        /// is HUD party slot 0 and is NOT stored here (this is the COMPANION roster).
+        /// </summary>
+        public List<string> PartyMemberIds = new List<string>();
+
+        /// <summary>Number of companions in the party (derived from the roster). 0 when alone.</summary>
+        public int PartySize => PartyMemberIds != null ? PartyMemberIds.Count : 0;
+
         /// <summary>A fresh List&lt;int&gt; of <paramref name="count"/> zeros.</summary>
         public static List<int> NewZeroed(int count)
         {

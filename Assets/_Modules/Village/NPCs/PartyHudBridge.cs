@@ -19,6 +19,7 @@
 
 using System.Reflection;
 using DeNelle.Core;
+using DeNelle.Core.State;
 using UnityEngine;
 
 namespace DeNelle.Village
@@ -55,6 +56,16 @@ namespace DeNelle.Village
 
             if (!ResolveHud()) return;
 
+            // WO-301 — the PERSISTED ROSTER is the source of truth for how many party
+            // frames show. PartySize companions (slots 1..PartySize) are visible; the
+            // rest are hidden. The live StoryCompanion still supplies the per-frame
+            // name/HP below, but a frame only appears when the roster says that member
+            // has joined — so the UI tracks the roster, not just whatever happens to be
+            // spawned. No service ⇒ fall back to "show whatever is spawned" (rosterCount
+            // = CompanionSlots) so non-persisted dev scenes still render.
+            var svc = GameStateService.Instance;
+            int rosterCount = (svc != null && svc.State != null) ? svc.State.PartySize : CompanionSlots;
+
             // Gather companions, stable slot order (lowest instance id = joined first).
             var all = FindObjectsByType<StoryCompanion>(FindObjectsSortMode.None);
             int n = 0;
@@ -77,7 +88,8 @@ namespace DeNelle.Village
             {
                 int hudSlot = slot + 1; // 0 is the hero
                 var c = _scratch[slot];
-                if (c != null)
+                // Roster gate (WO-301): only show a frame for a slot the roster covers.
+                if (c != null && slot < rosterCount)
                 {
                     _memberArgs[0] = hudSlot;
                     _memberArgs[1] = c.DisplayName;
