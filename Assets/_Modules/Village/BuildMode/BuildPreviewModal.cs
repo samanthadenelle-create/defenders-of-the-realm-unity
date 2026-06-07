@@ -39,6 +39,8 @@ namespace DeNelle.Village
         private bool _dragging;
         private Vector2 _lastDragPos;
         private Text _yawReadout; // live "Yaw: XX°" for premium viewer feel
+        private bool _closing;    // WO-314: idempotent close guard (prevents double-fire + post-close NRE)
+        private readonly List<Material> _tempMaterials = new List<Material>(); // WO-314: runtime mats to free on close
 
         private const int RT_SIZE = 384; // larger for proper 3D model viewer experience (still mobile friendly)
         private const string PLANE_NAME = "PreviewPlane";
@@ -200,6 +202,7 @@ namespace DeNelle.Village
             {
                 var mat = new Material(Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Unlit/Color"));
                 mat.color = new Color(0.4f, 0.4f, 0.42f, 1f); // neutral gray
+                _tempMaterials.Add(mat);
                 planeR.sharedMaterial = mat;
             }
             var planeCol = plane.GetComponent<Collider>();
@@ -228,7 +231,8 @@ namespace DeNelle.Village
             GameObject skinned = null;
             if (_entry != null && !string.IsNullOrEmpty(_entry.visualPrefabPath))
             {
-                skinned = VisualFactory.Skin(_previewVisual.transform, _entry.visualPrefabPath, SkinOptions.Prop(2.5f));
+                try { skinned = VisualFactory.Skin(_previewVisual.transform, _entry.visualPrefabPath, SkinOptions.Prop(2.5f)); }
+                catch (Exception e) { Debug.LogWarning($"[BuildPreviewModal] preview skin failed for {_entry.id}: {e.Message}"); skinned = null; }
             }
             if (skinned == null)
             {
@@ -239,7 +243,12 @@ namespace DeNelle.Village
                 var c = disc.GetComponent<Collider>();
                 if (c != null) Destroy(c);
                 var r = disc.GetComponent<Renderer>();
-                if (r != null) r.sharedMaterial = new Material(Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Unlit/Color")) { color = new Color(0.3f, 0.5f, 0.3f) };
+                if (r != null)
+                {
+                    var discMat = new Material(Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Unlit/Color")) { color = new Color(0.3f, 0.5f, 0.3f) };
+                    _tempMaterials.Add(discMat);
+                    r.sharedMaterial = discMat;
+                }
             }
 
             // Preview camera (orthographic for clean object view, or perspective).
@@ -275,7 +284,7 @@ namespace DeNelle.Village
 
         private void Update()
         {
-            if (_previewVisual == null || _rt == null) return;
+            if (_closing || _previewVisual == null || _rt == null) return;
 
             // Apply current yaw to visual (for buttons + drag).
             _previewVisual.transform.localRotation = Quaternion.Euler(0, _currentYaw, 0);
@@ -362,6 +371,8 @@ namespace DeNelle.Village
 
         private void Confirm()
         {
+            if (_closing) return;   // WO-314: idempotent — a second click / re-entry can't double-fire
+            _closing = true;
             float yaw = _currentYaw;
 
             // Core persistence: save (or overwrite) the final yaw the player chose as the
@@ -373,22 +384,33 @@ namespace DeNelle.Village
                 RotationCorrectionRegistry.SetAndSave(_entry.id, yaw);
             }
 
+            var cb = _onConfirm;
             Cleanup();
-            _onConfirm?.Invoke(yaw);
-            Destroy(gameObject);
+            Destroy(gameObject);    // WO-314: close FIRST so a throwing placement callback can't leave the modal stuck open
+            try { cb?.Invoke(yaw); }
+            catch (Exception e) { Debug.LogError($"[BuildPreviewModal] confirm callback threw: {e}"); }
         }
 
         private void Cancel()
         {
+            if (_closing) return;
+            _closing = true;
+            var cb = _onCancel;
             Cleanup();
-            _onCancel?.Invoke();
             Destroy(gameObject);
+            try { cb?.Invoke(); }
+            catch (Exception e) { Debug.LogError($"[BuildPreviewModal] cancel callback threw: {e}"); }
         }
 
         private void Cleanup()
         {
             if (_rt != null) { _rt.Release(); Destroy(_rt); _rt = null; }
-            if (_previewRoot != null) Destroy(_previewRoot);
+            if (_previewRoot != null) { Destroy(_previewRoot); _previewRoot = null; }
+            // WO-314: destroy runtime-created materials — Unity does NOT auto-free these when the
+            // renderer GameObject is destroyed, so they leaked on every modal open.
+            for (int i = 0; i < _tempMaterials.Count; i++)
+                if (_tempMaterials[i] != null) Destroy(_tempMaterials[i]);
+            _tempMaterials.Clear();
             // Canvas etc destroyed with this GO.
         }
 
