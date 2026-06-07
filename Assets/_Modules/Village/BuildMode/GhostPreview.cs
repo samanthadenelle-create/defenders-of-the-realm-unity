@@ -75,6 +75,12 @@ namespace DeNelle.Village
                 t.localPosition += _orientation.Offset;
                 if (_orientation.scale > 0f && !Mathf.Approximately(_orientation.scale, 1f))
                     t.localScale *= _orientation.scale;
+
+                // WYSIWYG seat — VisualFactory.SeatOnGround seated the RAW bounds at the host
+                // y; the correction above re-tipped the mesh so it now floats/sinks. Re-drop
+                // the CORRECTED bounds base to the ghost host's y, matching StructureFactory's
+                // ReseatCorrectedBottom so the ghost sits exactly where the piece will land.
+                ReseatCorrectedBottom(skinned, _visual.transform.position.y);
             }
 
             if (skinned == null)
@@ -141,6 +147,23 @@ namespace DeNelle.Village
         {
             _renderers.Clear();
             _renderers.AddRange(root.GetComponentsInChildren<Renderer>(true));
+        }
+
+        /// <summary>
+        /// Drop <paramref name="go"/> so its current (post-correction) world-bounds base sits
+        /// at <paramref name="groundY"/> — mirrors StructureFactory.ReseatCorrectedBottom so
+        /// the ghost and the placed structure seat identically (WYSIWYG).
+        /// </summary>
+        private static void ReseatCorrectedBottom(GameObject go, float groundY)
+        {
+            if (go == null) return;
+            var rends = go.GetComponentsInChildren<Renderer>(true);
+            if (rends == null || rends.Length == 0) return;
+            Bounds b = rends[0].bounds;
+            for (int i = 1; i < rends.Length; i++) b.Encapsulate(rends[i].bounds);
+            float dy = groundY - b.min.y;
+            if (!Mathf.Approximately(dy, 0f))
+                go.transform.position += new Vector3(0f, dy, 0f);
         }
 
         private void StripColliders(Transform root)

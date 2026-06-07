@@ -95,6 +95,14 @@ namespace DeNelle.Village
                     visual.transform.localPosition += entry.orientation.Offset;
                     if (entry.orientation.scale > 0f && !Mathf.Approximately(entry.orientation.scale, 1f))
                         visual.transform.localScale *= entry.orientation.scale;
+
+                    // FIX (build-placed FLOAT) — VisualFactory.SeatOnGround already seated the
+                    // RAW (un-corrected, often lying-down) bounds base at the root y. Applying the
+                    // upright correction AFTER that re-tips the mesh so its real base is no longer
+                    // at root y → the placed tower floats (or sinks). Re-seat the CORRECTED bounds:
+                    // drop the now-upright bounds.min.y back to the root's y. Same corrected mesh the
+                    // ghost shows, so WYSIWYG holds and pieces sit flat on the ground.
+                    ReseatCorrectedBottom(visual, root.transform.position.y);
                 }
             }
 
@@ -156,6 +164,105 @@ namespace DeNelle.Village
             Debug.Log($"[StructureFactory] composite '{composite.id}' built {built}/" +
                       $"{composite.composite.Length} member(s).");
             return groupRoot;
+        }
+
+        // ── corrected-bounds seat + footprint (fixes float + tight-to-wall) ───
+        // The placement pipeline (ghost + footprint + seat) must measure the UPRIGHT,
+        // OrientationFix-applied bounds, not the raw lying-down prefab. These helpers
+        // make that the single source of truth used by Create (seat) and the loader/
+        // validity (footprint) so all three agree on the same corrected geometry.
+
+        /// <summary>
+        /// Re-seat a skinned visual so its CURRENT (post-correction) world-bounds base
+        /// sits at <paramref name="groundY"/>. Called AFTER the OrientationFix re-rotates
+        /// the mesh, undoing the float/sink VisualFactory.SeatOnGround introduced when it
+        /// seated the raw (un-corrected) bounds. XZ is left as VisualFactory centred it.
+        /// </summary>
+        private static void ReseatCorrectedBottom(GameObject visual, float groundY)
+        {
+            if (visual == null) return;
+            if (!TryWorldBounds(visual, out Bounds b)) return;
+            float dy = groundY - b.min.y;
+            if (!Mathf.Approximately(dy, 0f))
+                visual.transform.position += new Vector3(0f, dy, 0f);
+        }
+
+        /// <summary>
+        /// Build the entry's visual OFF-SCREEN, apply its OrientationFix, and measure the
+        /// resulting UPRIGHT XZ footprint (the larger of width/depth, in metres). Used by
+        /// the placement/loader path so the footprint matches the corrected mesh the ghost
+        /// shows — a lying-down prefab would otherwise report a long, wrong footprint and
+        /// the tower couldn't sit tight to a wall. Returns the entry's authored
+        /// repo.placement.footprint as a fallback when the visual can't be measured.
+        /// The temp object is destroyed before return (no scene side-effects).
+        /// </summary>
+        // Cache the (relatively expensive) upright measurement per entry id — the ghost
+        // loop calls this every frame while arming. Keyed by id + a hash of the orientation
+        // so a live re-orient (build-mode orient editor) invalidates the stale value.
+        private static readonly System.Collections.Generic.Dictionary<string, float> s_footprintCache =
+            new System.Collections.Generic.Dictionary<string, float>();
+
+        public static float MeasureUprightFootprintMetres(CatalogEntry entry)
+        {
+            float authored = entry != null && entry.repo != null && entry.repo.placement != null
+                ? Mathf.Max(1f, entry.repo.placement.footprint) : 3f;
+            if (entry == null || string.IsNullOrEmpty(entry.visualPrefabPath)) return authored;
+
+            // Cache key folds in the orientation so a live re-orient re-measures.
+            var o = entry.orientation;
+            string key = o != null && o.manual
+                ? $"{entry.id}|{o.Euler.x:0.#},{o.Euler.y:0.#},{o.Euler.z:0.#}|{o.scale:0.##}"
+                : entry.id;
+            if (s_footprintCache.TryGetValue(key, out float cached)) return cached;
+
+            var probe = new GameObject("FootprintProbe");
+            probe.hideFlags = HideFlags.HideAndDontSave;
+            float result = authored;
+            try
+            {
+                SkinOptions opts;
+                float visualHeight = entry.repo != null ? entry.repo.visualHeight : 0f;
+                if (visualHeight > 0f) { opts = SkinOptions.Structure(0f); opts.FitHeight = visualHeight; }
+                else                   { opts = SkinOptions.Structure(authored); }
+
+                var visual = VisualFactory.Skin(probe.transform, entry.visualPrefabPath, opts);
+                if (visual != null)
+                {
+                    if (entry.orientation != null && entry.orientation.manual)
+                    {
+                        visual.transform.localRotation = Quaternion.Euler(entry.orientation.Euler) * visual.transform.localRotation;
+                        visual.transform.localPosition += entry.orientation.Offset;
+                        if (entry.orientation.scale > 0f && !Mathf.Approximately(entry.orientation.scale, 1f))
+                            visual.transform.localScale *= entry.orientation.scale;
+                    }
+                    if (TryWorldBounds(visual, out Bounds b))
+                        result = Mathf.Max(0.1f, Mathf.Max(b.size.x, b.size.z));
+                }
+            }
+            finally
+            {
+                if (Application.isPlaying) Object.Destroy(probe);
+                else                       Object.DestroyImmediate(probe);
+            }
+            s_footprintCache[key] = result;
+            return result;
+        }
+
+        /// <summary>World-space renderer bounds of <paramref name="go"/> (renderer-first, collider fallback).</summary>
+        private static bool TryWorldBounds(GameObject go, out Bounds bounds)
+        {
+            bounds = default;
+            if (go == null) return false;
+            var rends = go.GetComponentsInChildren<Renderer>(true);
+            if (rends != null && rends.Length > 0)
+            {
+                bounds = rends[0].bounds;
+                for (int i = 1; i < rends.Length; i++) bounds.Encapsulate(rends[i].bounds);
+                return true;
+            }
+            var col = go.GetComponentInChildren<Collider>(true);
+            if (col != null) { bounds = col.bounds; return true; }
+            return false;
         }
 
         // ── behaviorId -> component bridge (the Core/Village boundary) ─────────

@@ -52,15 +52,36 @@ namespace DeNelle.Village
 
         [Header("Camera overview")]
         [Tooltip("Camera height (Y) while in build mode — angled 3D overview so structures read as upright.")]
-        [SerializeField] private float _buildModeHeight = 35f;
+        [SerializeField] private float _buildModeHeight = 28f;
         [Tooltip("Pitch (degrees) while in build mode — angled, not top-down, so 3D orientation is visible.")]
         [SerializeField] private float _buildModePitch = 45f;
+
+        [Header("Build camera pan / zoom (desktop)")]
+        [Tooltip("Pan speed (m/sec) for WASD + edge-scroll.")]
+        [SerializeField] private float _camPanSpeed = 24f;
+        [Tooltip("Pan speed multiplier while middle/right-dragging (m per screen pixel).")]
+        [SerializeField] private float _camDragSpeed = 0.08f;
+        [Tooltip("Screen-edge band (px) that triggers edge-scroll pan.")]
+        [SerializeField] private float _camEdgeBand = 18f;
+        [Tooltip("Zoom (height) step per scroll notch.")]
+        [SerializeField] private float _camZoomStep = 4f;
+        [Tooltip("Min / max build-camera height (zoom clamp).")]
+        [SerializeField] private float _camHeightMin = 14f;
+        [SerializeField] private float _camHeightMax = 60f;
+
+        // Live overview state — the focus point the camera looks at (XZ on the grid plane)
+        // and the current zoom height. Seeded in PullCameraBack, mutated by the pan/zoom
+        // loop, and clamped to the grid (map) bounds so the player can't pan into the void.
+        private Vector3 _camFocus;
+        private float   _camHeight;
+        private bool    _camDragging;
+        private Vector2 _camDragLastPoint;
 
         [Header("Placement")]
         [SerializeField] private float _rayDistance = 800f;
         [SerializeField] private LayerMask _groundMask = ~0;
-        [Tooltip("Min clearance (m) a placement must keep from a gate, so the spawn→Heart lane stays open.")]
-        [SerializeField] private float _gateClearance = 8f;
+        [Tooltip("Min clearance (m) a placement must keep from the gate LANE, so the spawn→Heart corridor stays open.")]
+        [SerializeField] private float _gateClearance = 3f;
 
         private PlacementGrid _grid;
         private BuildPaletteUI _palette;
@@ -70,6 +91,9 @@ namespace DeNelle.Village
         // (The old UIToolkit 3-axis TowerPlacementRotateMenu is now the editor/dev OFFSET
         //  tool — no longer called from placement.)
         private RotateModelMenu _rotateMenu;
+        // The 3-axis dev/orient editor opened from the palette "Orient" button — while it is
+        // live the placement loops are frozen so a tap behind the modal can't drop a piece.
+        private TowerPlacementRotateMenu _orientEditor;
 
         private Camera _camera;
         private CatalogEntry _armed;
@@ -222,6 +246,16 @@ namespace DeNelle.Village
             // play Camera.main can resolve to a non-rendering / wrong camera, so taps
             // would miss the build grid. _camera is set in PullCameraBack().
             if (_camera == null) { _camera = ActiveScreenCamera(); if (_camera == null) return; }
+
+            // Move the overview each frame (WASD / edge-scroll / drag / zoom on desktop;
+            // touch pans via the Lean driver). Runs in every mode so the player can re-frame
+            // while arming, moving, or idle.
+            UpdateBuildCameraPan();
+
+            // While the 3-axis orient editor is open, the placement loops are frozen so a tap
+            // behind the modal can't drop a piece (the modal owns its own confirm/cancel).
+            if (_orientEditor != null && _orientEditor.isActiveAndEnabled && _orientEditor.IsOpen)
+            { _ghost?.Hide(); return; }
 
             // Three exclusive modes: re-placing a selected structure (MOVE), arming a
             // new one (CREATE), or idle (tap a structure to SELECT it).
@@ -448,8 +482,10 @@ namespace DeNelle.Village
             out Vector2Int cell, out Vector2Int footprint, bool ignoreCost = false)
         {
             cell = _grid.WorldToCell(snapped);
-            footprint = _grid.FootprintCells(
-                entry != null && entry.repo != null && entry.repo.placement != null ? entry.repo.placement.footprint : 3f);
+            // FIX (footprint from CORRECTED bounds) — measure the UPRIGHT, OrientationFix-
+            // applied mesh (the SAME geometry the ghost + the placed structure use) so the
+            // validity footprint matches what lands, letting pieces sit tight to a wall.
+            footprint = _grid.FootprintCells(StructureFactory.MeasureUprightFootprintMetres(entry));
 
             // 1. Flat, upward-facing top (TowerPlacementSystem.IsValidSurface rule).
             if (hit.collider == null) return false;
@@ -542,13 +578,15 @@ namespace DeNelle.Village
         }
 
         /// <summary>
-        /// True when the footprint AABB comes within the gate clearance of any live
-        /// <see cref="Gate"/>. Finds gates by COMPONENT (every gate has one) rather than
-        /// a fragile tag+name match — the old check searched tag "Building" + name
-        /// "gate", so a gate that wasn't tagged that way was never found and the lane
-        /// was never protected. Uses each gate's renderer/collider bounds (centre +
-        /// extents), avoiding the displacement trap, and expands them by the clearance,
-        /// then tests against the whole footprint AABB.
+        /// True when the footprint AABB intrudes on a gate's spawn→Heart LANE. TUNED
+        /// (build-mode playtest): the old test expanded each gate's WHOLE bounds by the
+        /// clearance on every side, which walled off a broad block around the gate and
+        /// blocked legitimate placement along the adjacent wall. Now it guards only the
+        /// actual gate OPENING — a narrow lane the width of the gate, running INWARD
+        /// toward the Heart (0,0,0) and a short way OUTWARD toward the spawn — so a piece
+        /// can sit right next to the gate as long as it doesn't block the doorway the
+        /// enemies path through. Clearance is a small pad on the lane (default 3 m), not a
+        /// radius around the gate. Uses renderer/collider bounds (displacement-trap safe).
         /// </summary>
         private bool IsTooCloseToGate(Bounds footprintAabb)
         {
@@ -558,8 +596,30 @@ namespace DeNelle.Village
                 if (gate == null) continue;
                 Bounds gb;
                 if (!TryWorldBounds(gate.gameObject, out gb)) gb = new Bounds(gate.transform.position, Vector3.one);
-                gb.Expand(new Vector3(_gateClearance * 2f, 0f, _gateClearance * 2f));   // grow by clearance on each side
-                if (OverlapsXZ(footprintAabb, gb)) return true;
+
+                // The lane runs along the gate→Heart axis (the spawn→Heart corridor). The
+                // gate's SHORTER horizontal span is the opening WIDTH; the lane keeps that
+                // width (+ a small pad) and extends along the through-axis so it covers the
+                // doorway the enemies walk, NOT the whole wall the gate sits in.
+                Vector3 c = gb.center;
+                Vector3 toHeart = new Vector3(-c.x, 0f, -c.z);   // Heart is at origin
+                bool throughIsX = Mathf.Abs(toHeart.x) >= Mathf.Abs(toHeart.z);
+
+                float openWidth = throughIsX ? gb.size.z : gb.size.x;   // span across the opening
+                float halfWidth = openWidth * 0.5f + _gateClearance;
+                float laneReach = 6f + _gateClearance;                   // how far the lane guards in/out
+
+                Bounds lane = new Bounds(c, Vector3.one);
+                if (throughIsX)
+                    lane.SetMinMax(
+                        new Vector3(c.x - laneReach, c.y - 0.5f, c.z - halfWidth),
+                        new Vector3(c.x + laneReach, c.y + 0.5f, c.z + halfWidth));
+                else
+                    lane.SetMinMax(
+                        new Vector3(c.x - halfWidth, c.y - 0.5f, c.z - laneReach),
+                        new Vector3(c.x + halfWidth, c.y + 0.5f, c.z + laneReach));
+
+                if (OverlapsXZ(footprintAabb, lane)) return true;
             }
             return false;
         }
@@ -1247,8 +1307,106 @@ namespace DeNelle.Village
             Vector3 centre = _grid != null
                 ? _grid.CellToWorld(new Vector2Int(_grid.gridWidth / 2, _grid.gridHeight / 2))
                 : Vector3.zero;
-            _camera.transform.position = new Vector3(centre.x, _buildModeHeight, centre.z - _buildModeHeight);
+            // Seed the live pan/zoom state, then apply. The camera now LOOKS AT _camFocus
+            // from _camHeight at the build pitch, so pan = move focus, zoom = change height.
+            _camFocus  = new Vector3(centre.x, 0f, centre.z);
+            _camHeight = Mathf.Clamp(_buildModeHeight, _camHeightMin, _camHeightMax);
+            _camDragging = false;
+            ApplyBuildCamera();
+        }
+
+        /// <summary>
+        /// Place the overview camera from the live focus + zoom state at the build pitch.
+        /// Keeps the original framing (back-and-up by the height, 45° down) but driven by
+        /// _camFocus / _camHeight so the pan/zoom loop just mutates those.
+        /// </summary>
+        private void ApplyBuildCamera()
+        {
+            if (_camera == null) return;
+            _camera.transform.position = new Vector3(_camFocus.x, _camHeight, _camFocus.z - _camHeight);
             _camera.transform.rotation = Quaternion.Euler(_buildModePitch, 0f, 0f);
+        }
+
+        /// <summary>
+        /// Desktop pan + zoom for the build overview (touch already pans via the Lean
+        /// driver). WASD / arrow keys + screen-edge scroll move the focus on the XZ plane;
+        /// middle- or right-drag grabs the view; the scroll wheel zooms (changes height).
+        /// The focus is CLAMPED to the grid (map) bounds so the player can't pan into the
+        /// void. New Input System reads (Village runs with legacy Input disabled).
+        /// </summary>
+        private void UpdateBuildCameraPan()
+        {
+            if (_camera == null) return;
+
+            var kb = UnityEngine.InputSystem.Keyboard.current;
+            var mouse = UnityEngine.InputSystem.Mouse.current;
+            float dt = Time.unscaledDeltaTime;
+
+            // Camera-local right/forward projected onto the XZ plane (pitch-independent pan).
+            Vector3 fwd = _camera.transform.forward; fwd.y = 0f; fwd = fwd.sqrMagnitude > 1e-4f ? fwd.normalized : Vector3.forward;
+            Vector3 right = _camera.transform.right; right.y = 0f; right = right.sqrMagnitude > 1e-4f ? right.normalized : Vector3.right;
+
+            Vector2 move = Vector2.zero;   // x = strafe, y = forward
+            if (kb != null)
+            {
+                if (kb.wKey.isPressed || kb.upArrowKey.isPressed)    move.y += 1f;
+                if (kb.sKey.isPressed || kb.downArrowKey.isPressed)  move.y -= 1f;
+                if (kb.dKey.isPressed || kb.rightArrowKey.isPressed) move.x += 1f;
+                if (kb.aKey.isPressed || kb.leftArrowKey.isPressed)  move.x -= 1f;
+            }
+
+            // Edge-scroll — pointer near a screen border nudges the view that way.
+            if (mouse != null && _camEdgeBand > 0f)
+            {
+                Vector2 p = mouse.position.ReadValue();
+                if (p.x <= _camEdgeBand)                    move.x -= 1f;
+                else if (p.x >= Screen.width - _camEdgeBand) move.x += 1f;
+                if (p.y <= _camEdgeBand)                    move.y -= 1f;
+                else if (p.y >= Screen.height - _camEdgeBand) move.y += 1f;
+            }
+
+            if (move.sqrMagnitude > 1e-4f)
+            {
+                move = Vector2.ClampMagnitude(move, 1f);
+                _camFocus += (right * move.x + fwd * move.y) * (_camPanSpeed * dt);
+            }
+
+            // Middle-drag grabs the view (screen-pixel delta → world pan). Right-drag also
+            // pans, but ONLY when idle (nothing armed / not moving) — while armed/moving the
+            // right button is reserved for Cancel (IBuildInput.Cancel), so a right-drag there
+            // would disarm rather than pan. Touch pans via the Lean driver.
+            if (mouse != null)
+            {
+                bool rightPanAllowed = _armed == null && !_movingSelected;
+                bool dragHeld = mouse.middleButton.isPressed || (rightPanAllowed && mouse.rightButton.isPressed);
+                Vector2 sp = mouse.position.ReadValue();
+                if (dragHeld && !_camDragging) { _camDragging = true; _camDragLastPoint = sp; }
+                else if (!dragHeld)            { _camDragging = false; }
+                else if (_camDragging)
+                {
+                    Vector2 d = sp - _camDragLastPoint;
+                    _camDragLastPoint = sp;
+                    // Drag-right pushes the world left (grab metaphor) → subtract.
+                    _camFocus -= (right * d.x + fwd * d.y) * _camDragSpeed;
+                }
+
+                // Scroll wheel → zoom (changes height).
+                float scroll = mouse.scroll.ReadValue().y;
+                if (Mathf.Abs(scroll) > 0.01f)
+                    _camHeight = Mathf.Clamp(_camHeight - Mathf.Sign(scroll) * _camZoomStep, _camHeightMin, _camHeightMax);
+            }
+
+            // Clamp the focus to the grid (map) bounds so the view can't leave the world.
+            if (_grid != null)
+            {
+                float halfW = _grid.gridWidth  * _grid.cellSize * 0.5f;
+                float halfH = _grid.gridHeight * _grid.cellSize * 0.5f;
+                Vector3 mapCentre = _grid.origin + new Vector3(halfW, 0f, halfH);
+                _camFocus.x = Mathf.Clamp(_camFocus.x, mapCentre.x - halfW, mapCentre.x + halfW);
+                _camFocus.z = Mathf.Clamp(_camFocus.z, mapCentre.z - halfH, mapCentre.z + halfH);
+            }
+
+            ApplyBuildCamera();
         }
 
         private void RestoreCamera()
@@ -1323,6 +1481,44 @@ namespace DeNelle.Village
             _palette = go.AddComponent<BuildPaletteUI>();
             _palette.OnEntrySelected += Arm;
             _palette.OnExitRequested += Exit;
+            _palette.OnOrientRequested += OpenOrientEditorForArmed;
+        }
+
+        /// <summary>
+        /// WO (build-mode orient) — open the 3-axis orient EDITOR on the ARMED entry (no id
+        /// typing). Resolves the armed entry's visual prefab from Resources and hands it to
+        /// TowerPlacementRotateMenu.OpenDevOrient, which logs an [OrientRecipe] line + applies
+        /// the dialed offset on Confirm. The standalone (AdminOverlay) path still drives the
+        /// same editor by typed/dropdown id.
+        /// </summary>
+        private void OpenOrientEditorForArmed(string id)
+        {
+            var entry = _armed ?? CatalogRegistry.Get(id);
+            if (entry == null)
+            {
+                Debug.LogWarning($"[BuildMode] Orient: no armed entry / '{id}' not in registry.");
+                return;
+            }
+
+            GameObject prefab = !string.IsNullOrEmpty(entry.visualPrefabPath)
+                ? Resources.Load<GameObject>(entry.visualPrefabPath)
+                : null;
+            if (prefab == null)
+            {
+                Debug.LogWarning($"[BuildMode] Orient: '{entry.id}' has no loadable visual prefab ('{entry.visualPrefabPath}').");
+                return;
+            }
+
+            var menu = FindObjectOfType<TowerPlacementRotateMenu>();
+            if (menu == null)
+            {
+                var mgo = new GameObject("DevOrientMenu");
+                menu = mgo.AddComponent<TowerPlacementRotateMenu>();
+            }
+            _orientEditor = menu;
+            string name = !string.IsNullOrEmpty(entry.displayName) ? entry.displayName : entry.id;
+            menu.OpenDevOrient(entry.id, prefab, name);
+            Debug.Log($"[Orient] build-mode orient opened on armed '{entry.id}'.");
         }
 
         private void EnsureSelectionUi()

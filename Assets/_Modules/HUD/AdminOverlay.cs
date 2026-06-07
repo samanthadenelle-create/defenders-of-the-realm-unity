@@ -160,6 +160,13 @@ namespace DeNelle.HUD
             row.style.alignItems    = Align.Center;
             row.style.marginTop = 8; row.style.marginBottom = 4;
 
+            // Relabelled "crafting id" → "catalog id" — the field takes a CatalogRegistry id.
+            var idLabel = new Label("catalog id");
+            idLabel.style.color = new Color(0.85f, 0.85f, 0.85f);
+            idLabel.style.fontSize = 12;
+            idLabel.style.width = 70;
+            row.Add(idLabel);
+
             _orientIdField = new TextField { value = "" };
             _orientIdField.style.flexGrow = 1;
             _orientIdField.style.marginRight = 6;

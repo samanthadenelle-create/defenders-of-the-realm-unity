@@ -44,6 +44,14 @@ namespace DeNelle.Village
         [Tooltip("World-space XZ of the grid's (0,0) cell-corner. Default centres the grid on the origin.")]
         public Vector3 origin = Vector3.zero;
 
+        // EDGE-ALLOW (owner hard requirement) — how many cells in from the grid border are
+        // BLOCKED for placement. 0 = the whole grid is buildable INCLUDING the boundary cells,
+        // so a perimeter wall run reaches the map edge. Was implicitly clamped to the interior
+        // before; keep this at 0 unless the owner asks for an inset. A negative value is treated
+        // as 0 (never inset).
+        [Tooltip("Cells of border to block from placement. 0 = edge-allow (perimeter walls reach the boundary).")]
+        public int edgeMargin = 0;
+
         // occupied[x,z] → the structure id occupying that cell, or null if free.
         private string[,] _occupied;
 
@@ -111,12 +119,16 @@ namespace DeNelle.Village
             EnsureGrid();
             int fw = Mathf.Max(1, footprint.x);
             int fh = Mathf.Max(1, footprint.y);
+            // EDGE-ALLOW — the buildable bounds. margin 0 = the full grid (incl. boundary
+            // cells) is placeable so perimeter walls reach the map edge.
+            int m = Mathf.Max(0, edgeMargin);
+            int minX = m, minZ = m, maxX = gridWidth - m, maxZ = gridHeight - m;
             for (int dx = 0; dx < fw; dx++)
             {
                 for (int dz = 0; dz < fh; dz++)
                 {
                     int x = cell.x + dx, z = cell.y + dz;
-                    if (x < 0 || z < 0 || x >= gridWidth || z >= gridHeight) return false;
+                    if (x < minX || z < minZ || x >= maxX || z >= maxZ) return false;
                     if (!string.IsNullOrEmpty(_occupied[x, z])) return false;
                 }
             }

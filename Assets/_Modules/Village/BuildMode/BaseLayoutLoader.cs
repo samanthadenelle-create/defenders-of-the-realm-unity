@@ -168,8 +168,10 @@ namespace DeNelle.Village
             var go = StructureFactory.Create(entry, new Pose(pos, rot), Root);
             if (go == null) return null;
 
-            Vector2Int footprint = grid.FootprintCells(
-                entry.repo != null && entry.repo.placement != null ? entry.repo.placement.footprint : 3f);
+            // FIX (footprint from CORRECTED bounds) — measure the UPRIGHT, OrientationFix-
+            // applied mesh so the footprint matches what the ghost showed (a lying-down
+            // prefab would report a long, wrong footprint and refuse to sit near a wall).
+            Vector2Int footprint = grid.FootprintCells(StructureFactory.MeasureUprightFootprintMetres(entry));
 
             AddFootprintBlocker(go, footprint, grid.cellSize);
 

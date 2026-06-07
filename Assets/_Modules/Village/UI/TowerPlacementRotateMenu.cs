@@ -30,6 +30,7 @@ using System;
 using System.IO;
 using System.Globalization;
 using DeNelle.Core.Data;
+using DeNelle.Core.Catalog;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -67,6 +68,10 @@ namespace DeNelle.Village
         private const string FontPath   = "Assets/_Modules/Village/Fonts/Cinzel-Regular.ttf";
 
         // ── State ───────────────────────────────────────────────────────────────
+        /// <summary>True while the panel is shown — lets callers (BuildModeController) freeze
+        /// the placement loop behind the modal.</summary>
+        public bool IsOpen { get; private set; }
+
         private UIDocument _document;
         private VisualElement _root;
 
@@ -85,9 +90,14 @@ namespace DeNelle.Village
 
         private int   _snapDegrees = 45;          // 0=off, 15, 45, 90
         private float _xDeg, _yDeg, _zDeg;        // current (snapped) euler values
+        private float _scale = 1f;                // dialed uniform scale (dev-orient)
 
         private Slider _xSlider, _ySlider, _zSlider;
         private Label  _xReadout, _yReadout, _zReadout;
+        // Numeric entry fields alongside the sliders (editable X/Y/Z euler + scale).
+        private TextField _xInput, _yInput, _zInput, _scaleInput;
+        // Dev-orient: a runtime dropdown of catalog ids (standalone path — pick instead of type).
+        private DropdownField _catalogIdDrop;
         private VisualElement _viewport;
 
         private TowerPreviewCamera _preview;
@@ -172,11 +182,23 @@ namespace DeNelle.Village
         {
             _towerData   = null;
             _devOrientId = string.IsNullOrEmpty(catalogId) ? "unknown" : catalogId;
+
+            // Seed from the entry's EXISTING orientation (if any) so re-opening shows the
+            // current correction rather than identity, and the scale field starts there.
+            var entry = CatalogRegistry.Get(_devOrientId);
+            Quaternion initial = Quaternion.identity;
+            _scale = 1f;
+            if (entry != null && entry.orientation != null && entry.orientation.manual)
+            {
+                initial = Quaternion.Euler(entry.orientation.Euler);
+                if (entry.orientation.scale > 0f) _scale = entry.orientation.scale;
+            }
+
             OpenCore(
                 previewPrefab,
                 string.IsNullOrEmpty(displayName) ? _devOrientId : displayName,
                 0d,
-                Quaternion.identity,
+                initial,
                 null,   // confirm handled by the dev-orient branch in OnConfirmClicked
                 null);
         }
@@ -213,6 +235,7 @@ namespace DeNelle.Village
         public void Close()
         {
             Debug.Log("[Orient] Close.");
+            IsOpen = false;
             DisposePreview();
             if (_root != null) _root.style.display = DisplayStyle.None;
             if (_document != null) _document.enabled = false;
@@ -251,10 +274,16 @@ namespace DeNelle.Village
             body.style.paddingLeft = 14; body.style.paddingRight = 14;
 
             body.Add(BuildHeader());
+            // DEV (standalone orient): a dropdown of catalog ids so the owner can pick the
+            // asset to orient instead of typing it (the build-mode path arms the entry, so the
+            // dropdown is informational there). Built from CatalogRegistry at runtime.
+            if (!string.IsNullOrEmpty(_devOrientId))
+                body.Add(BuildCatalogIdRow());
             body.Add(BuildViewport());
-            body.Add(BuildAxisRow("X Axis (Pitch)", AxisX, _xDeg, out _xSlider, out _xReadout, OnXChanged, () => ResetAxis(0)));
-            body.Add(BuildAxisRow("Y Axis (Yaw)",   AxisY, _yDeg, out _ySlider, out _yReadout, OnYChanged, () => ResetAxis(1)));
-            body.Add(BuildAxisRow("Z Axis (Roll)",  AxisZ, _zDeg, out _zSlider, out _zReadout, OnZChanged, () => ResetAxis(2)));
+            body.Add(BuildAxisRow("X Axis (Pitch)", AxisX, _xDeg, out _xSlider, out _xReadout, out _xInput, OnXChanged, OnXInput, () => ResetAxis(0)));
+            body.Add(BuildAxisRow("Y Axis (Yaw)",   AxisY, _yDeg, out _ySlider, out _yReadout, out _yInput, OnYChanged, OnYInput, () => ResetAxis(1)));
+            body.Add(BuildAxisRow("Z Axis (Roll)",  AxisZ, _zDeg, out _zSlider, out _zReadout, out _zInput, OnZChanged, OnZInput, () => ResetAxis(2)));
+            body.Add(BuildScaleRow());
             body.Add(BuildInfoBar());
             body.Add(BuildControlsRow());
 
@@ -324,11 +353,12 @@ namespace DeNelle.Village
             return _viewport;
         }
 
-        // axisIndex via the reset closure; slider/readout returned by out params.
+        // axisIndex via the reset closure; slider/readout/input returned by out params.
         private VisualElement BuildAxisRow(
             string label, Color accent, float initial,
-            out Slider slider, out Label readout,
-            EventCallback<ChangeEvent<float>> onChange, Action onReset)
+            out Slider slider, out Label readout, out TextField input,
+            EventCallback<ChangeEvent<float>> onChange,
+            EventCallback<ChangeEvent<string>> onInput, Action onReset)
         {
             var row = new VisualElement();
             row.style.flexDirection = FlexDirection.Row;
@@ -350,7 +380,7 @@ namespace DeNelle.Village
             row.Add(slider);
 
             readout = new Label($"{Mathf.RoundToInt(initial)}°");
-            readout.style.width    = 46;
+            readout.style.width    = 38;
             readout.style.fontSize = 11;
             readout.style.color    = TitleGold;
             readout.style.backgroundColor = ReadoutBg;
@@ -359,6 +389,13 @@ namespace DeNelle.Village
             readout.style.unityTextAlign = TextAnchor.MiddleCenter;
             readout.style.paddingTop = 3; readout.style.paddingBottom = 3;
             row.Add(readout);
+
+            // Editable numeric entry — type an exact angle (commits on Enter / focus-out).
+            input = new TextField { value = FormatDeg(initial), isDelayed = true };
+            input.style.width = 52;
+            input.style.marginLeft = 4;
+            input.RegisterValueChangedCallback(onInput);
+            row.Add(input);
 
             var reset = new Button(() => onReset()) { text = "↺" };
             reset.style.width = 26; reset.style.height = 22;
@@ -371,6 +408,90 @@ namespace DeNelle.Village
             row.Add(reset);
 
             return row;
+        }
+
+        /// <summary>Editable uniform-scale row (dev-orient). Commits on Enter / focus-out.</summary>
+        private VisualElement BuildScaleRow()
+        {
+            var row = new VisualElement();
+            row.style.flexDirection = FlexDirection.Row;
+            row.style.alignItems    = Align.Center;
+            row.style.marginBottom  = 6;
+
+            var name = new Label("Scale");
+            name.style.fontSize = 11;
+            name.style.color    = TitleGold;
+            name.style.width    = 96;
+            name.style.unityFontStyleAndWeight = FontStyle.Bold;
+            row.Add(name);
+
+            _scaleInput = new TextField { value = FormatScale(_scale), isDelayed = true };
+            _scaleInput.style.width = 64;
+            _scaleInput.RegisterValueChangedCallback(OnScaleInput);
+            row.Add(_scaleInput);
+
+            var hint = new Label("× uniform");
+            hint.style.fontSize = 10;
+            hint.style.color = CancelTxt;
+            hint.style.marginLeft = 8;
+            row.Add(hint);
+            return row;
+        }
+
+        /// <summary>
+        /// DEV: a dropdown of catalog ids read from CatalogRegistry at runtime, so the owner
+        /// can SELECT the asset to orient (standalone path) rather than typing it. Picking a
+        /// new id re-opens the editor on that entry's prefab. Reflection-free — the menu
+        /// already references DeNelle.Core.Catalog.
+        /// </summary>
+        private VisualElement BuildCatalogIdRow()
+        {
+            var row = new VisualElement();
+            row.style.flexDirection = FlexDirection.Row;
+            row.style.alignItems    = Align.Center;
+            row.style.marginBottom  = 8;
+
+            var name = new Label("Catalog id");
+            name.style.fontSize = 11;
+            name.style.color    = TitleGold;
+            name.style.width    = 96;
+            name.style.unityFontStyleAndWeight = FontStyle.Bold;
+            row.Add(name);
+
+            var ids = CollectCatalogIds();
+            int idx = Mathf.Max(0, ids.IndexOf(_devOrientId));
+            _catalogIdDrop = new DropdownField(ids, ids.Count > 0 ? idx : -1);
+            _catalogIdDrop.style.flexGrow = 1;
+            _catalogIdDrop.RegisterValueChangedCallback(OnCatalogIdPicked);
+            row.Add(_catalogIdDrop);
+            return row;
+        }
+
+        /// <summary>All registered catalog ids across every CatalogType (sorted, deduped).</summary>
+        private static System.Collections.Generic.List<string> CollectCatalogIds()
+        {
+            var set = new System.Collections.Generic.SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (CatalogType t in Enum.GetValues(typeof(CatalogType)))
+            {
+                var list = CatalogRegistry.OfType(t);
+                if (list == null) continue;
+                foreach (var e in list)
+                    if (e != null && !string.IsNullOrEmpty(e.id)) set.Add(e.id);
+            }
+            return new System.Collections.Generic.List<string>(set);
+        }
+
+        /// <summary>Pick a different catalog id from the dropdown → re-open the editor on it.</summary>
+        private void OnCatalogIdPicked(ChangeEvent<string> evt)
+        {
+            string id = evt.newValue;
+            if (string.IsNullOrEmpty(id)) return;
+            var entry = CatalogRegistry.Get(id);
+            string path = entry != null && !string.IsNullOrEmpty(entry.visualPrefabPath) ? entry.visualPrefabPath : id;
+            var prefab = Resources.Load<GameObject>(path);
+            if (prefab == null) { Debug.LogWarning($"[Orient] dropdown: '{id}' prefab not loadable ('{path}')."); return; }
+            string name = entry != null && !string.IsNullOrEmpty(entry.displayName) ? entry.displayName : id;
+            OpenDevOrient(id, prefab, name);
         }
 
         private VisualElement BuildInfoBar()
@@ -532,25 +653,57 @@ namespace DeNelle.Village
         private void OnYChanged(ChangeEvent<float> evt) => SetAxis(1, evt.newValue);
         private void OnZChanged(ChangeEvent<float> evt) => SetAxis(2, evt.newValue);
 
+        // Numeric entry → same SetAxis path (parse, fall back to current value on garbage).
+        private void OnXInput(ChangeEvent<string> evt) => SetAxisFromText(0, evt.newValue, _xDeg);
+        private void OnYInput(ChangeEvent<string> evt) => SetAxisFromText(1, evt.newValue, _yDeg);
+        private void OnZInput(ChangeEvent<string> evt) => SetAxisFromText(2, evt.newValue, _zDeg);
+
+        private void OnScaleInput(ChangeEvent<string> evt)
+        {
+            if (float.TryParse(evt.newValue, NumberStyles.Float, CultureInfo.InvariantCulture, out float s) && s > 0f)
+                _scale = s;
+            if (_scaleInput != null) _scaleInput.SetValueWithoutNotify(FormatScale(_scale));
+        }
+
+        private void SetAxisFromText(int axis, string text, float fallback)
+        {
+            float v = float.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out float parsed)
+                ? Wrap180(parsed) : fallback;
+            SetAxis(axis, v);
+            // Push the (snapped/wrapped) value back onto the matching slider handle.
+            switch (axis)
+            {
+                case 0: _xSlider?.SetValueWithoutNotify(_xDeg); break;
+                case 1: _ySlider?.SetValueWithoutNotify(_yDeg); break;
+                default: _zSlider?.SetValueWithoutNotify(_zDeg); break;
+            }
+        }
+
         private void SetAxis(int axis, float raw)
         {
             float snapped = SnapAngle(raw);
             switch (axis)
             {
-                case 0: _xDeg = snapped; UpdateReadout(_xReadout, _xSlider, snapped, raw); break;
-                case 1: _yDeg = snapped; UpdateReadout(_yReadout, _ySlider, snapped, raw); break;
-                default: _zDeg = snapped; UpdateReadout(_zReadout, _zSlider, snapped, raw); break;
+                case 0: _xDeg = snapped; UpdateReadout(_xReadout, _xSlider, _xInput, snapped, raw); break;
+                case 1: _yDeg = snapped; UpdateReadout(_yReadout, _ySlider, _yInput, snapped, raw); break;
+                default: _zDeg = snapped; UpdateReadout(_zReadout, _zSlider, _zInput, snapped, raw); break;
             }
         }
 
-        private void UpdateReadout(Label readout, Slider slider, float snapped, float raw)
+        private void UpdateReadout(Label readout, Slider slider, TextField input, float snapped, float raw)
         {
             if (readout != null) readout.text = $"{Mathf.RoundToInt(snapped)}°";
             // If snapping moved the value, reflect it on the slider handle too
             // (guard against feedback by only setting when it differs).
             if (slider != null && !Mathf.Approximately(slider.value, snapped) && !Mathf.Approximately(raw, snapped))
                 slider.SetValueWithoutNotify(snapped);
+            // Keep the numeric field in sync with the snapped value.
+            if (input != null && input.value != FormatDeg(snapped))
+                input.SetValueWithoutNotify(FormatDeg(snapped));
         }
+
+        private static string FormatDeg(float v) => Mathf.RoundToInt(v).ToString(CultureInfo.InvariantCulture);
+        private static string FormatScale(float v) => v.ToString("0.###", CultureInfo.InvariantCulture);
 
         private float SnapAngle(float raw) =>
             _snapDegrees == 0 ? raw : Mathf.Round(raw / _snapDegrees) * _snapDegrees;
@@ -569,9 +722,9 @@ namespace DeNelle.Village
         {
             switch (axis)
             {
-                case 0: _xDeg = _initialEuler.x; _xSlider?.SetValueWithoutNotify(_xDeg); if (_xReadout != null) _xReadout.text = $"{Mathf.RoundToInt(_xDeg)}°"; break;
-                case 1: _yDeg = _initialEuler.y; _ySlider?.SetValueWithoutNotify(_yDeg); if (_yReadout != null) _yReadout.text = $"{Mathf.RoundToInt(_yDeg)}°"; break;
-                default: _zDeg = _initialEuler.z; _zSlider?.SetValueWithoutNotify(_zDeg); if (_zReadout != null) _zReadout.text = $"{Mathf.RoundToInt(_zDeg)}°"; break;
+                case 0: _xDeg = _initialEuler.x; _xSlider?.SetValueWithoutNotify(_xDeg); if (_xReadout != null) _xReadout.text = $"{Mathf.RoundToInt(_xDeg)}°"; _xInput?.SetValueWithoutNotify(FormatDeg(_xDeg)); break;
+                case 1: _yDeg = _initialEuler.y; _ySlider?.SetValueWithoutNotify(_yDeg); if (_yReadout != null) _yReadout.text = $"{Mathf.RoundToInt(_yDeg)}°"; _yInput?.SetValueWithoutNotify(FormatDeg(_yDeg)); break;
+                default: _zDeg = _initialEuler.z; _zSlider?.SetValueWithoutNotify(_zDeg); if (_zReadout != null) _zReadout.text = $"{Mathf.RoundToInt(_zDeg)}°"; _zInput?.SetValueWithoutNotify(FormatDeg(_zDeg)); break;
             }
         }
 
@@ -590,10 +743,13 @@ namespace DeNelle.Village
             float ey = SnapAngle(_yDeg);
             float ez = SnapAngle(_zDeg);
 
-            // DEV "orient & report" path — log the dialed offset for baking; no placement.
+            // DEV "orient & report" path — log the dialed recipe AND apply it live so the
+            // next placement uses the new orientation immediately (no rebake round-trip).
             if (!string.IsNullOrEmpty(_devOrientId))
             {
-                ReportOrientRecipe(_devOrientId, new Vector3(ex, ey, ez));
+                var euler = new Vector3(ex, ey, ez);
+                ApplyOrientToCatalog(_devOrientId, euler, _scale);
+                ReportOrientRecipe(_devOrientId, euler, _scale);
                 Close();
                 return;
             }
@@ -610,10 +766,31 @@ namespace DeNelle.Village
         /// The panel dials rotation only, so offset is (0,0,0) and scale 1 — the
         /// owner edits those in the JSON if a non-zero offset/scale is needed.
         /// </summary>
-        private void ReportOrientRecipe(string id, Vector3 euler)
+        /// <summary>
+        /// Apply the dialed orientation to the live CatalogEntry so it takes effect on the
+        /// NEXT placement / ghost without a rebake (StructureFactory + GhostPreview read
+        /// entry.orientation; marking it manual=true is what makes them apply it). The owner
+        /// still bakes the logged [OrientRecipe] into the JSON to persist it across sessions.
+        /// </summary>
+        private static void ApplyOrientToCatalog(string id, Vector3 euler, float scale)
+        {
+            var entry = CatalogRegistry.Get(id);
+            if (entry == null) { Debug.LogWarning($"[Orient] apply: '{id}' not in CatalogRegistry — logged only."); return; }
+            entry.orientation = new OrientationFix
+            {
+                corrected = true,
+                manual    = true,   // human-verified → StructureFactory/GhostPreview apply it
+                euler     = new[] { euler.x, euler.y, euler.z },
+                offset    = new[] { 0f, 0f, 0f },
+                scale     = scale > 0f ? scale : 1f,
+                note      = "build-mode orient editor"
+            };
+            Debug.Log($"[Orient] applied to catalog '{id}' (live; bake the [OrientRecipe] line to persist).");
+        }
+
+        private void ReportOrientRecipe(string id, Vector3 euler, float scale)
         {
             Vector3 offset = Vector3.zero;
-            float   scale  = 1f;
             var ci = CultureInfo.InvariantCulture;
 
             // MUST-HAVE: copy-pasteable Console line.
@@ -698,6 +875,7 @@ namespace DeNelle.Village
             if (_document == null) return;
             _document.enabled = true;
             if (_root != null) _root.style.display = DisplayStyle.Flex;
+            IsOpen = true;
         }
 
         // ── PanelSettings adoption (renders in builds) ───────────────────────────

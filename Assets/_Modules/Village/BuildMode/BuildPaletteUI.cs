@@ -36,6 +36,13 @@ namespace DeNelle.Village
         /// <summary>Raised when the palette's Exit button is tapped.</summary>
         public event Action OnExitRequested;
 
+        /// <summary>
+        /// Raised when the "Orient" button is tapped (only shown while an entry is armed).
+        /// The controller opens the 3-axis orient editor ON THE ARMED ENTRY — no typing an
+        /// id. Arg is the armed entry id.
+        /// </summary>
+        public event Action<string> OnOrientRequested;
+
         [Tooltip("Catalog types the palette lists. Default = Tower (the registered content).")]
         [SerializeField] private CatalogType[] _types = { CatalogType.Tower, CatalogType.Wall, CatalogType.Gate, CatalogType.Resource };
 
@@ -43,6 +50,7 @@ namespace DeNelle.Village
         private VisualElement _root;
         private VisualElement _strip;
         private Label _balanceLabel;
+        private Button _orientBtn;     // shown only while an entry is armed
         private string _armedId;
 
         private void Awake()
@@ -112,6 +120,7 @@ namespace DeNelle.Village
         {
             if (_root != null) _root.style.display = DisplayStyle.None;
             _armedId = null;
+            UpdateOrientButton();
         }
 
         private void EnsureBuilt()
@@ -142,11 +151,26 @@ namespace DeNelle.Village
             _balanceLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
             topBar.Add(_balanceLabel);
 
+            // Right-side button cluster: Orient (armed-only) + Done.
+            var rightCluster = new VisualElement();
+            rightCluster.style.flexDirection = FlexDirection.Row;
+
+            // Orient — opens the 3-axis orient editor on the ARMED entry (no id typing).
+            _orientBtn = new Button(() => { if (!string.IsNullOrEmpty(_armedId)) OnOrientRequested?.Invoke(_armedId); })
+                { text = "Orient" };
+            _orientBtn.style.height = 30; _orientBtn.style.minWidth = 80;
+            _orientBtn.style.marginRight = 8;
+            _orientBtn.style.color = Color.white;
+            _orientBtn.style.backgroundColor = new Color(0.30f, 0.34f, 0.52f, 0.95f);
+            _orientBtn.style.display = DisplayStyle.None;   // shown only while armed
+            rightCluster.Add(_orientBtn);
+
             var exitBtn = new Button(() => OnExitRequested?.Invoke()) { text = "Done" };
             exitBtn.style.height = 30; exitBtn.style.minWidth = 80;
             exitBtn.style.color = Color.white;
             exitBtn.style.backgroundColor = new Color(0.30f, 0.52f, 0.34f, 0.95f);
-            topBar.Add(exitBtn);
+            rightCluster.Add(exitBtn);
+            topBar.Add(rightCluster);
             _root.Add(topBar);
 
             // Bottom row: scrollable horizontal card strip.
@@ -167,6 +191,7 @@ namespace DeNelle.Village
 
             _strip.Clear();
             UpdateBalance();
+            UpdateOrientButton();
 
             int cards = 0;
             foreach (var type in _types)
@@ -268,6 +293,14 @@ namespace DeNelle.Village
         private void UpdateBalance()
         {
             if (_balanceLabel != null) _balanceLabel.text = "◆ " + CrystalBalance;
+        }
+
+        /// <summary>Show the Orient button only while an entry is armed.</summary>
+        private void UpdateOrientButton()
+        {
+            if (_orientBtn != null)
+                _orientBtn.style.display = string.IsNullOrEmpty(_armedId)
+                    ? DisplayStyle.None : DisplayStyle.Flex;
         }
 
         /// <summary>The persisted crystal wallet (WO-131 — the single source of truth).</summary>
