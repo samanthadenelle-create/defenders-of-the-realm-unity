@@ -61,10 +61,52 @@ namespace DeNelle.Core.Catalog
         public bool    manual;        // true = human-verified (Inspector) → applied; false = advisory
         public float[] euler;         // [x,y,z] degrees
         public float[] offset;        // [x,y,z] metres
-        public float   scale = 1f;
+        public float   scale = 1f;    // UNIFORM scale multiplier (legacy / back-compat).
+        // NON-UNIFORM per-axis scale (WO: stretch X or Z, keep Y height) — multiplies on
+        // TOP of the uniform `scale` per component. OPTIONAL + backward-compatible: when
+        // absent/null (every existing entry) EffectiveScale falls back to (1,1,1), so the
+        // effective scale equals the legacy uniform `scale` exactly. Serialized as [x,y,z].
+        public float[] scaleAxis;     // [x,y,z] per-axis multipliers; null/short → (1,1,1)
         public string  note;
 
         public Vector3 Euler  => euler  != null && euler.Length  == 3 ? new Vector3(euler[0],  euler[1],  euler[2])  : Vector3.zero;
         public Vector3 Offset => offset != null && offset.Length == 3 ? new Vector3(offset[0], offset[1], offset[2]) : Vector3.zero;
+
+        /// <summary>Per-axis multipliers as a Vector3, defaulting to (1,1,1) when unset/short.</summary>
+        public Vector3 ScaleAxis => scaleAxis != null && scaleAxis.Length == 3
+            ? new Vector3(scaleAxis[0], scaleAxis[1], scaleAxis[2])
+            : Vector3.one;
+
+        /// <summary>
+        /// The full per-axis scale to APPLY: uniform <see cref="scale"/> (clamped to a sane
+        /// positive, legacy 1) times the per-axis <see cref="ScaleAxis"/> per component. For
+        /// every existing entry (scale only, no scaleAxis) this returns (s,s,s) — identical
+        /// to the old uniform behaviour. Returned components are forced positive (≥ a tiny
+        /// epsilon) so a 0/garbage value never collapses the mesh.
+        /// </summary>
+        public Vector3 EffectiveScale
+        {
+            get
+            {
+                float s = scale > 0f ? scale : 1f;
+                Vector3 a = ScaleAxis;
+                return new Vector3(
+                    Mathf.Max(0.0001f, s * a.x),
+                    Mathf.Max(0.0001f, s * a.y),
+                    Mathf.Max(0.0001f, s * a.z));
+            }
+        }
+
+        /// <summary>True when the effective scale differs from identity on any axis.</summary>
+        public bool HasScale
+        {
+            get
+            {
+                Vector3 e = EffectiveScale;
+                return !Mathf.Approximately(e.x, 1f)
+                    || !Mathf.Approximately(e.y, 1f)
+                    || !Mathf.Approximately(e.z, 1f);
+            }
+        }
     }
 }

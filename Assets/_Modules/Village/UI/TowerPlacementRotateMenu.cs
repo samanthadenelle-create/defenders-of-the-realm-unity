@@ -93,12 +93,22 @@ namespace DeNelle.Village
 
         private int   _snapDegrees = 45;          // 0=off, 15, 45, 90
         private float _xDeg, _yDeg, _zDeg;        // current (snapped) euler values
-        private float _scale = 1f;                // dialed uniform scale (dev-orient)
+        // Per-axis (non-uniform) scale — stretch X or Z, keep Y (height). These are the
+        // EFFECTIVE multipliers (uniform legacy `scale` is folded into all three on seed).
+        private float _sxScale = 1f, _syScale = 1f, _szScale = 1f;
+
+        // Per-axis scale slider range (modular pieces — wide enough to double a wall, thin
+        // it to a slab, without runaway values).
+        private const float ScaleMin = 0.1f;
+        private const float ScaleMax = 5f;
 
         private Slider _xSlider, _ySlider, _zSlider;
         private Label  _xReadout, _yReadout, _zReadout;
-        // Numeric entry fields alongside the sliders (editable X/Y/Z euler + scale).
-        private TextField _xInput, _yInput, _zInput, _scaleInput;
+        // Numeric entry fields alongside the euler sliders.
+        private TextField _xInput, _yInput, _zInput;
+        // Per-axis SCALE rows (slider + numeric field), mirroring the euler rows.
+        private Slider    _sxSlider, _sySlider, _szSlider;
+        private TextField _sxInput, _syInput, _szInput;
         // Dev-orient: a runtime dropdown of catalog ids (standalone path — pick instead of type).
         private DropdownField _catalogIdDrop;
         private VisualElement _viewport;
@@ -190,11 +200,14 @@ namespace DeNelle.Village
             // current correction rather than identity, and the scale field starts there.
             var entry = CatalogRegistry.Get(_devOrientId);
             Quaternion initial = Quaternion.identity;
-            _scale = 1f;
+            _sxScale = _syScale = _szScale = 1f;
             if (entry != null && entry.orientation != null && entry.orientation.manual)
             {
                 initial = Quaternion.Euler(entry.orientation.Euler);
-                if (entry.orientation.scale > 0f) _scale = entry.orientation.scale;
+                // Seed from the EFFECTIVE per-axis scale: a legacy uniform `scale` shows as
+                // X=Y=Z=scale; an already-stretched entry shows its per-axis values.
+                Vector3 es = entry.orientation.EffectiveScale;
+                _sxScale = es.x; _syScale = es.y; _szScale = es.z;
             }
 
             OpenCore(
@@ -292,7 +305,11 @@ namespace DeNelle.Village
             body.Add(BuildAxisRow("X Axis (Pitch)", AxisX, _xDeg, out _xSlider, out _xReadout, out _xInput, OnXChanged, OnXInput, () => ResetAxis(0)));
             body.Add(BuildAxisRow("Y Axis (Yaw)",   AxisY, _yDeg, out _ySlider, out _yReadout, out _yInput, OnYChanged, OnYInput, () => ResetAxis(1)));
             body.Add(BuildAxisRow("Z Axis (Roll)",  AxisZ, _zDeg, out _zSlider, out _zReadout, out _zInput, OnZChanged, OnZInput, () => ResetAxis(2)));
-            body.Add(BuildScaleRow());
+            // Per-axis scale rows (stretch X / Z, keep Y height) — mirror the euler rows.
+            body.Add(BuildScaleSectionLabel());
+            body.Add(BuildScaleAxisRow("Scale X (width)",  AxisX, _sxScale, out _sxSlider, out _sxInput, OnSxChanged, OnSxInput, () => ResetScaleAxis(0)));
+            body.Add(BuildScaleAxisRow("Scale Y (height)", AxisY, _syScale, out _sySlider, out _syInput, OnSyChanged, OnSyInput, () => ResetScaleAxis(1)));
+            body.Add(BuildScaleAxisRow("Scale Z (depth)",  AxisZ, _szScale, out _szSlider, out _szInput, OnSzChanged, OnSzInput, () => ResetScaleAxis(2)));
             body.Add(BuildInfoBar());
             body.Add(BuildControlsRow());
 
@@ -419,31 +436,74 @@ namespace DeNelle.Village
             return row;
         }
 
-        /// <summary>Editable uniform-scale row (dev-orient). Commits on Enter / focus-out.</summary>
-        private VisualElement BuildScaleRow()
+        /// <summary>Small section divider/label above the three per-axis scale rows.</summary>
+        private VisualElement BuildScaleSectionLabel()
+        {
+            var label = new Label("SCALE  ·  non-uniform (× multiplier)");
+            label.style.fontSize = 10;
+            label.style.color    = RuneStripTxt;
+            label.style.unityFontStyleAndWeight = FontStyle.Bold;
+            label.style.letterSpacing = 1;
+            label.style.marginTop    = 4;
+            label.style.marginBottom = 4;
+            return label;
+        }
+
+        /// <summary>
+        /// One per-axis SCALE row (slider + numeric field + reset), styled to MIRROR the
+        /// euler <see cref="BuildAxisRow"/> rows. Range <see cref="ScaleMin"/>..<see cref="ScaleMax"/>;
+        /// readout shows the multiplier (e.g. "2.0×"). axisIndex via the reset closure.
+        /// </summary>
+        private VisualElement BuildScaleAxisRow(
+            string label, Color accent, float initial,
+            out Slider slider, out TextField input,
+            EventCallback<ChangeEvent<float>> onChange,
+            EventCallback<ChangeEvent<string>> onInput, Action onReset)
         {
             var row = new VisualElement();
             row.style.flexDirection = FlexDirection.Row;
             row.style.alignItems    = Align.Center;
             row.style.marginBottom  = 6;
 
-            var name = new Label("Scale");
+            var name = new Label(label);
             name.style.fontSize = 11;
-            name.style.color    = TitleGold;
+            name.style.color    = accent;
             name.style.width    = 96;
             name.style.unityFontStyleAndWeight = FontStyle.Bold;
             row.Add(name);
 
-            _scaleInput = new TextField { value = FormatScale(_scale), isDelayed = true };
-            _scaleInput.style.width = 64;
-            _scaleInput.RegisterValueChangedCallback(OnScaleInput);
-            row.Add(_scaleInput);
+            slider = new Slider(ScaleMin, ScaleMax) { value = Mathf.Clamp(initial, ScaleMin, ScaleMax) };
+            slider.style.flexGrow = 1;
+            slider.style.marginLeft = 4; slider.style.marginRight = 8;
+            TintSlider(slider, accent);
+            slider.RegisterValueChangedCallback(onChange);
+            row.Add(slider);
 
-            var hint = new Label("× uniform");
-            hint.style.fontSize = 10;
-            hint.style.color = CancelTxt;
-            hint.style.marginLeft = 8;
-            row.Add(hint);
+            // "×" multiplier badge (styled like the euler ° readout) — purely decorative.
+            var unit = new Label("×");
+            unit.style.width    = 16;
+            unit.style.fontSize = 11;
+            unit.style.color    = TitleGold;
+            unit.style.unityTextAlign = TextAnchor.MiddleCenter;
+            row.Add(unit);
+
+            // Editable numeric entry — doubles as the live readout (commits on Enter / focus-out).
+            input = new TextField { value = FormatScale(initial), isDelayed = true };
+            input.style.width = 52;
+            input.style.marginLeft = 4;
+            input.RegisterValueChangedCallback(onInput);
+            row.Add(input);
+
+            var reset = new Button(() => onReset()) { text = "↺" };
+            reset.style.width = 26; reset.style.height = 22;
+            reset.style.marginLeft = 4;
+            reset.style.backgroundColor = ResetBg;
+            reset.style.color = ResetTxt;
+            SetBorder(reset, ReadoutBdr, 1);
+            SetRadius(reset, 4);
+            reset.style.fontSize = 12;
+            row.Add(reset);
+
             return row;
         }
 
@@ -667,11 +727,49 @@ namespace DeNelle.Village
         private void OnYInput(ChangeEvent<string> evt) => SetAxisFromText(1, evt.newValue, _yDeg);
         private void OnZInput(ChangeEvent<string> evt) => SetAxisFromText(2, evt.newValue, _zDeg);
 
-        private void OnScaleInput(ChangeEvent<string> evt)
+        // ── Per-axis scale callbacks (slider + numeric, one set per axis) ────────
+        private void OnSxChanged(ChangeEvent<float> evt) => SetScaleAxis(0, evt.newValue);
+        private void OnSyChanged(ChangeEvent<float> evt) => SetScaleAxis(1, evt.newValue);
+        private void OnSzChanged(ChangeEvent<float> evt) => SetScaleAxis(2, evt.newValue);
+
+        private void OnSxInput(ChangeEvent<string> evt) => SetScaleAxisFromText(0, evt.newValue, _sxScale);
+        private void OnSyInput(ChangeEvent<string> evt) => SetScaleAxisFromText(1, evt.newValue, _syScale);
+        private void OnSzInput(ChangeEvent<string> evt) => SetScaleAxisFromText(2, evt.newValue, _szScale);
+
+        private void SetScaleAxisFromText(int axis, string text, float fallback)
         {
-            if (float.TryParse(evt.newValue, NumberStyles.Float, CultureInfo.InvariantCulture, out float s) && s > 0f)
-                _scale = s;
-            if (_scaleInput != null) _scaleInput.SetValueWithoutNotify(FormatScale(_scale));
+            float v = float.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out float parsed) && parsed > 0f
+                ? Mathf.Clamp(parsed, ScaleMin, ScaleMax) : fallback;
+            SetScaleAxis(axis, v);
+            // Push the (clamped) value back onto the matching slider handle.
+            switch (axis)
+            {
+                case 0: _sxSlider?.SetValueWithoutNotify(_sxScale); break;
+                case 1: _sySlider?.SetValueWithoutNotify(_syScale); break;
+                default: _szSlider?.SetValueWithoutNotify(_szScale); break;
+            }
+        }
+
+        private void SetScaleAxis(int axis, float raw)
+        {
+            float v = Mathf.Clamp(raw, ScaleMin, ScaleMax);
+            switch (axis)
+            {
+                case 0: _sxScale = v; if (_sxInput != null && _sxInput.value != FormatScale(v)) _sxInput.SetValueWithoutNotify(FormatScale(v)); break;
+                case 1: _syScale = v; if (_syInput != null && _syInput.value != FormatScale(v)) _syInput.SetValueWithoutNotify(FormatScale(v)); break;
+                default: _szScale = v; if (_szInput != null && _szInput.value != FormatScale(v)) _szInput.SetValueWithoutNotify(FormatScale(v)); break;
+            }
+        }
+
+        /// <summary>Reset a single scale axis (0=X,1=Y,2=Z) to 1.0× (identity).</summary>
+        private void ResetScaleAxis(int axis)
+        {
+            switch (axis)
+            {
+                case 0: _sxScale = 1f; _sxSlider?.SetValueWithoutNotify(1f); _sxInput?.SetValueWithoutNotify(FormatScale(1f)); break;
+                case 1: _syScale = 1f; _sySlider?.SetValueWithoutNotify(1f); _syInput?.SetValueWithoutNotify(FormatScale(1f)); break;
+                default: _szScale = 1f; _szSlider?.SetValueWithoutNotify(1f); _szInput?.SetValueWithoutNotify(FormatScale(1f)); break;
+            }
         }
 
         private void SetAxisFromText(int axis, string text, float fallback)
@@ -756,9 +854,10 @@ namespace DeNelle.Village
             // next placement uses the new orientation immediately (no rebake round-trip).
             if (!string.IsNullOrEmpty(_devOrientId))
             {
-                var euler = new Vector3(ex, ey, ez);
-                ApplyOrientToCatalog(_devOrientId, euler, _scale);
-                ReportOrientRecipe(_devOrientId, euler, _scale);
+                var euler     = new Vector3(ex, ey, ez);
+                var scaleAxis = new Vector3(_sxScale, _syScale, _szScale);
+                ApplyOrientToCatalog(_devOrientId, euler, scaleAxis);
+                ReportOrientRecipe(_devOrientId, euler, scaleAxis);
                 Close();
                 return;
             }
@@ -781,38 +880,43 @@ namespace DeNelle.Village
         /// entry.orientation; marking it manual=true is what makes them apply it). The owner
         /// still bakes the logged [OrientRecipe] into the JSON to persist it across sessions.
         /// </summary>
-        private static void ApplyOrientToCatalog(string id, Vector3 euler, float scale)
+        private static void ApplyOrientToCatalog(string id, Vector3 euler, Vector3 scaleAxis)
         {
             var entry = CatalogRegistry.Get(id);
             if (entry == null) { Debug.LogWarning($"[Orient] apply: '{id}' not in CatalogRegistry — logged only."); return; }
+            // The editor dials the FULL effective scale into the per-axis field; keep uniform
+            // `scale` at 1 so EffectiveScale == scaleAxis (no double-multiply). Back-compat:
+            // an all-1 scaleAxis behaves exactly like the old uniform scale=1.
             entry.orientation = new OrientationFix
             {
                 corrected = true,
                 manual    = true,   // human-verified → StructureFactory/GhostPreview apply it
                 euler     = new[] { euler.x, euler.y, euler.z },
                 offset    = new[] { 0f, 0f, 0f },
-                scale     = scale > 0f ? scale : 1f,
+                scale     = 1f,
+                scaleAxis = new[] { scaleAxis.x, scaleAxis.y, scaleAxis.z },
                 note      = "build-mode orient editor"
             };
             Debug.Log($"[Orient] applied to catalog '{id}' (live; bake the [OrientRecipe] line to persist).");
         }
 
-        private void ReportOrientRecipe(string id, Vector3 euler, float scale)
+        private void ReportOrientRecipe(string id, Vector3 euler, Vector3 scaleAxis)
         {
             Vector3 offset = Vector3.zero;
             var ci = CultureInfo.InvariantCulture;
 
-            // MUST-HAVE: copy-pasteable Console line.
+            // MUST-HAVE: copy-pasteable Console line. scale stays 1 (uniform, back-compat);
+            // the per-axis stretch is in scaleAxis.
             Debug.Log(string.Format(ci,
-                "[OrientRecipe] id={0} euler=({1:0.##}, {2:0.##}, {3:0.##}) offset=({4:0.##}, {5:0.##}, {6:0.##}) scale={7:0.###}",
-                id, euler.x, euler.y, euler.z, offset.x, offset.y, offset.z, scale));
+                "[OrientRecipe] id={0} euler=({1:0.##}, {2:0.##}, {3:0.##}) offset=({4:0.##}, {5:0.##}, {6:0.##}) scale=1 scaleAxis=({7:0.###}, {8:0.###}, {9:0.###})",
+                id, euler.x, euler.y, euler.z, offset.x, offset.y, offset.z, scaleAxis.x, scaleAxis.y, scaleAxis.z));
 
             // BONUS: append a JSON line to the recipes file (best-effort; never throws to the UI).
             try
             {
                 string json = string.Format(ci,
-                    "{{ \"id\":\"{0}\", \"euler\":[{1:0.###},{2:0.###},{3:0.###}], \"offset\":[{4:0.###},{5:0.###},{6:0.###}], \"scale\":{7:0.###} }}",
-                    id, euler.x, euler.y, euler.z, offset.x, offset.y, offset.z, scale);
+                    "{{ \"id\":\"{0}\", \"euler\":[{1:0.###},{2:0.###},{3:0.###}], \"offset\":[{4:0.###},{5:0.###},{6:0.###}], \"scale\":1, \"scaleAxis\":[{7:0.###},{8:0.###},{9:0.###}] }}",
+                    id, euler.x, euler.y, euler.z, offset.x, offset.y, offset.z, scaleAxis.x, scaleAxis.y, scaleAxis.z);
 
                 string dir  = Path.Combine(Application.dataPath, "Resources", "Data");
                 string path = Path.Combine(dir, "orientation-recipes.json");

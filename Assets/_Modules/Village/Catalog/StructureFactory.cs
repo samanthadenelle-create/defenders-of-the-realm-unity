@@ -93,8 +93,12 @@ namespace DeNelle.Village
                     // ones are advisory (a bounds heuristic can't be trusted to not tip good assets).
                     visual.transform.localRotation = Quaternion.Euler(entry.orientation.Euler) * visual.transform.localRotation;
                     visual.transform.localPosition += entry.orientation.Offset;
-                    if (entry.orientation.scale > 0f && !Mathf.Approximately(entry.orientation.scale, 1f))
-                        visual.transform.localScale *= entry.orientation.scale;
+                    // Per-axis (non-uniform) scale: uniform `scale` × `scaleAxis` per component.
+                    // For legacy entries (scale only) EffectiveScale is (s,s,s) — identical to
+                    // the old `localScale *= scale`. A stretched wall (e.g. X=2) widens here, and
+                    // the ReseatCorrectedBottom below uses the SCALED bounds so it still sits flat.
+                    if (entry.orientation.HasScale)
+                        visual.transform.localScale = Vector3.Scale(visual.transform.localScale, entry.orientation.EffectiveScale);
 
                     // FIX (build-placed FLOAT) — VisualFactory.SeatOnGround already seated the
                     // RAW (un-corrected, often lying-down) bounds base at the root y. Applying the
@@ -209,9 +213,12 @@ namespace DeNelle.Village
             if (entry == null || string.IsNullOrEmpty(entry.visualPrefabPath)) return authored;
 
             // Cache key folds in the orientation so a live re-orient re-measures.
+            // Includes the per-axis EffectiveScale so a non-uniform stretch invalidates
+            // the stale footprint (a wider wall must report a wider footprint).
             var o = entry.orientation;
+            Vector3 es = o != null ? o.EffectiveScale : Vector3.one;
             string key = o != null && o.manual
-                ? $"{entry.id}|{o.Euler.x:0.#},{o.Euler.y:0.#},{o.Euler.z:0.#}|{o.scale:0.##}"
+                ? $"{entry.id}|{o.Euler.x:0.#},{o.Euler.y:0.#},{o.Euler.z:0.#}|{es.x:0.##},{es.y:0.##},{es.z:0.##}"
                 : entry.id;
             if (s_footprintCache.TryGetValue(key, out float cached)) return cached;
 
@@ -232,8 +239,10 @@ namespace DeNelle.Village
                     {
                         visual.transform.localRotation = Quaternion.Euler(entry.orientation.Euler) * visual.transform.localRotation;
                         visual.transform.localPosition += entry.orientation.Offset;
-                        if (entry.orientation.scale > 0f && !Mathf.Approximately(entry.orientation.scale, 1f))
-                            visual.transform.localScale *= entry.orientation.scale;
+                        // Same per-axis effective scale as Create() so the measured footprint
+                        // matches the stretched mesh that actually gets placed.
+                        if (entry.orientation.HasScale)
+                            visual.transform.localScale = Vector3.Scale(visual.transform.localScale, entry.orientation.EffectiveScale);
                     }
                     if (TryWorldBounds(visual, out Bounds b))
                         result = Mathf.Max(0.1f, Mathf.Max(b.size.x, b.size.z));
