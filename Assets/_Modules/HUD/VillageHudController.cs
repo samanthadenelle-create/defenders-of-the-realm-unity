@@ -1,25 +1,34 @@
 // =============================================================================
-// VillageHudController — sleek classic-RPG combat HUD (pure code-built uGUI).
+// VillageHudController — themed fantasy combat HUD (pure code-built uGUI).
 // -----------------------------------------------------------------------------
-// Styled "along the lines of" the classic fantasy-RPG reference: dark, minimal,
-// the SKILL BAR is the centrepiece (easy-access abilities), with hero HP/Mana
-// bars over it, party frames top-left, and banked resources as a thin top strip.
-// The MMO-only bits from the reference (chat tabs, friends/yell, compass, D-pad,
-// "unleash the horde") are intentionally dropped — not applicable to a single-
-// player TD-RPG.
+// WO-307 visual overhaul. Matches the owner concepts (docs/design/
+// hud-vertical-mobile-concept.jpg + hud-landscape-concept.jpg): grouped clusters,
+// stone/gold/parchment fantasy theme (HudTheme), rounded panel frames, large
+// touch targets, and a RESPONSIVE layout that re-anchors for portrait (mobile)
+// AND landscape (web/tablet). One HUD only — there is no second overlapping
+// Canvas (the old HUDManager demo path was retired).
 //
-// WIRING (all via the existing reflection bridges — DeNelle.Village → DeNelle.HUD
-// is blocked by asmdef isolation, so the Village side calls these by name):
+// Clusters (concept-aligned):
+//   • Top-left   — hero/party frames (portrait + level + HP/mana/XP).
+//   • Top-centre — Castle (Heart) HP + "WAVE N — <state>" banner.
+//   • Top-right  — currency strip (Wood / Iron / Crystal / Gold), icon discs.
+//   • Bottom     — ability/skill bar (4 cells, cooldown sweep) + build entry.
+//   The COMPASS is a separate component (CompassHud); owner chose compass over
+//   minimap (WO-307 roundtable). This controller leaves room for it top-centre.
+//
+// WIRING (unchanged — all via the existing reflection bridges; DeNelle.Village →
+// DeNelle.HUD is asmdef-isolated so the Village side calls these by name):
 //   • HeroAbilitiesHudBridge  → SetMana / SetAbilityCooldown / SetAbilitySlot /
 //                               SetHeroHp + reads the AbilityRequested event.
 //   • HeartHudBridge          → SetHeartHp / SetResources / SetCrystals.
 //   • WaveHudBridge           → SetWave / SetCountdown / SetWaveImminent.
 //   • WaveFeedbackDirector    → ShowWaveClearBanner / HideWaveClearBanner.
-//   • WallRepairHudBridge     → ShowRepairPrompt / HideRepairPrompt (+ the
-//                               RepairConfirmRequested / RepairCancelRequested events).
-//   • BuildButtonBridge / BuildMenuHudBridge → BuildRequested event.
+//   • WallRepairHudBridge     → ShowRepairPrompt / HideRepairPrompt (+ events).
+//   • BuildButtonBridge       → BuildRequested event.
+//   • PartyHudBridge          → SetPartyMember / SetPartyMemberVisible.
 //   • WardTetherService       → SetForgettingLevel / SetWardsReadout.
 //
+// Every public method signature is preserved — this is restyle + re-layout only.
 // Pure UnityEngine.UI + TMPro. No UXML/Toolkit (does not render in builds — see
 // memory "uxml-uidocuments-dont-render-in-builds"). Passive IVillageHud.
 // =============================================================================
@@ -48,26 +57,20 @@ namespace DeNelle.HUD
 
         [System.Serializable] public sealed class AbilitySlotEvent : UnityEvent<int> { }
 
-        // ── Theme (dark, sleek classic-RPG) ──────────────────────────────────
-        private static readonly Color Panel      = new Color(0.07f, 0.07f, 0.09f, 0.90f);
-        private static readonly Color PanelSolid  = new Color(0.10f, 0.10f, 0.13f, 0.98f);
-        private static readonly Color Metal       = new Color(0.42f, 0.40f, 0.38f, 1f);
-        private static readonly Color MetalDim     = new Color(0.26f, 0.25f, 0.24f, 1f);
-        private static readonly Color Gold        = new Color(0.85f, 0.72f, 0.30f, 1f);
-        private static readonly Color Parchment   = new Color(0.93f, 0.90f, 0.82f, 1f);
-        private static readonly Color HpRed       = new Color(0.78f, 0.13f, 0.13f, 1f);
-        private static readonly Color HpTrack     = new Color(0.18f, 0.05f, 0.05f, 1f);
-        private static readonly Color ManaBlue    = new Color(0.22f, 0.46f, 0.90f, 1f);
-        private static readonly Color ManaTrack   = new Color(0.05f, 0.10f, 0.25f, 1f);
-        private static readonly Color CdShade     = new Color(0.03f, 0.03f, 0.05f, 0.78f);
-
         // ── Canvas + cached widgets ──────────────────────────────────────────
         private Canvas _hudCanvas;
+        private CanvasScaler _scaler;
 
-        private TextMeshProUGUI[] _resourceTexts; // 0 Wood, 1 Iron, 2 Food, 3 Crystals
+        private TextMeshProUGUI[] _resourceTexts; // 0 Wood, 1 Iron, 2 Crystal, 3 Gold
 
         private TextMeshProUGUI _waveText;
+        private TextMeshProUGUI _waveStateText;
         private int _lastWaveNumber = 1;
+        private string _lastWaveState = "Defend";
+
+        // Castle (Heart) HP banner — top-centre.
+        private Image _castleFill;
+        private TextMeshProUGUI _castleText;
 
         // Hero vitals (over the skill bar)
         private Image _hpFill;
@@ -94,6 +97,17 @@ namespace DeNelle.HUD
 
         private CanvasGroup _rootGroup; // for SetForgettingLevel fade
 
+        // ── Responsive layout ────────────────────────────────────────────────
+        // Cluster roots whose anchors flip between portrait & landscape.
+        private RectTransform _resourceStrip;
+        private RectTransform _waveReadout;
+        private RectTransform _castleBanner;
+        private RectTransform _partyStack;
+        private RectTransform _skillBar;
+        private RectTransform _buildBtn;
+        private bool _isPortrait = true;
+        private int _lastScreenW, _lastScreenH;
+
         private void Awake()
         {
             CoreServices.RegisterHud(this);
@@ -107,7 +121,16 @@ namespace DeNelle.HUD
         private void Start()
         {
             Build();
-            Debug.Log("[VillageHudController] Sleek classic-RPG HUD active (skill bar + vitals + party + resources).");
+            ApplyResponsiveLayout(force: true);
+            Debug.Log("[VillageHudController] WO-307 themed responsive HUD active (party + castle + currency + skill bar).");
+        }
+
+        private void Update()
+        {
+            // Cheap watcher — re-anchor only when the screen size actually changes
+            // (orientation flip / window resize). No per-frame layout cost.
+            if (Screen.width != _lastScreenW || Screen.height != _lastScreenH)
+                ApplyResponsiveLayout(force: false);
         }
 
         // =====================================================================
@@ -122,14 +145,15 @@ namespace DeNelle.HUD
             _hudCanvas = go.AddComponent<Canvas>();
             _hudCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
             _hudCanvas.sortingOrder = 100;
-            var scaler = go.AddComponent<CanvasScaler>();
-            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(1080, 1920);
-            scaler.matchWidthOrHeight = 0.5f;
+            _scaler = go.AddComponent<CanvasScaler>();
+            _scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            _scaler.referenceResolution = new Vector2(1080, 1920);
+            _scaler.matchWidthOrHeight = 0.5f;
             go.AddComponent<GraphicRaycaster>();
             _rootGroup = go.AddComponent<CanvasGroup>();
 
             BuildResourceStrip(go.transform);
+            BuildCastleBanner(go.transform);
             BuildWaveReadout(go.transform);
             BuildPartyFrames(go.transform);
             BuildSkillBar(go.transform);
@@ -137,31 +161,68 @@ namespace DeNelle.HUD
             BuildRepairPrompt(go.transform);
         }
 
-        // Thin banked-resource strip across the very top.
+        // ── Currency strip: Wood / Iron / Crystal / Gold, icon disc per cell. ──
         private void BuildResourceStrip(Transform parent)
         {
-            var strip = NewRect("ResourceStrip", parent, new Vector2(0f, 0.955f), new Vector2(1f, 1f));
-            strip.gameObject.AddComponent<Image>().color = Panel;
+            _resourceStrip = NewRect("ResourceStrip", parent, new Vector2(0.50f, 0.955f), new Vector2(1f, 1f));
+            HudTheme.StylePanel(_resourceStrip.gameObject, HudTheme.PanelStone);
 
-            string[] names = { "Wood", "Iron", "Food", "Gems" };
+            // Concept order: Wood, Iron, Crystal (gem), Gold. Glyph + warm tint per.
+            string[] names  = { "Wood", "Iron", "Crystal", "Gold" };
+            string[] glyphs = { "▲", "◆", "❖", "●" }; // tri / diamond / facet / coin
+            Color[] tints   = { HudTheme.Wood, HudTheme.Iron, HudTheme.Crystal, HudTheme.Gold };
             _resourceTexts = new TextMeshProUGUI[4];
-            float w = 0.25f;
+
+            float w = 1f / 4f;
             for (int i = 0; i < 4; i++)
             {
-                var cell = NewRect("Res_" + names[i], strip, new Vector2(i * w, 0f), new Vector2((i + 1) * w, 1f));
-                var tmp = AddText(cell, names[i] + " 0", 26, Gold, TextAlignmentOptions.Center);
-                _resourceTexts[i] = tmp;
+                var cell = NewRect("Res_" + names[i], _resourceStrip, new Vector2(i * w, 0f), new Vector2((i + 1) * w, 1f));
+
+                // icon disc (left)
+                var disc = NewRect("Icon", cell, new Vector2(0.06f, 0.18f), new Vector2(0.42f, 0.82f));
+                var dimg = disc.gameObject.AddComponent<Image>();
+                dimg.color = tints[i];
+                dimg.sprite = HudTheme.Disc;
+                dimg.type = Image.Type.Simple;
+                AddText(disc, glyphs[i], 26, HudTheme.Ink, TextAlignmentOptions.Center);
+
+                // amount text (right)
+                var amt = NewRect("Amt", cell, new Vector2(0.42f, 0f), new Vector2(1f, 1f));
+                _resourceTexts[i] = AddText(amt, "0", 28, HudTheme.Parchment, TextAlignmentOptions.Left);
+                _resourceTexts[i].fontStyle = FontStyles.Bold;
             }
+        }
+
+        // ── Castle (Heart) HP banner — top-centre, parchment trim. ─────────────
+        private void BuildCastleBanner(Transform parent)
+        {
+            _castleBanner = NewRect("CastleBanner", parent, new Vector2(0.26f, 0.94f), new Vector2(0.74f, 0.99f));
+            HudTheme.StylePanel(_castleBanner.gameObject, HudTheme.PanelStone);
+
+            var track = NewRect("Track", _castleBanner, new Vector2(0.04f, 0.18f), new Vector2(0.96f, 0.82f));
+            track.gameObject.AddComponent<Image>().color = HudTheme.HpTrack;
+            var fill = NewRect("Fill", track, Vector2.zero, Vector2.one);
+            _castleFill = fill.gameObject.AddComponent<Image>();
+            _castleFill.color = HudTheme.CastleGold;
+            _castleFill.type = Image.Type.Filled;
+            _castleFill.fillMethod = Image.FillMethod.Horizontal;
+            _castleFill.fillOrigin = 0;
+            _castleFill.fillAmount = 1f;
+            _castleText = AddText(track, "Castle 100%", 22, HudTheme.Ink, TextAlignmentOptions.Center);
+            _castleText.fontStyle = FontStyles.Bold;
         }
 
         private void BuildWaveReadout(Transform parent)
         {
-            var waveRect = NewRect("WaveReadout", parent, new Vector2(0.34f, 0.905f), new Vector2(0.66f, 0.95f));
-            _waveText = AddText(waveRect, "WAVE 1", 30, Parchment, TextAlignmentOptions.Center);
+            _waveReadout = NewRect("WaveReadout", parent, new Vector2(0.26f, 0.885f), new Vector2(0.74f, 0.935f));
+            // No solid panel — floating banner text per the concept.
+            _waveText = AddText(_waveReadout, "WAVE 1", 32, HudTheme.Parchment, TextAlignmentOptions.Center);
             _waveText.fontStyle = FontStyles.Bold;
+            var stateRect = NewRect("State", _waveReadout, new Vector2(0f, 0f), new Vector2(1f, 0.48f));
+            _waveStateText = AddText(stateRect, _lastWaveState, 20, HudTheme.Gold, TextAlignmentOptions.Center);
         }
 
-        // Top-left vertical party stack: hero (slot 0) + up to 3 companions.
+        // ── Top-left party stack: hero (slot 0) + up to 3 companions. ──────────
         private void BuildPartyFrames(Transform parent)
         {
             _partyFrame   = new GameObject[PartySlotCount];
@@ -169,74 +230,78 @@ namespace DeNelle.HUD
             _partyName    = new TextMeshProUGUI[PartySlotCount];
             _partyHpText  = new TextMeshProUGUI[PartySlotCount];
 
-            var stack = NewRect("PartyStack", parent, new Vector2(0.01f, 0.66f), new Vector2(0.34f, 0.90f));
+            _partyStack = NewRect("PartyStack", parent, new Vector2(0.01f, 0.66f), new Vector2(0.30f, 0.93f));
             float rowH = 1f / PartySlotCount;
 
             for (int i = 0; i < PartySlotCount; i++)
             {
                 float yMax = 1f - i * rowH;
-                float yMin = 1f - (i + 1) * rowH + 0.012f; // small gap
-                var frame = NewRect("Party" + i, stack, new Vector2(0f, yMin), new Vector2(1f, yMax));
-                frame.gameObject.AddComponent<Image>().color = Panel;
+                float yMin = 1f - (i + 1) * rowH + 0.014f; // small gap
+                var frame = NewRect("Party" + i, _partyStack, new Vector2(0f, yMin), new Vector2(1f, yMax));
+                HudTheme.StylePanel(frame.gameObject, HudTheme.PanelStone);
                 _partyFrame[i] = frame.gameObject;
 
-                // Portrait swatch (left)
-                var port = NewRect("Portrait", frame, new Vector2(0.03f, 0.18f), new Vector2(0.26f, 0.94f));
-                port.gameObject.AddComponent<Image>().color = MetalDim;
+                // Portrait swatch (left) — rounded inset, gold-rimmed.
+                var port = NewRect("Portrait", frame, new Vector2(0.04f, 0.16f), new Vector2(0.30f, 0.92f));
+                var pimg = port.gameObject.AddComponent<Image>();
+                pimg.color = HudTheme.PortraitFill;
+                pimg.sprite = HudTheme.RoundedFrame;
+                pimg.type = Image.Type.Sliced;
 
                 // Name
-                var nameRect = NewRect("Name", frame, new Vector2(0.30f, 0.52f), new Vector2(0.98f, 0.96f));
-                _partyName[i] = AddText(nameRect, i == 0 ? "Hero" : "—", 20, Gold, TextAlignmentOptions.Left);
+                var nameRect = NewRect("Name", frame, new Vector2(0.34f, 0.50f), new Vector2(0.98f, 0.95f));
+                _partyName[i] = AddText(nameRect, i == 0 ? "Hero" : "—", 20, HudTheme.Gold, TextAlignmentOptions.Left);
+                _partyName[i].fontStyle = FontStyles.Bold;
 
                 // HP bar track + fill
-                var track = NewRect("HPTrack", frame, new Vector2(0.30f, 0.14f), new Vector2(0.98f, 0.46f));
-                track.gameObject.AddComponent<Image>().color = HpTrack;
+                var track = NewRect("HPTrack", frame, new Vector2(0.34f, 0.14f), new Vector2(0.98f, 0.44f));
+                track.gameObject.AddComponent<Image>().color = HudTheme.HpTrack;
                 var fill = NewRect("HPFill", track, new Vector2(0f, 0f), new Vector2(1f, 1f));
                 var fimg = fill.gameObject.AddComponent<Image>();
-                fimg.color = HpRed;
+                fimg.color = HudTheme.HpRed;
                 fimg.type = Image.Type.Filled;
                 fimg.fillMethod = Image.FillMethod.Horizontal;
                 fimg.fillOrigin = 0;
                 fimg.fillAmount = 1f;
                 _partyHpFill[i] = fimg;
-                _partyHpText[i] = AddText(track, "", 14, Parchment, TextAlignmentOptions.Center);
+                _partyHpText[i] = AddText(track, "", 14, HudTheme.Parchment, TextAlignmentOptions.Center);
 
                 // Hidden until populated (hero shown immediately once HP pushed).
                 _partyFrame[i].SetActive(i == 0);
             }
         }
 
-        // Bottom-centre centrepiece: HP + mana bars, then 4 ability cells.
+        // ── Bottom skill bar: HP + mana bars, then 4 ability cells. ────────────
         private void BuildSkillBar(Transform parent)
         {
-            var bar = NewRect("SkillBar", parent, new Vector2(0.14f, 0.0f), new Vector2(0.86f, 0.135f));
-            bar.gameObject.AddComponent<Image>().color = PanelSolid;
+            _skillBar = NewRect("SkillBar", parent, new Vector2(0.10f, 0.0f), new Vector2(0.90f, 0.135f));
+            HudTheme.StylePanel(_skillBar.gameObject, HudTheme.PanelStoneDark);
 
             // HP bar (top edge of the bar)
-            var hpTrack = NewRect("HPTrack", bar, new Vector2(0.04f, 0.80f), new Vector2(0.96f, 0.95f));
-            hpTrack.gameObject.AddComponent<Image>().color = HpTrack;
+            var hpTrack = NewRect("HPTrack", _skillBar, new Vector2(0.04f, 0.80f), new Vector2(0.96f, 0.95f));
+            hpTrack.gameObject.AddComponent<Image>().color = HudTheme.HpTrack;
             var hpFill = NewRect("HPFill", hpTrack, Vector2.zero, Vector2.one);
             _hpFill = hpFill.gameObject.AddComponent<Image>();
-            _hpFill.color = HpRed;
+            _hpFill.color = HudTheme.HpRed;
             _hpFill.type = Image.Type.Filled;
             _hpFill.fillMethod = Image.FillMethod.Horizontal;
             _hpFill.fillOrigin = 0;
             _hpFill.fillAmount = 1f;
-            _hpText = AddText(hpTrack, "", 18, Parchment, TextAlignmentOptions.Center);
+            _hpText = AddText(hpTrack, "", 18, HudTheme.Parchment, TextAlignmentOptions.Center);
 
             // Mana bar (just below HP)
-            var mTrack = NewRect("ManaTrack", bar, new Vector2(0.04f, 0.63f), new Vector2(0.96f, 0.78f));
-            mTrack.gameObject.AddComponent<Image>().color = ManaTrack;
+            var mTrack = NewRect("ManaTrack", _skillBar, new Vector2(0.04f, 0.63f), new Vector2(0.96f, 0.78f));
+            mTrack.gameObject.AddComponent<Image>().color = HudTheme.ManaTrack;
             var mFill = NewRect("ManaFill", mTrack, Vector2.zero, Vector2.one);
             _manaFill = mFill.gameObject.AddComponent<Image>();
-            _manaFill.color = ManaBlue;
+            _manaFill.color = HudTheme.ManaBlue;
             _manaFill.type = Image.Type.Filled;
             _manaFill.fillMethod = Image.FillMethod.Horizontal;
             _manaFill.fillOrigin = 0;
             _manaFill.fillAmount = 1f;
-            _manaText = AddText(mTrack, "", 16, Parchment, TextAlignmentOptions.Center);
+            _manaText = AddText(mTrack, "", 16, HudTheme.Parchment, TextAlignmentOptions.Center);
 
-            // 4 ability cells across the lower portion.
+            // 4 ability cells across the lower portion (large touch targets).
             _slotKey      = new TextMeshProUGUI[AbilitySlotCount];
             _slotGlyph    = new TextMeshProUGUI[AbilitySlotCount];
             _slotAccent   = new Image[AbilitySlotCount];
@@ -251,21 +316,27 @@ namespace DeNelle.HUD
             for (int i = 0; i < AbilitySlotCount; i++)
             {
                 float x = x0 + i * (cellW + gap);
-                var cell = NewRect("Slot" + i, bar, new Vector2(x, 0.06f), new Vector2(x + cellW, 0.58f));
-                cell.gameObject.AddComponent<Image>().color = Metal;
+                var cell = NewRect("Slot" + i, _skillBar, new Vector2(x, 0.06f), new Vector2(x + cellW, 0.58f));
+                var cellImg = cell.gameObject.AddComponent<Image>();
+                cellImg.color = HudTheme.SlotBack;
+                cellImg.sprite = HudTheme.RoundedFrame;
+                cellImg.type = Image.Type.Sliced;
 
                 // Accent rune disc (tinted per ability)
-                var disc = NewRect("Accent", cell, new Vector2(0.08f, 0.08f), new Vector2(0.92f, 0.92f));
+                var disc = NewRect("Accent", cell, new Vector2(0.10f, 0.10f), new Vector2(0.90f, 0.90f));
                 _slotAccent[i] = disc.gameObject.AddComponent<Image>();
-                _slotAccent[i].color = MetalDim;
+                _slotAccent[i].color = HudTheme.SlotDisc;
+                _slotAccent[i].sprite = HudTheme.Disc;
+                _slotAccent[i].type = Image.Type.Simple;
 
                 // Glyph
-                _slotGlyph[i] = AddText(disc, "", 34, Parchment, TextAlignmentOptions.Center);
+                _slotGlyph[i] = AddText(disc, "", 34, HudTheme.Parchment, TextAlignmentOptions.Center);
 
                 // Cooldown radial overlay (drains as the ability comes off cooldown)
                 var cd = NewRect("CD", cell, Vector2.zero, Vector2.one);
                 _slotCooldown[i] = cd.gameObject.AddComponent<Image>();
-                _slotCooldown[i].color = CdShade;
+                _slotCooldown[i].color = HudTheme.CdShade;
+                _slotCooldown[i].sprite = HudTheme.Disc;
                 _slotCooldown[i].type = Image.Type.Filled;
                 _slotCooldown[i].fillMethod = Image.FillMethod.Radial360;
                 _slotCooldown[i].fillOrigin = (int)Image.Origin360.Top;
@@ -275,7 +346,7 @@ namespace DeNelle.HUD
 
                 // Hotkey badge (bottom-right of the cell)
                 var keyRect = NewRect("Key", cell, new Vector2(0.62f, 0.0f), new Vector2(1f, 0.30f));
-                _slotKey[i] = AddText(keyRect, defaultKeys[i], 18, Gold, TextAlignmentOptions.Center);
+                _slotKey[i] = AddText(keyRect, defaultKeys[i], 18, HudTheme.Gold, TextAlignmentOptions.Center);
 
                 // Click → AbilityRequested(slot)
                 var btn = cell.gameObject.AddComponent<Button>();
@@ -284,36 +355,102 @@ namespace DeNelle.HUD
             }
         }
 
-        // Single small build entry (build is a core pillar; the busy MMO chrome is dropped).
+        // ── Build entry — bottom-right, gold pill (≥80px touch target). ────────
         private void BuildBuildButton(Transform parent)
         {
-            var b = NewRect("BuildBtn", parent, new Vector2(0.88f, 0.145f), new Vector2(0.99f, 0.225f));
-            b.gameObject.AddComponent<Image>().color = Panel;
-            var btn = b.gameObject.AddComponent<Button>();
+            _buildBtn = NewRect("BuildBtn", parent, new Vector2(0.86f, 0.145f), new Vector2(0.99f, 0.225f));
+            var bimg = _buildBtn.gameObject.AddComponent<Image>();
+            bimg.color = HudTheme.GoldButton;
+            bimg.sprite = HudTheme.RoundedFrame;
+            bimg.type = Image.Type.Sliced;
+            var btn = _buildBtn.gameObject.AddComponent<Button>();
             btn.onClick.AddListener(() => BuildRequested?.Invoke());
-            AddText(b, "BUILD", 20, Gold, TextAlignmentOptions.Center);
+            var t = AddText(_buildBtn, "BUILD", 22, HudTheme.Ink, TextAlignmentOptions.Center);
+            t.fontStyle = FontStyles.Bold;
         }
 
         private void BuildRepairPrompt(Transform parent)
         {
-            var p = NewRect("RepairPrompt", parent, new Vector2(0.30f, 0.42f), new Vector2(0.70f, 0.58f));
-            p.gameObject.AddComponent<Image>().color = PanelSolid;
+            var p = NewRect("RepairPrompt", parent, new Vector2(0.28f, 0.42f), new Vector2(0.72f, 0.58f));
+            HudTheme.StylePanel(p.gameObject, HudTheme.PanelStoneDark);
             _repairPanel = p.gameObject;
 
             var labelRect = NewRect("Label", p, new Vector2(0.05f, 0.50f), new Vector2(0.95f, 0.95f));
-            _repairLabel = AddText(labelRect, "", 22, Parchment, TextAlignmentOptions.Center);
+            _repairLabel = AddText(labelRect, "", 22, HudTheme.Parchment, TextAlignmentOptions.Center);
 
             var yes = NewRect("Yes", p, new Vector2(0.10f, 0.10f), new Vector2(0.46f, 0.42f));
-            yes.gameObject.AddComponent<Image>().color = Metal;
+            var yimg = yes.gameObject.AddComponent<Image>();
+            yimg.color = HudTheme.GoldButton;
+            yimg.sprite = HudTheme.RoundedFrame;
+            yimg.type = Image.Type.Sliced;
             yes.gameObject.AddComponent<Button>().onClick.AddListener(() => { RepairConfirmRequested?.Invoke(); HideRepairPrompt(); });
-            AddText(yes, "Repair", 20, Gold, TextAlignmentOptions.Center);
+            AddText(yes, "Repair", 20, HudTheme.Ink, TextAlignmentOptions.Center).fontStyle = FontStyles.Bold;
 
             var no = NewRect("No", p, new Vector2(0.54f, 0.10f), new Vector2(0.90f, 0.42f));
-            no.gameObject.AddComponent<Image>().color = MetalDim;
+            var nimg = no.gameObject.AddComponent<Image>();
+            nimg.color = HudTheme.PanelStone;
+            nimg.sprite = HudTheme.RoundedFrame;
+            nimg.type = Image.Type.Sliced;
             no.gameObject.AddComponent<Button>().onClick.AddListener(() => { RepairCancelRequested?.Invoke(); HideRepairPrompt(); });
-            AddText(no, "Later", 20, Parchment, TextAlignmentOptions.Center);
+            AddText(no, "Later", 20, HudTheme.Parchment, TextAlignmentOptions.Center);
 
             _repairPanel.SetActive(false);
+        }
+
+        // =====================================================================
+        //  RESPONSIVE LAYOUT — re-anchor clusters for portrait vs landscape.
+        // =====================================================================
+        // Both concepts share the same clusters; only the proportions change.
+        // Portrait (concept: hud-vertical-mobile): tall, wider top strips, taller
+        // bottom tray. Landscape (concept: hud-landscape): side rails, slimmer
+        // top bar, currency tucked top-right, skill bar centred along the bottom.
+        private void ApplyResponsiveLayout(bool force)
+        {
+            _lastScreenW = Screen.width;
+            _lastScreenH = Screen.height;
+            float aspect = _lastScreenH > 0 ? (float)_lastScreenW / _lastScreenH : 0.5f;
+            bool portrait = aspect < 1f;
+            if (!force && portrait == _isPortrait) return;
+            _isPortrait = portrait;
+
+            // CanvasScaler match: bias to height in portrait, width in landscape so
+            // the reference layout doesn't stretch awkwardly across orientations.
+            if (_scaler != null)
+                _scaler.matchWidthOrHeight = portrait ? 0.5f : 0.35f;
+
+            if (portrait)
+            {
+                // ── PORTRAIT (mobile-first) — vertical concept ──────────────
+                SetAnchors(_partyStack,     new Vector2(0.01f, 0.66f), new Vector2(0.46f, 0.93f));
+                SetAnchors(_castleBanner,   new Vector2(0.18f, 0.935f), new Vector2(0.74f, 0.99f));
+                SetAnchors(_waveReadout,    new Vector2(0.18f, 0.875f), new Vector2(0.82f, 0.93f));
+                SetAnchors(_resourceStrip,  new Vector2(0.46f, 0.935f), new Vector2(1f, 0.99f));
+                // Bottom tray a little taller for big thumb targets.
+                SetAnchors(_skillBar,       new Vector2(0.06f, 0.0f), new Vector2(0.94f, 0.145f));
+                SetAnchors(_buildBtn,       new Vector2(0.84f, 0.155f), new Vector2(0.99f, 0.235f));
+            }
+            else
+            {
+                // ── LANDSCAPE (web/tablet) — horizontal concept ─────────────
+                // Party rail hugs the left; currency strip tucked top-right;
+                // castle banner + wave centred along a slim top bar.
+                SetAnchors(_partyStack,     new Vector2(0.005f, 0.42f), new Vector2(0.20f, 0.98f));
+                SetAnchors(_castleBanner,   new Vector2(0.34f, 0.92f), new Vector2(0.66f, 0.99f));
+                SetAnchors(_waveReadout,    new Vector2(0.34f, 0.85f), new Vector2(0.66f, 0.915f));
+                SetAnchors(_resourceStrip,  new Vector2(0.74f, 0.92f), new Vector2(0.995f, 0.99f));
+                // Skill bar narrower & centred; build button bottom-right.
+                SetAnchors(_skillBar,       new Vector2(0.22f, 0.0f), new Vector2(0.78f, 0.16f));
+                SetAnchors(_buildBtn,       new Vector2(0.90f, 0.18f), new Vector2(0.995f, 0.28f));
+            }
+        }
+
+        private static void SetAnchors(RectTransform rt, Vector2 min, Vector2 max)
+        {
+            if (rt == null) return;
+            rt.anchorMin = min;
+            rt.anchorMax = max;
+            rt.offsetMin = Vector2.zero;
+            rt.offsetMax = Vector2.zero;
         }
 
         // =====================================================================
@@ -327,59 +464,82 @@ namespace DeNelle.HUD
 
         public void SetCountdown(float secondsRemaining)
         {
-            if (_waveText == null) return;
-            _waveText.text = secondsRemaining > 0.1f
-                ? "WAVE " + _lastWaveNumber + "  " + secondsRemaining.ToString("0.0") + "s"
-                : "WAVE " + _lastWaveNumber;
+            if (secondsRemaining > 0.1f)
+            {
+                _lastWaveState = "Prepare — " + secondsRemaining.ToString("0.0") + "s";
+                if (_waveStateText != null) _waveStateText.text = _lastWaveState;
+            }
+            else
+            {
+                _lastWaveState = "Defend";
+                if (_waveStateText != null) _waveStateText.text = _lastWaveState;
+            }
         }
 
         public void SetHeartHp(float current, float maxHp)
         {
-            // The Heart is the slot-0 party frame's vital companion to the hero bar;
-            // surfaced on the wave readout when low so the player feels the stakes.
             if (maxHp <= 0f) return;
             float pct = Mathf.Clamp01(current / maxHp);
-            if (_waveText != null && pct <= 0.35f)
-                _waveText.color = Color.Lerp(HpRed, Parchment, pct / 0.35f);
+            if (_castleFill != null) _castleFill.fillAmount = pct;
+            if (_castleText != null) _castleText.text = "Castle " + Mathf.RoundToInt(pct * 100f) + "%";
+            // Tint the banner toward red as the castle nears death.
+            if (_castleFill != null) _castleFill.color = Color.Lerp(HudTheme.HpRed, HudTheme.CastleGold, Mathf.Clamp01(pct / 0.5f));
         }
 
         public void SetCrystals(int amount)
         {
-            if (_resourceTexts != null && _resourceTexts.Length >= 4 && _resourceTexts[3] != null)
-                _resourceTexts[3].text = "Gems " + amount;
+            // Crystal is currency cell index 2 in the WO-307 strip.
+            if (_resourceTexts != null && _resourceTexts.Length >= 4 && _resourceTexts[2] != null)
+                _resourceTexts[2].text = amount.ToString();
         }
 
         public void SetResources(int wood, int iron, int food, int gems)
         {
+            // Concept strip = Wood / Iron / Crystal / Gold. "food" is mapped to the
+            // Gold cell (closest currency-of-record); crystals own cell 2. Data
+            // bindings are unchanged — only the visual labels shifted (icons/rename
+            // detail lands in WO-309).
             if (_resourceTexts == null || _resourceTexts.Length < 4) return;
-            _resourceTexts[0].text = "Wood " + wood;
-            _resourceTexts[1].text = "Iron " + iron;
-            _resourceTexts[2].text = "Food " + food;
-            _resourceTexts[3].text = "Gems " + gems;
+            _resourceTexts[0].text = wood.ToString();
+            _resourceTexts[1].text = iron.ToString();
+            _resourceTexts[2].text = gems.ToString();
+            _resourceTexts[3].text = food.ToString();
         }
 
-        public void SetAttackDirections(bool north, bool east, bool south, bool west) { /* compass dropped — not applicable */ }
+        public void SetAttackDirections(bool north, bool east, bool south, bool west) { /* compass is the separate CompassHud component (owner: compass over minimap) */ }
 
         public void SetWaveImminent(bool imminent)
         {
-            if (_waveText != null) _waveText.color = imminent ? HpRed : Parchment;
+            if (_waveText != null) _waveText.color = imminent ? HudTheme.HpRed : HudTheme.Parchment;
+            if (_waveStateText != null)
+            {
+                _lastWaveState = imminent ? "Horde Approaching" : "Defend";
+                _waveStateText.text = _lastWaveState;
+                _waveStateText.color = imminent ? HudTheme.HpRed : HudTheme.Gold;
+            }
         }
 
         public void ShowWaveClearBanner(int waveNumber, int enemiesDefeated, string flavourLine)
         {
             if (_waveText != null) _waveText.text = "WAVE " + waveNumber + " CLEAR";
+            if (_waveStateText != null)
+            {
+                _waveStateText.text = enemiesDefeated > 0 ? enemiesDefeated + " slain" : "Cleared";
+                _waveStateText.color = HudTheme.Gold;
+            }
         }
 
         public void HideWaveClearBanner()
         {
             if (_waveText != null) _waveText.text = "WAVE " + _lastWaveNumber;
+            if (_waveStateText != null) { _waveStateText.text = _lastWaveState; _waveStateText.color = HudTheme.Gold; }
         }
 
         public void ShowRepairPrompt(string wallLabel, float damagePercent)
         {
             if (_repairPanel == null) return;
             if (_repairLabel != null)
-                _repairLabel.text = string.Format("Repair {0}? ({0:0}% damaged)", wallLabel, Mathf.RoundToInt(damagePercent * 100f));
+                _repairLabel.text = string.Format("Repair {0}? ({1}% damaged)", wallLabel, Mathf.RoundToInt(damagePercent * 100f));
             _repairPanel.SetActive(true);
         }
 
@@ -439,7 +599,7 @@ namespace DeNelle.HUD
             if (_slotAccent != null && _slotAccent[slot] != null && !string.IsNullOrEmpty(accentHex)
                 && ColorUtility.TryParseHtmlString(accentHex, out var c))
             {
-                c.a = 0.85f;
+                c.a = 0.92f;
                 _slotAccent[slot].color = c;
             }
         }
