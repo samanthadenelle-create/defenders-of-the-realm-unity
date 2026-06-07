@@ -12,38 +12,54 @@
 
 using UnityEngine;
 using UnityEngine.UI;
+using DeNelle.Core.UI;   // canonical Elarion palette — uGUI mirrors UI-Toolkit
 
 namespace DeNelle.HUD
 {
-    /// <summary>Centralised HUD palette + lazily-built rounded/disc sprites.</summary>
+    /// <summary>
+    /// Centralised uGUI HUD palette + lazily-built rounded/disc sprites. Colour
+    /// values are SOURCED from <see cref="ElarionUi"/> (DeNelle.Core.UI) so the
+    /// uGUI HUD and the UI-Toolkit build/orient/admin panels read as ONE theme.
+    /// These aliases stay so the controller's existing references keep compiling.
+    /// </summary>
     public static class HudTheme
     {
-        // ── Palette (concept: earthy #2c2115 / stone #8b5e3c / gold #d4af37) ──
-        public static readonly Color PanelStone     = new Color(0.172f, 0.129f, 0.082f, 0.92f); // #2c2115-ish
-        public static readonly Color PanelStoneDark = new Color(0.110f, 0.086f, 0.058f, 0.96f);
-        public static readonly Color StoneTrim      = new Color(0.545f, 0.369f, 0.235f, 1f);    // #8b5e3c
-        public static readonly Color Gold           = new Color(0.831f, 0.686f, 0.216f, 1f);    // #d4af37
-        public static readonly Color GoldButton     = new Color(0.831f, 0.686f, 0.216f, 0.96f);
-        public static readonly Color Parchment       = new Color(0.945f, 0.910f, 0.820f, 1f);
-        public static readonly Color Ink            = new Color(0.137f, 0.098f, 0.055f, 1f);    // dark text on gold
+        // ── Palette — aliased to the canonical ElarionUi palette ──────────────
+        public static readonly Color PanelStone     = ElarionUi.PanelStone;
+        public static readonly Color PanelStoneDark = ElarionUi.PanelStoneDark;
+        public static readonly Color StoneTrim      = ElarionUi.StoneTrim;
+        public static readonly Color Gold           = ElarionUi.Gold;
+        public static readonly Color GoldButton     = ElarionUi.GoldButton;
+        public static readonly Color Parchment      = ElarionUi.Parchment;
+        public static readonly Color ParchmentDim   = ElarionUi.ParchmentDim;
+        public static readonly Color Ink            = ElarionUi.Ink;
+        public static readonly Color Affordable     = ElarionUi.Affordable;
+        public static readonly Color Danger         = ElarionUi.Danger;
 
         // Vitals
-        public static readonly Color HpRed      = new Color(0.78f, 0.13f, 0.13f, 1f);
-        public static readonly Color HpTrack    = new Color(0.10f, 0.04f, 0.04f, 0.85f);
-        public static readonly Color ManaBlue   = new Color(0.22f, 0.46f, 0.90f, 1f);
-        public static readonly Color ManaTrack  = new Color(0.05f, 0.08f, 0.20f, 0.85f);
+        public static readonly Color HpRed      = ElarionUi.HpRed;
+        public static readonly Color HpTrack    = ElarionUi.HpTrack;
+        public static readonly Color ManaBlue   = ElarionUi.ManaBlue;
+        public static readonly Color ManaTrack  = ElarionUi.ManaTrack;
         public static readonly Color CastleGold = new Color(0.84f, 0.70f, 0.26f, 1f);
         public static readonly Color CdShade    = new Color(0.03f, 0.03f, 0.05f, 0.74f);
 
         // Resource tints (icon discs)
         public static readonly Color Wood    = new Color(0.40f, 0.27f, 0.14f, 1f);
         public static readonly Color Iron    = new Color(0.55f, 0.57f, 0.62f, 1f);
-        public static readonly Color Crystal = new Color(0.55f, 0.35f, 0.85f, 1f);
+        public static readonly Color Crystal = ElarionUi.Aether;
 
         // Slots / portraits
         public static readonly Color SlotBack     = new Color(0.22f, 0.17f, 0.11f, 0.95f);
         public static readonly Color SlotDisc     = new Color(0.30f, 0.24f, 0.16f, 1f);
         public static readonly Color PortraitFill = new Color(0.16f, 0.13f, 0.10f, 1f);
+
+        // ── Typography scale (mirrors ElarionUi so uGUI text matches) ─────────
+        public const int FontTitle = ElarionUi.FontTitle;
+        public const int FontHead  = ElarionUi.FontHead;
+        public const int FontBody  = ElarionUi.FontBody;
+        public const int FontLabel = ElarionUi.FontLabel;
+        public const int FontMicro = ElarionUi.FontMicro;
 
         // ── Procedural sprites (lazily built once) ───────────────────────────
         private static Sprite _rounded;
@@ -61,15 +77,50 @@ namespace DeNelle.HUD
             get { if (_disc == null) _disc = BuildDiscSprite(); return _disc; }
         }
 
-        /// <summary>Add an Image with the rounded stone frame in the given fill colour.</summary>
+        /// <summary>
+        /// Add an Image with the panel frame in the given fill colour. Prefers the
+        /// SWAPPABLE Resources/UI/panel_bg texture (9-sliced, full-white tint so the
+        /// art shows true) when the owner has dropped one in; otherwise the procedural
+        /// rounded stone frame tinted by <paramref name="fill"/>. No code change needed
+        /// to slot the texture in later.
+        /// </summary>
         public static Image StylePanel(GameObject go, Color fill)
         {
             var img = go.GetComponent<Image>();
             if (img == null) img = go.AddComponent<Image>();
-            img.color = fill;
-            img.sprite = RoundedFrame;
+            var bg = ElarionUi.PanelBackgroundSprite;
+            if (bg != null)
+            {
+                img.sprite = bg;
+                img.color = new Color(1f, 1f, 1f, fill.a); // show the art; keep the panel's alpha
+            }
+            else
+            {
+                img.sprite = RoundedFrame;
+                img.color = fill;
+            }
             img.type = Image.Type.Sliced;
             return img;
+        }
+
+        /// <summary>
+        /// Wire idle/hover/pressed/disabled tints onto a uGUI Button so every HUD
+        /// button reacts to touch consistently. <paramref name="idle"/> is the rest
+        /// fill; hover lightens, pressed darkens, disabled greys.
+        /// </summary>
+        public static void StyleButtonColors(Button button, Color idle)
+        {
+            if (button == null) return;
+            button.transition = Selectable.Transition.ColorTint;
+            var cb = button.colors;
+            cb.normalColor      = Color.white;             // multiplies the Image colour
+            cb.highlightedColor = new Color(1.12f, 1.12f, 1.12f, 1f);
+            cb.pressedColor     = new Color(0.86f, 0.86f, 0.86f, 1f);
+            cb.selectedColor    = cb.highlightedColor;
+            cb.disabledColor    = new Color(0.5f, 0.5f, 0.5f, 0.6f);
+            cb.colorMultiplier  = 1f;
+            cb.fadeDuration     = 0.08f;
+            button.colors = cb;
         }
 
         // ── Sprite generation ────────────────────────────────────────────────

@@ -238,10 +238,11 @@ namespace DeNelle.HUD
         {
             _waveReadout = NewRect("WaveReadout", parent, new Vector2(0.26f, 0.885f), new Vector2(0.74f, 0.935f));
             // No solid panel — floating banner text per the concept.
-            _waveText = AddText(_waveReadout, "WAVE 1", 32, HudTheme.Parchment, TextAlignmentOptions.Center);
+            _waveText = AddText(_waveReadout, "WAVE 1", HudTheme.FontTitle + 6, HudTheme.Parchment, TextAlignmentOptions.Center);
             _waveText.fontStyle = FontStyles.Bold;
+            _waveText.characterSpacing = 6f; // engraved-banner feel
             var stateRect = NewRect("State", _waveReadout, new Vector2(0f, 0f), new Vector2(1f, 0.48f));
-            _waveStateText = AddText(stateRect, _lastWaveState, 20, HudTheme.Gold, TextAlignmentOptions.Center);
+            _waveStateText = AddText(stateRect, _lastWaveState, HudTheme.FontHead, HudTheme.Gold, TextAlignmentOptions.Center);
         }
 
         // ── Top-left party stack: hero (slot 0) + up to 3 companions. ──────────
@@ -381,6 +382,8 @@ namespace DeNelle.HUD
 
                 // Click → AbilityRequested(slot)
                 var btn = cell.gameObject.AddComponent<Button>();
+                btn.targetGraphic = cellImg;
+                HudTheme.StyleButtonColors(btn, HudTheme.SlotBack);
                 int slot = i;
                 btn.onClick.AddListener(() => AbilityRequested?.Invoke(slot));
             }
@@ -395,8 +398,10 @@ namespace DeNelle.HUD
             bimg.sprite = HudTheme.RoundedFrame;
             bimg.type = Image.Type.Sliced;
             var btn = _buildBtn.gameObject.AddComponent<Button>();
+            btn.targetGraphic = bimg;
+            HudTheme.StyleButtonColors(btn, HudTheme.GoldButton);
             btn.onClick.AddListener(() => BuildRequested?.Invoke());
-            var t = AddText(_buildBtn, "BUILD", 22, HudTheme.Ink, TextAlignmentOptions.Center);
+            var t = AddText(_buildBtn, "BUILD", HudTheme.FontHead, HudTheme.Ink, TextAlignmentOptions.Center);
             t.fontStyle = FontStyles.Bold;
         }
 
@@ -414,8 +419,10 @@ namespace DeNelle.HUD
             bimg.sprite = HudTheme.RoundedFrame;
             bimg.type = Image.Type.Sliced;
             var btn = _startWaveBtn.gameObject.AddComponent<Button>();
+            btn.targetGraphic = bimg;
+            HudTheme.StyleButtonColors(btn, HudTheme.GoldButton);
             btn.onClick.AddListener(() => StartWaveRequested?.Invoke());
-            var t = AddText(_startWaveBtn, "DEFEND!", 16, HudTheme.Ink, TextAlignmentOptions.Center);
+            var t = AddText(_startWaveBtn, "DEFEND!", HudTheme.FontBody, HudTheme.Ink, TextAlignmentOptions.Center);
             t.fontStyle = FontStyles.Bold;
             // Hidden until the bridge reports a wave is ready to start.
             _startWaveBtn.gameObject.SetActive(false);
@@ -435,16 +442,22 @@ namespace DeNelle.HUD
             yimg.color = HudTheme.GoldButton;
             yimg.sprite = HudTheme.RoundedFrame;
             yimg.type = Image.Type.Sliced;
-            yes.gameObject.AddComponent<Button>().onClick.AddListener(() => { RepairConfirmRequested?.Invoke(); HideRepairPrompt(); });
-            AddText(yes, "Repair", 20, HudTheme.Ink, TextAlignmentOptions.Center).fontStyle = FontStyles.Bold;
+            var yesBtn = yes.gameObject.AddComponent<Button>();
+            yesBtn.targetGraphic = yimg;
+            HudTheme.StyleButtonColors(yesBtn, HudTheme.GoldButton);
+            yesBtn.onClick.AddListener(() => { RepairConfirmRequested?.Invoke(); HideRepairPrompt(); });
+            AddText(yes, "Repair", HudTheme.FontHead, HudTheme.Ink, TextAlignmentOptions.Center).fontStyle = FontStyles.Bold;
 
             var no = NewRect("No", p, new Vector2(0.54f, 0.10f), new Vector2(0.90f, 0.42f));
             var nimg = no.gameObject.AddComponent<Image>();
             nimg.color = HudTheme.PanelStone;
             nimg.sprite = HudTheme.RoundedFrame;
             nimg.type = Image.Type.Sliced;
-            no.gameObject.AddComponent<Button>().onClick.AddListener(() => { RepairCancelRequested?.Invoke(); HideRepairPrompt(); });
-            AddText(no, "Later", 20, HudTheme.Parchment, TextAlignmentOptions.Center);
+            var noBtn = no.gameObject.AddComponent<Button>();
+            noBtn.targetGraphic = nimg;
+            HudTheme.StyleButtonColors(noBtn, HudTheme.PanelStone);
+            noBtn.onClick.AddListener(() => { RepairCancelRequested?.Invoke(); HideRepairPrompt(); });
+            AddText(no, "Later", HudTheme.FontHead, HudTheme.Parchment, TextAlignmentOptions.Center);
 
             _repairPanel.SetActive(false);
         }

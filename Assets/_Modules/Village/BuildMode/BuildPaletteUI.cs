@@ -20,6 +20,7 @@ using UnityEngine;
 using UnityEngine.UIElements;
 using DeNelle.Core.Catalog;
 using DeNelle.Core.State;
+using DeNelle.Core.UI;
 
 namespace DeNelle.Village
 {
@@ -137,17 +138,20 @@ namespace DeNelle.Village
             _root.pickingMode = PickingMode.Ignore;
             docRoot.Add(_root);
 
-            // Top row: balance + exit.
+            // Top row: balance + exit. Stone bar with a gilt under-rule.
             var topBar = new VisualElement();
             topBar.style.flexDirection = FlexDirection.Row;
             topBar.style.justifyContent = Justify.SpaceBetween;
-            topBar.style.paddingLeft = 12; topBar.style.paddingRight = 12;
+            topBar.style.alignItems = Align.Center;
+            topBar.style.paddingLeft = 14; topBar.style.paddingRight = 14;
             topBar.style.paddingTop = 6; topBar.style.paddingBottom = 6;
-            topBar.style.backgroundColor = new Color(0.06f, 0.08f, 0.14f, 0.92f);
+            topBar.style.backgroundColor = ElarionUi.PanelStone;
+            topBar.style.borderBottomWidth = 2;
+            topBar.style.borderBottomColor = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.55f);
 
-            _balanceLabel = new Label("◆ 0");
-            _balanceLabel.style.color = Color.white;
-            _balanceLabel.style.fontSize = 16;
+            _balanceLabel = new Label("❖ 0");
+            _balanceLabel.style.color = ElarionUi.Aether;
+            _balanceLabel.style.fontSize = ElarionUi.FontHead;
             _balanceLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
             topBar.Add(_balanceLabel);
 
@@ -158,25 +162,26 @@ namespace DeNelle.Village
             // Orient — opens the 3-axis orient editor on the ARMED entry (no id typing).
             _orientBtn = new Button(() => { if (!string.IsNullOrEmpty(_armedId)) OnOrientRequested?.Invoke(_armedId); })
                 { text = "Orient" };
-            _orientBtn.style.height = 30; _orientBtn.style.minWidth = 80;
+            ElarionUi.StyleButton(_orientBtn, ElarionUi.ButtonKind.Neutral);
+            _orientBtn.style.minWidth = 88;
             _orientBtn.style.marginRight = 8;
-            _orientBtn.style.color = Color.white;
-            _orientBtn.style.backgroundColor = new Color(0.30f, 0.34f, 0.52f, 0.95f);
             _orientBtn.style.display = DisplayStyle.None;   // shown only while armed
             rightCluster.Add(_orientBtn);
 
             var exitBtn = new Button(() => OnExitRequested?.Invoke()) { text = "Done" };
-            exitBtn.style.height = 30; exitBtn.style.minWidth = 80;
-            exitBtn.style.color = Color.white;
-            exitBtn.style.backgroundColor = new Color(0.30f, 0.52f, 0.34f, 0.95f);
+            ElarionUi.StyleButton(exitBtn, ElarionUi.ButtonKind.Gold);
+            exitBtn.style.minWidth = 88;
             rightCluster.Add(exitBtn);
             topBar.Add(rightCluster);
             _root.Add(topBar);
 
-            // Bottom row: scrollable horizontal card strip.
+            // Bottom row: scrollable horizontal card strip in a recessed stone tray.
             var scroll = new ScrollView(ScrollViewMode.Horizontal);
-            scroll.style.height = 120;
-            scroll.style.backgroundColor = new Color(0.08f, 0.10f, 0.16f, 0.92f);
+            scroll.style.height = 128;
+            scroll.style.backgroundColor = ElarionUi.PanelStoneDark;
+            scroll.style.paddingTop = 4; scroll.style.paddingBottom = 4;
+            scroll.horizontalScrollerVisibility = ScrollerVisibility.Hidden;
+            scroll.verticalScrollerVisibility = ScrollerVisibility.Hidden;
             _strip = scroll.contentContainer;
             _strip.style.flexDirection = FlexDirection.Row;
             _root.Add(scroll);
@@ -227,27 +232,34 @@ namespace DeNelle.Village
                 OnEntrySelected?.Invoke(e);
                 Render();   // refresh the armed highlight
             });
-            card.style.width = 110; card.style.height = 104;
+            card.style.width = 116; card.style.height = 108;
             card.style.marginLeft = 6; card.style.marginRight = 6;
             card.style.marginTop = 8; card.style.marginBottom = 8;
+            card.style.paddingTop = 8; card.style.paddingBottom = 8;
+            card.style.paddingLeft = 8; card.style.paddingRight = 8;
             card.style.flexDirection = FlexDirection.Column;
             card.style.justifyContent = Justify.SpaceBetween;
-            card.style.backgroundColor = armed
-                ? new Color(0.20f, 0.42f, 0.66f, 0.98f)
-                : new Color(0.14f, 0.18f, 0.26f, 0.96f);
-            card.style.opacity = affordable ? 1f : 0.5f;
+            // Armed = gilt-rimmed gold glow; rest = stone slot.
+            card.style.backgroundColor = armed ? ElarionUi.AetherDim : ElarionUi.PanelStone;
+            ElarionUi.SetRadius(card, ElarionUi.RadiusMd);
+            ElarionUi.SetBorderWidth(card, armed ? 2 : 1);
+            ElarionUi.SetBorderColor(card, armed
+                ? ElarionUi.Gilt
+                : new Color(ElarionUi.StoneTrim.r, ElarionUi.StoneTrim.g, ElarionUi.StoneTrim.b, 0.5f));
+            card.style.opacity = affordable ? 1f : 0.45f;
             card.SetEnabled(affordable);
 
             var nameLabel = new Label(string.IsNullOrEmpty(e.displayName) ? e.id : e.displayName);
-            nameLabel.style.color = Color.white;
-            nameLabel.style.fontSize = 13;
+            nameLabel.style.color = ElarionUi.Parchment;
+            nameLabel.style.fontSize = ElarionUi.FontLabel;
             nameLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
             nameLabel.style.whiteSpace = WhiteSpace.Normal;
             card.Add(nameLabel);
 
             var costLabel = new Label(CostLabel(cost));
-            costLabel.style.color = affordable ? new Color(0.6f, 0.9f, 1f) : new Color(1f, 0.5f, 0.5f);
-            costLabel.style.fontSize = 13;
+            costLabel.style.color = affordable ? ElarionUi.Affordable : ElarionUi.Danger;
+            costLabel.style.fontSize = ElarionUi.FontLabel;
+            costLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
             costLabel.style.whiteSpace = WhiteSpace.Normal;
             card.Add(costLabel);
 
@@ -286,13 +298,13 @@ namespace DeNelle.Village
             if (c.wood     > 0) parts.Add(c.wood     + "W");
             if (c.food     > 0) parts.Add(c.food     + "F");
             if (c.iron     > 0) parts.Add(c.iron     + "I");
-            if (c.crystals > 0) parts.Add("◆" + c.crystals);
+            if (c.crystals > 0) parts.Add("❖" + c.crystals);
             return string.Join("  ", parts);
         }
 
         private void UpdateBalance()
         {
-            if (_balanceLabel != null) _balanceLabel.text = "◆ " + CrystalBalance;
+            if (_balanceLabel != null) _balanceLabel.text = "❖ " + CrystalBalance;
         }
 
         /// <summary>Show the Orient button only while an entry is armed.</summary>

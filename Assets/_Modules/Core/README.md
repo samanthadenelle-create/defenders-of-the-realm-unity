@@ -17,7 +17,7 @@ Every other module may reference Core; Core references nothing first-party.
 | `Services/` | `ClanService`, `ChatPhraseCatalog` |
 | `Progression/` | `SkillSystem`, `IXpEarner`, `XpEarnerRegistry` |
 | `World/` | `ZoneManager`, `RegionZone`, `RegionSpawnTable`, `GameClock`, `CrystalGrade`, ward/world content |
-| `UI/` | `PanelManager`, `PanelRouter`, `AddressableUIManager`, `ShopTheme` |
+| `UI/` | `PanelManager`, `PanelRouter`, `AddressableUIManager`, `ShopTheme`, `ElarionUi` (shared in-game UI theme: palette + UI-Toolkit helpers + swappable `Resources/UI/panel_bg`/`menu_bg` hook) |
 | `Quests/` `Promo/` `Referral/` `Analytics/` | DailyQuests, promo codes, referrals, EventTracker |
 | `Web3/` | `IJupiterService`, `IWalletSigner` (interfaces only; impls in Wallet/Web3 modules) |
 | `Addressables/` | Group config, memory profiler, `SkinController` |

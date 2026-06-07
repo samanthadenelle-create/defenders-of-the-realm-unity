@@ -31,6 +31,7 @@ using System.IO;
 using System.Globalization;
 using DeNelle.Core.Data;
 using DeNelle.Core.Catalog;
+using DeNelle.Core.UI;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -44,20 +45,22 @@ namespace DeNelle.Village
     [DisallowMultipleComponent]
     public sealed class TowerPlacementRotateMenu : MonoBehaviour
     {
-        // ── Palette (from the approved mockup) ──────────────────────────────────
-        private static readonly Color PanelBg     = Hex(0x0c, 0x16, 0x25);
-        private static readonly Color RuneBorder  = Hex(0x9a, 0x74, 0x20);
-        private static readonly Color TitleGold   = Hex(0xee, 0xc8, 0x48);
-        private static readonly Color ViewportBg  = Hex(0x05, 0x0c, 0x18);
-        private static readonly Color ReadoutBg   = Hex(0x05, 0x0c, 0x18);
+        // ── Palette — re-based on the canonical ElarionUi theme (warm stone /
+        //     parchment / runic gold) so the orient editor matches the HUD + build
+        //     palette + shop. Axis tints + rune decoration stay local (below). ─────
+        private static readonly Color PanelBg     = ElarionUi.PanelStoneDark;
+        private static readonly Color RuneBorder  = ElarionUi.StoneTrim;
+        private static readonly Color TitleGold   = ElarionUi.Gilt;
+        private static readonly Color ViewportBg  = Hex(0x0a, 0x07, 0x04);   // near-black warm viewport well
+        private static readonly Color ReadoutBg   = Hex(0x0a, 0x07, 0x04);
         private static readonly Color ReadoutBdr  = Hex(0x38, 0x28, 0x0e);
         private static readonly Color ConfirmBg   = Hex(0x9a, 0x6e, 0x0c);
         private static readonly Color ConfirmBdr  = Hex(0xd4, 0xa0, 0x28);
-        private static readonly Color ConfirmTxt  = Hex(0xff, 0xf8, 0xe0);
+        private static readonly Color ConfirmTxt  = ElarionUi.Ink;          // dark ink on gold CTA
         private static readonly Color CancelBg    = Hex(0x1a, 0x0c, 0x06);
-        private static readonly Color CancelTxt   = Hex(0xb0, 0x78, 0x38);
-        private static readonly Color ResetBg     = Hex(0x06, 0x10, 0x1a);
-        private static readonly Color ResetTxt    = Hex(0x48, 0x78, 0xa8);
+        private static readonly Color CancelTxt   = ElarionUi.ParchmentDim;
+        private static readonly Color ResetBg     = Hex(0x12, 0x0d, 0x07);
+        private static readonly Color ResetTxt    = ElarionUi.StoneTrim;
         private static readonly Color RuneStripTxt = Hex(0x6a, 0x4e, 0x14);
 
         private static readonly Color AxisX = Hex(0xd0, 0x40, 0x40); // Pitch
@@ -258,15 +261,14 @@ namespace DeNelle.Village
 
             // Full-screen dimmer + centred card.
             _root = new VisualElement();
-            _root.style.position        = Position.Absolute;
-            _root.style.left = 0; _root.style.top = 0;
-            _root.style.right = 0; _root.style.bottom = 0;
-            _root.style.backgroundColor = new Color(0f, 0f, 0f, 0.55f);
-            _root.style.alignItems      = Align.Center;
-            _root.style.justifyContent  = Justify.Center;
+            ElarionUi.StyleScrim(_root);
+            // Optional full-screen menu backdrop (Resources/UI/menu_bg) over the scrim.
+            ElarionUi.TryApplyMenuBackground(_root);
 
             var card = new VisualElement();
-            card.style.backgroundColor = PanelBg;
+            // Swappable Resources/UI/panel_bg when present, else solid stone fill.
+            if (!ElarionUi.TryApplyPanelBackground(card))
+                card.style.backgroundColor = PanelBg;
             SetBorder(card, RuneBorder, 2);
             SetRadius(card, 10);
             card.style.minWidth   = 440;

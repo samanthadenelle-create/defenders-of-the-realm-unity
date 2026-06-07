@@ -14,6 +14,7 @@
 using System;
 using System.Reflection;
 using DeNelle.Core.Catalog;
+using DeNelle.Core.UI;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -100,22 +101,21 @@ namespace DeNelle.HUD
             card.style.minWidth = 420; card.style.maxWidth = 560;
             card.style.paddingTop = 22;  card.style.paddingBottom = 22;
             card.style.paddingLeft = 26; card.style.paddingRight = 26;
-            card.style.backgroundColor = new Color(0.07f, 0.05f, 0.11f, 0.98f);
-            card.style.borderTopLeftRadius = 14; card.style.borderTopRightRadius = 14;
-            card.style.borderBottomLeftRadius = 14; card.style.borderBottomRightRadius = 14;
-            var rim = new Color(0.78f, 0.16f, 0.16f, 0.7f);
-            card.style.borderTopColor = rim;   card.style.borderBottomColor = rim;
-            card.style.borderLeftColor = rim;  card.style.borderRightColor = rim;
-            card.style.borderTopWidth = 1;  card.style.borderBottomWidth = 1;
-            card.style.borderLeftWidth = 1; card.style.borderRightWidth = 1;
+            // Stone panel from the shared theme, but with a DANGER-red rim so the
+            // owner-only debug overlay reads as "admin / careful", still in-family.
+            card.style.backgroundColor = ElarionUi.PanelStoneDark;
+            ElarionUi.SetRadius(card, ElarionUi.RadiusLg);
+            ElarionUi.SetBorderWidth(card, 2);
+            ElarionUi.SetBorderColor(card, new Color(ElarionUi.Danger.r, ElarionUi.Danger.g, ElarionUi.Danger.b, 0.75f));
             _overlay.Add(card);
 
-            var title = new Label("Admin — owner-only");
-            title.style.fontSize = 20;
+            var title = new Label(ElarionUi.CrestGlyph + "  Admin — owner-only");
+            title.style.fontSize = ElarionUi.FontTitle;
             title.style.unityFontStyleAndWeight = FontStyle.Bold;
-            title.style.color = new Color(1f, 0.78f, 0.66f);
-            title.style.marginBottom = 14;
+            title.style.color = ElarionUi.Danger;
+            title.style.marginBottom = 6;
             card.Add(title);
+            card.Add(ElarionUi.MakeRule());
 
             card.Add(Button("Trigger next wave",      OnTriggerWave));
             card.Add(Button("+100 crystals",          () => OnGiveCrystals(100)));
@@ -132,8 +132,8 @@ namespace DeNelle.HUD
             card.Add(Button("Close",                  Toggle));
 
             _status = new Label(string.Empty);
-            _status.style.color = new Color(0.85f, 0.85f, 0.85f);
-            _status.style.fontSize = 12;
+            _status.style.color = ElarionUi.ParchmentDim;
+            _status.style.fontSize = ElarionUi.FontLabel;
             _status.style.marginTop = 8;
             _status.style.whiteSpace = WhiteSpace.Normal;
             card.Add(_status);
@@ -142,13 +142,9 @@ namespace DeNelle.HUD
         private static Button Button(string label, Action onClick)
         {
             var b = new Button(onClick) { text = label };
-            b.style.height = 36;
-            b.style.marginTop = 4; b.style.marginBottom = 4;
-            b.style.fontSize = 13;
-            b.style.backgroundColor = new Color(0.22f, 0.10f, 0.14f, 1f);
-            b.style.color = new Color(0.96f, 0.93f, 0.88f);
-            b.style.borderTopLeftRadius = 6; b.style.borderTopRightRadius = 6;
-            b.style.borderBottomLeftRadius = 6; b.style.borderBottomRightRadius = 6;
+            ElarionUi.StyleButton(b, ElarionUi.ButtonKind.Neutral);
+            b.style.minHeight = 38;   // compact debug rows (override the 44 default)
+            b.style.unityFontStyleAndWeight = FontStyle.Normal;
             return b;
         }
 
@@ -162,8 +158,8 @@ namespace DeNelle.HUD
 
             // Relabelled "crafting id" → "catalog id" — the field takes a CatalogRegistry id.
             var idLabel = new Label("catalog id");
-            idLabel.style.color = new Color(0.85f, 0.85f, 0.85f);
-            idLabel.style.fontSize = 12;
+            idLabel.style.color = ElarionUi.ParchmentDim;
+            idLabel.style.fontSize = ElarionUi.FontLabel;
             idLabel.style.width = 70;
             row.Add(idLabel);
 
@@ -173,8 +169,8 @@ namespace DeNelle.HUD
             var input = _orientIdField.Q(className: "unity-text-field__input");
             if (input != null)
             {
-                input.style.backgroundColor = new Color(0.05f, 0.04f, 0.07f, 1f);
-                input.style.color = new Color(0.96f, 0.93f, 0.88f);
+                input.style.backgroundColor = new Color(0.05f, 0.04f, 0.03f, 1f);
+                input.style.color = ElarionUi.Parchment;
             }
             // Placeholder via tooltip (UIElements 2021 has no native placeholder).
             _orientIdField.tooltip = "catalog id, e.g. mill or tower_ground_archer";
