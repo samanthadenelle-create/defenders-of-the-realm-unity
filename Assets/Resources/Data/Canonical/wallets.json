@@ -1,5 +1,5 @@
 {
-  "_comment": "Canonical wallet-address registry for Defenders of the Realm — PUBLIC on-chain addresses ONLY. Extracted VERBATIM from docs/wallets-of-record.md. NO private keys, seed phrases, or signer keypairs are stored here or anywhere in this repo (v2-unity-port-spec.md Part 10). These addresses power the v2 wallet module's transparency display and the devnet pack-purchase smoke test. Devnet-only economy in the v2 Unity foundation.",
+  "_comment": "Canonical wallet-address registry for Defenders of the Realm — PUBLIC on-chain addresses ONLY. Extracted VERBATIM from docs/wallets-of-record.md. NO private keys, seed phrases, or signing secrets are stored here or anywhere in this repo (v2-unity-port-spec.md Part 10). These addresses power the v2 wallet module's transparency display and the devnet pack-purchase smoke test. Devnet-only economy in the v2 Unity foundation.",
   "_sources": {
     "walletsOfRecord": "defenders-of-the-realm/docs/wallets-of-record.md (§2 Rewards Distributor, §3 Dev/Staging wallet)",
     "portSpec": "defenders-unity/docs/v2-unity-port-spec.md (Week 7 — Rewards Distributor display; Part 10 — devnet-only, no secrets)"
