@@ -56,6 +56,10 @@ namespace DeNelle.Village
         private BuildPaletteUI _palette;
         private BuildSelectionUI _selectionUi;
         private GhostPreview _ghost;
+        // WO-335 — simple PLAYER yaw-only rotate panel opened on a tower place-confirm.
+        // (The old UIToolkit 3-axis TowerPlacementRotateMenu is now the editor/dev OFFSET
+        //  tool — no longer called from placement.)
+        private RotateModelMenu _rotateMenu;
 
         private Camera _camera;
         private CatalogEntry _armed;
@@ -264,6 +268,11 @@ namespace DeNelle.Village
         {
             if (_ghost == null) return;
 
+            // WO-334 — while the Preview & Rotate panel is open, the placement is in the
+            // player's hands (the modal owns confirm/cancel). Freeze the ghost loop so a
+            // stray tap behind the modal can't drop a second structure.
+            if (_pendingPlace) { _ghost.Hide(); return; }
+
             // Cancel (right-click / Escape / touch Cancel button) backs out the armed
             // entry (keeps build mode open).
             if (_input.Cancel)
@@ -289,10 +298,79 @@ namespace DeNelle.Village
             _ghost.SetValid(valid);
 
             if (PlaceConfirmedThisFrame() && valid)
-                // Direct placement. The old BuildPreviewModal place-step was REMOVED
-                // (it threw a CreateButton NRE + rendered white). WO-334's
-                // TowerPlacementRotateMenu replaces it and is wired in once verified.
-                Place(cell, footprint, snapped);
+            {
+                // WO-335 — towers route through the simple PLAYER yaw-only Rotate Model
+                // panel so the player dials in the placement rotation before committing;
+                // every other catalog type (walls / floors / decorations / gates /
+                // resources) keeps the original instant CoC-style drop, where free 90°
+                // R-rotation is enough. This now runs on ALL platforms (incl. web) — it's
+                // the player UI, not an editor authoring tool.
+                if (IsTowerEntry(_armed))
+                    OpenRotateMenu(cell, footprint, snapped);
+                else
+                    Place(cell, footprint, snapped);
+            }
+        }
+
+        /// <summary>True when the armed catalog entry is a tower (gets the rotate panel).</summary>
+        private static bool IsTowerEntry(CatalogEntry entry)
+            => entry != null && entry.type == CatalogType.Tower;
+
+        /// <summary>
+        /// WO-334 — open the Preview &amp; Rotate panel for the armed tower at a validated
+        /// cell. Stashes the placement target in the _pending* fields (which freezes the
+        /// ghost loop), seeds the panel with the ghost's current free-rotate yaw, and on
+        /// confirm maps the chosen Quaternion → yaw offset/steps then commits via Place();
+        /// on cancel the entry stays armed (nothing placed). The preview model is the
+        /// armed entry's visual prefab loaded from Resources (CatalogEntry carries a PATH,
+        /// not a TowerData SO — see the prefab Open() overload).
+        /// </summary>
+        private void OpenRotateMenu(Vector2Int cell, Vector2Int footprint, Vector3 snapped)
+        {
+            if (_armed == null) return;
+
+            _pendingPlace     = true;
+            _pendingCell      = cell;
+            _pendingFootprint = footprint;
+            _pendingSnapped   = snapped;
+
+            EnsureRotateMenu();
+
+            GameObject prefab = !string.IsNullOrEmpty(_armed.visualPrefabPath)
+                ? Resources.Load<GameObject>(_armed.visualPrefabPath)
+                : null;
+            string name = !string.IsNullOrEmpty(_armed.displayName) ? _armed.displayName : _armed.id;
+            double costSkr = CostFor(_armed).crystals;
+
+            // Seed the panel from the ghost's current free-rotate yaw step (R key steps).
+            int initialYawSteps = _armedYawSteps & 3;
+
+            Debug.Log($"[Orient] open: id={_armed.id} prefab={(prefab != null ? prefab.name : "<none>")} yaw0={initialYawSteps * 90}");
+            _rotateMenu.Open(prefab, name, costSkr, initialYawSteps, OnRotateConfirmed, OnRotateCancelled);
+        }
+
+        /// <summary>
+        /// WO-335 confirm callback — the player committed a yaw step (0..3 → 0/90/180/270°).
+        /// Map it onto the same fields the place path writes (so the rotation persists into
+        /// PlacedStructureData identically): _armedYawSteps = the step, _armedYawOffset =
+        /// the exact yaw in degrees. Then commit at the pending cell.
+        /// </summary>
+        private void OnRotateConfirmed(int yawSteps)
+        {
+            _armedYawSteps  = yawSteps & 3;
+            _armedYawOffset = _armedYawSteps * 90f;
+            Debug.Log($"[Orient] confirmed: yawSteps={_armedYawSteps} yaw={_armedYawOffset:F0} cell={_pendingCell}");
+
+            _pendingPlace = false;
+            Place(_pendingCell, _pendingFootprint, _pendingSnapped);
+        }
+
+        /// <summary>WO-334 cancel callback — keep the entry armed; nothing is placed.</summary>
+        private void OnRotateCancelled()
+        {
+            _pendingPlace = false;
+            Debug.Log("[Orient] cancelled (entry stays armed).");
+            // Entry stays armed so the player can re-position / re-confirm or cancel out.
         }
 
         /// <summary>
@@ -453,6 +531,12 @@ namespace DeNelle.Village
         {
             _armed = null;
             _ghost?.Hide();
+            // WO-334 — if the rotate panel was mid-confirm, tear it down (no callback).
+            if (_pendingPlace)
+            {
+                _pendingPlace = false;
+                _rotateMenu?.Close();
+            }
         }
 
         // =====================================================================
@@ -1124,6 +1208,14 @@ namespace DeNelle.Village
             _selectionUi.OnSellRequested += SellSelected;
             _selectionUi.OnUpgradeRequested += UpgradeSelected;
             _selectionUi.OnCancelRequested += ClearSelection;
+        }
+
+        /// <summary>Lazily create the WO-335 player Rotate Model panel host (one per session).</summary>
+        private void EnsureRotateMenu()
+        {
+            if (_rotateMenu != null) return;
+            var go = new GameObject("RotateModelMenu");
+            _rotateMenu = go.AddComponent<RotateModelMenu>();
         }
 
         /// <summary>
