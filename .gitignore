@@ -173,6 +173,10 @@ Assets/Tests/Fixtures/DevnetTestWallet.*
 /Assets/Spells Pack/
 /Assets/Spells Pack.meta
 
+# TextMesh Pro package EXAMPLES — re-imported by the TMP package, not our code
+# (34 example scripts that kept churning the working tree). Keep off git.
+/Assets/TextMesh Pro/Examples & Extras/
+
 # Cross-repo implementation staging (defenders-unity-review deltas, *_delta.cs) —
 # NOT part of feat/tower-core-loop; kept local for reference only, never committed here.
 /CC_implementations/
@@ -182,3 +186,45 @@ Assets/Tests/Fixtures/DevnetTestWallet.*
 
 # Stray root-level scripts (must live under Assets/ to compile; kept out of git).
 /ColliderVisualizer.cs
+
+# ── Additional Unity 6 / Mobile / Solana (extended for this project) ──
+# Unity 6 Library sub-artifacts and newer caches (broad match already covers most).
+/[Ll]ibrary/Artifacts/
+/[Ll]ibrary/ArtifactDB-*
+/[Ll]ibrary/SourceAssetDB-*
+
+# Mobile platform build extras (iOS/Android).
+*.ipa
+*.dSYM.zip
+GoogleService-Info.plist
+google-services.json
+**/Il2CppOutputProject/
+**/gradleBuild/
+**/build/
+**/app/build/
+
+# Solana CLI + local validator + common dev key artifacts (beyond *.keypair.json).
+**/id.json
+**/test-ledger/
+**/.solana/
+**/*-keypair.json
+**/.config/solana/
+phantom-*.log
+seeker-*.log
+
+# Editor / IDE extras (Rider, VS Code, JetBrains).
+.idea/
+*.iml
+.vscode/
+*.code-workspace
+
+# Unity Addressables / Player build temp that can leak.
+**/PlayerBuildAnalyticsEvents.json
+**/buildlog.txt
+
+# Potential native Solana/JS bridge or temp wallet adapter outputs in Plugins or root (defensive).
+**/node_modules/
+package-lock.json
+yarn.lock
+*.js.map
+
