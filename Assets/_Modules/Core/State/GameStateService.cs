@@ -11,7 +11,7 @@
 //              SaveFile envelope → PlayerPrefs.SetString → PlayerPrefs.Save().
 //   mutators — typed methods mirroring the Week-1 Zustand slice actions; each
 //              writes the SO, raises its per-domain event, and Save()s.
-//   Reset()  — the React `reset()` carve-out: wipes progression but keeps
+//   ResetToNewGame() — the React `reset()` carve-out: wipes progression but keeps
 //              boundWallet, breachStyle and all social fields.
 //
 // IMPROVEMENT #1 (adopted): per-domain UnityEvents instead of one fat
@@ -84,7 +84,7 @@ namespace DeNelle.Core.State
         public readonly UnityEvent CombatChanged = new UnityEvent();
         /// <summary>Raised when social contacts / inbox change.</summary>
         public readonly UnityEvent SocialChanged = new UnityEvent();
-        /// <summary>Raised after a full <see cref="Reset"/> or <see cref="Load"/>.</summary>
+        /// <summary>Raised after a full <see cref="ResetToNewGame"/> or <see cref="Load"/>.</summary>
         public readonly UnityEvent StateReplaced = new UnityEvent();
 
         // =====================================================================
@@ -541,11 +541,11 @@ namespace DeNelle.Core.State
         /// and never touches the social fields (invite code / contacts / inbox).
         /// Transient runtime fields (prepTimerLocked, paused, dungeonEnteredAt,
         /// torchBurnEndsAt, activeRegionRun) live in runtime SOs, not here, so
-        /// Reset simply omits them.
+        /// ResetToNewGame simply omits them.
         /// </summary>
-        public void Reset()
+        public void ResetToNewGame()
         {
-            // Lazy-init mirrors Awake: Reset() is "New Game" and must work even when called
+            // Lazy-init mirrors Awake: ResetToNewGame() is "New Game" and must work even when called
             // before Awake has run — EditMode tests AddComponent without the MonoBehaviour
             // lifecycle, and a reset-before-load path would otherwise null-deref here (every
             // other accessor guards _state; Reset() must too). Fixes 16 save/reset tests.

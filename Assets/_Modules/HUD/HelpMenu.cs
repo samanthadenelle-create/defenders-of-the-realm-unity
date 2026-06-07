@@ -290,7 +290,7 @@ namespace DeNelle.HUD
                 var instance = t.GetProperty("Instance",
                     System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)?.GetValue(null);
                 if (instance == null) { ShowToast("Reset failed — service not alive."); return; }
-                var reset = t.GetMethod("Reset",
+                var reset = t.GetMethod("ResetToNewGame",
                     System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
                 reset?.Invoke(instance, null);
 

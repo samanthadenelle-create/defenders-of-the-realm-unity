@@ -49,7 +49,7 @@ namespace DeNelle.Core.Tests
         public void reset_preserves_the_bound_wallet()
         {
             _state.BoundWallet = "BwBB9LUS3Nmxqgc41xNbGUygsUVQniv9PdngiycicjJV";
-            _service.Reset();
+            _service.ResetToNewGame();
             Assert.That(_state.BoundWallet,
                 Is.EqualTo("BwBB9LUS3Nmxqgc41xNbGUygsUVQniv9PdngiycicjJV"),
                 "Reset() must NOT unbind the wallet.");
@@ -59,7 +59,7 @@ namespace DeNelle.Core.Tests
         public void reset_preserves_the_breach_style_preference()
         {
             _state.BreachStyle = BreachStyle.TowerSim;
-            _service.Reset();
+            _service.ResetToNewGame();
             Assert.That(_state.BreachStyle, Is.EqualTo(BreachStyle.TowerSim),
                 "Reset() must NOT clear the breachStyle preference.");
         }
@@ -86,7 +86,7 @@ namespace DeNelle.Core.Tests
             };
             _state.LastInboxSyncAt = 1716000200000.0;
 
-            _service.Reset();
+            _service.ResetToNewGame();
 
             Assert.That(_state.MyInviteCode, Is.EqualTo("ABC123"), "reset must keep myInviteCode");
             Assert.That(_state.Contacts.Count, Is.EqualTo(1), "reset must keep contacts");
@@ -138,7 +138,7 @@ namespace DeNelle.Core.Tests
             _state.Quests.Completed["quest-0"] = true;
             _state.Regions.Discovered["region-1"] = true;
 
-            _service.Reset();
+            _service.ResetToNewGame();
 
             Assert.That(_state.Pets, Is.Empty, "pets wiped");
             Assert.That(_state.StarterPetId, Is.Null, "starterPetId wiped");
@@ -178,7 +178,7 @@ namespace DeNelle.Core.Tests
         [Test]
         public void reset_seeds_the_starter_dungeon_discovered()
         {
-            _service.Reset();
+            _service.ResetToNewGame();
             // DungeonProgress.Empty() seeds healers_cottage so Dungeon Select has >=1 entry.
             Assert.That(_state.Dungeons.Discovered.ContainsKey(SaveSchema.StarterDungeonId), Is.True,
                 "Reset() must leave the starter dungeon discovered.");
@@ -189,7 +189,7 @@ namespace DeNelle.Core.Tests
         public void reset_stamps_the_current_schema_version()
         {
             _state.SchemaVersion = 3;
-            _service.Reset();
+            _service.ResetToNewGame();
             Assert.That(_state.SchemaVersion, Is.EqualTo(SaveSchema.CurrentVersion),
                 "Reset() must stamp SchemaVersion to CurrentVersion.");
         }
@@ -204,7 +204,7 @@ namespace DeNelle.Core.Tests
             _state.Contacts = new List<ChatContact> { new ChatContact { Code = "FRIEND" } };
             _state.LastInboxSyncAt = 555;
 
-            _service.Reset(); // Reset() also Save()s.
+            _service.ResetToNewGame(); // ResetToNewGame() also Save()s.
 
             TestSupport.DestroyService(_service);
             _service = TestSupport.SpawnService(out _state);

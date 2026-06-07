@@ -70,8 +70,16 @@ namespace DeNelle.Data.Tests
                 Assert.That(wave.WaveId, Is.GreaterThan(prevId),
                     "wave ids must be authored in ascending order.");
                 prevId = wave.WaveId;
-                Assert.That(wave.Enemies, Is.Not.Null.And.Not.Empty,
-                    $"wave {wave.WaveId} must have at least one spawn batch.");
+                // A wave is valid if it spawns a normal-enemy batch OR is a
+                // boss-only wave (e.g. wave 4 is the apex-dragon BOSS wave with
+                // enemies: [] by design — the dragon spawns from the boss/apexBoss
+                // block, see waves.json _comment). Mirrors the sibling cross-ref
+                // test that tolerates boss-only waves via wave.Boss.
+                bool hasBatch = wave.Enemies != null && wave.Enemies.Count > 0;
+                bool hasBoss = !string.IsNullOrEmpty(wave.Boss) || wave.IsApexBossWave;
+                Assert.That(hasBatch || hasBoss, Is.True,
+                    $"wave {wave.WaveId} must have at least one spawn batch " +
+                    "or a boss/apexBoss block.");
             }
         }
 

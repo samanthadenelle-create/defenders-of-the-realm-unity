@@ -88,7 +88,7 @@ namespace DeNelle.Core.Tests
         {
             // launch → New Game → quit → relaunch (the literal Week-1 path).
             _service = TestSupport.SpawnService(out _);
-            _service.Reset();
+            _service.ResetToNewGame();
 
             var reloaded = RestartAndLoad(out var loaded);
             Assert.That(loaded, Is.True);

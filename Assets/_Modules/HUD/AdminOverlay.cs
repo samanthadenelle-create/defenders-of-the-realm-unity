@@ -258,7 +258,7 @@ namespace DeNelle.HUD
         private void OnReset()
         {
             ResolveGameState();
-            InvokeMethod(_gameStateInstance, "Reset");
+            InvokeMethod(_gameStateInstance, "ResetToNewGame");
             SetStatus("Reset(): the carve-out preserves BoundWallet / BreachStyle / social.");
         }
 
