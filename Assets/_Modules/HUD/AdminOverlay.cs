@@ -13,6 +13,7 @@
 
 using System;
 using System.Reflection;
+using DeNelle.Core.Catalog;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -32,6 +33,9 @@ namespace DeNelle.HUD
         private VisualElement _overlay;
         private Label _status;
         private bool _bound;
+
+        // Dev orient tool — catalog id the owner types in.
+        private TextField _orientIdField;
 
         // Reflection handles — resolved lazily on first show.
         private Type _gameStateServiceType;
@@ -121,6 +125,10 @@ namespace DeNelle.HUD
             card.Add(Button("Save now",               OnSave));
             card.Add(Button("Reset save (carve-out)", OnReset));
             card.Add(Button("Replay Tutorial (clear Yarn)", OnReplayTutorial));
+
+            // ── Dev orient tool: type a catalog id, open the 3-axis panel ───────
+            card.Add(BuildOrientRow());
+
             card.Add(Button("Close",                  Toggle));
 
             _status = new Label(string.Empty);
@@ -142,6 +150,103 @@ namespace DeNelle.HUD
             b.style.borderTopLeftRadius = 6; b.style.borderTopRightRadius = 6;
             b.style.borderBottomLeftRadius = 6; b.style.borderBottomRightRadius = 6;
             return b;
+        }
+
+        // ── Dev orient tool row ──────────────────────────────────────────────
+        private VisualElement BuildOrientRow()
+        {
+            var row = new VisualElement();
+            row.style.flexDirection = FlexDirection.Row;
+            row.style.alignItems    = Align.Center;
+            row.style.marginTop = 8; row.style.marginBottom = 4;
+
+            _orientIdField = new TextField { value = "" };
+            _orientIdField.style.flexGrow = 1;
+            _orientIdField.style.marginRight = 6;
+            var input = _orientIdField.Q(className: "unity-text-field__input");
+            if (input != null)
+            {
+                input.style.backgroundColor = new Color(0.05f, 0.04f, 0.07f, 1f);
+                input.style.color = new Color(0.96f, 0.93f, 0.88f);
+            }
+            // Placeholder via tooltip (UIElements 2021 has no native placeholder).
+            _orientIdField.tooltip = "catalog id, e.g. mill or tower_ground_archer";
+            row.Add(_orientIdField);
+
+            var btn = Button("Orient Asset", OnOrientAsset);
+            btn.style.marginTop = 0; btn.style.marginBottom = 0;
+            btn.style.width = 130;
+            row.Add(btn);
+            return row;
+        }
+
+        private void OnOrientAsset()
+        {
+            string id = _orientIdField != null ? (_orientIdField.value ?? string.Empty).Trim() : string.Empty;
+            if (string.IsNullOrEmpty(id)) { SetStatus("Orient: type a catalog id first."); return; }
+
+            // Resolve the prefab path: prefer the CatalogEntry's visualPrefabPath;
+            // fall back to treating the typed id itself as a Resources path.
+            string prefabPath = null;
+            string displayName = id;
+            var entry = CatalogRegistry.Get(id);
+            if (entry != null)
+            {
+                prefabPath  = entry.visualPrefabPath;
+                displayName = !string.IsNullOrEmpty(entry.displayName) ? entry.displayName : id;
+            }
+            if (string.IsNullOrEmpty(prefabPath)) prefabPath = id;   // raw-path fallback
+
+            var prefab = Resources.Load<GameObject>(prefabPath);
+            if (prefab == null)
+            {
+                SetStatus(entry == null
+                    ? $"Orient: id '{id}' not in CatalogRegistry and not loadable as a Resources path."
+                    : $"Orient: '{id}' found, but Resources.Load failed for '{prefabPath}'.");
+                return;
+            }
+
+            if (!OpenOrientMenu(id, prefab, displayName))
+            {
+                SetStatus("Orient: could not open TowerPlacementRotateMenu (DeNelle.Village missing?).");
+                return;
+            }
+
+            // Hide the admin overlay so the orient panel is unobstructed.
+            if (_overlay != null)
+            {
+                _overlay.style.display = DisplayStyle.None;
+                _overlay.pickingMode = PickingMode.Ignore;
+            }
+            SetStatus($"Orienting '{id}'. Confirm in the panel — recipe logs to Console ([OrientRecipe]).");
+        }
+
+        /// <summary>
+        /// Find-or-create the DeNelle.Village TowerPlacementRotateMenu and invoke
+        /// its OpenDevOrient(string,GameObject,string) via reflection (HUD asmdef
+        /// does not reference DeNelle.Village). Returns false if the type is absent.
+        /// </summary>
+        private bool OpenOrientMenu(string id, GameObject prefab, string displayName)
+        {
+            var menuType = Type.GetType("DeNelle.Village.TowerPlacementRotateMenu, DeNelle.Village");
+            if (menuType == null) return false;
+
+            var menu = UnityEngine.Object.FindObjectOfType(menuType);
+            if (menu == null)
+            {
+                var go = new GameObject("DevOrientMenu");
+                menu = go.AddComponent(menuType);
+            }
+
+            var open = menuType.GetMethod("OpenDevOrient",
+                BindingFlags.Public | BindingFlags.Instance,
+                null,
+                new[] { typeof(string), typeof(GameObject), typeof(string) },
+                null);
+            if (open == null) return false;
+
+            open.Invoke(menu, new object[] { id, prefab, displayName });
+            return true;
         }
 
         public void Toggle()

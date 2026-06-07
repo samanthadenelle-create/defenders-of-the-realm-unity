@@ -27,6 +27,8 @@
 // =============================================================================
 
 using System;
+using System.IO;
+using System.Globalization;
 using DeNelle.Core.Data;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -77,6 +79,10 @@ namespace DeNelle.Village
         private Action<Quaternion> _onConfirm;
         private Action             _onCancel;
 
+        // Dev "orient & report" mode (AdminOverlay): when set, Confirm LOGS an
+        // [OrientRecipe] line + appends a JSON recipe instead of placing a tower.
+        private string             _devOrientId;
+
         private int   _snapDegrees = 45;          // 0=off, 15, 45, 90
         private float _xDeg, _yDeg, _zDeg;        // current (snapped) euler values
 
@@ -121,6 +127,7 @@ namespace DeNelle.Village
             Action onCancel)
         {
             _towerData = towerData;
+            _devOrientId = null;
             // The TowerData Level-1 visual is upgrades[0].visualPrefab — resolve it once
             // here so the shared core path is prefab-driven for BOTH overloads.
             GameObject prefab = towerData != null
@@ -148,7 +155,30 @@ namespace DeNelle.Village
             Action onCancel)
         {
             _towerData = null;   // prefab path — no SO; tier label falls back to "TIER I"
+            _devOrientId = null;
             OpenCore(previewPrefab, displayName, costSkr, initialRotation, onConfirm, onCancel);
+        }
+
+        /// <summary>
+        /// DEV ONLY (AdminOverlay → "Orient Asset"): open the 3-axis panel on a
+        /// catalog item's visual prefab to dial in an orientation offset. On
+        /// Confirm it does NOT place anything — it LOGS a copy-pasteable
+        /// <c>[OrientRecipe]</c> line and appends a JSON recipe line to
+        /// Assets/Resources/Data/orientation-recipes.json, so the offset can be
+        /// baked into the catalog. Reflection-friendly signature (string + GameObject)
+        /// so the HUD asmdef can invoke it without referencing DeNelle.Village.
+        /// </summary>
+        public void OpenDevOrient(string catalogId, GameObject previewPrefab, string displayName)
+        {
+            _towerData   = null;
+            _devOrientId = string.IsNullOrEmpty(catalogId) ? "unknown" : catalogId;
+            OpenCore(
+                previewPrefab,
+                string.IsNullOrEmpty(displayName) ? _devOrientId : displayName,
+                0d,
+                Quaternion.identity,
+                null,   // confirm handled by the dev-orient branch in OnConfirmClicked
+                null);
         }
 
         /// <summary>Shared open path for both overloads — builds the panel + preview off a prefab.</summary>
@@ -556,10 +586,58 @@ namespace DeNelle.Village
 
         private void OnConfirmClicked()
         {
-            var finalRotation = Quaternion.Euler(SnapAngle(_xDeg), SnapAngle(_yDeg), SnapAngle(_zDeg));
+            float ex = SnapAngle(_xDeg);
+            float ey = SnapAngle(_yDeg);
+            float ez = SnapAngle(_zDeg);
+
+            // DEV "orient & report" path — log the dialed offset for baking; no placement.
+            if (!string.IsNullOrEmpty(_devOrientId))
+            {
+                ReportOrientRecipe(_devOrientId, new Vector3(ex, ey, ez));
+                Close();
+                return;
+            }
+
+            var finalRotation = Quaternion.Euler(ex, ey, ez);
             var cb = _onConfirm;
             Close();
             cb?.Invoke(finalRotation);
+        }
+
+        /// <summary>
+        /// DEV: surface the dialed orientation as a copy-pasteable Console line and
+        /// append a JSON recipe to Assets/Resources/Data/orientation-recipes.json.
+        /// The panel dials rotation only, so offset is (0,0,0) and scale 1 — the
+        /// owner edits those in the JSON if a non-zero offset/scale is needed.
+        /// </summary>
+        private void ReportOrientRecipe(string id, Vector3 euler)
+        {
+            Vector3 offset = Vector3.zero;
+            float   scale  = 1f;
+            var ci = CultureInfo.InvariantCulture;
+
+            // MUST-HAVE: copy-pasteable Console line.
+            Debug.Log(string.Format(ci,
+                "[OrientRecipe] id={0} euler=({1:0.##}, {2:0.##}, {3:0.##}) offset=({4:0.##}, {5:0.##}, {6:0.##}) scale={7:0.###}",
+                id, euler.x, euler.y, euler.z, offset.x, offset.y, offset.z, scale));
+
+            // BONUS: append a JSON line to the recipes file (best-effort; never throws to the UI).
+            try
+            {
+                string json = string.Format(ci,
+                    "{{ \"id\":\"{0}\", \"euler\":[{1:0.###},{2:0.###},{3:0.###}], \"offset\":[{4:0.###},{5:0.###},{6:0.###}], \"scale\":{7:0.###} }}",
+                    id, euler.x, euler.y, euler.z, offset.x, offset.y, offset.z, scale);
+
+                string dir  = Path.Combine(Application.dataPath, "Resources", "Data");
+                string path = Path.Combine(dir, "orientation-recipes.json");
+                Directory.CreateDirectory(dir);
+                File.AppendAllText(path, json + "\n");
+                Debug.Log($"[OrientRecipe] appended to {path}");
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[OrientRecipe] could not write recipes file (Console line above is authoritative): {e.Message}");
+            }
         }
 
         private void OnCancelClicked()
