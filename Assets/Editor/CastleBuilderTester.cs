@@ -665,6 +665,21 @@ namespace DeNelle.Editor
             Debug.Log(log.ToString());
         }
 
+        // Per-type batchmode wrappers — set the EditorPref then build, so any variation can
+        // be built headless without manually poking EditorPrefs:
+        //   batchmode -executeMethod DeNelle.Editor.CastleBuilderTester.TestEnemyOutpost0 .. 3
+        [MenuItem("Defenders/Sandbox/Enemy Outpost/Type 0")]
+        public static void TestEnemyOutpost0() { EditorPrefs.SetInt("enemyOutpost.type", 0); TestBuildEnemyOutpost(); }
+
+        [MenuItem("Defenders/Sandbox/Enemy Outpost/Type 1")]
+        public static void TestEnemyOutpost1() { EditorPrefs.SetInt("enemyOutpost.type", 1); TestBuildEnemyOutpost(); }
+
+        [MenuItem("Defenders/Sandbox/Enemy Outpost/Type 2")]
+        public static void TestEnemyOutpost2() { EditorPrefs.SetInt("enemyOutpost.type", 2); TestBuildEnemyOutpost(); }
+
+        [MenuItem("Defenders/Sandbox/Enemy Outpost/Type 3")]
+        public static void TestEnemyOutpost3() { EditorPrefs.SetInt("enemyOutpost.type", 3); TestBuildEnemyOutpost(); }
+
         // Flat ground plane at Y=0 covering the outpost footprint (+ margin), collider +
         // NavigationStatic, neutral material. Outpost spans x:[0..(gridWidth-1)*unitSize],
         // z:[0..(gridDepth-1)*unitSize]; extend to cover the front approach (hero ~6m out).

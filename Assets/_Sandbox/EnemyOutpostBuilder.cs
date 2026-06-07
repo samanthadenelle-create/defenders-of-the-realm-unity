@@ -36,9 +36,18 @@ namespace DeNelle.Sandbox
         public GameObject stairsPrefab;      // straight stairs (used by the citadel variant)
         public GameObject[] debrisPrefabs;   // scatter props (barrels, blood, broken furniture)
 
+        // Surface seating — drop the WHOLE outpost root onto whatever surface it's placed on
+        // (any terrain elevation), rather than assuming Y=0. See SeatRootOnSurface().
+        public bool seatRootOnSurface = true;
+        public LayerMask surfaceMask = ~0;   // default: hit everything
+
         [ContextMenu("Build Enemy Outpost")]
         public void BuildOutpost()
         {
+            // Ride the outpost root on the surface BEFORE placing pieces, so every piece
+            // (and the SeatAllPieces grounding pass) is relative to the surface height.
+            SeatRootOnSurface();
+
             ClearExisting();
             switch (outpostType)
             {
@@ -47,6 +56,74 @@ namespace DeNelle.Sandbox
                 case 2: BuildWatchtowerNest(); break;
                 case 3: BuildLayeredDefenseCitadel(); break;
                 default: BuildBarricadeStronghold(); break;
+            }
+
+            // SEAT PASS — the hardcoded Y-positions above assume a center/base prefab pivot,
+            // but our pack's prefab pivots differ, so pieces float. Re-seat every piece on
+            // its renderer-bounds base so ground pieces sit ON the ground and elevated tiers
+            // sit AT their tier height. Same bounds-bottom seat used in VisualFactory.
+            SeatAllPieces();
+        }
+
+        // ================================================================
+        // SURFACE SEAT — ride the WHOLE outpost root on the placed surface
+        // ================================================================
+        // Raycast straight DOWN from high above the builder's transform position against
+        // surfaceMask. If it hits ground/terrain, set the root's Y to the hit point so the
+        // entire outpost rides on the surface at any elevation. If nothing is hit, leave Y
+        // as-is. Null/empty-safe and editor-safe ([ExecuteInEditMode]); called at the START
+        // of BuildOutpost so SeatAllPieces then grounds pieces relative to this root.
+        void SeatRootOnSurface()
+        {
+            if (!seatRootOnSurface) return;
+
+            Vector3 origin = transform.position + Vector3.up * 500f;
+            // Ignore our own colliders / triggers so we don't seat the root on a child piece.
+            if (Physics.Raycast(origin, Vector3.down, out RaycastHit hit, 1000f,
+                                 surfaceMask, QueryTriggerInteraction.Ignore))
+            {
+                Vector3 p = transform.position;
+                p.y = hit.point.y;
+                transform.position = p;
+            }
+            // No hit → leave Y as-is (e.g. flat-plane test scenes seated at Y=0).
+        }
+
+        // ================================================================
+        // SEAT PASS — fix floating pieces (pivot-agnostic)
+        // ================================================================
+        // For each direct child piece, drop/raise it on Y so its combined renderer-bounds
+        // BASE sits at its intended floor level. The intended floor is inferred from the
+        // piece's CURRENT y (set by the placement helpers): y < 3 → ground (floor 0); else
+        // → an elevated tier whose deck height IS that current y. This removes the float
+        // caused by varying prefab pivots without changing any placement logic.
+        void SeatAllPieces()
+        {
+            for (int i = 0; i < transform.childCount; i++)
+            {
+                Transform piece = transform.GetChild(i);
+                if (piece == null) continue;
+
+                var renderers = piece.GetComponentsInChildren<Renderer>();
+                if (renderers == null || renderers.Length == 0) continue;
+
+                // Combined world-space renderer bounds for this piece.
+                Bounds b = renderers[0].bounds;
+                for (int r = 1; r < renderers.Length; r++)
+                    b.Encapsulate(renderers[r].bounds);
+
+                // Ground (floor 0) when this piece was placed near the floor; otherwise the
+                // piece's current y IS its intended tier deck height.
+                float targetFloorY = piece.position.y < 3f ? 0f : piece.position.y;
+
+                // Shift on Y so bounds.min.y == targetFloorY.
+                float delta = targetFloorY - b.min.y;
+                if (Mathf.Abs(delta) > 0.0001f)
+                {
+                    Vector3 p = piece.position;
+                    p.y += delta;
+                    piece.position = p;
+                }
             }
         }
 
