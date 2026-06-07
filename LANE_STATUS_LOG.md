@@ -24,6 +24,7 @@
 
 ## ✅ Advanced this session
 - **Cycle 1** (2026-06-07, early AM) — WO-314 BuildPreviewModal fix (gate ✓, committed local, built into exe, held from push).
+- **Cycle 2** (2026-06-07 ~00:13) — WO-328 recon (no code change). It's a **PLAY-mode NRE** (zero load-time NRE in the gate/build logs). Ruled **CLEAN / well-guarded**: `HeroAbilitiesHudBridge`, `PartyHudBridge`, `HeroLocomotion.Update`. Can't pin headlessly without the runtime stack trace — did **not** guess-fix (conservative). No safe auto-commit this cycle; nothing new to build/retest.
 
 ## 🔴 ROUNDTABLE — needs your eyes (deliberately NOT auto-committed: felt/gameplay)
 From the 5-agent recon (see `HANDOVER_OVERNIGHT_2026-06-06.md`):
@@ -34,7 +35,7 @@ From the 5-agent recon (see `HANDOVER_OVERNIGHT_2026-06-06.md`):
 - **Design flags:** Pets = reconcile to shipped **3-species Bond** model (not the 8-species taming doc); Crafting = `CanCraft/TryCraft` are stubs (need plumbing before WO-293 tiers).
 
 ## ⏭️ Queued for the runner (safe lanes)
-- **WO-328** (HIGH, Lane 0) root NRE spam — needs diagnosis (recon) → null-guard.
+- **WO-328** (HIGH, Lane 0) root NRE spam — ⚠ **needs the Console stack trace from your playtest** (which script + line throws). Prime per-frame suspects already ruled clean (HUD bridges, HeroLocomotion). **ACTION for you:** on your retest, copy the first NullReferenceException's stack trace from the Console → I'll fix it precisely (a blind guard would just move the bug).
 - **WO-309** Gems→Crystals + resource icons (rename is safe).
 - **WO-310** companion green tint (mirrors the hero-color fix).
 - **WO-323** trees render white (URP material).
