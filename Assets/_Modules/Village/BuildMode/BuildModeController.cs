@@ -52,7 +52,7 @@ namespace DeNelle.Village
 
         [Header("Camera overview")]
         [Tooltip("Camera height (Y) while in build mode — angled 3D overview so structures read as upright.")]
-        [SerializeField] private float _buildModeHeight = 28f;
+        [SerializeField] private float _buildModeHeight = 22f;
         [Tooltip("Pitch (degrees) while in build mode — angled, not top-down, so 3D orientation is visible.")]
         [SerializeField] private float _buildModePitch = 45f;
 
