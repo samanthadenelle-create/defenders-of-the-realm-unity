@@ -521,9 +521,65 @@ namespace DeNelle.Editor
             return go;
         }
 
+        // =====================================================================
+        // SCENE-AGNOSTIC scene defaults (camera + light + ambient/fog) — the SAME
+        // body as B0_AddSceneDefaults, but operating on the ACTIVE scene without the
+        // Village2.unity path coupling, so a different builder (Village3) can wire an
+        // identical shell. B0_AddSceneDefaults is UNTOUCHED; this is additive.
+        // =====================================================================
+        public static void AddSceneDefaultsToActiveScene()
+        {
+            var existingCam = Object.FindFirstObjectByType<Camera>();
+            if (existingCam == null)
+            {
+                var cameraGo = new GameObject("Main Camera");
+                var camera = cameraGo.AddComponent<Camera>();
+                camera.clearFlags = CameraClearFlags.SolidColor;
+                camera.backgroundColor = new Color(0.74f, 0.66f, 0.72f);
+                camera.farClipPlane = 600f;
+                camera.fieldOfView = 60f;
+                cameraGo.tag = "MainCamera";
+                cameraGo.transform.position = new Vector3(2.8f, 2.6f, 1.9f);
+                cameraGo.transform.rotation = Quaternion.Euler(12f, 0f, 0f);
+                cameraGo.AddComponent<AudioListener>();
+                AddByType(cameraGo, TypeVillageCamera);
+                AddByType(cameraGo, TypeSmartMobileCamera);
+                Log("AddSceneDefaults: Main Camera (VillageCamera + SmartMobileCamera) added.");
+            }
+            else Log($"AddSceneDefaults: camera already present ('{existingCam.name}') — idempotent skip.");
+
+            var existingLight = Object.FindFirstObjectByType<Light>();
+            if (existingLight == null)
+            {
+                var lightGo = new GameObject("Directional Light");
+                var light = lightGo.AddComponent<Light>();
+                light.type = LightType.Directional;
+                light.color = new Color(1f, 0.96f, 0.89f);
+                light.intensity = 1.55f;
+                light.shadows = LightShadows.Soft;
+                light.shadowStrength = 0.6f;
+                lightGo.transform.rotation = Quaternion.Euler(42f, -35f, 0f);
+                lightGo.transform.position = new Vector3(0f, 40f, 0f);
+                Log("AddSceneDefaults: Directional Light added.");
+            }
+            else Log($"AddSceneDefaults: light already present ('{existingLight.name}') — idempotent skip.");
+
+            RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Trilight;
+            RenderSettings.ambientSkyColor     = new Color(0.62f, 0.66f, 0.74f);
+            RenderSettings.ambientEquatorColor = new Color(0.52f, 0.52f, 0.50f);
+            RenderSettings.ambientGroundColor  = new Color(0.34f, 0.33f, 0.30f);
+            RenderSettings.ambientIntensity = 1.0f;
+            RenderSettings.fog = true;
+            RenderSettings.fogMode = FogMode.Linear;
+            RenderSettings.fogColor = new Color(0.70f, 0.74f, 0.80f);
+            RenderSettings.fogStartDistance = 80f;
+            RenderSettings.fogEndDistance   = 220f;
+            Log("AddSceneDefaults: gradient ambient + linear fog configured.");
+        }
+
         /// Wires the Main Camera's VillageCamera + SmartMobileCamera `_target` to the
         /// hero so the adaptive follow camera tracks it. Mirrors WireVillageCameraTarget.
-        static void WireCameraTargetToHero(GameObject hero)
+        public static void WireCameraTargetToHero(GameObject hero)
         {
             if (hero == null) return;
             var cam = Camera.main;
