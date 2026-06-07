@@ -209,11 +209,22 @@ namespace DeNelle.Editor
         // places nothing when its house/specialty slots are null (Place/Pick null-guard), and
         // ScatterNatureRing early-returns when no nature prefabs are assigned. Village2Generator
         // itself is NEVER edited — this is a pure slot-wiring switch.
-        public static void SetupAndGenerateVillage2(bool bonesOnly)
+        public static void SetupAndGenerateVillage2(bool bonesOnly) =>
+            SetupAndGenerateVillage2(bonesOnly, terrainOnly: false);
+
+        // terrainOnly = true: a TRULY BARE authoring canvas. Implies bonesOnly (no houses/specialty/
+        // nature) AND additionally strips the generated PERIMETER — walls, gates, towers, moat, and
+        // perimeter torches — by setting the generator's skipPerimeter flag. The result is ground/
+        // roads + the centrepiece Tree-of-Life only, so the player authors the entire perimeter from
+        // scratch. Also always assigns the ground material (fixes the magenta/blue bare-ground).
+        public static void SetupAndGenerateVillage2(bool bonesOnly, bool terrainOnly)
         {
-            Debug.Log(bonesOnly
-                ? "[Village2Build] === SetupAndGenerateVillage2 START (BONES ONLY) ==="
-                : "[Village2Build] === SetupAndGenerateVillage2 START ===");
+            if (terrainOnly) bonesOnly = true;   // terrain-only is a strict superset of bones-only
+            Debug.Log(terrainOnly
+                ? "[Village2Build] === SetupAndGenerateVillage2 START (TERRAIN ONLY — no perimeter) ==="
+                : bonesOnly
+                    ? "[Village2Build] === SetupAndGenerateVillage2 START (BONES ONLY) ==="
+                    : "[Village2Build] === SetupAndGenerateVillage2 START ===");
 
             // Resolve the Village2Generator type (lives in Assembly-CSharp, no namespace).
             System.Type genType = FindTypeByName("Village2Generator");
@@ -247,6 +258,17 @@ namespace DeNelle.Editor
             GameObject balconyStraight = LoadPiece("Balcony_Simple_Straight.prefab");
             GameObject balconyCorner   = LoadPiece("Balcony_Simple_Corner.prefab");
             // moatWaterPlane + torchPrefab intentionally null for v1.
+
+            // Ground material: the Quaternius kit's own sample-scene ground (a URP ShaderGraph mat
+            // from the same pack as the walls/roads). This is what the bare shell paints its ground
+            // plane with so it no longer renders the default magenta/blue. Falls back to a name
+            // search if the path moves; null only if the pack isn't imported (graceful warn).
+            Material groundMat =
+                AssetDatabase.LoadAssetAtPath<Material>(
+                    "Assets/Quaternius/Medieval Village MegaKit/Materials/MI_SampleScene_Ground.mat")
+                ?? LoadMaterialByName("MI_SampleScene_Ground");
+            if (groundMat == null)
+                Debug.LogWarning("[Village2Build] MI_SampleScene_Ground material not found — ground plane will be skipped (bare canvas stays magenta).");
 
             // ---- Build arrays for the [] slots (skip nulls) ---------------------
             GameObject[] smallHouses   = NonNull(houseC, houseC2);
@@ -302,6 +324,12 @@ namespace DeNelle.Editor
             SetField(gen, "moatWaterPlane", null);   // moat skipped v1
             SetField(gen, "roadStraight", roadStraight);
             SetField(gen, "torchPrefab", null);      // torches skipped v1
+
+            // Ground plane + bare-canvas perimeter strip.
+            SetField(gen, "groundMaterial", groundMat);
+            SetField(gen, "skipPerimeter", terrainOnly);
+            if (terrainOnly)
+                Debug.Log("[Village2Build] TERRAIN ONLY: skipPerimeter=true — walls/gates/towers/moat/torches will NOT generate.");
 
             SetField(gen, "townHalfWidth", 42f);
             SetField(gen, "townHalfDepth", 33f);
@@ -490,6 +518,19 @@ namespace DeNelle.Editor
                 if (exact == null) exact = path;   // remember first partial as fallback
             }
             return exact != null ? AssetDatabase.LoadAssetAtPath<GameObject>(exact) : null;
+        }
+
+        // Finds a Material by asset name anywhere in the project (robust to pack location).
+        static Material LoadMaterialByName(string name)
+        {
+            foreach (var guid in AssetDatabase.FindAssets($"{name} t:Material"))
+            {
+                var path = AssetDatabase.GUIDToAssetPath(guid);
+                var file = System.IO.Path.GetFileNameWithoutExtension(path);
+                if (string.Equals(file, name, System.StringComparison.OrdinalIgnoreCase))
+                    return AssetDatabase.LoadAssetAtPath<Material>(path);
+            }
+            return null;
         }
 
         // Loads many by name, dropping any that aren't imported (graceful — packs are gitignored).

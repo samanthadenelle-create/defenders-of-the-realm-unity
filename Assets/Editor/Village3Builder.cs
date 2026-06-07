@@ -78,16 +78,31 @@ namespace DeNelle.Editor
         [MenuItem("Defenders/Village3/Build Village3 (Bones Only)")]
         public static void BuildVillage3Bones() => BuildVillage3Internal(populate: false, bonesOnly: true);
 
+        // =====================================================================
+        // BUILD VILLAGE3 (EMPTY / TERRAIN ONLY) — the BAREST authoring canvas.
+        // Same gameplay wiring as the shell (hero/camera/HUD/spawns/waves/NavMesh)
+        // and the Heart/Tree-of-Life, but the generated art shell is TERRAIN-ONLY:
+        // ground/roads only — NO walls, NO gates, NO towers, NO moat, NO torches,
+        // NO houses, NO nature ring. The player authors the ENTIRE perimeter from
+        // scratch. Ground is painted with a proper URP material (no magenta/blue).
+        // Batchmode-callable.
+        // =====================================================================
+        [MenuItem("Defenders/Village3/Build Village3 (Empty / Terrain Only)")]
+        public static void BuildVillage3Empty() => BuildVillage3Internal(populate: false, bonesOnly: true, terrainOnly: true);
+
         // populate = true: place the recipe gameplay buildings (full Village3).
         // populate = false: stop after the shell wiring (empty-shell Village3).
         // bonesOnly = true: generate the art shell with NO decorative houses/nature ring.
-        static void BuildVillage3Internal(bool populate, bool bonesOnly = false)
+        // terrainOnly = true: ALSO strip the perimeter (walls/gates/towers/moat/torches) — bare canvas.
+        static void BuildVillage3Internal(bool populate, bool bonesOnly = false, bool terrainOnly = false)
         {
-            Log(bonesOnly
-                ? "=== BUILD VILLAGE3 START (BONES ONLY) ==="
-                : populate
-                    ? "=== BUILD VILLAGE3 START (populated) ==="
-                    : "=== BUILD VILLAGE3 START (EMPTY SHELL) ===");
+            Log(terrainOnly
+                ? "=== BUILD VILLAGE3 START (EMPTY / TERRAIN ONLY — no perimeter) ==="
+                : bonesOnly
+                    ? "=== BUILD VILLAGE3 START (BONES ONLY) ==="
+                    : populate
+                        ? "=== BUILD VILLAGE3 START (populated) ==="
+                        : "=== BUILD VILLAGE3 START (EMPTY SHELL) ===");
 
             // --- 1. Fresh empty scene + generate the art shell ------------------
             // SetupAndGenerateVillage2 builds the generated town (terrain/ground,
@@ -95,7 +110,7 @@ namespace DeNelle.Editor
             // build it fresh, then SAVE it as Village3.unity (its own scene file,
             // so Village2.unity is never touched).
             EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
-            Village2Build.SetupAndGenerateVillage2(bonesOnly);
+            Village2Build.SetupAndGenerateVillage2(bonesOnly, terrainOnly);
 
             Scene scene = EditorSceneManager.GetActiveScene();
             GameObject root = FindGeneratedRoot(scene);
@@ -148,11 +163,13 @@ namespace DeNelle.Editor
             // --- 4. NavMesh bake (final step, same as Village2's flow) ----------
             BakeVillage3NavMesh();
 
-            Log(bonesOnly
-                ? "=== BUILD VILLAGE3 DONE (BONES ONLY) — open Village3.unity and press Play. VILLAGE3_BUILD_OK ==="
-                : populate
-                    ? "=== BUILD VILLAGE3 DONE (populated) — open Village3.unity and press Play. VILLAGE3_BUILD_OK ==="
-                    : "=== BUILD VILLAGE3 DONE (EMPTY SHELL) — open Village3.unity and press Play. VILLAGE3_BUILD_OK ===");
+            Log(terrainOnly
+                ? "=== BUILD VILLAGE3 DONE (EMPTY / TERRAIN ONLY) — open Village3.unity and press Play. VILLAGE3_BUILD_OK ==="
+                : bonesOnly
+                    ? "=== BUILD VILLAGE3 DONE (BONES ONLY) — open Village3.unity and press Play. VILLAGE3_BUILD_OK ==="
+                    : populate
+                        ? "=== BUILD VILLAGE3 DONE (populated) — open Village3.unity and press Play. VILLAGE3_BUILD_OK ==="
+                        : "=== BUILD VILLAGE3 DONE (EMPTY SHELL) — open Village3.unity and press Play. VILLAGE3_BUILD_OK ===");
         }
 
         // =====================================================================

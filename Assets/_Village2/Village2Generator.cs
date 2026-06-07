@@ -43,6 +43,24 @@ public class Village2Generator : MonoBehaviour
     [Header("Roads")]
     public GameObject roadStraight;     // Floor_Brick
 
+    [Header("Ground")]
+    // A continuous walkable ground plane painted with a proper URP material. Without this the
+    // bare shell shows the default magenta/blue (no ground mesh under the scattered road tiles).
+    // When assigned, GenerateVillage lays a flat plane at Y=0 and also re-skins the road tiles
+    // so nothing renders on the missing/default shader. groundSize = the plane's half-extent in
+    // metres (default comfortably covers the ±42/±33 town footprint).
+    public Material groundMaterial;
+    public float groundHalfSize = 70f;
+
+    [Header("Perimeter toggle (terrain-only authoring canvas)")]
+    // TERRAIN-ONLY mode: skip the entire generated perimeter — the 4 walls + gates + corner/gate
+    // towers, the moat ring, and the perimeter torches — so the player authors the whole perimeter
+    // from scratch on an empty canvas. Decorative houses/specialty/nature are already suppressed by
+    // leaving their slots null (same mechanism as bones-only). Terrain/roads/ground + the
+    // centrepiece Tree-of-Life still generate. Set via reflection by Village2Build; default OFF so
+    // Village2 / Village3 / bones-only are unchanged.
+    public bool skipPerimeter = false;
+
     [Header("Lighting")]
     public GameObject torchPrefab;
 
@@ -115,10 +133,18 @@ public class Village2Generator : MonoBehaviour
         CreateQuadrant("SE_Residential", new Vector3( 23, 0, -18), Quad.Residential);
         CreateQuadrant("SW_Market",      new Vector3(-23, 0, -18), Quad.Market);
 
+        CreateGroundPlane();   // continuous walkable ground (proper material — fixes the magenta/blue void)
         CreateRoadSystem();
-        CreateWalls();
-        CreateMoat();
-        PlaceLighting();
+        if (!skipPerimeter)
+        {
+            CreateWalls();
+            CreateMoat();
+            PlaceLighting();
+        }
+        else
+        {
+            Debug.Log("[Village2] TERRAIN-ONLY: skipped walls + gates + towers + moat + torches (player authors the perimeter).");
+        }
         ScatterNatureRing();   // depth: a wood encircling the town (procedural scatter — exact pos irrelevant)
 
         Debug.Log("[Village2] Generated. children=" + villageParent.childCount);
@@ -165,6 +191,38 @@ public class Village2Generator : MonoBehaviour
         float hw = townHalfWidth * 0.7f, hd = townHalfDepth * 0.7f;
         for (float x = -hw; x <= hw; x += 4f) Place(roadStraight, new Vector3(x, 0.04f, 0f), 0f);
         for (float z = -hd; z <= hd; z += 4f) Place(roadStraight, new Vector3(0f, 0.04f, z), 90f);
+    }
+
+    // Lays a single flat ground plane at Y=0 under the whole town and paints it with the proper
+    // URP groundMaterial. This is what fixes the "flat blue/magenta" bare-shell ground: without a
+    // ground mesh the camera renders the void/skybox or the road tiles fall back to the default
+    // (magenta) shader. The plane is decorative (collider stripped) — walkability comes from the
+    // NavMesh bake; it just gives the authoring canvas a real surface to look at and build on.
+    private void CreateGroundPlane()
+    {
+        if (groundMaterial == null)
+        {
+            Debug.Log("[Village2] Ground plane skipped — no groundMaterial assigned (would show magenta/blue void).");
+            return;
+        }
+
+        var ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
+        ground.name = "Ground";
+        ground.transform.SetParent(villageParent, false);
+        ground.transform.position = new Vector3(0f, 0f, 0f);
+        // Unity's primitive Plane is 10x10 m at scale 1; scale so it spans 2*groundHalfSize metres.
+        float s = (groundHalfSize * 2f) / 10f;
+        ground.transform.localScale = new Vector3(s, 1f, s);
+
+        var mr = ground.GetComponent<MeshRenderer>();
+        if (mr != null) mr.sharedMaterial = groundMaterial;
+
+        // Decorative surface only — let the hero/NavMesh own collision (a plane collider here would
+        // double up with the baked terrain seam). Strip it so it never interferes.
+        var col = ground.GetComponent<Collider>();
+        if (col != null) DestroyImmediate(col);
+
+        Debug.Log($"[Village2] Ground plane laid at Y=0 (half-size {groundHalfSize}m) with material '{groundMaterial.name}'.");
     }
 
     private void CreateWalls()
