@@ -74,8 +74,19 @@ public class Village2Generator : MonoBehaviour
         var tree = Place(treeOfLife, Vector3.zero, 0f);
         if (tree != null)
         {
-            // Explicit upright (auto-detect skips the roundish Tree-of-Life). Dial treeUprightEuler.
+            // DEF: the centrepiece Tree-of-Life renders ON ITS SIDE when the lying-down
+            // Tree_Of_Life.fbx prefab is used (its longest axis is authored horizontal),
+            // because the upright correction was being trusted from treeUprightEuler —
+            // which Village2Build zeroes out, so nothing stood it up.
+            // FIX: DERIVE the upright correction from the tree's own renderer bounds
+            // (the same self-correcting longest-axis->Y logic AutoUpright uses for the
+            // nature ring) and BAKE it as the localRotation. This stands the tree up
+            // regardless of which prefab is assigned (lying FBX or already-upright
+            // polyperfect), in Village2, Village3, and everywhere this generator runs.
+            // treeUprightEuler is used only as a fallback when bounds are too round to
+            // tell (e.g. a bushy canopy), preserving the old authoring knob.
             tree.transform.localRotation = Quaternion.Euler(treeUprightEuler);
+            UprightFromBounds(tree, treeUprightEuler);
             ScaleToHeight(tree, targetTreeHeight);
             SeatOnGround(tree, 0f);
             // Decorative centrepiece — the gameplay blocker is HeartController's clean capsule
@@ -319,6 +330,39 @@ public class Village2Generator : MonoBehaviour
         if (maxHoriz <= s.y * 1.3f) return;
         if (s.x >= s.z) go.transform.Rotate(0f, 0f, -90f, Space.World);  // X longest -> bring to Y
         else            go.transform.Rotate(-90f, 0f, 0f, Space.World);  // Z longest -> bring to Y
+    }
+
+    // DEF (Tree-of-Life sideways): stand the CENTREPIECE up by measuring its combined
+    // renderer bounds and rotating the longest (currently horizontal) axis to vertical Y.
+    // Same self-correcting principle as AutoUpright, but: (a) it's called explicitly for
+    // the centrepiece (which AutoUpright skips because its 1.3x guard treats it as "roundish"
+    // once the canopy is wide), and (b) if the bounds are genuinely ambiguous (no axis clearly
+    // longest), it leaves the already-applied `fallbackEuler` in place rather than guessing.
+    // The rotation is baked into the tree's localRotation so it persists across rebuilds.
+    private void UprightFromBounds(GameObject go, Vector3 fallbackEuler)
+    {
+        if (go == null) return;
+        var rends = go.GetComponentsInChildren<Renderer>();
+        if (rends == null || rends.Length == 0) return;
+        Bounds b = rends[0].bounds;
+        for (int i = 1; i < rends.Length; i++) b.Encapsulate(rends[i].bounds);
+        Vector3 s = b.size;
+        float maxHoriz = Mathf.Max(s.x, s.z);
+        // If a horizontal axis is clearly the longest, the tree is lying down -> stand it up
+        // by bringing that axis to vertical (world-space rotate, composing with current rot).
+        if (maxHoriz > s.y * 1.05f)
+        {
+            if (s.x >= s.z) go.transform.Rotate(0f, 0f, -90f, Space.World);  // X longest -> Y
+            else            go.transform.Rotate(-90f, 0f, 0f, Space.World);  // Z longest -> Y
+            Debug.Log($"[Village2] Tree-of-Life UprightFromBounds: was lying (bounds {s}); " +
+                      $"rotated longest axis to vertical. final localEuler={go.transform.localEulerAngles}");
+        }
+        else
+        {
+            // Roundish/ambiguous -> trust the authoring knob (already applied by the caller).
+            Debug.Log($"[Village2] Tree-of-Life UprightFromBounds: bounds {s} ambiguous (roundish); " +
+                      $"kept fallback treeUprightEuler={fallbackEuler}.");
+        }
     }
 
     // Strips colliders from a placed object (decorative props/centrepiece shouldn't block

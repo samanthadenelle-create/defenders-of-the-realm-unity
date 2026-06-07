@@ -19,6 +19,11 @@
 //   Defenders > Village3 > Build Village3
 //   (batchmode: DeNelle.Editor.Village3Builder.BuildVillage3)
 //
+//   Defenders > Village3 > Build Village3 (Empty Shell)
+//   (batchmode: DeNelle.Editor.Village3Builder.BuildVillage3Shell)
+//   Same flow MINUS the recipe building inject — walls/gates/terrain/Heart/
+//   hero/camera/HUD/waves/NavMesh only, NO gameplay buildings.
+//
 // The NavMesh bake is the FINAL step INSIDE BuildVillage3 (so one call yields a
 // walkable Village3). It is also exposed as BakeVillage3NavMesh for a separate run.
 // =============================================================================
@@ -50,9 +55,25 @@ namespace DeNelle.Editor
         // bake. One command, batchmode-callable.
         // =====================================================================
         [MenuItem("Defenders/Village3/Build Village3")]
-        public static void BuildVillage3()
+        public static void BuildVillage3() => BuildVillage3Internal(populate: true);
+
+        // =====================================================================
+        // BUILD VILLAGE3 SHELL (EMPTY) — identical flow to BuildVillage3 but
+        // SKIPS the recipe building inject, so the result is a SHELL ONLY:
+        // terrain/ground + walls + gates + Heart + camera/HUD/hero/waves +
+        // NavMesh, with NO gameplay buildings. Lets the player/build-mode place
+        // structures into a clean town. Batchmode-callable.
+        // =====================================================================
+        [MenuItem("Defenders/Village3/Build Village3 (Empty Shell)")]
+        public static void BuildVillage3Shell() => BuildVillage3Internal(populate: false);
+
+        // populate = true: place the recipe gameplay buildings (full Village3).
+        // populate = false: stop after the shell wiring (empty-shell Village3).
+        static void BuildVillage3Internal(bool populate)
         {
-            Log("=== BUILD VILLAGE3 START ===");
+            Log(populate
+                ? "=== BUILD VILLAGE3 START (populated) ==="
+                : "=== BUILD VILLAGE3 START (EMPTY SHELL) ===");
 
             // --- 1. Fresh empty scene + generate the art shell ------------------
             // SetupAndGenerateVillage2 builds the generated town (terrain/ground,
@@ -94,8 +115,17 @@ namespace DeNelle.Editor
             Village2Playable.ImportWaveManager(root.transform, heart);
 
             // --- 3. DATA-DRIVEN buildings from the recipe (NOT Buildings[]) -----
-            int placed = VillageSceneBuilder.InjectBuildingsFromRecipe(null);
-            Log($"Recipe-placed {placed} gameplay building(s) into Village3.");
+            // EMPTY-SHELL mode skips this entirely so Village3 ships with no
+            // gameplay buildings (walls/gates/terrain/Heart/hero/camera/HUD/waves only).
+            if (populate)
+            {
+                int placed = VillageSceneBuilder.InjectBuildingsFromRecipe(null);
+                Log($"Recipe-placed {placed} gameplay building(s) into Village3.");
+            }
+            else
+            {
+                Log("EMPTY SHELL: skipped InjectBuildingsFromRecipe — no gameplay buildings placed.");
+            }
 
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene, Village3ScenePath);
@@ -104,7 +134,9 @@ namespace DeNelle.Editor
             // --- 4. NavMesh bake (final step, same as Village2's flow) ----------
             BakeVillage3NavMesh();
 
-            Log("=== BUILD VILLAGE3 DONE — open Village3.unity and press Play. VILLAGE3_BUILD_OK ===");
+            Log(populate
+                ? "=== BUILD VILLAGE3 DONE (populated) — open Village3.unity and press Play. VILLAGE3_BUILD_OK ==="
+                : "=== BUILD VILLAGE3 DONE (EMPTY SHELL) — open Village3.unity and press Play. VILLAGE3_BUILD_OK ===");
         }
 
         // =====================================================================
