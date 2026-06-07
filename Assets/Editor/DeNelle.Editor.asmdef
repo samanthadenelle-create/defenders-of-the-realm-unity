@@ -4,6 +4,8 @@
     "references": [
         "DeNelle.Core",
         "DeNelle.Data",
+        "DeNelle.Sandbox",
+        "Unity.InputSystem",
         "Unity.Localization",
         "Unity.Localization.Editor",
         "Unity.RenderPipelines.Core.Runtime",
