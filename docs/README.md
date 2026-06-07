@@ -17,13 +17,16 @@ indexed separately in `../PROJECT_INDEX.md`.
   `MIRZABEIG_VFX_NOTES.md`, `LANA_RPG_VFX_NOTES.md`, `SPELLS_PACK_NOTES.md`,
   `MAGIC_VFX_LIBRARY.md`, `MASTER_ASSET_REFERENCE.md`
 - Library notes: `LEANTOUCH_NOTES.md`, `UNITASK_NOTES.md`, `YARNSPINNER_DIALOGUE_NOTES.md`
+- `Assets/_Modules/HUD/README_HUD.md` — Dark Fantasy Mobile HUD (HUD-001) setup, Lean Touch exclusive input, integration wiring (Economy/Heart/Wave/HeroAbilities/Build), D-Pad locomotion tie, prefab + acceptance steps.
 
 ## Architecture
 
+- `CORE_ARCHITECTURE_PLAN.md` — **root canonical plan** (professional structure, recommended folders, TD + dungeon + native Solana wallets + mobile + URP + cosmetic/seasonal monetization)
 - `ARCHITECTURE_NORTH_STAR.md`, `ENGINE_MASTER_PLAN.md`, `WORLD_ENGINE_ARCHITECTURE.md`
 - `ZONE_STREAMING_ARCHITECTURE.md`, `BUILD_MODE_ARCHITECTURE.md` (+ lowercase dup
   `build-mode-architecture.md`), `CHARACTER_ARCHITECTURE.md`, `MONSTER_FAMILY_ARCHITECTURE.md`
 - `CATALOG_SYSTEM.md`, `refactor-feature-modules-spec.md`, `addressables-implementation-plan.md`
+- `ANIMATION_PIPELINE.md` — **canonical animation method** (Shared + per-type, Humanoid retarget; all current/future models)
 - `unity-decisions.md`, `UNITY_BEST_PRACTICES_AUDIT.md`
 
 ## Game design specs

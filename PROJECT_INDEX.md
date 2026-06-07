@@ -11,7 +11,8 @@ Docs index: `docs/README.md`.
 | `CLAUDE.md` | **Agent rules — read first, non-negotiable** |
 | `PIPELINE_STATE.md` | Current pipeline/build state quick reference |
 | `SESSION_START_HERE.md` | Session onboarding for agents |
-| `ARCHITECTURE_REFERENCE.md` | Architecture reference |
+| `ARCHITECTURE_REFERENCE.md` | Architecture reference (earlier phase) |
+| `CORE_ARCHITECTURE_PLAN.md` | **Core architecture plan** — professional structure, modules, recommended folders, feature mapping (TD + dungeon + Solana + mobile + monetization) |
 | `PARALLEL_LANES.md` | Which work lanes can run simultaneously |
 | `BUG_LIST.md` + `BUG_WORKFLOW.md` | Open bugs + how bugs flow |
 | `PUNCHLIST.md` | Outstanding punch-list items |
@@ -26,6 +27,7 @@ The unit of work (~280 files, WO-05 → WO-281; current highest: see CLAUDE.md �
 - `WORK_ORDER_NNN_name.md` — the spec. Status line inside says if READY TO IMPLEMENT
 - `WORK_ORDER_NNN_name.RESULT.md` — CLI's completion report. **If a .RESULT.md
   exists, the WO is done** — don't re-implement
+- HUD-001 (this session): Dark Fantasy Mobile HUD Controller — `HUDManager.cs` + `VirtualDPadLean.cs` (rich reference layout, Lean Touch exclusive input, full integration with Economy/Heart/Wave/HeroAbilities/Build via events + reflection, D-Pad feeds locomotion loosely, self-contained drop-in, coexists with lean `VillageHudController`). See `Assets/_Modules/HUD/README_HUD.md`.
 - Numbering quirks: some numbers were reused with different names (e.g. three
   WO-136s, two WO-129s/137s/152s/179s); WO numbers ≥182 supersede earlier
   same-topic WOs (e.g. WO-198 supersedes WO-129 pipeline reconciliation)
@@ -38,7 +40,8 @@ The unit of work (~280 files, WO-05 → WO-281; current highest: see CLAUDE.md �
 `COMBAT_FEEL_PRIORITY_STACK.md`, `VILLAGE_SIZE_SPEC.md`,
 `WALL_LAYOUT_GUIDE_mirza_beig.md`, `ECONOMY_FOUNDATION_CODE.md`,
 `INTRO_VIDEO_FIRST_10_SECONDS.md` / `_SECONDS_10_20.md`,
-`CityManifest.draft.README.md`, `DEF-TARGET-SELECTION.md`
+`CityManifest.draft.README.md`, `DEF-TARGET-SELECTION.md`,
+`CORE_ARCHITECTURE_PLAN.md` (root-level canonical architecture for the Unity 6 mobile TD + dungeon + Solana game)
 
 ## Guides
 

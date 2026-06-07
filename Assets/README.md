@@ -1,5 +1,7 @@
 # Assets/ — Top-Level Map
 
+**Professional structure for Defenders of the Realm (Unity 6 LTS mobile TD + dungeon + Solana).** See `../CORE_ARCHITECTURE_PLAN.md` for the canonical recommended folders, module boundaries, and feature mapping.
+
 What lives in each folder. Code modules have their own READMEs under `_Modules/`.
 
 ## First-party

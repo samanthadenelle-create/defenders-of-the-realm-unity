@@ -1,0 +1,72 @@
+# WO-223: Add Archer Hero Card to Hero Select Screen
+
+**Status: READY TO IMPLEMENT**
+
+**Date:** 2026-06-01  
+**Priority:** 🟢 LOW (polish, can defer)  
+**Owner:** CLI  
+**Depends On:** None  
+**Blocks:** None  
+**Can Run In Parallel:** Any visual polish work
+
+---
+
+## Problem
+
+Hero select screen needs archer card artwork. Current placeholder or missing asset.
+
+---
+
+## Solution
+
+### Asset Integration
+
+**Artwork provided:**
+- Hero name: **Sylas** (archer)
+- Theme: Green magic/nature (leaf emblems, wind effects)
+- Weapon: Bow (ornate, curved)
+- Style: Fantasy archer with elf-like features
+
+### Implementation
+
+1. **Import artwork to project**
+   - Save as: `Assets/Art/Heroes/SylasCard.png` (or similar)
+   - Ensure correct aspect ratio (matches other hero cards)
+
+2. **Add to Hero Select UI**
+   - File: `Assets/_Modules/HUD/HeroSelect/HeroSelectUI.cs` (or equivalent)
+   - Add Sylas card alongside Knight, Mage
+   - Card should show:
+     - Portrait (the artwork)
+     - Name: "Sylas"
+     - Class: "Archer"
+     - Stats/abilities (if hero select shows them)
+
+3. **Wire to Hero Selection**
+   - Add Sylas prefab/class to selectable heroes
+   - Spawn Sylas hero when selected
+   - Load Sylas abilities into ability bar
+
+---
+
+## Acceptance Criteria
+
+- [ ] Artwork imported to project
+- [ ] Sylas card visible in hero select screen
+- [ ] Card displays name, class, artwork correctly
+- [ ] Clicking Sylas card selects archer
+- [ ] Archer hero spawns in game
+- [ ] WebGL tested: hero select works
+- [ ] Commit: "WO-223: add Sylas archer hero card to hero select"
+
+---
+
+## Notes
+
+- Artwork is high-quality fantasy illustration
+- Green/nature theme should match other archer visuals
+- Hero select layout should not be broken by new card (check spacing)
+
+---
+
+**Estimate:** 30–45 min (import asset, add to UI, wire to hero system, test)

@@ -52,4 +52,4 @@ landmines were all silent regressions a scripted check would have caught instant
 
 ## Notes
 - This pairs with the sole-committer gate discipline: Tier-1 (compile) + Tier-2 (run) = a real
-  pre-push quality bar. Local WO (Linear maxed); numbering per `MASTER_PIPELINES_BACKLOG` (next free 307).
+  pre-push quality bar. Local WO (Linear maxed); numbering per `MASTER_PIPELINES_BACKLOG` (next free 327).

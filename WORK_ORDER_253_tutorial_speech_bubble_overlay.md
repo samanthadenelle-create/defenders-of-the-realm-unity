@@ -1,0 +1,71 @@
+# WORK ORDER 253 — Tutorial Speech-Bubble Overlay (Visual Presentation)
+**Status: READY TO IMPLEMENT**
+**WO:** 253 | **Lane:** HUD (parallel safe)
+**Depends on:** WO-133 (OnboardingFlow wiring — must land first)
+**Closes:** DEF-153
+
+---
+## Context
+
+WO-133 wires `OnboardingFlow` into the village scene and notes that the overlay
+**must be code-built** (UXML does not render in builds — PIPELINE_STATE §8).
+This WO specifies the visual presentation of that code-built overlay per the
+creative direction in DEF-153.
+
+---
+## Spec
+
+Build the tutorial overlay as a **centered speech bubble** using Unity's
+code-built UI (IMGUI or runtime-created Canvas, matching existing HUD pattern).
+
+### Visual requirements
+
+1. **Bubble:** rounded-rect panel, semi-transparent dark background (RGBA 20,20,30,0.85),
+   8px corner radius, 2px gold border (#C8A84E). Anchored to screen center
+   (anchor min/max = 0.5, pivot = 0.5).
+
+2. **Text:** white, 24sp minimum (auto-scale up on tablets). TextMeshPro or
+   built-in Text with `BestFit` between 20–32sp. Center-aligned, max width = 80%
+   of screen width so it wraps cleanly in portrait.
+
+3. **Tap-to-continue:** small "Tap to continue" label below the main text,
+   14sp, 50% alpha, pulsing opacity (0.4–1.0 over 1.2s sine).
+
+4. **Responsive layout:**
+   - Landscape: bubble max-width = 50% of screen, vertically centered
+   - Portrait: bubble max-width = 85% of screen, positioned at 40% from top
+     (above d-pad / action buttons)
+   - Recalculate on `Screen.orientation` change or `RectTransform` rebuild
+
+5. **Sort order:** Canvas sortOrder must be ABOVE VillageHud (sortOrder 10+)
+   and ABOVE NPC dialogue (see WO-252). Use sortOrder = 100.
+
+6. **Dim background:** full-screen overlay behind the bubble at RGBA(0,0,0,0.4)
+   to focus attention. Raycast target = true to block taps on gameplay behind it.
+
+### Files to edit
+
+- `Assets/_Modules/Onboarding/OnboardingFlow.cs` — replace UXML overlay
+  creation with code-built Canvas + speech bubble panel
+- Create helper: `Assets/_Modules/Onboarding/TutorialBubbleUI.cs` — owns the
+  bubble GameObject, text update, responsive layout, tap-to-continue pulse
+
+### What NOT to touch
+
+- `VillageSceneBuilder.cs` (WO-133 handles placement)
+- `VillageHudController.cs`
+- Any `.unity` scene files
+
+---
+## Acceptance criteria
+
+- [ ] Tutorial speech bubble is visible and centered on first load into Village scene
+- [ ] Bubble text is readable at 375px portrait width (iPhone SE) — no clipping or overflow
+- [ ] Bubble text is readable at 812px landscape width — no excessive stretching
+- [ ] Rotating device between landscape ↔ portrait repositions bubble correctly within 1 frame
+- [ ] "Tap to continue" label pulses and advances to next tutorial beat on tap
+- [ ] Bubble canvas sortOrder > VillageHud sortOrder — tutorial renders on top of all HUD elements
+- [ ] Background dim blocks gameplay input while tutorial bubble is active
+- [ ] Skipping tutorial (tap skip button) dismisses bubble and dim immediately
+- [ ] Confirmed in WebGL build — bubble renders (no UXML dependency)
+- [ ] `OnboardingFlow` still functions identically (same beat progression, same events fired)
