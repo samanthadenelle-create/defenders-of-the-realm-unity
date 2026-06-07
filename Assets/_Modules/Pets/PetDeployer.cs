@@ -111,6 +111,12 @@ namespace DeNelle.Pets
 
         public void DeployStarterPets()
         {
+            // Deploy-once guard (WO-329): the tutorial fires <<spawn_starting_pet>> at START and
+            // END (plus PetIntroduction) for robustness — this makes the redundant calls safe
+            // no-ops so we never clear+respawn a LIVE pet (which would wipe its runtime state /
+            // position / progression). A fresh scene load = a new deployer instance (_deployed
+            // empty) so village reload still deploys. To intentionally redeploy, ClearDeployed() first.
+            if (_deployed != null && _deployed.Count > 0) return;
             ClearDeployed();
             if (DIAG_SKIP_ALL_PETS)
             {

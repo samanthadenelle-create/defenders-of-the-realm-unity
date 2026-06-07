@@ -1,6 +1,10 @@
 title: CompanionMeeting
 tags: tutorial onboarding
 ---
+// Deploy the starter pet at TUTORIAL START (robust): fires regardless of which later
+// nodes the click-through reaches. DeployStarterPets() clears+redeploys, so the existing
+// <<spawn_starting_pet>> in the PetIntroduction node is harmless (no double pets).
+<<spawn_starting_pet>>
 // Companion runs up to hero at the Heartwood tree
 <<wait 1.5>>
 <<camera_focus companion>>
@@ -174,5 +178,6 @@ tags: tutorial onboarding
 
 <<set $tutorialComplete to true>>
 <<enable_full_controls>>
+<<spawn_starting_pet>>   // belt-and-suspenders: guarantee the pet is deployed by tutorial END (idempotent w/ the start-of-tutorial call). See WO pet-deploy-timing to pick the canonical trigger.
 <<save_game>>
 ===

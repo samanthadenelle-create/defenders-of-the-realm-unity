@@ -8,6 +8,11 @@
 ## 🟢 READY TO RETEST (in the latest Win exe)
 
 ### Held from push — retest, then I push on your OK
+- **🐾 Pet not spawning (WO-329)** — ⏳ **TO BE CONFIRMED.** `<<spawn_starting_pet>>` added at tutorial
+  START + END (`CompanionMeeting.yarn`) + a **deploy-once guard** in `PetDeployer` (no double/respawn).
+  Root cause: the Yarn click-through bypassed the old PetIntroduction spawn. **Test:** reset onboarding
+  flag → load UI → New Game → run the click-through → a pet should appear + roam. Filed **WO-329** to pick
+  the canonical deploy trigger + scene/timing later.
 - **WO-314 — BuildPreviewModal: leak + NRE + stays-open** (commit `6688861`, LOCAL, not pushed)
   - **Test:** Build Mode → arm a structure → the *Preview & Orient* modal → rotate (drag / ±90°) →
     **Confirm** and **Cancel** both close cleanly (no stuck-open modal, no errors); open/close it
