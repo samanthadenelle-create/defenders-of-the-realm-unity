@@ -120,6 +120,7 @@ namespace DeNelle.HUD
             card.Add(Button("Mark Onboarded = false", () => OnSetOnboarded(false)));
             card.Add(Button("Save now",               OnSave));
             card.Add(Button("Reset save (carve-out)", OnReset));
+            card.Add(Button("Replay Tutorial (clear Yarn)", OnReplayTutorial));
             card.Add(Button("Close",                  Toggle));
 
             _status = new Label(string.Empty);
@@ -259,7 +260,34 @@ namespace DeNelle.HUD
         {
             ResolveGameState();
             InvokeMethod(_gameStateInstance, "ResetToNewGame");
-            SetStatus("Reset(): the carve-out preserves BoundWallet / BreachStyle / social.");
+
+            // ResetToNewGame() clears Onboarded + the party roster but NOT the
+            // FTUE gate. The intro Yarn (CompanionMeetingTrigger) is gated once
+            // per save via PlayerPrefs "yarn.companionMeeting.seen" (matches
+            // CompanionMeetingTrigger.SeenKey). If we leave it set, the tutorial
+            // Yarn short-circuits, FinishOnboarding never runs, AddToParty never
+            // fires, and the player lands with an empty roster / no companion.
+            PlayerPrefs.DeleteKey("yarn.companionMeeting.seen");
+            PlayerPrefs.Save();
+
+            // The in-place reset doesn't reload the scene, so the trigger's
+            // _hostedThisSession latch and TutorialDirector.s_ranThisSession can't
+            // re-fire this session. Reload the village scene so a devtools reset
+            // behaves like a real New Game -> tutorial runs -> companion joins.
+            UnityEngine.SceneManagement.SceneManager.LoadScene("Village2");
+            SetStatus("Reset(): new game -> FTUE gate cleared, reloading Village2 (tutorial + companion re-fire).");
+        }
+
+        private void OnReplayTutorial()
+        {
+            // Force the intro Yarn to replay WITHOUT wiping progress (unlike Reset):
+            // clear the FTUE gate then reload the village so CompanionMeetingTrigger +
+            // TutorialDirector re-fire (their session latches reset on scene load). The
+            // companion re-joins on tutorial completion. Key = CompanionMeetingTrigger.SeenKey.
+            PlayerPrefs.DeleteKey("yarn.companionMeeting.seen");
+            PlayerPrefs.Save();
+            UnityEngine.SceneManagement.SceneManager.LoadScene("Village2");
+            SetStatus("Replay Tutorial: FTUE gate cleared, reloading Village2 (intro Yarn re-fires).");
         }
 
         private void SetStatus(string s)
