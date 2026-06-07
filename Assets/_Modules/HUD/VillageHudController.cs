@@ -46,6 +46,8 @@ namespace DeNelle.HUD
     {
         public const int AbilitySlotCount = 4;
         private const int PartySlotCount = 4; // hero + up to 3 companions
+        private const float PartyRowHeight = 66f; // fixed compact px height per party row
+        private const float PartyRowGap = 6f;      // px gap between rows
 
         [Header("Events (read by the Village-side bridges via reflection)")]
         public UnityEvent BuildRequested = new UnityEvent();
@@ -237,14 +239,19 @@ namespace DeNelle.HUD
             _partyName    = new TextMeshProUGUI[PartySlotCount];
             _partyHpText  = new TextMeshProUGUI[PartySlotCount];
 
-            _partyStack = NewRect("PartyStack", parent, new Vector2(0.01f, 0.66f), new Vector2(0.30f, 0.93f));
-            float rowH = 1f / PartySlotCount;
+            // Top-left anchored, fixed pixel size — NOT a tall percent band.
+            // Rows are a fixed compact height each, so the lone hero row stays
+            // compact regardless of orientation or how many slots are visible.
+            _partyStack = NewRect("PartyStack", parent, new Vector2(0f, 1f), new Vector2(0f, 1f));
+            AnchorTopLeft(_partyStack, x: 12f, y: 12f, width: 260f, height: PartyRowHeight * PartySlotCount + PartyRowGap * (PartySlotCount - 1));
 
             for (int i = 0; i < PartySlotCount; i++)
             {
-                float yMax = 1f - i * rowH;
-                float yMin = 1f - (i + 1) * rowH + 0.014f; // small gap
-                var frame = NewRect("Party" + i, _partyStack, new Vector2(0f, yMin), new Vector2(1f, yMax));
+                // Each row: fixed pixel height, top-anchored, stacked downward.
+                var frame = NewRect("Party" + i, _partyStack, new Vector2(0f, 1f), new Vector2(1f, 1f));
+                frame.pivot = new Vector2(0.5f, 1f);
+                frame.anchoredPosition = new Vector2(0f, -i * (PartyRowHeight + PartyRowGap));
+                frame.sizeDelta = new Vector2(0f, PartyRowHeight);
                 HudTheme.StylePanel(frame.gameObject, HudTheme.PanelStone);
                 _partyFrame[i] = frame.gameObject;
 
@@ -257,8 +264,12 @@ namespace DeNelle.HUD
 
                 // Name
                 var nameRect = NewRect("Name", frame, new Vector2(0.34f, 0.50f), new Vector2(0.98f, 0.95f));
-                _partyName[i] = AddText(nameRect, i == 0 ? "Hero" : "—", 20, HudTheme.Gold, TextAlignmentOptions.Left);
+                _partyName[i] = AddText(nameRect, i == 0 ? "Hero" : "—", 18, HudTheme.Gold, TextAlignmentOptions.Left);
                 _partyName[i].fontStyle = FontStyles.Bold;
+                // Auto-fit so the name can't balloon past the compact row.
+                _partyName[i].enableAutoSizing = true;
+                _partyName[i].fontSizeMin = 10f;
+                _partyName[i].fontSizeMax = 18f;
 
                 // HP bar track + fill
                 var track = NewRect("HPTrack", frame, new Vector2(0.34f, 0.14f), new Vector2(0.98f, 0.44f));
@@ -449,7 +460,9 @@ namespace DeNelle.HUD
             if (portrait)
             {
                 // ── PORTRAIT (mobile-first) — vertical concept ──────────────
-                SetAnchors(_partyStack,     new Vector2(0.01f, 0.66f), new Vector2(0.46f, 0.93f));
+                // Compact top-left party stack, fixed pixel rows (not a band).
+                AnchorTopLeft(_partyStack, x: 12f, y: 12f, width: 300f,
+                    height: PartyRowHeight * PartySlotCount + PartyRowGap * (PartySlotCount - 1));
                 SetAnchors(_castleBanner,   new Vector2(0.18f, 0.935f), new Vector2(0.74f, 0.99f));
                 SetAnchors(_waveReadout,    new Vector2(0.18f, 0.875f), new Vector2(0.82f, 0.93f));
                 SetAnchors(_resourceStrip,  new Vector2(0.46f, 0.935f), new Vector2(1f, 0.99f));
@@ -464,7 +477,8 @@ namespace DeNelle.HUD
                 // ── LANDSCAPE (web/tablet) — horizontal concept ─────────────
                 // Party rail hugs the left; currency strip tucked top-right;
                 // castle banner + wave centred along a slim top bar.
-                SetAnchors(_partyStack,     new Vector2(0.005f, 0.42f), new Vector2(0.20f, 0.98f));
+                AnchorTopLeft(_partyStack, x: 12f, y: 12f, width: 260f,
+                    height: PartyRowHeight * PartySlotCount + PartyRowGap * (PartySlotCount - 1));
                 SetAnchors(_castleBanner,   new Vector2(0.34f, 0.92f), new Vector2(0.66f, 0.99f));
                 SetAnchors(_waveReadout,    new Vector2(0.34f, 0.85f), new Vector2(0.66f, 0.915f));
                 SetAnchors(_resourceStrip,  new Vector2(0.74f, 0.92f), new Vector2(0.995f, 0.99f));
@@ -483,6 +497,18 @@ namespace DeNelle.HUD
             rt.anchorMax = max;
             rt.offsetMin = Vector2.zero;
             rt.offsetMax = Vector2.zero;
+        }
+
+        // Pin a rect to the top-left corner at a fixed pixel offset + size, so
+        // it never stretches to a percentage band (rows inside stay compact).
+        private static void AnchorTopLeft(RectTransform rt, float x, float y, float width, float height)
+        {
+            if (rt == null) return;
+            rt.anchorMin = new Vector2(0f, 1f);
+            rt.anchorMax = new Vector2(0f, 1f);
+            rt.pivot = new Vector2(0f, 1f);
+            rt.anchoredPosition = new Vector2(x, -y);
+            rt.sizeDelta = new Vector2(width, height);
         }
 
         // =====================================================================

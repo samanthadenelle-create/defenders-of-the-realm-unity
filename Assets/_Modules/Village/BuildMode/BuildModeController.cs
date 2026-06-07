@@ -308,6 +308,15 @@ namespace DeNelle.Village
                 // _armedYawOffset = 0, so PlacedStructureData yaw = yawSteps × 90 only
                 // (this also retires the latent double-rotation).
                 Place(cell, footprint, snapped);
+
+                // STAY-ARMED (CoC-style) — deliberately do NOT clear _armed / hide the
+                // ghost after a place. The same entry stays armed so the next valid tap
+                // drops ANOTHER copy (lay a wall/fence run without re-selecting), and
+                // _armedYawSteps is kept so the run holds its rotation. Each copy still
+                // re-validates + re-charges inside Place(). The player stops by Cancel/
+                // Esc (_input.Cancel → CancelArmed, which fully disarms + hides the ghost)
+                // or by arming a different palette item (Arm() resets state). Do not add
+                // a disarm here.
             }
         }
 
