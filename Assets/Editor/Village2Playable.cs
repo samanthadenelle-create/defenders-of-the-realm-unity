@@ -32,6 +32,7 @@ namespace DeNelle.Editor
         // Runtime gameplay types (Assembly-CSharp / DeNelle.Village / DeNelle.HUD)
         // resolved by reflection (build tooling exemption, same as VillageSceneBuilder).
         const string TypeHeartController   = "DeNelle.Village.HeartController";
+        const string TypeSeatOnGround      = "DeNelle.Village.SeatOnGroundOnStart";
         const string TypeVillageCamera     = "DeNelle.Village.VillageCamera";
         const string TypeSmartMobileCamera = "DeNelle.Village.SmartMobileCamera";
         const string TypeVillageController = "DeNelle.Village.VillageController";
@@ -281,6 +282,22 @@ namespace DeNelle.Editor
                 ? $"Tree found '{tree.name}' at {tree.transform.position} scale {tree.transform.localScale}; Heart anchor x/z from it."
                 : "Tree not found; defaulting Heart anchor to origin.");
 
+            // The visible centerpiece (SM_Tree_Round(Clone), scale ~2.769×) FLOATS:
+            // its mesh pivot sits above the model base, so at that scale the rendered
+            // mesh lifts off the ground at raw y=0. Attach SeatOnGroundOnStart so at
+            // Play it measures its live renderer bounds and drops the bottom onto the
+            // ground — robust to scale/pivot, no scene re-save needed. Idempotent (the
+            // component is [DisallowMultipleComponent]); re-running B1 / a Village2
+            // rebuild re-attaches it. Attached to the SCALED visible tree, not the
+            // clean scale-1 Heart anchor below.
+            if (tree != null)
+            {
+                if (AddByType(tree, TypeSeatOnGround) != null)
+                    Log($"Attached SeatOnGroundOnStart to centerpiece '{tree.name}' (fixes floating tree at Play).");
+                else
+                    Warn("SeatOnGroundOnStart type not found (is DeNelle.Village compiled?) — centerpiece may still float.");
+            }
+
             System.Type heartType = FindType(TypeHeartController);
             if (heartType == null)
             {
@@ -471,7 +488,13 @@ namespace DeNelle.Editor
             var go = new GameObject("Hero (Blaise)");
             go.transform.SetParent(cityRoot, false);
             go.tag = "Player";
-            go.transform.position = new Vector3(6f, 0f, 4f);   // open-plaza spot near centre
+            // The old spawn (6,0,4) is only ~7m from the (0,0,0) centerpiece — INSIDE
+            // its scaled footprint, so the hero spawned embedded in the tree. Spawn OUT
+            // past the centerpiece radius on the open +Z road toward the N gate, facing
+            // back at the centerpiece. Drive the distance from the centerpiece's actual
+            // world-bounds radius (robust to its ~2.769× scale) + a hero clearance pad;
+            // fall back to a safe constant if no centerpiece/renderers are found.
+            go.transform.position = ComputeHeroSpawn(cityRoot);   // open road toward N gate, clear of centerpiece
 
             var collider = go.AddComponent<CapsuleCollider>();
             collider.height = 2f;
@@ -502,7 +525,7 @@ namespace DeNelle.Editor
                 else if (ctrl == null) Warn($"Mage.controller not found at '{HeroAnimatorPath}' — hero won't animate.");
             }
 
-            go.transform.rotation = Quaternion.identity;   // face +Z toward the open plaza
+            go.transform.rotation = Quaternion.Euler(0f, 180f, 0f);   // spawned on +Z road, face -Z back toward the centerpiece
 
             AddByType(go, TypeHeroBodySwapper);   // swaps to the chosen class body at runtime
             AddByType(go, TypeHeroLocomotion);    // WASD / stick movement
@@ -519,6 +542,42 @@ namespace DeNelle.Editor
             Log($"Imported hero rig '{go.name}' at {go.transform.position} " +
                 $"(body={(heroModel != null ? "Mage.fbx" : "placeholder")}).");
             return go;
+        }
+
+        // Hero spawn on the open +Z road toward the N gate, just OUTSIDE the
+        // centerpiece's footprint so the hero never spawns embedded in the tree.
+        // Bounds-driven: spawnZ = centerpiece world-bounds radius (max of its X/Z
+        // extents) + a hero clearance pad. Robust to the centerpiece's ~2.769× scale
+        // and any art swap. Falls back to a safe constant (0,0,11) if the centerpiece
+        // or its renderers can't be found. The N spawn stays inside the town
+        // (TownHalfDepth=33), so it's on the plaza road, not out a gate.
+        static Vector3 ComputeHeroSpawn(Transform cityRoot)
+        {
+            const float heroPad = 3f;          // clearance past the centerpiece edge
+            const float fallbackZ = 11f;       // safe constant if bounds unavailable
+
+            GameObject tree = null;
+            if (cityRoot != null)
+            {
+                foreach (var t in cityRoot.GetComponentsInChildren<Transform>(true))
+                {
+                    if (t.name.Contains("TreeOfLife")) { tree = t.gameObject; break; }
+                    if (tree == null && t.name.Contains("Tree")) tree = t.gameObject;
+                }
+            }
+
+            if (tree != null && TryWorldBounds(tree, out Bounds tb))
+            {
+                float radius = Mathf.Max(tb.extents.x, tb.extents.z);
+                float z = Mathf.Max(fallbackZ, radius + heroPad);
+                // Keep inside the town footprint (don't spawn out past the N gate).
+                z = Mathf.Min(z, TownHalfDepth - 2f);
+                Log($"Hero spawn: centerpiece bounds radius={radius:F2} -> spawn z={z:F2} (bounds-driven).");
+                return new Vector3(0f, 0f, z);
+            }
+
+            Log($"Hero spawn: no centerpiece bounds found -> safe constant (0,0,{fallbackZ}).");
+            return new Vector3(0f, 0f, fallbackZ);
         }
 
         // =====================================================================
