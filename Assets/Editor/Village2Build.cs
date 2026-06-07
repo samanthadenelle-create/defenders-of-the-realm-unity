@@ -200,9 +200,20 @@ namespace DeNelle.Editor
         // 2. SetupAndGenerateVillage2
         // =====================================================================
         [MenuItem("Defenders/Village2/2. Setup + Generate Village2")]
-        public static void SetupAndGenerateVillage2()
+        public static void SetupAndGenerateVillage2() => SetupAndGenerateVillage2(bonesOnly: false);
+
+        // bonesOnly = true: generate ONLY the structural bones — terrain/ground (roads),
+        // the 4 perimeter WALLS + gates + towers, and the centrepiece Tree-of-Life — by
+        // leaving the DECORATIVE slots (houses, specialty buildings, market stalls) and the
+        // NATURE-RING arrays (trees/bushes/rocks) UNASSIGNED. The generator's CreateQuadrant
+        // places nothing when its house/specialty slots are null (Place/Pick null-guard), and
+        // ScatterNatureRing early-returns when no nature prefabs are assigned. Village2Generator
+        // itself is NEVER edited — this is a pure slot-wiring switch.
+        public static void SetupAndGenerateVillage2(bool bonesOnly)
         {
-            Debug.Log("[Village2Build] === SetupAndGenerateVillage2 START ===");
+            Debug.Log(bonesOnly
+                ? "[Village2Build] === SetupAndGenerateVillage2 START (BONES ONLY) ==="
+                : "[Village2Build] === SetupAndGenerateVillage2 START ===");
 
             // Resolve the Village2Generator type (lives in Assembly-CSharp, no namespace).
             System.Type genType = FindTypeByName("Village2Generator");
@@ -261,16 +272,26 @@ namespace DeNelle.Editor
             // was for the lying Tree_Of_Life.fbx). Identity keeps the green centrepiece standing.
             SetField(gen, "treeUprightEuler", Vector3.zero);
 
-            // Specialty buildings reuse harvested houses (re-skin later).
-            SetField(gen, "blacksmithForge", houseA);
-            SetField(gen, "armorerShop", houseD);
-            SetField(gen, "lumbermill", houseA);
-            SetField(gen, "tavern", houseD);
-            SetField(gen, "church", houseA);
+            // DECORATIVE town content — houses + specialty buildings + market stalls.
+            // BONES-ONLY skips all of these (leaves the slots null) so CreateQuadrant places
+            // nothing; the walls/gates/towers/tree still generate from the slots below.
+            if (!bonesOnly)
+            {
+                // Specialty buildings reuse harvested houses (re-skin later).
+                SetField(gen, "blacksmithForge", houseA);
+                SetField(gen, "armorerShop", houseD);
+                SetField(gen, "lumbermill", houseA);
+                SetField(gen, "tavern", houseD);
+                SetField(gen, "church", houseA);
 
-            SetField(gen, "smallHouses", smallHouses);
-            SetField(gen, "mediumHouses", mediumHouses);
-            SetField(gen, "marketStalls", marketStalls);
+                SetField(gen, "smallHouses", smallHouses);
+                SetField(gen, "mediumHouses", mediumHouses);
+                SetField(gen, "marketStalls", marketStalls);
+            }
+            else
+            {
+                Debug.Log("[Village2Build] BONES ONLY: skipped house/specialty/market slot wiring — quadrants stay empty.");
+            }
 
             SetField(gen, "wallStraight", wallStraight);
             SetField(gen, "balconyStraight", balconyStraight);
@@ -335,13 +356,22 @@ namespace DeNelle.Editor
             // present) + KayKit Forest. LoadMany drops any that aren't on this machine.
             // Polyperfect SM_Tree/Bush/Rock only — they render green/textured. The KayKit
             // "_Color1" set is a WHITE/snow palette (the white pines in the playtest) — dropped.
-            SetField(gen, "trees", LoadMany(
-                "SM_Tree_Beech", "SM_Tree_Oak", "SM_Tree_Birch", "SM_Tree_Maple", "SM_Tree_Conifer",
-                "SM_Tree_Fir", "SM_Tree_Round", "SM_Tree_Lime", "SM_Tree_Poplar"));
-            SetField(gen, "bushes", LoadMany(
-                "SM_Bush_Big", "SM_Bush_Medium", "SM_Bush_Small", "SM_Shrub", "SM_Shrub_Round"));
-            SetField(gen, "rocks", LoadMany(
-                "SM_Rock_Large", "SM_Rocks_Small", "SM_Stone", "SM_Rock_Sharp"));
+            // BONES-ONLY leaves trees/bushes/rocks null so ScatterNatureRing early-returns
+            // (no 85-piece encircling wood) — a truly bare canvas.
+            if (!bonesOnly)
+            {
+                SetField(gen, "trees", LoadMany(
+                    "SM_Tree_Beech", "SM_Tree_Oak", "SM_Tree_Birch", "SM_Tree_Maple", "SM_Tree_Conifer",
+                    "SM_Tree_Fir", "SM_Tree_Round", "SM_Tree_Lime", "SM_Tree_Poplar"));
+                SetField(gen, "bushes", LoadMany(
+                    "SM_Bush_Big", "SM_Bush_Medium", "SM_Bush_Small", "SM_Shrub", "SM_Shrub_Round"));
+                SetField(gen, "rocks", LoadMany(
+                    "SM_Rock_Large", "SM_Rocks_Small", "SM_Stone", "SM_Rock_Sharp"));
+            }
+            else
+            {
+                Debug.Log("[Village2Build] BONES ONLY: skipped nature-ring (trees/bushes/rocks) wiring — ScatterNatureRing will early-return.");
+            }
 
             // ---- Invoke GenerateVillage() ---------------------------------------
             MethodInfo generate = genType.GetMethod("GenerateVillage",

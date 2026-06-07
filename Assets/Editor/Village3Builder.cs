@@ -67,13 +67,27 @@ namespace DeNelle.Editor
         [MenuItem("Defenders/Village3/Build Village3 (Empty Shell)")]
         public static void BuildVillage3Shell() => BuildVillage3Internal(populate: false);
 
+        // =====================================================================
+        // BUILD VILLAGE3 (BONES ONLY) — a truly BARE canvas. Identical wiring to
+        // BuildVillage3Shell (no recipe buildings) AND generates the art shell in
+        // BONES-ONLY mode: KEEPS terrain/ground (roads) + the 4 perimeter walls +
+        // gates + towers + the Heart/Tree-of-Life + camera/HUD/hero/spawns/waves +
+        // NavMesh, but SKIPS the decorative houses + specialty buildings + the
+        // nature ring (trees/bushes/rocks). Batchmode-callable.
+        // =====================================================================
+        [MenuItem("Defenders/Village3/Build Village3 (Bones Only)")]
+        public static void BuildVillage3Bones() => BuildVillage3Internal(populate: false, bonesOnly: true);
+
         // populate = true: place the recipe gameplay buildings (full Village3).
         // populate = false: stop after the shell wiring (empty-shell Village3).
-        static void BuildVillage3Internal(bool populate)
+        // bonesOnly = true: generate the art shell with NO decorative houses/nature ring.
+        static void BuildVillage3Internal(bool populate, bool bonesOnly = false)
         {
-            Log(populate
-                ? "=== BUILD VILLAGE3 START (populated) ==="
-                : "=== BUILD VILLAGE3 START (EMPTY SHELL) ===");
+            Log(bonesOnly
+                ? "=== BUILD VILLAGE3 START (BONES ONLY) ==="
+                : populate
+                    ? "=== BUILD VILLAGE3 START (populated) ==="
+                    : "=== BUILD VILLAGE3 START (EMPTY SHELL) ===");
 
             // --- 1. Fresh empty scene + generate the art shell ------------------
             // SetupAndGenerateVillage2 builds the generated town (terrain/ground,
@@ -81,7 +95,7 @@ namespace DeNelle.Editor
             // build it fresh, then SAVE it as Village3.unity (its own scene file,
             // so Village2.unity is never touched).
             EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
-            Village2Build.SetupAndGenerateVillage2();
+            Village2Build.SetupAndGenerateVillage2(bonesOnly);
 
             Scene scene = EditorSceneManager.GetActiveScene();
             GameObject root = FindGeneratedRoot(scene);
@@ -134,9 +148,11 @@ namespace DeNelle.Editor
             // --- 4. NavMesh bake (final step, same as Village2's flow) ----------
             BakeVillage3NavMesh();
 
-            Log(populate
-                ? "=== BUILD VILLAGE3 DONE (populated) — open Village3.unity and press Play. VILLAGE3_BUILD_OK ==="
-                : "=== BUILD VILLAGE3 DONE (EMPTY SHELL) — open Village3.unity and press Play. VILLAGE3_BUILD_OK ===");
+            Log(bonesOnly
+                ? "=== BUILD VILLAGE3 DONE (BONES ONLY) — open Village3.unity and press Play. VILLAGE3_BUILD_OK ==="
+                : populate
+                    ? "=== BUILD VILLAGE3 DONE (populated) — open Village3.unity and press Play. VILLAGE3_BUILD_OK ==="
+                    : "=== BUILD VILLAGE3 DONE (EMPTY SHELL) — open Village3.unity and press Play. VILLAGE3_BUILD_OK ===");
         }
 
         // =====================================================================
