@@ -42,6 +42,12 @@ namespace DeNelle.Village
         private Transform _root;            // parent for all loaded structures
         private readonly List<PlacedStructure> _loaded = new List<PlacedStructure>();
 
+        // Guard: the persisted set is instantiated exactly ONCE per session. After the
+        // initial load, incremental adds go through Spawn() (one piece). LoadFromState()
+        // must NEVER re-run Rebuild() (destroy-all/respawn-all) — that mass-rebuild is the
+        // cause of every prior piece (+ a stale prior-session building) popping on at once.
+        private bool _loadedOnce;
+
         /// <summary>The structures this loader currently has in the scene.</summary>
         public IReadOnlyList<PlacedStructure> Loaded => _loaded;
 
@@ -89,6 +95,13 @@ namespace DeNelle.Village
         /// </summary>
         public void LoadFromState()
         {
+            // Idempotent: only the FIRST call instantiates the persisted set. Any later
+            // call early-returns so we never re-run Rebuild()'s destroy-all/respawn-all
+            // (which made every prior piece + a stale prior-session building pop on at
+            // once). Subsequent placements add ONE piece each via Spawn() (the add path).
+            if (_loadedOnce) return;
+            _loadedOnce = true;
+
             var state = GameStateService.Instance != null ? GameStateService.Instance.State : null;
             var layout = state != null ? state.BaseLayout : null;
             if (layout == null || layout.Count == 0)

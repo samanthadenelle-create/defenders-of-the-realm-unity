@@ -1204,30 +1204,28 @@ namespace DeNelle.Village
         // =====================================================================
 
         /// <summary>
-        /// On the very first build-mode entry with an empty BaseLayout, seed it from
-        /// the live default-village structures so the player edits their familiar
-        /// town (not a blank plot). Seeds from any in-scene PlacedStructure first; if
-        /// none exist yet, leaves the layout empty (the default village stays the
-        /// seed and the player builds on top). Idempotent: a non-empty layout is left
-        /// alone.
+        /// First build-mode entry init. BaseLayout holds ONLY the player's added deltas
+        /// (catalog placements) — never the baked default village. The baked village stays
+        /// the scene default; BaseLayout is the delta layered on top.
+        ///
+        /// FIX (double-village / mass-rebuild): this used to copy every in-scene
+        /// PlacedStructure (incl. baked GameplayBuildings + a stale prior-session
+        /// loaded set) into BaseLayout. That double-counted the baked village and grew
+        /// the persisted set, which Rebuild()/LoadFromState() then destroyed-and-
+        /// respawned wholesale — making all prior pieces pop on at once. We no longer
+        /// seed the baked buildings. The lazy-init of an empty list is preserved so the
+        /// Place() add path has a list to append to. Idempotent: a non-empty layout is
+        /// left untouched.
         /// </summary>
         private void SeedBaseLayoutIfFirstEntry()
         {
             var state = GameStateService.Instance != null ? GameStateService.Instance.State : null;
             if (state == null) return;
             if (state.BaseLayout != null && state.BaseLayout.Count > 0) return;
-            if (state.BaseLayout == null) state.BaseLayout = new List<PlacedStructureData>();
 
-            // Seed from any structures the loader already placed (a re-entry case).
-            var existing = FindObjectsByType<PlacedStructure>(FindObjectsSortMode.None);
-            foreach (var ps in existing)
-            {
-                if (ps == null) continue;
-                state.BaseLayout.Add(ps.ToSaveData());
-            }
-            // If none exist, BaseLayout stays empty — the default VillageSceneBuilder
-            // village remains the seed and the player adds to it. (Authoring the full
-            // default layout into catalog records is the WO-148/builder follow-up.)
+            // Ensure the delta list exists so Place() can append, but DO NOT seed it from
+            // baked scene buildings — the baked village is the scene default, not a delta.
+            if (state.BaseLayout == null) state.BaseLayout = new List<PlacedStructureData>();
         }
 
         // =====================================================================
