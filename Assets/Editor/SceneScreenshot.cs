@@ -28,6 +28,158 @@ namespace DeNelle.Editor
             CaptureDungeon();
         }
 
+        /// <summary>
+        /// Opens CastleTest.unity, frames the union of ALL active Renderer bounds
+        /// with an angled overview camera, ensures lighting so the render isn't
+        /// black, and writes castle_render.png to the Desktop + docs/issues/ —
+        /// so the owner can SEE the built castle without opening Unity.
+        ///
+        /// Batchmode: -executeMethod DeNelle.Editor.SceneScreenshot.CaptureCastleTest
+        /// Headless caveat: a standard Camera + camera.Render() renders fine in
+        /// batchmode under URP (RenderTexture readback, no display needed); run
+        /// WITHOUT -nographics so a graphics device exists.
+        /// </summary>
+        [MenuItem("Defenders/Sandbox/Screenshot CastleTest")]
+        public static void CaptureCastleTest()
+        {
+            const string scenePath = "Assets/Scenes/CastleTest.unity";
+            const string desktopPath = "C:/Users/Kayden-Laptop/Desktop/castle_render.png";
+            const string repoPath = "docs/issues/castle_render.png";
+            const int w = 1600, h = 900;
+
+            // 1. Open the scene.
+            if (!File.Exists(scenePath))
+            {
+                Debug.LogError($"SCREENSHOT_FAIL missing scene: {scenePath}");
+                return;
+            }
+            EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Single);
+
+            // 2. Union of all active Renderer bounds (the castle).
+            var renderers = UnityEngine.Object.FindObjectsByType<Renderer>(
+                FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+            Bounds bounds = default;
+            bool any = false;
+            foreach (var r in renderers)
+            {
+                if (r == null || !r.enabled || !r.gameObject.activeInHierarchy) continue;
+                if (!any) { bounds = r.bounds; any = true; }
+                else bounds.Encapsulate(r.bounds);
+            }
+            if (!any)
+            {
+                Debug.LogError($"SCREENSHOT_FAIL no active renderers in {scenePath}");
+                return;
+            }
+
+            // 3. Ensure lighting so the render isn't black.
+            bool hasDir = false;
+            foreach (var l in UnityEngine.Object.FindObjectsByType<Light>(
+                         FindObjectsInactive.Exclude, FindObjectsSortMode.None))
+            {
+                if (l != null && l.enabled && l.type == LightType.Directional) { hasDir = true; break; }
+            }
+            GameObject tempLight = null;
+            if (!hasDir)
+            {
+                tempLight = new GameObject("__CastleScreenshotSun");
+                var l = tempLight.AddComponent<Light>();
+                l.type = LightType.Directional;
+                l.intensity = 1.1f;
+                l.color = Color.white;
+                tempLight.transform.rotation = Quaternion.Euler(50f, -30f, 0f);
+            }
+            if (RenderSettings.ambientLight.maxColorComponent < 0.05f)
+                RenderSettings.ambientLight = new Color(0.45f, 0.45f, 0.5f, 1f);
+
+            // 4. Angled overview camera framing the bounds.
+            Vector3 center = bounds.center;
+            float dist = Mathf.Max(bounds.extents.magnitude * 2.2f, 5f);
+            float pitch = 35f * Mathf.Deg2Rad;
+            float yaw = 30f * Mathf.Deg2Rad;
+            // Direction FROM center TO camera: up by sin(pitch), back/side by cos(pitch).
+            Vector3 dir = new Vector3(
+                Mathf.Sin(yaw) * Mathf.Cos(pitch),
+                Mathf.Sin(pitch),
+                -Mathf.Cos(yaw) * Mathf.Cos(pitch)).normalized;
+            Vector3 camPos = center + dir * dist;
+
+            var camGo = new GameObject("__CastleScreenshotCam");
+            var cam = camGo.AddComponent<Camera>();
+            camGo.transform.position = camPos;
+            camGo.transform.LookAt(center, Vector3.up);
+            cam.clearFlags = CameraClearFlags.SolidColor;
+            cam.backgroundColor = new Color(0.45f, 0.62f, 0.85f, 1f); // sky-ish
+            cam.nearClipPlane = 0.1f;
+            cam.farClipPlane = dist + bounds.size.magnitude + 100f;
+            cam.fieldOfView = 50f;
+
+            // URP: attach UniversalAdditionalCameraData if the type is present.
+            var urpDataType = Type.GetType(
+                "UnityEngine.Rendering.Universal.UniversalAdditionalCameraData, Unity.RenderPipelines.Universal.Runtime");
+            if (urpDataType != null && camGo.GetComponent(urpDataType) == null)
+                camGo.AddComponent(urpDataType);
+
+            // 5. Render to a RenderTexture and read back.
+            var rt = new RenderTexture(w, h, 24, RenderTextureFormat.ARGB32) { antiAliasing = 4 };
+            rt.Create();
+            var prevActive = RenderTexture.active;
+            Texture2D tex = null;
+            byte[] png = null;
+            try
+            {
+                cam.targetTexture = rt;
+                cam.Render();
+                cam.Render(); // second pass — URP can need a warm-up render in batchmode.
+                RenderTexture.active = rt;
+                tex = new Texture2D(w, h, TextureFormat.RGB24, false);
+                tex.ReadPixels(new Rect(0, 0, w, h), 0, 0);
+                tex.Apply();
+                png = tex.EncodeToPNG();
+            }
+            finally
+            {
+                cam.targetTexture = null;
+                RenderTexture.active = prevActive;
+            }
+
+            // 6. Write to both destinations.
+            if (png != null && png.Length > 0)
+            {
+                TryWriteBytes(desktopPath, png);
+                TryWriteBytes(Path.GetFullPath(
+                    Path.Combine(Application.dataPath, "..", repoPath)), png);
+            }
+            else
+            {
+                Debug.LogError("SCREENSHOT_FAIL EncodeToPNG produced no data");
+            }
+
+            // 7. Cleanup.
+            if (tex != null) UnityEngine.Object.DestroyImmediate(tex);
+            if (rt != null) { rt.Release(); UnityEngine.Object.DestroyImmediate(rt); }
+            if (camGo != null) UnityEngine.Object.DestroyImmediate(camGo);
+            if (tempLight != null) UnityEngine.Object.DestroyImmediate(tempLight);
+
+            Debug.Log($"SCREENSHOT_OK {desktopPath} bounds=center{center}/size{bounds.size}");
+        }
+
+        private static void TryWriteBytes(string path, byte[] data)
+        {
+            try
+            {
+                var dir = Path.GetDirectoryName(path);
+                if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                    Directory.CreateDirectory(dir);
+                File.WriteAllBytes(path, data);
+                Debug.Log($"[SceneScreenshot] Saved {path}");
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"SCREENSHOT_WARN could not write {path}: {e.Message}");
+            }
+        }
+
         [MenuItem("Defenders/Week 3/Build Village + Capture Screenshots")]
         public static void CaptureVillage()
         {
