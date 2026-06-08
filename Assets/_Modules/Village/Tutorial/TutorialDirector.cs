@@ -365,6 +365,34 @@ namespace DeNelle.Village
             // double-host the dialogue, so this hook no longer loads the prefab. It
             // remains the canonical progression-start beat.
             Debug.Log("[TutorialDirector] Progression start — Yarn narrative hosted by CompanionMeetingTrigger.");
+
+            // WO-358: optional dedicated "welcome" Yarn beat. If (and ONLY if) a
+            // "WelcomeToElarion" node has been authored into DefendersDialogue.yarnproject,
+            // play it here as the opening greeting. It is a NO-OP today (the node does not
+            // yet exist), so it cannot double-host the CompanionMeeting opener above; once
+            // a writer adds the node it lights up automatically. Guarded so a content/prefab
+            // gap can never fault progression start (matches DialogueService's own posture).
+            TryPlayWelcome();
+        }
+
+        // WO-358: play the optional welcome Yarn node iff it exists + nothing is already
+        // hosting dialogue. Existence is checked via the shared DialogueService launch
+        // path (which validates the node against the compiled program and silently
+        // returns false when it's missing), so this is inert until the node is authored.
+        private void TryPlayWelcome()
+        {
+            const string WelcomeNode = "WelcomeToElarion";
+            try
+            {
+                if (DialogueService.IsRunning) return;          // don't interrupt the opener
+                if (!DialogueService.NodeExists(WelcomeNode)) return; // not authored yet — no-op
+                DialogueService.Play(WelcomeNode);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning("[TutorialDirector] Welcome dialogue play threw — skipped so " +
+                                 "progression start is never faulted (WO-358). " + ex);
+            }
         }
 
         // ── Scene 1: Arrival + Meeting ───────────────────────────────────────

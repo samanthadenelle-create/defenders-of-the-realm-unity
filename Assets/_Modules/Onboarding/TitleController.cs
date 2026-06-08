@@ -807,11 +807,15 @@ namespace DeNelle.Onboarding
         }
 
         /// <summary>
-        /// Frames a hero portrait into its slot so the character FILLS the slot
-        /// cleanly with the head / upper body showing — never centre-cropping the
-        /// face off a tall portrait. Loads as a Sprite first (matching
+        /// Frames a hero portrait into its slot so the WHOLE character FITS the
+        /// slot without crop or overflow. WO-328: the old ScaleAndCrop cropped the
+        /// art to fill, which overflowed/clipped the card at mobile aspect ratios.
+        /// Now uses backgroundSize = contain (fit-in-parent, never crop), TOP-
+        /// anchored so any letterbox gap lands at the bottom and the head/upper
+        /// body always reads. The card already clips (overflow: Hidden) so nothing
+        /// spills past the rounded corners. Loads as a Sprite first (matching
         /// HeroSelectController, which the owner prefers), Texture2D fallback, then
-        /// a glyph fallback. Uses ScaleAndCrop + a TOP background anchor.
+        /// a glyph fallback.
         /// </summary>
         private static void FramePortrait(VisualElement portrait, string slug, HeroCardInfo info)
         {
@@ -821,8 +825,7 @@ namespace DeNelle.Onboarding
             if (sprite != null)
             {
                 portrait.style.backgroundImage = new StyleBackground(sprite);
-                portrait.style.unityBackgroundScaleMode = ScaleMode.ScaleAndCrop;
-                AnchorPortraitTop(portrait);
+                FitPortraitContain(portrait);
                 return;
             }
 
@@ -830,8 +833,7 @@ namespace DeNelle.Onboarding
             if (tex != null)
             {
                 portrait.style.backgroundImage = new StyleBackground(tex);
-                portrait.style.unityBackgroundScaleMode = ScaleMode.ScaleAndCrop;
-                AnchorPortraitTop(portrait);
+                FitPortraitContain(portrait);
                 return;
             }
 
@@ -845,14 +847,35 @@ namespace DeNelle.Onboarding
         }
 
         /// <summary>
-        /// Anchors a ScaleAndCrop background to the TOP of the slot so a tall
-        /// character portrait shows its head / upper body rather than centre-
-        /// cropping the face off. unityBackgroundPositionY exists on Unity 2022.2+;
-        /// guarded in try/catch so an older UI Toolkit silently keeps centred crop.
+        /// WO-328: fits the WHOLE portrait inside its slot with no crop and no
+        /// overflow, regardless of card aspect ratio. backgroundSize = Contain
+        /// scales the image to fit entirely within the slot (uniform scale, never
+        /// cropped); the TOP anchor parks the image at the top so any letterbox
+        /// gap from a portrait-shaped image in a shorter slot lands at the bottom
+        /// (head/upper body always visible). Both are guarded — an older UI
+        /// Toolkit without BackgroundSize/BackgroundPosition falls back to the
+        /// ScaleToFit mode below, which also fits-without-crop.
         /// </summary>
-        private static void AnchorPortraitTop(VisualElement portrait)
+        private static void FitPortraitContain(VisualElement portrait)
         {
             if (portrait == null) return;
+
+            // Base fit: ScaleToFit fits the image inside the slot without crop
+            // on every UI Toolkit version (the safe floor if BackgroundSize is
+            // unavailable). backgroundSize = Contain then makes the intent explicit.
+            portrait.style.unityBackgroundScaleMode = ScaleMode.ScaleToFit;
+
+            try
+            {
+                portrait.style.backgroundSize =
+                    new BackgroundSize(BackgroundSizeType.Contain);
+            }
+            catch (System.Exception)
+            {
+                // Older UI Toolkit without BackgroundSize — ScaleToFit above already
+                // fits the portrait inside the slot without cropping.
+            }
+
             try
             {
                 portrait.style.backgroundPositionY =
@@ -860,7 +883,7 @@ namespace DeNelle.Onboarding
             }
             catch (System.Exception)
             {
-                // Older UI Toolkit without BackgroundPosition — keep centred crop.
+                // Older UI Toolkit without BackgroundPosition — keep centred fit.
             }
         }
 

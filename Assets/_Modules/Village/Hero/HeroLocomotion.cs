@@ -15,9 +15,11 @@
 // =============================================================================
 
 using System.Collections.Generic;
+using System.Reflection;
 using UnityEngine;
 using UnityEngine.AI;
 using UnityEngine.InputSystem;
+using DeNelle.Core.Combat; // ActorAnimator (IActorAnimator impl) for guarded Speed/Cast etc. drive
 
 namespace DeNelle.Village
 {
@@ -44,6 +46,8 @@ namespace DeNelle.Village
 
         /// <summary>Current XZ velocity, exposed for the follow camera / animator.</summary>
         public Vector3 Velocity { get; private set; }
+
+        private ActorAnimator _actor; // lazy, for driving Speed into the (Humanoid) controller blendtree
 
         // WO-277 (tutorial auto-walk): while _autoWalkTarget is set, the tutorial
         // OWNS the hero — player input is ignored and the hero is driven toward the
@@ -168,11 +172,13 @@ namespace DeNelle.Village
             _agent.speed = 30f;              // we drive via Move(); keep high so it never caps us
             _agent.acceleration = 200f;
             _agent.angularSpeed = 0f;
-            _agent.updateRotation = false;   // facing handled manually (mesh forward is -X)
+            _agent.updateRotation = false;   // facing handled manually by root LookRotation + body swapper yaw correction (visual forward aligned to root +Z)
             _agent.updateUpAxis = false;
             _agent.autoBraking = false;
             _agent.stoppingDistance = 0f;
             _agent.obstacleAvoidanceType = ObstacleAvoidanceType.NoObstacleAvoidance;
+
+            _actor = GetComponent<ActorAnimator>() ?? gameObject.AddComponent<ActorAnimator>();
         }
 
         private void Start()
@@ -297,19 +303,15 @@ namespace DeNelle.Village
                 _victoryPose = false;  // player moved or the timer elapsed — resume
             }
 
-            // Camera-relative movement (DEF-204, CAMERA_INPUT_OVERHAUL.md §3): up on stick =
-            // away from camera = up-screen. We read the CAMERA'S yaw — an explicit
-            // player-controlled value (SmartMobileCamera._panYaw) — NEVER the hero's travel
-            // heading. That is the half of the loop we are allowed to keep; the camera-yaw
-            // half ({yaw←velocity}) is structurally absent. Together they satisfy "at most one
-            // of {yaw←velocity, move←yaw}", so the old "always turn left" curl cannot return.
-            // When _orbitBehind is OFF, CameraYaw returns 0 → identity basis → byte-identical
-            // to the legacy world-relative build (A/B parity). cam==null guard covers the DTT
-            // scene (no SmartMobileCamera) → world-relative fallback.
-            var cam = SmartMobileCamera.Instance;
-            float camYaw = cam != null ? cam.CameraYaw : 0f;
-            Quaternion basis = Quaternion.Euler(0f, camYaw, 0f);
-            Vector3 move = basis * new Vector3(input.x, 0f, input.y);
+            // WO-368: WORLD-ABSOLUTE movement (decouples input from the camera).
+            // WO-367 made this camera-relative (basis * input), which broke town
+            // movement: a camera-mode/angle change re-rotated the input mapping. The
+            // mapping must be a fixed contract — UP = +Z always, RIGHT = +X always —
+            // independent of camera pitch/yaw/distance, so it holds identically in BOTH
+            // town (bird's-eye) and battle (close 3rd-person) and a camera change can
+            // never break input (WO-363 intent). The character faces the move direction
+            // (LookRotation on Velocity below). No SmartMobileCamera basis read here.
+            Vector3 move = new Vector3(input.x, 0f, input.y);
             if (move.sqrMagnitude > 1f) move.Normalize();
 
             // Smooth velocity toward target — instant max-speed felt rigid.
@@ -341,17 +343,29 @@ namespace DeNelle.Village
                 else
                     transform.position += step;
 
-                // Face the move direction. HeroBodySwapper already orients each hero
-                // BODY (child) to face +Z forward via its per-class yaw, so the ROOT
-                // just points +Z at the velocity — NO extra offset here. The old
-                // blanket Euler(0,-90,0) was tuned for a prior mesh and fought the
-                // swapper's CC5-Knight +90 body yaw, producing the side-step/glide
-                // (hero walked sideways). Root = LookRotation(velocity); body yaw owns
-                // the mesh-forward correction. (WO: hero side-step fix, 2026-05-30.)
+                // Face the move direction. HeroBodySwapper applies a root-child LocalRotation
+                // (currently +90f) so the visual mesh's authored forward aligns to the
+                // locomotion root's +Z. HeroLocomotion therefore does pure LookRotation
+                // on the velocity for the root transform — no extra Euler offset.
+                // (If the hero still sidesteps after a swapper yaw change, the sign in
+                // HeroBodySwapper is the place to flip.)
                 Quaternion target = Quaternion.LookRotation(Velocity.normalized);
                 transform.rotation = Quaternion.Slerp(
                     transform.rotation, target, _rotationSpeed * Time.deltaTime);
             }
+
+            // Core animation fix: drive the guarded ActorAnimator (used by DTT + village
+            // heroes). This feeds the Speed float into the HeroAnimatorFactory blendtree
+            // (Idle 0 / Walk 6 / Run 9) so basic locomotion plays. The old direct
+            // _animator.SetFloat is kept for any legacy listeners; ActorAnimator is the
+            // canonical (re-resolves on body swap, guards missing params).
+            _actor?.SetLocomotion(Velocity.magnitude);
+
+            // Battle Ready (stance) vs casual Idle: when engaged (wave manager present or moving in
+            // threat context) use combat stance for ready pose; speed=0 + !combat = casual idle.
+            // This gives type-appropriate idle/battle ready in Village + world scenes.
+            bool engaged = _waveManager != null || Velocity.magnitude > 0.1f;
+            _actor?.SetCombatStance(engaged);
 
             // Edge/floor clamp + ground-snap ONLY when off the NavMesh (the transform
             // fallback). When the hero is ON the NavMesh, the bake defines the walkable
@@ -509,6 +523,12 @@ namespace DeNelle.Village
             // fallback so it counts as real input and the deadzoned fallback is skipped.
             v += VirtualJoystick.Move;
 
+            // HUD-001 / Lean D-Pad tie-in (rich dark fantasy mobile HUD): loose reflection read of
+            // VirtualDPadLean.Move so the rich HUD's thumb D-Pad drives locomotion without creating
+            // a hard assembly reference from DeNelle.Village to DeNelle.HUD. When the HUD is present
+            // in a battle/map scene, its normalized Vector2 feeds movement (multi-touch safe).
+            v += ReadHudDpadMove();
+
             // Legacy Input Manager fallback — activeInputHandler=2 (Both)
             // means UnityEngine.Input is always available too. This is the
             // belt-and-braces path for builds where the new system's device
@@ -530,6 +550,27 @@ namespace DeNelle.Village
             }
 
             return v;
+        }
+
+        // HUD-001: loose (reflection) read of the rich dark-fantasy HUD's VirtualDPadLean.Move.
+        // No compile dependency on DeNelle.HUD — Type.GetType + static property lookup.
+        // When the HUD prefab/manager is dropped into a battle or map scene, its thumb D-Pad
+        // (Lean Touch only) supplies normalized movement that is OR-ed with other inputs.
+        private static Vector2 ReadHudDpadMove()
+        {
+            try
+            {
+                var t = System.Type.GetType("DeNelle.HUD.VirtualDPadLean, DeNelle.HUD");
+                if (t == null) return Vector2.zero;
+                var p = t.GetProperty("Move", BindingFlags.Public | BindingFlags.Static);
+                if (p == null) return Vector2.zero;
+                var val = p.GetValue(null);
+                return val is Vector2 v ? v : Vector2.zero;
+            }
+            catch
+            {
+                return Vector2.zero;
+            }
         }
     }
 }

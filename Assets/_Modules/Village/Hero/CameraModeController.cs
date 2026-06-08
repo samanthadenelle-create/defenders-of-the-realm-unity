@@ -78,8 +78,8 @@ namespace DeNelle.Village
         [Tooltip("Look-at height above the town centre (the Heart's mid-height).")]
         [SerializeField] private float _townLookAtHeight = 2.5f;
 
-        [Tooltip("Pitch (deg, down) of the town bird's-eye. 45–60 per WO-338.")]
-        [SerializeField, Range(40f, 65f)] private float _townPitch = 50f;
+        [Tooltip("Pitch (deg, down) of the town bird's-eye. 45–60 per WO-338. WO-368: 45° (was 50°).")]
+        [SerializeField, Range(40f, 65f)] private float _townPitch = 45f;
 
         [Tooltip("Planar distance (m) from the town centre. 25–35 per WO-338.")]
         [SerializeField, Min(10f)] private float _townDistance = 30f;

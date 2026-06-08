@@ -204,7 +204,16 @@ namespace DeNelle.Village
             {
                 _blocking = held;
                 _actor.SetBlocking(_blocking);
-                if (held) _parryWindowUntil = Time.time + ParryWindow; // raising block opens the parry window
+                if (held)
+                {
+                    _parryWindowUntil = Time.time + ParryWindow; // raising block opens the parry window
+                    // WO-359: parry-READY visual cue. A brief cool-steel flash at the shield the
+                    // instant the window opens, so the player can SEE the (otherwise invisible)
+                    // 0.25 s timing window they're aiming for. Reuses the central VFXManager
+                    // (Impact_ShockwaveRing → procedural shield-ward nova); static + null-safe, so
+                    // it's a silent no-op when no VFXManager is present. No new VFX subsystem.
+                    VFXManager.Play(VFXType.Impact_ShockwaveRing, transform.position + Vector3.up * 1.2f);
+                }
             }
         }
 

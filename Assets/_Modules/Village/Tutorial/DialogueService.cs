@@ -43,6 +43,21 @@ namespace DeNelle.Village
         }
 
         /// <summary>
+        /// True if <paramref name="node"/> exists in the shared dialogue system's
+        /// compiled Yarn program. Hosts the system if needed (so it works before the
+        /// first Play). Used by callers to gate OPTIONAL dialogue beats — e.g. a
+        /// welcome node that may not be authored yet — without faulting when absent.
+        /// Returns false (and never throws) if the prefab/project/node is missing.
+        /// </summary>
+        public static bool NodeExists(string node)
+        {
+            if (string.IsNullOrEmpty(node)) return false;
+            DialogueRunner runner = Current ?? Host();
+            if (runner == null) return false;   // Host() already logged the reason.
+            return NodeExists(runner, node);
+        }
+
+        /// <summary>
         /// Start the Yarn node <paramref name="node"/> on the shared dialogue
         /// system, hosting it first if needed. Returns false (and logs) if the
         /// prefab/project is missing, the node doesn't exist, or a dialogue is
