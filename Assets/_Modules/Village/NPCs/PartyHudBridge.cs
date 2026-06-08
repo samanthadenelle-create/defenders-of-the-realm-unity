@@ -91,10 +91,15 @@ namespace DeNelle.Village
                 // Roster gate (WO-301): only show a frame for a slot the roster covers.
                 if (c != null && slot < rosterCount)
                 {
+                    // Real HP now that StoryCompanion is mortal (was a placeholder full
+                    // bar). MaxHp guards against a 0 (pre-Start) read so the bar never
+                    // shows empty for a just-spawned companion.
+                    float max = c.MaxHp > 0f ? c.MaxHp : Placeholder;
+                    float cur = Mathf.Clamp(c.Hp, 0f, max);
                     _memberArgs[0] = hudSlot;
                     _memberArgs[1] = c.DisplayName;
-                    _memberArgs[2] = Placeholder;
-                    _memberArgs[3] = Placeholder;
+                    _memberArgs[2] = cur;
+                    _memberArgs[3] = max;
                     _setPartyMember?.Invoke(_hud, _memberArgs);
                 }
                 else

@@ -17,6 +17,7 @@
 // (possibly changed) chosen hero. Runs only in the "Village" scene.
 // =============================================================================
 
+using System.Collections.Generic;
 using DeNelle.Core.State;
 using UnityEngine;
 using UnityEngine.AI;
@@ -31,8 +32,13 @@ namespace DeNelle.Village
 
         private const string TargetScene = "Village2";
 
-        // The live companion, so a re-load replaces rather than duplicates it.
-        private StoryCompanion _companion;
+        // The live companions, keyed by class, so a re-load / roster change replaces
+        // rather than duplicates them. WO (party-of-4): the injector now spawns ONE
+        // body PER party-roster member (up to all four classes), not just a single
+        // companion — so as Sylas → Elara → Grom join, the field fills to a party of
+        // hero + 3 companions, each following + fighting + showing its own party frame.
+        private readonly Dictionary<HeroClass, StoryCompanion> _companions =
+            new Dictionary<HeroClass, StoryCompanion>();
 
         // WO-277 (tutorial): the FTUE wants the companion to be a DIFFERENT class
         // from the player (a comrade, not a mirror). When the tutorial sets this
@@ -42,11 +48,33 @@ namespace DeNelle.Village
         // completes. Null = normal behaviour (companion = the player's hero class).
         private static HeroClass? s_heroClassOverride;
 
-        /// <summary>The live story companion's transform, or null if none is spawned.</summary>
-        public Transform CompanionTransform => _companion != null ? _companion.transform : null;
+        /// <summary>
+        /// A representative live companion's transform (the override-class one when a
+        /// story beat is framing it, else any spawned companion), or null if none is
+        /// spawned. Used by the FTUE / Sylas-meeting framing which spawns exactly one.
+        /// </summary>
+        public Transform CompanionTransform
+        {
+            get { var c = Companion; return c != null ? c.transform : null; }
+        }
 
-        /// <summary>The live story companion, or null if none is spawned.</summary>
-        public StoryCompanion Companion => _companion;
+        /// <summary>
+        /// A representative live story companion — the override-class companion while a
+        /// story beat frames it (FTUE / first-meeting), else the first spawned one.
+        /// Null when none is spawned.
+        /// </summary>
+        public StoryCompanion Companion
+        {
+            get
+            {
+                if (s_heroClassOverride.HasValue &&
+                    _companions.TryGetValue(s_heroClassOverride.Value, out var o) && o != null)
+                    return o;
+                foreach (var kv in _companions)
+                    if (kv.Value != null) return kv.Value;
+                return null;
+            }
+        }
 
         /// <summary>
         /// WO-277 — force the spawned companion to be <paramref name="heroClass"/>
@@ -113,48 +141,87 @@ namespace DeNelle.Village
 
         private void Spawn()
         {
-            // Replace any prior companion (e.g. a re-load after a class change).
-            if (_companion != null) { Destroy(_companion.gameObject); _companion = null; }
-
-            HeroClass hero = ResolveChosenHero();
-
-            // WO-301 — spawn keys off the PERSISTED PARTY ROSTER, not a one-off. The
-            // companion only appears once it has actually joined the party (tutorial
-            // complete → GameStateService.AddToParty). This is what makes the companion
-            // "know it's in the party" on EVERY spawn (village / open-world / re-load),
-            // and keeps a never-joined companion from showing up pre-tutorial. The
-            // tutorial override (s_heroClassOverride) wins for the FTUE beat so the
-            // companion can be framed during onboarding before the roster is written.
-            if (!s_heroClassOverride.HasValue && !IsCompanionInParty(hero))
+            // The set of companion classes that SHOULD be live this frame.
+            //   • Story-beat override (FTUE / first-meeting): exactly that one class,
+            //     so the beat can frame a single companion before the roster is written.
+            //   • Normal play: ONE per persisted party-roster member — the party fills
+            //     to hero + 3 as Sylas → Elara → Grom join (WO: party-of-4).
+            var desired = new HashSet<HeroClass>();
+            if (s_heroClassOverride.HasValue)
             {
-                Debug.Log($"[StoryCompanionInjector] {CompanionDialogue.NameFor(hero)} not in party yet (roster empty) — no spawn.");
+                desired.Add(s_heroClassOverride.Value);
+            }
+            else
+            {
+                foreach (HeroClass cls in PartyRosterClasses())
+                    desired.Add(cls);
+            }
+
+            // Despawn any live companion no longer desired (roster shrank / override changed).
+            var stale = new List<HeroClass>();
+            foreach (var kv in _companions)
+                if (kv.Value == null || !desired.Contains(kv.Key)) stale.Add(kv.Key);
+            foreach (var cls in stale)
+            {
+                if (_companions.TryGetValue(cls, out var c) && c != null) Destroy(c.gameObject);
+                _companions.Remove(cls);
+            }
+
+            if (desired.Count == 0)
+            {
+                Debug.Log("[StoryCompanionInjector] No party companions to spawn (roster empty) — none shown.");
                 return;
             }
 
             Transform heroT = ResolveHero();
+            foreach (HeroClass cls in desired)
+            {
+                if (_companions.TryGetValue(cls, out var existing) && existing != null) continue; // already live
+                SpawnOne(cls, heroT);
+            }
+        }
 
-            // Place a couple of metres off the hero's shoulder; snap onto the
-            // baked NavMesh so the agent can path. Falls back to a sensible spot.
+        /// <summary>Spawns one companion body for <paramref name="cls"/> at the hero's shoulder.</summary>
+        private void SpawnOne(HeroClass cls, Transform heroT)
+        {
+            // Place a couple of metres off the hero's shoulder, fanned per class so
+            // multiple companions don't stack on the same point; snap onto the baked
+            // NavMesh so the agent can path. Falls back to a sensible spot.
+            float fan = 1.5f + 0.9f * _companions.Count;
             Vector3 basePos = heroT != null
-                ? heroT.position - heroT.forward * 2.5f + heroT.right * 1.5f
-                : new Vector3(2f, 0f, 2f);
+                ? heroT.position - heroT.forward * 2.5f + heroT.right * fan
+                : new Vector3(2f + _companions.Count, 0f, 2f);
             if (NavMesh.SamplePosition(basePos, out var hit, 6f, NavMesh.AllAreas))
                 basePos = hit.position;
 
-            var go = BuildPlaceholder(hero, basePos);
+            var go = BuildPlaceholder(cls, basePos);
 
             var comp = go.GetComponent<StoryCompanion>();
             if (comp != null)
             {
-                comp.Configure(hero);                                  // before Start()
+                comp.Configure(cls);                                   // before Start()
                 var bubble = go.GetComponentInChildren<TownsfolkBubble>();
                 if (bubble != null) comp.SetBubble(bubble);
                 if (heroT != null) comp.SetHero(heroT);
-                _companion = comp;
+                _companions[cls] = comp;
             }
 
-            Debug.Log($"[StoryCompanionInjector] spawned {CompanionDialogue.NameFor(hero)} " +
-                      $"for {hero} hero" + (heroT != null ? "." : " (no hero found yet — will resolve)."));
+            Debug.Log($"[StoryCompanionInjector] spawned {CompanionDialogue.NameFor(cls)} " +
+                      $"({cls}) into the party" + (heroT != null ? "." : " (no hero found yet — will resolve)."));
+        }
+
+        /// <summary>
+        /// WO (party-of-4) — the companion classes in the persisted party roster
+        /// (<see cref="GameState.PartyMemberIds"/>; ids are HeroClass names). Empty
+        /// when no service / no roster. Skips ids that don't parse to a HeroClass.
+        /// </summary>
+        private static IEnumerable<HeroClass> PartyRosterClasses()
+        {
+            var svc = GameStateService.Instance;
+            var ids = svc != null && svc.State != null ? svc.State.PartyMemberIds : null;
+            if (ids == null) yield break;
+            foreach (var id in ids)
+                if (System.Enum.TryParse(id, out HeroClass cls)) yield return cls;
         }
 
         // ── Placeholder build (code-only, no art) ────────────────────────────
@@ -247,6 +314,23 @@ namespace DeNelle.Village
             agent.height = 2.0f;
             agent.radius = 0.35f;
             agent.baseOffset = 0f;
+
+            // HITBOX (WO: companion stakes) — a child capsule collider on the Default
+            // layer so the enemy contact-attack lane (Enemy.ProbeForStructure does a
+            // SphereCast with QueryTriggerInteraction.Ignore) can actually HIT the
+            // companion. It must be NON-trigger and OFF the Ignore-Raycast layer (2)
+            // for the probe to find it; GetComponentInParent<IDamageableStructure> on
+            // the hit resolves to the StoryCompanion on the root. Kept slim + the
+            // NavMeshAgent yields (avoidancePriority 60) so it never shoves the hero.
+            var hitbox = new GameObject("CompanionHitbox");
+            hitbox.layer = 0;                                  // Default — probe-visible
+            hitbox.transform.SetParent(go.transform, false);
+            hitbox.transform.localPosition = new Vector3(0f, 1.0f, 0f);
+            var cap = hitbox.AddComponent<CapsuleCollider>();
+            cap.isTrigger = false;
+            cap.radius = 0.35f;
+            cap.height = 1.9f;
+            cap.center = Vector3.zero;
 
             // The driver last, so Configure(...) (called by the injector after this
             // returns) lands before its Start() runs next frame.

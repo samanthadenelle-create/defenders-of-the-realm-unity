@@ -46,8 +46,75 @@ namespace DeNelle.Village
     /// Spawned at runtime by <see cref="StoryCompanionInjector"/>.
     /// </summary>
     [DisallowMultipleComponent]
-    public sealed class StoryCompanion : MonoBehaviour
+    public sealed class StoryCompanion : MonoBehaviour, IDamageableStructure
     {
+        // ── Health (WO: companion stakes — mirrors Pet.cs's HP model) ─────────
+        // Companions are now mortal: they take contact damage through the SAME
+        // IDamageableStructure seam the enemy contact-attack lane already probes
+        // (HeroHealth / Tower / Heart implement it too). At 0 HP the companion
+        // falls — it deactivates (stops following + fighting + speaking) and is
+        // not revived this session; a fresh body respawns on village re-enter
+        // (the injector rebuilds roster members each Village load). The party
+        // frame reads MaxHp/Hp so the bar is real, not a placeholder.
+        private const float DefaultMaxHp = 120f;   // a touch tankier than a pet, weaker than the hero
+        [SerializeField] private float _maxHp = DefaultMaxHp;
+        private float _hp = DefaultMaxHp;
+        private bool _fallen;
+
+        /// <summary>Current HP (party-frame bar reads this).</summary>
+        public float Hp => _hp;
+
+        /// <summary>Max HP at this companion's tier (party-frame bar reads this).</summary>
+        public float MaxHp => _maxHp;
+
+        /// <summary>True while the companion is up and fighting (HP &gt; 0, not fallen).</summary>
+        public bool IsAlive => !_fallen && _hp > 0f;
+
+        // ── IDamageableStructure (lets the enemy contact-attack lane hurt us) ──
+        // Enemy.ProbeForStructure / EnemyBrain.TryAttack resolve their target via
+        // GetComponentInParent<IDamageableStructure>(); implementing it here is the
+        // "damageable wrapper" — an enemy that closes to contact with the companion
+        // can now chip it down. No separate component needed; the slim non-trigger
+        // hitbox collider the injector attaches (Default layer, since ProbeForStructure
+        // uses QueryTriggerInteraction.Ignore) is what lets that probe find us.
+        bool IDamageableStructure.IsAlive => IsAlive;
+
+        void IDamageableStructure.ApplyContactDamage(float amount) => TakeDamage(amount);
+
+        /// <summary>
+        /// Applies <paramref name="amount"/> damage. At 0 HP the companion FALLS:
+        /// it stops following / fighting / speaking and is deactivated (no revive
+        /// this session — a fresh body respawns on the next Village entry). Simple
+        /// by design (mirrors Pet.TakeDamage); no death VFX / ragdoll yet.
+        /// </summary>
+        public void TakeDamage(float amount)
+        {
+            if (_fallen || _hp <= 0f) return;
+            _hp = Mathf.Max(0f, _hp - Mathf.Max(0f, amount));
+            if (_hp <= 0f) Fall();
+        }
+
+        /// <summary>Heals the companion, clamped to max HP (for a future Cleric/heal kit).</summary>
+        public void Heal(float amount)
+        {
+            if (_fallen) return;
+            _hp = Mathf.Min(_maxHp, _hp + Mathf.Max(0f, amount));
+        }
+
+        /// <summary>The companion fell at 0 HP — hide it (no revive this session).</summary>
+        private void Fall()
+        {
+            if (_fallen) return;
+            _fallen = true;
+            _bubble?.Hide();
+            if (_agent != null && _agent.enabled && _agent.isOnNavMesh) _agent.isStopped = true;
+            // Deactivate the body so it stops updating + targeting. PartyHudBridge
+            // hides its frame (no live StoryCompanion in that slot). The injector
+            // respawns a fresh companion for this roster member on the next Village load.
+            Debug.Log($"[StoryCompanion] {DisplayName} fell at 0 HP — deactivating until village re-enter.");
+            gameObject.SetActive(false);
+        }
+
         // ── Follow tuning (mirrors PetHeroLeash's "trail, don't block" intent) ─
         // Trail this far behind/beside the hero; never crowd closer than the
         // inner ring (so it stays out of the hero's path + camera centre).
@@ -170,6 +237,11 @@ namespace DeNelle.Village
         {
             // Stable per-instance side (left/right shoulder) so it isn't dead-centre.
             _sideSign = (gameObject.GetInstanceID() & 1) == 0 ? 1f : -1f;
+
+            // Init HP from the (possibly inspector-tuned) max so a fresh body is full.
+            if (_maxHp <= 0f) _maxHp = DefaultMaxHp;
+            _hp = _maxHp;
+            _fallen = false;
 
             _agent = GetComponent<NavMeshAgent>();
             if (_agent != null)
