@@ -44,17 +44,28 @@ namespace DeNelle.Village
         [Tooltip("Layers the ground raycast hits (terrain/floor). Default = everything.")]
         [SerializeField] private LayerMask _groundMask = ~0;
 
+        // On Start: measure live renderer bounds, find the ground, and shift the
+        // transform vertically so the visible bottom of the mesh rests on the ground.
         private void Start()
         {
             if (!TryGetWorldBounds(out Bounds b))
-                return; // no renderers — nothing to seat
+            {
+                Debug.LogWarning("[SeatOnGround] No renderers found on '" + name +
+                                 "' — cannot seat; leaving position unchanged.");
+                return;
+            }
 
-            float targetGroundY = ResolveGroundY(b);
-            float gap = targetGroundY - b.min.y; // +ve = mesh below ground, lift up; -ve = floating, drop
-            if (Mathf.Abs(gap) < 0.0005f)
-                return; // already seated
+            float groundY = ResolveGroundY(b);
+            float gap = b.min.y - groundY;          // >0 = mesh floats above ground; <0 = sunk in
+            if (Mathf.Abs(gap) > 0.0001f)
+            {
+                Vector3 p = transform.position;
+                p.y -= gap;                          // drop (or lift) so bounds.min.y lands on groundY
+                transform.position = p;
+            }
 
-            transform.position += new Vector3(0f, gap, 0f);
+            // DEBUG (WO tree-placement): final position after seating. Expect (0, groundY, 0).
+            Debug.Log($"[SeatOnGround] Tree final position: {transform.position} (groundY={groundY:0.###})");
         }
 
         /// <summary>Combined world-space renderer bounds of this object + children.</summary>
