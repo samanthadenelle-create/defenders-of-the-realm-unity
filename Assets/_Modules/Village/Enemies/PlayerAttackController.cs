@@ -70,6 +70,32 @@ namespace DeNelle.Village
         [Tooltip("Layer mask covering enemy colliders.")]
         [SerializeField] private LayerMask _enemyLayer;
 
+        [Header("Attack Weight (WO-217: anticipation → impact → recovery)")]
+        [Tooltip("When ON, the swing's tempo is shaped via Animator.speed: a brief slow wind-up " +
+                 "(anticipation), a fast snap through the contact frame (impact), then a settle " +
+                 "back to normal (recovery) — so the swing reads with weight instead of flat.")]
+        [SerializeField] private bool _shapeAttackTempo = true;
+
+        [Tooltip("Seconds of slow wind-up before the strike (the coil).")]
+        [SerializeField, Range(0f, 0.4f)] private float _anticipationDuration = 0.07f;
+
+        [Tooltip("Animator.speed during the wind-up. <1 = slower/heavier coil.")]
+        [SerializeField, Range(0.2f, 1f)] private float _windUpSpeed = 0.55f;
+
+        [Tooltip("Seconds the fast contact speed is held through the impact frame (the snap).")]
+        [SerializeField, Range(0f, 0.25f)] private float _impactHold = 0.05f;
+
+        [Tooltip("Animator.speed at the contact frame. >1 = snappy, punchy strike.")]
+        [SerializeField, Range(1f, 3f)] private float _impactSpeed = 1.9f;
+
+        [Tooltip("Seconds to ease back to normal speed after impact (the follow-through settle).")]
+        [SerializeField, Range(0f, 0.5f)] private float _recoveryDuration = 0.16f;
+
+        [Tooltip("Seconds after swing input when the weapon CONTACTS the target — the damage lands " +
+                 "here so the hit syncs to the impact frame, not the swing start. When 0, falls back " +
+                 "to the perfect-hit window start (legacy behaviour).")]
+        [SerializeField, Min(0f)] private float _impactFrameDelay = 0.13f;
+
         [Header("Perfect Hit Window")]
         [Tooltip("Seconds after swing input when the perfect-hit window opens.")]
         [SerializeField, Min(0f)] private float _perfectHitWindowStart = 0.08f;
@@ -268,6 +294,14 @@ namespace DeNelle.Village
                 _comboIndex    = (_comboIndex + 1) % ComboLength;
                 _lastSwingTime = Time.time;
             }
+            // WO-217: shape the swing's tempo so it reads anticipation → impact →
+            // recovery instead of a flat uniform swing. Drives Animator.speed through
+            // the canonical driver (a global multiplier, NOT a guarded param). Data
+            // -driven via the serialized timing fields; restores speed = 1 on settle.
+            if (_shapeAttackTempo && _actor != null)
+                _actor.ShapeAttackTempo(_anticipationDuration, _windUpSpeed,
+                                        _impactHold, _impactSpeed, _recoveryDuration);
+
             PlayWhoosh();
 
             // WO-219: light up the swing trail for the duration of the swing arc.
@@ -283,8 +317,12 @@ namespace DeNelle.Village
 
         private IEnumerator ResolveAttack()
         {
-            // Wait until the hit frame (start of perfect window).
-            yield return new WaitForSeconds(_perfectHitWindowStart);
+            // WO-217: land the hit on the IMPACT FRAME (when the weapon contacts the
+            // target) rather than at the swing start, so the damage + "connect" feel
+            // sync to the snap of the animation, not the wind-up. Data-driven via
+            // _impactFrameDelay; falls back to the perfect-window start when unset (0).
+            float hitDelay = _impactFrameDelay > 0f ? _impactFrameDelay : _perfectHitWindowStart;
+            yield return new WaitForSeconds(hitDelay);
 
             float elapsed   = Time.time - _swingStartTime;
             bool isPerfect  = elapsed >= _perfectHitWindowStart

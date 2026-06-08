@@ -19,6 +19,7 @@
 // Add it to any actor root: `GetComponent<ActorAnimator>() ?? AddComponent<>()`.
 // =============================================================================
 
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -150,6 +151,61 @@ namespace DeNelle.Core.Combat
             EnsureAnimator();
             if (_animator != null && Has(AnimParams.EmoteHash))
                 _animator.SetInteger(AnimParams.EmoteHash, (int)emote);
+        }
+
+        // ── WO-217: attack tempo shaping (anticipation → impact → recovery) ──────
+        // A flat clip read as a single uniform swing. Modulating Animator.speed over
+        // the swing gives it WEIGHT: a brief slow wind-up (anticipation), a fast snap
+        // through the contact frame (impact), then a settle back to normal (recovery).
+        // This drives Animator.speed (a global multiplier, NOT a parameter), so no
+        // HasParameter guard applies — only a null-guard on the Animator. Re-entrant:
+        // a new shape cancels the previous one and always restores speed = 1 on exit.
+        private Coroutine _tempoRoutine;
+
+        /// <summary>
+        /// WO-217: shape this attack's tempo for felt weight. Plays a slow anticipation
+        /// for <paramref name="anticipation"/>s at <paramref name="windUpSpeed"/>, snaps
+        /// to <paramref name="impactSpeed"/> through the contact for <paramref name="impact"/>s,
+        /// then settles back to 1.0 over <paramref name="recovery"/>s. All durations are
+        /// caller-supplied (data-driven). Safe no-op when no Animator is resolved.
+        /// </summary>
+        public void ShapeAttackTempo(float anticipation, float windUpSpeed,
+                                     float impact, float impactSpeed, float recovery)
+        {
+            EnsureAnimator();
+            if (_animator == null) return;
+            if (_tempoRoutine != null) StopCoroutine(_tempoRoutine);
+            _tempoRoutine = StartCoroutine(
+                ShapeAttackTempoRoutine(anticipation, windUpSpeed, impact, impactSpeed, recovery));
+        }
+
+        private IEnumerator ShapeAttackTempoRoutine(float anticipation, float windUpSpeed,
+                                                    float impact, float impactSpeed, float recovery)
+        {
+            // Anticipation: ease INTO the wind-up speed (the coil before the strike).
+            yield return LerpSpeed(1f, Mathf.Max(0.05f, windUpSpeed), Mathf.Max(0f, anticipation));
+            // Impact: snap to the fast contact speed and hold it briefly (the strike).
+            if (_animator != null) _animator.speed = Mathf.Max(0.05f, impactSpeed);
+            if (impact > 0f) yield return new WaitForSeconds(impact);
+            // Recovery: ease back to normal (the follow-through settle).
+            yield return LerpSpeed(Mathf.Max(0.05f, impactSpeed), 1f, Mathf.Max(0f, recovery));
+            if (_animator != null) _animator.speed = 1f;
+            _tempoRoutine = null;
+        }
+
+        private IEnumerator LerpSpeed(float from, float to, float dur)
+        {
+            if (_animator == null) yield break;
+            if (dur <= 0f) { _animator.speed = to; yield break; }
+            float t = 0f;
+            while (t < dur)
+            {
+                if (_animator == null) yield break;
+                t += Time.deltaTime;
+                _animator.speed = Mathf.Lerp(from, to, Mathf.Clamp01(t / dur));
+                yield return null;
+            }
+            _animator.speed = to;
         }
 
         /// <summary>
