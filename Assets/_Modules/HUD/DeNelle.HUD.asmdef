@@ -5,7 +5,12 @@
         "DeNelle.Core",
         "DeNelle.Data",
         "Unity.Localization",
-        "UniTask"
+        "UniTask",
+        "UnityEngine.UI",
+        "Unity.TextMeshPro",
+        "LeanTouch",
+        "LeanCommon",
+        "CW.Common"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
