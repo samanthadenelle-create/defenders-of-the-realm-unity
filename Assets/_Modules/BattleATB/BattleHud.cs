@@ -387,10 +387,12 @@ namespace DeNelle.BattleATB
             card.TargetCursor = cursor;
 
             // Header row — portrait icon (WO-213) on the left, name on the right.
-            // The icon is a square that shows the hero's rendered character portrait
-            // (Resources/HeroPortraits/<character>). It stays hidden for enemies/pets and
-            // for any hero whose portrait asset is missing — the name "pill" then
-            // reads exactly as before, so this is a purely additive enhancement.
+            // The icon is a square that shows the combatant's visual: a hero's rendered
+            // character portrait (Resources/HeroPortraits/<character>), a pet's species
+            // PNG (Resources/PetPortraits/pet-<species>), or a per-archetype tinted
+            // emblem for an enemy (no enemy portrait art ships). It collapses only when
+            // even the fallback is unavailable — then the name "pill" reads as before,
+            // so this is a purely additive enhancement.
             var headerRow = new VisualElement();
             headerRow.style.flexDirection = FlexDirection.Row;
             headerRow.style.alignItems = Align.Center;
@@ -532,25 +534,26 @@ namespace DeNelle.BattleATB
         private static void BindPortrait(Card card, BattleUnit u)
         {
             if (card == null || card.Portrait == null) return;
+            if (u == null) { card.Portrait.style.display = DisplayStyle.None; return; }
 
-            // Only heroes have rendered portraits. Pets/enemies → no icon.
-            if (u == null || u.Kind != UnitKind.Hero || u.HeroClass == null)
+            // WO-213 — give EVERY combatant a real visual chip instead of a bare name
+            // "pill". Heroes load their rendered character portrait; pets load their
+            // species PNG; enemies (no shipped portrait art) get a per-archetype tinted
+            // emblem so each foe still reads as a distinct character, not a generic pill.
+            StyleBackground? bg = null;
+            switch (u.Kind)
             {
-                card.Portrait.style.display = DisplayStyle.None;
-                return;
+                case UnitKind.Hero:
+                    bg = ResolveHeroBackground(u);
+                    break;
+                case UnitKind.Pet:
+                    bg = ResolvePetPortrait(u.Species);
+                    break;
+                case UnitKind.Enemy:
+                    bg = ResolveEnemyEmblem(u.EnemyDefId);
+                    break;
             }
 
-            // Portrait assets are CHARACTER-named (canon roster), NOT class slugs —
-            // matches HeroSelectController / TitleController. Thrain=Mage, Grom=Knight,
-            // Sylas=Ranger (Elara=Cleric isn't a battle HeroClass, but mapped for safety).
-            string slug = u.HeroClass.Value switch
-            {
-                HeroClass.Mage   => "Thrain",
-                HeroClass.Knight => "Grom",
-                HeroClass.Ranger => "Sylas",
-                _                => u.HeroClass.Value.ToString()
-            };
-            StyleBackground? bg = ResolveHeroPortrait(slug);
             if (bg.HasValue)
             {
                 card.Portrait.style.backgroundImage = bg.Value;
@@ -560,6 +563,114 @@ namespace DeNelle.BattleATB
             {
                 // Graceful fallback: collapse the icon, keep the name pill as-is.
                 card.Portrait.style.display = DisplayStyle.None;
+            }
+        }
+
+        /// <summary>The hero's rendered portrait background, keyed by canon character
+        /// name (Thrain=Mage, Grom=Knight, Sylas=Ranger). Null when the class is unset.</summary>
+        private static StyleBackground? ResolveHeroBackground(BattleUnit u)
+        {
+            if (u.HeroClass == null) return null;
+            // Portrait assets are CHARACTER-named (canon roster), NOT class slugs —
+            // matches HeroSelectController / TitleController. Elara=Cleric isn't a battle
+            // HeroClass, but mapped for safety.
+            string slug = u.HeroClass.Value switch
+            {
+                HeroClass.Mage   => "Thrain",
+                HeroClass.Knight => "Grom",
+                HeroClass.Ranger => "Sylas",
+                _                => u.HeroClass.Value.ToString()
+            };
+            return ResolveHeroPortrait(slug);
+        }
+
+        /// <summary>The pet's species portrait from Resources/PetPortraits/pet-&lt;species&gt;
+        /// (the committed starter-pet PNGs, matching PetDeployer / PetSelectController).
+        /// Cached; warns once on a miss then falls back to the name pill.</summary>
+        private static StyleBackground? ResolvePetPortrait(PetSpecies? species)
+        {
+            if (species == null) return null;
+            string id = species.Value switch
+            {
+                PetSpecies.AetherSprite => "pet-aether-sprite",
+                PetSpecies.FlamePup     => "pet-flame-pup",
+                PetSpecies.IceWolf      => "pet-ice-wolf",
+                _                       => null
+            };
+            if (string.IsNullOrEmpty(id)) return null;
+
+            string key = "pet:" + id;
+            if (_portraitCache.TryGetValue(key, out StyleBackground? cached)) return cached;
+
+            StyleBackground? result = null;
+            var sprite = Resources.Load<Sprite>($"PetPortraits/{id}");
+            if (sprite != null) result = new StyleBackground(sprite);
+            else
+            {
+                var tex = Resources.Load<Texture2D>($"PetPortraits/{id}");
+                if (tex != null) result = new StyleBackground(tex);
+            }
+
+            if (result == null && !_portraitMissWarned.Contains(key))
+            {
+                _portraitMissWarned.Add(key);
+                Debug.LogWarning($"[BattleHud] Pet portrait 'Resources/PetPortraits/{id}' " +
+                                 "not found — falling back to the name pill for this pet.");
+            }
+
+            _portraitCache[key] = result;
+            return result;
+        }
+
+        // ── Enemy emblem (WO-213) ────────────────────────────────────────────
+        // No enemy portrait art ships in Resources (KayKit enemy meshes are edit-time
+        // only, gitignored — see AtbCombatantSwapper). To still replace the enemy name
+        // "pill" with a real visual chip, synthesize a small solid-color emblem texture
+        // per archetype: a distinct tint so a Skeleton, Bruiser, Necromancer etc. each
+        // read as their own character. Generated once and cached (WebGL-safe — pure
+        // Texture2D, no file IO, no missing-asset warning).
+        private static readonly Dictionary<string, StyleBackground?> _enemyEmblemCache =
+            new Dictionary<string, StyleBackground?>();
+
+        private static StyleBackground? ResolveEnemyEmblem(string enemyDefId)
+        {
+            string id = string.IsNullOrEmpty(enemyDefId) ? "skeleton" : enemyDefId.ToLowerInvariant();
+            if (_enemyEmblemCache.TryGetValue(id, out StyleBackground? cached)) return cached;
+
+            Color c = EnemyEmblemColor(id);
+            var tex = new Texture2D(8, 8, TextureFormat.RGBA32, false)
+            {
+                name = $"AtbEnemyEmblem_{id}",
+                filterMode = FilterMode.Bilinear,
+                wrapMode = TextureWrapMode.Clamp,
+                hideFlags = HideFlags.HideAndDontSave
+            };
+            var px = new Color[8 * 8];
+            for (int i = 0; i < px.Length; i++) px[i] = c;
+            tex.SetPixels(px);
+            tex.Apply(false, false);
+
+            StyleBackground? result = new StyleBackground(tex);
+            _enemyEmblemCache[id] = result;
+            return result;
+        }
+
+        /// <summary>A distinct emblem tint per enemy archetype (engine ENEMY_DEFS keys +
+        /// village hollow-* ids). Unknown ids fall to the Hollow-One violet default.</summary>
+        private static Color EnemyEmblemColor(string id)
+        {
+            switch (id)
+            {
+                case "goblin":            return new Color(0.36f, 0.55f, 0.24f); // mossy green
+                case "skeleton":
+                case "hollow-walker":     return new Color(0.78f, 0.78f, 0.72f); // bone
+                case "bruiser":
+                case "hollow-warrior":    return new Color(0.62f, 0.30f, 0.20f); // rust/iron
+                case "necromancer":
+                case "hollow-apprentice": return new Color(0.30f, 0.18f, 0.52f); // dark arcane
+                case "hollow-captain":    return new Color(0.55f, 0.16f, 0.20f); // crimson officer
+                case "hollow-king":       return new Color(0.72f, 0.58f, 0.20f); // gilded boss
+                default:                  return new Color(0.45f, 0.12f, 0.55f); // Hollow-One violet
             }
         }
 
