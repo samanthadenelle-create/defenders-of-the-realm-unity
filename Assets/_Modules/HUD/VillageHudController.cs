@@ -109,6 +109,18 @@ namespace DeNelle.HUD
         private TextMeshProUGUI _manaText;
         private float _hpCurrent, _hpMax = 1f;
 
+        // Hero XP — a thin yellow line ABOVE the HP bar, in the same vitals panel
+        // (owner: no full-screen XP bar; show progress visually next to health).
+        // Driven by polling HeroProgression via reflection (HUD→Core; no Village ref).
+        private Image _xpLineFill;          // the yellow fill (width = XP fraction)
+        private float _xpFraction;          // 0..1 toward next level
+        private object _heroProg;           // cached HeroProgression instance (reflection)
+        private System.Type _heroProgType;
+        private System.Reflection.PropertyInfo _xpProp;      // HeroProgression.Xp (float)
+        private System.Reflection.PropertyInfo _xpToNextProp; // HeroProgression.XpToNext (float)
+        private float _xpPollTimer;
+        private const float XpPollInterval = 0.25f;
+
         // Skill bar cells
         private TextMeshProUGUI[] _slotKey;
         private TextMeshProUGUI[] _slotGlyph;
@@ -282,6 +294,58 @@ namespace DeNelle.HUD
 
             AnimateMomentumBadge();
             UpdateTownHud();
+            UpdateHeroXpLine();
+        }
+
+        // ── Hero XP yellow line (above the HP bar) — cheap poll of HeroProgression. ─
+        // HUD cannot reference DeNelle.Village, so the level/XP source is read via
+        // reflection (same pattern as ResolveHeroIfNeeded / XPBarController). The fill
+        // width = current XP / XP-to-next-level (0..1), lerped for a smooth slide.
+        private void UpdateHeroXpLine()
+        {
+            if (_xpLineFill == null) return;
+
+            _xpPollTimer -= Time.unscaledDeltaTime;
+            if (_xpPollTimer <= 0f)
+            {
+                _xpPollTimer = XpPollInterval;
+                ResolveHeroProgIfNeeded();
+                if (_heroProg != null && _xpProp != null && _xpToNextProp != null)
+                {
+                    try
+                    {
+                        float xp     = (float)_xpProp.GetValue(_heroProg);
+                        float toNext = (float)_xpToNextProp.GetValue(_heroProg);
+                        _xpFraction = toNext > 0f ? Mathf.Clamp01(xp / toNext) : 0f;
+                    }
+                    catch { /* hero swapped out mid-poll — re-resolve next tick */ _heroProg = null; }
+                }
+            }
+
+            // Smooth slide toward the target fraction.
+            float cur = _xpLineFill.fillAmount;
+            if (!Mathf.Approximately(cur, _xpFraction))
+                _xpLineFill.fillAmount = Mathf.Lerp(cur, _xpFraction, Time.unscaledDeltaTime * 6f);
+        }
+
+        private void ResolveHeroProgIfNeeded()
+        {
+            if (_heroProg != null) return;
+            if (_heroProgType == null)
+                _heroProgType = System.Type.GetType("DeNelle.Village.HeroProgression, DeNelle.Village");
+            if (_heroProgType == null) return;
+
+            // HeroProgression.Instance is the canonical single hero per run.
+            var instProp = _heroProgType.GetProperty("Instance",
+                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+            object prog = instProp != null ? instProp.GetValue(null) : null;
+            if (prog == null)
+                prog = UnityEngine.Object.FindObjectOfType(_heroProgType);
+            if (prog == null) return;
+
+            _heroProg     = prog;
+            _xpProp       = _heroProgType.GetProperty("Xp");
+            _xpToNextProp = _heroProgType.GetProperty("XpToNext");
         }
 
         // ── WO-339: per-frame TOWN-HUD animation (timer urgency, res flash, map). ─
@@ -667,6 +731,22 @@ namespace DeNelle.HUD
             _hpText.fontStyle = FontStyles.Bold;
             _hpText.outlineColor = new Color32(0, 0, 0, 170); _hpText.outlineWidth = 0.1f;
 
+            // XP line — a THIN yellow strip directly ABOVE the HP bar (owner request:
+            // no full-screen XP bar; show level progress visually next to health).
+            // Sits in the gap between the HP track top (0.92) and the panel top (1.0).
+            var xpTrack = NewRect("XPTrack", _vitalsCluster, new Vector2(0.05f, 0.935f), new Vector2(0.95f, 0.99f));
+            HudTheme.StyleWell(xpTrack.gameObject);
+            var xpFill = NewRect("XPFill", xpTrack, Vector2.zero, Vector2.one);
+            xpFill.offsetMin = new Vector2(1f, 1f); xpFill.offsetMax = new Vector2(-1f, -1f);
+            _xpLineFill = xpFill.gameObject.AddComponent<Image>();
+            _xpLineFill.color = new Color(1f, 0.85f, 0.15f, 1f); // yellow
+            _xpLineFill.sprite = HudTheme.RoundedFrame;
+            _xpLineFill.type = HudTheme.RoundedFrame != null ? Image.Type.Filled : Image.Type.Filled;
+            _xpLineFill.fillMethod = Image.FillMethod.Horizontal;
+            _xpLineFill.fillOrigin = 0;
+            _xpLineFill.fillAmount = 0f;
+            _xpLineFill.raycastTarget = false;
+
             // Mana bar (bottom half)
             var mTrack = NewRect("ManaTrack", _vitalsCluster, new Vector2(0.05f, 0.10f), new Vector2(0.95f, 0.48f));
             HudTheme.StyleWell(mTrack.gameObject);
@@ -796,10 +876,16 @@ namespace DeNelle.HUD
             t.fontStyle = FontStyles.Bold;
         }
 
-        // ── "Defend!" start-wave button. VILLAGE-ONLY + between-waves only. ───
+        // ── "Start Next Wave" button. VILLAGE-ONLY + between-waves only. ──────
+        // OWNER ASK (2026-06-08): the old big centre "DEFEND!" button was too large
+        // and ambiguous (read like a pet command, not "begin the next wave"). It's
+        // now a SMALL pill relabelled "Start Next Wave" sitting BESIDE the town wave
+        // TIMER (top-left, just right of the TownWave cluster). Same action — it
+        // still raises StartWaveRequested (the wave-start signal); only the label,
+        // size and position changed. Final anchors set in ApplyResponsiveLayout.
         private void BuildStartWaveButton(Transform parent)
         {
-            _startWaveBtn = NewRect("StartWaveBtn", parent, new Vector2(0.40f, 0.825f), new Vector2(0.60f, 0.875f));
+            _startWaveBtn = NewRect("StartWaveBtn", parent, new Vector2(0.30f, 0.945f), new Vector2(0.43f, 0.99f));
             var bimg = _startWaveBtn.gameObject.AddComponent<Image>();
             bimg.color = HudTheme.GoldButton;
             bimg.sprite = HudTheme.RoundedFrame;
@@ -808,9 +894,11 @@ namespace DeNelle.HUD
             btn.targetGraphic = bimg;
             HudTheme.StyleButtonColors(btn, HudTheme.GoldButton);
             btn.onClick.AddListener(() => StartWaveRequested?.Invoke());
-            var t = AddText(_startWaveBtn, "⚔ DEFEND!", HudTheme.FontBody, HudTheme.Ink, TextAlignmentOptions.Center);
+            var t = AddText(_startWaveBtn, "▶ Start Next Wave", 14, HudTheme.Ink, TextAlignmentOptions.Center);
             t.fontStyle = FontStyles.Bold;
-            t.characterSpacing = 2f;
+            t.enableAutoSizing = true;
+            t.fontSizeMin = 9f;
+            t.fontSizeMax = 14f;
             _startWaveBtn.gameObject.SetActive(false);
         }
 
@@ -1075,7 +1163,9 @@ namespace DeNelle.HUD
                 SetAnchors(_vitalsCluster,  new Vector2(0.02f, 0.235f), new Vector2(0.46f, 0.30f));
                 // Build entry lifts to the upper-right, clear of the skill cluster.
                 SetAnchors(_buildBtn,       new Vector2(0.84f, 0.255f), new Vector2(0.99f, 0.33f));
-                SetAnchors(_startWaveBtn,   new Vector2(0.40f, 0.83f),  new Vector2(0.60f, 0.88f));
+                // Small "Start Next Wave" pill BESIDE the wave timer (top-left), just
+                // right of the narrowed TownWave cluster. Portrait: cluster width 260px.
+                SetAnchors(_startWaveBtn,   new Vector2(0.26f, 0.94f),  new Vector2(0.46f, 0.985f));
 
                 // WO-339 TOWN HUD portrait reflow: wave/timer cluster top-LEFT
                 // narrows; resources STACK on the left under it; mini-map shrinks
@@ -1097,7 +1187,9 @@ namespace DeNelle.HUD
                 // Vitals bottom-left above the (smaller) landscape joystick.
                 SetAnchors(_vitalsCluster,  new Vector2(0.02f, 0.30f),  new Vector2(0.30f, 0.37f));
                 SetAnchors(_buildBtn,       new Vector2(0.88f, 0.36f),  new Vector2(0.995f, 0.45f));
-                SetAnchors(_startWaveBtn,   new Vector2(0.44f, 0.79f),  new Vector2(0.56f, 0.845f));
+                // Small "Start Next Wave" pill BESIDE the wave timer (top-left), just
+                // right of the TownWave cluster (x:12 + width 300px ≈ 0.29 on 1080-ref).
+                SetAnchors(_startWaveBtn,   new Vector2(0.295f, 0.945f), new Vector2(0.45f, 0.99f));
 
                 // WO-339 TOWN HUD landscape: wide top spread — wave cluster top-left,
                 // resource badges top-centre, full-size 140 mini-map top-right.

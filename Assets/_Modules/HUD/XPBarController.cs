@@ -280,9 +280,16 @@ namespace DeNelle.HUD
         }
 
         // ── IMGUI fallback — renders when UXML elements were not found ────────
-
+        //
+        // RETIRED (owner request 2026-06-08): the full-width bottom XP strip is gone.
+        // XP now shows as a thin YELLOW line directly ABOVE the hero's HP bar inside
+        // the VillageHudController vitals panel (BuildVitalsCluster → "XPTrack"). This
+        // controller keeps its HeroProgression hook so any UXML "xp-fill" element (if
+        // ever present) still updates, but it NO LONGER draws a full-screen IMGUI bar.
         private void OnGUI()
         {
+            return; // full-screen XP strip retired — see VillageHudController vitals line
+#pragma warning disable CS0162 // unreachable retained for reference / quick re-enable
             if (_uiReady) return;   // UXML is driving the UI — skip IMGUI
             if (!IsGameplayScene()) return;   // onboarding scene (Title/HeroSelect/PetSelect) — draw nothing
             if (_prog == null) return;   // no hero in this scene yet — draw nothing
@@ -319,6 +326,7 @@ namespace DeNelle.HUD
             GUI.Label(new Rect(marginX, labelY, barW, labelH), xpText, style);
 
             GUI.color = Color.white;
+#pragma warning restore CS0162
         }
     }
 }
