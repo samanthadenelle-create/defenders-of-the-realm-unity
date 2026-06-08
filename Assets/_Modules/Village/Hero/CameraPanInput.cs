@@ -54,6 +54,11 @@ namespace DeNelle.Village
         [Tooltip("Pitch degrees applied per vertical drag pixel (clamped in the camera API).")]
         [SerializeField] private float _dragSensY = 0.10f;
 
+        [Tooltip("Degrees/second the camera orbits from KEYBOARD (Q/E yaw, R/F pitch). Keyboard is " +
+                 "the WebGL-reliable camera control — right-mouse drag is eaten by the browser " +
+                 "context menu in a web build, so on web this is how the player moves the camera.")]
+        [SerializeField] private float _keyOrbitSpeed = 90f;
+
         [Tooltip("Pixels a finger must move before it is treated as a drag (vs a tap). " +
                  "Below this, the tap passes through to tap-to-attack.")]
         [SerializeField] private float _dragThresholdPx = 12f;
@@ -205,10 +210,27 @@ namespace DeNelle.Village
             if (_heroCheckTimer <= 0f) { _heroCheckTimer = 0.5f; RefreshHeroPresence(); }
 
             if (!_panEnabled || !_heroPresent || InDttScene()) return;
+            if (BuildModeActive()) return;   // build mode owns the camera
+
+            // Keyboard orbit — the WebGL-reliable camera control. The right-mouse drag below
+            // is swallowed by the browser's context menu in a web build, so on web Q/E (yaw)
+            // and R/F (pitch) are how the player moves the camera. Works on standalone too.
+            // Feeds the SAME single yaw authority as the mouse, so no movement/gate impact.
+            var keys = Keyboard.current;
+            var camKeys = SmartMobileCamera.Instance;
+            if (keys != null && camKeys != null)
+            {
+                float kYaw = 0f, kPitch = 0f;
+                if (keys.qKey.isPressed) kYaw   -= 1f;
+                if (keys.eKey.isPressed) kYaw   += 1f;
+                if (keys.rKey.isPressed) kPitch -= 1f;
+                if (keys.fKey.isPressed) kPitch += 1f;
+                if (kYaw   != 0f) camKeys.AddYaw(kYaw   * _keyOrbitSpeed * Time.unscaledDeltaTime);
+                if (kPitch != 0f) camKeys.AddPitch(kPitch * _keyOrbitSpeed * Time.unscaledDeltaTime);
+            }
 
             var mouse = Mouse.current;
             if (mouse == null || !mouse.rightButton.isPressed) return;
-            if (BuildModeActive()) return;
 
             Vector2 delta = mouse.delta.ReadValue();
             if (delta.sqrMagnitude <= 0f) return;
