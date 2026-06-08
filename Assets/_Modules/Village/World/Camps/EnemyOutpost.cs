@@ -32,10 +32,12 @@
 // =============================================================================
 using System;
 using System.Collections.Generic;
+using System.Text;
 using UnityEngine;
 using UnityEngine.AI;
 using DeNelle.Core.World;
 using DeNelle.Core.State;
+using DeNelle.Core.Quests;
 
 namespace DeNelle.Village.World.Camps
 {
@@ -56,11 +58,49 @@ namespace DeNelle.Village.World.Camps
         private const int FortGridWidth = 6;
         private const int FortGridDepth = 6;
 
-        // -- Flat clear reward (this slice; loot DROPS are the next bite) ------
+        // -- Clear reward base (threat-scaled in GrantClearReward) -------------
         /// <summary>Aether Crystals banked on clear (before the threat-tier bonus).</summary>
         public int BaseClearCrystals { get; private set; } = 40;
         /// <summary>Hero XP granted on clear (before the threat-tier bonus).</summary>
         public int BaseClearXp { get; private set; } = 120;
+
+        // =====================================================================
+        // LOOT TABLE (data-tunable) - a THREAT-SCALED roll on clear that routes
+        // each drop type to its EXISTING system (no parallel loot-economy):
+        //   * Resources (wood/iron)  -> EconomyService.Grant
+        //   * Crystals / rare gems   -> GameState.AetherCrystals (premium wallet)
+        //   * Weapon / armor          -> GearLoadout.EquipWeaponById/EquipArmorById
+        //   * Raid quest progress     -> DailyQuestService.Report (clean hook)
+        // Rarity/quantity rise with the outpost's ZoneManager threat tier, so a
+        // deadlier outpost pays better/rarer loot. All knobs are const here.
+        // =====================================================================
+
+        // ALWAYS: base resources, scaled per threat tier.
+        private const int BaseLootWood       = 40;   // + WoodPerThreat * threat
+        private const int WoodPerThreat      = 12;
+        private const int BaseLootIron       = 20;   // + IronPerThreat * threat
+        private const int IronPerThreat      = 8;
+
+        // CHANCE: a GEAR drop. Probability rises with threat (clamped). On a hit,
+        // the rolled rarity is biased UP by threat (see RollGearRarity).
+        private const float GearDropChanceBase    = 0.35f;  // at threat 0
+        private const float GearDropChancePerTier = 0.06f;  // + per threat tier
+        private const float GearDropChanceMax     = 0.85f;
+
+        // RARER (high threat): a rare-gem bonus crystal payout on top of the base.
+        private const int   RareGemThreatGate   = 4;     // only at threat >= this
+        private const float RareGemChance       = 0.30f;
+        private const int   RareGemCrystals     = 75;    // + RareGemPerThreat * threat
+        private const int   RareGemPerThreat    = 15;
+
+        // RARER (high threat): a QUEST ITEM token. No clean "grant quest item to
+        // inventory" hook exists (DailyQuests rewards on completion, not the
+        // reverse) - so we tick raid-clear quest PROGRESS (the clean hook) always,
+        // and only deposit a tangible token when the item-drops larder lane is on.
+        private const int   QuestItemThreatGate = 6;
+        private const float QuestItemChance     = 0.25f;
+        private const string QuestRaidEventId   = "combat.raid";   // DailyQuests Report() id
+        private const string QuestItemMaterial  = "warlord-seal";  // token into the larder (lane-gated)
 
         // -- Persistence (PlayerPrefs only - schema untouched; mirror ClaimableCamp) --
         private const string PrefClearedKey = "dotr-raid-cleared-";   // +OutpostId -> "1"
@@ -264,32 +304,215 @@ namespace DeNelle.Village.World.Camps
             OnCleared?.Invoke(this);
         }
 
-        // Flat clear reward (this slice): Aether Crystals banked into GameState (the
-        // existing economy wallet path) + hero XP via HeroProgression. Both scale with
-        // the outpost's threat tier so deadlier outposts pay better. Loot DROPS are the
-        // NEXT bite. Idempotent - paid at most once per outpost.
+        // THREAT-SCALED LOOT TABLE: rolled once on clear, every drop routed to an
+        // EXISTING system (no parallel loot-economy). Always pays resources +
+        // crystals + XP; a chance (rising with threat) adds a GEAR drop; high-threat
+        // outposts can also drop a rare gem (bonus crystals) and a quest token.
+        // Idempotent - paid at most once per outpost.
         private void GrantClearReward()
         {
             if (_rewardPaid) return;
             _rewardPaid = true;
 
+            var summary = new StringBuilder();
+
+            // --- ALWAYS: resources -> EconomyService.Grant -------------------
+            int wood = BaseLootWood + WoodPerThreat * ThreatLevel;
+            int iron = BaseLootIron + IronPerThreat * ThreatLevel;
+            if (EconomyService.Instance != null)
+            {
+                EconomyService.Instance.Grant(wood: wood, iron: iron);
+                summary.Append($"{wood} wood, {iron} iron");
+            }
+            else
+            {
+                Debug.LogWarning("[EnemyOutpost] EconomyService null - resources not granted.");
+            }
+
+            // --- ALWAYS: crystals -> GameState.AetherCrystals (premium wallet) -
             int crystals = BaseClearCrystals + ThreatLevel * 10;
-            int xp = BaseClearXp + ThreatLevel * 25;
+
+            // --- RARER (high threat): a rare GEM = bonus crystals ------------
+            string gemNote = null;
+            if (ThreatLevel >= RareGemThreatGate && UnityEngine.Random.value < RareGemChance)
+            {
+                int gem = RareGemCrystals + RareGemPerThreat * ThreatLevel;
+                crystals += gem;
+                gemNote = $"rare gem (+{gem} crystals)";
+            }
 
             var state = GameStateService.Instance?.State;
             if (state != null)
             {
                 state.AetherCrystals += crystals;
                 GameStateService.Instance.ResourcesChanged.Invoke();
+                summary.Append(summary.Length > 0 ? ", " : "").Append($"{crystals} crystals");
             }
             else
             {
                 Debug.LogWarning("[EnemyOutpost] GameState null - clear crystals not banked.");
             }
+            if (gemNote != null) summary.Append(", ").Append(gemNote);
 
+            // --- ALWAYS: hero XP -> HeroProgression -------------------------
+            int xp = BaseClearXp + ThreatLevel * 25;
             HeroProgression.Instance?.AddXp(xp);
+            summary.Append(summary.Length > 0 ? ", " : "").Append($"{xp} XP");
 
-            Debug.Log($"[EnemyOutpost] {OutpostId} clear reward: +{crystals} crystals, +{xp} XP.");
+            // --- CHANCE (rises with threat): a GEAR drop -> GearLoadout ------
+            string gear = TryGrantGearDrop();
+            if (gear != null) summary.Append(", [").Append(gear).Append("]");
+
+            // --- RARER (high threat): a QUEST ITEM token --------------------
+            // Clean hook = tick raid-clear quest PROGRESS (always). A literal
+            // "grant quest item into inventory" has NO clean API (FLAGGED): the
+            // closest tangible store is the item-drops larder, which only accepts
+            // deposits when that lane is enabled - so the token is best-effort.
+            DailyQuestService.Instance?.Report(QuestRaidEventId, 1);
+            if (ThreatLevel >= QuestItemThreatGate && UnityEngine.Random.value < QuestItemChance)
+            {
+                DeNelle.Village.Items.ItemInventory.GrantDrop(QuestItemMaterial, 1); // no-op unless ItemDropSystem lane is on
+                summary.Append(", [Warlord's Seal (quest)]");
+            }
+
+            Debug.Log($"[EnemyOutpost] Raid cleared ({OutpostId}, threat {ThreatLevel}) - looted: {summary}.");
+        }
+
+        // Roll the gear-drop chance (rising with threat); on a hit, pick a catalog
+        // weapon OR armor at a threat-biased rarity that the hero qualifies for, and
+        // grant it via the REAL armory API (GearLoadout.EquipWeaponById/EquipArmorById).
+        // Returns the granted item's display name, or null if nothing dropped.
+        private string TryGrantGearDrop()
+        {
+            float chance = Mathf.Min(GearDropChanceMax,
+                GearDropChanceBase + GearDropChancePerTier * Mathf.Max(0, ThreatLevel));
+            if (UnityEngine.Random.value > chance) return null;
+
+            var hero = FindHeroLoadout();
+            if (hero == null)
+            {
+                Debug.LogWarning("[EnemyOutpost] gear dropped but no hero GearLoadout - skipped.");
+                return null;
+            }
+
+            string job   = hero.HeroClass;
+            int    level = hero.HeroLevel;
+            string targetRarity = RollGearRarity(ThreatLevel);
+
+            // 50/50 weapon vs armor; fall back to the other type if the first yields none.
+            bool wantWeapon = UnityEngine.Random.value < 0.5f;
+
+            if (wantWeapon)
+            {
+                var w = PickWeapon(job, level, targetRarity);
+                if (w != null) { hero.EquipWeaponById(w.id); return w.name; }
+                var a = PickArmor(level, targetRarity);
+                if (a != null) { hero.EquipArmorById(a.id); return a.name; }
+            }
+            else
+            {
+                var a = PickArmor(level, targetRarity);
+                if (a != null) { hero.EquipArmorById(a.id); return a.name; }
+                var w = PickWeapon(job, level, targetRarity);
+                if (w != null) { hero.EquipWeaponById(w.id); return w.name; }
+            }
+            return null;
+        }
+
+        // Bias rarity UP with threat: low threat = mostly common/uncommon, high
+        // threat = a real shot at rare/epic. Pure weighted roll over the catalog
+        // rarity tiers; the actual eligible item is gated by the hero's job+level.
+        private static string RollGearRarity(int threat)
+        {
+            // Weights shift toward higher tiers as threat rises.
+            float t = Mathf.Clamp01(Mathf.Max(0, threat) / 10f);
+            float wCommon   = Mathf.Lerp(0.55f, 0.10f, t);
+            float wUncommon = 0.30f;
+            float wRare     = Mathf.Lerp(0.12f, 0.35f, t);
+            float wEpic     = Mathf.Lerp(0.03f, 0.25f, t);
+
+            float total = wCommon + wUncommon + wRare + wEpic;
+            float pick  = UnityEngine.Random.value * total;
+            if ((pick -= wCommon)   <= 0f) return "common";
+            if ((pick -= wUncommon) <= 0f) return "uncommon";
+            if ((pick -= wRare)     <= 0f) return "rare";
+            return "epic";
+        }
+
+        // Pick the eligible weapon nearest the target rarity (prefer exact rarity;
+        // else the best the hero qualifies for). Returns null if the catalog is empty.
+        private static WeaponDef PickWeapon(string job, int level, string rarity)
+        {
+            WeaponDef exact = null;
+            foreach (var w in GearCatalog.AllWeapons())
+            {
+                if (w == null) continue;
+                if (!JobOk(w.job, job)) continue;
+                if (w.req != null && level < w.req.level) continue;
+                if (string.Equals(w.rarity, rarity, StringComparison.OrdinalIgnoreCase))
+                {
+                    if (exact == null || w.damageMult > exact.damageMult) exact = w;
+                }
+            }
+            if (exact != null) return exact;
+            return GearCatalog.BestWeapon(job, level); // fallback: best the hero qualifies for
+        }
+
+        private static ArmorDef PickArmor(int level, string rarity)
+        {
+            ArmorDef exact = null;
+            foreach (var a in GearCatalog.AllArmors())
+            {
+                if (a == null) continue;
+                if (a.req != null && level < a.req.level) continue;
+                if (string.Equals(a.rarity, rarity, StringComparison.OrdinalIgnoreCase))
+                {
+                    if (exact == null || a.defense > exact.defense) exact = a;
+                }
+            }
+            if (exact != null) return exact;
+            return GearCatalog.BestArmor("any", level); // fallback (armor jobs are "any")
+        }
+
+        private static bool JobOk(string itemJob, string heroJob)
+        {
+            if (string.IsNullOrEmpty(itemJob)) return true;
+            if (itemJob.Equals("any", StringComparison.OrdinalIgnoreCase)) return true;
+            return itemJob.Equals(heroJob ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+        }
+
+        // Locate the active hero's GearLoadout (the real armory grant surface),
+        // mirroring ShopPanel.FindActiveHeroGO: Player tag -> add/get GearLoadout.
+        private static HeroGearRef FindHeroLoadout()
+        {
+            GameObject heroGo = GameObject.FindWithTag("Player");
+            if (heroGo == null) return null;
+
+            var loadout = heroGo.GetComponent<GearLoadout>();
+            if (loadout == null) loadout = heroGo.AddComponent<GearLoadout>();
+
+            var abilities    = heroGo.GetComponent<HeroAbilities>();
+            var progression  = heroGo.GetComponent<HeroProgression>();
+            return new HeroGearRef(loadout, abilities, progression);
+        }
+
+        // Small bundle so the loot roll can read job/level + grant gear through ONE
+        // handle (the real GearLoadout equip API), without re-finding the hero.
+        private sealed class HeroGearRef
+        {
+            private readonly GearLoadout _loadout;
+            public string HeroClass { get; }
+            public int    HeroLevel { get; }
+
+            public HeroGearRef(GearLoadout loadout, HeroAbilities abilities, HeroProgression progression)
+            {
+                _loadout  = loadout;
+                HeroClass = abilities != null ? abilities.HeroClass : AbilityCatalog.DefaultClass;
+                HeroLevel = progression != null ? progression.Level : 1;
+            }
+
+            public void EquipWeaponById(string id) => _loadout?.EquipWeaponById(id);
+            public void EquipArmorById(string id)  => _loadout?.EquipArmorById(id);
         }
 
         // =====================================================================
