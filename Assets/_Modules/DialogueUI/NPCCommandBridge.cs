@@ -21,6 +21,17 @@ namespace DeNelle.DialogueUI
             reg.AddCommandHandler("OpenArena", CmdOpenArena);
             reg.AddCommandHandler("LearnRecipe", (System.Action<string>)CmdLearnRecipe);
 
+            // Quests (WO-290) — vendor / forgemaster / pet narrative verbs delegate
+            // to the general QuestService (Core). These mirror the FTUE bridge's
+            // registrations so quest dialogue works from EITHER bridge.
+            reg.AddCommandHandler("StartQuest",    (System.Action<string>)CmdStartQuest);
+            reg.AddCommandHandler("AdvanceQuest",  (System.Action<string>)CmdAdvanceQuest);
+            reg.AddCommandHandler("CompleteQuest", (System.Action<string>)CmdCompleteQuest);
+            reg.AddCommandHandler("SetQuestFlag",  (System.Action<string, string>)CmdSetQuestFlag);
+            reg.AddCommandHandler("GiveKeystone",  (System.Action<string>)CmdGiveKeystone);
+            reg.AddFunction("HasKeystone",  (System.Func<string, bool>)FnHasKeystone);
+            reg.AddFunction("KeystoneCount", (System.Func<int>)FnKeystoneCount);
+
             Debug.Log("[NPCCommandBridge] Commands registered successfully.");
         }
 
@@ -89,5 +100,16 @@ namespace DeNelle.DialogueUI
         {
             Debug.Log($"[NPC] Learned recipe: {recipeId}");
         }
+
+        // ── Quests (WO-290) — delegate to QuestService (Core) ─────────────────
+        private void CmdStartQuest(string id)        => DeNelle.Core.Quests.QuestService.Instance?.StartQuest(id);
+        private void CmdAdvanceQuest(string id)       => DeNelle.Core.Quests.QuestService.Instance?.AdvanceQuest(id);
+        private void CmdCompleteQuest(string id)      => DeNelle.Core.Quests.QuestService.Instance?.CompleteQuest(id);
+        private void CmdSetQuestFlag(string id, string flag) => DeNelle.Core.Quests.QuestService.Instance?.SetFlag(id, flag);
+        private void CmdGiveKeystone(string name)     => DeNelle.Core.Quests.QuestService.Instance?.GiveKeystone(name);
+        private static bool FnHasKeystone(string name) =>
+            DeNelle.Core.Quests.QuestService.Instance != null && DeNelle.Core.Quests.QuestService.Instance.HasKeystone(name);
+        private static int FnKeystoneCount() =>
+            DeNelle.Core.Quests.QuestService.Instance != null ? DeNelle.Core.Quests.QuestService.Instance.KeystoneCount : 0;
     }
 }

@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "quests": [
+    {
+      "id": "elarion.welcome",
+      "title": "A New Defender",
+      "stages": [
+        {
+          "stageId": "meet-elder",
+          "objectiveText": "Speak with the Village Elder at the Heart of Elarion.",
+          "reward": { "crystals": 50, "food": 0, "magic": 0, "grantItemId": "" },
+          "requiresFlag": "",
+          "grantsKeystone": false
+        },
+        {
+          "stageId": "first-defense",
+          "objectiveText": "Survive the first wave at the gate.",
+          "reward": { "crystals": 100, "food": 20, "magic": 0, "grantItemId": "" },
+          "requiresFlag": "",
+          "grantsKeystone": true
+        }
+      ]
+    },
+    {
+      "id": "forgemaster.first-commission",
+      "title": "The Forgemaster's Request",
+      "stages": [
+        {
+          "stageId": "gather-iron",
+          "objectiveText": "Bring iron to the Forgemaster.",
+          "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
+          "requiresFlag": "",
+          "grantsKeystone": false
+        },
+        {
+          "stageId": "claim-weapon",
+          "objectiveText": "Claim your forged weapon.",
+          "reward": { "crystals": 0, "food": 0, "magic": 10, "grantItemId": "iron-sword" },
+          "requiresFlag": "",
+          "grantsKeystone": false
+        }
+      ]
+    },
+    {
+      "id": "vendor.supply-run",
+      "title": "Supply Run",
+      "stages": [
+        {
+          "stageId": "talk-vendor",
+          "objectiveText": "Visit the Market vendor.",
+          "reward": { "crystals": 25, "food": 0, "magic": 0, "grantItemId": "" },
+          "requiresFlag": "",
+          "grantsKeystone": false
+        }
+      ]
+    }
+  ]
+}

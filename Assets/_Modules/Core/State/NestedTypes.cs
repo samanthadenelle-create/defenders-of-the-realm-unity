@@ -199,6 +199,9 @@ namespace DeNelle.Core.State
     {
         [JsonProperty("beatIndex")] public int BeatIndex;
         [JsonProperty("flags")] public Dictionary<string, bool> Flags = new Dictionary<string, bool>();
+        // WO-290: current stage id within the quest's stage chain (QuestCatalog).
+        // Additive — defaults to null on read of an older save, no version bump.
+        [JsonProperty("stageId")] public string StageId;
     }
 
     /// <summary>The persisted quest ledger (dungeonsSlice QuestProgress).</summary>
@@ -208,6 +211,10 @@ namespace DeNelle.Core.State
         [JsonProperty("active")] public Dictionary<string, QuestState> Active = new Dictionary<string, QuestState>();
         [JsonProperty("completed")] public Dictionary<string, bool> Completed = new Dictionary<string, bool>();
         [JsonProperty("available")] public Dictionary<string, bool> Available = new Dictionary<string, bool>();
+        // WO-290: aggregate keystone ledger (story-progression macguffins earned
+        // across quests). Additive — defaults to an empty list on read of an older
+        // save, so NO version bump / migrator step is required.
+        [JsonProperty("keystones")] public List<string> Keystones = new List<string>();
 
         /// <summary>Fresh empty quest progress — the v6 migration seed.</summary>
         public static QuestProgress Empty()
@@ -217,6 +224,7 @@ namespace DeNelle.Core.State
                 Active = new Dictionary<string, QuestState>(),
                 Completed = new Dictionary<string, bool>(),
                 Available = new Dictionary<string, bool>(),
+                Keystones = new List<string>(),
             };
         }
     }

@@ -30,6 +30,7 @@ using System;
 using System.Collections;
 using Cysharp.Threading.Tasks;
 using DeNelle.Core;
+using DeNelle.Core.Quests;
 using DeNelle.Core.State;
 using DeNelle.Pets;
 using UnityEngine;
@@ -125,6 +126,16 @@ namespace DeNelle.Village
             Reg("show_pet_name_prompt", (Action)CmdShowPetNamePrompt);
             Reg("show_pet_role_choice", (Action)CmdShowPetRoleChoice);
             Reg("send_pet_to_harvest",  (Action)CmdSendPetToHarvest);
+
+            // Quests (WO-290 — general story-quest verbs → QuestService)
+            Reg("StartQuest",    (Action<string>)CmdStartQuest);
+            Reg("AdvanceQuest",  (Action<string>)CmdAdvanceQuest);
+            Reg("CompleteQuest", (Action<string>)CmdCompleteQuest);
+            Reg("SetQuestFlag",  (Action<string, string>)CmdSetQuestFlag);
+            Reg("GiveKeystone",  (Action<string>)CmdGiveKeystone);
+            // Yarn functions for branching on keystones (<<if HasKeystone("x")>>).
+            ((IActionRegistration)_runner).AddFunction("HasKeystone",  (Func<string, bool>)FnHasKeystone);
+            ((IActionRegistration)_runner).AddFunction("KeystoneCount", (Func<int>)FnKeystoneCount);
 
             // Misc / meta
             Reg("save_game",            (Action)CmdSaveGame);
@@ -452,6 +463,15 @@ namespace DeNelle.Village
         // ── Misc / meta ──────────────────────────────────────────────────────
 
         private void CmdSaveGame() => GameStateService.Instance?.Save();
+
+        // ── Quests (WO-290) ──────────────────────────────────────────────────
+        private void CmdStartQuest(string id)        => QuestService.Instance?.StartQuest(id);
+        private void CmdAdvanceQuest(string id)       => QuestService.Instance?.AdvanceQuest(id);
+        private void CmdCompleteQuest(string id)      => QuestService.Instance?.CompleteQuest(id);
+        private void CmdSetQuestFlag(string id, string flag) => QuestService.Instance?.SetFlag(id, flag);
+        private void CmdGiveKeystone(string name)     => QuestService.Instance?.GiveKeystone(name);
+        private static bool FnHasKeystone(string name) => QuestService.Instance != null && QuestService.Instance.HasKeystone(name);
+        private static int FnKeystoneCount() => QuestService.Instance != null ? QuestService.Instance.KeystoneCount : 0;
 
         private void CmdSpawnNpc(string who, string atWord, string where) =>
             Debug.Log($"[DialogueCommandBridge] spawn_npc '{who}' at '{where}' (companion auto-spawns; ambient NPCs are a follow-up).");
