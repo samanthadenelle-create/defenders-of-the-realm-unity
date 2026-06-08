@@ -85,11 +85,13 @@ title: SagaBorin
         -> I recovered the Fold.
             <<command: SetQuestFlag forgemasters_act3 comp_fold>>
             <<set $saga_comp_fold = true>>
-            Borin: <i>He turns the old vellum over with shaking hands.</i> Aldric's own hand. Three folds, three prayers. I never thought I'd hold it again. That's the steel sorted. <<detour SagaCheckAct3>>
+            Borin: <i>He turns the old vellum over with shaking hands.</i> Aldric's own hand. Three folds, three prayers. I never thought I'd hold it again. That's the steel sorted.
+            <<detour SagaCheckAct3>>
         -> Still hunting it.
             Borin: West gate, into the peaks. Mind the Stonebellies — they don't fold easy either.
     <<else>>
-        Borin: The Fold's home and the steel's ready. We're waiting on the others now. <<detour SagaCheckAct3>>
+        Borin: The Fold's home and the steel's ready. We're waiting on the others now.
+        <<detour SagaCheckAct3>>
     <<endif>>
 <<elseif $saga_act == 4>>
     Borin: All four pieces, under one roof. <i>He grips your shoulder, hard.</i> When you're ready, we light the great fire. Come to Wren's hearth — we reforge as one, the way it should've always been.
@@ -133,11 +135,13 @@ title: SagaHalvard
         -> I recovered the Frost Peaks gear.
             <<command: SetQuestFlag forgemasters_act3 comp_oathweld>>
             <<set $saga_comp_oathweld = true>>
-            Halvard: <i>She lays the restored breastplate flat, the dent hammered whole at last.</i> Thirty years I kept this broken so I'd not forget. Now I'll keep it whole so I never do. The Oathweld is ours again. <<detour SagaCheckAct3>>
+            Halvard: <i>She lays the restored breastplate flat, the dent hammered whole at last.</i> Thirty years I kept this broken so I'd not forget. Now I'll keep it whole so I never do. The Oathweld is ours again.
+            <<detour SagaCheckAct3>>
         -> Still searching.
             Halvard: North, into the cold. Bring them home — all of them.
     <<else>>
-        Halvard: The Oathweld's restored and the plate stands ready. We wait on the others. <<detour SagaCheckAct3>>
+        Halvard: The Oathweld's restored and the plate stands ready. We wait on the others.
+        <<detour SagaCheckAct3>>
     <<endif>>
 <<elseif $saga_act >= 4>>
     Halvard: The plate will bond to you the way it should have bonded to him. When Borin lights the fire, I'll be there. We all will.
@@ -178,11 +182,13 @@ title: SagaPell
         -> The Verdant blight is cleansed.
             <<command: SetQuestFlag forgemasters_act3 comp_heartwood>>
             <<set $saga_comp_heartwood = true>>
-            Old Pell: <i>He lays a hand on a bough that came away in his palm of its own weight, the wound already sealing green.</i> It gave it to me. Freely. After thirty years of weeping, the Tree forgave the asking. <i>He weeps himself.</i> The Heartwood is ours. <<detour SagaCheckAct3>>
+            Old Pell: <i>He lays a hand on a bough that came away in his palm of its own weight, the wound already sealing green.</i> It gave it to me. Freely. After thirty years of weeping, the Tree forgave the asking. <i>He weeps himself.</i> The Heartwood is ours.
+            <<detour SagaCheckAct3>>
         -> Still cleansing it.
             Old Pell: Gently, east. Heal the forest and the Heart heals with it.
     <<else>>
-        Old Pell: The Heartwood is given and the Tree is at peace. We wait on the others. <<detour SagaCheckAct3>>
+        Old Pell: The Heartwood is given and the Tree is at peace. We wait on the others.
+        <<detour SagaCheckAct3>>
     <<endif>>
 <<elseif $saga_act >= 4>>
     Old Pell: The living wood is the only thing that holds aether without burning. It will hold yours. When the fire is lit, I'll bring it to the hearth myself.
@@ -223,11 +229,13 @@ title: SagaWren
         -> I drew the pure aether sap.
             <<command: SetQuestFlag forgemasters_act3 comp_pressing>>
             <<set $saga_comp_pressing = true>>
-            Mother Wren: <i>The great stones groan and a black-gold oil runs bright into the trough.</i> The Last Pressing, pressed again. Bless you, and bless your safe return. Now we have everything. Everything but the courage. <<detour SagaCheckAct3>>
+            Mother Wren: <i>The great stones groan and a black-gold oil runs bright into the trough.</i> The Last Pressing, pressed again. Bless you, and bless your safe return. Now we have everything. Everything but the courage.
+            <<detour SagaCheckAct3>>
         -> Not yet.
             Mother Wren: South, and carefully. No oil's worth you, dearie.
     <<else>>
-        Mother Wren: The Pressing's in the trough and the quench is ready. We wait on the others. <<detour SagaCheckAct3>>
+        Mother Wren: The Pressing's in the trough and the quench is ready. We wait on the others.
+        <<detour SagaCheckAct3>>
     <<endif>>
 <<elseif $saga_act >= 4>>
     Mother Wren: It all comes back to the quench in the end, dearie — the bond that lets the steel drink without breaking. Same as people. When the fire's lit, my hearth is the place. It always was.
