@@ -32,6 +32,12 @@ namespace DeNelle.DialogueUI
             reg.AddFunction("HasKeystone",  (System.Func<string, bool>)FnHasKeystone);
             reg.AddFunction("KeystoneCount", (System.Func<int>)FnKeystoneCount);
 
+            // WO-291: quest-state READ functions so a vendor's stage-aware Talk node
+            // branches on the REAL quest ledger (survives save/reload), not just local
+            // Yarn vars. Additive — the quest WRITE verbs above were registered by WO-290.
+            reg.AddFunction("IsQuestActive",   (System.Func<string, bool>)FnIsQuestActive);
+            reg.AddFunction("IsQuestComplete", (System.Func<string, bool>)FnIsQuestComplete);
+
             Debug.Log("[NPCCommandBridge] Commands registered successfully.");
         }
 
@@ -111,5 +117,11 @@ namespace DeNelle.DialogueUI
             DeNelle.Core.Quests.QuestService.Instance != null && DeNelle.Core.Quests.QuestService.Instance.HasKeystone(name);
         private static int FnKeystoneCount() =>
             DeNelle.Core.Quests.QuestService.Instance != null ? DeNelle.Core.Quests.QuestService.Instance.KeystoneCount : 0;
+
+        // WO-291: read the live quest ledger for stage-aware vendor Talk branching.
+        private static bool FnIsQuestActive(string id) =>
+            DeNelle.Core.Quests.QuestService.Instance != null && DeNelle.Core.Quests.QuestService.Instance.IsActive(id);
+        private static bool FnIsQuestComplete(string id) =>
+            DeNelle.Core.Quests.QuestService.Instance != null && DeNelle.Core.Quests.QuestService.Instance.IsCompleted(id);
     }
 }

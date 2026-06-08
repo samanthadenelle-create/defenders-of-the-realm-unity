@@ -1,0 +1,50 @@
+// =============================================================================
+// Mother Wren — Mill & Granary.  Questline: "Full Bellies, Full Ranks" (vendor.granary)
+// Keystone: the Full Granary.  Teaches Food→Population, workers, offline accrual.
+// =============================================================================
+title: TalkToGranary
+---
+<<if $q_granary_stage == 0>>
+    Mother Wren: Empty bellies, empty walls, dearie. No one stands a watch on an empty stomach.
+    -> Let me help the mill.
+        Mother Wren: Get my mill turning and feed the folk — full bellies make full ranks.
+        <<set $q_granary_stage = 1>>
+        <<command: StartQuest vendor.granary>>
+        Mother Wren: That's the way. Build me up and we'll all eat.
+    -> Just trade food.
+        <<command: OpenShop "granary">>
+<<elseif $q_granary_stage == 1>>
+    Mother Wren: Is the mill turning again?
+    -> The mill's restored.
+        <<command: AdvanceQuest vendor.granary>>
+        <<set $q_granary_stage = 2>>
+        Mother Wren: Flour on the air — bless you. Now feed the folk 'til the village grows. Reach the next population mark and you'll see the gatherers move quicker.
+    -> Not yet.
+        Mother Wren: A cold mill feeds no one. Hop to it.
+<<elseif $q_granary_stage == 2>>
+    Mother Wren: Has the village grown? More mouths, more hands.
+    -> Population's up.
+        <<command: AdvanceQuest vendor.granary>>
+        <<set $q_granary_stage = 3>>
+        Mother Wren: Then put those hands to work — send folk to a gathering node and let it fill while you're off adventuring. Idle hands and all that.
+    -> Not yet.
+        Mother Wren: Feed them and they'll come, dearie.
+<<elseif $q_granary_stage == 3>>
+    Mother Wren: Are the workers earning their keep at the nodes?
+    -> The node's running itself.
+        <<command: AdvanceQuest vendor.granary>>
+        <<command: GiveKeystone "FullGranary">>
+        <<set $q_granary_stage = 9>>
+        Mother Wren: Then take the Full Granary, with my love. The ranks are fed and the stores brim even while you sleep. Warden Alric can raise a proper village on full bellies now.
+    -> Not yet.
+        Mother Wren: Send them out, they won't bite.
+<<else>>
+    Mother Wren: The Granary-keeper returns. Bellies are full, ranks are full. What do you need?
+    -> Trade food.
+        <<command: OpenShop "granary">>
+    -> Upgrade the mill.
+        <<command: OpenUpgrade "granary">>
+    -> Nothing today.
+        Mother Wren: Eat something, dearie.
+<<endif>>
+===

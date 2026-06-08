@@ -1,14 +1,59 @@
+// =============================================================================
+// Dame Halvard — Armorer.  Questline: "Shields of the Fallen" (vendor.armorer)
+// Keystone: the Oathshield.  Teaches armor tiers + defense waves; rescue hook (Grom).
+// Cross-vendor gate: reforging needs Borin's forge lit (vendor.forge past stage 1).
+// =============================================================================
 title: TalkToArmorer
 ---
-The armorer's shop. I can help with protection.
--> Browse wares (buy / sell gear).
-    <<command: OpenShop "armorer">>
--> Upgrade my armor.
-    <<command: OpenUpgrade "armorer">>
--> Craft some gear.
-    <<command: OpenCraft "armorer">>
--> Manage my equipment.
-    <<command: OpenEquip>>
--> That's all.
-    Stay safe out there.
+<<if $q_armorer_stage == 0>>
+    Halvard: Stand straight. That padding won't stop an orc's first swing, let alone the second.
+    -> Can you plate me proper?
+        Halvard: I can — if you find me salvage. There's a fallen garrison's gear out past the wall. Bring it back; don't bring back their fate.
+        <<set $q_armorer_stage = 1>>
+        <<command: StartQuest vendor.armorer>>
+        Halvard: "Shields of the Fallen." Clear a camp and recover what's left of them.
+    -> Just show me your wares.
+        <<command: OpenShop "armorer">>
+<<elseif $q_armorer_stage == 1>>
+    Halvard: Did you recover the garrison salvage?
+    -> Got it.
+        <<command: AdvanceQuest vendor.armorer>>
+        <<set $q_armorer_stage = 2>>
+        Halvard: Good steel under the rust. Now — reforge this plate at Borin's forge. If his fire's not lit yet, light a fire under HIM first.
+    -> Not yet.
+        Halvard: Then the wall's still your only armor. Hurry.
+<<elseif $q_armorer_stage == 2>>
+    <<if $q_forge_stage >= 2>>
+        Halvard: Is the plate reforged at the forge?
+        -> It's reforged.
+            <<command: AdvanceQuest vendor.armorer>>
+            <<set $q_armorer_stage = 3>>
+            Halvard: Then wear it and hold the line — survive a full defense wave in it. Plate's only trust you've tested.
+        -> Not yet.
+            Halvard: Borin's fire is lit. No excuses.
+    <<else>>
+        Halvard: Borin's forge is still cold — I can't reforge plate without it. Go relight the Last Ember first.
+    <<endif>>
+<<elseif $q_armorer_stage == 3>>
+    Halvard: Did the plate hold the line?
+    -> The wave broke on it.
+        <<command: AdvanceQuest vendor.armorer>>
+        <<command: GiveKeystone "Oathshield">>
+        <<set $q_armorer_stage = 9>>
+        Halvard: Then the Oathshield is yours, and Halvard's Bulwark stands with the wall. <i>She pauses.</i> That garrison — it was Grom's old company. If any survived, they'd be in the Frost Peaks. He'd want to know.
+    -> Not yet.
+        Halvard: Then go bleed for it like the rest of us did.
+<<else>>
+    Halvard: Oathshield-bearer. The walls are stronger for you. What do you need?
+    -> Browse armor (buy / sell).
+        <<command: OpenShop "armorer">>
+    -> Upgrade my armor.
+        <<command: OpenUpgrade "armorer">>
+    -> Craft some gear.
+        <<command: OpenCraft "armorer">>
+    -> Manage my equipment.
+        <<command: OpenEquip>>
+    -> That's all.
+        Halvard: Stay armored.
+<<endif>>
 ===

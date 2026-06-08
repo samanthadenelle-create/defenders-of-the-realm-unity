@@ -47,4 +47,21 @@ tags: system
 <<declare $elowenFreed = false>>
 <<declare $sennaFreed = false>>
 <<declare $varenFreed = false>>
+
+// — WO-291 Vendor questline stage trackers (the "stemming" mechanic) —
+// Each vendor's Talk node reads its $q_<vendor>_stage to show Stranger(0)→Hook(1)→
+// InProgress(2..n)→Bonded(END=9). Persisted via Yarn VariableStorage; the REAL
+// quest ledger (StartQuest/AdvanceQuest verbs → QuestService) is source of truth,
+// these mirror it for cheap stage-aware branching. $villageLevel gates Stage-1 hooks.
+<<declare $villageLevel = 1>>
+<<declare $q_forge_stage = 0>>
+<<declare $q_armorer_stage = 0>>
+<<declare $q_lumber_stage = 0>>
+<<declare $q_granary_stage = 0>>
+<<declare $q_jeweler_stage = 0>>
+<<declare $q_market_stage = 0>>
+<<declare $q_inn_stage = 0>>
+<<declare $q_stable_stage = 0>>
+<<declare $q_steward_stage = 0>>
+<<declare $sableChoiceReported = false>>
 ===

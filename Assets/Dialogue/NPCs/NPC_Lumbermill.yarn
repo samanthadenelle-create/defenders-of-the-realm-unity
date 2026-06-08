@@ -1,0 +1,50 @@
+// =============================================================================
+// Old Pell — Lumbermill.  Questline: "Roots Run Deep" (vendor.lumbermill)
+// Keystone: the Heartwood Sapling.  Teaches harvest sites + terrain restoration.
+// =============================================================================
+title: TalkToLumbermill
+---
+<<if $q_lumber_stage == 0>>
+    Old Pell: Used to be I'd fell a tree and two'd grow back. Now the wood comes up grey. The forest's sick, same as the Heart.
+    -> Can I help the grove?
+        Old Pell: Clear the blight off my old grove in the Verdant Forest and I'll get the saws singing again.
+        <<set $q_lumber_stage = 1>>
+        <<command: StartQuest vendor.lumbermill>>
+        Old Pell: "Roots Run Deep," my grandmother called it. Go on, then.
+    -> Just trade wood.
+        <<command: OpenShop "lumbermill">>
+<<elseif $q_lumber_stage == 1>>
+    Old Pell: Is the grove cleared of the grey rot?
+    -> The grove's clean.
+        <<command: AdvanceQuest vendor.lumbermill>>
+        <<set $q_lumber_stage = 2>>
+        Old Pell: Saws are singing again, hear that? Now — carry a sapling from the Heart of Elarion and plant it in the bare patch. New roots from the old.
+    -> Not yet.
+        Old Pell: Grey wood splinters wrong. Mind your hands out there.
+<<elseif $q_lumber_stage == 2>>
+    Old Pell: Did you plant the Heart's sapling?
+    -> It's in the ground.
+        <<command: AdvanceQuest vendor.lumbermill>>
+        <<set $q_lumber_stage = 3>>
+        Old Pell: Then guard it through the night-raid. Young roots don't survive an orc's torch alone.
+    -> Not yet.
+        Old Pell: Carry it gentle. That sapling's a piece of the Heart itself.
+<<elseif $q_lumber_stage == 3>>
+    Old Pell: Did the sapling live through the night?
+    -> It stands.
+        <<command: AdvanceQuest vendor.lumbermill>>
+        <<command: GiveKeystone "HeartwoodSapling">>
+        <<set $q_lumber_stage = 9>>
+        Old Pell: Then take the Heartwood Sapling, and my thanks. The saws run faster now, and the forest's coming back green where you walked. Mother Wren'll want to hear it — full forests make full fields.
+    -> Not yet.
+        Old Pell: Don't let it burn. Go.
+<<else>>
+    Old Pell: The Heartwood-bearer. The grove's yours as much as mine now. What'll you have?
+    -> Trade wood.
+        <<command: OpenShop "lumbermill">>
+    -> Upgrade the lumbermill.
+        <<command: OpenUpgrade "lumbermill">>
+    -> Nothing today.
+        Old Pell: Mind the saplings.
+<<endif>>
+===

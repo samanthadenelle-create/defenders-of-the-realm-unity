@@ -1,26 +1,60 @@
+// =============================================================================
+// Borin Emberhand — Blacksmith / Forge.  Questline: "The Last Ember" (vendor.forge)
+// Keystone: the Emberbrand.  Teaches weapon crafting + the Iron economy.
+// Stage-aware Talk (the "stemming" mechanic): $q_forge_stage 0→1→2→3→9(bonded).
+// Quest verbs (StartQuest/AdvanceQuest/GiveKeystone) come from NPCCommandBridge
+// (WO-290); shop/craft/equip from the existing vendor verbs.
+// =============================================================================
 title: TalkToForge
 ---
-<<if $firstForgeTalk is not true>>
-<<set $firstForgeTalk = true>>
-Ah, a new face at the forge. I can teach you to craft basic weapons if you bring the iron and wood.
--> Show me how to craft a sword.
-    <<command: LearnRecipe "basic_sword">>
-    Good. Bring the materials and I'll forge it for you. Use the workshop.
-    -> Open the forge now.
-        <<command: OpenCraft "forge">>
-    -> Maybe later.
-        Come back when you're ready.
+<<if $q_forge_stage == 0>>
+    Borin: Hmph. A hero with a starter blade. That iron's soft as cheese — and the good ore's gone bad since the Heart started to dim.
+    -> What's wrong with the ore?
+        Borin: Aether-rot. Crept in from the west when the Heart dimmed. My forge has been cold a week for want of clean fuel.
+    -> Can you forge me something better?
+        Borin: Not 'til the forge is lit. Bring me wood and iron and we'll talk about a real weapon.
+        <<set $q_forge_stage = 1>>
+        <<command: StartQuest vendor.forge>>
+        Borin: "The Last Ember," I'm calling it. Get me that fuel.
+    -> Just browse your wares.
+        <<command: OpenShop "forge">>
+<<elseif $q_forge_stage == 1>>
+    Borin: Back already? Did you bring the wood and iron to relight the forge?
+    -> Here's your fuel.
+        <<command: AdvanceQuest vendor.forge>>
+        <<set $q_forge_stage = 2>>
+        Borin: <i>The forge roars to life.</i> Now THAT'S a sound I've missed. Next: bring me one flawless Aether Crystal to quench the first true blade.
+    -> Not yet.
+        Borin: Then don't waste my heat. Off with you.
+<<elseif $q_forge_stage == 2>>
+    Borin: Got that flawless crystal? A blade's only as true as what cools it.
+    -> Quench it.
+        <<command: AdvanceQuest vendor.forge>>
+        <<set $q_forge_stage = 3>>
+        Borin: <i>Steam hisses.</i> She's perfect. But steel's only proven in the field — go clear the Stonebelly raid at the west gate, then bring her back to me.
+    -> Still hunting one.
+        Borin: The flawless ones surface when the veil's thin. Keep your eyes open.
+<<elseif $q_forge_stage == 3>>
+    Borin: Did the blade hold against the trolls?
+    -> The west gate's clear.
+        <<command: AdvanceQuest vendor.forge>>
+        <<command: GiveKeystone "Emberbrand">>
+        <<set $q_forge_stage = 9>>
+        Borin: Then it's done — the Emberbrand is yours, and the Last Ember burns again. <i>He lowers his voice.</i> That ore wasn't soured by chance. The rot traces back to the Stone Mountains. Someone's fouling it on purpose.
+        Borin: Tell Warden Alric the forge stands ready. And mind the Mountains.
+    -> Not yet.
+        Borin: Then go earn the blade.
 <<else>>
-Back for more? The forge is hot.
--> Craft a basic sword.
-    <<command: OpenCraft "forge">>
--> Browse the forge wares (buy/sell).
-    <<command: OpenShop "forge">>
--> Equip what I have.
-    <<command: OpenEquip>>
--> Upgrade my gear instead.
-    <<command: OpenUpgrade "armorer">>
--> Never mind.
-    Safe travels.
+    Borin: The Emberbrand-bearer returns. Forge is hot — what'll it be?
+    -> Craft a weapon.
+        <<command: OpenCraft "forge">>
+    -> Browse the forge wares.
+        <<command: OpenShop "forge">>
+    -> Upgrade my gear.
+        <<command: OpenUpgrade "forge">>
+    -> Equip what I have.
+        <<command: OpenEquip>>
+    -> Nothing today.
+        Borin: Then keep that edge sharp.
 <<endif>>
 ===

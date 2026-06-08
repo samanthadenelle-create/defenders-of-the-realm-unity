@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "quests": [
     {
       "id": "elarion.welcome",
@@ -51,6 +51,250 @@
           "reward": { "crystals": 25, "food": 0, "magic": 0, "grantItemId": "" },
           "requiresFlag": "",
           "grantsKeystone": false
+        }
+      ]
+    },
+
+    {
+      "id": "vendor.forge",
+      "title": "The Last Ember",
+      "stages": [
+        {
+          "stageId": "relight-forge",
+          "objectiveText": "Bring Borin Emberhand wood and iron to relight the forge.",
+          "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
+          "requiresFlag": "",
+          "grantsKeystone": false
+        },
+        {
+          "stageId": "quench-blade",
+          "objectiveText": "Bring a flawless Aether Crystal to quench the first true blade.",
+          "reward": { "crystals": 0, "food": 0, "magic": 10, "grantItemId": "" },
+          "requiresFlag": "",
+          "grantsKeystone": false
+        },
+        {
+          "stageId": "field-test",
+          "objectiveText": "Field-test the new blade: clear the Stonebelly raid at the west gate.",
+          "reward": { "crystals": 75, "food": 0, "magic": 0, "grantItemId": "" },
+          "requiresFlag": "",
+          "grantsKeystone": true
+        }
+      ]
+    },
+    {
+      "id": "vendor.armorer",
+      "title": "Shields of the Fallen",
+      "stages": [
+        {
+          "stageId": "recover-salvage",
+          "objectiveText": "Recover garrison salvage from a cleared enemy camp.",
+          "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
+          "requiresFlag": "",
+          "grantsKeystone": false
+        },
+        {
+          "stageId": "reforge-plate",
+          "objectiveText": "Reforge the plate at Borin's now-lit forge.",
+          "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
+          "requiresFlag": "",
+          "grantsKeystone": false
+        },
+        {
+          "stageId": "hold-the-line",
+          "objectiveText": "Hold the line: survive a timed defense in the new armor.",
+          "reward": { "crystals": 75, "food": 0, "magic": 0, "grantItemId": "" },
+          "requiresFlag": "",
+          "grantsKeystone": true
+        }
+      ]
+    },
+    {
+      "id": "vendor.lumbermill",
+      "title": "Roots Run Deep",
+      "stages": [
+        {
+          "stageId": "clear-grove",
+          "objectiveText": "Clear the blight from Old Pell's grove in the Verdant Forest.",
+          "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
+          "requiresFlag": "",
+          "grantsKeystone": false
+        },
+        {
+          "stageId": "plant-sapling",
+          "objectiveText": "Carry a sapling from the Heart of Elarion and plant it.",
+          "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
+          "requiresFlag": "",
+          "grantsKeystone": false
+        },
+        {
+          "stageId": "defend-sapling",
+          "objectiveText": "Defend the sapling through one night-raid.",
+          "reward": { "crystals": 50, "food": 30, "magic": 0, "grantItemId": "" },
+          "requiresFlag": "",
+          "grantsKeystone": true
+        }
+      ]
+    },
+    {
+      "id": "vendor.granary",
+      "title": "Full Bellies, Full Ranks",
+      "stages": [
+        {
+          "stageId": "restore-mill",
+          "objectiveText": "Restore food flow: build or upgrade Mother Wren's mill.",
+          "reward": { "crystals": 0, "food": 40, "magic": 0, "grantItemId": "" },
+          "requiresFlag": "",
+          "grantsKeystone": false
+        },
+        {
+          "stageId": "grow-population",
+          "objectiveText": "Grow the population to the next threshold.",
+          "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
+          "requiresFlag": "",
+          "grantsKeystone": false
+        },
+        {
+          "stageId": "assign-workers",
+          "objectiveText": "Assign workers to a node and let it accrue while away.",
+          "reward": { "crystals": 50, "food": 50, "magic": 0, "grantItemId": "" },
+          "requiresFlag": "",
+          "grantsKeystone": true
+        }
+      ]
+    },
+    {
+      "id": "vendor.jeweler",
+      "title": "Aether's Facet",
+      "stages": [
+        {
+          "stageId": "chase-spawn",
+          "objectiveText": "Chase a rare timed crystal spawn and harvest it before it fades.",
+          "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
+          "requiresFlag": "",
+          "grantsKeystone": false
+        },
+        {
+          "stageId": "cut-heartgem",
+          "objectiveText": "Cut your first heartgem and socket it.",
+          "reward": { "crystals": 0, "food": 0, "magic": 15, "grantItemId": "" },
+          "requiresFlag": "",
+          "grantsKeystone": false
+        },
+        {
+          "stageId": "broker-choice",
+          "objectiveText": "Decide what to do about Sable's outside broker.",
+          "reward": { "crystals": 75, "food": 0, "magic": 0, "grantItemId": "" },
+          "requiresFlag": "",
+          "grantsKeystone": true
+        }
+      ]
+    },
+    {
+      "id": "vendor.market",
+      "title": "The Glimmer Road",
+      "stages": [
+        {
+          "stageId": "clear-road",
+          "objectiveText": "Clear and escort the trade road to the next outpost.",
+          "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
+          "requiresFlag": "",
+          "grantsKeystone": false
+        },
+        {
+          "stageId": "establish-route",
+          "objectiveText": "Establish a steady trade route for a Glimmer trickle.",
+          "reward": { "crystals": 50, "food": 0, "magic": 0, "grantItemId": "" },
+          "requiresFlag": "",
+          "grantsKeystone": false
+        },
+        {
+          "stageId": "expand-network",
+          "objectiveText": "Expand the network to unlock Brom's rumor board.",
+          "reward": { "crystals": 75, "food": 0, "magic": 0, "grantItemId": "" },
+          "requiresFlag": "",
+          "grantsKeystone": true
+        }
+      ]
+    },
+    {
+      "id": "vendor.inn",
+      "title": "Last Call",
+      "stages": [
+        {
+          "stageId": "defend-inn",
+          "objectiveText": "Defend Brom's inn during a surprise raid.",
+          "reward": { "crystals": 50, "food": 30, "magic": 0, "grantItemId": "" },
+          "requiresFlag": "",
+          "grantsKeystone": false
+        },
+        {
+          "stageId": "rally-point",
+          "objectiveText": "Raise the inn as a rally and respawn point.",
+          "reward": { "crystals": 50, "food": 0, "magic": 0, "grantItemId": "" },
+          "requiresFlag": "",
+          "grantsKeystone": true
+        }
+      ]
+    },
+    {
+      "id": "vendor.stable",
+      "title": "Wild Hearts",
+      "stages": [
+        {
+          "stageId": "tame-beast",
+          "objectiveText": "Track and tame a wild beast in its region.",
+          "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
+          "requiresFlag": "",
+          "grantsKeystone": false
+        },
+        {
+          "stageId": "train-ability",
+          "objectiveText": "Train a pet ability with Fenn Wildmane.",
+          "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
+          "requiresFlag": "",
+          "grantsKeystone": false
+        },
+        {
+          "stageId": "put-to-work",
+          "objectiveText": "Assign the pet to auto-harvest a node or guard an outpost.",
+          "reward": { "crystals": 50, "food": 0, "magic": 0, "grantItemId": "" },
+          "requiresFlag": "",
+          "grantsKeystone": true
+        }
+      ]
+    },
+    {
+      "id": "vendor.steward",
+      "title": "Rebuild Elarion",
+      "stages": [
+        {
+          "stageId": "raise-tier2",
+          "objectiveText": "Raise the village to Tier 2 (Granary + Lumbermill restored).",
+          "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
+          "requiresFlag": "",
+          "grantsKeystone": false
+        },
+        {
+          "stageId": "rearm-walls",
+          "objectiveText": "Re-arm the walls (Forge + Armorer keystones).",
+          "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
+          "requiresFlag": "",
+          "grantsKeystone": false
+        },
+        {
+          "stageId": "rekindle-wards",
+          "objectiveText": "Rekindle the wards (Heartgem + Bonded Beast).",
+          "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
+          "requiresFlag": "",
+          "grantsKeystone": false
+        },
+        {
+          "stageId": "awaken-spire",
+          "objectiveText": "Awaken the Spire and march on the Orc Necromancer.",
+          "reward": { "crystals": 250, "food": 0, "magic": 50, "grantItemId": "" },
+          "requiresFlag": "",
+          "grantsKeystone": true
         }
       ]
     }
