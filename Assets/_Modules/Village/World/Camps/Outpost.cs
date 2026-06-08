@@ -72,14 +72,21 @@ namespace DeNelle.Village.World.Camps
             }
         }
 
-        /// <summary>Configure + build the primitive visual. Called by ClaimableCamp.</summary>
-        public void Init(OutpostType type, RegionId region, int threat)
+        /// <summary>
+        /// Configure the outpost. By default builds the primitive placeholder visual;
+        /// pass <paramref name="buildPrimitiveVisual"/>=false when the ClaimableCamp is
+        /// generating a REAL catalog-piece fortification (OutpostFoundationGenerator)
+        /// on the same root — the foundation IS the visual then, and the placeholder
+        /// post/cap would just clutter the centre. Harvest + IDamageableStructure logic
+        /// is unchanged either way.
+        /// </summary>
+        public void Init(OutpostType type, RegionId region, int threat, bool buildPrimitiveVisual = true)
         {
             Type = type == OutpostType.None ? OutpostType.Watchtower : type;
             Region = region;
             ThreatLevel = threat;
             _hp = MaxHp;
-            BuildVisual();
+            if (buildPrimitiveVisual) BuildVisual();
         }
 
         /// <summary>Which wallet field this outpost feeds.</summary>

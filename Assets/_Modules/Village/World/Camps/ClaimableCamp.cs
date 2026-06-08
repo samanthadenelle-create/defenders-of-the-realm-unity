@@ -20,9 +20,12 @@
 // Canon: the village is Elarion (never Avalon). ASCII-only runtime strings.
 // =============================================================================
 using System;
+using System.Collections.Generic;
+using System.Text;
 using UnityEngine;
 using DeNelle.Core.World;
 using DeNelle.Core.State;
+using DeNelle.Village.World;
 
 namespace DeNelle.Village.World.Camps
 {
@@ -86,6 +89,16 @@ namespace DeNelle.Village.World.Camps
         private const string PrefClearedKey = "dotr-camp-cleared-";   // +CampId -> "1"
         private const string PrefClaimedKey = "dotr-camp-claimed-";   // +CampId -> outpost type int
         private const string PrefSecuredKey = "dotr-camp-secured-";   // +CampId -> "1" (defended)
+        private const string PrefRecipeKey  = "dotr-camp-recipe-";    // +CampId -> serialized fortification recipe
+
+        // -- Outpost fortification (WO: claim -> generate a WOOD outpost foundation) --
+        // The generated catalog-piece fortification recipe (perimeter walls + corner
+        // towers + one gate) in LOCAL cell coords. Pure data; persisted to PlayerPrefs
+        // so the same fortification re-Realizes on reload (no village-grid involvement).
+        [Tooltip("Fortification footprint in grid cells (W x D). cellSize = 3 m.")]
+        private const int FortGridWidth = 5;
+        private const int FortGridDepth = 5;
+        private List<PlacedStructureData> _recipe;
 
         /// <summary>Called by CampSystem immediately after AddComponent.</summary>
         public void Configure(RegionId region, int threat, int killsRequired, float radius)
@@ -95,6 +108,36 @@ namespace DeNelle.Village.World.Camps
             KillsRequired = Mathf.Max(1, killsRequired);
             CampRadius = Mathf.Max(1f, radius);
             CampId = "camp_" + region;
+        }
+
+        // WO-111: Basic enemy outpost extension (clear -> boss -> claim rewards as
+        // progression content, additive scene friendly for mobile).
+        // Spawn Quaternius enemy-themed buildings (low-poly from catalog).
+        // On boss clear: Economy.Grant (scaled by danger) + loot.
+        public bool IsEnemyOutpost { get; private set; }
+
+        public void ConfigureAsEnemyOutpost(RegionId region, int threat)
+        {
+            IsEnemyOutpost = true;
+            // Quaternius for enemy camp buildings (see docs/QUATERNIUS_NOTES.md;
+            // use Modules/Prefabs for huts/tents as cover).
+            SpawnQuaterniusEnemyCamp();
+            // Boss spawn hooked in defense clear (extend CampGuards or wave).
+            // Rewards: Economy.Grant on boss death.
+        }
+
+        private void SpawnQuaterniusEnemyCamp()
+        {
+            // Demo spawn; real load Quaternius enemy/medieval props.
+            for (int i = 0; i < 3; i++)
+            {
+                var p = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                p.name = "QuaterniusEnemyProp";
+                p.transform.SetParent(transform, false);
+                p.transform.localPosition = new Vector3(i * 5 - 5, 1, 3);
+                p.transform.localScale = Vector3.one * 3f;
+            }
+            Debug.Log("[ClaimableCamp] WO-111 enemy outpost props (Quaternius).");
         }
 
         private void Start()
@@ -274,8 +317,23 @@ namespace DeNelle.Village.World.Camps
             go.transform.SetParent(transform, false);
             go.transform.localPosition = Vector3.zero;
 
+            // Suppress the primitive post/cap placeholder — the generated fortification
+            // IS the visual now. Harvest + IDamageableStructure logic is untouched.
             _outpost = go.AddComponent<Outpost>();
-            _outpost.Init(type, Region, ThreatLevel);
+            _outpost.Init(type, Region, ThreatLevel, buildPrimitiveVisual: false);
+
+            // FIRST SLICE of the outpost->raid->loot loop: generate a REAL catalog-piece
+            // WOOD fortification (perimeter walls + corner towers + one gate) from the
+            // SAME StructureFactory.Create path the village build mode uses, and persist
+            // the recipe so it re-Realizes on reload. LOCAL cell math against this root —
+            // never the village-scoped PlacementGrid / GameState.BaseLayout.
+            BuildFortification(go.transform, OutpostTier.Wood, persist: true);
+
+            // Attach recruitable hub (small defense grid + Economy-backed troop recruitment
+            // for Tank/DPS/Healer). This gives the "outpost needs better defenses as it scales".
+            var hub = go.AddComponent<OutpostHub>();
+            hub.Region = Region;
+            hub.ThreatLevel = ThreatLevel;
 
             PlayerPrefs.SetString(PrefClaimedKey + CampId, ((int)type).ToString());
             PlayerPrefs.Save();
@@ -286,6 +344,73 @@ namespace DeNelle.Village.World.Camps
             // (A camp already SECURED in a prior session resolves instantly inside Begin.)
             StartDefense();
             return _outpost;
+        }
+
+        // =====================================================================
+        // FORTIFICATION - generate + realize the catalog-piece outpost foundation.
+        // =====================================================================
+
+        // Generate (or restore) the fortification recipe and realize it onto the
+        // outpost root. The surface mask is "everything" (~0) like the sandbox builder;
+        // SeatRootOnSurface ignores triggers so prompt/zone volumes don't catch it.
+        // When persist is true the freshly-generated recipe is saved to PlayerPrefs;
+        // on restore we pass persist:false and reuse the deserialized recipe.
+        private void BuildFortification(Transform outpostRoot, OutpostTier tier, bool persist)
+        {
+            if (outpostRoot == null) return;
+
+            if (_recipe == null || _recipe.Count == 0)
+                _recipe = OutpostFoundationGenerator.GenerateFootprintRecipe(FortGridWidth, FortGridDepth, tier);
+
+            OutpostFoundationGenerator.Realize(_recipe, outpostRoot, ~0);
+
+            if (persist)
+            {
+                PlayerPrefs.SetString(PrefRecipeKey + CampId, SerializeRecipe(_recipe));
+                PlayerPrefs.Save();
+            }
+        }
+
+        // Compact PlayerPrefs serialization of the recipe (PlacedStructureData is Core).
+        // One record per ';' as "itemId,cellX,cellZ,yawSteps,level,yawOffset". Kept tiny
+        // + dependency-free (no JSON lib) since this is the camp's existing PlayerPrefs lane.
+        private static string SerializeRecipe(IReadOnlyList<PlacedStructureData> recipe)
+        {
+            if (recipe == null || recipe.Count == 0) return string.Empty;
+            var sb = new StringBuilder();
+            for (int i = 0; i < recipe.Count; i++)
+            {
+                var r = recipe[i];
+                if (i > 0) sb.Append(';');
+                sb.Append(r.itemId).Append(',')
+                  .Append(r.cellX).Append(',')
+                  .Append(r.cellZ).Append(',')
+                  .Append(r.yawSteps).Append(',')
+                  .Append(r.level).Append(',')
+                  .Append(r.yawOffset.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            }
+            return sb.ToString();
+        }
+
+        private static List<PlacedStructureData> DeserializeRecipe(string raw)
+        {
+            var list = new List<PlacedStructureData>();
+            if (string.IsNullOrEmpty(raw)) return list;
+            var records = raw.Split(';');
+            foreach (var rec in records)
+            {
+                if (string.IsNullOrEmpty(rec)) continue;
+                var f = rec.Split(',');
+                if (f.Length < 6) continue;
+                if (!int.TryParse(f[1], out int cx)) continue;
+                if (!int.TryParse(f[2], out int cz)) continue;
+                if (!int.TryParse(f[3], out int yaw)) continue;
+                if (!int.TryParse(f[4], out int lvl)) continue;
+                float.TryParse(f[5], System.Globalization.NumberStyles.Float,
+                               System.Globalization.CultureInfo.InvariantCulture, out float yoff);
+                list.Add(new PlacedStructureData(f[0], cx, cz, yaw, lvl, yoff));
+            }
+            return list;
         }
 
         // =====================================================================
@@ -313,6 +438,12 @@ namespace DeNelle.Village.World.Camps
             PlayerPrefs.SetString(PrefSecuredKey + CampId, "1");
             PlayerPrefs.Save();
             Debug.Log($"[ClaimableCamp] {CampId} SECURED - counterattack repelled.");
+
+            // WO-106: tell the Economy class (EconomyService) so TerritoryMultiplier
+            // and SecuredOutpostCount update for difficulty scaling + passive power.
+            // The multiplier is then available to wave/enemy systems without new deps.
+            EconomyService.Instance?.OnOutpostSecured();
+
             OnDefended?.Invoke(this);
         }
 
@@ -348,7 +479,13 @@ namespace DeNelle.Village.World.Camps
                     go.transform.SetParent(transform, false);
                     go.transform.localPosition = Vector3.zero;
                     _outpost = go.AddComponent<Outpost>();
-                    _outpost.Init(type, Region, ThreatLevel);
+                    _outpost.Init(type, Region, ThreatLevel, buildPrimitiveVisual: false);
+
+                    // Re-Realize the persisted catalog-piece fortification (or regenerate
+                    // it if no recipe was saved, e.g. a pre-feature save). persist:false on
+                    // restore — the recipe is already stored; reuse the deserialized one.
+                    _recipe = DeserializeRecipe(PlayerPrefs.GetString(PrefRecipeKey + CampId, null));
+                    BuildFortification(go.transform, OutpostTier.Wood, persist: _recipe.Count == 0);
 
                     // Restored with an outpost but NOT yet secured -> the counterattack
                     // is still pending; re-arm it so the loop can complete after reload.
