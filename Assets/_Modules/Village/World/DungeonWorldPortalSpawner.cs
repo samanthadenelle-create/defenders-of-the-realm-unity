@@ -298,12 +298,18 @@ namespace DeNelle.Village.World
         private Renderer[] BuildArch(Transform parent, float h, Color accent)
         {
             Shader lit = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Sprites/Default");
+            if (lit == null)
+                Debug.LogWarning("[DungeonWorldPortals] URP/Lit shader not found — arch will use the fallback material.");
             Material mat = lit != null ? new Material(lit) : null;
             if (mat != null)
             {
                 mat.EnableKeyword("_EMISSION");
-                if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", accent);
-                if (mat.HasProperty("_EmissionColor")) mat.SetColor("_EmissionColor", accent * 0.6f);
+                // DEF-94: arch reads as an arcane-violet portal (per-dungeon accent kept
+                // as a subtle tint), NOT a flat pastel AccentColor frame. WO-272's glow
+                // layers on top of this base.
+                Color archBase = PortalVFXController.ArchBaseColor(accent);
+                if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", archBase);
+                if (mat.HasProperty("_EmissionColor")) mat.SetColor("_EmissionColor", PortalVFXController.ArchEmissionColor(accent));
             }
 
             var list = new List<Renderer>(3);

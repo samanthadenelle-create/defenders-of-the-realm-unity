@@ -50,6 +50,36 @@ namespace DeNelle.Village
         private bool _active = false;
         private static readonly int EmissionColor = Shader.PropertyToID("_EmissionColor");
 
+        // ── DEF-94: canonical portal arch colour ─────────────────────────────────
+        // The portal arch must read as an ARCANE / magical gateway — a deep violet —
+        // NOT the soft pastel DungeonDef.AccentColor (peach / pale-green), which was
+        // being used as the arch BASE colour and made portals render the wrong hue.
+        // AccentColor is the per-dungeon IDENTITY cue, so we keep it as a subtle tint
+        // mixed into the violet (and on the emission), preserving identity while the
+        // structure itself reads unmistakably as a portal. WO-272's additive glow
+        // layers on top of this base.
+        public static readonly Color ArcaneViolet = new Color(0.32f, 0.06f, 0.78f);
+
+        /// <summary>
+        /// Canonical portal-arch base colour: arcane violet with a light wash of the
+        /// per-dungeon <paramref name="accent"/> so each portal keeps its identity cue
+        /// without losing the magical-gateway read. Used by every portal arch builder
+        /// (world spawner + village entrance bootstrap) so they all agree.
+        /// </summary>
+        public static Color ArchBaseColor(Color accent)
+        {
+            // 80% arcane violet, 20% accent — the violet dominates so the portal never
+            // reads as a plain tan/green frame; the accent stays a recognisable hint.
+            return Color.Lerp(ArcaneViolet, accent, 0.20f);
+        }
+
+        /// <summary>Per-dungeon emissive accent for the arch — accent-led but kept
+        /// dim so the additive WO-272 glow (added later) is what actually "glows".</summary>
+        public static Color ArchEmissionColor(Color accent)
+        {
+            return Color.Lerp(ArcaneViolet, accent, 0.5f) * 0.45f;
+        }
+
         // ── DEF-100 self-bootstrap + proximity state ─────────────────────────────
         private Transform _hero;
         private float _nextHeroRefresh;
@@ -200,7 +230,7 @@ namespace DeNelle.Village
                 return;
             }
 
-            Color violet = new Color(0.35f, 0f, 0.8f);
+            Color violet = ArcaneViolet; // DEF-94: single canonical arcane-violet source
             int fixedCount = 0;
 
             foreach (var r in GetComponentsInChildren<MeshRenderer>(true))

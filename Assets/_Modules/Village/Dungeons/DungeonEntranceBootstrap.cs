@@ -115,8 +115,21 @@ namespace DeNelle.Village
             {
                 // Shared per-entrance URP material (emissive on, so the MPB accent reads).
                 Shader lit = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Sprites/Default");
+                if (lit == null)
+                    Debug.LogWarning("[DungeonEntranceBootstrap] URP/Lit shader not found — doorway will use the fallback material.");
                 Material mat = lit != null ? new Material(lit) : null;
-                if (mat != null) mat.EnableKeyword("_EMISSION");
+                if (mat != null)
+                {
+                    mat.EnableKeyword("_EMISSION");
+                    // DEF-94: the doorway frame reads as an arcane-violet portal base
+                    // (per-dungeon accent kept as a subtle tint), not a flat pastel
+                    // AccentColor frame. DungeonEntrance still applies its own MPB
+                    // accent on top for the active/identity cue; this sets the BASE so
+                    // an un-accented frame (or a frame whose MPB hasn't run) is violet.
+                    Color archBase = PortalVFXController.ArchBaseColor(def.AccentColor);
+                    if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", archBase);
+                    if (mat.HasProperty("_EmissionColor")) mat.SetColor("_EmissionColor", PortalVFXController.ArchEmissionColor(def.AccentColor));
+                }
                 BuildBox(root.transform, new Vector3(-0.9f, h * 0.5f, 0f), new Vector3(0.3f, h, 0.3f), mat);          // left post
                 BuildBox(root.transform, new Vector3(0.9f, h * 0.5f, 0f),  new Vector3(0.3f, h, 0.3f), mat);          // right post
                 BuildBox(root.transform, new Vector3(0f, h + 0.15f, 0f),   new Vector3(2.1f, 0.3f, 0.3f), mat);       // lintel

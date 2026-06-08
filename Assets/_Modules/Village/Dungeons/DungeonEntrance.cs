@@ -72,13 +72,20 @@ namespace DeNelle.Village
             }
             if (_def == null || _accentRenderers == null) return;
 
+            // DEF-94: the doorway must read as an arcane-violet PORTAL, not a flat
+            // pastel AccentColor frame. AccentColor stays the per-dungeon identity cue,
+            // but it is mixed into the canonical violet base (and a dim emissive accent)
+            // rather than painting the whole doorway its raw colour. WO-272's additive
+            // glow layers on top of this base.
+            Color archBase     = PortalVFXController.ArchBaseColor(_def.AccentColor);
+            Color archEmission = PortalVFXController.ArchEmissionColor(_def.AccentColor);
             _mpb ??= new MaterialPropertyBlock();
             foreach (var r in _accentRenderers)
             {
                 if (r == null) continue;
                 r.GetPropertyBlock(_mpb);
-                _mpb.SetColor(BaseColorId, _def.AccentColor);
-                _mpb.SetColor(EmissionColorId, _def.AccentColor);
+                _mpb.SetColor(BaseColorId, archBase);
+                _mpb.SetColor(EmissionColorId, archEmission);
                 r.SetPropertyBlock(_mpb);
             }
         }
