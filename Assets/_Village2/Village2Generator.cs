@@ -209,7 +209,14 @@ public class Village2Generator : MonoBehaviour
         var ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
         ground.name = "Ground";
         ground.transform.SetParent(villageParent, false);
-        ground.transform.position = new Vector3(0f, 0f, 0f);
+        // WO-333 (z-fighting fix): seat this plane 5 cm BELOW Y=0, not flush on it.
+        // In the combined additive world the OuterWorld ExteriorTerrain is leveled so its
+        // surface sits at exactly Y=0 across the whole village footprint (SeamWeight=1.0 holds
+        // it flat there) — the terrain is the intended visible ground. A coplanar opaque plane
+        // at Y=0 z-fought the terrain over the entire floor (the "shading artifacts"). Dropping
+        // it to -0.05 lets the terrain win the depth test cleanly while this plane still gives
+        // Build Mode its raycast collider and a visible floor when Village2 is opened standalone.
+        ground.transform.position = new Vector3(0f, -0.05f, 0f);
         // Unity's primitive Plane is 10x10 m at scale 1; scale so it spans 2*groundHalfSize metres.
         float s = (groundHalfSize * 2f) / 10f;
         ground.transform.localScale = new Vector3(s, 1f, s);
@@ -221,7 +228,7 @@ public class Village2Generator : MonoBehaviour
         // a ground collider; with none the ray misses and NO ghost ever shows. A flat plane collider at
         // Y=0 is just the floor and does not conflict with the NavMesh bake (NavMesh still owns walkability).
 
-        Debug.Log($"[Village2] Ground plane laid at Y=0 (half-size {groundHalfSize}m) with material '{groundMaterial.name}'.");
+        Debug.Log($"[Village2] Ground plane laid at Y=-0.05 (under the OuterWorld terrain to avoid z-fighting; half-size {groundHalfSize}m) with material '{groundMaterial.name}'.");
     }
 
     private void CreateWalls()

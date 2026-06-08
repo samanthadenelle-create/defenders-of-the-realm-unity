@@ -95,11 +95,12 @@ namespace DeNelle.HUD
             _compassStrip.style.height = CompassHeight;
             _compassStrip.style.left = Length.Percent(50);
             _compassStrip.style.translate = new StyleTranslate(new Translate(-CompassWidth / 2f, 0));
-            // Elarion stone plate with a runic-gold rim — matches the uGUI HUD panels.
-            _compassStrip.style.backgroundColor = ElarionUi.PanelStoneDark;
-            ElarionUi.SetRadius(_compassStrip, ElarionUi.RadiusMd);
-            ElarionUi.SetBorderWidth(_compassStrip, 1.5f);
-            ElarionUi.SetBorderColor(_compassStrip, new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.55f));
+            // SLEEK to match the new uGUI HUD: dark translucent glass + one thin,
+            // faint gold accent border (a hint of Elarion, minimal chrome).
+            _compassStrip.style.backgroundColor = new Color(0.06f, 0.07f, 0.09f, 0.66f);
+            ElarionUi.SetRadius(_compassStrip, ElarionUi.RadiusSm);
+            ElarionUi.SetBorderWidth(_compassStrip, 1f);
+            ElarionUi.SetBorderColor(_compassStrip, new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.30f));
             _compassStrip.style.alignItems = Align.Center;
             _compassStrip.style.justifyContent = Justify.Center;
             _root.Add(_compassStrip);
