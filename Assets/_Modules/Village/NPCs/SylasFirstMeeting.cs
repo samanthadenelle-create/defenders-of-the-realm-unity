@@ -168,6 +168,23 @@ namespace DeNelle.Village
                 // Let the scene + the companion injector's own spawn settle first.
                 await UniTask.Delay(TimeSpan.FromSeconds(SettleSeconds));
 
+                // WO-238 — prefer the authored Yarn first-meeting node when it's compiled
+                // into the project. The Yarn node IS the recruit (it fires StartQuest +
+                // RecruitCompanion "Ranger" + CompleteQuest through the command bridge, so
+                // the injector still spawns + joins Sylas), and it plays through the shared
+                // tap-to-advance DialogueService runner. We only take this path for the
+                // canonical Sylas (Ranger) meeting; the rare different-class substitution
+                // (player IS the Ranger) keeps the bubble lines below. Mark the one-shot
+                // flag so this standalone beat never replays once Yarn has the meeting.
+                if (ResolveCompanionClass() == HeroClass.Ranger &&
+                    DialogueService.NodeExists("SylasFirstMeeting"))
+                {
+                    DialogueService.Play("SylasFirstMeeting");
+                    MarkSeen();
+                    Debug.Log("[SylasFirstMeeting] Delegated to the authored Yarn node 'SylasFirstMeeting' (recruit fires via the command bridge).");
+                    return;
+                }
+
                 // Make the village's single companion BE Sylas — or, if the player IS
                 // Sylas (Ranger hero), a DIFFERENT companion via the FTUE mapping. The
                 // injector spawns exactly one body that already follows + fights, so

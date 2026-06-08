@@ -133,6 +133,10 @@ namespace DeNelle.Village
             Reg("CompleteQuest", (Action<string>)CmdCompleteQuest);
             Reg("SetQuestFlag",  (Action<string, string>)CmdSetQuestFlag);
             Reg("GiveKeystone",  (Action<string>)CmdGiveKeystone);
+            // WO-238 — companion recruit verb: enrol a companion class into the persisted
+            // party roster (the proven join API, same as ElaraWaveThreeJoin). Fires
+            // PlayerChanged → StoryCompanionInjector spawns the body that follows + fights.
+            Reg("RecruitCompanion", (Action<string>)CmdRecruitCompanion);
             // Yarn functions for branching on keystones (<<if HasKeystone("x")>>).
             ((IActionRegistration)_runner).AddFunction("HasKeystone",  (Func<string, bool>)FnHasKeystone);
             ((IActionRegistration)_runner).AddFunction("KeystoneCount", (Func<int>)FnKeystoneCount);
@@ -470,6 +474,18 @@ namespace DeNelle.Village
         private void CmdCompleteQuest(string id)      => QuestService.Instance?.CompleteQuest(id);
         private void CmdSetQuestFlag(string id, string flag) => QuestService.Instance?.SetFlag(id, flag);
         private void CmdGiveKeystone(string name)     => QuestService.Instance?.GiveKeystone(name);
+
+        // WO-238 — <<command: RecruitCompanion Ranger>>: enrol the companion class into
+        // the persisted party roster via the same join API the wave-3/return joins use.
+        // AddToParty is idempotent (a member already in the party is a no-op) and fires
+        // PlayerChanged, which StoryCompanionInjector listens to → spawns the companion
+        // body (follows + fights) and PartyHudBridge grows the party frame. Null-guarded.
+        private void CmdRecruitCompanion(string companionClass)
+        {
+            if (string.IsNullOrEmpty(companionClass)) return;
+            GameStateService.Instance?.AddToParty(companionClass);
+            Debug.Log($"[DialogueCommandBridge] RecruitCompanion '{companionClass}' → AddToParty.");
+        }
         private static bool FnHasKeystone(string name) => QuestService.Instance != null && QuestService.Instance.HasKeystone(name);
         private static int FnKeystoneCount() => QuestService.Instance != null ? QuestService.Instance.KeystoneCount : 0;
 

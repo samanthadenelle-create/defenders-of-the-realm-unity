@@ -33,6 +33,9 @@ namespace DeNelle.DialogueUI
             reg.AddCommandHandler("CompleteQuest", (System.Action<string>)CmdCompleteQuest);
             reg.AddCommandHandler("SetQuestFlag",  (System.Action<string, string>)CmdSetQuestFlag);
             reg.AddCommandHandler("GiveKeystone",  (System.Action<string>)CmdGiveKeystone);
+            // WO-238 — companion recruit verb (same as the FTUE bridge) so the Sylas
+            // first-meeting node joins the party from EITHER launch path.
+            reg.AddCommandHandler("RecruitCompanion", (System.Action<string>)CmdRecruitCompanion);
             reg.AddFunction("HasKeystone",  (System.Func<string, bool>)FnHasKeystone);
             reg.AddFunction("KeystoneCount", (System.Func<int>)FnKeystoneCount);
 
@@ -129,6 +132,16 @@ namespace DeNelle.DialogueUI
         private void CmdCompleteQuest(string id)      => DeNelle.Core.Quests.QuestService.Instance?.CompleteQuest(id);
         private void CmdSetQuestFlag(string id, string flag) => DeNelle.Core.Quests.QuestService.Instance?.SetFlag(id, flag);
         private void CmdGiveKeystone(string name)     => DeNelle.Core.Quests.QuestService.Instance?.GiveKeystone(name);
+
+        // WO-238 — enrol a companion class into the persisted party roster via the proven
+        // join API (idempotent; fires PlayerChanged → StoryCompanionInjector spawns the
+        // companion body that follows + fights, PartyHudBridge grows the party frame).
+        private void CmdRecruitCompanion(string companionClass)
+        {
+            if (string.IsNullOrEmpty(companionClass)) return;
+            DeNelle.Core.State.GameStateService.Instance?.AddToParty(companionClass);
+            Debug.Log($"[NPCCommandBridge] RecruitCompanion '{companionClass}' → AddToParty.");
+        }
         private static bool FnHasKeystone(string name) =>
             DeNelle.Core.Quests.QuestService.Instance != null && DeNelle.Core.Quests.QuestService.Instance.HasKeystone(name);
         private static int FnKeystoneCount() =>

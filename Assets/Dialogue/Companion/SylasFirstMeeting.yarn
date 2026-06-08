@@ -1,0 +1,96 @@
+// =============================================================================
+// Sylas, Scout of the Reach — the beat-1 companion first-meeting + recruit (WO-238).
+// -----------------------------------------------------------------------------
+// Canon join order (companion roster): Sylas (beat-1) -> Elara (wave 3) -> Grom
+// (first OuterWorld return). This authors the FIRST join as Yarn content so it
+// plays through the shared DialogueService runner (tap/click-to-advance, ClassicRPG
+// presenter) like every other dialogue, and fires the REAL party-join + quest
+// ledger through the command bridges rather than hand-granting.
+//
+// THE RECRUIT (not hand-granted):
+//   <<command: StartQuest companion.sylas>>     -> QuestService ledger (quest opens)
+//   <<command: RecruitCompanion Ranger>>        -> GameStateService.AddToParty("Ranger")
+//                                                  fires PlayerChanged -> StoryCompanionInjector
+//                                                  spawns Sylas's body (follows + fights),
+//                                                  PartyHudBridge grows the party frame.
+//   <<command: SetQuestFlag companion.sylas met>>-> persisted met-flag
+//   <<command: CompleteQuest companion.sylas>>   -> ledger marks the meeting done
+// All four verbs are registered in BOTH DialogueCommandBridge (FTUE host) and
+// NPCCommandBridge (world-NPC host), so this node works from either launch path.
+//
+// $sylasMet (declared in _Declarations.yarn) mirrors the ledger flag for cheap
+// re-entry branching, the same "stemming" pattern the WO-291 vendor pack uses.
+//
+// VOICE (narrative bible): Sylas is a grounded woodland scout — wry, watchful,
+// economical. The Hollow Ones read as grief, not cartoon villains; no fake-archaic
+// speech. He commits to walk WITH the Keeper, on his own terms. ASCII-only.
+// =============================================================================
+title: SylasFirstMeeting
+tags: companion recruit beat1 sylas
+---
+<<if $sylasMet == true>>
+    <<jump SylasGreetAgain>>
+<<endif>>
+
+// --- The encounter: he's already had eyes on you ---
+Sylas: Hold - easy. Keep your hand off that hilt; if I wanted you down you'd not have heard me at all.
+Sylas: I've had eyes on you since the treeline. You're the new Keeper. The Heart's been louder since you came - even out here I felt it stir.
+
+-> Who are you?
+    Sylas: Sylas. Scout of the Reach. I've read these woods longer than the Hollow Ones have walked them.
+    Sylas: I knew the people who gave themselves to that tree. Some of those Echoes were friends. So I keep the wild off the wall, and I don't ask for thanks.
+-> You've been following me.
+    Sylas: Watching. There's a difference, and you'll learn it. A scout who follows gets seen. A scout who watches keeps you alive.
+    Sylas: I'm Sylas - Scout of the Reach. And I don't trail just anyone through these trees.
+
+// --- The hook: why he matters now ---
+Sylas: The wild's been restless. Something past the dark side of this land is pushing them toward Elarion - the Hollow Ones first, and worse behind them.
+Sylas: I can read a trail three days cold. You can hold a wall. Apart, we each lose slow. Together, maybe we don't.
+
+// --- The recruit moment: his offer, the player's call ---
+-> Then walk with me.
+    <<jump SylasAccept>>
+-> Why should I trust a stranger in the woods?
+    Sylas: You shouldn't. Not on my word. So trust the arrow - I'll put one in whatever finds us first, and you can decide what I'm worth after.
+    -> ...Fair. Walk with me, Sylas.
+        <<jump SylasAccept>>
+    -> I work alone.
+        <<jump SylasDecline>>
+===
+
+title: SylasAccept
+tags: companion recruit sylas
+---
+// Open the meeting quest in the real ledger, JOIN the party (spawns his body +
+// grows the party frame), persist the met-flag, then close the quest. Sylas is the
+// Ranger companion by canon; if the player themselves chose Ranger, the standalone
+// SylasFirstMeeting.cs beat handles the different-class substitution - this Yarn
+// path is the explicit, story-first recruit and names the Ranger directly.
+<<command: StartQuest companion.sylas>>
+<<command: RecruitCompanion Ranger>>
+<<command: SetQuestFlag companion.sylas met>>
+<<set $sylasMet to true>>
+
+Sylas: <i>He lowers the bow, and something in his shoulders eases.</i> Then it's settled. I walk where you walk, Keeper - and I put an arrow in whatever finds us first.
+Sylas: Stay near the wall when the horns sound. Out here, I'll go first - I always have.
+Sylas: Lead on. Let's see what the dark side of this land is hiding.
+
+<<command: CompleteQuest companion.sylas>>
+===
+
+title: SylasDecline
+tags: companion sylas
+---
+// He doesn't join now, but the door stays open - the standalone beat / a later
+// approach can re-offer. We deliberately do NOT set $sylasMet, so the recruit can
+// still fire on a later meeting.
+Sylas: Suit yourself. Proud gets you killed out here, but it's your wall to bleed for.
+Sylas: <i>He fades back toward the trees.</i> I'll be in the treeline when you change your mind, Keeper. You will.
+===
+
+title: SylasGreetAgain
+tags: companion ambient sylas
+---
+// Re-entry once Sylas has already joined (mirrors the vendor "bonded" branch).
+Sylas: Still breathing, Keeper. Good. The treeline's quiet - for now. Say the word and I'll scout ahead.
+===

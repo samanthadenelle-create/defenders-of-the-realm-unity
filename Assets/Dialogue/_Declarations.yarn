@@ -64,4 +64,9 @@ tags: system
 <<declare $q_stable_stage = 0>>
 <<declare $q_steward_stage = 0>>
 <<declare $sableChoiceReported = false>>
+
+// — WO-238 Sylas (beat-1 companion) first-meeting / recruit flag —
+// Mirrors the QuestService ledger flag (companion.sylas "met") for cheap re-entry
+// branching in SylasFirstMeeting.yarn; the ledger is the source of truth.
+<<declare $sylasMet = false>>
 ===
