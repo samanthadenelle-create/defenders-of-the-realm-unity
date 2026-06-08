@@ -375,8 +375,9 @@ namespace DeNelle.Village
             if (state == null || kindle == null) return;
             var bal = state.Resources;
             bal.Coins += kindle.CoinsPaid;
+            bal.Crystals += kindle.CrystalsPaid;   // crystals unified onto Resources.Crystals
             state.Resources = bal;
-            state.AetherCrystals += kindle.CrystalsPaid;
+            GameStateService.Instance?.ResourcesChanged?.Invoke();
         }
 
         // A kindle defender — reuse the SAME Enemy + RegionSpawnTable path as the other
@@ -578,11 +579,12 @@ namespace DeNelle.Village
         {
             var state = GameStateService.Instance != null ? GameStateService.Instance.State : null;
             if (state == null) return false;
-            if (state.Resources.Coins < coins || state.AetherCrystals < crystals) return false;
+            if (state.Resources.Coins < coins || state.Resources.Crystals < crystals) return false;
             var bal = state.Resources;
             bal.Coins -= coins;
+            bal.Crystals -= crystals;   // crystals unified onto Resources.Crystals
             state.Resources = bal;
-            state.AetherCrystals -= crystals;
+            GameStateService.Instance?.ResourcesChanged?.Invoke();
             return true;
         }
 

@@ -337,6 +337,7 @@ namespace DeNelle.Core.State
                 BaseLayout = s.BaseLayout != null ? new List<PlacedStructureData>(s.BaseLayout) : null,
                 Magic = s.Magic,
                 PartyMemberIds = s.PartyMemberIds != null ? new List<string>(s.PartyMemberIds) : null,
+                Zones = s.Zones != null ? new List<DeNelle.Core.World.ZoneState>(s.Zones) : null,   // WO-164 — zone graph (v17)
             };
         }
 
@@ -397,6 +398,21 @@ namespace DeNelle.Core.State
             if (p.BaseLayout != null) s.BaseLayout = p.BaseLayout;
             if (p.Magic.HasValue) s.Magic = (int)p.Magic.Value;   // DEF-121 — tech-axis currency
             if (p.PartyMemberIds != null) s.PartyMemberIds = p.PartyMemberIds;   // WO-301 — party roster
+            if (p.Zones != null) s.Zones = p.Zones;   // WO-164 — zone graph (v17)
+            EnsureZoneGraph(s);                       // backfill a pre-v17 / empty save's zone graph
+        }
+
+        /// <summary>
+        /// WO-164 — idempotently seeds the zone graph onto <paramref name="s"/> ONLY when
+        /// it is null or empty (so the 5 default zones can never duplicate across the
+        /// fresh-save, post-load and migrator call sites). Shared by ResetToNewGame and
+        /// the post-load backfill in <see cref="ApplyPersisted"/>.
+        /// </summary>
+        private static void EnsureZoneGraph(GameState s)
+        {
+            if (s == null) return;
+            if (s.Zones != null && s.Zones.Count > 0) return;
+            s.Zones = new List<DeNelle.Core.World.ZoneState>(DeNelle.Core.World.ZoneManager.DefaultZoneGraph());
         }
 
         // =====================================================================
@@ -661,6 +677,7 @@ namespace DeNelle.Core.State
             s.BaseLayout = new List<PlacedStructureData>();   // WO-108 — New Game starts on the default village seed.
             s.Magic = 0;                                      // DEF-121 — tech-axis currency resets on New Game.
             s.PartyMemberIds = new List<string>();            // WO-301 — start alone; the first companion joins on tutorial complete.
+            EnsureZoneGraph(s);                               // WO-164 — seed the default zone graph (5 zones) on New Game.
             // NOTE: BoundWallet, BreachStyle and every social field are deliberately
             // left untouched — preferences and identity survive a New Game.
             s.SchemaVersion = SaveSchema.CurrentVersion;
@@ -827,7 +844,16 @@ namespace DeNelle.Core.State
             if (server.Resources.HasValue)
                 _state.Resources = server.Resources.Value;
             if (server.Voidshards.HasValue) _state.Voidshards = (int)server.Voidshards.Value;
-            if (server.AetherCrystals.HasValue) _state.AetherCrystals = (int)server.AetherCrystals.Value;
+            // Crystals are unified onto Resources.Crystals (save v18). A legacy/older
+            // backend record may still carry an aetherCrystals balance the server
+            // Resources blob doesn't include — fold it in so cloud load can't reopen the
+            // split-brain. (Field kept for back-compat; left at 0 locally.)
+            if (server.AetherCrystals.HasValue && server.AetherCrystals.Value > 0)
+            {
+                var cr = _state.Resources;
+                cr.Crystals += (int)server.AetherCrystals.Value;
+                _state.Resources = cr;
+            }
             if (server.Stone.HasValue)      _state.Stone       = (int)server.Stone.Value;
             if (server.Iron.HasValue)       _state.Iron        = (int)server.Iron.Value;
             if (server.Wood.HasValue)       _state.Wood        = (int)server.Wood.Value;

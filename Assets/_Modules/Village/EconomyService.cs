@@ -195,8 +195,44 @@ namespace DeNelle.Village
             Instance = this;
         }
 
+        private bool _bridgeAttached;
+
+        private void OnEnable()  => AttachResourcesBridge();
+        private void Start()     => AttachResourcesBridge();   // retry: GameStateService may not have existed at OnEnable
+
+        /// <summary>
+        /// HUD-refresh bridge: crystal/food gains from harvest/mine/empower/camp paths
+        /// write GameState.Resources and raise GameStateService.ResourcesChanged (Core),
+        /// NOT this service's OnChanged. The village HUD listens to OnChanged, so without
+        /// this bridge it would not visually update on those GameState-backed gains.
+        /// Re-emit OnChanged whenever the GameState resource wallet changes. Idempotent —
+        /// guards against double-subscribe across OnEnable + Start.
+        /// </summary>
+        private void AttachResourcesBridge()
+        {
+            if (_bridgeAttached) return;
+            var gs = GameStateService.Instance;
+            if (gs == null) return;
+            gs.ResourcesChanged.AddListener(OnGameStateResourcesChanged);
+            _bridgeAttached = true;
+        }
+
+        private void OnDisable()
+        {
+            var gs = GameStateService.Instance;
+            if (gs != null) gs.ResourcesChanged.RemoveListener(OnGameStateResourcesChanged);
+            _bridgeAttached = false;
+        }
+
+        /// <summary>Re-emit <see cref="OnChanged"/> when the Core resource wallet changes
+        /// (crystal/food gains route through GameStateService, not this service's methods).</summary>
+        private void OnGameStateResourcesChanged() => NotifyChanged();
+
         private void OnDestroy()
         {
+            var gs = GameStateService.Instance;
+            if (gs != null) gs.ResourcesChanged.RemoveListener(OnGameStateResourcesChanged);
+            _bridgeAttached = false;
             if (Instance == this) Instance = null;
         }
 

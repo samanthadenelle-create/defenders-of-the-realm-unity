@@ -224,19 +224,13 @@ namespace DeNelle.Core.Referral
                 return;
             }
 
-            // Apply claimer reward. Write straight to PersistedState — CrystalEconomy
-            // lives in the DeNelle.Village assembly which Core cannot reference, so we
-            // award via shared state (the same field CrystalEconomy reads/writes).
+            // Apply claimer reward. Crystals are unified onto Resources.Crystals (the
+            // single wallet); route through GameStateService.AddCrystals (Core-internal —
+            // CrystalEconomy lives in DeNelle.Village which Core cannot reference). This
+            // clamps >= 0, persists, and raises ResourcesChanged.
             int crystals = resp.Reward?.Crystals ?? 0;
             if (crystals > 0)
-            {
-                var state = GameStateService.Instance?.State;
-                if (state != null)
-                {
-                    state.AetherCrystals += crystals;
-                    GameStateService.Instance.Save();
-                }
-            }
+                GameStateService.Instance?.AddCrystals(crystals);
 
             // Mark claimed.
             _hasClaimedReferral = true;

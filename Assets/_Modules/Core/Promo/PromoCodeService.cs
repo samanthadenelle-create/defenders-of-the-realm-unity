@@ -177,22 +177,19 @@ namespace DeNelle.Core.Promo
             var state = GameStateService.Instance?.State;
             if (state == null) return;
 
-            // Crystals — write straight to PersistedState (the same path
-            // CrystalEconomy uses). CrystalEconomy lives in the DeNelle.Village
-            // assembly which Core cannot reference, so we award via shared state.
-            if (reward.Crystals > 0)
-                state.AetherCrystals += reward.Crystals;
-
-            // Coins via GameState resources.
-            if (reward.Coins > 0)
+            // Crystals + Coins both live on Resources (the single wallet). Crystals were
+            // unified onto Resources.Crystals (save v18); ResourceBalance is a struct, so
+            // read-modify-write-assign-back. CrystalEconomy lives in DeNelle.Village which
+            // Core cannot reference, so we award via shared GameState here (Core-internal).
+            if (reward.Crystals > 0 || reward.Coins > 0)
             {
                 var r = state.Resources;
-                r.Coins += reward.Coins;
+                if (reward.Crystals > 0) r.Crystals += reward.Crystals;
+                if (reward.Coins > 0)    r.Coins    += reward.Coins;
                 state.Resources = r;
-            }
-
-            if (reward.Crystals > 0 || reward.Coins > 0)
                 GameStateService.Instance.Save();
+                GameStateService.Instance.ResourcesChanged?.Invoke();
+            }
         }
 
         // ── Error mapping ─────────────────────────────────────────────────────

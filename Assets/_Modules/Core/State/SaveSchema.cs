@@ -27,7 +27,7 @@ namespace DeNelle.Core.State
     {
         // ── Versioning ───────────────────────────────────────────────────────
         /// <summary>CURRENT_SCHEMA_VERSION — bumped whenever the persisted shape changes.</summary>
-        public const int CurrentVersion = 16;  // v16 — added party roster (WO-301); v15 — magic tech-axis currency (DEF-121/WO-230); v14 — baseLayout (WO-108); v13 — buildJobs + adSkip (WO-172)
+        public const int CurrentVersion = 18;  // v18 — fold AetherCrystals into Resources.Crystals (single-source-of-truth); v17 — zone graph persistence (WO-164); v16 — party roster (WO-301); v15 — magic tech-axis currency (DEF-121/WO-230); v14 — baseLayout (WO-108); v13 — buildJobs + adSkip (WO-172)
         /// <summary>SaveExport.format — bumped only if the envelope shape changes.</summary>
         public const int FileFormat = 1;
 
@@ -141,11 +141,13 @@ namespace DeNelle.Core.State
             [JsonProperty("inbox")] public List<ChatMessage> Inbox;
             [JsonProperty("lastInboxSyncAt")] public double? LastInboxSyncAt;
 
-            // ── v11 — Tower Empowerment ──────────────────────────────────────────
+            // ── v11 — Tower Empowerment (DEPRECATED v18) ─────────────────────────
             /// <summary>
-            /// Aether Crystals — the rare off-chain currency used for tower empowerment.
-            /// Earned via Crystal Mine (passive), wave bonuses, boss kills, and dungeon runs.
-            /// Local-only: never touches the SKR token or Solana wallet.
+            /// DEPRECATED (save v18) — the legacy Aether Crystals balance was folded into
+            /// <c>resources.crystals</c> (the single source of truth) by SaveMigrator
+            /// MigrateToV18. The JsonProperty is KEPT (removing it is a breaking change)
+            /// but is no longer written meaningfully — it serializes as 0. Read crystals
+            /// from <c>resources.crystals</c>.
             /// </summary>
             [JsonProperty("aetherCrystals")] public double? AetherCrystals;
 
@@ -199,6 +201,17 @@ namespace DeNelle.Core.State
             /// <c>baseLayout</c>/<c>magic</c>).
             /// </summary>
             [JsonProperty("partyMemberIds")] public List<string> PartyMemberIds;
+
+            // ── v17 — Zone graph persistence (WO-164) ────────────────────────────
+            /// <summary>
+            /// Per-region zone records — discovery/clear flags, the neighbor graph, and
+            /// the City/Horde destination tag (WO-164). Seeded from
+            /// <see cref="DeNelle.Core.World.ZoneManager.DefaultZoneGraph"/> on a fresh
+            /// save (or backfilled on load for a pre-v17 save). Append-only field at the
+            /// END so older saves stay loadable. ZoneState stores its enum keys as NAMES
+            /// (strings) deliberately, so it survives enum renumbering.
+            /// </summary>
+            [JsonProperty("zones")] public List<DeNelle.Core.World.ZoneState> Zones;
         }
 
         // =====================================================================
@@ -361,6 +374,10 @@ namespace DeNelle.Core.State
                 }
                 if (raw.AdSkipsUsedToday.HasValue)
                     raw.AdSkipsUsedToday = NonNegInt(raw.AdSkipsUsedToday.Value, "adSkipsUsedToday");
+
+                // ── Zones (WO-164) → default empty list (never null on disk) ─
+                if (raw.Zones == null)
+                    raw.Zones = new List<DeNelle.Core.World.ZoneState>();
 
                 // ── Volumes / joystick → finite-only (NOT clamped on load) ───
                 if (raw.JoystickSensitivity.HasValue)

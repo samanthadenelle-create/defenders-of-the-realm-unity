@@ -11,9 +11,12 @@
 //   • Boss wave completion       → +3 (Necromancer wave-boss defeat)
 //   • Dungeon completion         → +2–5 (per dungeon, once)
 //
-// Persistence: stored in PersistedState.AetherCrystals (double? in SaveSchema
-// v11). Reads and writes go through GameStateService so the value round-trips
-// correctly. A null stored value reads as 0 (fresh-save default).
+// Persistence: as of save v18 this class is a THIN FAÇADE over
+// GameState.Resources.Crystals — the SINGLE source of truth the HUD, PackStore,
+// BuildMenu and build/upgrade paths all read. The legacy PersistedState.AetherCrystals
+// pool was folded into Resources.Crystals (SaveMigrator MigrateToV18). All reads/writes
+// route through GameStateService.AddCrystals (clamps >= 0, persists, raises
+// ResourcesChanged). The class + public API are kept because many callers reference it.
 //
 // Usage:
 //   CrystalEconomy.Instance.CurrentCrystals   // read balance
@@ -55,13 +58,19 @@ namespace DeNelle.Village
 
         // ── Balance ────────────────────────────────────────────────────────────
 
-        /// <summary>The player's current Aether Crystal balance (never negative).</summary>
+        /// <summary>
+        /// The player's current Crystal balance (never negative). Thin façade over
+        /// GameState.Resources.Crystals — the SINGLE source of truth the HUD, PackStore
+        /// and build/upgrade paths all read. (The legacy AetherCrystals pool was folded
+        /// into Resources.Crystals in save v18; this class is now just a convenience
+        /// shim for the many DeNelle.Village callers.)
+        /// </summary>
         public int CurrentCrystals
         {
             get
             {
                 var state = GetState();
-                return state == null ? 0 : state.AetherCrystals;
+                return state == null ? 0 : state.Resources.Crystals;
             }
         }
 
@@ -86,16 +95,16 @@ namespace DeNelle.Village
                 return false;
             }
 
-            int current = state.AetherCrystals;
+            int current = state.Resources.Crystals;
             if (current < cost)
             {
                 Debug.Log($"[CrystalEconomy] Insufficient Crystals — need {cost}, have {current}.");
                 return false;
             }
 
-            state.AetherCrystals = current - cost;
-            svc.Save();
-            Debug.Log($"[CrystalEconomy] Spent {cost} Crystals — balance now {state.AetherCrystals}.");
+            // AddCrystals clamps >= 0, persists, and raises ResourcesChanged.
+            svc.AddCrystals(-cost);
+            Debug.Log($"[CrystalEconomy] Spent {cost} Crystals — balance now {state.Resources.Crystals}.");
             return true;
         }
 
@@ -115,9 +124,9 @@ namespace DeNelle.Village
                 return;
             }
 
-            state.AetherCrystals += amount;
-            svc.Save();
-            Debug.Log($"[CrystalEconomy] +{amount} Crystals awarded — balance now {state.AetherCrystals}.");
+            // AddCrystals writes Resources.Crystals, clamps >= 0, persists, raises ResourcesChanged.
+            svc.AddCrystals(amount);
+            Debug.Log($"[CrystalEconomy] +{amount} Crystals awarded — balance now {state.Resources.Crystals}.");
         }
 
         // ── Helpers ────────────────────────────────────────────────────────────

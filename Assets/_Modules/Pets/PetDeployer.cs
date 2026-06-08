@@ -410,6 +410,13 @@ namespace DeNelle.Pets
             if (pet.GetComponent<PetHarvester>() == null)
                 pet.gameObject.AddComponent<PetHarvester>();
 
+            // WO-366: cute idle routines (sit / lie-down "play dead" / shake) once
+            // the pet has been idle a while. Self-guards on the Animator's params —
+            // no-op (and logs the authoring gap once) when the cute clips/params
+            // aren't on the resolved controller, so it's safe on every pet today.
+            if (pet.GetComponent<PetIdleRoutines>() == null)
+                pet.gameObject.AddComponent<PetIdleRoutines>();
+
             pet.name = $"Pet_{def.Species}";
             return pet;
         }

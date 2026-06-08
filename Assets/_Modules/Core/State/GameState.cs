@@ -48,7 +48,10 @@ namespace DeNelle.Core.State
         public ResourceBalance Resources = ResourceBalance.Starter;
         /// <summary>#8 — rare Voidshard currency. Fresh = 5. Clamped ≥0.</summary>
         public int Voidshards = 5;
-        /// <summary>Aether Crystals — tower-empowerment currency (v11). Fresh = 0. Clamped >= 0.</summary>
+        /// <summary>DEPRECATED (save v18) — the legacy Aether Crystals pool was unified
+        /// into <see cref="Resources"/>.Crystals (the single source of truth). Kept at 0
+        /// for save back-compat (the aetherCrystals JsonProperty still round-trips); no
+        /// code writes a meaningful value here anymore. Use Resources.Crystals.</summary>
         public int AetherCrystals = 0;
         /// <summary>#12 — gathered Stone. Fresh = 20. Clamped ≥0.</summary>
         public int Stone = 20;
@@ -175,9 +178,10 @@ namespace DeNelle.Core.State
         /// <summary>Per-region zone records — discovery/clear flags, neighbor graph,
         /// and City/Horde destination tag (WO-164). Seeded from
         /// <see cref="DeNelle.Core.World.ZoneManager.DefaultZoneGraph"/> on a fresh save.
-        /// Append-only field — added at the END so older saves stay loadable. NOT yet
-        /// wired into SaveSchema/SaveMigrator; the save owner (Agent 3) must add its
-        /// (de)serialization + bump the schema version for it to round-trip to disk.</summary>
+        /// Append-only field — added at the END so older saves stay loadable. Round-trips
+        /// through SaveSchema (v17, WO-164): seeded on New Game + backfilled on load via
+        /// GameStateService.EnsureZoneGraph, and pre-v17 saves are seeded by SaveMigrator
+        /// MigrateToV17.</summary>
         public List<DeNelle.Core.World.ZoneState> Zones = new List<DeNelle.Core.World.ZoneState>();
 
         // ── World content (WO-159 settlements / WO-160 tribes) ───────────────

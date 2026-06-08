@@ -238,7 +238,13 @@ namespace DeNelle.Village
                 bal.Food += result.Food;
                 state.Resources = bal;
             }
-            if (result.AetherCrystals > 0) state.AetherCrystals += result.AetherCrystals;
+            if (result.AetherCrystals > 0)
+            {
+                // Crystals unified onto Resources.Crystals (the single wallet).
+                var cbal = state.Resources;
+                cbal.Crystals += result.AetherCrystals;
+                state.Resources = cbal;
+            }
 
             // Nudge the resource-changed listeners (HUD wallet) without coupling to HUD.
             GameStateService.Instance?.ResourcesChanged?.Invoke();

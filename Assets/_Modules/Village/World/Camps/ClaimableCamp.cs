@@ -262,8 +262,7 @@ namespace DeNelle.Village.World.Camps
             var state = GameStateService.Instance?.State;
             if (state != null)
             {
-                state.AetherCrystals += crystals;
-                GameStateService.Instance?.ResourcesChanged?.Invoke();
+                GameStateService.Instance?.AddCrystals(crystals);   // unified onto Resources.Crystals; persists + raises ResourcesChanged
             }
             else
             {

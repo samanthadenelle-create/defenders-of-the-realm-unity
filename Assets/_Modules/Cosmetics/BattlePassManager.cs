@@ -192,12 +192,12 @@ namespace DeNelle.Cosmetics
                 case BattlePassRewardKind.Crystals:
                     if (reward.amount > 0)
                     {
-                        // Add crystals via GameStateService (Core — same asmdef ref).
+                        // Add crystals via GameStateService — unified onto Resources.Crystals
+                        // (clamps >= 0, persists, raises ResourcesChanged).
                         var gs = GameStateService.Instance;
                         if (gs != null)
                         {
-                            gs.State.AetherCrystals += reward.amount;
-                            gs.Save();
+                            gs.AddCrystals(reward.amount);
                             Debug.Log($"[BattlePassManager] {track} reward Lv{level}: +{reward.amount} Crystals.");
                         }
                     }

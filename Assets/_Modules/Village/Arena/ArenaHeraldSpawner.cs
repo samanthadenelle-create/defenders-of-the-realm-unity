@@ -43,8 +43,9 @@ namespace DeNelle.Village.Arena
                  "A few metres off the plaza so it reads as its own landmark.")]
         public Vector3 HeraldOffset = new Vector3(8f, 0f, 6f);
 
-        [Tooltip("How close (metres) the hero must be for the Interact prompt to arm.")]
-        public float InteractRadius = 4.5f;
+        [Tooltip("How close (metres) the hero must be for the Interact prompt to arm. " +
+                 "Sized for the WO-369 monument dais (6m wide) so the prompt arms at the steps.")]
+        public float InteractRadius = 6.0f;
 
         [Tooltip("Visual height of the placeholder banner pole (metres).")]
         public float BannerHeight = 3.2f;
@@ -153,41 +154,105 @@ namespace DeNelle.Village.Arena
         }
 
         // =====================================================================
-        // Build a code-built placeholder banner so the herald reads as a landmark
-        // with no art dependency (BuildArch pattern from DungeonWorldPortalSpawner).
+        // WO-369 — build an ICONIC, code-built Arena MONUMENT so the entry reads as a
+        // grand endgame landmark (no art dependency; BuildArch pattern from
+        // DungeonWorldPortalSpawner, scaled up into a proper monument):
+        //   * a stacked tiered stone DAIS (three shrinking slabs) the hero stands on,
+        //   * four corner PILLARS framing the dais,
+        //   * a tall tapering central OBELISK / spire of stacked stone blocks,
+        //   * a glowing emissive RUNE CAPSTONE crowning the obelisk (arena crimson),
+        //   * the heraldic BANNER retained as an accent flag on the spire,
+        //   * the WO-370 magical AURA centred high on the monument.
+        // Fully procedural + WebGL-safe (URP/Lit + primitives), so it always renders
+        // regardless of pack import state, mirroring the herald's no-art philosophy.
         // =====================================================================
         private Transform BuildHerald(Vector3 offset)
         {
-            var root = new GameObject("ArenaHerald");
+            var root = new GameObject("ArenaMonument");
             DontDestroyOnLoad(root);
             root.transform.position = offset; // Heart is at world origin (0,0,0).
 
-            // Face the banner back toward the Heart so the hero reads its front.
+            // Face the monument's front (banner side) back toward the Heart.
             Vector3 toHeart = -new Vector3(offset.x, 0f, offset.z);
             if (toHeart.sqrMagnitude > 0.01f)
                 root.transform.rotation = Quaternion.LookRotation(toHeart.normalized);
 
-            Color accent = new Color(0.85f, 0.20f, 0.20f); // arena crimson
+            Color accent = new Color(0.85f, 0.20f, 0.20f);  // arena crimson (runes / banner / glow)
+            Color stone  = new Color(0.62f, 0.60f, 0.58f);  // weathered grey monument stone
 
-            Shader lit = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Sprites/Default");
-            Material mat = lit != null ? new Material(lit) : null;
-            if (mat != null)
+            Material stoneMat = MakeLitMaterial(stone, 0f);            // matte stone (no glow)
+            Material runeMat  = MakeLitMaterial(accent, 0.9f);         // bright emissive runes
+            Material bannerMat = MakeLitMaterial(accent, 0.5f);        // heraldic banner cloth
+
+            // ── Tiered stone DAIS: three shrinking square slabs the monument rises from.
+            MakeBox(root.transform, new Vector3(0f, 0.20f, 0f), new Vector3(6.0f, 0.40f, 6.0f), stoneMat);
+            MakeBox(root.transform, new Vector3(0f, 0.55f, 0f), new Vector3(4.6f, 0.30f, 4.6f), stoneMat);
+            MakeBox(root.transform, new Vector3(0f, 0.85f, 0f), new Vector3(3.4f, 0.30f, 3.4f), stoneMat);
+            float daisTop = 1.0f; // approximate walking surface height of the top slab
+
+            // ── Four corner PILLARS framing the dais (capped with a small rune block).
+            float pillarH = 3.2f;
+            const float c = 2.1f; // corner offset on the mid slab
+            Vector3[] corners =
             {
-                mat.EnableKeyword("_EMISSION");
-                if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", accent);
-                if (mat.HasProperty("_EmissionColor")) mat.SetColor("_EmissionColor", accent * 0.6f);
+                new Vector3(-c, 0f, -c), new Vector3(c, 0f, -c),
+                new Vector3(-c, 0f, c),  new Vector3(c, 0f, c),
+            };
+            foreach (var corner in corners)
+            {
+                MakeBox(root.transform,
+                        new Vector3(corner.x, daisTop + pillarH * 0.5f, corner.z),
+                        new Vector3(0.45f, pillarH, 0.45f), stoneMat);
+                // Glowing rune cap so the pillars read as enchanted, not plain posts.
+                MakeBox(root.transform,
+                        new Vector3(corner.x, daisTop + pillarH + 0.18f, corner.z),
+                        new Vector3(0.62f, 0.30f, 0.62f), runeMat);
             }
 
-            // Pole + a banner flag panel near the top.
-            MakeBox(root.transform, new Vector3(0f, BannerHeight * 0.5f, 0f),
-                    new Vector3(0.22f, BannerHeight, 0.22f), mat);
-            MakeBox(root.transform, new Vector3(0.55f, BannerHeight * 0.82f, 0f),
-                    new Vector3(1.0f, BannerHeight * 0.5f, 0.08f), mat);
+            // ── Central tapering OBELISK / spire: stacked stone blocks narrowing upward.
+            float baseY = daisTop;
+            // Wide base block.
+            MakeBox(root.transform, new Vector3(0f, baseY + 1.0f, 0f), new Vector3(1.6f, 2.0f, 1.6f), stoneMat);
+            // Mid shaft.
+            MakeBox(root.transform, new Vector3(0f, baseY + 3.4f, 0f), new Vector3(1.1f, 2.8f, 1.1f), stoneMat);
+            // Upper shaft (narrowest).
+            MakeBox(root.transform, new Vector3(0f, baseY + 5.8f, 0f), new Vector3(0.7f, 2.2f, 0.7f), stoneMat);
 
-            // WO-370: persistent magical aura so the monument reads as special.
-            BuildAura(root.transform, accent);
+            // Glowing rune bands wrapping the shaft (the monument's "magic" reads at distance).
+            MakeBox(root.transform, new Vector3(0f, baseY + 2.1f, 0f), new Vector3(1.7f, 0.18f, 1.7f), runeMat);
+            MakeBox(root.transform, new Vector3(0f, baseY + 4.9f, 0f), new Vector3(1.2f, 0.16f, 1.2f), runeMat);
+
+            // ── Crowning RUNE CAPSTONE: an emissive pyramid-ish cap atop the spire.
+            float capY = baseY + 7.1f;
+            MakeBox(root.transform, new Vector3(0f, capY, 0f), new Vector3(0.9f, 0.5f, 0.9f), runeMat);
+            MakeBox(root.transform, new Vector3(0f, capY + 0.45f, 0f), new Vector3(0.5f, 0.45f, 0.5f), runeMat);
+            float monumentTop = capY + 0.7f;
+
+            // ── Heraldic BANNER accent on the front face of the spire (kept from the herald).
+            float bannerCenterY = baseY + BannerHeight * 0.82f;
+            MakeBox(root.transform, new Vector3(0f, bannerCenterY, -0.95f),
+                    new Vector3(1.1f, BannerHeight * 0.65f, 0.08f), bannerMat);
+
+            // ── WO-370: persistent magical aura, centred high on the obelisk so the
+            // glow + spell-motes crown the whole monument.
+            BuildAura(root.transform, accent, monumentTop * 0.7f);
 
             return root.transform;
+        }
+
+        // Shared URP/Lit material factory (matte when emission == 0, glowing otherwise).
+        private static Material MakeLitMaterial(Color color, float emission)
+        {
+            Shader lit = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Sprites/Default");
+            Material mat = lit != null ? new Material(lit) : null;
+            if (mat == null) return null;
+            if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", color);
+            if (emission > 0f)
+            {
+                mat.EnableKeyword("_EMISSION");
+                if (mat.HasProperty("_EmissionColor")) mat.SetColor("_EmissionColor", color * emission);
+            }
+            return mat;
         }
 
         // =====================================================================
@@ -197,11 +262,11 @@ namespace DeNelle.Village.Arena
         // Fully code-built (no prefab / VFXCatalog dependency) so it always shows
         // regardless of VFX quality gating, mirroring the herald's no-art philosophy.
         // =====================================================================
-        private void BuildAura(Transform parent, Color accent)
+        private void BuildAura(Transform parent, Color accent, float height)
         {
             var auraGo = new GameObject("ArenaAura");
             auraGo.transform.SetParent(parent, false);
-            auraGo.transform.localPosition = new Vector3(0f, BannerHeight * 0.6f, 0f);
+            auraGo.transform.localPosition = new Vector3(0f, height, 0f);
 
             // ── Glow: a soft point Light tinted to the arena accent, gently pulsing.
             var lightGo = new GameObject("AuraGlow");
@@ -209,8 +274,8 @@ namespace DeNelle.Village.Arena
             var glow = lightGo.AddComponent<Light>();
             glow.type = LightType.Point;
             glow.color = Color.Lerp(accent, Color.white, 0.35f);
-            glow.range = 7f;
-            glow.intensity = 1.6f;
+            glow.range = 11f; // bathe the whole monument (WO-369 grand landmark scale)
+            glow.intensity = 1.8f;
             glow.shadows = LightShadows.None; // cheap; no shadow cost on mobile/WebGL
             lightGo.AddComponent<AuraPulse>();
 
@@ -239,7 +304,7 @@ namespace DeNelle.Village.Arena
             sh.enabled = true;
             sh.shapeType = ParticleSystemShapeType.Cone;
             sh.angle = 14f;
-            sh.radius = 0.9f;
+            sh.radius = 1.4f; // wider swirl to match the monument's footprint
             sh.rotation = new Vector3(-90f, 0f, 0f); // emit upward from the base
 
             // Gentle fade-out so motes dissolve magically rather than pop.

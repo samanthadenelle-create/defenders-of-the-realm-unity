@@ -49,6 +49,10 @@ namespace DeNelle.Core.State
                 // v15 (DEF-121/WO-230) added `magic` — additive-default-on-read (a
                 // nullable field defaulted to 0 on load, like aetherCrystals v11), so
                 // NO Steps entry is needed.
+                // v16 (WO-301) added `partyMemberIds` — additive-default-on-read (a
+                // nullable list defaulted to empty on load), so NO Steps entry is needed.
+                { 17, MigrateToV17 },
+                { 18, MigrateToV18 },
             };
 
         /// <summary>
@@ -264,6 +268,40 @@ namespace DeNelle.Core.State
         private static PersistedState MigrateToV14(PersistedState s)
         {
             if (s.BaseLayout == null) s.BaseLayout = new List<PlacedStructureData>();
+            return s;
+        }
+
+        /// <summary>
+        /// v16→v17 (WO-164 zone persistence): seed zones ?? the default zone graph
+        /// (5 zones). A pre-v17 save had no persisted zone graph; seed it so the
+        /// world's discovery/clear/destination spine round-trips. Idempotent (only
+        /// seeds when null/empty), matching <see cref="GameStateService"/>'s
+        /// EnsureZoneGraph so the 5 zones can't duplicate across call sites.
+        /// </summary>
+        private static PersistedState MigrateToV17(PersistedState s)
+        {
+            if (s.Zones == null || s.Zones.Count == 0)
+                s.Zones = new List<DeNelle.Core.World.ZoneState>(
+                    DeNelle.Core.World.ZoneManager.DefaultZoneGraph());
+            return s;
+        }
+
+        /// <summary>
+        /// v17→v18 (crystal unification): a one-time fold of the orphan
+        /// <c>aetherCrystals</c> balance into <c>resources.crystals</c> — the single
+        /// source of truth. After the fold, zero out aetherCrystals (the field is
+        /// kept for back-compat but no longer written). ResourceBalance is a struct →
+        /// read-modify-write-assign-back.
+        /// </summary>
+        private static PersistedState MigrateToV18(PersistedState s)
+        {
+            if (s.AetherCrystals.HasValue && s.AetherCrystals.Value > 0)
+            {
+                var r = s.Resources ?? ResourceBalance.Starter;
+                r.Crystals += (int)s.AetherCrystals.Value;
+                s.Resources = r;
+            }
+            s.AetherCrystals = 0;
             return s;
         }
 

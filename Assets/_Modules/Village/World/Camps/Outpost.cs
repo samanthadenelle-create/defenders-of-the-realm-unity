@@ -158,7 +158,14 @@ namespace DeNelle.Village.World.Camps
                     state.Resources = bal;
                     break;
                 }
-                case MineResource.AetherCrystal: state.AetherCrystals += amount; break;
+                case MineResource.AetherCrystal:
+                {
+                    // Crystals are unified onto Resources.Crystals (the single wallet).
+                    var bal = state.Resources;
+                    bal.Crystals += amount;
+                    state.Resources = bal;
+                    break;
+                }
             }
             DeNelle.Core.State.GameStateService.Instance?.ResourcesChanged?.Invoke();
         }
