@@ -256,6 +256,21 @@ namespace DeNelle.Core.State
         /// <summary>Number of companions in the party (derived from the roster). 0 when alone.</summary>
         public int PartySize => PartyMemberIds != null ? PartyMemberIds.Count : 0;
 
+        // ── Arena — async-PvP raid record (ARENA MVP) ─────────────────────────
+        /// <summary>
+        /// The Arena (async-PvP) win/loss ledger — the SKR-wager raid loop's record
+        /// (ARENA MVP). A small append-only struct (Wins/Losses/Streak/TotalPurse),
+        /// mirroring the "small serializable record on GameState" shape that Zones /
+        /// Tribes / BaseLayout use. Append-only field at the END so older saves load
+        /// with a zeroed record. NOT yet wired into SaveSchema/SaveMigrator — like
+        /// <see cref="Zones"/>/<see cref="Tribes"/> it lives in-memory now and is
+        /// mirrored to PlayerPrefs by ArenaProgressStore; threading it through the
+        /// save round-trip (+ a schema bump) is the save owner's follow-up. The SKR
+        /// wager balance itself is a SEPARATE client stub (ArenaWalletService) — this
+        /// is only the W/L scoreboard.
+        /// </summary>
+        public ArenaProgress Arena = ArenaProgress.Empty;
+
         /// <summary>A fresh List&lt;int&gt; of <paramref name="count"/> zeros.</summary>
         public static List<int> NewZeroed(int count)
         {

@@ -128,6 +128,16 @@ namespace DeNelle.Village.World.Camps
         private bool _spawned;
         private bool _rewardPaid;
 
+        // -- ARENA override (async-PvP) ---------------------------------------
+        // The Arena raid (DeNelle.Village.Arena) reuses this whole component but
+        // points it at a SEEDED opponent's base recipe + a fixed garrison size and
+        // suppresses the open-world clear-loot (the Arena pays the SKR purse itself).
+        // All null/zero = the original open-world behaviour is untouched.
+        private List<PlacedStructureData> _arenaRecipe;   // opponent base, or null = auto-gen fort
+        private int _arenaGuardCount = -1;                // fixed guard count, or <0 = threat-scaled
+        private bool _suppressClearReward;                // Arena pays its own purse; skip open-world loot
+        private bool _everCleared;                        // for ConfigureArena re-clear guard
+
         /// <summary>Called by RaidOutpostSystem immediately after AddComponent.</summary>
         public void Configure(RegionId region, int threat)
         {
@@ -136,8 +146,43 @@ namespace DeNelle.Village.World.Camps
             OutpostId = "raid_" + region;
         }
 
+        /// <summary>
+        /// ARENA-MVP entry: configure this outpost as a SEEDED async-PvP opponent base
+        /// instead of an open-world raid. Reuses the ENTIRE spawn/clear/combat path —
+        /// only the fortification recipe, garrison size, persistence id and clear-loot
+        /// are overridden. Combat is still FULL REUSE (real Enemy via TargetManager);
+        /// no new combat code. Must be called BEFORE the component's Start() runs (the
+        /// Arena AddComponents this then calls it on the same frame).
+        /// </summary>
+        /// <param name="outpostId">Unique persistence id for this opponent (e.g. "arena_ironhold").</param>
+        /// <param name="threat">Threat tier driving stat scaling (1 / 4 / 8 for the seeded tiers).</param>
+        /// <param name="baseRecipe">The opponent's base layout (LOCAL cells). Null = auto-gen wood fort.</param>
+        /// <param name="guardCount">Fixed guard count (excludes the boss). &lt;0 = threat-scaled default.</param>
+        public void ConfigureArena(string outpostId, int threat,
+                                   List<PlacedStructureData> baseRecipe, int guardCount)
+        {
+            OutpostId = string.IsNullOrEmpty(outpostId) ? ("arena_" + Region) : outpostId;
+            ThreatLevel = Mathf.Max(0, threat);
+            _arenaRecipe = baseRecipe;
+            _arenaGuardCount = guardCount;
+            _suppressClearReward = true;   // the Arena credits the SKR purse + records the win itself
+        }
+
+        /// <summary>True once this outpost has ever been cleared this session (Arena re-raid guard).</summary>
+        public bool EverCleared => _everCleared;
+
         private void Start()
         {
+            // ARENA: an opponent base is ALWAYS spawned fresh for each raid (the Arena
+            // owns the lifetime — it Destroys + recreates per raid), so skip the
+            // open-world "stay cleared on reload" persistence restore entirely.
+            if (_suppressClearReward)
+            {
+                BuildFortification();
+                SpawnGarrison();
+                return;
+            }
+
             // Restore a previously-cleared raid: stay peaceful, no garrison, no fort
             // re-raise (the fight is over). A fresh raid spawns the fort + garrison.
             if (PlayerPrefs.GetString(PrefClearedKey + OutpostId, null) == "1")
@@ -167,7 +212,9 @@ namespace DeNelle.Village.World.Camps
             // generated + realized through the SAME StructureFactory.Create path the
             // village build mode uses. LOCAL cell math against this root only - never
             // the village-scoped PlacementGrid / GameState.BaseLayout singletons.
-            var recipe = OutpostFoundationGenerator.GenerateFootprintRecipe(
+            // ARENA: realize the SEEDED opponent's base recipe; else auto-gen the
+            // open-world wood fort. SAME OutpostFoundationGenerator.Realize path.
+            var recipe = _arenaRecipe ?? OutpostFoundationGenerator.GenerateFootprintRecipe(
                 FortGridWidth, FortGridDepth, OutpostTier.Wood);
             OutpostFoundationGenerator.Realize(recipe, transform, ~0);
         }
@@ -190,8 +237,11 @@ namespace DeNelle.Village.World.Camps
             // The BOSS holds the centre of the outpost (MiniBoss role).
             SpawnBoss();
 
-            // The guard ring (charger/walker Enemy), threat-scaled count 5..8.
-            int guards = BaseGuardCount + Mathf.Clamp(ThreatLevel / 2, 0, 3);
+            // The guard ring (charger/walker Enemy). ARENA = a fixed seeded count;
+            // open-world = threat-scaled 5..8.
+            int guards = _arenaGuardCount >= 0
+                ? _arenaGuardCount
+                : BaseGuardCount + Mathf.Clamp(ThreatLevel / 2, 0, 3);
             for (int i = 0; i < guards; i++)
                 SpawnGuard(i, guards);
 
@@ -294,15 +344,30 @@ namespace DeNelle.Village.World.Camps
         {
             if (Cleared) return;
             Cleared = true;
+            _everCleared = true;
 
-            GrantClearReward();
-
-            PlayerPrefs.SetString(PrefClearedKey + OutpostId, "1");
-            PlayerPrefs.Save();
+            // ARENA: the Arena pays the SKR purse + GrantClearReward loot + records the
+            // win itself (off OnCleared), and owns this outpost's lifetime, so we skip
+            // the open-world flat-reward + the "stay cleared on reload" persistence.
+            if (!_suppressClearReward)
+            {
+                GrantClearReward();
+                PlayerPrefs.SetString(PrefClearedKey + OutpostId, "1");
+                PlayerPrefs.Save();
+            }
 
             Debug.Log($"[EnemyOutpost] {OutpostId} CLEARED - garrison wiped.");
             OnCleared?.Invoke(this);
         }
+
+        /// <summary>
+        /// ARENA hook: run the standard threat-scaled clear-loot roll on demand (the
+        /// open-world clear suppresses it for an Arena outpost, then the Arena calls
+        /// this on a WIN so the victor still gets the gear/resource drop ON TOP of the
+        /// SKR purse). Idempotent (paid at most once). Full reuse of the loot table —
+        /// no parallel loot economy.
+        /// </summary>
+        public void GrantArenaLoot() => GrantClearReward();
 
         // THREAT-SCALED LOOT TABLE: rolled once on clear, every drop routed to an
         // EXISTING system (no parallel loot-economy). Always pays resources +
