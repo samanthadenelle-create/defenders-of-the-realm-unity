@@ -133,6 +133,15 @@ namespace DeNelle.Village
         [Tooltip("WO-316: the formation runtime-composed family squads spawn in.")]
         [SerializeField] private SpawnFormation _composedFormation = SpawnFormation.Wedge;
 
+        [Tooltip("WO-362: SMART per-wave composition + tactical positioning. ON = ignore the " +
+                 "flat waves.json batches and instead GENERATE each wave's roster from the wave " +
+                 "number (tiered weak/medium/strong mix, an elite every 5th wave, no two " +
+                 "consecutive waves identical), then place each enemy by tactical role (tanks " +
+                 "front-centre, archers backline, weak trailing) at a gate that ROTATES N→E→S→W. " +
+                 "OFF = the legacy compose-family / flat-batch paths (full back-compat). Takes " +
+                 "priority over _composeFamilyGroups when both are on.")]
+        [SerializeField] private bool _smartComposition = true;
+
         [Header("Wave SO Authoring (WO-86)")]
         [Tooltip("Optional list of WaveData ScriptableObjects for SO-driven authoring. The existing JSON-driven loop runs independently and is unaffected.")]
         [SerializeField] private List<WaveData> _soWaves
@@ -274,6 +283,9 @@ namespace DeNelle.Village
 
         /// <summary>The apex flying boss for the current wave (null when not an apex wave / dead).</summary>
         private DragonBoss _liveApexBoss;
+
+        /// <summary>WO-362: lazily-built tactical spawner (no inspector wiring required).</summary>
+        private SmartEnemySpawner _smartSpawner;
 
         /// <summary>True once we've subscribed to the Heart's OnHeartDestroyed — fire-once subscribe guard.</summary>
         private bool _heartDeathHooked;
@@ -621,13 +633,21 @@ namespace DeNelle.Village
             if (_heart != null)
                 _heart.SetState(wave.IsApexBossWave ? HeartState.Boss : HeartState.Vigilant);
 
+            // WO-362: SMART composition + tactical positioning takes priority. When on,
+            // GENERATE the wave's ground roster from the wave number (tiered mix + elite
+            // cadence + anti-repeat) and place each enemy by role at a ROTATING gate,
+            // instead of releasing the flat waves.json batches. Falls through to the
+            // legacy paths if it spawns nothing (e.g. no spawn points / catalog).
+            bool composed = false;
+            if (_smartComposition)
+                composed = SpawnSmartComposedWave(waveId);
+
             // WO-316: compose the wave's batches into runtime role-mix FAMILY squads
             // (tank + healer + a few DPS that hold then charge together) routed through
             // the EnemyGroupSpawner / EnemyGroupCoordinator. Falls back to the flat
             // per-batch SpawnBatch stream when composition is off or yields nothing
             // (so the legacy path is always available for back-compat).
-            bool composed = false;
-            if (_composeFamilyGroups && wave.Enemies != null && wave.Enemies.Count > 0)
+            if (!composed && _composeFamilyGroups && wave.Enemies != null && wave.Enemies.Count > 0)
                 composed = SpawnComposedFamilyGroups(wave);
 
             if (!composed && wave.Enemies != null)
@@ -787,6 +807,70 @@ namespace DeNelle.Village
                     _liveEnemies.Add(e);
                     spawnedAny = true;
                 }
+            }
+
+            return spawnedAny;
+        }
+
+        /// <summary>
+        /// WO-362: generates this wave's ground roster via
+        /// <see cref="WaveCompositionBuilder.Build"/> (tiered weak/medium/strong mix,
+        /// an elite every 5th wave, no two consecutive waves identical, count + difficulty
+        /// scaling with the wave number) and releases it through the
+        /// <see cref="SmartEnemySpawner"/>, which positions each enemy by tactical role
+        /// (tanks front-centre, archers backline, weak trailing) at a gate that ROTATES
+        /// N→E→S→W across waves. Subscribes Died / ReachedHeart and applies wave-scaling
+        /// with full parity to the legacy <see cref="SpawnOne"/> / compose paths.
+        ///
+        /// Returns true if at least one enemy spawned (caller skips the legacy paths);
+        /// false when nothing resolved (caller falls back to compose / flat batches).
+        /// </summary>
+        private bool SpawnSmartComposedWave(int waveId)
+        {
+            if (_enemyCatalog == null) return false;
+
+            // Lazily build the spawner (no inspector wiring needed on the live scene).
+            if (_smartSpawner == null)
+            {
+                _smartSpawner = GetComponentInChildren<SmartEnemySpawner>();
+                if (_smartSpawner == null)
+                {
+                    var go = new GameObject("[SmartEnemySpawner]");
+                    go.transform.SetParent(transform, false);
+                    _smartSpawner = go.AddComponent<SmartEnemySpawner>();
+                }
+            }
+
+            EnemyWaveComposition composition =
+                WaveCompositionBuilder.Build(waveId, _enemyCatalog);
+            if (composition == null || composition.Entries.Count == 0) return false;
+
+            Transform heartT = _heart != null ? _heart.transform : null;
+            List<Enemy> squad = _smartSpawner.SpawnWave(
+                composition,
+                _enemyCatalog,
+                _spawnPoints,
+                heartT,
+                _enemyRoot,
+                waveId,
+                ref _spawnInstanceCounter);
+
+            bool spawnedAny = false;
+            foreach (Enemy e in squad)
+            {
+                if (e == null) continue;
+
+                // DEF-59: wave-scaling parity with the flat SpawnOne / compose paths.
+                if (_scalingCurve != null)
+                    e.ApplyWaveScaling(
+                        _scalingCurve.HpMultiplier(_currentWaveId),
+                        _scalingCurve.SpeedMultiplier(_currentWaveId),
+                        _scalingCurve.DamageMultiplier(_currentWaveId));
+
+                e.Died         += HandleEnemyDied;
+                e.ReachedHeart += HandleEnemyReachedHeart;
+                _liveEnemies.Add(e);
+                spawnedAny = true;
             }
 
             return spawnedAny;

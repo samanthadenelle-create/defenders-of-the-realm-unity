@@ -53,6 +53,11 @@ namespace DeNelle.Village
         /// already joined the companion still hears the Echo intro exactly once.</summary>
         private const string EchoIntroSeenKey = "companion_echo_intro";
 
+        /// <summary>WO-364: one-shot key for the hero gear-up offer that rides on the
+        /// wave-3 join beat. Independent of the other keys so a save that already saw
+        /// the join / Echo intro still gets the gear offer exactly once.</summary>
+        private const string GearOfferSeenKey = "companion_gear_offer";
+
         /// <summary>The wave whose clear summons Elara (canon: ~wave 3).</summary>
         private const int JoinWave = 3;
 
@@ -188,9 +193,20 @@ namespace DeNelle.Village
 
                 await WaitForDialogue();
 
+                // WO-364: the same companion now offers to OUTFIT THE HERO. Delivered
+                // through the same bubble, then a two-button choice (visit forge / "I'm
+                // already equipped"). BOTH choices auto-equip IN PLACE — the forge walk
+                // is intentionally NOT a pathing cutscene (polish follow-up); the choice
+                // only flavours the follow-up line. Idempotent via its OWN seen-flag.
+                if (!HasSeenGearOffer())
+                {
+                    await RunGearOffer(speaker);
+                }
+
                 companion?.SetSpeechSuppressed(false);
                 MarkSeen();
                 MarkEchoIntroSeen();
+                MarkGearOfferSeen();
 
                 Debug.Log($"[ElaraWaveThreeJoin] {speaker} joined the party after wave {JoinWave}.");
             }
@@ -200,6 +216,7 @@ namespace DeNelle.Village
                 ResolveCompanion(_companionClass)?.SetSpeechSuppressed(false);
                 MarkSeen();
                 MarkEchoIntroSeen();
+                MarkGearOfferSeen();
             }
             finally
             {
@@ -287,6 +304,64 @@ namespace DeNelle.Village
 
         private static void MarkEchoIntroSeen() =>
             GameStateService.Instance?.MarkTutorialSeen(EchoIntroSeenKey);
+
+        // ── WO-364: hero gear-up offer one-shot ──────────────────────────────
+
+        private static bool HasSeenGearOffer()
+        {
+            if (ForceRun) return false;
+            var svc = GameStateService.Instance;
+            var state = svc != null ? svc.State : null;
+            return state != null && state.SeenTutorials != null
+                && state.SeenTutorials.TryGetValue(GearOfferSeenKey, out bool seen) && seen;
+        }
+
+        private static void MarkGearOfferSeen() =>
+            GameStateService.Instance?.MarkTutorialSeen(GearOfferSeenKey);
+
+        /// <summary>
+        /// WO-364 gear-up beat: the companion offers gear, the player picks (forge /
+        /// already-equipped), the hero is auto-equipped IN PLACE (CompanionGearSetup),
+        /// and the companion closes with "Much better." Both choices equip in place —
+        /// the forge-visit is flavour only (a real walk-to-forge is a polish follow-up).
+        /// Drives the SAME bubble via <see cref="_dialogue"/>; fully guarded.
+        /// </summary>
+        private async UniTask RunGearOffer(string speaker)
+        {
+            if (_dialogue == null) return;
+
+            // 1) The offer line.
+            _dialogue.Say(speaker,
+                "Let me outfit you properly - you'll need armor and a weapon for what's coming.");
+            await WaitForDialogue();
+
+            // 2) The choice (both auto-equip in place; forge-visit is flavour only).
+            bool chosen = false;
+            bool visitForge = false;
+            GearOfferChoiceUI.Show(forge =>
+            {
+                visitForge = forge;
+                chosen = true;
+            });
+            // Wait for the player's pick (the UI auto-chooses on its own failsafe).
+            await UniTask.WaitUntil(() => chosen);
+
+            // 3) A short flavour line for the choice (no pathing cutscene either way).
+            _dialogue.Say(speaker, visitForge
+                ? "Good - the forge is just by the Heart. Hold still, this won't take long."
+                : "Then let's see what you're carrying. Hold still, this won't take long.");
+            await WaitForDialogue();
+
+            // 4) Apply the class gear (equips on the hero's GearLoadout -> model updates,
+            //    fires a small VFX/SFX flourish + a "+<Armor>" HUD toast).
+            HeroClass heroClass = ResolvePlayerClass();
+            CompanionGearSetup.GearGrant grant = CompanionGearSetup.Apply(heroClass);
+
+            // 5) The companion's close.
+            _dialogue.Say(speaker,
+                $"There - {grant.ArmorLabel} and a good {grant.WeaponLabel}. Much better. You look ready.");
+            await WaitForDialogue();
+        }
 
         /// <summary>
         /// The companion's short Echo introduction — references the pet the player

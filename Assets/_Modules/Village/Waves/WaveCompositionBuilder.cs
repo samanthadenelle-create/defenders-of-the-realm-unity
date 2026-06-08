@@ -1,0 +1,260 @@
+// =============================================================================
+// WaveCompositionBuilder — smart per-wave enemy composition (WO-362).
+// -----------------------------------------------------------------------------
+// Assembly: DeNelle.Village   Namespace: DeNelle.Village
+//
+// WHAT IT DOES
+//   Replaces the flat "8 of one type from one gate" spawn with a COMPOSED wave:
+//   a tiered mix of REAL enemy ids drawn from enemies.json, each tagged with a
+//   tactical SpawnRole the SmartEnemySpawner positions by. The composition is
+//   generated per wave number with a difficulty curve:
+//
+//     waves 1-2 : 100% weak  (grunts/skirmishers)
+//     waves 3-5 : ~60% weak + ~40% medium (brutes/casters)
+//     waves 6+  : mixed weak / medium / strong, weak enemies PERSIST
+//     every 5th : an ELITE (single, centred) is added on top
+//
+//   Total count + difficulty scale with the wave number. NO two consecutive
+//   waves are identical — the builder varies the type pick + the counts using a
+//   per-wave seed so the felt experience changes wave to wave.
+//
+// TIER → REAL ENEMY ID MAP  (read from enemies.json, family "hollow" = the wave
+// siege faction; falls back to literal ids if the catalog is unavailable):
+//   weak   → role "grunt"      → hollow-walker        (DPS-positioned)
+//            role "skirmisher" → hollow-rogue         (Ranged-positioned)
+//   medium → role "brute"      → hollow-warrior       (Tank-positioned)
+//            role "caster"     → hollow-acolyte       (Ranged/back-positioned)
+//   strong → role "brute"      → hollow-warrior (more of them, front)
+//   elite  → role "elite"      → necromancer          (Elite — single, centred)
+//
+// PURE DATA + ALGORITHM — no MonoBehaviour, no scene refs, no per-frame work.
+// The build allocates once per wave (a small List) — never in the spawn hot path.
+// =============================================================================
+
+using System.Collections.Generic;
+using UnityEngine;
+
+namespace DeNelle.Village
+{
+    /// <summary>
+    /// WO-362: the tactical position bucket the <see cref="SmartEnemySpawner"/>
+    /// places a composed enemy in. Distinct from <see cref="EnemyRole"/> (which
+    /// drives EnemyBrain target selection) — this is purely about WHERE on the
+    /// approach the unit materialises relative to the gate/Heart line.
+    /// </summary>
+    public enum SpawnRole
+    {
+        /// <summary>Tanks / brutes — front-centre, lead the push.</summary>
+        FrontTank = 0,
+        /// <summary>Melee line — mid, spread laterally.</summary>
+        Melee = 1,
+        /// <summary>Archers / casters — backline, away from the hero.</summary>
+        Archer = 2,
+        /// <summary>Weak fodder — back / sides, trail the formation.</summary>
+        Weak = 3,
+        /// <summary>Boss / elite — single, dead-centre.</summary>
+        Elite = 4,
+    }
+
+    /// <summary>
+    /// One composed slot: how many of a real enemy id to spawn and the tactical
+    /// position bucket they hold. The <see cref="EnemyRole"/> (brain targeting)
+    /// is carried alongside so the spawner can stamp it without re-deriving.
+    /// </summary>
+    public struct WaveCompositionEntry
+    {
+        public string     EnemyId;    // a REAL id from enemies.json (e.g. "hollow-walker")
+        public int        Count;
+        public SpawnRole  SpawnRole;  // tactical position bucket
+        public EnemyRole  Role;       // EnemyBrain tactical role
+
+        public WaveCompositionEntry(string enemyId, int count, SpawnRole spawnRole, EnemyRole role)
+        {
+            EnemyId   = enemyId;
+            Count     = Mathf.Max(0, count);
+            SpawnRole = spawnRole;
+            Role      = role;
+        }
+    }
+
+    /// <summary>
+    /// The full composition for one wave: the ordered list of (enemyType, tier,
+    /// spawnRole) slots plus the wave number it was generated for. Built by
+    /// <see cref="WaveCompositionBuilder.Build"/>, consumed by
+    /// <see cref="SmartEnemySpawner"/>.
+    /// </summary>
+    public sealed class EnemyWaveComposition
+    {
+        /// <summary>1-based wave this composition is for.</summary>
+        public int WaveId;
+
+        /// <summary>The composed slots (front tanks first, elite last).</summary>
+        public readonly List<WaveCompositionEntry> Entries = new List<WaveCompositionEntry>();
+
+        /// <summary>Total enemy count across all entries.</summary>
+        public int TotalCount
+        {
+            get
+            {
+                int n = 0;
+                for (int i = 0; i < Entries.Count; i++) n += Entries[i].Count;
+                return n;
+            }
+        }
+
+        /// <summary>True if this wave contains an elite slot.</summary>
+        public bool HasElite
+        {
+            get
+            {
+                for (int i = 0; i < Entries.Count; i++)
+                    if (Entries[i].SpawnRole == SpawnRole.Elite) return true;
+                return false;
+            }
+        }
+    }
+
+    /// <summary>
+    /// WO-362: generates a smart, tiered <see cref="EnemyWaveComposition"/> for a
+    /// given wave number. Pure: no Unity scene state, deterministic per wave +
+    /// seed so a wave reads the same on retry but consecutive waves differ.
+    /// </summary>
+    public static class WaveCompositionBuilder
+    {
+        // ── Real enemy ids (family "hollow" — the wave-siege faction) ─────────
+        // These ARE the ids in Resources/Data/Canonical/enemies.json. Resolved
+        // against the live catalog when one is supplied (so a renamed/added id is
+        // picked up), with these literals as the back-compat fallback.
+        private const string IdWeakGrunt   = "hollow-walker";   // role grunt      → DPS
+        private const string IdWeakSkirm   = "hollow-rogue";    // role skirmisher → Ranged
+        private const string IdMediumBrute = "hollow-warrior";  // role brute      → Tank
+        private const string IdMediumCast  = "hollow-acolyte";  // role caster     → Healer/back
+        private const string IdElite       = "necromancer";     // role elite      → MiniBoss
+
+        // ── Difficulty pacing ────────────────────────────────────────────────
+        private const int   BaseCount       = 4;     // total at wave 1
+        private const float CountPerWave    = 0.9f;  // +~1 enemy per wave
+        private const int   MaxCount        = 22;    // hard cap so the field never floods
+        private const int   EliteEveryNth   = 5;     // an elite on every 5th wave
+
+        /// <summary>
+        /// Builds the composition for <paramref name="waveId"/> (1-based). When a
+        /// <paramref name="catalog"/> is supplied the chosen tier ids are validated
+        /// against it (and the closest family member substituted if an id is gone),
+        /// so the builder always emits ids the spawner can actually resolve.
+        ///
+        /// <paramref name="seedSalt"/> lets the caller vary the RNG (e.g. the gate
+        /// index) without changing the wave-to-wave anti-repeat guarantee.
+        /// </summary>
+        public static EnemyWaveComposition Build(int waveId, EnemyCatalog catalog = null, int seedSalt = 0)
+        {
+            waveId = Mathf.Max(1, waveId);
+            var comp = new EnemyWaveComposition { WaveId = waveId };
+
+            // Deterministic-but-varying RNG: seeded on the wave (so a retry of the
+            // same wave reads the same) plus an odd/even phase so consecutive waves
+            // never resolve to the same counts/picks. State is restored after.
+            UnityEngine.Random.State prev = UnityEngine.Random.state;
+            UnityEngine.Random.InitState(waveId * 7919 + seedSalt * 104729 + (waveId & 1) * 31);
+
+            int total = Mathf.Clamp(
+                Mathf.RoundToInt(BaseCount + CountPerWave * (waveId - 1)),
+                BaseCount, MaxCount);
+
+            // ── Tier ratios by wave band ─────────────────────────────────────
+            float weakFrac, mediumFrac, strongFrac;
+            if (waveId <= 2)
+            {
+                weakFrac = 1f; mediumFrac = 0f; strongFrac = 0f;
+            }
+            else if (waveId <= 5)
+            {
+                weakFrac = 0.6f; mediumFrac = 0.4f; strongFrac = 0f;
+            }
+            else
+            {
+                // 6+: weak PERSISTS, medium core, a growing strong slice.
+                strongFrac = Mathf.Min(0.4f, 0.12f + 0.03f * (waveId - 6));
+                mediumFrac = 0.4f;
+                weakFrac   = 1f - mediumFrac - strongFrac;   // weak never vanishes
+            }
+
+            int weakN   = Mathf.RoundToInt(total * weakFrac);
+            int mediumN = Mathf.RoundToInt(total * mediumFrac);
+            int strongN = Mathf.Max(0, total - weakN - mediumN);
+
+            // ── WEAK tier: split grunt / skirmisher, ratio varies per wave ────
+            if (weakN > 0)
+            {
+                // 50–75% grunts, the remainder skirmishers — the split swings per
+                // wave so two consecutive weak-heavy waves don't feel identical.
+                float gruntShare = UnityEngine.Random.Range(0.5f, 0.75f);
+                int grunts = Mathf.Clamp(Mathf.RoundToInt(weakN * gruntShare), 0, weakN);
+                int skirms = weakN - grunts;
+
+                if (grunts > 0)
+                    AddEntry(comp, catalog, IdWeakGrunt, "hollow", "grunt",
+                             grunts, SpawnRole.Weak, EnemyRole.DPS);
+                if (skirms > 0)
+                    AddEntry(comp, catalog, IdWeakSkirm, "hollow", "skirmisher",
+                             skirms, SpawnRole.Melee, EnemyRole.Ranged);
+            }
+
+            // ── MEDIUM tier: brutes (front tanks) + casters (backline) ────────
+            if (mediumN > 0)
+            {
+                // ~60% brute, ~40% caster, jittered so it varies.
+                float bruteShare = UnityEngine.Random.Range(0.5f, 0.7f);
+                int brutes  = Mathf.Clamp(Mathf.RoundToInt(mediumN * bruteShare), 0, mediumN);
+                int casters = mediumN - brutes;
+
+                if (brutes > 0)
+                    AddEntry(comp, catalog, IdMediumBrute, "hollow", "brute",
+                             brutes, SpawnRole.FrontTank, EnemyRole.Tank);
+                if (casters > 0)
+                    AddEntry(comp, catalog, IdMediumCast, "hollow", "caster",
+                             casters, SpawnRole.Archer, EnemyRole.Healer);
+            }
+
+            // ── STRONG tier (6+): more brutes leading the front ───────────────
+            if (strongN > 0)
+                AddEntry(comp, catalog, IdMediumBrute, "hollow", "brute",
+                         strongN, SpawnRole.FrontTank, EnemyRole.Tank);
+
+            // ── ELITE: one, centred, every Nth wave (added on TOP of total) ───
+            if (waveId % EliteEveryNth == 0)
+                AddEntry(comp, catalog, IdElite, "hollow", "elite",
+                         1, SpawnRole.Elite, EnemyRole.MiniBoss);
+
+            UnityEngine.Random.state = prev;
+            return comp;
+        }
+
+        /// <summary>
+        /// Adds one slot, resolving the preferred id against the catalog. If the
+        /// literal id is missing, falls back to the first family member of the
+        /// given role; if that also fails, keeps the literal so the spawner logs a
+        /// clear "unknown enemy" rather than silently dropping the slot.
+        /// </summary>
+        private static void AddEntry(
+            EnemyWaveComposition comp, EnemyCatalog catalog,
+            string preferredId, string family, string role,
+            int count, SpawnRole spawnRole, EnemyRole brainRole)
+        {
+            if (count <= 0) return;
+
+            string id = preferredId;
+            if (catalog != null)
+            {
+                if (catalog.Find(preferredId) == null)
+                {
+                    EnemyDef byRole = catalog.FindByRole(family, role);
+                    if (byRole != null && !string.IsNullOrEmpty(byRole.Id))
+                        id = byRole.Id;
+                }
+            }
+
+            comp.Entries.Add(new WaveCompositionEntry(id, count, spawnRole, brainRole));
+        }
+    }
+}
