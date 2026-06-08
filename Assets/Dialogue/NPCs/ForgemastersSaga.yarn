@@ -19,6 +19,17 @@
 // The reforge "choice" persists via the EXISTING SetQuestFlag verb (no new command):
 //   <<command: SetQuestFlag forgemasters_act4 reforge_heart>>   (or reforge_regions)
 //
+// WO-296 — the choice PAYOFF: SagaScene_ReforgeComplete fires the SHARED mechanical
+//   climax (CompleteQuest forgemasters_act4 → Legendary unlock) then branches on the
+//   choice into one of two FINALE/ending beats:
+//     reforge_heart   -> SagaScene_Ending_Heart   ("The Long Healing" — somber, full power, Tree dims)
+//     reforge_regions -> SagaScene_Ending_Regions ("Whole" — the true ending, Tree spared)
+//   Each ending grants a path-distinct keystone (AegisReforgedHeart / AegisReforgedWhole)
+//   as the finale SEAM for the Spire/Necromancer confrontation + NG+ (read via the
+//   existing HasKeystone function). NO end-screen system exists to trigger from Yarn
+//   (GameOverScreen/UI are loss-only; transition_to is a deliberate no-op), so the
+//   ending is delivered IN-DIALOGUE and the keystone leaves a clean downstream seam.
+//
 // ENTRY GATE: all four vendor questlines must be BONDED (stage 9) before Act I opens —
 // that gathering of the four IS Act I's hidden premise.
 // =============================================================================
@@ -382,6 +393,56 @@ Halvard: <i>She fastens the Oathweld plate to your shoulders with her own hands.
 <<command: CompleteQuest forgemasters_act4>>
 <<set $saga_reforged = true>>
 <<set $saga_act = 5>>
-Narrator: <i>The Aegis of Elarion is reforged. LEGENDARY crafting is unlocked — the Forge can now craft the Aegis set and each class's legendary arm. Carry it to the Spire, and end the Necromancer.</i>
-Borin: Go on, then, hero. We'll keep the fire lit. We'll keep it lit together — for good this time.
+Narrator: <i>The Aegis of Elarion is reforged. LEGENDARY crafting is unlocked — the Forge can now craft the Aegis set and each class's legendary arm.</i>
+// — The ending diverges on the choice made at the trough. Each path is its own
+//   finale beat (WO-296). The mechanical climax (CompleteQuest → unlock) above is
+//   shared; the PAYOFF below is not.
+<<if $saga_reforge_choice == "heart">>
+    <<jump SagaScene_Ending_Heart>>
+<<else>>
+    <<jump SagaScene_Ending_Regions>>
+<<endif>>
+===
+
+// =============================================================================
+// SagaScene_Ending_Heart — FINALE A: "The Long Healing"  (reforge_heart)
+// The player drew the quench from the Heart. The Aegis is immediate + full power,
+// but the Tree dims further: a somber, bittersweet ending + the harder NG+ seed.
+// Branches off the reforge choice persisted via <<SetQuestFlag forgemasters_act4
+// reforge_heart>> (read here through the Yarn mirror $saga_reforge_choice).
+// Finale seam: GiveKeystone "AegisReforgedHeart" marks this path for the Spire /
+// Necromancer finale + an NG+ "the long healing" read. No new command added.
+// =============================================================================
+title: SagaScene_Ending_Heart
+---
+Narrator: <i>As the quench takes, a long shiver runs up through the floor — through the mill, through the roots, all the way to the Heart at Elarion's centre. The Tree of Life gives the last bright of itself into the steel, and dims another shade toward dark.</i>
+Old Pell: <i>He lays his palm flat to the old timber and bows his head.</i> It's quieter now. The Tree. It gave what we asked, the way it always would have. <i>Softly.</i> Now we owe it a long healing — years of it, maybe more than we have. But it lives. And so do we.
+Borin: <i>He weighs the reforged blade, his jaw tight.</i> Full power, and not a spark wasted. She'll hold against anything the Wastes can throw. <i>Quietly.</i> But I'll not forget what she cost. None of us will. A legend with a grief folded into it — that's the only honest kind.
+Mother Wren: <i>She sets a hand on your shoulder.</i> You chose the hard knowing, dearie — that some things you love must spend themselves to save the rest. There's no shame in it. The Heart would have chosen the same. We'll tend it together, all our days, and call that the work.
+Halvard: Carry it to the Spire, Aegis-bearer. Strike the Necromancer down at full strength — for the Heart that gave its light so you could.
+<<command: GiveKeystone "AegisReforgedHeart">>
+<<set $saga_ending_seen = true>>
+Narrator: <i>THE FORGEMASTERS' SAGA — ENDING: "The Long Healing." The Aegis stands reborn at full power; the Heart is dimmer for it. Four crafts, one workshop, one shared and somber resolve. Carry the Aegis to the Spire and end the Necromancer — then begin the long mending of the Tree.</i>
+Borin: Go on, then, hero. We'll keep the fire lit — and we'll keep faith with the Tree, for good this time.
+===
+
+// =============================================================================
+// SagaScene_Ending_Regions — FINALE B: "Whole"  (reforge_regions) — the "true" ending.
+// The player gathered the quench-aether from the four cleansed regions, sparing the
+// Tree. Slower (a final stand at every node), but Elarion is rebuilt AND whole.
+// Branches off <<SetQuestFlag forgemasters_act4 reforge_regions>> (mirror
+// $saga_reforge_choice). Finale seam: GiveKeystone "AegisReforgedWhole" marks the
+// true-ending path for the Spire finale + NG+. No new command added.
+// =============================================================================
+title: SagaScene_Ending_Regions
+---
+Narrator: <i>The aether comes not from the Heart but from the four lands you healed — drawn node by node from the Stone Mountains, the Frost Peaks, the Verdant Forest, the Ashen Wastes, each won with one last stand. It pours into the quench gathered, given, whole. And the Tree at Elarion's centre does not dim. It stands a shade brighter, fed by the realm it shelters.</i>
+Old Pell: <i>He laughs — a sound no one here has heard from him in thirty years.</i> It's singing. Do you hear it? Not weeping — singing. You gave the lands back to the Tree, and the Tree kept its own light. <i>He grips your hand.</i> Child, you mended more than a blade today. You mended the whole of it.
+Mother Wren: <i>Tears bright on her face.</i> The slow road. The kind one. I hoped against hope you'd walk it, dearie — and you did. Elarion whole, the Heart bright, the four of us round one fire. I can go content now, knowing it. But I think I'll stay a while yet.
+Borin: <i>He holds up the Aegis, and for once there's no grief folded in it.</i> She cost the realm nothing it couldn't spare. That's a legend I can stand behind without flinching. Grandfather would've called this the work done right.
+Halvard: Then carry her whole, Aegis-bearer — a blade with no debt and no shadow. Take her to the Spire and end the Necromancer, and bring all of Elarion home with you.
+<<command: GiveKeystone "AegisReforgedWhole">>
+<<set $saga_ending_seen = true>>
+Narrator: <i>THE FORGEMASTERS' SAGA — ENDING: "Whole" (the true ending). The Aegis stands reborn and the Heart of Elarion is spared — brighter, fed by the cleansed lands. Four crafts, one workshop, one realm made whole. Carry the Aegis to the Spire, end the Necromancer, and rebuild Elarion entire.</i>
+Borin: Go on, then, hero. We'll keep the fire lit — all of us, together, in a realm that's whole at last.
 ===

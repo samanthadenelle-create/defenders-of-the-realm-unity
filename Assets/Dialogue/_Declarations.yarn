@@ -107,6 +107,13 @@ tags: system
 <<declare $saga_reforge_choice = "">>
 <<declare $saga_reforged = false>>
 
+// WO-296 — the two endings/finale beats keyed on the reforge choice. Set once the
+// player has SEEN the path-specific ending (Heart = somber sacrifice; Regions = the
+// "true"/whole ending). Read by the saga node so a re-entry replays the short coda,
+// not the full finale; downstream finale/NG+ reads the path via $saga_reforge_choice
+// (and the path-distinct keystone AegisReforgedHeart / AegisReforgedWhole).
+<<declare $saga_ending_seen = false>>
+
 // =============================================================================
 // — WO-299 Wild Hearts: Fenn's pet-bond questlines (per-species bonds) —
 // Yarn-side mirrors of the QuestService ledger (StartQuest/AdvanceQuest/SetQuestFlag
