@@ -207,8 +207,71 @@ namespace DeNelle.Core
         /// </summary>
         public static void GoPetSelect() => LoadScene(PetSelect);
 
-        /// <summary>Go to the Village scene (React `/village`).</summary>
-        public static void GoVillage() => LoadScene(Village);
+        /// <summary>
+        /// Go to the Village scene (React `/village`). Routes through
+        /// <see cref="LoadVillageWithLoader"/> so the 3-6s village load shows a
+        /// code-built loading overlay instead of a black stall. Fire-and-forget —
+        /// the overlay + async load run on their own; callers don't await.
+        /// </summary>
+        public static void GoVillage() => LoadVillageWithLoader().Forget();
+
+        /// <summary>
+        /// Loads the Village scene ASYNCHRONOUSLY behind a full-screen, code-built
+        /// loading overlay ("Loading Elarion…" + spinner + progress + rotating lore).
+        /// Fixes the black-screen stall: the synchronous SceneManager.LoadScene gave
+        /// the engine no chance to render feedback during the multi-second load;
+        /// LoadSceneAsync yields each frame so the overlay animates while the village
+        /// streams in, then the overlay tears down once the scene is active.
+        ///
+        /// The overlay is uGUI (no UXML, no PanelSettings) so it renders in player
+        /// builds — see <see cref="UI.VillageLoadOverlay"/>. Returns a UniTask; never
+        /// async void (Part-3 mandate).
+        /// </summary>
+        public static async UniTask LoadVillageWithLoader()
+        {
+            if (!IsSceneRegistered(Village))
+            {
+                Debug.LogError($"[SceneRouter] Scene '{Village}' is not in Build Settings — load aborted.");
+                return;
+            }
+
+            // Persist the save before tearing the old scene down (same contract as
+            // LoadScene). No await needed — the background delta-sync pushes shortly.
+            DeNelle.Core.State.GameStateService.Instance?.Save();
+
+            // Put the loader up FIRST so the player sees feedback immediately, before
+            // the (heavy) scene load begins.
+            var overlay = UI.VillageLoadOverlay.Show();
+
+            // A frame so the overlay actually paints before we start the load.
+            await UniTask.Yield();
+
+            var op = SceneManager.LoadSceneAsync(Village);
+            if (op != null)
+            {
+                // Hold activation until ~90% so the bar fills smoothly, then flip it.
+                op.allowSceneActivation = false;
+                while (!op.isDone)
+                {
+                    // Unity caps progress at 0.9 until allowSceneActivation flips true.
+                    float p = Mathf.Clamp01(op.progress / 0.9f);
+                    overlay?.SetProgress(p);
+
+                    if (op.progress >= 0.9f)
+                    {
+                        overlay?.SetProgress(1f);
+                        op.allowSceneActivation = true;
+                    }
+                    await UniTask.Yield();
+                }
+            }
+
+            // A couple of frames after activation so the new scene's first frame is up
+            // (NavMesh/HUD/hero settling) before we pull the overlay — avoids a flash
+            // of an un-lit village.
+            await UniTask.DelayFrame(2);
+            overlay?.HideAndDestroy();
+        }
 
         /// <summary>
         /// Go to a dungeon scene with a fade (React `/dungeon/:id`). Week 1 ships

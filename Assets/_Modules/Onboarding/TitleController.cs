@@ -233,6 +233,10 @@ namespace DeNelle.Onboarding
         {
             if (!_splashActive) return;
             _splashActive = false;
+            // DEF onboarding fast-path (owner: fast into battle). "Start New" takes the
+            // FAST PATH — a brief companion hook in the village then straight to Wave 1.
+            // The full 7-scene FTUE / cinematic is reserved for "Play Intro" below.
+            DeNelle.Core.OnboardingMode.ChooseFastPath();
             _titleBuilt = false;
             BuildTitleScreen();
             SetTitleVisible(true);
@@ -247,6 +251,10 @@ namespace DeNelle.Onboarding
         {
             if (!_splashActive) return;
             _splashActive = false;
+            // DEF onboarding: "Play Intro" opts INTO the full tutorial experience —
+            // the cinematic intro here, then the full FTUE companion meeting in the
+            // village (TutorialDirector / CompanionMeetingTrigger read this flag).
+            DeNelle.Core.OnboardingMode.ChooseFullTutorial();
             if (DeNelle.Core.IntroLauncher.Play != null)
             {
                 // The cinematic owns the screen until it transitions to hero select;

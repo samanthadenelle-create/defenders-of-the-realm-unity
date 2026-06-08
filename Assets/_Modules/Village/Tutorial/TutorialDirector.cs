@@ -38,6 +38,7 @@
 
 using System;
 using Cysharp.Threading.Tasks;
+using DeNelle.Core;
 using DeNelle.Core.Data;
 using DeNelle.Core.State;
 using UnityEngine;
@@ -169,6 +170,22 @@ namespace DeNelle.Village
             ResolveSceneRefs();
 
             // ─────────────────────────────────────────────────────────────────
+            // FAST PATH (the DEFAULT for "Start New") — owner: fast into battle.
+            // Instead of the full 7-scene FTUE / Yarn meeting, play a BRIEF hook
+            // (2-4 lines: the story beat + "defend the gate!") then kick Wave 1
+            // immediately. Deeper teaching moves to LEARN-BY-DOING (the companion
+            // delivers short contextual lines on first tower-build / first breach).
+            // Target: ~20-40s from village-load to fighting.
+            // Skipped when the player opted into the full tutorial via "Play Intro".
+            if (OnboardingMode.FastPath)
+            {
+                await RunFastPath();
+                return;
+            }
+
+            // ─────────────────────────────────────────────────────────────────
+            // FULL TUTORIAL (opt-in via "Play Intro") — the original path below.
+            // ─────────────────────────────────────────────────────────────────
             // DEF-263 — NPC INTRO DIALOG REMOVED.
             // The hardcoded seven-scene companion-meeting / tour / "they're here!"
             // dialogue no longer fires on village entry. The owner directive is a
@@ -198,6 +215,108 @@ namespace DeNelle.Village
                 Debug.Log("[TutorialDirector] No FTUE narrative hosted — finishing tutorial inline (fallback).");
                 FinishTutorial();
             }
+        }
+
+        // =====================================================================
+        //  FAST PATH (default new-game) — brief hook → Wave 1 → learn-by-doing
+        // =====================================================================
+
+        /// <summary>
+        /// The DEFAULT "Start New" onboarding: a brief companion hook (2-4 lines),
+        /// then Wave 1 kicks immediately. The deeper teaching is moved to in-world
+        /// LEARN-BY-DOING — short contextual companion lines wired on first tower
+        /// build and first breach (see <see cref="InstallLearnByDoingHooks"/>).
+        /// Cleanly skippable: a tap during the hook drains the dialogue queue, and a
+        /// hard timeout failsafe (TutorialDialogue.MaxAutoHold) means it can never
+        /// wedge — control reaches Wave 1 within ~20-40s either way.
+        /// </summary>
+        private async UniTask RunFastPath()
+        {
+            // Build the lightweight sub-components we need (companion + dialogue).
+            BuildSubComponents();
+
+            // Spawn the guide companion (a DIFFERENT class) and take over its bubble
+            // so the hook reads as the companion speaking.
+            _companionSpawner?.Spawn();
+            BindCompanionBubble();
+
+            string speaker = SpeakerName();
+            string shortName = _companionSpawner != null ? _companionSpawner.CompanionShortName : "your guide";
+
+            // THE HOOK — a little story + an immediate call to action (3 lines).
+            _dialogue?.Say(speaker,
+                $"You made it. I'm {shortName} — and the enemy is already at the gate.",
+                "No time for a tour. Elarion holds because we hold the line.",
+                "Defend the gate — I'm right beside you. GO!");
+            await WaitForDialogue();
+
+            // Learn-by-doing: arm the contextual companion lines for the first time
+            // the player builds a tower and the first time a wave breaches. These
+            // fire NON-BLOCKING during real play (no upfront tour). Keep this director
+            // alive (don't self-destroy in FinishTutorial) so the listeners survive.
+            _keepAliveForHooks = true;
+            InstallLearnByDoingHooks();
+
+            // Hand off to gameplay — Onboarded persisted + Wave 1 kicked. From here
+            // the companion stays in-world and follows (StoryCompanion loop is live).
+            FinishTutorial();
+        }
+
+        // ── Learn-by-doing: in-world contextual teaching during real play ─────
+
+        private bool _taughtFirstTower;
+        private bool _taughtFirstBreach;
+        // Keep the director alive past FinishTutorial on the fast path so its
+        // learn-by-doing event listeners can fire during real play.
+        private bool _keepAliveForHooks;
+
+        /// <summary>
+        /// Wires the two contextual teaching beats that replace the upfront tour:
+        ///   • first tower built  → "good — that'll thin them out; build at every gate"
+        ///   • first breach        → "they broke through — fall back and fight!"
+        /// Both are NON-BLOCKING barks through the companion bubble (no modal, no
+        /// gameplay pause) and self-unsubscribe after firing once. Null-safe — if a
+        /// system isn't present the hook simply never fires.
+        /// </summary>
+        private void InstallLearnByDoingHooks()
+        {
+            // First tower-build bark — reuses the placement system's OnTowerPlaced.
+            if (TowerPlacementSystem.Instance != null)
+            {
+                TowerPlacementSystem.Instance.OnTowerPlaced -= OnFirstTowerBuiltBark;
+                TowerPlacementSystem.Instance.OnTowerPlaced += OnFirstTowerBuiltBark;
+            }
+
+            // First breach bark — reuses the wave manager's OnBreach UnityEvent.
+            if (_wave == null) _wave = FindObjectOfType<WaveManager>();
+            if (_wave != null)
+                _wave.OnBreach.AddListener(OnFirstBreachBark);
+        }
+
+        private void OnFirstTowerBuiltBark(TowerData _)
+        {
+            if (_taughtFirstTower) return;
+            _taughtFirstTower = true;
+            if (TowerPlacementSystem.Instance != null)
+                TowerPlacementSystem.Instance.OnTowerPlaced -= OnFirstTowerBuiltBark;
+
+            // Non-blocking bark — straight to the companion bubble (no await).
+            var injector = StoryCompanionInjector.Instance;
+            var bubble = injector != null && injector.Companion != null ? injector.Companion.Bubble : null;
+            bubble?.Show(SpeakerName(),
+                "Good — that'll thin them out. Build one at every gate to hold all sides.");
+        }
+
+        private void OnFirstBreachBark(int _)
+        {
+            if (_taughtFirstBreach) return;
+            _taughtFirstBreach = true;
+            if (_wave != null) _wave.OnBreach.RemoveListener(OnFirstBreachBark);
+
+            var injector = StoryCompanionInjector.Instance;
+            var bubble = injector != null && injector.Companion != null ? injector.Companion.Bubble : null;
+            bubble?.Show(SpeakerName(),
+                "They broke through! Fall back to the Heart and fight — don't let them reach it!");
         }
 
         /// <summary>
@@ -420,6 +539,12 @@ namespace DeNelle.Village
             _wave?.BeginLoop().Forget();
 
             Debug.Log("[TutorialDirector] Tutorial complete — Onboarded persisted, wave loop kicked.");
+
+            // FAST PATH keeps the director ALIVE: the learn-by-doing barks (first
+            // tower-build / first breach) are serviced by THIS component's event
+            // listeners, so destroying it here would orphan them. It self-cleans in
+            // OnDestroy (scene unload) and the barks self-unsubscribe once fired.
+            if (_keepAliveForHooks) return;
             Destroy(gameObject, 0.5f);
         }
 
@@ -625,7 +750,11 @@ namespace DeNelle.Village
         private void OnDestroy()
         {
             if (TowerPlacementSystem.Instance != null)
+            {
                 TowerPlacementSystem.Instance.OnTowerPlaced -= OnTutorialTowerPlaced;
+                TowerPlacementSystem.Instance.OnTowerPlaced -= OnFirstTowerBuiltBark;
+            }
+            if (_wave != null) _wave.OnBreach.RemoveListener(OnFirstBreachBark);
         }
     }
 }

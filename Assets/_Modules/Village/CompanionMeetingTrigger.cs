@@ -29,6 +29,7 @@
 // =============================================================================
 
 using System;
+using DeNelle.Core;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -89,6 +90,18 @@ namespace DeNelle.Village
             // re-trigger on retry). Only the explicit -yarnAlways desktop flag forces a
             // replay for testing — dev builds no longer auto-replay every entry.
             bool always = HasAlwaysFlag();
+
+            // FAST PATH (default "Start New") — owner: fast into battle. The full Yarn
+            // CompanionMeeting is the deep, blocking FTUE; it must ONLY play when the
+            // player opted into the full tutorial ("Play Intro"). On the fast path the
+            // brief hook lives in TutorialDirector.RunFastPath instead, so we DON'T host
+            // the meeting here. The -yarnAlways dev flag still forces it for testing.
+            if (!always && OnboardingMode.FastPath)
+            {
+                Debug.Log("[CompanionMeetingTrigger] Fast-path onboarding — skipping the full " +
+                          "CompanionMeeting Yarn FTUE (the brief hook runs in TutorialDirector).");
+                return;
+            }
 
             // Once per process, regardless of gate (avoid double-hosting on re-load).
             if (_hostedThisSession && !always) return;
