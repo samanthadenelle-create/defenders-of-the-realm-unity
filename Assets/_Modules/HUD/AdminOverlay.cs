@@ -394,8 +394,10 @@ namespace DeNelle.HUD
             // companion re-joins on tutorial completion. Key = CompanionMeetingTrigger.SeenKey.
             PlayerPrefs.DeleteKey("yarn.companionMeeting.seen");
             PlayerPrefs.Save();
-            UnityEngine.SceneManagement.SceneManager.LoadScene("Village2");
-            SetStatus("Replay Tutorial: FTUE gate cleared, reloading Village2 (intro Yarn re-fires).");
+            // Owner-requested: a Yarn reset drops back to Character Select so the whole
+            // onboarding flow (HeroSelect -> PetSelect -> Village -> tutorial) replays.
+            DeNelle.Core.SceneRouter.GoHeroSelect();
+            SetStatus("Replay Tutorial: FTUE gate cleared — dropping to Character Select (HeroSelect).");
         }
 
         private void SetStatus(string s)
