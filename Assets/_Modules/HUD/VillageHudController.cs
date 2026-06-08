@@ -129,6 +129,17 @@ namespace DeNelle.HUD
 
         private CanvasGroup _rootGroup;
 
+        // ── WO-337: BATTLE-HUD group ──────────────────────────────────────────
+        // The combat-only clusters (abilities, hero vitals, wave/enemy readout,
+        // momentum badge) live under their OWN canvas + CanvasGroup at a higher
+        // sortingOrder so BattleHudVisibilityManager can fade the whole battle HUD
+        // in/out (active combat only) WITHOUT touching the IDLE/village UI
+        // (resource strip, castle/Heart HP banner, build button) which stays on
+        // the base HUD canvas. Exposed read-only for the visibility manager.
+        private Canvas _battleCanvas;
+        private CanvasGroup _battleHudGroup;
+        public CanvasGroup BattleHudGroup => _battleHudGroup;
+
         // ── Responsive layout cluster roots ──────────────────────────────────
         private RectTransform _resourceStrip;
         private RectTransform _waveReadout;
@@ -250,16 +261,37 @@ namespace DeNelle.HUD
             _safeArea = NewRect("SafeArea", go.transform, Vector2.zero, Vector2.one);
             ApplySafeArea();
 
+            // WO-337: dedicated BATTLE-HUD canvas (its own CanvasGroup, sortingOrder
+            // ~150) layered over the base HUD. The combat clusters live UNDER this so
+            // the visibility manager can fade the whole battle HUD without disturbing
+            // the idle/village UI on the base canvas. Full-stretch inside the safe area.
+            var battleGo = new GameObject("BattleHUD");
+            battleGo.transform.SetParent(_safeArea, false);
+            var battleRt = battleGo.AddComponent<RectTransform>();
+            battleRt.anchorMin = Vector2.zero;
+            battleRt.anchorMax = Vector2.one;
+            battleRt.offsetMin = Vector2.zero;
+            battleRt.offsetMax = Vector2.zero;
+            _battleCanvas = battleGo.AddComponent<Canvas>();
+            _battleCanvas.overrideSorting = true;
+            _battleCanvas.sortingOrder = 150;
+            battleGo.AddComponent<GraphicRaycaster>();
+            _battleHudGroup = battleGo.AddComponent<CanvasGroup>();
+            var battleRoot = battleRt;
+
+            // IDLE / village UI — base canvas (NEVER hidden by the battle-HUD gate).
             BuildResourceStrip(_safeArea);
             BuildCastleBanner(_safeArea);
-            BuildWaveReadout(_safeArea);
-            BuildPartyFrames(_safeArea);
-            BuildMomentumBadge(_safeArea);
-            BuildVitalsCluster(_safeArea);
-            BuildSkillBar(_safeArea);
             BuildBuildButton(_safeArea);
             BuildStartWaveButton(_safeArea);
             BuildRepairPrompt(_safeArea);
+            BuildPartyFrames(_safeArea);
+
+            // BATTLE HUD — combat-only clusters (faded in/out by the visibility mgr).
+            BuildWaveReadout(battleRoot);
+            BuildMomentumBadge(battleRoot);
+            BuildVitalsCluster(battleRoot);
+            BuildSkillBar(battleRoot);
         }
 
         // ── Currency strip — thin glass bar, tiny colour dot + amount. ─────────
@@ -725,8 +757,11 @@ namespace DeNelle.HUD
 
             bool showVillage = inVillage || _villageOnlyForced;
             SetActiveSafe(_castleBanner, showVillage);
-            SetActiveSafe(_waveReadout, showVillage);
             SetActiveSafe(_buildBtn, showVillage);
+            // NOTE (WO-337): the wave readout (N/M + enemy count + combat status) is
+            // part of the BATTLE HUD now — its visibility is driven by
+            // BattleHudVisibilityManager (active-combat fade), NOT the village/world
+            // context gate. Left out of this gate deliberately.
             // The Defend button is village-only AND gated by wave availability.
             SetActiveSafe(_startWaveBtn, showVillage && _startWaveAvailable);
             if (!showVillage) HideRepairPrompt();
