@@ -140,6 +140,22 @@ namespace DeNelle.Village
             // Yarn functions for branching on keystones (<<if HasKeystone("x")>>).
             ((IActionRegistration)_runner).AddFunction("HasKeystone",  (Func<string, bool>)FnHasKeystone);
             ((IActionRegistration)_runner).AddFunction("KeystoneCount", (Func<int>)FnKeystoneCount);
+            // WO-291 — quest-state READ functions for stage-aware vendor Talk branching
+            // against the live QuestService ledger (survives save/reload).
+            ((IActionRegistration)_runner).AddFunction("IsQuestActive",   (Func<string, bool>)FnIsQuestActive);
+            ((IActionRegistration)_runner).AddFunction("IsQuestComplete", (Func<string, bool>)FnIsQuestComplete);
+
+            // Vendor / station UI verbs (WO-106/109/291/304) — formerly on the now-dead
+            // NPCCommandBridge. Consolidated here onto the SINGLE live runner so each Yarn
+            // action name is registered exactly ONCE project-wide (the YarnSpinner source
+            // generator throws on a duplicate name across IActionRegistration methods).
+            Reg("OpenShop",       (Action<string>)CmdOpenShop);
+            Reg("OpenUpgrade",    (Action<string>)CmdOpenUpgrade);
+            Reg("OpenCraft",      (Action<string>)CmdOpenCraft);
+            Reg("OpenEquip",      (Action)CmdOpenEquip);
+            Reg("OpenArena",      (Action)CmdOpenArena);
+            Reg("OpenRumorBoard", (Action)CmdOpenRumorBoard);
+            Reg("LearnRecipe",    (Action<string>)CmdLearnRecipe);
 
             // Misc / meta
             Reg("save_game",            (Action)CmdSaveGame);
@@ -488,6 +504,73 @@ namespace DeNelle.Village
         }
         private static bool FnHasKeystone(string name) => QuestService.Instance != null && QuestService.Instance.HasKeystone(name);
         private static int FnKeystoneCount() => QuestService.Instance != null ? QuestService.Instance.KeystoneCount : 0;
+
+        // WO-291 — read the live quest ledger for stage-aware vendor Talk branching.
+        private static bool FnIsQuestActive(string id) =>
+            QuestService.Instance != null && QuestService.Instance.IsActive(id);
+        private static bool FnIsQuestComplete(string id) =>
+            QuestService.Instance != null && QuestService.Instance.IsCompleted(id);
+
+        // ── Vendor / station UI verbs (consolidated from the dead NPCCommandBridge) ──
+        // Each opens the relevant code-built panel, self-healing a host if none exists
+        // (the panels build their own Canvas). Behaviour identical to the old bridge.
+        private void CmdOpenShop(string vendor)
+        {
+            Debug.Log($"[DialogueCommandBridge] OpenShop: {vendor}");
+            var panel = FindObjectOfType<DeNelle.Village.Hero.ShopPanel>();
+            if (panel == null)
+                panel = new GameObject("ShopPanelHost").AddComponent<DeNelle.Village.Hero.ShopPanel>();
+            panel.Open(vendor);
+        }
+
+        private void CmdOpenUpgrade(string stationType)
+        {
+            Debug.Log($"[DialogueCommandBridge] OpenUpgrade: {stationType}");
+            var panel = FindObjectOfType<DeNelle.Village.Buildings.Progression.BuildingUpgradePanel>();
+            if (panel == null)
+                panel = new GameObject("BuildingUpgradePanelHost").AddComponent<DeNelle.Village.Buildings.Progression.BuildingUpgradePanel>();
+            if (!string.IsNullOrEmpty(stationType)) panel.OpenFocused(stationType);
+            else panel.Open();
+        }
+
+        private void CmdOpenCraft(string context)
+        {
+            Debug.Log($"[DialogueCommandBridge] OpenCraft: {context}");
+            var panel = FindObjectOfType<DeNelle.Village.Crafting.VillageCraftingPanel>();
+            if (panel == null)
+                panel = new GameObject("VillageCraftingPanelHost").AddComponent<DeNelle.Village.Crafting.VillageCraftingPanel>();
+            panel.Open();
+        }
+
+        private void CmdOpenEquip()
+        {
+            Debug.Log("[DialogueCommandBridge] OpenEquip");
+            var panel = FindObjectOfType<DeNelle.Village.Hero.EquipmentPanel>();
+            if (panel == null)
+                panel = new GameObject("EquipmentPanelHost").AddComponent<DeNelle.Village.Hero.EquipmentPanel>();
+            panel.Open();
+        }
+
+        private void CmdOpenArena()
+        {
+            Debug.Log("[DialogueCommandBridge] OpenArena");
+            var panel = FindObjectOfType<DeNelle.Village.Arena.ArenaPanel>();
+            if (panel == null)
+                panel = new GameObject("ArenaPanelHost").AddComponent<DeNelle.Village.Arena.ArenaPanel>();
+            panel.Open();
+        }
+
+        private void CmdOpenRumorBoard()
+        {
+            Debug.Log("[DialogueCommandBridge] OpenRumorBoard");
+            var panel = FindObjectOfType<DeNelle.Village.Hero.RumorBoardPanel>();
+            if (panel == null)
+                panel = new GameObject("RumorBoardPanelHost").AddComponent<DeNelle.Village.Hero.RumorBoardPanel>();
+            panel.Open();
+        }
+
+        private void CmdLearnRecipe(string recipeId)
+            => Debug.Log($"[DialogueCommandBridge] Learned recipe: {recipeId}");
 
         private void CmdSpawnNpc(string who, string atWord, string where) =>
             Debug.Log($"[DialogueCommandBridge] spawn_npc '{who}' at '{where}' (companion auto-spawns; ambient NPCs are a follow-up).");
