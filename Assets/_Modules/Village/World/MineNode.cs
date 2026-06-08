@@ -172,6 +172,7 @@ namespace DeNelle.Village
             int banked = Mathf.Min(amount, _reserveRemaining);
             _reserveRemaining -= banked;
             BankYield(banked);
+            SpawnGainPopup(banked);   // WO-229 floating "+N <Resource>" at the node
 
             if (_reserveRemaining <= 0)
             {
@@ -420,7 +421,11 @@ namespace DeNelle.Village
             int amount = Mathf.RoundToInt(YieldPerExtract * (1f + 0.25f * tier));
 
             BankYield(amount);
-            if (amount > 0) GameSfx.PlayPetHarvest();   // harvest "ding" on a successful extract
+            if (amount > 0)
+            {
+                GameSfx.PlayPetHarvest();   // harvest "ding" on a successful extract
+                SpawnGainPopup(amount);     // WO-229 floating "+N <Resource>" at the node
+            }
             _cooldown = ExtractCooldown;
 
             if (TotalExtracts > 0)
@@ -489,6 +494,36 @@ namespace DeNelle.Village
                 }
             }
             DeNelle.Core.State.GameStateService.Instance?.ResourcesChanged?.Invoke();
+        }
+
+        // WO-229 — visual harvest feedback. Emit ONE floating "+N <Resource>" popup at
+        // the node on every successful bank, so the player sees income whether it came
+        // from a manual [F]-tap (Extract), a finite-reserve tap (ExtractReserve), or an
+        // autonomous pet/worker auto-extract (TryAutoExtract → Extract → here). Uses the
+        // shared ResourceGainPopup (same code-built, WebGL-safe, prefab-free world text
+        // HarvestSite uses) so the income visual language is unified. The HUD resource
+        // tick is already covered: BankYield → EconomyService/GameState → OnChanged.
+        // HarvestSite spawns its own popup via EconomyService.AddResource (a separate
+        // banking path), so there is no double-popup with this MineNode-path emission.
+        private void SpawnGainPopup(int amount)
+        {
+            if (amount <= 0) return;
+            Vector3 pos = transform.position + Vector3.up * 1.6f;
+            ResourceGainPopup.Spawn(pos, $"+{amount} {Resource}", ResourceTint(Resource));
+        }
+
+        /// <summary>Resource-themed popup tint (matches HarvestSite's palette so Wood/
+        /// Iron/Food/Crystal read the same colour across both harvest visuals).</summary>
+        private static Color ResourceTint(MineResource res)
+        {
+            return res switch
+            {
+                MineResource.Wood          => new Color(0.55f, 0.38f, 0.22f),
+                MineResource.Iron          => new Color(0.62f, 0.64f, 0.70f),
+                MineResource.Food          => new Color(0.72f, 0.62f, 0.28f),
+                MineResource.AetherCrystal => new Color(0.35f, 0.72f, 0.95f),
+                _                          => Color.white
+            };
         }
 
 #if UNITY_EDITOR
