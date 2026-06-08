@@ -17,6 +17,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UIElements;
+using DeNelle.Core.UI;   // shared Elarion palette — compass matches the uGUI HUD
 
 namespace DeNelle.HUD
 {
@@ -94,15 +95,17 @@ namespace DeNelle.HUD
             _compassStrip.style.height = CompassHeight;
             _compassStrip.style.left = Length.Percent(50);
             _compassStrip.style.translate = new StyleTranslate(new Translate(-CompassWidth / 2f, 0));
-            _compassStrip.style.backgroundColor = new Color(0.07f, 0.05f, 0.11f, 0.78f);
-            _compassStrip.style.borderTopLeftRadius = 14; _compassStrip.style.borderTopRightRadius = 14;
-            _compassStrip.style.borderBottomLeftRadius = 14; _compassStrip.style.borderBottomRightRadius = 14;
+            // Elarion stone plate with a runic-gold rim — matches the uGUI HUD panels.
+            _compassStrip.style.backgroundColor = ElarionUi.PanelStoneDark;
+            ElarionUi.SetRadius(_compassStrip, ElarionUi.RadiusMd);
+            ElarionUi.SetBorderWidth(_compassStrip, 1.5f);
+            ElarionUi.SetBorderColor(_compassStrip, new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.55f));
             _compassStrip.style.alignItems = Align.Center;
             _compassStrip.style.justifyContent = Justify.Center;
             _root.Add(_compassStrip);
 
             _compassLabel = new Label("N");
-            _compassLabel.style.color = new Color(0.95f, 0.92f, 0.85f);
+            _compassLabel.style.color = ElarionUi.Parchment;
             _compassLabel.style.fontSize = 14;
             _compassLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
             _compassLabel.style.letterSpacing = 6;
@@ -203,7 +206,7 @@ namespace DeNelle.HUD
                 arrow.style.width = 20; arrow.style.height = 20;
                 arrow.style.fontSize = 18;
                 arrow.style.unityFontStyleAndWeight = FontStyle.Bold;
-                arrow.style.color = new Color(1f, 0.32f, 0.32f);
+                arrow.style.color = ElarionUi.Danger; // threat-red, shared palette
                 arrow.style.unityTextAlign = TextAnchor.MiddleCenter;
                 arrow.style.display = DisplayStyle.None;
                 _arrowLayer.Add(arrow);

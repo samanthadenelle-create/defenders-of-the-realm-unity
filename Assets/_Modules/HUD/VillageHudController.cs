@@ -232,6 +232,7 @@ namespace DeNelle.HUD
         {
             _resourceStrip = NewRect("ResourceStrip", parent, new Vector2(0.50f, 0.955f), new Vector2(1f, 1f));
             HudTheme.StylePanel(_resourceStrip.gameObject, HudTheme.PanelStone);
+            HudTheme.AddRim(_resourceStrip.gameObject, HudTheme.GoldRim);
 
             // Concept order: Wood, Iron, Crystal (gem), Gold. Glyph + warm tint per.
             string[] names  = { "Wood", "Iron", "Crystal", "Gold" };
@@ -244,16 +245,26 @@ namespace DeNelle.HUD
             {
                 var cell = NewRect("Res_" + names[i], _resourceStrip, new Vector2(i * w, 0f), new Vector2((i + 1) * w, 1f));
 
-                // icon disc (left)
-                var disc = NewRect("Icon", cell, new Vector2(0.06f, 0.18f), new Vector2(0.42f, 0.82f));
+                // Hairline gilt divider between cells (not before the first) — groups
+                // the four currencies as one strip while keeping each readable.
+                if (i > 0)
+                {
+                    var div = NewRect("Div", cell, new Vector2(0f, 0.20f), new Vector2(0f, 0.80f));
+                    div.sizeDelta = new Vector2(1.5f, 0f);
+                    div.anchoredPosition = Vector2.zero;
+                    div.gameObject.AddComponent<Image>().color = HudTheme.TrimSoft;
+                }
+
+                // icon disc (left) — warm-tinted rune disc, dark glyph for contrast.
+                var disc = NewRect("Icon", cell, new Vector2(0.07f, 0.20f), new Vector2(0.40f, 0.80f));
                 var dimg = disc.gameObject.AddComponent<Image>();
                 dimg.color = tints[i];
                 dimg.sprite = HudTheme.Disc;
                 dimg.type = Image.Type.Simple;
-                AddText(disc, glyphs[i], 26, HudTheme.Ink, TextAlignmentOptions.Center);
+                AddText(disc, glyphs[i], 24, HudTheme.Ink, TextAlignmentOptions.Center);
 
                 // amount text (right)
-                var amt = NewRect("Amt", cell, new Vector2(0.42f, 0f), new Vector2(1f, 1f));
+                var amt = NewRect("Amt", cell, new Vector2(0.42f, 0f), new Vector2(0.96f, 1f));
                 _resourceTexts[i] = AddText(amt, "0", 28, HudTheme.Parchment, TextAlignmentOptions.Left);
                 _resourceTexts[i].fontStyle = FontStyles.Bold;
             }
@@ -264,35 +275,58 @@ namespace DeNelle.HUD
         {
             _castleBanner = NewRect("CastleBanner", parent, new Vector2(0.26f, 0.94f), new Vector2(0.74f, 0.99f));
             HudTheme.StylePanel(_castleBanner.gameObject, HudTheme.PanelStone);
+            HudTheme.AddRim(_castleBanner.gameObject, HudTheme.GoldRim);
 
-            var track = NewRect("Track", _castleBanner, new Vector2(0.04f, 0.18f), new Vector2(0.96f, 0.82f));
-            track.gameObject.AddComponent<Image>().color = HudTheme.HpTrack;
-            var fill = NewRect("Fill", track, Vector2.zero, Vector2.one);
+            // Recessed well behind the fill, plus a thin gilt frame around the bar so
+            // the Heart's vitality reads as a deliberate engraved gauge.
+            var track = NewRect("Track", _castleBanner, new Vector2(0.05f, 0.20f), new Vector2(0.95f, 0.80f));
+            HudTheme.StyleWell(track.gameObject);
+            var fill = NewRect("Fill", track, new Vector2(0f, 0f), new Vector2(1f, 1f));
+            fill.offsetMin = new Vector2(2, 2); fill.offsetMax = new Vector2(-2, -2);
             _castleFill = fill.gameObject.AddComponent<Image>();
             _castleFill.color = HudTheme.CastleGold;
+            _castleFill.sprite = HudTheme.RoundedFrame;
             _castleFill.type = Image.Type.Filled;
             _castleFill.fillMethod = Image.FillMethod.Horizontal;
             _castleFill.fillOrigin = 0;
             _castleFill.fillAmount = 1f;
-            _castleText = AddText(track, "Castle 100%", 22, HudTheme.Ink, TextAlignmentOptions.Center);
+            HudTheme.AddRim(track.gameObject, HudTheme.TrimSoft);
+            // Crest + label, inset over the bar so the banner reads "Heart of Elarion".
+            _castleText = AddText(track, "✦ Heart of Elarion — 100%", 20, HudTheme.Parchment, TextAlignmentOptions.Center);
             _castleText.fontStyle = FontStyles.Bold;
+            _castleText.outlineColor = new Color32(0, 0, 0, 200);
+            _castleText.outlineWidth = 0.18f;
         }
 
         private void BuildWaveReadout(Transform parent)
         {
             _waveReadout = NewRect("WaveReadout", parent, new Vector2(0.26f, 0.885f), new Vector2(0.74f, 0.935f));
-            // No solid panel — floating banner text per the concept.
+            // No solid panel — floating banner per the concept, but with a soft
+            // gilt rule under the title so it reads as one engraved plate.
             _waveText = AddText(_waveReadout, "WAVE 1", HudTheme.FontTitle + 6, HudTheme.Parchment, TextAlignmentOptions.Center);
             _waveText.fontStyle = FontStyles.Bold;
             _waveText.characterSpacing = 6f; // engraved-banner feel
-            var stateRect = NewRect("State", _waveReadout, new Vector2(0f, 0.24f), new Vector2(1f, 0.52f));
+            _waveText.outlineColor = new Color32(0, 0, 0, 210);
+            _waveText.outlineWidth = 0.2f;
+
+            // Thin gilt rule centred under the WAVE title — a deliberate divider that
+            // ties title + state + count together without a heavy panel.
+            var rule = NewRect("Rule", _waveReadout, new Vector2(0.30f, 0.52f), new Vector2(0.70f, 0.52f));
+            rule.sizeDelta = new Vector2(0f, 2f);
+            rule.gameObject.AddComponent<Image>().color = HudTheme.GoldRim;
+
+            var stateRect = NewRect("State", _waveReadout, new Vector2(0f, 0.24f), new Vector2(1f, 0.50f));
             _waveStateText = AddText(stateRect, _lastWaveState, HudTheme.FontHead, HudTheme.Gold, TextAlignmentOptions.Center);
+            _waveStateText.outlineColor = new Color32(0, 0, 0, 180);
+            _waveStateText.outlineWidth = 0.15f;
 
             // Live "X / Y enemies" readout — sits just under the wave state so the
             // player always knows how close the current wave is to being cleared.
-            var countRect = NewRect("EnemyCount", _waveReadout, new Vector2(0f, 0f), new Vector2(1f, 0.26f));
+            var countRect = NewRect("EnemyCount", _waveReadout, new Vector2(0f, 0f), new Vector2(1f, 0.24f));
             _enemyCountText = AddText(countRect, "", HudTheme.FontBody, HudTheme.Parchment, TextAlignmentOptions.Center);
             _enemyCountText.fontStyle = FontStyles.Bold;
+            _enemyCountText.outlineColor = new Color32(0, 0, 0, 160);
+            _enemyCountText.outlineWidth = 0.12f;
         }
 
         // ── Combo / kill-streak momentum badge ─────────────────────────────────
@@ -308,17 +342,31 @@ namespace DeNelle.HUD
             _momentumGroup.interactable = false;
             _momentumGroup.blocksRaycasts = false;
 
+            // Soft dark plate behind the pop so big combo/streak numbers stay legible
+            // over bright VFX — translucent, gilt-rimmed, never blocks raycasts.
+            var plate = NewRect("Plate", _momentumBadge, new Vector2(0.06f, 0.04f), new Vector2(0.94f, 0.96f));
+            var plateImg = plate.gameObject.AddComponent<Image>();
+            plateImg.sprite = HudTheme.RoundedFrame;
+            plateImg.type = Image.Type.Sliced;
+            plateImg.color = new Color(HudTheme.PanelStoneDark.r, HudTheme.PanelStoneDark.g, HudTheme.PanelStoneDark.b, 0.62f);
+            plateImg.raycastTarget = false;
+            HudTheme.AddRim(plate.gameObject, HudTheme.GoldRim);
+
             // Combo line (big) — e.g. "8× COMBO"
             var comboRect = NewRect("Combo", _momentumBadge, new Vector2(0f, 0.42f), new Vector2(1f, 1f));
-            _comboText = AddText(comboRect, "", HudTheme.FontTitle + 10, HudTheme.Gold, TextAlignmentOptions.Center);
+            _comboText = AddText(comboRect, "", HudTheme.FontTitle + 10, HudTheme.Gilt, TextAlignmentOptions.Center);
             _comboText.fontStyle = FontStyles.Bold;
             _comboText.characterSpacing = 4f;
+            _comboText.outlineColor = new Color32(0, 0, 0, 220);
+            _comboText.outlineWidth = 0.22f;
 
             // Kill-streak line (smaller, under) — e.g. "3× KILLS"
             var streakRect = NewRect("Streak", _momentumBadge, new Vector2(0f, 0f), new Vector2(1f, 0.42f));
             _streakText = AddText(streakRect, "", HudTheme.FontHead, HudTheme.HpRed, TextAlignmentOptions.Center);
             _streakText.fontStyle = FontStyles.Bold;
             _streakText.characterSpacing = 3f;
+            _streakText.outlineColor = new Color32(0, 0, 0, 200);
+            _streakText.outlineWidth = 0.18f;
         }
 
         // ── Top-left party stack: hero (slot 0) + up to 3 companions. ──────────
@@ -343,14 +391,19 @@ namespace DeNelle.HUD
                 frame.anchoredPosition = new Vector2(0f, -i * (PartyRowHeight + PartyRowGap));
                 frame.sizeDelta = new Vector2(0f, PartyRowHeight);
                 HudTheme.StylePanel(frame.gameObject, HudTheme.PanelStone);
+                // Hero (slot 0) gets the brighter gilt rim; companions a softer rim.
+                HudTheme.AddRim(frame.gameObject, i == 0 ? HudTheme.GoldRim : HudTheme.TrimSoft);
                 _partyFrame[i] = frame.gameObject;
 
-                // Portrait swatch (left) — rounded inset, gold-rimmed.
+                // Portrait swatch (left) — recessed well + gilt rim ring.
                 var port = NewRect("Portrait", frame, new Vector2(0.04f, 0.16f), new Vector2(0.30f, 0.92f));
                 var pimg = port.gameObject.AddComponent<Image>();
                 pimg.color = HudTheme.PortraitFill;
                 pimg.sprite = HudTheme.RoundedFrame;
                 pimg.type = Image.Type.Sliced;
+                HudTheme.AddRim(port.gameObject, HudTheme.GoldRim);
+                // Crest placeholder glyph until real portrait art lands.
+                AddText(port, "✦", 22, new Color(HudTheme.Gilt.r, HudTheme.Gilt.g, HudTheme.Gilt.b, 0.5f), TextAlignmentOptions.Center);
 
                 // Name
                 var nameRect = NewRect("Name", frame, new Vector2(0.34f, 0.50f), new Vector2(0.98f, 0.95f));
@@ -361,18 +414,23 @@ namespace DeNelle.HUD
                 _partyName[i].fontSizeMin = 10f;
                 _partyName[i].fontSizeMax = 18f;
 
-                // HP bar track + fill
+                // HP bar — recessed well track + rounded fill, faint trim rim.
                 var track = NewRect("HPTrack", frame, new Vector2(0.34f, 0.14f), new Vector2(0.98f, 0.44f));
-                track.gameObject.AddComponent<Image>().color = HudTheme.HpTrack;
+                HudTheme.StyleWell(track.gameObject);
                 var fill = NewRect("HPFill", track, new Vector2(0f, 0f), new Vector2(1f, 1f));
+                fill.offsetMin = new Vector2(1.5f, 1.5f); fill.offsetMax = new Vector2(-1.5f, -1.5f);
                 var fimg = fill.gameObject.AddComponent<Image>();
                 fimg.color = HudTheme.HpRed;
+                fimg.sprite = HudTheme.RoundedFrame;
                 fimg.type = Image.Type.Filled;
                 fimg.fillMethod = Image.FillMethod.Horizontal;
                 fimg.fillOrigin = 0;
                 fimg.fillAmount = 1f;
                 _partyHpFill[i] = fimg;
-                _partyHpText[i] = AddText(track, "", 14, HudTheme.Parchment, TextAlignmentOptions.Center);
+                HudTheme.AddRim(track.gameObject, HudTheme.TrimSoft);
+                _partyHpText[i] = AddText(track, "", 13, HudTheme.Parchment, TextAlignmentOptions.Center);
+                _partyHpText[i].outlineColor = new Color32(0, 0, 0, 180);
+                _partyHpText[i].outlineWidth = 0.12f;
 
                 // Hidden until populated (hero shown immediately once HP pushed).
                 _partyFrame[i].SetActive(i == 0);
@@ -384,30 +442,41 @@ namespace DeNelle.HUD
         {
             _skillBar = NewRect("SkillBar", parent, new Vector2(0.10f, 0.0f), new Vector2(0.90f, 0.135f));
             HudTheme.StylePanel(_skillBar.gameObject, HudTheme.PanelStoneDark);
+            HudTheme.AddRim(_skillBar.gameObject, HudTheme.GoldRim);
 
-            // HP bar (top edge of the bar)
+            // HP bar (top edge of the bar) — recessed well + rounded fill.
             var hpTrack = NewRect("HPTrack", _skillBar, new Vector2(0.04f, 0.80f), new Vector2(0.96f, 0.95f));
-            hpTrack.gameObject.AddComponent<Image>().color = HudTheme.HpTrack;
+            HudTheme.StyleWell(hpTrack.gameObject);
             var hpFill = NewRect("HPFill", hpTrack, Vector2.zero, Vector2.one);
+            hpFill.offsetMin = new Vector2(2, 2); hpFill.offsetMax = new Vector2(-2, -2);
             _hpFill = hpFill.gameObject.AddComponent<Image>();
             _hpFill.color = HudTheme.HpRed;
+            _hpFill.sprite = HudTheme.RoundedFrame;
             _hpFill.type = Image.Type.Filled;
             _hpFill.fillMethod = Image.FillMethod.Horizontal;
             _hpFill.fillOrigin = 0;
             _hpFill.fillAmount = 1f;
-            _hpText = AddText(hpTrack, "", 18, HudTheme.Parchment, TextAlignmentOptions.Center);
+            HudTheme.AddRim(hpTrack.gameObject, HudTheme.TrimSoft);
+            _hpText = AddText(hpTrack, "", 16, HudTheme.Parchment, TextAlignmentOptions.Center);
+            _hpText.fontStyle = FontStyles.Bold;
+            _hpText.outlineColor = new Color32(0, 0, 0, 180); _hpText.outlineWidth = 0.12f;
 
-            // Mana bar (just below HP)
+            // Mana bar (just below HP) — same recessed-well treatment.
             var mTrack = NewRect("ManaTrack", _skillBar, new Vector2(0.04f, 0.63f), new Vector2(0.96f, 0.78f));
-            mTrack.gameObject.AddComponent<Image>().color = HudTheme.ManaTrack;
+            HudTheme.StyleWell(mTrack.gameObject);
             var mFill = NewRect("ManaFill", mTrack, Vector2.zero, Vector2.one);
+            mFill.offsetMin = new Vector2(2, 2); mFill.offsetMax = new Vector2(-2, -2);
             _manaFill = mFill.gameObject.AddComponent<Image>();
             _manaFill.color = HudTheme.ManaBlue;
+            _manaFill.sprite = HudTheme.RoundedFrame;
             _manaFill.type = Image.Type.Filled;
             _manaFill.fillMethod = Image.FillMethod.Horizontal;
             _manaFill.fillOrigin = 0;
             _manaFill.fillAmount = 1f;
-            _manaText = AddText(mTrack, "", 16, HudTheme.Parchment, TextAlignmentOptions.Center);
+            HudTheme.AddRim(mTrack.gameObject, HudTheme.TrimSoft);
+            _manaText = AddText(mTrack, "", 15, HudTheme.Parchment, TextAlignmentOptions.Center);
+            _manaText.fontStyle = FontStyles.Bold;
+            _manaText.outlineColor = new Color32(0, 0, 0, 180); _manaText.outlineWidth = 0.12f;
 
             // 4 ability cells across the lower portion (large touch targets).
             _slotKey      = new TextMeshProUGUI[AbilitySlotCount];
@@ -431,20 +500,31 @@ namespace DeNelle.HUD
                 cellImg.color = HudTheme.SlotBack;
                 cellImg.sprite = HudTheme.RoundedFrame;
                 cellImg.type = Image.Type.Sliced;
+                // Gilt rim ring frames the cell as a proper runic ability button.
+                HudTheme.AddRim(cell.gameObject, HudTheme.GoldRim);
 
                 // Accent rune disc (tinted per ability) — top portion of the cell,
                 // leaving a strip at the bottom for the ability NAME label.
-                var disc = NewRect("Accent", cell, new Vector2(0.14f, 0.34f), new Vector2(0.86f, 0.96f));
+                var disc = NewRect("Accent", cell, new Vector2(0.16f, 0.34f), new Vector2(0.84f, 0.96f));
                 _slotAccent[i] = disc.gameObject.AddComponent<Image>();
                 _slotAccent[i].color = HudTheme.SlotDisc;
                 _slotAccent[i].sprite = HudTheme.Disc;
                 _slotAccent[i].type = Image.Type.Simple;
+                // Thin gilt ring around the rune disc.
+                var discRing = NewRect("DiscRing", disc, Vector2.zero, Vector2.one);
+                var discRingImg = discRing.gameObject.AddComponent<Image>();
+                discRingImg.sprite = HudTheme.Disc;
+                discRingImg.type = Image.Type.Simple;
+                discRingImg.color = new Color(HudTheme.Gilt.r, HudTheme.Gilt.g, HudTheme.Gilt.b, 0.22f);
+                discRingImg.raycastTarget = false;
 
                 // Glyph
                 _slotGlyph[i] = AddText(disc, "", 34, HudTheme.Parchment, TextAlignmentOptions.Center);
+                _slotGlyph[i].outlineColor = new Color32(0, 0, 0, 160);
+                _slotGlyph[i].outlineWidth = 0.12f;
 
                 // Cooldown radial overlay (drains as the ability comes off cooldown)
-                var cd = NewRect("CD", cell, Vector2.zero, Vector2.one);
+                var cd = NewRect("CD", disc, Vector2.zero, Vector2.one);
                 _slotCooldown[i] = cd.gameObject.AddComponent<Image>();
                 _slotCooldown[i].color = HudTheme.CdShade;
                 _slotCooldown[i].sprite = HudTheme.Disc;
@@ -465,10 +545,19 @@ namespace DeNelle.HUD
                 _slotName[i].fontSizeMin = 9f;
                 _slotName[i].fontSizeMax = 16f;
                 _slotName[i].raycastTarget = false;
+                _slotName[i].outlineColor = new Color32(0, 0, 0, 150);
+                _slotName[i].outlineWidth = 0.1f;
 
-                // Hotkey badge (top-right corner of the cell, over the disc)
-                var keyRect = NewRect("Key", cell, new Vector2(0.66f, 0.70f), new Vector2(1f, 1f));
-                _slotKey[i] = AddText(keyRect, defaultKeys[i], 18, HudTheme.Gold, TextAlignmentOptions.Center);
+                // Hotkey badge (top-right corner) — small dark gilt-rimmed disc so the
+                // key reads cleanly over the rune disc.
+                var keyBadge = NewRect("KeyBadge", cell, new Vector2(0.66f, 0.66f), new Vector2(1.0f, 1.0f));
+                var keyImg = keyBadge.gameObject.AddComponent<Image>();
+                keyImg.sprite = HudTheme.Disc;
+                keyImg.type = Image.Type.Simple;
+                keyImg.color = new Color(HudTheme.PanelStoneDark.r, HudTheme.PanelStoneDark.g, HudTheme.PanelStoneDark.b, 0.9f);
+                keyImg.raycastTarget = false;
+                _slotKey[i] = AddText(keyBadge, defaultKeys[i], 16, HudTheme.Gilt, TextAlignmentOptions.Center);
+                _slotKey[i].fontStyle = FontStyles.Bold;
 
                 // Click → AbilityRequested(slot)
                 var btn = cell.gameObject.AddComponent<Button>();
@@ -491,7 +580,8 @@ namespace DeNelle.HUD
             btn.targetGraphic = bimg;
             HudTheme.StyleButtonColors(btn, HudTheme.GoldButton);
             btn.onClick.AddListener(() => BuildRequested?.Invoke());
-            var t = AddText(_buildBtn, "BUILD", HudTheme.FontHead, HudTheme.Ink, TextAlignmentOptions.Center);
+            HudTheme.AddRim(_buildBtn.gameObject, new Color(HudTheme.Gilt.r, HudTheme.Gilt.g, HudTheme.Gilt.b, 0.9f));
+            var t = AddText(_buildBtn, "⚒ BUILD", HudTheme.FontHead, HudTheme.Ink, TextAlignmentOptions.Center);
             t.fontStyle = FontStyles.Bold;
         }
 
@@ -512,8 +602,10 @@ namespace DeNelle.HUD
             btn.targetGraphic = bimg;
             HudTheme.StyleButtonColors(btn, HudTheme.GoldButton);
             btn.onClick.AddListener(() => StartWaveRequested?.Invoke());
-            var t = AddText(_startWaveBtn, "DEFEND!", HudTheme.FontBody, HudTheme.Ink, TextAlignmentOptions.Center);
+            HudTheme.AddRim(_startWaveBtn.gameObject, new Color(HudTheme.Gilt.r, HudTheme.Gilt.g, HudTheme.Gilt.b, 0.9f));
+            var t = AddText(_startWaveBtn, "⚔ DEFEND!", HudTheme.FontBody, HudTheme.Ink, TextAlignmentOptions.Center);
             t.fontStyle = FontStyles.Bold;
+            t.characterSpacing = 2f;
             // Hidden until the bridge reports a wave is ready to start.
             _startWaveBtn.gameObject.SetActive(false);
         }
@@ -522,10 +614,12 @@ namespace DeNelle.HUD
         {
             var p = NewRect("RepairPrompt", parent, new Vector2(0.28f, 0.42f), new Vector2(0.72f, 0.58f));
             HudTheme.StylePanel(p.gameObject, HudTheme.PanelStoneDark);
+            HudTheme.AddRim(p.gameObject, HudTheme.GoldRim);
             _repairPanel = p.gameObject;
 
             var labelRect = NewRect("Label", p, new Vector2(0.05f, 0.50f), new Vector2(0.95f, 0.95f));
             _repairLabel = AddText(labelRect, "", 22, HudTheme.Parchment, TextAlignmentOptions.Center);
+            _repairLabel.fontStyle = FontStyles.Bold;
 
             var yes = NewRect("Yes", p, new Vector2(0.10f, 0.10f), new Vector2(0.46f, 0.42f));
             var yimg = yes.gameObject.AddComponent<Image>();
@@ -536,6 +630,7 @@ namespace DeNelle.HUD
             yesBtn.targetGraphic = yimg;
             HudTheme.StyleButtonColors(yesBtn, HudTheme.GoldButton);
             yesBtn.onClick.AddListener(() => { RepairConfirmRequested?.Invoke(); HideRepairPrompt(); });
+            HudTheme.AddRim(yes.gameObject, new Color(HudTheme.Gilt.r, HudTheme.Gilt.g, HudTheme.Gilt.b, 0.9f));
             AddText(yes, "Repair", HudTheme.FontHead, HudTheme.Ink, TextAlignmentOptions.Center).fontStyle = FontStyles.Bold;
 
             var no = NewRect("No", p, new Vector2(0.54f, 0.10f), new Vector2(0.90f, 0.42f));
@@ -547,6 +642,7 @@ namespace DeNelle.HUD
             noBtn.targetGraphic = nimg;
             HudTheme.StyleButtonColors(noBtn, HudTheme.PanelStone);
             noBtn.onClick.AddListener(() => { RepairCancelRequested?.Invoke(); HideRepairPrompt(); });
+            HudTheme.AddRim(no.gameObject, HudTheme.TrimSoft);
             AddText(no, "Later", HudTheme.FontHead, HudTheme.Parchment, TextAlignmentOptions.Center);
 
             _repairPanel.SetActive(false);
@@ -655,7 +751,7 @@ namespace DeNelle.HUD
             if (maxHp <= 0f) return;
             float pct = Mathf.Clamp01(current / maxHp);
             if (_castleFill != null) _castleFill.fillAmount = pct;
-            if (_castleText != null) _castleText.text = "Castle " + Mathf.RoundToInt(pct * 100f) + "%";
+            if (_castleText != null) _castleText.text = "✦ Heart of Elarion — " + Mathf.RoundToInt(pct * 100f) + "%";
             // Tint the banner toward red as the castle nears death.
             if (_castleFill != null) _castleFill.color = Color.Lerp(HudTheme.HpRed, HudTheme.CastleGold, Mathf.Clamp01(pct / 0.5f));
         }

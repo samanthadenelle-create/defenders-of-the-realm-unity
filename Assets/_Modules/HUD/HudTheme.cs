@@ -36,6 +36,8 @@ namespace DeNelle.HUD
         public static readonly Color Affordable     = ElarionUi.Affordable;
         public static readonly Color Danger         = ElarionUi.Danger;
 
+        public static readonly Color Gilt       = ElarionUi.Gilt;
+
         // Vitals
         public static readonly Color HpRed      = ElarionUi.HpRed;
         public static readonly Color HpTrack    = ElarionUi.HpTrack;
@@ -53,6 +55,14 @@ namespace DeNelle.HUD
         public static readonly Color SlotBack     = new Color(0.22f, 0.17f, 0.11f, 0.95f);
         public static readonly Color SlotDisc     = new Color(0.30f, 0.24f, 0.16f, 1f);
         public static readonly Color PortraitFill = new Color(0.16f, 0.13f, 0.10f, 1f);
+
+        // Shared accent tints (one source so clusters don't invent their own).
+        /// <summary>Translucent gold for rims / hairline dividers.</summary>
+        public static readonly Color GoldRim    = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.55f);
+        /// <summary>Faint stone trim for inner separators.</summary>
+        public static readonly Color TrimSoft   = new Color(ElarionUi.StoneTrim.r, ElarionUi.StoneTrim.g, ElarionUi.StoneTrim.b, 0.45f);
+        /// <summary>Recessed inner-well fill (behind bars / portraits).</summary>
+        public static readonly Color Well        = new Color(0.07f, 0.05f, 0.035f, 0.92f);
 
         // ── Typography scale (mirrors ElarionUi so uGUI text matches) ─────────
         public const int FontTitle = ElarionUi.FontTitle;
@@ -100,6 +110,44 @@ namespace DeNelle.HUD
                 img.color = fill;
             }
             img.type = Image.Type.Sliced;
+            return img;
+        }
+
+        /// <summary>
+        /// Add a child Image that 9-slices the rounded frame as a translucent RIM
+        /// over its parent (fills the parent, ignores raycasts). Gives every panel /
+        /// cell a consistent gold-or-stone outline without per-element ad-hoc setup.
+        /// Returns the rim Image so the caller can retint it (e.g. selected = gold).
+        /// </summary>
+        public static Image AddRim(GameObject parent, Color rimColor)
+        {
+            var go = new GameObject("Rim");
+            go.transform.SetParent(parent.transform, false);
+            var rt = go.AddComponent<RectTransform>();
+            rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one;
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+            var img = go.AddComponent<Image>();
+            img.sprite = RoundedFrame;
+            img.type = Image.Type.Sliced;
+            img.color = rimColor;
+            img.raycastTarget = false;
+            // Render on top of the fill but under content (content is added after).
+            go.transform.SetAsLastSibling();
+            return img;
+        }
+
+        /// <summary>
+        /// Recessed "well" backing for a bar / portrait — darker rounded inset with a
+        /// faint trim rim. One shared look for every track behind an HP/mana fill.
+        /// </summary>
+        public static Image StyleWell(GameObject go)
+        {
+            var img = go.GetComponent<Image>();
+            if (img == null) img = go.AddComponent<Image>();
+            img.sprite = RoundedFrame;
+            img.type = Image.Type.Sliced;
+            img.color = Well;
+            img.raycastTarget = false;
             return img;
         }
 

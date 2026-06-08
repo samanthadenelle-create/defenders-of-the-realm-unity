@@ -17,6 +17,13 @@ namespace DeNelle.Editor
     ///   - Assets/_Modules/**/Resources/**             (module Resources — always ships)
     ///   - Assets/polyperfect/**                        (world atlases pulled in by the
     ///                                                    village _M prefabs — ship via refs)
+    ///   - Assets/Models/**                             (People/Peasant/Merchant/etc. char
+    ///                                                    textures — ~2.4-5.5 MB each, ship
+    ///                                                    via prefab/FBX refs; MISSED before)
+    ///   - Assets/Spells Pack/**                        (spell VFX — referenced by VFXManager
+    ///                                                    / VFXCatalog; some 6-12 MB normals)
+    ///   - Assets/Lana Studio/**                        (Casual RPG VFX prefabs — ship via refs)
+    ///   ( /Demo and /Examples subfolders are skipped — that art never ships. )
     ///
     /// Per-folder maxSize map (FolderRules below, tunable):
     ///   - UI / portraits / title / intro / dialogue → 512
@@ -42,7 +49,21 @@ namespace DeNelle.Editor
         {
             "Assets/Resources",
             "Assets/polyperfect",
+            "Assets/Models",        // People/Peasant/Merchant/Blacksmith/Orc char textures (2.4-5.5 MB each)
+            "Assets/Spells Pack",   // spell VFX (VFXManager/VFXCatalog refs) — large normals
+            "Assets/Lana Studio",   // Casual RPG VFX prefabs ship via refs
             // _Modules has many Resources/ subfolders — discovered dynamically below.
+        };
+
+        // Path fragments that mark NON-shipping demo / example art. Any texture whose
+        // path contains one of these (case-insensitive) is skipped — those scenes
+        // never bundle into the player, so shrinking them is wasted reimport churn.
+        private static readonly string[] SkipFragments =
+        {
+            "/Demo/",
+            "/Demos/",
+            "/Example/",
+            "/Examples/",
         };
 
         // The parent under which every module's Resources/ folder lives.
@@ -61,8 +82,8 @@ namespace DeNelle.Editor
             ("/Title",        512),   // title splash is full-screen — keep a bit higher
             ("/Intro",        512),
 
-            // ── heroes keep 1024 (the demo's main characters); world → 512 ──────
-            ("Heroes",        1024),
+            // ── heroes → 512 (.data still too big at 1024; 512 is fine for web) ─
+            ("Heroes",        512),
             ("Enemies",       512),
             ("Structures",    512),
             ("polyperfect",   512), // world atlases — 512 is plenty for stylized low-poly
@@ -123,6 +144,9 @@ namespace DeNelle.Editor
                         string path = AssetDatabase.GUIDToAssetPath(guid);
                         if (string.IsNullOrEmpty(path))
                             continue;
+
+                        if (IsSkippedPath(path))
+                            continue; // demo / example art — never ships
 
                         var importer = AssetImporter.GetAtPath(path) as TextureImporter;
                         if (importer == null)
@@ -217,6 +241,18 @@ namespace DeNelle.Editor
                 }
             }
             return result;
+        }
+
+        /// <summary>True if the asset path is non-shipping demo/example art (skip it).</summary>
+        private static bool IsSkippedPath(string assetPath)
+        {
+            string p = assetPath.Replace('\\', '/');
+            foreach (var frag in SkipFragments)
+            {
+                if (p.IndexOf(frag, System.StringComparison.OrdinalIgnoreCase) >= 0)
+                    return true;
+            }
+            return false;
         }
 
         /// <summary>Resolves the WebGL maxTextureSize for an asset path via FolderRules.</summary>

@@ -58,6 +58,25 @@ namespace DeNelle.Core
         private const string MaterialResourcePath = "Structures/Materials/TreeofLife_basecolor";
         private const string DiffuseResourcePath = "Structures/TreeofLife_basecolor";
 
+        // WEBGL SPAWN-GUARD (2026-06-07) — Resources-loadable Tree-of-Life mesh.
+        // The centrepiece in the baked Village2/Village3 scene references the Tripo
+        // mesh Assets/Art/Tree_Of_Life.fbx DIRECTLY by GUID. That asset is untracked
+        // in git and is a Tripo FBX (isReadable:0, embedded Phong material); in the
+        // WebGL build the owner saw the village load with NO tree at the centre — the
+        // baked centrepiece did not resolve, so nothing renders at origin.
+        // FIX: if no centrepiece tree is found near origin after the village scene
+        // loads, spawn one from THIS Resources path (Resources.Load is WebGL-safe,
+        // unlike a scene mesh ref / File.ReadAllText) at exactly (0,0,0), stand it
+        // up, scale it to the plaza centrepiece height, then run the material fix so
+        // it is never grey. Robust in every build incl. WebGL with no scene re-save.
+        private const string TreeResourcePath = "Structures/tree_of_life";
+
+        // Centrepiece sizing/orientation — mirrors Village2Generator's authored values
+        // (targetTreeHeight 14 m; the Tripo tree imports lying down -> -90° X stands it
+        // up). The spawn-guard re-derives upright from bounds so it is art-independent.
+        private const float CentrepieceTargetHeight = 14f;
+        private static readonly Vector3 TreeUprightEulerFallback = new Vector3(-90f, 0f, 0f);
+
         // Foliage-leaning tint, applied only when nothing better resolves — better a
         // green-ish tree than a grey one. Owner can refine later.
         private static readonly Color FallbackTint = new Color(0.36f, 0.52f, 0.30f);
@@ -71,21 +90,190 @@ namespace DeNelle.Core
         private void Start() => Apply(gameObject);
 
         /// <summary>
-        /// DEF-267: after the scene loads, find the centrepiece tree and give it a
-        /// material so it doesn't render grey. No scene edit (rescues the live baked
-        /// Village2 build). No-op when no tree exists.
+        /// DEF-267 + WebGL spawn-guard registrar. Runs once at app start and then
+        /// subscribes to <see cref="UnityEngine.SceneManagement.SceneManager.sceneLoaded"/>
+        /// so the centrepiece check re-runs on EVERY scene load — the player boots into
+        /// Title and navigates to Village2 LATER, after this RuntimeInitialize fires, so a
+        /// one-shot check would miss the town entirely. Idempotent per load (the guard
+        /// no-ops when a centrepiece already renders at origin).
         /// </summary>
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void AutoFixOnSceneLoad()
         {
+            // Re-arm on each scene load (de-dup the subscription first so domain reloads
+            // / repeated init don't stack handlers).
+            UnityEngine.SceneManagement.SceneManager.sceneLoaded -= OnSceneLoaded;
+            UnityEngine.SceneManagement.SceneManager.sceneLoaded += OnSceneLoaded;
+            EnsureCentrepiece(); // also run for the scene that is already active at app start
+        }
+
+        private static void OnSceneLoaded(UnityEngine.SceneManagement.Scene scene,
+                                          UnityEngine.SceneManagement.LoadSceneMode mode)
+        {
+            // Use the just-loaded scene name so this works for BOTH single and additive
+            // loads (an additively-loaded Village2 is not the "active" scene).
+            string n = scene.name;
+            bool village = !string.IsNullOrEmpty(n) && n.StartsWith("Village");
+            EnsureCentrepiece(village);
+        }
+
+        private static void EnsureCentrepiece(bool? villageHint = null)
+        {
             GameObject tree = FindCentrepieceTree();
-            if (tree == null) return;
+
+            // WEBGL SPAWN-GUARD: the baked centrepiece (Tripo mesh ref by GUID) can
+            // fail to resolve in WebGL -> the village loads with NO tree at origin.
+            // If we are in a village scene and found no centrepiece near origin,
+            // spawn one from Resources (WebGL-safe) at exactly (0,0,0).
+            if (tree == null)
+            {
+                bool village = villageHint ?? InVillageScene();
+                if (!village) return;                   // only the town gets a centrepiece
+                if (HasCentrepieceNearOrigin()) return; // a tree is already at origin — leave it
+                tree = SpawnCentrepieceFromResources();
+                if (tree == null) return;               // resource missing — nothing to do
+            }
 
             // Skip if a real instance of this component already lives on the tree (it
             // will have fixed itself via Start) — avoid double-processing.
             if (tree.GetComponentInParent<TreeOfLifeMaterialFixer>() != null) return;
 
+            // DISPLACEMENT FIX (Tripo off-centre-pivot × large scale): whether this tree
+            // was spawned from Resources OR is the existing baked centrepiece, its VISIBLE
+            // mesh may be flung off (0,0,0) by an off-centre pivot — landing on a building.
+            // Re-centre its COMBINED RENDERER BOUNDS at world origin on XZ and seat the
+            // base at y=0 so the trunk you SEE sits at the plaza centre, on the ground.
+            CenterBoundsAtOrigin(tree);
+
             Apply(tree);
+        }
+
+        // True when the active scene is one of the playable towns (Village2 canonical,
+        // Village3, Village). Keeps the spawn-guard from dropping a tree into Title /
+        // HeroSelect / DTT / dungeon scenes that this RuntimeInitialize hook also runs in.
+        private static bool InVillageScene()
+        {
+            string n = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name;
+            return !string.IsNullOrEmpty(n) && n.StartsWith("Village");
+        }
+
+        // Any renderer (tree-named or not) sitting inside the centre plaza means a
+        // centrepiece already rendered from the baked scene — do NOT spawn a duplicate.
+        // Guards the desktop/editor case (baked mesh resolved fine) so only a genuinely
+        // empty plaza (the WebGL miss) triggers a spawn.
+        private static bool HasCentrepieceNearOrigin()
+        {
+            var all = Object.FindObjectsByType<Renderer>(FindObjectsSortMode.None);
+            foreach (var r in all)
+            {
+                if (r == null) continue;
+                if (!NameIsTree(NameOfTreeRoot(r.transform))) continue;
+                Vector3 p = r.bounds.center;
+                if (new Vector2(p.x, p.z).sqrMagnitude <= CentrepieceRadius * CentrepieceRadius)
+                    return true;
+            }
+            return false;
+        }
+
+        // Instantiate the Tree-of-Life mesh from Resources at world origin, stand it
+        // upright from its own bounds, scale it to the plaza centrepiece height, strip
+        // colliders (the gameplay blocker is HeartController's capsule), and seat its
+        // base at y=0. Resources.Load is WebGL-safe (no File I/O, no scene mesh ref).
+        private static GameObject SpawnCentrepieceFromResources()
+        {
+            GameObject src = Resources.Load<GameObject>(TreeResourcePath);
+            if (src == null)
+            {
+                Debug.LogWarning("[TreeOfLifeMaterialFixer] WebGL spawn-guard — no Tree-of-Life " +
+                                 "at Resources/" + TreeResourcePath + "; centre plaza will be empty.");
+                return null;
+            }
+
+            GameObject tree = Object.Instantiate(src);
+            tree.name = "TreeOfLife(SpawnGuard)";
+            tree.transform.position = Vector3.zero;
+            tree.transform.rotation = Quaternion.Euler(TreeUprightEulerFallback);
+
+            UprightFromBounds(tree, TreeUprightEulerFallback);
+            ScaleToHeight(tree, CentrepieceTargetHeight);
+            // Centre the VISIBLE bounds (not the transform/pivot) at origin on XZ and
+            // seat the base at y=0 — an off-centre Tripo pivot otherwise flings the mesh
+            // off-plaza even though transform.position == (0,0,0).
+            CenterBoundsAtOrigin(tree);
+            StripColliders(tree);
+
+            Debug.Log("[TreeOfLifeMaterialFixer] WebGL spawn-guard — baked centrepiece was missing; " +
+                      "spawned Tree-of-Life from Resources/" + TreeResourcePath + " at (0,0,0).");
+            return tree;
+        }
+
+        // ── Spawn-guard placement helpers (bounds-derived, art-independent) ──────
+
+        // Stand a lying FBX up by rotating its longest horizontal axis to vertical.
+        // Same self-correcting logic Village2Generator uses; falls back to the supplied
+        // euler when the bounds are too round to tell.
+        private static void UprightFromBounds(GameObject go, Vector3 fallbackEuler)
+        {
+            if (go == null) return;
+            if (!TryCombinedBounds(go, out Bounds b)) return;
+            Vector3 s = b.size;
+            float maxHoriz = Mathf.Max(s.x, s.z);
+            if (maxHoriz > s.y * 1.05f)
+            {
+                if (s.x >= s.z) go.transform.Rotate(0f, 0f, -90f, Space.World);
+                else            go.transform.Rotate(-90f, 0f, 0f, Space.World);
+            }
+            // else: keep the already-applied fallbackEuler.
+        }
+
+        // Uniform-scale the object so its combined renderer-bounds height equals targetH.
+        private static void ScaleToHeight(GameObject go, float targetH)
+        {
+            if (go == null) return;
+            if (!TryCombinedBounds(go, out Bounds b)) return;
+            float h = b.size.y;
+            if (h > 0.01f) go.transform.localScale *= (targetH / h);
+        }
+
+        // Centre the object's COMBINED RENDERER BOUNDS at world (0,0,0) on the XZ plane
+        // and seat the bottom of those bounds at y=0. This is the displacement fix: a
+        // Tripo mesh with an off-centre pivot × large scale renders far from its
+        // transform.position, so moving the transform to origin is NOT enough — the
+        // VISIBLE trunk must be the thing that lands at the plaza centre. We offset
+        // transform.position by -(bounds.center.x, 0, bounds.center.z) so the bounds
+        // centre moves to x=0,z=0 (keeping the height we computed), then shift Y so
+        // bounds.min.y == 0 (base on the ground). Bounds are recomputed after the XZ
+        // shift is conceptually irrelevant (a pure translation moves centre and min
+        // together), so a single pass is exact.
+        private static void CenterBoundsAtOrigin(GameObject go)
+        {
+            if (go == null) return;
+            if (!TryCombinedBounds(go, out Bounds b)) return;
+            Vector3 c = b.center;
+            go.transform.position += new Vector3(-c.x, 0f, -c.z);
+            // Re-seat the base at ground level (min.y unaffected by the XZ shift).
+            go.transform.position += new Vector3(0f, -b.min.y, 0f);
+        }
+
+        // Decorative centrepiece — never wall off the plaza (HeartController owns the blocker).
+        private static void StripColliders(GameObject go)
+        {
+            if (go == null) return;
+            foreach (var c in go.GetComponentsInChildren<Collider>(true)) Object.Destroy(c);
+        }
+
+        private static bool TryCombinedBounds(GameObject go, out Bounds bounds)
+        {
+            bounds = default;
+            var rends = go.GetComponentsInChildren<Renderer>(true);
+            bool have = false;
+            foreach (var r in rends)
+            {
+                if (r == null) continue;
+                if (!have) { bounds = r.bounds; have = true; }
+                else bounds.Encapsulate(r.bounds);
+            }
+            return have;
         }
 
         // ---------------------------------------------------------------------
