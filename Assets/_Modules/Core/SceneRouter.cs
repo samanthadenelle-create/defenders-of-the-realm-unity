@@ -270,7 +270,42 @@ namespace DeNelle.Core
             // (NavMesh/HUD/hero settling) before we pull the overlay — avoids a flash
             // of an un-lit village.
             await UniTask.DelayFrame(2);
+
+            // LAST word on village load: plant the decorative Tree of Life at a fixed
+            // (0, -0.25, 0) so its roots sit just under the ground (owner-requested).
+            // This runs AFTER every Awake/Start (incl. SeatOnGroundOnStart), so it is
+            // the final position. NB: this is the *decorative* centrepiece (it carries
+            // the Core-side TreeOfLifeMaterialFixer) — NOT the gameplay Heart anchor,
+            // which stays at (0,0,0) for spawns/camera/grid and the regression gate.
+            SeatTreeOfLifeRootsUnderground();
+
             overlay?.HideAndDestroy();
+        }
+
+        /// <summary>
+        /// Forces the decorative Tree of Life centrepiece to (0, -0.25, 0) so its roots
+        /// read as planted under the ground. Found via its Core-side
+        /// <c>TreeOfLifeMaterialFixer</c> (no Core→Village reference). Non-fatal.
+        /// </summary>
+        private static void SeatTreeOfLifeRootsUnderground()
+        {
+            try
+            {
+                var tree = UnityEngine.Object.FindFirstObjectByType<DeNelle.Core.TreeOfLifeMaterialFixer>();
+                if (tree != null)
+                {
+                    tree.transform.position = new Vector3(0f, -0.25f, 0f);
+                    Debug.Log($"[SceneRouter] Tree of Life planted at {tree.transform.position} (roots underground).");
+                }
+                else
+                {
+                    Debug.LogWarning("[SceneRouter] Tree of Life (TreeOfLifeMaterialFixer) not found on village load — root-seat skipped.");
+                }
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning("[SceneRouter] Tree root-seat threw (non-fatal): " + e.Message);
+            }
         }
 
         /// <summary>
