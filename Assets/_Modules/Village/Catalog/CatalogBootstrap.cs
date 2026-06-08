@@ -184,6 +184,36 @@ namespace DeNelle.Village
                     },
                 },
             });
+
+            // Arcane Spire (WO-113) — slow-firing AoE MAGIC tower: every shot blasts a
+            // radius around the impact for Aether damage + a Slow debuff. Ground-placed,
+            // crystal-heavy cost. The optional aoeRadius / slowSeconds / splashFraction
+            // tune the blast (the ArcaneTower component falls back to its own defaults
+            // when a field is 0).
+            CatalogRegistry.Register(new CatalogEntry
+            {
+                id          = "tower_arcane_spire",
+                displayName = "Arcane Spire",
+                type        = CatalogType.Tower,
+                kind        = EntryKind.Cell,
+                visualPrefabPath = "Structures/Tower_Medieval_Big",
+                repo = new RepoProps
+                {
+                    behaviorId = "ArcaneTower",
+                    buildCost  = 200,
+                    navSurface = NavSurfaceKind.Blocker,
+                    visualHeight = 6f,
+                    range = 24f, damage = 16f, fireRate = 0.6f,
+                    canHitAir = true, element = DamageElement.Aether,
+                    aoeRadius = 6f, slowSeconds = 2.5f, splashFraction = 0.7f,
+                    maxLevel = 3,
+                    placement = new PlacementRules
+                    {
+                        mustSitOn = PlacementSurface.Ground,
+                        footprint = 3f, noOverlap = true, checkAffordable = true,
+                    },
+                },
+            });
         }
     }
 }

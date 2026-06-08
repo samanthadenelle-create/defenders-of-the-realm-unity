@@ -711,6 +711,56 @@
     "scale": 1.0,
     "note": "zeroed — polyperfect _M prefabs are upright (no -90X needed)"
    }
+  },
+  {
+   "id": "tower_arcane_spire",
+   "displayName": "Arcane Spire",
+   "type": "Tower",
+   "kind": "Cell",
+   "visualPrefabPath": "Structures/Tower_Medieval_Big",
+   "repo": {
+    "behaviorId": "ArcaneTower",
+    "buildCost": 200,
+    "cost": {
+     "wood": 30,
+     "food": 0,
+     "iron": 30,
+     "crystals": 80
+    },
+    "maxLevel": 3,
+    "navSurface": "Blocker",
+    "visualHeight": 6.0,
+    "range": 24.0,
+    "damage": 16.0,
+    "fireRate": 0.6,
+    "canHitAir": true,
+    "element": "Aether",
+    "aoeRadius": 6.0,
+    "slowSeconds": 2.5,
+    "splashFraction": 0.7,
+    "placement": {
+     "mustSitOn": "Ground",
+     "footprint": 3.0,
+     "noOverlap": true,
+     "checkAffordable": true
+    }
+   },
+   "orientation": {
+    "corrected": false,
+    "manual": false,
+    "euler": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "offset": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "scale": 1.0,
+    "note": "zeroed — polyperfect _M prefabs are upright (no -90X needed)"
+   }
   }
  ]
 }

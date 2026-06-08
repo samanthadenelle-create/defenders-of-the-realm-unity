@@ -24,6 +24,7 @@
 
 using UnityEngine;
 using DeNelle.Core.Catalog;
+using DeNelle.Core.Combat;   // DamageElement literals (WO-113 ArcaneTower default element)
 
 namespace DeNelle.Village
 {
@@ -292,6 +293,26 @@ namespace DeNelle.Village
                     t.FireRate  = r.fireRate;
                     t.CanHitAir = r.canHitAir;
                     t.Element   = r.element;
+                    break;
+                }
+
+                // ArcaneTower — WO-113: the slow-firing AoE MAGIC tower. Same copy-
+                // stats-off-RepoProps pattern as DefenseTower, plus the optional AoE
+                // fields (aoeRadius / slowSeconds / splashFraction). Each optional field
+                // only overrides the component's serialized default when authored > 0,
+                // so a sparse row still gets a sensible blast + slow.
+                case "ArcaneTower":
+                {
+                    var a = root.AddComponent<ArcaneTower>();
+                    var r = entry.repo;
+                    a.Range     = r.range;
+                    a.Damage    = r.damage;
+                    a.FireRate  = r.fireRate;
+                    a.CanHitAir = r.canHitAir;
+                    a.Element   = r.element != DamageElement.None ? r.element : DamageElement.Aether;
+                    if (r.aoeRadius      > 0f) a.AoeRadius            = r.aoeRadius;
+                    if (r.slowSeconds    > 0f) a.SlowSeconds          = r.slowSeconds;
+                    if (r.splashFraction > 0f) a.SplashDamageFraction = r.splashFraction;
                     break;
                 }
 

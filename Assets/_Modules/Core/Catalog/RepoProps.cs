@@ -115,5 +115,14 @@ namespace DeNelle.Core.Catalog
         public float         fireRate  = 0f;     // shots per second
         public bool          canHitAir = false;  // ground = false · wall-walk = true
         public DamageElement element   = DamageElement.None;
+
+        // --- AoE / debuff stats (WO-113 ArcaneTower) — OPTIONAL, additive ---
+        // Only the ArcaneTower behaviour reads these; every other behaviorId ignores
+        // them. All default 0 so existing rows are unaffected and the component falls
+        // back to its own serialized defaults when a row omits them. JSON deserializes
+        // "aoeRadius" / "slowSeconds" / "splashFraction" straight in.
+        public float aoeRadius      = 0f;   // splash radius (m) around the impact; 0 = use component default
+        public float slowSeconds    = 0f;   // Slow debuff duration (s) on every blast victim; 0 = no slow
+        public float splashFraction = 0f;   // 0-1 fraction of damage to non-primary victims; 0 = use default
     }
 }
