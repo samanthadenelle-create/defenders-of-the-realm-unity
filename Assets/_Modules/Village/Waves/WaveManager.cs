@@ -1184,11 +1184,10 @@ namespace DeNelle.Village
         // =====================================================================
 
         /// <summary>
-        /// One or more enemies crossed the inner ring. Pauses the loop and offers
-        /// the breach CHOICE (WO-47): the player picks the ATB "Last Stand" or the
-        /// real-time "Defend the Tower" shooter (PatriciaLightMode). The choice
-        /// overlay is built in code; if it cannot be created the breach falls back
-        /// to the ATB hand-off so a breach is never a dead end.
+        /// One or more enemies crossed the inner ring. Pauses the loop and hands
+        /// off to the ATB "Last Stand" battle. (The real-time "Defend the Tower"
+        /// shooter / PatriciaLight branch has been retired — the breach now routes
+        /// straight to the ATB path so a breach is never a dead end.)
         /// </summary>
         private void TriggerBreach()
         {
@@ -1196,77 +1195,15 @@ namespace DeNelle.Village
             OnBreach.Invoke(_currentWaveId);
             if (_heart != null) _heart.SetState(HeartState.Critical);
 
-            // Snapshot the breaching roster's count + the breaching enemy refs
-            // BEFORE either branch consumes them. PatriciaLightMode runs IN the
-            // village (no scene change), so it borrows the same Heart + a fresh
-            // assault rather than the ATB roster; the ATB branch keeps using the
-            // breach roster verbatim (see EnterAtbBattle).
+            // Snapshot the breaching roster's count BEFORE EnterAtbBattle consumes
+            // the roster (it keeps using the breach roster verbatim).
             int breachCount = _breachRoster.Count;
-
-            // WO-47 breach choice: show the code-built Last-Stand / Defend prompt.
-            // It returns false if it could not be created (no UIDocument host /
-            // missing PanelSettings) — in that case fall through to the ATB path
-            // immediately so the breach still resolves.
-            bool shown = BreachChoiceOverlay.Show(
-                heart: _heart,
-                onLastStand: EnterAtbBattle,
-                onDefendTower: EnterDefendTower);
-
-            if (!shown)
-            {
-                Debug.LogWarning(
-                    "[WaveManager] Breach choice overlay could not be created — " +
-                    "falling back to the ATB Last Stand so the breach is not a dead end.");
-                EnterAtbBattle();
-                return;
-            }
 
             Debug.Log(
                 $"[WaveManager] Wave {_currentWaveId} breached with {breachCount} enemies — " +
-                "awaiting the player's Last-Stand / Defend-the-Tower choice.");
-        }
+                "handing off to the ATB Last Stand.");
 
-        /// <summary>
-        /// WO-47 "Defend the Tower" (Phase 2): clears the rest of the wave off the
-        /// village field (the breaching enemies + any remaining live enemies + the
-        /// apex boss), stashes the breach context, and loads the DEDICATED
-        /// <see cref="SceneRouter.PatriciaLight"/> scene — the third-person tower-
-        /// defense shooter (driven by <c>PatriciaLightController</c>). On win/lose
-        /// that scene returns to the village via <see cref="SceneRouter.GoVillage"/>,
-        /// where a fresh WaveManager re-runs the loop — same lifecycle as the ATB
-        /// path. (Phase 1's in-place <c>PatriciaLightMode.Begin</c> is superseded.)
-        /// </summary>
-        private void EnterDefendTower()
-        {
-            // Clear the wave off the field so nothing lingers when we return from
-            // the dedicated scene (the shooter spawns its own assault there).
-            // Iterate a SNAPSHOT: Kill() -> Die() removes the enemy from _liveEnemies,
-            // which otherwise throws "Collection was modified" mid-enumeration and
-            // aborts the breach -> Defend-the-Tower transition (dev-log error at
-            // WaveManager.cs:722 / BreachChoiceOverlay.Resolve).
-            foreach (Enemy e in _liveEnemies.ToArray())
-                if (e != null) e.Kill();
-            _liveEnemies.Clear();
-            _breachRoster.Clear();
-
-            if (_liveApexBoss != null)
-            {
-                _liveApexBoss.Died -= HandleApexBossDied;
-                Destroy(_liveApexBoss.gameObject);
-                _liveApexBoss = null;
-            }
-
-            Debug.Log($"[WaveManager] Wave {_currentWaveId} breach — loading Defend the Tower (Patricia Light) scene.");
-
-            // Stash the breach context the way PendingBattle works, then load the
-            // dedicated scene. PatriciaLightController reads PendingPatriciaLight on
-            // the far side and returns to the village when it resolves.
-            var p = new PatriciaLightParams
-            {
-                Wave = _currentWaveId,
-                ReturnScene = SceneRouter.Village,
-            };
-            SceneRouter.GoPatriciaLight(p).Forget();
+            EnterAtbBattle();
         }
 
         /// <summary>

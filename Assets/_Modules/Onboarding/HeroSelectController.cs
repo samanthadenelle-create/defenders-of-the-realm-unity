@@ -641,15 +641,16 @@ namespace DeNelle.Onboarding
         // =====================================================================
 
         /// <summary>
-        /// "Jump into the Action" — persists the chosen hero and routes straight to
-        /// the Defend the Tower (PatriciaLight) scene, bypassing the pet-select
-        /// intro flow. Wave 1 difficulty is used as the entry params.
+        /// "Jump into the Action" — persists the chosen hero and routes to the
+        /// canonical pet-select intro flow. (Previously dove straight into the
+        /// retired Defend the Tower / PatriciaLight scene; that branch is removed,
+        /// so this now follows the same path as "Dive into Village".)
         /// </summary>
         private void OnConfirmClicked()
         {
             if (!_hasSelection) return;
             PersistHero();
-            SceneRouter.GoPatriciaLight(new PatriciaLightParams { Wave = 1 });
+            SceneRouter.GoPetSelect();
         }
 
         /// <summary>

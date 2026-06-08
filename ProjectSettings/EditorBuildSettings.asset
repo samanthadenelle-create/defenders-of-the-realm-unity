@@ -18,6 +18,9 @@ EditorBuildSettings:
     path: Assets/Scenes/Village.unity
     guid: b1e088b2594ac9745983dd1508b3913d
   - enabled: 1
+    path: Assets/Scenes/Village3.unity
+    guid: 6796d45077887b847ac34ff3a6698d4c
+  - enabled: 1
     path: Assets/Scenes/Village2.unity
     guid: ff2ee2f82936e5f49bf3d04e041c8702
   - enabled: 1
@@ -29,9 +32,6 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/Dungeon_FolksGranary.unity
     guid: 6f71f9f7476706d4fb7c9a43dddd8021
-  - enabled: 1
-    path: Assets/Scenes/PatriciaLightMode.unity
-    guid: 84716325a6d82264e8fabc7edb120228
   - enabled: 1
     path: Assets/Scenes/OuterWorld.unity
     guid: 2977fc19ecfa7de46a4ab41135b3e8ff
