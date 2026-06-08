@@ -209,14 +209,20 @@ public class Village2Generator : MonoBehaviour
         var ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
         ground.name = "Ground";
         ground.transform.SetParent(villageParent, false);
-        // WO-333 (z-fighting fix): seat this plane 5 cm BELOW Y=0, not flush on it.
+        // WO-333 (z-fighting / mottled-checkerboard fix): seat this plane WELL BELOW Y=0.
         // In the combined additive world the OuterWorld ExteriorTerrain is leveled so its
-        // surface sits at exactly Y=0 across the whole village footprint (SeamWeight=1.0 holds
-        // it flat there) — the terrain is the intended visible ground. A coplanar opaque plane
-        // at Y=0 z-fought the terrain over the entire floor (the "shading artifacts"). Dropping
-        // it to -0.05 lets the terrain win the depth test cleanly while this plane still gives
-        // Build Mode its raycast collider and a visible floor when Village2 is opened standalone.
-        ground.transform.position = new Vector3(0f, -0.05f, 0f);
+        // surface sits at ~Y=0 across the whole village footprint (SeamWeight=1.0 holds it
+        // flat there) — the terrain is the intended visible ground. A coplanar opaque plane
+        // z-fought the terrain over the entire floor.
+        //   A 5 cm drop (-0.05) was NOT enough: the terrain RENDER mesh is LOD-simplified
+        //   (heightmapPixelError=4) so its visible surface deviates several cm from the flat
+        //   heightmap — in patches it dips below -0.05 and the plane pokes through, producing
+        //   the alternating dark-grey(plane)/green(terrain) MOTTLED CHECKERBOARD the owner saw.
+        //   Dropping the plane to -0.5 m puts it safely below ALL terrain render deviation so
+        //   the terrain wins the depth test EVERYWHERE — single clean visible floor — while the
+        //   plane still gives Build Mode its raycast collider and a visible floor when Village2
+        //   is opened standalone (camera/hero stand on the terrain/NavMesh at Y=0, not this plane).
+        ground.transform.position = new Vector3(0f, -0.5f, 0f);
         // Unity's primitive Plane is 10x10 m at scale 1; scale so it spans 2*groundHalfSize metres.
         float s = (groundHalfSize * 2f) / 10f;
         ground.transform.localScale = new Vector3(s, 1f, s);
@@ -228,7 +234,7 @@ public class Village2Generator : MonoBehaviour
         // a ground collider; with none the ray misses and NO ghost ever shows. A flat plane collider at
         // Y=0 is just the floor and does not conflict with the NavMesh bake (NavMesh still owns walkability).
 
-        Debug.Log($"[Village2] Ground plane laid at Y=-0.05 (under the OuterWorld terrain to avoid z-fighting; half-size {groundHalfSize}m) with material '{groundMaterial.name}'.");
+        Debug.Log($"[Village2] Ground plane laid at Y=-0.5 (well under the OuterWorld terrain render mesh to kill the mottled z-fight; half-size {groundHalfSize}m) with material '{groundMaterial.name}'.");
     }
 
     private void CreateWalls()

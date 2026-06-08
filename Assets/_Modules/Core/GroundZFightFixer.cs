@@ -43,14 +43,20 @@ namespace DeNelle.Core
 {
     public static class GroundZFightFixer
     {
-        // Target depth for the baked ground plane: 5 cm below Y=0 so the coplanar
-        // OuterWorld terrain (leveled to Y=0) wins the depth test. Matches the value
+        // Target depth for the baked ground plane: 0.5 m below Y=0 so the coplanar
+        // OuterWorld terrain wins the depth test EVERYWHERE. Matches the value
         // Village2Generator.CreateGroundPlane() now bakes.
-        private const float TargetY = -0.05f;
+        //   WO-333 update: a 5 cm drop was NOT enough — the terrain RENDER mesh is
+        //   LOD-simplified (heightmapPixelError=4) so its visible surface deviates
+        //   several cm from the flat heightmap; in patches it dipped below -0.05 and the
+        //   plane poked through, giving the MOTTLED dark-grey/green CHECKERBOARD. -0.5 m
+        //   clears all terrain render deviation so the terrain is the single visible floor.
+        private const float TargetY = -0.5f;
 
-        // Only lower a plane that is still effectively AT Y=0. A plane already at or
-        // below the target (regenerated town, or a re-load after we lowered it) is
-        // skipped — keeps the fix idempotent and prevents drift on repeated loads.
+        // Only lower a plane that is still ABOVE the target (a baked plane at Y=0 OR the
+        // earlier -0.05 fix). A plane already at/below the target (regenerated town, or a
+        // re-load after we lowered it) is skipped — keeps the fix idempotent and prevents
+        // drift on repeated loads.
         private const float NearZeroEpsilon = 0.01f;
 
         // How far (XZ) from the village centre the plane's centre may sit and still
@@ -105,8 +111,9 @@ namespace DeNelle.Core
             if (ground == null) return;
 
             float y = ground.transform.position.y;
-            // IDEMPOTENT: only lower a plane still effectively at Y=0. Already-lowered
-            // planes (regen / re-load) are at/below the target → skip.
+            // IDEMPOTENT: only lower a plane still ABOVE the target (baked Y=0, or the
+            // earlier -0.05 fix). Already-lowered planes (regen / re-load) are at/below
+            // the target → skip.
             if (y > TargetY + NearZeroEpsilon)
             {
                 Vector3 p = ground.transform.position;

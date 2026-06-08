@@ -102,7 +102,8 @@ namespace DeNelle.Core
             Material sharedGood = FindGoodTreeMaterial(all);
 
             int fixedSlots = 0;
-            string source = "none";
+            int treeRenderers = 0;
+            int viaSibling = 0, viaUrpConvert = 0, viaTint = 0;
 
             foreach (var r in all)
             {
@@ -111,6 +112,7 @@ namespace DeNelle.Core
                 // The canonical Tree of Life is owned by TreeOfLifeMaterialFixer — skip it
                 // so the two fixers never fight over the centrepiece.
                 if (IsCanonicalCentrepiece(r.transform)) continue;
+                treeRenderers++;
 
                 var mats = r.sharedMaterials;
                 if (mats == null || mats.Length == 0)
@@ -118,7 +120,7 @@ namespace DeNelle.Core
                     var m = sharedGood ?? TintMatFor(r.name);
                     r.sharedMaterial = m;
                     fixedSlots++;
-                    source = sharedGood != null ? "sibling" : "tint";
+                    if (sharedGood != null) viaSibling++; else viaTint++;
                     continue;
                 }
 
@@ -128,9 +130,9 @@ namespace DeNelle.Core
                     if (!SlotNeedsFix(mats[i])) continue;
 
                     Material repl;
-                    if (sharedGood != null)            { repl = sharedGood;          source = "sibling"; }
-                    else if (mats[i] != null)          { repl = UrpConvert(mats[i]); source = "urp-convert"; }
-                    else                               { repl = TintMatFor(r.name);  source = "tint"; }
+                    if (sharedGood != null)            { repl = sharedGood;          viaSibling++; }
+                    else if (mats[i] != null)          { repl = UrpConvert(mats[i]); viaUrpConvert++; }
+                    else                               { repl = TintMatFor(r.name);  viaTint++; }
 
                     mats[i] = repl;
                     changed = true;
@@ -141,8 +143,12 @@ namespace DeNelle.Core
 
             if (fixedSlots > 0)
                 Debug.Log("[EnvironmentTreeMaterialFixer] WO-332 — fixed " + fixedSlots +
-                          " white/grey tree slot(s) via " + source +
-                          ". (Full pack fix: Defenders/Art/Fix Polyperfect URP Materials.)");
+                          " white/grey tree slot(s) across " + treeRenderers + " tree renderer(s) " +
+                          "(sibling=" + viaSibling + ", urp-convert=" + viaUrpConvert +
+                          ", tint=" + viaTint + "). (Full pack fix: Defenders/Art/Fix Polyperfect URP Materials.)");
+            else if (treeRenderers > 0)
+                Debug.Log("[EnvironmentTreeMaterialFixer] WO-332 — scanned " + treeRenderers +
+                          " tree renderer(s); all already had good URP materials (no fix needed).");
         }
 
         // A good (URP, textured, non-default) material some tree in the scene already
@@ -178,10 +184,25 @@ namespace DeNelle.Core
         {
             if (string.IsNullOrEmpty(n)) return false;
             string lower = n.ToLowerInvariant();
-            return lower.Contains("tree")          // SM_Tree_*, trees_*, tree_single_*, TreeOfLife
+            // Generic tree/foliage words first…
+            if (lower.Contains("tree")             // SM_Tree_*, trees_*, tree_single_*, TreeOfLife
                 || lower.Contains("foliage")
                 || lower.Contains("bush")
-                || lower.Contains("shrub");
+                || lower.Contains("shrub")
+                || lower.Contains("plant")
+                || lower.Contains("leaf")
+                || lower.Contains("leaves")
+                || lower.Contains("canopy"))
+                return true;
+            // …then the concrete polyperfect / KayKit species names. Polyperfect ships
+            // trees whose CHILD mesh objects are often named by species only ("Beech",
+            // "Conifer", …) with no "tree" token, so the parent-walk would miss the leaf
+            // renderer's own name; match the species directly so every slot is covered.
+            return lower.Contains("beech")  || lower.Contains("oak")    || lower.Contains("birch")
+                || lower.Contains("maple")  || lower.Contains("conifer")|| lower.Contains("poplar")
+                || lower.Contains("lime")   || lower.Contains("baobab") || lower.Contains("willow")
+                || lower.Contains("pine")   || lower.Contains("palm")   || lower.Contains("spruce")
+                || lower.Contains("cedar")  || lower.Contains("aspen");
         }
 
         // The canonical Tree of Life — owned by TreeOfLifeMaterialFixer. We skip it.
@@ -204,23 +225,42 @@ namespace DeNelle.Core
 
         // ── Material repair (WebGL-safe) ──────────────────────────────────────────
 
-        // A slot needs fixing if it is null, on a built-in default/error/legacy shader
-        // (the white/grey fallback), or carries no basecolor texture at all.
+        // A slot needs fixing if it is null, on a built-in/non-URP/error/legacy shader
+        // (the white/grey fallback), OR resolves to a flat WHITE surface (the WO-332
+        // symptom): no basecolor texture AND a white/near-white base colour. Matching on
+        // the SHADER + RENDERED COLOUR (not just the object name) is the robustness the
+        // WO asks for — a polyperfect tree baked without the editor URP-convert lands on
+        // shader "Standard" (caught here) regardless of what its GameObject is named.
         private static bool SlotNeedsFix(Material m)
         {
             if (m == null) return true;
             string sn = m.shader != null ? m.shader.name : "";
-            if (sn == "Standard"
+            // Anything that is NOT a URP lit/unlit shader is a white/pink/grey risk under
+            // URP: Standard, Legacy, the internal error shader, a stripped/empty shader,
+            // or any leftover built-in surface shader.
+            bool isUrp = sn.StartsWith("Universal Render Pipeline/")
+                      || sn.StartsWith("URP/");
+            if (!isUrp
+                || sn == "Standard"
                 || sn == "Standard (Specular setup)"
                 || sn.StartsWith("Legacy Shaders/")
                 || sn.Contains("InternalErrorShader")
                 || string.IsNullOrEmpty(sn))
                 return true;
-            // Already a URP material with a real basecolor texture = art-authored; keep it.
+
+            // URP shader: art-authored only if it has a real basecolor texture OR a
+            // non-white tint. A URP/Lit slot with NO texture and a white base colour
+            // renders as the flat-white tree the owner saw → fix it.
             Texture tex = null;
             if (m.HasProperty("_BaseMap")) tex = m.GetTexture("_BaseMap");
             if (tex == null && m.HasProperty("_MainTex")) tex = m.GetTexture("_MainTex");
-            return tex == null;
+            if (tex != null) return false;                 // textured URP = keep
+
+            Color c = Color.white;
+            if (m.HasProperty("_BaseColor")) c = m.GetColor("_BaseColor");
+            else if (m.HasProperty("_Color")) c = m.GetColor("_Color");
+            // Near-white untextured = the white-tree symptom → needs a tint.
+            return c.r > 0.85f && c.g > 0.85f && c.b > 0.85f;
         }
 
         // Rebuild a built-in/grey material as URP/Lit carrying its texture + colour.
