@@ -71,8 +71,21 @@ namespace DeNelle.HUD
 
         private TextMeshProUGUI _waveText;
         private TextMeshProUGUI _waveStateText;
+        private TextMeshProUGUI _enemyCountText; // "X / Y" live/total enemies during a wave
         private int _lastWaveNumber = 1;
         private string _lastWaveState = "Defend";
+
+        // ── Combo / Kill-streak momentum badge (centre, pops + fades) ──────────
+        // Subscribed via ComboHudBridge → SetComboCount / SetKillStreak (resolved
+        // by name, like SetMana). The badge punches in on a change then fades out
+        // after a short hold so the player FEELS the momentum building.
+        private RectTransform _momentumBadge;
+        private TextMeshProUGUI _comboText;
+        private TextMeshProUGUI _streakText;
+        private CanvasGroup _momentumGroup;
+        private int _lastCombo, _lastStreak;
+        private float _momentumPop;     // 0..1 pop scale driver (eased each frame)
+        private float _momentumHold;    // seconds remaining before the badge fades
 
         // Castle (Heart) HP banner — top-centre.
         private Image _castleFill;
@@ -88,8 +101,10 @@ namespace DeNelle.HUD
         // Skill bar cells
         private TextMeshProUGUI[] _slotKey;
         private TextMeshProUGUI[] _slotGlyph;
+        private TextMeshProUGUI[] _slotName;  // ability NAME under each cell (first-time-player clarity)
         private Image[] _slotAccent;     // tinted rune disc behind the glyph
         private Image[] _slotCooldown;   // radial dark overlay (remaining/total)
+        private float[] _slotCdFill;     // last pushed cooldown fill (so the name can grey when on CD)
 
         // Party frames (slot 0 = hero, 1..3 = companions)
         private GameObject[] _partyFrame;
@@ -152,6 +167,34 @@ namespace DeNelle.HUD
             // automatically). Polled like the other HUD inputs.
             if (Input.GetKeyDown(KeyCode.H))
                 SetCombatHudVisible(!_combatHudVisible);
+
+            AnimateMomentumBadge();
+        }
+
+        // Drives the combo/streak badge: a quick scale "pop" on each new event,
+        // then a hold, then a fade-out. Uses unscaled time so it animates cleanly
+        // even through the combat hit-stop / kill slo-mo time dips.
+        private void AnimateMomentumBadge()
+        {
+            if (_momentumBadge == null || _momentumGroup == null) return;
+            float dt = Time.unscaledDeltaTime;
+
+            // Ease the pop driver back toward rest (1 = punched, 0 = rest).
+            if (_momentumPop > 0f)
+                _momentumPop = Mathf.Max(0f, _momentumPop - dt * 6f);
+
+            float scale = 1f + 0.35f * _momentumPop;
+            _momentumBadge.localScale = new Vector3(scale, scale, 1f);
+
+            if (_momentumHold > 0f)
+            {
+                _momentumHold -= dt;
+                _momentumGroup.alpha = Mathf.MoveTowards(_momentumGroup.alpha, 1f, dt * 8f);
+            }
+            else if (_momentumGroup.alpha > 0f)
+            {
+                _momentumGroup.alpha = Mathf.MoveTowards(_momentumGroup.alpha, 0f, dt * 2.2f);
+            }
         }
 
         // =====================================================================
@@ -177,6 +220,7 @@ namespace DeNelle.HUD
             BuildCastleBanner(go.transform);
             BuildWaveReadout(go.transform);
             BuildPartyFrames(go.transform);
+            BuildMomentumBadge(go.transform);
             BuildSkillBar(go.transform);
             BuildBuildButton(go.transform);
             BuildStartWaveButton(go.transform);
@@ -241,8 +285,40 @@ namespace DeNelle.HUD
             _waveText = AddText(_waveReadout, "WAVE 1", HudTheme.FontTitle + 6, HudTheme.Parchment, TextAlignmentOptions.Center);
             _waveText.fontStyle = FontStyles.Bold;
             _waveText.characterSpacing = 6f; // engraved-banner feel
-            var stateRect = NewRect("State", _waveReadout, new Vector2(0f, 0f), new Vector2(1f, 0.48f));
+            var stateRect = NewRect("State", _waveReadout, new Vector2(0f, 0.24f), new Vector2(1f, 0.52f));
             _waveStateText = AddText(stateRect, _lastWaveState, HudTheme.FontHead, HudTheme.Gold, TextAlignmentOptions.Center);
+
+            // Live "X / Y enemies" readout — sits just under the wave state so the
+            // player always knows how close the current wave is to being cleared.
+            var countRect = NewRect("EnemyCount", _waveReadout, new Vector2(0f, 0f), new Vector2(1f, 0.26f));
+            _enemyCountText = AddText(countRect, "", HudTheme.FontBody, HudTheme.Parchment, TextAlignmentOptions.Center);
+            _enemyCountText.fontStyle = FontStyles.Bold;
+        }
+
+        // ── Combo / kill-streak momentum badge ─────────────────────────────────
+        // Centred above the skill bar, hidden until a combo/streak event fires.
+        // Pops in (scale punch) + fades out after a brief hold — surfaces the
+        // CombatFeedbackManager momentum that was previously invisible. Positioned
+        // mid-screen-low so it never overlaps the top wave readout.
+        private void BuildMomentumBadge(Transform parent)
+        {
+            _momentumBadge = NewRect("MomentumBadge", parent, new Vector2(0.30f, 0.30f), new Vector2(0.70f, 0.42f));
+            _momentumGroup = _momentumBadge.gameObject.AddComponent<CanvasGroup>();
+            _momentumGroup.alpha = 0f;
+            _momentumGroup.interactable = false;
+            _momentumGroup.blocksRaycasts = false;
+
+            // Combo line (big) — e.g. "8× COMBO"
+            var comboRect = NewRect("Combo", _momentumBadge, new Vector2(0f, 0.42f), new Vector2(1f, 1f));
+            _comboText = AddText(comboRect, "", HudTheme.FontTitle + 10, HudTheme.Gold, TextAlignmentOptions.Center);
+            _comboText.fontStyle = FontStyles.Bold;
+            _comboText.characterSpacing = 4f;
+
+            // Kill-streak line (smaller, under) — e.g. "3× KILLS"
+            var streakRect = NewRect("Streak", _momentumBadge, new Vector2(0f, 0f), new Vector2(1f, 0.42f));
+            _streakText = AddText(streakRect, "", HudTheme.FontHead, HudTheme.HpRed, TextAlignmentOptions.Center);
+            _streakText.fontStyle = FontStyles.Bold;
+            _streakText.characterSpacing = 3f;
         }
 
         // ── Top-left party stack: hero (slot 0) + up to 3 companions. ──────────
@@ -336,8 +412,10 @@ namespace DeNelle.HUD
             // 4 ability cells across the lower portion (large touch targets).
             _slotKey      = new TextMeshProUGUI[AbilitySlotCount];
             _slotGlyph    = new TextMeshProUGUI[AbilitySlotCount];
+            _slotName     = new TextMeshProUGUI[AbilitySlotCount];
             _slotAccent   = new Image[AbilitySlotCount];
             _slotCooldown = new Image[AbilitySlotCount];
+            _slotCdFill   = new float[AbilitySlotCount];
 
             string[] defaultKeys = { "Q", "W", "E", "R" };
             float cellW = 0.22f;
@@ -354,8 +432,9 @@ namespace DeNelle.HUD
                 cellImg.sprite = HudTheme.RoundedFrame;
                 cellImg.type = Image.Type.Sliced;
 
-                // Accent rune disc (tinted per ability)
-                var disc = NewRect("Accent", cell, new Vector2(0.10f, 0.10f), new Vector2(0.90f, 0.90f));
+                // Accent rune disc (tinted per ability) — top portion of the cell,
+                // leaving a strip at the bottom for the ability NAME label.
+                var disc = NewRect("Accent", cell, new Vector2(0.14f, 0.34f), new Vector2(0.86f, 0.96f));
                 _slotAccent[i] = disc.gameObject.AddComponent<Image>();
                 _slotAccent[i].color = HudTheme.SlotDisc;
                 _slotAccent[i].sprite = HudTheme.Disc;
@@ -376,8 +455,19 @@ namespace DeNelle.HUD
                 _slotCooldown[i].fillAmount = 0f;
                 _slotCooldown[i].raycastTarget = false;
 
-                // Hotkey badge (bottom-right of the cell)
-                var keyRect = NewRect("Key", cell, new Vector2(0.62f, 0.0f), new Vector2(1f, 0.30f));
+                // Ability NAME label across the bottom strip — the key clarity win
+                // for a first-time player ("that's Fireball"). Auto-sizes so longer
+                // names ("Chain Lightning") still fit the cell width.
+                var nameRect = NewRect("Name", cell, new Vector2(0.02f, 0.0f), new Vector2(0.98f, 0.30f));
+                _slotName[i] = AddText(nameRect, "", 16, HudTheme.Parchment, TextAlignmentOptions.Center);
+                _slotName[i].fontStyle = FontStyles.Bold;
+                _slotName[i].enableAutoSizing = true;
+                _slotName[i].fontSizeMin = 9f;
+                _slotName[i].fontSizeMax = 16f;
+                _slotName[i].raycastTarget = false;
+
+                // Hotkey badge (top-right corner of the cell, over the disc)
+                var keyRect = NewRect("Key", cell, new Vector2(0.66f, 0.70f), new Vector2(1f, 1f));
                 _slotKey[i] = AddText(keyRect, defaultKeys[i], 18, HudTheme.Gold, TextAlignmentOptions.Center);
 
                 // Click → AbilityRequested(slot)
@@ -674,6 +764,72 @@ namespace DeNelle.HUD
                 _skillBar.gameObject.SetActive(visible);
         }
 
+        /// <summary>
+        /// Combo count badge — pushed by the Village-side ComboHudBridge which subscribes
+        /// to CombatFeedbackManager.OnComboChanged. Pops + fades the "N× COMBO" badge.
+        /// count &lt;= 1 hides the combo line (a 1-hit "combo" isn't momentum yet).
+        /// Resolved by name (not on IVillageHud) like SetMana.
+        /// </summary>
+        public void SetComboCount(int count)
+        {
+            if (_comboText == null) return;
+            if (count <= 1)
+            {
+                // Don't re-pop on the reset-to-zero; just let the badge fade if the
+                // streak line isn't holding it up.
+                _comboText.text = "";
+                _lastCombo = count;
+                return;
+            }
+            _comboText.text = count + "× COMBO";   // ×
+            if (count > _lastCombo) PopMomentum();        // only punch on growth
+            _lastCombo = count;
+        }
+
+        /// <summary>
+        /// Kill-streak badge — pushed by ComboHudBridge (OnKillStreakChanged).
+        /// streak &lt;= 1 hides the streak line. Resolved by name like SetComboCount.
+        /// </summary>
+        public void SetKillStreak(int streak)
+        {
+            if (_streakText == null) return;
+            if (streak <= 1)
+            {
+                _streakText.text = "";
+                _lastStreak = streak;
+                return;
+            }
+            _streakText.text = streak + "× KILLS";
+            if (streak > _lastStreak) PopMomentum();
+            _lastStreak = streak;
+        }
+
+        // Punch the badge in (pop scale + refresh the visible hold window).
+        private void PopMomentum()
+        {
+            _momentumPop = 1f;
+            _momentumHold = 1.1f; // seconds at full alpha before the fade begins
+        }
+
+        /// <summary>
+        /// Live enemy readout — "X / Y enemies" while a wave is active. Pushed by the
+        /// WaveHudBridge (live = WaveManager.LiveEnemies.Count, total = the wave's peak
+        /// live count). total &lt;= 0 hides the line (between waves). Resolved by name.
+        /// </summary>
+        public void SetEnemyCount(int live, int total)
+        {
+            if (_enemyCountText == null) return;
+            if (total <= 0)
+            {
+                _enemyCountText.text = "";
+                return;
+            }
+            _enemyCountText.text = live + " / " + total + " enemies";
+            // Tint toward gold as the wave nears clear so progress reads at a glance.
+            float clearPct = total > 0 ? 1f - Mathf.Clamp01((float)live / total) : 0f;
+            _enemyCountText.color = Color.Lerp(HudTheme.Parchment, HudTheme.Gold, clearPct);
+        }
+
         /// <summary>Live mana bar — pushed every frame by HeroAbilitiesHudBridge.</summary>
         public void SetMana(float current, float max)
         {
@@ -696,7 +852,16 @@ namespace DeNelle.HUD
         public void SetAbilityCooldown(int slot, float remaining, float total)
         {
             if (_slotCooldown == null || slot < 0 || slot >= _slotCooldown.Length || _slotCooldown[slot] == null) return;
-            _slotCooldown[slot].fillAmount = total > 0f ? Mathf.Clamp01(remaining / total) : 0f;
+            float fill = total > 0f ? Mathf.Clamp01(remaining / total) : 0f;
+            _slotCooldown[slot].fillAmount = fill;
+            if (_slotCdFill != null) _slotCdFill[slot] = fill;
+            // Grey the name + key while the ability is recharging so "on cooldown"
+            // reads at a glance; back to bright when ready.
+            bool ready = fill <= 0.001f;
+            if (_slotName != null && _slotName[slot] != null)
+                _slotName[slot].color = ready ? HudTheme.Parchment : HudTheme.ParchmentDim;
+            if (_slotKey != null && _slotKey[slot] != null)
+                _slotKey[slot].color = ready ? HudTheme.Gold : HudTheme.ParchmentDim;
         }
 
         /// <summary>Per-class ability cell content (key/glyph/name) — 5-arg path.</summary>
@@ -711,6 +876,9 @@ namespace DeNelle.HUD
             if (slot < 0 || slot >= AbilitySlotCount) return;
             if (_slotKey != null && _slotKey[slot] != null && !string.IsNullOrEmpty(key)) _slotKey[slot].text = key;
             if (_slotGlyph != null && _slotGlyph[slot] != null) _slotGlyph[slot].text = string.IsNullOrEmpty(glyph) ? "?" : glyph;
+            // Per-job clarity: show the ability NAME under the cell (e.g. "Fireball").
+            if (_slotName != null && _slotName[slot] != null)
+                _slotName[slot].text = string.IsNullOrEmpty(name) ? "" : name;
             if (_slotAccent != null && _slotAccent[slot] != null && !string.IsNullOrEmpty(accentHex)
                 && ColorUtility.TryParseHtmlString(accentHex, out var c))
             {

@@ -142,8 +142,23 @@ namespace DeNelle.Village
         {
             EnsureGateProximityOpeners();
             EnsureHeartHudBridge();
+            EnsureComboHudBridge();
             EnsureDungeonEntrances();
             EnsureOnboardingIntegrator();
+        }
+
+        /// <summary>
+        /// Attaches a <see cref="ComboHudBridge"/> at runtime so the HUD's combo /
+        /// kill-streak momentum badge gets live data — CombatFeedbackManager raised
+        /// OnComboChanged / OnKillStreakChanged but nothing subscribed, so the
+        /// momentum was invisible. Idempotent ([DisallowMultipleComponent]).
+        /// Runtime-attached for the same reason as the Heart HUD bridge: the scene
+        /// is builder-baked.
+        /// </summary>
+        private void EnsureComboHudBridge()
+        {
+            if (GetComponent<ComboHudBridge>() == null)
+                gameObject.AddComponent<ComboHudBridge>();
         }
 
         // ── WO-133: first-run tutorial (FTUE) ─────────────────────────────────
