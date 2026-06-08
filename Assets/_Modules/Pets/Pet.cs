@@ -80,6 +80,32 @@ namespace DeNelle.Pets
         [Tooltip("How far the pet will scan for an enemy to hunt (units). React PET_DEFEND_LEASH = 999.")]
         [SerializeField] private float _huntScanRadius = 60f;
 
+        // ── Anti-ranged ability (WO-128) ─────────────────────────────────────
+        [Header("Anti-ranged ability (WO-128)")]
+        [Tooltip("When on, a Defend pet PRIORITISES ranged attackers (archers / kiters / casters) " +
+                 "— it dashes onto the nearest one and disrupts its fire with a status effect on a " +
+                 "cooldown, so ranged enemies can't safely kite the hero. Additive: with no ranged " +
+                 "threat in range (or no enemy implementing IRangedThreat yet) normal hunting runs.")]
+        [SerializeField] private bool _antiRangedEnabled = true;
+
+        [Tooltip("Radius the pet scans for a RANGED threat to counter (units). Independent of the " +
+                 "normal hunt radius so the counter can have a tighter / wider reach.")]
+        [SerializeField] private float _antiRangedScanRadius = 45f;
+
+        [Tooltip("Multiplier applied to hunt speed while DASHING onto a ranged threat — the pet " +
+                 "closes faster than a normal hunt so the archer gets less free fire.")]
+        [SerializeField, Range(1f, 3f)] private float _antiRangedDashSpeed = 1.8f;
+
+        [Tooltip("Status effect the pet inflicts on a ranged threat to disrupt its fire (Slow = it " +
+                 "can't reposition to standoff; Freeze = it can't act at all).")]
+        [SerializeField] private StatusEffect _antiRangedDisrupt = StatusEffect.Slow;
+
+        [Tooltip("Seconds the disrupt status lasts per application.")]
+        [SerializeField] private float _antiRangedDisruptSeconds = 1.5f;
+
+        [Tooltip("Cooldown (seconds) between anti-ranged disrupt strikes.")]
+        [SerializeField] private float _antiRangedCooldown = 4f;
+
         [Header("Live state")]
         [Tooltip("Current HP. Set from the bond-rank max HP by Configure().")]
         [SerializeField] private float _hp;
@@ -94,6 +120,9 @@ namespace DeNelle.Pets
         private DamageElement _element = DamageElement.None;
 
         private float _attackCdRemaining;
+
+        // WO-128: cooldown remaining on the anti-ranged disrupt strike.
+        private float _antiRangedCdRemaining;
 
         // ── Level progression (PetProgression drives these) ──────────────────
         // Stat multipliers from the pet's level. Default 1 (level 1 = base def
@@ -303,6 +332,7 @@ namespace DeNelle.Pets
         {
             float dt = Time.deltaTime;
             _attackCdRemaining = Mathf.Max(0f, _attackCdRemaining - dt);
+            _antiRangedCdRemaining = Mathf.Max(0f, _antiRangedCdRemaining - dt);
 
             // Feed the Animator's Speed float from the actual per-frame
             // displacement — Pet moves kinematically (no agent / rigidbody to
@@ -318,6 +348,14 @@ namespace DeNelle.Pets
             // Idle / Fortify pets do not hunt — Idle trails the hero (the
             // integrator drives that), Fortify holds its wall span.
             if (_mode != PetMode.Defend) return;
+
+            // WO-128 — anti-ranged ability: ranged attackers (archers / kiters /
+            // casters that hold standoff) are the threat melee defenders struggle
+            // to reach. When enabled and one is in range, the pet ABANDONS the
+            // nearest-foe rule, dashes onto that ranged threat, and disrupts its
+            // fire with a status effect on a cooldown. Returns true once it has
+            // handled this frame so the normal hunt below is skipped.
+            if (_antiRangedEnabled && UpdateAntiRanged(dt)) return;
 
             var foe = NearestHostile();
             if (foe == null)
@@ -392,6 +430,84 @@ namespace DeNelle.Pets
                 if (col == null) continue;
                 var dmg = col.GetComponentInParent<IDamageable>();
                 if (dmg == null || !dmg.IsAlive || dmg.Faction != CombatFaction.Hostile) continue;
+                float sqr = (dmg.WorldPosition - transform.position).sqrMagnitude;
+                if (sqr < bestSqr)
+                {
+                    bestSqr = sqr;
+                    best = dmg;
+                }
+            }
+            return best;
+        }
+
+        /// <summary>
+        /// WO-128 — anti-ranged ability. Finds the nearest living RANGED threat
+        /// (a hostile <see cref="IDamageable"/> that ALSO implements
+        /// <see cref="IRangedThreat"/> and is actively attacking from range). When
+        /// one exists the pet dashes onto it (a faster close than a normal hunt)
+        /// and, on reaching attack range, lands a normal strike PLUS a disrupt
+        /// status (slow / freeze) on a cooldown — interrupting its kiting fire.
+        ///
+        /// Fully isolated + additive: discovery is via the cross-module Core
+        /// marker interface (Pet never names the Village enemy type), and if no
+        /// enemy implements <see cref="IRangedThreat"/> yet, or none is in range,
+        /// this returns false and the pet's normal hunt runs unchanged.
+        /// </summary>
+        /// <returns>True when a ranged threat was handled this frame.</returns>
+        private bool UpdateAntiRanged(float dt)
+        {
+            var threat = NearestRangedThreat();
+            if (threat == null) return false;
+
+            Vector3 threatPos = threat.WorldPosition;
+            float dist = Vector3.Distance(transform.position, threatPos);
+
+            if (dist > _attackRange)
+            {
+                // DASH onto the kiter — close faster than a normal hunt so it
+                // gets less free fire. We temporarily scale hunt speed for the
+                // move step, then restore it (MoveToward reads _huntSpeed).
+                float baseHuntSpeed = _huntSpeed;
+                _huntSpeed = baseHuntSpeed * _antiRangedDashSpeed;
+                MoveToward(threatPos, dt);
+                _huntSpeed = baseHuntSpeed;
+                return true;
+            }
+
+            // In range — face it, and on cooldown land a strike + disrupt.
+            FaceToward(threatPos);
+            if (_antiRangedCdRemaining <= 0f)
+            {
+                _antiRangedCdRemaining = Mathf.Max(0.1f, _antiRangedCooldown);
+                Attack(threat);   // normal damage tick (also fires the guarded Attack anim)
+                if (_antiRangedDisruptSeconds > 0f)
+                    threat.ApplyStatus(_antiRangedDisrupt, _antiRangedDisruptSeconds);
+            }
+            return true;
+        }
+
+        /// <summary>
+        /// The nearest living hostile that ALSO advertises itself as a ranged
+        /// attacker via <see cref="IRangedThreat"/>, within
+        /// <see cref="_antiRangedScanRadius"/>, or null. Reuses the same enemy
+        /// LayerMask overlap as <see cref="NearestHostile"/> — Pet never names the
+        /// concrete Village enemy type.
+        /// </summary>
+        private IDamageable NearestRangedThreat()
+        {
+            int count = Physics.OverlapSphereNonAlloc(
+                transform.position, _antiRangedScanRadius, _overlap, _enemyMask, QueryTriggerInteraction.Collide);
+            IDamageable best = null;
+            float bestSqr = float.MaxValue;
+            for (int i = 0; i < count; i++)
+            {
+                var col = _overlap[i];
+                if (col == null) continue;
+                var dmg = col.GetComponentInParent<IDamageable>();
+                if (dmg == null || !dmg.IsAlive || dmg.Faction != CombatFaction.Hostile) continue;
+                // Only target things that mark themselves as a live ranged attacker.
+                var ranged = col.GetComponentInParent<IRangedThreat>();
+                if (ranged == null || !ranged.IsRangedAttacker) continue;
                 float sqr = (dmg.WorldPosition - transform.position).sqrMagnitude;
                 if (sqr < bestSqr)
                 {
@@ -532,6 +648,12 @@ namespace DeNelle.Pets
             Gizmos.DrawWireSphere(transform.position, _attackRange);
             Gizmos.color = new Color(0.49f, 0.84f, 0.99f, 0.25f);
             Gizmos.DrawWireSphere(transform.position, _huntScanRadius);
+            // WO-128: anti-ranged counter reach.
+            if (_antiRangedEnabled)
+            {
+                Gizmos.color = new Color(1f, 0.55f, 0.2f, 0.35f);
+                Gizmos.DrawWireSphere(transform.position, _antiRangedScanRadius);
+            }
         }
 #endif
     }
