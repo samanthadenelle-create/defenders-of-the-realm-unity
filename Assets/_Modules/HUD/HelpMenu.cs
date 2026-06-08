@@ -59,8 +59,12 @@ namespace DeNelle.HUD
                 enabled = false;
                 return;
             }
-            // Render above every other UI in the scene.
-            _document.sortingOrder = 100;
+            // Render above every other UI in the scene — including the uGUI
+            // TOWN-HUD canvas (sortingOrder 140 in VillageHudController), whose
+            // top-right mini-map otherwise drew over + ate the gear's raycasts.
+            // UIToolkit panels and uGUI Screen-Space-Overlay canvases sort by
+            // their own sortingOrder, so this must exceed the town canvas.
+            _document.sortingOrder = 160;
             BuildUi();
         }
 
@@ -84,11 +88,16 @@ namespace DeNelle.HUD
             _root.style.left = 0; _root.style.right = 0;
             _root.style.top = 0;  _root.style.bottom = 0;
 
-            // The little launcher button — top-right, below the Wave indicator.
+            // The little launcher button — top-right, BELOW the town mini-map.
             // Owner 2026-05-25: use a gear glyph (reads as settings) over "?".
+            // The TOWN-HUD mini-map (VillageHudController) is a 140×140 panel
+            // anchored top-right at offset (-12,-12), so it spans top 12→152px.
+            // The gear used to sit at top:80 — squarely UNDER the map — and was
+            // unclickable when the map was open. Park it at top:164 (a 12px gap
+            // below the map's 152px bottom edge) so it is always clear + clickable.
             var launcher = new Button(ToggleOverlay) { text = "⚙" };
             launcher.style.position = Position.Absolute;
-            launcher.style.top = 80; launcher.style.right = 20;
+            launcher.style.top = 164; launcher.style.right = 20;
             launcher.style.width = 36; launcher.style.height = 36;
             launcher.style.fontSize = 18;
             launcher.style.unityFontStyleAndWeight = FontStyle.Bold;

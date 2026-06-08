@@ -60,7 +60,7 @@ namespace DeNelle.HUD
                 }
             }
             if (_document.panelSettings == null) { enabled = false; return; }
-            _document.sortingOrder = 110; // above HelpMenu (100)
+            _document.sortingOrder = 170; // above HelpMenu (160, raised over the town mini-map canvas)
             BuildUi();
         }
 
