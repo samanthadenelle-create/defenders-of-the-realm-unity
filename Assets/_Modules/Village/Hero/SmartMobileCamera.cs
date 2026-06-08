@@ -63,7 +63,7 @@ namespace DeNelle.Village
                  "the legacy high value baked into Village.unity to this default, so it applies on " +
                  "the next Play with NO rebake and NO scene edit. Tune Y=height, Z=distance live to " +
                  "taste; any value below the legacy threshold is honored.")]
-        [SerializeField] private Vector3 _followOffset = new Vector3(0f, 6.5f, -7.5f);
+        [SerializeField] private Vector3 _followOffset = new Vector3(0f, 2.6f, -4.5f);
 
         // Close cinematic 3D third-person, tilted DOWN for mobile PORTRAIT (DEF-227).
         // Portrait viewports have a tall vertical FOV, so a near-horizontal seat (the old
@@ -71,7 +71,11 @@ namespace DeNelle.Village
         // the hero large + low into a corner. This seat sits higher and a touch further back
         // (~28 deg downtilt over the 2.5m look-at) so the ground frames the hero and the sky
         // band shrinks. Awake() snaps the retired top-down seat to this.
-        private static readonly Vector3 DefaultFollowOffset = new Vector3(0f, 6.5f, -7.5f);
+        // Owner 2026-06-08 (desktop/landscape): the 0,6.5,-7.5 portrait seat reads "twice
+        // as high"; dropped to a CLOSE over-the-shoulder action seat (low + near) so the
+        // hero's combat animations read almost face-to-face. _forceCameraFix snaps the
+        // baked scene value to this every Play (no rebake). Tune Y=height / Z=distance live.
+        private static readonly Vector3 DefaultFollowOffset = new Vector3(0f, 2.6f, -4.5f);
         private const float LegacyHighOffsetY = 14f;   // old TD seat sat at y=18; >=14 => retire it
 
         [Tooltip("Look-at height above hero feet (metres).")]
@@ -370,6 +374,14 @@ namespace DeNelle.Village
             var heroGo = GameObject.FindWithTag("Player");
             // "HeroTarget" may be undefined (FindWithTag throws on an undefined tag).
             if (heroGo == null) heroGo = SafeFindWithTag("HeroTarget");
+            // Tag-independent fallback: the baked Village2 hero is NOT tagged Player/
+            // HeroTarget, which left this camera with no target ("fixed, doesn't follow
+            // the hero"). The hero definitively carries HeroLocomotion, so lock onto that.
+            if (heroGo == null)
+            {
+                var loco = FindFirstObjectByType<HeroLocomotion>();
+                if (loco != null) heroGo = loco.gameObject;
+            }
             if (heroGo != null) _target = heroGo.transform;
         }
 
