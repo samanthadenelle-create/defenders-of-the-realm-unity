@@ -49,6 +49,20 @@ namespace DeNelle.Editor
             int placed = 0, skipped = 0, reseated = 0;
             foreach (var b in Buildings)
             {
+                // WO-312 — the Farm is no longer a BUILDING; it is a harvestable Food
+                // MineNode (a small farm plot the player taps [F] to bank Food, the same
+                // economy faucet as wood/iron/crystal nodes). Skip the building placement
+                // here and drop the node below instead. If an old Farm building plot is
+                // already in the scene, retire it so it doesn't double up with the node.
+                if (string.Equals(b.Id, "farm", StringComparison.OrdinalIgnoreCase))
+                {
+                    var oldFarm = FindVillage2Building(b.Id);
+                    if (oldFarm != null) UnityEngine.Object.DestroyImmediate(oldFarm);
+                    PlaceFarmFoodNode(parentGo.transform, b);
+                    placed++;
+                    continue;
+                }
+
                 var existing = FindVillage2Building(b.Id);
                 if (existing != null)
                 {
@@ -84,6 +98,66 @@ namespace DeNelle.Editor
             Debug.Log($"[Village2Inject] DONE — placed {placed} new, reseated {reseated} to ground, " +
                       $"skipped {skipped} already-good. NavMesh re-bake still needed for enemy pathing. " +
                       "VILLAGE2_INJECT_OK");
+        }
+
+        // WO-312 — Farm → harvestable Food node. Builds a small farm-plot visual and
+        // attaches a DeNelle.Village.MineNode configured to yield Food. The node banks
+        // Food via EconomyService.Grant(food:) exactly like the wood/iron/crystal nodes
+        // (see MineNode.BankYield). Renewable + [F]-tappable in the village: we keep
+        // UseFiniteReserve OFF (the settlement-drain model is an outer-world concern) so
+        // the legacy in-range prompt + [F]/tap extract path is active, and use the
+        // cooldown-respawn so the plot refills instead of depleting permanently.
+        //
+        // MineNode lives in DeNelle.Village; the Editor asmdef can't reference Village,
+        // so it is attached by reflection and its public fields are set by name — the
+        // same asmdef-free pattern OuterWorldBuilder uses. Resource is set via the
+        // MineResource enum's underlying int (Iron=0, Wood=1, Food=2, AetherCrystal=3).
+        private const int MineResourceFood = 2;   // DeNelle.Village.MineResource.Food
+
+        private static void PlaceFarmFoodNode(Transform parent, BuildingPlacement b)
+        {
+            // Root plot at the Farm's authored position (DEF-101-cleared, off the gate).
+            var plot = new GameObject($"FarmFoodNode-{b.Id} ({b.Label})");
+            plot.transform.SetParent(parent, false);
+            plot.transform.position = new Vector3(b.X, 0f, b.Z);
+
+            // Small tilled-soil patch so the plot reads as a farm field (visual only —
+            // the MineNode's own MineNodeVisual builds the readable grain silhouette on
+            // top, since AutoBuildVisual defaults on). Thin quad-like cube, no collider
+            // so it never blocks pathing or the [F] pick.
+            var soil = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            soil.name = "FarmPlot_Soil";
+            soil.transform.SetParent(plot.transform, false);
+            soil.transform.localPosition = new Vector3(0f, 0.05f, 0f);
+            soil.transform.localScale = new Vector3(4f, 0.1f, 4f);
+            ApplyColor(soil, new Color(0.40f, 0.28f, 0.16f));   // tilled-earth brown
+            var soilCol = soil.GetComponent<Collider>();
+            if (soilCol != null) UnityEngine.Object.DestroyImmediate(soilCol);
+
+            // Attach the Food MineNode by reflection (asmdef-free).
+            Type mineNodeType = FindType("DeNelle.Village.MineNode");
+            if (mineNodeType == null)
+            {
+                Debug.LogWarning("[Village2Inject] DeNelle.Village.MineNode not found — Farm food " +
+                                 "plot placed as a bare visual (no harvest). Is DeNelle.Village compiled?");
+                return;
+            }
+
+            var mn = plot.AddComponent(mineNodeType);
+            var fRes = mineNodeType.GetField("Resource");
+            if (fRes != null) fRes.SetValue(mn, Enum.ToObject(fRes.FieldType, MineResourceFood));
+            var fYield = mineNodeType.GetField("YieldPerExtract");
+            if (fYield != null) fYield.SetValue(mn, 5);
+            // Renewable in-village node: legacy extract+cooldown-respawn (NOT a finite
+            // reserve), so the player can [F]/tap to bank Food and the plot refills.
+            var fFinite = mineNodeType.GetField("UseFiniteReserve");
+            if (fFinite != null) fFinite.SetValue(mn, false);
+            var fTotal = mineNodeType.GetField("TotalExtracts");
+            if (fTotal != null) fTotal.SetValue(mn, 6);
+            var fCooldown = mineNodeType.GetField("ExtractCooldown");
+            if (fCooldown != null) fCooldown.SetValue(mn, 8f);
+            var fRespawn = mineNodeType.GetField("RespawnSeconds");
+            if (fRespawn != null) fRespawn.SetValue(mn, 60f);
         }
 
         /// <summary>The "Building-{id} (...)" plot in the open scene, or null.</summary>

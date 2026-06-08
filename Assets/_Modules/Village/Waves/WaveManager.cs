@@ -1118,7 +1118,12 @@ namespace DeNelle.Village
             int totalAward = 0;
 
             // ── Boss-wave drop (every Nth wave, chance-based) ─────────────────
-            if (waveId % cfg.BossInterval == 0)
+            // Guard the interval: a backend ServerConfig can deliver BossWaveInterval = 0
+            // (non-null, so the ?? fallback to 5 does NOT apply), which would make
+            // `waveId % 0` throw DivideByZeroException and abort the wave-clear reward
+            // path right after OnWaveCleared fired. Clamp to ≥1 so the modulo is safe.
+            int bossInterval = Mathf.Max(1, cfg.BossInterval);
+            if (waveId % bossInterval == 0)
             {
                 if (UnityEngine.Random.value <= cfg.DropChance)
                 {

@@ -62,7 +62,12 @@ namespace DeNelle.Village
         private Func<float> _fraction;     // 0..1 HP fraction supplier
         private Func<bool>  _isDead;        // true once the unit is dead
         private float _heightOffset = 2.4f; // world-units above the unit pivot
-        private Vector2 _barSize = new Vector2(1.5f, 0.18f);
+        // WO-302: compact slim chip. The world-space canvas renders sizeDelta as
+        // world metres (scale-compensated to ~1), so these ARE the bar's world
+        // dimensions. The old 1.5 × 0.18 m read as a giant green pill over a ~2 m
+        // enemy; a ~0.9 m wide, 0.11 m tall bar reads as a proportional slim HP
+        // indicator above the head.
+        private Vector2 _barSize = new Vector2(0.9f, 0.11f);
         // DEF-206: when true the bar stays hidden until the unit is ENGAGED
         // (damaged / targeted / recently in combat), then fades back out. When
         // false (the hero) the bar is always present so you can locate yourself.

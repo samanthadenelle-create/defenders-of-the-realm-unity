@@ -142,6 +142,12 @@ namespace DeNelle.Village
         // Build mode is an explicit "defer to BuildModeController" gate (it owns the cam).
         private bool _buildModeActive;
 
+        // WRITER MODEL: while FULLY in town we DISABLE SmartMobileCamera so only ONE rig
+        // writes the transform (no SMC SmoothDamp fighting the locked town seat). During a
+        // blend SMC stays enabled so its LIVE seat is the battle endpoint we lerp from/to.
+        // Re-enabled the instant we fully blend back to battle/exploration.
+        private bool _smcSuspended;
+
         // Cross-assembly BattleController (ATB) — reflected, matching the HUD's discipline.
         private System.Type _battleControllerType;
         private bool _battleTypeResolved;
@@ -167,6 +173,23 @@ namespace DeNelle.Village
         private void OnDisable()
         {
             BuildModeController.BuildModeChanged -= OnBuildModeChanged;
+
+            // SAFETY: never leave SMC disabled if we go away — that would freeze the
+            // camera. Hand the transform back to its validated rig on the way out.
+            //
+            // EXCEPTION — build mode: BuildModeController.PullCameraBack disables EVERY
+            // "Camera"-named driver on the camera (SMC first, then THIS controller, whose
+            // type name also contains "Camera"). It deliberately disables SMC for its
+            // overview and re-enables it in RestoreCamera(). So while build mode is active
+            // we must NOT re-enable SMC here — that would resurrect the rig BuildMode just
+            // suppressed and split/fight the overview. BuildModeController owns SMC's
+            // enabled state for the duration; we just drop our suspend bookkeeping.
+            if (_buildModeActive)
+            {
+                _smcSuspended = false; // BuildMode now owns SMC.enabled; don't touch it
+                return;
+            }
+            ResumeSmc();
         }
 
         private void OnBuildModeChanged(bool active) => _buildModeActive = active;
@@ -192,11 +215,12 @@ namespace DeNelle.Village
             }
 
             // BUILD MODE: BuildModeController owns the camera (its own overview + pan).
-            // Stand down entirely so we never fight it — and reset our pan seat so the
-            // next town entry re-seeds cleanly behind the player's last drag.
+            // Stand down entirely so we never fight it — hand the transform back to SMC
+            // (re-enable it) and reset our pan seat so the next town entry re-seeds cleanly.
             if (_buildModeActive)
             {
                 _townSeatInit = false;
+                ResumeSmc();
                 return;
             }
 
@@ -205,25 +229,60 @@ namespace DeNelle.Village
             float step = _transitionSeconds > 0f ? dt / _transitionSeconds : 1f;
             _blend = Mathf.MoveTowards(_blend, target, step);
 
-            // BATTLE/EXPLORATION, fully blended out → SmartMobileCamera's transform
-            // stands untouched (its owner-validated framing, zero degradation).
+            // BATTLE/EXPLORATION, fully blended out → hand the camera back to
+            // SmartMobileCamera entirely (re-enable it). Its owner-validated framing is
+            // restored with ZERO degradation; we don't touch the transform at all.
             if (_blend <= 0.0001f)
             {
-                _cam.fieldOfView = _baseFov; // SMC manages its own combat-FOV from here
+                ResumeSmc();
                 return;
             }
 
-            // We are in town, or transitioning. Compute the town bird's-eye seat and
-            // blend the camera from SMC's just-written battle seat toward it.
+            // We are in town, or transitioning.
+            //
+            // WRITER MODEL:
+            //  • FULLY in town (_blend == 1): the town bird's-eye is the SOLE writer; SMC is
+            //    suspended so its SmoothDamp can't fight a hero-relative pull every frame.
+            //  • TRANSITIONING (0 < _blend < 1): SMC stays ENABLED so its LIVE validated seat
+            //    is the blend's battle endpoint — we read transform.* (SMC just wrote it this
+            //    frame) and lerp toward the town seat by the absolute blend t. This makes both
+            //    the enter AND exit blends track SMC's real seat (no stale-seat jump), and the
+            //    result is never fed back into SMC (we overwrite after it ran).
+            bool fullyTown = _blend >= 0.9999f;
+            if (fullyTown) SuspendSmc();
+            else ResumeSmc(); // keep SMC live during the blend so its seat is current
+
             UpdateTownInput(dt);
             ComputeTownSeat(out Vector3 townPos, out Quaternion townRot);
 
             float t = Smoothstep01(_blend);
 
-            // SMC already wrote its battle seat to transform.* this frame; blend from it.
+            // Battle endpoint = SMC's live seat (transform.*, written this frame) while
+            // transitioning, or the town seat itself at t==1. Single effective writer:
+            // SMC computes, we produce the final composited seat.
             transform.position = Vector3.Lerp(transform.position, townPos, t);
             transform.rotation = Quaternion.Slerp(transform.rotation, townRot, t);
             _cam.fieldOfView = Mathf.Lerp(_baseFov, _townFov, t);
+        }
+
+        // ── Single-writer handover with SmartMobileCamera ──────────────────────────
+
+        // Disable SMC's LateUpdate so the town bird's-eye is the sole transform writer.
+        private void SuspendSmc()
+        {
+            if (_smcSuspended || _battleCam == null) return;
+            _battleCam.enabled = false;
+            _smcSuspended = true;
+        }
+
+        // Re-enable SMC so it resumes its validated battle/exploration framing. SMC's
+        // SmoothDamp eases from wherever the town seat left the camera, so the handover
+        // back is smooth (no jump). Restore the FOV it owns.
+        private void ResumeSmc()
+        {
+            if (!_smcSuspended) { if (_cam != null) _cam.fieldOfView = _baseFov; return; }
+            if (_battleCam != null) _battleCam.enabled = true;
+            _smcSuspended = false;
         }
 
         // ── Town seat (LOCKED to the town centre — never hero-relative) ───────────
@@ -239,11 +298,23 @@ namespace DeNelle.Village
 
             Vector3 lookAt = _townCentre + Vector3.up * _townLookAtHeight;
 
-            // Pitch the offset down by _townPitch and rotate it by the player's pan yaw.
-            // The seat is anchored to the TOWN CENTRE, not the hero (economy overview).
-            Quaternion orbit = Quaternion.Euler(_townPitch, _townYaw, 0f);
-            Vector3 back = orbit * new Vector3(0f, 0f, -_townDistanceLive);
-            pos = lookAt + back + Vector3.up * (_townHeight - _townLookAtHeight);
+            // Spherical seat around the town centre (NOT hero-relative). _townPitch is the
+            // single source of truth for the down-angle; _townDistanceLive is the straight-
+            // line range to the look-at. We DERIVE the planar offset + height from those, so
+            // the height/angle are internally consistent (the previous seat double-counted
+            // _townHeight on top of the already-pitched back vector → camera ~2x too high,
+            // staring near-straight-down at nothing — the WO-338 regression).
+            //
+            //   pitch down by _townPitch:  up = sin(pitch)*dist, planar-back = cos(pitch)*dist
+            //   yaw the planar-back by the player's pan yaw around the centre.
+            float pitchRad = _townPitch * Mathf.Deg2Rad;
+            float up = Mathf.Sin(pitchRad) * _townDistanceLive;
+            float planar = Mathf.Cos(pitchRad) * _townDistanceLive;
+
+            Quaternion yaw = Quaternion.Euler(0f, _townYaw, 0f);
+            Vector3 planarBack = yaw * new Vector3(0f, 0f, -planar);
+
+            pos = lookAt + planarBack + Vector3.up * up;
 
             Vector3 dir = lookAt - pos;
             rot = dir.sqrMagnitude > 0.0001f ? Quaternion.LookRotation(dir) : transform.rotation;

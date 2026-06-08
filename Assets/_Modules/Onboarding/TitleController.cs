@@ -83,6 +83,12 @@ namespace DeNelle.Onboarding
         private Label _detailBlurb;
         private Button _connectWalletButton;
 
+        // WO-329 stat-card rows (real per-hero values from HeroCatalog).
+        private Label _statHp;
+        private Label _statAttack;
+        private Label _statSpeed;
+        private Label _statAbility;
+
         // One card VisualElement per hero, in HeroCatalog order.
         private readonly VisualElement[] _cards = new VisualElement[HeroCatalog.Heroes.Length];
 
@@ -167,10 +173,59 @@ namespace DeNelle.Onboarding
         {
             var root = _titleDocument != null ? _titleDocument.rootVisualElement : null;
             if (root == null) { RunArrival().Forget(); return; }   // no doc — fall back to direct arrival
+
+            // WO-335 ROOT-CAUSE FIX (title button hitboxes misaligned / dead). The
+            // bumper, story-intro AND title UIDocuments all share ONE
+            // OnboardingPanelSettings panel (OnboardingSceneBuilder assigns the same
+            // asset to all three). In the splash-gate flow the bumper / story-intro
+            // overlays NEVER run Play() — so their roots are never built and never
+            // neutralised. A freshly-enabled UIDocument root defaults to
+            // PickingMode.Position and fills the panel; because the bumper doc has
+            // the HIGHEST sortingOrder (20) it composites ON TOP of the title doc
+            // (sortingOrder 0) and its empty-but-pickable root SWALLOWS every pointer
+            // event meant for the visible Start / Play / Continue buttons below it.
+            // The buttons render in the title panel but the picks land on the unseen
+            // overlay panel above — exactly the "visible buttons don't match the
+            // clickable areas" symptom. The PanelSettings scale mode is already
+            // correct (ScaleWithScreenSize, 1920×1080, match 0.5), so visual and
+            // hit-test share the same transform — the misalignment is the stacked
+            // empty overlay panels, not a scale mismatch. Make those overlay roots
+            // un-pickable + collapsed so picks fall through to the title buttons.
+            NeutralizeOverlayPanels();
+
             _root = root;
             BuildSplashInto(root);
             SetTitleVisible(true);
             _splashActive = true;
+        }
+
+        /// <summary>
+        /// WO-335: makes the bumper + story-intro overlay UIDocument roots
+        /// un-pickable and collapsed so they cannot intercept pointer events on the
+        /// shared OnboardingPanelSettings panel (they out-sort the title doc). We do
+        /// NOT disable the documents or null their panelSettings — that would tear
+        /// down the SHARED panel and blank the title (DEF-211). We only collapse +
+        /// un-pick their own roots, which renders nothing and steals no picks.
+        /// </summary>
+        private void NeutralizeOverlayPanels()
+        {
+            NeutralizeDoc(_splash != null ? _splash.GetComponent<UIDocument>() : null);
+            NeutralizeDoc(_storyIntro != null ? _storyIntro.GetComponent<UIDocument>() : null);
+        }
+
+        private static void NeutralizeDoc(UIDocument doc)
+        {
+            try
+            {
+                var r = doc != null ? doc.rootVisualElement : null;
+                if (r == null) return;
+                r.style.display = DisplayStyle.None;   // renders nothing
+                r.pickingMode = PickingMode.Ignore;    // steals no pointer picks
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning($"[TitleController] WO-335 overlay neutralise skipped: {e.Message}");
+            }
         }
 
         private void BuildSplashInto(VisualElement root)
@@ -474,6 +529,11 @@ namespace DeNelle.Onboarding
             _root.style.backgroundColor = ColBackground;
 
             _cardHealAttempted = false;   // fresh build — re-arm the self-heal
+
+            // WO-335: re-assert the overlay panels are un-pickable now the hero-select
+            // is the live screen, in case the splash-gate path was skipped (e.g. the
+            // DEF-253 watchdog or the OnPlayIntro fallback reached here directly).
+            NeutralizeOverlayPanels();
 
             BuildDragonStage();   // top half (acceptance #4)
             BuildRosterPanel();   // bottom half — title + 4 cards + detail
@@ -805,11 +865,14 @@ namespace DeNelle.Onboarding
         }
 
         /// <summary>
-        /// Builds the slim confirm BAR that sits BELOW the four rich cards. Since
-        /// each card now carries its own class title + full blurb inline (the
-        /// owner-preferred rich frame), this bar no longer repeats the blurb — it
-        /// just confirms the current pick: a "you chose X" line + the "Choose this
-        /// Hero" CTA that persists the pick and routes onward.
+        /// WO-329: builds the selected-hero STAT CARD that sits BELOW the four rich
+        /// cards. Before WO-329 this was a slim bar that only showed a "Selected: X"
+        /// status line — tapping a hero showed portrait + name but no stats. It now
+        /// renders a real play-card: an info column (name + class/role, HP/Attack/
+        /// Speed pip ratings, and the hero's signature ability + effect) on the left,
+        /// with the "Choose this Hero" confirm CTA on the right. Values come from
+        /// HeroCatalog (WebGL-safe, no cross-module JSON dependency). Before a pick
+        /// it shows the "Tap a hero to begin" hint instead of the old static line.
         /// </summary>
         private void BuildDetailCard()
         {
@@ -820,8 +883,8 @@ namespace DeNelle.Onboarding
             _detailCard.style.flexDirection = FlexDirection.Row;
             _detailCard.style.alignItems = Align.Center;
             _detailCard.style.justifyContent = Justify.SpaceBetween;
-            _detailCard.style.paddingTop = 8f;
-            _detailCard.style.paddingBottom = 8f;
+            _detailCard.style.paddingTop = 10f;
+            _detailCard.style.paddingBottom = 10f;
             _detailCard.style.paddingLeft = 14f;
             _detailCard.style.paddingRight = 14f;
             float r = 12f;
@@ -833,26 +896,48 @@ namespace DeNelle.Onboarding
             SetBorderColor(_detailCard, ColVioletBorder);
             _detailCard.style.backgroundColor = new Color(0.149f, 0.102f, 0.204f, 0.85f);
 
-            // "Selected: <name> — <class title>" status line (left side).
+            // ── Left: hero info + stat block ────────────────────────────────
+            var info = new VisualElement { name = "title-hero-statblock" };
+            info.style.flexGrow = 1f;
+            info.style.flexShrink = 1f;
+            info.style.flexDirection = FlexDirection.Column;
+            info.pickingMode = PickingMode.Ignore;
+
+            // "Selected: <name> — <class title>" header line.
             _detailName = new Label(string.Empty);
             _detailName.style.flexShrink = 1f;
             _detailName.style.fontSize = 15f;
             _detailName.style.unityFontStyleAndWeight = FontStyle.Bold;
             _detailName.style.color = ColTextBright;
             _detailName.style.whiteSpace = WhiteSpace.Normal;
-            _detailCard.Add(_detailName);
+            info.Add(_detailName);
+
+            // Stat pip rows — HP / Attack / Speed (real ratings from HeroCatalog).
+            _statHp     = MakeStatRow(info);
+            _statAttack = MakeStatRow(info);
+            _statSpeed  = MakeStatRow(info);
+
+            // Signature ability line.
+            _statAbility = new Label(string.Empty);
+            _statAbility.style.marginTop = 4f;
+            _statAbility.style.fontSize = 11f;
+            _statAbility.style.color = ColTextMuted;
+            _statAbility.style.whiteSpace = WhiteSpace.Normal;
+            info.Add(_statAbility);
+
+            _detailCard.Add(info);
 
             // Kept (assigned in RefreshDetailCard) but not added to the tree — the
-            // role + blurb now live inline in each card, so the bar stays slim.
+            // role + blurb live inline in each card, so they are not repeated here.
             _detailRole = new Label(string.Empty);
             _detailBlurb = new Label(string.Empty);
 
-            // Confirm CTA — persists the chosen hero and routes onward to PetSelect.
+            // ── Right: confirm CTA — persists the pick and routes onward ────
             var confirm = new Button(OnChooseHeroClicked) { text = "Choose this Hero →", name = "title-choose-hero" };
             confirm.style.marginLeft = 10f;
             confirm.style.flexShrink = 0f;
             confirm.style.height = 42f;
-            confirm.style.minWidth = 180f;
+            confirm.style.minWidth = 170f;
             confirm.style.fontSize = 15f;
             confirm.style.unityFontStyleAndWeight = FontStyle.Bold;
             SetBorderWidth(confirm, 0f);
@@ -864,6 +949,27 @@ namespace DeNelle.Onboarding
             confirm.style.backgroundColor = ColAmber;
             confirm.style.color = new Color(0.086f, 0.055f, 0.024f, 1f);
             _detailCard.Add(confirm);
+        }
+
+        /// <summary>Adds one stat row label to the stat block and returns it.</summary>
+        private Label MakeStatRow(VisualElement parent)
+        {
+            var row = new Label(string.Empty);
+            row.style.marginTop = 2f;
+            row.style.fontSize = 12f;
+            row.style.unityFontStyleAndWeight = FontStyle.Bold;
+            row.style.color = ColTextMuted;
+            row.style.whiteSpace = WhiteSpace.Normal;
+            row.pickingMode = PickingMode.Ignore;
+            parent.Add(row);
+            return row;
+        }
+
+        /// <summary>Renders a 1-5 rating as filled/empty pips, e.g. "●●●○○".</summary>
+        private static string Pips(int value)
+        {
+            int v = Mathf.Clamp(value, 0, 5);
+            return new string('●', v) + new string('○', 5 - v);
         }
 
         // ── Connect Wallet — Week-1 stub, pinned top-right ──────────────────
@@ -905,13 +1011,24 @@ namespace DeNelle.Onboarding
         private void OnCardClicked(HeroClass hero)
         {
             if (_advancing) return;   // route already in flight — ignore late taps
+
+            // WO-329: the FIRST tap on a hero now SELECTS it and reveals the stat
+            // card (HP/Attack/Speed + signature ability) below the row — previously
+            // the tap routed instantly to PetSelect so the stat card was never seen.
+            // A SECOND tap on the already-selected hero (or the "Choose this Hero"
+            // CTA) COMMITS and routes onward — preserving the quick tap-to-go feel
+            // (DEF-263) while letting the player read the card first.
+            bool reselect = _hasSelection && hero == _selectedHero;
+
             _selectedHero = hero;
             _hasSelection = true;
             RefreshSelectionVisuals();
 
-            // DEF-263: selecting a hero IS the commit — go straight to PetSelect.
-            _advancing = true;
-            AdvanceToPetSelect();
+            if (reselect)
+            {
+                _advancing = true;
+                AdvanceToPetSelect();
+            }
         }
 
         /// <summary>Pre-selects the hero the save already records, if any.</summary>
@@ -951,11 +1068,16 @@ namespace DeNelle.Onboarding
             if (_detailCard == null) return;
             if (!_hasSelection)
             {
-                if (_detailName != null) _detailName.text = "Tap a hero to choose";
+                if (_detailName  != null) _detailName.text  = "Tap a hero to choose";
+                if (_statHp      != null) _statHp.text      = string.Empty;
+                if (_statAttack  != null) _statAttack.text  = string.Empty;
+                if (_statSpeed   != null) _statSpeed.text   = string.Empty;
+                if (_statAbility != null) _statAbility.text = string.Empty;
                 return;
             }
             HeroCardInfo info = FindInfo(_selectedHero);
             if (info == null) return;
+
             if (_detailName != null)
             {
                 string name = CanonStrings.Locale(info.NameKey);
@@ -963,6 +1085,18 @@ namespace DeNelle.Onboarding
                 _detailName.text = string.IsNullOrEmpty(role)
                     ? $"Selected: {name}"
                     : $"Selected: {name} — {role}";
+            }
+
+            // WO-329: real per-hero stats from HeroCatalog, glanceable pip ratings.
+            if (_statHp     != null) _statHp.text     = $"HP      {Pips(info.Hp)}";
+            if (_statAttack != null) _statAttack.text = $"Attack  {Pips(info.Attack)}";
+            if (_statSpeed  != null) _statSpeed.text  = $"Speed   {Pips(info.Speed)}";
+            if (_statAbility != null)
+            {
+                string ab = string.IsNullOrEmpty(info.AbilityDesc)
+                    ? info.AbilityName
+                    : $"{info.AbilityName} — {info.AbilityDesc}";
+                _statAbility.text = string.IsNullOrEmpty(ab) ? string.Empty : $"✦ {ab}";
             }
             // _detailRole / _detailBlurb intentionally not displayed (inline in cards).
         }
