@@ -172,7 +172,7 @@ namespace DeNelle.Village
             _agent.speed = 30f;              // we drive via Move(); keep high so it never caps us
             _agent.acceleration = 200f;
             _agent.angularSpeed = 0f;
-            _agent.updateRotation = false;   // facing handled manually by root LookRotation + body swapper yaw correction (visual forward aligned to root +Z)
+            _agent.updateRotation = false;   // facing handled manually by root LookRotation; HeroBodySwapper's -90f body yaw (WO-326) aligns the visual forward to root +Z
             _agent.updateUpAxis = false;
             _agent.autoBraking = false;
             _agent.stoppingDistance = 0f;
@@ -344,11 +344,11 @@ namespace DeNelle.Village
                     transform.position += step;
 
                 // Face the move direction. HeroBodySwapper applies a root-child LocalRotation
-                // (currently +90f) so the visual mesh's authored forward aligns to the
-                // locomotion root's +Z. HeroLocomotion therefore does pure LookRotation
-                // on the velocity for the root transform — no extra Euler offset.
-                // (If the hero still sidesteps after a swapper yaw change, the sign in
-                // HeroBodySwapper is the place to flip.)
+                // (WO-326: -90f, the proven companion value) so the visual mesh's authored +X
+                // forward aligns to the locomotion root's +Z. HeroLocomotion therefore does
+                // pure LookRotation on the velocity for the root transform — no extra Euler
+                // offset. (If the hero ever sidesteps again, the forwardYaw sign in
+                // HeroBodySwapper is the single place to flip.)
                 Quaternion target = Quaternion.LookRotation(Velocity.normalized);
                 transform.rotation = Quaternion.Slerp(
                     transform.rotation, target, _rotationSpeed * Time.deltaTime);
