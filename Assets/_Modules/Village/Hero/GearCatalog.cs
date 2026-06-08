@@ -61,6 +61,13 @@ namespace DeNelle.Village
         // WO-295: saga flavour text (names the four crafters). Optional; null for v1 gear.
         public string saga;
 
+        // WO-300: Elarion weaponsmithing lore. Both optional + default empty so existing
+        // items are unaffected. `flavor` = item flavour line (Bright Centuries tone);
+        // `makersMark` = the forge stamp on the tang (Emberhand/Oathweld/Heartwood/Last-Pressing)
+        // that the realm — and an appraiser — learns to read. Surfaced via GearAppraisal.
+        public string flavor;
+        public string makersMark;
+
         // Shop integration (basic): resource costs. Populated from canonical JSON.
         public int buyWood;
         public int buyFood;
@@ -91,6 +98,10 @@ namespace DeNelle.Village
 
         // WO-295: saga flavour text (names the four crafters). Optional; null for v1 gear.
         public string saga;
+
+        // WO-300: Elarion weaponsmithing lore (see WeaponDef). Optional + default empty.
+        public string flavor;
+        public string makersMark;
 
         // Shop integration (basic): resource costs. Populated from canonical JSON.
         public int buyWood;

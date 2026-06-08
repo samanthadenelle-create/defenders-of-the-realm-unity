@@ -3,22 +3,22 @@
   "weapons": [
     { "id": "mage_starter",  "name": "Apprentice Wand",  "icon": "🪄", "job": "mage",   "rarity": "common",   "damageMult": 1.0,  "req": { "level": 1 } },
     { "id": "mage_oak",      "name": "Oakheart Staff",   "icon": "🪄", "job": "mage",   "rarity": "uncommon", "damageMult": 1.25, "req": { "level": 3 } },
-    { "id": "mage_arcane",   "name": "Arcane Scepter",   "icon": "🔮", "job": "mage",   "rarity": "rare",     "damageMult": 1.6,  "req": { "level": 6 } },
-    { "id": "mage_void",     "name": "Voidcaller Staff", "icon": "🔮", "job": "mage",   "rarity": "epic",     "damageMult": 2.1,  "req": { "level": 10 } },
+    { "id": "mage_arcane",   "name": "Arcane Scepter",   "icon": "🔮", "job": "mage",   "rarity": "rare",     "damageMult": 1.6,  "req": { "level": 6 }, "flavor": "Cut in the Bright Centuries, when an Elarion-forged head still drank the Heart's light without dimming.", "makersMark": "Last-Pressing" },
+    { "id": "mage_void",     "name": "Voidcaller Staff", "icon": "🔮", "job": "mage",   "rarity": "epic",     "damageMult": 2.1,  "req": { "level": 10 }, "flavor": "A late-age masterwork. Pressed to the ear in a quiet room, the crystal is said to hum the old singing note.", "makersMark": "Last-Pressing" },
 
     { "id": "knight_starter","name": "Squire's Blade",   "icon": "🗡️", "job": "knight", "rarity": "common",   "damageMult": 1.0,  "reach": 2.8, "req": { "level": 1 } },
     { "id": "knight_iron",   "name": "Iron Longsword",   "icon": "🗡️", "job": "knight", "rarity": "uncommon", "damageMult": 1.25, "reach": 3.4, "req": { "level": 3 } },
-    { "id": "knight_oath",   "name": "Oathkeeper",       "icon": "⚔️", "job": "knight", "rarity": "rare",     "damageMult": 1.6,  "reach": 4.0, "req": { "level": 6 } },
-    { "id": "knight_dawn",   "name": "Dawnbreaker",      "icon": "⚔️", "job": "knight", "rarity": "epic",     "damageMult": 2.1,  "reach": 4.6, "req": { "level": 10 } },
+    { "id": "knight_oath",   "name": "Oathkeeper",       "icon": "⚔️", "job": "knight", "rarity": "rare",     "damageMult": 1.6,  "reach": 4.0, "req": { "level": 6 }, "flavor": "Such blades sealed the highest bonds — given at sworn-knightings, written into wills above land.", "makersMark": "Emberhand" },
+    { "id": "knight_dawn",   "name": "Dawnbreaker",      "icon": "⚔️", "job": "knight", "rarity": "epic",     "damageMult": 2.1,  "reach": 4.6, "req": { "level": 10 }, "flavor": "Kin to the lost Dawnedge, gifted to a southern queen at her crowning. To hold one was to be someone.", "makersMark": "Emberhand" },
 
     { "id": "ranger_starter","name": "Hunter's Shortbow","icon": "🏹", "job": "ranger", "rarity": "common",   "damageMult": 1.0,  "req": { "level": 1 } },
     { "id": "ranger_yew",    "name": "Yewwood Longbow",  "icon": "🏹", "job": "ranger", "rarity": "uncommon", "damageMult": 1.25, "req": { "level": 3 } },
-    { "id": "ranger_storm",  "name": "Stormrender Bow",  "icon": "🎯", "job": "ranger", "rarity": "rare",     "damageMult": 1.6,  "req": { "level": 6 } },
-    { "id": "ranger_eclipse","name": "Eclipse Recurve",  "icon": "🎯", "job": "ranger", "rarity": "epic",     "damageMult": 2.1,  "req": { "level": 10 } },
+    { "id": "ranger_storm",  "name": "Stormrender Bow",  "icon": "🎯", "job": "ranger", "rarity": "rare",     "damageMult": 1.6,  "req": { "level": 6 }, "flavor": "Its limbs were grown, not cut — living wood from the Lumbermill that never wearied the arm.", "makersMark": "Heartwood" },
+    { "id": "ranger_eclipse","name": "Eclipse Recurve",  "icon": "🎯", "job": "ranger", "rarity": "epic",     "damageMult": 2.1,  "req": { "level": 10 }, "flavor": "A true Heartwood-marked bow. Merchants who could say 'this is Elarion-marked' had already named their price.", "makersMark": "Heartwood" },
 
-    { "id": "aegis_emberbrand",       "name": "Emberbrand, the Rekindled", "icon": "⚔️", "job": "knight", "rarity": "legendary", "damageMult": 2.4, "reach": 4.8, "req": { "level": 10 }, "saga": "Borin reforged the snapped hilt with the Threefold Fold; Wren's Last Pressing let the steel drink aether without shattering. A combo finisher releases the stored aether as a shock." },
-    { "id": "aegis_heartwood_longbow","name": "Heartwood Longbow",         "icon": "🏹", "job": "ranger", "rarity": "legendary", "damageMult": 2.4, "req": { "level": 10 }, "saga": "Pell's living-wood limbs, given by the Tree rather than taken. Charged shots pierce and 'remember' the last struck foe." },
-    { "id": "aegis_aetherstaff",      "name": "Aetherstaff",               "icon": "🔮", "job": "mage",   "rarity": "legendary", "damageMult": 2.4, "req": { "level": 10 }, "saga": "A quench-bonded crystal head set in Heartwood — Wren and Pell's craft as one. Spells cost less the closer you fight." },
-    { "id": "aegis_hallowed_censer",  "name": "The Hallowed Censer",       "icon": "🕯️", "job": "cleric", "rarity": "legendary", "damageMult": 2.2, "reach": 1.8, "req": { "level": 10 }, "saga": "Halvard's Oathweld bound to Pell's Heartwood. Its heals also seed a small ward on the Heart and the village's structures." }
+    { "id": "aegis_emberbrand",       "name": "Emberbrand, the Rekindled", "icon": "⚔️", "job": "knight", "rarity": "legendary", "damageMult": 2.4, "reach": 4.8, "req": { "level": 10 }, "makersMark": "Emberhand", "saga": "Borin reforged the snapped hilt with the Threefold Fold; Wren's Last Pressing let the steel drink aether without shattering. A combo finisher releases the stored aether as a shock." },
+    { "id": "aegis_heartwood_longbow","name": "Heartwood Longbow",         "icon": "🏹", "job": "ranger", "rarity": "legendary", "damageMult": 2.4, "req": { "level": 10 }, "makersMark": "Heartwood", "saga": "Pell's living-wood limbs, given by the Tree rather than taken. Charged shots pierce and 'remember' the last struck foe." },
+    { "id": "aegis_aetherstaff",      "name": "Aetherstaff",               "icon": "🔮", "job": "mage",   "rarity": "legendary", "damageMult": 2.4, "req": { "level": 10 }, "makersMark": "Last-Pressing", "saga": "A quench-bonded crystal head set in Heartwood — Wren and Pell's craft as one. Spells cost less the closer you fight." },
+    { "id": "aegis_hallowed_censer",  "name": "The Hallowed Censer",       "icon": "🕯️", "job": "cleric", "rarity": "legendary", "damageMult": 2.2, "reach": 1.8, "req": { "level": 10 }, "makersMark": "Oathweld", "saga": "Halvard's Oathweld bound to Pell's Heartwood. Its heals also seed a small ward on the Heart and the village's structures." }
   ]
 }

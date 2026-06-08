@@ -255,11 +255,11 @@ namespace DeNelle.Village.Hero
             float y = 0.92f;
             foreach (var w in weapons)
             {
-                CreateBuyRow(_contentRoot.transform, w.name, GearCatalog.GetBuyCost(w), () => TryBuyWeapon(w), ref y);
+                CreateBuyRow(_contentRoot.transform, BuyLabel(w.name, GearAppraisal.Appraise(w)), GearCatalog.GetBuyCost(w), () => TryBuyWeapon(w), ref y);
             }
             foreach (var a in armors)
             {
-                CreateBuyRow(_contentRoot.transform, a.name, GearCatalog.GetBuyCost(a), () => TryBuyArmor(a), ref y);
+                CreateBuyRow(_contentRoot.transform, BuyLabel(a.name, GearAppraisal.Appraise(a)), GearCatalog.GetBuyCost(a), () => TryBuyArmor(a), ref y);
             }
             foreach (var pid in _potionIds)
             {
@@ -319,6 +319,15 @@ namespace DeNelle.Village.Hero
             y -= 0.085f;
         }
 
+        // WO-300: enrich a buy-row name with its Elarion maker's mark, so a vendor
+        // (Sable / Coppin) surfaces the appraisal at a glance. Additive + read-only:
+        // unmarked / ordinary gear shows just its name.
+        private string BuyLabel(string baseName, GearAppraisalResult appraisal)
+        {
+            if (appraisal == null || !appraisal.isElarionMarked) return baseName;
+            return $"{baseName}  [{appraisal.makersMark}]";
+        }
+
         private string CostString(ResourceCost c)
         {
             var parts = new List<string>();
@@ -336,7 +345,8 @@ namespace DeNelle.Village.Hero
             if (EconomyService.Instance != null && EconomyService.Instance.TrySpend(cost))
             {
                 if (VillageInventory.Instance != null) VillageInventory.Instance.Add(w.id, 1);
-                SetStatus($"Bought {w.name}.");
+                var ap = GearAppraisal.Appraise(w);
+                SetStatus(ap != null && ap.isElarionMarked ? $"Bought {w.name}. {ap.Summary()}" : $"Bought {w.name}.");
                 ShowBuy(); // refresh
             }
             else
@@ -352,7 +362,8 @@ namespace DeNelle.Village.Hero
             if (EconomyService.Instance != null && EconomyService.Instance.TrySpend(cost))
             {
                 if (VillageInventory.Instance != null) VillageInventory.Instance.Add(a.id, 1);
-                SetStatus($"Bought {a.name}.");
+                var ap = GearAppraisal.Appraise(a);
+                SetStatus(ap != null && ap.isElarionMarked ? $"Bought {a.name}. {ap.Summary()}" : $"Bought {a.name}.");
                 ShowBuy();
             }
             else
