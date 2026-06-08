@@ -106,4 +106,29 @@ tags: system
 // nodes (slower, the true ending). Persisted so the finale/NG+ can read it.
 <<declare $saga_reforge_choice = "">>
 <<declare $saga_reforged = false>>
+
+// =============================================================================
+// — WO-299 Wild Hearts: Fenn's pet-bond questlines (per-species bonds) —
+// Yarn-side mirrors of the QuestService ledger (StartQuest/AdvanceQuest/SetQuestFlag
+// → petbond.<species>). Source of truth = the ledger (IsQuestActive/IsQuestComplete
+// + HasFlag); these locals drive cheap stage-aware branching inside the bond hub.
+//
+// $q_wildhearts_open : 1 once Fenn's umbrella "Wild Hearts" (vendor.stable) is bonded
+//                      (keystone BondedBeast) and the per-species bond hub is unlocked.
+// $petbond_<x>_stage : per-species bond progress (0 not begun → 9 bonded/companion).
+// The PERK SEAM: reaching a species' bond tier fires
+//   <<command: SetQuestFlag petbond.<species> perk_unlocked>>
+// which the pet system reads via QuestService.HasFlag("petbond.<species>",
+// "perk_unlocked") to enable that species' signature perk. We do NOT rewire Pet.cs
+// here — this is a clean flag-based seam only.
+// =============================================================================
+<<declare $q_wildhearts_open = 0>>
+<<declare $petbond_sproutling_stage = 0>>
+<<declare $petbond_craghound_stage = 0>>
+<<declare $petbond_frostkit_stage = 0>>
+<<declare $petbond_emberpup_stage = 0>>
+<<declare $petbond_mirewing_stage = 0>>
+<<declare $petbond_glimmermoth_stage = 0>>
+<<declare $petbond_stoneback_stage = 0>>
+<<declare $petbond_aetherfox_stage = 0>>
 ===

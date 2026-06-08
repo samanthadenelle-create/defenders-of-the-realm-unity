@@ -378,6 +378,216 @@
           "grantsKeystone": true
         }
       ]
+    },
+
+    {
+      "id": "petbond.sproutling",
+      "title": "Wild Hearts: Sproutling",
+      "stages": [
+        {
+          "stageId": "cleanse-site",
+          "objectiveText": "Cleanse a blighted harvest site in the Verdant Forest and leave an offering.",
+          "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
+          "requiresFlag": "",
+          "grantsKeystone": false
+        },
+        {
+          "stageId": "follow-home",
+          "objectiveText": "Walk the Sproutling home and let the bond set.",
+          "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
+          "requiresFlag": "",
+          "grantsKeystone": false
+        },
+        {
+          "stageId": "bond-sproutling",
+          "objectiveText": "Bond the Sproutling — unlock its Photosynth harvest perk.",
+          "reward": { "crystals": 0, "food": 30, "magic": 0, "grantItemId": "" },
+          "requiresFlag": "",
+          "grantsKeystone": false
+        }
+      ]
+    },
+    {
+      "id": "petbond.craghound",
+      "title": "Wild Hearts: Craghound",
+      "stages": [
+        {
+          "stageId": "shield-hound",
+          "objectiveText": "Protect a wounded hound through a raid in the Stone Mountains.",
+          "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
+          "requiresFlag": "",
+          "grantsKeystone": false
+        },
+        {
+          "stageId": "bring-to-wall",
+          "objectiveText": "Bring the Craghound home through the west gate.",
+          "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
+          "requiresFlag": "",
+          "grantsKeystone": false
+        },
+        {
+          "stageId": "bond-craghound",
+          "objectiveText": "Bond the Craghound — unlock its stone-hide Guardian perk.",
+          "reward": { "crystals": 40, "food": 0, "magic": 0, "grantItemId": "" },
+          "requiresFlag": "",
+          "grantsKeystone": false
+        }
+      ]
+    },
+    {
+      "id": "petbond.frostkit",
+      "title": "Wild Hearts: Frostkit",
+      "stages": [
+        {
+          "stageId": "approach-frostkit",
+          "objectiveText": "Clear the Frost Peaks and make a slow taming approach.",
+          "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
+          "requiresFlag": "",
+          "grantsKeystone": false
+        },
+        {
+          "stageId": "warm-stall",
+          "objectiveText": "Bring the Frostkit down from the cold to a bonded stall.",
+          "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
+          "requiresFlag": "",
+          "grantsKeystone": false
+        },
+        {
+          "stageId": "bond-frostkit",
+          "objectiveText": "Bond the Frostkit — unlock its chill-on-hit Striker perk.",
+          "reward": { "crystals": 40, "food": 0, "magic": 0, "grantItemId": "" },
+          "requiresFlag": "",
+          "grantsKeystone": false
+        }
+      ]
+    },
+    {
+      "id": "petbond.emberpup",
+      "title": "Wild Hearts: Emberpup",
+      "stages": [
+        {
+          "stageId": "stand-in-fire",
+          "objectiveText": "Clear the worst of the Ashen Wastes alongside the Emberpup.",
+          "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
+          "requiresFlag": "",
+          "grantsKeystone": false
+        },
+        {
+          "stageId": "bring-home-ember",
+          "objectiveText": "Bring the Emberpup home to settle.",
+          "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
+          "requiresFlag": "",
+          "grantsKeystone": false
+        },
+        {
+          "stageId": "bond-emberpup",
+          "objectiveText": "Bond the Emberpup — unlock its burn-DoT Striker perk.",
+          "reward": { "crystals": 40, "food": 0, "magic": 0, "grantItemId": "" },
+          "requiresFlag": "",
+          "grantsKeystone": false
+        }
+      ]
+    },
+    {
+      "id": "petbond.mirewing",
+      "title": "Wild Hearts: Mirewing",
+      "stages": [
+        {
+          "stageId": "cleanse-mire",
+          "objectiveText": "Cleanse the poisoned waters of the Mire at their source.",
+          "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
+          "requiresFlag": "",
+          "grantsKeystone": false
+        },
+        {
+          "stageId": "roost-mirewing",
+          "objectiveText": "Bring the Mirewing home to roost.",
+          "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
+          "requiresFlag": "",
+          "grantsKeystone": false
+        },
+        {
+          "stageId": "bond-mirewing",
+          "objectiveText": "Bond the Mirewing — unlock its cleanse + heal Warden aura.",
+          "reward": { "crystals": 0, "food": 0, "magic": 15, "grantItemId": "" },
+          "requiresFlag": "",
+          "grantsKeystone": false
+        }
+      ]
+    },
+    {
+      "id": "petbond.glimmermoth",
+      "title": "Wild Hearts: Glimmermoth",
+      "stages": [
+        {
+          "stageId": "flawless-gem",
+          "objectiveText": "Obtain a flawless heartgem from Sable the Jeweler.",
+          "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
+          "requiresFlag": "",
+          "grantsKeystone": false
+        },
+        {
+          "stageId": "coax-moth",
+          "objectiveText": "Coax a Glimmermoth at a crystal node with the flawless gem.",
+          "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
+          "requiresFlag": "",
+          "grantsKeystone": false
+        },
+        {
+          "stageId": "bond-glimmermoth",
+          "objectiveText": "Bond the Glimmermoth — unlock its crystal-yield + rare-scent Harvester perk.",
+          "reward": { "crystals": 60, "food": 0, "magic": 0, "grantItemId": "" },
+          "requiresFlag": "",
+          "grantsKeystone": false
+        }
+      ]
+    },
+    {
+      "id": "petbond.stoneback",
+      "title": "Wild Hearts: Stoneback Calf",
+      "stages": [
+        {
+          "stageId": "free-calf",
+          "objectiveText": "Clear a Stonebelly camp and free the caged Stoneback Calf.",
+          "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
+          "requiresFlag": "",
+          "grantsKeystone": false
+        },
+        {
+          "stageId": "bond-stoneback",
+          "objectiveText": "The freed Stoneback bonds instantly — unlock its mobile-cover + carry Guardian perk.",
+          "reward": { "crystals": 50, "food": 0, "magic": 0, "grantItemId": "" },
+          "requiresFlag": "",
+          "grantsKeystone": false
+        }
+      ]
+    },
+    {
+      "id": "petbond.aetherfox",
+      "title": "Wild Hearts: Aether Fox",
+      "stages": [
+        {
+          "stageId": "walk-healed-ground",
+          "objectiveText": "Walk the restored ground at the edge of the Spire's light and let the Aether Fox find you worthy.",
+          "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
+          "requiresFlag": "",
+          "grantsKeystone": false
+        },
+        {
+          "stageId": "witness-at-heart",
+          "objectiveText": "Bring the Aether Fox to the Heart of Elarion.",
+          "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
+          "requiresFlag": "",
+          "grantsKeystone": false
+        },
+        {
+          "stageId": "bond-aetherfox",
+          "objectiveText": "Bond the Aether Fox — unlock its aether aura (ability-cost reduction) Warden perk.",
+          "reward": { "crystals": 100, "food": 0, "magic": 50, "grantItemId": "" },
+          "requiresFlag": "",
+          "grantsKeystone": false
+        }
+      ]
     }
   ]
 }

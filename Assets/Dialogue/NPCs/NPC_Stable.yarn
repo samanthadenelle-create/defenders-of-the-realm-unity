@@ -39,7 +39,10 @@ title: TalkToStable
     -> Not yet.
         Fenn: Idle beasts fret. Give it a purpose.
 <<else>>
+    <<set $q_wildhearts_open = 1>>
     Fenn: The Bonded one returns. The pack's yours to command. What'll you have?
+    -> Tell me about the wild ones. <<if $q_wildhearts_open == 1>>
+        <<detour WildHearts>>
     -> Manage my pets.
         <<command: OpenShop "stable">>
     -> Upgrade the stables.

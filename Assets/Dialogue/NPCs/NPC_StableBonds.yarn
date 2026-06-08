@@ -1,0 +1,332 @@
+// =============================================================================
+// WO-299 — Fenn Wildmane's "Wild Hearts": per-species pet-bond questlines.
+//
+// Builds on NPC_Stable.yarn (vendor.stable umbrella, keystone BondedBeast). Once the
+// umbrella is bonded ($q_wildhearts_open == 1), Fenn's Talk node detours here. Each
+// species is a short bond quest tracked by QuestService (petbond.<species>) AND mirrored
+// in a Yarn local ($petbond_<x>_stage) for cheap branching.
+//
+// PERK SEAM (do NOT rewire Pet.cs here): at a species' bond capstone we fire
+//   <<command: SetQuestFlag petbond.<species> perk_unlocked>>
+// The pet system reads QuestService.HasFlag("petbond.<species>", "perk_unlocked")
+// to enable that species' signature perk. Pure flag handshake — nothing else touched.
+//
+// SYNTAX: every <<command>>/<<set>>/<<if>>/<<detour>> on its OWN line (a prior compile
+// break came from inline commands). All vars declared in _Declarations.yarn. NO new
+// Yarn functions — only existing verbs (StartQuest/AdvanceQuest/SetQuestFlag/CompleteQuest).
+// =============================================================================
+title: WildHearts
+---
+Fenn: The wilds remember kindness. Every beast out there is a bond waiting on a steady hand. Which calls to you?
+// Early bonds first; mid/late tiers note their gate in the line itself.
+-> The Verdant green — something small and growing. (Sproutling)
+    <<detour BondSproutling>>
+-> The Stone Mountains — a hound that won't quit. (Craghound)
+    <<detour BondCraghound>>
+-> The Frost Peaks — a kit of ice and teeth. (Frostkit)
+    <<detour BondFrostkit>>
+-> The Ashen Wastes — something that thrives in fire. (Emberpup)
+    <<detour BondEmberpup>>
+-> The Mire — a healer on the wing. (Mirewing)
+    <<detour BondMirewing>>
+-> The crystal nodes — a moth that sniffs out rare seams. (Glimmermoth)
+    <<detour BondGlimmermoth>>
+-> A caged calf in a Stonebelly camp. (Stoneback)
+    <<detour BondStoneback>>
+-> They say a fox of pure aether walks the healed places. (Aether Fox)
+    <<detour BondAetherFox>>
+-> Not today.
+    Fenn: They'll keep. The wilds are patient — learn to be too.
+===
+
+// =============================================================================
+// BOND: SPROUTLING — Verdant (E). Harvester. Signature: Wood/Food yield + Photosynth.
+// Beat (design §5.1): cleanse a Verdant harvest site, leave an offering → it follows home.
+// =============================================================================
+title: BondSproutling
+---
+<<if $petbond_sproutling_stage == 0>>
+    Fenn: A Sproutling? Gentle little thing. It roots where the land's gone sour. Cleanse a blighted harvest site in the Verdant, then leave an offering — don't grab. Let it choose you.
+    -> I'll cleanse the site.
+        <<command: StartQuest petbond.sproutling>>
+        <<set $petbond_sproutling_stage = 1>>
+        Fenn: Clear the rot first. A Sproutling won't show until the soil breathes again.
+    -> Maybe later.
+        Fenn: The green waits for no one — but it forgives.
+<<elseif $petbond_sproutling_stage == 1>>
+    Fenn: Is the harvest site clean? Did you leave the offering?
+    -> The site's clean. I left food at the roots.
+        <<command: AdvanceQuest petbond.sproutling>>
+        <<set $petbond_sproutling_stage = 2>>
+        Fenn: <i>He smiles.</i> Then it'll follow you home. Walk slow on the way back — let the bond set.
+    -> Not yet.
+        Fenn: Sour soil, sour beast. Cleanse it first.
+<<elseif $petbond_sproutling_stage == 2>>
+    Fenn: Did it follow you all the way home?
+    -> It's at the stables now.
+        <<command: AdvanceQuest petbond.sproutling>>
+        <<command: SetQuestFlag petbond.sproutling perk_unlocked>>
+        <<command: CompleteQuest petbond.sproutling>>
+        <<set $petbond_sproutling_stage = 9>>
+        Fenn: Bonded. Feel that? It'll pull more from a node than any tool — and keep drawing while you sleep. That's Photosynth. Earned, not bought.
+    -> It wandered off.
+        Fenn: Go back, walk slower. A Sproutling spooks at a hurried step.
+<<else>>
+    Fenn: Your Sproutling's thriving. The Verdant gave us back something good.
+<<endif>>
+===
+
+// =============================================================================
+// BOND: CRAGHOUND — Stone Mtns (W). Guardian. Signature: stone-hide taunt, wall guard.
+// Beat (design §5.2): survive a Stone Mtns raid PROTECTING a wounded hound → loyalty.
+// =============================================================================
+title: BondCraghound
+---
+<<if $petbond_craghound_stage == 0>>
+    Fenn: A Craghound earns no bond by rope. There's a wounded one out in the Stone Mountains, hunted. Stand over it through a raid — body between it and the spears. Survive that together and it's yours for life.
+    -> I'll shield the hound.
+        <<command: StartQuest petbond.craghound>>
+        <<set $petbond_craghound_stage = 1>>
+        Fenn: Don't carry it. Don't cage it. Just don't let it fall. Loyalty's forged under fire.
+    -> Not yet.
+        Fenn: A Craghound waits in the cold. So can you.
+<<elseif $petbond_craghound_stage == 1>>
+    Fenn: Did the hound live through the raid?
+    -> We held. It's still breathing.
+        <<command: AdvanceQuest petbond.craghound>>
+        <<set $petbond_craghound_stage = 2>>
+        Fenn: Then it's chosen you. Bring it back through the west gate — let it see the walls it'll guard.
+    -> It didn't make it.
+        Fenn: <i>Quiet.</i> Then find another, and be faster. The Stone Mountains are not gentle.
+<<elseif $petbond_craghound_stage == 2>>
+    Fenn: Is the hound inside the walls?
+    -> It's home, guarding the west wall.
+        <<command: AdvanceQuest petbond.craghound>>
+        <<command: SetQuestFlag petbond.craghound perk_unlocked>>
+        <<command: CompleteQuest petbond.craghound>>
+        <<set $petbond_craghound_stage = 9>>
+        Fenn: Stone-hide and all. Set it on a wall and arrows break against it — it'll taunt the foe and soak what would've cracked our stone. A Guardian true.
+    -> Still on the road.
+        Fenn: Bring it in. A hound idle in the open frets.
+<<else>>
+    Fenn: Your Craghound holds the wall like it was born to. The mountains gave us a shield.
+<<endif>>
+===
+
+// =============================================================================
+// BOND: FROSTKIT — Frost Peaks (N). Striker. Signature: chill-on-hit (slow).
+// Beat (design §5.3): region-clear + a taming approach in Frost. (Mid; needs N reachable.)
+// =============================================================================
+title: BondFrostkit
+---
+<<if $petbond_frostkit_stage == 0>>
+    Fenn: A Frostkit hunts the Frost Peaks — small, quick, and colder than the wind it rides. Clear the peaks of what's hunting it, then close the distance slow. Move when it looks away. Freeze when it watches.
+    -> I'll make the approach.
+        <<command: StartQuest petbond.frostkit>>
+        <<set $petbond_frostkit_stage = 1>>
+        Fenn: Patience and stillness. Rush it and you'll get nothing but frostbite.
+    -> Not yet.
+        Fenn: The peaks aren't going anywhere. Neither's the kit.
+<<elseif $petbond_frostkit_stage == 1>>
+    Fenn: Did you clear the peaks and close the gap?
+    -> It let me near. It's following.
+        <<command: AdvanceQuest petbond.frostkit>>
+        <<set $petbond_frostkit_stage = 2>>
+        Fenn: Then bring it down from the cold. Let it learn the warmth of a bonded stall.
+    -> It bolted.
+        Fenn: Too fast. Stillness, remember. Try again when the peaks are quiet.
+<<elseif $petbond_frostkit_stage == 2>>
+    Fenn: Has the Frostkit settled in?
+    -> It's bonded and warm.
+        <<command: AdvanceQuest petbond.frostkit>>
+        <<command: SetQuestFlag petbond.frostkit perk_unlocked>>
+        <<command: CompleteQuest petbond.frostkit>>
+        <<set $petbond_frostkit_stage = 9>>
+        Fenn: Now watch it fight. Every strike leaves a rime of frost — the enemy slows, staggers. A Striker that buys you time as much as blood.
+    -> Not settled.
+        Fenn: Give it the warm stall and your patience. It'll come round.
+<<else>>
+    Fenn: Your Frostkit fights like winter itself. The Peaks fight with us now.
+<<endif>>
+===
+
+// =============================================================================
+// BOND: EMBERPUP — Ashen Wastes (S). Striker. Signature: burn DoT; thrives in danger.
+// Beat (design §5.3): region-clear + taming approach in Ashen. (Mid; needs S reachable.)
+// =============================================================================
+title: BondEmberpup
+---
+<<if $petbond_emberpup_stage == 0>>
+    Fenn: An Emberpup whelps in the Ashen Wastes — where the ground still burns. It runs TO danger, not from it. To bond it, prove you'll stand in the fire beside it. Clear the worst of the Wastes and let it see you don't flinch.
+    -> I'll stand in the fire.
+        <<command: StartQuest petbond.emberpup>>
+        <<set $petbond_emberpup_stage = 1>>
+        Fenn: Hottest part of the Wastes, mind. An Emberpup respects nothing less.
+    -> Not yet.
+        Fenn: The Wastes will still be burning when you're ready.
+<<elseif $petbond_emberpup_stage == 1>>
+    Fenn: Did you face the worst of the Ashen Wastes?
+    -> I cleared it. It's at my heel.
+        <<command: AdvanceQuest petbond.emberpup>>
+        <<set $petbond_emberpup_stage = 2>>
+        Fenn: Then it's claimed you for pack. Bring it home — it'll fret in cold air a while, that's just the ash settling.
+    -> It snapped and ran.
+        Fenn: You flinched. Go back and don't. An Emberpup smells fear like smoke.
+<<elseif $petbond_emberpup_stage == 2>>
+    Fenn: Has the Emberpup taken to the stables?
+    -> It's bonded — restless, but mine.
+        <<command: AdvanceQuest petbond.emberpup>>
+        <<command: SetQuestFlag petbond.emberpup perk_unlocked>>
+        <<command: CompleteQuest petbond.emberpup>>
+        <<set $petbond_emberpup_stage = 9>>
+        Fenn: Send it into the thick of a fight. Its bite leaves a burn that eats away after — and the more dangerous the field, the harder it hits. A Striker for the deep end.
+    -> Still restless.
+        Fenn: Let it run the perimeter a few nights. It'll bank its fire.
+<<else>>
+    Fenn: Your Emberpup burns brightest where it's worst. The Wastes answer to you now.
+<<endif>>
+===
+
+// =============================================================================
+// BOND: MIREWING — Swamp/Mire. Warden. Signature: poison-cleanse + HoT aura.
+// Bond beat: tend the Mire's sickness rather than fight it — a Warden bonds to mercy.
+// =============================================================================
+title: BondMirewing
+---
+<<if $petbond_mirewing_stage == 0>>
+    Fenn: A Mirewing? Now there's a gentle one. It nests where the Mire festers, drawn to sickness so it can mend it. You won't fight your way to a Warden — you'll heal your way there. Cleanse the poisoned waters and it'll come to the clean.
+    -> I'll cleanse the Mire.
+        <<command: StartQuest petbond.mirewing>>
+        <<set $petbond_mirewing_stage = 1>>
+        Fenn: No blade does this. Find the source of the rot and stop it. Mercy's the bait.
+    -> Not yet.
+        Fenn: The Mire suffers slow. It'll wait for you.
+<<elseif $petbond_mirewing_stage == 1>>
+    Fenn: Did you cleanse the poisoned waters?
+    -> The waters run clean. It came to me.
+        <<command: AdvanceQuest petbond.mirewing>>
+        <<set $petbond_mirewing_stage = 2>>
+        Fenn: Of course it did — you gave the Mire mercy. Bring it home gently, on the wing.
+    -> The rot's still spreading.
+        Fenn: Then the source still stands. A Mirewing won't trust half-mercy.
+<<elseif $petbond_mirewing_stage == 2>>
+    Fenn: Is the Mirewing nesting in the stables?
+    -> It's bonded and roosting.
+        <<command: AdvanceQuest petbond.mirewing>>
+        <<command: SetQuestFlag petbond.mirewing perk_unlocked>>
+        <<command: CompleteQuest petbond.mirewing>>
+        <<set $petbond_mirewing_stage = 9>>
+        Fenn: Deploy it and feel the air change. It cleanses poison off your party and mends wounds slow and steady — a healing aura wherever it flies. The kindest beast I know.
+    -> Not yet roosting.
+        Fenn: Give it still water and quiet. Wardens come to calm.
+<<else>>
+    Fenn: Your Mirewing mends what battle breaks. The Mire gave us mercy on the wing.
+<<endif>>
+===
+
+// =============================================================================
+// BOND: GLIMMERMOTH — Crystal nodes. Harvester. Signature: crystal yield + rare-node scent.
+// Capstone cross-wire (design §5): feed it a flawless crystal from Sable the Jeweler.
+// =============================================================================
+title: BondGlimmermoth
+---
+<<if $petbond_glimmermoth_stage == 0>>
+    Fenn: A Glimmermoth follows the crystal light. It'll bond to whoever feeds it the brightest gem — and there's only one cutter in Elarion who makes them flawless. See Sable the Jeweler first. You'll need a flawless heartgem to coax one in.
+    -> I'll get a flawless gem from Sable.
+        <<command: StartQuest petbond.glimmermoth>>
+        <<set $petbond_glimmermoth_stage = 1>>
+        Fenn: Flawless, mind — a Glimmermoth turns its nose up at a clouded stone.
+    -> Not yet.
+        Fenn: The light keeps. So will the moth.
+<<elseif $petbond_glimmermoth_stage == 1>>
+    Fenn: Did Sable cut you a flawless heartgem?
+    -> I have the flawless gem.
+        <<command: AdvanceQuest petbond.glimmermoth>>
+        <<set $petbond_glimmermoth_stage = 2>>
+        Fenn: Then take it to a crystal node at dusk and hold it out. The Glimmermoth will find you.
+    -> Not yet.
+        Fenn: No flawless gem, no moth. Back to Sable.
+<<elseif $petbond_glimmermoth_stage == 2>>
+    Fenn: Did the moth take the gem?
+    -> It's bonded to me now.
+        <<command: AdvanceQuest petbond.glimmermoth>>
+        <<command: SetQuestFlag petbond.glimmermoth perk_unlocked>>
+        <<command: CompleteQuest petbond.glimmermoth>>
+        <<set $petbond_glimmermoth_stage = 9>>
+        Fenn: Set it on a crystal node and watch the yield climb — and it sniffs out the rare timed seams before they fade. A Harvester worth a vault.
+    -> It flew off with the gem.
+        Fenn: <i>He laughs.</i> Cheeky thing. Get another from Sable and hold firmer this time.
+<<else>>
+    Fenn: Your Glimmermoth's worth its weight in heartgems. Sable's work and yours, together.
+<<endif>>
+===
+
+// =============================================================================
+// BOND: STONEBACK CALF — Stone Mtns. Guardian. Signature: mobile cover + extra carry.
+// Beat (design §5.5): RESCUE — free it from a Stonebelly camp cage → bonds instantly.
+// =============================================================================
+title: BondStoneback
+---
+<<if $petbond_stoneback_stage == 0>>
+    Fenn: A Stoneback Calf? The Stonebelly raiders keep one caged — using it for cover, the cowards. Clear the camp and break the cage. Free a beast and it bonds on the spot. No taming. Just kindness, the fast way.
+    -> I'll free the calf.
+        <<command: StartQuest petbond.stoneback>>
+        <<set $petbond_stoneback_stage = 1>>
+        Fenn: Clear the whole camp first — a calf won't follow you out through a fight it can still hear.
+    -> Not yet.
+        Fenn: It's caged, not going anywhere. But every day in that cage is a cruelty.
+<<elseif $petbond_stoneback_stage == 1>>
+    Fenn: Did you clear the camp and break the cage?
+    -> It's free. It came straight to me.
+        <<command: AdvanceQuest petbond.stoneback>>
+        <<command: SetQuestFlag petbond.stoneback perk_unlocked>>
+        <<command: CompleteQuest petbond.stoneback>>
+        <<set $petbond_stoneback_stage = 9>>
+        Fenn: <i>Warmly.</i> That's the warmest bond there is — the one you set loose. It'll walk as mobile cover for your party and haul extra resource besides. A Guardian that carries its own keep.
+    -> The camp still stands.
+        Fenn: Then so does the cage. Finish the camp first.
+<<else>>
+    Fenn: Your Stoneback walks free and proud. You set that bond loose yourself.
+<<endif>>
+===
+
+// =============================================================================
+// BOND: AETHER FOX (rare) — post-Dimming. Warden. Signature: aether aura (cost reduction).
+// LATE gate (design §5.6): only appears after the Heart is partway restored — ties to the
+// Forgemasters/Spire arc. We gate on the Heartgem keystone (jeweler) being in hand: the
+// "you've healed enough of the world that wonder returns" payoff.
+// =============================================================================
+title: BondAetherFox
+---
+<<if HasKeystone("Heartgem") == false>>
+    Fenn: <i>He shakes his head slowly.</i> An Aether Fox? They don't walk a wounded world. Heal more of the Heart first — restore the wards, cut a true heartgem. When wonder comes back to the land, it'll come back to you. Not before.
+<<elseif $petbond_aetherfox_stage == 0>>
+    Fenn: <i>His eyes go wide.</i> You've mended enough that the rare ones stir. An Aether Fox has been seen near the healed places — pure aether, half a dream. It won't be tracked or caged. Walk the restored ground at the edge of the Spire's light and let it find you worthy.
+    -> I'll walk the healed ground.
+        <<command: StartQuest petbond.aetherfox>>
+        <<set $petbond_aetherfox_stage = 1>>
+        Fenn: Bring no weapon drawn. The Fox judges the hand, not the blade.
+    -> Not yet.
+        Fenn: Wonder doesn't hurry. When it's ready, so will you be.
+<<elseif $petbond_aetherfox_stage == 1>>
+    Fenn: Did the Aether Fox show itself?
+    -> It judged me worthy. It walks with me.
+        <<command: AdvanceQuest petbond.aetherfox>>
+        <<set $petbond_aetherfox_stage = 2>>
+        Fenn: <i>Hushed.</i> Then you've truly turned the tide. Bring it to the Heart — let the Tree and the Fox know each other.
+    -> It vanished.
+        Fenn: It saw something unsettled in you. Heal a little more of the world, then walk again.
+<<elseif $petbond_aetherfox_stage == 2>>
+    Fenn: Has the Fox bonded at the Heart?
+    -> It's bonded — the air around it hums.
+        <<command: AdvanceQuest petbond.aetherfox>>
+        <<command: SetQuestFlag petbond.aetherfox perk_unlocked>>
+        <<command: CompleteQuest petbond.aetherfox>>
+        <<set $petbond_aetherfox_stage = 9>>
+        Fenn: Deploy it and your every spell and ability costs a touch less — its aura threads aether back into the world. The rarest Warden there is. The wilds are whole again, friend. You did that.
+    -> Not yet.
+        Fenn: Take it to the Heart in the quiet. Some bonds need the Tree to witness them.
+<<else>>
+    Fenn: The Aether Fox at your side. I never thought I'd live to see the wonder return. Thank you.
+<<endif>>
+===
