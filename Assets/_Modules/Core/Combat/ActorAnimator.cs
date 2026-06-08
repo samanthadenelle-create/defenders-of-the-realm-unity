@@ -34,6 +34,15 @@ namespace DeNelle.Core.Combat
         private RuntimeAnimatorController _scannedController;
         private readonly HashSet<int> _present = new HashSet<int>();
 
+        // WO-218: cached index of the "Upper Body" attack layer (-1 = none / not yet
+        // resolved). The HeroAnimatorFactory authors an upper-body Override layer
+        // (masked to arms+torso) so the hero can swing/cast WHILE moving — the base
+        // layer keeps the legs in Locomotion. We force that layer's weight to 1 after
+        // a controller (re)scan in case a runtime-swapped controller came in with the
+        // layer weight reset; a controller without the layer leaves this -1 (no-op).
+        private int _upperBodyLayer = -1;
+        private const string UpperBodyLayerName = "Upper Body";
+
         /// <summary>The resolved Animator (may be null until a body is present).</summary>
         public Animator Animator { get { EnsureAnimator(); return _animator; } }
 
@@ -58,8 +67,24 @@ namespace DeNelle.Core.Combat
             _scannedAnimator = _animator;
             _scannedController = ctrl;
             _present.Clear();
+            _upperBodyLayer = -1;
             if (ctrl == null) return;
             foreach (var p in _animator.parameters) _present.Add(p.nameHash);
+
+            // WO-218: locate the upper-body attack layer (if this controller has one)
+            // and make sure it contributes at full weight, so an attack can play on the
+            // arms while the legs keep their locomotion on the base layer. layer 0 is the
+            // base layer — never touch it. Safe no-op on controllers without the layer.
+            int layers = _animator.layerCount;
+            for (int i = 1; i < layers; i++)
+            {
+                if (_animator.GetLayerName(i) == UpperBodyLayerName)
+                {
+                    _upperBodyLayer = i;
+                    if (_animator.GetLayerWeight(i) < 1f) _animator.SetLayerWeight(i, 1f);
+                    break;
+                }
+            }
         }
 
         private bool Has(int hash) => _present.Contains(hash);
@@ -84,6 +109,7 @@ namespace DeNelle.Core.Combat
         {
             EnsureAnimator();
             if (_animator == null) return;
+            EnsureUpperBodyActive();   // WO-218: arms swing while legs keep walking
             if (Has(AnimParams.ComboHash)) _animator.SetInteger(AnimParams.ComboHash, combo);
             if (Has(AnimParams.AttackHash)) _animator.SetTrigger(AnimParams.AttackHash);
         }
@@ -91,8 +117,24 @@ namespace DeNelle.Core.Combat
         public void PlayCast()
         {
             EnsureAnimator();
-            if (_animator != null && Has(AnimParams.CastHash))
-                _animator.SetTrigger(AnimParams.CastHash);
+            if (_animator == null || !Has(AnimParams.CastHash)) return;
+            EnsureUpperBodyActive();   // WO-218: cast plays on the arms while moving
+            _animator.SetTrigger(AnimParams.CastHash);
+        }
+
+        /// <summary>
+        /// WO-218: guarantee the upper-body attack layer (if the controller has one)
+        /// contributes at full weight, so a swing/cast overlays the arms while the base
+        /// layer keeps the legs in locomotion — i.e. the hero can attack WHILE moving.
+        /// Cheap (a single weight compare) and a safe no-op on controllers with no such
+        /// layer (_upperBodyLayer stays -1). NOT a HasParameter concern — layer weight
+        /// is not an animator parameter, so only the null/layer guards apply.
+        /// </summary>
+        private void EnsureUpperBodyActive()
+        {
+            if (_animator == null || _upperBodyLayer < 1) return;
+            if (_animator.GetLayerWeight(_upperBodyLayer) < 1f)
+                _animator.SetLayerWeight(_upperBodyLayer, 1f);
         }
 
         public void PlayWindUp()
