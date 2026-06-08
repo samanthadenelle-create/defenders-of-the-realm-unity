@@ -40,6 +40,7 @@
 // =============================================================================
 
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using System.Collections.Generic;
 
 namespace DeNelle.Village
@@ -356,17 +357,57 @@ namespace DeNelle.Village
             if (Instance == this) Instance = null;
         }
 
+        private void OnEnable()
+        {
+            SceneManager.sceneLoaded += OnSceneLoadedForCamera;
+        }
+
+        private void OnDisable()
+        {
+            SceneManager.sceneLoaded -= OnSceneLoadedForCamera;
+        }
+
+        private void OnSceneLoadedForCamera(Scene scene, LoadSceneMode mode)
+        {
+            // Re-enforce sole camera and snap on any scene load (including additive OuterWorld)
+            // so the follow isn't lost after additive loads or scene transitions in Village2.
+            EnforceSoleCamera();
+            if (IsTargetValid())
+            {
+                ForceFollowImmediate();
+            }
+            else
+            {
+                TryFindHero();
+                if (IsTargetValid())
+                {
+                    ForceFollowImmediate();
+                }
+            }
+        }
+
         private void Start()
         {
             // Fallback: if the scene builder didn't wire a target (or the hero
-            // spawned after this camera), find the hero by canonical tag so the
-            // camera is never left staring at the origin/ground (CLAUDE.md §7).
-            if (_target == null) TryFindHero();
-            if (_target == null) return;
-            transform.position = _target.position + _followOffset;
-            _leadPoint         = _target.position + Vector3.up * _lookAtHeight;
-            AimAt(_leadPoint);
+            // spawned after this camera), find the hero by canonical tag/name/loco so the
+            // camera is never left staring at the origin/ground (tree) on load.
+            EnsureTargetAndSnap();
             EnforceSoleCamera();
+        }
+
+        private void EnsureTargetAndSnap()
+        {
+            if (!IsTargetValid())
+            {
+                TryFindHero();
+            }
+            if (IsTargetValid())
+            {
+                transform.position = _target.position + _followOffset;
+                _leadPoint         = _target.position + Vector3.up * _lookAtHeight;
+                AimAt(_leadPoint);
+                ForceFollowImmediate();  // ensure snap (idempotent)
+            }
         }
 
         private void TryFindHero()
@@ -382,8 +423,28 @@ namespace DeNelle.Village
                 var loco = FindFirstObjectByType<HeroLocomotion>();
                 if (loco != null) heroGo = loco.gameObject;
             }
-            if (heroGo != null) _target = heroGo.transform;
+            // Additional fallback for baked hero names (e.g. "Hero (Blaise)", "Hero (Knight)" etc.)
+            // used by HeroControlEnsurer and scene builder. Helps when tags are missing or
+            // hero appears late on web load / editor scene load.
+            if (heroGo == null)
+            {
+                foreach (var t in FindObjectsByType<Transform>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+                {
+                    if (t != null && t.name.StartsWith("Hero ("))
+                    {
+                        heroGo = t.gameObject;
+                        break;
+                    }
+                }
+            }
+            if (heroGo != null)
+            {
+                _target = heroGo.transform;
+                Debug.Log($"[SmartMobileCamera] acquired hero target: {heroGo.name}");
+            }
         }
+
+        private bool IsTargetValid() => _target != null && _target.gameObject != null;
 
         /// <summary>Undefined-tag-safe FindWithTag (Unity throws on an undefined tag).</summary>
         private static GameObject SafeFindWithTag(string tag)
@@ -394,15 +455,20 @@ namespace DeNelle.Village
 
         private void LateUpdate()
         {
-            // Hero may spawn a frame or two after this camera — keep looking until
-            // we have a target so we never sit framing the origin/ground forever.
-            if (_target == null)
+            // Enforce sole camera every frame so no additive scene camera or Cinemachine vcam can steal the view.
+            EnforceSoleCamera();
+
+            // Keep searching for the hero each frame until we have a valid target so we never
+            // sit framing the origin/tree. ONLY snap (ForceFollowImmediate) on the frame we first
+            // acquire the target — NOT every frame. The old per-frame ">0.5m → snap" fought the
+            // SmoothDamp follow below (which aims at a DIFFERENT orbit/collision-adjusted seat),
+            // making the camera oscillate between the two points nonstop ("screen shakes back and
+            // forth"). Ongoing follow is owned solely by the SmoothDamp pass below.
+            if (!IsTargetValid())
             {
                 TryFindHero();
-                if (_target == null) return;
-                transform.position = _target.position + _followOffset;
-                _leadPoint         = _target.position + Vector3.up * _lookAtHeight;
-                AimAt(_leadPoint);
+                if (!IsTargetValid()) return;
+                ForceFollowImmediate();   // one-shot snap off the tree on first acquisition
             }
 
             float dt = Time.unscaledDeltaTime;
@@ -496,8 +562,30 @@ namespace DeNelle.Village
 
         // ── Public API ─────────────────────────────────────────────────────────
 
-        /// <summary>Wires the hero target (called by VillageController).</summary>
-        public void SetTarget(Transform hero) => _target = hero;
+        /// <summary>Wires the hero target (called by HeroControlEnsurer and scene bootstraps).</summary>
+        public void SetTarget(Transform hero)
+        {
+            _target = hero;
+            if (hero != null)
+            {
+                Debug.Log($"[SmartMobileCamera] SetTarget wired to: {hero.name}");
+            }
+        }
+
+        /// <summary>Forces an immediate snap to the current target (bypasses smooth for initial acquire on load).
+        /// Call after SetTarget from external wirers.</summary>
+        public void ForceFollowImmediate()
+        {
+            if (IsTargetValid())
+            {
+                transform.position = _target.position + _followOffset;
+                _leadPoint = _target.position + Vector3.up * _lookAtHeight;
+                AimAt(_leadPoint);
+                _posVelocity = Vector3.zero;
+                EnforceSoleCamera();
+                Debug.Log("[SmartMobileCamera] ForceFollowImmediate snap executed");
+            }
+        }
 
         /// <summary>Toggles the auto-framing behaviour at runtime.</summary>
         public bool FramingEnabled
@@ -541,7 +629,7 @@ namespace DeNelle.Village
 
         private void ScanForEnemies()
         {
-            if (_target == null) { _enemyInRange = false; return; }
+            if (!IsTargetValid()) { _enemyInRange = false; return; }
 
             int count = Physics.OverlapSphereNonAlloc(
                 _target.position, _combatScanRadius, _scanBuffer, _enemyMask, QueryTriggerInteraction.Collide);
@@ -578,7 +666,7 @@ namespace DeNelle.Village
         // untouched except when something is actually between the hero and the camera.
         private Vector3 ApplyCollision(Vector3 desired, float dt)
         {
-            if (!_collisionEnabled || _target == null)
+            if (!_collisionEnabled || !IsTargetValid())
             {
                 _distanceFrac = 1f;
                 return desired;
@@ -645,7 +733,7 @@ namespace DeNelle.Village
                 transform.rotation = Quaternion.LookRotation(dir);
         }
 
-        private void EnforceSoleCamera()
+        public void EnforceSoleCamera()
         {
             if (_cam == null) return;
             _cam.depth = 100f;

@@ -357,8 +357,18 @@ namespace DeNelle.Village
             CameraMode resolved = CameraMode.BattleExploration;
             try
             {
-                bool battle = IsWaveActive() || IsInBattle() || IsExploring();
-                resolved = battle ? CameraMode.BattleExploration : CameraMode.Town;
+                // Owner-validated decision (close 3D third-person is the default; "pull up only
+                // for base-build"): the town bird's-eye overview is OPT-IN for base-build ONLY —
+                // never the idle-in-town default.
+                //
+                // PRE-FIX BUG (WO-338): TOWN engaged at load whenever no wave/battle was active and
+                // the hero was within the town ring. TOWN disables SmartMobileCamera and locks the
+                // view to _townCentre (the Tree of Life at origin), so the hero was off-screen and
+                // the camera sat "stuck on the tree" — the long-standing unplayable-village symptom.
+                // Now TOWN is gated strictly on active base-build; all other play stays in the
+                // validated SmartMobileCamera follow (BattleExploration).
+                bool buildOverview = BuildModeController.Instance != null && BuildModeController.Instance.IsActive;
+                resolved = buildOverview ? CameraMode.Town : CameraMode.BattleExploration;
             }
             catch (System.Exception e)
             {
