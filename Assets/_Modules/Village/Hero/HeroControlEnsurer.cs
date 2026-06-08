@@ -11,8 +11,8 @@
 //   2. Attaches HeroDeathLogger to the live hero so its OnDestroy logs WHEN (frame/
 //      time) + a stack trace - which names the destroyer if it used DestroyImmediate.
 //   3. Watches; if the hero vanishes it spawns an EMERGENCY movable capsule-hero at
-//      the build spawn point and re-points VillageCamera at it - so the player can
-//      move + test the rest of the game while the root destroyer is hunted.
+//      the build spawn point and wires SmartMobileCamera (primary) + legacy fallback
+//      so the camera follows instead of staying stuck on the tree. (PatriciaLight descoped.)
 // Self-bootstrapping DDOL; no Village.unity edit.
 // =============================================================================
 
@@ -27,8 +27,16 @@ namespace DeNelle.Village
     public sealed class HeroControlEnsurer : MonoBehaviour
     {
         public static HeroControlEnsurer Instance { get; private set; }
-        private const string TargetScene = "Village2";
         private const int MaxEmergencySpawns = 8;
+
+        // PatriciaLight (DTT) is descoped. Activate for Village* scenes AND the new Castle Hub
+        // (MainCastle_Hall, CastleHub*, etc.) so the ensurer + SmartMobileCamera target wiring
+        // and emergency recovery works when the Castle is the project start / primary world scene.
+        private static bool IsVillageScene(string name) =>
+            !string.IsNullOrEmpty(name) && (
+                name == "Village" || name.StartsWith("Village") || name.Contains("Village") ||
+                name.Contains("Castle") || name.Contains("MainCastle") || name.Contains("CastleHub")
+            );
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
@@ -44,7 +52,7 @@ namespace DeNelle.Village
             DontDestroyOnLoad(gameObject);
             SceneManager.sceneLoaded -= OnSceneLoaded;
             SceneManager.sceneLoaded += OnSceneLoaded;
-            if (SceneManager.GetActiveScene().name == TargetScene) Begin();
+            Begin();  // always attempt - Ensure will early-out if nothing to do; IsVillageScene only gates the Watch emergency loop
         }
 
         private void OnDestroy()
@@ -55,7 +63,7 @@ namespace DeNelle.Village
 
         private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
         {
-            if (scene.name == TargetScene) Begin();
+            Begin();  // always attempt for robustness on loads (web, title->village, editor play of Village2 etc.)
         }
 
         private void Begin()
@@ -73,7 +81,18 @@ namespace DeNelle.Village
         {
             var loco = FindLoco();
             GameObject hero = loco != null ? loco.gameObject : FindHeroByName();
-            if (hero == null) return;   // Watch() will emergency-spawn
+            if (hero == null)
+            {
+                if (IsVillageScene(SceneManager.GetActiveScene().name))
+                {
+                    // In primary scene (Village2), ensure a hero exists immediately on load so
+                    // camera can acquire target and not stay stuck on the tree. Watch() still
+                    // monitors for later destruction.
+                    SpawnEmergencyHero();
+                    hero = FindLoco()?.gameObject ?? FindHeroByName();
+                }
+                if (hero == null) return;
+            }
 
             if (!hero.activeSelf) hero.SetActive(true);
             var l = hero.GetComponent<HeroLocomotion>() ?? hero.AddComponent<HeroLocomotion>();
@@ -96,6 +115,73 @@ namespace DeNelle.Village
             // HeroReachRing. The class is kept (HeroReachRing.cs) in case a gated, opt-in
             // reach hint is wanted later, but it must NOT render during normal play.
             // (Intentionally not adding HeroReachRing here.)
+
+            // Find the primary gameplay camera (prefer tagged MainCamera or "main"/"game" in name, enabled, no render texture).
+            // This is more reliable than Camera.main alone in editor or complex Village2 setups.
+            Camera cam = Camera.main;
+            if (cam == null || cam.GetComponent<SmartMobileCamera>() != null)
+            {
+                foreach (var c in FindObjectsByType<Camera>(FindObjectsInactive.Exclude, FindObjectsSortMode.None))
+                {
+                    if (c == null || !c.enabled || c.targetTexture != null) continue;
+                    if (c.CompareTag("MainCamera") || c.name.ToLower().Contains("main") || c.name.ToLower().Contains("game") || c.name.ToLower().Contains("camera"))
+                    {
+                        cam = c;
+                        break;
+                    }
+                }
+            }
+            if (cam != null && cam.GetComponent<SmartMobileCamera>() == null)
+            {
+                cam.gameObject.AddComponent<SmartMobileCamera>();
+                Debug.Log($"[HeroControlEnsurer] runtime-attached SmartMobileCamera to gameplay camera '{cam.name}'");
+            }
+
+            // Disable CinemachineBrain if present (can override transform in some Village2 setups).
+            // Our SmartMobile follow + ForceFollowImmediate should control the view.
+            var brain = cam != null ? cam.GetComponent("CinemachineBrain") as Behaviour : null;
+            if (brain != null && brain.enabled)
+            {
+                brain.enabled = false;
+                Debug.Log("[HeroControlEnsurer] disabled CinemachineBrain on gameplay camera");
+            }
+
+            // Force sole camera and high depth so this is the one used in Game view.
+            var smc2 = cam != null ? cam.GetComponent<SmartMobileCamera>() : null;
+            if (smc2 != null)
+            {
+                smc2.EnforceSoleCamera();
+            }
+
+            // Wire the authoritative camera (SmartMobileCamera) so it follows the hero.
+            // Legacy VillageCamera is a fallback (SmartMobileCamera disables it at runtime).
+            // This ensures the camera is never left "stuck on tree" (origin) when hero is
+            // ensured/recovered — especially important on WebGL clean loads where timing/tags
+            // can cause SmartMobileCamera's own TryFindHero fallback to miss on first frames.
+            var smc = cam != null ? cam.GetComponent<SmartMobileCamera>() : FindFirstObjectByType<SmartMobileCamera>();
+            if (smc != null)
+            {
+                smc.SetTarget(hero.transform);
+                smc.ForceFollowImmediate();  // ensure instant snap off the tree on load
+            }
+            else
+            {
+                var legacyCam = FindFirstObjectByType<VillageCamera>();
+                if (legacyCam != null) legacyCam.SetTarget(hero.transform);
+            }
+
+            // Quick direct force (easier workaround while full follow is stabilizing):
+            // Explicitly move the gameplay camera to a follow position behind the hero.
+            // This guarantees the view leaves the tree immediately on load in Village2,
+            // even if LateUpdate follow or additive scene is interfering.
+            if (cam != null && hero != null)
+            {
+                Vector3 followOffset = new Vector3(0f, 5f, -10f); // simple behind/above the hero
+                cam.transform.position = hero.transform.position + followOffset;
+                cam.transform.LookAt(hero.transform.position + Vector3.up * 1.8f); // look at hero chest/head
+                Debug.Log("[HeroControlEnsurer] direct force: camera moved to follow hero at " + cam.transform.position);
+            }
+
             Debug.Log($"[HeroControlEnsurer] ensured hero='{hero.name}' active={hero.activeInHierarchy} locoEnabled={l.enabled}.");
         }
 
@@ -103,7 +189,7 @@ namespace DeNelle.Village
         private IEnumerator Watch()
         {
             int spawns = 0;
-            while (SceneManager.GetActiveScene().name == TargetScene)
+            while (IsVillageScene(SceneManager.GetActiveScene().name))
             {
                 yield return new WaitForSeconds(0.5f);
                 if (FindLoco() == null && spawns < MaxEmergencySpawns)
@@ -139,12 +225,28 @@ namespace DeNelle.Village
             go.AddComponent<HeroDeathLogger>();   // catch it too, in case the destroyer is periodic
             go.AddComponent<HeroTargetIndicator>();
 
-            var cam = FindObjectsByType<VillageCamera>(FindObjectsInactive.Include, FindObjectsSortMode.None)
-                      .FirstOrDefault();
-            if (cam != null) cam.SetTarget(go.transform);
+            // Wire camera for emergency hero (prefer modern SmartMobileCamera; legacy fallback).
+            // Prevents "camera stuck on tree" in recovery scenarios on WebGL / clean loads.
+            var smc = FindFirstObjectByType<SmartMobileCamera>();
+            Transform camTarget = null;
+            if (smc != null)
+            {
+                smc.SetTarget(go.transform);
+                camTarget = go.transform;
+            }
+            else
+            {
+                var legacyCam = FindObjectsByType<VillageCamera>(FindObjectsInactive.Include, FindObjectsSortMode.None)
+                                .FirstOrDefault();
+                if (legacyCam != null)
+                {
+                    legacyCam.SetTarget(go.transform);
+                    camTarget = go.transform;
+                }
+            }
 
             Debug.LogWarning($"[HeroControlEnsurer] real hero missing — spawned EMERGENCY movable hero at " +
-                             $"{go.transform.position}; camera retargeted={(cam != null)}.");
+                             $"{go.transform.position}; camera retargeted={(camTarget != null)}.");
         }
 
         private static GameObject FindHeroByName()

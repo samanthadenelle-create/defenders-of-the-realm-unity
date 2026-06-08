@@ -68,9 +68,6 @@ namespace DeNelle.Village
         // Fingers that have crossed the threshold and are now panning (claimed).
         private readonly HashSet<int> _panning = new HashSet<int>();
 
-        // Scene this driver must NOT run in (Lean is owned by LeanTouchAimDriver there).
-        private const string DttSceneName = "PatriciaLightMode";
-
         public static CameraPanInput Instance { get; private set; }
 
         // Hero-presence gate: this driver stays inert until a HeroLocomotion exists.
@@ -85,11 +82,11 @@ namespace DeNelle.Village
         private static void Bootstrap()
         {
             if (Instance != null) return;
-            // Spawn in any gameplay scene that is not the DTT scene. We deliberately do
-            // NOT gate on a hero existing yet — the hero can spawn a frame later, and
-            // Bootstrap fires once with no retry. The spawned singleton lazily re-checks
-            // for the hero (RefreshHeroPresence) so a late spawn still enables panning.
-            if (SceneManager.GetActiveScene().name == DttSceneName) return;
+            // PatriciaLight (DTT) is descoped. Always allow in current gameplay scenes
+            // (Village / Village2 / web loads). No DTT scene to avoid.
+            // We deliberately do NOT gate on a hero existing yet — the hero can spawn
+            // a frame later, and Bootstrap fires once with no retry. The spawned singleton
+            // lazily re-checks for the hero (RefreshHeroPresence) so a late spawn still enables panning.
             new GameObject("CameraPanInput").AddComponent<CameraPanInput>();
         }
 
@@ -143,12 +140,7 @@ namespace DeNelle.Village
             }
         }
 
-        // True while the DTT scene is active — Lean is owned by LeanTouchAimDriver there,
-        // so we must never double-drive. (Bootstrap also prevents spawning in DTT, but a
-        // DDOL instance could outlive a scene swap INTO DTT, so guard at runtime too.)
-        private static bool InDttScene() => SceneManager.GetActiveScene().name == DttSceneName;
-
-        // Whole-screen suppression: build mode owns its own taps + top-down overview.
+        // Whole-screen suppression: build mode owns its own taps + top-down overview. (PatriciaLight/DTT descoped.)
         private static bool BuildModeActive()
         {
             return BuildModeController.Instance != null && BuildModeController.Instance.IsActive;
@@ -158,7 +150,6 @@ namespace DeNelle.Village
         private void HandleFinger(LeanFinger f)
         {
             if (!_panEnabled || !_heroPresent || f == null) return;
-            if (InDttScene()) return;
             if (f.Index < 0) return;            // simulated mouse / hover — desktop fallback owns it
 
             // Step 1–2: reject GUI + build mode (whole-screen consumers).
@@ -209,7 +200,7 @@ namespace DeNelle.Village
             _heroCheckTimer -= Time.unscaledDeltaTime;
             if (_heroCheckTimer <= 0f) { _heroCheckTimer = 0.5f; RefreshHeroPresence(); }
 
-            if (!_panEnabled || !_heroPresent || InDttScene()) return;
+            if (!_panEnabled || !_heroPresent) return;
             if (BuildModeActive()) return;   // build mode owns the camera
 
             // Keyboard orbit — the WebGL-reliable camera control. The right-mouse drag below
