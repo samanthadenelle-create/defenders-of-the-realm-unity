@@ -5,6 +5,9 @@ Pet companion runtime (village-side hooks live in `Village/Pets/`).
 ## Files
 
 - `Pet`, `PetCatalog`, `PetDeployer` — core pet lifecycle
+- `PetAcquisitionService` — WO-297: tame / hatch / rescue → roster unlock
+  (GameState.Pets + OwnedPets) + active deploy-slot model; asks PetDeployer to
+  re-sync via `SyncDeployedToSlots`. Clean seam for quest gating (WO-299) — no Yarn.
 - `PetHeroLeash` — follow-the-hero movement
 - `PetHarvester`, `MineNodeBridge` — auto-harvest (WO-119 / WO-106); pet farming
   now feeds the live economy via MineNode/HarvestSite → EconomyService.AddResource / Grant.

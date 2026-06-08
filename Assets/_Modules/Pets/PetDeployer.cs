@@ -201,6 +201,78 @@ namespace DeNelle.Pets
         }
 
         /// <summary>
+        /// WO-297 (active slots): deploy exactly the set of owned species the
+        /// <see cref="PetAcquisitionService"/> has assigned to active slots. Unlike
+        /// <see cref="DeployStarterPets"/> (single chosen starter), this honours the
+        /// multi-slot roster: it tears down any deployed pet whose species is no
+        /// longer slotted and spawns one pet per newly-slotted species at its Heart-
+        /// ring slot. Additive — the starter-only path is untouched; the acquisition
+        /// service is the only caller, so the default flow is unchanged until a 2nd
+        /// slot is unlocked.
+        /// </summary>
+        /// <param name="slotSpecies">Canonical species ids occupying active slots, in slot order.</param>
+        public void SyncDeployedToSlots(IReadOnlyList<string> slotSpecies)
+        {
+            var wanted = new List<string>();
+            if (slotSpecies != null)
+                foreach (var s in slotSpecies)
+                    if (!string.IsNullOrEmpty(s) && !wanted.Contains(s)) wanted.Add(s);
+
+            var defs = PetCatalog.Pets;
+            if (defs == null || defs.Count == 0)
+            {
+                Debug.LogWarning("[PetDeployer] SyncDeployedToSlots — PetCatalog empty.");
+                return;
+            }
+
+            // 1) Remove deployed pets whose species is no longer wanted.
+            for (int i = _deployed.Count - 1; i >= 0; i--)
+            {
+                var pet = _deployed[i];
+                if (pet == null) { _deployed.RemoveAt(i); continue; }
+                string sp = SpeciesOfDeployed(pet);
+                if (string.IsNullOrEmpty(sp) || !wanted.Contains(sp))
+                {
+                    Destroy(pet.gameObject);
+                    _deployed.RemoveAt(i);
+                }
+            }
+
+            // 2) Spawn any wanted species not already deployed, at its slot.
+            foreach (var species in wanted)
+            {
+                bool already = false;
+                foreach (var pet in _deployed)
+                    if (pet != null && SpeciesOfDeployed(pet) == species) { already = true; break; }
+                if (already) continue;
+
+                PetDef def = null;
+                foreach (var d in defs)
+                    if (d != null && d.Species == species) { def = d; break; }
+                if (def == null) continue;
+
+                Vector3 slot = PetCatalog.DeploySlotPosition(def.SlotIndex, _heartPosition);
+                int bond = BondRankFor(def.SlotIndex);
+                Pet spawned = SpawnPet(def, slot);
+                spawned.Configure(def, bond, slot, _deployMode);
+                spawned.SetEnemyMask(_enemyMask);
+                if (spawned.GetComponent<PetProgression>() == null)
+                    spawned.gameObject.AddComponent<PetProgression>();
+                _deployed.Add(spawned);
+            }
+        }
+
+        // Recover a deployed pet's canonical species id from its name
+        // ("Pet_<species>"); SpawnPet sets pet.name = $"Pet_{def.Species}".
+        private static string SpeciesOfDeployed(Pet pet)
+        {
+            if (pet == null) return null;
+            const string prefix = "Pet_";
+            string n = pet.name ?? "";
+            return n.StartsWith(prefix) ? n.Substring(prefix.Length) : null;
+        }
+
+        /// <summary>
         /// WO-360 (Echo at the outpost): summon ONE pet — the player's chosen starter
         /// species (their "Echo") — at an arbitrary world position, independent of the
         /// Heart-ring starter deployment. Used by EchoAutoDeployTrigger when the player
