@@ -63,10 +63,10 @@ namespace DeNelle.Onboarding
         // -- en.json keys for the screen's own copy --------------------------
         private const string TitleKey    = "heroSelect.title";
         private const string SubtitleKey = "heroSelect.subtitle";
-        // "Dive into Village" — secondary CTA, routes to normal village.
+        // "Dive into Village" — the sole confirm CTA, routes to pet-select/village.
         private const string DiveKey    = "heroSelect.diveVillage";
-        // "Jump into the Action" — primary CTA, routes to Defend the Tower.
-        private const string ConfirmKey = "heroSelect.jumpAction";
+        // WO-327: ConfirmKey ("heroSelect.jumpAction" / "Jump into the Action") was
+        // removed with the DTT-crashing button.
 
         // -- Palette (inline; no USS dependency) -----------------------------
         private static readonly Color ColBackground   = new Color(0.024f, 0.016f, 0.047f, 1f);
@@ -96,7 +96,9 @@ namespace DeNelle.Onboarding
         private Label _detailName;
         private Label _detailRole;
         private Label _detailBlurb;
-        private Button _confirmButton;        // "Jump into the Action" — Defend the Tower
+        // WO-327: the "Jump into the Action" CTA (DTT/PatriciaLight quick-entry)
+        // was REMOVED — it launched Defend the Tower in a state that crashed the
+        // player build. Only the single "Dive into Village" confirm remains.
         private Button _diveButton;           // "Dive into Village"    — normal village
 
         // One card VisualElement per hero, in HeroCatalog order.
@@ -130,7 +132,6 @@ namespace DeNelle.Onboarding
 
         private void OnDisable()
         {
-            if (_confirmButton != null) _confirmButton.clicked -= OnConfirmClicked;
             if (_diveButton    != null) _diveButton.clicked    -= OnDiveVillageClicked;
             if (_root != null) _root.UnregisterCallback<GeometryChangedEvent>(OnRootGeometryChanged);
             _built = false;
@@ -324,25 +325,18 @@ namespace DeNelle.Onboarding
             footer.style.justifyContent = Justify.Center;
             footer.style.alignItems = Align.Center;
 
-            // Primary CTA — the normal first-run path. "Dive into Village"
-            // persists the hero then routes to pet-select. (Styled primary/amber
-            // now that it is the sole confirm in the player build.)
+            // Sole CTA — the normal first-run path. "Dive into Village" persists
+            // the hero then routes to pet-select. (Styled primary/amber.)
+            //
+            // WO-327: the old "Jump into the Action" CTA was REMOVED entirely. It
+            // was the Defend-the-Tower (PatriciaLight) quick-entry that launched
+            // DTT in a state that crashed the player build, so the button, its
+            // styling/registration, and its onClick handler are all gone — leaving
+            // a single safe confirm in both editor and player builds.
             _diveButton = new Button { text = FallbackLocale(DiveKey, "Dive into Village") };
             StyleCta(_diveButton, secondary: false);
             _diveButton.clicked += OnDiveVillageClicked;
             footer.Add(_diveButton);
-
-#if UNITY_EDITOR
-            // WO-327: the old "Jump into the Action" CTA was the Defend-the-Tower
-            // (PatriciaLight) dev quick-entry that crashed in the player build. Its
-            // handler now routes to the same safe pet-select path, but the
-            // DTT-labelled button must NOT ship — it is kept EDITOR-ONLY for dev
-            // convenience and is compiled out of the WebGL / player build.
-            _confirmButton = new Button { text = FallbackLocale(ConfirmKey, "Jump into the Action") };
-            StyleCta(_confirmButton, secondary: true);
-            _confirmButton.clicked += OnConfirmClicked;
-            footer.Add(_confirmButton);
-#endif
 
             roster.Add(footer);
             _root.Add(roster);
@@ -639,29 +633,18 @@ namespace DeNelle.Onboarding
             if (_detailBlurb != null) _detailBlurb.text = CanonStrings.Locale(info.BlurbKey);
         }
 
-        /// <summary>Enables both CTA buttons only once a hero is chosen.</summary>
+        /// <summary>Enables the confirm CTA only once a hero is chosen.</summary>
         private void RefreshConfirmEnabled()
         {
-            if (_confirmButton != null) _confirmButton.SetEnabled(_hasSelection);
-            if (_diveButton    != null) _diveButton.SetEnabled(_hasSelection);
+            if (_diveButton != null) _diveButton.SetEnabled(_hasSelection);
         }
 
         // =====================================================================
         //  Entry-point CTAs — write the hero choice then route
         // =====================================================================
 
-        /// <summary>
-        /// "Jump into the Action" — persists the chosen hero and routes to the
-        /// canonical pet-select intro flow. (Previously dove straight into the
-        /// retired Defend the Tower / PatriciaLight scene; that branch is removed,
-        /// so this now follows the same path as "Dive into Village".)
-        /// </summary>
-        private void OnConfirmClicked()
-        {
-            if (!_hasSelection) return;
-            PersistHero();
-            SceneRouter.GoPetSelect();
-        }
+        // WO-327: OnConfirmClicked() — the "Jump into the Action" handler that
+        // routed into Defend the Tower — was REMOVED with its button.
 
         /// <summary>
         /// "Dive into Village" — the canonical first-run path. Persists the chosen
