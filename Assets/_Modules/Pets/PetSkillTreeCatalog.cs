@@ -33,8 +33,24 @@ namespace DeNelle.Pets
         [JsonProperty("unlockLevel")] public int UnlockLevel;
         [JsonProperty("prerequisites")] public List<string> Prerequisites = new List<string>();
 
+        // ── WO-298 additive content fields (optional; legacy skills omit them) ──
+        // Which of the four design branches this node lives on (DESIGN_PET_SYSTEM §4).
+        [JsonProperty("branch")] public string Branch;        // harvest | combat | utility | aura | signature
+        // Numeric balance for passive bonuses. Magnitude is the additive amount
+        // (e.g. 0.10 for +10% yield, 2 for +2 carry); MagnitudeType names what it
+        // applies to so the runtime can route the effect (yieldPct, gatherSpeedPct,
+        // autoRange, offlineCapPct, carryCap, moveSpeedPct, attack, healPerSec, ...).
+        [JsonProperty("magnitude")] public float? Magnitude;
+        [JsonProperty("magnitudeType")] public string MagnitudeType;
+        // Apex/signature gate: id of a quest item required to unlock (null = none).
+        [JsonProperty("questItem")] public string QuestItem;
+        // Skill-point cost to unlock (default 1 = one level's point).
+        [JsonProperty("cost")] public int Cost = 1;
+
         public bool IsActive  => string.Equals(Type, "active",  StringComparison.OrdinalIgnoreCase);
         public bool IsPassive => string.Equals(Type, "passive", StringComparison.OrdinalIgnoreCase);
+        public bool IsSignature => string.Equals(Branch, "signature", StringComparison.OrdinalIgnoreCase)
+                                || string.Equals(Tier, "signature", StringComparison.OrdinalIgnoreCase);
     }
 
     [Serializable]
@@ -52,6 +68,9 @@ namespace DeNelle.Pets
         [JsonProperty("version")] public int Version;
         [JsonProperty("petMaxLevel")] public int PetMaxLevel = 20;
         [JsonProperty("petLoadoutSize")] public int PetLoadoutSize = 3;
+        // WO-298: respec at the Stables (DESIGN_PET_SYSTEM §4). Cost in Food + Glimmer.
+        [JsonProperty("respecFoodCost")] public int RespecFoodCost = 50;
+        [JsonProperty("respecGlimmerCost")] public int RespecGlimmerCost = 5;
         [JsonProperty("trees")] public Dictionary<string, PetSkillTreeDef> Trees =
             new Dictionary<string, PetSkillTreeDef>();
     }
@@ -63,6 +82,29 @@ namespace DeNelle.Pets
 
         public static int PetMaxLevel    { get { EnsureLoaded(); return _data.PetMaxLevel; } }
         public static int PetLoadoutSize { get { EnsureLoaded(); return _data.PetLoadoutSize; } }
+        public static int RespecFoodCost    { get { EnsureLoaded(); return _data.RespecFoodCost; } }
+        public static int RespecGlimmerCost { get { EnsureLoaded(); return _data.RespecGlimmerCost; } }
+
+        /// <summary>All skills on a species' tree that belong to <paramref name="branch"/>
+        /// (harvest | combat | utility | aura | signature). Empty if none/unknown.</summary>
+        public static IEnumerable<PetSkillDef> SkillsInBranch(string species, string branch)
+        {
+            var tree = GetTree(species);
+            if (tree == null || tree.Skills == null) yield break;
+            foreach (var s in tree.Skills)
+                if (s != null && string.Equals(s.Branch, branch, StringComparison.OrdinalIgnoreCase))
+                    yield return s;
+        }
+
+        /// <summary>The signature (apex) skill for a species, or null.</summary>
+        public static PetSkillDef GetSignature(string species)
+        {
+            var tree = GetTree(species);
+            if (tree == null || tree.Skills == null) return null;
+            foreach (var s in tree.Skills)
+                if (s != null && s.IsSignature) return s;
+            return null;
+        }
 
         public static PetSkillTreeDef GetTree(string species)
         {
