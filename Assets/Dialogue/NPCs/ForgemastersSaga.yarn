@@ -1,0 +1,379 @@
+// =============================================================================
+// WO-294 — The Forgemasters' Saga.  Deep crafter questlines + 3 reconciliation
+// scenes culminating in the Legendary Aegis reforge.
+// See DESIGN_FORGEMASTERS_SAGA_LEGENDARY.md.
+//
+// Quest ledger (QuestService, defined in quests.json):
+//   forgemasters_act1  "Honest Steel"   — the four are gathered; the feud surfaces.
+//   forgemasters_act2  "The Old Fire"   — broker the three reconciliations (Master tier).
+//   forgemasters_act3  "What Was Lost"  — recover the four scattered components.
+//   forgemasters_act4  "The Reforging"  — the choice + the reforge. COMPLETING this
+//                                          quest UNLOCKS Legendary recipes (gear-recipes
+//                                          requiresQuestId == "forgemasters_act4").
+//
+// VERBS USED (all pre-registered on DialogueCommandBridge — ZERO new functions added):
+//   <<command: StartQuest id>>  <<command: AdvanceQuest id>>  <<command: CompleteQuest id>>
+//   <<command: SetQuestFlag id flag>>   <<command: GiveKeystone name>>   <<command: OpenCraft ...>>
+// FUNCTIONS USED (pre-registered): IsQuestActive(id), IsQuestComplete(id), HasKeystone(name)
+//
+// The reforge "choice" persists via the EXISTING SetQuestFlag verb (no new command):
+//   <<command: SetQuestFlag forgemasters_act4 reforge_heart>>   (or reforge_regions)
+//
+// ENTRY GATE: all four vendor questlines must be BONDED (stage 9) before Act I opens —
+// that gathering of the four IS Act I's hidden premise.
+// =============================================================================
+
+// ── Shared gate: are the four crafters all bonded? ──────────────────────────
+// (We branch on the cheap Yarn-side stage mirrors set by each vendor's Talk node.)
+
+// =============================================================================
+// SagaBorin — the Forge hub.  Borin is the reluctant heart of the saga.
+// =============================================================================
+title: SagaBorin
+---
+<<if $q_forge_stage != 9 or $q_armorer_stage != 9 or $q_lumber_stage != 9 or $q_granary_stage != 9>>
+    Borin: <i>He shakes his head.</i> The saga? Reforging the Aegis takes more than me. It takes the Armory, the Lumbermill, the Mill — and we four haven't shared a fire in thirty years. Earn each of their trust first. Then come talk to me of legends.
+    <<return>>
+<<endif>>
+
+<<if $saga_act == 0>>
+    // — ACT I culmination: the four are, unknowingly, gathered. Borin names it. —
+    Borin: <i>He looks at you a long moment, then at the snapped hilt on the anvil.</i> You've done it. The Forge, the Armory, Old Pell's grove, Wren's mill — all running, all because of you. You've put the four of us in your debt without once putting us in the same room.
+    Borin: There's a thing out in the Ashen Wastes now. A Necromancer, drinking what aether the Heart has left. The only thing that ever stopped an unbreakable enemy was an unbreakable weapon — the Aegis. And the only folk who can reforge it are the four who'd rather die than work together.
+    -> Then let's change that.
+        Borin: <i>A dry, tired laugh.</i> You don't know what you're asking. But aye. For the Heart, I'll try. We call it honest, what we're about to do. Nothing about it is.
+        <<command: StartQuest forgemasters_act1>>
+        <<command: CompleteQuest forgemasters_act1>>
+        <<command: StartQuest forgemasters_act2>>
+        <<set $saga_act = 2>>
+        Borin: It starts with Halvard. She thinks my grandfather's steel killed her brother. Go to Brom's hearth — bring her, and bring me. Let's have it out where there's witnesses and ale.
+    -> Not yet.
+        Borin: Aye. It's a heavy thing. The hilt'll keep.
+<<elseif $saga_act == 2>>
+    // — ACT II: route the player through the three reconciliations. —
+    <<if $saga_peace_borin_halvard == false>>
+        Borin: Halvard and I still have words owed between us. Brom's hearth. You broker it.
+        -> Take me to the hearth (Borin & Halvard).
+            <<jump SagaScene_SteelTruth>>
+        -> Later.
+            Borin: It's waited thirty years. It'll wait the afternoon.
+    <<elseif $saga_peace_pell_forge == false>>
+        Borin: Halvard and I are square — that's a weight off the anvil. But Pell won't cut Heartwood for a weapon, and he's not wrong to fear it. That's between him and the forge. Best you stand for us.
+        -> Take me to the hearth (Pell & the Forge).
+            <<jump SagaScene_BoughForTree>>
+        -> Later.
+            Borin: Don't push the old man. He carries more than any of us.
+    <<elseif $saga_peace_wren_hearth == false>>
+        Borin: <i>Almost a smile.</i> Wren's been waiting thirty years for one quiet thing. Go let her have it.
+        -> Take me to Wren's hearth.
+            <<jump SagaScene_SharedHearth>>
+        -> Later.
+            Borin: Don't keep her waiting, hero. She's earned it.
+    <<else>>
+        // All three reconciliations done → Master tier; open Act III.
+        Borin: <i>He stands a little straighter than you've ever seen him.</i> Four crafts, one hearth, for the first time in thirty years. I'd forgotten what that sounded like. The forge runs hotter when it's not running alone — that's your Master tier, friend. Earned, not given.
+        Borin: But the Legendary's older than any of us, and the knowing of it got scattered. My piece is the Threefold Fold — the folding pattern Aldric took to his grave. A journeyman ran with it into the Stone Mountains the night the workshop broke. It's in a Stonebelly stronghold out west. Bring it home.
+        <<command: AdvanceQuest forgemasters_act2>>
+        <<command: StartQuest forgemasters_act3>>
+        <<set $saga_act = 3>>
+        Borin: Halvard, Pell, Wren — they each have a piece to fetch too. Gather all four and we do the unthinkable.
+    <<endif>>
+<<elseif $saga_act == 3>>
+    // — ACT III: Borin's component (the Threefold Fold, Stone Mountains W). —
+    <<if $saga_comp_fold == false>>
+        Borin: The Threefold Fold's still out in the Stone Mountains, in the Stonebelly hold. No fold, no legendary edge. Go.
+        -> I recovered the Fold.
+            <<command: SetQuestFlag forgemasters_act3 comp_fold>>
+            <<set $saga_comp_fold = true>>
+            Borin: <i>He turns the old vellum over with shaking hands.</i> Aldric's own hand. Three folds, three prayers. I never thought I'd hold it again. That's the steel sorted. <<detour SagaCheckAct3>>
+        -> Still hunting it.
+            Borin: West gate, into the peaks. Mind the Stonebellies — they don't fold easy either.
+    <<else>>
+        Borin: The Fold's home and the steel's ready. We're waiting on the others now. <<detour SagaCheckAct3>>
+    <<endif>>
+<<elseif $saga_act == 4>>
+    Borin: All four pieces, under one roof. <i>He grips your shoulder, hard.</i> When you're ready, we light the great fire. Come to Wren's hearth — we reforge as one, the way it should've always been.
+    -> To the reforging.
+        <<jump SagaScene_TheReforging>>
+    -> A moment more.
+        Borin: Take it. After today, nothing's the same.
+<<else>>
+    // saga_act >= 5 : reforged.
+    Borin: <i>The snapped hilt is gone from the anvil — reborn, and on your back.</i> The Aegis stands the wall again, and four old fools stand behind it. Go end this, Aegis-bearer. We'll keep the fire lit.
+    -> Craft a weapon.
+        <<command: OpenCraft "forge">>
+    -> Nothing today.
+        Borin: Strike true.
+<<endif>>
+===
+
+// =============================================================================
+// SagaHalvard — the Armory hub.
+// =============================================================================
+title: SagaHalvard
+---
+<<if $saga_act < 2>>
+    Halvard: The saga is Borin's to begin. He keeps the broken hilt; let him find the nerve to lift it. Come back when he has.
+    <<return>>
+<<endif>>
+<<if $saga_act == 2>>
+    <<if $saga_peace_borin_halvard == false>>
+        Halvard: <i>She sets her jaw.</i> So Emberhand finally wants to talk. Thirty years and a Necromancer were what it took. Fine. Brom's hearth. You'll stand between us, hero — I'll not trust myself.
+        -> Take me to the hearth (Borin & Halvard).
+            <<jump SagaScene_SteelTruth>>
+        -> Later.
+            Halvard: I've waited this long.
+    <<else>>
+        Halvard: <i>Something has eased in her, though she'd never say so.</i> The steel didn't fail my brother. I carried that wrong for thirty years. Go on with the others — I'll be ready when the fire is.
+    <<endif>>
+<<elseif $saga_act == 3>>
+    // — ACT III: Halvard's component (the Oathweld breastplate, Frost Peaks N). —
+    <<if $saga_comp_oathweld == false>>
+        Halvard: I remember the Oathweld — the plating that bonds armor to its bearer's will. But I can't reweld a thing from grief alone; I need my brother's company's gear, lost in the Frost Peaks to the north. Restore the dented breastplate and the Oathweld comes back with it.
+        -> I recovered the Frost Peaks gear.
+            <<command: SetQuestFlag forgemasters_act3 comp_oathweld>>
+            <<set $saga_comp_oathweld = true>>
+            Halvard: <i>She lays the restored breastplate flat, the dent hammered whole at last.</i> Thirty years I kept this broken so I'd not forget. Now I'll keep it whole so I never do. The Oathweld is ours again. <<detour SagaCheckAct3>>
+        -> Still searching.
+            Halvard: North, into the cold. Bring them home — all of them.
+    <<else>>
+        Halvard: The Oathweld's restored and the plate stands ready. We wait on the others. <<detour SagaCheckAct3>>
+    <<endif>>
+<<elseif $saga_act >= 4>>
+    Halvard: The plate will bond to you the way it should have bonded to him. When Borin lights the fire, I'll be there. We all will.
+    -> To the reforging.
+        <<jump SagaScene_TheReforging>>
+    -> Later.
+        Halvard: Stand ready.
+<<else>>
+    Halvard: Go on with the others, hero. I'll be at the hearth.
+<<endif>>
+===
+
+// =============================================================================
+// SagaPell — the Lumbermill hub.
+// =============================================================================
+title: SagaPell
+---
+<<if $saga_act < 2>>
+    Old Pell: <i>He shakes his head slowly.</i> No. Not yet. Whatever you're planning, it'll want Heartwood, and I'll not speak of cutting the Tree until the others have made their peace. Go mend what's older than my fear first.
+    <<return>>
+<<endif>>
+<<if $saga_act == 2>>
+    <<if $saga_peace_borin_halvard == false>>
+        Old Pell: Borin and Halvard first, child. There's no asking the Tree for a weapon those two would only quarrel over. Mend them, then come to me.
+    <<elseif $saga_peace_pell_forge == false>>
+        Old Pell: <i>His hands tremble on the axe-haft.</i> So it comes to me. You want me to ask the Heart for a living bough — for a weapon. I cut it once and it has wept ever since. Tell me at the hearth why this blade is different, and the Tree will hear your answer through me.
+        -> Take me to the hearth (Pell & the Forge).
+            <<jump SagaScene_BoughForTree>>
+        -> I need to think.
+            Old Pell: Think long. The Tree has all the time there is.
+    <<else>>
+        Old Pell: You spoke true at the hearth. The bough is for the Heart's own defense — I can carry that. Go on; I'll ask the Tree when the fire's lit.
+    <<endif>>
+<<elseif $saga_act == 3>>
+    // — ACT III: Pell's component (the Heartwood Bough, Verdant Forest E). —
+    <<if $saga_comp_heartwood == false>>
+        Old Pell: The Heart won't give freely while it's sick. Cleanse the last blight in the Verdant Forest to the east — make the Tree strong enough to give — and then I'll ask it for a living bough. Given, not taken. Never again taken.
+        -> The Verdant blight is cleansed.
+            <<command: SetQuestFlag forgemasters_act3 comp_heartwood>>
+            <<set $saga_comp_heartwood = true>>
+            Old Pell: <i>He lays a hand on a bough that came away in his palm of its own weight, the wound already sealing green.</i> It gave it to me. Freely. After thirty years of weeping, the Tree forgave the asking. <i>He weeps himself.</i> The Heartwood is ours. <<detour SagaCheckAct3>>
+        -> Still cleansing it.
+            Old Pell: Gently, east. Heal the forest and the Heart heals with it.
+    <<else>>
+        Old Pell: The Heartwood is given and the Tree is at peace. We wait on the others. <<detour SagaCheckAct3>>
+    <<endif>>
+<<elseif $saga_act >= 4>>
+    Old Pell: The living wood is the only thing that holds aether without burning. It will hold yours. When the fire is lit, I'll bring it to the hearth myself.
+    -> To the reforging.
+        <<jump SagaScene_TheReforging>>
+    -> Later.
+        Old Pell: Mind the roots.
+<<else>>
+    Old Pell: Go on with the others, child.
+<<endif>>
+===
+
+// =============================================================================
+// SagaWren — the Windmill / Granary hub.  The keystone everyone forgot.
+// =============================================================================
+title: SagaWren
+---
+<<if $saga_act < 2>>
+    Mother Wren: <i>She smiles, sad and knowing.</i> Oh, dearie. You want to put us all round one fire. I've wanted it longer than you've been alive. But it has to start with the steel and the plate. Mend them. I'll be here, grinding, waiting — same as ever.
+    <<return>>
+<<endif>>
+<<if $saga_act == 2>>
+    <<if $saga_peace_borin_halvard == false or $saga_peace_pell_forge == false>>
+        Mother Wren: The men will need to stop their quarrelling before there's any point in me lighting a hearth. Get Borin and Halvard square, and dear Pell at ease, then come to me. My part's the easy one — I've only ever wanted to say yes.
+    <<elseif $saga_peace_wren_hearth == false>>
+        Mother Wren: <i>Her eyes shine.</i> They've made their peace? All of them? Then there's only the one thing left, and it's mine to give. No quest, no battle, dearie. A meal. One night, the four of us round my hearth, the way it was. Bring them. That's all. Just bring them.
+        -> Bring them to Wren's hearth.
+            <<jump SagaScene_SharedHearth>>
+        -> Soon.
+            Mother Wren: I'll set four places. I've kept them set thirty years.
+    <<else>>
+        Mother Wren: That was the warmest night this old mill's seen since it burned, dearie. Now go fetch the pieces — and then come home, all of you, and we'll reforge it together.
+    <<endif>>
+<<elseif $saga_act == 3>>
+    // — ACT III: Wren's component (the Last Pressing, Ashen Wastes S). —
+    <<if $saga_comp_pressing == false>>
+        Mother Wren: My stones can press the Last Pressing again — the quench-oil that lets steel drink aether and not shatter. But it wants pure aether sap, and the only node the Necromancer hasn't drained is deep in the Ashen Wastes, south. The most dangerous draw there is, dearie. Come back to me. Promise an old woman you'll come back.
+        -> I drew the pure aether sap.
+            <<command: SetQuestFlag forgemasters_act3 comp_pressing>>
+            <<set $saga_comp_pressing = true>>
+            Mother Wren: <i>The great stones groan and a black-gold oil runs bright into the trough.</i> The Last Pressing, pressed again. Bless you, and bless your safe return. Now we have everything. Everything but the courage. <<detour SagaCheckAct3>>
+        -> Not yet.
+            Mother Wren: South, and carefully. No oil's worth you, dearie.
+    <<else>>
+        Mother Wren: The Pressing's in the trough and the quench is ready. We wait on the others. <<detour SagaCheckAct3>>
+    <<endif>>
+<<elseif $saga_act >= 4>>
+    Mother Wren: It all comes back to the quench in the end, dearie — the bond that lets the steel drink without breaking. Same as people. When the fire's lit, my hearth is the place. It always was.
+    -> To the reforging.
+        <<jump SagaScene_TheReforging>>
+    -> Later.
+        Mother Wren: I'll keep it warm.
+<<else>>
+    Mother Wren: Go on with the others, dearie. The hearth's ready.
+<<endif>>
+===
+
+// =============================================================================
+// SagaCheckAct3 — shared tail: once ALL FOUR components are in, advance to Act IV.
+// Detoured into from each crafter's Act-III "recovered" branch so the gate is in
+// one place. Uses only the Yarn-side component mirrors.
+// =============================================================================
+title: SagaCheckAct3
+---
+<<if $saga_comp_fold and $saga_comp_oathweld and $saga_comp_heartwood and $saga_comp_pressing>>
+    Narrator: <i>Four pieces, gathered for the first time in thirty years: the Fold, the Oathweld, the Heartwood, the Pressing. The workshop is whole in everything but the lighting of the fire.</i>
+    <<command: AdvanceQuest forgemasters_act3>>
+    <<command: StartQuest forgemasters_act4>>
+    <<set $saga_act = 4>>
+    Narrator: <i>Go to Mother Wren's hearth. It is time for the Reforging.</i>
+<<else>>
+    Narrator: <i>One craft's piece, secured. Three more wait across the realm.</i>
+<<endif>>
+===
+
+// =============================================================================
+// RECONCILIATION SCENE 1 — "The Steel Did Not Fail"  (Borin ↔ Halvard, ACT II)
+// Brom's hearth is the staging room.  Two-NPC scene.
+// =============================================================================
+title: SagaScene_SteelTruth
+---
+Narrator: <i>Brom's hearth. Borin Emberhand and Dame Halvard stand at opposite ends of the long table, the broken hilt and the dented breastplate set between them like evidence at a trial.</i>
+Halvard: Your grandfather's steel snapped on my brother's back, Emberhand. I felt the blow through my own ribs from a hundred yards. Tell me that wasn't your craft failing.
+Borin: <i>Low.</i> I've told myself it was, every day of thirty years. Say it was the steel and I'll not argue. I've no defence left.
+Brom: <i>Wiping a tankard.</i> Begging both your pardons — but I've a witness says otherwise. The last of your brother's company, Dame. Took me a year to find her. She saw the Aegis in his final hour.
+-> Let the witness speak.
+    Brom: She says the blade was never finished. Aldric forged the steel true — but the Aegis was meant to be quenched in Wren's oil and warded with Pell's wood, and the workshop had already cracked apart. Your brother went to the wall in a half-made legend, Dame. The steel didn't fail him. The four of us did — by being four.
+    Halvard: <i>The breastplate slips from her hands to the table.</i> Half-made. All these years I hated his fire, and the truth is... no one finished the work. No one could. We were already broken.
+    Borin: <i>He reaches across and rights the fallen breastplate, gently.</i> Then let's finish it. Properly. All of it. I'm sorry, Halvard. For the steel, and for the silence after.
+    Halvard: <i>A long breath, thirty years long.</i> ...So am I, Borin. So am I.
+    <<command: AdvanceQuest forgemasters_act2>>
+    <<set $saga_peace_borin_halvard = true>>
+    Narrator: <i>The Forge and the Armory share a fire for the first time in thirty years. Their crafts can now be worked as one — Master-tier arms are within reach.</i>
+-> This is between the two of you. (step back)
+    Brom: Suit yourself — but the truth keeps. Come back when they're ready to hear it.
+===
+
+// =============================================================================
+// RECONCILIATION SCENE 2 — "A Bough for the Tree"  (Old Pell ↔ the Forge, ACT II)
+// =============================================================================
+title: SagaScene_BoughForTree
+---
+Narrator: <i>Brom's hearth. Old Pell sits with his hands folded around a cup he hasn't touched. Borin stands by the fire, hat in his hands, for once with nothing gruff to say.</i>
+Old Pell: I know why you've brought me, child. You want me to ask the Heart for a living bough. I did that once, for Aldric. The Tree has wept in the wind every day since. I'll not buy another grand weapon with the Heart's grief.
+Borin: Pell — I'm not asking for a weapon to win glory. I made a thousand honest swords rather than one great one, because I believed the great ones doomed us. You're not wrong to fear it.
+-> The weapon is to defend the Tree itself.
+    PlayerHero: Then hear me, Pell. The Necromancer is drinking the Heart dry. If we do nothing, the Tree dies anyway — slowly, alone, with no one able to stop it. The Aegis isn't to take from the Heart. It's the only thing that can defend it. A bough given freely, to guard the tree it came from.
+    Old Pell: <i>He is quiet a long time. Then he sets down the cup.</i> ...To guard it. Not to bleed it. <i>He looks at Borin.</i> You'd swear that, Emberhand? On the hilt you've never had the nerve to lift?
+    Borin: On the hilt. And I'll lift it now. For the Tree.
+    Old Pell: Then I'll ask the Heart — not take, ask — when the time comes. And if it says no, we honour the no. Agreed?
+    PlayerHero: Agreed.
+    <<command: AdvanceQuest forgemasters_act2>>
+    <<set $saga_peace_pell_forge = true>>
+    Narrator: <i>The Lumbermill and the Forge come to terms. The one material that can hold aether may yet be given — freely.</i>
+-> I'm not sure it's right either. (step back)
+    Old Pell: <i>A sad nod.</i> Good. Doubt is the only honest way to carry a thing like this. Come back when you can stand for it true.
+===
+
+// =============================================================================
+// RECONCILIATION SCENE 3 — "One Hearth"  (Mother Wren — the shared meal, ACT II)
+// The warmest beat in the game.  No combat.  The peacemaker says yes.
+// =============================================================================
+title: SagaScene_SharedHearth
+---
+Narrator: <i>Mother Wren's mill, hung with lantern-light. Four places set, as they have been every night for thirty years. Tonight, for the first time, four people come to fill them.</i>
+Mother Wren: Sit. All of you. Borin by the fire where your grandfather sat. Halvard at his right, where your brother used to steal the bread. Pell where the window lets you hear the Tree. And me at the head, grinding, as ever.
+Old Pell: <i>Softly.</i> It's quiet tonight, Wren. The Tree. It's... not weeping.
+Mother Wren: No, dear. It's listening. Same as me.
+Borin: Wren — your mill burned the night it all broke. Sparks off my grandfather's forge, they said. I've never once said I was sorry. I'm saying it now.
+Mother Wren: <i>She pats his hand.</i> I know, dearie. I rebuilt it so I'd have somewhere to set your place. I never blamed a soul. I only ever wanted this — the four of you, eating my bread, too full to quarrel.
+-> Raise a cup to the workshop.
+    Halvard: <i>Lifting her cup.</i> To the workshop. To what we were, and the fools we've been since.
+    Borin: To Aldric. And to finishing what he couldn't.
+    Old Pell: To the Tree, that forgives more than we deserve.
+    Mother Wren: <i>Eyes bright.</i> To one hearth, dearies. At last. Now eat — there's a legend to forge in the morning, and no one forges hungry.
+    <<command: AdvanceQuest forgemasters_act2>>
+    <<set $saga_peace_wren_hearth = true>>
+    Narrator: <i>For one warm night, the four crafts are one workshop again. The thirty-year wound is closed. Whatever comes, they face it together now — and the Master forge burns brighter than any of them remembered.</i>
+-> Let them have the night. (step back)
+    Mother Wren: <i>Smiling.</i> Go on, then, dearie. The bread keeps, and so do we. Come back when you're hungry.
+===
+
+// =============================================================================
+// RECONCILIATION / FINALE — "The Reforging"  (all four + the CHOICE, ACT IV)
+// Culmination.  COMPLETING forgemasters_act4 here UNLOCKS the Legendary recipes
+// (gear-recipes.json requiresQuestId == "forgemasters_act4").
+// The choice persists via the EXISTING SetQuestFlag verb (no new command added).
+// =============================================================================
+title: SagaScene_TheReforging
+---
+<<if $saga_reforged>>
+    Mother Wren: It's done, dearie. The Aegis stands. Go end this.
+    <<return>>
+<<endif>>
+Narrator: <i>Mother Wren's hearth, banked into a roaring legend-fire. All four Forgemasters stand around the great stone trough for the first time in thirty years. The Threefold Fold, the Oathweld, the Heartwood bough, the Last Pressing — laid together at last.</i>
+Borin: The steel's folded thrice and sung over. <i>He lifts the snapped hilt — and this time his hands are steady.</i>
+Halvard: The plate's welded to bond with whoever bears it. It will not fail again.
+Old Pell: The Heartwood's set to hold the aether. Given, not taken.
+Mother Wren: And the quench is warm and waiting. There's only the last thing, dearies. The spark of life itself — the aether. And there's the rub.
+Borin: The quench demands a heart of aether, and the Heart is near dark. So it's your call, Aegis-bearer, and none of ours. How do we light it?
+-> Draw from the Heart — reforge it now, at full power.
+    Old Pell: <i>He bows his head.</i> Then the Tree gives the last of itself to save itself. There's a grief in that. But it will be done, and done whole, tonight.
+    Mother Wren: <i>Quietly.</i> A hard road, dearie. But an honest one. The Heart would choose to give, I think.
+    <<command: SetQuestFlag forgemasters_act4 reforge_heart>>
+    <<set $saga_reforge_choice = "heart">>
+    <<jump SagaScene_ReforgeComplete>>
+-> Gather from the cleansed regions — spare the Tree.
+    Old Pell: <i>He looks up, hope breaking over his face.</i> You'd take the slow road? Draw the aether from the lands you've already healed, so the Heart keeps its own? It'll cost you sweat and one last stand at every node. But the Tree would live whole. Bless you, child.
+    Mother Wren: That's the road I'd hoped you'd walk. Harder on you. Kinder on the world.
+    <<command: SetQuestFlag forgemasters_act4 reforge_regions>>
+    <<set $saga_reforge_choice = "regions">>
+    <<jump SagaScene_ReforgeComplete>>
+-> I'm not ready to choose. (step back)
+    Borin: <i>He nods slowly.</i> A weight like this shouldn't be lifted in a hurry. The fire keeps. So do we. Come back when you know your own heart.
+===
+
+// =============================================================================
+// SagaScene_ReforgeComplete — the shared payoff + Act IV completion (unlock).
+// Jumped to from either choice branch above so the climax/unlock lives in one place.
+// =============================================================================
+title: SagaScene_ReforgeComplete
+---
+Narrator: <i>Four pairs of hands move as one over the trough — fold and plate, wood and oil, and the aether's spark. For the first time in thirty years, the Forgemasters work a single piece together, and no one speaks, because there is nothing left unsaid.</i>
+Narrator: <i>The legend-fire flares white. When it dims, the Aegis of Elarion lies whole upon the stone — reforged.</i>
+Borin: <i>His voice cracks.</i> ...She holds. Grandfather. She holds.
+Mother Wren: Of course she does, dearie. We finished her this time. Together.
+Old Pell: A line of the saga is written into the steel itself — your name, and ours. Whoever bears the Aegis will read, in their own gear, the tale of four old fools who set aside thirty years of grief to make it.
+Halvard: <i>She fastens the Oathweld plate to your shoulders with her own hands.</i> It's bonded to you now, Aegis-bearer. A part of every blow you take will ward the Heart itself. Your survival and Elarion's are one thing now. As they always should have been.
+<<command: CompleteQuest forgemasters_act4>>
+<<set $saga_reforged = true>>
+<<set $saga_act = 5>>
+Narrator: <i>The Aegis of Elarion is reforged. LEGENDARY crafting is unlocked — the Forge can now craft the Aegis set and each class's legendary arm. Carry it to the Spire, and end the Necromancer.</i>
+Borin: Go on, then, hero. We'll keep the fire lit. We'll keep it lit together — for good this time.
+===

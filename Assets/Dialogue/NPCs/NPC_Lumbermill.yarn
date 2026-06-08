@@ -39,11 +39,24 @@ title: TalkToLumbermill
     -> Not yet.
         Old Pell: Don't let it burn. Go.
 <<else>>
-    Old Pell: The Heartwood-bearer. The grove's yours as much as mine now. What'll you have?
+    <<if $saga_pell_seeded == false>>
+        Old Pell: The Heartwood-bearer. <i>He sets down his axe and listens to the wind in the high branches.</i> Hear that? Folk say it's only wind. I know better. The Tree weeps.
+        -> Why would the Tree weep?
+            Old Pell: Because I cut it. Thirty years gone, I was woodward when Aldric Emberhand needed a living bough for his Aegis. I took it. I wounded the Heart of Elarion with my own saw, and it has grieved in the wind ever since. I swore I'd never cut it again — not for any weapon, however grand.
+            Old Pell: <i>Quiet.</i> There's a way to ask the Tree instead of wound it. Only Heartwood can hold aether without burning. But I'll carry the asking to my grave before I let another blade bleed the Heart.
+            <<set $saga_pell_seeded = true>>
+            Old Pell: Forgive an old man. What'll you have?
+        -> Just trading wood.
+            Old Pell: Aye. What'll you have?
+    <<else>>
+        Old Pell: The Heartwood-bearer. The grove's yours as much as mine now. What'll you have?
+    <<endif>>
     -> Trade wood.
         <<command: OpenShop "lumbermill">>
     -> Upgrade the lumbermill.
         <<command: OpenUpgrade "lumbermill">>
+    -> The Forgemasters' saga.
+        <<jump SagaPell>>
     -> Nothing today.
         Old Pell: Mind the saplings.
 <<endif>>

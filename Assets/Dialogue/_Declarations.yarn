@@ -69,4 +69,41 @@ tags: system
 // Mirrors the QuestService ledger flag (companion.sylas "met") for cheap re-entry
 // branching in SylasFirstMeeting.yarn; the ledger is the source of truth.
 <<declare $sylasMet = false>>
+
+// =============================================================================
+// — WO-294 Forgemasters' Saga (deep crafter questlines + reconciliation) —
+// Yarn-side mirrors of the QuestService ledger (StartQuest/AdvanceQuest →
+// forgemasters_act1..4). Source of truth = the ledger (IsQuestActive/IsQuestComplete);
+// these locals drive cheap stage-aware branching inside each crafter's Saga node.
+//
+// $saga_act      : highest act the player has REACHED (0 = saga not begun, 4 = reforged).
+// $saga_<x>_done : per-crafter / per-pairing beat flags within an act.
+// The four vendor questlines (vendor.forge/armorer/lumbermill/granary) must each be
+// at stage 9 (bonded) before the saga's Act I will open — that gathering of the four
+// IS Act I's hidden premise (see DESIGN_FORGEMASTERS_SAGA_LEGENDARY.md §2).
+// =============================================================================
+<<declare $saga_act = 0>>
+
+// Act I — "Honest Steel": each crafter privately mourns the broken Aegis (the seed).
+<<declare $saga_borin_seeded = false>>
+<<declare $saga_halvard_seeded = false>>
+<<declare $saga_pell_seeded = false>>
+<<declare $saga_wren_seeded = false>>
+
+// Act II — "The Old Fire": the three reconciliations (brokered at Brom's hearth).
+<<declare $saga_peace_borin_halvard = false>>   // the steel didn't fail — it was incomplete
+<<declare $saga_peace_pell_forge = false>>      // the bough is for defending the Tree, not glory
+<<declare $saga_peace_wren_hearth = false>>     // the shared meal — Wren says yes
+
+// Act III — "What Was Lost": the four scattered techniques/components recovered.
+<<declare $saga_comp_fold = false>>        // Threefold Fold — Stone Mountains (W)
+<<declare $saga_comp_oathweld = false>>    // Oathweld breastplate restored — Frost Peaks (N)
+<<declare $saga_comp_heartwood = false>>   // Heartwood Bough — Verdant Forest (E)
+<<declare $saga_comp_pressing = false>>    // the Last Pressing — Ashen Wastes (S)
+
+// Act IV — "The Reforging": the choice + the reforge.
+// "heart" = draw from the Tree (immediate, somber); "regions" = gather from cleansed
+// nodes (slower, the true ending). Persisted so the finale/NG+ can read it.
+<<declare $saga_reforge_choice = "">>
+<<declare $saga_reforged = false>>
 ===

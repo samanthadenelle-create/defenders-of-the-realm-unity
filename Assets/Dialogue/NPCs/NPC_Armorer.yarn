@@ -44,7 +44,18 @@ title: TalkToArmorer
     -> Not yet.
         Halvard: Then go bleed for it like the rest of us did.
 <<else>>
-    Halvard: Oathshield-bearer. The walls are stronger for you. What do you need?
+    <<if $saga_halvard_seeded == false>>
+        Halvard: Oathshield-bearer. <i>She is polishing a dented breastplate she will not let near a furnace.</i>
+        -> Whose armor is that?
+            Halvard: My brother's. He wore the Aegis the day it fell — the legendary plate Aldric Emberhand forged. They tell me it was the steel that failed him. So I've hated that forge for thirty years, and I keep this dent so I never forget what their craft costs.
+            Halvard: <i>Iron in her voice.</i> I could make armor that never fails again. I remember how. But I'll not waste it on another doomed hero, and I'll not stand at Borin Emberhand's fire to do it.
+            <<set $saga_halvard_seeded = true>>
+            Halvard: Enough. What do you need?
+        -> Just here for armor.
+            Halvard: Then let's see you fitted. What do you need?
+    <<else>>
+        Halvard: Oathshield-bearer. The walls are stronger for you. What do you need?
+    <<endif>>
     -> Browse armor (buy / sell).
         <<command: OpenShop "armorer">>
     -> Upgrade my armor.
@@ -53,6 +64,8 @@ title: TalkToArmorer
         <<command: OpenCraft "armorer">>
     -> Manage my equipment.
         <<command: OpenEquip>>
+    -> The Forgemasters' saga.
+        <<jump SagaHalvard>>
     -> That's all.
         Halvard: Stay armored.
 <<endif>>

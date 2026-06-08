@@ -45,7 +45,19 @@ title: TalkToForge
     -> Not yet.
         Borin: Then go earn the blade.
 <<else>>
-    Borin: The Emberbrand-bearer returns. Forge is hot — what'll it be?
+    // — Bonded. Once bonded, seed the saga: Borin grieves the Aegis (Act I beat). —
+    <<if $saga_borin_seeded == false>>
+        Borin: The Emberbrand-bearer returns. <i>He glances at a snapped hilt resting on the anvil — old, blackened, never reforged.</i>
+        -> What's that broken hilt?
+            Borin: <i>Long silence.</i> My grandfather's. Aldric Emberhand — the First Forgemaster. He forged the Aegis of Elarion, the only legendary that ever held this wall. Then the champion who bore it fell anyway, and the blade snapped, and the whole workshop... shattered. Forge, Armory, Mill, Lumber — four crafts that were one, blamin' each other ever since.
+            Borin: They say the Aegis is why the Heart dims. That we bled the Tree into a suit of armor. I've never had the stomach to reforge that hilt. Some things are better left broken.
+            <<set $saga_borin_seeded = true>>
+            Borin: Anyway. The forge is hot. What'll it be?
+        -> Just here to work.
+            Borin: Good. Forge is hot — what'll it be?
+    <<else>>
+        Borin: The Emberbrand-bearer returns. Forge is hot — what'll it be?
+    <<endif>>
     -> Craft a weapon.
         <<command: OpenCraft "forge">>
     -> Browse the forge wares.
@@ -54,6 +66,8 @@ title: TalkToForge
         <<command: OpenUpgrade "forge">>
     -> Equip what I have.
         <<command: OpenEquip>>
+    -> The Forgemasters' saga.
+        <<jump SagaBorin>>
     -> Nothing today.
         Borin: Then keep that edge sharp.
 <<endif>>

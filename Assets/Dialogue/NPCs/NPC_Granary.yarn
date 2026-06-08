@@ -39,11 +39,24 @@ title: TalkToGranary
     -> Not yet.
         Mother Wren: Send them out, they won't bite.
 <<else>>
-    Mother Wren: The Granary-keeper returns. Bellies are full, ranks are full. What do you need?
+    <<if $saga_wren_seeded == false>>
+        Mother Wren: The Granary-keeper returns, bless you. <i>The great millstones turn slow behind her.</i> Sit a moment. An old woman gets to talking.
+        -> You look like you're remembering something.
+            Mother Wren: This mill burned the night the Aegis fell, dearie. Sparks from the forge, some said. I never spoke a word of blame — rebuilt it with these hands. But silence is its own kind of blame, isn't it. Borin, Halvard, Pell — four of us, were one workshop once. Aldric's workshop. Haven't shared a fire in thirty years.
+            Mother Wren: <i>She pats the millstone.</i> These stones grind more than grain, you know. They could press the Last Pressing again — the quench-oil that lets steel drink aether and not shatter. But there's no point pressing it for a forge nobody'll share. All I want, before I'm gone, is to see the four of us round one hearth again.
+            <<set $saga_wren_seeded = true>>
+            Mother Wren: Listen to me ramble. What do you need?
+        -> Just here for grain.
+            Mother Wren: Of course, dearie. What do you need?
+    <<else>>
+        Mother Wren: The Granary-keeper returns. Bellies are full, ranks are full. What do you need?
+    <<endif>>
     -> Trade food.
         <<command: OpenShop "granary">>
     -> Upgrade the mill.
         <<command: OpenUpgrade "granary">>
+    -> The Forgemasters' saga.
+        <<jump SagaWren>>
     -> Nothing today.
         Mother Wren: Eat something, dearie.
 <<endif>>

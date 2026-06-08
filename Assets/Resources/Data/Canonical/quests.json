@@ -297,6 +297,87 @@
           "grantsKeystone": true
         }
       ]
+    },
+
+    {
+      "id": "forgemasters_act1",
+      "title": "Honest Steel",
+      "stages": [
+        {
+          "stageId": "gather-the-four",
+          "objectiveText": "Bond all four Forgemasters (Forge, Armory, Lumbermill, Mill) — and learn the legend of the broken Aegis.",
+          "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
+          "requiresFlag": "",
+          "grantsKeystone": false
+        }
+      ]
+    },
+    {
+      "id": "forgemasters_act2",
+      "title": "The Old Fire",
+      "stages": [
+        {
+          "stageId": "steel-truth",
+          "objectiveText": "Broker peace between Borin and Halvard at Brom's hearth — the truth of the fallen Aegis.",
+          "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
+          "requiresFlag": "",
+          "grantsKeystone": false
+        },
+        {
+          "stageId": "bough-for-tree",
+          "objectiveText": "Reconcile Old Pell and the Forge — prove the bough is to defend the Tree, not bleed it.",
+          "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
+          "requiresFlag": "",
+          "grantsKeystone": false
+        },
+        {
+          "stageId": "one-hearth",
+          "objectiveText": "Gather all four to Mother Wren's hearth for one shared meal — the night the wound closes.",
+          "reward": { "crystals": 100, "food": 60, "magic": 0, "grantItemId": "" },
+          "requiresFlag": "",
+          "grantsKeystone": false
+        },
+        {
+          "stageId": "master-tier",
+          "objectiveText": "Master tier unlocked — the four crafts work as one. Recover what was lost.",
+          "reward": { "crystals": 0, "food": 0, "magic": 25, "grantItemId": "" },
+          "requiresFlag": "",
+          "grantsKeystone": true
+        }
+      ]
+    },
+    {
+      "id": "forgemasters_act3",
+      "title": "What Was Lost",
+      "stages": [
+        {
+          "stageId": "gather-components",
+          "objectiveText": "Recover the four scattered techniques: the Threefold Fold (Stone Mountains), the Oathweld (Frost Peaks), the Heartwood Bough (Verdant Forest), and the Last Pressing (Ashen Wastes).",
+          "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
+          "requiresFlag": "",
+          "grantsKeystone": false
+        },
+        {
+          "stageId": "all-gathered",
+          "objectiveText": "All four components secured — bring them to the hearth for the Reforging.",
+          "reward": { "crystals": 150, "food": 0, "magic": 50, "grantItemId": "" },
+          "requiresFlag": "",
+          "grantsKeystone": true
+        }
+      ]
+    },
+    {
+      "id": "forgemasters_act4",
+      "title": "The Reforging",
+      "stages": [
+        {
+          "stageId": "the-choice",
+          "objectiveText": "At Wren's hearth, choose the aether for the quench — draw from the Heart, or gather from the cleansed regions — and reforge the Aegis of Elarion.",
+          "reward": { "crystals": 300, "food": 0, "magic": 100, "grantItemId": "" },
+          "requiresFlag": "",
+          "grantsKeystone": true
+        }
+      ]
     }
   ]
 }
