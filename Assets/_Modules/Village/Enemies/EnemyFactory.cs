@@ -14,7 +14,8 @@
 
 using UnityEngine;
 using UnityEngine.AI;
-using DeNelle.Core.Combat; // ActorAnimator (attached so Enemy drives work)
+using DeNelle.Core.Combat;      // ActorAnimator (attached so Enemy drives work)
+using DeNelle.Core.Validation;  // WO-315/WO-363: opt-in OrientationGuard on the enemy root
 
 namespace DeNelle.Village
 {
@@ -110,6 +111,17 @@ namespace DeNelle.Village
             // Enemy.cs drives (SetLocomotion/PlayAttack/Die) work for skeleton/orc/troll etc.
             if (go.GetComponent<ActorAnimator>() == null)
                 go.AddComponent<ActorAnimator>();
+
+            // WO-315 / WO-363: attach the opt-in orientation gate to the enemy ROOT —
+            // the same transform Enemy.DriveNav slerps toward agent velocity. The guard
+            // is INERT in shipping builds (needs its bool ticked AND the ORIENTATION_GATE
+            // define / editor), so this is zero-cost at runtime; in a QA/validation run it
+            // turns an ambiguous "enemy looks backwards" into a precise GATE-FAILED verdict
+            // (root facing vs world displacement) instead of a felt guess. Enemies carried
+            // no guard before, so the WO-363 rule was never actually exercised on them.
+            if (go.GetComponent<OrientationGuard>() == null)
+                go.AddComponent<OrientationGuard>();
+
             return enemy;
         }
 

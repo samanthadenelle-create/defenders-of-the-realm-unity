@@ -209,7 +209,7 @@ namespace DeNelle.Village
             var rimGo = new GameObject("Rim");
             rimGo.transform.SetParent(canvasGo.transform, false);
             var rimImg = rimGo.AddComponent<Image>();
-            rimImg.sprite = chip; rimImg.type = Image.Type.Sliced;
+            rimImg.sprite = chip; rimImg.type = Image.Type.Simple;
             rimImg.color = RimColor;
             StretchToCanvas(rimGo.GetComponent<RectTransform>(), -0.035f);
 
@@ -217,7 +217,7 @@ namespace DeNelle.Village
             var frameGo = new GameObject("Frame");
             frameGo.transform.SetParent(canvasGo.transform, false);
             var frameImg = frameGo.AddComponent<Image>();
-            frameImg.sprite = chip; frameImg.type = Image.Type.Sliced;
+            frameImg.sprite = chip; frameImg.type = Image.Type.Simple;
             frameImg.color = FrameColor;
             StretchToCanvas(frameGo.GetComponent<RectTransform>(), -0.018f);
 
@@ -225,7 +225,7 @@ namespace DeNelle.Village
             var trackGo = new GameObject("Track");
             trackGo.transform.SetParent(canvasGo.transform, false);
             var trackImg = trackGo.AddComponent<Image>();
-            trackImg.sprite = chip; trackImg.type = Image.Type.Sliced;
+            trackImg.sprite = chip; trackImg.type = Image.Type.Simple;
             trackImg.color = TrackColor;
             StretchToCanvas(trackGo.GetComponent<RectTransform>(), 0f);
 
@@ -233,7 +233,7 @@ namespace DeNelle.Village
             var fillGo = new GameObject("Fill");
             fillGo.transform.SetParent(canvasGo.transform, false);
             _fillImg = fillGo.AddComponent<Image>();
-            _fillImg.sprite = chip; _fillImg.type = Image.Type.Sliced;
+            _fillImg.sprite = chip; _fillImg.type = Image.Type.Simple;
             _fillImg.color = HealthyColor;
             _fillRect = fillGo.GetComponent<RectTransform>();
             _fillRect.anchorMin = new Vector2(0f, 0f);
@@ -280,16 +280,28 @@ namespace DeNelle.Village
             rt.offsetMax = new Vector2(-inset, -inset);
         }
 
-        // ── DEF-206: rounded-rect chip sprite (cached, drawn once) ────────────
-        // A 9-sliced white rounded-rect so every chip layer gets rounded corners
-        // at any width. Generated at runtime (no art asset / no UXML), WebGL-safe.
+        // ── DEF-206 / WO-302: rounded-rect chip sprite (cached, drawn once) ───
+        // WO-302 ROOT CAUSE of the "giant green pill": the chip layers used
+        // Image.Type.Sliced with a 9-slice border. A SLICED image cannot render
+        // smaller than the SUM of its borders — here radius(10px)+radius(10px) =
+        // 20px of border per axis at 100 px/unit = 0.20 world-units MINIMUM on
+        // BOTH width and height. Our bar is only 0.11 m tall, so the sliced Image
+        // was floored to ≥0.20 m tall and the full-height rounded corners merged
+        // into a fat green oval/pill — independent of (and surviving) the host-
+        // scale fix. The layers now draw with Image.Type.Simple (set in BuildUi),
+        // which stretches the whole texture to the rect with NO minimum-size floor,
+        // so a 0.9 × 0.11 m bar renders exactly that size. To keep nice corners at
+        // any width under Simple (which scales the corners with the quad rather
+        // than holding them fixed), the radius is a modest fraction of the texture
+        // so a wide thin bar still reads as a rounded chip, not a stretched blob.
+        // Generated at runtime (no art asset / no UXML), WebGL-safe.
         private static Sprite _chipSprite;
         private static Sprite ChipSprite()
         {
             if (_chipSprite != null) return _chipSprite;
 
-            const int S = 32;             // texture is square; sliced borders stretch the middle
-            const float radius = 10f;     // corner radius in px
+            const int S = 32;             // square source texture
+            const float radius = 6f;      // corner radius in px (modest under Simple scaling)
             var tex = new Texture2D(S, S, TextureFormat.RGBA32, false)
             {
                 wrapMode = TextureWrapMode.Clamp,
@@ -308,9 +320,10 @@ namespace DeNelle.Village
                 }
             }
             tex.Apply();
-            // border = radius so the corners are preserved and only the centre stretches.
+            // No 9-slice border (Vector4.zero): the chip is drawn with Image.Type.Simple
+            // so it has no minimum-size floor and can render at the bar's true 0.11 m height.
             _chipSprite = Sprite.Create(tex, new Rect(0, 0, S, S), new Vector2(0.5f, 0.5f),
-                100f, 0, SpriteMeshType.FullRect, new Vector4(radius, radius, radius, radius));
+                100f, 0, SpriteMeshType.FullRect, Vector4.zero);
             return _chipSprite;
         }
 

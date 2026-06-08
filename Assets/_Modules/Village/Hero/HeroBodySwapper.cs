@@ -481,10 +481,18 @@ namespace DeNelle.Village
                 // PARKED (2026-06-06): the Knight FBX is a broken combo — its mesh material
                 // is 'tripo_mat_18e58c3e', which has NO matching atlas in-project (tripo_1afe2e5e,
                 // remesh_12, knight_basecolor, HumanTank all read wrong). This needs a CLEAN
-                // Knight model re-import, not a texture pick. Until then return null so the body
-                // falls through to ApplyClassTint's clean steel placeholder (presentable, not
-                // garbled). TODO: re-import a matching Knight mesh+atlas, then bind it here.
-                HeroClass.Knight => null,
+                // Knight model re-import, not a texture pick.
+                // WO-330 (2026-06-08): returning null here is what produces the DTT/Village
+                // CYAN SILHOUETTE. When texPath is null, the CC5 `baked` material below is never
+                // built, so the Knight's combined-mesh renderer slots — which import NULL/default
+                // on the AccuRIG single-atlas FBX — are never replaced and render as URP's bright
+                // cyan/magenta error shader (a missing-material fallback). ApplyClassTint can't
+                // rescue it because it only colours EXISTING non-null materials, never a null slot.
+                // Bind the clean medieval-knight atlas (same one the COMPANION Knight already uses
+                // successfully via StoryCompanionInjector.BindClassDiffuse) so `baked` is built and
+                // replaces the null slots with a lit, textured material. Textured-but-imperfect
+                // beats an unlit cyan blob for go-live; a clean Knight re-import can repoint later.
+                HeroClass.Knight => "Heroes/Textures/medievalknight3dmodel_basecolor",
                 // DEF-229 (2026-06-03): the Ranger body is now the CC5/CC_Base adult
                 // archer (InstaLOD-remeshed: ONE combined mesh + ONE baked PBR atlas),
                 // imported Humanoid by PeopleCharacterImporter.ImportRangerCC5 into
@@ -605,6 +613,15 @@ namespace DeNelle.Village
             // texture — the Ranger's fresh v2 basecolor, the Mage's embedded texture,
             // and whatever the Knight imported — and the tint is just the fallback so
             // an untextured mesh still reads coloured instead of solid white.
+            // WO-330 anti-cyan: a CC5/AccuRIG combined mesh can import its renderer slots as
+            // NULL (or Unity's Default-Material), which URP renders as a bright cyan/magenta
+            // UNLIT error shape — the "solid cyan silhouette". A null slot must be REPLACED with
+            // a real URP/Lit material (tinted), not skipped, or the hero stays cyan. Build the
+            // lit shader once for that case.
+            Shader lit = Shader.Find("Universal Render Pipeline/Lit")
+                         ?? Shader.Find("Universal Render Pipeline/Simple Lit")
+                         ?? Shader.Find("Standard");
+
             foreach (var r in body.GetComponentsInChildren<Renderer>(true))
             {
                 if (r == null) continue;
@@ -613,7 +630,22 @@ namespace DeNelle.Village
                 for (int i = 0; i < mats.Length; i++)
                 {
                     var m = mats[i];
-                    if (m == null) continue;
+                    // WO-330: a null/default slot is the cyan culprit — give it a fresh lit,
+                    // tinted material so it is never left on URP's error/default shader.
+                    if (m == null)
+                    {
+                        if (lit == null) continue;
+                        var fill = new Material(lit) { name = cls + " (tint fill)" };
+                        if (fill.HasProperty("_BaseColor")) fill.SetColor("_BaseColor", tint);
+                        if (fill.HasProperty("_Color"))     fill.SetColor("_Color", tint);
+                        if (cls == HeroClass.Knight)
+                        {
+                            if (fill.HasProperty("_Metallic"))   fill.SetFloat("_Metallic", 0.35f);
+                            if (fill.HasProperty("_Smoothness")) fill.SetFloat("_Smoothness", 0.45f);
+                        }
+                        mats[i] = fill;
+                        continue;
+                    }
                     Texture tex = null;
                     if (m.HasProperty("_BaseMap")) tex = m.GetTexture("_BaseMap");
                     if (tex == null && m.HasProperty("_MainTex")) tex = m.GetTexture("_MainTex");

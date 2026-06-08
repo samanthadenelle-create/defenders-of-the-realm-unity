@@ -47,26 +47,38 @@ namespace DeNelle.HUD
 
         private void Awake()
         {
+            // WO-322: the bootstrap now adds the UIDocument + assigns a PanelSettings
+            // BEFORE adding this component, so the document is normally already wired.
+            // We still self-heal a missing panel by borrowing one from any other
+            // scene UIDocument, but we DON'T permanently disable when none is found —
+            // OnEnable retries the build so a late-spawning HUD panel can recover us.
             _document = GetComponent<UIDocument>();
             if (_document == null) _document = gameObject.AddComponent<UIDocument>();
-            if (_document.panelSettings == null)
-            {
-                foreach (var existing in UnityEngine.Object.FindObjectsByType<UIDocument>(
-                             FindObjectsInactive.Include, FindObjectsSortMode.None))
-                {
-                    if (existing == _document || existing.panelSettings == null) continue;
-                    _document.panelSettings = existing.panelSettings;
-                    break;
-                }
-            }
-            if (_document.panelSettings == null) { enabled = false; return; }
-            _document.sortingOrder = 90; // below Help menu (100), above default HUD
-            BuildUi();
+            if (_document.panelSettings == null) BorrowPanelSettings();
+            if (_document.sortingOrder < 90) _document.sortingOrder = 90; // below Help (100)
+            if (_document.panelSettings != null) BuildUi();
         }
 
         private void OnEnable()
         {
             _camera = Camera.main;
+            // Recover if the panel arrived after Awake (race with sibling HUD spawns).
+            if (_document != null && _root == null)
+            {
+                if (_document.panelSettings == null) BorrowPanelSettings();
+                if (_document.panelSettings != null) BuildUi();
+            }
+        }
+
+        private void BorrowPanelSettings()
+        {
+            foreach (var existing in UnityEngine.Object.FindObjectsByType<UIDocument>(
+                         FindObjectsInactive.Include, FindObjectsSortMode.None))
+            {
+                if (existing == _document || existing.panelSettings == null) continue;
+                _document.panelSettings = existing.panelSettings;
+                return;
+            }
         }
 
         private void LateUpdate()

@@ -444,14 +444,15 @@ namespace DeNelle.Village
                     var m = mats[i];
                     if (m == null) continue;
 
-                    // Already has a real diffuse? Leave it (preserve any working texture).
-                    Texture existing = null;
-                    if (m.HasProperty("_BaseMap")) existing = m.GetTexture("_BaseMap");
-                    if (existing == null && m.HasProperty("_MainTex")) existing = m.GetTexture("_MainTex");
-                    if (existing != null) continue;
-
                     if (tex != null)
                     {
+                        // WO-310: when we HAVE the correct per-class atlas, bind it
+                        // AUTHORITATIVELY — do NOT skip a slot just because something is
+                        // already on _BaseMap. FixTripoMaterials runs first and can leave a
+                        // wrong/embedded FBX texture (or a tinted fallback) on the slot; the
+                        // old "if existing, leave it" guard then preserved that wrong atlas,
+                        // which is exactly how the Ranger read GREEN. The known-good class
+                        // diffuse must win so the companion matches the player hero.
                         if (m.HasProperty("_BaseMap")) m.SetTexture("_BaseMap", tex);
                         if (m.HasProperty("_MainTex")) m.SetTexture("_MainTex", tex);
                         if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", Color.white);
@@ -459,8 +460,14 @@ namespace DeNelle.Village
                     }
                     else
                     {
-                        // No diffuse available → paint the signature class tint so the body
-                        // reads coloured instead of a flat blue/grey blob.
+                        // No class diffuse resolved. Preserve any real texture the importer/
+                        // TripoMaterialFixer already bound; only paint the signature class tint
+                        // when the slot is genuinely untextured, so the body reads coloured
+                        // instead of a flat blue/grey/green blob.
+                        Texture existing = null;
+                        if (m.HasProperty("_BaseMap")) existing = m.GetTexture("_BaseMap");
+                        if (existing == null && m.HasProperty("_MainTex")) existing = m.GetTexture("_MainTex");
+                        if (existing != null) continue;
                         if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", tint);
                         if (m.HasProperty("_Color"))     m.SetColor("_Color", tint);
                     }
