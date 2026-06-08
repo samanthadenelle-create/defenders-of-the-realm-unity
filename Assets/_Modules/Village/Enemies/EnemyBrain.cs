@@ -148,6 +148,14 @@ namespace DeNelle.Village
         private float _provokedUntil;
         private const float ProvokeDuration = 6f;
 
+        // Tier-2 party teamwork (Knight TAUNT): a companion Knight can FORCE this
+        // enemy to fix on the knight for a window, pulling aggro off the hero / the
+        // wounded backline. Modeled on the retaliation provoke above — same single
+        // owner of enemy targeting (EnemyBrain), no second targeting authority. The
+        // taunt overrides role/BT/engage-radius while active, exactly like provoke.
+        private float _tauntUntil;
+        private Transform _taunter;
+
         // WO-90: attack state for TryAttack().
         private float     _nextAttackTime;
         private Animator  _animator;
@@ -325,9 +333,35 @@ namespace DeNelle.Village
             _provokedUntil = Time.time + ProvokeDuration;
         }
 
+        /// <summary>
+        /// Tier-2 Knight TAUNT — forces this enemy to fix on <paramref name="taunter"/>
+        /// (the companion Knight) for <paramref name="seconds"/>, pulling its aggro off
+        /// the hero / wounded allies. Reuses the retaliation-override seam so EnemyBrain
+        /// stays the SINGLE owner of enemy targeting (no second authority). Null-safe.
+        /// </summary>
+        public void TauntTo(Transform taunter, float seconds)
+        {
+            if (taunter == null || seconds <= 0f) return;
+            _taunter   = taunter;
+            _tauntUntil = Time.time + seconds;
+        }
+
         private void Update()
         {
             if (_enemy == null || _enemy.IsDead) return;
+
+            // TAUNT OVERRIDE (Tier-2 Knight): a taunting companion Knight fixes this
+            // enemy onto itself, ahead of even retaliation — it's a deliberate tank
+            // pull, so it wins over an incidental provoke. Same override shape: lock the
+            // target, stop on it, attack. Drops through once the taunter dies/leaves.
+            if (Time.time < _tauntUntil && _taunter != null)
+            {
+                _currentTarget = _taunter;
+                _enemy.SetBrainTarget(_taunter);
+                _enemy.SetBrainTargetPosition(_taunter.position);
+                TriggerAttack();
+                return;
+            }
 
             // RETALIATION OVERRIDE: a recently-struck enemy locks onto the hero and
             // chases + attacks it, ignoring role/BT/engage-radius for the window.
@@ -651,6 +685,11 @@ namespace DeNelle.Village
                 // eval interval. When tactics weights aren't assigned the scorer
                 // degrades to the legacy nearest-ish chain (FindNearbyHero ?? Tower ?? tag).
                 default:
+                    // Basic strategy (per user req): DPS focus-fire healers first (protect
+                    // the support), then score for low-HP/threat. Tanks protect healer by
+                    // choosing hero/structure near healers. Healers already prioritize allies.
+                    if ((Role == EnemyRole.DPS || Role == EnemyRole.Ranged) && FindMostDamagedAlly() != null)
+                        return FindMostDamagedAlly() ?? ScoreAndPickTarget();
                     return ScoreAndPickTarget();
             }
         }

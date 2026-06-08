@@ -33,6 +33,7 @@
 // Spawned by StoryCompanionInjector (self-bootstrapping DDOL, no scene edit).
 // =============================================================================
 
+using System.Collections.Generic;
 using DeNelle.Core.State;
 using DeNelle.Core.Combat;
 using UnityEngine;
@@ -90,7 +91,11 @@ namespace DeNelle.Village
         public void TakeDamage(float amount)
         {
             if (_fallen || _hp <= 0f) return;
-            _hp = Mathf.Max(0f, _hp - Mathf.Max(0f, amount));
+            amount = Mathf.Max(0f, amount);
+            // Knight Bulwark: while the damage-soak is up the tank takes reduced damage
+            // (the other half of the taunt — it pulls the hits AND survives them).
+            if (Time.time < _bulwarkUntil) amount *= (1f - _bulwarkReduction);
+            _hp = Mathf.Max(0f, _hp - amount);
             if (_hp <= 0f) Fall();
         }
 
@@ -156,6 +161,45 @@ namespace DeNelle.Village
         private const float LeashFromHero = 22f;   // don't engage past this from the hero (stay with the party)
         private float _attackTimer;
         private RangedAttackVFX _ranged;
+
+        // ── Class ability (Tier-2 party teamwork) ────────────────────────────
+        // Each companion class has ONE signature ability that AUTO-FIRES on its own
+        // cooldown whenever the situation is valid — no hotkey/UI yet (Tier-3). This
+        // is what turns four identical basic-attackers into a TEAM: a Cleric sustains
+        // the party, a Knight tanks (taunt + soak), a Ranger bursts, a Mage AoEs.
+        // Tunables are SerializeField so feel can be dialled in the inspector.
+        [Header("Class ability (Tier-2)")]
+        [Tooltip("Seconds between class-ability casts (per companion class).")]
+        [SerializeField] private float _abilityCooldown = 6f;
+        [Tooltip("Range the ability operates in (heal-ally search / AoE radius / engage gate).")]
+        [SerializeField] private float _abilityRange = 14f;
+
+        [Header("Cleric — Mend (heal most-wounded ally)")]
+        [Tooltip("Fraction of the target's MAX HP restored per heal.")]
+        [SerializeField, Range(0.05f, 1f)] private float _healFraction = 0.30f;
+
+        [Header("Knight — Taunt + Bulwark")]
+        [Tooltip("Seconds taunted enemies stay fixed on the Knight.")]
+        [SerializeField] private float _tauntSeconds = 4f;
+        [Tooltip("Incoming-damage reduction while Bulwark is up (0.5 = take half).")]
+        [SerializeField, Range(0f, 0.9f)] private float _bulwarkReduction = 0.5f;
+        [Tooltip("Seconds the Knight's Bulwark damage-soak lasts after each taunt.")]
+        [SerializeField] private float _bulwarkSeconds = 4f;
+
+        [Header("Ranger — Multishot")]
+        [Tooltip("Arrows fired in the Multishot burst.")]
+        [SerializeField, Min(2)] private int _multishotArrows = 3;
+        [Tooltip("Damage per Multishot arrow.")]
+        [SerializeField] private float _multishotDamagePerArrow = 12f;
+
+        [Header("Mage — Arcane Burst (AoE)")]
+        [Tooltip("Damage dealt to every enemy in the burst radius.")]
+        [SerializeField] private float _mageBurstDamage = 26f;
+
+        // Ability runtime.
+        private float _abilityTimer;            // counts down to the next cast
+        private float _bulwarkUntil;            // Time.time while the Knight soak is active
+        private static readonly List<Enemy> s_aoeBuf = new List<Enemy>(32); // shared AoE scratch
 
         // ── Runtime ──────────────────────────────────────────────────────────
         private HeroClass _hero = HeroClass.Knight;
@@ -276,16 +320,240 @@ namespace DeNelle.Village
             if (_heroT == null) _heroT = ResolveHeroFallback();
 
             _speakTimer = IntroDelay;
+            // Stagger the first cast so a party doesn't fire every ability on frame 1.
+            _abilityTimer = _abilityCooldown * 0.5f;
         }
 
         private void Update()
         {
             ResolveHeroIfNeeded();
-            // Fight a nearby hostile if there is one; otherwise trail the hero.
-            if (!UpdateCombat())
-                UpdateFollow();
+
+            // Tier-2 class ability ticks on its own cooldown, INDEPENDENT of the basic
+            // attack. The Cleric's Mend can fire while merely following (it targets a
+            // wounded ally, not an enemy); the dps/tank abilities gate on a valid foe
+            // inside TryClassAbility. Returns true when it consumed this frame's action
+            // (e.g. the Cleric paused to heal) so we skip the basic-attack/follow step.
+            bool abilityActed = TickClassAbility();
+
+            if (!abilityActed)
+            {
+                // Fight a nearby hostile if there is one; otherwise trail the hero.
+                if (!UpdateCombat())
+                    UpdateFollow();
+            }
+
             UpdateSpeech();
             DriveAnimator();
+        }
+
+        // ── Class ability dispatch (Tier-2) ──────────────────────────────────
+
+        /// <summary>
+        /// Counts the ability cooldown down and, when ready, attempts this companion's
+        /// signature CLASS ability (by <see cref="HeroClass"/>). Returns true only when
+        /// the Cleric paused its turn to heal (so the caller skips the basic step that
+        /// frame); the dps/tank abilities fire alongside the normal combat loop and
+        /// return false so the companion still positions/basic-attacks.
+        /// </summary>
+        private bool TickClassAbility()
+        {
+            if (_fallen) return false;
+            _abilityTimer -= Time.deltaTime;
+            if (_abilityTimer > 0f) return false;
+
+            switch (_hero)
+            {
+                case HeroClass.Cleric: return TryClericMend();   // heal — may pause to act
+                case HeroClass.Knight: TryKnightTaunt();   break; // tank — fires with combat
+                case HeroClass.Ranger: TryRangerMultishot(); break; // dps burst
+                case HeroClass.Mage:   TryMageBurst();     break; // dps/control AoE
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// CLERIC — Mend. Finds the most-wounded ALLY (hero + other companions + pet)
+        /// within <see cref="_abilityRange"/> and heals it a chunk of its MAX HP. Only
+        /// fires when someone is actually wounded (else the cooldown is NOT consumed, so
+        /// it heals the instant an ally drops). Plays the existing heal VFX on the target.
+        /// Returns true when it healed (the Cleric holds position + faces the patient that
+        /// frame instead of basic-attacking). This sustain is what makes the party a team.
+        /// </summary>
+        private bool TryClericMend()
+        {
+            if (!FindMostWoundedAlly(out Vector3 healPos, out float healAmount, out System.Action applyHeal))
+                return false;   // nobody hurt — don't burn the cooldown, keep basic-attacking
+
+            applyHeal();
+            _abilityTimer = _abilityCooldown;
+
+            // Reuse the hero/respawn heal VFX (Impact_Heal green sparkle). Null-safe static.
+            VFXManager.Play(VFXType.Impact_Heal, healPos + Vector3.up);
+            GameSfx.PlayHeroHit();   // placeholder cue — no dedicated heal SFX yet (FLAGGED)
+
+            // Hold + face the patient for the beat (don't path away mid-heal).
+            if (_agent != null && _agent.enabled && _agent.isOnNavMesh) _agent.isStopped = true;
+            FaceWorld(healPos);
+            return true;
+        }
+
+        /// <summary>
+        /// Scans all allies — hero (HeroHealth), the other StoryCompanions, the pet(s)
+        /// — within <see cref="_abilityRange"/> and picks the one with the LOWEST HP
+        /// fraction that is below max (the most-wounded). Out-params return where to play
+        /// the VFX, the heal amount used (for logging/feel), and a closure that applies
+        /// the clamped heal to that specific ally. Returns false when nobody is wounded
+        /// in range (so the Cleric doesn't over-heal or waste the cast).
+        /// </summary>
+        private bool FindMostWoundedAlly(out Vector3 pos, out float amount, out System.Action apply)
+        {
+            pos = Vector3.zero; amount = 0f; apply = null;
+            float rangeSqr = _abilityRange * _abilityRange;
+            float worstFrac = 0.999f;   // must be BELOW max to qualify (don't over-heal)
+            Vector3 self = transform.position;
+
+            // — Hero —
+            var hero = HeroHealth.Instance;
+            if (hero != null && hero.IsAlive && (hero.transform.position - self).sqrMagnitude <= rangeSqr)
+            {
+                float frac = hero.MaxHp > 0f ? hero.Hp / hero.MaxHp : 1f;
+                if (frac < worstFrac)
+                {
+                    worstFrac = frac;
+                    Vector3 hp = hero.transform.position; float heal = hero.MaxHp * _healFraction;
+                    pos = hp; amount = heal; apply = () => hero.Heal(heal);
+                }
+            }
+
+            // — Other companions (including a wounded self) —
+            var companions = FindObjectsByType<StoryCompanion>(FindObjectsSortMode.None);
+            foreach (var c in companions)
+            {
+                if (c == null || !c.IsAlive) continue;
+                if ((c.transform.position - self).sqrMagnitude > rangeSqr) continue;
+                float frac = c.MaxHp > 0f ? c.Hp / c.MaxHp : 1f;
+                if (frac < worstFrac)
+                {
+                    worstFrac = frac;
+                    StoryCompanion target = c; float heal = c.MaxHp * _healFraction;
+                    pos = c.transform.position; amount = heal; apply = () => target.Heal(heal);
+                }
+            }
+
+            // — Pet(s) —
+            var pets = FindObjectsByType<DeNelle.Pets.Pet>(FindObjectsSortMode.None);
+            foreach (var p in pets)
+            {
+                if (p == null || !p.IsAlive) continue;
+                if ((p.transform.position - self).sqrMagnitude > rangeSqr) continue;
+                float frac = p.MaxHp > 0f ? p.Hp / p.MaxHp : 1f;
+                if (frac < worstFrac)
+                {
+                    worstFrac = frac;
+                    DeNelle.Pets.Pet target = p; float heal = p.MaxHp * _healFraction;
+                    pos = p.transform.position; amount = heal; apply = () => target.Heal(heal);
+                }
+            }
+
+            return apply != null;
+        }
+
+        /// <summary>
+        /// KNIGHT — Taunt + Bulwark. Pulls every enemy in <see cref="_abilityRange"/>
+        /// onto the Knight (EnemyBrain.TauntTo) and raises a damage-soak (_bulwarkUntil),
+        /// so the tank both grabs aggro and survives it. Only fires when at least one
+        /// enemy is in range (else keeps the cooldown ready). No new VFX — reuses the
+        /// existing combat feel; a dedicated shout/shield VFX is a later polish (FLAGGED).
+        /// </summary>
+        private void TryKnightTaunt()
+        {
+            var tm = TargetManager.Instance;
+            if (tm == null) return;
+            tm.CollectInRange(transform.position, _abilityRange, s_aoeBuf);
+            if (s_aoeBuf.Count == 0) return;   // nothing to taunt — save the cooldown
+
+            for (int i = 0; i < s_aoeBuf.Count; i++)
+            {
+                var brain = s_aoeBuf[i] != null ? s_aoeBuf[i].GetComponent<EnemyBrain>() : null;
+                if (brain != null) brain.TauntTo(transform, _tauntSeconds);
+            }
+            _bulwarkUntil = Time.time + _bulwarkSeconds;
+            _abilityTimer = _abilityCooldown;
+            // Reuse the shockwave-ring impact as a stand-in "ground slam / shout" tell.
+            VFXManager.Play(VFXType.Impact_ShockwaveRing, transform.position);
+        }
+
+        /// <summary>
+        /// RANGER — Multishot. Fires several arrows at the nearest enemy in one burst for
+        /// strong front-loaded damage. Reuses RangedAttackVFX.FireArrow (the same arrow the
+        /// basic attack uses). Only fires when a foe is in range.
+        /// </summary>
+        private void TryRangerMultishot()
+        {
+            var tm = TargetManager.Instance;
+            if (tm == null) return;
+            Enemy foe = tm.GetClosestTarget(transform.position, _abilityRange);
+            if (foe == null || !foe.IsAlive) return;
+
+            if (_ranged == null)
+                _ranged = GetComponent<RangedAttackVFX>() ?? gameObject.AddComponent<RangedAttackVFX>();
+
+            var dmg = foe.GetComponent<EnemyDamageable>() as IDamageable;
+            Vector3 baseTarget = foe.transform.position + Vector3.up;
+            for (int i = 0; i < _multishotArrows; i++)
+            {
+                // Slight horizontal spread so the volley reads as several arrows.
+                Vector3 spread = new Vector3((i - (_multishotArrows - 1) * 0.5f) * 0.5f, 0f, 0f);
+                float perArrow = _multishotDamagePerArrow;
+                System.Action onArrive = () =>
+                {
+                    if (dmg != null && dmg.IsAlive) dmg.TakeDamage(perArrow, DamageElement.None);
+                };
+                _ranged.FireArrow(baseTarget + spread, onArrive);
+            }
+            FaceWorld(foe.transform.position);
+            _abilityTimer = _abilityCooldown;
+        }
+
+        /// <summary>
+        /// MAGE — Arcane Burst. Damages EVERY enemy within <see cref="_abilityRange"/> of
+        /// the nearest foe (an AoE around the cluster centre), with an Aether impact at
+        /// each. Only fires when enemies are present. Reuses the Aether impact VFX.
+        /// </summary>
+        private void TryMageBurst()
+        {
+            var tm = TargetManager.Instance;
+            if (tm == null) return;
+            Enemy nearest = tm.GetClosestTarget(transform.position, _abilityRange);
+            if (nearest == null || !nearest.IsAlive) return;
+
+            // Burst centred on the nearest foe; radius = a slice of the ability range so
+            // it rewards clustered enemies (the Mage's "control" identity).
+            Vector3 centre = nearest.transform.position;
+            float burstRadius = _abilityRange * 0.5f;
+            tm.CollectInRange(centre, burstRadius, s_aoeBuf);
+
+            for (int i = 0; i < s_aoeBuf.Count; i++)
+            {
+                var e = s_aoeBuf[i];
+                if (e == null || !e.IsAlive) continue;
+                var dmg = e.GetComponent<EnemyDamageable>() as IDamageable;
+                if (dmg != null && dmg.IsAlive) dmg.TakeDamage(_mageBurstDamage, DamageElement.Aether);
+                VFXManager.Play(VFXType.Impact_Aether, e.transform.position + Vector3.up);
+            }
+            // Centre detonation so the AoE reads even when it whiffs the edges.
+            VFXManager.Play(VFXType.Impact_ExplosionAether, centre + Vector3.up * 0.5f);
+            FaceWorld(centre);
+            _abilityTimer = _abilityCooldown;
+        }
+
+        /// <summary>Smoothly turns the companion to face a world point (heal/cast tell).</summary>
+        private void FaceWorld(Vector3 worldPos)
+        {
+            Vector3 dir = worldPos - transform.position; dir.y = 0f;
+            if (dir.sqrMagnitude < 0.0004f) return;
+            transform.rotation = Quaternion.Slerp(
+                transform.rotation, Quaternion.LookRotation(dir, Vector3.up), Time.deltaTime * 8f);
         }
 
         /// <summary>
