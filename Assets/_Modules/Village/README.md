@@ -6,7 +6,7 @@ waves, buildings, outer world. References **Core only** — never HUD directly
 
 ## Root files
 
-`VillageController` (scene orchestrator), `EconomyService` (the Economy class — Grant is now the single faucet for pet harvest via MineNode and outpost trickle via Outpost; also exposes SecuredOutpostCount + TerritoryMultiplier for scaling), `CrystalEconomy`,
+`VillageController` (scene orchestrator), `EconomyService` (the Economy class — Grant is now the single faucet for pet harvest via MineNode and outpost trickle via Outpost; also exposes SecuredOutpostCount + TerritoryMultiplier for scaling; bridges Core `GameStateService.ResourcesChanged` → its own `OnChanged` so the HUD refreshes on GameState-backed crystal/food gains), `CrystalEconomy` (now a thin façade over `GameState.Resources.Crystals` — the legacy AetherCrystals pool was unified into the single Crystals wallet in save v18),
 `VisualFactory`, `VillageStrings`, `OnboardingIntegrator`, `WaveSystemBridgeBootstrap`,
 `EventSystemEnsurer`, `UIInputModuleFix`, `CompanionMeetingTrigger`.
 

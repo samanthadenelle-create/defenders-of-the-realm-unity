@@ -40,6 +40,45 @@ namespace DeNelle.Village
         /// <summary>Fired after any manual or auto equip change (shop/equip UI can subscribe to refresh lists or HUD).</summary>
         public event System.Action OnGearChanged;
 
+        // ── WO-295: Legendary "Aegis of Elarion" set bonus ───────────────────────
+        // The full Aegis set = an Aegis WEAPON (per-class) + the Aegis ARMOR, both
+        // carrying setId "aegis". A full set grants:
+        //   • the "Oathweld" ward — a portion of damage the hero takes is refunded
+        //     as HP to the Heart (mechanically ties survival to the win condition).
+        //     Driven by the lazily-attached AegisSetEffect component.
+        //   • a per-class weapon perk, expressed as an extra damage multiplier folded
+        //     into WeaponMult (so it flows through the existing damage chain without
+        //     forking combat), plus a small bonus armour defense.
+        // All gated on AegisSetEffect.SetActive; ordinary gear is untouched.
+
+        /// <summary>True when a full Aegis set (Aegis weapon + Aegis armor) is equipped.</summary>
+        public bool AegisSetActive =>
+            EquippedWeapon != null && EquippedWeapon.IsAegis &&
+            EquippedArmor  != null && EquippedArmor.IsAegis;
+
+        /// <summary>Fraction of damage taken that the Oathweld ward refunds to the Heart (0 when no set).</summary>
+        public float WardRefundFraction => AegisSetActive ? 0.25f : 0f;
+
+        // Per-class Aegis weapon perk as a flat extra outgoing-damage multiplier,
+        // folded into WeaponMult when the full set is active. Knight (shock combo) and
+        // Mage (cost-down → leans on raw power up close) get the larger bump; Archer
+        // (pierce/mark) and Cleric (heal-also-wards) a steadier one. Data-tunable later.
+        private static float AegisWeaponPerkMult(string job)
+        {
+            switch ((job ?? string.Empty).ToLowerInvariant())
+            {
+                case "knight": return 1.15f;  // Emberbrand — stored-aether shock finisher
+                case "mage":   return 1.15f;  // Aetherstaff — spells hit harder up close
+                case "ranger": return 1.10f;  // Heartwood Longbow — pierce + mark
+                case "cleric": return 1.10f;  // Hallowed Censer — heal-also-wards
+                default:       return 1.0f;
+            }
+        }
+
+        // Extra flat defense the Oathweld plating adds on top of the armor's own value
+        // when the full set is worn (clamped with the base in Refresh/Equip*).
+        private const float AegisSetDefenseBonus = 0.05f;
+
         private HeroAbilities   _abilities;
         private HeroProgression _progression;
 
@@ -74,10 +113,42 @@ namespace DeNelle.Village
             EquippedWeapon = GearCatalog.BestWeapon(job, level);
             EquippedArmor  = GearCatalog.BestArmor(job, level);
 
-            WeaponMult   = EquippedWeapon != null ? Mathf.Max(0.1f, EquippedWeapon.damageMult) : 1f;
-            ArmorDefense = EquippedArmor  != null ? Mathf.Clamp(EquippedArmor.defense, 0f, 0.9f) : 0f;
-
+            ApplyStats(job);
             OnGearChanged?.Invoke();
+        }
+
+        /// <summary>
+        /// Recomputes WeaponMult + ArmorDefense from the equipped pieces, folding in the
+        /// WO-295 Aegis full-set bonus (per-class weapon perk multiplier + bonus defense)
+        /// when both an Aegis weapon and Aegis armor are equipped. Also (de)activates the
+        /// Oathweld ward via the lazily-attached AegisSetEffect. Ordinary gear is unchanged.
+        /// </summary>
+        private void ApplyStats(string job)
+        {
+            float weapon = EquippedWeapon != null ? Mathf.Max(0.1f, EquippedWeapon.damageMult) : 1f;
+            float armor  = EquippedArmor  != null ? Mathf.Clamp(EquippedArmor.defense, 0f, 0.9f) : 0f;
+
+            if (AegisSetActive)
+            {
+                weapon *= AegisWeaponPerkMult(job);
+                armor   = Mathf.Clamp(armor + AegisSetDefenseBonus, 0f, 0.9f);
+            }
+
+            WeaponMult   = weapon;
+            ArmorDefense = armor;
+
+            // Activate / refresh the Oathweld ward driver (lazily attached, self-guards).
+            EnsureSetEffect().Refresh();
+        }
+
+        private AegisSetEffect _setEffect;
+
+        /// <summary>Lazily attaches the Oathweld-ward driver so every hero gets it with no builder change.</summary>
+        private AegisSetEffect EnsureSetEffect()
+        {
+            if (_setEffect == null)
+                _setEffect = GetComponent<AegisSetEffect>() ?? gameObject.AddComponent<AegisSetEffect>();
+            return _setEffect;
         }
 
         /// <summary>
@@ -90,7 +161,7 @@ namespace DeNelle.Village
             var w = GearCatalog.FindWeapon(id);
             if (w == null) return;
             EquippedWeapon = w;
-            WeaponMult = Mathf.Max(0.1f, w.damageMult);
+            ApplyStats(CurrentJob());
             OnGearChanged?.Invoke();
             TryReapplyVisuals();
         }
@@ -100,9 +171,16 @@ namespace DeNelle.Village
             var a = GearCatalog.FindArmor(id);
             if (a == null) return;
             EquippedArmor = a;
-            ArmorDefense = Mathf.Clamp(a.defense, 0f, 0.9f);
+            ApplyStats(CurrentJob());
             OnGearChanged?.Invoke();
             TryReapplyVisuals();
+        }
+
+        /// <summary>The hero's current class id (for the Aegis per-class weapon perk).</summary>
+        private string CurrentJob()
+        {
+            if (_abilities == null) _abilities = GetComponent<HeroAbilities>();
+            return _abilities != null ? _abilities.HeroClass : AbilityCatalog.DefaultClass;
         }
 
         private void TryReapplyVisuals()

@@ -4,6 +4,7 @@
     { "id": "armor_cloth",   "name": "Wanderer's Cloth", "icon": "🧥", "job": "any", "rarity": "common",   "defense": 0.04, "hpBonus": 10, "req": { "level": 1 } },
     { "id": "armor_leather", "name": "Tanned Leather",    "icon": "🧥", "job": "any", "rarity": "uncommon", "defense": 0.08, "hpBonus": 25, "req": { "level": 3 } },
     { "id": "armor_chain",   "name": "Chainmail Vest",    "icon": "🛡️", "job": "any", "rarity": "rare",     "defense": 0.14, "hpBonus": 45, "req": { "level": 6 } },
-    { "id": "armor_plate",   "name": "Elarion Plate",     "icon": "🛡️", "job": "any", "rarity": "epic",     "defense": 0.20, "hpBonus": 75, "req": { "level": 10 } }
+    { "id": "armor_plate",   "name": "Elarion Plate",     "icon": "🛡️", "job": "any", "rarity": "epic",     "defense": 0.20, "hpBonus": 75, "req": { "level": 10 } },
+    { "id": "aegis_plate",   "name": "Aegis of Elarion",  "icon": "🛡️", "job": "any", "rarity": "legendary", "defense": 0.28, "hpBonus": 100, "req": { "level": 10 }, "setId": "aegis", "saga": "The reforged Aegis — Borin's steel, Halvard's Oathweld plating, Pell's Heartwood core, Wren's Last Pressing. Worn with a full Aegis weapon, the Oathweld returns a portion of damage taken as a ward on the Heart." }
   ]
 }

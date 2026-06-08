@@ -53,11 +53,23 @@ namespace DeNelle.Village
         public float reach = 0f;
         public GearReq req;
 
+        // WO-295: Legendary "Aegis of Elarion" set. setId groups items into a set
+        // (the per-class Aegis weapons + the Aegis armor all carry "aegis"); the
+        // AegisSetEffect detects a full set by this key. Empty for ordinary gear.
+        public string setId;
+
+        // WO-295: saga flavour text (names the four crafters). Optional; null for v1 gear.
+        public string saga;
+
         // Shop integration (basic): resource costs. Populated from canonical JSON.
         public int buyWood;
         public int buyFood;
         public int buyIron;
         public int buyCrystals;
+
+        /// <summary>WO-295: part of the legendary Aegis of Elarion set.</summary>
+        public bool IsAegis =>
+            !string.IsNullOrEmpty(setId) && setId.Equals("aegis", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>A piece of armor: defense = fractional incoming-damage reduction (0.04 = 4%).</summary>
@@ -73,11 +85,22 @@ namespace DeNelle.Village
         public float hpBonus;     // carried for a later pass; v1 applies defense only
         public GearReq req;
 
+        // WO-295: set key (see WeaponDef.setId). The Aegis armor carries "aegis";
+        // AegisSetEffect needs BOTH an Aegis weapon and Aegis armor for the full set.
+        public string setId;
+
+        // WO-295: saga flavour text (names the four crafters). Optional; null for v1 gear.
+        public string saga;
+
         // Shop integration (basic): resource costs. Populated from canonical JSON.
         public int buyWood;
         public int buyFood;
         public int buyIron;
         public int buyCrystals;
+
+        /// <summary>WO-295: part of the legendary Aegis of Elarion set.</summary>
+        public bool IsAegis =>
+            !string.IsNullOrEmpty(setId) && setId.Equals("aegis", StringComparison.OrdinalIgnoreCase);
     }
 
     [Serializable] public sealed class WeaponCatalogData { public List<WeaponDef> weapons; }

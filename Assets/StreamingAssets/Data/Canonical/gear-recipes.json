@@ -36,9 +36,9 @@
       "saga": "Halvard's plate cored with Pell's heartwood."
     },
     {
-      "id": "aegis_blade_legendary",
+      "id": "aegis_emberbrand_legendary",
       "displayName": "Emberbrand, the Rekindled (Legendary)",
-      "outputGearId": "knight_dawn",
+      "outputGearId": "aegis_emberbrand",
       "outputKind": "weapon",
       "tier": "Legendary",
       "cost": { "wood": 0, "food": 0, "iron": 60, "crystals": 40 },
@@ -50,12 +50,63 @@
         { "id": "aether_catalyst", "count": 1 }
       ],
       "requiresQuestId": "forgemasters_act4",
-      "saga": "Borin, Halvard, Pell, and Wren — one workshop again — reforge the Aegis blade."
+      "saga": "Borin, Halvard, Pell, and Wren — one workshop again — reforge the Knight's greatblade."
+    },
+    {
+      "id": "aegis_longbow_legendary",
+      "displayName": "Heartwood Longbow (Legendary)",
+      "outputGearId": "aegis_heartwood_longbow",
+      "outputKind": "weapon",
+      "tier": "Legendary",
+      "cost": { "wood": 60, "food": 0, "iron": 20, "crystals": 40 },
+      "components": [
+        { "id": "reforged_steel", "count": 1 },
+        { "id": "oathweld_plating", "count": 1 },
+        { "id": "heartwood_bough", "count": 1 },
+        { "id": "last_pressing", "count": 1 },
+        { "id": "aether_catalyst", "count": 1 }
+      ],
+      "requiresQuestId": "forgemasters_act4",
+      "saga": "Pell asked the Tree for a living bough; the four reforged the Archer's longbow."
+    },
+    {
+      "id": "aegis_aetherstaff_legendary",
+      "displayName": "Aetherstaff (Legendary)",
+      "outputGearId": "aegis_aetherstaff",
+      "outputKind": "weapon",
+      "tier": "Legendary",
+      "cost": { "wood": 20, "food": 0, "iron": 20, "crystals": 60 },
+      "components": [
+        { "id": "reforged_steel", "count": 1 },
+        { "id": "oathweld_plating", "count": 1 },
+        { "id": "heartwood_bough", "count": 1 },
+        { "id": "last_pressing", "count": 1 },
+        { "id": "aether_catalyst", "count": 1 }
+      ],
+      "requiresQuestId": "forgemasters_act4",
+      "saga": "Wren's quench bonded the crystal head to Pell's Heartwood — the Mage's Aetherstaff reborn."
+    },
+    {
+      "id": "aegis_censer_legendary",
+      "displayName": "The Hallowed Censer (Legendary)",
+      "outputGearId": "aegis_hallowed_censer",
+      "outputKind": "weapon",
+      "tier": "Legendary",
+      "cost": { "wood": 20, "food": 0, "iron": 40, "crystals": 50 },
+      "components": [
+        { "id": "reforged_steel", "count": 1 },
+        { "id": "oathweld_plating", "count": 1 },
+        { "id": "heartwood_bough", "count": 1 },
+        { "id": "last_pressing", "count": 1 },
+        { "id": "aether_catalyst", "count": 1 }
+      ],
+      "requiresQuestId": "forgemasters_act4",
+      "saga": "Halvard's Oathweld bound to Pell's Heartwood — the Cleric's Hallowed Censer."
     },
     {
       "id": "aegis_plate_legendary",
-      "displayName": "Aegis Plate of Elarion (Legendary)",
-      "outputGearId": "armor_plate",
+      "displayName": "Aegis of Elarion (Legendary armor)",
+      "outputGearId": "aegis_plate",
       "outputKind": "armor",
       "tier": "Legendary",
       "cost": { "wood": 40, "food": 0, "iron": 80, "crystals": 40 },
@@ -67,7 +118,7 @@
         { "id": "aether_catalyst", "count": 1 }
       ],
       "requiresQuestId": "forgemasters_act4",
-      "saga": "The Oathweld set — a portion of damage taken returns as a ward on the Heart."
+      "saga": "The Oathweld set — worn with a full Aegis weapon, a portion of damage taken returns as a ward on the Heart."
     }
   ]
 }
