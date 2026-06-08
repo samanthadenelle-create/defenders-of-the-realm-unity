@@ -63,6 +63,18 @@ namespace DeNelle.HUD
         public static readonly Color CastleGold = ElarionUi.Gold;
         public static readonly Color CdShade    = new Color(0.0f, 0.0f, 0.0f, 0.62f);
 
+        // ── WO-339 · TOWN-HUD lookout status pips (safe→combat) + mini-map hero ─
+        /// <summary>Lookout GREEN — village safe, no threat.</summary>
+        public static readonly Color LookoutSafe     = new Color(0.36f, 0.74f, 0.42f, 1f);
+        /// <summary>Lookout YELLOW — scouts alert / mid-countdown.</summary>
+        public static readonly Color LookoutAlert    = new Color(0.92f, 0.78f, 0.28f, 1f);
+        /// <summary>Lookout RED — wave incoming in &lt;30s.</summary>
+        public static readonly Color LookoutIncoming = new Color(0.86f, 0.30f, 0.28f, 1f);
+        /// <summary>Lookout PURPLE — active combat.</summary>
+        public static readonly Color LookoutCombat   = ElarionUi.Aether;
+        /// <summary>Mini-map hero dot.</summary>
+        public static readonly Color HeroDot         = ElarionUi.Gilt;
+
         // ── Resource tints (small icon dot per currency) ──────────────────────
         public static readonly Color Wood    = new Color(0.62f, 0.45f, 0.27f, 1f);
         public static readonly Color Iron    = new Color(0.70f, 0.72f, 0.78f, 1f);

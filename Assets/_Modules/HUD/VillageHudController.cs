@@ -140,6 +140,24 @@ namespace DeNelle.HUD
         private CanvasGroup _battleHudGroup;
         public CanvasGroup BattleHudGroup => _battleHudGroup;
 
+        // ── WO-339: TOWN-HUD group ────────────────────────────────────────────
+        // The idle-village TOWN HUD (wave-management cluster top-left, resource
+        // badges top-centre, lightweight 2D mini-map top-right, town-metrics
+        // bottom strip) lives under its OWN canvas + CanvasGroup so the new
+        // HudModeManager can cross-fade TOWN ⇄ BATTLE ⇄ hidden WITHOUT disturbing
+        // the BATTLE-HUD group (abilities/vitals) or the always-on base chrome.
+        // Exposed read-only for the mode manager (same contract as BattleHudGroup).
+        private Canvas _townCanvas;
+        private CanvasGroup _townHudGroup;
+        public CanvasGroup TownHudGroup => _townHudGroup;
+
+        /// <summary>
+        /// WO-339: the live village/world context (Village2 active + hero inside the
+        /// town ring). Shared with BattleHudVisibilityManager so the TOWN↔hidden mode
+        /// reuses ONE context evaluation instead of duplicating the radial/scene test.
+        /// </summary>
+        public bool InVillage => _inVillage || _villageOnlyForced;
+
         // ── Responsive layout cluster roots ──────────────────────────────────
         private RectTransform _resourceStrip;
         private RectTransform _waveReadout;
@@ -155,6 +173,54 @@ namespace DeNelle.HUD
 
         private bool _combatHudVisible = true;
         private bool _built;
+
+        // ── WO-339: TOWN-HUD widgets ──────────────────────────────────────────
+        // Top-left WAVE MANAGEMENT cluster.
+        private RectTransform _townWaveCluster;
+        private TextMeshProUGUI _townTimerText;      // MM:SS to next wave (colour by urgency)
+        private TextMeshProUGUI _townWaveProgText;   // "Wave N / M"
+        private Image _townWaveProgFill;             // progress bar
+        private Image _townLookoutBadge;             // GREEN/YELLOW/RED/PURPLE status pip
+        private TextMeshProUGUI _townLookoutText;
+        private float _townTimerSeconds = -1f;       // last countdown (negative = none)
+        private int _townWaveCur = 1, _townWaveMax = 0;
+        private int _lookoutStatus;                  // 0 safe,1 alert,2 incoming,3 combat
+        private bool _townWaveActive;                // wave currently in combat
+
+        // Top-centre RESOURCE badges (icon + number) with +/- flash + low-warn outline.
+        private RectTransform _townResStrip;
+        private TextMeshProUGUI[] _townResText;      // 0 Gold,1 Wood,2 Crystal,3 Iron
+        private Image[] _townResBadge;               // badge bg (for low-warn red outline / flash)
+        private Image[] _townResOutline;             // red low-warning outline overlay
+        private int[] _townResLast = { -1, -1, -1, -1 };
+        private float[] _townResFlash = { 0f, 0f, 0f, 0f };
+        private bool[] _townResFlashUp = { false, false, false, false };
+        private const int TownResLowThreshold = 50;
+
+        // Top-right LIGHTWEIGHT 2D mini-map (icon markers, no RenderTexture).
+        private RectTransform _townMiniMap;
+        private RectTransform _townMiniMapInner;     // square draw area markers live under
+        private readonly System.Collections.Generic.List<MiniMapMarker> _miniMarkers
+            = new System.Collections.Generic.List<MiniMapMarker>();
+        private const float MiniMapWorldRadius = 120f; // world half-extent mapped to map edge
+
+        // Bottom TOWN METRICS strip (3-col: Heart HP %, Towers built/max, Population).
+        private RectTransform _townMetrics;
+        private TextMeshProUGUI _townHeartText;
+        private TextMeshProUGUI _townTowerText;
+        private TextMeshProUGUI _townPopText;
+        private float _townHeartPct = 1f;
+        private int _townTowersBuilt, _townTowersMax, _townPopulation;
+
+        // A single mini-map marker (POI icon positioned by world→map projection).
+        private sealed class MiniMapMarker
+        {
+            public RectTransform Rect;
+            public Image Icon;
+            public Transform WorldTarget; // optional live world anchor
+            public Vector3 WorldPos;      // static fallback world position
+            public bool IsHero;
+        }
 
         // ── Context (village vs open world) ──────────────────────────────────
         private bool _inVillage = true;             // last evaluated context
@@ -210,6 +276,89 @@ namespace DeNelle.HUD
                 SetCombatHudVisible(!_combatHudVisible);
 
             AnimateMomentumBadge();
+            UpdateTownHud();
+        }
+
+        // ── WO-339: per-frame TOWN-HUD animation (timer urgency, res flash, map). ─
+        private void UpdateTownHud()
+        {
+            float dt = Time.unscaledDeltaTime;
+
+            // Countdown timer text + urgency colour (only when a wave is pending).
+            if (_townTimerText != null)
+            {
+                if (_townWaveActive)
+                {
+                    _townTimerText.text = "WAVE IN PROGRESS";
+                    _townTimerText.color = HudTheme.LookoutCombat;
+                }
+                else if (_townTimerSeconds >= 0f)
+                {
+                    int total = Mathf.Max(0, Mathf.CeilToInt(_townTimerSeconds));
+                    _townTimerText.text = string.Format("Next wave {0:00}:{1:00}", total / 60, total % 60);
+                    // urgency: <10s red, <30s amber, else calm cream.
+                    _townTimerText.color = _townTimerSeconds < 10f ? HudTheme.LookoutIncoming
+                        : _townTimerSeconds < 30f ? HudTheme.LookoutAlert : HudTheme.Text;
+                }
+            }
+
+            // Resource +/- flash fade.
+            if (_townResBadge != null)
+            {
+                for (int i = 0; i < _townResBadge.Length; i++)
+                {
+                    if (_townResFlash[i] <= 0f || _townResBadge[i] == null) continue;
+                    _townResFlash[i] = Mathf.Max(0f, _townResFlash[i] - dt * 2.2f);
+                    Color flash = _townResFlashUp[i] ? HudTheme.LookoutSafe : HudTheme.HpRed;
+                    _townResBadge[i].color = Color.Lerp(HudTheme.Glass, flash, _townResFlash[i] * 0.6f);
+                }
+            }
+
+            // Mini-map marker projection (world → map). Hero marker tracks the hero.
+            ProjectMiniMap();
+
+            // WO-339: the TOWN HUD supersedes the legacy top resource strip + castle
+            // banner whenever it's visible (avoids a double resource bar / HP banner).
+            // When the town group fades out (BATTLE / exploration) the legacy strip +
+            // banner return so combat still shows resources + Heart HP as before.
+            bool townShown = _townHudGroup != null && _townHudGroup.alpha > 0.5f;
+            SetActiveSafe(_resourceStrip, !townShown);
+            // Castle banner is ALSO village-context gated (ApplyContext); only override
+            // it OFF while the town HUD owns the readout, never force it on outside.
+            if (townShown) SetActiveSafe(_castleBanner, false);
+            else if (_inVillage || _villageOnlyForced) SetActiveSafe(_castleBanner, true);
+        }
+
+        private void ProjectMiniMap()
+        {
+            if (_townMiniMapInner == null || _miniMarkers.Count == 0) return;
+            ResolveHeroIfNeeded();
+            float half = _townMiniMapInner.rect.width * 0.5f;
+            if (half <= 0f) half = 60f;
+            for (int i = 0; i < _miniMarkers.Count; i++)
+            {
+                var m = _miniMarkers[i];
+                if (m == null || m.Rect == null) continue;
+                Vector3 world = m.IsHero
+                    ? (_hero != null ? _hero.position : m.WorldPos)
+                    : (m.WorldTarget != null ? m.WorldTarget.position : m.WorldPos);
+                // flat XZ projection centred on the Heart (world origin).
+                float nx = Mathf.Clamp(world.x / MiniMapWorldRadius, -1f, 1f);
+                float nz = Mathf.Clamp(world.z / MiniMapWorldRadius, -1f, 1f);
+                m.Rect.anchoredPosition = new Vector2(nx * half, nz * half);
+            }
+        }
+
+        // Pan the main camera toward a world point (best-effort, asmdef-safe).
+        private void PanCameraToward(Vector3 worldPoint)
+        {
+            var cam = Camera.main;
+            if (cam == null) return;
+            // Slide the camera rig parent (or the camera) horizontally over the point,
+            // keeping its current height + pitch. Best-effort: no Village dependency.
+            Transform rig = cam.transform.parent != null ? cam.transform.parent : cam.transform;
+            Vector3 p = rig.position;
+            rig.position = new Vector3(worldPoint.x, p.y, worldPoint.z - 6f);
         }
 
         private void AnimateMomentumBadge()
@@ -278,6 +427,30 @@ namespace DeNelle.HUD
             battleGo.AddComponent<GraphicRaycaster>();
             _battleHudGroup = battleGo.AddComponent<CanvasGroup>();
             var battleRoot = battleRt;
+
+            // WO-339: dedicated TOWN-HUD canvas (its own CanvasGroup, sortingOrder
+            // ~140 — under the battle HUD so an active wave's combat chrome always
+            // wins, over the base chrome). The HudModeManager cross-fades this group
+            // against the battle group; the always-on base chrome stays untouched.
+            var townGo = new GameObject("TownHUD");
+            townGo.transform.SetParent(_safeArea, false);
+            var townRt = townGo.AddComponent<RectTransform>();
+            townRt.anchorMin = Vector2.zero;
+            townRt.anchorMax = Vector2.one;
+            townRt.offsetMin = Vector2.zero;
+            townRt.offsetMax = Vector2.zero;
+            _townCanvas = townGo.AddComponent<Canvas>();
+            _townCanvas.overrideSorting = true;
+            _townCanvas.sortingOrder = 140;
+            townGo.AddComponent<GraphicRaycaster>();
+            _townHudGroup = townGo.AddComponent<CanvasGroup>();
+            var townRoot = townRt;
+
+            // TOWN HUD — idle-village clusters (faded in/out by the HudModeManager).
+            BuildTownWaveCluster(townRoot);
+            BuildTownResourceBadges(townRoot);
+            BuildTownMiniMap(townRoot);
+            BuildTownMetrics(townRoot);
 
             // IDLE / village UI — base canvas (NEVER hidden by the battle-HUD gate).
             BuildResourceStrip(_safeArea);
@@ -672,6 +845,161 @@ namespace DeNelle.HUD
         }
 
         // =====================================================================
+        //  WO-339 · TOWN HUD builders (idle-village mode)
+        // =====================================================================
+
+        // ── Top-LEFT · WAVE MANAGEMENT — countdown + progress + lookout badge. ─
+        private void BuildTownWaveCluster(Transform parent)
+        {
+            _townWaveCluster = NewRect("TownWave", parent, new Vector2(0f, 1f), new Vector2(0f, 1f));
+            AnchorTopLeft(_townWaveCluster, x: 12f, y: 12f, width: 300f, height: 118f);
+            HudTheme.StylePanel(_townWaveCluster.gameObject, HudTheme.Glass);
+            HudTheme.AddRim(_townWaveCluster.gameObject, HudTheme.AccentSoft);
+
+            // Lookout status badge (pip + label) — top row.
+            var badgeRect = NewRect("Lookout", _townWaveCluster, new Vector2(0.04f, 0.66f), new Vector2(0.30f, 0.94f));
+            _townLookoutBadge = badgeRect.gameObject.AddComponent<Image>();
+            _townLookoutBadge.sprite = HudTheme.RoundedFrame;
+            _townLookoutBadge.type = HudTheme.RoundedFrame != null ? Image.Type.Sliced : Image.Type.Simple;
+            _townLookoutBadge.color = HudTheme.LookoutSafe;
+            _townLookoutBadge.raycastTarget = false;
+            _townLookoutText = AddText(badgeRect, "SAFE", 12, HudTheme.Ink, TextAlignmentOptions.Center);
+            _townLookoutText.fontStyle = FontStyles.Bold;
+
+            // Countdown timer (MM:SS) — top row, large.
+            var timerRect = NewRect("Timer", _townWaveCluster, new Vector2(0.32f, 0.62f), new Vector2(0.98f, 0.97f));
+            _townTimerText = AddText(timerRect, "Next wave —:—", HudTheme.FontHead, HudTheme.Text, TextAlignmentOptions.MidlineRight);
+            _townTimerText.fontStyle = FontStyles.Bold;
+            _townTimerText.outlineColor = new Color32(0, 0, 0, 160);
+            _townTimerText.outlineWidth = 0.12f;
+
+            // Wave progress label + bar — bottom rows.
+            var progLabel = NewRect("ProgLabel", _townWaveCluster, new Vector2(0.04f, 0.34f), new Vector2(0.96f, 0.60f));
+            _townWaveProgText = AddText(progLabel, "Wave 1", 14, HudTheme.TextDim, TextAlignmentOptions.Left);
+            _townWaveProgText.fontStyle = FontStyles.Bold;
+
+            var progTrack = NewRect("ProgTrack", _townWaveCluster, new Vector2(0.04f, 0.10f), new Vector2(0.96f, 0.30f));
+            HudTheme.StyleWell(progTrack.gameObject);
+            var progFill = NewRect("ProgFill", progTrack, Vector2.zero, Vector2.one);
+            progFill.offsetMin = new Vector2(1.5f, 1.5f); progFill.offsetMax = new Vector2(-1.5f, -1.5f);
+            _townWaveProgFill = progFill.gameObject.AddComponent<Image>();
+            _townWaveProgFill.color = HudTheme.Gold;
+            _townWaveProgFill.sprite = HudTheme.RoundedFrame;
+            _townWaveProgFill.type = HudTheme.RoundedFrame != null ? Image.Type.Filled : Image.Type.Filled;
+            _townWaveProgFill.fillMethod = Image.FillMethod.Horizontal;
+            _townWaveProgFill.fillOrigin = 0;
+            _townWaveProgFill.fillAmount = 0f;
+            _townWaveProgFill.raycastTarget = false;
+        }
+
+        // ── Top-CENTRE · RESOURCE badges (icon + number, distinct colours). ────
+        private void BuildTownResourceBadges(Transform parent)
+        {
+            _townResStrip = NewRect("TownResources", parent, new Vector2(0.30f, 0.955f), new Vector2(0.70f, 1f));
+
+            string[] names  = { "Gold", "Wood", "Crystal", "Iron" };
+            string[] glyphs = { "●", "▲", "❖", "◆" };
+            Color[] tints   = { HudTheme.GoldRes, HudTheme.Wood, HudTheme.Crystal, HudTheme.Iron };
+            _townResText    = new TextMeshProUGUI[4];
+            _townResBadge   = new Image[4];
+            _townResOutline = new Image[4];
+
+            float w = 1f / 4f;
+            for (int i = 0; i < 4; i++)
+            {
+                var cell = NewRect("Res_" + names[i], _townResStrip, new Vector2(i * w + 0.01f, 0.08f), new Vector2((i + 1) * w - 0.01f, 0.92f));
+                _townResBadge[i] = HudTheme.StylePanel(cell.gameObject, HudTheme.Glass);
+
+                // red low-warn outline overlay (hidden until value < threshold).
+                var outline = NewRect("Low", cell, Vector2.zero, Vector2.one);
+                _townResOutline[i] = outline.gameObject.AddComponent<Image>();
+                _townResOutline[i].sprite = HudTheme.RoundedFrame;
+                _townResOutline[i].type = HudTheme.RoundedFrame != null ? Image.Type.Sliced : Image.Type.Simple;
+                _townResOutline[i].color = new Color(HudTheme.HpRed.r, HudTheme.HpRed.g, HudTheme.HpRed.b, 0f);
+                _townResOutline[i].raycastTarget = false;
+
+                var dot = NewRect("Dot", cell, new Vector2(0.06f, 0.28f), new Vector2(0.30f, 0.72f));
+                var dimg = dot.gameObject.AddComponent<Image>();
+                dimg.color = tints[i];
+                dimg.sprite = HudTheme.Disc;
+                dimg.raycastTarget = false;
+                AddText(dot, glyphs[i], 14, HudTheme.Ink, TextAlignmentOptions.Center);
+
+                var amt = NewRect("Amt", cell, new Vector2(0.32f, 0f), new Vector2(0.97f, 1f));
+                _townResText[i] = AddText(amt, "0", 20, HudTheme.Text, TextAlignmentOptions.Left);
+                _townResText[i].fontStyle = FontStyles.Bold;
+            }
+        }
+
+        // ── Top-RIGHT · LIGHTWEIGHT 2D mini-map (icon markers, NOT a RenderTexture).
+        // Markers are positioned by a flat world→map projection (origin = Heart at
+        // 0,0,0). A RenderTexture/second-camera upgrade is FUTURE — too heavy/risky
+        // for WebGL. Tapping a marker pans the main camera toward its world point.
+        private void BuildTownMiniMap(Transform parent)
+        {
+            _townMiniMap = NewRect("TownMiniMap", parent, new Vector2(1f, 1f), new Vector2(1f, 1f));
+            _townMiniMap.anchorMin = new Vector2(1f, 1f);
+            _townMiniMap.anchorMax = new Vector2(1f, 1f);
+            _townMiniMap.pivot = new Vector2(1f, 1f);
+            _townMiniMap.anchoredPosition = new Vector2(-12f, -12f);
+            _townMiniMap.sizeDelta = new Vector2(140f, 140f);
+            HudTheme.StylePanel(_townMiniMap.gameObject, HudTheme.GlassDeep);
+            HudTheme.AddRim(_townMiniMap.gameObject, HudTheme.AccentSoft);
+
+            _townMiniMapInner = NewRect("Inner", _townMiniMap, new Vector2(0.06f, 0.06f), new Vector2(0.94f, 0.94f));
+
+            // Hero dot — always centred (the map is hero-relative? No: world-anchored
+            // at Heart origin; the hero marker tracks the hero's world position).
+            AddMiniMapMarker("Hero", Vector3.zero, HudTheme.HeroDot, "✦", isHero: true);
+        }
+
+        /// <summary>Add a POI marker icon to the mini-map (projected world→map each frame).</summary>
+        private MiniMapMarker AddMiniMapMarker(string label, Vector3 worldPos, Color tint, string glyph, bool isHero)
+        {
+            if (_townMiniMapInner == null) return null;
+            var rect = NewRect("M_" + label, _townMiniMapInner, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+            rect.sizeDelta = isHero ? new Vector2(14f, 14f) : new Vector2(12f, 12f);
+            var img = rect.gameObject.AddComponent<Image>();
+            img.color = tint;
+            img.sprite = HudTheme.Disc;
+            AddText(rect, glyph, isHero ? 12 : 10, HudTheme.Ink, TextAlignmentOptions.Center);
+
+            var marker = new MiniMapMarker { Rect = rect, Icon = img, WorldPos = worldPos, IsHero = isHero };
+
+            // Tap-a-marker → pan the main camera toward its world point (best-effort).
+            var btn = rect.gameObject.AddComponent<Button>();
+            btn.targetGraphic = img;
+            btn.onClick.AddListener(() => PanCameraToward(marker.WorldTarget != null ? marker.WorldTarget.position : marker.WorldPos));
+
+            _miniMarkers.Add(marker);
+            return marker;
+        }
+
+        // ── Bottom · TOWN METRICS (3-col: Heart HP %, Towers built/max, Population).
+        private void BuildTownMetrics(Transform parent)
+        {
+            _townMetrics = NewRect("TownMetrics", parent, new Vector2(0.30f, 0f), new Vector2(0.70f, 0.05f));
+            HudTheme.StylePanel(_townMetrics.gameObject, HudTheme.Glass);
+            HudTheme.AddRim(_townMetrics.gameObject, HudTheme.AccentSoft);
+
+            _townHeartText = BuildMetricCol(_townMetrics, 0f, 1f / 3f, "♥ Heart", "100%", HudTheme.HpRed);
+            _townTowerText = BuildMetricCol(_townMetrics, 1f / 3f, 2f / 3f, "⛨ Towers", "0/0", HudTheme.Gold);
+            _townPopText   = BuildMetricCol(_townMetrics, 2f / 3f, 1f, "☖ Pop", "0", HudTheme.Crystal);
+        }
+
+        private TextMeshProUGUI BuildMetricCol(Transform parent, float x0, float x1, string label, string value, Color tint)
+        {
+            var col = NewRect("Col_" + label, parent, new Vector2(x0, 0f), new Vector2(x1, 1f));
+            var lab = NewRect("Lab", col, new Vector2(0.04f, 0.05f), new Vector2(0.50f, 0.95f));
+            var lt = AddText(lab, label, 13, new Color(tint.r, tint.g, tint.b, 0.9f), TextAlignmentOptions.MidlineRight);
+            lt.fontStyle = FontStyles.Bold;
+            var valRect = NewRect("Val", col, new Vector2(0.52f, 0.05f), new Vector2(0.97f, 0.95f));
+            var vt = AddText(valRect, value, 16, HudTheme.Text, TextAlignmentOptions.MidlineLeft);
+            vt.fontStyle = FontStyles.Bold;
+            return vt;
+        }
+
+        // =====================================================================
         //  SAFE AREA — inset the whole HUD inside the device safe area.
         // =====================================================================
         private void ApplySafeArea()
@@ -722,6 +1050,14 @@ namespace DeNelle.HUD
                 // Build entry lifts to the upper-right, clear of the skill cluster.
                 SetAnchors(_buildBtn,       new Vector2(0.84f, 0.255f), new Vector2(0.99f, 0.33f));
                 SetAnchors(_startWaveBtn,   new Vector2(0.40f, 0.83f),  new Vector2(0.60f, 0.88f));
+
+                // WO-339 TOWN HUD portrait reflow: wave/timer cluster top-LEFT
+                // narrows; resources STACK on the left under it; mini-map shrinks
+                // to ~100×100 top-right; metrics bottom span wider as a 2-col feel.
+                AnchorTopLeft(_townWaveCluster, x: 10f, y: 10f, width: 260f, height: 110f);
+                SetAnchors(_townResStrip, new Vector2(0.0f, 0.83f), new Vector2(0.46f, 0.875f));
+                if (_townMiniMap != null) { _townMiniMap.anchoredPosition = new Vector2(-10f, -10f); _townMiniMap.sizeDelta = new Vector2(100f, 100f); }
+                SetAnchors(_townMetrics, new Vector2(0.06f, 0f), new Vector2(0.94f, 0.05f));
             }
             else
             {
@@ -736,6 +1072,13 @@ namespace DeNelle.HUD
                 SetAnchors(_vitalsCluster,  new Vector2(0.02f, 0.30f),  new Vector2(0.30f, 0.37f));
                 SetAnchors(_buildBtn,       new Vector2(0.88f, 0.36f),  new Vector2(0.995f, 0.45f));
                 SetAnchors(_startWaveBtn,   new Vector2(0.44f, 0.79f),  new Vector2(0.56f, 0.845f));
+
+                // WO-339 TOWN HUD landscape: wide top spread — wave cluster top-left,
+                // resource badges top-centre, full-size 140 mini-map top-right.
+                AnchorTopLeft(_townWaveCluster, x: 12f, y: 12f, width: 300f, height: 118f);
+                SetAnchors(_townResStrip, new Vector2(0.32f, 0.955f), new Vector2(0.68f, 1f));
+                if (_townMiniMap != null) { _townMiniMap.anchoredPosition = new Vector2(-12f, -12f); _townMiniMap.sizeDelta = new Vector2(140f, 140f); }
+                SetAnchors(_townMetrics, new Vector2(0.34f, 0f), new Vector2(0.66f, 0.05f));
             }
         }
 
@@ -837,6 +1180,9 @@ namespace DeNelle.HUD
         {
             _lastWaveNumber = waveNumber;
             if (_waveText != null) _waveText.text = "WAVE " + waveNumber;
+            // WO-339: feed the TOWN wave-progress readout too.
+            _townWaveCur = waveNumber;
+            RefreshTownWaveProgress();
         }
 
         public void SetCountdown(float secondsRemaining)
@@ -845,11 +1191,19 @@ namespace DeNelle.HUD
             {
                 _lastWaveState = "Prepare — " + secondsRemaining.ToString("0.0") + "s";
                 if (_waveStateText != null) _waveStateText.text = _lastWaveState;
+                // WO-339: live town countdown timer + auto lookout escalation.
+                _townTimerSeconds = secondsRemaining;
+                _townWaveActive = false;
+                if (_lookoutStatus != 3)
+                    ApplyLookout(secondsRemaining < 30f ? 2 : 1);
             }
             else
             {
                 _lastWaveState = "Defend";
                 if (_waveStateText != null) _waveStateText.text = _lastWaveState;
+                _townTimerSeconds = 0f;
+                _townWaveActive = true;
+                ApplyLookout(3); // combat
             }
         }
 
@@ -860,21 +1214,62 @@ namespace DeNelle.HUD
             if (_castleFill != null) _castleFill.fillAmount = pct;
             if (_castleText != null) _castleText.text = "Heart of Elarion — " + Mathf.RoundToInt(pct * 100f) + "%";
             if (_castleFill != null) _castleFill.color = Color.Lerp(HudTheme.HpRed, HudTheme.CastleGold, Mathf.Clamp01(pct / 0.5f));
+            // WO-339: town metric (Heart HP %).
+            _townHeartPct = pct;
+            if (_townHeartText != null)
+            {
+                _townHeartText.text = Mathf.RoundToInt(pct * 100f) + "%";
+                _townHeartText.color = Color.Lerp(HudTheme.HpRed, HudTheme.Text, Mathf.Clamp01(pct / 0.5f));
+            }
         }
 
         public void SetCrystals(int amount)
         {
             if (_resourceTexts != null && _resourceTexts.Length >= 4 && _resourceTexts[2] != null)
                 _resourceTexts[2].text = amount.ToString();
+            // WO-339 town crystal badge (index 2).
+            SetTownResource(2, amount);
         }
 
         public void SetResources(int wood, int iron, int food, int gems)
         {
-            if (_resourceTexts == null || _resourceTexts.Length < 4) return;
-            _resourceTexts[0].text = wood.ToString();
-            _resourceTexts[1].text = iron.ToString();
-            _resourceTexts[2].text = gems.ToString();
-            _resourceTexts[3].text = food.ToString();
+            if (_resourceTexts != null && _resourceTexts.Length >= 4)
+            {
+                _resourceTexts[0].text = wood.ToString();
+                _resourceTexts[1].text = iron.ToString();
+                _resourceTexts[2].text = gems.ToString();
+                _resourceTexts[3].text = food.ToString();
+            }
+            // WO-339 TOWN badges — order: 0 Gold(food), 1 Wood, 2 Crystal(gems), 3 Iron.
+            // (the legacy battle strip has no Gold slot; the town strip surfaces it as
+            //  the existing "food" wallet bucket which is the soft currency here.)
+            SetTownResource(0, food);
+            SetTownResource(1, wood);
+            SetTownResource(2, gems);
+            SetTownResource(3, iron);
+        }
+
+        // WO-339: update one town resource badge — number, +/- flash, low-warn outline.
+        private void SetTownResource(int idx, int value)
+        {
+            if (_townResText == null || idx < 0 || idx >= _townResText.Length || _townResText[idx] == null) return;
+            _townResText[idx].text = value.ToString();
+
+            int prev = _townResLast[idx];
+            if (prev >= 0 && value != prev)
+            {
+                _townResFlash[idx] = 1f;
+                _townResFlashUp[idx] = value > prev;
+            }
+            _townResLast[idx] = value;
+
+            // red outline when this resource runs low (< 50).
+            if (_townResOutline != null && _townResOutline[idx] != null)
+            {
+                var c = HudTheme.HpRed;
+                c.a = value < TownResLowThreshold ? 0.9f : 0f;
+                _townResOutline[idx].color = c;
+            }
         }
 
         public void SetAttackDirections(bool north, bool east, bool south, bool west) { /* compass is the separate CompassHud component */ }
@@ -888,6 +1283,8 @@ namespace DeNelle.HUD
                 _waveStateText.text = _lastWaveState;
                 _waveStateText.color = imminent ? HudTheme.HpRed : HudTheme.Gold;
             }
+            // WO-339: escalate the town lookout pip (unless already in combat).
+            if (_lookoutStatus != 3) ApplyLookout(imminent ? 2 : 0);
         }
 
         public void ShowWaveClearBanner(int waveNumber, int enemiesDefeated, string flavourLine)
@@ -898,12 +1295,19 @@ namespace DeNelle.HUD
                 _waveStateText.text = enemiesDefeated > 0 ? enemiesDefeated + " slain" : "Cleared";
                 _waveStateText.color = HudTheme.Gold;
             }
+            // WO-339: wave cleared → exit combat lookout.
+            _townWaveActive = false;
+            ApplyLookout(0);
         }
 
         public void HideWaveClearBanner()
         {
             if (_waveText != null) _waveText.text = "WAVE " + _lastWaveNumber;
             if (_waveStateText != null) { _waveStateText.text = _lastWaveState; _waveStateText.color = HudTheme.Gold; }
+            // WO-339: wave done → lookout returns to SAFE, timer awaits next countdown.
+            _townWaveActive = false;
+            _townTimerSeconds = -1f;
+            ApplyLookout(0);
         }
 
         public void ShowRepairPrompt(string wallLabel, float damagePercent)
@@ -967,6 +1371,110 @@ namespace DeNelle.HUD
                 _skillBar.gameObject.SetActive(visible);
             if (_vitalsCluster != null && _vitalsCluster.gameObject.activeSelf != visible)
                 _vitalsCluster.gameObject.SetActive(visible);
+        }
+
+        // =====================================================================
+        //  WO-339 · TOWN-HUD data setters (by-name reflected extras, NOT on
+        //  IVillageHud — same decoupling contract as SetStartWaveAvailable). The
+        //  Village-side bridges may call these to enrich the town readouts; all
+        //  are harmless no-ops if never wired. Core/Village asmdefs unchanged.
+        // =====================================================================
+
+        /// <summary>Town wave progress — "Wave N / M" label + bar fill. By name.</summary>
+        public void SetWaveProgress(int current, int total)
+        {
+            _townWaveCur = current;
+            _townWaveMax = total;
+            RefreshTownWaveProgress();
+        }
+
+        private void RefreshTownWaveProgress()
+        {
+            if (_townWaveProgText != null)
+                _townWaveProgText.text = _townWaveMax > 0
+                    ? "Wave " + _townWaveCur + " / " + _townWaveMax
+                    : "Wave " + _townWaveCur;
+            if (_townWaveProgFill != null)
+                _townWaveProgFill.fillAmount = _townWaveMax > 0
+                    ? Mathf.Clamp01((float)_townWaveCur / _townWaveMax) : 0f;
+        }
+
+        /// <summary>
+        /// Lookout status pip: 0 SAFE(green) · 1 ALERT(yellow) · 2 INCOMING(red,
+        /// &lt;30s) · 3 COMBAT(purple). Auto-driven by SetCountdown/SetWaveImminent;
+        /// a bridge can also push it explicitly by name. (3 latches until cleared.)
+        /// </summary>
+        public void SetLookoutStatus(int status) => ApplyLookout(status);
+
+        private void ApplyLookout(int status)
+        {
+            _lookoutStatus = status;
+            if (_townLookoutBadge == null) return;
+            string label; Color tint;
+            switch (status)
+            {
+                case 3: label = "COMBAT";   tint = HudTheme.LookoutCombat;   break;
+                case 2: label = "INCOMING"; tint = HudTheme.LookoutIncoming; break;
+                case 1: label = "ALERT";    tint = HudTheme.LookoutAlert;    break;
+                default: label = "SAFE";    tint = HudTheme.LookoutSafe;     break;
+            }
+            _townLookoutBadge.color = tint;
+            if (_townLookoutText != null) _townLookoutText.text = label;
+        }
+
+        /// <summary>
+        /// Town metrics strip: Heart HP % (0..1, or -1 to keep the SetHeartHp value),
+        /// towers built/max, population. By name; any field harmless if unwired.
+        /// </summary>
+        public void SetTownMetrics(float heartPct01, int towersBuilt, int towersMax, int population)
+        {
+            if (heartPct01 >= 0f)
+            {
+                _townHeartPct = Mathf.Clamp01(heartPct01);
+                if (_townHeartText != null) _townHeartText.text = Mathf.RoundToInt(_townHeartPct * 100f) + "%";
+            }
+            _townTowersBuilt = towersBuilt;
+            _townTowersMax = towersMax;
+            _townPopulation = population;
+            if (_townTowerText != null) _townTowerText.text = towersBuilt + "/" + Mathf.Max(towersBuilt, towersMax);
+            if (_townPopText != null) _townPopText.text = population.ToString();
+        }
+
+        /// <summary>
+        /// Add a static mini-map POI marker by world position (shop/forge/warehouse,
+        /// resource node, enemy gate, …). kind picks the glyph+tint. By name; the
+        /// hero dot is added automatically. Call <see cref="ClearMinimapPois"/> first
+        /// to rebuild. A RenderTexture mini-map is a FUTURE upgrade (this is the
+        /// lightweight 2D-icon version, WebGL-safe).
+        /// </summary>
+        public void SetMinimapPoi(string kind, float worldX, float worldZ)
+        {
+            string k = string.IsNullOrEmpty(kind) ? "poi" : kind.ToLowerInvariant();
+            string glyph; Color tint;
+            switch (k)
+            {
+                case "shop":      glyph = "$"; tint = HudTheme.GoldRes; break;
+                case "forge":     glyph = "⚒"; tint = HudTheme.Iron;    break;
+                case "warehouse": glyph = "▦"; tint = HudTheme.Wood;    break;
+                case "tree":
+                case "resource":  glyph = "▲"; tint = HudTheme.LookoutSafe; break;
+                case "gate":
+                case "enemy":     glyph = "✖"; tint = HudTheme.LookoutIncoming; break;
+                default:          glyph = "•"; tint = HudTheme.TextDim; break;
+            }
+            AddMiniMapMarker(k + "_" + _miniMarkers.Count, new Vector3(worldX, 0f, worldZ), tint, glyph, isHero: false);
+        }
+
+        /// <summary>Clear all mini-map markers EXCEPT the hero dot (rebuild support).</summary>
+        public void ClearMinimapPois()
+        {
+            for (int i = _miniMarkers.Count - 1; i >= 0; i--)
+            {
+                var m = _miniMarkers[i];
+                if (m == null || m.IsHero) continue;
+                if (m.Rect != null) Destroy(m.Rect.gameObject);
+                _miniMarkers.RemoveAt(i);
+            }
         }
 
         public void SetComboCount(int count)

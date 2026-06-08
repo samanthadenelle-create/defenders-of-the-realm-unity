@@ -1,23 +1,27 @@
 // =============================================================================
-// BattleHudVisibilityManager — WO-337
+// BattleHudVisibilityManager — WO-337 + WO-339 (now the single HUD-MODE manager)
 // -----------------------------------------------------------------------------
-// SINGLE RESPONSIBILITY: show the BATTLE HUD (abilities, hero vitals, wave /
-// enemy-count, combat status) ONLY during ACTIVE COMBAT, and hide it when idle
-// (village plaza, open-world exploration, title, hero-select, any non-combat).
+// SINGLE RESPONSIBILITY: drive the CONTEXT-AWARE HUD MODE — cross-fading three
+// states across the TOWN-HUD and BATTLE-HUD CanvasGroups:
 //
-//   SHOW when:
-//     • A village wave is ACTIVE  — WaveManager.Phase == Countdown | Active
-//       (the wave loop's "in combat" window: prepare countdown → fighting).
-//     • An arena/dungeon battle is live — a DeNelle.BattleATB.BattleController
-//       exists and is enabled in the scene.
-//   HIDE otherwise (idle village, exploration, title, hero-select, …).
+//   • BATTLE  — a wave is ACTIVE (WaveManager.Phase == Countdown|Active) OR an
+//               arena/dungeon BattleController is live.  →  BATTLE HUD in,
+//               TOWN HUD out.
+//   • TOWN    — idle in the village (VillageHudController.InVillage, NO active
+//               combat).                                  →  TOWN HUD in,
+//               BATTLE HUD out.
+//   • HIDDEN  — exploration (OuterWorld / outside the town ring, no combat) or
+//               any non-combat non-village screen.        →  BOTH faded out
+//               (minimal HUD — base chrome + compass only).
 //
-// The IDLE / village UI (Build button, Castle/Heart HP, resource strip) lives on
-// VillageHudController's BASE canvas and is NOT touched here — only the separate
-// BATTLE-HUD CanvasGroup (VillageHudController.BattleHudGroup, its own canvas at
-// sortingOrder ~150) is faded. So: idle village = build / resources / castle-HP
-// visible while abilities / vitals / wave-info are hidden; wave active = the
-// battle HUD fades IN.
+// The two HUD groups (VillageHudController.TownHudGroup @ sortingOrder 140,
+// .BattleHudGroup @ 150) are CROSS-FADED here (0.6s). The always-on base chrome
+// (build button, party frames) lives on VillageHudController's base canvas and is
+// NOT touched — exactly as before. So nothing on the base canvas regresses.
+//
+// SHARED CONTEXT (WO-339): village-vs-world is read from
+// VillageHudController.InVillage so we DON'T duplicate the radial/scene test the
+// controller already runs — one source of truth for "in the village".
 //
 // ASMDEF DISCIPLINE (HUD → Core only): WaveManager lives in DeNelle.Village and
 // BattleController in DeNelle.BattleATB — neither is referenced by DeNelle.HUD.
@@ -51,8 +55,11 @@ namespace DeNelle.HUD
         }
 
         // ── Tunables ──────────────────────────────────────────────────────────
-        private const float FadeSeconds = 0.3f;          // smooth show/hide fade
+        private const float FadeSeconds = 0.6f;          // WO-339: TOWN↔BATTLE cross-fade
         private const float ReResolveInterval = 0.5f;    // re-find systems / re-eval (cheap)
+
+        // ── HUD modes (WO-339) ──────────────────────────────────────────────────
+        private enum HudMode { Hidden, Town, Battle }
 
         // ── Reflection handles (resolved lazily; HUD → Core asmdef preserved) ──
         private System.Type _waveManagerType;
@@ -65,12 +72,14 @@ namespace DeNelle.HUD
         private bool _waveEventActive;         // set by OnWaveStarted/Countdown, cleared by Cleared/Defeat
         private bool _waveEventsBound;
 
-        // ── Target group ──────────────────────────────────────────────────────
+        // ── Target groups ─────────────────────────────────────────────────────
         private VillageHudController _hud;
         private CanvasGroup _battleGroup;
+        private CanvasGroup _townGroup;        // WO-339
 
         // ── Fade state ────────────────────────────────────────────────────────
-        private float _targetAlpha;            // 0 hidden, 1 shown
+        private float _battleTargetAlpha;      // 0 hidden, 1 shown
+        private float _townTargetAlpha;        // WO-339
         private float _pollTimer;
 
         private void Awake()
@@ -107,7 +116,8 @@ namespace DeNelle.HUD
             // Snap to the correct state on boot (no fade on first frame).
             ResolveTargets();
             RefreshVisibility();
-            if (_battleGroup != null) _battleGroup.alpha = _targetAlpha;
+            if (_battleGroup != null) _battleGroup.alpha = _battleTargetAlpha;
+            if (_townGroup != null) _townGroup.alpha = _townTargetAlpha;
         }
 
         private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
@@ -115,6 +125,7 @@ namespace DeNelle.HUD
             // New scene → the HUD / WaveManager / BattleController may have changed.
             _hud = null;
             _battleGroup = null;
+            _townGroup = null;
             _waveManager = null;
             _waveEventsBound = false;
             _waveEventActive = false;
@@ -132,13 +143,19 @@ namespace DeNelle.HUD
                 RefreshVisibility();      // re-evaluate (covers polled WaveManager.Phase)
             }
 
-            // Smooth 0.3s fade of the battle-HUD CanvasGroup (alpha + raycasts).
-            if (_battleGroup == null) return;
+            // WO-339: cross-fade BOTH HUD groups (0.6s) toward their mode targets.
             float step = FadeSeconds > 0f ? Time.unscaledDeltaTime / FadeSeconds : 1f;
-            _battleGroup.alpha = Mathf.MoveTowards(_battleGroup.alpha, _targetAlpha, step);
-            bool interactive = _targetAlpha > 0.5f;
-            _battleGroup.blocksRaycasts = interactive;
-            _battleGroup.interactable = interactive;
+            FadeGroup(_battleGroup, _battleTargetAlpha, step);
+            FadeGroup(_townGroup, _townTargetAlpha, step);
+        }
+
+        private static void FadeGroup(CanvasGroup g, float target, float step)
+        {
+            if (g == null) return;
+            g.alpha = Mathf.MoveTowards(g.alpha, target, step);
+            bool interactive = target > 0.5f;
+            g.blocksRaycasts = interactive;
+            g.interactable = interactive;
         }
 
         // ─────────────────────────────────────────────────────────────────────
@@ -152,10 +169,12 @@ namespace DeNelle.HUD
                 {
                     _hud = FindObjectOfType<VillageHudController>();
                     _battleGroup = _hud != null ? _hud.BattleHudGroup : null;
+                    _townGroup = _hud != null ? _hud.TownHudGroup : null;
                 }
-                else if (_battleGroup == null)
+                else
                 {
-                    _battleGroup = _hud.BattleHudGroup;
+                    if (_battleGroup == null) _battleGroup = _hud.BattleHudGroup;
+                    if (_townGroup == null) _townGroup = _hud.TownHudGroup;
                 }
 
                 ResolveWaveManager();
@@ -245,13 +264,25 @@ namespace DeNelle.HUD
         {
             try
             {
-                bool inCombat = IsWaveActive() || IsInBattle();
-                _targetAlpha = inCombat ? 1f : 0f;
+                HudMode mode = EvaluateMode();
+                // BATTLE → battle group in, town out. TOWN → town in, battle out.
+                // HIDDEN (exploration / non-village idle) → both out (minimal HUD).
+                _battleTargetAlpha = mode == HudMode.Battle ? 1f : 0f;
+                _townTargetAlpha   = mode == HudMode.Town   ? 1f : 0f;
             }
             catch (System.Exception e)
             {
                 Debug.LogWarning("[BattleHudVisibilityManager] RefreshVisibility failed: " + e.Message);
             }
+        }
+
+        // WO-339: combat wins; else village idle = TOWN; else (exploration) HIDDEN.
+        // Village context is SHARED from VillageHudController.InVillage (one test).
+        private HudMode EvaluateMode()
+        {
+            if (IsWaveActive() || IsInBattle()) return HudMode.Battle;
+            bool inVillage = _hud != null && _hud.InVillage;
+            return inVillage ? HudMode.Town : HudMode.Hidden;
         }
 
         /// <summary>Village wave defense in progress (prepare countdown or fighting).</summary>
