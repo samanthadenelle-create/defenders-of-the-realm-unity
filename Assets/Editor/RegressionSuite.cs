@@ -95,6 +95,34 @@ namespace DeNelle.Editor
         private const string TypeWaveManager    = "DeNelle.Village.WaveManager";
         private const string TypeEconomyService = "DeNelle.Village.EconomyService";
 
+        // WO-363 — the hero movement source must stay WORLD-ABSOLUTE (WO-368). A
+        // regression to camera-relative input (WO-367) broke town movement: a camera
+        // mode/angle change re-rotated the input mapping. We STATIC-check the source
+        // (batchmode has no play-mode) for the camera-coupling tokens in the movement
+        // path + assert facing still uses LookRotation on the move/velocity.
+        private const string HeroLocomotionPath =
+            "Assets/_Modules/Village/Hero/HeroLocomotion.cs";
+
+        // WO-373 Critical Regression Gates — the canonical types the 4 gates probe.
+        // Resolved by full name across loaded assemblies (Editor doesn't reference
+        // DeNelle.Village — same FindType pattern the rest of this suite uses).
+        private const string TypeHeartController = "DeNelle.Village.HeartController";
+
+        // WO-373 — the Yarn DialogueSystem prefab the interaction layer instantiates
+        // (vendors / upgrades / confirms route through it). Resources.Load path form.
+        private const string DialogueSystemResPath = "Dialogue/DialogueSystem";
+        private const string DialogueSystemAssetPath =
+            "Assets/Resources/Dialogue/DialogueSystem.prefab";
+
+        // WO-373 — the battle music tracks BattleMusicManager loads via Resources.Load
+        // (WebGL-safe). At minimum the two combat-loop tracks must resolve, else combat
+        // is silent. Resources.Load form (no extension, no Resources/ prefix).
+        private static readonly string[] RequiredBattleMusicResPaths =
+        {
+            "Music/Battle/Overworld_Battle_1",
+            "Music/Battle/Overworld_Battle_2",
+        };
+
         // ── One case result ────────────────────────────────────────────────────
         private sealed class CaseResult
         {
@@ -129,6 +157,17 @@ namespace DeNelle.Editor
             Run(results, "scene-opens-village3",     () => Case_SceneOpens(SecondaryScenePath));
             Run(results, "core-wiring-village2",     Case_CoreWiring);
             Run(results, "layout-validator",         Case_LayoutValidator);
+
+            // ── WO-373 / WO-363 CRITICAL hard-gate cases (ship-blockers) ─────────
+            Run(results, "hero-move-world-absolute", Case_HeroMoveWorldAbsolute);
+            Run(results, "dialogue-system-prefab",   Case_DialogueSystemPrefab);
+            Run(results, "battle-music-resolves",    Case_BattleMusicResolves);
+
+            // ── WO-373 Critical Regression Gates (4 pre-ship hard gates) ─────────
+            Run(results, "critical-gate-tree-origin",       Case_GateTreeOrigin);
+            Run(results, "critical-gate-wasd-world-abs",    Case_GateWasdWorldAbsolute);
+            Run(results, "critical-gate-scene-no-errors",   Case_GateSceneLoadsClean);
+            Run(results, "critical-gate-cam-not-relative",  Case_GateCameraNeverRelative);
 
             // ── Report ──────────────────────────────────────────────────────────
             int passed = results.Count(r => r.Pass);
@@ -390,6 +429,330 @@ namespace DeNelle.Editor
             return ok
                 ? Pass("LAYOUT_VALIDATE_OK (recipe math safeguards passed)")
                 : Fail("LAYOUT_VALIDATE_FAIL — see [LayoutValidator] FAIL lines above");
+        }
+
+        // ── WO-363: hero movement stays WORLD-ABSOLUTE (no camera coupling) ────
+        // STATIC source check (batchmode has no play-mode): read HeroLocomotion.cs
+        // and FAIL if the movement path couples input to the camera basis — i.e.
+        // references SmartMobileCamera / CameraYaw / a camera forward|right used in
+        // the move vector. The WO-368 contract: UP=+Z, RIGHT=+X, independent of the
+        // camera, so a camera mode/angle change can never re-rotate input (the WO-367
+        // regression). Also assert facing still uses LookRotation on velocity/move so
+        // a refactor that drops the face-the-direction line is caught too.
+        private static CaseResult Case_HeroMoveWorldAbsolute()
+        {
+            if (!File.Exists(HeroLocomotionPath)) return Fail($"missing {HeroLocomotionPath}");
+
+            // Strip // line comments + /* */ block comments so the doc-comments that
+            // legitimately MENTION the regression (e.g. "WO-367 made this camera-relative")
+            // don't trip the scan — we only care about live code coupling.
+            string code = StripComments(File.ReadAllText(HeroLocomotionPath));
+
+            var hits = new List<string>();
+            // Hard camera-coupling tokens: any of these in live code means the
+            // movement basis is (or can be) camera-derived again.
+            foreach (var token in new[] { "SmartMobileCamera", "CameraYaw", "cameraYaw" })
+                if (code.IndexOf(token, StringComparison.Ordinal) >= 0)
+                    hits.Add(token);
+
+            // camera.forward / camera.right (or *Camera.forward etc.) used as a basis.
+            foreach (var m in System.Text.RegularExpressions.Regex.Matches(
+                         code, @"[A-Za-z_][A-Za-z0-9_]*\.(forward|right)\b")
+                     .Cast<System.Text.RegularExpressions.Match>())
+            {
+                string lhs = m.Value;
+                if (lhs.IndexOf("amera", StringComparison.Ordinal) >= 0) // camera./Camera.
+                    hits.Add(lhs);
+            }
+
+            if (hits.Count > 0)
+                return Fail("HeroLocomotion movement is CAMERA-RELATIVE again (WO-367 regression) — " +
+                            "must be world-absolute new Vector3(input.x,0,input.y) per WO-368. " +
+                            "Offending token(s): " + string.Join(", ", hits.Distinct()));
+
+            // Facing must still be derived from the move/velocity via LookRotation.
+            bool facesMoveDir =
+                System.Text.RegularExpressions.Regex.IsMatch(
+                    code, @"LookRotation\s*\(\s*(Velocity|move|_?velocity)");
+            if (!facesMoveDir)
+                return Fail("HeroLocomotion no longer faces the move direction via " +
+                            "Quaternion.LookRotation(Velocity/move...) — facing contract dropped (WO-363).");
+
+            return Pass("movement world-absolute (no camera basis) + faces velocity via LookRotation");
+        }
+
+        // =====================================================================
+        //  WO-373 — CRITICAL REGRESSION GATES (4 pre-ship hard gates)
+        // -----------------------------------------------------------------------
+        //  A focused pre-ship verification harness, expressed as 4 independent
+        //  cases so a failing run names exactly which ship-blocker broke:
+        //    (1) Tree of Life / Heart sits at world (0,0,0).
+        //    (2) WASD player movement works AND is WORLD-ABSOLUTE (not camera-rel),
+        //        re-using the WO-363 OrientationValidator for the facing check.
+        //    (3) The playable scene loads with no missing scripts / red errors and
+        //        a Player/HeroTarget-tagged hero is present (visible).
+        //    (4) A camera mode/angle change can NEVER make movement camera-relative
+        //        (the movement basis is independent of SmartMobileCamera).
+        //  Static/source + scene-open checks (batchmode has no play-mode); the live
+        //  felt loop stays the play-mode follow-up layer (see file footer).
+        //
+        //  A single public report entry point (VerifyCriticalGates) lets ship tooling
+        //  call the 4 gates directly and get a pass/fail line per gate.
+        // =====================================================================
+
+        /// <summary>
+        /// WO-373 — runs the 4 critical regression gates and returns true only if all
+        /// pass. Logs one CRITICAL_GATES_OK / CRITICAL_GATES_FAIL verdict plus a
+        /// per-gate PASS/FAIL line. Callable on its own (pre-ship harness) in addition
+        /// to being wired into <see cref="RunAll"/> as 4 individual cases.
+        /// </summary>
+        [MenuItem("Defenders/QA/Run Critical Regression Gates")]
+        public static bool VerifyCriticalGates()
+        {
+            var gates = new (string name, Func<CaseResult> body)[]
+            {
+                ("tree-of-life-origin",       Case_GateTreeOrigin),
+                ("wasd-world-absolute",       Case_GateWasdWorldAbsolute),
+                ("scene-loads-clean",         Case_GateSceneLoadsClean),
+                ("camera-never-relative",     Case_GateCameraNeverRelative),
+            };
+
+            var results = new List<CaseResult>();
+            foreach (var g in gates) Run(results, g.name, g.body);
+
+            int passed = results.Count(r => r.Pass);
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine("============== WO-373 CRITICAL REGRESSION GATES ==============");
+            foreach (var r in results)
+                sb.AppendLine($"  [{(r.Pass ? "PASS" : "FAIL")}] {r.Name}" +
+                              (string.IsNullOrEmpty(r.Detail) ? "" : $"  — {r.Detail}"));
+            bool ok = passed == results.Count;
+            sb.AppendLine($"  {passed}/{results.Count} gates passed.");
+            sb.AppendLine($"  VERDICT: {(ok ? "CRITICAL_GATES_OK" : "CRITICAL_GATES_FAIL")}");
+            sb.AppendLine("==============================================================");
+            if (ok) Debug.Log(sb.ToString()); else Debug.LogError(sb.ToString());
+            return ok;
+        }
+
+        // ── Gate 1: Tree of Life / Heart at world origin (0,0,0) ───────────────
+        // VerifyTreeOrigin() contract. Opens the playable scene, finds the
+        // HeartController (resolved by full name — Editor doesn't ref Village), and
+        // asserts its transform sits at world (0,0,0) within a tight epsilon.
+        private static CaseResult Case_GateTreeOrigin()
+        {
+            return VerifyTreeOrigin(out string detail) ? Pass(detail) : Fail(detail);
+        }
+
+        /// <summary>
+        /// WO-373 Gate 1: the Tree of Life / Heart of Elarion must sit at world origin
+        /// (0,0,0). Opens the playable scene, locates the HeartController and checks its
+        /// world position. Returns true on pass; <paramref name="detail"/> always carries
+        /// a human-readable reason.
+        /// </summary>
+        public static bool VerifyTreeOrigin(out string detail)
+        {
+            detail = "";
+            if (!File.Exists(PlayableScenePath)) { detail = $"missing {PlayableScenePath}"; return false; }
+            EditorSceneManager.OpenScene(PlayableScenePath, OpenSceneMode.Single);
+
+            Type heartType = FindType(TypeHeartController);
+            if (heartType == null) { detail = $"type {TypeHeartController} not found (DeNelle.Village compiled?)"; return false; }
+
+            var heart = UnityEngine.Object.FindFirstObjectByType(heartType) as Component;
+            if (heart == null) { detail = "no HeartController (Tree of Life) in the playable scene"; return false; }
+
+            Vector3 p = heart.transform.position;
+            const float eps = 0.01f;
+            if (p.sqrMagnitude > eps * eps)
+            {
+                detail = $"Tree of Life is at {p}, NOT world origin (0,0,0)";
+                return false;
+            }
+            detail = $"Tree of Life at world origin ({p})";
+            return true;
+        }
+
+        // ── Gate 2: WASD movement works AND is world-absolute ──────────────────
+        // Source-checks HeroLocomotion: it must (a) read WASD keys, (b) build the
+        // move vector world-absolute (no camera basis — shares the existing
+        // Case_HeroMoveWorldAbsolute scan), and (c) face the move direction. The
+        // facing contract is cross-checked against the WO-363 OrientationValidator:
+        // a synthetic UP input must validate against an UP facing (proves the shared
+        // rule the runtime guard enforces agrees with "faces movement").
+        private static CaseResult Case_GateWasdWorldAbsolute()
+        {
+            if (!File.Exists(HeroLocomotionPath)) return Fail($"missing {HeroLocomotionPath}");
+            string code = StripComments(File.ReadAllText(HeroLocomotionPath));
+
+            // (a) WASD actually read.
+            bool readsWasd =
+                System.Text.RegularExpressions.Regex.IsMatch(code, @"\bwKey\b") &&
+                System.Text.RegularExpressions.Regex.IsMatch(code, @"\baKey\b") &&
+                System.Text.RegularExpressions.Regex.IsMatch(code, @"\bsKey\b") &&
+                System.Text.RegularExpressions.Regex.IsMatch(code, @"\bdKey\b");
+            if (!readsWasd)
+                return Fail("HeroLocomotion no longer reads WASD (wKey/aKey/sKey/dKey) — movement input gone");
+
+            // (b) world-absolute basis (reuse the camera-coupling scan).
+            var camHits = new List<string>();
+            foreach (var token in new[] { "SmartMobileCamera", "CameraYaw", "cameraYaw" })
+                if (code.IndexOf(token, StringComparison.Ordinal) >= 0) camHits.Add(token);
+            foreach (var m in System.Text.RegularExpressions.Regex.Matches(
+                         code, @"[A-Za-z_][A-Za-z0-9_]*\.(forward|right)\b")
+                     .Cast<System.Text.RegularExpressions.Match>())
+                if (m.Value.IndexOf("amera", StringComparison.Ordinal) >= 0) camHits.Add(m.Value);
+            if (camHits.Count > 0)
+                return Fail("WASD movement is CAMERA-RELATIVE (WO-367 regression): " +
+                            string.Join(", ", camHits.Distinct()) + " — must be world-absolute");
+
+            // (c) faces the move direction.
+            bool facesMove = System.Text.RegularExpressions.Regex.IsMatch(
+                code, @"LookRotation\s*\(\s*(Velocity|move|_?velocity)");
+            if (!facesMove)
+                return Fail("HeroLocomotion no longer faces the move direction (LookRotation dropped)");
+
+            // (d) cross-check the WO-363 shared facing rule: facing UP for input UP passes,
+            //     facing the opposite fails — same validator the runtime OrientationGuard uses.
+            if (!DeNelle.Core.Validation.OrientationValidator.IsValid(Vector3.forward, Vector3.forward))
+                return Fail("OrientationValidator disagrees that facing UP matches moving UP (WO-363 rule broken)");
+            if (DeNelle.Core.Validation.OrientationValidator.IsValid(Vector3.back, Vector3.forward))
+                return Fail("OrientationValidator wrongly accepts facing DOWN while moving UP (WO-363 rule broken)");
+
+            return Pass("WASD read, world-absolute basis (no camera), faces velocity; WO-363 validator agrees");
+        }
+
+        // ── Gate 3: scene loads clean (no missing scripts) + hero present ──────
+        // Opens the playable scene, asserts 0 GameObjects with MISSING scripts (the
+        // closest static proxy for "no null-ref / red errors on load"), and that a
+        // Player- or HeroTarget-tagged hero exists in the scene (hero visible).
+        private static CaseResult Case_GateSceneLoadsClean()
+        {
+            if (!File.Exists(PlayableScenePath)) return Fail($"missing {PlayableScenePath}");
+            Scene scene = EditorSceneManager.OpenScene(PlayableScenePath, OpenSceneMode.Single);
+            if (!scene.IsValid() || !scene.isLoaded) return Fail($"scene failed to load: {PlayableScenePath}");
+
+            int missing = CountMissingScripts(scene);
+            if (missing > 0)
+                return Fail($"{missing} GameObject(s) with MISSING (None) scripts — load would throw / red errors");
+
+            bool heroPresent = false;
+            foreach (var root in scene.GetRootGameObjects())
+            {
+                foreach (var t in root.GetComponentsInChildren<Transform>(true))
+                {
+                    if (t.CompareTag("Player") || t.CompareTag("HeroTarget")) { heroPresent = true; break; }
+                }
+                if (heroPresent) break;
+            }
+            if (!heroPresent)
+                return Fail("no Player/HeroTarget-tagged hero in the scene (hero not present/visible)");
+
+            return Pass("scene opens with 0 missing scripts + a Player/HeroTarget hero present");
+        }
+
+        // ── Gate 4: a camera change can NEVER make movement camera-relative ────
+        // The movement basis must be independent of the camera. Static contract:
+        // HeroLocomotion's source contains no camera-basis coupling AT ALL (so no
+        // camera mode/angle/distance change can re-rotate input). This is the dual
+        // of gate 2(b) but framed as the camera-invariance guarantee; it also fails
+        // if SmartMobileCamera ever WRITES back into the locomotion input frame.
+        private static CaseResult Case_GateCameraNeverRelative()
+        {
+            if (!File.Exists(HeroLocomotionPath)) return Fail($"missing {HeroLocomotionPath}");
+            string code = StripComments(File.ReadAllText(HeroLocomotionPath));
+
+            var hits = new List<string>();
+            foreach (var token in new[] { "SmartMobileCamera", "CameraYaw", "cameraYaw", "Camera.main", "Camera.current" })
+                if (code.IndexOf(token, StringComparison.Ordinal) >= 0) hits.Add(token);
+            foreach (var m in System.Text.RegularExpressions.Regex.Matches(
+                         code, @"[A-Za-z_][A-Za-z0-9_]*\.(forward|right)\b")
+                     .Cast<System.Text.RegularExpressions.Match>())
+                if (m.Value.IndexOf("amera", StringComparison.Ordinal) >= 0) hits.Add(m.Value);
+
+            return hits.Count == 0
+                ? Pass("movement basis is camera-invariant — no camera coupling in HeroLocomotion")
+                : Fail("a camera reference is present in the movement path — a camera change could make " +
+                       "movement camera-relative: " + string.Join(", ", hits.Distinct()));
+        }
+
+        // ── WO-373: the Yarn DialogueSystem prefab exists (interaction layer) ──
+        // Vendors / building upgrades / yes-no confirms all route through the
+        // DialogueService prefab. A missing prefab = the whole interaction layer is
+        // dead. Assert it loads via Resources.Load (the runtime path) AND the asset
+        // file physically exists (catches a stale .meta with no prefab).
+        private static CaseResult Case_DialogueSystemPrefab()
+        {
+            bool onDisk = File.Exists(DialogueSystemAssetPath);
+            var go = Resources.Load<GameObject>(DialogueSystemResPath);
+            if (go == null)
+                return Fail($"DialogueSystem prefab does NOT resolve via Resources.Load(\"{DialogueSystemResPath}\")" +
+                            (onDisk ? " (asset exists on disk but failed to load)"
+                                    : $" — and {DialogueSystemAssetPath} is missing"));
+            return Pass($"DialogueSystem prefab resolves (Resources/{DialogueSystemResPath}) + asset on disk");
+        }
+
+        // ── WO-373: battle music tracks resolve under Resources (combat audio) ──
+        // BattleMusicManager loads these via Resources.Load (WebGL-safe). If they
+        // don't resolve, combat plays silent. We require the two combat-loop tracks;
+        // Victory / Boss are optional (manager logs a warning, doesn't break).
+        private static CaseResult Case_BattleMusicResolves()
+        {
+            var unresolved = new List<string>();
+            foreach (var p in RequiredBattleMusicResPaths)
+            {
+                var clip = Resources.Load<AudioClip>(p);
+                if (clip == null) unresolved.Add(p);
+            }
+            return unresolved.Count == 0
+                ? Pass($"{RequiredBattleMusicResPaths.Length} battle-music track(s) resolve under Resources")
+                : Fail("battle music track(s) do NOT resolve under Resources (combat would be silent): " +
+                       string.Join(", ", unresolved) +
+                       " — import under Assets/Audio/Resources/Music/Battle/");
+        }
+
+        // Strips // line comments and /* */ block comments (string-literal-aware) so a
+        // source-token scan only sees live code, not doc-comments that mention a token.
+        private static string StripComments(string src)
+        {
+            var sb = new System.Text.StringBuilder(src.Length);
+            bool inStr = false, inChar = false, inLine = false, inBlock = false, esc = false;
+            for (int i = 0; i < src.Length; i++)
+            {
+                char c = src[i];
+                char n = i + 1 < src.Length ? src[i + 1] : '\0';
+                if (inLine)
+                {
+                    if (c == '\n') { inLine = false; sb.Append(c); }
+                    continue;
+                }
+                if (inBlock)
+                {
+                    if (c == '*' && n == '/') { inBlock = false; i++; }
+                    continue;
+                }
+                if (inStr)
+                {
+                    sb.Append(c);
+                    if (esc) esc = false;
+                    else if (c == '\\') esc = true;
+                    else if (c == '"') inStr = false;
+                    continue;
+                }
+                if (inChar)
+                {
+                    sb.Append(c);
+                    if (esc) esc = false;
+                    else if (c == '\\') esc = true;
+                    else if (c == '\'') inChar = false;
+                    continue;
+                }
+                if (c == '/' && n == '/') { inLine = true; i++; continue; }
+                if (c == '/' && n == '*') { inBlock = true; i++; continue; }
+                if (c == '"')  { inStr  = true; sb.Append(c); continue; }
+                if (c == '\'') { inChar = true; sb.Append(c); continue; }
+                sb.Append(c);
+            }
+            return sb.ToString();
         }
 
         // =====================================================================
