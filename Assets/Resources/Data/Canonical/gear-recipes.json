@@ -1,0 +1,73 @@
+{
+  "_note": "WO-293 tiered gear + legendary reforge recipes (Forgemasters' Saga). outputGearId references an existing id in weapons.json / armor.json; tier scales its base stat via GearTierTable.StatMultiplier (Common 1.0 / Fine 1.25 / Master 1.6 / Legendary 2.2). cost spends the unified wallet (EconomyService.TrySpend -> GameState for crystals/food). components are inventory-keyed ids consumed on craft (e.g. the four legendary components). requiresQuestId locks a recipe until QuestService.IsCompleted (legendary gates on Act IV: forgemasters_act4). Dual-copied: StreamingAssets source + Resources copy (Resources WINS at load in WebGL via CanonicalJson). Keep both in sync.",
+  "version": 1,
+  "recipes": [
+    {
+      "id": "knight_iron_fine",
+      "displayName": "Iron Longsword (Fine)",
+      "outputGearId": "knight_iron",
+      "outputKind": "weapon",
+      "tier": "Fine",
+      "cost": { "wood": 0, "food": 0, "iron": 25, "crystals": 0 },
+      "components": [],
+      "requiresQuestId": "",
+      "saga": "Honest steel from Borin's relit forge."
+    },
+    {
+      "id": "knight_oath_master",
+      "displayName": "Oathkeeper (Master)",
+      "outputGearId": "knight_oath",
+      "outputKind": "weapon",
+      "tier": "Master",
+      "cost": { "wood": 0, "food": 0, "iron": 40, "crystals": 8 },
+      "components": [ { "id": "quench_oil", "count": 1 } ],
+      "requiresQuestId": "",
+      "saga": "Borin's steel quenched in Wren's Last Pressing."
+    },
+    {
+      "id": "armor_plate_master",
+      "displayName": "Elarion Plate (Master)",
+      "outputGearId": "armor_plate",
+      "outputKind": "armor",
+      "tier": "Master",
+      "cost": { "wood": 30, "food": 0, "iron": 50, "crystals": 8 },
+      "components": [ { "id": "heartwood_core", "count": 1 } ],
+      "requiresQuestId": "",
+      "saga": "Halvard's plate cored with Pell's heartwood."
+    },
+    {
+      "id": "aegis_blade_legendary",
+      "displayName": "Emberbrand, the Rekindled (Legendary)",
+      "outputGearId": "knight_dawn",
+      "outputKind": "weapon",
+      "tier": "Legendary",
+      "cost": { "wood": 0, "food": 0, "iron": 60, "crystals": 40 },
+      "components": [
+        { "id": "reforged_steel", "count": 1 },
+        { "id": "oathweld_plating", "count": 1 },
+        { "id": "heartwood_bough", "count": 1 },
+        { "id": "last_pressing", "count": 1 },
+        { "id": "aether_catalyst", "count": 1 }
+      ],
+      "requiresQuestId": "forgemasters_act4",
+      "saga": "Borin, Halvard, Pell, and Wren — one workshop again — reforge the Aegis blade."
+    },
+    {
+      "id": "aegis_plate_legendary",
+      "displayName": "Aegis Plate of Elarion (Legendary)",
+      "outputGearId": "armor_plate",
+      "outputKind": "armor",
+      "tier": "Legendary",
+      "cost": { "wood": 40, "food": 0, "iron": 80, "crystals": 40 },
+      "components": [
+        { "id": "reforged_steel", "count": 1 },
+        { "id": "oathweld_plating", "count": 1 },
+        { "id": "heartwood_bough", "count": 1 },
+        { "id": "last_pressing", "count": 1 },
+        { "id": "aether_catalyst", "count": 1 }
+      ],
+      "requiresQuestId": "forgemasters_act4",
+      "saga": "The Oathweld set — a portion of damage taken returns as a ward on the Heart."
+    }
+  ]
+}
