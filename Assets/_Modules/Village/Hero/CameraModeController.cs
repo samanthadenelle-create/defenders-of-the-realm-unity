@@ -10,8 +10,8 @@
 //   • TOWN / economy  (bird's-eye): trigger = in the village AND no active wave
 //       AND not in build mode. A high, wide overview LOCKED to the town centre
 //       (the Heart at world origin) — NOT hero-relative — so the player sees the
-//       whole village footprint and pans around it. (~50° pitch down, ~30m out,
-//       ~22m high, 60° FOV.)
+//       whole village footprint and pans around it. (45° pitch down, ~12m out
+//       (WO-367, ~65% closer), height derived from pitch+distance, 60° FOV.)
 //   • BATTLE / EXPLORATION (cinematic 3rd-person): trigger = a wave is active OR
 //       an ATB battle is live OR the hero is OUT in the open world (beyond the
 //       town ring). This mode is the EXISTING, owner-validated SmartMobileCamera
@@ -81,11 +81,11 @@ namespace DeNelle.Village
         [Tooltip("Pitch (deg, down) of the town bird's-eye. 45–60 per WO-338. WO-368: 45° (was 50°).")]
         [SerializeField, Range(40f, 65f)] private float _townPitch = 45f;
 
-        [Tooltip("Planar distance (m) from the town centre. 25–35 per WO-338.")]
-        [SerializeField, Min(10f)] private float _townDistance = 30f;
+        [Tooltip("Straight-line distance (m) to the town look-at. WO-367: 12 (~65% closer than 30) for a more intimate town read. Derives planar+height at _townPitch.")]
+        [SerializeField, Min(6f)] private float _townDistance = 12f;
 
-        [Tooltip("Camera height (m) above the town centre. 20–25 per WO-338.")]
-        [SerializeField, Min(5f)] private float _townHeight = 22f;
+        [Tooltip("Camera height (m) above the town centre. Kept proportional to _townDistance for serialized consistency; the seat DERIVES height from pitch+distance. WO-367: 9 (was 22).")]
+        [SerializeField, Min(3f)] private float _townHeight = 9f;
 
         [Tooltip("Field of view (deg) in the town overview. 55–65 per WO-338 (wider than battle).")]
         [SerializeField, Range(50f, 70f)] private float _townFov = 60f;
@@ -100,9 +100,9 @@ namespace DeNelle.Village
         [Tooltip("Desktop zoom step (m of distance) per scroll notch.")]
         [SerializeField, Min(0f)] private float _townZoomStep = 4f;
 
-        [Tooltip("Min / max town distance (zoom clamp).")]
-        [SerializeField] private float _townDistanceMin = 18f;
-        [SerializeField] private float _townDistanceMax = 45f;
+        [Tooltip("Min / max town distance (zoom clamp). WO-367: tightened to 8–18 to match the closer base (was 18–45).")]
+        [SerializeField] private float _townDistanceMin = 8f;
+        [SerializeField] private float _townDistanceMax = 18f;
 
         [Header("Context — exploration ring (geometric, matches GromOuterWorldReturnJoin)")]
         [Tooltip("Hero within this radius of the town centre counts as 'in town'. Beyond it = exploration.")]

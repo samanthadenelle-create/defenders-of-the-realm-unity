@@ -212,6 +212,11 @@ namespace DeNelle.HUD
         private float _townHeartPct = 1f;
         private int _townTowersBuilt, _townTowersMax, _townPopulation;
 
+        // Passive-XP badge (WO-361): "⚡ Towers earning N XP/min". Compact, toggleable.
+        private RectTransform _townPassiveXp;
+        private TextMeshProUGUI _townPassiveXpText;
+        private bool _townPassiveXpVisible = true;
+
         // A single mini-map marker (POI icon positioned by world→map projection).
         private sealed class MiniMapMarker
         {
@@ -448,6 +453,7 @@ namespace DeNelle.HUD
 
             // TOWN HUD — idle-village clusters (faded in/out by the HudModeManager).
             BuildTownWaveCluster(townRoot);
+            BuildTownPassiveXp(townRoot);
             BuildTownResourceBadges(townRoot);
             BuildTownMiniMap(townRoot);
             BuildTownMetrics(townRoot);
@@ -890,6 +896,26 @@ namespace DeNelle.HUD
             _townWaveProgFill.fillOrigin = 0;
             _townWaveProgFill.fillAmount = 0f;
             _townWaveProgFill.raycastTarget = false;
+        }
+
+        // ── Top-LEFT (under the wave cluster) · PASSIVE-XP badge (WO-361). ──────
+        // Compact "⚡ Towers earning N XP/min" pill. Toggleable via SetPassiveXp /
+        // the visibility flag; hidden when there are no towers / zero rate.
+        private void BuildTownPassiveXp(Transform parent)
+        {
+            _townPassiveXp = NewRect("TownPassiveXp", parent, new Vector2(0f, 1f), new Vector2(0f, 1f));
+            // Sits just below the 118px-tall wave cluster (top-left, y:12).
+            AnchorTopLeft(_townPassiveXp, x: 12f, y: 136f, width: 248f, height: 26f);
+            HudTheme.StylePanel(_townPassiveXp.gameObject, HudTheme.Glass);
+            HudTheme.AddRim(_townPassiveXp.gameObject, HudTheme.AccentSoft);
+
+            var label = NewRect("Label", _townPassiveXp, new Vector2(0.04f, 0.08f), new Vector2(0.96f, 0.92f));
+            _townPassiveXpText = AddText(label, "⚡ Towers earning 0 XP/min", 13, HudTheme.Crystal, TextAlignmentOptions.MidlineLeft);
+            _townPassiveXpText.fontStyle = FontStyles.Bold;
+            _townPassiveXpText.raycastTarget = false;
+
+            // Hidden until a non-zero rate is fed.
+            _townPassiveXp.gameObject.SetActive(false);
         }
 
         // ── Top-CENTRE · RESOURCE badges (icon + number, distinct colours). ────
@@ -1438,6 +1464,27 @@ namespace DeNelle.HUD
             _townPopulation = population;
             if (_townTowerText != null) _townTowerText.text = towersBuilt + "/" + Mathf.Max(towersBuilt, towersMax);
             if (_townPopText != null) _townPopText.text = population.ToString();
+        }
+
+        /// <summary>
+        /// WO-361 — passive-XP badge: "⚡ Towers earning N XP/min" where N is the
+        /// aggregate idle XP rate (towerCount × per-tower XP/min, computed by the feed).
+        /// Compact + auto-toggling: hidden when there are no towers or a zero rate, shown
+        /// otherwise. Resolved by name (reflection) from the Village-side TownHudBridge.
+        /// </summary>
+        public void SetPassiveXp(int xpPerMin, int towerCount)
+        {
+            bool show = _townPassiveXpVisible && towerCount > 0 && xpPerMin > 0;
+            if (_townPassiveXp != null) _townPassiveXp.gameObject.SetActive(show);
+            if (show && _townPassiveXpText != null)
+                _townPassiveXpText.text = "⚡ Towers earning " + xpPerMin + " XP/min";
+        }
+
+        /// <summary>Toggle the passive-XP badge on/off (compact mode / player preference).</summary>
+        public void SetPassiveXpVisible(bool visible)
+        {
+            _townPassiveXpVisible = visible;
+            if (!visible && _townPassiveXp != null) _townPassiveXp.gameObject.SetActive(false);
         }
 
         /// <summary>

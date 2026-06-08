@@ -58,6 +58,13 @@ namespace DeNelle.Village
         private const float RefreshInterval = 0.5f;
         private const int TowersMaxConstant = 12;   // sensible cap (no catalog max exposed here)
 
+        // WO-361 — passive-XP badge feed. There is NO real passive-XP accrual on towers
+        // yet (Tower.cs has no XP concept; the only XP path is wave-clear via WaveXpBridge
+        // → HeroProgression.AddXp). So the badge shows the INTENDED idle rate: each built
+        // tower is treated as earning this many XP per minute. When real idle accrual is
+        // wired, swap this constant for the live per-tower rate (and start crediting it).
+        private const int IdleXpPerTowerPerMin = 5;
+
         // Cached HUD + its setters (resolved once the HUD is registered).
         private object _hud;
         private MethodInfo _setWaveProgress;   // (int current, int total)
@@ -65,12 +72,14 @@ namespace DeNelle.Village
         private MethodInfo _setMinimapPoi;     // (string kind, float worldX, float worldZ)
         private MethodInfo _clearMinimapPois;  // ()
         private MethodInfo _setLookoutStatus;  // (int status)
+        private MethodInfo _setPassiveXp;      // (int xpPerMin, int towerCount)  — WO-361
         private bool _resolveWarned;
 
-        private readonly object[] _waveArgs    = new object[2];
-        private readonly object[] _metricsArgs = new object[4];
-        private readonly object[] _poiArgs     = new object[3];
-        private readonly object[] _lookoutArgs = new object[1];
+        private readonly object[] _waveArgs      = new object[2];
+        private readonly object[] _metricsArgs   = new object[4];
+        private readonly object[] _poiArgs       = new object[3];
+        private readonly object[] _lookoutArgs   = new object[1];
+        private readonly object[] _passiveXpArgs = new object[2];
 
         private float _timer;
 
@@ -97,6 +106,7 @@ namespace DeNelle.Village
                 if (!ResolveHud()) return;
                 PushWaveProgress();
                 PushTownMetrics();
+                PushPassiveXp();
                 PushMinimapPois();
                 PushLookoutStatus();
             }
@@ -141,6 +151,23 @@ namespace DeNelle.Village
             _metricsArgs[2] = TowersMaxConstant;
             _metricsArgs[3] = pop;
             _setTownMetrics.Invoke(_hud, _metricsArgs);
+        }
+
+        /// <summary>
+        /// WO-361 — feeds the passive-XP badge: towerCount × per-tower idle XP/min.
+        /// NOTE: this is a DISPLAY of the intended rate — towers do not actually accrue
+        /// passive XP yet (see <see cref="IdleXpPerTowerPerMin"/>). Reuses the same live
+        /// Tower count as the metrics strip.
+        /// </summary>
+        private void PushPassiveXp()
+        {
+            if (_setPassiveXp == null) return;
+            var towers = FindObjectsByType<Tower>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+            int towerCount = towers != null ? towers.Length : 0;
+            int xpPerMin = towerCount * IdleXpPerTowerPerMin;
+            _passiveXpArgs[0] = xpPerMin;
+            _passiveXpArgs[1] = towerCount;
+            _setPassiveXp.Invoke(_hud, _passiveXpArgs);
         }
 
         private void PushMinimapPois()
@@ -229,6 +256,9 @@ namespace DeNelle.Village
                 _setLookoutStatus = t.GetMethod("SetLookoutStatus",
                     BindingFlags.Public | BindingFlags.Instance, null,
                     new[] { typeof(int) }, null);
+                _setPassiveXp = t.GetMethod("SetPassiveXp",
+                    BindingFlags.Public | BindingFlags.Instance, null,
+                    new[] { typeof(int), typeof(int) }, null);
 
                 if (!_resolveWarned &&
                     _setWaveProgress == null && _setTownMetrics == null &&
@@ -242,7 +272,8 @@ namespace DeNelle.Village
 
             // Any one resolved setter is enough to do useful work.
             return _setWaveProgress != null || _setTownMetrics != null ||
-                   _setMinimapPoi != null || _setLookoutStatus != null;
+                   _setMinimapPoi != null || _setLookoutStatus != null ||
+                   _setPassiveXp != null;
         }
     }
 }

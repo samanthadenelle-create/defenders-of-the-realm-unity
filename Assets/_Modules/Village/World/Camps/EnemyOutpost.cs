@@ -194,6 +194,12 @@ namespace DeNelle.Village.World.Camps
 
             BuildFortification();
             SpawnGarrison();
+
+            // WO-360: when the player walks into this outpost's combat zone, summon
+            // their Echo (pet) to fight alongside them + show a mini-tutorial. The
+            // trigger is idempotent + session-guarded (Echo persists once summoned),
+            // and is open-world only (the Arena suppresses the open-world beats above).
+            EchoAutoDeployTrigger.Attach(gameObject, GarrisonRing + 6f);
         }
 
         private void OnDestroy()

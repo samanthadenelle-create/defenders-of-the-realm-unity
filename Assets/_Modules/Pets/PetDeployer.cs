@@ -200,6 +200,54 @@ namespace DeNelle.Pets
             DeployStarterPets();
         }
 
+        /// <summary>
+        /// WO-360 (Echo at the outpost): summon ONE pet — the player's chosen starter
+        /// species (their "Echo") — at an arbitrary world position, independent of the
+        /// Heart-ring starter deployment. Used by EchoAutoDeployTrigger when the player
+        /// enters an enemy-outpost combat zone so the Echo fights alongside them and
+        /// persists for the battle + exploration after.
+        ///
+        /// Idempotent per live summon: if this deployer already has a live summoned Echo
+        /// it returns the existing one (no duplicate spawn). The summoned Echo is tracked
+        /// in the same <see cref="_deployed"/> list so ClearDeployed() also tears it down.
+        /// Returns null only if the catalog is empty.
+        /// </summary>
+        public Pet SummonAt(Vector3 worldPosition, PetMode mode = PetMode.Defend)
+        {
+            // Reuse a live summon if one already exists (don't double-summon the Echo).
+            for (int i = 0; i < _deployed.Count; i++)
+                if (_deployed[i] != null) return _deployed[i];
+
+            var defs = PetCatalog.Pets;
+            if (defs == null || defs.Count == 0)
+            {
+                Debug.LogWarning("[PetDeployer] SummonAt — PetCatalog empty; cannot summon the Echo.");
+                return null;
+            }
+
+            string species = ResolveStarterSpecies();
+            PetDef chosen = null;
+            foreach (var def in defs)
+            {
+                if (def == null) continue;
+                if (def.Species == species) { chosen = def; break; }
+            }
+            // Fall back to the first available def if the chosen species isn't in the catalog.
+            if (chosen == null)
+                foreach (var def in defs) { if (def != null) { chosen = def; break; } }
+            if (chosen == null) return null;
+
+            int bond = BondRankFor(chosen.SlotIndex);
+            Pet pet = SpawnPet(chosen, worldPosition);
+            pet.Configure(chosen, bond, worldPosition, mode);
+            pet.SetEnemyMask(_enemyMask);
+            if (pet.GetComponent<PetProgression>() == null)
+                pet.gameObject.AddComponent<PetProgression>();
+
+            _deployed.Add(pet);
+            return pet;
+        }
+
         // Fallback starter species when GameState records no pick (pre-WO-185
         // saves, or the express Defend-the-Tower path that skips pet-select).
         private const string DefaultStarterSpecies = "ice-wolf";

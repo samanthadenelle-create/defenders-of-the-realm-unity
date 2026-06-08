@@ -347,6 +347,12 @@ namespace DeNelle.Village
                     : VFXType.Impact_Physical;
             VFXManager.Play(impactType, hitPosition);
 
+            // WO-371: projectile impact SFX through the existing audio surface
+            // (CoreServices.Audio, null-guarded inside GameSfx). The tower-fire "pew"
+            // already plays on the shot (FireAt); this is the arrow/bolt CONNECT
+            // sound on the enemy, mixed low so a wall of towers doesn't drown out.
+            GameSfx.PlayTowerArrowHit();
+
             HitStopManager.DoImpact((_isEmpowered || level >= 3) ? HitTier.Medium : HitTier.Light);
         }
 

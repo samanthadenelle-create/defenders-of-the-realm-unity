@@ -166,28 +166,56 @@ namespace DeNelle.Village
                  "(the legacy crystal drop still runs).")]
         [SerializeField] private bool _awardResourcesOnWaveClear = true;
 
-        [Tooltip("Base Wood granted for clearing a wave (before per-wave scaling). " +
-                 "Total = Base + PerWave * (waveId - 1).")]
-        [SerializeField, Min(0)] private int _woodRewardBase = 40;
+        [Tooltip("Base Wood granted on a wood-payout wave (before scaling). WO-361: wood pays out " +
+                 "every Nth wave (WoodInterval), in the range [Base .. Base+Spread], scaled by wave.")]
+        [SerializeField, Min(0)] private int _woodRewardBase = 20;
 
-        [Tooltip("Additional Wood added per wave number — later waves reward more. " +
-                 "Total Wood = Base + PerWave * (waveId - 1).")]
-        [SerializeField, Min(0)] private int _woodRewardPerWave = 15;
+        [Tooltip("Random spread added on top of the wood base (0 = flat). Final = Random[Base..Base+Spread] * scale.")]
+        [SerializeField, Min(0)] private int _woodRewardSpread = 10;
 
-        [Tooltip("Base Iron granted for clearing a wave (before per-wave scaling). " +
-                 "Total = Base + PerWave * (waveId - 1).")]
-        [SerializeField, Min(0)] private int _ironRewardBase = 20;
+        [Tooltip("WO-330 wiring contract: extra Wood added to the wood base per wave number (linear ramp). " +
+                 "Folded into the effective wood base BEFORE the random spread + WO-361 scaling, so a " +
+                 "later wood-payout wave starts from a higher floor. 0 = no per-wave wood ramp.")]
+        [SerializeField, Min(0)] private int _woodRewardPerWave = 0;
 
-        [Tooltip("Additional Iron added per wave number — later waves reward more. " +
-                 "Total Iron = Base + PerWave * (waveId - 1).")]
-        [SerializeField, Min(0)] private int _ironRewardPerWave = 8;
+        [Tooltip("Wood pays out every Nth wave (WO-361 default: every 3rd). 0/1 = every wave.")]
+        [SerializeField, Min(0)] private int _woodRewardInterval = 3;
 
-        [Tooltip("Optional small Food granted per wave clear (0 = none). Flat — not scaled.")]
-        [SerializeField, Min(0)] private int _foodRewardPerWave = 0;
+        [Tooltip("Base Iron granted on an iron-payout wave (before scaling). WO-361: iron pays out " +
+                 "every Nth wave (IronInterval), in the range [Base .. Base+Spread], scaled by wave.")]
+        [SerializeField, Min(0)] private int _ironRewardBase = 15;
 
-        [Tooltip("Clamps the per-wave multiplier so the reward growth never runs away on very " +
-                 "late waves. 0 = uncapped. e.g. 12 caps scaling at wave 12's amount.")]
-        [SerializeField, Min(0)] private int _rewardScalingWaveCap = 0;
+        [Tooltip("Random spread added on top of the iron base (0 = flat). Final = Random[Base..Base+Spread] * scale.")]
+        [SerializeField, Min(0)] private int _ironRewardSpread = 10;
+
+        [Tooltip("WO-330 wiring contract: extra Iron added to the iron base per wave number (linear ramp). " +
+                 "Folded into the effective iron base BEFORE the random spread + WO-361 scaling, so a " +
+                 "later iron-payout wave starts from a higher floor. 0 = no per-wave iron ramp.")]
+        [SerializeField, Min(0)] private int _ironRewardPerWave = 0;
+
+        [Tooltip("Iron pays out every Nth wave (WO-361 default: every 4th). 0/1 = every wave.")]
+        [SerializeField, Min(0)] private int _ironRewardInterval = 4;
+
+        [Tooltip("Base Food granted on a food-payout wave (before scaling). WO-361: food pays out " +
+                 "every Nth wave (FoodInterval), in the range [Base .. Base+Spread], scaled by wave.")]
+        [SerializeField, Min(0)] private int _foodRewardBase = 30;
+
+        [Tooltip("Random spread added on top of the food base (0 = flat). Final = Random[Base..Base+Spread] * scale.")]
+        [SerializeField, Min(0)] private int _foodRewardSpread = 20;
+
+        [Tooltip("Food pays out every Nth wave (WO-361 default: every 2nd). 0/1 = every wave.")]
+        [SerializeField, Min(0)] private int _foodRewardInterval = 2;
+
+        [Tooltip("Reward scaling: amounts grow by this fraction every ScalePer waves (WO-361: +20% per 5 waves). " +
+                 "e.g. 0.2 with ScalePer 5 → wave 6 pays 1.2×, wave 11 pays 1.4×, …")]
+        [SerializeField, Min(0f)] private float _rewardScalePerStep = 0.2f;
+
+        [Tooltip("Number of waves per scaling step (WO-361: every 5 waves). Min 1.")]
+        [SerializeField, Min(1)] private int _rewardScaleWaveStep = 5;
+
+        [Tooltip("Clamps the scaling step count so reward growth never runs away on very " +
+                 "late waves. 0 = uncapped. e.g. 6 caps scaling after 6 steps.")]
+        [SerializeField, Min(0)] private int _rewardScalingStepCap = 0;
 
         [Header("Per-kill resource trickle (WO-330 — optional, secondary)")]
         [Tooltip("Grant a small Wood/Iron trickle per enemy killed during the wave (the wave-clear " +
@@ -1060,14 +1088,19 @@ namespace DeNelle.Village
         /// defeat the wave → earn the resources you build/upgrade defenses with → harder
         /// waves → repeat.
         ///
-        /// The reward SCALES with the wave number (later waves pay more):
-        ///   amount = base + perWave * (waveId - 1)
-        /// with the wave factor optionally clamped by <see cref="_rewardScalingWaveCap"/> so
-        /// very late waves don't run away. All amounts are inspector-tunable
-        /// (base + per-wave fields above), so balance can change with no code edit.
+        /// WO-361 — the payout is STAGGERED by interval rather than every wave:
+        ///   • Food  every <see cref="_foodRewardInterval"/>th wave (default 2nd), 30–50
+        ///   • Wood  every <see cref="_woodRewardInterval"/>th wave (default 3rd), 20–30
+        ///   • Iron  every <see cref="_ironRewardInterval"/>th wave (default 4th), 15–25
+        /// Each amount is randomized in [Base .. Base+Spread] and SCALES with the wave
+        /// number — +<see cref="_rewardScalePerStep"/> (default +20%) every
+        /// <see cref="_rewardScaleWaveStep"/> waves (default 5), optionally clamped by
+        /// <see cref="_rewardScalingStepCap"/>. All amounts/intervals are inspector-tunable
+        /// so balance changes need no code edit. Crystals stay on the separate
+        /// <see cref="AwardWaveCrystals"/> path.
         ///
-        /// No-ops cleanly when <see cref="_awardResourcesOnWaveClear"/> is off, when the
-        /// computed total is zero, or when no EconomyService exists yet (early boot).
+        /// No-ops cleanly when <see cref="_awardResourcesOnWaveClear"/> is off, when nothing
+        /// is due this wave, or when no EconomyService exists yet (early boot).
         /// </summary>
         private void AwardWaveResources(int waveId)
         {
@@ -1076,24 +1109,92 @@ namespace DeNelle.Village
             var economy = EconomyService.Instance;
             if (economy == null) return;
 
-            // Wave factor: 0 on wave 1, +1 per wave, optionally capped so late-game
-            // rewards plateau instead of growing unbounded.
-            int waveFactor = Mathf.Max(0, waveId - 1);
-            if (_rewardScalingWaveCap > 0)
-                waveFactor = Mathf.Min(waveFactor, Mathf.Max(0, _rewardScalingWaveCap - 1));
+            // Scaling multiplier: +scalePerStep every scaleWaveStep waves, capped.
+            int step = waveId / Mathf.Max(1, _rewardScaleWaveStep);
+            if (_rewardScalingStepCap > 0) step = Mathf.Min(step, _rewardScalingStepCap);
+            float scale = 1f + _rewardScalePerStep * step;
 
-            int wood = _woodRewardBase + _woodRewardPerWave * waveFactor;
-            int iron = _ironRewardBase + _ironRewardPerWave * waveFactor;
-            int food = _foodRewardPerWave;
+            // WO-330 wiring contract: the per-wave ramp fields raise the effective base
+            // floor by (perWave * waveId) before the random spread + scaling are applied,
+            // so they stay LIVE alongside the WO-361 staggered/scaled payout.
+            int woodBase = _woodRewardBase + _woodRewardPerWave * waveId;
+            int ironBase = _ironRewardBase + _ironRewardPerWave * waveId;
+
+            int wood = DueThisWave(waveId, _woodRewardInterval)
+                ? ScaledRoll(woodBase, _woodRewardSpread, scale) : 0;
+            int iron = DueThisWave(waveId, _ironRewardInterval)
+                ? ScaledRoll(ironBase, _ironRewardSpread, scale) : 0;
+            int food = DueThisWave(waveId, _foodRewardInterval)
+                ? ScaledRoll(_foodRewardBase, _foodRewardSpread, scale) : 0;
 
             if (wood <= 0 && iron <= 0 && food <= 0) return;
 
             economy.Grant(new ResourceCost(wood: wood, food: food, iron: iron));
 
+            // Brief on-victory loot toast (reuses the existing combat feedback if present).
+            ShowRewardToast(wood, iron, food);
+
             Debug.Log(
-                $"[WaveManager] Wave {waveId} cleared — granted build resources: " +
-                $"{wood} Wood, {iron} Iron" + (food > 0 ? $", {food} Food" : "") +
+                $"[WaveManager] Wave {waveId} cleared — granted build resources (×{scale:0.0} scale): " +
+                string.Join(", ", BuildRewardParts(wood, iron, food)) +
                 " (defend → earn → build).");
+        }
+
+        /// <summary>True when a payout with the given interval is due on this wave.
+        /// Interval 0/1 = every wave; otherwise every Nth wave (waveId % N == 0).</summary>
+        private static bool DueThisWave(int waveId, int interval)
+        {
+            if (interval <= 1) return true;
+            return waveId % interval == 0;
+        }
+
+        /// <summary>Randomized, wave-scaled amount: Round(Random[base..base+spread] * scale).</summary>
+        private static int ScaledRoll(int baseAmount, int spread, float scale)
+        {
+            if (baseAmount <= 0 && spread <= 0) return 0;
+            int rolled = baseAmount + (spread > 0 ? UnityEngine.Random.Range(0, spread + 1) : 0);
+            return Mathf.Max(0, Mathf.RoundToInt(rolled * scale));
+        }
+
+        private static System.Collections.Generic.List<string> BuildRewardParts(int wood, int iron, int food)
+        {
+            var parts = new System.Collections.Generic.List<string>(3);
+            if (wood > 0) parts.Add($"{wood} Wood");
+            if (iron > 0) parts.Add($"{iron} Iron");
+            if (food > 0) parts.Add($"{food} Food");
+            if (parts.Count == 0) parts.Add("nothing");
+            return parts;
+        }
+
+        /// <summary>
+        /// Best-effort floating loot/notification on wave victory. Resolves the HUD's
+        /// banner setter by cached reflection (HUD → Core only; Village cannot reference
+        /// DeNelle.HUD), exactly like the town-HUD bridges. Fully guarded — a missing HUD
+        /// or method simply skips the toast (never throws; WebGL halts on an uncaught throw).
+        /// </summary>
+        private void ShowRewardToast(int wood, int iron, int food)
+        {
+            try
+            {
+                var hud = DeNelle.Core.CoreServices.Hud as object;
+                if (hud == null) return;
+                var parts = BuildRewardParts(wood, iron, food);
+                string msg = "Wave cleared! +" + string.Join("  +", parts);
+
+                // Prefer a dedicated banner/toast setter if the HUD exposes one.
+                var t = hud.GetType();
+                var m = t.GetMethod("ShowBanner",
+                            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance,
+                            null, new[] { typeof(string) }, null)
+                     ?? t.GetMethod("ShowToast",
+                            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance,
+                            null, new[] { typeof(string) }, null);
+                m?.Invoke(hud, new object[] { msg });
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning("[WaveManager] reward toast skipped: " + e.Message);
+            }
         }
 
         /// <summary>

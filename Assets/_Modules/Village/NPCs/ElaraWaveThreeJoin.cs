@@ -48,6 +48,11 @@ namespace DeNelle.Village
         /// <summary>The one-shot SeenTutorials key — once set the beat never replays.</summary>
         private const string SeenKey = "elara_wave3_join";
 
+        /// <summary>WO-360: one-shot key for the Echo (pet) introduction that rides on
+        /// the wave-3 join beat. Independent of <see cref="SeenKey"/> so a save that
+        /// already joined the companion still hears the Echo intro exactly once.</summary>
+        private const string EchoIntroSeenKey = "companion_echo_intro";
+
         /// <summary>The wave whose clear summons Elara (canon: ~wave 3).</summary>
         private const int JoinWave = 3;
 
@@ -165,10 +170,27 @@ namespace DeNelle.Village
                 foreach (string line in JoinLines(_companionClass))
                     _dialogue.Say(speaker, line);
 
+                // WO-360: the same companion, in the SAME breath, introduces Echo —
+                // the starter pet the player named in the FTUE ("one of the Echoes").
+                // This primes the auto-deploy-at-the-outpost beat (EchoAutoDeployTrigger)
+                // so the player knows the Echo will fight beside them at the raid.
+                // Idempotent via its OWN seen-flag, independent of the join flag, so a
+                // save that already joined Elara (pre-WO-360) still gets the Echo intro
+                // exactly once. Yarn note: a `CompanionOutpostIntroduction` node would
+                // be the localized home for these lines — it does NOT exist yet, so we
+                // deliver them through the proven companion-bubble path (same as the
+                // join lines above) and flag the node for authoring.
+                if (!HasSeenEchoIntro())
+                {
+                    foreach (string line in EchoIntroLines())
+                        _dialogue.Say(speaker, line);
+                }
+
                 await WaitForDialogue();
 
                 companion?.SetSpeechSuppressed(false);
                 MarkSeen();
+                MarkEchoIntroSeen();
 
                 Debug.Log($"[ElaraWaveThreeJoin] {speaker} joined the party after wave {JoinWave}.");
             }
@@ -177,6 +199,7 @@ namespace DeNelle.Village
                 Debug.LogWarning($"[ElaraWaveThreeJoin] Join beat error — finishing anyway. {ex.Message}");
                 ResolveCompanion(_companionClass)?.SetSpeechSuppressed(false);
                 MarkSeen();
+                MarkEchoIntroSeen();
             }
             finally
             {
@@ -250,6 +273,41 @@ namespace DeNelle.Village
         }
 
         private static void MarkSeen() => GameStateService.Instance?.MarkTutorialSeen(SeenKey);
+
+        // ── WO-360: Echo (pet) intro one-shot ────────────────────────────────
+
+        private static bool HasSeenEchoIntro()
+        {
+            if (ForceRun) return false;
+            var svc = GameStateService.Instance;
+            var state = svc != null ? svc.State : null;
+            return state != null && state.SeenTutorials != null
+                && state.SeenTutorials.TryGetValue(EchoIntroSeenKey, out bool seen) && seen;
+        }
+
+        private static void MarkEchoIntroSeen() =>
+            GameStateService.Instance?.MarkTutorialSeen(EchoIntroSeenKey);
+
+        /// <summary>
+        /// The companion's short Echo introduction — references the pet the player
+        /// named in the FTUE ("one of the Echoes") and the fact it will appear and
+        /// fight beside them at the enemy outpost. Uses the player's chosen pet name
+        /// (GameState.PetName) when one is recorded, else a warm generic. ASCII-only.
+        /// </summary>
+        private static string[] EchoIntroLines()
+        {
+            string petName = null;
+            var state = GameStateService.Instance?.State;
+            if (state != null && !string.IsNullOrWhiteSpace(state.PetName))
+                petName = state.PetName.Trim();
+
+            string named = string.IsNullOrEmpty(petName) ? "your Echo" : petName;
+            return new[]
+            {
+                $"And you don't walk alone, Keeper. {named} — your Echo — has been pacing the gate, itching for the fight.",
+                "When you press into the enemy outposts beyond the wall, the Echo will rise at your side. Let it. It was made to guard you.",
+            };
+        }
 
         // =====================================================================
         //  Scripted join lines (canon tone — grounded, warm)
