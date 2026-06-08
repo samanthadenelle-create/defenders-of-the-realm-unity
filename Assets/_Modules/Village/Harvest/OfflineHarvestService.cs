@@ -40,9 +40,10 @@ using DeNelle.Village.UI;
 namespace DeNelle.Village
 {
     /// <summary>
-    /// Computes resources accrued by claimed nodes + settlements (+ harvesting pets,
-    /// when WO-111 Phase 4 lands) while the app was backgrounded/closed, grants them
-    /// capped, and raises a welcome-back summary. Runs on cold load and on resume.
+    /// Computes resources accrued by worker-claimed nodes + WO-159 settlements +
+    /// WO-229 harvesting pets (each derived from the shared MineNode claim seam) while
+    /// the app was backgrounded/closed, grants them capped, and raises a welcome-back
+    /// summary. Runs on cold load and on resume.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class OfflineHarvestService : MonoBehaviour
@@ -65,6 +66,11 @@ namespace DeNelle.Village
         public event System.Action<OfflineHarvestResult> Claimed;
 
         private float OfflineCapSeconds => Mathf.Max(0f, OfflineCapHours) * 3600f;
+
+        // Worker-owned nodes captured during AccrueWorkerNodes, so AccruePets can
+        // exclude them and credit ONLY the pet-claimed nodes (disjoint sets → no
+        // double-grant). Reused (cleared) each claim; never holds across frames.
+        private readonly HashSet<MineNode> _workerOwnedThisClaim = new HashSet<MineNode>();
 
         private void Awake()
         {
@@ -151,10 +157,12 @@ namespace DeNelle.Village
 
             if (cappedSec > 0.0)
             {
+                // ORDER MATTERS for double-grant safety. AccrueWorkerNodes snapshots the
+                // worker-owned node set FIRST; AccruePets then credits the pet-owned nodes,
+                // which it derives as "claimed but NOT worker-owned" — so the two source
+                // sets are disjoint by construction and a node is never counted twice.
                 AccrueWorkerNodes(result, cappedSec);
                 AccrueSettlements(result, cappedSec);
-                // Pet harvest accrual — null-safe no-op until WO-111 Phase 4 ships
-                // pet auto-harvest. Folds into the same result buckets when it lands.
                 AccruePets(result, cappedSec);
             }
 
@@ -173,6 +181,8 @@ namespace DeNelle.Village
         // finite-reserve node, so those are handled only by the settlement path.)
         private void AccrueWorkerNodes(OfflineHarvestResult result, double cappedSec)
         {
+            _workerOwnedThisClaim.Clear();
+
             var wm = WorkerManager.Instance;
             if (wm == null) return;
 
@@ -181,7 +191,11 @@ namespace DeNelle.Village
             for (int i = 0; i < nodes.Count; i++)
             {
                 var node = nodes[i];
-                if (node == null || node.IsDepleted) continue;
+                if (node == null) continue;
+                // Record worker ownership BEFORE the depletion/rate gates so AccruePets
+                // never re-credits a node a worker owns, even one that's spent this frame.
+                _workerOwnedThisClaim.Add(node);
+                if (node.IsDepleted) continue;
                 float rate = node.RatePerSecond;
                 if (rate <= 0f) continue;
                 int accrued = (int)(rate * cappedSec);
@@ -213,14 +227,43 @@ namespace DeNelle.Village
             }
         }
 
-        // ── Source 3: harvesting pets (WO-111 Phase 4 — not built yet) ────────
-        // Null-safe no-op. When pet auto-harvest lands it exposes a registry of
-        // (resource, ratePerSecond) harvesters; integrate them into the same result
-        // here. No crash today because there is simply no source to read.
+        // ── Source 3: harvesting pets (WO-229 PetHarvester) ───────────────────
+        // A deployed harvesting pet works a MineNode through the SAME seam a Worker
+        // does: it claims the node (MineNode.SetWorkerClaim → IsClaimedByWorker) and
+        // drives TryAutoExtract() on the node's cooldown. So a pet-worked node banks at
+        // exactly the node's RatePerSecond, just like a worker-worked one.
+        //
+        // We can't enumerate PetHarvester from here (it lives in DeNelle.Pets, which
+        // Village must not reference — CLAUDE.md §5/§9; pets reach Village only via the
+        // reflection MineNodeBridge). Instead we read the shared MineNode claim seam:
+        // a node that is CLAIMED but is NOT one of WorkerManager's active worker
+        // assignments is, by elimination, being worked by a pet (the only other thing
+        // that calls SetWorkerClaim). That set is disjoint from AccrueWorkerNodes's set
+        // by construction (we exclude _workerOwnedThisClaim), so no node is double-counted.
+        //
+        // Note: claims are runtime-only (not persisted), so on a COLD load a pet hasn't
+        // re-acquired a node yet within this deferred frame → pets contribute 0 that
+        // launch (the clock still advances; nothing is lost, just not retro-credited).
+        // On RESUME (the common mobile case) claims are live, so the away-gap is credited.
         private void AccruePets(OfflineHarvestResult result, double cappedSec)
         {
-            // Intentionally empty until WO-111 Phase 4. Left as an explicit seam so the
-            // integration point is obvious and the no-op is deliberate, not forgotten.
+#if UNITY_2023_1_OR_NEWER
+            var nodes = Object.FindObjectsByType<MineNode>(FindObjectsSortMode.None);
+#else
+            var nodes = Object.FindObjectsOfType<MineNode>();
+#endif
+            if (nodes == null) return;
+            for (int i = 0; i < nodes.Length; i++)
+            {
+                var node = nodes[i];
+                if (node == null || node.IsDepleted) continue;
+                if (!node.IsClaimedByWorker) continue;             // unclaimed → no harvester
+                if (_workerOwnedThisClaim.Contains(node)) continue; // a Worker owns it → already credited
+                float rate = node.RatePerSecond;                   // finite-reserve nodes report 0 (settlement path)
+                if (rate <= 0f) continue;
+                int accrued = (int)(rate * cappedSec);
+                result.Add(node.Resource, accrued);
+            }
         }
 
         // ── Banking — the established off-chain award path ────────────────────
