@@ -272,9 +272,7 @@ namespace DeNelle.Village
             var wm = FindAnyObjectByType<WaveManager>();
             if (wm != null && wm.Phase == WavePhase.Active) return true;
 
-            // Defend-the-Tower mode? (mirrors LevelUpSkillPopup's combat guard)
-            if (FindAnyObjectByType<PatriciaLightController>() != null) return true;
-
+            // (Defend-the-Tower mode removed — only an active wave counts as combat now.)
             return false;
         }
     }

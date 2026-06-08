@@ -203,13 +203,16 @@ namespace DeNelle.Editor
             if (cathedralModel == null)
             {
                 // Owner 2026-05-25: real Tripo "Tree of Life" centerpiece model at
-                // Resources/Structures/tree_of_life.fbx (with its own basecolor/normal
-                // maps). Prefer it; fall back to the KayKit hex tree, then a primitive.
+                // Resources/Structures/tree_of_life.fbx (with its own basecolor/normal maps).
+                // WO-311: ONLY the canonical Tree of Life may bake at origin. Do NOT fall back
+                // to the generic KayKit hex tree (trees_A_large) or a primitive at the village
+                // centre — a generic tree at origin is the bug. If the canonical FBX is missing,
+                // leave the centre EMPTY and let the runtime TreeOfLifeMaterialFixer spawn-guard
+                // fill it.
                 var tolModel = LoadModel("Assets/Resources/Structures/tree_of_life.fbx");
-                GameObject tree;
                 if (tolModel != null)
                 {
-                    tree = (GameObject)PrefabUtility.InstantiatePrefab(tolModel);
+                    GameObject tree = (GameObject)PrefabUtility.InstantiatePrefab(tolModel);
                     tree.name = "ElarionTree";
                     tree.transform.SetParent(go.transform, false);
                     tree.transform.localPosition = new Vector3(0f, 0.4f, 0f);
@@ -230,29 +233,11 @@ namespace DeNelle.Editor
                 }
                 else
                 {
-                    var treeModel = LoadModel(HexDecoNature + "trees_A_large.fbx");
-                    if (treeModel != null)
-                    {
-                        tree = InstantiateModel(treeModel, "trees_A_large.fbx", "ElarionTree");
-                        tree.name = "ElarionTree";
-                        tree.transform.SetParent(go.transform, false);
-                        tree.transform.localPosition = new Vector3(0f, 0.7f, 0f);
-                        tree.transform.localScale = Vector3.one * 3.0f;
-                        ApplyColorAll(tree, new Color(0.24f, 0.42f, 0.22f));
-                    }
-                    else
-                    {
-                        tree = new GameObject("[PLACEHOLDER] Elarion world-tree");
-                        NotePlaceholder("Elarion world-tree");
-                        tree.transform.SetParent(go.transform, false);
-                        tree.transform.localPosition = new Vector3(0f, 0.7f, 0f);
-                        PrimitiveChild(tree.transform, "Trunk", PrimitiveType.Cylinder,
-                            new Vector3(0f, 4f, 0f), new Vector3(1.4f, 4f, 1.4f),
-                            new Color(0.30f, 0.21f, 0.13f));
-                        PrimitiveChild(tree.transform, "Canopy", PrimitiveType.Sphere,
-                            new Vector3(0f, 9f, 0f), new Vector3(7f, 6f, 7f),
-                            new Color(0.24f, 0.42f, 0.22f));
-                    }
+                    // WO-311: canonical missing — leave the centre empty, NO generic tree at origin.
+                    Debug.LogWarning("[VillageSceneBuilder] Canonical Tree of Life FBX not found at " +
+                                     "Assets/Resources/Structures/tree_of_life.fbx — leaving village " +
+                                     "centre EMPTY (runtime TreeOfLifeMaterialFixer will spawn it). " +
+                                     "NOT placing a generic trees_A_large/primitive at origin (WO-311).");
                 }
             }
 

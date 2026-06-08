@@ -241,14 +241,20 @@ namespace DeNelle.Editor
             GameObject houseC2 = LoadBuilding("HouseC2");
             GameObject houseD  = LoadBuilding("HouseD");
             GameObject kitTower = LoadBuilding("KitTower");
-            // Centrepiece tree: the enchanted Tree_Of_Life now HAS its basecolor
-            // (enchantedtree3dmodel_basecolor copied to Resources/Structures/TreeofLife_basecolor,
-            // auto-bound at runtime by TreeOfLifeMaterialFixer), so it no longer renders the
-            // untextured "blue" that forced the polyperfect placeholder. Prefer the real
-            // enchanted prefab; fall back to a polyperfect tree only if it's somehow missing.
-            GameObject treeOfLife = LoadAt(TreeOfLifePrefabPath, "TreeOfLife")
-                                    ?? LoadByName("SM_Tree_Round") ?? LoadByName("SM_Tree_Oak")
-                                    ?? LoadByName("SM_Tree_Baobab");
+            // Centrepiece tree: ONLY the canonical enchanted Tree of Life may bake at
+            // origin (0,0,0). It has its basecolor (auto-bound at runtime by
+            // TreeOfLifeMaterialFixer). WO-311: do NOT fall back to a generic polyperfect
+            // tree (SM_Tree_Round / SM_Tree_Oak / SM_Tree_Baobab) at the village centre —
+            // a generic tree at origin is the bug. If the canonical prefab is missing,
+            // leave the centre EMPTY (treeOfLife == null) and let the runtime
+            // TreeOfLifeMaterialFixer spawn-guard fill it; never bake a placeholder here.
+            GameObject treeOfLife =
+                LoadAt(TreeOfLifePrefabPath, "TreeOfLife")
+                ?? LoadAt("Assets/Resources/Structures/tree_of_life.fbx", "tree_of_life");
+            if (treeOfLife == null)
+                Debug.LogWarning("[Village2Build] Canonical Tree of Life prefab/FBX not found — " +
+                                 "leaving village centre EMPTY (runtime TreeOfLifeMaterialFixer will spawn it). " +
+                                 "NOT placing a generic tree at origin (WO-311).");
 
             GameObject wallStraight = LoadPiece("Wall_UnevenBrick_Straight.prefab");
             GameObject gatePrefab   = LoadPiece("Wall_Arch.prefab");

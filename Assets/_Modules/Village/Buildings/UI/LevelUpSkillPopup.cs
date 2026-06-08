@@ -82,7 +82,6 @@ namespace DeNelle.Village.UI
         private void Update()
         {
             if (_pendingLevel < 0) return;
-            if (FindAnyObjectByType<DeNelle.Village.PatriciaLightController>() != null) return;
             int lvl = _pendingLevel;
             _pendingLevel = -1;
             Show(lvl);
@@ -100,13 +99,6 @@ namespace DeNelle.Village.UI
             // remain spendable via the skill panel; alerts just start at genuine
             // level-UPs (2+). Guards on the level REACHED (not points-available).
             if (newLevel < 2) return;
-            // During the Defend-the-Tower battle, don't interrupt the fight — QUEUE the
-            // level so Update() surfaces the spend screen the instant the fight ends.
-            if (FindAnyObjectByType<DeNelle.Village.PatriciaLightController>() != null)
-            {
-                if (newLevel > _pendingLevel) _pendingLevel = newLevel;
-                return;
-            }
             _lastLevel = newLevel;
             if (_title != null) _title.text = $"Level {newLevel}!  Spend a skill point";
             ShowCard();

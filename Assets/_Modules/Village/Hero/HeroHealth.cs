@@ -126,7 +126,7 @@ namespace DeNelle.Village
             if (!_modeChecked)
             {
                 _modeChecked = true;
-                _safeTurretMode = FindAnyObjectByType<DeNelle.Village.PatriciaLightController>() != null;
+                _safeTurretMode = false;   // Defend-the-Tower mode removed — always normal village contact damage
             }
             if (_safeTurretMode) return;   // enemies target the tower, not the hero
 
