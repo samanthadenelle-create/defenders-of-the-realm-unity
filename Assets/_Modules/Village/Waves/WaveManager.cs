@@ -159,6 +159,47 @@ namespace DeNelle.Village
         [Tooltip("Start the loop from this wave id (1 = the first wave). Dev override.")]
         [SerializeField, Min(1)] private int _startWave = 1;
 
+        [Header("Wave-clear resource reward (WO-330 — defend → earn → build)")]
+        [Tooltip("Award build resources (Wood/Iron) when a wave is fully cleared. This is the " +
+                 "primary economy income: defend the city → defeat the wave → earn the resources " +
+                 "you spend on building/upgrading defenses. OFF = no wave-clear resource grant " +
+                 "(the legacy crystal drop still runs).")]
+        [SerializeField] private bool _awardResourcesOnWaveClear = true;
+
+        [Tooltip("Base Wood granted for clearing a wave (before per-wave scaling). " +
+                 "Total = Base + PerWave * (waveId - 1).")]
+        [SerializeField, Min(0)] private int _woodRewardBase = 40;
+
+        [Tooltip("Additional Wood added per wave number — later waves reward more. " +
+                 "Total Wood = Base + PerWave * (waveId - 1).")]
+        [SerializeField, Min(0)] private int _woodRewardPerWave = 15;
+
+        [Tooltip("Base Iron granted for clearing a wave (before per-wave scaling). " +
+                 "Total = Base + PerWave * (waveId - 1).")]
+        [SerializeField, Min(0)] private int _ironRewardBase = 20;
+
+        [Tooltip("Additional Iron added per wave number — later waves reward more. " +
+                 "Total Iron = Base + PerWave * (waveId - 1).")]
+        [SerializeField, Min(0)] private int _ironRewardPerWave = 8;
+
+        [Tooltip("Optional small Food granted per wave clear (0 = none). Flat — not scaled.")]
+        [SerializeField, Min(0)] private int _foodRewardPerWave = 0;
+
+        [Tooltip("Clamps the per-wave multiplier so the reward growth never runs away on very " +
+                 "late waves. 0 = uncapped. e.g. 12 caps scaling at wave 12's amount.")]
+        [SerializeField, Min(0)] private int _rewardScalingWaveCap = 0;
+
+        [Header("Per-kill resource trickle (WO-330 — optional, secondary)")]
+        [Tooltip("Grant a small Wood/Iron trickle per enemy killed during the wave (the wave-clear " +
+                 "bonus is the primary reward). OFF = only the wave-clear bonus pays out.")]
+        [SerializeField] private bool _awardResourcesPerKill = true;
+
+        [Tooltip("Wood granted per enemy killed.")]
+        [SerializeField, Min(0)] private int _woodPerKill = 1;
+
+        [Tooltip("Iron granted per enemy killed.")]
+        [SerializeField, Min(0)] private int _ironPerKill = 0;
+
         [Header("Performance budget (DEF-48)")]
         [Tooltip("Hard cap on simultaneously live enemies. 0 = no cap. " +
                  "SpawnBatch stalls until an enemy dies when the cap is hit. " +
@@ -996,6 +1037,7 @@ namespace DeNelle.Village
             int cleared = _currentWaveId;
             if (_heart != null) _heart.SetState(HeartState.Serene);
 
+            AwardWaveResources(cleared);   // WO-330: build resources (Wood/Iron) — the core economy income
             AwardWaveCrystals(cleared);
 
             OnWaveCleared.Invoke(cleared);
@@ -1008,6 +1050,50 @@ namespace DeNelle.Village
             });
 
             EnterCountdown(cleared + 1);
+        }
+
+        /// <summary>
+        /// WO-330 — the city-defense fundamental loop's payout: clearing a wave grants
+        /// BUILD RESOURCES (Wood/Iron, optional Food) into the player's wallet via
+        /// <see cref="EconomyService.Grant(ResourceCost)"/> — the same pool the BuildMenu /
+        /// upgrade paths spend from. This is the primary economy income: defend the city →
+        /// defeat the wave → earn the resources you build/upgrade defenses with → harder
+        /// waves → repeat.
+        ///
+        /// The reward SCALES with the wave number (later waves pay more):
+        ///   amount = base + perWave * (waveId - 1)
+        /// with the wave factor optionally clamped by <see cref="_rewardScalingWaveCap"/> so
+        /// very late waves don't run away. All amounts are inspector-tunable
+        /// (base + per-wave fields above), so balance can change with no code edit.
+        ///
+        /// No-ops cleanly when <see cref="_awardResourcesOnWaveClear"/> is off, when the
+        /// computed total is zero, or when no EconomyService exists yet (early boot).
+        /// </summary>
+        private void AwardWaveResources(int waveId)
+        {
+            if (!_awardResourcesOnWaveClear) return;
+
+            var economy = EconomyService.Instance;
+            if (economy == null) return;
+
+            // Wave factor: 0 on wave 1, +1 per wave, optionally capped so late-game
+            // rewards plateau instead of growing unbounded.
+            int waveFactor = Mathf.Max(0, waveId - 1);
+            if (_rewardScalingWaveCap > 0)
+                waveFactor = Mathf.Min(waveFactor, Mathf.Max(0, _rewardScalingWaveCap - 1));
+
+            int wood = _woodRewardBase + _woodRewardPerWave * waveFactor;
+            int iron = _ironRewardBase + _ironRewardPerWave * waveFactor;
+            int food = _foodRewardPerWave;
+
+            if (wood <= 0 && iron <= 0 && food <= 0) return;
+
+            economy.Grant(new ResourceCost(wood: wood, food: food, iron: iron));
+
+            Debug.Log(
+                $"[WaveManager] Wave {waveId} cleared — granted build resources: " +
+                $"{wood} Wood, {iron} Iron" + (food > 0 ? $", {food} Food" : "") +
+                " (defend → earn → build).");
         }
 
         /// <summary>
@@ -1258,6 +1344,19 @@ namespace DeNelle.Village
                 _enemyStuckTime.Remove(enemy);
             }
             _liveEnemies.Remove(enemy);
+
+            // WO-330: optional small per-kill resource trickle (the wave-clear bonus is
+            // the primary reward). Only paid while the wave is still ACTIVE so the forced
+            // removals on a breach hand-off (phase Breached) / defeat don't pay out, and
+            // only for a real death (the enemy actually reached zero HP, not a stuck-cull
+            // Kill()). Routes through the same EconomyService wallet as the wave-clear bonus.
+            if (_awardResourcesPerKill
+                && _phase == WavePhase.Active
+                && enemy != null && enemy.Hp <= 0f
+                && (_woodPerKill > 0 || _ironPerKill > 0))
+            {
+                EconomyService.Instance?.Grant(wood: _woodPerKill, iron: _ironPerKill);
+            }
         }
 
         /// <summary>
