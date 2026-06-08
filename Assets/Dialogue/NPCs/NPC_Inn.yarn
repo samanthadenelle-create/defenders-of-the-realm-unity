@@ -52,6 +52,7 @@ title: TalkToInn
 // and works through ANY launch path (NPC station OR DialogueService). ──
 title: RumorBoard
 ---
+<<command: OpenRumorBoard>>
 Brom: Here's the talk, then —
 <<if $q_forge_stage > 0 and $q_forge_stage < 9>>
     Brom: Borin's forge is lit but his work's not done — he's still waiting on you.

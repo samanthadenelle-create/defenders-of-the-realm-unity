@@ -20,6 +20,10 @@ namespace DeNelle.DialogueUI
             reg.AddCommandHandler("OpenShop", (System.Action<string>)CmdOpenShop);
             reg.AddCommandHandler("OpenArena", CmdOpenArena);
             reg.AddCommandHandler("LearnRecipe", (System.Action<string>)CmdLearnRecipe);
+            // WO-304: Brom's rumor board — the browse/accept surface for the quest
+            // web. Additive verb; the existing NPC_Inn.yarn RumorBoard node opens it
+            // via <<command: OpenRumorBoard>>.
+            reg.AddCommandHandler("OpenRumorBoard", CmdOpenRumorBoard);
 
             // Quests (WO-290) — vendor / forgemaster / pet narrative verbs delegate
             // to the general QuestService (Core). These mirror the FTUE bridge's
@@ -105,6 +109,18 @@ namespace DeNelle.DialogueUI
         private void CmdLearnRecipe(string recipeId)
         {
             Debug.Log($"[NPC] Learned recipe: {recipeId}");
+        }
+
+        private void CmdOpenRumorBoard()
+        {
+            Debug.Log("[NPC] OpenRumorBoard called");
+            var panel = FindFirstObjectByType<DeNelle.Village.Hero.RumorBoardPanel>();
+            if (panel == null)
+            {
+                var host = new GameObject("RumorBoardPanelHost");
+                panel = host.AddComponent<DeNelle.Village.Hero.RumorBoardPanel>();
+            }
+            panel.Open();
         }
 
         // ── Quests (WO-290) — delegate to QuestService (Core) ─────────────────
