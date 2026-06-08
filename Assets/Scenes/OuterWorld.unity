@@ -295,6 +295,7 @@ MonoBehaviour:
   ReserveTotal: 650
   DespawnOnEmpty: 1
   InteractRadius: 2.5
+  AutoBuildVisual: 1
 --- !u!23 &75805695
 MeshRenderer:
   m_ObjectHideFlags: 0
@@ -632,6 +633,7 @@ MonoBehaviour:
   ReserveTotal: 500
   DespawnOnEmpty: 1
   InteractRadius: 2.5
+  AutoBuildVisual: 1
 --- !u!23 &342612278
 MeshRenderer:
   m_ObjectHideFlags: 0
@@ -766,6 +768,7 @@ MonoBehaviour:
   ReserveTotal: 450
   DespawnOnEmpty: 1
   InteractRadius: 2.5
+  AutoBuildVisual: 1
 --- !u!23 &567369928
 MeshRenderer:
   m_ObjectHideFlags: 0
@@ -1646,6 +1649,7 @@ MonoBehaviour:
   ReserveTotal: 450
   DespawnOnEmpty: 1
   InteractRadius: 2.5
+  AutoBuildVisual: 1
 --- !u!23 &1390992159
 MeshRenderer:
   m_ObjectHideFlags: 0
@@ -2607,6 +2611,7 @@ MonoBehaviour:
   ReserveTotal: 350
   DespawnOnEmpty: 1
   InteractRadius: 2.5
+  AutoBuildVisual: 1
 --- !u!23 &1983573694
 MeshRenderer:
   m_ObjectHideFlags: 0
@@ -2762,6 +2767,7 @@ MonoBehaviour:
   ReserveTotal: 500
   DespawnOnEmpty: 1
   InteractRadius: 2.5
+  AutoBuildVisual: 1
 --- !u!23 &2041754493
 MeshRenderer:
   m_ObjectHideFlags: 0
@@ -2896,6 +2902,7 @@ MonoBehaviour:
   ReserveTotal: 350
   DespawnOnEmpty: 1
   InteractRadius: 2.5
+  AutoBuildVisual: 1
 --- !u!23 &2079269975
 MeshRenderer:
   m_ObjectHideFlags: 0
@@ -3142,6 +3149,7 @@ MonoBehaviour:
   ReserveTotal: 550
   DespawnOnEmpty: 1
   InteractRadius: 2.5
+  AutoBuildVisual: 1
 --- !u!23 &2093530001
 MeshRenderer:
   m_ObjectHideFlags: 0
