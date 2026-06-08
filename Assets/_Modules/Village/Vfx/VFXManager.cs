@@ -218,6 +218,9 @@ namespace DeNelle.Village
             VFXType.Boss_Spawn              => DeNelle.Audio.SfxId.None,
             VFXType.Boss_Death              => DeNelle.Audio.SfxId.EnemyDeath,
             VFXType.Boss_AttackImpact       => DeNelle.Audio.SfxId.Shockwave,
+            // WO-66 boss phase VFX
+            VFXType.Boss_PhaseTransition    => DeNelle.Audio.SfxId.Shockwave,
+            VFXType.Boss_Telegraph          => DeNelle.Audio.SfxId.None,
             _                               => DeNelle.Audio.SfxId.None,
         };
 
@@ -709,6 +712,17 @@ namespace DeNelle.Village
                     AbilityVfxKit.SpawnAbilityVfx(AbilityEffect.Cleave, _physColor, position, 3f, position);
                     break;
 
+                // -- WO-66: boss phase transition / telegraph -----------------------------------
+                case VFXType.Boss_PhaseTransition:
+                    // Enrage burst — a wide flame nova when the boss crosses a threshold.
+                    AbilityVfxKit.SpawnAbilityVfx(AbilityEffect.Aoe, _flameColor, position, 3.5f, position);
+                    break;
+
+                case VFXType.Boss_Telegraph:
+                    // Wind-up tell — a tight aether gather just before a special attack.
+                    AbilityVfxKit.SpawnAbilityVfx(AbilityEffect.Strike, _aetherColor, position, 1.5f, position);
+                    break;
+
                 default:
                     AbilityVfxKit.SpawnAbilityVfx(AbilityEffect.Aoe, _aetherColor, position, 1.5f, position);
                     break;
@@ -728,6 +742,10 @@ namespace DeNelle.Village
                 VFXType.Aura_Ice            => _iceColor,
                 VFXType.Aura_Healer         => _healColor,
                 VFXType.Env_TorchFlame      => _flameColor,
+                // WO-66 boss phase auras — calm -> enraged -> seething.
+                VFXType.Boss_Aura_Phase1    => _aetherColor,
+                VFXType.Boss_Aura_Phase2    => _goldColor,
+                VFXType.Boss_Aura_Phase3    => _flameColor,
                 _                           => _aetherColor,
             };
 

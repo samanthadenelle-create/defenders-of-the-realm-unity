@@ -191,5 +191,17 @@ namespace DeNelle.Village
         Boss_Death,
         /// <summary>Oversized shockwave ring on boss melee impact. WO-66.</summary>
         Boss_AttackImpact,
+
+        // -- WO-66 boss phase VFX (DragonBoss phase transitions) -------------------
+        /// <summary>One-shot enrage/phase-transition burst when a boss crosses an HP threshold. WO-66.</summary>
+        Boss_PhaseTransition,
+        /// <summary>Telegraph wind-up burst on the boss just before a special attack (swoop/breath). WO-66.</summary>
+        Boss_Telegraph,
+        /// <summary>Persistent phase aura loop — early/calm phase (Circling). Swapped per phase. WO-66.</summary>
+        Boss_Aura_Phase1,
+        /// <summary>Persistent phase aura loop — mid/enraged phase (Stooping). WO-66.</summary>
+        Boss_Aura_Phase2,
+        /// <summary>Persistent phase aura loop — final/relentless phase (LastWing). WO-66.</summary>
+        Boss_Aura_Phase3,
     }
 }

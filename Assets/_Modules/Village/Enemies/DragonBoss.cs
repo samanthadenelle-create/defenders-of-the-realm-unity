@@ -137,6 +137,42 @@ namespace DeNelle.Village
         [Tooltip("Seconds the spiralling death fall takes before the dragon is destroyed.")]
         [SerializeField] private float _deathFallSeconds = 4.5f;
 
+        // ── Phase VFX (WO-66) ─────────────────────────────────────────────────
+        // Boss-fight visual phases driven entirely off the boss's own HP/state
+        // events (PhaseChanged / StruckHeart / Died) through the canonical
+        // DeNelle.Village VFXManager. Pooled (VFXManager owns the pool) — no
+        // per-frame alloc; auras are loop handles swapped once per transition.
+
+        [Header("Phase VFX (WO-66)")]
+        [Tooltip("Master toggle — play phase-transition bursts, phase auras and " +
+                 "attack telegraphs through VFXManager. Off = silent (e.g. low-end).")]
+        [SerializeField] private bool _phaseVfxEnabled = true;
+
+        [Tooltip("One-shot enrage burst played at the boss when it crosses an HP threshold.")]
+        [SerializeField] private VFXType _phaseTransitionVfx = VFXType.Boss_PhaseTransition;
+
+        [Tooltip("Wind-up tell played on the boss just before a swoop / fire-breath special.")]
+        [SerializeField] private VFXType _telegraphVfx = VFXType.Boss_Telegraph;
+
+        [Tooltip("Oneshot impact burst at the Heart when a swoop / breath strike lands.")]
+        [SerializeField] private VFXType _strikeImpactVfx = VFXType.Boss_AttackImpact;
+
+        [Tooltip("Oneshot burst at the boss on death.")]
+        [SerializeField] private VFXType _deathVfx = VFXType.Boss_Death;
+
+        [Tooltip("Persistent phase aura for Phase 1 (Circling) — calm.")]
+        [SerializeField] private VFXType _phase1Aura = VFXType.Boss_Aura_Phase1;
+
+        [Tooltip("Persistent phase aura for Phase 2 (Stooping) — enraged.")]
+        [SerializeField] private VFXType _phase2Aura = VFXType.Boss_Aura_Phase2;
+
+        [Tooltip("Persistent phase aura for Phase 3 (LastWing) — seething.")]
+        [SerializeField] private VFXType _phase3Aura = VFXType.Boss_Aura_Phase3;
+
+        // The single live aura loop handle — swapped (Stop old, Play new) on each
+        // phase transition so only ONE aura is ever attached to the boss.
+        private VFXHandle _auraHandle;
+
         // ── Phase thresholds (HP fraction) ────────────────────────────────────
 
         /// <summary>Phase 1 → Phase 2 boundary — 60% HP.</summary>
@@ -248,6 +284,10 @@ namespace DeNelle.Village
             _attackCooldown = _phase1AttackInterval;
             _swoopElapsed = 0f;
             _swoopStruck = false;
+
+            // Boss-fight phase VFX — attach the calm Phase-1 aura now. Later
+            // phases swap it via PlayPhaseAura on each PhaseChanged.
+            PlayPhaseAura(_phase);
         }
 
         // ---------------------------------------------------------------------
@@ -309,6 +349,10 @@ namespace DeNelle.Village
             if (next != _phase)
             {
                 _phase = next;
+                // Boss-fight phase VFX: a one-shot enrage burst on the boss, then
+                // swap the persistent phase aura to the new phase's loop.
+                PlayPhaseTransition();
+                PlayPhaseAura(_phase);
                 PhaseChanged?.Invoke(_phase);
             }
         }
@@ -394,6 +438,7 @@ namespace DeNelle.Village
             _swoopElapsed = Mathf.Epsilon; // mark active; TickSwoop drives it
             _swoopStruck = false;
             if (_animator != null && _hasAttackParam) _animator.SetTrigger(AnimAttack);
+            PlayTelegraph(); // wind-up tell before the dive
         }
 
         /// <summary>
@@ -497,6 +542,7 @@ namespace DeNelle.Village
         private void FireBreath()
         {
             if (_animator != null && _hasAttackParam) _animator.SetTrigger(AnimAttack);
+            PlayTelegraph(); // wind-up tell before the breath pass
             DealStrike(_breathDamage);
         }
 
@@ -509,6 +555,11 @@ namespace DeNelle.Village
         {
             if (_heartStructure != null && _heartStructure.IsAlive)
                 _heartStructure.ApplyContactDamage(amount);
+
+            // Oneshot impact burst at the strike point (the anchor / Heart).
+            if (_phaseVfxEnabled && _strikeImpactVfx != VFXType.None)
+                VFXManager.Play(_strikeImpactVfx, AnchorPosition());
+
             StruckHeart?.Invoke(amount);
         }
 
@@ -553,6 +604,13 @@ namespace DeNelle.Village
             _swoopElapsed = 0f;
             _deathElapsed = 0f;
             if (_animator != null && _hasDeadParam) _animator.SetBool(AnimDead, true);
+
+            // Phase VFX: stop the persistent aura and play the death burst at the
+            // boss. (The body keeps spiralling down; the burst marks the kill.)
+            StopPhaseAura();
+            if (_phaseVfxEnabled && _deathVfx != VFXType.None)
+                VFXManager.Play(_deathVfx, transform.position);
+
             Died?.Invoke(this);
             PhaseChanged?.Invoke(DragonPhase.Falling);
         }
@@ -602,6 +660,73 @@ namespace DeNelle.Village
             if (_animator == null || !_hasSpeedParam) return;
             _shownSpeed = Mathf.Lerp(_shownSpeed, rawSpeed, Time.deltaTime * 4f);
             _animator.SetFloat(AnimSpeed, _shownSpeed);
+        }
+
+        // ---------------------------------------------------------------------
+        // Phase VFX (WO-66)
+        // ---------------------------------------------------------------------
+        // All boss-fight visual phases route through the canonical VFXManager
+        // (DeNelle.Village). Bursts are pooled oneshots; the phase aura is a
+        // single VFXHandle loop swapped per transition — no per-frame alloc.
+
+        /// <summary>The looping aura VFXType for the given flight phase.</summary>
+        private VFXType AuraForPhase(DragonPhase phase)
+        {
+            switch (phase)
+            {
+                case DragonPhase.Stooping: return _phase2Aura;
+                case DragonPhase.LastWing: return _phase3Aura;
+                default:                   return _phase1Aura; // Circling
+            }
+        }
+
+        /// <summary>
+        /// Swaps the persistent phase aura to the one for <paramref name="phase"/>.
+        /// Stops the previous aura first so only one is ever attached. No-op when
+        /// phase VFX are disabled or VFXManager is not present.
+        /// </summary>
+        private void PlayPhaseAura(DragonPhase phase)
+        {
+            if (!_phaseVfxEnabled) return;
+            var mgr = VFXManager.Instance;
+            if (mgr == null) return;
+
+            VFXType type = AuraForPhase(phase);
+            if (type == VFXType.None) { StopPhaseAura(); return; }
+
+            // Swap: stop the old loop, then attach the new one to the boss.
+            StopPhaseAura();
+            _auraHandle = mgr.PlayAura(type, transform);
+        }
+
+        /// <summary>Stops and clears the live phase aura handle, if any.</summary>
+        private void StopPhaseAura()
+        {
+            if (_auraHandle != null)
+            {
+                if (_auraHandle.IsAlive) _auraHandle.Stop();
+                _auraHandle = null;
+            }
+        }
+
+        /// <summary>Oneshot enrage burst at the boss when it crosses an HP threshold.</summary>
+        private void PlayPhaseTransition()
+        {
+            if (!_phaseVfxEnabled || _phaseTransitionVfx == VFXType.None) return;
+            VFXManager.Play(_phaseTransitionVfx, transform.position);
+        }
+
+        /// <summary>Wind-up telegraph burst on the boss just before a special attack.</summary>
+        private void PlayTelegraph()
+        {
+            if (!_phaseVfxEnabled || _telegraphVfx == VFXType.None) return;
+            VFXManager.Play(_telegraphVfx, transform.position, transform.rotation);
+        }
+
+        /// <summary>Tear down the live aura loop so it does not leak the pooled object.</summary>
+        private void OnDisable()
+        {
+            StopPhaseAura();
         }
 
         // ---------------------------------------------------------------------
