@@ -123,7 +123,7 @@ namespace DeNelle.Onboarding
             // screen entirely — route on before building any UI.
             if (_skipWhenIntroComplete && IsIntroComplete())
             {
-                SceneRouter.GoVillage();
+                SceneRouter.GoCastle();
                 return;
             }
 

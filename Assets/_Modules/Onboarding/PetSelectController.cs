@@ -117,7 +117,7 @@ namespace DeNelle.Onboarding
             // screen — route on to the Village before binding any UI.
             if (_skipWhenPetChosen && HasStarterPet())
             {
-                SceneRouter.GoVillage();
+                SceneRouter.GoCastle();
                 return;
             }
 
@@ -465,7 +465,7 @@ namespace DeNelle.Onboarding
                                  "was NOT persisted. Routing onward anyway.");
             }
 
-            SceneRouter.GoVillage();
+            SceneRouter.GoCastle();
         }
     }
 }

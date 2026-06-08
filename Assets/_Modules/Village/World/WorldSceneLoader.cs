@@ -16,6 +16,7 @@
 // additively. No scene wiring, no manual call. Safe no-op in any other scene.
 // Domain-reload-off safe via the s_done reset.
 // =============================================================================
+using System.Linq;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -25,6 +26,11 @@ namespace DeNelle.Village
     {
         private const string VillageSceneName    = "Village2";
         private const string OuterWorldSceneName  = "OuterWorld";
+
+        // Support the new Central Castle Hub as an alternative project start / home world.
+        // When the active scene is a Castle hub (MainCastle_Hall, CastleHub*, or any with "Castle" in name),
+        // we still want OuterWorld streamed in additively for the open world connection.
+        private static readonly string[] HubSceneNames = { "Village2", "MainCastle_Hall", "CastleHub", "CastleHub_MainKeep" };
 
         // BUILD FIX (WO-173/DEF-108): a one-shot AfterSceneLoad check FAILED in player
         // builds. AfterSceneLoad fires when the BOOT scene (Title) is active — not Village
@@ -147,11 +153,12 @@ namespace DeNelle.Village
 
         private static void TryLoadOuterWorld(Scene scene, string via)
         {
-            // Only pull the outer world in when the Village scene is the one that loaded.
-            if (scene.name != VillageSceneName)
+            // Pull OuterWorld when the active scene is Village2 OR one of the Castle Hubs (new project start point).
+            bool isHubScene = HubSceneNames.Any(name => scene.name == name || scene.name.Contains(name));
+            if (!isHubScene)
             {
                 Debug.Log("[WorldSceneLoader] DEBUG (" + via + ") skip — '" + scene.name +
-                    "' != '" + VillageSceneName + "'.");
+                    "' not a recognized hub (Village2 or Castle*).");
                 return;
             }
 

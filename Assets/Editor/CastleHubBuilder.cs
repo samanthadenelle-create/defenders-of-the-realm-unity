@@ -1,0 +1,705 @@
+using System.Collections.Generic;
+using System.Linq;
+using UnityEditor;
+using UnityEditor.SceneManagement;
+using UnityEngine;
+using UnityEngine.AI;
+using UnityEngine.SceneManagement;
+
+namespace DeNelle.Editor
+{
+    // =============================================================================
+    // CastleHubBuilder — Central Castle Hub (CastleHubRoot) scene automation.
+    // -----------------------------------------------------------------------------
+    // Run from: Defenders > Scenes > Build CastleHub_MainKeep
+    //
+    // Designed to run AFTER you create a blank/empty scene (File > New Scene > Empty).
+    // It is idempotent: re-running in the same scene will clear the prior root and rebuild.
+    //
+    // Implements the Central Castle Hub spec:
+    // - Separate scene for home + hub (distinct from Village2 primary).
+    // - Beautifully designed castle using Quaternius (modular beauty, walls/floors/stairs/props)
+    //   + polyperfect Low Poly Ultimate Pack _M tier (performant, single-atlas, mobile friendly).
+    // - Outer defensive walls + 4 corner towers + main south gate (connection marker to OuterWorld).
+    // - Central courtyard/plaza with exactly 8 dedicated structures (storefront + NPC interact points):
+    //     1. Blacksmith (Weapons)   2. Lumbermill (Wood)   3. Windmill (Food)
+    //     4. Echo Hollow (Pets)     5. Forge (Armor)       6. Arcane Tower (Magic)
+    //     7. Jeweler (Gems)         8. Store/Marketplace (Monetization)
+    // - Main Keep (Castle_Medieval) with Player Hero Hall / Personal Quarters (home space).
+    // - Upper battlements (wide ~42m platform at height, 4 defensive towers, LOS down to courtyard
+    //   for player-placed defenses via existing base-building system).
+    // - Stairs/ramps for 2-level access.
+    // - Connection point south for additive load with OuterWorld + NavMeshLink (bake NavMesh after).
+    // - Space/comments for roaming NPCs/animals (Bella), mobile touch interaction points,
+    //   integration with Economy/Yarn/NPCUpgradeStation/BuildModeController/WorldSceneLoader.
+    // - Low-poly from packs → good mobile perf (static batch, LODs, URP lighting).
+    //
+    // After run:
+    //   1. Save the scene under Assets/Scenes/ (e.g. MainCastle_Hall.unity or CastleHub_MainKeep.unity).
+    //   2. Window > AI > Navigation (or add NavMeshSurface + bake for modern multi-scene use; include upper level).
+    //   3. Add NavMeshLink at south gate for adjacency to OuterWorld (position root accordingly).
+    //   4. Wire the 8 NPC_*_Interactable points with existing systems (Yarn dialogue for shops,
+    //      NPCUpgradeStation for blacksmith/forge, pet roaming for Echo Hollow, etc.).
+    //   5. Add SmartMobileCamera + Lean Touch setup for overview/follow + touch nav.
+    //   6. Optional: extend WorldSceneLoader or add a gate trigger for seamless transition.
+    //
+    // Packs used (read docs before editing):
+    // - polyperfect: Assets/polyperfect/Low Poly Ultimate Pack/_M/Prefabs_M/Medieval_M/...
+    // - Quaternius:  Assets/Quaternius/Medieval Village MegaKit/Modules/Prefabs/(Wall|Prop|...)/...
+    // See: docs/INSTALLED_PACKS_INDEX.md, POLYPERFECT_NOTES.md, QUATERNIUS_NOTES.md,
+    //      polyperfect-asset-catalog.md.
+    //
+    // No .unity hand-edits. Matches VillageSceneBuilder pattern (Editor-only, menu driven,
+    // PrefabUtility.InstantiatePrefab, graceful miss handling).
+    // =============================================================================
+    public static class CastleHubBuilder
+    {
+        private const string MenuPath = "Defenders/Scenes/Build CastleHub_MainKeep";
+        private const string RootName = "CastleHubRoot";
+
+        // Pack roots (validated against catalogs + on-disk)
+        private const string PolyRoot =
+            "Assets/polyperfect/Low Poly Ultimate Pack/_M/Prefabs_M/Medieval_M/";
+        private const string QuatRoot =
+            "Assets/Quaternius/Medieval Village MegaKit/Modules/Prefabs/";
+
+        [MenuItem(MenuPath)]
+        public static void BuildCastleHub()
+        {
+            // --- Idempotent: clear prior generation in the open scene (safe for re-runs or blank scene) ---
+            var prior = GameObject.Find(RootName);
+            if (prior != null)
+            {
+                Debug.Log($"[CastleHubBuilder] Destroying prior {RootName} root for rebuild.");
+                Object.DestroyImmediate(prior);
+            }
+
+            // Optional: if user wants a truly fresh scene, they created a blank one before running.
+            // We populate whatever scene is active.
+
+            var root = new GameObject(RootName);
+            root.transform.position = Vector3.zero;
+
+            Debug.Log("[CastleHubBuilder] Building Central Castle Hub (CastleHubRoot) from Quaternius + polyperfect packs...");
+
+            // === Load prefabs (null = will skip or placeholder) ===
+            GameObject castleCore   = LoadPoly("Castle_Medieval.prefab");
+            GameObject towerRound   = LoadPoly("Tower_Castle_Round.prefab");
+            GameObject towerSquare  = LoadPoly("Tower_Castle_Square.prefab");
+            GameObject towerBig     = LoadPoly("Tower_Medieval_Big.prefab");
+            GameObject wallStone    = LoadPoly("Wall_Medieval_Stone.prefab");
+            GameObject gateMedium   = LoadPoly("Gate_Medieval_Medium.prefab");
+            GameObject drawbridge   = LoadPoly("Drawbridge_Medieval.prefab");
+            GameObject stairsStone  = LoadPoly("Stairs_Medieval_Stone.prefab");
+
+            // 8 structures sources
+            GameObject houseMed     = LoadPoly("House_Medieval_Medium.prefab");
+            GameObject houseLarge   = LoadPoly("House_Medieval_Large.prefab");
+            GameObject houseSmall   = LoadPoly("House_Medieval_Small.prefab");
+            GameObject windmill     = LoadPoly("Windmill_Medieval.prefab");
+            GameObject watermill    = LoadPoly("Watermill_Medieval.prefab");
+            GameObject stables      = LoadPoly("Stables_Medieval.prefab");
+            GameObject marketStand  = LoadPoly("Marketplace_Stand_Simple.prefab");
+
+            // Quaternius modular beauty pieces (for walls, floors, stairs, vines, details)
+            GameObject qWallStraight = LoadQuat("Wall/Wall_Plaster_Straight.prefab");
+            GameObject qStairsExt    = LoadQuat("Prop/Stairs_Exterior_Straight.prefab");
+            GameObject qFloorWood    = LoadQuat("Wall/Floor_WoodDark.prefab"); // floors live under Wall/ in this pack tree
+            GameObject qVine1        = LoadQuat("Prop/Prop_Vine1.prefab");
+            GameObject qCrate        = LoadQuat("Prop/Prop_Crate.prefab");
+            GameObject qBalcony      = LoadQuat("Prop/Balcony_Simple_Straight.prefab");
+
+            // === OUTER WALLS + TOWERS + BATTLEMENTS (defensive perimeter) ===
+            var wallsRoot = new GameObject("OuterWalls_Towers_Battlements");
+            wallsRoot.transform.SetParent(root.transform, false);
+
+            // 4 corner towers (polyperfect round for silhouette)
+            if (towerRound != null)
+            {
+                Vector3[] corners = {
+                    new Vector3(-42, 0, -42), new Vector3(42, 0, -42),
+                    new Vector3(-42, 0, 42),  new Vector3(42, 0, 42)
+                };
+                for (int i = 0; i < corners.Length; i++)
+                {
+                    var t = (GameObject)PrefabUtility.InstantiatePrefab(towerRound);
+                    t.transform.SetParent(wallsRoot.transform, false);
+                    t.transform.localPosition = corners[i];
+                    t.name = $"CornerTower_{i+1}";
+                }
+            }
+
+            // Main perimeter walls (poly stone segments + Quaternius plaster for beauty/detail)
+            if (wallStone != null)
+            {
+                // South wall segments (skip center for gate)
+                for (int x = -3; x <= 3; x++)
+                {
+                    if (Mathf.Abs(x) > 1)
+                    {
+                        var w = (GameObject)PrefabUtility.InstantiatePrefab(wallStone);
+                        w.transform.SetParent(wallsRoot.transform, false);
+                        w.transform.localPosition = new Vector3(x * 13f, 0f, -44f);
+                        w.name = $"Wall_South_{x}";
+                    }
+                }
+                // North wall
+                for (int x = -3; x <= 3; x++)
+                {
+                    if (Mathf.Abs(x) > 1)
+                    {
+                        var w = (GameObject)PrefabUtility.InstantiatePrefab(wallStone);
+                        w.transform.SetParent(wallsRoot.transform, false);
+                        w.transform.localPosition = new Vector3(x * 13f, 0f, 44f);
+                        w.name = $"Wall_North_{x}";
+                    }
+                }
+                // East/West simplified (add more Quaternius runs for full beauty)
+            }
+
+            // Quaternius west wall line for visual variety + battlements feel
+            if (qWallStraight != null)
+            {
+                for (int i = 0; i < 7; i++)
+                {
+                    var w = (GameObject)PrefabUtility.InstantiatePrefab(qWallStraight);
+                    w.transform.SetParent(wallsRoot.transform, false);
+                    w.transform.localPosition = new Vector3(-44f, 0f, -30f + i * 10f);
+                    w.transform.localRotation = Quaternion.Euler(0, 90, 0);
+                    w.name = $"QWall_West_{i}";
+                }
+                for (int i = 0; i < 7; i++)
+                {
+                    var w = (GameObject)PrefabUtility.InstantiatePrefab(qWallStraight);
+                    w.transform.SetParent(wallsRoot.transform, false);
+                    w.transform.localPosition = new Vector3(44f, 0f, -30f + i * 10f);
+                    w.transform.localRotation = Quaternion.Euler(0, -90, 0);
+                    w.name = $"QWall_East_{i}";
+                }
+            }
+
+            // Main South Gate + Drawbridge (connection to OuterWorld)
+            if (gateMedium != null)
+            {
+                var g = (GameObject)PrefabUtility.InstantiatePrefab(gateMedium);
+                g.transform.SetParent(wallsRoot.transform, false);
+                g.transform.localPosition = new Vector3(0, 0, -50);
+                g.name = "MainGate_South_ToOuterWorld";
+            }
+            if (drawbridge != null)
+            {
+                var d = (GameObject)PrefabUtility.InstantiatePrefab(drawbridge);
+                d.transform.SetParent(wallsRoot.transform, false);
+                d.transform.localPosition = new Vector3(0, 0, -58);
+                d.name = "Drawbridge_Approach";
+            }
+
+            // === CENTRAL COURTYARD / PLAZA (mobile-friendly open space) ===
+            var courtyard = new GameObject("CentralCourtyard_Plaza");
+            courtyard.transform.SetParent(root.transform, false);
+
+            // Simple ground/plaza floor (Quaternius wood or poly stone brick)
+            if (qFloorWood != null)
+            {
+                for (int x = -2; x <= 2; x++)
+                {
+                    for (int z = -2; z <= 2; z++)
+                    {
+                        var f = (GameObject)PrefabUtility.InstantiatePrefab(qFloorWood);
+                        f.transform.SetParent(courtyard.transform, false);
+                        f.transform.localPosition = new Vector3(x * 8f, 0.01f, z * 8f);
+                        f.name = $"CourtyardFloor_{x}_{z}";
+                    }
+                }
+            }
+            else
+            {
+                // Fallback visual plane
+                var plane = GameObject.CreatePrimitive(PrimitiveType.Plane);
+                plane.transform.SetParent(courtyard.transform, false);
+                plane.transform.localScale = new Vector3(8, 1, 8);
+                plane.name = "Courtyard_PlazaFallback";
+                Object.DestroyImmediate(plane.GetComponent<Collider>());
+            }
+
+            // === THE 8 STRUCTURES (ring around plaza, storefronts face center, NPC points) ===
+            var structuresRoot = new GameObject("The8Structures_Storefronts_NPCPoints");
+            structuresRoot.transform.SetParent(courtyard.transform, false);
+
+            // Exact 8 per spec, positions in a pleasant octagon-ish ring for clear mobile nav + thumb reach
+            var structures = new List<(GameObject prefab, string displayName, Vector3 localPos)>
+            {
+                (houseMed,   "Blacksmith_Weapons_Storefront",   new Vector3(-22, 0, -22)),
+                (watermill,  "Lumbermill_Wood_Storefront",      new Vector3( 22, 0, -22)),
+                (windmill,   "Windmill_Food_Storefront",        new Vector3(-22, 0,  22)),
+                (stables,    "EchoHollow_Pets_RoamingArea",     new Vector3( 22, 0,  22)),
+                (houseMed,   "Forge_Armor_Storefront",          new Vector3(-32, 0,   0)),
+                (towerBig,   "ArcaneTower_MagicUpgrades",       new Vector3( 32, 0,   0)),
+                (houseSmall, "Jeweler_Gems_Storefront",         new Vector3(  0, 0, -32)),
+                (houseLarge, "Marketplace_Monetization",        new Vector3(  0, 0,  32)),
+            };
+
+            for (int i = 0; i < structures.Count; i++)
+            {
+                var (prefab, name, pos) = structures[i];
+                if (prefab == null) continue;
+
+                var inst = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
+                inst.transform.SetParent(structuresRoot.transform, false);
+                inst.transform.localPosition = pos;
+                inst.name = name;
+
+                // Front-of-building NPC / storefront interact point (wire with existing Yarn/Economy/NPC systems)
+                var npc = new GameObject($"NPC_{name.Split('_')[0]}_Interactable");
+                npc.transform.SetParent(inst.transform, false);
+                npc.transform.localPosition = new Vector3(0, 0, 6); // front offset; rotate building if needed for facing
+
+                // Optional crate/vine dressing for storefront vibe (Quaternius)
+                if (qCrate != null && i % 2 == 0)
+                {
+                    var c = (GameObject)PrefabUtility.InstantiatePrefab(qCrate);
+                    c.transform.SetParent(inst.transform, false);
+                    c.transform.localPosition = new Vector3(3, 0, 4);
+                    c.name = "StorefrontCrate";
+                }
+                if (qVine1 != null)
+                {
+                    var v = (GameObject)PrefabUtility.InstantiatePrefab(qVine1);
+                    v.transform.SetParent(inst.transform, false);
+                    v.transform.localPosition = new Vector3(-2.5f, 2, 0);
+                    v.name = "StorefrontVine";
+                }
+
+                Debug.Log($"[CastleHubBuilder] Placed {name} + NPC interact point.");
+            }
+
+            // === MAIN KEEP + PLAYER HOME (2 levels: ground hall + upper private quarters) ===
+            var keepRoot = new GameObject("MainKeep_CastleWithTwoLevels_Home");
+            keepRoot.transform.SetParent(root.transform, false);
+
+            if (castleCore != null)
+            {
+                var keep = (GameObject)PrefabUtility.InstantiatePrefab(castleCore);
+                keep.transform.SetParent(keepRoot.transform, false);
+                keep.transform.localPosition = Vector3.zero;
+                keep.name = "GroundLevel_Keep_Hall_Entry";
+            }
+
+            // Labeled home space (ground + upper access). Dress further with Quaternius floors/walls + KayKit furniture bits.
+            var home = new GameObject("PlayerHeroHall_PersonalQuarters_HomeSpace");
+            home.transform.SetParent(keepRoot.transform, false);
+            home.transform.localPosition = new Vector3(0, 0, -12);
+
+            // Hero start point inside the personal quarters — this becomes the project start location
+            // when we move the entry point from Village2 to the Castle Hub.
+            var heroStart = new GameObject("HeroStartPoint_InsidePersonalQuarters");
+            heroStart.transform.SetParent(home.transform, false);
+            heroStart.transform.localPosition = new Vector3(0, 0.1f, 0);
+            heroStart.transform.localRotation = Quaternion.Euler(0, 0, 0);
+
+            // === UPPER BATTLEMENTS (wide platform, defensive towers, LOS to courtyard below) ===
+            var upper = new GameObject("UpperBattlements_SecondLevel_Defenses_LOS");
+            upper.transform.SetParent(keepRoot.transform, false);
+            upper.transform.localPosition = new Vector3(0, 11f, 0);
+
+            // Wide flat platform for player base-building defenses (existing PlacementGrid + BuildModeController)
+            var platform = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            platform.transform.SetParent(upper.transform, false);
+            platform.transform.localPosition = Vector3.zero;
+            platform.transform.localScale = new Vector3(44, 0.8f, 44);
+            platform.name = "BattlementsPlatform_Wide42m_ForPlayerTowers_LOS_DownToCourtyard";
+            Object.DestroyImmediate(platform.GetComponent<Collider>());
+
+            // Crenellated feel + Quaternius modular walls around edge
+            if (qWallStraight != null)
+            {
+                for (int i = 0; i < 9; i++)
+                {
+                    var bw = (GameObject)PrefabUtility.InstantiatePrefab(qWallStraight);
+                    bw.transform.SetParent(upper.transform, false);
+                    bw.transform.localPosition = new Vector3(-22 + i * 5.5f, 1.2f, -23);
+                    bw.name = $"BattlementWall_South_{i}";
+                }
+                for (int i = 0; i < 9; i++)
+                {
+                    var bw = (GameObject)PrefabUtility.InstantiatePrefab(qWallStraight);
+                    bw.transform.SetParent(upper.transform, false);
+                    bw.transform.localPosition = new Vector3(-22 + i * 5.5f, 1.2f, 23);
+                    bw.name = $"BattlementWall_North_{i}";
+                }
+            }
+
+            // 4 upper defensive towers (space + pre-placed for LOS defense)
+            if (towerBig != null)
+            {
+                Vector3[] utPos = {
+                    new Vector3(-18, 1.5f, -18), new Vector3(18, 1.5f, -18),
+                    new Vector3(-18, 1.5f, 18),  new Vector3(18, 1.5f, 18)
+                };
+                for (int i = 0; i < utPos.Length; i++)
+                {
+                    var ut = (GameObject)PrefabUtility.InstantiatePrefab(towerBig);
+                    ut.transform.SetParent(upper.transform, false);
+                    ut.transform.localPosition = utPos[i];
+                    ut.name = $"UpperDefensiveTower_{i+1}_PlayerBuildLOS";
+                }
+            }
+
+            // Access stairs (poly + Quaternius for beauty)
+            if (stairsStone != null)
+            {
+                var st = (GameObject)PrefabUtility.InstantiatePrefab(stairsStone);
+                st.transform.SetParent(keepRoot.transform, false);
+                st.transform.localPosition = new Vector3(16, 5.5f, 0);
+                st.name = "MainStairs_Poly_ToUpperBattlements";
+            }
+            if (qStairsExt != null)
+            {
+                var qs = (GameObject)PrefabUtility.InstantiatePrefab(qStairsExt);
+                qs.transform.SetParent(upper.transform, false);
+                qs.transform.localPosition = new Vector3(-2, 0, -20);
+                qs.name = "QuaterniusStairs_UpperAccess";
+            }
+
+            // === BEAUTY + DEFENSIVE DRESSING (vines, crates, balconies from Quaternius) ===
+            if (qVine1 != null)
+            {
+                for (int i = 0; i < 8; i++)
+                {
+                    var v = (GameObject)PrefabUtility.InstantiatePrefab(qVine1);
+                    v.transform.SetParent(wallsRoot.transform, false);
+                    v.transform.localPosition = new Vector3(-38 + i * 11f, 4f, -40);
+                    v.name = $"VineDecor_{i}";
+                }
+            }
+            if (qBalcony != null)
+            {
+                // A few balcony accents on keep/upper for "home" verticality
+                var b = (GameObject)PrefabUtility.InstantiatePrefab(qBalcony);
+                b.transform.SetParent(keepRoot.transform, false);
+                b.transform.localPosition = new Vector3(8, 6, -8);
+                b.name = "KeepBalcony_HomeAccent";
+            }
+
+            // === CONNECTION TO OUTERWORLD (NavMesh seam + player transition) ===
+            // South gate seam between Castle Hub (home) and OuterWorld regions.
+            // - NavMeshLink: AI can path across when both scenes additive.
+            // - SceneTransitionTrigger: on player cross, ensures OuterWorld loaded additive + teleports hero to target pos.
+            // Alignment tip: When loading CastleHub additive, position its root so the marker's world pos
+            // matches the desired "castle approach" point in OuterWorld (e.g. place OuterWorld root at (0,0,0)
+            // and set Castle root offset, or vice versa). The marker local pos is south of hub.
+            var gateMarker = new GameObject("WorldGate_ConnectToOuterWorld_Marker");
+            gateMarker.transform.SetParent(root.transform, false);
+            gateMarker.transform.localPosition = new Vector3(0, 0, -68);
+
+            // Actually wire the components (NavMeshLink + trigger with the new SceneTransitionTrigger).
+            // Also exposed via the one-off menu for already-saved scenes (e.g. your MainCastle_Hall).
+            WireOuterWorldConnection(gateMarker);
+
+            // === ROAMING / AMBIENCE (Bella + NPCs) ===
+            var ambience = new GameObject("RoamingNPCs_Animals_Bella_Ambience");
+            ambience.transform.SetParent(root.transform, false);
+            // Populate later with People_M / Animals_M from polyperfect or existing injectors (StoryCompanionInjector etc.).
+            // Echo Hollow (stables) gets extra radius for pet roaming.
+
+            // === LIGHTING / PERF HINTS (do not add heavy lights here — use scene lighting) ===
+            // All pieces are low-poly single-atlas or URP ShaderGraph → excellent batching.
+            // After placing: mark static where appropriate, add light probes / reflection probes for upper/lower contrast.
+
+            Debug.Log("[CastleHubBuilder] CastleHubRoot complete. 8 structures + keep + upper battlements + gate marker placed.\n" +
+                      "Next: Save under Assets/Scenes/ (e.g. MainCastle_Hall.unity), Bake NavMesh (NavMeshSurface recommended), wire NPC points + connection via existing systems (WorldSceneLoader, Economy, Yarn, base-build on battlements).");
+            Selection.activeGameObject = root;
+        }
+
+        // --- Helpers (graceful loading like VillageSceneBuilder pattern) ---
+        private static GameObject LoadPoly(string fileName)
+        {
+            string path = PolyRoot + fileName;
+            var go = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+            if (go == null)
+            {
+                Debug.LogWarning($"[CastleHubBuilder] Missing polyperfect prefab (using placeholder behavior): {path}");
+            }
+            return go;
+        }
+
+        private static GameObject LoadQuat(string relative)
+        {
+            string path = QuatRoot + relative;
+            var go = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+            if (go == null)
+            {
+                Debug.LogWarning($"[CastleHubBuilder] Missing Quaternius prefab: {path}");
+            }
+            return go;
+        }
+
+        // =====================================================================
+        //  OuterWorld connection wiring (NavMeshLink + transition trigger)
+        //  Called from BuildCastleHub and exposed as a menu for existing scenes
+        //  (e.g. open MainCastle_Hall.unity then run the menu to wire without rebuild).
+        // =====================================================================
+
+        [MenuItem("Defenders/Scenes/Wire Current Castle to OuterWorld")]
+        public static void WireCurrentCastleToOuterWorld()
+        {
+            var marker = GameObject.Find("WorldGate_ConnectToOuterWorld_Marker");
+            if (marker == null)
+            {
+                Debug.LogError("[CastleHubBuilder] Could not find 'WorldGate_ConnectToOuterWorld_Marker' in the current scene. " +
+                               "Run the main Build CastleHub first (or create the marker manually at your south gate).");
+                return;
+            }
+
+            WireOuterWorldConnection(marker);
+            Debug.Log("[CastleHubBuilder] Wired current scene's gate marker to OuterWorld (NavMeshLink + transition trigger). " +
+                      "Make sure 'OuterWorld' is in Build Settings. Align world positions of the two scenes for seam to match.");
+            Selection.activeGameObject = marker;
+        }
+
+        /// <summary>
+        /// Adds a NavMeshLink across the gate for AI pathing + a trigger that loads OuterWorld
+        /// additively and moves the player (uses the SceneTransitionTrigger we created to match WorldSceneLoader patterns).
+        /// Reflection is used for the custom component (Editor asm cannot directly reference DeNelle.Village).
+        /// </summary>
+        private static void WireOuterWorldConnection(GameObject gateMarker)
+        {
+            if (gateMarker == null) return;
+
+            // 1. NavMeshLink — bridges the navmesh seam when Castle + OuterWorld are both loaded additive.
+            //    Tune start/end/width to the actual gate opening width (Quaternius/poly gate ~12-15m).
+            // Use reflection / SerializedObject to add the component and configure it without a hard
+            // compile-time reference to the type (the AI Navigation package may not be in the Editor asmdef
+            // references in a way that resolves the type for all build contexts). This matches the project's
+            // pattern for optional/cross-package Editor scripting.
+            var navType = System.Type.GetType("UnityEngine.AI.NavMeshLink, Unity.AI.Navigation");
+            if (navType != null)
+            {
+                var comp = gateMarker.AddComponent(navType);
+                if (comp != null)
+                {
+                    var so = new SerializedObject(comp);
+                    var p = so.FindProperty("startPoint"); if (p != null) p.vector3Value = new Vector3(-7f, 0f, -1f);
+                    p = so.FindProperty("endPoint"); if (p != null) p.vector3Value = new Vector3(7f, 0f, -1f);
+                    p = so.FindProperty("width"); if (p != null) p.floatValue = 12f;
+                    p = so.FindProperty("bidirectional"); if (p != null) p.boolValue = true;
+                    p = so.FindProperty("area"); if (p != null) p.intValue = 0;
+                    so.ApplyModifiedProperties();
+                }
+            }
+            else
+            {
+                Debug.LogWarning("[CastleHubBuilder] Could not resolve NavMeshLink type at runtime. Install the 'AI Navigation' package (Window > Package Manager) and ensure the Editor asmdef references 'Unity.AI.Navigation' for seamless multi-scene NavMesh.");
+            }
+
+            // 2. Transition trigger (player crosses the gate).
+            //    Box covers the gate area. On enter (Player/HeroTarget tag) it ensures OuterWorld is loaded
+            //    and teleports the player to the corresponding spot in OuterWorld world space.
+            var triggerGo = new GameObject("OuterWorldTransitionTrigger");
+            triggerGo.transform.SetParent(gateMarker.transform, false);
+            triggerGo.transform.localPosition = new Vector3(0, 1.5f, -2f);
+
+            var col = triggerGo.AddComponent<BoxCollider>();
+            col.isTrigger = true;
+            col.size = new Vector3(16f, 6f, 6f);
+
+            // Add the transition behaviour via reflection (matches MineNode / other builder patterns).
+            var transType = FindType("DeNelle.Village.SceneTransitionTrigger");
+            if (transType != null)
+            {
+                var comp = triggerGo.AddComponent(transType);
+
+                // Configure via reflection (public fields on the trigger script).
+                var fScene = transType.GetField("targetSceneName");
+                if (fScene != null) fScene.SetValue(comp, "OuterWorld");
+
+                // Target position in OuterWorld space — adjust this to where the "castle approach" lives
+                // in your OuterWorld layout (e.g. a road south of the Village area or a custom entrance).
+                // When the Castle root is at (0,0,0), this is the world pos the player appears at after crossing south.
+                var fPos = transType.GetField("targetPosition");
+                if (fPos != null) fPos.SetValue(comp, new Vector3(0f, 0.5f, -80f));
+
+                var fAdditive = transType.GetField("loadAdditive");
+                if (fAdditive != null) fAdditive.SetValue(comp, true);
+            }
+            else
+            {
+                Debug.LogWarning("[CastleHubBuilder] DeNelle.Village.SceneTransitionTrigger not found (is the script compiled?). " +
+                                 "Trigger collider was still added — you can attach the behaviour manually or re-run after compile.");
+            }
+
+            Debug.Log("[CastleHubBuilder] Wired gate marker with NavMeshLink + SceneTransitionTrigger (target OuterWorld at ~ (0, 0.5, -80)).");
+        }
+
+        /// <summary>
+        /// Cross-assembly type lookup (same pattern used by OuterWorldBuilder / VillageSceneBuilder).
+        /// </summary>
+        private static System.Type FindType(string fullName)
+        {
+            foreach (var asm in System.AppDomain.CurrentDomain.GetAssemblies())
+            {
+                var t = asm.GetType(fullName, false);
+                if (t != null) return t;
+            }
+            return null;
+        }
+
+        // =====================================================================
+        //  Make Castle the primary project start (move from Village2)
+        //  + wire hero, camera, defaults, OuterWorld streaming (via generalized loader),
+        //  and other core items (gate already wired by previous step).
+        //
+        //  Run on your saved MainCastle_Hall.unity (or any Castle scene) while it is open.
+        //  Reuses Village2Playable (same Editor assembly) for hero + camera setup.
+        //  This + the updated WorldSceneLoader means playing the Castle scene now streams
+        //  OuterWorld, spawns you in the personal quarters, and gives full controls.
+        // =====================================================================
+
+        [MenuItem("Defenders/Scenes/Make CastleHub Primary Start (current scene) + Wire Everything")]
+        public static void MakeCastleHubPrimaryStartAndWire()
+        {
+            var scene = UnityEditor.SceneManagement.EditorSceneManager.GetActiveScene();
+            if (scene == null || !scene.path.Contains("Castle") && !scene.path.Contains("MainCastle"))
+            {
+                Debug.LogWarning("[CastleHubBuilder] Open a Castle Hub scene (MainCastle_Hall or similar) first.");
+                return;
+            }
+
+            Log("=== Make CastleHub Primary Start + Full Wiring START ===");
+
+            // 1. Scene defaults (camera with SmartMobileCamera, light, ambient/fog) + EventSystem.
+            //    Idempotent.
+            Village2Playable.AddSceneDefaultsToActiveScene();
+            Village2Playable.ImportEventSystem();
+            Log("Scene defaults + EventSystem wired.");
+
+            // 2. Find a good parent for the hero: prefer the personal quarters / home space inside the keep.
+            Transform heroParent = FindHeroParentInCastle(scene);
+            if (heroParent == null)
+            {
+                heroParent = scene.GetRootGameObjects().FirstOrDefault(r => r.name.Contains("Castle") || r.name.Contains("Root"))?.transform;
+            }
+            if (heroParent == null && scene.rootCount > 0)
+                heroParent = scene.GetRootGameObjects()[0].transform;
+
+            // 3. Import the hero (Mage rig by default, with locomotion, abilities, gear, body swapper, tagged Player).
+            //    No Heart for hub (castle is safe home, not the defend-the-tower core).
+            GameObject hero = Village2Playable.ImportHero(heroParent, heart: null);
+            if (hero == null)
+            {
+                Err("ImportHero returned null. Check that Village2Playable and hero assets are present.");
+                return;
+            }
+            Log("Hero imported (locomotion + abilities + visuals).");
+
+            // 4. Place the hero inside the personal quarters (use the HeroStartPoint we placed during build, or fallback).
+            PlaceHeroInCastleHome(scene, hero);
+
+            // 5. Wire the smart camera to follow the hero.
+            Village2Playable.WireCameraTargetToHero(hero);
+            Log("Camera wired to hero.");
+
+            // 6. Ensure HeroLocomotion is enabled (HeroControlEnsurer is often hardcoded to "Village2").
+            EnsureHeroControllable(hero);
+
+            // 7. Make sure the OuterWorld gate connection is wired (NavMeshLink + transition trigger).
+            //    Safe to call again.
+            var gateMarker = GameObject.Find("WorldGate_ConnectToOuterWorld_Marker");
+            if (gateMarker != null)
+            {
+                WireOuterWorldConnection(gateMarker);
+            }
+            else
+            {
+                Log("No gate marker found — run the Build or Wire menu first for OuterWorld connection.");
+            }
+
+            // 8. Mark dirty + save reminder.
+            UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(scene);
+            Log("=== CASTLE IS NOW THE PRIMARY START ===");
+            Log("Open/play this scene directly. Hero spawns in the personal quarters.");
+            Log("OuterWorld will stream in additively (via updated WorldSceneLoader).");
+            Log("South gate is wired for seamless transition to the open world.");
+            Log("Other items (NPC points in the 8 structures, build on upper battlements, Echo Hollow pets area) are present — wire specific Yarn/Economy/Pet systems as needed.");
+            Log("Save the scene. Add it (and OuterWorld) to Build Settings if not already.");
+
+            Selection.activeGameObject = hero;
+        }
+
+        private static Transform FindHeroParentInCastle(Scene scene)
+        {
+            foreach (var root in scene.GetRootGameObjects())
+            {
+                // Prefer the labeled home quarters.
+                var home = root.transform.Find("MainKeep_CastleWithTwoLevels_Home/PlayerHeroHall_PersonalQuarters_HomeSpace")
+                           ?? root.transform.Find("PlayerHeroHall_PersonalQuarters_HomeSpace");
+                if (home != null) return home;
+
+                // Fallbacks
+                if (root.name.Contains("PlayerHeroHall") || root.name.Contains("PersonalQuarters") || root.name.Contains("HomeSpace"))
+                    return root.transform;
+
+                var keep = root.transform.Find("MainKeep_CastleWithTwoLevels_Home");
+                if (keep != null) return keep;
+            }
+            return null;
+        }
+
+        private static void PlaceHeroInCastleHome(Scene scene, GameObject hero)
+        {
+            // Prefer the marker we (optionally) placed during build.
+            var start = GameObject.Find("HeroStartPoint_InsidePersonalQuarters") ?? GameObject.Find("HeroStartPoint_PlayerSpawn");
+            if (start != null)
+            {
+                hero.transform.position = start.transform.position;
+                hero.transform.rotation = start.transform.rotation;
+                Log("Hero placed at HeroStartPoint inside personal quarters.");
+                return;
+            }
+
+            // Fallback: place relative to the home quarters using similar logic to CastleWalkable.
+            var home = FindHeroParentInCastle(scene);
+            if (home != null)
+            {
+                hero.transform.SetParent(home, false);
+                hero.transform.localPosition = new Vector3(0, 0.1f, 0);
+                hero.transform.localRotation = Quaternion.identity;
+                Log("Hero placed inside home quarters (fallback local pos).");
+            }
+            else
+            {
+                hero.transform.position = new Vector3(0, 0.1f, -10); // rough inside keep area
+                Log("Hero placed with rough fallback position (no home quarters found).");
+            }
+        }
+
+        private static void EnsureHeroControllable(GameObject hero)
+        {
+            if (hero == null) return;
+            if (!hero.activeSelf) { hero.SetActive(true); Log("Hero activated."); }
+
+            // HeroLocomotion enable (the control ensurer is frequently hardcoded to Village2).
+            var locoType = FindType("DeNelle.Village.HeroLocomotion");
+            if (locoType != null)
+            {
+                var loco = hero.GetComponent(locoType) as Behaviour;
+                if (loco != null && !loco.enabled)
+                {
+                    loco.enabled = true;
+                    Log("HeroLocomotion enabled (prevents silent input eat).");
+                }
+            }
+
+            // Also try to make HeroControlEnsurer happy if present (set its target scene or enable).
+            var ensurerType = FindType("DeNelle.Village.HeroControlEnsurer");
+            if (ensurerType != null)
+            {
+                var ensurer = hero.GetComponent(ensurerType) as Behaviour;
+                if (ensurer != null && !ensurer.enabled) ensurer.enabled = true;
+            }
+        }
+
+        private static void Log(string m)  => Debug.Log("[CastleHubBuilder] " + m);
+        private static void Err(string m)  => Debug.LogError("[CastleHubBuilder] " + m);
+    }
+}

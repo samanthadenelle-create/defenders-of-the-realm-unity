@@ -91,6 +91,14 @@ namespace DeNelle.Core
         public const string PetSelect = "PetSelect";
         /// <summary>The village tower-defense scene (React `/village`).</summary>
         public const string Village = "Village2";
+        /// <summary>
+        /// The Central Castle Hub (MainCastle_Hall) — the player's home base and the
+        /// new first stop after onboarding. Built by
+        /// <c>DeNelle.Editor.CastleHubBuilder.BuildCastleHub</c>. The player arrives
+        /// here, then travels out to <see cref="Village"/> for the tower-defense loop.
+        /// OuterWorld streams in additively (see WorldSceneLoader hub list).
+        /// </summary>
+        public const string Castle = "MainCastle_Hall";
         /// <summary>The ATB Last-Stand battle scene (React global AtbBattleHost).</summary>
         public const string ATBBattle = "ATBBattle";
 
@@ -214,6 +222,15 @@ namespace DeNelle.Core
         /// the overlay + async load run on their own; callers don't await.
         /// </summary>
         public static void GoVillage() => LoadVillageWithLoader().Forget();
+
+        /// <summary>
+        /// Go to the Central Castle Hub (<see cref="Castle"/>) — the home base players
+        /// land in after onboarding and on every session resume. Fire-and-forget with
+        /// a fade, mirroring <see cref="GoVillage"/>. The castle is lighter than the
+        /// village, so it uses the standard fade load rather than the village overlay.
+        /// From the castle the player travels out to the village TD loop.
+        /// </summary>
+        public static void GoCastle() => LoadSceneWithFade(Castle).Forget();
 
         /// <summary>
         /// Loads the Village scene ASYNCHRONOUSLY behind a full-screen, code-built

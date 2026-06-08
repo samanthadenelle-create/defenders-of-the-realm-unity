@@ -324,12 +324,13 @@ namespace DeNelle.Onboarding
             }
         }
 
-        // Continue: resume into the village (loads the save). No-save falls into a fresh village.
+        // Continue: resume into the Castle home hub (loads the save). The player travels
+        // out to the village TD loop from there. No-save falls into a fresh hub.
         private void OnContinue()
         {
             if (!_splashActive) return;
             _splashActive = false;
-            SceneRouter.GoVillage();
+            SceneRouter.GoCastle();
         }
 
         // Temporary panel-render diagnostic — logs the title panel's state a
