@@ -433,6 +433,22 @@ namespace DeNelle.Editor
                                  $"at '{WallSeg}' — wall perimeter will have no stone segments " +
                                  "(polyperfect pack re-import needed on this machine).");
 
+            // WO-321: a missing gate PREFAB is the mechanism behind the "bare arch with
+            // no gatehouse" near the Pet House (SE) — Make()/GateFill() silently no-op on
+            // a null prefab, leaving the wall opening unfilled with NO error. Surface it
+            // LOUDLY here so a missing gatehouse is caught at build time, not in a
+            // playtest screenshot. gateMedModel drives N/S; gateSmModel drives E/W (the
+            // east gate is the SE exit beside the Pet House).
+            if (gateMedModel == null)
+                Debug.LogError("[VillageSceneBuilder] WO-321 Gate_Medieval_Medium prefab not found " +
+                               $"at '{GateMedium}' — the NORTH + SOUTH gate openings will be BARE " +
+                               "ARCHES with no gatehouse (re-import the polyperfect pack on this machine).");
+            if (gateSmModel == null)
+                Debug.LogError("[VillageSceneBuilder] WO-321 Gate_Medieval_Small prefab not found " +
+                               $"at '{GateSmall}' — the EAST + WEST gate openings (the SE exit beside " +
+                               "the Pet House is the EAST gate) will be BARE ARCHES with no gatehouse " +
+                               "(re-import the polyperfect pack on this machine).");
+
             // ── Layout constants ──────────────────────────────────────────────
             const float wallZ    = 33f;  // north/south wall Z
             const float wallX    = 42f;  // east/west wall X
@@ -766,6 +782,28 @@ namespace DeNelle.Editor
             var gateW = GateFill(gateSmModel, "Gate-West-Side", new Vector3(-wallX, 0f, 0f), 270f, gateTarget, 4.5f);
             // DEF-215: mirror of the east gate (run along Z, x=-42 wall line).
             SealGate(gateW, false, -wallX, 3f, 4f);
+
+            // ── WO-321: verify all FOUR cardinal gatehouses were actually placed ──
+            // Every cardinal opening (N/S/E/W) must be filled by a gatehouse mesh; a
+            // null here means that side is a BARE ARCH (the reported "missing gate near
+            // the Pet House" — the SE exit is the EAST gate). Report each side's state
+            // explicitly so a regression is unambiguous and self-diagnosing.
+            int gatesPlaced = 0;
+            var gateChecks = new (string side, GameObject go)[]
+            {
+                ("North", gateN), ("South", gateS), ("East (SE exit by Pet House)", gateE), ("West", gateW),
+            };
+            foreach (var (side, go) in gateChecks)
+            {
+                if (go != null) gatesPlaced++;
+                else Debug.LogError($"[VillageSceneBuilder] WO-321 MISSING GATEHOUSE on the {side} wall — " +
+                                    "the opening is a BARE ARCH (gate prefab failed to load). " +
+                                    "All 4 cardinal gates must be present.");
+            }
+            if (gatesPlaced == 4)
+                Debug.Log("[VillageSceneBuilder] WO-321 OK — all 4 cardinal gatehouses placed " +
+                          "(North/South Gate_Medieval_Medium, East/West Gate_Medieval_Small); " +
+                          "no bare arches. The SE exit beside the Pet House (East gate) is gated.");
 
             // ── Corner towers at (±42, 0, ±33) ───────────────────────────────
             Big(towerCorModel, "Tower-NE-Corner", new Vector3( wallX, 0f,  wallZ), 0f, towerTarget);

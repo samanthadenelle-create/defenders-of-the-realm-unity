@@ -122,7 +122,11 @@ namespace DeNelle.Editor
             // scaled up to read as the village spire. The cathedral arrived
             // as Assets/Models/Cathedral/Cathedral.fbx (Tripo embedded-mat
             // FBX — TripoMaterialFixer rebuilds the URP material on Awake).
-            Vector3 site = new Vector3(0f, 0f, 1f);
+            // WO-311 / WO-373 Gate 1: the Tree of Life / Heart of Elarion is canon at
+            // WORLD ORIGIN (0,0,0). The prior +1 m Z offset drifted it off origin and
+            // would fail the critical regression gate (VerifyTreeOrigin, eps=0.01).
+            // Authored exactly at origin; _useAuthoredTransform=true (below) keeps it here.
+            Vector3 site = new Vector3(0f, 0f, 0f);
 
             var go = new GameObject("Heart (Elarion Tree of Life)");
             go.transform.SetParent(parent, false);
