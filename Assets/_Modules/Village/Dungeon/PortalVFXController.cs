@@ -47,8 +47,37 @@ namespace DeNelle.Village
         public float activationRadius = 3f;
         public float flashDuration    = 0.22f;
 
+        [Header("WO-272 Glow Layer")]
+        [Tooltip("Idle emissive HDR intensity multiplier on the arch + glow.")]
+        [Range(0.5f, 4f)] public float idleGlowIntensity   = 1.4f;
+        [Tooltip("Active (hero near) emissive HDR intensity multiplier.")]
+        [Range(1f, 8f)]   public float activeGlowIntensity = 3.6f;
+        [Tooltip("Breathing pulse: cycles per second of the emissive ramp.")]
+        [Range(0.05f, 2f)] public float pulseSpeed = 0.55f;
+        [Tooltip("Pulse depth — fraction of the emissive intensity that breathes.")]
+        [Range(0f, 0.6f)] public float pulseDepth = 0.30f;
+        [Tooltip("How fast the glow eases between idle and active (per second).")]
+        [Range(1f, 12f)]  public float glowEaseSpeed = 4.5f;
+
         private bool _active = false;
         private static readonly int EmissionColor = Shader.PropertyToID("_EmissionColor");
+        private static readonly int BaseColor     = Shader.PropertyToID("_BaseColor");
+
+        // ── WO-272 glow-layer state (no per-frame allocations) ───────────────────
+        // Arch frame renderers that carry the 264 violet base/dim emission; we ramp
+        // a pulsing emissive on top via a single cached MaterialPropertyBlock so we
+        // never instantiate the shared arch materials.
+        private Renderer[] _archRenderers;
+        private MaterialPropertyBlock _archMpb;
+        private MeshRenderer _haloPlane;          // brighter additive core/halo behind glowPlane
+        private Material _haloMat;                // owned instance, cached
+        private Material _glowMat;                // cached glowPlane material instance
+        private float _glowLevel = 0f;            // 0 = idle, 1 = active (smoothed)
+        private float _pulsePhase = 0f;
+        // Canonical arch emissive hue for the pulse (agrees with the 264 base, which
+        // is ArcaneViolet-led). A touch brighter than ArcaneViolet so the additive
+        // ramp reads as light, not paint.
+        private static readonly Color GlowHue = new Color(0.55f, 0.18f, 1f);
 
         // ── DEF-94: canonical portal arch colour ─────────────────────────────────
         // The portal arch must read as an ARCANE / magical gateway — a deep violet —
@@ -95,7 +124,9 @@ namespace DeNelle.Village
 
             if (vortexParticles != null) vortexParticles.Play();
             if (portalLight    != null) portalLight.intensity = idleLightIntensity;
-            SetGlowColor(idleGlowColor); // idle glow ALWAYS visible (criterion 1)
+            // WO-272: UpdateGlow() now owns the glow plane + arch emission every frame
+            // (idle glow ALWAYS visible, criterion 1). Prime it once so frame 0 isn't dark.
+            UpdateGlow();
         }
 
         // ── DEF-100: build interior glow + light + cheap vortex if not wired ─────
@@ -159,6 +190,68 @@ namespace DeNelle.Village
                 vortexParticles = pgo.AddComponent<ParticleSystem>();
                 BuildCheapVortex(vortexParticles);
             }
+
+            // ── WO-272: brighter additive core/halo behind the interior glow ─────
+            // A larger, softer additive quad that sits just behind the glow plane so
+            // the portal reads as a luminous well, not a flat lit panel. It pulses +
+            // brightens with proximity (driven in UpdateGlow). One extra transparent
+            // quad — mobile-cheap, shadows off.
+            if (_haloPlane == null)
+            {
+                var halo = GameObject.CreatePrimitive(PrimitiveType.Quad);
+                halo.name = "PortalHaloPlane";
+                var hcol = halo.GetComponent<Collider>();
+                if (hcol != null) Destroy(hcol);
+                halo.transform.SetParent(transform, false);
+                // Slightly behind the glow plane, larger so its soft edge bleeds past
+                // the arch interior like a halo.
+                halo.transform.localPosition = new Vector3(0f, 2.0f, -0.05f);
+                halo.transform.localScale = new Vector3(3.4f, 4.6f, 1f);
+
+                _haloPlane = halo.GetComponent<MeshRenderer>();
+                _haloPlane.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                _haloPlane.receiveShadows = false;
+
+                Shader haloShader = Shader.Find("Universal Render Pipeline/Particles/Unlit")
+                                    ?? Shader.Find("Universal Render Pipeline/Unlit")
+                                    ?? Shader.Find("Sprites/Default");
+                if (haloShader != null)
+                {
+                    _haloMat = new Material(haloShader);
+                    if (_haloMat.HasProperty("_Surface")) _haloMat.SetFloat("_Surface", 1f);  // transparent
+                    if (_haloMat.HasProperty("_Blend"))   _haloMat.SetFloat("_Blend", 1f);    // additive
+                    _haloMat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+                    _haloMat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+                    _haloPlane.sharedMaterial = _haloMat;
+                }
+            }
+
+            // Collect the arch frame renderers ONCE (everything except our own VFX
+            // children + the prompt) so UpdateGlow can pulse their emission via a
+            // shared MPB — never instantiating the shared 264 arch material.
+            CollectArchRenderers();
+            _archMpb ??= new MaterialPropertyBlock();
+            // Cache the glow-plane material instance once (reading .material clones it
+            // on first touch; we keep the reference so we never re-clone per frame).
+            if (glowPlane != null) _glowMat = glowPlane.material;
+        }
+
+        // Arch renderers = our host's mesh frame, excluding the code-built glow /
+        // halo / vortex children and the TextMesh prompt (which must stay readable).
+        private void CollectArchRenderers()
+        {
+            var all = GetComponentsInChildren<MeshRenderer>(true);
+            var list = new System.Collections.Generic.List<Renderer>(all.Length);
+            foreach (var r in all)
+            {
+                if (r == null) continue;
+                if (r == glowPlane || r == _haloPlane) continue;
+                string n = r.gameObject.name;
+                if (n == "PortalGlowPlane" || n == "PortalHaloPlane" || n == "PortalVortex") continue;
+                if (r.GetComponent<TextMesh>() != null) continue; // never tint the prompt
+                list.Add(r);
+            }
+            _archRenderers = list.ToArray();
         }
 
         private void BuildCheapVortex(ParticleSystem ps)
@@ -281,6 +374,9 @@ namespace DeNelle.Village
         // ── DEF-100: own-frame proximity (3 m) drives idle ⇄ active ──────────────
         private void Update()
         {
+            // WO-272: drive the animated glow every frame (cheap, allocation-free).
+            UpdateGlow();
+
             if (Time.time < _nextProximityCheck) return;
             _nextProximityCheck = Time.time + ProximityInterval;
 
@@ -292,6 +388,80 @@ namespace DeNelle.Village
 
             if (inRange && !_active) OnHeroApproach();
             else if (!inRange && _active) OnHeroLeave();
+        }
+
+        // ── WO-272: animated arcane-violet glow layered over the 264 base ────────
+        // Per-frame, no allocations: eases _glowLevel toward idle/active, builds a
+        // breathing emissive intensity (sine pulse), then writes it to the arch
+        // (via the shared MPB), the interior glow plane, and the additive halo. The
+        // 264 base already painted the arch deep violet with DIM emission — this is
+        // the ramp that makes it actually glow + react.
+        private void UpdateGlow()
+        {
+            // Ease toward the proximity target (1 active, 0 idle) — smooth, framerate-safe.
+            float target = _active ? 1f : 0f;
+            _glowLevel = Mathf.MoveTowards(_glowLevel, target, glowEaseSpeed * Time.deltaTime);
+
+            // Breathing pulse. Idle breathes gently; near the hero it breathes a
+            // little stronger (depth scales up with proximity) — alive, not a rave.
+            _pulsePhase += Time.deltaTime * pulseSpeed * (1f + 0.5f * _glowLevel);
+            float wave = (Mathf.Sin(_pulsePhase * Mathf.PI * 2f) + 1f) * 0.5f; // 0..1
+            float depth = pulseDepth * (0.6f + 0.4f * _glowLevel);
+            float pulse = 1f - depth + wave * depth;                            // ~[1-depth..1]
+
+            float baseIntensity = Mathf.Lerp(idleGlowIntensity, activeGlowIntensity, _glowLevel);
+            float intensity = baseIntensity * pulse;
+
+            // Emissive arch colour: arcane-violet hue carried at HDR intensity.
+            Color emissive = GlowHue * intensity;
+
+            // 1) Pulse the arch frame emission via the shared MPB (no material clone).
+            if (_archRenderers != null && _archRenderers.Length > 0)
+            {
+                _archMpb ??= new MaterialPropertyBlock();
+                for (int i = 0; i < _archRenderers.Length; i++)
+                {
+                    var r = _archRenderers[i];
+                    if (r == null) continue;
+                    r.GetPropertyBlock(_archMpb);
+                    // Keep the 264 violet BASE; only ramp EMISSION so colour stays on-identity.
+                    _archMpb.SetColor(BaseColor, ArchBaseColor(ArcaneViolet));
+                    _archMpb.SetColor(EmissionColor, emissive);
+                    r.SetPropertyBlock(_archMpb);
+                }
+            }
+
+            // 2) Interior glow plane (additive URP/Unlit) — the additive contribution
+            // IS its _BaseColor, so we pulse that. Tint lerps idle->active hue; the
+            // alpha carries the per-frame breathing brightness.
+            if (_glowMat != null)
+            {
+                Color glowTint = Color.Lerp(idleGlowColor, activeGlowColor, _glowLevel);
+                // Fold the pulse into RGB so an additive blend visibly breathes.
+                Color glowRgb = new Color(glowTint.r, glowTint.g, glowTint.b, 1f) * (0.55f + 0.45f * pulse);
+                glowRgb.a = glowTint.a;
+                if (_glowMat.HasProperty(BaseColor)) _glowMat.SetColor(BaseColor, glowRgb);
+                if (_glowMat.HasProperty("_Color")) _glowMat.SetColor("_Color", glowRgb);
+                // Harmless on Unlit, helps if a fallback Lit/Sprites shader is in use.
+                if (_glowMat.HasProperty(EmissionColor))
+                    _glowMat.SetColor(EmissionColor, GlowHue * (intensity * 0.9f));
+            }
+
+            // 3) Additive halo — brighter core that swells + brightens with proximity.
+            if (_haloMat != null)
+            {
+                // Soft additive: alpha low so it reads as a bloom-y halo, scaled by glow.
+                float haloA = Mathf.Lerp(0.16f, 0.42f, _glowLevel) * pulse;
+                Color halo = new Color(GlowHue.r, GlowHue.g, GlowHue.b, haloA);
+                if (_haloMat.HasProperty("_BaseColor")) _haloMat.SetColor("_BaseColor", halo);
+                if (_haloMat.HasProperty("_Color"))     _haloMat.SetColor("_Color", halo);
+            }
+            if (_haloPlane != null)
+            {
+                // Gentle breathing swell (±6% near hero) so the halo feels alive.
+                float swell = 1f + (wave - 0.5f) * 0.12f * (0.5f + _glowLevel);
+                _haloPlane.transform.localScale = new Vector3(3.4f * swell, 4.6f * swell, 1f);
+            }
         }
 
         private void EnsureHeroRef()
@@ -347,13 +517,13 @@ namespace DeNelle.Village
             VFXManager.Play(VFXType.Portal_Exit, transform.position);
         }
 
-        // Ramp light + glow toward active (≥1.5× idle) or back to idle.
+        // Ramp the POINT LIGHT toward active or back to idle. The arch/glow/halo
+        // emission ramp is owned by UpdateGlow() (WO-272), keyed off _active via the
+        // smoothed _glowLevel — so this coroutine no longer touches the glow plane.
         private IEnumerator TransitionRoutine(bool toActive)
         {
             float fromLight = portalLight != null ? portalLight.intensity : idleLightIntensity;
             float toLight   = toActive ? activeLightIntensity : idleLightIntensity;
-            Color fromGlow  = toActive ? idleGlowColor : activeGlowColor;
-            Color toGlow    = toActive ? activeGlowColor : idleGlowColor;
 
             float elapsed = 0f, rampTime = 0.5f;
             while (elapsed < rampTime)
@@ -361,12 +531,10 @@ namespace DeNelle.Village
                 float t = elapsed / rampTime;
                 if (portalLight != null)
                     portalLight.intensity = Mathf.Lerp(fromLight, toLight, t);
-                SetGlowColor(Color.Lerp(fromGlow, toGlow, t));
                 elapsed += Time.deltaTime;
                 yield return null;
             }
             if (portalLight != null) portalLight.intensity = toLight;
-            SetGlowColor(toGlow);
             _transition = null;
         }
 
@@ -386,16 +554,6 @@ namespace DeNelle.Village
                 yield return null;
             }
             img.color = Color.clear;
-        }
-
-        private void SetGlowColor(Color c)
-        {
-            if (glowPlane == null) return;
-            var mat = glowPlane.material;
-            if (mat == null) return;
-            mat.color = c;
-            if (mat.HasProperty(EmissionColor))
-                mat.SetColor(EmissionColor, c * 2f);
         }
 
         private void OnDrawGizmosSelected()
