@@ -232,23 +232,37 @@ namespace DeNelle.Village
         /// </summary>
         private async UniTask RunFastPath()
         {
-            // Build the lightweight sub-components we need (companion + dialogue).
-            BuildSubComponents();
+            // WEBGL CRASH-GUARD (WO-331): the companion hook (spawn + bubble bind +
+            // dialogue) is a NON-ESSENTIAL cosmetic intro. If any of it throws (a bad
+            // companion prefab, a missing bubble, etc.) it must NOT abort the handoff
+            // to gameplay below — otherwise the player is stranded before Wave 1 on a
+            // village that "loaded but does nothing" (reads as a crash). Degrade to a
+            // silent skip-into-combat instead.
+            try
+            {
+                // Build the lightweight sub-components we need (companion + dialogue).
+                BuildSubComponents();
 
-            // Spawn the guide companion (a DIFFERENT class) and take over its bubble
-            // so the hook reads as the companion speaking.
-            _companionSpawner?.Spawn();
-            BindCompanionBubble();
+                // Spawn the guide companion (a DIFFERENT class) and take over its bubble
+                // so the hook reads as the companion speaking.
+                _companionSpawner?.Spawn();
+                BindCompanionBubble();
 
-            string speaker = SpeakerName();
-            string shortName = _companionSpawner != null ? _companionSpawner.CompanionShortName : "your guide";
+                string speaker = SpeakerName();
+                string shortName = _companionSpawner != null ? _companionSpawner.CompanionShortName : "your guide";
 
-            // THE HOOK — a little story + an immediate call to action (3 lines).
-            _dialogue?.Say(speaker,
-                $"You made it. I'm {shortName} — and the enemy is already at the gate.",
-                "No time for a tour. Elarion holds because we hold the line.",
-                "Defend the gate — I'm right beside you. GO!");
-            await WaitForDialogue();
+                // THE HOOK — a little story + an immediate call to action (3 lines).
+                _dialogue?.Say(speaker,
+                    $"You made it. I'm {shortName} — and the enemy is already at the gate.",
+                    "No time for a tour. Elarion holds because we hold the line.",
+                    "Defend the gate — I'm right beside you. GO!");
+                await WaitForDialogue();
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning("[TutorialDirector] Fast-path companion hook threw — skipping straight " +
+                                 "into gameplay so the village is never stranded (WebGL crash-guard). " + ex);
+            }
 
             // Learn-by-doing: arm the contextual companion lines for the first time
             // the player builds a tower and the first time a wave breaches. These

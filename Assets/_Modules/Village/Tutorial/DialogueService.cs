@@ -73,7 +73,23 @@ namespace DeNelle.Village
                 return false;
             }
 
-            runner.StartDialogue(node).Forget();
+            // WEBGL CRASH-GUARD (WO-331): StartDialogue runs its synchronous prologue
+            // (program load, first-line / command dispatch, presenter init) INLINE before
+            // it yields. A throw there (e.g. a Yarn SignalContentComplete fired outside a
+            // running command, a missing presenter, a command-handler exception) would
+            // escape here — and under WebGL (ExplicitlyThrownExceptionsOnly) an uncaught
+            // throw on Village load HALTS the player. Dialogue is non-essential to the
+            // village loading, so a failure must degrade (log) — never crash the scene.
+            try
+            {
+                runner.StartDialogue(node).Forget();
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogError($"[DialogueService] StartDialogue('{node}') threw — dialogue skipped so " +
+                               "the village still loads (WebGL crash-guard). " + ex);
+                return false;
+            }
             Debug.Log($"[DialogueService] Playing '{node}'.");
             return true;
         }
@@ -120,7 +136,18 @@ namespace DeNelle.Village
                 if (!string.IsNullOrEmpty(displayName))
                     runner.VariableStorage.SetValue("$structureName", displayName);
             }
-            runner.StartDialogue(node).Forget();
+            // WEBGL CRASH-GUARD (WO-331): see Play() — the synchronous StartDialogue
+            // prologue must never escape into the frame and halt the WebGL player.
+            try
+            {
+                runner.StartDialogue(node).Forget();
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogError($"[DialogueService] StartDialogue('{node}') threw for structure " +
+                               $"'{structureId}' — dialogue skipped (WebGL crash-guard). " + ex);
+                return false;
+            }
             Debug.Log($"[DialogueService] Structure '{structureId}' → node '{node}' ('{displayName}').");
             return true;
         }
@@ -154,9 +181,22 @@ namespace DeNelle.Village
             // which has not run yet (Instantiate only ran Awake).
             runner.autoStart = false;
 
-            var bridgeGo = new GameObject("DialogueCommandBridge");
-            bridgeGo.transform.SetParent(instance.transform, false);
-            bridgeGo.AddComponent<DialogueCommandBridge>().Install(runner);
+            // WEBGL CRASH-GUARD (WO-331): installing the command bridge registers ~30
+            // Yarn command handlers. A throw here (duplicate registration, a bad handler
+            // signature, a missing sub-system) would otherwise escape the host path and
+            // halt the WebGL player on Village load. Degrade to "hosted, no FTUE commands"
+            // rather than crash — the runner still exists for plain dialogue.
+            try
+            {
+                var bridgeGo = new GameObject("DialogueCommandBridge");
+                bridgeGo.transform.SetParent(instance.transform, false);
+                bridgeGo.AddComponent<DialogueCommandBridge>().Install(runner);
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogError("[DialogueService] DialogueCommandBridge install threw — FTUE commands " +
+                               "may be unbound, but the village still loads (WebGL crash-guard). " + ex);
+            }
 
             return runner;
         }

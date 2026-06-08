@@ -104,7 +104,12 @@ namespace DeNelle.Core
             // / repeated init don't stack handlers).
             UnityEngine.SceneManagement.SceneManager.sceneLoaded -= OnSceneLoaded;
             UnityEngine.SceneManagement.SceneManager.sceneLoaded += OnSceneLoaded;
-            EnsureCentrepiece(); // also run for the scene that is already active at app start
+            // WEBGL-SAFETY (WO-331): never let the centrepiece fix throw at app start.
+            try { EnsureCentrepiece(); } // also run for the scene already active at app start
+            catch (System.Exception e)
+            {
+                Debug.LogWarning("[TreeOfLifeMaterialFixer] centrepiece fix threw at init (non-fatal): " + e);
+            }
         }
 
         private static void OnSceneLoaded(UnityEngine.SceneManagement.Scene scene,
@@ -112,24 +117,43 @@ namespace DeNelle.Core
         {
             // Use the just-loaded scene name so this works for BOTH single and additive
             // loads (an additively-loaded Village2 is not the "active" scene).
-            string n = scene.name;
-            bool village = !string.IsNullOrEmpty(n) && n.StartsWith("Village");
-            EnsureCentrepiece(village);
+            // WEBGL-SAFETY (WO-331): an uncaught exception in a sceneLoaded handler halts
+            // the WebGL player. Wrap EVERYTHING so a bad tree fix can never freeze the game.
+            try
+            {
+                string n = scene.name;
+                bool village = !string.IsNullOrEmpty(n) && n.StartsWith("Village");
+                EnsureCentrepiece(village);
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning("[TreeOfLifeMaterialFixer] centrepiece fix threw (non-fatal): " + e);
+            }
         }
 
         private static void EnsureCentrepiece(bool? villageHint = null)
         {
-            GameObject tree = FindCentrepieceTree();
+            bool village = villageHint ?? InVillageScene();
 
-            // WEBGL SPAWN-GUARD: the baked centrepiece (Tripo mesh ref by GUID) can
-            // fail to resolve in WebGL -> the village loads with NO tree at origin.
-            // If we are in a village scene and found no centrepiece near origin,
-            // spawn one from Resources (WebGL-safe) at exactly (0,0,0).
+            // WO-311: GUARANTEE the centrepiece is the CANONICAL Tree of Life, never the
+            // generic polyperfect SM_Tree_Round the Village2 generator falls back to when
+            // the authored TreeOfLife prefab is absent (e.g. a fresh clone — Tree_Of_Life.fbx
+            // is a gitignored Tripo asset). In the town:
+            //   1. Remove any GENERIC tree sitting at origin (it would otherwise be mistaken
+            //      for, and visually replace, the real centrepiece).
+            //   2. Ensure exactly ONE canonical tree stands at origin (spawn from Resources
+            //      if the baked one didn't resolve).
+            if (village)
+                RemoveGenericTreesAtOrigin();
+
+            GameObject tree = FindCanonicalCentrepieceTree();
+
+            // No CANONICAL tree at origin. Either the baked Tripo mesh ref failed to resolve
+            // (WebGL), or the bake fell back to a generic tree we just removed. Spawn the
+            // canonical Tree of Life from Resources (WebGL-safe) at exactly (0,0,0).
             if (tree == null)
             {
-                bool village = villageHint ?? InVillageScene();
                 if (!village) return;                   // only the town gets a centrepiece
-                if (HasCentrepieceNearOrigin()) return; // a tree is already at origin — leave it
                 tree = SpawnCentrepieceFromResources();
                 if (tree == null) return;               // resource missing — nothing to do
             }
@@ -155,24 +179,6 @@ namespace DeNelle.Core
         {
             string n = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name;
             return !string.IsNullOrEmpty(n) && n.StartsWith("Village");
-        }
-
-        // Any renderer (tree-named or not) sitting inside the centre plaza means a
-        // centrepiece already rendered from the baked scene — do NOT spawn a duplicate.
-        // Guards the desktop/editor case (baked mesh resolved fine) so only a genuinely
-        // empty plaza (the WebGL miss) triggers a spawn.
-        private static bool HasCentrepieceNearOrigin()
-        {
-            var all = Object.FindObjectsByType<Renderer>(FindObjectsSortMode.None);
-            foreach (var r in all)
-            {
-                if (r == null) continue;
-                if (!NameIsTree(NameOfTreeRoot(r.transform))) continue;
-                Vector3 p = r.bounds.center;
-                if (new Vector2(p.x, p.z).sqrMagnitude <= CentrepieceRadius * CentrepieceRadius)
-                    return true;
-            }
-            return false;
         }
 
         // Instantiate the Tree-of-Life mesh from Resources at world origin, stand it
@@ -277,20 +283,101 @@ namespace DeNelle.Core
         }
 
         // ---------------------------------------------------------------------
-        // FIND: the centrepiece is the tree-ish renderer nearest world origin.
+        // WO-311 — CANONICAL vs GENERIC centrepiece discrimination.
+        // The real Tree of Life clones as "TreeOfLife(Clone)" (authored prefab) or
+        // "TreeOfLife(SpawnGuard)" (this fixer's Resources spawn). The generic
+        // polyperfect fallback the generator drops at origin clones as
+        // "SM_Tree_Round(Clone)" / "SM_Tree_Oak" / "SM_Tree_Baobab". We must show the
+        // FORMER at origin and delete the LATTER if it ever lands there.
         // ---------------------------------------------------------------------
-        private static GameObject FindCentrepieceTree()
+
+        // The canonical Tree of Life only — NOT a generic SM_Tree_* polyperfect prop.
+        private static bool NameIsCanonicalTree(string n)
+        {
+            if (string.IsNullOrEmpty(n)) return false;
+            string lower = n.ToLowerInvariant();
+            if (NameIsGenericTree(n)) return false;            // SM_Tree_* is never canonical
+            return lower.Contains("treeoflife")
+                || lower.Contains("tree_of_life")
+                || lower.Contains("tree of life")
+                || lower.Contains("world tree")
+                || lower.Contains("life tree");
+        }
+
+        // A generic polyperfect tree prop (ring/decoration foliage), never the centrepiece.
+        private static bool NameIsGenericTree(string n)
+        {
+            if (string.IsNullOrEmpty(n)) return false;
+            string lower = n.ToLowerInvariant();
+            return lower.StartsWith("sm_tree")            // SM_Tree_Round/Oak/Baobab(Clone)
+                || lower.Contains("trees_a_large");       // KayKit hex decoration tree
+        }
+
+        // Remove (or disable) any GENERIC tree whose visible bounds sit inside the centre
+        // plaza, so it can't be mistaken for or visually overlap the real Tree of Life.
+        // Walks to the generic tree's own root and destroys the whole prop. Idempotent.
+        private static void RemoveGenericTreesAtOrigin()
         {
             var all = Object.FindObjectsByType<Renderer>(FindObjectsSortMode.None);
-
-            // Pass 1: a tree-named renderer inside the centre plaza (best signal —
-            // both the prefab name "SM_Tree_Round" and friendly "TreeOfLife" match).
-            GameObject best = null;
-            float bestDist = float.MaxValue;
+            // Collect distinct generic roots first so destroying one doesn't invalidate the loop.
+            var doomed = new System.Collections.Generic.HashSet<GameObject>();
             foreach (var r in all)
             {
                 if (r == null) continue;
-                if (!NameIsTree(NameOfTreeRoot(r.transform))) continue;
+                string rootName = NameOfGenericTreeRoot(r.transform);
+                if (rootName == null) continue;            // not part of a generic tree
+                Vector3 p = r.bounds.center;
+                if (new Vector2(p.x, p.z).sqrMagnitude > CentrepieceRadius * CentrepieceRadius)
+                    continue;                              // generic ring tree, far from plaza — keep
+                GameObject root = GenericTreeRoot(r.transform);
+                if (root != null) doomed.Add(root);
+            }
+            foreach (var g in doomed)
+            {
+                if (g == null) continue;
+                Debug.Log("[TreeOfLifeMaterialFixer] WO-311 — removed generic tree '" + g.name +
+                          "' from the centre plaza (canonical Tree of Life owns origin).");
+                Object.Destroy(g);
+            }
+        }
+
+        // Highest ancestor that still reads as a generic tree (so we destroy the whole prop).
+        private static GameObject GenericTreeRoot(Transform t)
+        {
+            Transform best = null;
+            Transform cur = t;
+            while (cur != null)
+            {
+                if (NameIsGenericTree(cur.name)) best = cur;
+                cur = cur.parent;
+            }
+            return best != null ? best.gameObject : null;
+        }
+
+        // Name of the nearest generic-tree ancestor, or null if this transform isn't in one.
+        private static string NameOfGenericTreeRoot(Transform t)
+        {
+            Transform cur = t;
+            while (cur != null)
+            {
+                if (NameIsGenericTree(cur.name)) return cur.name;
+                cur = cur.parent;
+            }
+            return null;
+        }
+
+        // The CANONICAL Tree of Life nearest world origin (inside the plaza first, then
+        // anywhere). Distinct from FindCentrepieceTree, which would also accept a generic.
+        private static GameObject FindCanonicalCentrepieceTree()
+        {
+            var all = Object.FindObjectsByType<Renderer>(FindObjectsSortMode.None);
+            GameObject best = null;
+            float bestDist = float.MaxValue;
+            // Pass 1: canonical tree inside the centre plaza.
+            foreach (var r in all)
+            {
+                if (r == null) continue;
+                if (!NameIsCanonicalTree(NameOfTreeRoot(r.transform))) continue;
                 Vector3 p = r.bounds.center;
                 float d = new Vector2(p.x, p.z).sqrMagnitude;
                 if (d <= CentrepieceRadius * CentrepieceRadius && d < bestDist)
@@ -300,19 +387,14 @@ namespace DeNelle.Core
                 }
             }
             if (best != null) return best;
-
-            // Pass 2 (fallback): any tree-named renderer at all, nearest origin.
+            // Pass 2: any canonical tree at all, nearest origin (covers a displaced pivot).
             foreach (var r in all)
             {
                 if (r == null) continue;
-                if (!NameIsTree(NameOfTreeRoot(r.transform))) continue;
+                if (!NameIsCanonicalTree(NameOfTreeRoot(r.transform))) continue;
                 Vector3 p = r.bounds.center;
                 float d = new Vector2(p.x, p.z).sqrMagnitude;
-                if (d < bestDist)
-                {
-                    bestDist = d;
-                    best = TreeRoot(r.transform);
-                }
+                if (d < bestDist) { bestDist = d; best = TreeRoot(r.transform); }
             }
             return best;
         }

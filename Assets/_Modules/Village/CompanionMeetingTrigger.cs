@@ -72,12 +72,30 @@ namespace DeNelle.Village
 
         private static void OnSceneLoaded(Scene scene, LoadSceneMode mode)
         {
-            if (IsVillageScene(scene.name)) TryHost();
+            if (IsVillageScene(scene.name)) SafeTryHost();
         }
 
         private static void TryHostForActiveScene()
         {
-            if (IsVillageScene(SceneManager.GetActiveScene().name)) TryHost();
+            if (IsVillageScene(SceneManager.GetActiveScene().name)) SafeTryHost();
+        }
+
+        // WEBGL CRASH-GUARD (WO-331): both call sites run from engine callbacks
+        // (RuntimeInitializeOnLoadMethod / SceneManager.sceneLoaded). An uncaught
+        // throw out of one of those halts the WebGL player on Village load. Hosting
+        // the FTUE dialogue is non-essential to the village loading, so any failure
+        // must degrade (log) — never take the scene down.
+        private static void SafeTryHost()
+        {
+            try
+            {
+                TryHost();
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError("[CompanionMeetingTrigger] TryHost threw — FTUE dialogue skipped so " +
+                               "the village still loads (WebGL crash-guard). " + ex);
+            }
         }
 
         private static bool IsVillageScene(string sceneName) =>

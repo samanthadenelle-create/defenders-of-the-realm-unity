@@ -324,15 +324,25 @@ namespace DeNelle.Onboarding
             footer.style.justifyContent = Justify.Center;
             footer.style.alignItems = Align.Center;
 
+            // Primary CTA — the normal first-run path. "Dive into Village"
+            // persists the hero then routes to pet-select. (Styled primary/amber
+            // now that it is the sole confirm in the player build.)
             _diveButton = new Button { text = FallbackLocale(DiveKey, "Dive into Village") };
-            StyleCta(_diveButton, secondary: true);
+            StyleCta(_diveButton, secondary: false);
             _diveButton.clicked += OnDiveVillageClicked;
             footer.Add(_diveButton);
 
+#if UNITY_EDITOR
+            // WO-327: the old "Jump into the Action" CTA was the Defend-the-Tower
+            // (PatriciaLight) dev quick-entry that crashed in the player build. Its
+            // handler now routes to the same safe pet-select path, but the
+            // DTT-labelled button must NOT ship — it is kept EDITOR-ONLY for dev
+            // convenience and is compiled out of the WebGL / player build.
             _confirmButton = new Button { text = FallbackLocale(ConfirmKey, "Jump into the Action") };
-            StyleCta(_confirmButton, secondary: false);
+            StyleCta(_confirmButton, secondary: true);
             _confirmButton.clicked += OnConfirmClicked;
             footer.Add(_confirmButton);
+#endif
 
             roster.Add(footer);
             _root.Add(roster);
