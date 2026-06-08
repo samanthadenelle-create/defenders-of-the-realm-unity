@@ -13,9 +13,9 @@
 //   ┌──────────────────────────────────────────────┐
 //   │ Upgrade Buildings                       [ X ] │
 //   ├──────────────────────────────────────────────┤
-//   │ Farm                                    Lv 2  │
-//   │ Yields: +32 Food / harvest                    │
-//   │ Next: 64 Wood · 64 Crystals     [ Upgrade ]   │
+//   │ Farm                                  Lv 2 → 3 │
+//   │ Yields: +32 → +44 Food / harvest              │
+//   │ Next: 64 Wood (250) · 64 Crystals (40) [Upgr] │   (per-resource have/need color)
 //   ├──────────────────────────────────────────────┤
 //   │ Lumbermill ...                                │
 //   ├──────────────────────────────────────────────┤
@@ -30,7 +30,6 @@
 // crafting panel: Open / Close / Toggle / IsOpen.
 // =============================================================================
 
-using System.Text;
 using DeNelle.Core.State;
 using DeNelle.Core.UI;
 using UnityEngine;
@@ -321,14 +320,33 @@ namespace DeNelle.Village.Buildings.Progression
             name.style.unityFontStyleAndWeight = FontStyle.Bold;
             titleRow.Add(name);
 
-            var levelBadge = new Label(maxed ? $"Lv {level} · MAX" : $"Lv {level}");
+            // WO-237: clear current → next tier badge so the player sees what the
+            // upgrade moves them TO, not just where they are. Maxed shows "Lv N · MAX".
+            var levelBadge = new Label(maxed ? $"Lv {level} · MAX" : $"Lv {level} → {level + 1}");
             levelBadge.style.color = new StyleColor(Cream);
             levelBadge.style.fontSize = 13;
+            levelBadge.style.unityFontStyleAndWeight = FontStyle.Bold;
             titleRow.Add(levelBadge);
 
-            // Yield line.
+            // Yield line — WO-237: show the current → next yield delta so the upgrade's
+            // benefit is explicit (e.g. "+20 Food → +32 Food / harvest"), not just the
+            // current output. At max we show only the current (final) yield.
             int yield = lvlDef != null ? lvlDef.YieldPerTick : 0;
-            var yieldLine = new Label($"Yields  +{yield} {ResourceBuildingProgression.LabelFor(def.Yields)} / harvest");
+            string resLabel = ResourceBuildingProgression.LabelFor(def.Yields);
+            string yieldText;
+            if (maxed)
+            {
+                yieldText = $"Yields  +{yield} {resLabel} / harvest";
+            }
+            else
+            {
+                var nextDef = def.LevelDef(level + 1);
+                int nextYield = nextDef != null ? nextDef.YieldPerTick : yield;
+                yieldText = nextYield > yield
+                    ? $"Yields  +{yield} → +{nextYield} {resLabel} / harvest"
+                    : $"Yields  +{yield} {resLabel} / harvest";
+            }
+            var yieldLine = new Label(yieldText);
             yieldLine.style.color = new StyleColor(Dim);
             yieldLine.style.fontSize = 12;
             yieldLine.style.marginTop = 4;
@@ -358,11 +376,11 @@ namespace DeNelle.Village.Buildings.Progression
                 costColumn.style.flexDirection = FlexDirection.Column;
                 costRow.Add(costColumn);
 
-                var costLine = new Label("Next:  " + FormatCost(lvlDef));
-                costLine.style.color = new StyleColor(affordable ? Dim : Bad);
-                costLine.style.fontSize = 12;
-                costLine.style.whiteSpace = WhiteSpace.Normal;
-                costColumn.Add(costLine);
+                // WO-237: per-resource cost with have/need coloring. Each line shows
+                // "need (have)" and is GREEN when you have enough of that resource, RED
+                // when short — so the player sees AT A GLANCE which resource is blocking
+                // the upgrade, not just one flat-colored aggregate line.
+                costColumn.Add(BuildCostBreakdown(lvlDef));
 
                 if (magicGated)
                 {
@@ -396,29 +414,76 @@ namespace DeNelle.Village.Buildings.Progression
             return card;
         }
 
-        private static string FormatCost(ResourceLevelDef lvlDef)
+        /// <summary>
+        /// WO-237: builds the per-resource cost breakdown for the next tier. One chip
+        /// per cost line, reading "Next: 64 Wood (250)" with the line GREEN when the
+        /// unified GameState wallet (via ResourceLedger) holds enough of THAT resource
+        /// and RED when it is short — so affordability is legible per resource, not as a
+        /// single aggregate color. Magic (the tech axis) is appended the same way.
+        /// </summary>
+        private static VisualElement BuildCostBreakdown(ResourceLevelDef lvlDef)
         {
-            if (lvlDef == null) return "—";
-            bool hasHarvest = lvlDef.UpgradeCost != null && lvlDef.UpgradeCost.Count > 0;
-            if (!hasHarvest && lvlDef.MagicCost <= 0) return "—";
+            var wrap = new VisualElement();
+            wrap.style.flexDirection = FlexDirection.Row;
+            wrap.style.flexWrap = Wrap.Wrap;
+            wrap.style.alignItems = Align.Center;
 
-            var sb = new StringBuilder();
+            var prefix = new Label("Next: ");
+            prefix.style.color = new StyleColor(Dim);
+            prefix.style.fontSize = 12;
+            wrap.Add(prefix);
+
+            bool hasHarvest = lvlDef != null && lvlDef.UpgradeCost != null && lvlDef.UpgradeCost.Count > 0;
+            bool any = false;
+
             if (hasHarvest)
             {
                 for (int i = 0; i < lvlDef.UpgradeCost.Count; i++)
                 {
                     var c = lvlDef.UpgradeCost[i];
-                    if (i > 0) sb.Append("  ·  ");
-                    sb.Append(c.Amount).Append(' ').Append(ResourceBuildingProgression.LabelFor(c.Resource));
+                    int have = ResourceLedger.Balance(c.Resource);
+                    bool ok = have >= c.Amount;
+                    wrap.Add(MakeCostChip(
+                        $"{c.Amount} {ResourceBuildingProgression.LabelFor(c.Resource)}",
+                        have, ok, i > 0));
+                    any = true;
                 }
             }
-            // Magic is the tech axis (not a harvestable) — append it as the gating cost.
-            if (lvlDef.MagicCost > 0)
+
+            // Magic is the tech axis (not a harvestable) — surface it as a colored chip too.
+            if (lvlDef != null && lvlDef.MagicCost > 0)
             {
-                if (sb.Length > 0) sb.Append("  ·  ");
-                sb.Append(lvlDef.MagicCost).Append(" Magic");
+                int haveMagic = ResourceLedger.MagicBalance();
+                bool ok = haveMagic >= lvlDef.MagicCost;
+                wrap.Add(MakeCostChip($"{lvlDef.MagicCost} Magic", haveMagic, ok, any));
+                any = true;
             }
-            return sb.ToString();
+
+            if (!any)
+            {
+                var none = new Label("—");
+                none.style.color = new StyleColor(Dim);
+                none.style.fontSize = 12;
+                wrap.Add(none);
+            }
+
+            return wrap;
+        }
+
+        /// <summary>
+        /// A single colored cost line "{need} {Res} ({have})": Good when affordable,
+        /// Bad when short. <paramref name="leadingSep"/> prepends a separator dot so the
+        /// chips read as a list without depending on flex gaps.
+        /// </summary>
+        private static Label MakeCostChip(string needText, int have, bool affordable, bool leadingSep)
+        {
+            var lbl = new Label((leadingSep ? "·  " : "") + $"{needText} ({have})");
+            lbl.style.color = new StyleColor(affordable ? Good : Bad);
+            lbl.style.fontSize = 12;
+            lbl.style.marginLeft = leadingSep ? 4 : 0;
+            lbl.style.marginRight = 2;
+            lbl.style.unityFontStyleAndWeight = affordable ? FontStyle.Normal : FontStyle.Bold;
+            return lbl;
         }
 
         private void RefreshWallet()
