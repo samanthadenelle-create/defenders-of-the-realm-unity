@@ -1,0 +1,8 @@
+title: TalkToArena
+---
+The Arena Master sizes you up. So you fancy your chances against another lord's garrison?
+-> Enter the Arena (stake SKR, raid an opponent).
+    <<command: OpenArena>>
+-> Not today.
+    Come back when your blade is sharp.
+===

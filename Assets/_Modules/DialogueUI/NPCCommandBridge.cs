@@ -18,6 +18,7 @@ namespace DeNelle.DialogueUI
             reg.AddCommandHandler("OpenCraft", (System.Action<string>)CmdOpenCraft);
             reg.AddCommandHandler("OpenEquip", CmdOpenEquip);
             reg.AddCommandHandler("OpenShop", (System.Action<string>)CmdOpenShop);
+            reg.AddCommandHandler("OpenArena", CmdOpenArena);
             reg.AddCommandHandler("LearnRecipe", (System.Action<string>)CmdLearnRecipe);
 
             Debug.Log("[NPCCommandBridge] Commands registered successfully.");
@@ -70,6 +71,18 @@ namespace DeNelle.DialogueUI
                 panel = host.AddComponent<DeNelle.Village.Hero.ShopPanel>();
             }
             panel.Open(vendor);
+        }
+
+        private void CmdOpenArena()
+        {
+            Debug.Log("[NPC] OpenArena called");
+            var panel = FindFirstObjectByType<DeNelle.Village.Arena.ArenaPanel>();
+            if (panel == null)
+            {
+                var host = new GameObject("ArenaPanelHost");
+                panel = host.AddComponent<DeNelle.Village.Arena.ArenaPanel>();
+            }
+            panel.Open();
         }
 
         private void CmdLearnRecipe(string recipeId)
