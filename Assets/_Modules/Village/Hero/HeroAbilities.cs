@@ -567,6 +567,14 @@ namespace DeNelle.Village
                 return;
             }
 
+            // WO-195: add a distinct element-coded CAST flash so each spell reads
+            // as its own element (fire / frost / arcane / holy) at the cast beat.
+            // SpellVfxFactory resolves (effect, class, accent) -> a Cast_* VFXType
+            // and plays it through the canonical VFXManager (pooled prefab when
+            // wired, procedural fallback otherwise). Additive — the main per-class
+            // effect below is unchanged.
+            SpellVfxFactory.PlayCast(def.EffectEnum, _heroClass, def.UnityColor, at);
+
             // DEF-VFX-01: route through VFXManager so prefab-based art swaps require
             // no code changes. Falls back to procedural if no prefab is wired.
             AbilityVfxKit.PlayHeroAbility(def.EffectEnum, def.UnityColor, at,
