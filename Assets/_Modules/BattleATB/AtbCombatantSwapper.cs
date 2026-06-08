@@ -92,6 +92,12 @@ namespace DeNelle.BattleATB
             var prefab = Resources.Load<GameObject>("Heroes/" + slug);
             if (prefab == null) return;                          // keep the capsule
 
+            // Ensure the canonical ActorAnimator driver (IActorAnimator) is on the logical root
+            // so battle actions can drive PlayAttack/PlayCast/PlayHit/Die for immersive knight swings,
+            // mage casts, hit flinches, and death falls. Matches EnemyFactory / HeroBodySwapper.
+            if (capsule.GetComponent<DeNelle.Core.Combat.ActorAnimator>() == null)
+                capsule.gameObject.AddComponent<DeNelle.Core.Combat.ActorAnimator>();
+
             // Capture the capsule "slot" (world bounds) + its renderers BEFORE adding
             // the model, so we can size/place the model into the exact slot and hide
             // the original pill.
@@ -157,6 +163,10 @@ namespace DeNelle.BattleATB
 
             var prefab = Resources.Load<GameObject>("Enemies/" + ResolveEnemySlug());
             if (prefab == null) { TintEnemy(capsule); return; }  // no model -> keep the tinted pill
+
+            // Ensure ActorAnimator driver for enemy hit reactions, attacks, death falls (matches hero and EnemyFactory).
+            if (capsule.GetComponent<DeNelle.Core.Combat.ActorAnimator>() == null)
+                capsule.gameObject.AddComponent<DeNelle.Core.Combat.ActorAnimator>();
 
             var capsuleRenderers = capsule.GetComponentsInChildren<Renderer>(true);
             Bounds slot = default; bool haveSlot = false;

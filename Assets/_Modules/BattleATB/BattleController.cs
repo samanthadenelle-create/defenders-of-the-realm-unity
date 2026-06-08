@@ -27,12 +27,14 @@
 // =============================================================================
 
 using System.Collections.Generic;
+using System.Linq;
 using Cysharp.Threading.Tasks;
 using DeNelle.BattleATB.Engine;
 using DeNelle.BattleATB.State;
 using DeNelle.Core;
+using DeNelle.Core.Combat;  // ActorAnimator / IActorAnimator for 3D fight anims (knight swings, mage casts, hits, deaths)
+using TMPro;
 using UnityEngine;
-using UnityEngine.UIElements;
 
 namespace DeNelle.BattleATB
 {
@@ -41,7 +43,6 @@ namespace DeNelle.BattleATB
     /// <see cref="ATBRuntimeState"/> store, the placeholder capsule combatants
     /// and the <c>BattleHUD</c> UI Toolkit document.
     /// </summary>
-    [RequireComponent(typeof(UIDocument))]
     public sealed class BattleController : MonoBehaviour
     {
         // ---------------------------------------------------------------------
@@ -52,9 +53,9 @@ namespace DeNelle.BattleATB
         [Tooltip("The runtime-only ScriptableObject store. Created by the scene builder.")]
         [SerializeField] private ATBRuntimeState _runtimeState;
 
-        [Header("UI")]
-        [Tooltip("The UIDocument carrying BattleHUD.uxml. Defaults to this GameObject's.")]
-        [SerializeField] private UIDocument _hudDocument;
+        // NOTE: Old UIDocument + complex VisualElement BattleHud removed.
+        // We now use a clean code-built uGUI FF7-style HUD (BattleHudUgui) that is self-contained
+        // and matches the requested classic layout. No UXML — guaranteed to work in builds.
 
         // WO-163: cached "Attack" trigger hash — guards SubmitPlayerAction's swing
         // so it never drives an absent param (the placeholder capsule has none).
@@ -84,18 +85,18 @@ namespace DeNelle.BattleATB
         // Dynamic HUD — WO-169 P1 code-built party battle screen
         // ---------------------------------------------------------------------
 
-        /// <summary>The dynamic, data-bound FF HUD (enemies left, party right). Owns
-        /// all combatant cards, the command menu, skill/item menus, and the target
-        /// picker. The controller wires its action callback to ChooseAction.</summary>
-        private BattleHud _hud;
-
-        /// <summary>WO-170 — the retro 2D VFX presenter layered over the HUD. Pure
-        /// presentation: replays the battle log as hit-flashes / floating numbers /
-        /// elemental bursts / screen flash+shake. Never touches the engine.</summary>
-        private BattleVfx _vfx;
+        /// <summary>FF7-style code-built uGUI HUD (classic command window bottom-left, party status bottom-right with 4 slots + ATB bars, info top).
+        /// Replaces the previous overly complex VisualElement BattleHud. Pure uGUI so it works in builds. Wired to the same ATB engine/state.</summary>
+        private BattleHudUgui _hudUgui;
 
         /// <summary>True once the result hand-back has been kicked off (fire once).</summary>
         private bool _returnScheduled;
+        private int _playerAttackCombo;  // for cycling Knight melee combo swings in PlayAttack
+        // Cursor into the cumulative battle log — TryDriveHitAndDeathAnims / SpawnFloatingDamage
+        // only process entries ADDED since the last turn. Without it both methods replayed the
+        // entire log every TurnResolved (re-spawning damage numbers + re-firing hit/death anims
+        // for all past hits). Reset to 0 on battle start. (Replaces the old BattleVfx log-diff cursor.)
+        private int _lastProcessedLogIndex;
 
         /// <summary>Where this battle came from — a village tree-breach "Last Stand"
         /// (Village) vs a dungeon encounter (Dungeon). Gates Flee: you cannot flee
@@ -107,26 +108,7 @@ namespace DeNelle.BattleATB
         // Lifecycle
         // ---------------------------------------------------------------------
 
-        private bool _bound;        // BindUi() succeeded (UI elements queried)
-        private bool _subscribed;   // runtime-state events + attack button wired
-
-        private void Awake()
-        {
-            if (_hudDocument == null) _hudDocument = GetComponent<UIDocument>();
-        }
-
-        // CRITICAL: UI binding + event subscription happen in Start(), NOT here.
-        // A UIDocument builds its rootVisualElement in its OWN OnEnable, and script
-        // execution order means THIS OnEnable can run first — so binding here read a
-        // null root, BindUi() failed, OnEnable bailed before ever subscribing, and
-        // the HUD never rendered. That is the long-standing "ATB shows only the
-        // capsule combatants, no 2D turn-based window" bug. By Start() the document
-        // root is guaranteed built. OnEnable only RE-subscribes on a later re-enable
-        // (once first-time binding in Start has happened).
-        private void OnEnable()
-        {
-            if (_bound) Subscribe();
-        }
+        private bool _subscribed;   // runtime-state events wired
 
         private void OnDisable()
         {
@@ -142,38 +124,36 @@ namespace DeNelle.BattleATB
 
         private void Start()
         {
-            // Bind the HUD now that UIDocument.rootVisualElement is built (see the
-            // OnEnable note). Without a bound HUD the battle would run invisibly.
-            if (!BindUi())
-            {
-                Debug.LogError("[BattleController] BattleHUD failed to bind in Start — HUD will not render.");
-                return;
-            }
-            _bound = true;
-            Subscribe();   // wire events AFTER binding
+            Subscribe();   // wire events
 
             if (_runtimeState == null)
             {
                 Debug.LogError("[BattleController] No ATBRuntimeState assigned — battle cannot run.");
                 return;
             }
-            _hud?.ResetLog();
-            _vfx?.Reset();   // WO-170 — clear the VFX log-diff cursor for the new fight
             _returnScheduled = false;
+            _lastProcessedLogIndex = 0;   // fresh battle — start the log cursor at the top
 
             BattleSetup setup = BuildSetup();
             // Tag the source from the handoff: Wave > 0 is a village tree-breach
             // "Last Stand" (Heart consequences commit on close); Wave == 0 or no
             // handoff (dungeon / dev) is a Dungeon encounter (no village damage).
-            // Previously hardcoded Village, which mis-tagged dungeon battles.
             _source = ResolveSource();
             _runtimeState.StartBattle(setup, _source);
-            // StartBattle fires OnBattleChanged synchronously — the listener is wired
-            // above, but render once explicitly as a belt-and-suspenders first paint.
-            Render(_runtimeState.Battle);
 
-            // WO-68: arm the turn-timer now that the battle is live. Safe null-
-            // conditional — ATBCombatManager is optional (tests / direct-play paths).
+            // Build the clean FF7 uGUI HUD (code-built Canvas + panels exactly as specified).
+            // Self-contained — creates BattleHUD_Canvas if needed. No UIDocument / UXML.
+            var hudGo = new GameObject("BattleHudUgui");
+            _hudUgui = hudGo.AddComponent<BattleHudUgui>();
+            _hudUgui.Build(); // creates its own ScreenSpaceOverlay Canvas + Scaler (1920x1080 ref)
+
+            // Wire callbacks (same surface the engine/state expect).
+            _hudUgui.OnAction = action => _runtimeState.ChooseAction(action);
+
+            // Initial paint of the FF7 layout.
+            _hudUgui.Render(_runtimeState);
+
+            // WO-68: arm the turn-timer now that the battle is live.
             ATBCombatManager.Instance?.StartCombat();
         }
 
@@ -184,12 +164,12 @@ namespace DeNelle.BattleATB
         /// </summary>
         private void Update()
         {
-            if (!_bound || _hud == null || _runtimeState == null) return;
+            if (_hudUgui == null || _runtimeState == null) return;
             if (_runtimeState.Battle == null) return;
-            _hud.TickVisualAtb(_runtimeState, Time.deltaTime);
+            _hudUgui.TickVisualAtb(_runtimeState, Time.deltaTime);
         }
 
-        /// <summary>Wires the runtime-state events + the attack button. Idempotent.</summary>
+        /// <summary>Wires the runtime-state events. Idempotent.</summary>
         private void Subscribe()
         {
             if (_subscribed || _runtimeState == null) return;
@@ -499,35 +479,49 @@ namespace DeNelle.BattleATB
         // Event handlers — driven by ATBRuntimeState's UnityEvents
         // ---------------------------------------------------------------------
 
-        /// <summary>Re-render the whole HUD whenever the live snapshot changes.</summary>
+        /// <summary>Re-render the FF7 uGUI HUD whenever the live snapshot changes.</summary>
         private void HandleBattleChanged(BattleState state)
         {
-            Render(state);
+            _hudUgui?.Render(_runtimeState);
         }
 
         /// <summary>
-        /// The player just submitted an action (before the AI drain). The dynamic
-        /// HUD re-renders fully on the OnBattleChanged that follows; nothing extra
-        /// is needed here now that the command bar is rebuilt per snapshot.
+        /// The player just submitted an action. Drive the uGUI command feedback + 3D anims.
         /// </summary>
         private void HandleActionSubmitted(BattleState state)
         {
-            // Render() (via HandleBattleChanged) rebuilds the command bar and disables
-            // it whenever it isn't a player-mode member's turn. WO-170: also play the
-            // acting unit's retro attack/cast lunge as the move is committed.
-            _vfx?.OnActionSubmitted(state);
+            _hudUgui?.Render(_runtimeState);
+
+            // Drive 3D ActorAnimator on the swapped models for real fight feel:
+            // - Knight PlayAttack(combo) → sword swings from the Knight action clips.
+            // - Mage PlayCast() → Wizard_Spell_Cast animation.
+            // - Enemy gets a wind-up/attack pose.
+            // This uses the canonical IActorAnimator already wired on the capsules by AtbCombatantSwapper.
+            TryDriveActionAnim(state);
         }
 
         /// <summary>
-        /// WO-170 — a turn fully resolved and the snapshot updated. Fires AFTER
-        /// OnBattleChanged (which rebinds the HUD cards), so the VFX presenter can
-        /// safely anchor effects to the freshly-bound cards. Replays every NEW battle-
-        /// log entry as a retro effect (hit-flash, floating number, elemental burst,
-        /// defeat, screen flash/shake). Read-only over the log — never mutates state.
+        /// A turn fully resolved. Update the uGUI HUD + drive 3D hit/death reactions.
         /// </summary>
         private void HandleTurnResolved(BattleState state)
         {
-            _vfx?.OnTurnResolved(state);
+            _hudUgui?.Render(_runtimeState);
+
+            // Only react to log entries ADDED since the last turn (cursor) — the log is
+            // cumulative, so looping the whole thing would replay every past hit/death each turn.
+            int from = _lastProcessedLogIndex;
+
+            // On resolution, drive hit reactions and death falls on the 3D models.
+            // Every direct hit → PlayHit (flinch / impact anim from Shared_Hit_Reaction).
+            // Death → Die (latches Dead + fall animation from Shared_Death, immersive collapse).
+            TryDriveHitAndDeathAnims(state, from);
+
+            // Simple world-space floating damage numbers above the capsules (3D field).
+            // Uses the same capsules the swapper populated. Keeps the central arena clean.
+            SpawnFloatingDamage(state, from);
+
+            // Advance the cursor past everything we just processed.
+            _lastProcessedLogIndex = state.Log?.Count ?? _lastProcessedLogIndex;
         }
 
         /// <summary>Battle reached a final outcome — schedule the scene hand-back.</summary>
@@ -577,7 +571,7 @@ namespace DeNelle.BattleATB
         private void Render(BattleState state)
         {
             if (state == null) return;
-            _hud?.Render(_runtimeState);
+            _hudUgui?.Render(_runtimeState);
             RenderCapsules(state);
         }
 
@@ -659,50 +653,9 @@ namespace DeNelle.BattleATB
             return SceneRouter.Village;
         }
 
-        // ---------------------------------------------------------------------
-        // UI binding helpers
-        // ---------------------------------------------------------------------
-
         /// <summary>
-        /// Build the dynamic, code-built HUD into the UIDocument root and wire its
-        /// action callback to the engine. WO-169 commits to code-built UI: the dead
-        /// BattleHUD.uxml is ignored entirely (it does not clone in builds, CLAUDE.md
-        /// §8). Returns false only if there is no document to draw into.
-        /// </summary>
-        private bool BindUi()
-        {
-            if (_hudDocument == null) _hudDocument = GetComponent<UIDocument>();
-            if (_hudDocument == null)
-            {
-                Debug.LogError("[BattleController] No UIDocument — BattleHUD cannot bind.");
-                return false;
-            }
-
-            VisualElement root = _hudDocument.rootVisualElement;
-            if (root == null)
-            {
-                Debug.LogError("[BattleController] UIDocument has no rootVisualElement.");
-                return false;
-            }
-
-            _hud = new BattleHud();
-            _hud.OnAction = SubmitPlayerAction;
-            _hud.OnControlModeToggled = HandleControlModeToggled;
-            _hud.Build(root);
-
-            // WO-170 — bind the retro VFX presenter to the freshly-built HUD. Pure
-            // view: it reads the battle log + card geometry, draws on the HUD's
-            // input-transparent VFX layer, and never calls into the engine.
-            _vfx = new BattleVfx();
-            _vfx.Bind(_hud);
-            return true;
-        }
-
-        /// <summary>
-        /// WO-169 P0 — the player flipped a member's Command/Auto toggle. Persist the
-        /// preference so it sticks; it takes effect from the NEXT battle build (the
-        /// engine snapshot's ControlMode is set at construction — we don't hot-swap a
-        /// unit mid-fight, which would risk a turn-phase race).
+        /// (Old BindUi / UIDocument / old BattleHud completely removed. The FF7 uGUI HUD
+        /// is self-built in Start() and driven via _hudUgui. See BattleHudUgui.cs.)
         /// </summary>
         private void HandleControlModeToggled(string memberId, ControlMode mode)
         {
@@ -727,6 +680,131 @@ namespace DeNelle.BattleATB
                 if (u.Kind == kind) return u;
             }
             return null;
+        }
+
+        // ── 3D ActorAnimator drive for immersive fights (knight swings, mage casts, hits/falls) ──
+
+        private void TryDriveActionAnim(BattleState state)
+        {
+            if (state == null || string.IsNullOrEmpty(state.ActiveUnitId)) return;
+
+            var unit = state.Units.FirstOrDefault(u => u.Id == state.ActiveUnitId);
+            if (unit == null) return;
+
+            bool isHeroSide = unit.Side == Side.Party;
+
+            ActorAnimator actor = isHeroSide
+                ? GetActorOnCapsule(_heroCapsule)
+                : GetActorOnCapsule(_enemyCapsule);
+
+            if (actor == null) return;
+
+            // For player side: Knight-style → PlayAttack (uses combo clips); caster (Mage) → PlayCast.
+            // Enemy side: basic attack telegraph.
+            if (isHeroSide)
+            {
+                // Resolve from the setup hero class if possible (simple heuristic for now).
+                if (IsCasterHeroClass())
+                    actor.PlayCast();
+                else
+                {
+                    // Knight-style: cycle the 3-swing combo (factory maps Combo int + Attack trigger
+                    // to the Knight/ standing melee clips). Gives satisfying multi-hit swing feel.
+                    _playerAttackCombo = (_playerAttackCombo + 1) % 3;
+                    actor.PlayAttack(_playerAttackCombo);
+                }
+            }
+            else
+            {
+                actor.PlayWindUp(); // or PlayAttack(0) for enemy wind-up/attack feel
+            }
+        }
+
+        private void TryDriveHitAndDeathAnims(BattleState state, int fromIndex)
+        {
+            if (state?.Log == null) return;
+
+            // Scan only NEW log entries (>= fromIndex) for damage/death to drive reactions on the
+            // corresponding 3D model. This gives visible flinch on every direct hit and collapse on KO.
+            for (int i = Mathf.Max(0, fromIndex); i < state.Log.Count; i++)
+            {
+                var entry = state.Log[i];
+                if (entry.Event != BattleLogEvent.Attack && entry.Event != BattleLogEvent.Ability && entry.Event != BattleLogEvent.Death) continue;
+
+                bool targetIsHero = entry.TargetId != null && state.Units.Any(u => u.Id == entry.TargetId && u.Side == Side.Party);
+                Transform capsule = targetIsHero ? _heroCapsule : _enemyCapsule;
+                var actor = GetActorOnCapsule(capsule);
+                if (actor == null) continue;
+
+                if (entry.Event == BattleLogEvent.Death || (entry.TargetId != null && !state.Units.Any(u => u.Id == entry.TargetId && u.Alive)))
+                {
+                    actor.Die(DeathDirection.Fall);  // immersive collapse / fall
+                }
+                else if ((entry.Event == BattleLogEvent.Attack || entry.Event == BattleLogEvent.Ability) && (entry.Amount ?? 0) > 0)
+                {
+                    // Direct hit → flinch / impact reaction (Shared_Hit_Reaction anim)
+                    var dir = HitDirection.Front;
+                    actor.PlayHit(dir);
+                }
+            }
+        }
+
+        private static ActorAnimator GetActorOnCapsule(Transform capsule)
+        {
+            if (capsule == null) return null;
+            return capsule.GetComponent<ActorAnimator>() ?? capsule.GetComponentInChildren<ActorAnimator>(true);
+        }
+
+        private bool IsCasterHeroClass()
+        {
+            // Matches the ResolveHeroClass mapping (Mage/Cleric use cast anims; Knight/Ranger use attack swings).
+            // For ATB the hero class is resolved at setup time; here we use a lightweight check against the fallback/known.
+            // In a full multi-party this would inspect the ActiveUnit kind.
+            return _fallbackHeroName.Contains("Mage") || _fallbackHeroName.Contains("Thrain") || _fallbackHeroName.Contains("Elara");
+        }
+
+        // Simple 3D floating damage for the arena (keeps the central field clean while giving punchy feedback).
+        // Called from HandleTurnResolved for every Strike entry. Uses the capsules populated by AtbCombatantSwapper.
+        private void SpawnFloatingDamage(BattleState state, int fromIndex)
+        {
+            if (state?.Log == null || _heroCapsule == null || _enemyCapsule == null) return;
+
+            for (int i = Mathf.Max(0, fromIndex); i < state.Log.Count; i++)
+            {
+                var entry = state.Log[i];
+                if ((entry.Event != BattleLogEvent.Attack && entry.Event != BattleLogEvent.Ability) || (entry.Amount ?? 0) == 0) continue;
+
+                bool isHeroTarget = entry.TargetId != null && state.Units.Any(u => u.Id == entry.TargetId && u.Side == Side.Party);
+                Transform capsule = isHeroTarget ? _heroCapsule : _enemyCapsule;
+
+                var go = new GameObject("FloatDmg");
+                go.transform.SetParent(capsule, false);
+                go.transform.localPosition = new Vector3(0, 2.4f, 0);
+
+                var tmp = go.AddComponent<TextMeshPro>();
+                tmp.text = entry.Amount > 0 ? entry.Amount.ToString() : "+" + (-entry.Amount);
+                tmp.fontSize = 3.5f;
+                tmp.color = entry.Amount > 0 ? (entry.Crit ?? false ? new Color(1f, 0.9f, 0.3f) : new Color(0.95f, 0.25f, 0.25f)) : new Color(0.3f, 0.95f, 0.4f);
+                tmp.alignment = TextAlignmentOptions.Center;
+
+                Destroy(go, 1.3f);
+                StartCoroutine(AnimateFloat(go.transform, tmp));
+            }
+        }
+
+        private System.Collections.IEnumerator AnimateFloat(Transform t, TextMeshPro tmp)
+        {
+            float t0 = Time.time;
+            float dur = 1.1f;
+            Vector3 start = t.localPosition;
+            while (Time.time - t0 < dur && t != null)
+            {
+                float p = (Time.time - t0) / dur;
+                t.localPosition = start + new Vector3(0, p * 1.6f, 0);
+                if (tmp) tmp.color = new Color(tmp.color.r, tmp.color.g, tmp.color.b, 1f - Mathf.Pow(p, 0.7f));
+                yield return null;
+            }
+            if (t) Destroy(t.gameObject);
         }
     }
 }
