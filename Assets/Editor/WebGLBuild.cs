@@ -65,11 +65,17 @@ namespace DeNelle.Editor
                 .Any(a => a.Equals("-debugExceptions", System.StringComparison.OrdinalIgnoreCase));
 
             PlayerSettings.SetScriptingBackend(NamedBuildTarget.WebGL, ScriptingImplementation.IL2CPP);
-            PlayerSettings.WebGL.compressionFormat = noBrotli
-                ? WebGLCompressionFormat.Disabled
-                : WebGLCompressionFormat.Brotli;
-            Debug.Log($"[WebGLBuild] compressionFormat = {PlayerSettings.WebGL.compressionFormat}" +
-                      (noBrotli ? " (-noBrotli: uncompressed for itch.io)" : " (Brotli for Vercel)"));
+            // itch.io + any static host: Brotli compression + decompressionFallback.
+            // itch does NOT send `Content-Encoding: br`, so WITHOUT fallback the .br
+            // payloads fail to load. WITH fallback Unity's loader decompresses in-JS, so
+            // compressed payloads work everywhere AND stay small. Uncompressed (-noBrotli)
+            // made WebGL.data ~223 MB, which exceeds itch's per-file zip limit ("file too
+            // large") — so -noBrotli is now deprecated/ignored; always Brotli+fallback.
+            if (noBrotli)
+                Debug.LogWarning("[WebGLBuild] -noBrotli is deprecated/ignored (uncompressed exceeds itch's file limit). Using Brotli + decompressionFallback.");
+            PlayerSettings.WebGL.compressionFormat = WebGLCompressionFormat.Brotli;
+            PlayerSettings.WebGL.decompressionFallback = true;
+            Debug.Log("[WebGLBuild] compressionFormat = Brotli + decompressionFallback = true (itch-safe, no Content-Encoding header needed)");
             PlayerSettings.WebGL.memorySize = 512;
             // RELEASE was WebGLExceptionSupport.None — but with None, WebGL try/catch
             // does NOT catch, so ANY thrown exception (e.g. a catalog's File.ReadAllText

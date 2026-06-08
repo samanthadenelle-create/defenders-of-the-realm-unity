@@ -60,8 +60,8 @@ if ($SkipBuild) {
     $buildScript = Join-Path $proj 'build-webgl.ps1'
     if (-not (Test-Path $buildScript)) { Write-Error "[ship] build-webgl.ps1 not found at $buildScript."; exit 1 }
 
-    Write-Host "[ship] Building WebGL (-NoBrotli). First IL2CPP compile can take 30-60 min..."
-    $buildArgs = @('-NoBrotli')
+    Write-Host "[ship] Building WebGL (Brotli + decompression fallback, itch-safe). First IL2CPP compile can take 30-60 min..."
+    $buildArgs = @()   # was -NoBrotli (uncompressed -> WebGL.data too large for itch); now Brotli+fallback (small + itch-serveable)
     if ($DebugExceptions) { $buildArgs += '-DebugExceptions' }
     & powershell -ExecutionPolicy Bypass -File $buildScript @buildArgs
     $buildExit = $LASTEXITCODE
