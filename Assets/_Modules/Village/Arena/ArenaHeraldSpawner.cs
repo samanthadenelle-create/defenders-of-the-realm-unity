@@ -58,6 +58,19 @@ namespace DeNelle.Village.Arena
         private Transform _hero;
         private ArenaPanel _panel;
 
+        // ── Arena-screen suppression (DEF: herald button lingered over the Arena UI) ──
+        // While ANY arena screen owns the display, the world "Enter Arena" prompt must
+        // not re-arm. ArenaPanel has its own overlay (polled via ArenaPanel.IsOpen); the
+        // attack-recruit / defense-setup authoring modes CLOSE the panel and run their own
+        // fullscreen overlay, so we track those via their existing static signals
+        // (RecruitModeChanged / SetupModeChanged). We do NOT add a new global — these are
+        // the controllers' own published events. AnyArenaScreenOpen gates the re-request.
+        private bool _recruitActive;
+        private bool _setupActive;
+
+        private bool AnyArenaScreenOpen =>
+            _recruitActive || _setupActive || (_panel != null && _panel.IsOpen);
+
         // =====================================================================
         // Self-bootstrap (no scene edit). Runs after every scene load; idempotent.
         // =====================================================================
@@ -75,11 +88,33 @@ namespace DeNelle.Village.Arena
             // Destroy(this), not the host -- DDOL singleton (CLAUDE.md memory).
             if (Instance != null && Instance != this) { Destroy(this); return; }
             Instance = this;
+
+            // Track the arena authoring sub-modes so we can suppress the herald prompt
+            // while they own the screen (they close ArenaPanel, so IsOpen alone misses them).
+            ArenaAttackRecruitController.RecruitModeChanged -= OnRecruitModeChanged;
+            ArenaAttackRecruitController.RecruitModeChanged += OnRecruitModeChanged;
+            ArenaDefenseSetupController.SetupModeChanged -= OnSetupModeChanged;
+            ArenaDefenseSetupController.SetupModeChanged += OnSetupModeChanged;
         }
 
         private void OnDestroy()
         {
+            ArenaAttackRecruitController.RecruitModeChanged -= OnRecruitModeChanged;
+            ArenaDefenseSetupController.SetupModeChanged -= OnSetupModeChanged;
             if (Instance == this) Instance = null;
+        }
+
+        private void OnRecruitModeChanged(bool active)
+        {
+            _recruitActive = active;
+            // Drop any prompt the instant a screen opens so it can't linger a frame.
+            if (active) MobileInteractButton.Release(this);
+        }
+
+        private void OnSetupModeChanged(bool active)
+        {
+            _setupActive = active;
+            if (active) MobileInteractButton.Release(this);
         }
 
         private void Update()
@@ -125,6 +160,12 @@ namespace DeNelle.Village.Arena
         {
             if (_heraldRoot == null || _hero == null) return;
 
+            // While any Arena screen owns the display, do NOT re-arm the prompt — the
+            // per-frame proximity Request would otherwise re-show the button over the
+            // open Arena UI every frame. The button returns automatically once all arena
+            // screens close (this gate lifts and the Request resumes next in-range frame).
+            if (AnyArenaScreenOpen) return;
+
             float sqr = InteractRadius * InteractRadius;
             if ((_heraldRoot.position - _hero.position).sqrMagnitude > sqr) return;
 
@@ -150,6 +191,10 @@ namespace DeNelle.Village.Arena
                 _panel = host.AddComponent<ArenaPanel>();
             }
             _panel.Open();
+            // Dismiss the world "Enter Arena" prompt the moment the panel opens so it
+            // can't linger over the Arena UI. The proximity loop's AnyArenaScreenOpen
+            // gate (ArenaPanel.IsOpen) then keeps it suppressed until the panel closes.
+            MobileInteractButton.Release(this);
             Debug.Log("[ArenaHeraldSpawner] Opened the Arena panel.");
         }
 

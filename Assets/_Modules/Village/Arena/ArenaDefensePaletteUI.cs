@@ -74,10 +74,23 @@ namespace DeNelle.Village.Arena
             {
                 _document.panelSettings = src.panelSettings;
                 _document.sortingOrder = src.sortingOrder + 6;   // above HUD
+                Debug.Log("[ArenaDefensePaletteUI] Adopted PanelSettings from sibling '" + src.gameObject.name + "'.");
             }
             else
             {
-                Debug.LogWarning("[ArenaDefensePaletteUI] No sibling PanelSettings found — palette will not render.");
+                // No UI-Toolkit sibling AND no Resources PanelSettings (castle hub is uGUI)
+                // — CREATE one at runtime so the palette renders (inline styles do the look).
+                var created = ScriptableObject.CreateInstance<PanelSettings>();
+                created.name = "ArenaRuntimePanelSettings";
+                created.scaleMode = PanelScaleMode.ScaleWithScreenSize;
+                created.referenceResolution = new Vector2Int(1080, 1920);
+                foreach (var d in FindObjectsByType<UIDocument>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+                    if (d != null && d.panelSettings != null && d.panelSettings.themeStyleSheet != null)
+                    { created.themeStyleSheet = d.panelSettings.themeStyleSheet; break; }
+                _document.panelSettings = created;
+                _document.sortingOrder = 5000;
+                Debug.Log("[ArenaDefensePaletteUI] Created runtime PanelSettings (theme=" +
+                          (created.themeStyleSheet != null ? "yes" : "none") + ").");
             }
         }
 

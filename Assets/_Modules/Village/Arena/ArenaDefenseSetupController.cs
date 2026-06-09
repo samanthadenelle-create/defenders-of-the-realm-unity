@@ -123,6 +123,11 @@ namespace DeNelle.Village.Arena
             EnsurePalette();
             ShowPalette();
 
+            // Suppress the whole gameplay HUD so the live town/wave readout doesn't
+            // clutter the placement view. The CASTLE stays visible (we do NOT cover the
+            // world here — troops are placed onto it); only the HUD is hidden.
+            ArenaHudBridge.SetVisible(false);
+
             SetupModeChanged?.Invoke(true);
             Debug.Log("[ArenaDefense] Entered Arena Defense Setup.");
         }
@@ -144,6 +149,8 @@ namespace DeNelle.Village.Arena
             GameStateService.Instance?.Save();
 
             RestoreCamera();
+            // Restore the gameplay HUD suppressed on Enter.
+            ArenaHudBridge.SetVisible(true);
             SetupModeChanged?.Invoke(false);
             Debug.Log("[ArenaDefense] Exited Arena Defense Setup — defense saved.");
         }

@@ -95,6 +95,11 @@ namespace DeNelle.Village.Arena
             EnsurePalette();
             ShowPalette();
 
+            // Suppress the whole gameplay HUD so the live town/wave readout doesn't
+            // bleed through this full-screen modal (the recruit palette adds its own
+            // covering backdrop; this also kills the wave text behind it).
+            ArenaHudBridge.SetVisible(false);
+
             RecruitModeChanged?.Invoke(true);
             Debug.Log("[ArenaAttack] Entered Arena Attack recruiting.");
         }
@@ -107,6 +112,9 @@ namespace DeNelle.Village.Arena
 
             _palette?.Hide();
             _squad.Clear();
+
+            // Restore the gameplay HUD suppressed on Enter.
+            ArenaHudBridge.SetVisible(true);
 
             RecruitModeChanged?.Invoke(false);
             Debug.Log("[ArenaAttack] Exited Arena Attack recruiting (cancelled).");
@@ -170,6 +178,8 @@ namespace DeNelle.Village.Arena
 
             IsActive = false;
             _palette?.Hide();
+            // Restore the gameplay HUD suppressed on Enter (the live raid HUD takes over).
+            ArenaHudBridge.SetVisible(true);
             RecruitModeChanged?.Invoke(false);
 
             Debug.Log($"[ArenaAttack] Launching raid vs '{opponent.DisplayName}' with a {_squad.Count}-unit squad.");

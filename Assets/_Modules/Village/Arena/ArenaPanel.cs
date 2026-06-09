@@ -62,6 +62,14 @@ namespace DeNelle.Village.Arena
         private static readonly Color AccentSoft = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.30f);
         private static readonly Color Accent     = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.85f);
 
+        /// <summary>
+        /// True while the Arena overlay exists on screen. Reflects the existing private
+        /// <c>_ui</c> lifetime (set in <see cref="Open"/>/<see cref="BuildRoot"/>, cleared
+        /// in <see cref="Close"/>). Used by ArenaHeraldSpawner to suppress its world
+        /// "Enter Arena" interact prompt while the panel is up. No new state introduced.
+        /// </summary>
+        public bool IsOpen => _ui != null;
+
         /// <summary>Open the Arena entry screen (creates the overlay if needed).</summary>
         public void Open()
         {
@@ -163,12 +171,15 @@ namespace DeNelle.Village.Arena
             // (place your War Base) flows reachable. These open the dedicated screens
             // and hide this panel so they are unobstructed. The per-opponent RAID
             // buttons above remain a distinct "quick raid" straight at a seeded base.
+            // AddButton centres horizontally at 0.5 (uses anchorX.y as half-width only);
+            // anchorY = (y0, y1) with y0 < y1. Stack ATTACK (red) above DEFEND (gold),
+            // both above the "Use My Castle" well (y 0.10-0.18) and Close (0.025-0.075).
             AddButton(_entryRoot.transform, "ATTACK",
-                      new Vector2(0.215f, 0.225f), new Vector2(0.085f, 0.075f),
-                      new Color(ElarionUi.Danger.r, ElarionUi.Danger.g, ElarionUi.Danger.b, 0.85f),
+                      new Vector2(0.5f, 0.22f), new Vector2(0.29f, 0.36f),
+                      new Color(ElarionUi.Danger.r, ElarionUi.Danger.g, ElarionUi.Danger.b, 0.9f),
                       OpenAttackRecruit, ButtonKind.Confirm);
             AddButton(_entryRoot.transform, "DEFEND",
-                      new Vector2(0.215f, 0.225f), new Vector2(0.305f, 0.075f),
+                      new Vector2(0.5f, 0.22f), new Vector2(0.20f, 0.27f),
                       ElarionUi.GoldButton, OpenDefenseSetup, ButtonKind.Gold);
 
             AddButton(_entryRoot.transform, "Close", new Vector2(0.30f, 0.70f),

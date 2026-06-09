@@ -1489,6 +1489,24 @@ namespace DeNelle.HUD
                 _vitalsCluster.gameObject.SetActive(visible);
         }
 
+        /// <summary>
+        /// Show / hide the ENTIRE village HUD (wave/lookout/resources/heart banner +
+        /// the combat clusters) by fading the root CanvasGroup. Used by full-screen
+        /// modal overlays (Arena recruit / defense setup) so the live town/wave HUD
+        /// doesn't bleed through and clutter the modal. VISIBILITY ONLY — every data
+        /// binding keeps writing while hidden, so the HUD is correct on restore.
+        /// Resolved BY NAME (reflection) from the Village-side Arena controllers — it
+        /// is a HUD extra, not on the IVillageHud interface (same decoupling contract
+        /// as SetCombatHudVisible). Idempotent + harmless if _rootGroup is null.
+        /// </summary>
+        public void SetHudVisible(bool visible)
+        {
+            if (_rootGroup == null) return;
+            _rootGroup.alpha = visible ? 1f : 0f;
+            _rootGroup.interactable = visible;
+            _rootGroup.blocksRaycasts = visible;
+        }
+
         // =====================================================================
         //  WO-339 · TOWN-HUD data setters (by-name reflected extras, NOT on
         //  IVillageHud — same decoupling contract as SetStartWaveAvailable). The
