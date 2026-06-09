@@ -99,6 +99,41 @@ namespace DeNelle.Village
             ApplyTransparentMaterials();
         }
 
+        /// <summary>
+        /// (Re)build a simple PLACEHOLDER ghost (a translucent capsule on a disc) not
+        /// tied to a CatalogEntry. Used by the Arena Defense setup screen (WO-389): a
+        /// pre-placed troop has no CatalogEntry visual at setup time (full troop-body
+        /// skinning happens at raid spawn), so the setup screen reuses this SAME ghost
+        /// primitive — MoveTo / SetValid / Hide — with a generic marker. The
+        /// <paramref name="key"/> dedupes rebuilds so re-arming the same troop is a no-op.
+        /// </summary>
+        public void SetPlaceholder(string key, float fit = 2.5f)
+        {
+            if (_visual != null && _builtForId == key) return;
+
+            Clear();
+            _builtForId = key;
+            _mpb = new MaterialPropertyBlock();
+
+            _visual = new GameObject("ArenaDefenseGhost");
+            _visual.transform.SetParent(transform, false);
+
+            // A capsule body (the unit) standing on a thin footprint disc — enough to
+            // read placement + validity; the real troop body is skinned at spawn.
+            var body = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            body.transform.SetParent(_visual.transform, false);
+            body.transform.localScale = new Vector3(0.9f, 1.1f, 0.9f);
+            body.transform.localPosition = new Vector3(0f, 1.1f, 0f);
+
+            var disc = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            disc.transform.SetParent(_visual.transform, false);
+            disc.transform.localScale = new Vector3(Mathf.Max(1f, fit), 0.05f, Mathf.Max(1f, fit));
+
+            CollectRenderers(_visual.transform);
+            StripColliders(_visual.transform);
+            ApplyTransparentMaterials();
+        }
+
         /// <summary>Move the ghost to a snapped world position with a discrete yaw.</summary>
         public void MoveTo(Vector3 snappedWorldPos, int yawSteps)
         {
