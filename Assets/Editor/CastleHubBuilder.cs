@@ -477,6 +477,31 @@ namespace DeNelle.Editor
             // so the interior is walkable AND threads out through the entrance to the courtyard.
             // ~26x26m covers the keep + overlaps the courtyard floor on every side.
             CreateInvisibleFloor(floorRoot.transform, "KeepInterior_Nav", new Vector3(0f, 0.12f, 0f), new Vector3(2.6f, 1f, 2.6f));
+
+            // LEVEL 2 — upper battlements (y~11.4). The platform cube's collider is destroyed,
+            // so without this there is NO navmesh up there. ~44x44 plane over the platform.
+            CreateInvisibleFloor(floorRoot.transform, "UpperBattlements_Nav", new Vector3(0f, 11.5f, 0f), new Vector3(4.4f, 1f, 4.4f));
+
+            // Ramp up to level 2: a tilted invisible plane at ~36deg (under the agent's 45deg max
+            // slope). BOTTOM (+X, ~x34) overlaps the courtyard navmesh on the ground; TOP (-X,
+            // ~x18) overlaps the upper-battlements plane. ~20m long x 8m wide so the agent has a
+            // generous, gentle climb. -Z rotation tilts the -X edge UP toward the platform.
+            CreateInvisibleRamp(floorRoot.transform, "UpperRamp_Nav", new Vector3(26f, 5.75f, 0f), new Vector3(0f, 0f, -36f), new Vector3(2f, 1f, 0.8f));
+        }
+
+        // A tilted invisible floor (ramp) — same as CreateInvisibleFloor but with a rotation so
+        // the agent can climb between levels. Slope must stay under the NavMesh agent's max slope.
+        private static void CreateInvisibleRamp(Transform parent, string name, Vector3 localPos, Vector3 euler, Vector3 localScale)
+        {
+            var plane = GameObject.CreatePrimitive(PrimitiveType.Plane);
+            plane.name = name;
+            plane.transform.SetParent(parent, false);
+            plane.transform.localPosition = localPos;
+            plane.transform.localRotation = Quaternion.Euler(euler);
+            plane.transform.localScale = localScale;
+            var r = plane.GetComponent<MeshRenderer>();
+            if (r != null) r.enabled = false;
+            if (plane.GetComponent<MeshCollider>() == null) plane.AddComponent<MeshCollider>();
         }
 
         private static void CreateInvisibleFloor(Transform parent, string name, Vector3 localPos, Vector3 localScale)
@@ -754,6 +779,15 @@ namespace DeNelle.Editor
             const string scenePath = "Assets/Scenes/MainCastle_Hall.unity";
             var scene = EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Single);
             Log("BATCH-BAKE: opened " + scenePath);
+
+            // Remove the owner's leftover hand-placed planes — they still render (z-fight "ground
+            // flash") and over-extend the navmesh way past the walls. The generated invisible
+            // floor (renderer-off) replaces them cleanly.
+            foreach (var n in new[] { "Plane", "Plane (1)" })
+            {
+                var stray = GameObject.Find(n);
+                if (stray != null) { Object.DestroyImmediate(stray); Log("BATCH-BAKE: removed leftover hand-plane '" + n + "'."); }
+            }
 
             // Ensure the generated invisible floor (courtyard + gate + keep entrance) exists.
             var root = GameObject.Find(RootName);
