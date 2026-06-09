@@ -58,5 +58,23 @@ Don't bury stair generation inside `CastleHubBuilder` as a one-off — that viol
 - Keep movement world-absolute (WO-368). Don't touch the camera.
 - `CastleHubBuilder.cs` is single-writer — one agent only.
 
-## Reference (owner-relayed procedural script — geometry logic is the keeper; run it editor-side, not at runtime)
-`ProceduralWideStairs` step-cube generation + `AddWideNavMeshLink(startPos, endPos, width)` + enemy `AttackSiegeTarget(siegeItem) => agent.SetDestination(siegeItem.position)`. Adapt the generation into the builder; if a runtime MonoBehaviour is ever used instead, `DeNelle.Village`'s asmdef must reference `Unity.AI.Navigation` (the project currently touches NavMeshSurface/NavMeshLink via reflection to avoid that).
+## Reference implementation — SPIRAL (from owner's `new castle.txt` / `ProceduralCastleBuilder`, integrated 2026-06-09)
+Owner shared a `ProceduralCastleBuilder` draft to compare against `CastleHubBuilder`. **Verdict: keep our art castle, lift only its wide-spiral staircase** (the draft is bare primitive cubes with no NavMesh/OuterWorld/spawn/art — it can't replace ours). The draft's polar spiral math is the pinned reference for `StairwayBuilder`'s curved form:
+```csharp
+// per step i in [0..StairSteps):
+float angleStep = 360f / (StairSteps * sweepFactor);     // draft sweepFactor 1.8 ≈ 200° total
+float angle = StartAngle + i * angleStep;
+float rad   = angle * Mathf.Deg2Rad;
+float x = Mathf.Cos(rad) * SpiralRadius;
+float z = Mathf.Sin(rad) * SpiralRadius;
+step.localScale    = new Vector3(StairWidth, stepHeight, treadDepth);   // wide tread
+step.localPosition = new Vector3(x, i * stepHeight + stepHeight/2f, z);
+step.localRotation = Quaternion.Euler(0, angle + 90f, 0);
+// + outer/inner railing posts at radius ± StairWidth/2 (cosmetic).
+```
+**REQUIRED refinements when integrating (do NOT drop the draft in verbatim):**
+1. **Fit-to-bounds, not hardcoded.** Draft climbs `FloorHeight=5`; OUR upper plane is **y≈11.5**. Derive `stepHeight` from the MEASURED courtyard→upper-plane rise and the step count so the **top tread lands flush on `UpperBattlements_Nav`** (the upper tier is one plane with its collider destroyed → the stair top must OVERLAP that nav plane or the bake won't fuse).
+2. **Keep step MeshColliders ON** (draft leaves cube colliders on — good; do NOT disable them like the draft does for walls) so the NavMeshSurface (Physics Colliders) bakes the climb. Railings = visual (thin/colliders-off fine).
+3. **Radius vs width.** Draft `SpiralRadius=8` + `StairWidth=9` = tight inner curve (~3.5m inner radius) → navmesh PINCH risk. Widen radius (≥ StairWidth) so the walkable band stays ≥~8m for the multi-agent siege climb — or use a quarter/half-turn sweep instead of a full tight spiral.
+4. **Editor-time + headless bake, NOT runtime** (per §0 above). Lives in the reusable `StairwayBuilder`; `CastleHubBuilder` consumes it; replaces `UpperRamp_Nav`.
+5. **NavMeshLink across the chord** (start→end) as backup — links are straight, the stair is curved, so the baked surface is primary and the chord-link is the safety net.
