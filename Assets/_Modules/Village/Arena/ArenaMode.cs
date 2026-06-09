@@ -72,6 +72,20 @@ namespace DeNelle.Village.Arena
             }
         }
 
+        /// <summary>
+        /// WO-389 (#3) — the ATTACK squad roster (ArenaDefenseDef ids) the player
+        /// recruited for the NEXT attack raid. Set by ArenaAttackRecruitController on
+        /// Launch; READ once at raid start to spawn the friendly squad hero-leashed to
+        /// the Captain, then CLEARED so it never bleeds into a later defend raid. A null
+        /// / empty squad = no attack-squad spawn (the seeded/defend paths are untouched).
+        /// MVP store: a simple static (no SaveSchema round-trip — the squad is a
+        /// per-raid choice, not persisted state). // TODO data-driven: persist if needed.
+        /// </summary>
+        public static List<string> AttackSquad;
+
+        // The number of recruited attackers spawned this raid (for teardown / logging).
+        private readonly List<GameObject> _spawnedSquad = new List<GameObject>();
+
         /// <summary>True while a raid is in progress (UI blocks a second start).</summary>
         public bool RaidInProgress { get; private set; }
 
@@ -140,6 +154,11 @@ namespace DeNelle.Village.Arena
 
             SpawnOpponentBase(opponent);
 
+            // WO-389 (#3) — ATTACK FLOW: if the player recruited a squad, spawn it now,
+            // hero-leashed to the Captain (the player hero), so it follows + auto-fights
+            // the garrison. Gracefully no-ops on the defend / seeded path (null squad).
+            SpawnAttackSquad();
+
             // WIN watch: the outpost fires OnCleared the instant its last defender dies.
             if (_outpost != null) _outpost.OnCleared += HandleOutpostCleared;
 
@@ -183,6 +202,66 @@ namespace DeNelle.Village.Arena
                 var baker = _outpostHost.AddComponent<ArenaNavMeshBaker>();
                 baker.BakeForCastle(_outpostHost.transform);
             }
+        }
+
+        // WO-389 (#3) — ATTACK FLOW: spawn the recruited squad as FRIENDLY units
+        // hero-leashed to the Captain (the player hero), fanned in a small ring around
+        // them so they don't stack. Each troop id maps to a HeroClass via the catalog
+        // (StoryCompanionInjector.SpawnAttacker reuses the companion body + follow +
+        // combat — zero new combat code). STRUCTURES (e.g. Ballista) are skipped for
+        // MVP (an attack squad is mobile units; a placed structure can't follow). The
+        // squad is CLEARED after reading so it never re-spawns on a later defend raid.
+        private void SpawnAttackSquad()
+        {
+            var squad = AttackSquad;
+            AttackSquad = null;   // consume — a per-raid choice, never reused
+            if (squad == null || squad.Count == 0) return;
+
+            Transform captain = ResolveCaptain();
+            if (captain == null)
+            {
+                Debug.LogWarning("[ArenaMode] Attack squad recruited but no Captain (Player) found - squad not spawned.");
+                return;
+            }
+
+            _spawnedSquad.Clear();
+            int i = 0;
+            foreach (var id in squad)
+            {
+                var def = ArenaDefenseCatalog.Get(id);
+                if (def == null) continue;
+
+                if (def.Kind != DefenderKind.Unit || !def.UnitClass.HasValue)
+                {
+                    // MVP: skip structures (Ballista/Shrine) — they can't follow the
+                    // Captain. A future bite spawns them via StructureFactory at the
+                    // raid anchor. // TODO: structure attackers via StructureFactory.
+                    Debug.Log($"[ArenaMode] Attack squad: skipping non-unit troop '{id}' (MVP).");
+                    continue;
+                }
+
+                // Fan the units in a ring just behind/beside the Captain so they don't
+                // stack on one point; SpawnAttacker snaps onto the NavMesh internally
+                // via the shared BuildPlaceholder path.
+                float angle = (i * 47f) * Mathf.Deg2Rad;   // golden-ish spread
+                float radius = 2.0f + 0.6f * i;
+                Vector3 offset = new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * radius;
+                Vector3 pos = captain.position - captain.forward * 1.5f + offset;
+
+                var go = StoryCompanionInjector.SpawnAttacker(def.UnitClass.Value, pos, captain);
+                if (go != null) _spawnedSquad.Add(go);
+                i++;
+            }
+
+            Debug.Log($"[ArenaMode] Attack squad spawned: {_spawnedSquad.Count} friendly units leashed to the Captain.");
+        }
+
+        // Resolve the player Captain transform (the single hero leading the attack).
+        // Mirrors ResolveRaidAnchor's hero lookup (the "Player" tag).
+        private static Transform ResolveCaptain()
+        {
+            var hero = GameObject.FindWithTag("Player");
+            return hero != null ? hero.transform : null;
         }
 
         // WO-388: resolve the defender base recipe. When "Use My Castle" is ON and the
@@ -297,6 +376,12 @@ namespace DeNelle.Village.Arena
             if (_outpostHost != null) Destroy(_outpostHost);
             _outpostHost = null;
             _outpost = null;
+
+            // WO-389 (#3) — despawn the recruited attack squad (Arena owns its lifetime,
+            // same as the opponent base). Null-safe; some may have already fallen.
+            foreach (var unit in _spawnedSquad)
+                if (unit != null) Destroy(unit);
+            _spawnedSquad.Clear();
 
             // Restore the prior (explore) music so "Echo's theme" doesn't bleed past
             // the raid. The raid plays in the open world by the hero, so return to the

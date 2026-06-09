@@ -272,6 +272,38 @@ namespace DeNelle.Village
             return go;
         }
 
+        /// <summary>
+        /// WO-389 (#3, ATTACK flow) — spawn ONE friendly Arena ATTACKER body of class
+        /// <paramref name="cls"/> at <paramref name="worldPos"/>, hero-leashed to the
+        /// player <paramref name="captain"/> so it FOLLOWS the Captain into the enemy
+        /// castle and auto-fights. This is the EXACT OPPOSITE of <see cref="SpawnDefender"/>:
+        /// a defender is pinned to a stationary guard post (HOLD its cell), whereas an
+        /// attacker trails the live hero (StoryCompanion's ORIGINAL leash behaviour) and
+        /// engages hostile garrison via the shared TargetManager — zero new combat code.
+        ///
+        /// Reuses the SAME <see cref="BuildPlaceholder"/> path (skin + NavMeshAgent +
+        /// hitbox + the StoryCompanion driver), so the attacker is automatically FRIENDLY
+        /// (it targets Hostile raiders/garrison and is hit back via IDamageableStructure).
+        /// No speech bubble (silent, like the defender). Returns the spawned GameObject,
+        /// or null on failure.
+        /// </summary>
+        internal static GameObject SpawnAttacker(HeroClass cls, Vector3 worldPos, Transform captain)
+        {
+            var go = BuildPlaceholder(cls, worldPos);
+            if (go == null) return null;
+
+            var comp = go.GetComponent<StoryCompanion>();
+            if (comp != null)
+            {
+                comp.Configure(cls);            // before Start(): name + class kit
+                // HERO-LEASH to the Captain (the player hero) — the unit FOLLOWS the
+                // Captain and fights the hostile garrison near them. Non-null SetHero
+                // skips the name-based auto-resolve. No bubble = silent.
+                if (captain != null) comp.SetHero(captain);
+            }
+            return go;
+        }
+
         // ── Placeholder build (code-only, no art) ────────────────────────────
 
         /// <summary>
