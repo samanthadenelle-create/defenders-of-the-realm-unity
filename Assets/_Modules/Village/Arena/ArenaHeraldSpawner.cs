@@ -41,7 +41,7 @@ namespace DeNelle.Village.Arena
         // ── Tunables (code-only; no SO authoring) ────────────────────────────
         [Tooltip("Where the Arena herald stands, relative to the village Heart (0,0,0). " +
                  "A few metres off the plaza so it reads as its own landmark.")]
-        public Vector3 HeraldOffset = new Vector3(8f, 0f, 6f);
+        public Vector3 HeraldOffset = new Vector3(15f, 0f, 6f);
 
         [Tooltip("How close (metres) the hero must be for the Interact prompt to arm. " +
                  "Sized for the WO-369 monument dais (6m wide) so the prompt arms at the steps.")]
