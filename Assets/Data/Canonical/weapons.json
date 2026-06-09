@@ -1,0 +1,65 @@
+{
+  "weapons": [
+    {
+      "id": "starter_knight_sword",
+      "name": "Iron Sword",
+      "icon": "",
+      "job": "knight",
+      "rarity": "common",
+      "damageMult": 1.12,
+      "reach": 1.7,
+      "req": { "level": 1 },
+      "buyWood": 12,
+      "buyIron": 6
+    },
+    {
+      "id": "starter_ranger_bow",
+      "name": "Short Bow",
+      "icon": "",
+      "job": "ranger",
+      "rarity": "common",
+      "damageMult": 1.10,
+      "reach": 0,
+      "req": { "level": 1 },
+      "buyWood": 14,
+      "buyIron": 3
+    },
+    {
+      "id": "starter_mage_staff",
+      "name": "Apprentice Staff",
+      "icon": "",
+      "job": "mage",
+      "rarity": "common",
+      "damageMult": 1.15,
+      "reach": 0,
+      "req": { "level": 1 },
+      "buyWood": 10,
+      "buyIron": 2,
+      "buyCrystals": 1
+    },
+    {
+      "id": "starter_cleric_mace",
+      "name": "Bronze Mace",
+      "icon": "",
+      "job": "cleric",
+      "rarity": "common",
+      "damageMult": 1.08,
+      "reach": 1.4,
+      "req": { "level": 1 },
+      "buyWood": 11,
+      "buyIron": 5
+    },
+    {
+      "id": "starter_knight_longsword",
+      "name": "Knight Longsword",
+      "icon": "",
+      "job": "knight",
+      "rarity": "uncommon",
+      "damageMult": 1.22,
+      "reach": 2.1,
+      "req": { "level": 3 },
+      "buyWood": 25,
+      "buyIron": 14
+    }
+  ]
+}

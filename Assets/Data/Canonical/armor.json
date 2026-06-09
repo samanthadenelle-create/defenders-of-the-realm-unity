@@ -1,0 +1,64 @@
+{
+  "armor": [
+    {
+      "id": "starter_knight_plate",
+      "name": "Iron Plate",
+      "icon": "",
+      "job": "knight",
+      "rarity": "common",
+      "defense": 0.09,
+      "hpBonus": 5,
+      "req": { "level": 1 },
+      "buyWood": 8,
+      "buyIron": 10
+    },
+    {
+      "id": "starter_ranger_leather",
+      "name": "Leather Jerkin",
+      "icon": "",
+      "job": "ranger",
+      "rarity": "common",
+      "defense": 0.05,
+      "hpBonus": 2,
+      "req": { "level": 1 },
+      "buyWood": 10,
+      "buyIron": 4
+    },
+    {
+      "id": "starter_mage_robes",
+      "name": "Woven Robes",
+      "icon": "",
+      "job": "mage",
+      "rarity": "common",
+      "defense": 0.03,
+      "hpBonus": 0,
+      "req": { "level": 1 },
+      "buyWood": 9,
+      "buyCrystals": 2
+    },
+    {
+      "id": "starter_cleric_light",
+      "name": "Light Acolyte Armor",
+      "icon": "",
+      "job": "cleric",
+      "rarity": "common",
+      "defense": 0.06,
+      "hpBonus": 3,
+      "req": { "level": 1 },
+      "buyWood": 9,
+      "buyIron": 4
+    },
+    {
+      "id": "starter_knight_shield",
+      "name": "Heater Shield",
+      "icon": "",
+      "job": "knight",
+      "rarity": "common",
+      "defense": 0.06,
+      "hpBonus": 8,
+      "req": { "level": 1 },
+      "buyWood": 6,
+      "buyIron": 7
+    }
+  ]
+}

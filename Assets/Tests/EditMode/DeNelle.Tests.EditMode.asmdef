@@ -1,0 +1,28 @@
+{
+    "name": "DeNelle.Tests.EditMode",
+    "rootNamespace": "DeNelle.Tests.EditMode",
+    "references": [
+        "DeNelle.Core",
+        "DeNelle.Village",
+        "DeNelle.Data",
+        "UniTask",
+        "UnityEngine.TestRunner",
+        "UnityEditor.TestRunner"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll",
+        "Newtonsoft.Json.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
