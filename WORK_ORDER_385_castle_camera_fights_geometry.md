@@ -1,6 +1,6 @@
 # WORK_ORDER_385 — Castle camera "fights the castle": world-locked seat + wall-collision jam
 
-**Status:** READY TO IMPLEMENT (felt change — owner playtests)
+**Status:** FADE FIX LANDED (commit 4291324, COMPILE_GATE_OK) — PENDING OWNER PLAYTEST. Global, not castle-only.
 **Lane:** Camera / Hero (DeNelle.Village.Hero) — `SmartMobileCamera.cs`. Code-only, no scene/bake.
 **Source:** This session (2026-06-09)
 **Related:** WO-383 (seam teleport — a *separate* edge event). This WO is the *in-castle* angle-loss.
@@ -27,6 +27,13 @@ Disabling collision alone would stop the jam but let the camera clip through wal
 2. **Lighten the collision for the hub** so interior structures you walk *among* don't yank the view: e.g. restrict `_collisionMask` to the outer perimeter only (drop Building/Tower for the hub), and/or replace pull-in with **wall-fade** (fade obstructing geometry, keep the camera at offset — the AAA approach, cf. the "camera over walls" WO-156/204 lineage).
 
 Keep **movement world-absolute** (WO-368) and the **"close 3rd-person, pull up only for base-build"** decision intact. This is a felt change — ship behind a flag if needed and owner playtests.
+
+## As-built — 2026-06-09 (commit 4291324, COMPILE_GATE_OK) — PENDING OWNER PLAYTEST
+Implemented the occluder-FADE half (higher-leverage, lower-risk, global), NOT the orbit/recenter change:
+- `SmartMobileCamera.ApplyCollision` now `SphereCastNonAlloc` pivot→seat and **fades occluding renderers to `ShadowsOnly`** (exact-restore via `Dictionary<Renderer,ShadowCastingMode>` the instant they stop occluding), keeping the camera at its proper seat/angle. The old hard pull-in survives ONLY as a point-blank (`< _occluderPullInDistance` 0.6m) safety backstop. Gated behind `_collisionEnabled`; restores all faded renderers on disable/destroy/target-loss.
+- GLOBAL — every corner, every scene (village, dungeons, camps), not castle-only.
+- No movement / yaw / `_orbitBehind` changes.
+- Mis-read corrected: the camera force-enables orbit-behind at runtime (`_forceCameraFix`) with `_facingRecenterEnabled` OFF, so it holds the player's last pan-yaw rather than auto-swinging behind the hero's facing. If, after playtest, the camera still doesn't *swing* behind you at corners (distinct from the wall-jam this fixes), enabling `_facingRecenterEnabled` is the follow-up lever — its own small change.
 
 ## Acceptance criteria
 - [ ] Returning into the castle keeps a clean third-person angle — no jam-to-close, no persistent "lost" state.
