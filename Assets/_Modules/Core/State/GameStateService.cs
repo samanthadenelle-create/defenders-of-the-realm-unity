@@ -338,6 +338,7 @@ namespace DeNelle.Core.State
                 Magic = s.Magic,
                 PartyMemberIds = s.PartyMemberIds != null ? new List<string>(s.PartyMemberIds) : null,
                 Zones = s.Zones != null ? new List<DeNelle.Core.World.ZoneState>(s.Zones) : null,   // WO-164 — zone graph (v17)
+                ArenaDefense = s.ArenaDefense != null ? new List<PlacedDefenderData>(s.ArenaDefense) : null,   // WO-389 — pre-placed Arena defenders (v19)
             };
         }
 
@@ -399,6 +400,7 @@ namespace DeNelle.Core.State
             if (p.Magic.HasValue) s.Magic = (int)p.Magic.Value;   // DEF-121 — tech-axis currency
             if (p.PartyMemberIds != null) s.PartyMemberIds = p.PartyMemberIds;   // WO-301 — party roster
             if (p.Zones != null) s.Zones = p.Zones;   // WO-164 — zone graph (v17)
+            if (p.ArenaDefense != null) s.ArenaDefense = p.ArenaDefense;   // WO-389 — pre-placed Arena defenders (v19)
             EnsureZoneGraph(s);                       // backfill a pre-v17 / empty save's zone graph
         }
 
@@ -675,6 +677,7 @@ namespace DeNelle.Core.State
             s.AdSkipsUsedToday = 0;
             s.AdSkipDayKey = null;
             s.BaseLayout = new List<PlacedStructureData>();   // WO-108 — New Game starts on the default village seed.
+            s.ArenaDefense = new List<PlacedDefenderData>();  // WO-389 — New Game starts with no pre-placed Arena defense.
             s.Magic = 0;                                      // DEF-121 — tech-axis currency resets on New Game.
             s.PartyMemberIds = new List<string>();            // WO-301 — start alone; the first companion joins on tutorial complete.
             EnsureZoneGraph(s);                               // WO-164 — seed the default zone graph (5 zones) on New Game.

@@ -27,7 +27,7 @@ namespace DeNelle.Core.State
     {
         // ── Versioning ───────────────────────────────────────────────────────
         /// <summary>CURRENT_SCHEMA_VERSION — bumped whenever the persisted shape changes.</summary>
-        public const int CurrentVersion = 18;  // v18 — fold AetherCrystals into Resources.Crystals (single-source-of-truth); v17 — zone graph persistence (WO-164); v16 — party roster (WO-301); v15 — magic tech-axis currency (DEF-121/WO-230); v14 — baseLayout (WO-108); v13 — buildJobs + adSkip (WO-172)
+        public const int CurrentVersion = 19;  // v19 — arenaDefense placed-defender layout (WO-389); v18 — fold AetherCrystals into Resources.Crystals (single-source-of-truth); v17 — zone graph persistence (WO-164); v16 — party roster (WO-301); v15 — magic tech-axis currency (DEF-121/WO-230); v14 — baseLayout (WO-108); v13 — buildJobs + adSkip (WO-172)
         /// <summary>SaveExport.format — bumped only if the envelope shape changes.</summary>
         public const int FileFormat = 1;
 
@@ -212,6 +212,19 @@ namespace DeNelle.Core.State
             /// (strings) deliberately, so it survives enum renumbering.
             /// </summary>
             [JsonProperty("zones")] public List<DeNelle.Core.World.ZoneState> Zones;
+
+            // ── v19 — Arena defense placed-defender layout (WO-389) ──────────────
+            /// <summary>
+            /// The player's pre-placed Arena DEFENDERS — the CoC-style defense layer
+            /// (a List of <see cref="PlacedDefenderData"/>, SEPARATE from the
+            /// <c>baseLayout</c> base buildings). Nullable per the <c>.partial()</c>
+            /// convention; absent on an older save → defaults to an empty list on load
+            /// (no pre-placed defense until the player sets one up), so no explicit
+            /// migration step is needed (same additive-default-on-read pattern as
+            /// <c>magic</c>/<c>partyMemberIds</c>). Append-only field at the END so
+            /// older saves stay loadable.
+            /// </summary>
+            [JsonProperty("arenaDefense")] public List<PlacedDefenderData> ArenaDefense;
         }
 
         // =====================================================================

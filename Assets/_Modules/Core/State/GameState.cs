@@ -275,6 +275,22 @@ namespace DeNelle.Core.State
         /// </summary>
         public ArenaProgress Arena = ArenaProgress.Empty;
 
+        // ── Arena — pre-placed defenders (CoC defense layer, WO-389) ──────────
+        /// <summary>
+        /// The player's pre-placed Arena DEFENDERS — the CoC-style defense layer
+        /// (WO-389). One <see cref="PlacedDefenderData"/> per pre-placed troop/structure
+        /// (grid cell + discrete yaw), bought from a limited point pool
+        /// (<c>ArenaDefenseCatalog.DefensePointPool</c>). SEPARATE from
+        /// <see cref="BaseLayout"/> (the normal base buildings) — this is the defense
+        /// layout: when the castle is raided in the Arena these spawn FRIENDLY and
+        /// auto-fight the raiders. Empty on a fresh save (no pre-placed defense).
+        /// Round-trips through SaveSchema (v19) — additive at the END so older saves
+        /// load empty. This is exactly the payload that travels WITH the base recipe
+        /// when async raids load the defender's castle (principle: the defense ports
+        /// alongside the city).
+        /// </summary>
+        public List<PlacedDefenderData> ArenaDefense = new List<PlacedDefenderData>();
+
         /// <summary>A fresh List&lt;int&gt; of <paramref name="count"/> zeros.</summary>
         public static List<int> NewZeroed(int count)
         {
