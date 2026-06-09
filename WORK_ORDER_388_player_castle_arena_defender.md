@@ -7,6 +7,25 @@
 ## Goal
 When the player does an Arena raid, fight against (or mirror) the **player's own built castle** (`GameState.BaseLayout`) instead of the seeded `ArenaCatalog` wood/stone forts. Foundation for the CoC raid loop + the watchable battle (WO-386).
 
+## ⭐ EVOLVED ARCHITECTURE (2026-06-09) — Arena = a VENUE SCENE + plate + portable castle
+This supersedes the "spawn a fort 24m ahead in the open world + runtime-bake" approach below (which had the silent-win / no-navmesh headache). The cleaner, owner-designed model:
+
+**The Arena is a dedicated VENUE SCENE (a grand siege arena), not an open-world spawn.**
+- **Venue (built ONCE, static, baked):** a big **navmesh PLATE** (ground ~140m) + **natural cover** (trees/rocks/ruined walls/bushes placed in polar rings, WITH colliders so they actually block movement/LoS) for multi-directional attacker approach + an outer boundary. Builder = `ProceduralSiegeArenaBuilder` (owner concept) — REFINED: the central castle is NOT a fixed prefab (see below), add a NavMesh bake, use polyperfect nature art, and split static-venue from per-raid.
+- **Per-raid (runtime):** port the defender's castle onto the plate → **rebake** → spawn defenders (WO-389) + garrison.
+
+**Why a plate fixes everything:** a guaranteed walkable plate means the rebake can't fail to find ground (kills the silent-win bug). And it's **reusable — one venue, any opponent.**
+
+**TWO ports (same venue):**
+- **Your OWN castle** → **drag-and-drop the whole unit** — it's self-contained: geometry + its own `NavMeshFloor_Invisible_Walkable` plane travel together (the castle carries its own *interior* plate).
+- **Opponent (async PvP)** → you only get their **`BaseLayout` JSON** (a plane doesn't travel in JSON) → `OutpostFoundationGenerator.Realize` their JSON **onto the arena's plate**.
+
+**Plate split:** the castle's own plane = INTERIOR walkability (free with the drag-and-drop); the arena's plate = the APPROACH/battleground ring; the **rebake FUSES** interior + approach into one continuous navmesh.
+
+**Reuse:** `ProceduralSiegeArenaBuilder` (venue) · `SceneRouter`/`WorldSceneLoader` (load the arena scene, same as castle→OuterWorld) · `OutpostFoundationGenerator.Realize` (port JSON) · WO-389 defenders + `CombatFaction` flag · `ArenaMode` orchestrates (load venue → port castle → rebake → spawn). The §3 recipe-swap + `ArenaNavMeshBaker` work below still applies — it just runs in the arena scene onto a guaranteed plate instead of an open-world anchor.
+
+---
+
 ## Today (verified, WO from prior investigation)
 Every raid uses a SEEDED fort: `ArenaPanel.ConfirmRaid(opp)` → `ArenaMode.TryStartRaid(opp)` → `SpawnOpponentBase` → `EnemyOutpost.ConfigureArena(opp.Id, opp.Threat, opp.BaseRecipe, opp.GuardCount)` (`ArenaMode.cs:153`) → `BuildFortification` → `OutpostFoundationGenerator.Realize`. `opp.BaseRecipe` = `OutpostFoundationGenerator.GenerateFootprintRecipe(...)`. The player base (`GameState.BaseLayout`) is explicitly NOT used (`EnemyOutpost.cs:220`).
 
