@@ -29,6 +29,8 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using DeNelle.Core;
+using DeNelle.Core.Audio;
 using DeNelle.Core.State;
 using DeNelle.Village.World.Camps;
 
@@ -143,6 +145,12 @@ namespace DeNelle.Village.Arena
 
             // LOSE watch: hero down OR the raid times out.
             _watcher = StartCoroutine(WatchForLoss());
+
+            // ARENA BGM: crossfade to "Echo's theme" (soft, looping) for the raid.
+            // arena BGM — soft background. The Audio assembly owns the soft mix
+            // volume + loop (MusicTrackRegistry.Arena); Village reaches it only via
+            // the Core seam. ReturnToAmbient on EndRaid restores the explore music.
+            CoreServices.Audio?.PlayMusic(MusicTrack.Arena);
 
             Debug.Log($"[ArenaMode] Raid started vs '{opponent.DisplayName}' (tier {opponent.Tier}, stake {opponent.Wager} SKR).");
             return true;
@@ -289,6 +297,13 @@ namespace DeNelle.Village.Arena
             if (_outpostHost != null) Destroy(_outpostHost);
             _outpostHost = null;
             _outpost = null;
+
+            // Restore the prior (explore) music so "Echo's theme" doesn't bleed past
+            // the raid. The raid plays in the open world by the hero, so return to the
+            // Overworld ambient — the bridge routes this through PlayAmbientContext,
+            // which restores the player's chosen explore track (WIN / LOSS / timeout
+            // all funnel through EndRaid).
+            CoreServices.Audio?.PlayMusic(MusicTrack.Overworld);
 
             OnRaidEnded?.Invoke(opponent, result, skrDelta);
         }

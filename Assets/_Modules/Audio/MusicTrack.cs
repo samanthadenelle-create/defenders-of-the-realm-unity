@@ -43,6 +43,8 @@ namespace DeNelle.Audio
         Defeat,
         /// <summary>Open-world (OuterWorld) exploration ambient. Default volume 0.4 (soft — long sessions). WO-171.</summary>
         Overworld,
+        /// <summary>Arena raid BGM — "Echo's theme" (echo_theme.mp3). Default volume 0.4 (soft background). Loops.</summary>
+        Arena,
     }
 
     /// <summary>
@@ -129,6 +131,8 @@ namespace DeNelle.Audio
         public const float DefeatVolume = 0.5f;
         /// <summary>Overworld default volume — soft, anti-fatigue for open-world exploration (WO-171).</summary>
         public const float OverworldVolume = 0.4f;
+        /// <summary>Arena ("Echo's theme") default volume — soft background, sits under the raid combat SFX.</summary>
+        public const float ArenaVolume = 0.4f;   // arena BGM — soft background
 
         private static readonly Dictionary<MusicTrack, MusicTrackDef> Defs =
             new Dictionary<MusicTrack, MusicTrackDef>
@@ -148,6 +152,8 @@ namespace DeNelle.Audio
                 "Assets/Audio/defeat.mp3",                             DefeatVolume,  false, 1.5f, 1.5f) },
             { MusicTrack.Overworld, new MusicTrackDef(MusicTrack.Overworld,
                 "Assets/Audio/world.mp3",                              OverworldVolume, true, 1.2f, 1.0f) },
+            { MusicTrack.Arena,   new MusicTrackDef(MusicTrack.Arena,
+                "Assets/Audio/Resources/Music/echo_theme.mp3",         ArenaVolume,   true,  1.2f, 1.0f) },
         };
 
         /// <summary>

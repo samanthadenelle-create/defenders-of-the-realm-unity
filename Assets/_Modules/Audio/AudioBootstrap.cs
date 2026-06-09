@@ -119,6 +119,11 @@ namespace DeNelle.Audio
             TryAssignClip(service, MusicTrack.Overworld, "mainworld1_NEW");
             TryAddClip(service,    MusicTrack.Overworld, "world_theme_NEW");
 
+            // Arena raid BGM — "Echo's theme" (owner-supplied). Ships at
+            // Assets/Audio/Resources/Music/echo_theme.mp3, so the Resources short
+            // name is "Music/echo_theme". Soft + looping (MusicTrackRegistry.Arena).
+            TryAssignClip(service, MusicTrack.Arena, "Music/echo_theme");
+
             // One-time mute-migration. Pre-2026-05-20 the schema default for
             // GameState.Muted was true, so saves persisted as muted even when
             // the player never opened Settings. Now that music actually exists,

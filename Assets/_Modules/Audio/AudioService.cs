@@ -104,6 +104,10 @@ namespace DeNelle.Audio
         [Tooltip("defeat.mp3 — battle-loss sting. Default mix volume 0.5, no loop.")]
         [SerializeField] private AudioClip _defeatClip;
 
+        [Tooltip("Music/echo_theme.mp3 — \"Echo's theme\", the Arena raid BGM. " +
+                 "Default mix volume 0.4 (soft background), loops. // arena BGM — soft background")]
+        [SerializeField] private AudioClip _arenaClip;
+
         // ── Rotating clip pools (WO-171) ─────────────────────────────────────
         // Some contexts have MORE THAN ONE clip and rotate per request so the
         // music varies (battle: 3 owner tracks; overworld: 2 tracks). The pools
@@ -515,6 +519,7 @@ namespace DeNelle.Audio
                 case MusicTrack.Victory: return _victoryClip;
                 case MusicTrack.Defeat:  return _defeatClip;
                 case MusicTrack.Overworld: return NextFromPool(_overworldPool, ref _overworldCursor) ?? _overworldClip;
+                case MusicTrack.Arena:   return _arenaClip;
                 default:                 return null;
             }
         }
@@ -558,6 +563,7 @@ namespace DeNelle.Audio
                 case MusicTrack.Victory: _victoryClip = clip; break;
                 case MusicTrack.Defeat:  _defeatClip = clip;  break;
                 case MusicTrack.Overworld: _overworldClip = clip; SeedPool(_overworldPool, clip); break;
+                case MusicTrack.Arena:   _arenaClip = clip;   break;
             }
 
             // If this track was requested but silent for want of a clip, start it.
@@ -1090,6 +1096,8 @@ namespace DeNelle.Audio
                 case DeNelle.Core.Audio.MusicTrack.Dungeon: PlayMusic(MusicTrack.Dungeon); break;
                 case DeNelle.Core.Audio.MusicTrack.Overworld: PlayAmbientContext(AmbientContext.Overworld); break;
                 case DeNelle.Core.Audio.MusicTrack.Defeat:  PlayMusic(MusicTrack.Defeat);  break;
+                // Arena raid BGM — "Echo's theme". Soft, looping background for a raid.
+                case DeNelle.Core.Audio.MusicTrack.Arena:   PlayMusic(MusicTrack.Arena);   break;
                 // DEF-228: the cold-open intro primes the title theme (title.mp3) so it
                 // is the opening music and the WebGL audio-unlock resumes THIS, not Overworld.
                 case DeNelle.Core.Audio.MusicTrack.Title:   PlayMusic(MusicTrack.Title);   break;
