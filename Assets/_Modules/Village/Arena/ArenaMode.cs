@@ -27,7 +27,9 @@
 
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
+using DeNelle.Core.State;
 using DeNelle.Village.World.Camps;
 
 namespace DeNelle.Village.Arena
@@ -73,6 +75,15 @@ namespace DeNelle.Village.Arena
 
         /// <summary>The opponent of the in-flight (or last) raid.</summary>
         public ArenaOpponentDef CurrentOpponent { get; private set; }
+
+        /// <summary>
+        /// WO-388 toggle (default OFF): when ON, an Arena raid fights the PLAYER'S OWN
+        /// built castle (GameState.BaseLayout) as the defender base instead of the
+        /// seeded ArenaCatalog fort, and runtime-bakes a local NavMesh for it. Default
+        /// OFF keeps the verified seeded path identical. Bound to the ArenaPanel
+        /// "Use My Castle" toggle.
+        /// </summary>
+        public bool UsePlayerCastle;
 
         /// <summary>
         /// Raised when a raid ends: (opponent, result, skrDelta). skrDelta is +purse
@@ -150,8 +161,40 @@ namespace DeNelle.Village.Arena
 
             _outpost = _outpostHost.AddComponent<EnemyOutpost>();
             // Region default is fine; threat + recipe + garrison come from the opponent.
-            _outpost.ConfigureArena(opponent.Id, opponent.Threat, opponent.BaseRecipe, opponent.GuardCount);
+            // WO-388: the defender recipe is the player's OWN castle when "Use My Castle"
+            // is ON (and a base exists), else the seeded opponent fort.
+            _outpost.ConfigureArena(opponent.Id, opponent.Threat, GetDefenderRecipe(opponent), opponent.GuardCount);
             // EnemyOutpost.Start() (this same frame) realizes the fort + spawns the garrison.
+
+            // WO-388: a player castle has NO pre-baked NavMesh + no ground at the raid
+            // anchor, so bake a local walkable surface at runtime (toggle-gated). The
+            // baker's coroutine waits for the fort to realize before baking. The seeded
+            // path (toggle OFF) keeps relying on the existing scene mesh - untouched.
+            if (UsePlayerCastle)
+            {
+                var baker = _outpostHost.AddComponent<ArenaNavMeshBaker>();
+                baker.BakeForCastle(_outpostHost.transform);
+            }
+        }
+
+        // WO-388: resolve the defender base recipe. When "Use My Castle" is ON and the
+        // player has a non-empty built base, fight that castle (GameState.BaseLayout);
+        // otherwise the seeded opponent fort. An EMPTY player base returns the seeded
+        // recipe (NOT an empty list) so EnemyOutpost's `_arenaRecipe ?? generated`
+        // fallback fires correctly. Default OFF = the verified seeded path.
+        private List<PlacedStructureData> GetDefenderRecipe(ArenaOpponentDef opponent)
+        {
+            if (UsePlayerCastle)
+            {
+                var state = GameStateService.Instance?.State;
+                if (state?.BaseLayout != null && state.BaseLayout.Count > 0)
+                {
+                    Debug.Log($"[ArenaMode] Defender = player's castle ({state.BaseLayout.Count} structures).");
+                    return state.BaseLayout;
+                }
+                Debug.LogWarning("[ArenaMode] Use-My-Castle on but no player base - falling back to seeded fort.");
+            }
+            return opponent.BaseRecipe;   // seeded (BuildFortification's ?? also covers null)
         }
 
         // A walk-to anchor in front of the hero (mirrors RaidOutpostSystem's idea).

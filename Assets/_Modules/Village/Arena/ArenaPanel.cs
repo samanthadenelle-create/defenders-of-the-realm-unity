@@ -153,8 +153,43 @@ namespace DeNelle.Village.Arena
                 BuildOpponentCard(_entryRoot.transform, opponents[i], y0, y1);
             }
 
+            // WO-388 debug toggle: A/B the player's OWN castle vs the seeded opponent
+            // base as the defender. Default OFF (the verified seeded path). Tapping it
+            // flips ArenaMode.UsePlayerCastle and re-renders the entry so the pill
+            // reflects the new state.
+            BuildUseMyCastleToggle(_entryRoot.transform);
+
             AddButton(_entryRoot.transform, "Close", new Vector2(0.30f, 0.70f),
                       new Vector2(0.025f, 0.075f), Glass, Close, ButtonKind.Neutral);
+        }
+
+        // ── "Use My Castle" toggle — a sleek labelled pill (matches the panel idiom:
+        // built from the same glass/gold helpers; tap flips the flag + re-renders). ──
+        private void BuildUseMyCastleToggle(Transform parent)
+        {
+            bool on = ArenaMode.Instance.UsePlayerCastle;
+
+            // A recessed well behind the toggle so it reads as a setting, not a card.
+            var well = AddImage(parent, "CastleToggleWell", new Vector2(0.06f, 0.10f), new Vector2(0.94f, 0.18f), Track);
+            AddLabel(well.transform, "DEFENDER BASE", 0.55f, 0.96f, ElarionUi.ParchmentDim,
+                     ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Left, 0.04f, 0.62f, spacing: 3f);
+            AddLabel(well.transform, on ? "My Castle" : "Seeded opponent", 0.06f, 0.55f, ElarionUi.Parchment,
+                     ElarionUi.FontBody, TMPro.TextAlignmentOptions.Left, 0.04f, 0.62f, bold: true);
+
+            // The pill: green/ON shows "USE MY CASTLE", neutral/OFF shows "SEEDED".
+            string label = on ? "MY CASTLE  *" : "USE MY CASTLE";
+            Color pill = on
+                ? new Color(ElarionUi.Affordable.r, ElarionUi.Affordable.g, ElarionUi.Affordable.b, 0.92f)
+                : Glass;
+            ButtonKind kind = on ? ButtonKind.Confirm : ButtonKind.Neutral;
+            AddButton(well.transform, label, new Vector2(0.18f, 0.78f), new Vector2(0.18f, 0.82f),
+                      pill, ToggleUseMyCastle, kind);
+        }
+
+        private void ToggleUseMyCastle()
+        {
+            ArenaMode.Instance.UsePlayerCastle = !ArenaMode.Instance.UsePlayerCastle;
+            ShowEntry();   // re-render so the pill + label reflect the new state
         }
 
         // ── SKR balance + W/L record header — two recessed glass wells. ────────
