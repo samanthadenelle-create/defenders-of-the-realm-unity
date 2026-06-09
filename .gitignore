@@ -228,3 +228,8 @@ package-lock.json
 yarn.lock
 *.js.map
 
+
+# Local recovery backups & session config (cleanup 2026-06-09)
+/Assets/_Recovery/
+/Assets/_Recovery.meta
+/.claude/
