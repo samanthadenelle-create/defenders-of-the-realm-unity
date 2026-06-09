@@ -132,6 +132,10 @@ namespace DeNelle.Village
         private bool _hasSpeedParam;
         private bool _hasVictoryParam;
         private NavMeshAgent _agent;   // unified navigation: hero shares the enemies' NavMesh
+
+        // WO-387: follow camera for camera-relative movement. CameraYaw returns 0 in
+        // top-down, so movement auto-degrades to world-absolute there. Cached in Start; lazy-refreshed.
+        private SmartMobileCamera _smartCamera;
 #if UNITY_EDITOR
         // Collision diagnostic: log each unique blocking collider once.
         private readonly HashSet<Collider> _loggedColliders = new HashSet<Collider>();
@@ -201,6 +205,9 @@ namespace DeNelle.Village
                 _waveManager.OnWaveCleared.AddListener(OnWaveCleared);
             else
                 Debug.LogWarning("[HeroLocomotion] WaveManager not found — victory pose will not fire.");
+
+            // WO-387: cache the follow camera for the camera-relative movement basis.
+            _smartCamera = Object.FindObjectOfType<SmartMobileCamera>();
         }
 
         private void OnDestroy()
@@ -303,15 +310,15 @@ namespace DeNelle.Village
                 _victoryPose = false;  // player moved or the timer elapsed — resume
             }
 
-            // WO-368: WORLD-ABSOLUTE movement (decouples input from the camera).
-            // WO-367 made this camera-relative (basis * input), which broke town
-            // movement: a camera-mode/angle change re-rotated the input mapping. The
-            // mapping must be a fixed contract — UP = +Z always, RIGHT = +X always —
-            // independent of camera pitch/yaw/distance, so it holds identically in BOTH
-            // town (bird's-eye) and battle (close 3rd-person) and a camera change can
-            // never break input (WO-363 intent). The character faces the move direction
-            // (LookRotation on Velocity below). No SmartMobileCamera basis read here.
-            Vector3 move = new Vector3(input.x, 0f, input.y);
+            // WO-387: camera-relative in follow mode, world-absolute in top-down. SmartMobileCamera
+            // .CameraYaw returns the player-pan yaw in 3rd-person follow and 0 in top-down/legacy, so a
+            // camera-mode change can't break input (WO-368/363 intent preserved). Curl-safe: CameraYaw is
+            // pan-driven, never velocity-driven. (Lazy re-fetch so the fix engages if the camera wired
+            // up after the hero — otherwise it would silently no-op.)
+            if (_smartCamera == null) _smartCamera = Object.FindObjectOfType<SmartMobileCamera>();
+            float yaw = _smartCamera != null ? _smartCamera.CameraYaw : 0f;
+            Quaternion cameraRotation = Quaternion.Euler(0f, yaw, 0f);
+            Vector3 move = cameraRotation * new Vector3(input.x, 0f, input.y);
             if (move.sqrMagnitude > 1f) move.Normalize();
 
             // Smooth velocity toward target — instant max-speed felt rigid.
