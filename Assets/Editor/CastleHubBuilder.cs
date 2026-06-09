@@ -846,6 +846,18 @@ namespace DeNelle.Editor
             BuildNavMeshFloor(parent);
             Log("BATCH-BAKE: floor ensured (courtyard + gate + keep interior).");
 
+            // WO-384: inject the grand spiral stair so the re-bake fuses courtyard → stairs →
+            // upper plane into ONE walkable sheet (the old UpperRamp_Nav is gone). Idempotent:
+            // clear the old MainStairs_Poly prefab + any prior grand stair first, so re-bakes
+            // don't stack duplicates. Non-destructive to the wired hero/camera/spawn/structures.
+            foreach (var n in new[] { "MainStairs_Poly_ToUpperBattlements", "GrandStair_CourtyardToBattlements" })
+            {
+                var oldStair = GameObject.Find(n);
+                if (oldStair != null) { Object.DestroyImmediate(oldStair); Log("BATCH-BAKE: removed prior stair '" + n + "'."); }
+            }
+            BuildGrandStair(parent);
+            Log("BATCH-BAKE: grand spiral stair injected (courtyard → upper-battlement edge).");
+
             // Configure + bake every NavMeshSurface via reflection so renderer-off planes are
             // collected (Use Geometry = Physics Colliders). RenderMeshes=0, PhysicsColliders=1.
             var surfType = FindType("Unity.AI.Navigation.NavMeshSurface");
