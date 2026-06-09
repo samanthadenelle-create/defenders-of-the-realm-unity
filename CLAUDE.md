@@ -64,7 +64,7 @@ work order goes back to the queue.
 - Save to project root as `WORK_ORDER_NNN_short_name.md`
 - Mark **Status: READY TO IMPLEMENT** when spec is complete
 - Include files to edit, acceptance criteria, and what NOT to touch
-- **WO-numbering authority = `MASTER_PIPELINES_BACKLOG_2026-06-06.md` + `CLI_LANES_WO_NUMBERS.md`, NOT the filesystem max.** Reserved new block **290–305** (minted 2026-06-06: quests, crafting, pets, persistence, HUD). 287–288 also used; 289 free. **Next free WO = 385** (through 384 used). Always slot a new WO into a lane in the master doc.
+- **WO-numbering authority = `MASTER_PIPELINES_BACKLOG_2026-06-06.md` + `CLI_LANES_WO_NUMBERS.md`, NOT the filesystem max.** Reserved new block **290–305** (minted 2026-06-06: quests, crafting, pets, persistence, HUD). 287–288 also used; 289 free. **Next free WO = 386** (through 385 used). Always slot a new WO into a lane in the master doc.
 - **LIVE BOARD (source of truth mirror) = Notion "Work Orders" DB** in *Defenders of the Realm — Pipelines*: https://app.notion.com/p/f3115f05ecf940cf8968bd82bbbdff9f (data source `5f66b263-c732-4075-b94a-f5f4de9f8087`). The git docs + Notion are kept in sync; full WO spec files stay in the repo. We migrated off Linear (free-tier 250-issue cap). See `NOTION_SOURCE_OF_TRUTH.md`.
 
 ### Completing work orders
