@@ -159,8 +159,60 @@ namespace DeNelle.Village.Arena
             // reflects the new state.
             BuildUseMyCastleToggle(_entryRoot.transform);
 
+            // WO-389 wiring: make the ATTACK (recruit a squad -> raid) and DEFEND
+            // (place your War Base) flows reachable. These open the dedicated screens
+            // and hide this panel so they are unobstructed. The per-opponent RAID
+            // buttons above remain a distinct "quick raid" straight at a seeded base.
+            AddButton(_entryRoot.transform, "ATTACK",
+                      new Vector2(0.215f, 0.225f), new Vector2(0.085f, 0.075f),
+                      new Color(ElarionUi.Danger.r, ElarionUi.Danger.g, ElarionUi.Danger.b, 0.85f),
+                      OpenAttackRecruit, ButtonKind.Confirm);
+            AddButton(_entryRoot.transform, "DEFEND",
+                      new Vector2(0.215f, 0.225f), new Vector2(0.305f, 0.075f),
+                      ElarionUi.GoldButton, OpenDefenseSetup, ButtonKind.Gold);
+
             AddButton(_entryRoot.transform, "Close", new Vector2(0.30f, 0.70f),
                       new Vector2(0.025f, 0.075f), Glass, Close, ButtonKind.Neutral);
+        }
+
+        // ── ATTACK flow: open the recruit screen (pick a <=50-pt squad -> Launch
+        // starts the raid with the squad following the Captain). Hide this panel so
+        // the recruit screen is unobstructed; the controller owns its own teardown. ──
+        private void OpenAttackRecruit()
+        {
+            try
+            {
+                var ctl = ArenaAttackRecruitController.EnsureExists();
+                // Default the raid target to the first seeded opponent (MVP) so the
+                // recruit -> launch path always has a base to raid.
+                if (ArenaCatalog.All != null && ArenaCatalog.All.Count > 0)
+                    ctl.SetOpponent(ArenaCatalog.All[0]);
+                if (_ui != null) _ui.SetActive(false);
+                ctl.Enter();
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError("[ArenaPanel] OpenAttackRecruit failed: " + e);
+                if (_ui != null) _ui.SetActive(true);
+            }
+        }
+
+        // ── DEFEND flow: open the defense-placement screen (place your War Base ->
+        // saved into GameState.ArenaDefense on Exit). Hide this panel so the
+        // placement camera + palette are unobstructed. ──
+        private void OpenDefenseSetup()
+        {
+            try
+            {
+                var ctl = ArenaDefenseSetupController.EnsureExists();
+                if (_ui != null) _ui.SetActive(false);
+                ctl.Enter();
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError("[ArenaPanel] OpenDefenseSetup failed: " + e);
+                if (_ui != null) _ui.SetActive(true);
+            }
         }
 
         // ── "Use My Castle" toggle — a sleek labelled pill (matches the panel idiom:
