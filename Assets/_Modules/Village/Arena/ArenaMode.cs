@@ -29,6 +29,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.AI;
 using DeNelle.Core;
 using DeNelle.Core.Audio;
 using DeNelle.Core.State;
@@ -191,17 +192,26 @@ namespace DeNelle.Village.Arena
             // WO-388: the defender recipe is the player's OWN castle when "Use My Castle"
             // is ON (and a base exists), else the seeded opponent fort.
             _outpost.ConfigureArena(opponent.Id, opponent.Threat, GetDefenderRecipe(opponent), opponent.GuardCount);
+
+            // FIX (empty-Arena bug): listen for a FAILED garrison spawn so an outpost that
+            // could NOT place its garrison on navmesh ends the raid as a NON-win (no purse)
+            // instead of mis-firing the open-world auto-Clear() as an instant WIN.
+            _outpost.OnArenaSpawnFailed += HandleArenaSpawnFailed;
+
             // EnemyOutpost.Start() (this same frame) realizes the fort + spawns the garrison.
 
-            // WO-388: a player castle has NO pre-baked NavMesh + no ground at the raid
-            // anchor, so bake a local walkable surface at runtime (toggle-gated). The
-            // baker's coroutine waits for the fort to realize before baking. The seeded
-            // path (toggle OFF) keeps relying on the existing scene mesh - untouched.
-            if (UsePlayerCastle)
-            {
-                var baker = _outpostHost.AddComponent<ArenaNavMeshBaker>();
-                baker.BakeForCastle(_outpostHost.transform);
-            }
+            // BAKE a local walkable NavMesh for EVERY castle-hub arena raid. The raid
+            // anchor (hero.forward * 24m) lands OFF the hub's baked NavMesh, so the
+            // garrison NavMeshAgents would fail to materialize and the outpost would
+            // silent-win (the empty-Arena bug). A local runtime surface under the fort
+            // (the baker waits for the fort to realize, then carves walls) gives the
+            // garrison + the realized fort walkable mesh and lets the player reach it.
+            // WO-388 originally gated this on UsePlayerCastle; the SEEDED fort has the
+            // same off-mesh anchor problem, so bake for both. The baker is idempotent
+            // (one NavMeshSurface per host) and only adds a LOCAL surface — the rest of
+            // the scene's mesh is untouched, so the UsePlayerCastle path is preserved.
+            var baker = _outpostHost.AddComponent<ArenaNavMeshBaker>();
+            baker.BakeForCastle(_outpostHost.transform);
         }
 
         // WO-389 (#3) — ATTACK FLOW: spawn the recruited squad as FRIENDLY units
@@ -284,19 +294,60 @@ namespace DeNelle.Village.Arena
             return opponent.BaseRecipe;   // seeded (BuildFortification's ?? also covers null)
         }
 
-        // A walk-to anchor in front of the hero (mirrors RaidOutpostSystem's idea).
-        // Falls back to a fixed point if no hero is found.
+        // A walk-to anchor in FRONT of the hero (mirrors RaidOutpostSystem's idea),
+        // SNAPPED onto the baked NavMesh so the opponent fort + its garrison land on
+        // walkable mesh the player can reach. In the castle hub the raw forward point
+        // often lands OFF the baked mesh (the empty-Arena bug): the synchronous garrison
+        // spawn then can't snap and the outpost silent-wins. We therefore try the full
+        // forward offset first, then progressively closer offsets, and finally the hero's
+        // own spot — using the FIRST one that NavMesh.SamplePosition resolves to walkable
+        // mesh. Falls back to a fixed point only if no hero is found.
         private static Vector3 ResolveRaidAnchor()
         {
             var hero = GameObject.FindWithTag("Player");
-            if (hero != null)
+            if (hero == null)
             {
-                Vector3 fwd = hero.transform.forward;
-                fwd.y = 0f;
-                if (fwd.sqrMagnitude < 0.01f) fwd = Vector3.forward;
-                return hero.transform.position + fwd.normalized * RaidAnchorDistance;
+                // No hero: snap a fixed point onto the mesh if we can, else use it raw.
+                Vector3 fixedPt = new Vector3(RaidAnchorDistance, 0f, 0f);
+                return SnapAnchorToNav(fixedPt, out Vector3 snapped) ? snapped : fixedPt;
             }
-            return new Vector3(RaidAnchorDistance, 0f, 0f);
+
+            Vector3 origin = hero.transform.position;
+            Vector3 fwd = hero.transform.forward;
+            fwd.y = 0f;
+            if (fwd.sqrMagnitude < 0.01f) fwd = Vector3.forward;
+            fwd.Normalize();
+
+            // Try the full forward distance first (fort in view, a real walk-to), then
+            // shrink toward the hero so we never place the base off-mesh. The fort still
+            // spawns in FRONT of the player at whichever distance first lands on mesh.
+            float[] distances = { RaidAnchorDistance, 16f, 10f, 6f, 0f };
+            foreach (float d in distances)
+            {
+                Vector3 candidate = origin + fwd * d;
+                if (SnapAnchorToNav(candidate, out Vector3 snapped))
+                    return snapped;
+            }
+
+            // No walkable mesh found anywhere along the ray — return the raw forward
+            // point; the runtime ArenaNavMeshBaker then lays a local surface under it.
+            return origin + fwd * RaidAnchorDistance;
+        }
+
+        // Snap a candidate anchor onto the baked NavMesh (typed SamplePosition — the
+        // asmdef references Unity.AI.Navigation). Generous search radius so a point near
+        // a path still resolves. Returns false (no walkable mesh nearby) so the caller
+        // can fall back to a closer offset.
+        private static bool SnapAnchorToNav(Vector3 candidate, out Vector3 result)
+        {
+            const float SampleRadius = 30f;
+            if (NavMesh.SamplePosition(candidate, out NavMeshHit hit, SampleRadius, NavMesh.AllAreas))
+            {
+                result = hit.position;
+                return true;
+            }
+            result = candidate;
+            return false;
         }
 
         // -- WIN -------------------------------------------------------------
@@ -363,11 +414,37 @@ namespace DeNelle.Village.Arena
             EndRaid(ArenaResult.Loss, -_stakedWager);
         }
 
+        // -- FAILED SPAWN (empty-Arena bug guard) ----------------------------
+        // The opponent garrison could NOT spawn (no walkable NavMesh under the raid
+        // anchor). EnemyOutpost used to auto-Clear() here, which fired OnCleared -> an
+        // instant WIN + purse the player never earned. We now end the raid as a NON-win
+        // ABORT: no purse, no recorded win — and (since the stake was already debited and
+        // the failure is the game's fault, not the player's) we REFUND the stake by
+        // recording a zero-delta abort rather than a loss. The result reads as a
+        // no-contest so the entry UI can re-offer the raid.
+        private void HandleArenaSpawnFailed(EnemyOutpost o)
+        {
+            if (_resolved) return;
+            _resolved = true;
+
+            // Refund the staked wager — the raid never actually happened (spawn failure),
+            // so the player should not forfeit. STUB wallet mirror of TryStartRaid's Debit.
+            ArenaWalletService.Credit(_stakedWager);
+            Debug.LogError($"[ArenaMode] Raid vs '{NameOf()}' ABORTED - opponent garrison failed to spawn " +
+                           "(no NavMesh at the raid anchor). NOT a win; stake refunded.");
+            // skrDelta 0 = no net change (stake refunded); result None = no-contest abort.
+            EndRaid(ArenaResult.None, 0L);
+        }
+
         // -- teardown --------------------------------------------------------
         private void EndRaid(ArenaResult result, long skrDelta)
         {
             if (_watcher != null) { StopCoroutine(_watcher); _watcher = null; }
-            if (_outpost != null) _outpost.OnCleared -= HandleOutpostCleared;
+            if (_outpost != null)
+            {
+                _outpost.OnCleared -= HandleOutpostCleared;
+                _outpost.OnArenaSpawnFailed -= HandleArenaSpawnFailed;
+            }
 
             var opponent = CurrentOpponent;
             RaidInProgress = false;

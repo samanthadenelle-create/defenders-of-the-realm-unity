@@ -110,6 +110,16 @@ namespace DeNelle.Village.World.Camps
         /// <summary>Raised once the entire garrison is dead (the outpost is cleared).</summary>
         public event Action<EnemyOutpost> OnCleared;
 
+        /// <summary>
+        /// ARENA only: raised when the garrison FAILED to spawn (0 alive after
+        /// SpawnGarrison) on a raid whose clear-reward is suppressed (the Arena path).
+        /// In the open world an empty garrison auto-Clear()s as an anti-deadlock; in the
+        /// Arena that would mis-fire as an instant WIN + purse, so the Arena listens to
+        /// this instead and ends the raid as a NON-win (no purse). Never raised on the
+        /// open-world path.
+        /// </summary>
+        public event Action<EnemyOutpost> OnArenaSpawnFailed;
+
         // -- Config -----------------------------------------------------------
         public RegionId Region { get; private set; } = RegionId.Goldfields;
         public int ThreatLevel { get; private set; }
@@ -336,8 +346,22 @@ namespace DeNelle.Village.World.Camps
 
             if (_aliveCount == 0)
             {
-                // Nothing could spawn (no NavMesh / no roster) - treat as cleared so
-                // the raid loop never deadlocks waiting on defenders that never existed.
+                // Nothing could spawn (no NavMesh / no roster).
+                if (_suppressClearReward)
+                {
+                    // ARENA: do NOT Clear() — that fires OnCleared -> instant WIN + purse
+                    // even though the player never fought a thing (the empty-Arena bug).
+                    // Treat it as a FAILED spawn: log an error and signal the Arena to end
+                    // the raid as a NON-win (no purse). The Arena owns this outpost's
+                    // lifetime + result.
+                    Debug.LogError($"[EnemyOutpost] ARENA garrison FAILED to spawn for {OutpostId} " +
+                                   "(no NavMesh under the raid anchor?) - aborting raid as a NON-win, NOT an auto-win.");
+                    OnArenaSpawnFailed?.Invoke(this);
+                    return;
+                }
+
+                // OPEN WORLD: treat as cleared so the raid loop never deadlocks waiting on
+                // defenders that never existed (legit anti-deadlock — keep unchanged).
                 Debug.LogWarning($"[EnemyOutpost] no garrison spawned for {Region} outpost - auto-clearing.");
                 Clear();
             }
