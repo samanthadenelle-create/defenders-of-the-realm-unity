@@ -200,18 +200,19 @@ namespace DeNelle.Village.Arena
 
             // EnemyOutpost.Start() (this same frame) realizes the fort + spawns the garrison.
 
-            // BAKE a local walkable NavMesh for EVERY castle-hub arena raid. The raid
-            // anchor (hero.forward * 24m) lands OFF the hub's baked NavMesh, so the
-            // garrison NavMeshAgents would fail to materialize and the outpost would
-            // silent-win (the empty-Arena bug). A local runtime surface under the fort
-            // (the baker waits for the fort to realize, then carves walls) gives the
-            // garrison + the realized fort walkable mesh and lets the player reach it.
-            // WO-388 originally gated this on UsePlayerCastle; the SEEDED fort has the
-            // same off-mesh anchor problem, so bake for both. The baker is idempotent
-            // (one NavMeshSurface per host) and only adds a LOCAL surface — the rest of
-            // the scene's mesh is untouched, so the UsePlayerCastle path is preserved.
-            var baker = _outpostHost.AddComponent<ArenaNavMeshBaker>();
-            baker.BakeForCastle(_outpostHost.transform);
+            // The SEEDED castle-hub raid does NOT runtime-bake: FIX 1 (ResolveRaidAnchor's
+            // NavMesh.SamplePosition snap) places the opponent ON the hub's PRE-baked floor,
+            // and the fort's carving NavMeshObstacles cut the walls in real-time — so the
+            // garrison + player path on the EXISTING mesh, no bake needed.
+            // The runtime bake is a SYNCHRONOUS BuildNavMesh on the main thread; running it
+            // every raid FROZE the game (it also needs read-enabled meshes for player builds).
+            // So it stays restricted to the UsePlayerCastle path — the imported player castle
+            // has NO pre-baked mesh, so it genuinely needs a local surface.
+            if (UsePlayerCastle)
+            {
+                var baker = _outpostHost.AddComponent<ArenaNavMeshBaker>();
+                baker.BakeForCastle(_outpostHost.transform);
+            }
         }
 
         // WO-389 (#3) — ATTACK FLOW: spawn the recruited squad as FRIENDLY units
