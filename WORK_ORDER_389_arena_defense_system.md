@@ -65,6 +65,7 @@ Stats (damage/health/range/etc.) hardcoded for now, **every value commented `// 
 - **Asymmetric (async PvP):** the defender is OFFLINE → their `DefenseSetup` runs as a **simulation**; the attacker plays **live**. Every raid = live player vs simulated defense (CoC model).
 - **Screens:** staging area = Phase 2 placement (FF grid + point pool); invaders / opponent-select = extend `ArenaPanel`; watch (both sides) = WO-386 battle-viz.
 - **Win:** attacker destroys the objective, OR the 3-min time limit expires → defender wins (reuse `ArenaMode.RaidTimeoutSeconds`).
+- **Teardown + payout (on resolve):** the arena is a TRANSIENT instance (`ArenaMode` spawns per raid + already destroys the outpost on end). On resolve → **destroy the instance** (unload venue + ported castle + troops; reuse the per-raid teardown) AND **pay the winner** — attacker on objective-destroyed, defender on timeout/survive (reuse `ArenaMode` loot/wager + `ArenaWalletService`; the only ADD is the defender-side payout).
 
 ## What NOT to do
 - No new placement system, no new AI/targeting, no bespoke save layer. Reuse.
