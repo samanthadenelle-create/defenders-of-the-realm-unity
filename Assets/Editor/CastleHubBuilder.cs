@@ -56,6 +56,7 @@ namespace DeNelle.Editor
     {
         private const string MenuPath = "Defenders/Scenes/Build CastleHub_MainKeep";
         private const string RootName = "CastleHubRoot";
+        private const string NavFloorName = "NavMeshFloor_Invisible_Walkable";
 
         // Pack roots (validated against catalogs + on-disk)
         private const string PolyRoot =
@@ -406,6 +407,11 @@ namespace DeNelle.Editor
             // All pieces are low-poly single-atlas or URP ShaderGraph → excellent batching.
             // After placing: mark static where appropriate, add light probes / reflection probes for upper/lower contrast.
 
+            // Invisible, continuous walkable NavMesh floor (interior + gate bridge) so the
+            // NavMeshAgent hero can traverse the WHOLE castle and cross the gate. The visual
+            // qFloorWood tiles only cover the central ~±16 plaza; this fills the rest.
+            BuildNavMeshFloor(root.transform);
+
             Debug.Log("[CastleHubBuilder] CastleHubRoot complete. 8 structures + keep + upper battlements + gate marker placed.\n" +
                       "Next: Save under Assets/Scenes/ (e.g. MainCastle_Hall.unity), Bake NavMesh (NavMeshSurface recommended), wire NPC points + connection via existing systems (WorldSceneLoader, Economy, Yarn, base-build on battlements).");
             Selection.activeGameObject = root;
@@ -432,6 +438,82 @@ namespace DeNelle.Editor
                 Debug.LogWarning($"[CastleHubBuilder] Missing Quaternius prefab: {path}");
             }
             return go;
+        }
+
+        // =====================================================================
+        //  Invisible walkable NavMesh floor — ONE continuous collider surface so the
+        //  NavMeshAgent hero can traverse the WHOLE castle and cross the gate. The
+        //  visual qFloorWood tiles only cover the central ~±16 plaza, leaving the rest
+        //  of the ±44 interior + the gate/drawbridge with no walkable ground -> the
+        //  "fragmented islands" + uncrossable gate. These planes are renderer-OFF
+        //  (invisible) but keep their MeshCollider, so the NavMeshSurface bakes them
+        //  when Use Geometry = Physics Colliders. Generated, not hand-placed, so a
+        //  rebuild reproduces the walkable floor every time.
+        // =====================================================================
+        private static void BuildNavMeshFloor(Transform parent)
+        {
+            // Idempotent: drop any prior generated floor first.
+            var priorFloor = GameObject.Find(NavFloorName);
+            if (priorFloor != null) Object.DestroyImmediate(priorFloor);
+
+            var floorRoot = new GameObject(NavFloorName);
+            floorRoot.transform.SetParent(parent, false);
+
+            // Main interior floor: a Unity Plane is 10x10m at scale 1, so scale 9 = 90x90m,
+            // covering the full -45..+45 interior (corner towers ±42, walls ±44). y sits just
+            // above the visual tiles (0.01) and below the hero spawn (0.1).
+            CreateInvisibleFloor(floorRoot.transform, "CourtyardFloor_Nav", new Vector3(0f, 0.05f, 0f), new Vector3(9f, 1f, 9f));
+
+            // Gate bridge: spans the south gate (z -50) + drawbridge approach (z -58) and
+            // OVERLAPS the main floor (which ends ~z -45) so the two fuse into ONE connected
+            // mesh — that overlap is what lets the agent cross the gate. ~12m wide (gate
+            // opening), ~18m deep (z -42 .. -60).
+            CreateInvisibleFloor(floorRoot.transform, "GateBridge_Nav", new Vector3(0f, 0.05f, -51f), new Vector3(1.2f, 1f, 1.8f));
+
+            // Keep interior + entrance bridge: GroundLevel_Keep_Hall_Entry (the keep building)
+            // sits at origin with 4 wall colliders + a doorway. The walls carve the navmesh and
+            // seal the spawn hall (hero spawns inside, can't exit). Fill the keep footprint with
+            // floor, RAISED slightly (y 0.12) to sit above any door threshold/step the walls cut,
+            // so the interior is walkable AND threads out through the entrance to the courtyard.
+            // ~26x26m covers the keep + overlaps the courtyard floor on every side.
+            CreateInvisibleFloor(floorRoot.transform, "KeepInterior_Nav", new Vector3(0f, 0.12f, 0f), new Vector3(2.6f, 1f, 2.6f));
+        }
+
+        private static void CreateInvisibleFloor(Transform parent, string name, Vector3 localPos, Vector3 localScale)
+        {
+            var plane = GameObject.CreatePrimitive(PrimitiveType.Plane); // Plane = MeshFilter + MeshRenderer + MeshCollider
+            plane.name = name;
+            plane.transform.SetParent(parent, false);
+            plane.transform.localPosition = localPos;
+            plane.transform.localScale = localScale;
+
+            // Invisible but bakeable: hide the renderer; the NavMesh bakes from the MeshCollider
+            // (Use Geometry = Physics Colliders), so visibility doesn't matter to the bake.
+            var r = plane.GetComponent<MeshRenderer>();
+            if (r != null) r.enabled = false;
+            if (plane.GetComponent<MeshCollider>() == null) plane.AddComponent<MeshCollider>();
+        }
+
+        // Non-destructive: add ONLY the invisible floor to whatever castle scene is open,
+        // without rebuilding the whole hub (preserves the wired hero/camera/gate). Run this,
+        // then set the NavMeshSurface Use Geometry = Physics Colliders and Bake.
+        [MenuItem("Defenders/Scenes/Add NavMesh Floor to Current Castle")]
+        public static void AddNavMeshFloorToCurrentCastle()
+        {
+            var root = GameObject.Find(RootName);
+            Transform parent;
+            if (root != null) { parent = root.transform; }
+            else
+            {
+                var holder = new GameObject(RootName + "_FloorHost");
+                parent = holder.transform;
+                Debug.LogWarning("[CastleHubBuilder] No CastleHubRoot found — floor added under a new host object.");
+            }
+            BuildNavMeshFloor(parent);
+            Debug.Log("[CastleHubBuilder] Added invisible NavMesh floor (interior + gate bridge). " +
+                      "NEXT: select your NavMeshSurface, set Use Geometry = Physics Colliders, then Bake. " +
+                      "The blue should become ONE connected sheet through the gate.");
+            Selection.activeGameObject = parent.gameObject;
         }
 
         // =====================================================================
@@ -659,6 +741,73 @@ namespace DeNelle.Editor
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene);
             Log("BATCH: wired + saved MainCastle_Hall. Ready to Play.");
+        }
+
+        // =====================================================================
+        //  Batchmode entry — open MainCastle_Hall, ensure the invisible floor
+        //  (courtyard + gate + keep entrance), force the NavMeshSurface to
+        //  Physics Colliders, BAKE, and persist the navmesh asset + scene.
+        //  Reflection on NavMeshSurface (no hard package dep). Invoked headless.
+        // =====================================================================
+        public static void BatchAddFloorAndBakeCastle()
+        {
+            const string scenePath = "Assets/Scenes/MainCastle_Hall.unity";
+            var scene = EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Single);
+            Log("BATCH-BAKE: opened " + scenePath);
+
+            // Ensure the generated invisible floor (courtyard + gate + keep entrance) exists.
+            var root = GameObject.Find(RootName);
+            Transform parent = root != null ? root.transform
+                : (GameObject.Find(RootName + "_FloorHost") ?? new GameObject(RootName + "_FloorHost")).transform;
+            BuildNavMeshFloor(parent);
+            Log("BATCH-BAKE: floor ensured (courtyard + gate + keep interior).");
+
+            // Configure + bake every NavMeshSurface via reflection so renderer-off planes are
+            // collected (Use Geometry = Physics Colliders). RenderMeshes=0, PhysicsColliders=1.
+            var surfType = FindType("Unity.AI.Navigation.NavMeshSurface");
+            if (surfType == null)
+            {
+                Err("BATCH-BAKE: NavMeshSurface type not resolved — bake skipped (do it in-editor).");
+            }
+            else
+            {
+                var surfaces = Object.FindObjectsByType(surfType, FindObjectsSortMode.None);
+                Log("BATCH-BAKE: NavMeshSurface count = " + surfaces.Length);
+                foreach (var s in surfaces)
+                {
+                    var ug = surfType.GetProperty("useGeometry");
+                    if (ug != null) ug.SetValue(s, System.Enum.ToObject(ug.PropertyType, 1)); // PhysicsColliders
+                    var co = surfType.GetProperty("collectObjects");
+                    if (co != null) co.SetValue(s, System.Enum.ToObject(co.PropertyType, 0)); // All
+
+                    var build = surfType.GetMethod("BuildNavMesh", System.Type.EmptyTypes);
+                    if (build != null) { build.Invoke(s, null); Log("BATCH-BAKE: BuildNavMesh() invoked."); }
+
+                    // Persist the freshly-built data as an asset so it survives the scene save.
+                    var dataProp = surfType.GetProperty("navMeshData");
+                    var data = dataProp != null ? dataProp.GetValue(s) as Object : null;
+                    if (data != null)
+                    {
+                        if (!System.IO.Directory.Exists("Assets/Scenes/MainCastle_Hall"))
+                            AssetDatabase.CreateFolder("Assets/Scenes", "MainCastle_Hall");
+                        string assetPath = "Assets/Scenes/MainCastle_Hall/NavMesh-NavMeshSurface.asset";
+                        if (!AssetDatabase.Contains(data))
+                        {
+                            var existing = AssetDatabase.LoadAssetAtPath<Object>(assetPath);
+                            if (existing != null) AssetDatabase.DeleteAsset(assetPath);
+                            AssetDatabase.CreateAsset(data, assetPath);
+                            Log("BATCH-BAKE: navmesh asset written -> " + assetPath);
+                        }
+                        else Log("BATCH-BAKE: navmesh data already an asset (updated in place).");
+                    }
+                    else Err("BATCH-BAKE: surface.navMeshData was null after bake — bake likely produced nothing.");
+                }
+            }
+
+            EditorSceneManager.MarkSceneDirty(scene);
+            EditorSceneManager.SaveScene(scene);
+            AssetDatabase.SaveAssets();
+            Log("BATCH-BAKE: saved scene + assets. Done.");
         }
 
         private static Transform FindHeroParentInCastle(Scene scene)
