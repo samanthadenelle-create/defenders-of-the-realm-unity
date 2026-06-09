@@ -888,6 +888,10 @@ namespace DeNelle.Audio
 
             if (sceneName == SceneRouter.Title)    return MusicTrack.Title;
             if (sceneName == SceneRouter.Village)  return MusicTrack.Village;
+            // Castle hub scenes share the town/village ambient BGM (same explore
+            // context as Village2 — respects the player's jukebox pick).
+            if (sceneName == "MainCastle_Hall" || sceneName == "CastleHub" || sceneName == "CastleHub_MainKeep")
+                return MusicTrack.Village;
             if (sceneName == SceneRouter.ATBBattle) return MusicTrack.Battle;
 
             // The Onboarding scene (studio bumper / cold open), if it is a
