@@ -66,6 +66,12 @@ namespace DeNelle.Editor
                 var c = clips[i];
 
                 c.loopTime = looping;
+                // Loop Pose (loopBlend): offset the clip so its END pose matches its START,
+                // so a looping clip cycles SEAMLESSLY instead of snapping to a different frame
+                // and restarting (the "walk cycle resets" bug). MUST be set here — this
+                // postprocessor rewrites clipAnimations every import, so setting loopPose only
+                // via the .meta or a one-off menu gets clobbered on the next reimport.
+                c.loopPose = looping;
 
                 // Bake horizontal root translation into the pose -> in place.
                 c.lockRootPositionXZ = true;
