@@ -129,13 +129,15 @@ L3) used by CLI today; **289 free**. **Next free WO = 330** (306–329 now used)
 ## Lane 7 — Persistence / Backend  (GameState/SaveSchema = coordinate additive)
 
 1. ★ **WO-301** — Party persistence: wallet-keyed roster in GameState + local fallback id (renders via WO-303).
-2. ⚠ SaveSchema / SaveMigrator version owner — single agent bumps schema for all new fields (incl. quest/pet state).
-3. ▶ **WO-120** — Backend spec reconciliation.
-4. ▶ **WO-80** — Vercel + Neon backend.
-5. ▶ **WO-129** — Leaderboard / profile / social.
-6. ▶ **WO-121** — Metrics / analytics dashboard.
-7. ▶ **WO-118** — Rewarded ads route.
-8. ▶ **DEF-121** — Resource economy correction (server-authoritative).
+2. ★ **WO-339** — SaveSchema: add quest state versioning + migration stub (anchor for all quest WOs).
+3. ★ **WO-340** — PlayerPrefs migration: legacy pet/party data → GameState on load.
+4. ★ **WO-341** — Backend: auth token refresh + expiry handling.
+5. ▶ **WO-120** — Backend spec reconciliation.
+6. ▶ **WO-80** — Vercel + Neon backend.
+7. ▶ **WO-129** — Leaderboard / profile / social.
+8. ▶ **WO-121** — Metrics / analytics dashboard.
+9. ▶ **WO-118** — Rewarded ads route.
+10. ▶ **DEF-121** — Resource economy correction (server-authoritative).
 
 ## Lane 8 — Monetization / Store  (fully isolated, ~70% built — do NOT greenfield)
 
@@ -163,12 +165,14 @@ L3) used by CLI today; **289 free**. **Next free WO = 330** (306–329 now used)
 
 1. ▶ **WO-196** — WebGL no-Brotli rebuild (web deploy blocker).
 2. ▶ **WO-211** — WebGL optimize (remove unused assets).
-3. ▶ **WO-191** — WebGL size optimization.
-4. ▶ **WO-51** — Mobile performance pass.
-5. ▶ **WO-53** — Animator culling.
-6. ▶ **WO-54** — LOD setup.
-7. ▶ **WO-57** — Mobile quality settings.
-8. ⏸ **WO-282** — Heroes → Addressables (HELD — daytime play-verified session).
+3. ★ **WO-342** — WebGL: memory optimization + GC pressure reduction.
+4. ★ **WO-343** — Analytics: event batching + periodic backend flush.
+5. ▶ **WO-191** — WebGL size optimization.
+6. ▶ **WO-51** — Mobile performance pass.
+7. ▶ **WO-53** — Animator culling.
+8. ▶ **WO-54** — LOD setup.
+9. ▶ **WO-57** — Mobile quality settings.
+10. ⏸ **WO-282** — Heroes → Addressables (HELD — daytime play-verified session).
 
 ## Lane 11 — Build Mode / Player Base  (keystone — mostly own files in BuildMode/*)
 
@@ -249,7 +253,7 @@ legendary set + ward **WO-295** (L3) · Heart-vs-regions reforge choice **WO-296
 | 305 | Relic-recovery quests | 5 | 290 |
 
 **Pre-290 block (CLI, today):** WO-287 Threat-Assessment Intel → Lane 2 (SPEC) · WO-288 Class Signature
-Combat Moves → Lane 3 (in progress). 289 free; 306–329 used. Next free WO = 330.
+Combat Moves → Lane 3 (in progress). 289 free; 306–338 used. Next free WO = 339. Latest 339–343 added per nightly refill (Lane 7/10 thin).
 
 ---
 

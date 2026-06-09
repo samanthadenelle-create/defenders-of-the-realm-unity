@@ -76,41 +76,57 @@ All in `_M/Meshes_M/` (no category subfolder for these):
 
 Each maps to one of the five gameplay buildings in `VillageSceneBuilder`.
 
-| Building (code) | Polyperfect FBX | Notes |
-|---|---|---|
-| Crystal Mine | `House_Medieval_Small` + `Well` | Small structure + well as mine entrance |
-| Echo Hollow (id `pet-house`) | `Stables_Medieval` | Direct match — hollow where Echoes rest |
-| Arcane Tower | `Tower_Medieval_Big` | Tall standalone tower |
-| Workshop | `House_Medieval_Medium` | Mid-size house, dress with crafting props |
-| Farm | `Farm_House` + `Windmill_Medieval` | Farmhouse + working windmill |
-| Market / Shop | `House_Medieval_Large` + `Marketplace_Stand_Simple` | Shop front + market stalls |
-| Dungeon entrance | `Castle_Medieval` (arch only) or `Gate_Medieval_Medium` | Portal framing |
-| Tavern / Inn | `House_Medieval_Big` | Largest house variant |
+| Building (code) | Polyperfect FBX | Status | Notes |
+|---|---|---|---|
+| `gate_stone` | `Gate_Medieval_Medium` | ✅ Locked | In Resources |
+| `mill` (Farm) | `Farm_House` + `Windmill_Medieval` | ✅ Locked | In Resources |
+| `tower_ground_archer` L1 | `Tower_Medieval_Wood` | ✅ Locked | In Resources |
+| `tower_ground_archer` L2 | `Tower_Castle_Round` | ✅ Locked | Upgrade swap |
+| `wall_wood` | `Wall_Medieval_Wood` | ✅ Locked | In Resources |
+| `wall_stone` | `Wall_Medieval_Stone` | ✅ Locked | In Resources |
+| `pet-house` (Echo Hollow) | `Stables_Medieval` | 🔧 Repoint | copy→Resources/Structures |
+| `workshop` | `House_Medieval_Medium` | 🔧 Repoint | copy→Resources/Structures |
+| `market` | `House_Medieval_Large` + `Marketplace_Stand_Simple` (front props) | 🔧 Repoint | House = structure; stands = stalls |
+| `lumbermill` (Sawmill) | `Watermill_Medieval` | 🔧 Repoint | Better fit than House_Medieval_Small |
+| `forge` (Armorer) | `House_Medieval_Medium` | 🔧 Repoint | No blacksmith mesh in pack — dress with Tools_M props |
+| `arcane-tower` | `Tower_Medieval_Big` | 🔧 Repoint | Already in Resources (mage L2) |
+| `mine_crystal` | `Well` + `House_Medieval_Small` | 🔧 Repoint | Well = shaft landmark; house = surface hut |
+| `deco_torch` | `Torche_Wall` | 🔧 Repoint | copy→Resources/Structures |
+| `tower_wall_wizard` L1 | PatriciaLight/tower2 (DTT) | ⚠️ Keep | Imposing apex — leave on DTT tower |
+| `tower_catapult` | `Catapult` (Medieval_M) | ⚠️ Pick → **locked** | Direct match |
+| `tower_siege_tower` | `Ballista` (Medieval_M) | ⚠️ Pick → **locked** | Distinct silhouette from catapult |
+| `wall_corner` | rotate `Wall_Medieval_Stone` | ❌ No corner mesh | Rotate-a-straight until better pack acquired |
+| Dungeon entrance | `Castle_Medieval` (arch only) or `Gate_Medieval_Medium` | — | Portal framing |
+| Tavern / Inn | `House_Medieval_Big` | — | Largest house variant |
 
-### Prop dressing per building
+### Prop dressing per building — lightweight (≤4 props each)
 
-**Crystal Mine:**
-`Well`, `Timber`, `Stone_Big`, `Rock_Large`, `Torche_Wall` (×2)
+**`mine_crystal` — Well + House_Medieval_Small:**
+`Stone_Big` ×2, `Rocks_Small` scatter — Well shape sells the shaft, keep bare
 
-**Workshop:**
-`Table_Crafting_Wood`, `Anvil` (Tools_M), `Axe` (Tools_M), `Hammer` (Tools_M),
-`Wheelbarrow` (Tools_M), `Crate_Box` (Fantasy_M), `Torche_Wall`
+**`workshop` — House_Medieval_Medium:**
+`Anvil` (Tools_M), `Torche_Wall` ×2 — Anvil is the identifier, nothing else needed
 
-**Farm:**
-`Farm_Silo`, `Haystack` (Farm_M), `Hay_Pile` (Farm_M), `Scarecrow` (Farm_M),
-`Farm_Flower_Bed` (Farm_M), `Fence_Picket`, `Cow` or `Hen` (Animals_M)
+**`forge` (Armorer) — House_Medieval_Medium:**
+`Anvil` (Tools_M), `Hammer` (Tools_M), `Torche_Wall` ×2 — same base as Workshop, different tool combo distinguishes them
 
-**Echo Hollow / Stables (id `pet-house`):**
-`Fence_Stone` surround, `Hay_Pile`, `Bucket_Milk` (Farm_M),
-`Bench_Wood` (Fantasy_M), `Torche_Wall` (×2)
+**`market` — House_Medieval_Large + Marketplace_Stand_Simple:**
+`Marketplace_Stand_Simple` ×2 (front), `Torche_Wall` ×1 — stands do the visual work
 
-**Arcane Tower:**
-`Torche_Wall` (×4), `Statue_Knight` (Fantasy_M), `Candlestick` (Fantasy_M),
-`Book_Open` (Fantasy_M), `Scroll` (Fantasy_M)
+**`lumbermill` (Sawmill) — Watermill_Medieval:**
+`Timber` ×2, `Tree_Dead_Log_A` ×1 — wheel shape sells it, logs confirm the function
+
+**`pet-house` (Echo Hollow) — Stables_Medieval:**
+`Hay_Pile` (Farm_M), `Fence_Stone` surround, `Torche_Wall` ×2 — warm and enclosed
+
+**Farm — Farm_House + Windmill_Medieval:**
+`Farm_Silo`, `Haystack` (Farm_M), `Scarecrow` (Farm_M), `Fence_Picket` — windmill is the hero, props are light scatter
+
+**`arcane-tower` — Tower_Medieval_Big:**
+`Torche_Wall` ×4, `Statue_Knight` (Fantasy_M), `Scroll` (Fantasy_M) — tall tower sells itself; keep props to 3
 
 **Heart of Elarion (central):**
-`Altar` (Fantasy_M), `Candlestick` (×4), `Candle_Big` (Fantasy_M),
-`Chest` (Fantasy_M), `Statue_Knight` flanking, `Pillar_Ionic` (Empire) ×4
+`Altar` (Fantasy_M), `Candlestick` ×4, `Statue_Knight` flanking, `Pillar_Ionic` (Empire) ×4
 
 ---
 

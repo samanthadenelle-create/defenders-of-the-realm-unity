@@ -1,9 +1,9 @@
-# Lanes — Work-Order Numbers Only (for CLI)  ·  topped up 2026-06-06
+# Lanes — Work-Order Numbers Only (for CLI)  ·  topped up 2026-06-08
 
 Branch **feat/tower-core-loop**. Numbers only, run order. `→` = serial (same lane, in order);
 commas = parallel-safe. Detail in `MASTER_PIPELINES_BACKLOG_2026-06-06.md`. New WOs ≥290 are spec'd by
 this session's design docs (see "Newly minted" below) — full WO files on request.
-**Numbering authority = the master doc + this file, NOT the filesystem max. Next free WO = 339** (287/288/306–338 used, 289 free, 290–305 minted).
+**Numbering authority = the master doc + this file, NOT the filesystem max. Next free WO = 344** (287/288/306–343 used, 289 free, 290–305 minted, 339–343 refill).
 **Live board (Notion mirror):** https://app.notion.com/p/f3115f05ecf940cf8968bd82bbbdff9f — see `NOTION_SOURCE_OF_TRUTH.md`.
 
 ---
@@ -26,6 +26,11 @@ this session's design docs (see "Newly minted" below) — full WO files on reque
 - **303** Combat party HUD wire-to-live-data (HUDManager)
 - **304** Brom's rumor board (quest-board UI; can fold into 290)
 - **305** Relic-recovery quests (Dawnedge / garrison blades / pattern-blade)
+- **339** SaveSchema: add quest state versioning + migration stub (anchor for all quest WOs)
+- **340** PlayerPrefs migration: legacy pet/party data → GameState on load
+- **341** Backend: auth token refresh + expiry handling
+- **342** WebGL: memory optimization + GC pressure reduction
+- **343** Analytics: event batching + periodic backend flush
 
 ---
 
@@ -38,13 +43,13 @@ this session's design docs (see "Newly minted" below) — full WO files on reque
 **Lane 4 — UI/HUD (parallel):** 307 → 308, 309; 303, 302, 110, 124, 156, 178, 237, 257, 304, 322, 337(Echo Hollow dialogue overlap HIGH), 338(Echo Hollow rebrand — UI strings)
 **Lane 5 — World/Exploration:** 164 → 153, 159, 160, 165, 142, 143, 144, 154, 305, 324
 **Lane 6 — Economy/Progression:** 228 → 229, 151, 115, 117, 119, 194, 293, 297, 298, 325
-**Lane 7 — Persistence/Backend:** 301 → 120, 80, 129, 121, 118
+**Lane 7 — Persistence/Backend:** 301 → 339 → 340, 341; 120, 80, 129, 121, 118
 **Lane 8 — Monetization/Store:** 72, 73, 74, 75, 76, 77, 78, 79, 80, 236
 **Lane 9 — VFX/Audio (parallel):** 256, 264, 272, 195, 170, 171, 66, 111, 243
-**Lane 10 — Build/Deploy/Perf:** 196 → 211 → 191, 51, 53, 54, 57, 282(HELD)
+**Lane 10 — Build/Deploy/Perf:** 196 → 211 → 342, 343; 191, 51, 53, 54, 57, 282(HELD)
 **Lane 11 — Build Mode / Player Base:** 108 → 215, 282, 113, 114, 181, 104, 239, 292, 314, 334(tower placement rotate menu)
 **Lane 12 — Narrative/Onboarding/Quests:** 290 → 291 → 304, 230, 222 → 227, 238, 277, 116, 235, 133, 294, 296, 299, 300, 338(Echo Hollow rebrand — Yarn + DESIGN-DECISIONS)
 
-**Hard rules:** ONE agent in Lane 1. `GameState.cs`/`SaveSchema` field-adds (Lanes 5/6/7/11/301) additive,
-one-at-a-time. **Do early:** 164 (zone), wallet/economy merge, 290 (QuestService) — many lanes depend on them.
-Overlaps: 108 (5/11), 282 (10/11), 80 (7/8), 111 (0/9), 295 (3/6).
+**Hard rules:** ONE agent in Lane 1. `GameState.cs`/`SaveSchema` field-adds (Lanes 5/6/7/11/301/339) additive,
+one-at-a-time. **Do early:** 164 (zone), wallet/economy merge, 290 (QuestService), 339 (SaveSchema anchor) — many lanes depend on them.
+Overlaps: 108 (5/11), 282 (10/11), 80 (7/8), 111 (0/9), 295 (3/6), 340 (7/301).

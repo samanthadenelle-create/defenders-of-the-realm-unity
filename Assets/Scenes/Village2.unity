@@ -25021,6 +25021,7 @@ MonoBehaviour:
   _waveGroupSequence: []
   _composeFamilyGroups: 1
   _composedFormation: 1
+  _smartComposition: 1
   _soWaves: []
   _innerRingRadius: 9
   _breachArmDelay: 0.5
@@ -25029,9 +25030,11 @@ MonoBehaviour:
   _awardResourcesOnWaveClear: 1
   _woodRewardBase: 40
   _woodRewardSpread: 10
+  _woodRewardPerWave: 0
   _woodRewardInterval: 3
   _ironRewardBase: 20
   _ironRewardSpread: 10
+  _ironRewardPerWave: 0
   _ironRewardInterval: 4
   _foodRewardBase: 30
   _foodRewardSpread: 20
@@ -43775,7 +43778,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 285977583}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 21e7140e887831841b18f1ab15b04b37, type: 3}
   m_Name: 
@@ -63832,8 +63835,10 @@ Material:
   m_EnableInstancingVariants: 0
   m_DoubleSidedGI: 0
   m_CustomRenderQueue: -1
-  stringTagMap: {}
-  disabledShaderPasses: []
+  stringTagMap:
+    RenderType: Opaque
+  disabledShaderPasses:
+  - MOTIONVECTORS
   m_LockedProperties: 
   m_SavedProperties:
     serializedVersion: 3
@@ -63930,7 +63935,7 @@ Material:
     - _ZWrite: 1
     m_Colors:
     - _BaseColor: {r: 0.2, g: 0.2, b: 0.22, a: 1}
-    - _Color: {r: 1, g: 1, b: 1, a: 1}
+    - _Color: {r: 0.19999996, g: 0.19999996, b: 0.21999997, a: 1}
     - _EmissionColor: {r: 0, g: 0, b: 0, a: 1}
     - _SpecColor: {r: 0.19999996, g: 0.19999996, b: 0.19999996, a: 1}
   m_BuildTextureStacks: []
