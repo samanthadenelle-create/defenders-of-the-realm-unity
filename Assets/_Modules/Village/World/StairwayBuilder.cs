@@ -246,9 +246,11 @@ namespace DeNelle.Village
                 // Tread depth ≈ arc length per step so adjacent treads meet with no gap.
                 float arcDepth = Mathf.Max(p.TreadDepth, (Mathf.Abs(angleStep) * Mathf.Deg2Rad) * radius);
 
-                // Orient tangent to the arc (radial + 90°, like the draft) so the wide axis
-                // spans the band and the depth axis follows the climb.
-                Quaternion rot = Quaternion.Euler(0f, -angle + 90f, 0f);
+                // WO-384 fix: orient so the WIDE axis (Width) spans the band RADIALLY (inner→outer)
+                // and the DEPTH axis (arcDepth) follows the arc/climb tangentially. yaw = -angle
+                // makes local +X point radially. The prior "+90" rotated every tread 90° off — the
+                // wide axis ran ALONG the arc, so the steps looked like scattered bars/posts.
+                Quaternion rot = Quaternion.Euler(0f, -angle, 0f);
 
                 Vector3 pos = new Vector3(x, topY - stepH * 0.5f, z);
                 CreateStep(root, $"Step_{i}", pos, rot,
