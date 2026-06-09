@@ -519,7 +519,13 @@ namespace DeNelle.HUD
             BuildTownWaveCluster(townRoot);
             BuildTownPassiveXp(townRoot);
             BuildTownResourceBadges(townRoot);
-            BuildTownMiniMap(townRoot);
+            // WO-380: minimap cut. In the compact castle hub everything is in-frame, so a
+            // navigation minimap adds no value and was crowding the settings gear in the
+            // top-right corner. Threat awareness ("enemies attacking") is already handled
+            // in-world by StructureAttackAlert (red flash + bobbing "!" on hit buildings).
+            // BuildTownMiniMap intentionally not called; _townMiniMap stays null and every
+            // consumer (ProjectMiniMap, the mode-toggle reflow, markers) null-checks → inert.
+            // BuildTownMiniMap(townRoot);
             BuildTownMetrics(townRoot);
 
             // IDLE / village UI — base canvas (NEVER hidden by the battle-HUD gate).
