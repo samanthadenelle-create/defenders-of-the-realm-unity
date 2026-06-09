@@ -56,6 +56,16 @@ Stats (damage/health/range/etc.) hardcoded for now, **every value commented `// 
 - Healing Shrine = a small heal-aura behavior (verify/add in `StructureFactory.AttachBehavior`); Ballista = reuse `behaviorId="DefenseTower"`.
 - Time limit = reuse `ArenaMode.RaidTimeoutSeconds`/`WatchForLoss` (above).
 
+## Complete async loop — design closed 2026-06-09 (ALL reuse, no new combat/path tech)
+- **Venue** = `ProceduralSiegeArenaBuilder` (navmesh plate + natural cover) — see WO-388.
+- **Opponent payload = city + defense, ported together:** `BaseLayout` JSON (city) + `DefenseSetup` JSON (placed troops) → `Realize`/spawn onto the plate → rebake. The defense travels WITH the city.
+- **Combat = the AI brain + `CombatFaction` flag** (both already exist): defenders spawn `Friendly`, the brain drives them, `CombatFaction.Hostile` points them at the attacker. ZERO new combat/targeting code.
+- **Paths = the navmesh itself (no authored paths).** Troops are `NavMeshAgent`s; the rebaked arena navmesh (plate + ported castle + stairs) IS the path network — the brain targets, the agent routes through gates/around walls/up stairs automatically. Pathing falls out of plate+port+rebake.
+- **Serialization:** `PlacedDefenderData` (troopId, cellX/cellZ, yawSteps) — mirror `PlacedStructureData` — in the `DefenseSetup` JSON, so the defense saves AND ports.
+- **Asymmetric (async PvP):** the defender is OFFLINE → their `DefenseSetup` runs as a **simulation**; the attacker plays **live**. Every raid = live player vs simulated defense (CoC model).
+- **Screens:** staging area = Phase 2 placement (FF grid + point pool); invaders / opponent-select = extend `ArenaPanel`; watch (both sides) = WO-386 battle-viz.
+- **Win:** attacker destroys the objective, OR the 3-min time limit expires → defender wins (reuse `ArenaMode.RaidTimeoutSeconds`).
+
 ## What NOT to do
 - No new placement system, no new AI/targeting, no bespoke save layer. Reuse.
 - Don't conflate with normal base buildings — Arena defense is a SEPARATE layout/pool.
