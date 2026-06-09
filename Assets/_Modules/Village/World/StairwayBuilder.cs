@@ -137,6 +137,11 @@ namespace DeNelle.Village
 
             var root = new GameObject(rootName);
             root.transform.SetParent(parent, false);
+            // Pivot the whole structure at its BASE (Start) so it behaves like a prefab you can
+            // rotate IN PLACE: select the root, spin Y, and the steps + railings + chord link turn
+            // as ONE unit about the courtyard base — instead of swinging across the yard from the
+            // castle origin. Steps are placed at world positions below, so this only sets the pivot.
+            root.transform.position = p.Start;
 
             // FIT-TO-BOUNDS: derive the step count from the MEASURED rise so the top tread
             // lands flush at End. Guard against degenerate params.

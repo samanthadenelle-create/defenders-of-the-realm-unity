@@ -819,6 +819,24 @@ namespace DeNelle.Editor
         }
 
         // =====================================================================
+        //  WO-384 — FORCE a fresh grand-stair rebuild (after a code change like the
+        //  pivot/rotation/width), then bake. Unlike BatchAddFloorAndBakeCastle (which
+        //  PRESERVES an existing GrandStair so a manual in-editor rotation survives),
+        //  this removes the existing stair so BuildGrandStair regenerates it from code.
+        // =====================================================================
+        public static void BatchRebuildGrandStairAndBake()
+        {
+            const string scenePath = "Assets/Scenes/MainCastle_Hall.unity";
+            var scene = EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Single);
+            var existing = GameObject.Find("GrandStair_CourtyardToBattlements");
+            if (existing != null) { Object.DestroyImmediate(existing); Log("BATCH-REBUILD: removed existing GrandStair for a fresh code rebuild."); }
+            EditorSceneManager.MarkSceneDirty(scene);
+            EditorSceneManager.SaveScene(scene);
+            // The normal bake now builds it fresh (build-if-absent) + bakes + saves.
+            BatchAddFloorAndBakeCastle();
+        }
+
+        // =====================================================================
         //  Batchmode entry — open MainCastle_Hall, ensure the invisible floor
         //  (courtyard + gate + keep entrance), force the NavMeshSurface to
         //  Physics Colliders, BAKE, and persist the navmesh asset + scene.
@@ -846,17 +864,24 @@ namespace DeNelle.Editor
             BuildNavMeshFloor(parent);
             Log("BATCH-BAKE: floor ensured (courtyard + gate + keep interior).");
 
-            // WO-384: inject the grand spiral stair so the re-bake fuses courtyard → stairs →
-            // upper plane into ONE walkable sheet (the old UpperRamp_Nav is gone). Idempotent:
-            // clear the old MainStairs_Poly prefab + any prior grand stair first, so re-bakes
-            // don't stack duplicates. Non-destructive to the wired hero/camera/spawn/structures.
-            foreach (var n in new[] { "MainStairs_Poly_ToUpperBattlements", "GrandStair_CourtyardToBattlements" })
+            // WO-384: ensure the grand spiral stair exists so the bake fuses courtyard → stairs →
+            // upper plane into ONE walkable sheet. Always drop the OLD ramp/prefab stair. Treat
+            // the GrandStair like a PREFAB INSTANCE: build it ONCE if missing, but if it already
+            // exists DON'T regenerate — bake it AS-IS so any manual rotation/placement the owner
+            // applied in-editor is PRESERVED (steps + railings + link are one rotatable object,
+            // pivoted at the base). Use BatchRebuildGrandStairAndBake to force a fresh rebuild
+            // after a code change.
+            var strayStair = GameObject.Find("MainStairs_Poly_ToUpperBattlements");
+            if (strayStair != null) { Object.DestroyImmediate(strayStair); Log("BATCH-BAKE: removed old MainStairs_Poly prefab."); }
+            if (GameObject.Find("GrandStair_CourtyardToBattlements") == null)
             {
-                var oldStair = GameObject.Find(n);
-                if (oldStair != null) { Object.DestroyImmediate(oldStair); Log("BATCH-BAKE: removed prior stair '" + n + "'."); }
+                BuildGrandStair(parent);
+                Log("BATCH-BAKE: grand spiral stair built (was missing).");
             }
-            BuildGrandStair(parent);
-            Log("BATCH-BAKE: grand spiral stair injected (courtyard → upper-battlement edge).");
+            else
+            {
+                Log("BATCH-BAKE: existing GrandStair found — baking AS-IS (manual rotation/placement preserved).");
+            }
 
             // Configure + bake every NavMeshSurface via reflection so renderer-off planes are
             // collected (Use Geometry = Physics Colliders). RenderMeshes=0, PhysicsColliders=1.
