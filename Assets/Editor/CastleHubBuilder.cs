@@ -626,6 +626,41 @@ namespace DeNelle.Editor
             Selection.activeGameObject = hero;
         }
 
+        // =====================================================================
+        //  Batchmode entry — open MainCastle_Hall, wire it as primary start, SAVE.
+        //  Runs the interactive "Make CastleHub Primary Start" pass headless so the
+        //  scene comes back ready to Play (hero on the spawn marker + follow camera +
+        //  controls + OuterWorld gate). Invoked via run-unity-method.ps1. No dialogs.
+        // =====================================================================
+        public static void BatchWireCastleAndSave()
+        {
+            const string scenePath = "Assets/Scenes/MainCastle_Hall.unity";
+            var scene = EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Single);
+            Log("BATCH: opened " + scenePath);
+
+            // Promote the owner's placeholder capsule to the canonical spawn marker so the
+            // NavMeshAgent hero spawns on the verified (first-floor) NavMesh — not the upper
+            // quarters anchor, which may sit off-mesh. Hide its renderer so it's an invisible point.
+            var pill = GameObject.Find("Capsule");
+            if (pill != null)
+            {
+                pill.name = "HeroStartPoint_PlayerSpawn";
+                var r = pill.GetComponent<Renderer>();
+                if (r != null) r.enabled = false;
+                Log("BATCH: promoted 'Capsule' -> HeroStartPoint_PlayerSpawn (renderer hidden).");
+            }
+            else
+            {
+                Log("BATCH: no 'Capsule' pill found — hero will fall back to the personal-quarters anchor.");
+            }
+
+            MakeCastleHubPrimaryStartAndWire();
+
+            EditorSceneManager.MarkSceneDirty(scene);
+            EditorSceneManager.SaveScene(scene);
+            Log("BATCH: wired + saved MainCastle_Hall. Ready to Play.");
+        }
+
         private static Transform FindHeroParentInCastle(Scene scene)
         {
             foreach (var root in scene.GetRootGameObjects())
