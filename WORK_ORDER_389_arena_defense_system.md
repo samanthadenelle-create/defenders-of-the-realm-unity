@@ -1,74 +1,63 @@
-# WORK_ORDER_389 — Arena Defense System (CoC-style pre-placed troops)
+# WORK_ORDER_389 — Arena Mode (live Attack / set-and-watch Defend)
 
-**Status:** SPEC — Phase 1 (data/core) ready to build; Phase 2 (UI/placement) pending reuse-map.
-**Lane:** 2 Combat/AI + 6 Economy + 4 UI/HUD.
-**Source:** Owner spec, 2026-06-09. Pairs with WO-388 (Use My Castle — the raid loads the player's base; this adds the *defenders* on it).
+**Status:** SPEC FINALIZED 2026-06-09 (consolidated with owner). Data/core + venue + defense-setup + defender-spawn + patterns BUILT this session; Attack flow + AI-attacker + matchmaking remain.
+**Lane:** 2 Combat/AI + 6 Economy + 4 UI.
 
-## Concept
-The defender spends a **limited point pool (start 50 pts)** to pre-place troops in their castle for **Arena defense** — SEPARATE from normal base buildings. When someone raids the castle in the Arena (WO-388), these pre-placed troops **spawn and auto-fight**. CoC defense layer.
+## Goal
+A fun, unique, adrenaline-filled Arena mode where the player is **ALWAYS the live actor**: **Attack = you play, Defend = you set up and watch.**
 
-## Time Limit (win condition)
-- **Default 180s (3 minutes).** If the attacker fails to destroy the objective within the limit → **the defender wins automatically.**
-- **REUSE — mostly already built:** `ArenaMode` already has `RaidTimeoutSeconds = 180f` + `WatchForLoss()` (0.5s poll) with a timeout branch. Wire the timeout outcome to "attacker failed → **defender wins**" (confirm it credits the defender / counts as an attacker loss, not a silent win). Don't add a new timer system.
-- Make the value **easy to change** + comment `// TODO data-driven: move to arena-defense.json/config`.
+## Core Rules
+- **Player is always the live side; the opposite side is always AI-controlled** (no live-vs-live for now).
+- Both sides use the **same 50-point budget + troop catalog** (symmetry / fairness).
+- All stats data-driven from JSON where possible — **hardcode now with clear `// TODO data-driven` comments.**
 
-## Troops (Phase 1) — HARDCODE values now, comment "→ data-driven (JSON)"
-| Troop | Cost | Kind |
+## 1. Attack Mode (the adrenaline mode)
+- Player chooses Attack → spend **50 pts to recruit a squad** (Ranger/Knight/Wizard/Healer/Ballista…).
+- Player enters the enemy castle as **the Captain — the single selected hero** (NOT the party of 4).
+- The recruited squad **follows the Captain and auto-fights** via existing `StoryCompanion` / AI-brain logic (friendly `CombatFaction`).
+- **3-minute time limit.** Win = destroy the enemy **Heart / Town Hall** (the pinnacle objective) before time runs out.
+- Optional **SKR wager** for higher stakes/payout (DEFERRED — post-audit, off for beta).
+
+## 2. Defend Mode (war-base style — set & watch)
+- Player chooses Defend → spend **50 pts to place** troops/structures around their **imported castle**.
+- Save as the player's **War Base / Arena Defense** (persistent).
+- When attacked, **AI assaults the castle and the player WATCHES** (live or replay — the CoC model).
+- The castle's **existing built defenses (towers / catapults / ballistae) also activate** (reuse `DefenseTower`/`TowerCombat` — already fire at `CombatFaction.Hostile`).
+
+## 3. Matchmaking & Tension
+- **Tiered, PRIMARY = Arena Rating (W/L)**; SECONDARY modifier = power (defensive points, level, echo affinity, upgrades). *W/L-primary resists sandbagging; keep reward ∝ tier so progression never punishes the player.*
+- **Cold-start = AI-sync:** with a thin pool, **synthesize** an opponent scaled to the player's value (closest balance *by construction*) from the 7 `DefensePatternLibrary` templates × a value→composition scaler. **Fade to real player War Bases** as the pool grows.
+- Before committing to Attack, show **limited intel — threat rating + blurred base preview** (not fully blind; the tier also bounds the threat band).
+- Optional **SKR wagering** layer (DEFERRED).
+
+## 4. Troop Catalog (Phase 1) — hardcoded, `// TODO data-driven`
+| Troop | Cost | Role |
 |---|---|---|
-| Ranger | 5 | unit (ranged) |
-| Knight | 10 | unit (melee) |
-| Wizard | 15 | unit (caster) |
-| Healer | 12 | unit (support) |
-| Healing Shrine | 18 | static structure |
-| Ballista | 20 | static structure (ranged) |
-Stats (damage/health/range/etc.) hardcoded for now, **every value commented `// TODO data-driven: move to arena-defense.json`**.
+| Ranger | 5 | Ranged DPS |
+| Knight | 10 | Melee Tank |
+| Wizard | 15 | Magic / Splash DPS |
+| Healer | 12 | Support Healing |
+| Healing Shrine | 18 | Passive Healing Aura |
+| Ballista | 20 | Heavy Siege / Anti-Hero |
 
-## Phase 1 — Data & Core Logic (build first, gate-able, no UI)
-- **`ArenaDefenseCatalog`** (mirror the project's existing catalog pattern — see reuse map): the 6 troop definitions (id, displayName, cost, kind, stats), hardcoded, with the JSON-TODO comments. Eventually loaded via the project's CanonicalJson/CatalogRegistry path.
-- **`DefenseSetup`** data structure: the player's placed defense layout — a list of `{ troopId, position(/cell), rotation }` + the spent points. Serializable (mirror `PlacedStructureData`/`BaseLayout`).
-- **Save/load**: persist `DefenseSetup` through the existing save path (mirror how `GameState.BaseLayout` is saved in `SaveSchema`/`GameStateService`) — a new `arenaDefense` field. Point-pool validation (can't exceed 50; sum of placed costs ≤ pool).
-- Acceptance P1: catalog returns the 6 troops with costs; a `DefenseSetup` can be built, validated against the 50-pt pool, saved, and loaded back identically. Compiles green.
+## Deliverables → BUILD STATUS (2026-06-09)
+1. **ArenaDefenseCatalog + troop data** — ✅ BUILT & committed (`9e1e6ed`).
+2. **Defense Setup screen** (FF-style placement reuse + point pool) — ✅ BUILT & committed (`9d584a9`).
+3. **Attack flow** (recruit → lead squad as Captain) — ✅ BUILT & committed (`a0e5620`). `ArenaAttackRecruitController` + palette (recruit ≤50-pt squad) + `SpawnAttacker` (hero-leashed = follows the Captain, auto-fights) + `ArenaMode.SpawnAttackSquad` hook. MVP core; **still to wire: HUD Attack button, full menu/dice/intel UI, structures-in-squad (units only for now).**
+4. **Defend flow** (place → save War Base) — 🟡 PARTIAL. Placement + save ✅; defender-hold spawn (`SpawnDefenders`, guard-post, friendly) ✅ BUILT & committed (`0b6c8dd`); **still to build: the AI attacker (re-aim EnemyBrain at the War Base) + the watch/replay view + activate existing castle defenses.**
+5. **Time limit + win condition** — 🟡 REUSE. `ArenaMode.RaidTimeoutSeconds` (180s) + Heart/Town-Hall destruction exist; wire to the two modes.
+6. **Basic tiered matchmaking** — 🟡 SEEDED. `DefensePatternLibrary` (7 templates = AI-sync seed) ✅ BUILT & committed (`0b6c8dd`); **still to build: Arena Rating (W/L) + the value→composition AI-sync scaler + the intel UI (threat rating + blurred preview).**
+7. **Comments for future JSON stats + SKR wagering** — ✅ present in the built code.
 
-## Phase 2 — UI & Placement (after the reuse-map)
-- **Placement UI: REUSE the existing FF-style placement system** (BuildMode/PlacementGrid/the FF-style placement — see reuse map) — do NOT build a new placement system. A dedicated **"Arena Defense Setup"** screen lets the player place the troops on their castle layout, spending the point pool.
-- **Spawning + AI: REUSE the friendly/hostile flag** — the AI brain already supports friendly vs hostile via a flag; spawn the placed troops as **friendly** combat units (via the existing unit/enemy factory) that auto-fight raiders. Do NOT write new AI/targeting logic.
-- On a raid (WO-388 path): after the defender base is realized, also spawn the `DefenseSetup` troops as friendly defenders at their placed positions.
-
-## Reuse requirements (non-negotiable — the spec's own rule)
-- Placement UI → existing FF-style placement system.
-- Troop AI → existing friendly/hostile flag, NOT new AI.
-- Troops (Ranger/Knight/Wizard/Healer) → existing hero/companion classes where possible.
-- Save → mirror `BaseLayout`/`SaveSchema`.
-- Catalog → mirror existing catalog (hardcoded now, JSON later).
-
-## Reuse map (verified 2026-06-09 — includes a premise correction)
-**Net new code = ~6 small pieces; everything else reused:**
-1. `ArenaDefenseDef` + `ArenaDefenseCatalog` — mirror `ArenaCatalog` (static class + plain def class). Troops are UNITS, not `CatalogEntry` structures.
-2. `PlacedDefenderData` struct in **`DeNelle.Core.State`** — mirror `PlacedStructureData` (`itemId`, `cellX/cellZ`, `yawSteps`); grid-cell-relative (server re-verifiable).
-3. Save: add `[JsonProperty("arenaDefense")] List<PlacedDefenderData> ArenaDefense` to `SaveSchema.PersistedState` (append at END), bump `CurrentVersion` **18→19**; additive-default-on-read (null→empty, no migration step needed).
-4. Placement: a **slim `ArenaDefenseSetupController`** reusing `PlacementGrid` + `GhostPreview` + `StructureFactory` (do NOT thread a "mode" flag through the 1581-line `BuildModeController`). Swap the `EconomyService` resource cost for a simple **point-pool** check (sum of `PointCost` ≤ 50) at the single affordability call (`IsValidPlacement` step 5).
-5. Friendly spawn: reuse `StoryCompanionInjector.BuildPlaceholder(HeroClass, pos)` for the 4 troops; `StructureFactory.Create` for Shrine/Ballista. Tether troops to a **guard post** (mirror `OutpostDefender.GuardPost`/`EnemyOutpost.MakeAnchor`), NOT StoryCompanion's hero-leash.
-6. `SpawnDefenders()` hook in `EnemyOutpost.Start()` next to `SpawnGarrison()` (after `BuildFortification`), reading `GameState.ArenaDefense`, spawning friendly defenders at their cells.
-
-**Friend/foe = the `CombatFaction` flag (owner was right; the reuse-agent missed it).** `IDamageable.Faction` (`Assets/_Modules/Core/Combat/IDamageable.cs:28`) = `{ Friendly=0 (hero/pets/buildings/walls/Heart), Hostile=1 (enemies) }`. EVERY targeting check filters it — `DefenseTower`/`TowerCombat`/`ArcaneTower`/`HeroAbilities`/`HeroTargetIndicator`/`PlayerAttackController` all do `if (mb is IDamageable d && d.Faction == CombatFaction.Hostile)`. Raiders already report `Hostile` (`EnemyDamageable.Faction => Hostile`).
-- So an Arena **DEFENDER** = a unit with **`Faction = Friendly`** that **targets `Hostile`** (reuse the existing Hostile target filter — `TowerCombat`/`StoryCompanion`/`OutpostDefender` already do it) + implements `IDamageableStructure` so raiders attack it back. **Set the flag, reuse the filter → zero new combat logic.**
-- `StoryCompanion` is still the richest body to reuse — it already IS the 4 troops (HeroClass Knight/Ranger/Mage=Wizard/Cleric=Healer) with abilities (Taunt+Bulwark / Multishot / Burst / Mend). Spawn it `Friendly`, tether to a guard post (not the hero-leash).
-- Healing Shrine = a small heal-aura behavior (verify/add in `StructureFactory.AttachBehavior`); Ballista = reuse `behaviorId="DefenseTower"`.
-- Time limit = reuse `ArenaMode.RaidTimeoutSeconds`/`WatchForLoss` (above).
-
-## Complete async loop — design closed 2026-06-09 (ALL reuse, no new combat/path tech)
-- **Venue** = `ProceduralSiegeArenaBuilder` (navmesh plate + natural cover) — see WO-388.
-- **Opponent payload = city + defense, ported together:** `BaseLayout` JSON (city) + `DefenseSetup` JSON (placed troops) → `Realize`/spawn onto the plate → rebake. The defense travels WITH the city.
-- **Combat = the AI brain + `CombatFaction` flag** (both already exist): defenders spawn `Friendly`, the brain drives them, `CombatFaction.Hostile` points them at the attacker. ZERO new combat/targeting code.
-- **Paths = the navmesh itself (no authored paths).** Troops are `NavMeshAgent`s; the rebaked arena navmesh (plate + ported castle + stairs) IS the path network — the brain targets, the agent routes through gates/around walls/up stairs automatically. Pathing falls out of plate+port+rebake.
-- **Serialization:** `PlacedDefenderData` (troopId, cellX/cellZ, yawSteps) — mirror `PlacedStructureData` — in the `DefenseSetup` JSON, so the defense saves AND ports.
-- **Asymmetric (async PvP):** the defender is OFFLINE → their `DefenseSetup` runs as a **simulation**; the attacker plays **live**. Every raid = live player vs simulated defense (CoC model).
-- **Screens:** staging area = Phase 2 placement (FF grid + point pool); invaders / opponent-select = extend `ArenaPanel`; watch (both sides) = WO-386 battle-viz.
-- **Objective = the Heart of Elarion (the Tree) at the castle PINNACLE** — the highest, best-defended point (reuse `HeartController`/`IDamageableStructure`, repositioned to the keep apex in `CastleHubBuilder`; keep its blocker collider contained — the old plaza-blocking collider-scale trap). **Defense-in-depth:** the attacker must fight UP through every layer — natural cover → gate → courtyard → stairs → battlements → the climb to the pinnacle — to reach it. The verticality IS the siege; height = the defender's advantage (you can't sneak a pinnacle).
-- **Win:** attacker destroys the objective (the elevated Tree), OR the 3-min time limit expires → defender wins (reuse `ArenaMode.RaidTimeoutSeconds`).
-- **Teardown + payout (on resolve):** the arena is a TRANSIENT instance (`ArenaMode` spawns per raid + already destroys the outpost on end). On resolve → **destroy the instance** (unload venue + ported castle + troops; reuse the per-raid teardown) AND **pay the winner** — attacker on objective-destroyed, defender on timeout/survive (reuse `ArenaMode` loot/wager + `ArenaWalletService`; the only ADD is the defender-side payout).
+## Reuse map (the verified seams — no new combat/AI/path tech)
+- **Friend/foe = `CombatFaction`** (Friendly/Hostile); every tower/hero/companion filters `Faction==Hostile`. Squad/defenders = Friendly; AI attackers = Hostile. Zero new combat code.
+- **Bodies = `StoryCompanion`** (4 classes + abilities). Attack = hero-leashed (follow the Captain); Defend = guard-post tethered (hold). Structures = `StructureFactory` (Ballista=`DefenseTower`; Shrine=HealAura — TODO behavior).
+- **Time limit** = `ArenaMode.RaidTimeoutSeconds`. **Objective** = Heart/Tree at the castle **pinnacle** (capture-the-flag, defense-in-depth).
+- **Paths** = the rebaked navmesh (NavMeshAgents — no authored paths).
+- **Venue** = `ProceduralSiegeArenaBuilder` (plate → port castle JSON → rebake). Own castle drag-and-drop (brings its plane); opponent = `Realize` JSON onto the plate.
+- **AI-sync opponent** = `DefensePatternLibrary` template × value scaler (synthesize, don't search).
 
 ## What NOT to do
-- No new placement system, no new AI/targeting, no bespoke save layer. Reuse.
-- Don't conflate with normal base buildings — Arena defense is a SEPARATE layout/pool.
-- Hardcode stats but comment every one as data-driven.
+- No new placement system / AI / combat / path logic — reuse. No live-vs-live netcode.
+- Hardcode stats with `// TODO data-driven` comments. Defer SKR wagering + tiers-at-scale until the population/audit are ready.
+- Don't punish progression — keep reward ∝ value-tier.
