@@ -346,14 +346,16 @@ namespace DeNelle.Editor
                 }
             }
 
-            // Access stairs (poly + Quaternius for beauty)
-            if (stairsStone != null)
-            {
-                var st = (GameObject)PrefabUtility.InstantiatePrefab(stairsStone);
-                st.transform.SetParent(keepRoot.transform, false);
-                st.transform.localPosition = new Vector3(16, 5.5f, 0);
-                st.name = "MainStairs_Poly_ToUpperBattlements";
-            }
+            // === GRAND STAIR (WO-384) — the REAL climbable nav path, courtyard → upper battlements ===
+            // Replaces both the old single MainStairs_Poly prefab AND the invisible UpperRamp_Nav.
+            // Built via the shared, reusable DeNelle.Village.StairwayBuilder (composition, not a
+            // one-off): a WIDE curved sweep of real step pieces (MeshColliders ON) that the
+            // NavMeshSurface bakes directly as the walkable surface. Fit-to-bounds from the measured
+            // courtyard anchor (y≈0) to the upper-battlement EDGE so the top tread lands FLUSH and
+            // OVERLAPS UpperBattlements_Nav (the upper tier is one plane whose cube collider is
+            // destroyed — the stair top must overlap that nav plane or the bake won't fuse).
+            BuildGrandStair(root.transform);
+
             if (qStairsExt != null)
             {
                 var qs = (GameObject)PrefabUtility.InstantiatePrefab(qStairsExt);
@@ -482,26 +484,74 @@ namespace DeNelle.Editor
             // so without this there is NO navmesh up there. ~44x44 plane over the platform.
             CreateInvisibleFloor(floorRoot.transform, "UpperBattlements_Nav", new Vector3(0f, 11.5f, 0f), new Vector3(4.4f, 1f, 4.4f));
 
-            // Ramp up to level 2: a tilted invisible plane at ~36deg (under the agent's 45deg max
-            // slope). BOTTOM (+X, ~x34) overlaps the courtyard navmesh on the ground; TOP (-X,
-            // ~x18) overlaps the upper-battlements plane. ~20m long x 8m wide so the agent has a
-            // generous, gentle climb. -Z rotation tilts the -X edge UP toward the platform.
-            CreateInvisibleRamp(floorRoot.transform, "UpperRamp_Nav", new Vector3(26f, 5.75f, 0f), new Vector3(0f, 0f, -36f), new Vector3(2f, 1f, 0.8f));
+            // NOTE (WO-384): the old invisible UpperRamp_Nav (a hidden 36° ramp) was REMOVED.
+            // The two levels are now connected by the REAL, visible grand stair built via
+            // StairwayBuilder (BuildGrandStair) — its step MeshColliders bake as the climb, with
+            // a chord NavMeshLink as the backup. No hidden-ramp-under-cosmetic-stairs mismatch.
         }
 
-        // A tilted invisible floor (ramp) — same as CreateInvisibleFloor but with a rotation so
-        // the agent can climb between levels. Slope must stay under the NavMesh agent's max slope.
-        private static void CreateInvisibleRamp(Transform parent, string name, Vector3 localPos, Vector3 euler, Vector3 localScale)
+        // =====================================================================
+        //  GRAND STAIR (WO-384) — consume the reusable DeNelle.Village.StairwayBuilder
+        //  to build the REAL climbable nav path from the courtyard up to the upper
+        //  battlement EDGE. Replaces the old MainStairs_Poly prefab + the invisible
+        //  UpperRamp_Nav. Cross-assembly (Editor cannot reference DeNelle.Village at
+        //  compile time) so we invoke the builder via reflection — same pattern as
+        //  FindType/WireOuterWorldConnection. Composition, not copy-paste.
+        // -----------------------------------------------------------------------------
+        //  ANCHORS (world space; root is at origin):
+        //   • Start  = courtyard, east of the keep, y≈0  → (16, 0, 0)
+        //   • End    = upper-battlement EDGE on the east side, y≈11.5. The platform /
+        //              UpperBattlements_Nav plane spans ±22 around the keep origin, so the
+        //              east edge is x≈+22. We aim the top tread at (21, 11.5, 0) so it
+        //              sits ON / OVERLAPPING the nav plane (not past it, not short of it).
+        //  The builder fits step count + per-step rise to the measured 11.5 m climb, keeps
+        //  a ≥8 m walkable band (width 9, radius 12 → no inner pinch), and drops a chord
+        //  NavMeshLink (start→end) as the reliability backup. NO runtime bake — the castle
+        //  re-bakes its persisted NavMeshSurface via BatchAddFloorAndBakeCastle.
+        // =====================================================================
+        private static void BuildGrandStair(Transform parent)
         {
-            var plane = GameObject.CreatePrimitive(PrimitiveType.Plane);
-            plane.name = name;
-            plane.transform.SetParent(parent, false);
-            plane.transform.localPosition = localPos;
-            plane.transform.localRotation = Quaternion.Euler(euler);
-            plane.transform.localScale = localScale;
-            var r = plane.GetComponent<MeshRenderer>();
-            if (r != null) r.enabled = false;
-            if (plane.GetComponent<MeshCollider>() == null) plane.AddComponent<MeshCollider>();
+            Vector3 start = new Vector3(16f, 0f, 0f);    // courtyard, east of the keep
+            Vector3 end   = new Vector3(21f, 11.5f, 0f); // upper-battlement east edge — overlaps UpperBattlements_Nav
+
+            var builderType = FindType("DeNelle.Village.StairwayBuilder");
+            if (builderType == null)
+            {
+                Debug.LogWarning("[CastleHubBuilder] DeNelle.Village.StairwayBuilder not found (is it compiled?). " +
+                                 "Grand stair NOT built — the two levels will have no walkable connection until it compiles. " +
+                                 "Re-run Build CastleHub after the script compiles.");
+                return;
+            }
+
+            // Params is a nested struct: DeNelle.Village.StairwayBuilder+Params. Build it via the
+            // CastleGrandStair(start, end) static factory so all WO-384 defaults (wide curved sweep,
+            // fit-to-bounds, colliders on, railings, chord link) are applied in one place.
+            var paramsType = builderType.GetNestedType("Params");
+            object prms = null;
+            if (paramsType != null)
+            {
+                var factory = paramsType.GetMethod("CastleGrandStair",
+                    System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+                if (factory != null)
+                    prms = factory.Invoke(null, new object[] { start, end });
+            }
+            if (prms == null)
+            {
+                Debug.LogWarning("[CastleHubBuilder] Could not construct StairwayBuilder.Params.CastleGrandStair via reflection. Grand stair NOT built.");
+                return;
+            }
+
+            var build = builderType.GetMethod("Build",
+                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+            if (build == null)
+            {
+                Debug.LogWarning("[CastleHubBuilder] StairwayBuilder.Build(Transform,string,Params) not found via reflection. Grand stair NOT built.");
+                return;
+            }
+
+            build.Invoke(null, new object[] { parent, "GrandStair_CourtyardToBattlements", prms });
+            Debug.Log("[CastleHubBuilder] Grand stair built via StairwayBuilder (courtyard → upper-battlement edge, " +
+                      "top tread flush at (21,11.5,0) overlapping UpperBattlements_Nav). Re-bake to walk it.");
         }
 
         private static void CreateInvisibleFloor(Transform parent, string name, Vector3 localPos, Vector3 localScale)
