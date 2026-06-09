@@ -720,22 +720,14 @@ namespace DeNelle.HUD
             HudTheme.StylePanel(_vitalsCluster.gameObject, HudTheme.Glass);
             HudTheme.AddRim(_vitalsCluster.gameObject, HudTheme.AccentSoft);
 
-            // HP bar (top half)
-            var hpTrack = NewRect("HPTrack", _vitalsCluster, new Vector2(0.05f, 0.54f), new Vector2(0.95f, 0.92f));
-            HudTheme.StyleWell(hpTrack.gameObject);
-            var hpFill = NewRect("HPFill", hpTrack, Vector2.zero, Vector2.one);
-            hpFill.offsetMin = new Vector2(1.5f, 1.5f); hpFill.offsetMax = new Vector2(-1.5f, -1.5f);
-            _hpFill = hpFill.gameObject.AddComponent<Image>();
-            _hpFill.color = HudTheme.HpRed;
-            _hpFill.sprite = HudTheme.RoundedFrame;
-            _hpFill.type = HudTheme.RoundedFrame != null ? Image.Type.Filled : Image.Type.Filled;
-            _hpFill.fillMethod = Image.FillMethod.Horizontal;
-            _hpFill.fillOrigin = 0;
-            _hpFill.fillAmount = 1f;
-            _hpFill.raycastTarget = false;
-            _hpText = AddText(hpTrack, "", 14, HudTheme.Text, TextAlignmentOptions.Center);
-            _hpText.fontStyle = FontStyles.Bold;
-            _hpText.outlineColor = new Color32(0, 0, 0, 170); _hpText.outlineWidth = 0.1f;
+            // HP bar (top half) — REMOVED (WO-382): the hero's HP was shown twice —
+            // here (bottom-left red bar) AND in the top-left party panel (slot 0).
+            // The party panel is now the single source of truth for hero HP, so we
+            // no longer build the duplicate HP bar/text here. _hpFill and _hpText
+            // stay null; SetHeroHp() null-guards them and still feeds the party
+            // panel via SetPartyMember(0, ...). The mana bar + XP line below are
+            // UNIQUE to this cluster and are intentionally kept.
+            // (Former HP-bar build block removed to de-duplicate the display.)
 
             // XP line — a THIN yellow strip directly ABOVE the HP bar (owner request:
             // no full-screen XP bar; show level progress visually next to health).
