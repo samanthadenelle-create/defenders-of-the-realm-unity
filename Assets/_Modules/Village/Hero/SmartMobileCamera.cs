@@ -210,9 +210,28 @@ namespace DeNelle.Village
                  "(lower = smoother, no jitter as you walk along a wall).")]
         [SerializeField, Min(1f)] private float _collisionReturnSpeed = 8f;
 
+        [Tooltip("WO-385: distance (metres) below which the camera still PULLS IN to the occluder " +
+                 "as a last-resort safety backstop (so the camera body never embeds point-blank in a " +
+                 "mesh). Above this, occluders are FADED (hidden) instead so the camera keeps its " +
+                 "proper seat/angle and you simply see the hero through the wall. Keep small.")]
+        [SerializeField, Min(0.1f)] private float _occluderPullInDistance = 0.6f;
+
         private bool _collisionMaskInit;
         // Smoothed 0..1 fraction of the desired distance currently allowed (1 = no wall, full offset).
         private float _distanceFrac = 1f;
+
+        // ── Occluder fade (WO-385) ─────────────────────────────────────────────
+        // Instead of pulling the camera IN to a wall (which jammed it to a close "lost" angle at
+        // every corner), we keep the camera at its proper seat and FADE the occluding renderer(s)
+        // to ShadowsOnly so you see the hero through the wall. Renderers are restored the instant
+        // they stop occluding. _faded stores each currently-hidden renderer with its ORIGINAL
+        // shadow casting mode so restore is exact; _fadedThisFrame marks the ones still occluding.
+        private readonly Dictionary<Renderer, UnityEngine.Rendering.ShadowCastingMode> _faded
+            = new Dictionary<Renderer, UnityEngine.Rendering.ShadowCastingMode>();
+        private readonly HashSet<Renderer> _fadedThisFrame = new HashSet<Renderer>();
+        private readonly List<Renderer> _restoreScratch = new List<Renderer>();
+        // Reused buffer for SphereCastAll (NonAlloc) so the per-frame path stays allocation-light.
+        private readonly RaycastHit[] _occluderHits = new RaycastHit[16];
 
         // ── Runtime state ──────────────────────────────────────────────────────
 
@@ -354,6 +373,7 @@ namespace DeNelle.Village
 
         private void OnDestroy()
         {
+            RestoreAllFaded();   // WO-385: never leave a faded wall invisible on teardown
             if (Instance == this) Instance = null;
         }
 
@@ -365,6 +385,7 @@ namespace DeNelle.Village
         private void OnDisable()
         {
             SceneManager.sceneLoaded -= OnSceneLoadedForCamera;
+            RestoreAllFaded();   // WO-385: restore any faded occluders so nothing is left invisible
         }
 
         private void OnSceneLoadedForCamera(Scene scene, LoadSceneMode mode)
@@ -466,6 +487,7 @@ namespace DeNelle.Village
             // forth"). Ongoing follow is owned solely by the SmoothDamp pass below.
             if (!IsTargetValid())
             {
+                RestoreAllFaded();   // WO-385: target lost — never leave a faded wall invisible
                 TryFindHero();
                 if (!IsTargetValid()) return;
                 ForceFollowImmediate();   // one-shot snap off the tree on first acquisition
@@ -659,16 +681,22 @@ namespace DeNelle.Village
             _nearestEnemyPos = found ? closestPos : _target.position + Vector3.up * _lookAtHeight;
         }
 
-        // DEF-151: camera-collision pass. Casts a small sphere from the hero pivot out to
-        // the desired camera seat; if world geometry (walls/buildings/towers) is in the way
-        // it returns a seat just IN FRONT of the obstruction instead of inside it. When the
-        // path is clear it eases back out to the full offset, so the validated framing is
-        // untouched except when something is actually between the hero and the camera.
+        // WO-385: camera-occlusion pass (replaces the DEF-151 hard pull-in). The old behaviour
+        // spherecast pivot→seat and pulled the camera IN to _minCollisionDistance whenever ANY
+        // world geometry was between hero and camera — so at EVERY corner the camera jammed to a
+        // close "lost" angle and the slow ease-out couldn't recover while the wall persisted.
+        // New behaviour: KEEP the camera at its proper seat and FADE the occluding renderer(s) to
+        // ShadowsOnly (mesh hidden, shadows kept) so you simply see the hero through the wall.
+        // Renderers restore the instant they stop occluding. The only remaining pull-in is a rare
+        // safety backstop: if an occluder is point-blank close (< _occluderPullInDistance) we still
+        // pull in to it so the camera body never literally embeds in a mesh. Walking past normal
+        // corner walls now fades them — it never jams the view.
         private Vector3 ApplyCollision(Vector3 desired, float dt)
         {
             if (!_collisionEnabled || !IsTargetValid())
             {
                 _distanceFrac = 1f;
+                RestoreAllFaded();   // never leave a wall invisible when collision is off / target lost
                 return desired;
             }
 
@@ -680,28 +708,51 @@ namespace DeNelle.Village
             if (fullDist <= 0.0001f)
             {
                 _distanceFrac = 1f;
+                RestoreFadedNotHitThisFrame();
                 return desired;
             }
 
             Vector3 dir = toCam / fullDist;
 
-            // Target fraction of the full distance we're allowed this frame (1 = no wall).
+            _fadedThisFrame.Clear();
+            float nearestOccluderDist = float.MaxValue;
+
+            // SphereCastAll so the camera body — not an infinitely-thin ray — clears the wall,
+            // and so we catch EVERY occluder between hero and seat (not just the first), fading
+            // them all. QueryTriggerInteraction.Ignore so combat-scan / pickup triggers never block.
+            int count = Physics.SphereCastNonAlloc(pivot, _collisionRadius, dir, _occluderHits,
+                fullDist, _collisionMask, QueryTriggerInteraction.Ignore);
+
+            for (int i = 0; i < count; i++)
+            {
+                Collider col = _occluderHits[i].collider;
+                if (col == null) continue;
+                // Never fade or collide against the hero's own body.
+                if (IsTargetCollider(col)) continue;
+
+                float hitDist = _occluderHits[i].distance;
+                if (hitDist < nearestOccluderDist) nearestOccluderDist = hitDist;
+
+                // Hide the visible mesh of this occluder (keep its shadows) so the hero shows through.
+                FadeOccluder(col);
+            }
+
+            // Restore any renderer we faded on a previous frame that is NOT occluding now.
+            RestoreFadedNotHitThisFrame();
+
+            // Target fraction of the full distance we're allowed this frame (1 = full seat).
+            // Default: hold the full seat (we faded the wall rather than pulling in).
             float targetFrac = 1f;
 
-            // SphereCast so the camera body — not just an infinitely-thin ray — clears the
-            // wall; gives a margin before the surface ever reaches the near clip plane.
-            // QueryTriggerInteraction.Ignore so combat-scan / pickup triggers never block.
-            if (Physics.SphereCast(pivot, _collisionRadius, dir, out RaycastHit hit,
-                    fullDist, _collisionMask, QueryTriggerInteraction.Ignore))
+            // SAFETY BACKSTOP ONLY: if an occluder is point-blank close, still pull in to it so
+            // the camera body / near clip never embeds in the mesh. This is the rare last resort
+            // — normal corner walls (well beyond _occluderPullInDistance) are faded, not pulled in.
+            if (nearestOccluderDist < _occluderPullInDistance)
             {
-                // Skip the hero's own colliders (hero is on Default, same layer as walls).
-                if (!IsTargetCollider(hit.collider))
-                {
-                    float allowed = hit.distance - _collisionSkin;
-                    if (allowed < _minCollisionDistance) allowed = _minCollisionDistance;
-                    if (allowed > fullDist)               allowed = fullDist;
-                    targetFrac = allowed / fullDist;
-                }
+                float allowed = nearestOccluderDist - _collisionSkin;
+                if (allowed < _minCollisionDistance) allowed = _minCollisionDistance;
+                if (allowed > fullDist)               allowed = fullDist;
+                targetFrac = allowed / fullDist;
             }
 
             // Pull IN fast (avoid a clip frame), ease OUT slowly (no jitter along a wall).
@@ -709,6 +760,64 @@ namespace DeNelle.Village
             _distanceFrac = Mathf.MoveTowards(_distanceFrac, targetFrac, speed * dt);
 
             return pivot + dir * (fullDist * _distanceFrac);
+        }
+
+        // Hide an occluder's visible mesh (set ShadowsOnly) so the hero shows through, keeping its
+        // shadows. Stores the ORIGINAL shadow casting mode the first time we touch each renderer so
+        // restore is exact. Marks every renderer touched this frame in _fadedThisFrame.
+        private void FadeOccluder(Collider col)
+        {
+            if (col == null) return;
+
+            // Renderer on the collider, or the nearest one up/under its hierarchy (compound colliders).
+            var rend = col.GetComponent<Renderer>();
+            if (rend == null) rend = col.GetComponentInParent<Renderer>();
+            if (rend == null) rend = col.GetComponentInChildren<Renderer>();
+            if (rend == null) return;
+
+            if (!_faded.ContainsKey(rend))
+                _faded[rend] = rend.shadowCastingMode;
+
+            _fadedThisFrame.Add(rend);
+            if (rend.shadowCastingMode != UnityEngine.Rendering.ShadowCastingMode.ShadowsOnly)
+                rend.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.ShadowsOnly;
+        }
+
+        // Restore (un-hide) every faded renderer that was NOT an occluder this frame, so walls
+        // reappear the instant they stop blocking the view. Null-safe (renderers can be destroyed).
+        private void RestoreFadedNotHitThisFrame()
+        {
+            if (_faded.Count == 0) return;
+
+            _restoreScratch.Clear();
+            foreach (var kv in _faded)
+            {
+                if (kv.Key == null || !_fadedThisFrame.Contains(kv.Key))
+                    _restoreScratch.Add(kv.Key);
+            }
+
+            for (int i = 0; i < _restoreScratch.Count; i++)
+            {
+                var rend = _restoreScratch[i];
+                if (rend != null)
+                    rend.shadowCastingMode = _faded[rend];
+                _faded.Remove(rend);
+            }
+        }
+
+        // Restore ALL faded renderers to their original shadow casting mode and clear the sets, so
+        // nothing is ever left invisible (collision disabled, target lost, scene change, teardown).
+        private void RestoreAllFaded()
+        {
+            if (_faded.Count == 0) { _fadedThisFrame.Clear(); return; }
+
+            foreach (var kv in _faded)
+            {
+                if (kv.Key != null)
+                    kv.Key.shadowCastingMode = kv.Value;
+            }
+            _faded.Clear();
+            _fadedThisFrame.Clear();
         }
 
         // True if the hit collider belongs to the hero we're following (its own body must
