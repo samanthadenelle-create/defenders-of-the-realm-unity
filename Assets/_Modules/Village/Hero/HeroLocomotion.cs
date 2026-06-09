@@ -47,6 +47,58 @@ namespace DeNelle.Village
         /// <summary>Current XZ velocity, exposed for the follow camera / animator.</summary>
         public Vector3 Velocity { get; private set; }
 
+        // WO-383: teleport-aware warp. SceneTransitionTrigger / seam handoffs set the
+        // hero far outside the off-mesh ±50 clamp and onto a separately-baked NavMesh
+        // (OuterWorld). A raw transform.position = fights the agent + clamp every frame
+        // (the "camera + direction break at the gate" bug). WarpTo disables the agent,
+        // moves it, re-warps it onto the destination mesh, and raises OnTeleported so the
+        // follow camera can snap instead of smooth-chasing the jump. _isTeleporting tells
+        // the off-mesh clamp below to leave the warp frame alone.
+        private bool _isTeleporting;
+
+        /// <summary>
+        /// WO-383 — raised after the hero is warped to a new world position (e.g. a scene
+        /// seam). SmartMobileCamera subscribes to snap its seat so it never smooth-chases
+        /// the teleport through intermediate positions.
+        /// </summary>
+        public event System.Action OnTeleported;
+
+        /// <summary>
+        /// WO-383 — teleport-aware reposition. Samples the nearest NavMesh point near
+        /// <paramref name="worldPos"/> (so the hero lands on valid mesh even if the caller's
+        /// target is slightly off), then disables / moves / re-warps the agent so it
+        /// re-acquires the (possibly additively-loaded) destination NavMesh. Raises
+        /// <see cref="OnTeleported"/> for the follow camera. Null-safe: with no agent it
+        /// falls back to a plain transform move.
+        /// </summary>
+        public void WarpTo(Vector3 worldPos, Quaternion? rot = null)
+        {
+            _isTeleporting = true;   // clamp/movement skips this frame
+
+            if (NavMesh.SamplePosition(worldPos, out NavMeshHit hit, 5f, NavMesh.AllAreas))
+                worldPos = hit.position;   // land on valid mesh
+
+            if (_agent != null)
+            {
+                _agent.enabled = false;            // critical before moving the transform
+                transform.position = worldPos;
+                _agent.Warp(worldPos);             // re-acquires the destination NavMesh
+                _agent.enabled = true;
+                _agent.ResetPath();
+            }
+            else
+            {
+                transform.position = worldPos;
+            }
+
+            if (rot.HasValue) transform.rotation = rot.Value;
+
+            Velocity = Vector3.zero;   // don't carry pre-warp momentum across the seam
+            OnTeleported?.Invoke();
+
+            _isTeleporting = false;
+        }
+
         private ActorAnimator _actor; // lazy, for driving Speed into the (Humanoid) controller blendtree
 
         // WO-277 (tutorial auto-walk): while _autoWalkTarget is set, the tutorial
@@ -378,7 +430,10 @@ namespace DeNelle.Village
             // fallback). When the hero is ON the NavMesh, the bake defines the walkable
             // bounds + height, so a manual clamp would fight the agent (and break
             // ramparts/hills by pinning Y to 0).
-            if (_agent == null || !_agent.isOnNavMesh)
+            // WO-383: a seam warp (WarpTo) deliberately places the hero past ±50 and onto a
+            // separately-baked NavMesh — skip the off-mesh clamp on that frame so the warp
+            // isn't yanked back to the castle bounds.
+            if ((_agent == null || !_agent.isOnNavMesh) && !_isTeleporting)
             {
                 var p = transform.position;
                 const float PlayableHalf = 50f;

@@ -258,6 +258,13 @@ namespace DeNelle.Village
 
         private readonly Collider[] _scanBuffer = new Collider[32];
 
+        // WO-383: the HeroLocomotion we're currently subscribed to for OnTeleported. On a
+        // scene-seam warp the hero jumps far in one frame; without this the SmoothDamp follow
+        // would chase the jump through the intermediate bad positions. We snap the seat
+        // instead. Tracked so we can re-subscribe when the target changes and cleanly detach
+        // in OnDisable / OnDestroy.
+        private HeroLocomotion _teleportLoco;
+
         // ── Sole-camera guard (same pattern as VillageCamera) ─────────────────
         private float _soleCheckTimer;
 
@@ -373,6 +380,7 @@ namespace DeNelle.Village
 
         private void OnDestroy()
         {
+            UnsubscribeTeleport();   // WO-383: detach the hero teleport handler
             RestoreAllFaded();   // WO-385: never leave a faded wall invisible on teardown
             if (Instance == this) Instance = null;
         }
@@ -385,6 +393,7 @@ namespace DeNelle.Village
         private void OnDisable()
         {
             SceneManager.sceneLoaded -= OnSceneLoadedForCamera;
+            UnsubscribeTeleport();   // WO-383: detach the hero teleport handler (re-attaches on next acquire)
             RestoreAllFaded();   // WO-385: restore any faded occluders so nothing is left invisible
         }
 
@@ -466,6 +475,33 @@ namespace DeNelle.Village
         }
 
         private bool IsTargetValid() => _target != null && _target.gameObject != null;
+
+        // WO-383: (re)subscribe to the current target's HeroLocomotion.OnTeleported so a
+        // scene-seam warp snaps the camera instead of smooth-chasing the jump. Idempotent and
+        // null-safe — detaches any previous subscription first, then attaches the new one.
+        private void SyncTeleportSubscription()
+        {
+            HeroLocomotion loco = _target != null ? _target.GetComponent<HeroLocomotion>() : null;
+            if (loco == _teleportLoco) return;
+            if (_teleportLoco != null) _teleportLoco.OnTeleported -= OnHeroTeleported;
+            _teleportLoco = loco;
+            if (_teleportLoco != null) _teleportLoco.OnTeleported += OnHeroTeleported;
+        }
+
+        // WO-383: detach the teleport subscription (OnDisable / OnDestroy / target change).
+        private void UnsubscribeTeleport()
+        {
+            if (_teleportLoco != null) _teleportLoco.OnTeleported -= OnHeroTeleported;
+            _teleportLoco = null;
+        }
+
+        // WO-383: the hero just warped (scene seam). Snap the camera to its seat so it never
+        // smooth-chases through the intermediate teleport positions. Does NOT touch movement
+        // or yaw — purely a follow-position snap (WO-368 world-absolute basis preserved).
+        private void OnHeroTeleported()
+        {
+            if (IsTargetValid()) ForceFollowImmediate();
+        }
 
         /// <summary>Undefined-tag-safe FindWithTag (Unity throws on an undefined tag).</summary>
         private static GameObject SafeFindWithTag(string tag)
@@ -588,6 +624,7 @@ namespace DeNelle.Village
         public void SetTarget(Transform hero)
         {
             _target = hero;
+            SyncTeleportSubscription();   // WO-383: track the new target's OnTeleported
             if (hero != null)
             {
                 Debug.Log($"[SmartMobileCamera] SetTarget wired to: {hero.name}");
@@ -600,6 +637,7 @@ namespace DeNelle.Village
         {
             if (IsTargetValid())
             {
+                SyncTeleportSubscription();   // WO-383: ensure we track this target's OnTeleported
                 transform.position = _target.position + _followOffset;
                 _leadPoint = _target.position + Vector3.up * _lookAtHeight;
                 AimAt(_leadPoint);

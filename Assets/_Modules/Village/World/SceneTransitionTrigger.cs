@@ -1,5 +1,6 @@
 using System.Collections;
 using UnityEngine;
+using UnityEngine.AI;
 using UnityEngine.SceneManagement;
 
 namespace DeNelle.Village
@@ -53,9 +54,27 @@ namespace DeNelle.Village
 
             if (playerTransform != null)
             {
-                playerTransform.position = targetPosition;
+                // WO-383: don't hard-set transform.position — that fights HeroLocomotion's
+                // off-mesh ±50 clamp + NavMeshAgent every frame (the "camera/direction break
+                // at the gate" bug). Use the teleport-aware WarpTo, which disables the agent,
+                // moves it, re-warps onto the destination (additively-loaded) NavMesh, and
+                // raises OnTeleported so the follow camera snaps instead of chasing the jump.
+                var loco = playerTransform.GetComponent<HeroLocomotion>();
+                if (loco != null)
+                {
+                    loco.WarpTo(targetPosition);
+                }
+                else
+                {
+                    // Fallback (no HeroLocomotion): land on the nearest valid NavMesh point
+                    // so a plain transform move doesn't drop the player off-mesh.
+                    Vector3 dest = targetPosition;
+                    if (NavMesh.SamplePosition(targetPosition, out NavMeshHit hit, 5f, NavMesh.AllAreas))
+                        dest = hit.position;
+                    playerTransform.position = dest;
+                }
 
-                // Optional: face a direction or clear velocity if Rigidbody present.
+                // Optional: clear velocity if Rigidbody present.
                 var rb = playerTransform.GetComponent<Rigidbody>();
                 if (rb != null) rb.linearVelocity = Vector3.zero;
 
