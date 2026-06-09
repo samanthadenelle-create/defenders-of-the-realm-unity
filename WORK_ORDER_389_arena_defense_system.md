@@ -27,7 +27,8 @@ A fun, unique, adrenaline-filled Arena mode where the player is **ALWAYS the liv
 ## 3. Matchmaking & Tension
 - **Tiered, PRIMARY = Arena Rating (W/L)**; SECONDARY modifier = power (defensive points, level, echo affinity, upgrades). *W/L-primary resists sandbagging; keep reward ∝ tier so progression never punishes the player.*
 - **Cold-start = AI-sync:** with a thin pool, **synthesize** an opponent scaled to the player's value (closest balance *by construction*) from the 7 `DefensePatternLibrary` templates × a value→composition scaler. **Fade to real player War Bases** as the pool grows.
-- Before committing to Attack, show **limited intel — threat rating + blurred base preview** (not fully blind; the tier also bounds the threat band).
+- **Tiered intel / "Peek" before committing to Attack** (not fully blind; composes with the tier, which bounds the power band): **Basic** (FREE, always — threat rating + general composition, e.g. "Heavy Ranged Presence"); **Scout** (COOLDOWN- or earned-ability-gated — blurred layout + troop types, no exact count/position); **Full Scout** (EARNED rare item / unlock — full placement). BUILD AFTER the core attack loop is playable.
+- **⚠ NO-P2W LINE (owner, non-negotiable):** peeks gate on TIME/EFFORT (cooldown, earned unlock, played-for resource) — **NEVER on SKR.** Intel is decisive in a hidden-info game, so paying for it = buying a higher win-rate = P2W. **General rule: SKR may buy STAKES (the symmetric wager) or cosmetics — NEVER advantage (intel / power / stats).** (Grok proposed SKR-cost peeks; rejected as P2W.)
 - Optional **SKR wagering** layer (DEFERRED).
 
 ## 4. Troop Catalog (Phase 1) — hardcoded, `// TODO data-driven`
