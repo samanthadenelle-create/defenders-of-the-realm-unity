@@ -41,6 +41,19 @@ Stats (damage/health/range/etc.) hardcoded for now, **every value commented `// 
 - Save → mirror `BaseLayout`/`SaveSchema`.
 - Catalog → mirror existing catalog (hardcoded now, JSON later).
 
+## Reuse map (verified 2026-06-09 — includes a premise correction)
+**Net new code = ~6 small pieces; everything else reused:**
+1. `ArenaDefenseDef` + `ArenaDefenseCatalog` — mirror `ArenaCatalog` (static class + plain def class). Troops are UNITS, not `CatalogEntry` structures.
+2. `PlacedDefenderData` struct in **`DeNelle.Core.State`** — mirror `PlacedStructureData` (`itemId`, `cellX/cellZ`, `yawSteps`); grid-cell-relative (server re-verifiable).
+3. Save: add `[JsonProperty("arenaDefense")] List<PlacedDefenderData> ArenaDefense` to `SaveSchema.PersistedState` (append at END), bump `CurrentVersion` **18→19**; additive-default-on-read (null→empty, no migration step needed).
+4. Placement: a **slim `ArenaDefenseSetupController`** reusing `PlacementGrid` + `GhostPreview` + `StructureFactory` (do NOT thread a "mode" flag through the 1581-line `BuildModeController`). Swap the `EconomyService` resource cost for a simple **point-pool** check (sum of `PointCost` ≤ 50) at the single affordability call (`IsValidPlacement` step 5).
+5. Friendly spawn: reuse `StoryCompanionInjector.BuildPlaceholder(HeroClass, pos)` for the 4 troops; `StructureFactory.Create` for Shrine/Ballista. Tether troops to a **guard post** (mirror `OutpostDefender.GuardPost`/`EnemyOutpost.MakeAnchor`), NOT StoryCompanion's hero-leash.
+6. `SpawnDefenders()` hook in `EnemyOutpost.Start()` next to `SpawnGarrison()` (after `BuildFortification`), reading `GameState.ArenaDefense`, spawning friendly defenders at their cells.
+
+**⚠ PREMISE CORRECTION — there is NO friendly/hostile flag on the AI brain.** `EnemyBrain` is hardcoded-hostile. Friendliness is **STRUCTURAL**: friendly units target via `TargetManager` (a registry of ONLY `Enemy` instances), so anything pulling from it inherently fights hostiles. So **spawn defenders as friendly `StoryCompanion`s — which ALREADY are the 4 troops** (HeroClass Knight/Ranger/Mage=Wizard/Cleric=Healer) **with abilities built** — NOT by flipping an `EnemyBrain` flag (it doesn't exist). Garrison vs defenders auto-fight via `TargetManager` + `IDamageableStructure` = **zero new combat code**.
+- Healing Shrine = a small heal-aura behavior (verify/add in `StructureFactory.AttachBehavior`); Ballista = reuse `behaviorId="DefenseTower"`.
+- Time limit = reuse `ArenaMode.RaidTimeoutSeconds`/`WatchForLoss` (above).
+
 ## What NOT to do
 - No new placement system, no new AI/targeting, no bespoke save layer. Reuse.
 - Don't conflate with normal base buildings — Arena defense is a SEPARATE layout/pool.
