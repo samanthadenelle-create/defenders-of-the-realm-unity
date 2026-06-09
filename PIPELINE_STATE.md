@@ -10,6 +10,35 @@ PM catalog. Status legend: **BUILT** (works) · **WIRED** (in-scene/connected) �
 
 ---
 
+## CURRENT STATE — 2026-06-09 (supersedes older sections below)
+
+> The sections below this block are a 2026-05-29 snapshot kept for history. Where they
+> conflict with this block, **this block wins.** Notion "Work Orders" is the source of truth
+> for WO status (per `NOTION_SOURCE_OF_TRUTH.md`); this doc mirrors it.
+
+- **Start / home hub = `MainCastle_Hall`** (the Castle hub). Routed via `SceneRouter.GoCastle()`;
+  both onboarding and returning-player route there. Built entirely from script by
+  `Assets/Editor/CastleHubBuilder.cs`. Ground level is owner-verified walkable; the L2 ramp +
+  castle camera are pending playtest.
+- **`Village2` = raid-target stronghold** (repurposed from the old town). **`Village.unity` =
+  ABANDONED** — it was never canonical and is corruption-cursed; do not use it.
+- **`OuterWorld` streams in additively** over the castle hub via `WorldSceneLoader` (which lists
+  `MainCastle_Hall` as a hub). Both `MainCastle_Hall.unity` and `OuterWorld.unity` are in Build Settings.
+- **Castle ↔ OuterWorld seam: WIRED** (commits `b3b5cef`, `9c8c64f`, `e213e25`, `53640cf`).
+  Live bug — the south-gate transition trigger teleports the hero to `(0,0.5,-80)`, past
+  HeroLocomotion's ±50 off-mesh clamp → hero stranded + camera snap-back. Tracked as
+  **WO-383 (Status: Ready, ACTIVE NOW)**.
+- **Defend-the-Tower / PatriciaLight = REMOVED (2026-06-09).** The module folder + the
+  `PatriciaLightMode` scene are gone and unreachable; only the `Resources/PatriciaLight/tower2`
+  asset was kept. It is **no longer a built pillar** — any older line below calling it BUILT is wrong.
+- **WO numbering:** highest WO is now **383**; **next free WO = 384.** Recent batch WO-358–373 = Done.
+  WO-332/333/334 = marked Done in Notion but their Notes say "pending Tricia play-mode visual confirm"
+  (treat as Done-but-playtest-pending). **Board-hygiene gap (open):** WO-380 & WO-382 (and likely the
+  376–382 range) have repo `*.RESULT.md` files but are MISSING from the Notion board — not yet resolved.
+- **Branch:** `feat/tower-core-loop`; 5 unpushed art/meta/doc commits; not merged to master (711 ahead).
+
+---
+
 ## ☀️ MORNING SUMMARY — overnight run complete (read first)
 
 **Tree state: GREEN ✅ and locked.** Last night's "red marathon" root cause was found + fixed: a flaky
@@ -71,7 +100,11 @@ ladder, Pi utility-sink, 3-build distribution, rewarded-ads pillar), `docs/PI_PI
 | Lean Touch (CW) | Assets/Plugins/CW (committed, examples trimmed) | tracked | Mobile gestures |
 | Low Poly Ultimate Pack (polyperfect) | Assets/polyperfect (**gitignored**, 246MB) | ignored | Arena props (siege engines) + future village rebuild |
 
-## 2. Defend-the-Tower (PatriciaLight) — **BUILT**, the polished pillar
+## 2. Defend-the-Tower (PatriciaLight) — **REMOVED (2026-06-09)**
+> ⚠ **No longer a built pillar.** The PatriciaLight module folder + the `PatriciaLightMode` scene
+> have been removed and are unreachable; only `Resources/PatriciaLight/tower2` was kept. The detail
+> below is frozen history — disregard its **BUILT** markers.
+
 Scene: `Assets/Scenes/PatriciaLightMode.unity` (baked by `Assets/Editor/PatriciaLightSceneBuilder.cs`). Director: `Assets/_Modules/Village/PatriciaLight/PatriciaLightController.cs`.
 - Manual aim-assist combat — `TowerAimSystem` (input-agnostic reticle+target) + `LeanTouchAimDriver` (drag=aim, hold=fire, pinch=zoom) + desktop mouse/keyboard fallback. **BUILT.**
 - HUD (code-built UIDocument): tower HP bar (top), circular cooldown rings (Painter2D), color-coded damage pops (cyan hero / green pet via `IDamageTintable`), pet Engage/Repair toggle, FX overlays. **BUILT.**
@@ -88,7 +121,13 @@ Scene: `Assets/Scenes/PatriciaLightMode.unity` (baked by `Assets/Editor/Patricia
 - `Enemy.cs` already drives Speed/Attack/Hit/Dead → any rigged mesh walks/attacks/dies for free.
 - **Apex DragonBoss** (`Assets/_Modules/Village/Enemies/DragonBoss.cs`): own kinematic-flight class (NOT Enemy/NavMesh), 3-phase encounter, baked Fly take + code-driven dives. Prefab: `Assets/Prefabs/Village/Generated/Boss_Dragon.prefab`. **BUILT.**
 
-## 4. Village (the tower-defense town) — **WIRED, with gaps**
+## 4. Village / town — **SUPERSEDED (see 2026-06-09 block above)**
+> ⚠ **Out of date.** The home/start hub is now **`MainCastle_Hall`** (the Castle, built by
+> `Assets/Editor/CastleHubBuilder.cs`); the town role moved to **`Village2`**, repurposed as a
+> raid-target stronghold. **`Village.unity` is ABANDONED** (never canonical, corruption-cursed —
+> do not use). `OuterWorld` streams in additively over the castle hub via `WorldSceneLoader`.
+> The detail below describes the old `Village.unity` flow and is frozen history.
+
 Scene: `Assets/Scenes/Village.unity` (⚠ corruption-on-resave history — regenerate ONLY via the builder, never hand-save). Builder: `Assets/Editor/VillageSceneBuilder.cs` (`BuildVillage`).
 - Wave loop `Assets/_Modules/Village/Waves/WaveManager.cs`: countdown→spawn→breach/clear→next. **BUILT.** Spawn-spread + stuck-enemy failsafe added (77984d9).
 - 5 gameplay buildings on lightweight **polyperfect _M Medieval** prefabs (WO-101 Phase A, 4cf0037) — Tripo meshes shed (Seeker file-size win); store/interactable wiring on the plot root (dispatch by `Building.Type`) untouched. **Rebake VERIFIED loads (no level3 crash); rebake is SAFE.** ✅ Materials URP-converted via `PolyperfectUrpFix` (69 mats built-in→URP/Lit) — render correctly (confirmed). Note: polyperfect is gitignored, so re-run `Defenders/Art/Fix Polyperfect URP Materials` on a fresh clone.

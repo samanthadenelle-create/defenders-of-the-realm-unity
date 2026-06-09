@@ -22,7 +22,7 @@ Docs index: `docs/README.md`.
 
 ## Work orders — `WORK_ORDER_NNN_name.md`
 
-The unit of work (~280 files, WO-05 → WO-281; current highest: see CLAUDE.md §2).
+The unit of work (~280 files, WO-05 → WO-383 (next free 384)).
 
 - `WORK_ORDER_NNN_name.md` — the spec. Status line inside says if READY TO IMPLEMENT
 - `WORK_ORDER_NNN_name.RESULT.md` — CLI's completion report. **If a .RESULT.md

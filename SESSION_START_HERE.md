@@ -83,9 +83,14 @@ colliders + scale (189), defeat-screen Canvas (132), Cathedral.png cleanup.
 - **Tree is GREEN and playable.** Baseline restore points: `00b1662` / `8e4fd35`.
   A Windows exe and a 186 MB WebGL build exist in `Builds/`. We always move forward
   from a green build — never ship red.
-- **What's BUILT:** Defend-the-Tower pillar (polished), enemy+animation pipeline,
-  dragon boss, village wave loop, store/economy backend (~70%, not scene-wired —
+- **What's BUILT:** the **MainCastle_Hall** castle hub (start/home; built from script by
+  `CastleHubBuilder.cs`; ground walkable, L2 ramp + cam pending playtest), **OuterWorld** streaming
+  in additively over it via `WorldSceneLoader`, **Village2** repurposed as the raid-target stronghold,
+  plus the enemy+animation pipeline, dragon boss, and store/economy backend (~70%, not scene-wired —
   UXML doesn't render in builds, code-built UI only).
+  **Defend-the-Tower / PatriciaLight = REMOVED (2026-06-09)** — module + scene gone; only the
+  `Resources/PatriciaLight/tower2` asset was kept. (`Village.unity` is abandoned/corruption-cursed.)
+  Live bug: the Castle↔OuterWorld south-gate seam teleports the hero past the off-mesh clamp — **WO-383, ACTIVE.**
 - **The vision** (`docs/NORTH_STAR.md`): mobile-first base-builder + tower-defense +
   offline-idle. Loop: BUILD → HARVEST → UPGRADE → DEFEND → grow while offline.
   Keystone gap = **WO-108 player build mode** (hand the player VillageSceneBuilder's power).
@@ -110,8 +115,8 @@ colliders + scale (189), defeat-screen Canvas (132), Cathedral.png cleanup.
 **Do NOT** open the old `ORCHESTRATION_PLAN.md` for current state — it's the stale
 05-28 VFX-sprint map (kept for history only). This file supersedes it as the entry point.
 
-**Stale metadata to ignore:** `CLAUDE.md §2` says "highest WO is 105." Real highest is
-**WO-180**. New work orders start at **WO-181**. (25 `.RESULT.md` files closed so far.)
+**WO numbering (current 2026-06-09):** highest WO is **WO-383**; **next free WO = 384.** Notion
+"Work Orders" is the source of truth for status (per `NOTION_SOURCE_OF_TRUTH.md`); these docs mirror it.
 
 ---
 
