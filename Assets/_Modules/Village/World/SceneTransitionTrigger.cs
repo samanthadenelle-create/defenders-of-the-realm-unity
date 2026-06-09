@@ -6,12 +6,19 @@ using UnityEngine.SceneManagement;
 namespace DeNelle.Village
 {
     /// <summary>
-    /// Simple gate/portal trigger for transitioning between hub scenes (e.g. CastleHub) and OuterWorld.
-    /// Place at a gate or seam. On player enter: ensures target scene is loaded additively,
-    /// then moves the player (tagged Player or HeroTarget) to the target world position.
+    /// Gate/portal SEAM between a hub scene (e.g. MainCastle_Hall) and OuterWorld.
+    ///
+    /// PROXIMITY-based (not OnTriggerEnter): when the hero (tagged Player/HeroTarget) comes
+    /// within <see cref="ProximityRadius"/> of this object, it ensures the target scene is
+    /// loaded additively and <c>WarpTo</c>s the hero across to <see cref="targetPosition"/>.
+    ///
+    /// WHY proximity: the castle and OuterWorld each have their OWN baked NavMesh (two scenes
+    /// overlaid at runtime). A NavMeshAgent hero stops at the castle navmesh EDGE and can't
+    /// physically reach a trigger box just beyond it — the "invisible barrier" / two-scene
+    /// seam. A distance check fires reliably AT that edge and carries the hero across. The
+    /// OnTriggerEnter path is kept as a fallback for movers that DO trip physics triggers.
     ///
     /// Used by CastleHubBuilder to wire the south gate connection to OuterWorld.
-    /// Extend as needed for unload logic, camera snaps, or state save.
     /// </summary>
     public class SceneTransitionTrigger : MonoBehaviour
     {
@@ -24,10 +31,36 @@ namespace DeNelle.Village
         [Tooltip("If true, load additive (recommended for seamless world).")]
         public bool loadAdditive = true;
 
+        [Tooltip("Hero within this distance (m) of the gate triggers the crossing. RAISE this if " +
+                 "the hero stops short at the navmesh edge and never fires; LOWER it if it fires " +
+                 "too early before you reach the gate.")]
+        public float ProximityRadius = 6f;
+
+        private bool _fired;
+        private Transform _hero;
+
+        private void Update()
+        {
+            if (_fired) return;
+            if (_hero == null) _hero = ResolveHero();
+            if (_hero == null) return;
+
+            if ((_hero.position - transform.position).sqrMagnitude <= ProximityRadius * ProximityRadius)
+                Cross(_hero);
+        }
+
+        // Box-collider entry still works as a fallback (for movers that DO trip OnTriggerEnter).
         private void OnTriggerEnter(Collider other)
         {
-            if (other == null) return;
+            if (_fired || other == null) return;
             if (other.tag != "Player" && other.tag != "HeroTarget") return;
+            Cross(other.transform);
+        }
+
+        private void Cross(Transform player)
+        {
+            if (_fired || player == null) return;
+            _fired = true;
 
             var targetScene = SceneManager.GetSceneByName(targetSceneName);
             if (!targetScene.isLoaded)
@@ -35,6 +68,7 @@ namespace DeNelle.Village
                 if (!Application.CanStreamedLevelBeLoaded(targetSceneName))
                 {
                     Debug.LogWarning($"[SceneTransitionTrigger] '{targetSceneName}' not in Build Settings — cannot transition.");
+                    _fired = false;   // allow a retry once it's loadable
                     return;
                 }
 
@@ -42,8 +76,19 @@ namespace DeNelle.Village
                 SceneManager.LoadScene(targetSceneName, loadAdditive ? LoadSceneMode.Additive : LoadSceneMode.Single);
             }
 
-            // Reposition after load has a chance to process (simple timing; production would use sceneLoaded + frame).
-            StartCoroutine(RepositionPlayerAfterLoad(other.transform));
+            StartCoroutine(RepositionPlayerAfterLoad(player));
+        }
+
+        private Transform ResolveHero()
+        {
+            var p = SafeFindWithTag("Player") ?? SafeFindWithTag("HeroTarget");
+            return p != null ? p.transform : null;
+        }
+
+        private static GameObject SafeFindWithTag(string tag)
+        {
+            try { return GameObject.FindWithTag(tag); }
+            catch (UnityEngine.UnityException) { return null; }
         }
 
         private IEnumerator RepositionPlayerAfterLoad(Transform playerTransform)
@@ -55,10 +100,10 @@ namespace DeNelle.Village
             if (playerTransform != null)
             {
                 // WO-383: don't hard-set transform.position — that fights HeroLocomotion's
-                // off-mesh ±50 clamp + NavMeshAgent every frame (the "camera/direction break
-                // at the gate" bug). Use the teleport-aware WarpTo, which disables the agent,
-                // moves it, re-warps onto the destination (additively-loaded) NavMesh, and
-                // raises OnTeleported so the follow camera snaps instead of chasing the jump.
+                // off-mesh clamp + NavMeshAgent every frame (the "camera/direction break at the
+                // gate" bug). Use the teleport-aware WarpTo: disables the agent, moves it,
+                // re-warps onto the destination (additively-loaded) NavMesh, and raises
+                // OnTeleported so the follow camera snaps instead of chasing the jump.
                 var loco = playerTransform.GetComponent<HeroLocomotion>();
                 if (loco != null)
                 {
@@ -66,15 +111,13 @@ namespace DeNelle.Village
                 }
                 else
                 {
-                    // Fallback (no HeroLocomotion): land on the nearest valid NavMesh point
-                    // so a plain transform move doesn't drop the player off-mesh.
+                    // Fallback (no HeroLocomotion): land on the nearest valid NavMesh point.
                     Vector3 dest = targetPosition;
                     if (NavMesh.SamplePosition(targetPosition, out NavMeshHit hit, 5f, NavMesh.AllAreas))
                         dest = hit.position;
                     playerTransform.position = dest;
                 }
 
-                // Optional: clear velocity if Rigidbody present.
                 var rb = playerTransform.GetComponent<Rigidbody>();
                 if (rb != null) rb.linearVelocity = Vector3.zero;
 
