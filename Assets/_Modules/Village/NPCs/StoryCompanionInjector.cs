@@ -224,6 +224,54 @@ namespace DeNelle.Village
                 if (System.Enum.TryParse(id, out HeroClass cls)) yield return cls;
         }
 
+        // ── Arena-defense spawn (WO-389) ─────────────────────────────────────
+
+        /// <summary>
+        /// WO-389 — spawn ONE friendly Arena DEFENDER body of class
+        /// <paramref name="cls"/> at <paramref name="worldPos"/>, parented under
+        /// <paramref name="parent"/> (the raid outpost root). Reuses the SAME
+        /// <see cref="BuildPlaceholder"/> path the story companions use (skin +
+        /// NavMeshAgent + hitbox + the <see cref="StoryCompanion"/> driver), so the
+        /// defender is automatically FRIENDLY: it targets Hostile raiders via
+        /// TargetManager and is hit back through its IDamageableStructure hitbox —
+        /// zero new combat/targeting code.
+        ///
+        /// DIFFERENCE from a story companion (the two things the Arena needs):
+        ///   1. NO hero-leash. A story companion trails the player and gates combat
+        ///      to <c>LeashFromHero</c> of the hero. An Arena defender must HOLD its
+        ///      placed cell, NOT chase (and definitely not follow the ATTACKING hero,
+        ///      who is the enemy here). We pin its "hero to trail" to a STATIONARY
+        ///      guard-post transform at the spawn cell — so it stands on its post and
+        ///      engages any raider that comes within range of the post (guard-post
+        ///      tether, mirroring OutpostDefender.GuardPost / EnemyOutpost.MakeAnchor).
+        ///   2. NO speech bubble (we never call SetBubble) — defenders are silent.
+        /// Returns the spawned defender GameObject, or null on failure.
+        /// </summary>
+        internal static GameObject SpawnDefender(HeroClass cls, Vector3 worldPos, Transform parent)
+        {
+            var go = BuildPlaceholder(cls, worldPos);
+            if (go == null) return null;
+            if (parent != null) go.transform.SetParent(parent, true);
+
+            var comp = go.GetComponent<StoryCompanion>();
+            if (comp != null)
+            {
+                comp.Configure(cls);   // before Start(): drives the name + class kit
+
+                // GUARD POST tether (NOT the hero-leash): a stationary transform at the
+                // spawn cell that the companion "trails". It is parented to the OUTPOST
+                // ROOT (not the companion) so it stays FIXED at the cell — the defender
+                // holds its post and only engages hostiles within range of it, and never
+                // resolves/chases the attacking hero (SetHero is non-null, so the
+                // name-based hero auto-resolve is skipped). No bubble = silent.
+                var post = new GameObject("DefenderGuardPost (" + cls + ")").transform;
+                post.SetParent(parent != null ? parent : go.transform, true);
+                post.position = worldPos;
+                comp.SetHero(post);
+            }
+            return go;
+        }
+
         // ── Placeholder build (code-only, no art) ────────────────────────────
 
         /// <summary>

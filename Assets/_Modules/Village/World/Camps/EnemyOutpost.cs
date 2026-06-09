@@ -38,6 +38,8 @@ using UnityEngine.AI;
 using DeNelle.Core.World;
 using DeNelle.Core.State;
 using DeNelle.Core.Quests;
+using DeNelle.Core.Catalog;     // CatalogRegistry — Arena defender STRUCTURES (WO-389)
+using DeNelle.Village.Arena;    // ArenaDefenseCatalog / ArenaDefenseDef (WO-389)
 
 namespace DeNelle.Village.World.Camps
 {
@@ -179,6 +181,11 @@ namespace DeNelle.Village.World.Camps
             if (_suppressClearReward)
             {
                 BuildFortification();
+                // WO-389: the defender's PLACED Arena defenders (units + structures)
+                // port WITH the base and spawn FRIENDLY to auto-fight the raider. The
+                // defense travels with the city — spawn it right after the fortification
+                // is realized, before the (Hostile) garrison. No-op if no defense placed.
+                SpawnDefenders();
                 SpawnGarrison();
                 return;
             }
@@ -223,6 +230,82 @@ namespace DeNelle.Village.World.Camps
             var recipe = _arenaRecipe ?? OutpostFoundationGenerator.GenerateFootprintRecipe(
                 FortGridWidth, FortGridDepth, OutpostTier.Wood);
             OutpostFoundationGenerator.Realize(recipe, transform, ~0);
+        }
+
+        // =====================================================================
+        // ARENA DEFENDERS (WO-389) - the player's PRE-PLACED Arena defense, spawned
+        // FRIENDLY to auto-fight the raider. This is the connective tissue that makes
+        // a placed DefenseSetup actually FIGHT: read GameState.ArenaDefense, resolve
+        // each PlacedDefenderData against ArenaDefenseCatalog, and spawn a UNIT (a
+        // friendly StoryCompanion body, guard-post tethered) or a STRUCTURE (via
+        // StructureFactory) at the placed cell. FULL REUSE - StoryCompanionInjector
+        // .SpawnDefender + StructureFactory.Create; NO new spawn/skin/AI/targeting
+        // code. Friend/foe is the CombatFaction flag (units target Hostile via
+        // TargetManager; DefenseTower structures target Hostile too) - zero new combat.
+        //
+        // MVP: hardcoded behavior-id -> catalog-entry map; no tuning knobs / no
+        // data-driven plumbing yet (a later pass). No-op when no defense is placed,
+        // so the seeded open-world raid path is never disturbed.
+        // =====================================================================
+
+        // BehaviorId (ArenaDefenseDef) -> structures-catalog entry id. Both the
+        // Ballista and (for now) the Healing Shrine resolve to the Ballista/Siege-Tower
+        // entry (visual "Structures/Ballista" + the DefenseTower behavior, which already
+        // targets CombatFaction.Hostile). There is no heal-aura behavior yet.
+        private const string StructEntryBallista = "tower_siege_tower";
+
+        private void SpawnDefenders()
+        {
+            var placed = GameStateService.Instance?.State?.ArenaDefense;
+            if (placed == null || placed.Count == 0) return;   // no defense placed -> no-op
+
+            int units = 0, structures = 0;
+
+            for (int i = 0; i < placed.Count; i++)
+            {
+                var rec = placed[i];
+                var def = ArenaDefenseCatalog.Get(rec.itemId);
+                if (def == null)
+                {
+                    Debug.LogWarning($"[EnemyOutpost] Arena defender id '{rec.itemId}' not in catalog - skipped.");
+                    continue;
+                }
+
+                // LOCAL cell coords -> WORLD via the outpost root's TRS, identical to
+                // OutpostFoundationGenerator.Realize so a defender lands on its placed
+                // cell of the SAME grid the fortification uses (CellSize = 3 m).
+                Vector3 localOffset = new Vector3(rec.cellX * OutpostFoundationGenerator.CellSize,
+                                                  0f,
+                                                  rec.cellZ * OutpostFoundationGenerator.CellSize);
+                Vector3 worldPos = SnapToNav(transform.TransformPoint(localOffset));
+                Quaternion worldRot = transform.rotation * Quaternion.Euler(0f, rec.yawSteps * 90f, 0f);
+
+                if (def.Kind == DefenderKind.Unit && def.UnitClass.HasValue)
+                {
+                    // FRIENDLY unit: a guard-post-tethered StoryCompanion body. It targets
+                    // Hostile raiders via TargetManager and is hit back through its hitbox
+                    // (IDamageableStructure). Does NOT leash to / chase the attacking hero.
+                    var go = StoryCompanionInjector.SpawnDefender(def.UnitClass.Value, worldPos, transform);
+                    if (go != null) units++;
+                }
+                else if (def.Kind == DefenderKind.Structure)
+                {
+                    // FRIENDLY structure: the DefenseTower behavior already shoots Hostile
+                    // targets, so a placed Ballista is a friendly defender with zero new
+                    // combat code. TODO: heal-aura behavior - the Healing Shrine falls back
+                    // to the Ballista/DefenseTower entry for now (no HealAura behavior yet).
+                    var entry = CatalogRegistry.Get(StructEntryBallista);
+                    if (entry == null)
+                    {
+                        Debug.LogWarning($"[EnemyOutpost] structure entry '{StructEntryBallista}' not in registry - '{rec.itemId}' skipped.");
+                        continue;
+                    }
+                    var go = StructureFactory.Create(entry, new Pose(worldPos, worldRot), transform);
+                    if (go != null) structures++;
+                }
+            }
+
+            Debug.Log($"[EnemyOutpost] Spawned {units + structures} defenders ({units} units, {structures} structures).");
         }
 
         // =====================================================================
