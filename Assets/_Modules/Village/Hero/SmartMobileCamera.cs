@@ -739,6 +739,22 @@ namespace DeNelle.Village
             _cam.depth = 100f;
             if (!_cam.enabled) _cam.enabled = true;
 
+            // The builder (Village2Playable / VillageSceneBuilder) adds BOTH the legacy
+            // VillageCamera AND this SmartMobileCamera to the Main Camera, on the documented
+            // assumption that "SMC's EnforceSoleCamera disables VillageCamera and takes over".
+            // The loop below only disables Camera COMPONENTS on OTHER GameObjects — it can NOT
+            // disable a sibling follow-SCRIPT sharing this GameObject's single Camera. So the
+            // two follow scripts ran every frame, both writing transform.position/rotation and
+            // fighting over the seat (SMC wants height 2.6/dist 4.5; VillageCamera's Awake forces
+            // height 5.5/dist 9). Realize the intended sole-camera contract: disable the sibling
+            // legacy follow rig so ONLY SmartMobileCamera drives the view.
+            var legacy = GetComponent<VillageCamera>();
+            if (legacy != null && legacy.enabled)
+            {
+                legacy.enabled = false;
+                Debug.Log("[SmartMobileCamera] disabled sibling VillageCamera (sole-camera contract).");
+            }
+
             foreach (var c in Camera.allCameras)
             {
                 if (c == null || c == _cam) continue;

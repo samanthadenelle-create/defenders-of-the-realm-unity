@@ -162,6 +162,11 @@ namespace DeNelle.Village
                 if (prefabAnim != null && prefabAnim.avatar != null && prefabAnim.avatar.isValid)
                     anim.avatar = prefabAnim.avatar;
             }
+
+            // DEF-232 (facing) self-correct — replaces the hard-coded -90° guess above for any body
+            // whose authored forward ISN'T +X. Needs the valid Humanoid avatar ensured just above, so
+            // it runs here (not in the FORWARD CORRECTION block). No-op for already-aligned bodies.
+            AlignBodyFacingToRoot(body, anim);
             if (controller != null)
             {
                 anim.runtimeAnimatorController = controller;
@@ -738,6 +743,62 @@ namespace DeNelle.Village
                 // Safety-net re-centre: shift the body so its bounds centre sits over the root's XZ.
                 body.transform.position -= new Vector3(dx, 0f, dz);
             }
+        }
+
+        /// <summary>
+        /// DEF-232 (facing) self-correct. The legacy fix rotated EVERY hero body by a hard-coded
+        /// -90° on the assumption all meshes import facing +X. That's a guessed Euler: a body that
+        /// imports facing some other axis is left angled, so the character STRAFES across the screen
+        /// ("walks at 45°") even though HeroLocomotion drives the ROOT dead-straight (proven by
+        /// world-coords). Here we DERIVE the body's true forward from the skeleton — the hip-to-hip
+        /// vector is the character's lateral axis on EVERY humanoid rig, so forward = right × up is
+        /// rig-independent (no guess) — then rotate the body by only the RESIDUAL needed to match the
+        /// root's heading. Residual + 5° deadzone ⇒ an already-aligned body (the working heroes) gets
+        /// a NO-OP; this can ONLY fix a misaligned body, never disturb a correct one. Non-humanoid /
+        /// unmappable rigs fall back to the base seat untouched.
+        /// </summary>
+        private void AlignBodyFacingToRoot(GameObject body, Animator anim)
+        {
+            if (body == null || anim == null) return;
+            if (!anim.isHuman || anim.avatar == null || !anim.avatar.isValid) return;
+
+            var leftLeg  = anim.GetBoneTransform(HumanBodyBones.LeftUpperLeg);
+            var rightLeg = anim.GetBoneTransform(HumanBodyBones.RightUpperLeg);
+            if (leftLeg == null || rightLeg == null) return;     // can't derive — keep the base seat
+
+            // Character RIGHT = left-hip → right-hip (laterally placed on every humanoid), ground-projected.
+            Vector3 rightDir = rightLeg.position - leftLeg.position;
+            rightDir.y = 0f;
+            if (rightDir.sqrMagnitude < 1e-6f) return;           // degenerate pose — bail safely
+            rightDir.Normalize();
+
+            // FORWARD = right × up (Unity left-handed: Cross((1,0,0),(0,1,0)) == (0,0,1)).
+            Vector3 bodyForward = Vector3.Cross(rightDir, Vector3.up);
+
+            Vector3 rootForward = transform.forward;
+            rootForward.y = 0f;
+            if (rootForward.sqrMagnitude < 1e-6f) rootForward = Vector3.forward;
+            rootForward.Normalize();
+
+            float curYaw = Mathf.Atan2(bodyForward.x, bodyForward.z) * Mathf.Rad2Deg;
+            float tgtYaw = Mathf.Atan2(rootForward.x, rootForward.z) * Mathf.Rad2Deg;
+            float delta  = Mathf.DeltaAngle(curYaw, tgtYaw);
+
+            const float DeadzoneDeg = 5f;
+            if (Mathf.Abs(delta) <= DeadzoneDeg)
+            {
+                Debug.Log($"[HeroBodySwapper] facing OK — body within {delta:F1}° of root heading; no correction.");
+                return;
+            }
+
+            // Rotate the body about its OWN origin (position preserved) to face the root heading.
+            body.transform.rotation = Quaternion.AngleAxis(delta, Vector3.up) * body.transform.rotation;
+            Debug.Log($"[HeroBodySwapper] facing self-correct: skeleton forward {curYaw:F0}° vs root {tgtYaw:F0}° → rotated body {delta:F0}° (derive-from-skeleton, replaces guessed -90°).");
+
+            // A yaw on an off-pivot mesh can shift its bounds — re-centre XZ and re-plant feet so the
+            // body stays dead-on the root the camera follows.
+            ValidateBodyCentredOverRoot(body);
+            PlantFeetOnGround(body);
         }
 
         /// <summary>
