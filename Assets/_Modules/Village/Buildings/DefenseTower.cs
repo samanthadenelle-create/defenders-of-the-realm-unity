@@ -63,9 +63,19 @@ namespace DeNelle.Village
 
         private void Rescan()
         {
+            // PERF (OuterWorld 1fps fix): the old scan was FindObjectsByType<MonoBehaviour>,
+            // which enumerates EVERY MonoBehaviour in ALL loaded scenes (the additive
+            // OuterWorld terrain/props/NPCs = tens of thousands) on every 0.4s tick, per
+            // tower — hundreds of ms/frame regardless of enemy count. Scan only the two
+            // CONCRETE hostile IDamageable implementors instead (engine-filtered, returns
+            // just the live enemy bodies + the dragon). Identical target set, no full-scene
+            // enumeration. Same Faction==Hostile gate preserved.
             _hostiles.Clear();
-            foreach (var mb in FindObjectsByType<MonoBehaviour>(FindObjectsSortMode.None))
-                if (mb is IDamageable d && d.Faction == CombatFaction.Hostile)
+            foreach (var d in FindObjectsByType<EnemyDamageable>(FindObjectsSortMode.None))
+                if (d != null && d.Faction == CombatFaction.Hostile)
+                    _hostiles.Add(d);
+            foreach (var d in FindObjectsByType<DragonBoss>(FindObjectsSortMode.None))
+                if (d != null && d.Faction == CombatFaction.Hostile)
                     _hostiles.Add(d);
         }
 

@@ -59,10 +59,8 @@ namespace DeNelle.Editor
         // ── Tunables: what the suite expects to exist ──────────────────────────
 
         // The canonical PLAYABLE village scene (Village2 — canonical per project
-        // memory; Village.unity is abandoned). Village3 is also opened as a smoke
-        // case but the WaveManager wiring assertions run against Village2.
+        // memory; Village.unity is abandoned). (Village3 test scene removed 2026-06-10.)
         private const string PlayableScenePath = "Assets/Scenes/Village2.unity";
-        private const string SecondaryScenePath = "Assets/Scenes/Village3.unity";
 
         // Canonical data files — both copies must parse and be byte-equal.
         private const string ResCatalog = "Assets/Resources/Data/Canonical/structures-catalog.json";
@@ -158,7 +156,6 @@ namespace DeNelle.Editor
             Run(results, "structures-kit-present",   Case_StructuresKitPresent);
             Run(results, "no-duplicate-landmines",   Case_NoDuplicateLandmines);
             Run(results, "scene-opens-village2",     () => Case_SceneOpens(PlayableScenePath));
-            Run(results, "scene-opens-village3",     () => Case_SceneOpens(SecondaryScenePath));
             Run(results, "core-wiring-village2",     Case_CoreWiring);
             Run(results, "layout-validator",         Case_LayoutValidator);
 

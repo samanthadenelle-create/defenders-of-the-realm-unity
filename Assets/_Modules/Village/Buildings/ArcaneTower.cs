@@ -77,9 +77,18 @@ namespace DeNelle.Village
 
         private void Rescan()
         {
+            // PERF (OuterWorld 1fps fix): mirrors DefenseTower. The old scan was
+            // FindObjectsByType<MonoBehaviour>, which enumerates EVERY MonoBehaviour in ALL
+            // loaded scenes (the additive OuterWorld = tens of thousands) every 0.4s tick,
+            // per tower — hundreds of ms/frame independent of enemy count. Scan only the two
+            // CONCRETE hostile IDamageable implementors instead (engine-filtered to the live
+            // enemy bodies + the dragon). Identical target set; no full-scene enumeration.
             _hostiles.Clear();
-            foreach (var mb in FindObjectsByType<MonoBehaviour>(FindObjectsSortMode.None))
-                if (mb is IDamageable d && d.Faction == CombatFaction.Hostile)
+            foreach (var d in FindObjectsByType<EnemyDamageable>(FindObjectsSortMode.None))
+                if (d != null && d.Faction == CombatFaction.Hostile)
+                    _hostiles.Add(d);
+            foreach (var d in FindObjectsByType<DragonBoss>(FindObjectsSortMode.None))
+                if (d != null && d.Faction == CombatFaction.Hostile)
                     _hostiles.Add(d);
         }
 
