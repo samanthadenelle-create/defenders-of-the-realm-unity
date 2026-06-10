@@ -52,6 +52,7 @@ namespace DeNelle.Village
         private GameObject _gridRoot;     // re-built per tab
         private GameObject _sidebarRoot;  // re-built per selection
         private GameObject _paperDoll;    // rebuilt on equip-change
+        private GameObject _tabsRoot;     // tab row host (rebuilt on tab change)
         private Tab _tab = Tab.Weapons;
 
         // The current selection (one of these is non-null while a cell is selected).
@@ -163,7 +164,7 @@ namespace DeNelle.Village
             Unsubscribe();
             if (_ui != null) Destroy(_ui);
             _ui = null;
-            _gridRoot = _sidebarRoot = _paperDoll = null;
+            _gridRoot = _sidebarRoot = _paperDoll = _tabsRoot = null;
             ClearSelection();
         }
 
@@ -242,44 +243,86 @@ namespace DeNelle.Village
             // The main panel fills most of the screen (mobile-first).
             var panel = AddPanel(_ui.transform, new Vector2(0.04f, 0.03f), new Vector2(0.96f, 0.97f), deep: true);
 
+            // ── MOCKUP #41 LAYOUT (WO-400) ──────────────────────────────────────
+            //   [ rune strip ............................................... ]  top
+            //   [ ✦ INVENTORY ...................................... [X] ]      header
+            //   [ Weapons | Armor | Accessories | Consumables ]               tab row
+            //   ┌── LEFT 28% ──┐ ┌──────── RIGHT 70% ────────┐
+            //   │ hero name    │ │ scrollable item grid       │
+            //   │  ╭ rune ╮    │ │ (4-5 cols, rune frames)    │              main row
+            //   │ ◯ ring  ◯   │ │                            │
+            //   │  ╰ hero ╯    │ ├─ detail / equip strip ─────┤
+            //   └──────────────┘ └────────────────────────────┘
+            //   [ Sort  Filter ............... ● Gold  ◆ Cryst  ◈ SKR ]       footer
+            // The signature look = the equipped slots arranged in a RING around the
+            // hero medallion (see RebuildPaperDoll), vs the old vertical columns.
+            // ────────────────────────────────────────────────────────────────────
+
             // A faint rune strip across the very top edge — a HINT of Elarion magic.
-            AddRuneStrip(panel.transform, 0.972f, 0.998f);
+            AddRuneStrip(panel.transform, 0.965f, 0.992f);
 
             // Header: bronze crest + title (dark ink on light parchment; the prior soft
             // dark drop-shadow now reads as a gentle emboss on the light ground).
-            AddLabelShadow(panel.transform, ElarionUi.CrestGlyph + "  INVENTORY", 0.940f, 0.985f,
-                           GiltInk, ElarionUi.FontTitle, 0.06f, 0.94f, spacing: 6f);
-            AddRule(panel.transform, 0.932f, 0.06f, 0.94f);
-
-            BuildWalletStrip(panel.transform);
+            AddLabelShadow(panel.transform, ElarionUi.CrestGlyph + "  INVENTORY", 0.918f, 0.958f,
+                           GiltInk, ElarionUi.FontTitle, 0.05f, 0.80f, spacing: 6f);
+            AddRule(panel.transform, 0.908f, 0.04f, 0.96f);
 
             // Close X — top-right, in a deeper-tan parchment chip (so it reads on light).
-            AddButton(panel.transform, "X", new Vector2(0.905f, 0.038f), new Vector2(0.942f, 0.986f),
+            AddButton(panel.transform, "X", new Vector2(0.92f, 0.035f), new Vector2(0.916f, 0.962f),
                       new Color(0.847f, 0.804f, 0.710f, 1f), Close, ButtonKind.Neutral);
 
-            // ── Top half: the paper-doll. A recessed stone NICHE the hero stands in,
-            // bordered with a soft gold rim so it feels like a display alcove. ──
+            // Tabs row (top, under the header) — host so the active pill can be rebuilt.
+            _tabsRoot = AddImage(panel.transform, "TabsRow",
+                                 new Vector2(0.04f, 0.838f), new Vector2(0.96f, 0.898f), new Color(0, 0, 0, 0));
+            NoRaycast(_tabsRoot);
+            BuildTabs(_tabsRoot.transform);
+
+            // ── LEFT column (~28%): the paper-doll RING. A recessed aged-parchment
+            // alcove the hero "stands" in, with a soft gold rim = a display niche. ──
             var niche = AddImage(panel.transform, "PaperDollNiche",
-                                 new Vector2(0.04f, 0.615f), new Vector2(0.96f, 0.92f), StoneNiche);
+                                 new Vector2(0.04f, 0.115f), new Vector2(0.335f, 0.822f), StoneNiche);
             AddInnerRim(niche, AccentSoft);
             _paperDoll = AddImage(niche.transform, "PaperDollArea",
-                                  new Vector2(0.012f, 0.02f), new Vector2(0.988f, 0.98f), new Color(0, 0, 0, 0));
+                                  new Vector2(0.03f, 0.02f), new Vector2(0.97f, 0.98f), new Color(0, 0, 0, 0));
 
-            // Tabs row.
-            BuildTabs(panel.transform);
-
-            // Grid area (rebuilt per tab) lives in a fixed band; sidebar to its right.
-            // Grid: left ~62%; Sidebar: right ~36% (a touch wider for the stat block).
+            // ── RIGHT region (~70%, mockup): the scrollable item grid DOMINATES (top),
+            // with a compact horizontal DETAIL / EQUIP strip beneath it. The grid is the
+            // mockup's "center/right ~70% item grid (4-5 cols)"; the strip carries the
+            // selected-item icon + stats + the EQUIP CTA laid out left-to-right. ──
             _gridRoot = AddImage(panel.transform, "GridArea",
-                                 new Vector2(0.04f, 0.035f), new Vector2(0.625f, 0.50f), Track);
+                                 new Vector2(0.355f, 0.305f), new Vector2(0.96f, 0.822f), Track);
             AddInnerRim(_gridRoot, AccentSoft);
             _sidebarRoot = AddImage(panel.transform, "SidebarArea",
-                                    new Vector2(0.645f, 0.035f), new Vector2(0.96f, 0.50f), GlassDeep);
+                                    new Vector2(0.355f, 0.115f), new Vector2(0.96f, 0.293f), GlassDeep);
             AddInnerRim(_sidebarRoot, AccentSoft);
+
+            // ── Footer bar: Sort / Filter on the left, resource wells on the right. ──
+            BuildFooterBar(panel.transform);
         }
 
-        private void BuildWalletStrip(Transform panel)
+        // ── Footer bar (mockup #41 bottom): Sort / Filter chips on the LEFT, the
+        // Gold + Crystals + SKR resource wells on the RIGHT. The Sort/Filter chips are
+        // visual affordances for the catalog (no owned-list to re-sort yet — TODO when
+        // a real ownership list lands they re-order the grid); kept here so the footer
+        // matches the mockup. Resource wells read live GameState (Gold/Crystals); SKR
+        // is the Web3 purse, surfaced as a styled badge (its balance lives in the
+        // DeNelle.Wallet stack which this assembly does not reference — so it shows the
+        // rail glyph, not a live figure, to avoid a cross-assembly/async dependency).
+        private void BuildFooterBar(Transform panel)
         {
+            // A thin recessed footer tray spanning the panel bottom.
+            var tray = AddImage(panel, "FooterTray",
+                                new Vector2(0.04f, 0.035f), new Vector2(0.96f, 0.100f), Track);
+            AddInnerRim(tray, AccentSoft);
+
+            // LEFT: Sort + Filter chips (parchment chips with dark-ink labels).
+            Color chip = new Color(0.847f, 0.804f, 0.710f, 1f);
+            AddButton(tray.transform, "⇅ Sort", new Vector2(0.115f, 0.085f), new Vector2(0.18f, 0.82f),
+                      chip, () => { /* TODO owned-list re-sort */ }, ButtonKind.Neutral);
+            AddButton(tray.transform, "⛃ Filter", new Vector2(0.305f, 0.085f), new Vector2(0.18f, 0.82f),
+                      chip, () => { /* TODO owned-list filter */ }, ButtonKind.Neutral);
+
+            // RIGHT: resource wells.
             int coins = 0, crystals = 0;
             try
             {
@@ -292,29 +335,39 @@ namespace DeNelle.Village
             }
             catch { /* GameState not ready — show zeros */ }
 
-            // Two recessed coin/crystal wells, each with its own tinted glyph chip,
-            // so the wallet reads as currency badges rather than a plain text line.
-            var goldWell = AddImage(panel, "GoldWell", new Vector2(0.30f, 0.895f), new Vector2(0.49f, 0.928f), Track);
-            AddInnerRim(goldWell, AccentSoft);
-            AddLabel(goldWell.transform, "● " + coins, 0f, 1f, GiltInk,
-                     ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.06f, 0.94f, bold: true);
-            AddLabel(goldWell.transform, "GOLD", 0.04f, 0.30f, InkMicro,
-                     ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.06f, 0.94f, spacing: 2f);
-
-            var crysWell = AddImage(panel, "CrystalWell", new Vector2(0.51f, 0.895f), new Vector2(0.70f, 0.928f), Track);
-            AddInnerRim(crysWell, AccentSoft);
-            // Aether violet darkened so it reads on the light tan well.
-            AddLabel(crysWell.transform, "◆ " + crystals, 0f, 1f, new Color(0.42f, 0.26f, 0.62f, 1f),
-                     ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.06f, 0.94f, bold: true);
-            AddLabel(crysWell.transform, "CRYSTALS", 0.04f, 0.30f, InkMicro,
-                     ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.06f, 0.94f, spacing: 2f);
+            ResourceWell(tray.transform, "GoldWell", 0.470f, 0.640f, "● " + coins, "GOLD", GiltInk);
+            ResourceWell(tray.transform, "CrystalWell", 0.650f, 0.820f, "◆ " + crystals, "CRYSTALS",
+                         new Color(0.42f, 0.26f, 0.62f, 1f));
+            // SKR = Web3 rail; show the rail glyph (no live figure from this assembly).
+            ResourceWell(tray.transform, "SkrWell", 0.830f, 0.985f, "◈ SKR", "WALLET",
+                         new Color(0.18f, 0.43f, 0.40f, 1f));
         }
 
-        // ── Paper-doll: the emotional centerpiece. A class-crest medallion sits at
-        // center (the hero "silhouette"), with framed EQUIPPED-SLOT tiles arranged
-        // around it — weapon + helm down the left, armor + trinket down the right —
-        // and the hero name / class / level banner above. This is the composed
-        // fallback for the aspirational live render.
+        // A single footer currency well (icon+value on top, micro caps label below),
+        // anchored within the footer tray by [x0..x1].
+        private void ResourceWell(Transform tray, string name, float x0, float x1,
+                                  string value, string caps, Color valueColor)
+        {
+            var well = AddImage(tray, name, new Vector2(x0, 0.10f), new Vector2(x1, 0.90f), GlassDeep);
+            AddInnerRim(well, AccentSoft);
+            AddLabel(well.transform, value, 0.40f, 0.98f, valueColor,
+                     ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, bold: true);
+            AddLabel(well.transform, caps, 0.04f, 0.42f, InkMicro,
+                     ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, spacing: 2f);
+        }
+
+        // ── Paper-doll: the mockup-#41 SIGNATURE — a large ornate CIRCULAR RUNE FRAME
+        // with the class-crest hero medallion at its centre and the EQUIPPED-SLOT tiles
+        // arranged in a RING around it (not the old left/right columns). The hero name +
+        // class + level banner sits above. This is the composed fallback for the
+        // aspirational live render.
+        //
+        // RING LAYOUT — six sockets evenly spaced on a circle (60° apart), placed by
+        // trig around the medallion centre so the look is the radial "rune-frame" of the
+        // mockup. Two are LIVE gear (WEAPON + ARMOR, driven by GearLoadout); the other
+        // four are cosmetic placeholders (HELM / AMULET / TRINKET / BOOTS) shown as dim
+        // empty sockets so the ring always reads full. When those slots get real data
+        // (cosmetics / accessories catalog) they fill in place — the ring is the frame.
         //
         // TODO live 3D preview — a RenderTexture camera on the hero (isolated layer +
         // key light) would drop a rotating model into the central medallion. Deferred
@@ -330,53 +383,89 @@ namespace DeNelle.Village
             string job = HeroJob;
             int level = HeroLevel();
 
-            // Hero name banner (top): big class name in dark ink + a level pip beside it.
-            AddLabelShadow(_paperDoll.transform, HeroDisplayName(job), 0.875f, 0.985f,
-                           Ink, ElarionUi.FontHead, 0.20f, 0.80f, spacing: 2f);
-            var lvPip = AddImage(_paperDoll.transform, "LevelPip", new Vector2(0.80f, 0.885f), new Vector2(0.965f, 0.975f),
-                                 new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.85f));
-            AddInnerRim(lvPip, Accent);
-            AddLabel(lvPip.transform, "LV " + level, 0f, 1f, Ink,
-                     ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0f, 1f, bold: true);
+            // Hero name banner (top of the left column).
+            AddLabelShadow(_paperDoll.transform, HeroDisplayName(job), 0.935f, 0.99f,
+                           Ink, ElarionUi.FontHead, 0.02f, 0.98f, spacing: 1f);
+            AddLabel(_paperDoll.transform, Cap(job).ToUpperInvariant() + "   •   LV " + level, 0.895f, 0.93f,
+                     InkMicro, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.02f, 0.98f, spacing: 3f);
 
-            // ── Center: the class-crest medallion (stand-in for the live hero). ──
-            var medallion = AddImage(_paperDoll.transform, "Medallion",
-                                     new Vector2(0.355f, 0.155f), new Vector2(0.645f, 0.80f), StoneBack);
-            AddInnerRim(medallion, Accent);
-            // A soft aether bloom behind the crest so it reads as "your hero, lit".
-            AddImage(medallion.transform, "Bloom", new Vector2(0.12f, 0.12f), new Vector2(0.88f, 0.88f), AetherSoft);
-            AddLabel(medallion.transform, ClassCrest(job), 0.30f, 0.86f, GiltInk,
-                     ElarionUi.FontTitle + 28, TMPro.TextAlignmentOptions.Center, 0.06f, 0.94f, bold: true);
-            AddLabel(medallion.transform, Cap(job).ToUpperInvariant(), 0.10f, 0.26f, InkMicro,
-                     ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, spacing: 4f);
+            // ── The circular rune frame. Concentric rings = an ornate gilt halo:
+            //   outer gilt ring -> aether-tinted mid ring -> inner parchment disc.
+            // All built with the rounded sprite (max corner radius => reads circular at
+            // these sizes); WebGL-safe (RoundedSprite falls back to a soft quad). The
+            // ring lives in a SQUARE band of the left column so the circle isn't ovalled
+            // by the column's portrait aspect. ──
+            // Square band: centred horizontally, vertical span 0.085..0.575 (~0.49 tall).
+            var ringHost = AddImage(_paperDoll.transform, "RuneRing",
+                                    new Vector2(0.04f, 0.085f), new Vector2(0.96f, 0.575f), new Color(0, 0, 0, 0));
+            NoRaycast(ringHost);
 
-            // ── Arranged equipped-slot frames around the silhouette. ──
+            // Outer gilt halo ring.
+            var haloOuter = AddCircle(ringHost.transform, "HaloOuter", 0.5f, 0.5f, 0.50f,
+                                      new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.55f));
+            NoRaycast(haloOuter);
+            // Aether-tinted mid ring (the runic glow).
+            var haloMid = AddCircle(ringHost.transform, "HaloMid", 0.5f, 0.5f, 0.455f,
+                                    new Color(ElarionUi.Aether.r, ElarionUi.Aether.g, ElarionUi.Aether.b, 0.20f));
+            NoRaycast(haloMid);
+            // Inner parchment disc the hero medallion sits on.
+            var disc = AddCircle(ringHost.transform, "RingDisc", 0.5f, 0.5f, 0.43f, StoneNiche);
+            NoRaycast(disc);
+
+            // A faint rune ring around the disc edge — Elarion magic on the frame.
+            var runeRing = AddLabel(ringHost.transform, ElarionUi.RuneGlyphs, 0.86f, 0.99f,
+                                    new Color(GiltInk.r, GiltInk.g, GiltInk.b, 0.45f),
+                                    ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f, spacing: 4f);
+            runeRing.raycastTarget = false;
+
+            // ── Center: the class-crest hero medallion (stand-in for the live render). ──
+            var medallion = AddCircle(ringHost.transform, "Medallion", 0.5f, 0.5f, 0.30f, StoneBack);
+            AddCircleRim(medallion, Accent);
+            AddCircle(medallion.transform, "Bloom", 0.5f, 0.5f, 0.40f, AetherSoft);   // centred bloom
+            AddLabel(medallion.transform, ClassCrest(job), 0.30f, 0.82f, GiltInk,
+                     ElarionUi.FontTitle + 22, TMPro.TextAlignmentOptions.Center, 0.06f, 0.94f, bold: true);
+            AddLabel(medallion.transform, Cap(job).ToUpperInvariant(), 0.12f, 0.28f, InkMicro,
+                     ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, spacing: 2f);
+
+            // ── The six ring sockets, placed by angle around the medallion. ──
             WeaponDef w = _loadout != null ? _loadout.EquippedWeapon : null;
             ArmorDef  a = _loadout != null ? _loadout.EquippedArmor  : null;
 
-            // Left column: WEAPON (filled) + HELM (placeholder cosmetic slot).
-            EquipSlotTile(_paperDoll.transform, "WEAPON",
-                          w != null ? WeaponTypeGlyph(w) : "", w != null ? ItemIconCatalog.ForWeapon(w) : null,
-                          w != null ? w.name : "Empty",
-                          w != null ? w.rarity : null, w != null,
-                          new Vector2(0.045f, 0.55f), new Vector2(0.315f, 0.80f));
-            EquipSlotTile(_paperDoll.transform, "HELM",
-                          "", null, "Locked", null, false,
-                          new Vector2(0.045f, 0.18f), new Vector2(0.315f, 0.50f));
-
-            // Right column: ARMOR (filled) + TRINKET (placeholder).
-            EquipSlotTile(_paperDoll.transform, "ARMOR",
-                          a != null ? ArmorTypeGlyph(a) : "", a != null ? ItemIconCatalog.ForArmor(a) : null,
-                          a != null ? a.name : "Empty",
-                          a != null ? a.rarity : null, a != null,
-                          new Vector2(0.685f, 0.55f), new Vector2(0.955f, 0.80f));
-            EquipSlotTile(_paperDoll.transform, "TRINKET",
-                          "", null, "Locked", null, false,
-                          new Vector2(0.685f, 0.18f), new Vector2(0.955f, 0.50f));
+            // Socket radius (distance from centre, in ringHost-normalised units) + tile
+            // half-size. Sockets ride the gap between the medallion (r=0.30) and the disc
+            // edge (r=0.43), so ~0.385 keeps them framed inside the ring.
+            const float orbit = 0.385f, half = 0.085f;
+            // angle 90° = top, going clockwise. Slot mapping around the ring:
+            //   top(90)=HELM, upper-right(30)=AMULET, lower-right(-30)=WEAPON,
+            //   bottom(-90)=BOOTS, lower-left(-150)=TRINKET, upper-left(150)=ARMOR.
+            RingSocket(ringHost.transform, "HELM",   90f,  orbit, half, "", null, "Locked", null, false);
+            RingSocket(ringHost.transform, "AMULET", 30f,  orbit, half, "", null, "Locked", null, false);
+            RingSocket(ringHost.transform, "WEAPON", -30f, orbit, half,
+                       w != null ? WeaponTypeGlyph(w) : "", w != null ? ItemIconCatalog.ForWeapon(w) : null,
+                       w != null ? w.name : "Empty", w != null ? w.rarity : null, w != null);
+            RingSocket(ringHost.transform, "BOOTS",  -90f, orbit, half, "", null, "Locked", null, false);
+            RingSocket(ringHost.transform, "TRINKET", -150f, orbit, half, "", null, "Locked", null, false);
+            RingSocket(ringHost.transform, "ARMOR",  150f, orbit, half,
+                       a != null ? ArmorTypeGlyph(a) : "", a != null ? ItemIconCatalog.ForArmor(a) : null,
+                       a != null ? a.name : "Empty", a != null ? a.rarity : null, a != null);
         }
 
-        // A framed equipped-slot tile: rarity-tinted frame, icon glyph, label + value.
-        // filled=false renders a dim empty/locked socket so the layout always reads.
+        // Places one equipped-slot socket on the rune ring at `angleDeg` (90°=top, CW),
+        // `orbit` units from centre. Parent is the square ringHost (anchors 0..1), so the
+        // polar->cartesian maths is in that square's normalised space (circle stays round).
+        private void RingSocket(Transform ringHost, string label, float angleDeg, float orbit, float half,
+                                string icon, Sprite iconSprite, string value, string rarity, bool filled)
+        {
+            float rad = angleDeg * Mathf.Deg2Rad;
+            float cx = 0.5f + orbit * Mathf.Cos(rad);
+            float cy = 0.5f + orbit * Mathf.Sin(rad);
+            EquipSlotTile(ringHost, label, icon, iconSprite, value, rarity, filled,
+                          new Vector2(cx - half, cy - half), new Vector2(cx + half, cy + half));
+        }
+
+        // A framed equipped-slot tile: rarity-tinted CIRCULAR socket, icon glyph, and a
+        // label/value caption beneath it. filled=false renders a dim empty/locked socket
+        // so the ring always reads full. Sized small (it's a ring node, not a card).
         private void EquipSlotTile(Transform parent, string label, string icon, Sprite iconSprite, string value,
                                    string rarity, bool filled, Vector2 min, Vector2 max)
         {
@@ -385,38 +474,46 @@ namespace DeNelle.Village
             Color rc    = filled ? RarityColor(rarity) : new Color(0.55f, 0.50f, 0.42f, 1f);
             Color rcInk = filled ? RarityInk(rarity)   : InkMicro;
 
-            // Rarity frame behind the tile (a thin tinted rim = "this is gear").
-            var frame = AddImage(parent, "SlotFrame_" + label, min, max,
-                                 new Color(rc.r, rc.g, rc.b, filled ? 0.85f : 0.45f));
-            var tile = AddImage(frame.transform, "Slot_" + label, new Vector2(0.06f, 0.07f), new Vector2(0.94f, 0.93f),
-                                filled ? Cell : new Color(Cell.r, Cell.g, Cell.b, 0.65f));
+            // Host (transparent) so the circular frame + caption can stack within it.
+            var host = AddImage(parent, "SlotHost_" + label, min, max, new Color(0, 0, 0, 0));
+            NoRaycast(host);
 
-            // Slot label (top, spaced micro caps).
-            AddLabel(tile.transform, label, 0.74f, 0.96f, InkMicro,
-                     ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, spacing: 3f);
-            // Icon (center) — real item art when present, else a TYPE glyph so the slot
-            // reads weapon-vs-armor at a glance (empty/locked = a "+" hint).
+            // Rarity-tinted circular frame (the "rune socket").
+            var frame = AddCircle(host.transform, "SlotFrame_" + label, 0.5f, 0.62f, 0.40f,
+                                  new Color(rc.r, rc.g, rc.b, filled ? 0.85f : 0.45f));
+            NoRaycast(frame);
+            var tile = AddCircle(frame.transform, "Slot_" + label, 0.5f, 0.5f, 0.86f,
+                                 filled ? Cell : new Color(Cell.r, Cell.g, Cell.b, 0.65f));
+            NoRaycast(tile);
+
+            // Icon (center of the socket) — real item art when present, else a TYPE glyph
+            // (empty/locked = a "+" hint).
             Color glyphCol = filled ? Ink : new Color(0.55f, 0.50f, 0.42f, 0.8f);
             string glyph = string.IsNullOrEmpty(icon) ? (filled ? "?" : "+") : icon;
-            var iconHost = AddImage(tile.transform, "SlotIcon", new Vector2(0.04f, 0.34f), new Vector2(0.96f, 0.74f),
+            var iconHost = AddImage(tile.transform, "SlotIcon", new Vector2(0.12f, 0.12f), new Vector2(0.88f, 0.88f),
                                     new Color(0, 0, 0, 0));
             NoRaycast(iconHost);
-            AddIcon(iconHost.transform, iconSprite, glyph, ElarionUi.FontHead + 4, glyphCol, 1f);
-            // Value name (bottom, rarity-INK coloured so it stays readable on light).
-            AddLabel(tile.transform, (filled ? RarityGlyph(rarity) + " " : "") + value, 0.04f, 0.32f,
-                     filled ? rcInk : InkMicro,
-                     ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, bold: true);
+            AddIcon(iconHost.transform, iconSprite, glyph, ElarionUi.FontBody + 2, glyphCol, 1f);
+
+            // Slot label (spaced micro caps, beneath the socket).
+            AddLabel(host.transform, label, 0.10f, 0.24f, InkMicro,
+                     ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0f, 1f, spacing: 1f);
         }
 
         // ====================================================================
         // TABS
         // ====================================================================
-        private void BuildTabs(Transform panel)
+        // Tabs fill the full width of their host row (the _tabsRoot band under the
+        // header). "Accessories" is the mockup label for the Tab.Outfits slot (the
+        // cosmetic/accessory tab — enum + logic unchanged).
+        private void BuildTabs(Transform host)
         {
-            string[] names = { "Weapons", "Armor", "Outfits", "Consumables" };
+            string[] names = { "Weapons", "Armor", "Accessories", "Consumables" };
             Tab[] tabs = { Tab.Weapons, Tab.Armor, Tab.Outfits, Tab.Consumables };
-            float y0 = 0.530f, y1 = 0.595f;
-            float w = 0.225f, gap = 0.015f, x = 0.04f;
+            float y0 = 0.06f, y1 = 0.94f;
+            float gap = 0.012f;
+            float w = (1f - gap * (names.Length - 1)) / names.Length;   // four equal pills
+            float x = 0f;
             for (int i = 0; i < names.Length; i++)
             {
                 Tab t = tabs[i];
@@ -428,8 +525,18 @@ namespace DeNelle.Village
                 // distinct, tappable chip (plain parchment would vanish into the bg).
                 Color inactive = new Color(0.847f, 0.804f, 0.710f, 1f);
                 Color bg = sel ? ElarionUi.GoldButton : inactive;
-                var btn = AddButton(panel, names[i], new Vector2(cx, w * 0.5f), new Vector2(y0, y1),
+                var btn = AddButton(host, names[i], new Vector2(cx, w * 0.5f), new Vector2(y0, y1),
                                     bg, () => SelectTab(t), sel ? ButtonKind.Gold : ButtonKind.Neutral);
+                // Active-tab glow halo behind the gold pill (mockup: "active tab glow").
+                if (sel)
+                {
+                    var glow = AddImage(host, "TabGlow_" + names[i],
+                                        new Vector2(cx - w * 0.5f - 0.006f, y0 - 0.06f),
+                                        new Vector2(cx + w * 0.5f + 0.006f, y1 + 0.06f),
+                                        new Color(ElarionUi.Gilt.r, ElarionUi.Gilt.g, ElarionUi.Gilt.b, 0.30f));
+                    NoRaycast(glow);
+                    glow.transform.SetSiblingIndex(btn.transform.GetSiblingIndex());
+                }
                 if (sel)
                 {
                     // Gilt underline hugging the active pill's bottom edge.
@@ -461,16 +568,10 @@ namespace DeNelle.Village
 
         private void RebuildTabsRow()
         {
-            if (_ui == null) return;
-            var panel = _ui.transform.GetChild(_ui.transform.childCount - 1); // last child = main panel
-            // Destroy existing tab buttons (named "Btn_Weapons" etc.) and rebuild.
-            string[] names = { "Btn_Weapons", "Btn_Armor", "Btn_Outfits", "Btn_Consumables" };
-            foreach (var n in names)
-            {
-                var existing = panel.Find(n);
-                if (existing != null) Destroy(existing.gameObject);
-            }
-            BuildTabs(panel);
+            if (_tabsRoot == null) return;
+            for (int i = _tabsRoot.transform.childCount - 1; i >= 0; i--)
+                Destroy(_tabsRoot.transform.GetChild(i).gameObject);
+            BuildTabs(_tabsRoot.transform);
         }
 
         // ====================================================================
@@ -504,12 +605,15 @@ namespace DeNelle.Village
             scroll.content = crt;
             scroll.viewport = viewport.GetComponent<RectTransform>();
 
+            // Mockup #41: a denser 4-column rune-framed grid (the right column is now
+            // ~60% of the panel, so cells shrink from the old 3-up to 4-up). Cells stay
+            // > 44px tap targets. (Empty-note cells span via LayoutElement.)
             var grid = content.AddComponent<GridLayoutGroup>();
-            grid.cellSize = new Vector2(196f, 132f);     // large touch targets
-            grid.spacing = new Vector2(12f, 12f);
+            grid.cellSize = new Vector2(128f, 116f);
+            grid.spacing = new Vector2(10f, 10f);
             grid.padding = new RectOffset(10, 10, 10, 10);
             grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
-            grid.constraintCount = 3;
+            grid.constraintCount = 4;
             grid.childAlignment = TextAnchor.UpperCenter;
 
             var fitter = content.AddComponent<ContentSizeFitter>();
@@ -684,8 +788,18 @@ namespace DeNelle.Village
         }
 
         // ====================================================================
-        // SIDEBAR (selected item stats + Equip/Unequip)
+        // DETAIL / EQUIP STRIP  (compact HORIZONTAL band beneath the grid)
+        // -----------------------------------------------------------------------------
+        // The mockup keeps the grid dominant, so the selected-item detail is a short,
+        // wide strip laid out LEFT->RIGHT: [icon + name] | [stat chips + flavour] |
+        // [EQUIP CTA]. The equip logic (GearLoadout.Equip*ById) is unchanged — only the
+        // arrangement is horizontal now. Three column bands keep every element readable.
+        //   LEFT block : x 0.015..0.235   (icon medallion + name + rarity)
+        //   MID  block : x 0.250..0.690   (up to 3 stat chips, stacked + flavour)
+        //   RIGHT block: x 0.705..0.985   (EQUIP / EQUIPPED / LOCKED button)
         // ====================================================================
+        private const float SbMidX0 = 0.250f, SbMidX1 = 0.690f;
+
         private void RebuildSidebar()
         {
             if (_sidebarRoot == null) return;
@@ -694,52 +808,51 @@ namespace DeNelle.Village
 
             if (_selWeapon == null && _selArmor == null && _selConsumable == null)
             {
-                AddLabel(_sidebarRoot.transform, "Tap an item\nto view + equip.", 0.4f, 0.6f,
+                AddLabel(_sidebarRoot.transform, "Tap an item to view + equip.", 0.40f, 0.60f,
                          InkDim, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.06f, 0.94f);
                 return;
             }
-
-            AddLabel(_sidebarRoot.transform, "DETAILS", 0.945f, 0.99f, InkMicro,
-                     ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, spacing: 3f);
-            AddRule(_sidebarRoot.transform, 0.935f, 0.06f, 0.94f);
 
             if (_selWeapon != null) BuildWeaponSidebar(_selWeapon);
             else if (_selArmor != null) BuildArmorSidebar(_selArmor);
             else if (_selConsumable != null) BuildConsumableSidebar(_selConsumable);
         }
 
-        // A rarity-tinted name header band + icon medallion at the top of the detail
-        // panel. Returns nothing; lays out the shared chrome for any selected item.
+        // LEFT block: rarity-tinted icon medallion + name + rarity/job subline, all
+        // stacked in the left ~22% of the strip.
         private void BuildDetailHeader(string icon, Sprite iconSprite, string name, string rarity, string subline)
         {
             Color rc    = RarityColor(rarity);
             Color rcInk = RarityInk(rarity);
 
-            // Rarity band behind the name (a soft tinted strip — the loudest rarity cue).
-            var band = AddImage(_sidebarRoot.transform, "RarityBand",
-                                new Vector2(0.05f, 0.80f), new Vector2(0.95f, 0.925f),
-                                new Color(rc.r, rc.g, rc.b, 0.22f));
-            AddInnerRim(band, new Color(rc.r, rc.g, rc.b, 0.75f));
-
-            // Icon medallion above the band (TYPE glyph on a soft tinted well).
-            var med = AddImage(_sidebarRoot.transform, "DetailIcon", new Vector2(0.36f, 0.815f), new Vector2(0.64f, 0.915f),
+            // Icon medallion (upper-left of the block).
+            var med = AddImage(_sidebarRoot.transform, "DetailIcon",
+                               new Vector2(0.060f, 0.40f), new Vector2(0.190f, 0.92f),
                                new Color(rc.r, rc.g, rc.b, 0.14f));
-            AddInnerRim(med, new Color(rc.r, rc.g, rc.b, 0.45f));
-            // Sprite-first: real item art in the detail medallion, else the type glyph.
+            AddInnerRim(med, new Color(rc.r, rc.g, rc.b, 0.55f));
             AddIcon(med.transform, iconSprite, string.IsNullOrEmpty(icon) ? "?" : icon,
-                    ElarionUi.FontHead + 2, rcInk, 1f);
+                    ElarionUi.FontHead, rcInk, 1f);
 
-            AddLabel(_sidebarRoot.transform, name, 0.745f, 0.795f, rcInk, ElarionUi.FontBody,
+            // Name + rarity band below the medallion.
+            var band = AddImage(_sidebarRoot.transform, "RarityBand",
+                                new Vector2(0.015f, 0.22f), new Vector2(0.235f, 0.37f),
+                                new Color(rc.r, rc.g, rc.b, 0.22f));
+            AddInnerRim(band, new Color(rc.r, rc.g, rc.b, 0.70f));
+            AddLabel(band.transform, name, 0f, 1f, rcInk, ElarionUi.FontLabel,
                      TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, bold: true);
-            AddLabel(_sidebarRoot.transform, RarityGlyph(rarity) + " " + subline, 0.695f, 0.74f,
-                     InkDim, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, spacing: 2f);
+            AddLabel(_sidebarRoot.transform, RarityGlyph(rarity) + " " + subline, 0.045f, 0.19f,
+                     InkDim, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.015f, 0.235f, spacing: 1f);
         }
 
-        // A recessed stat row in the detail well: label left, value right, optional
-        // ▲/▼ delta (green up / red down) comparing to the currently-equipped piece.
-        private void StatRow(float y0, float y1, string label, string value, float delta)
+        // A recessed stat chip in the MIDDLE column. `slot` (0,1,2) stacks it vertically
+        // within the strip. label left, value right, optional ▲/▼ delta vs the worn piece.
+        private void StatRow(int slot, string label, string value, float delta)
         {
-            var row = AddImage(_sidebarRoot.transform, "Stat_" + label, new Vector2(0.06f, y0), new Vector2(0.94f, y1), Track);
+            // Three rows from y 0.86 down to 0.18, each ~0.22 tall with a small gap.
+            float y1 = 0.88f - slot * 0.245f;
+            float y0 = y1 - 0.205f;
+            var row = AddImage(_sidebarRoot.transform, "Stat_" + label,
+                               new Vector2(SbMidX0, y0), new Vector2(SbMidX1, y1), Track);
             AddLabel(row.transform, label, 0f, 1f, InkDim, ElarionUi.FontLabel,
                      TMPro.TextAlignmentOptions.Left, 0.06f, 0.55f);
             AddLabel(row.transform, value, 0f, 1f, Ink, ElarionUi.FontLabel,
@@ -754,6 +867,14 @@ namespace DeNelle.Village
             }
         }
 
+        // A one-line flavour caption beneath the stat chips in the middle column.
+        private void DetailFlavour(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return;
+            AddLabel(_sidebarRoot.transform, "\"" + text + "\"", 0.05f, 0.165f,
+                     InkDim, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, SbMidX0, SbMidX1);
+        }
+
         private void BuildWeaponSidebar(WeaponDef w)
         {
             int level = HeroLevel();
@@ -762,25 +883,21 @@ namespace DeNelle.Village
                             string.Equals(_loadout.EquippedWeapon.id, w.id, System.StringComparison.OrdinalIgnoreCase);
             WeaponDef cur = _loadout != null ? _loadout.EquippedWeapon : null;
 
-            BuildDetailHeader(WeaponTypeGlyph(w), ItemIconCatalog.ForWeapon(w), w.name, w.rarity, Cap(w.rarity) + "  -  " + Cap(w.job));
+            BuildDetailHeader(WeaponTypeGlyph(w), ItemIconCatalog.ForWeapon(w), w.name, w.rarity, Cap(w.rarity) + " - " + Cap(w.job));
 
             // Compare-to-equipped stat block (▲/▼ vs the worn weapon).
+            int slot = 0;
             float curDmg = cur != null ? cur.damageMult : 0f;
-            StatRow(0.620f, 0.675f, "Damage", $"x{w.damageMult:0.0#}", equipped ? 0f : w.damageMult - curDmg);
+            StatRow(slot++, "Damage", $"x{w.damageMult:0.0#}", equipped ? 0f : w.damageMult - curDmg);
             if (w.reach > 0f)
             {
                 float curReach = cur != null ? cur.reach : 0f;
-                StatRow(0.560f, 0.615f, "Reach", $"{w.reach:0.0} m", equipped ? 0f : w.reach - curReach);
+                StatRow(slot++, "Reach", $"{w.reach:0.0} m", equipped ? 0f : w.reach - curReach);
             }
             if (w.req != null && w.req.level > 1)
-                StatRow(0.500f, 0.555f, "Requires", "Lv " + w.req.level, 0f);
-            if (cur != null && !equipped)
-                AddLabel(_sidebarRoot.transform, "vs equipped: " + cur.name, 0.455f, 0.495f,
-                         InkMicro, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f);
+                StatRow(slot++, "Requires", "Lv " + w.req.level, 0f);
 
-            if (!string.IsNullOrEmpty(w.flavor) || !string.IsNullOrEmpty(w.saga))
-                AddLabel(_sidebarRoot.transform, "\"" + (w.flavor ?? w.saga) + "\"", 0.22f, 0.44f,
-                         InkDim, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.06f, 0.94f);
+            DetailFlavour(!string.IsNullOrEmpty(w.flavor) ? w.flavor : w.saga);
 
             BuildEquipButton(equipped, locked,
                 () => { if (_loadout != null) _loadout.EquipWeaponById(w.id); },
@@ -795,24 +912,20 @@ namespace DeNelle.Village
                             string.Equals(_loadout.EquippedArmor.id, a.id, System.StringComparison.OrdinalIgnoreCase);
             ArmorDef cur = _loadout != null ? _loadout.EquippedArmor : null;
 
-            BuildDetailHeader(ArmorTypeGlyph(a), ItemIconCatalog.ForArmor(a), a.name, a.rarity, Cap(a.rarity) + "  -  " + Cap(a.job));
+            BuildDetailHeader(ArmorTypeGlyph(a), ItemIconCatalog.ForArmor(a), a.name, a.rarity, Cap(a.rarity) + " - " + Cap(a.job));
 
+            int slot = 0;
             float curDef = cur != null ? cur.defense : 0f;
-            StatRow(0.620f, 0.675f, "Defense", $"{a.defense * 100f:0}%", equipped ? 0f : a.defense - curDef);
+            StatRow(slot++, "Defense", $"{a.defense * 100f:0}%", equipped ? 0f : a.defense - curDef);
             if (a.hpBonus > 0f)
             {
                 float curHp = cur != null ? cur.hpBonus : 0f;
-                StatRow(0.560f, 0.615f, "HP Bonus", $"+{a.hpBonus:0}", equipped ? 0f : a.hpBonus - curHp);
+                StatRow(slot++, "HP Bonus", $"+{a.hpBonus:0}", equipped ? 0f : a.hpBonus - curHp);
             }
             if (a.req != null && a.req.level > 1)
-                StatRow(0.500f, 0.555f, "Requires", "Lv " + a.req.level, 0f);
-            if (cur != null && !equipped)
-                AddLabel(_sidebarRoot.transform, "vs equipped: " + cur.name, 0.455f, 0.495f,
-                         InkMicro, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f);
+                StatRow(slot++, "Requires", "Lv " + a.req.level, 0f);
 
-            if (!string.IsNullOrEmpty(a.flavor) || !string.IsNullOrEmpty(a.saga))
-                AddLabel(_sidebarRoot.transform, "\"" + (a.flavor ?? a.saga) + "\"", 0.22f, 0.44f,
-                         InkDim, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.06f, 0.94f);
+            DetailFlavour(!string.IsNullOrEmpty(a.flavor) ? a.flavor : a.saga);
 
             BuildEquipButton(equipped, locked,
                 () => { if (_loadout != null) _loadout.EquipArmorById(a.id); },
@@ -823,22 +936,25 @@ namespace DeNelle.Village
         {
             string name = c.def != null && !string.IsNullOrEmpty(c.def.DisplayName) ? c.def.DisplayName : c.id;
             string glyph = ConsumableTypeGlyph(c.id, name);
-            BuildDetailHeader(glyph, ItemIconCatalog.ForConsumable(c.id, name), name, "common", "Owned  x" + c.count);
+            BuildDetailHeader(glyph, ItemIconCatalog.ForConsumable(c.id, name), name, "common", "Owned x" + c.count);
 
+            int slot = 0;
             if (c.def != null)
             {
-                StatRow(0.620f, 0.675f, Cap(c.def.EffectRaw), c.def.Magnitude.ToString("0"), 0f);
+                StatRow(slot++, Cap(c.def.EffectRaw), c.def.Magnitude.ToString("0"), 0f);
                 if (c.def.Duration > 0f)
-                    StatRow(0.560f, 0.615f, "Duration", $"{c.def.Duration:0}s", 0f);
-                StatRow(0.500f, 0.555f, "Use", c.def.UsableInFight ? "In combat" : "Rest only", 0f);
+                    StatRow(slot++, "Duration", $"{c.def.Duration:0}s", 0f);
+                StatRow(slot++, "Use", c.def.UsableInFight ? "In combat" : "Rest only", 0f);
             }
 
             // Consumables aren't "equipped" — v1 surfaces them read-only here.
             // TODO use-consumable — wire to the use-service when its public entry is settled.
-            AddLabel(_sidebarRoot.transform, "Use from the combat hotbar.", 0.22f, 0.34f,
-                     InkDim, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.06f, 0.94f);
+            AddLabel(_sidebarRoot.transform, "Use from the combat hotbar.", 0.40f, 0.62f,
+                     InkDim, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.705f, 0.985f);
         }
 
+        // RIGHT block: the EQUIP call-to-action (or EQUIPPED / LOCKED state). A tall pill
+        // filling the right ~28% of the strip so it's the obvious thumb target.
         private void BuildEquipButton(bool equipped, bool locked, System.Action equip, System.Action unequip)
         {
             string label;
@@ -864,11 +980,11 @@ namespace DeNelle.Village
 
             // A soft glow plate behind the CTA when it's actionable, so EQUIP "pops".
             if (action != null)
-                NoRaycast(AddImage(_sidebarRoot.transform, "EquipGlow", new Vector2(0.06f, 0.05f), new Vector2(0.94f, 0.205f),
+                NoRaycast(AddImage(_sidebarRoot.transform, "EquipGlow", new Vector2(0.700f, 0.18f), new Vector2(0.990f, 0.82f),
                                    new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.20f)));
 
-            var btn = AddButton(_sidebarRoot.transform, label, new Vector2(0.5f, 0.44f),
-                                new Vector2(0.06f, 0.19f), color, action, kind);
+            var btn = AddButton(_sidebarRoot.transform, label, new Vector2(0.845f, 0.140f),
+                                new Vector2(0.24f, 0.76f), color, action, kind);
             btn.interactable = action != null;
         }
 
@@ -1068,6 +1184,36 @@ namespace DeNelle.Village
         {
             var sprite = RoundedSprite;
             if (sprite != null) { img.sprite = sprite; img.type = Image.Type.Sliced; }
+        }
+
+        // A circular Image positioned by CENTER + RADIUS in the parent's normalised
+        // space (cx,cy in 0..1; radius in 0..1 of the parent's WIDTH so it stays round
+        // when the parent is square). Uses the soft circle sprite; WebGL-safe (falls
+        // back to the rounded quad if the circle build fails).
+        private static GameObject AddCircle(Transform parent, string name, float cx, float cy, float radius, Color color)
+        {
+            var go = new GameObject(name, typeof(Image));
+            go.transform.SetParent(parent, false);
+            var r = go.GetComponent<RectTransform>();
+            r.anchorMin = new Vector2(cx - radius, cy - radius);
+            r.anchorMax = new Vector2(cx + radius, cy + radius);
+            r.offsetMin = Vector2.zero; r.offsetMax = Vector2.zero;
+            var img = go.GetComponent<Image>();
+            img.color = color;
+            var sprite = CircleSprite;
+            if (sprite != null) { img.sprite = sprite; img.type = Image.Type.Simple; }
+            else ApplyRounded(img);
+            return go;
+        }
+
+        // A thin circular rim AROUND a circular host: a slightly larger disc rendered
+        // BEHIND the host so a gilt ring peeks out past its edge.
+        private void AddCircleRim(GameObject host, Color color)
+        {
+            var rim = AddCircle(host.transform, "CircleRim", 0.5f, 0.5f, 0.54f,
+                                new Color(color.r, color.g, color.b, color.a * 0.85f));
+            rim.GetComponent<Image>().raycastTarget = false;
+            rim.transform.SetAsFirstSibling();
         }
 
         private void AddRule(Transform parent, float y, float x0, float x1)
@@ -1311,6 +1457,53 @@ namespace DeNelle.Village
             float dy = Mathf.Max(Mathf.Max(radius - fy, fy - (h - radius)), 0f);
             float dist = Mathf.Sqrt(dx * dx + dy * dy) - radius;
             return Mathf.Clamp01(dist + 0.5f);
+        }
+
+        // ── Procedural soft CIRCLE sprite (lazily built once; WebGL failure-safe) ──
+        // Used for the mockup-#41 rune ring + circular equipped-slot sockets. A solid
+        // white disc with a 1px antialiased edge; tint via the Image colour.
+        private static Sprite _circle;
+        private static bool _circleTried;
+        private static Sprite CircleSprite
+        {
+            get
+            {
+                if (!_circleTried)
+                {
+                    _circleTried = true;
+                    try { _circle = BuildCircleSprite(); }
+                    catch (System.Exception e)
+                    {
+                        Debug.LogWarning("[HeroInventoryController] circle sprite build failed (rounded quad): " + e.Message);
+                        _circle = null;
+                    }
+                }
+                return _circle;
+            }
+        }
+
+        private static Sprite BuildCircleSprite()
+        {
+            const int size = 64;
+            float c = (size - 1) * 0.5f;
+            float rOuter = c;                  // touches the texture edge
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false) { filterMode = FilterMode.Bilinear };
+            var px = new Color32[size * size];
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    float dx = x - c, dy = y - c;
+                    float dist = Mathf.Sqrt(dx * dx + dy * dy);
+                    // 1px antialiased falloff at the rim.
+                    float a = Mathf.Clamp01(rOuter - dist);
+                    px[y * size + x] = new Color32(255, 255, 255, (byte)(a * 255f));
+                }
+            }
+            tex.SetPixels32(px);
+            tex.Apply();
+            return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 100f,
+                                 0, SpriteMeshType.FullRect);
         }
     }
 }

@@ -21,15 +21,56 @@ using UnityEngine;
 using UnityEngine.UI;
 using DeNelle.Village;
 using DeNelle.Village.Crafting;
+using DeNelle.Core.UI;
 
 namespace DeNelle.Village.Hero
 {
     public sealed class ShopPanel : MonoBehaviour
     {
+        // ── LIGHT PARCHMENT palette (matches HeroInventoryController's light feel) ──
+        // SELF-CONTAINED to the shop (do NOT mutate the global ElarionUi palette —
+        // these are local LIGHT values, a tone inversion of the old dark-glass shop).
+        // Warm parchment fills, DARK INK text (readable on light), THIN gilt/rune
+        // frames. Gold accent tones borrow ElarionUi.Gold's hue so the merchant skin
+        // stays cohesive with the inventory/HUD. ASCII-only runtime strings; WebGL-safe.
+        //
+        // Panel + surfaces — warm parchment, lightly translucent so the scrim warms it.
+        private static readonly Color PanelPaper   = new Color(0.945f, 0.918f, 0.851f, 0.985f); // ~#F1EAD9 main panel
+        private static readonly Color HeaderPaper  = new Color(0.965f, 0.945f, 0.890f, 1f);      // brighter header band
+        private static readonly Color Scrim        = new Color(0.10f, 0.08f, 0.05f, 0.55f);      // warm dim behind modal
+        // Rows — clean light paper; cost/refund tones picked for contrast on paper.
+        private static readonly Color RowPaper     = new Color(0.957f, 0.933f, 0.875f, 1f);      // light row paper
+        private static readonly Color RowAlt       = new Color(0.929f, 0.902f, 0.831f, 1f);      // (reserved) subtle alt
+        private static readonly Color RowHover     = new Color(0.969f, 0.910f, 0.741f, 1f);      // warm gilt-tinted hover
+        private static readonly Color RowPress     = new Color(0.835f, 0.886f, 0.741f, 1f);      // soft green confirm press
+        private static readonly Color WellPaper    = new Color(0.886f, 0.847f, 0.761f, 0.6f);    // recessed scroll well (faint tan)
+        // Tab bar — inactive = soft tan, active = gilt glow with a brighter rim.
+        private static readonly Color TabRest      = new Color(0.882f, 0.847f, 0.761f, 1f);      // inactive tab (tan)
+        private static readonly Color TabActive    = new Color(0.969f, 0.886f, 0.620f, 1f);      // active tab (gilt glow)
+        // Gilt frame accents (thin) — gold rims on a light ground.
+        private static readonly Color GiltRim      = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.85f);
+        private static readonly Color GiltRimSoft  = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.40f);
+        // Action buttons on light: green BUY, bronze SELL, blue EQUIP — kept saturated
+        // enough to carry white text legibly.
+        private static readonly Color BuyGreen     = new Color(0.30f, 0.55f, 0.28f, 1f);
+        private static readonly Color SellBronze   = new Color(0.62f, 0.42f, 0.20f, 1f);
+        private static readonly Color EquipBlue    = new Color(0.27f, 0.40f, 0.58f, 1f);
+        private static readonly Color CloseRed      = new Color(0.72f, 0.30f, 0.26f, 1f);
+
+        // ── INK text tones (dark, readable on the light parchment) ────────────────
+        private static readonly Color Ink          = new Color(0.157f, 0.118f, 0.078f, 1f);      // primary dark ink
+        private static readonly Color InkDim        = new Color(0.345f, 0.290f, 0.220f, 1f);     // secondary / flavour ink
+        // Bronze heading ink — true gilt is too pale on parchment, so titles read bronze.
+        private static readonly Color GiltInk      = new Color(0.521f, 0.380f, 0.102f, 1f);      // bronze heading ink
+        // Affordable green ink (cost/refund/eco accents) — darkened to read on paper.
+        private static readonly Color CostInk      = new Color(0.255f, 0.412f, 0.235f, 1f);      // green cost ink
+        private static readonly Color RefundInk    = new Color(0.541f, 0.392f, 0.157f, 1f);      // bronze refund ink
+
         private GameObject _ui;
         private string _vendorContext;
         private GearLoadout _activeLoadout;
         private GameObject _contentRoot;
+        private GameObject _tabBar; // tab row host (for active-tab highlight)
         private TMPro.TextMeshProUGUI _statusText; // use TMPro for consistency with EquipmentPanel + to avoid any legacy UI asm quirks
         private TMPro.TextMeshProUGUI _ecoText;
         private System.Action<ResourceSnapshot> _ecoHandler; // stored so Close() can unsubscribe (no leak)
@@ -70,7 +111,7 @@ namespace DeNelle.Village.Hero
             bdRect.offsetMin = Vector2.zero;
             bdRect.offsetMax = Vector2.zero;
             var bdImg = backdrop.GetComponent<Image>();
-            bdImg.color = new Color(0.04f, 0.03f, 0.02f, 0.65f);
+            bdImg.color = Scrim;
             var bdBtn = backdrop.GetComponent<Button>();
             bdBtn.transition = Selectable.Transition.None;
             bdBtn.onClick.AddListener(Close);
@@ -84,7 +125,13 @@ namespace DeNelle.Village.Hero
             pr.offsetMin = Vector2.zero;
             pr.offsetMax = Vector2.zero;
             var pImg = panel.GetComponent<Image>();
-            pImg.color = new Color(0.12f, 0.09f, 0.07f, 0.97f);
+            pImg.color = PanelPaper;
+
+            // Gilt rune-frame around the panel (thin gold border via an Outline image
+            // sitting just behind the panel paper). Drawn as a slightly larger image
+            // behind the panel so a 2px gold rim shows on all sides — the cohesive
+            // gilt frame from the inventory look, on the light ground.
+            AddPanelGiltFrame(panel.transform);
 
             // Header
             string title = "Vendor Wares";
@@ -107,6 +154,7 @@ namespace DeNelle.Village.Hero
             CreateTabButton(tabBar.transform, "BUY", new Vector2(-0.33f, 0), () => ShowBuy());
             CreateTabButton(tabBar.transform, "SELL", new Vector2(0f, 0), () => ShowSell());
             CreateTabButton(tabBar.transform, "EQUIP", new Vector2(0.33f, 0), () => ShowEquip());
+            _tabBar = tabBar; // kept so ShowBuy/Sell/Equip can light the active tab
 
             // Content area (replaced per mode)
             _contentRoot = new GameObject("Content", typeof(RectTransform));
@@ -130,7 +178,7 @@ namespace DeNelle.Village.Hero
             sRect.anchorMax = new Vector2(0.98f, 0.07f);
             _statusText = statusGo.GetComponent<TMPro.TextMeshProUGUI>();
             _statusText.fontSize = 14;
-            _statusText.color = new Color(0.85f, 0.8f, 0.7f);
+            _statusText.color = InkDim; // soft ink, readable on parchment
             _statusText.alignment = TMPro.TextAlignmentOptions.Center;
             SetStatus("Browse wares. Transactions use Wood / Iron / Crystals.");
 
@@ -140,8 +188,72 @@ namespace DeNelle.Village.Hero
             Debug.Log($"[ShopPanel] Opened for vendor '{_vendorContext}'. Economy + inventory driven.");
         }
 
+        // Thin gilt rune-frame: a gold image one notch larger than the panel, sitting
+        // BEHIND the panel paper so a 2px gold rim peeks out on every side. Cheap, no
+        // sprite/9-slice needed, and reads as the inventory's gilt frame on the light
+        // parchment. Parented to the panel and pushed to the back of the sibling order.
+        private void AddPanelGiltFrame(Transform panel)
+        {
+            var frame = new GameObject("GiltFrame", typeof(Image));
+            frame.transform.SetParent(panel, false);
+            frame.transform.SetAsFirstSibling(); // draw behind the panel's children
+            var fr = frame.GetComponent<RectTransform>();
+            fr.anchorMin = Vector2.zero;
+            fr.anchorMax = Vector2.one;
+            // grow 3px past the panel on each side so the gold rim shows
+            fr.offsetMin = new Vector2(-3f, -3f);
+            fr.offsetMax = new Vector2(3f, 3f);
+            frame.GetComponent<Image>().color = GiltRim;
+            frame.GetComponent<Image>().raycastTarget = false;
+            // NOTE: this frame is a child of the panel, so it renders ON TOP of the
+            // panel paper, not behind it. To make it a rim, the panel paper is opaque
+            // and centered, so the 3px overhang is the only gold visible — a clean
+            // gilt border. (Children always draw above their parent's own graphic.)
+        }
+
+        // Thin gilt rune-frame around a single item row: a soft-gold image one notch
+        // larger than the row, behind the row paper, so a 1px gold rim shows. Mirrors
+        // AddPanelGiltFrame at row scale. raycast off so the row button still takes taps.
+        private void AddRowGiltRim(Transform row)
+        {
+            var rim = new GameObject("RowRim", typeof(Image));
+            rim.transform.SetParent(row, false);
+            rim.transform.SetAsFirstSibling();
+            var rr = rim.GetComponent<RectTransform>();
+            rr.anchorMin = Vector2.zero;
+            rr.anchorMax = Vector2.one;
+            rr.offsetMin = new Vector2(-1.5f, -1.5f);
+            rr.offsetMax = new Vector2(1.5f, 1.5f);
+            rim.GetComponent<Image>().color = GiltRimSoft;
+            rim.GetComponent<Image>().raycastTarget = false;
+        }
+
         private void CreateHeader(Transform parent, string txt)
         {
+            // Header band — a brighter paper strip with a thin gilt rule beneath, so
+            // the title sits in a defined masthead rather than floating on the panel.
+            var band = new GameObject("HeaderBand", typeof(Image));
+            band.transform.SetParent(parent, false);
+            var bandR = band.GetComponent<RectTransform>();
+            bandR.anchorMin = new Vector2(0.02f, 0.875f);
+            bandR.anchorMax = new Vector2(0.98f, 0.975f);
+            bandR.offsetMin = Vector2.zero;
+            bandR.offsetMax = Vector2.zero;
+            var bandImg = band.GetComponent<Image>();
+            bandImg.color = HeaderPaper;
+            bandImg.raycastTarget = false;
+
+            // thin gilt rule under the masthead
+            var rule = new GameObject("HeaderRule", typeof(Image));
+            rule.transform.SetParent(parent, false);
+            var ruleR = rule.GetComponent<RectTransform>();
+            ruleR.anchorMin = new Vector2(0.06f, 0.873f);
+            ruleR.anchorMax = new Vector2(0.94f, 0.879f);
+            ruleR.offsetMin = Vector2.zero;
+            ruleR.offsetMax = Vector2.zero;
+            rule.GetComponent<Image>().color = GiltRimSoft;
+            rule.GetComponent<Image>().raycastTarget = false;
+
             var go = new GameObject("Header", typeof(TMPro.TextMeshProUGUI));
             go.transform.SetParent(parent, false);
             var r = go.GetComponent<RectTransform>();
@@ -151,9 +263,12 @@ namespace DeNelle.Village.Hero
             r.offsetMax = Vector2.zero;
             var t = go.GetComponent<TMPro.TextMeshProUGUI>();
             t.fontSize = 22;
-            t.color = new Color(0.95f, 0.88f, 0.7f);
+            t.fontStyle = TMPro.FontStyles.Bold;
+            t.characterSpacing = 4f;
+            t.color = GiltInk; // bronze ink reads on the light masthead
             t.alignment = TMPro.TextAlignmentOptions.Center;
-            t.text = txt;
+            // small crest glyph flanking the vendor name for the runic merchant feel
+            t.text = ElarionUi.CrestGlyph + "  " + txt + "  " + ElarionUi.CrestGlyph;
         }
 
         private void CreateEconomyReadout(Transform parent)
@@ -166,8 +281,8 @@ namespace DeNelle.Village.Hero
             r.offsetMin = Vector2.zero;
             r.offsetMax = Vector2.zero;
             var t = go.GetComponent<TMPro.TextMeshProUGUI>();
-            t.fontSize = 13;
-            t.color = new Color(0.7f, 0.85f, 0.65f);
+            t.fontSize = 14;
+            t.color = CostInk; // green-bronze resource ink, readable on parchment
             t.alignment = TMPro.TextAlignmentOptions.Center;
             _ecoText = t;
             UpdateEcoText(t);
@@ -197,9 +312,19 @@ namespace DeNelle.Village.Hero
             r.offsetMin = Vector2.zero;
             r.offsetMax = Vector2.zero;
             var img = go.GetComponent<Image>();
-            img.color = tint ?? new Color(0.22f, 0.17f, 0.12f);
+            img.color = tint ?? TabRest; // inactive tan by default; active set via HighlightTab
             var btn = go.GetComponent<Button>();
+            btn.transition = Selectable.Transition.None; // we drive the active glow ourselves
             btn.onClick.AddListener(() => onClick());
+
+            // thin gilt rim under the tab — a soft gold underline strip
+            var underline = new GameObject("TabRule", typeof(Image));
+            underline.transform.SetParent(go.transform, false);
+            var ur = underline.GetComponent<RectTransform>();
+            ur.anchorMin = new Vector2(0.1f, 0f); ur.anchorMax = new Vector2(0.9f, 0.06f);
+            ur.offsetMin = Vector2.zero; ur.offsetMax = Vector2.zero;
+            underline.GetComponent<Image>().color = GiltRimSoft;
+            underline.GetComponent<Image>().raycastTarget = false;
 
             var txt = new GameObject("Label", typeof(TMPro.TextMeshProUGUI));
             txt.transform.SetParent(go.transform, false);
@@ -208,8 +333,39 @@ namespace DeNelle.Village.Hero
             var tt = txt.GetComponent<TMPro.TextMeshProUGUI>();
             tt.text = label;
             tt.fontSize = 16;
-            tt.color = Color.white;
+            tt.fontStyle = TMPro.FontStyles.Bold;
+            tt.characterSpacing = 2f;
+            tt.color = Ink; // dark ink label, readable on the light tab
             tt.alignment = TMPro.TextAlignmentOptions.Center;
+        }
+
+        // Light the active tab with the gilt glow + a bright rim; dim the rest to tan.
+        // Called by ShowBuy/ShowSell/ShowEquip so the current mode is always obvious.
+        // Null-safe: a no-op until the tab bar exists.
+        private void HighlightTab(string activeLabel)
+        {
+            if (_tabBar == null) return;
+            foreach (Transform child in _tabBar.transform)
+            {
+                if (child == null) continue;
+                bool isActive = child.name == "Tab_" + activeLabel;
+                var img = child.GetComponent<Image>();
+                if (img != null) img.color = isActive ? TabActive : TabRest;
+                // brighten the gilt underline on the active tab
+                var rule = child.Find("TabRule");
+                if (rule != null)
+                {
+                    var rImg = rule.GetComponent<Image>();
+                    if (rImg != null) rImg.color = isActive ? GiltRim : GiltRimSoft;
+                }
+                // bronze-bold the active label so the text reads selected too
+                var lbl = child.Find("Label");
+                if (lbl != null)
+                {
+                    var lt = lbl.GetComponent<TMPro.TextMeshProUGUI>();
+                    if (lt != null) lt.color = isActive ? GiltInk : Ink;
+                }
+            }
         }
 
         private void CreateBigButton(Transform parent, string label, Vector2 anchor, System.Action onClick, Color? bg = null)
@@ -222,7 +378,7 @@ namespace DeNelle.Village.Hero
             r.offsetMin = Vector2.zero;
             r.offsetMax = Vector2.zero;
             var img = go.GetComponent<Image>();
-            img.color = bg ?? new Color(0.18f, 0.14f, 0.10f);
+            img.color = bg ?? TabRest;
             var btn = go.GetComponent<Button>();
             btn.onClick.AddListener(() => onClick());
 
@@ -233,7 +389,8 @@ namespace DeNelle.Village.Hero
             var tt = txt.GetComponent<TMPro.TextMeshProUGUI>();
             tt.text = label;
             tt.fontSize = 15;
-            tt.color = new Color(0.95f, 0.9f, 0.8f);
+            tt.fontStyle = TMPro.FontStyles.Bold;
+            tt.color = Ink; // dark ink on the light button
             tt.alignment = TMPro.TextAlignmentOptions.Center;
         }
 
@@ -250,7 +407,7 @@ namespace DeNelle.Village.Hero
             r.offsetMin = Vector2.zero;
             r.offsetMax = Vector2.zero;
             var img = go.GetComponent<Image>();
-            img.color = new Color(0.45f, 0.18f, 0.14f, 0.95f);
+            img.color = CloseRed; // muted brick red — clear dismiss, white X reads on it
             var btn = go.GetComponent<Button>();
             btn.transition = Selectable.Transition.None;
             btn.onClick.AddListener(Close);
@@ -278,6 +435,7 @@ namespace DeNelle.Village.Hero
         private void ShowBuy()
         {
             ClearContent();
+            HighlightTab("BUY");
             SetStatus("Buy gear or potions. Tap a row or BUY to purchase.");
 
             GearCatalog.Reload(); // pick up any live data change
@@ -355,6 +513,17 @@ namespace DeNelle.Village.Hero
         // (the reported "no way to complete a purchase"). Vertical scroll, clipped.
         private Transform BuildScrollContent(int rowCount)
         {
+            // Recessed well backing — a faint tan panel behind the scroll list so the
+            // rows sit in a defined tray (the parchment mockup's inset). Non-masking,
+            // non-interactive; drawn first so the viewport/rows render on top of it.
+            var well = new GameObject("ScrollWell", typeof(Image));
+            well.transform.SetParent(_contentRoot.transform, false);
+            var wr = well.GetComponent<RectTransform>();
+            wr.anchorMin = Vector2.zero; wr.anchorMax = Vector2.one;
+            wr.offsetMin = new Vector2(-2f, -2f); wr.offsetMax = new Vector2(2f, 2f);
+            well.GetComponent<Image>().color = WellPaper;
+            well.GetComponent<Image>().raycastTarget = false;
+
             // Viewport (masked) fills the content area.
             var viewport = new GameObject("Viewport", typeof(Image), typeof(Mask), typeof(ScrollRect));
             viewport.transform.SetParent(_contentRoot.transform, false);
@@ -407,40 +576,44 @@ namespace DeNelle.Village.Hero
             rr.anchorMax = new Vector2(0.98f, y - 0.005f);
             rr.offsetMin = Vector2.zero;
             rr.offsetMax = Vector2.zero;
-            row.GetComponent<Image>().color = new Color(0.08f, 0.07f, 0.06f, 0.6f);
+            row.GetComponent<Image>().color = RowPaper;
+            AddRowGiltRim(row.transform); // thin rune-frame around the item row
             var rowBtn = row.GetComponent<Button>();
             rowBtn.transition = Selectable.Transition.ColorTint;
             var rowColors = rowBtn.colors;
-            rowColors.highlightedColor = new Color(0.16f, 0.18f, 0.12f, 0.8f);
-            rowColors.pressedColor = new Color(0.12f, 0.22f, 0.12f, 0.9f);
+            rowColors.normalColor = Color.white;     // multiplies the RowPaper image -> stays paper
+            rowColors.highlightedColor = RowHover;   // warm gilt-tinted hover
+            rowColors.pressedColor = RowPress;       // soft green confirm press
+            rowColors.fadeDuration = 0.08f;
             rowBtn.colors = rowColors;
             rowBtn.onClick.AddListener(() => buyAction());
 
             var nameTxt = new GameObject("N", typeof(TMPro.TextMeshProUGUI));
             nameTxt.transform.SetParent(row.transform, false);
             var nr = nameTxt.GetComponent<RectTransform>();
-            nr.anchorMin = new Vector2(0.02f, 0.15f); nr.anchorMax = new Vector2(0.48f, 0.85f);
+            nr.anchorMin = new Vector2(0.04f, 0.15f); nr.anchorMax = new Vector2(0.5f, 0.85f);
             var nt = nameTxt.GetComponent<TMPro.TextMeshProUGUI>();
             nt.text = label;
             nt.fontSize = 14;
-            nt.color = Color.white;
+            nt.color = Ink; // dark ink, readable on light row
             nt.raycastTarget = false; // let the row button receive the tap
 
             var priceTxt = new GameObject("P", typeof(TMPro.TextMeshProUGUI));
             priceTxt.transform.SetParent(row.transform, false);
             var pr = priceTxt.GetComponent<RectTransform>();
-            pr.anchorMin = new Vector2(0.48f, 0.15f); pr.anchorMax = new Vector2(0.72f, 0.85f);
+            pr.anchorMin = new Vector2(0.5f, 0.15f); pr.anchorMax = new Vector2(0.72f, 0.85f);
             var pt = priceTxt.GetComponent<TMPro.TextMeshProUGUI>();
             pt.text = CostString(cost);
-            pt.fontSize = 12;
-            pt.color = new Color(0.75f, 0.85f, 0.65f);
+            pt.fontSize = 13;
+            pt.fontStyle = TMPro.FontStyles.Bold;
+            pt.color = CostInk; // green cost ink
             pt.raycastTarget = false;
 
             var buyBtn = new GameObject("Buy", typeof(Button), typeof(Image));
             buyBtn.transform.SetParent(row.transform, false);
             var br = buyBtn.GetComponent<RectTransform>();
             br.anchorMin = new Vector2(0.74f, 0.15f); br.anchorMax = new Vector2(0.98f, 0.85f);
-            buyBtn.GetComponent<Image>().color = new Color(0.18f, 0.32f, 0.18f);
+            buyBtn.GetComponent<Image>().color = BuyGreen;
             var bb = buyBtn.GetComponent<Button>();
             bb.onClick.AddListener(() => buyAction());
 
@@ -540,6 +713,7 @@ namespace DeNelle.Village.Hero
         private void ShowSell()
         {
             ClearContent();
+            HighlightTab("SELL");
             SetStatus("Sell owned gear/potions for partial refund (Economy).");
 
             var inv = VillageInventory.Instance;
@@ -592,16 +766,17 @@ namespace DeNelle.Village.Hero
             rr.anchorMax = new Vector2(0.98f, y - 0.005f);
             rr.offsetMin = Vector2.zero;
             rr.offsetMax = Vector2.zero;
-            row.GetComponent<Image>().color = new Color(0.09f, 0.06f, 0.05f, 0.6f);
+            row.GetComponent<Image>().color = RowPaper;
+            AddRowGiltRim(row.transform);
 
             var nameTxt = new GameObject("N", typeof(TMPro.TextMeshProUGUI));
             nameTxt.transform.SetParent(row.transform, false);
             var nr = nameTxt.GetComponent<RectTransform>();
-            nr.anchorMin = new Vector2(0.02f, 0.15f); nr.anchorMax = new Vector2(0.55f, 0.85f);
+            nr.anchorMin = new Vector2(0.04f, 0.15f); nr.anchorMax = new Vector2(0.55f, 0.85f);
             var nt = nameTxt.GetComponent<TMPro.TextMeshProUGUI>();
             nt.text = label;
             nt.fontSize = 13;
-            nt.color = Color.white;
+            nt.color = Ink;
 
             var refTxt = new GameObject("R", typeof(TMPro.TextMeshProUGUI));
             refTxt.transform.SetParent(row.transform, false);
@@ -609,14 +784,15 @@ namespace DeNelle.Village.Hero
             pr.anchorMin = new Vector2(0.55f, 0.15f); pr.anchorMax = new Vector2(0.72f, 0.85f);
             var pt = refTxt.GetComponent<TMPro.TextMeshProUGUI>();
             pt.text = "+" + CostString(refund);
-            pt.fontSize = 12;
-            pt.color = new Color(0.85f, 0.75f, 0.55f);
+            pt.fontSize = 13;
+            pt.fontStyle = TMPro.FontStyles.Bold;
+            pt.color = RefundInk; // bronze refund ink
 
             var sellBtn = new GameObject("Sell", typeof(Button), typeof(Image));
             sellBtn.transform.SetParent(row.transform, false);
             var br = sellBtn.GetComponent<RectTransform>();
             br.anchorMin = new Vector2(0.74f, 0.15f); br.anchorMax = new Vector2(0.98f, 0.85f);
-            sellBtn.GetComponent<Image>().color = new Color(0.32f, 0.18f, 0.12f);
+            sellBtn.GetComponent<Image>().color = SellBronze;
             var bb = sellBtn.GetComponent<Button>();
             bb.onClick.AddListener(() => sellAction());
 
@@ -649,6 +825,7 @@ namespace DeNelle.Village.Hero
         private void ShowEquip()
         {
             ClearContent();
+            HighlightTab("EQUIP");
             SetStatus("Equip owned gear to the active hero (updates visuals + stats).");
 
             ResolveActiveHero();
@@ -699,7 +876,7 @@ namespace DeNelle.Village.Hero
             var t = go.GetComponent<TMPro.TextMeshProUGUI>();
             t.text = txt;
             t.fontSize = 13;
-            t.color = new Color(0.9f, 0.85f, 0.7f);
+            t.color = InkDim; // soft ink, readable on parchment
         }
 
         private void CreateEquipRow(Transform parent, string label, string id, bool isWeapon, ref float y)
@@ -711,22 +888,23 @@ namespace DeNelle.Village.Hero
             rr.anchorMax = new Vector2(0.98f, y - 0.005f);
             rr.offsetMin = Vector2.zero;
             rr.offsetMax = Vector2.zero;
-            row.GetComponent<Image>().color = new Color(0.07f, 0.06f, 0.05f, 0.5f);
+            row.GetComponent<Image>().color = RowPaper;
+            AddRowGiltRim(row.transform);
 
             var nameTxt = new GameObject("N", typeof(TMPro.TextMeshProUGUI));
             nameTxt.transform.SetParent(row.transform, false);
             var nr = nameTxt.GetComponent<RectTransform>();
-            nr.anchorMin = new Vector2(0.02f, 0.15f); nr.anchorMax = new Vector2(0.62f, 0.85f);
+            nr.anchorMin = new Vector2(0.04f, 0.15f); nr.anchorMax = new Vector2(0.62f, 0.85f);
             var nt = nameTxt.GetComponent<TMPro.TextMeshProUGUI>();
             nt.text = label;
             nt.fontSize = 13;
-            nt.color = Color.white;
+            nt.color = Ink;
 
             var eqBtn = new GameObject("Equip", typeof(Button), typeof(Image));
             eqBtn.transform.SetParent(row.transform, false);
             var br = eqBtn.GetComponent<RectTransform>();
             br.anchorMin = new Vector2(0.65f, 0.15f); br.anchorMax = new Vector2(0.98f, 0.85f);
-            eqBtn.GetComponent<Image>().color = new Color(0.22f, 0.28f, 0.38f);
+            eqBtn.GetComponent<Image>().color = EquipBlue;
             var bb = eqBtn.GetComponent<Button>();
             bb.onClick.AddListener(() => TryEquip(id, isWeapon));
 
@@ -802,6 +980,7 @@ namespace DeNelle.Village.Hero
             if (_ui != null) Destroy(_ui);
             _ui = null;
             _contentRoot = null;
+            _tabBar = null;
         }
 
         private void OnDestroy()

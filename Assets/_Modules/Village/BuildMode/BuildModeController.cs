@@ -85,6 +85,10 @@ namespace DeNelle.Village
 
         private PlacementGrid _grid;
         private BuildPaletteUI _palette;
+        // WO-352 — the Structure Info Preview shown on a palette-card tap, BEFORE arming.
+        // "Place" arms the entry (deferred from the old immediate-arm tap); "Cancel" / a
+        // tap outside dismisses without arming.
+        private BuildStructureInfoPanel _infoPanel;
         private BuildSelectionUI _selectionUi;
         private GhostPreview _ghost;
         // WO-335 — simple PLAYER yaw-only rotate panel opened on a tower place-confirm.
@@ -211,6 +215,7 @@ namespace DeNelle.Village
 
             CancelArmed();
             ClearSelection();
+            _infoPanel?.Hide();   // WO-352 — close any open structure preview on exit
             _palette?.Hide();
             _selectionUi?.Hide();
             _grid?.SetGridVisible(false);
@@ -1539,6 +1544,38 @@ namespace DeNelle.Village
             _palette.OnEntrySelected += Arm;
             _palette.OnExitRequested += Exit;
             _palette.OnOrientRequested += OpenOrientEditorForArmed;
+
+            // WO-352 — a card tap opens the Structure Info Preview first; arming is
+            // deferred to the panel's "Place" button (OnPlaceRequested). Subscribing
+            // OnCardTapped switches BuildPaletteUI from immediate-arm to preview-first.
+            EnsureInfoPanel();
+            _palette.OnCardTapped += OnPaletteCardTapped;
+        }
+
+        /// <summary>Lazily create the WO-352 Structure Info Preview panel (one per session).</summary>
+        private void EnsureInfoPanel()
+        {
+            if (_infoPanel != null) return;
+            var go = new GameObject("BuildStructureInfoPanel");
+            _infoPanel = go.AddComponent<BuildStructureInfoPanel>();
+            _infoPanel.OnPlaceRequested += OnInfoPanelPlace;
+            _infoPanel.OnCancelRequested += () => { /* dismiss only — nothing armed */ };
+        }
+
+        /// <summary>WO-352 — a palette card was tapped: preview it (no arm yet).</summary>
+        private void OnPaletteCardTapped(CatalogEntry entry)
+        {
+            if (entry == null) return;
+            EnsureInfoPanel();
+            _infoPanel.Show(entry);
+        }
+
+        /// <summary>WO-352 — the player confirmed "Place" in the preview: arm the entry now.</summary>
+        private void OnInfoPanelPlace(CatalogEntry entry)
+        {
+            if (entry == null) return;
+            Arm(entry);
+            _palette?.SetArmed(entry.id);   // sync the palette gilt highlight + Orient button
         }
 
         /// <summary>

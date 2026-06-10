@@ -337,6 +337,105 @@ namespace DeNelle.HUD
             return t;
         }
 
+        // =====================================================================
+        //  HUD WIDGET ICONS (WO-403/404) — real artwork sprites, sprite-first.
+        // ---------------------------------------------------------------------
+        //  The widget sheet is sliced by DeNelle.Editor.HudIconSlicer + mirrored to
+        //  Resources/HudIcons (WebGL-safe). We load every sub-sprite once via
+        //  Resources.LoadAll<Sprite>("HudIcons/<sheet>") and index by sprite name —
+        //  EXACTLY the ItemIconCatalog pattern (no AssetDatabase / StreamingAssets /
+        //  File IO → safe on every target). Every consumer is sprite-FIRST with the
+        //  existing code-drawn glyph kept as the fallback, so the HUD is correct
+        //  whether or not the art is present (sheet missing → null → glyph shows).
+        // =====================================================================
+        private const string HudIconSheet = "HudIcons/hud_widgets_sheet";
+        private static System.Collections.Generic.Dictionary<string, Sprite> _hudIcons;
+        private static bool _hudIconsLoaded;
+
+        // Widget sprite names — kept in lockstep with HudIconSlicer.WidgetNames.
+        private const string IconTree         = "hud_tree";
+        private const string IconCompass      = "hud_compass";
+        private const string IconSettings     = "hud_settings";
+        private const string IconInventory    = "hud_inventory";
+        private const string IconTalk         = "hud_talk";
+        private const string IconQuest        = "hud_quest";
+        private const string IconAbilityFrame = "hud_ability_frame";
+
+        /// <summary>Widget sprite by name, or null (caller keeps its glyph fallback).</summary>
+        private static Sprite WidgetSprite(string name)
+        {
+            EnsureHudIconsLoaded();
+            if (_hudIcons == null || string.IsNullOrEmpty(name)) return null;
+            return _hudIcons.TryGetValue(name, out var s) ? s : null;
+        }
+
+        private static void EnsureHudIconsLoaded()
+        {
+            if (_hudIconsLoaded) return;
+            _hudIconsLoaded = true;
+            _hudIcons = new System.Collections.Generic.Dictionary<string, Sprite>(
+                System.StringComparer.OrdinalIgnoreCase);
+            Sprite[] subs = null;
+            try { subs = Resources.LoadAll<Sprite>(HudIconSheet); }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning("[VillageHudController] HUD-icon load failed for " + HudIconSheet + ": " + e.Message);
+            }
+            if (subs != null)
+                for (int i = 0; i < subs.Length; i++)
+                {
+                    var sp = subs[i];
+                    if (sp != null && !string.IsNullOrEmpty(sp.name)) _hudIcons[sp.name] = sp;
+                }
+            if (_hudIcons.Count == 0)
+                Debug.Log("[VillageHudController] no HUD-widget sprites under Resources/HudIcons — " +
+                          "run Defenders/Art/Slice HUD Icons. Falling back to code-drawn glyphs.");
+        }
+
+        /// <summary>
+        /// Try to apply a widget sprite to an Image (sprite-FIRST). Returns true when
+        /// the art was found + applied (the caller then hides/keeps its glyph), false
+        /// when missing (caller keeps the code-drawn fallback visible). Tints to white
+        /// so the artwork shows in its own colours; non-raycast.
+        /// </summary>
+        private static bool TrySetWidget(Image img, string name)
+        {
+            if (img == null) return false;
+            var sp = WidgetSprite(name);
+            if (sp == null) return false;
+            img.sprite = sp;
+            img.type = Image.Type.Simple;
+            img.color = Color.white;
+            img.preserveAspect = true;
+            img.raycastTarget = false;
+            return true;
+        }
+
+        /// <summary>
+        /// Build a widget ICON cell that is sprite-FIRST: an Image that shows the named
+        /// widget artwork when present, otherwise a code-drawn glyph label (kept as the
+        /// fallback). Returns the host rect so callers can position/parent it. The glyph
+        /// label is hidden when the sprite resolves so the two never overlap.
+        /// </summary>
+        private static RectTransform AddWidgetIcon(string objName, Transform parent,
+            Vector2 anchorMin, Vector2 anchorMax, string widgetName, string glyphFallback,
+            float glyphSize, Color glyphColor)
+        {
+            var rt = NewRect(objName, parent, anchorMin, anchorMax);
+            var img = rt.gameObject.AddComponent<Image>();
+            bool hasArt = TrySetWidget(img, widgetName);
+            if (!hasArt)
+            {
+                // No artwork — make the Image inert and show the code-drawn glyph.
+                img.color = new Color(0f, 0f, 0f, 0f);
+                img.raycastTarget = false;
+                var t = AddText(rt, glyphFallback, glyphSize, glyphColor, TextAlignmentOptions.Center);
+                t.outlineColor = LGlow;
+                t.outlineWidth = 0.06f;
+            }
+            return rt;
+        }
+
         private void Awake()
         {
             CoreServices.RegisterHud(this);
@@ -703,6 +802,14 @@ namespace DeNelle.HUD
             // BuildTownMiniMap(townRoot);
             BuildTownMetrics(townRoot);
 
+            // WO-403/404: full-screen RUNIC BORDER frame — a light, thin gilt/rune
+            // frame around the whole play area (the mockup's framed-parchment feel).
+            // Always-on base chrome, non-raycast, behind every cluster.
+            BuildRunicBorderFrame(_safeArea);
+
+            // WO-403: top-centre ornate COMPASS + top-right Settings / Inventory icons.
+            BuildTopChrome(_safeArea);
+
             // IDLE / village UI — base canvas (NEVER hidden by the battle-HUD gate).
             BuildResourceStrip(_safeArea);
             BuildCastleBanner(_safeArea);
@@ -711,11 +818,173 @@ namespace DeNelle.HUD
             BuildRepairPrompt(_safeArea);
             BuildPartyFrames(_safeArea);
 
+            // WO-403/404: RIGHT-edge action panel — Talk + Quest (town) buttons. The
+            // combat Skills panel is the existing bottom-right skill bar (rune cells).
+            BuildTownActionPanel(_safeArea);
+
             // BATTLE HUD — combat-only clusters (faded in/out by the visibility mgr).
             BuildWaveReadout(battleRoot);
             BuildMomentumBadge(battleRoot);
             BuildVitalsCluster(battleRoot);
             BuildSkillBar(battleRoot);
+        }
+
+        // ── WO-403/404 · Full-screen RUNIC BORDER frame ───────────────────────
+        // A light, thin gilt/rune frame hugging the safe-area edges — four hairline
+        // gilt bars (top/bottom/left/right) + a soft glow inset + small corner runes,
+        // all NON-RAYCAST decorative children behind every cluster. Code-drawn so it
+        // needs no art and is WebGL-safe; reads as the mockup's framed-parchment feel
+        // without boxing in / darkening the play area.
+        private RectTransform _runicFrame;
+        private void BuildRunicBorderFrame(Transform parent)
+        {
+            _runicFrame = NewRect("RunicFrame", parent, Vector2.zero, Vector2.one);
+            _runicFrame.SetAsFirstSibling(); // behind everything
+
+            const float bar = 3f;     // crisp gilt hairline thickness
+            const float glow = 7f;     // soft glow band just inside the hairline
+            const float inset = 6f;    // pull off the very edge so it reads as a frame
+
+            // Soft gold glow band (low alpha, slightly inside the hairline).
+            AddFrameEdge("GlowTop",    new Vector2(0f, 1f), new Vector2(1f, 1f), inset, glow, true,  LGiltSoft);
+            AddFrameEdge("GlowBottom", new Vector2(0f, 0f), new Vector2(1f, 0f), inset, glow, true,  LGiltSoft);
+            AddFrameEdge("GlowLeft",   new Vector2(0f, 0f), new Vector2(0f, 1f), inset, glow, false, LGiltSoft);
+            AddFrameEdge("GlowRight",  new Vector2(1f, 0f), new Vector2(1f, 1f), inset, glow, false, LGiltSoft);
+
+            // Crisp gilt hairline on the outer edge of the glow.
+            AddFrameEdge("EdgeTop",    new Vector2(0f, 1f), new Vector2(1f, 1f), inset, bar, true,  LGilt);
+            AddFrameEdge("EdgeBottom", new Vector2(0f, 0f), new Vector2(1f, 0f), inset, bar, true,  LGilt);
+            AddFrameEdge("EdgeLeft",   new Vector2(0f, 0f), new Vector2(0f, 1f), inset, bar, false, LGilt);
+            AddFrameEdge("EdgeRight",  new Vector2(1f, 0f), new Vector2(1f, 1f), inset, bar, false, LGilt);
+
+            // Small corner rune flourishes (decorative glyphs anchored to each corner).
+            AddCornerRune("RuneTL", new Vector2(0f, 1f), new Vector2(14f, -14f));
+            AddCornerRune("RuneTR", new Vector2(1f, 1f), new Vector2(-14f, -14f));
+            AddCornerRune("RuneBL", new Vector2(0f, 0f), new Vector2(14f, 14f));
+            AddCornerRune("RuneBR", new Vector2(1f, 0f), new Vector2(-14f, 14f));
+        }
+
+        // One edge bar of the runic frame. `horizontal` = a full-width top/bottom bar
+        // (thickness in px); otherwise a full-height left/right bar. `inset` pulls it
+        // off the screen edge. Decorative, non-raycast.
+        private void AddFrameEdge(string name, Vector2 anchorMin, Vector2 anchorMax,
+            float inset, float thickness, bool horizontal, Color color)
+        {
+            var rt = NewRect(name, _runicFrame, anchorMin, anchorMax);
+            if (horizontal)
+            {
+                // stretch across X, fixed height; anchored to the top or bottom edge.
+                bool top = anchorMin.y > 0.5f;
+                rt.anchorMin = new Vector2(0f, top ? 1f : 0f);
+                rt.anchorMax = new Vector2(1f, top ? 1f : 0f);
+                rt.pivot = new Vector2(0.5f, top ? 1f : 0f);
+                rt.sizeDelta = new Vector2(-2f * inset, thickness);
+                rt.anchoredPosition = new Vector2(0f, top ? -inset : inset);
+            }
+            else
+            {
+                bool right = anchorMin.x > 0.5f;
+                rt.anchorMin = new Vector2(right ? 1f : 0f, 0f);
+                rt.anchorMax = new Vector2(right ? 1f : 0f, 1f);
+                rt.pivot = new Vector2(right ? 1f : 0f, 0.5f);
+                rt.sizeDelta = new Vector2(thickness, -2f * inset);
+                rt.anchoredPosition = new Vector2(right ? -inset : inset, 0f);
+            }
+            var img = rt.gameObject.AddComponent<Image>();
+            img.color = color;
+            img.sprite = HudTheme.RoundedFrame;
+            img.type = HudTheme.RoundedFrame != null ? Image.Type.Sliced : Image.Type.Simple;
+            img.raycastTarget = false;
+        }
+
+        private void AddCornerRune(string name, Vector2 corner, Vector2 offset)
+        {
+            var rt = NewRect(name, _runicFrame, corner, corner);
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.sizeDelta = new Vector2(22f, 22f);
+            rt.anchoredPosition = offset;
+            var t = AddText(rt, "❖", 18, LGilt, TextAlignmentOptions.Center);
+            t.raycastTarget = false;
+        }
+
+        // ── WO-403 · Top-centre COMPASS + top-right SETTINGS / INVENTORY icons. ─
+        // The compass is a passive ornate widget (top-centre, above the resource
+        // strip). Settings (gear) + Inventory (backpack) are tappable icons top-right.
+        // Both icons raise the existing event hooks: Settings → ShopRequested (the HUD
+        // already routes ShopRequested to the menu bridge); Inventory → BuildRequested
+        // (loadout/build entry). All sprite-first with glyph fallback. By-name extras.
+        private RectTransform _compassWidget;
+        private void BuildTopChrome(Transform parent)
+        {
+            // Ornate compass — top-centre, small, above the resource strip. Passive.
+            _compassWidget = AddWidgetIcon("Compass", parent,
+                new Vector2(0.465f, 0.90f), new Vector2(0.535f, 0.955f),
+                IconCompass, "✺", 30, LGilt);
+
+            // Top-right icon cluster — Settings gear + Inventory backpack.
+            var cluster = NewRect("TopRightIcons", parent, new Vector2(1f, 1f), new Vector2(1f, 1f));
+            cluster.anchorMin = new Vector2(1f, 1f);
+            cluster.anchorMax = new Vector2(1f, 1f);
+            cluster.pivot = new Vector2(1f, 1f);
+            // Drop below the top resource strip band so the gear/backpack never
+            // overlap the resources (battle) or the compass row (town).
+            cluster.anchoredPosition = new Vector2(-12f, -78f);
+            cluster.sizeDelta = new Vector2(108f, 50f);
+
+            BuildIconButton(cluster, new Vector2(0f, 0f), new Vector2(0.48f, 1f),
+                IconSettings, "⚙", () => ShopRequested?.Invoke());
+            BuildIconButton(cluster, new Vector2(0.52f, 0f), new Vector2(1f, 1f),
+                IconInventory, "🎒", () => BuildRequested?.Invoke());
+        }
+
+        // A round rune-framed icon BUTTON: gilt ring seat + sprite-first widget icon
+        // (glyph fallback) + a Button raising the given action.
+        private void BuildIconButton(Transform parent, Vector2 anchorMin, Vector2 anchorMax,
+            string widgetName, string glyph, UnityEngine.Events.UnityAction action)
+        {
+            var cell = NewRect("Icon_" + widgetName, parent, anchorMin, anchorMax);
+            // round parchment seat + gilt rune ring (the airy framed look).
+            var seat = cell.gameObject.AddComponent<Image>();
+            seat.color = LPortrait;
+            seat.sprite = HudTheme.Disc;
+            var ring = NewRect("Ring", cell, Vector2.zero, Vector2.one);
+            ring.offsetMin = new Vector2(-1.5f, -1.5f); ring.offsetMax = new Vector2(1.5f, 1.5f);
+            var ringImg = ring.gameObject.AddComponent<Image>();
+            ringImg.color = LGilt;
+            ringImg.sprite = HudTheme.Disc;
+            ringImg.raycastTarget = false;
+            ring.SetAsFirstSibling(); // behind the seat = rim
+
+            // sprite-first widget icon (glyph fallback) inset inside the ring.
+            AddWidgetIcon("Glyph", cell, new Vector2(0.16f, 0.16f), new Vector2(0.84f, 0.84f),
+                widgetName, glyph, 22, LInk);
+
+            var btn = cell.gameObject.AddComponent<Button>();
+            btn.targetGraphic = seat;
+            HudTheme.StyleButtonColors(btn, LPortrait);
+            if (action != null) btn.onClick.AddListener(action);
+        }
+
+        // ── WO-403/404 · RIGHT-edge TOWN action panel — Talk + Quest rune buttons. ─
+        // Circular rune-framed buttons on the right edge (town mode). Talk →
+        // ShopRequested (vendor/dialogue entry — DialogueService is the interaction
+        // layer); Quest → BuildRequested (quest/board entry hook). VILLAGE-ONLY:
+        // gated with the rest of the town chrome by ApplyContext. The COMBAT mode's
+        // right-edge Skills panel is the existing bottom-right rune skill bar.
+        private RectTransform _townActionPanel;
+        private void BuildTownActionPanel(Transform parent)
+        {
+            _townActionPanel = NewRect("TownActions", parent, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
+            _townActionPanel.anchorMin = new Vector2(1f, 0.5f);
+            _townActionPanel.anchorMax = new Vector2(1f, 0.5f);
+            _townActionPanel.pivot = new Vector2(1f, 0.5f);
+            _townActionPanel.anchoredPosition = new Vector2(-12f, 0f);
+            _townActionPanel.sizeDelta = new Vector2(64f, 148f);
+
+            BuildIconButton(_townActionPanel, new Vector2(0f, 0.54f), new Vector2(1f, 1f),
+                IconTalk, "💬", () => ShopRequested?.Invoke());
+            BuildIconButton(_townActionPanel, new Vector2(0f, 0f), new Vector2(1f, 0.46f),
+                IconQuest, "❢", () => BuildRequested?.Invoke());
         }
 
         // ── Currency strip — thin glass bar, tiny colour dot + amount. ─────────
@@ -764,9 +1033,10 @@ namespace DeNelle.HUD
             // LIGHT: warm parchment plate + thin glowing gilt rune rim + soft glow.
             FramePanelLight(_castleBanner.gameObject, LParchDeep);
 
-            // Crest leaf glyph (the world-tree mark) tucked top-left of the banner.
-            var crest = NewRect("Crest", _castleBanner, new Vector2(0.015f, 0.42f), new Vector2(0.11f, 0.96f));
-            AddText(crest, "❦", HudTheme.FontHead, LGilt, TextAlignmentOptions.Center);
+            // Tree-of-Life crest tucked top-left of the banner — sprite-FIRST (the
+            // hud_tree widget art), with the world-tree glyph kept as the fallback.
+            AddWidgetIcon("Crest", _castleBanner, new Vector2(0.015f, 0.42f), new Vector2(0.11f, 0.96f),
+                IconTree, "❦", HudTheme.FontHead, LGilt);
 
             // Caption row — small spaced gilt label so the bar reads as the Heart.
             var caption = NewRect("Caption", _castleBanner, new Vector2(0.11f, 0.56f), new Vector2(0.99f, 0.97f));
@@ -893,12 +1163,17 @@ namespace DeNelle.HUD
                 pimg.raycastTarget = false;
                 var pring = NewRect("Ring", port, Vector2.zero, Vector2.one);
                 var pringImg = pring.gameObject.AddComponent<Image>();
-                pringImg.color = LGilt;                      // thin gilt rune ring
-                pringImg.sprite = HudTheme.Disc;
                 pringImg.raycastTarget = false;
                 pringImg.transform.SetSiblingIndex(0);       // behind the seat = rim
+                // Sprite-first: the runic ability-circle frame art rings the portrait;
+                // fall back to a flat gilt disc rim when the widget art is missing.
+                if (!TrySetWidget(pringImg, IconAbilityFrame))
+                {
+                    pringImg.color = LGilt;                  // thin gilt rune ring
+                    pringImg.sprite = HudTheme.Disc;
+                }
                 port.localScale = Vector3.one;
-                pring.offsetMin = new Vector2(-1.5f, -1.5f); pring.offsetMax = new Vector2(1.5f, 1.5f);
+                pring.offsetMin = new Vector2(-2.5f, -2.5f); pring.offsetMax = new Vector2(2.5f, 2.5f);
                 AddText(port, "✦", 18, new Color(LGilt.r, LGilt.g, LGilt.b, 0.85f), TextAlignmentOptions.Center);
 
                 // Name
@@ -1031,14 +1306,24 @@ namespace DeNelle.HUD
                 // thin gilt rune rim per cell (the airy framed look).
                 ElarionUiKit.AddInnerRim(cell.gameObject, LGiltSoft);
 
-                // Accent square (tinted per ability) — fills most of the cell. Light
-                // rune-frame seat so an unset slot reads parchment, not dark glass;
-                // SetAbilitySlot still recolours this per-ability (kept).
-                var disc = NewRect("Accent", cell, new Vector2(0.10f, 0.36f), new Vector2(0.90f, 0.96f));
+                // Circular RUNIC ability frame ringing the ability disc (sprite-first;
+                // the hud_ability_frame widget art). A decorative ring behind the
+                // accent so each skill reads as a rune-framed circular button per the
+                // mockup. When the art is missing it stays inert (the accent shows).
+                var runeFrame = NewRect("RuneFrame", cell, new Vector2(0.04f, 0.30f), new Vector2(0.96f, 1.0f));
+                var runeImg = runeFrame.gameObject.AddComponent<Image>();
+                runeImg.raycastTarget = false;
+                if (!TrySetWidget(runeImg, IconAbilityFrame))
+                    runeImg.color = new Color(0f, 0f, 0f, 0f); // no art → inert
+
+                // Accent disc (tinted per ability) — fills most of the cell as a CIRCLE
+                // now (circular rune button). Light seat so an unset slot reads
+                // parchment; SetAbilitySlot still recolours this per-ability (kept).
+                var disc = NewRect("Accent", cell, new Vector2(0.14f, 0.40f), new Vector2(0.86f, 0.94f));
                 _slotAccent[i] = disc.gameObject.AddComponent<Image>();
                 _slotAccent[i].color = LSlotFill;
-                _slotAccent[i].sprite = HudTheme.RoundedFrame;
-                _slotAccent[i].type = HudTheme.RoundedFrame != null ? Image.Type.Sliced : Image.Type.Simple;
+                _slotAccent[i].sprite = HudTheme.Disc;   // circular ability seat
+                _slotAccent[i].type = HudTheme.Disc != null ? Image.Type.Simple : Image.Type.Simple;
                 _slotAccent[i].raycastTarget = false;
 
                 // Glyph: dark ink (legible on the light seat AND on tinted ability
@@ -1462,6 +1747,9 @@ namespace DeNelle.HUD
             bool showVillage = inVillage || _villageOnlyForced;
             SetActiveSafe(_castleBanner, showVillage);
             SetActiveSafe(_buildBtn, showVillage);
+            // WO-403: the right-edge Talk/Quest action panel is town-only (replaced by
+            // the combat Skills bar out in a fight / the open world).
+            SetActiveSafe(_townActionPanel, showVillage);
             // NOTE (WO-337): the wave readout (N/M + enemy count + combat status) is
             // part of the BATTLE HUD now — its visibility is driven by
             // BattleHudVisibilityManager (active-combat fade), NOT the village/world

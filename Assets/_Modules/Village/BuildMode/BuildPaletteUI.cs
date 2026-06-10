@@ -34,6 +34,15 @@ namespace DeNelle.Village
         /// <summary>Raised when a palette card is tapped — arg is the armed entry.</summary>
         public event Action<CatalogEntry> OnEntrySelected;
 
+        /// <summary>
+        /// WO-352 — raised when a palette card is tapped, BEFORE arming, so the controller
+        /// can show the Structure Info Preview panel and defer arming until the player taps
+        /// "Place". When a subscriber is attached this REPLACES the immediate-arm behaviour
+        /// (the card no longer raises <see cref="OnEntrySelected"/> on tap); with no
+        /// subscriber the legacy immediate-arm path is unchanged. Arg = the tapped entry.
+        /// </summary>
+        public event Action<CatalogEntry> OnCardTapped;
+
         /// <summary>Raised when the palette's Exit button is tapped.</summary>
         public event Action OnExitRequested;
 
@@ -131,6 +140,19 @@ namespace DeNelle.Village
             if (_root != null) _root.style.display = DisplayStyle.None;
             _armedId = null;
             UpdateOrientButton();
+        }
+
+        /// <summary>
+        /// WO-352 — set which entry the palette shows as ARMED (gilt highlight + Orient
+        /// button), without raising OnEntrySelected. The controller calls this after the
+        /// player confirms "Place" in the Structure Info Preview, so the palette stays in
+        /// sync with the deferred-arm flow. Pass null to clear the highlight.
+        /// </summary>
+        public void SetArmed(string id)
+        {
+            _armedId = id;
+            if (_root != null && _root.style.display == DisplayStyle.Flex) Render();
+            else UpdateOrientButton();
         }
 
         private void EnsureBuilt()
@@ -238,6 +260,14 @@ namespace DeNelle.Village
 
             var card = new Button(() =>
             {
+                // WO-352 — if a preview subscriber is attached, defer arming: raise
+                // OnCardTapped so the controller shows the Structure Info Preview panel
+                // (it calls SetArmed on "Place"). Otherwise keep the legacy immediate-arm.
+                if (OnCardTapped != null)
+                {
+                    OnCardTapped.Invoke(e);
+                    return;
+                }
                 _armedId = e.id;
                 OnEntrySelected?.Invoke(e);
                 Render();   // refresh the armed highlight
