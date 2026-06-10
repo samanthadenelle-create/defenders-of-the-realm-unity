@@ -44,6 +44,7 @@
 
 using DeNelle.Core;
 using DeNelle.Core.State;
+using DeNelle.Core.UI;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -103,6 +104,9 @@ namespace DeNelle.Onboarding
 
         // One card VisualElement per hero, in HeroCatalog order.
         private readonly VisualElement[] _cards = new VisualElement[HeroCatalog.Heroes.Length];
+        // The gold image-frame of each card (parallel to _cards) so selection can
+        // brighten the frame rim to gilt (WO-374 selection state).
+        private readonly VisualElement[] _cardFrames = new VisualElement[HeroCatalog.Heroes.Length];
 
         private bool _built;
         private bool _hasSelection;
@@ -354,12 +358,23 @@ namespace DeNelle.Onboarding
                 VisualElement card = BuildCard(info);
                 _cardRow.Add(card);
                 _cards[i] = card;
+                _cardFrames[i] = card.Q<VisualElement>("image-frame");
             }
         }
 
         /// <summary>
-        /// Builds one hero panel. Sized with flex (NOT a fixed pixel width) so the
-        /// four panels share the row evenly and re-flow in both orientations.
+        /// Builds one hero panel (WO-374 card framing): a gold-framed portrait
+        /// IMAGE sitting above a clearly-separated DATA strip (hero name + class),
+        /// with no overlap between the two. Sized with flex (NOT a fixed pixel
+        /// width) so the four panels share the row evenly and re-flow in both
+        /// orientations.
+        ///
+        /// Structure:
+        ///   card (column, padded)
+        ///     ├─ image-frame   (gold double-rim, dark backing, fixed 3:4 aspect)
+        ///     │    └─ portrait  (cover-fit art, or accent glyph fallback)
+        ///     ├─ accent strip   (element colour)
+        ///     └─ data strip     (name in gold, class line in cream — BELOW image)
         /// </summary>
         private VisualElement BuildCard(HeroCardInfo info)
         {
@@ -386,17 +401,47 @@ namespace DeNelle.Onboarding
             card.style.overflow = Overflow.Hidden;
             card.style.flexDirection = FlexDirection.Column;
             card.style.alignItems = Align.Stretch;
+            card.style.justifyContent = Justify.FlexStart;
+            // Breathing room inside the card so the framed image isn't flush to
+            // the violet card border (WO-374 #3: cards were cramped).
+            card.style.paddingTop = 8f;
+            card.style.paddingBottom = 8f;
+            card.style.paddingLeft = 8f;
+            card.style.paddingRight = 8f;
 
-            // Portrait block — fills the top of the panel, square-ish.
+            // ── Image frame (WO-374 #1): a gold double-rim around a dark backing
+            //    holds the portrait at a fixed portrait aspect, clearly set off
+            //    from the data strip below. ScaleAndCrop "covers" the frame so the
+            //    art is never stretched/squashed; overflow-hidden + rounding keep
+            //    it neatly inside the gilt rim.
+            var imageFrame = new VisualElement { name = "image-frame" };
+            imageFrame.style.flexGrow = 1f;
+            imageFrame.style.flexShrink = 1f;
+            imageFrame.style.minHeight = 70f;
+            imageFrame.style.overflow = Overflow.Hidden;
+            imageFrame.style.alignItems = Align.Center;
+            imageFrame.style.justifyContent = Justify.Center;
+            imageFrame.style.backgroundColor = new Color(0f, 0f, 0f, 0.30f); // dark backing
+            float frameRadius = 8f;
+            imageFrame.style.borderTopLeftRadius = frameRadius;
+            imageFrame.style.borderTopRightRadius = frameRadius;
+            imageFrame.style.borderBottomLeftRadius = frameRadius;
+            imageFrame.style.borderBottomRightRadius = frameRadius;
+            SetBorderWidth(imageFrame, 2f);
+            SetBorderColor(imageFrame, new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.85f));
+
+            // Portrait art fills the frame (cover-fit). Portraits use the owner's
+            // character-named art (canon roster): Thrain=Mage, Grom=Knight,
+            // Sylas=Ranger, Elara=Cleric.
             var portrait = new VisualElement { name = "portrait" };
-            portrait.style.flexGrow = 1f;
-            portrait.style.minHeight = 70f;
+            portrait.style.position = Position.Absolute;
+            portrait.style.left = 0f;
+            portrait.style.right = 0f;
+            portrait.style.top = 0f;
+            portrait.style.bottom = 0f;
             portrait.style.alignItems = Align.Center;
             portrait.style.justifyContent = Justify.Center;
-            portrait.style.backgroundColor = new Color(0.486f, 0.227f, 0.929f, 0.10f);
 
-            // Portraits use the owner's character-named art (canon roster):
-            // Thrain=Mage, Grom=Knight, Sylas=Ranger, Elara=Cleric.
             string slug = SlugFor(info.Hero);
             var portraitSprite = Resources.Load<Sprite>($"HeroPortraits/{slug}");
             if (portraitSprite != null)
@@ -421,29 +466,52 @@ namespace DeNelle.Onboarding
                     portrait.Add(glyph);
                 }
             }
-            card.Add(portrait);
+            imageFrame.Add(portrait);
+            card.Add(imageFrame);
 
-            // Element-coloured accent strip.
+            // Element-coloured accent strip — a clean seam between image and data.
             var accent = new VisualElement();
-            accent.style.height = 4f;
+            accent.style.height = 3f;
             accent.style.flexShrink = 0f;
+            accent.style.marginTop = 8f;
             accent.style.backgroundColor = info.Accent;
+            float accentRadius = 2f;
+            accent.style.borderTopLeftRadius = accentRadius;
+            accent.style.borderTopRightRadius = accentRadius;
+            accent.style.borderBottomLeftRadius = accentRadius;
+            accent.style.borderBottomRightRadius = accentRadius;
             card.Add(accent);
 
-            // Hero name strip under the portrait (compact — full copy is in the
-            // detail card below the row).
+            // ── Data strip (WO-374 #2): name + class BELOW the framed image, never
+            //    overlapping it. Name in runic gold, class line in muted cream.
+            var dataStrip = new VisualElement { name = "card-data" };
+            dataStrip.style.flexShrink = 0f;
+            dataStrip.style.paddingTop = 6f;
+            dataStrip.style.paddingBottom = 4f;
+            dataStrip.style.paddingLeft = 2f;
+            dataStrip.style.paddingRight = 2f;
+            dataStrip.style.alignItems = Align.Center;
+
             var nameLabel = new Label(CanonStrings.Locale(info.NameKey));
             nameLabel.style.unityTextAlign = TextAnchor.MiddleCenter;
-            nameLabel.style.paddingTop = 6f;
-            nameLabel.style.paddingBottom = 6f;
-            nameLabel.style.paddingLeft = 2f;
-            nameLabel.style.paddingRight = 2f;
-            nameLabel.style.fontSize = 14f;
+            nameLabel.style.fontSize = 15f;
             nameLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
-            nameLabel.style.color = ColTextBright;
+            nameLabel.style.color = ElarionUi.Gold;        // gold name (WO-374 typography)
             nameLabel.style.whiteSpace = WhiteSpace.Normal;
             nameLabel.style.flexShrink = 0f;
-            card.Add(nameLabel);
+            dataStrip.Add(nameLabel);
+
+            var classLabel = new Label(CanonStrings.Locale(info.RoleKey));
+            classLabel.style.unityTextAlign = TextAnchor.MiddleCenter;
+            classLabel.style.marginTop = 1f;
+            classLabel.style.fontSize = 11f;
+            classLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
+            classLabel.style.color = ElarionUi.ParchmentDim; // cream class line
+            classLabel.style.whiteSpace = WhiteSpace.Normal;
+            classLabel.style.flexShrink = 0f;
+            dataStrip.Add(classLabel);
+
+            card.Add(dataStrip);
 
             // Whole panel is the hit target.
             HeroClass captured = info.Hero;
@@ -609,6 +677,17 @@ namespace DeNelle.Onboarding
                 bool active = _hasSelection && HeroCatalog.Heroes[i].Hero == _selectedHero;
                 SetBorderColor(_cards[i], active ? ColAmber : ColVioletBorder);
                 _cards[i].style.backgroundColor = active ? ColCardActive : ColCardIdle;
+
+                // Brighten the framed-image rim to gilt on the selected card so the
+                // chosen hero stands out (WO-374 selection state).
+                if (_cardFrames[i] != null)
+                {
+                    Color rim = active
+                        ? ElarionUi.Gilt
+                        : new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.85f);
+                    SetBorderColor(_cardFrames[i], rim);
+                    SetBorderWidth(_cardFrames[i], active ? 3f : 2f);
+                }
             }
             RefreshDetailCard();
         }
