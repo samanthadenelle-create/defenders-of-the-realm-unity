@@ -207,6 +207,46 @@ namespace DeNelle.Village
         private static readonly Vector3 IdleHoldOffsetEuler   = new Vector3(55f, 0f, 0f);
         private static readonly Vector3 CombatHoldOffsetEuler = new Vector3(0f, 0f, 0f);
 
+        // ── SWORD GRIP ORIENTATION (rig-relative) ────────────────────────────────────
+        // THE FIX (task #36 follow-up): the grip POINT (handle below the crossguard) is
+        // correct, but the blade DIRECTION was wrong — it lay across the torso. Cause:
+        // the grip root was parented under the RightHand bone and its blade axis (prop
+        // local +Y) was left aligned to the BONE's local +Y. On this rig the hand bone's
+        // local axes do NOT world-align the way a generic prop frame assumes, so "blade
+        // +Y" came out pointing sideways across the body instead of forward from the fist.
+        //
+        // We now build the grip-root's base rotation FROM the hand bone's own axes so the
+        // blade extends along the way a fist naturally "points" when gripping a sword, and
+        // the grip axis runs along the bone (palm→fingers). Which of the hand bone's local
+        // axes is the "point" (forward-from-fist) vs the "grip" (along the bone) is
+        // RIG-SPECIFIC, so both are EXPOSED below for an in-Inspector nudge without a
+        // recompile. Defaults are the most plausible for a Humanoid RightHand (Unity's
+        // Mecanim convention: the bone's local +Y runs down the forearm toward the
+        // fingertips = the grip/point line; +Z is roughly the palm normal). Tune on the
+        // real rig if the first pick reads off.
+
+        // The hand-bone local axis the BLADE should extend along (forward from the fist).
+        // Default +Y (along the finger line — a held blade continues the forearm/finger
+        // direction). Flip sign or switch axis in the Inspector if the blade still reads
+        // sideways/backward on this rig.
+        [SerializeField] private Vector3 _handBladeAxis = new Vector3(0f, 1f, 0f);
+
+        // The hand-bone local axis the weapon's GRIP/edge plane should align to (keeps the
+        // flat of the blade oriented sanely — roughly the palm normal). Default +Z.
+        [SerializeField] private Vector3 _handGripUpAxis = new Vector3(0f, 0f, 1f);
+
+        // Final calibration nudge applied ON TOP of the rig-derived orientation, in the
+        // grip root's local space (after it's been pointed down the hand axis). Lets the
+        // owner perfect the read (e.g. blade forward-and-slightly-up from the fist) from
+        // the Inspector against the real hand bone — no recompile. The idle/combat hold
+        // offset composes on top of THIS (see ApplyHoldPose), so the hold tilt stays
+        // relative to the corrected ready orientation (no double-apply).
+        [SerializeField] private Vector3 _swordGripEuler = new Vector3(-25f, 0f, 0f);
+
+        // Cached base rotation for the current grip root (rig-derived + _swordGripEuler),
+        // expressed in the hand bone's local space. ApplyHoldPose offsets from this.
+        private Quaternion _baseGripRot = Quaternion.identity;
+
         private void Awake()
         {
             CacheRig();
@@ -316,6 +356,21 @@ namespace DeNelle.Village
             _gripRoot = gripRoot.transform;
             _baseGripEuler = vis.gripEuler;
             _currentWeaponProp = gripRoot;
+
+            // Base orientation:
+            //  • Swords/daggers: build the grip-root rotation FROM the hand bone's own axes
+            //    so the blade extends forward from the fist (not across the torso). The
+            //    prop's blade/grip line is local +Y (NormalizeInto/SeatByHandle put the
+            //    longest axis there); we point that down the hand's blade axis and keep the
+            //    flat of the blade aligned to the hand's grip-up axis, then add the
+            //    serialized _swordGripEuler calibration nudge.
+            //  • Other classes: keep the proven per-weapon gripEuler (bow/staff/shield are
+            //    already seated correctly by NormalizeInto + their preset euler).
+            if (vis.kind == WeaponClass.Sword || vis.kind == WeaponClass.Dagger)
+                _baseGripRot = ComputeSwordGripRotation();
+            else
+                _baseGripRot = Quaternion.Euler(_baseGripEuler);
+
             ApplyHoldPose();
         }
 
@@ -538,7 +593,42 @@ namespace DeNelle.Village
         {
             if (_gripRoot == null) return;
             Vector3 offset = _combatActive ? CombatHoldOffsetEuler : IdleHoldOffsetEuler;
-            _gripRoot.localRotation = Quaternion.Euler(_baseGripEuler) * Quaternion.Euler(offset);
+            // _baseGripRot is the corrected READY orientation (rig-derived for swords, the
+            // per-weapon preset otherwise). The idle/combat hold tilt composes on top of it
+            // so the hold offset is relative to the corrected ready pose (no double-apply).
+            _gripRoot.localRotation = _baseGripRot * Quaternion.Euler(offset);
+        }
+
+        // Build the sword grip-root's LOCAL rotation (in the hand bone's space) so the blade
+        // extends forward from the fist. The prop's blade/grip line is local +Y; we rotate
+        // the grip root so its +Y points along the hand bone's _handBladeAxis and its +Z
+        // along the hand bone's _handGripUpAxis — i.e. the prop frame is rebuilt to match the
+        // hand's natural "point" + grip axes rather than assuming a world-aligned bone. The
+        // serialized _swordGripEuler is then applied in that corrected local frame as a final
+        // calibration nudge (e.g. tip the blade forward-and-slightly-up). Rig-specific: the
+        // axis choices are exposed so they can be re-picked in the Inspector without a recompile.
+        private Quaternion ComputeSwordGripRotation()
+        {
+            Vector3 blade = _handBladeAxis.sqrMagnitude > 1e-6f ? _handBladeAxis.normalized : Vector3.up;
+            Vector3 up    = _handGripUpAxis.sqrMagnitude > 1e-6f ? _handGripUpAxis.normalized : Vector3.forward;
+
+            // Orthonormalize `up` against `blade` so the basis is valid even if the two
+            // chosen axes aren't perfectly perpendicular on this rig.
+            up = up - Vector3.Dot(up, blade) * blade;
+            if (up.sqrMagnitude < 1e-6f)
+            {
+                // Degenerate (axes parallel) — pick any axis not collinear with the blade.
+                up = Mathf.Abs(blade.y) < 0.9f ? Vector3.up : Vector3.forward;
+                up = up - Vector3.Dot(up, blade) * blade;
+            }
+            up.Normalize();
+
+            // Rotation mapping prop-local (+Y up, +Z forward) onto (blade, up): Quaternion
+            // .LookRotation builds a frame whose +Z = forward, +Y = up. We want the prop's
+            // +Y (its blade line) to land on `blade` and its +Z (its flat-plane normal) on
+            // `up`, so feed forward=up, upwards=blade.
+            Quaternion rigAligned = Quaternion.LookRotation(up, blade);
+            return rigAligned * Quaternion.Euler(_swordGripEuler);
         }
 
         // ── ARMOR STUB ───────────────────────────────────────────────────────────

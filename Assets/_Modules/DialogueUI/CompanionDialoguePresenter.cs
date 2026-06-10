@@ -66,7 +66,76 @@ namespace DeNelle.DialogueUI
         {
             TryInjectPortraitTag(line);
             UpdateNameBanner(line);
+            // Re-assert dark ink on the body + option-preface line text EVERY line.
+            // The one-time reskin tints these once, but defend against any per-line
+            // state that could regress the colour (and cover the case where the
+            // reskin ran before these objects existed). Cheap + idempotent.
+            TintLineText(FindDescendant(transform, "Line"), ElarionUi.Ink);
+            TintLineText(FindDescendant(transform, "Options"), ElarionUi.Ink);
             await base.RunLineAsync(line, token);
+        }
+
+        // ---------------------------------------------------------------------
+        // OPTION-TEXT INK FIX (the readable-on-parchment win).
+        // ---------------------------------------------------------------------
+        // The ROOT of the "yellow on the light box" report: each option button is
+        // a fresh Instantiate of the ClassicRPG "Option Item" prefab, whose TMP
+        // vertex colour is the package's bright option GREEN (m_fontColor ≈
+        // 0.37,1,0.32). On the dark stock box that green is legible; on our LIGHT
+        // parchment reskin it washes out to an unreadable yellow-green. The
+        // one-time ReskinToLightParchmentOnce tint never reaches these buttons
+        // because they don't exist yet at dialogue-start AND are rebuilt every
+        // time options are shown — so the green always wins.
+        //
+        // Fix: override RunOptionsAsync, let the base build + present the options
+        // (it instantiates every option item synchronously before its first
+        // await), then force each option item's TMP colour to dark ink. We retint
+        // for a few frames so it also catches items that finish their typewriter
+        // reveal slightly later. OptionItem's selection highlight only toggles a
+        // separate icon GameObject (never the text colour), so a flat ink colour
+        // is safe for selected + unselected alike.
+        public override async YarnTask<DialogueOption?> RunOptionsAsync(
+            DialogueOption[] dialogueOptions, LineCancellationToken cancellationToken)
+        {
+            var optionsTask = base.RunOptionsAsync(dialogueOptions, cancellationToken);
+
+            // Repaint the freshly-built option items for a short window while the
+            // player reads/selects, then leave the awaited choice to resolve.
+            for (int frame = 0; frame < 4; frame++)
+            {
+                TintOptionItems(ElarionUi.Ink);
+                if (optionsTask.IsCompleted()) break;
+                await YarnTask.Yield();
+            }
+
+            return await optionsTask;
+        }
+
+        // Force every spawned option button's line text to dark ink. Resolved by
+        // hierarchy ("Items" holds the instantiated option items); each item's TMP
+        // text is the descendant named "Text". TMP_Text derives from Graphic, so
+        // we set Graphic.color without a Unity.TextMeshPro reference, matching the
+        // rest of this presenter. Null-guarded + idempotent.
+        private void TintOptionItems(Color ink)
+        {
+            Transform items = FindDescendant(transform, "Items");
+            if (items == null) return;
+            for (int i = 0; i < items.childCount; i++)
+                TintAllTextGraphics(items.GetChild(i), ink);
+        }
+
+        // Recolour the option item's TEXT to ink. The ClassicRPG "Option Item"
+        // prefab names its TMP child "Label" (NOT "Text"), so we don't match by
+        // name. Instead we recolour every Graphic under the item that is NOT an
+        // Image — i.e. the TMP_Text label (TMP_Text derives from Graphic, so this
+        // reaches it without a Unity.TextMeshPro reference) — while leaving the
+        // option's background / selection-icon Images untouched. Null-guarded.
+        private static void TintAllTextGraphics(Transform root, Color ink)
+        {
+            if (root == null) return;
+            var graphics = root.GetComponentsInChildren<Graphic>(true);
+            foreach (var g in graphics)
+                if (g != null && !(g is Image)) g.color = ink;
         }
 
         // The base presenter renders TextWithoutCharacterName (it discards the

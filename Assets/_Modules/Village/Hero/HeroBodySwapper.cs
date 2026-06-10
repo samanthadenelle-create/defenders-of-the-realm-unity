@@ -28,6 +28,12 @@ namespace DeNelle.Village
         // 0.5 = half speed. Tune here.
         private const float HeroAnimSpeed = 0.5f;
 
+        // WO-376: the swapped hero's guarded animator + the Yarn runner we hook so the
+        // hero RE-asserts a clean idle when dialogue starts (and on complete). Cached so
+        // OnDestroy can unsubscribe and a deferred FindDialogueRunner retry can wire late.
+        private ActorAnimator _heroActor;
+        private Yarn.Unity.DialogueRunner _dialogueRunner;
+
         private void Start()
         {
             HeroClass cls = ResolveHeroClass();
@@ -227,6 +233,22 @@ namespace DeNelle.Village
                     anim.SetFloat("Speed", 0f); // open in Idle, not mid-Walk
                 }
             }
+            // WO-376 HERO POSE INIT: drive the controller into a clean, UPRIGHT IDLE on
+            // scene load (and thus during the dialogue intro that plays right after). Two
+            // things were leaving the hero in a bad/hunched non-idle pose on entry:
+            //   1. Animator state ENTRY is deferred — right after Rebind()+SetFloat the
+            //      controller may not have evaluated into "Locomotion" yet, so the rig
+            //      shows its raw resting/bind-adjacent pose for the first frames (the
+            //      "hunched/drooping" look the owner sees on load and in dialogue).
+            //   2. Stray Any-State combat triggers (Cast/Attack/Victory/WindUp/Hit) left
+            //      latched from a prior scene/playthrough yank the hero straight into a
+            //      combat/cast pose on spawn.
+            // Force the issue: clear those triggers, pin Speed=0, and PLAY the Locomotion
+            // (Idle) state at normalized time 0 so the hero is deterministically standing
+            // in the relaxed idle from frame one. Guarded by name so a controller without
+            // these params/state is a safe no-op. Does NOT touch the Walk/Cast/combat
+            // transitions — those still fire from gameplay as before.
+            DriveIdlePose(anim);
             // ALWAYS re-cache the _animator field on BOTH HeroLocomotion (drives
             // Speed → Walk) and HeroAbilities (fires Cast). This was previously
             // gated on the (always-null) snapshot AND only touched HeroLocomotion,
@@ -278,11 +300,15 @@ namespace DeNelle.Village
             bool textured = ApplyExtractedTexture(body, cls);
             if (cls == HeroClass.Knight)
             {
-                // FORCE flat steel for the Knight. The FBX has NO UV-matching texture in-project:
-                // medievalknight3dmodel -> speckled, remesh_12 bake -> MIXED (both wrong UVs). Until a
-                // genuinely NEW clean Knight model is imported (#37), a solid steel knight beats a
-                // speckled/mixed one. (textured result intentionally ignored for the Knight.)
-                ApplyFlatSteelStopgap(body);
+                // WO (2026-06-10) KNIGHT BODY SWAP → human_tank:
+                //   The Knight body is now the clean, textured human_tank model and its OWN
+                //   UV-matched basecolor (HumanTank_basecolor) binds via ApplyExtractedTexture.
+                //   Route the Knight through that real texture instead of forcing flat steel.
+                //   Keep flat steel ONLY as the load-failed fallback so the Knight degrades to
+                //   solid armour grey (not a cyan/null-slot error shape) if the diffuse ever fails
+                //   to load — ApplyExtractedTexture returns false when no diffuse was bound.
+                if (!textured)
+                    ApplyFlatSteelStopgap(body);
             }
             else
             {
@@ -318,9 +344,127 @@ namespace DeNelle.Village
             // so Village + World scenes get correct hero anims (Idle/BattleReady, Movement,
             // Attack/Cast per class, Hit, Death) without falling back to T-pose or legacy only.
             var actor = GetComponent<ActorAnimator>() ?? gameObject.AddComponent<ActorAnimator>();
-            actor.SetCombatStance(true); // battle ready / engagement stance for village threats/waves
+            // WO-376: spawn RELAXED, not in a combat/battle-ready stance. The hero loads
+            // into a town/dialogue context, not a fight — forcing the combat stance here
+            // was the wrong default (the WO is explicit: "Don't force SetPose(Combat) by
+            // default"). InCombat is flipped to true by the wave/battle flow when a real
+            // threat starts (WaveManager) and back to false on victory; at scene load and
+            // during the dialogue intro the hero holds the clean upright idle. Re-assert
+            // the idle pose through the guarded ActorAnimator too, in case the body-swap
+            // timing means the actor only just resolved its Animator.
+            actor.SetCombatStance(false); // relaxed idle on load (waves flip this true)
+            actor.SetLocomotion(0f);      // ensure the locomotion blend opens at Idle
+            DriveIdlePose(actor.Animator);
+            _heroActor = actor;
+
+            // WO-376: HOLD the idle during the dialogue intro. The Yarn DialogueRunner may
+            // already be hosted (intro/FTUE) or may be hosted lazily by DialogueService on the
+            // first Play; subscribe now if present, else retry next frame so a runner that
+            // spins up just after the swap is still hooked. On dialogue start (and complete) we
+            // re-pin the relaxed idle so the hero never holds a stale combat/hunched pose while
+            // a story line is on screen.
+            HookDialogueIdle();
 
             Debug.Log("[HeroBodySwapper] Swapped hero body to " + slug + ".fbx");
+        }
+
+        /// <summary>
+        /// WO-376: subscribe to the shared Yarn runner's start/complete events so the hero
+        /// re-asserts a clean upright idle whenever dialogue is on screen. Idempotent — never
+        /// double-subscribes. If no runner is hosted yet (DialogueService hosts lazily), retry
+        /// on the next frame so a runner created just after the swap is still wired.
+        /// </summary>
+        private void HookDialogueIdle()
+        {
+            if (_dialogueRunner != null) return; // already hooked
+
+            var runner = Object.FindObjectOfType<Yarn.Unity.DialogueRunner>();
+            if (runner == null)
+            {
+                StartCoroutine(RetryHookDialogueIdle());
+                return;
+            }
+
+            _dialogueRunner = runner;
+            if (runner.onDialogueStart != null)    runner.onDialogueStart.AddListener(OnDialogueIdle);
+            if (runner.onDialogueComplete != null) runner.onDialogueComplete.AddListener(OnDialogueIdle);
+        }
+
+        private System.Collections.IEnumerator RetryHookDialogueIdle()
+        {
+            // A handful of deferred attempts covers a runner hosted lazily right after the
+            // swap (DialogueService.Host on the first Play) without polling forever.
+            for (int i = 0; i < 5 && _dialogueRunner == null && this != null; i++)
+            {
+                yield return null;
+                HookDialogueIdle();
+            }
+        }
+
+        /// <summary>WO-376: re-pin the relaxed idle pose when a dialogue starts/completes.</summary>
+        private void OnDialogueIdle()
+        {
+            if (_heroActor == null) return;
+            _heroActor.SetCombatStance(false);
+            _heroActor.SetLocomotion(0f);
+            DriveIdlePose(_heroActor.Animator);
+        }
+
+        private void OnDestroy()
+        {
+            if (_dialogueRunner != null)
+            {
+                if (_dialogueRunner.onDialogueStart != null)    _dialogueRunner.onDialogueStart.RemoveListener(OnDialogueIdle);
+                if (_dialogueRunner.onDialogueComplete != null) _dialogueRunner.onDialogueComplete.RemoveListener(OnDialogueIdle);
+            }
+        }
+
+        /// <summary>
+        /// WO-376: deterministically pose the freshly-swapped hero in a clean, upright IDLE
+        /// for scene load + the dialogue intro that follows. Clears any latched Any-State
+        /// combat triggers (so a stale Cast/Attack/Victory from a prior scene can't pull the
+        /// hero into a combat pose on spawn), pins the locomotion blend to Speed=0 (Idle clip),
+        /// and PLAYs the "Locomotion" state at normalized time 0 so the rig is standing in idle
+        /// from the first frame instead of showing its deferred-entry resting/hunched pose.
+        /// Every access is name/param guarded — a controller missing a param or the state is a
+        /// safe no-op. Leaves the Walk/Cast/combat transitions intact (they fire from gameplay).
+        /// </summary>
+        private static void DriveIdlePose(Animator anim)
+        {
+            if (anim == null || anim.runtimeAnimatorController == null) return;
+
+            // Snapshot which trigger/float params this controller actually declares so we
+            // never poke a missing parameter (the project's well-documented param-spam pitfall).
+            bool hasSpeed = false, hasCast = false, hasAttack = false,
+                 hasVictory = false, hasWindUp = false, hasHit = false;
+            foreach (var p in anim.parameters)
+            {
+                switch (p.name)
+                {
+                    case "Speed":   if (p.type == AnimatorControllerParameterType.Float)   hasSpeed   = true; break;
+                    case "Cast":    if (p.type == AnimatorControllerParameterType.Trigger) hasCast    = true; break;
+                    case "Attack":  if (p.type == AnimatorControllerParameterType.Trigger) hasAttack  = true; break;
+                    case "Victory": if (p.type == AnimatorControllerParameterType.Trigger) hasVictory = true; break;
+                    case "WindUp":  if (p.type == AnimatorControllerParameterType.Trigger) hasWindUp  = true; break;
+                    case "Hit":     if (p.type == AnimatorControllerParameterType.Trigger) hasHit     = true; break;
+                }
+            }
+
+            // Clear stray Any-State combat triggers so none of them yanks the hero out of
+            // Locomotion the moment the controller starts evaluating.
+            if (hasCast)    anim.ResetTrigger("Cast");
+            if (hasAttack)  anim.ResetTrigger("Attack");
+            if (hasVictory) anim.ResetTrigger("Victory");
+            if (hasWindUp)  anim.ResetTrigger("WindUp");
+            if (hasHit)     anim.ResetTrigger("Hit");
+
+            // Pin the locomotion blend to Idle and force the state to be entered NOW, so the
+            // rig stands in the idle pose from frame zero instead of its deferred-entry pose.
+            if (hasSpeed) anim.SetFloat("Speed", 0f);
+            int locoHash = Animator.StringToHash("Locomotion");
+            if (anim.HasState(0, locoHash))
+                anim.Play(locoHash, 0, 0f);
+            anim.Update(0f); // evaluate immediately so the idle pose shows this frame
         }
 
         private static HeroClass ResolveHeroClass()
@@ -538,7 +682,15 @@ namespace DeNelle.Village
                 //   every UV island samples its matching region → no speckle. If this load fails,
                 //   ApplyExtractedTexture warns + returns and the Start() path falls back to the
                 //   flat-steel stopgap, so the Knight is never left speckled.
-                HeroClass.Knight => "Heroes/Textures/remesh_12_combined_Bake_Diffuse",
+                // WO (2026-06-10) KNIGHT BODY SWAP → human_tank:
+                //   The Knight body is now the clean, textured human_tank export (copied over
+                //   Resources/Heroes/Knight.fbx, re-imported Humanoid). Its UV-matched atlas is
+                //   HumanTank_basecolor, already copied into the reliably-loadable plain
+                //   Heroes/Textures/ folder (textureType=Default, sRGB, valid Texture2D). Binding
+                //   the mesh's OWN basecolor means every UV island samples its matching region —
+                //   a real textured Knight, not the flat-steel stopgap. If this load fails,
+                //   ApplyExtractedTexture returns false and Start() falls back to flat steel.
+                HeroClass.Knight => "Heroes/Textures/HumanTank_basecolor",
                 // DEF-229 (2026-06-03): the Ranger body is now the CC5/CC_Base adult
                 // archer (InstaLOD-remeshed: ONE combined mesh + ONE baked PBR atlas),
                 // imported Humanoid by PeopleCharacterImporter.ImportRangerCC5 into
