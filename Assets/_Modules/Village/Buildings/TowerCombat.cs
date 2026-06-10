@@ -116,6 +116,27 @@ namespace DeNelle.Village
 
         // ── Target selection ──────────────────────────────────────────────────
 
+        /// <summary>
+        /// The air/ground targeting-matrix gate (TD rock-paper-scissors). Returns
+        /// true when THIS tower may fire at <paramref name="target"/>: an anti-ground
+        /// tower skips flyers, an anti-air tower skips ground, "both" hits all. A
+        /// target that doesn't declare an <see cref="ICombatLayered"/> layer is
+        /// treated as Ground (back-compat — an all-ground board is unchanged), and a
+        /// tower with no TowerData defaults to Ground. This is the single central
+        /// check every acquisition path routes through.
+        /// </summary>
+        private bool CanHit(IDamageable target)
+        {
+            if (target == null) return false;
+            var targets = _tower != null && _tower.Data != null
+                ? _tower.Data.targets
+                : TowerTargets.Ground;
+            CombatLayer layer = (target is ICombatLayered layered)
+                ? layered.Layer
+                : CombatLayer.Ground;
+            return TowerData.CanTarget(targets, layer);
+        }
+
         private IDamageable FindNearestTarget(float range)
         {
             if (_wave == null) { ResolveWave(); if (_wave == null) return null; }
@@ -136,6 +157,8 @@ namespace DeNelle.Village
                 if (sq > maxSq || sq >= bestSq) continue;
                 var dmg = enemy.GetComponent<EnemyDamageable>();
                 if (dmg == null || !dmg.IsAlive || dmg.Faction != CombatFaction.Hostile) continue;
+                // Air/ground matrix: skip an enemy this tower's layer can't reach.
+                if (!CanHit(dmg)) continue;
                 bestSq = sq;
                 best = dmg;
             }
@@ -145,7 +168,8 @@ namespace DeNelle.Village
             // implements IDamageable directly. So the ground-roster scan above can never
             // see it. Consider it here through the Core seam (Village->Core is allowed).
             var boss = _wave?.LiveApexBoss;
-            if (boss != null && boss.IsAlive && ((IDamageable)boss).Faction == CombatFaction.Hostile)
+            if (boss != null && boss.IsAlive && ((IDamageable)boss).Faction == CombatFaction.Hostile
+                && CanHit(boss))   // air/ground matrix: the dragon flies — anti-air / both only
             {
                 float bsq = (((IDamageable)boss).WorldPosition - myPos).sqrMagnitude;
                 if (bsq <= maxSq && bsq < bestSq)
@@ -184,13 +208,16 @@ namespace DeNelle.Village
                 if (sq > maxSq) continue;
                 var dmg = enemy.GetComponent<EnemyDamageable>();
                 if (dmg == null || !dmg.IsAlive || dmg.Faction != CombatFaction.Hostile) continue;
+                // Air/ground matrix: don't pick a target this tower can't actually hit.
+                if (!CanHit(dmg)) continue;
                 if (dmg.Hp > bestHp) { bestHp = dmg.Hp; best = dmg; }
             }
 
             // WO-125 Bug 2 (mirror): also weigh the apex dragon for TrueAim's
             // highest-HP pick — it's the biggest health pool on the field by far.
             var boss = _wave?.LiveApexBoss;
-            if (boss != null && boss.IsAlive && ((IDamageable)boss).Faction == CombatFaction.Hostile)
+            if (boss != null && boss.IsAlive && ((IDamageable)boss).Faction == CombatFaction.Hostile
+                && CanHit(boss))   // air/ground matrix: anti-air / both only
             {
                 float bsq = (((IDamageable)boss).WorldPosition - myPos).sqrMagnitude;
                 if (bsq <= maxSq && ((IDamageable)boss).Hp > bestHp)
@@ -308,6 +335,8 @@ namespace DeNelle.Village
                     if (sq > maxSq) continue;
                     var dmg = enemy.GetComponent<EnemyDamageable>();
                     if (dmg == null || !dmg.IsAlive) continue;
+                    // Air/ground matrix: a ground tower can't field-slow a flyer.
+                    if (!CanHit(dmg)) continue;
                     dmg.ApplyStatus(StatusEffect.Slow, GlacialSlowDuration);
                 }
             }

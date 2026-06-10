@@ -5,7 +5,9 @@ tags: structure interaction
 // (DialogueService.PlayStructure); everything below is data-driven from that id —
 // the portrait (Portraits/<id>), the name/level/yield, and the upgrade cost — so a
 // building can only ever surface its OWN domain (no out-of-domain options).
-//   Buy / Sell  = silo-scoped stubs (empty sets for now, extensible).
+//   Buy / Sell  = open the real stocked ShopPanel (GearCatalog weapons/armor +
+//                 VillageInventory) via the OpenShop vendor verb, scoped to this
+//                 building's $structureId so the panel shows the right flavour.
 //   Upgrade     = the live option (levels + perks via the economy backend).
 //   Talk        = narrative/questline seed (e.g. the Forge's "forgotten hammer").
 <<portrait Portraits/{$structureId}>>
@@ -17,9 +19,11 @@ tags: structure interaction
     <<structure_upgrade $structureId>>
     {$structureName}: {$upgradeResult}
 -> Buy
-    {$structureName}: Nothing in stock just yet — come back soon.
+    {$structureName}: Take a look at what I have.
+    <<OpenShop $structureId>>
 -> Sell
-    {$structureName}: I'm not buying at the moment.
+    {$structureName}: Show me what you'd part with.
+    <<OpenShop $structureId>>
 -> Talk
     <<structure_talk $structureId>>
     {$structureName}: Always work to be done around here. Stick around and I might have a task for you.

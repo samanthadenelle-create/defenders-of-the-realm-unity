@@ -257,6 +257,10 @@ namespace DeNelle.Village
 
         private static T LoadJson<T>(string relativePath, string label) where T : class
         {
+            // TODO adopt DataInjector: this is exactly DeNelle.Core.DataInjector.Inject<T>
+            // (CanonicalJson.Read → JsonConvert.DeserializeObject<T>, WebGL-safe, guarded).
+            // Kept inline for now so the gear-specific warning text ("gear disabled…") is
+            // preserved; swap to DataInjector once a shared warning is acceptable.
             // WebGL-safe load via CanonicalJson (Resources first, StreamingAssets fallback).
             try
             {

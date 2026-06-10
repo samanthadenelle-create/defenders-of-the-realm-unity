@@ -83,6 +83,13 @@ namespace DeNelle.Village
         [JsonProperty("modelKey")] public string ModelKey;
         /// <summary>AI archetype token ("walker" / "charger" / "skirmisher").</summary>
         [JsonProperty("ai")] public string Ai = "walker";
+        /// <summary>
+        /// Air/ground traversal layer ("ground" / "flying") — the enemy side of the
+        /// TD targeting matrix. Flyers can only be hit by anti-air (or "both") towers.
+        /// Absent in JSON ⇒ "ground" (back-compat default — every existing enemy stays
+        /// ground, so an all-ground board behaves exactly as before).
+        /// </summary>
+        [JsonProperty("movement")] public string Movement = "ground";
         /// <summary>Resolved max hit points (React global buffs already baked in).</summary>
         [JsonProperty("hp")] public float Hp = 50f;
         /// <summary>NavMeshAgent speed — world units per second.</summary>
@@ -111,6 +118,21 @@ namespace DeNelle.Village
         [JsonProperty("xpReward")]    public int XpReward    = 15;
         /// <summary>Glimmer (cosmetic currency) awarded to the hero on kill.</summary>
         [JsonProperty("glimmerReward")] public int GlimmerReward = 3;
+
+        /// <summary>
+        /// True when this enemy flies (<see cref="Movement"/> == "flying", case-
+        /// insensitive). Drives the air/ground targeting matrix — only anti-air or
+        /// "both" towers can fire at a flyer. Anything else (incl. an absent field)
+        /// is ground.
+        /// </summary>
+        public bool IsFlying =>
+            string.Equals((Movement ?? "ground").Trim(), "flying",
+                System.StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>The typed air/ground <see cref="DeNelle.Core.Combat.CombatLayer"/> for this enemy.</summary>
+        public DeNelle.Core.Combat.CombatLayer Layer =>
+            IsFlying ? DeNelle.Core.Combat.CombatLayer.Flying
+                     : DeNelle.Core.Combat.CombatLayer.Ground;
 
         /// <summary>The <see cref="Ai"/> token parsed to the typed enum.</summary>
         public EnemyAiKind AiKind

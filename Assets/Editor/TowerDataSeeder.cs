@@ -84,7 +84,10 @@ namespace DeNelle.Editor
                 tierRange:  new[] { 18f, 20f, 22f },
                 tierDamage: new[] { 22f, 35f, 50f },
                 tierCost:   new[] { 0,   100,  220 },
-                modelPaths: ArcherModelPaths);
+                modelPaths: ArcherModelPaths,
+                // Air/ground matrix: arrows reach the sky — the generalist that also
+                // covers anti-air, so a player always has *some* answer to a flyer.
+                targets: TowerTargets.Both);
 
             // 2) MAGE TOWER — AoE arcane caster. Lower fire rate, hits clusters; the
             //    Arcane skill gate (Arcane Library, DEF-209) unlocks it. MagicalAffinity
@@ -95,7 +98,11 @@ namespace DeNelle.Editor
                 tierRange:  new[] { 14f, 16f, 18f },
                 tierDamage: new[] { 18f, 28f, 40f },
                 tierCost:   new[] { 0,   140,  300 },
-                modelPaths: MageModelPaths);
+                modelPaths: MageModelPaths,
+                // Air/ground matrix: the ward-stone's arcane bolts are the dedicated
+                // ANTI-AIR pick (skybound only) — pairs with a ground tower for full
+                // coverage and makes the dragon wave a real "did you build anti-air?" check.
+                targets: TowerTargets.Air);
 
             // 3) FROST TOWER — crowd control / slow. Modest damage but its value is the
             //    SlowEnemies field (T2) escalating to a FrostNova burst (T3). Blacksmith
@@ -106,7 +113,11 @@ namespace DeNelle.Editor
                 tierRange:  new[] { 12f, 14f, 16f },
                 tierDamage: new[] { 8f,  14f, 22f },
                 tierCost:   new[] { 0,   130,  280 },
-                modelPaths: FrostModelPaths);
+                modelPaths: FrostModelPaths,
+                // Air/ground matrix: the frost field is a GROUND crowd-control anchor —
+                // great against the marching swarm, useless against the dragon (build
+                // anti-air for that). This is the rock-paper-scissors trade.
+                targets: TowerTargets.Ground);
 
             // Free, ungated tower wired with real KayKit hex models —
             // TowerLoopDevHarness loads this one ("Towers/DevTower") so the dev
@@ -128,7 +139,7 @@ namespace DeNelle.Editor
         private static void CreateTower(
             string assetName, string towerName, int cost, SkillRequirement req,
             SpecialAbility[] tierAbilities, float[] tierRange, float[] tierDamage,
-            int[] tierCost, string[] modelPaths)
+            int[] tierCost, string[] modelPaths, TowerTargets targets = TowerTargets.Ground)
         {
             string path = $"{Dir}/{assetName}.asset";
 
@@ -136,6 +147,7 @@ namespace DeNelle.Editor
             data.towerName = towerName;
             data.cost = cost;
             data.requiredSkill = req;
+            data.targets = targets;   // air/ground targeting matrix
             data.upgrades = new TowerUpgrade[3];
             for (int i = 0; i < 3; i++)
             {

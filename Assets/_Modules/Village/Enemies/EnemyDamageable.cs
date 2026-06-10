@@ -38,7 +38,7 @@ namespace DeNelle.Village
     /// </summary>
     [DisallowMultipleComponent]
     [RequireComponent(typeof(Enemy))]
-    public sealed class EnemyDamageable : MonoBehaviour, IDamageable, IDamageTintable
+    public sealed class EnemyDamageable : MonoBehaviour, IDamageable, IDamageTintable, ICombatLayered
     {
         private Enemy _enemy;
 
@@ -72,6 +72,14 @@ namespace DeNelle.Village
 
         /// <summary>Enemies are always hostile to the village's defenders.</summary>
         public CombatFaction Faction => CombatFaction.Hostile;
+
+        /// <summary>
+        /// ICombatLayered — the air/ground layer this enemy occupies, forwarded from
+        /// the underlying <see cref="Enemy.IsFlying"/>. Lets a tower's acquisition loop
+        /// gate on the targeting matrix through the Core seam (no Village reference).
+        /// A destroyed/missing Enemy reads as Ground (safe default).
+        /// </summary>
+        public CombatLayer Layer => E != null ? E.CombatLayer : CombatLayer.Ground;
 
         /// <summary>World position of the enemy — used by range / nearest queries.
         /// Guarded for a destroyed adapter so a late land-burst query can't NRE.</summary>

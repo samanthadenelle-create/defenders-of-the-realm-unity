@@ -72,7 +72,7 @@ namespace DeNelle.Village
     /// apex-wave placement is the working design (see docs/port-notes/dragon-boss.md).
     /// </remarks>
     [DisallowMultipleComponent]
-    public sealed class DragonBoss : MonoBehaviour, IDamageable
+    public sealed class DragonBoss : MonoBehaviour, IDamageable, ICombatLayered
     {
         // ── Identity ──────────────────────────────────────────────────────────
 
@@ -240,6 +240,13 @@ namespace DeNelle.Village
 
         /// <summary>The dragon is hostile to the village's defenders.</summary>
         public CombatFaction Faction => CombatFaction.Hostile;
+
+        /// <summary>
+        /// ICombatLayered — the apex dragon FLIES, so only anti-air (or "both")
+        /// towers can acquire and fire at it. This is the canonical flyer in the
+        /// air/ground targeting matrix.
+        /// </summary>
+        public CombatLayer Layer => CombatLayer.Flying;
 
         /// <summary>World position of the dragon — used by range / nearest queries.</summary>
         public Vector3 WorldPosition => transform.position;

@@ -71,6 +71,34 @@ namespace DeNelle.Core.Combat
     }
 
     /// <summary>
+    /// The traversal layer a combat target occupies — the air/ground axis of the
+    /// tower-defense targeting matrix (the TD rock-paper-scissors). A tower's
+    /// <c>Targets</c> mask is checked against this so anti-ground towers can't hit
+    /// flyers (and vice-versa), forcing the player to build a MIX.
+    /// </summary>
+    public enum CombatLayer
+    {
+        /// <summary>Walks the NavMesh — the default for every enemy.</summary>
+        Ground = 0,
+        /// <summary>Airborne (e.g. the apex Dragon) — only anti-air towers reach it.</summary>
+        Flying = 1,
+    }
+
+    /// <summary>
+    /// Optional companion to <see cref="IDamageable"/>: exposes the target's
+    /// air/ground <see cref="CombatLayer"/> so a tower's acquisition loop can gate
+    /// on it. A target that does NOT implement this is treated as
+    /// <see cref="CombatLayer.Ground"/> (back-compat default — existing all-ground
+    /// behaviour is unchanged). Cross-module (Core) so Village enemies + the apex
+    /// boss can both declare their layer without referencing each other.
+    /// </summary>
+    public interface ICombatLayered
+    {
+        /// <summary>The air/ground layer this target occupies.</summary>
+        CombatLayer Layer { get; }
+    }
+
+    /// <summary>
     /// Optional companion to <see cref="IDamageable"/>: lets a damage SOURCE tint the
     /// next floating damage number this target spawns, so the player can tell their
     /// own hits from a pet's. The implementor applies the tint to the next number,

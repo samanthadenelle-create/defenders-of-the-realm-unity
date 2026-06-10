@@ -15,15 +15,39 @@
 // =============================================================================
 
 using UnityEngine;
+using DeNelle.Core.Combat;
 
 namespace DeNelle.Core.Data
 {
+    /// <summary>
+    /// Which air/ground layers a tower can acquire + fire at — the tower side of
+    /// the TD targeting matrix. Anti-ground towers (melee/cannon/spike) cannot
+    /// touch flyers; anti-air towers (archer/arcane) can; <see cref="Both"/> hits
+    /// everything. Defaults to <see cref="Ground"/> so an un-tagged tower keeps the
+    /// original all-ground behaviour.
+    /// </summary>
+    public enum TowerTargets
+    {
+        /// <summary>Ground enemies only — cannot hit flyers. The default.</summary>
+        Ground = 0,
+        /// <summary>Flying enemies only — dedicated anti-air.</summary>
+        Air = 1,
+        /// <summary>Both ground and air — the flexible (usually pricier) pick.</summary>
+        Both = 2,
+    }
+
     /// <summary>Authoring data for one tower type and its 3-level upgrade chain.</summary>
     [CreateAssetMenu(menuName = "Defenders/Tower Data", fileName = "TowerData")]
     public class TowerData : ScriptableObject
     {
         public string towerName = "Archer Tower";
         public int cost = 150;
+
+        [Header("Targeting matrix (air/ground)")]
+        [Tooltip("Which enemy layers this tower can acquire + fire at. Ground = can't " +
+                 "hit flyers; Air = anti-air only; Both = hits everything. Defaults to " +
+                 "Ground so untagged towers keep the original all-ground behaviour.")]
+        public TowerTargets targets = TowerTargets.Ground;
 
         [Header("Requirements")]
         public SkillRequirement requiredSkill;
@@ -45,6 +69,23 @@ namespace DeNelle.Core.Data
 
         [Header("UI")]
         public GameObject upgradeUIPrefab;
+
+        /// <summary>
+        /// The central air/ground matrix gate: true when a tower whose mask is
+        /// <paramref name="targets"/> may fire at a target on <paramref name="layer"/>.
+        /// Ground towers hit only Ground; Air towers hit only Flying; Both hits all.
+        /// This is the single rock-paper-scissors rule — the tower acquisition loop
+        /// calls it and skips any target it returns false for.
+        /// </summary>
+        public static bool CanTarget(TowerTargets targets, CombatLayer layer)
+        {
+            switch (targets)
+            {
+                case TowerTargets.Both: return true;
+                case TowerTargets.Air:  return layer == CombatLayer.Flying;
+                default:                return layer == CombatLayer.Ground;   // Ground
+            }
+        }
     }
 
     /// <summary>

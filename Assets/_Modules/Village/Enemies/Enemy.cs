@@ -78,6 +78,12 @@ namespace DeNelle.Village
         [Tooltip("AI archetype — Walker marches straight; Charger / Skirmisher are later waves.")]
         [SerializeField] private EnemyAiKind _ai = EnemyAiKind.Walker;
 
+        [Tooltip("Air/ground targeting matrix: when true this enemy FLIES — only anti-air " +
+                 "(or 'both') towers can hit it. Set from the enemies.json 'movement' field " +
+                 "in Configure; defaults false (ground) so a hand-placed enemy with no def " +
+                 "is ground unless this is ticked in the prefab.")]
+        [SerializeField] private bool _isFlying;
+
         [Header("Contact attack tuning")]
         [Tooltip("Distance ahead the enemy probes for an attackable structure (world units).")]
         [SerializeField] private float _contactProbeDistance = 1.1f;
@@ -273,6 +279,20 @@ namespace DeNelle.Village
         /// <summary>AI archetype this enemy runs.</summary>
         public EnemyAiKind Ai => _ai;
 
+        /// <summary>
+        /// True when this enemy flies — the air/ground targeting matrix gate.
+        /// Anti-ground towers skip a flyer; anti-air (or "both") towers can hit it.
+        /// Set from the enemies.json "movement" field in <see cref="Configure"/>;
+        /// false (ground) by default. Read by <c>EnemyDamageable</c> (ICombatLayered)
+        /// so a tower's acquisition loop can gate on it via the Core seam.
+        /// </summary>
+        public bool IsFlying => _isFlying;
+
+        /// <summary>The air/ground <see cref="DeNelle.Core.Combat.CombatLayer"/> this enemy occupies.</summary>
+        public DeNelle.Core.Combat.CombatLayer CombatLayer =>
+            _isFlying ? DeNelle.Core.Combat.CombatLayer.Flying
+                      : DeNelle.Core.Combat.CombatLayer.Ground;
+
         // ── DEF-21: EnemyBrain integration ────────────────────────────────────
 
         /// <summary>
@@ -357,6 +377,9 @@ namespace DeNelle.Village
                 _contactDamage = Mathf.Max(0f, def.ContactDamage);
                 _attackInterval = Mathf.Max(0.1f, def.AttackInterval);
                 _ai = def.AiKind;
+                // Air/ground targeting matrix — flyers can only be hit by anti-air
+                // (or "both") towers. Sourced from the enemies.json "movement" field.
+                _isFlying = def.IsFlying;
             }
 
             EnsureAgent();
