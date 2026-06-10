@@ -246,6 +246,12 @@ namespace DeNelle.Village
         private void Update()
         {
             if (!IsActive) return;
+
+            // WO-377: freeze the placement loops while a Yarn dialogue is on screen so a
+            // click meant for the dialogue box can't place/select/cancel a structure.
+            // HeroLocomotion owns the global input gate (set on dialogue start, cleared on
+            // complete). The ghost is hidden so nothing tracks the cursor mid-conversation.
+            if (HeroLocomotion.InputSuppressed) { _ghost?.Hide(); return; }
             // DEF-117 — raycast from the camera that is ACTUALLY on screen (the one
             // we pulled into the overview), never Camera.main: with rogue cameras in
             // play Camera.main can resolve to a non-rendering / wrong camera, so taps

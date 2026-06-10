@@ -487,7 +487,11 @@ namespace DeNelle.Village
             float inv = bins / length;
             foreach (var mf in prop.GetComponentsInChildren<MeshFilter>(true))
             {
-                if (mf == null || mf.sharedMesh == null) continue;
+                // BUILD-SAFE: sharedMesh.vertices THROWS ("Not allowed to access vertices")
+                // when the mesh isn't Read/Write-enabled — the default for imported FBX in a
+                // player build. Skip non-readable meshes; SeatByHandle then degrades to the
+                // bounds-based grip (no vertex access). This was the in-build sword crash.
+                if (mf == null || mf.sharedMesh == null || !mf.sharedMesh.isReadable) continue;
                 var verts = mf.sharedMesh.vertices;
                 Transform mt = mf.transform;
                 for (int v = 0; v < verts.Length; v++)
@@ -503,7 +507,7 @@ namespace DeNelle.Village
             // Skinned meshes (rare for a held prop, but be safe): use renderer bounds slabs.
             foreach (var smr in prop.GetComponentsInChildren<SkinnedMeshRenderer>(true))
             {
-                if (smr == null || smr.sharedMesh == null) continue;
+                if (smr == null || smr.sharedMesh == null || !smr.sharedMesh.isReadable) continue;
                 var verts = smr.sharedMesh.vertices;
                 Transform mt = smr.transform;
                 for (int v = 0; v < verts.Length; v++)

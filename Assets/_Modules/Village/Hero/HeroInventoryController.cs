@@ -317,9 +317,9 @@ namespace DeNelle.Village
 
             // LEFT: Sort + Filter chips (parchment chips with dark-ink labels).
             Color chip = new Color(0.847f, 0.804f, 0.710f, 1f);
-            AddButton(tray.transform, "⇅ Sort", new Vector2(0.115f, 0.085f), new Vector2(0.18f, 0.82f),
+            AddButton(tray.transform, "Sort", new Vector2(0.115f, 0.085f), new Vector2(0.18f, 0.82f),
                       chip, () => { /* TODO owned-list re-sort */ }, ButtonKind.Neutral);
-            AddButton(tray.transform, "⛃ Filter", new Vector2(0.305f, 0.085f), new Vector2(0.18f, 0.82f),
+            AddButton(tray.transform, "Filter", new Vector2(0.305f, 0.085f), new Vector2(0.18f, 0.82f),
                       chip, () => { /* TODO owned-list filter */ }, ButtonKind.Neutral);
 
             // RIGHT: resource wells.
@@ -335,11 +335,11 @@ namespace DeNelle.Village
             }
             catch { /* GameState not ready — show zeros */ }
 
-            ResourceWell(tray.transform, "GoldWell", 0.470f, 0.640f, "● " + coins, "GOLD", GiltInk);
-            ResourceWell(tray.transform, "CrystalWell", 0.650f, 0.820f, "◆ " + crystals, "CRYSTALS",
+            ResourceWell(tray.transform, "GoldWell", 0.470f, 0.640f, "o " + coins, "GOLD", GiltInk);
+            ResourceWell(tray.transform, "CrystalWell", 0.650f, 0.820f, "* " + crystals, "CRYSTALS",
                          new Color(0.42f, 0.26f, 0.62f, 1f));
             // SKR = Web3 rail; show the rail glyph (no live figure from this assembly).
-            ResourceWell(tray.transform, "SkrWell", 0.830f, 0.985f, "◈ SKR", "WALLET",
+            ResourceWell(tray.transform, "SkrWell", 0.830f, 0.985f, "* SKR", "WALLET",
                          new Color(0.18f, 0.43f, 0.40f, 1f));
         }
 
@@ -753,7 +753,7 @@ namespace DeNelle.Village
                 var chip = AddImage(cell.transform, "Equipped", new Vector2(0.62f, 0.80f), new Vector2(0.96f, 0.96f),
                                     new Color(ElarionUi.Affordable.r, ElarionUi.Affordable.g, ElarionUi.Affordable.b, 0.95f));
                 NoRaycast(chip);
-                AddLabel(chip.transform, "✓", 0f, 1f, ElarionUi.Ink, ElarionUi.FontLabel,
+                AddLabel(chip.transform, "v", 0f, 1f, ElarionUi.Ink, ElarionUi.FontLabel,
                          TMPro.TextAlignmentOptions.Center, 0f, 1f, bold: true);
             }
             if (locked)
@@ -861,7 +861,7 @@ namespace DeNelle.Village
             {
                 bool up = delta > 0f;
                 // Darkened up/down deltas so they read on the light tan stat row.
-                AddLabel(row.transform, up ? "▲" : "▼", 0f, 1f,
+                AddLabel(row.transform, up ? "^" : "v", 0f, 1f,
                          up ? new Color(0.20f, 0.45f, 0.18f, 1f) : new Color(0.62f, 0.16f, 0.14f, 1f),
                          ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Right, 0.45f, 0.94f, bold: true);
             }
@@ -969,7 +969,7 @@ namespace DeNelle.Village
             }
             else if (equipped)
             {
-                label = "✓ EQUIPPED";
+                label = "v EQUIPPED";
                 color = new Color(ElarionUi.Affordable.r, ElarionUi.Affordable.g, ElarionUi.Affordable.b, 0.55f);
                 kind = ButtonKind.Confirm; action = null;   // already worn
             }
@@ -1053,11 +1053,11 @@ namespace DeNelle.Village
         {
             switch ((rarity ?? "common").ToLowerInvariant())
             {
-                case "legendary": return "★";
-                case "epic":      return "◆";
-                case "rare":      return "◈";
-                case "uncommon":  return "◇";
-                default:          return "○";
+                case "legendary": return "*";
+                case "epic":      return "+";
+                case "rare":      return "=";
+                case "uncommon":  return "-";
+                default:          return ".";
             }
         }
 
@@ -1096,24 +1096,24 @@ namespace DeNelle.Village
             if (w == null) return "?";
             string k = ((w.id ?? "") + " " + (w.name ?? "")).ToLowerInvariant();
             // Most specific first.
-            if (Has(k, "dagger", "knife", "dirk", "stiletto"))          return "†"; // † dagger
-            if (Has(k, "bow", "recurve", "longbow", "shortbow"))        return "➶"; // ➶ bow / ranged shot
-            if (Has(k, "wand"))                                         return "❉"; // ❉ wand spark
-            if (Has(k, "staff", "scepter", "sceptre", "stave", "rod"))  return "✦"; // ✦ arcane staff
-            if (Has(k, "censer", "censor", "thurible"))                 return "✚"; // ✚ cleric censer
-            if (Has(k, "axe", "hatchet"))                               return "⚒"; // ⚒ axe
-            if (Has(k, "hammer", "maul", "mace"))                       return "⚒"; // ⚒ hammer/mace
+            if (Has(k, "dagger", "knife", "dirk", "stiletto"))          return "D"; // dagger
+            if (Has(k, "bow", "recurve", "longbow", "shortbow"))        return "B"; // bow / ranged shot
+            if (Has(k, "wand"))                                         return "W"; // wand
+            if (Has(k, "staff", "scepter", "sceptre", "stave", "rod"))  return "S"; // arcane staff
+            if (Has(k, "censer", "censor", "thurible"))                 return "C"; // cleric censer
+            if (Has(k, "axe", "hatchet"))                               return "A"; // axe
+            if (Has(k, "hammer", "maul", "mace"))                       return "H"; // hammer/mace
             if (Has(k, "greatsword", "claymore", "sword", "blade",
                        "longsword", "saber", "sabre", "edge", "brand",
-                       "breaker", "keeper")) return "⚔";                            // ⚔ sword
+                       "breaker", "keeper")) return "/";                            // sword
             // Fallback by class.
             switch ((w.job ?? "").ToLowerInvariant())
             {
-                case "mage":   return "✦"; // ✦ staff
-                case "ranger": return "➶"; // ➶ bow
-                case "cleric": return "✚"; // ✚ censer
-                case "knight": return "⚔"; // ⚔ sword
-                default:        return "⚔";
+                case "mage":   return "S"; // staff
+                case "ranger": return "B"; // bow
+                case "cleric": return "C"; // censer
+                case "knight": return "/"; // sword
+                default:        return "/";
             }
         }
 
@@ -1121,26 +1121,26 @@ namespace DeNelle.Village
         {
             if (a == null) return "?";
             string k = ((a.id ?? "") + " " + (a.name ?? "")).ToLowerInvariant();
-            if (Has(k, "shield", "aegis", "buckler", "ward"))           return "◉"; // ◉ shield boss
-            if (Has(k, "plate", "platemail"))                           return "▣"; // ▣ plate
-            if (Has(k, "chain", "mail", "chainmail"))                   return "❖"; // ❖ mail
-            if (Has(k, "leather", "hide"))                              return "❖"; // ❖ leather
-            if (Has(k, "cloth", "robe", "cloak", "garb", "wanderer"))   return "⁂"; // ⁂ cloth/robe
-            if (Has(k, "helm", "helmet", "hood", "crown", "cap"))       return "◖"; // ◖ helm
-            return "❖";                                                            // ❖ generic armor
+            if (Has(k, "shield", "aegis", "buckler", "ward"))           return "O"; // shield boss
+            if (Has(k, "plate", "platemail"))                           return "#"; // plate
+            if (Has(k, "chain", "mail", "chainmail"))                   return "x"; // mail
+            if (Has(k, "leather", "hide"))                              return "x"; // leather
+            if (Has(k, "cloth", "robe", "cloak", "garb", "wanderer"))   return "~"; // cloth/robe
+            if (Has(k, "helm", "helmet", "hood", "crown", "cap"))       return "^"; // helm
+            return "x";                                                            // generic armor
         }
 
         private static string ConsumableTypeGlyph(string id, string name)
         {
             string k = ((id ?? "") + " " + (name ?? "")).ToLowerInvariant();
             if (Has(k, "potion", "elixir", "draught", "tonic", "heal",
-                       "health", "hp", "regen"))                        return "⚗"; // ⚗ alembic / potion
-            if (Has(k, "mana", "aether", "ether", "arcane"))            return "✧"; // ✧ mana spark
+                       "health", "hp", "regen"))                        return "+"; // potion / heal
+            if (Has(k, "mana", "aether", "ether", "arcane"))            return "*"; // mana spark
             if (Has(k, "food", "bread", "meat", "ration", "feast",
-                       "stew", "meal"))                                 return "❀"; // ❀ food / sustenance
-            if (Has(k, "scroll", "tome", "rune"))                       return "✐"; // ✐ scroll
-            if (Has(k, "bomb", "fire", "flask", "oil"))                 return "✵"; // ✵ burst
-            return "•";                                                            // • generic pip
+                       "stew", "meal"))                                 return "%"; // food / sustenance
+            if (Has(k, "scroll", "tome", "rune"))                       return "="; // scroll
+            if (Has(k, "bomb", "fire", "flask", "oil"))                 return "o"; // burst
+            return "."; // generic pip
         }
 
         private static bool Has(string haystack, params string[] needles)
@@ -1305,10 +1305,10 @@ namespace DeNelle.Village
         {
             switch ((job ?? "").ToLowerInvariant())
             {
-                case "mage":   return "✦";   // arcane star
-                case "knight": return "⚔";   // crossed blades
-                case "ranger": return "➶";   // arrow
-                case "healer": return "✚";   // cross
+                case "mage":   return "S";   // staff
+                case "knight": return "/";   // blade
+                case "ranger": return "B";   // bow
+                case "healer": return "+";   // cross
                 default:        return ElarionUi.CrestGlyph;
             }
         }

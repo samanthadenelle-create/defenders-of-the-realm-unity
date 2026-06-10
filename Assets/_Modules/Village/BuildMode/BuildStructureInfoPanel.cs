@@ -336,10 +336,10 @@ namespace DeNelle.Village
             {
                 float dps1 = repo.damage * (repo.fireRate > 0f ? repo.fireRate : 1f);
                 float dps2 = (repo.damage * l2Mul) * (repo.fireRate > 0f ? repo.fireRate : 1f);
-                parts.Add("DPS " + FormatNum(dps1) + " → " + FormatNum(dps2));
+                parts.Add("DPS " + FormatNum(dps1) + " -> " + FormatNum(dps2));
             }
             if (repo.range > 0f)
-                parts.Add("Range " + FormatNum(repo.range) + "m → " + FormatNum(repo.range * l2Mul) + "m");
+                parts.Add("Range " + FormatNum(repo.range) + "m -> " + FormatNum(repo.range * l2Mul) + "m");
             if (parts.Count == 0)
                 parts.Add("Sturdier — higher durability tier");
             _nextTierStats.text = string.Join("\n", parts);
@@ -395,7 +395,7 @@ namespace DeNelle.Village
             if (c.wood     > 0) parts.Add(c.wood     + "W");
             if (c.food     > 0) parts.Add(c.food     + "F");
             if (c.iron     > 0) parts.Add(c.iron     + "I");
-            if (c.crystals > 0) parts.Add("❖" + c.crystals);
+            if (c.crystals > 0) parts.Add("*" + c.crystals);
             return string.Join("  ", parts);
         }
 

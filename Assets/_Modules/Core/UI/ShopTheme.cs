@@ -78,8 +78,8 @@ namespace DeNelle.Core.UI
 
         // Small decorative glyphs (no font dependency — plain unicode the default
         // UI font renders). A crest before the title, a coin before Glimmer.
-        public const string CrestGlyph = "✦";
-        public const string CoinGlyph  = "◈";
+        public const string CrestGlyph = "*";
+        public const string CoinGlyph  = "*";
 
         // ── Frame / panel ────────────────────────────────────────────────────
 
@@ -272,7 +272,7 @@ namespace DeNelle.Core.UI
         public static void StyleCloseButton(Button button)
         {
             if (button == null) return;
-            button.text = "✕";
+            button.text = "X";
             button.style.width = 34; button.style.height = 34;
             button.style.fontSize = 15;
             button.style.unityFontStyleAndWeight = FontStyle.Bold;

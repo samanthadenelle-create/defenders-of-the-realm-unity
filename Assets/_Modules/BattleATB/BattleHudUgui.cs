@@ -70,7 +70,7 @@ namespace DeNelle.BattleATB
         private static readonly Color PortraitFill = new Color(0.74f, 0.66f, 0.50f, 1f);
 
         // ── ElarionUi parity tokens (local mirror — keeps battle screen on the one ladder)
-        private const string CrestGlyph = "✦"; // ✦ runic crest
+        private const string CrestGlyph = "*"; // decorative crest (font-safe ASCII)
         private const int FontTitle = 24;
         private const int FontHead = 18;
         private const int FontBody = 15;

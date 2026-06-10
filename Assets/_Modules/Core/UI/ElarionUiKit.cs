@@ -292,7 +292,7 @@ namespace DeNelle.Core.UI
             var check = AddImage(cell.transform, "EquippedCheck", new Vector2(0.62f, 0.78f), new Vector2(0.94f, 0.94f),
                                  new Color(ElarionUi.Affordable.r, ElarionUi.Affordable.g, ElarionUi.Affordable.b, 0.95f));
             check.GetComponent<Image>().raycastTarget = false;
-            var checkLbl = Label(check.transform, "✓", 0f, 1f, ElarionUi.Ink, ElarionUi.FontLabel,
+            var checkLbl = Label(check.transform, "v", 0f, 1f, ElarionUi.Ink, ElarionUi.FontLabel,
                                  TextAlignmentOptions.Center, 0f, 1f, bold: true);
             checkLbl.raycastTarget = false;
             check.SetActive(false);
@@ -434,16 +434,16 @@ namespace DeNelle.Core.UI
         /// <summary>The canonical rarity colour for a catalog rarity word (case-insensitive).</summary>
         public static Color RarityColor(string rarity) => RarityColor(RarityIndex(rarity));
 
-        /// <summary>A small glyph per rarity tier (○ ◇ ◈ ◆ ★).</summary>
+        /// <summary>A small font-safe ASCII glyph per rarity tier (. - = + *).</summary>
         public static string RarityGlyph(int rarityIndex)
         {
             switch (Mathf.Clamp(rarityIndex, 0, 4))
             {
-                case 4:  return "★";   // ★ legendary
-                case 3:  return "◆";   // ◆ epic
-                case 2:  return "◈";   // ◈ rare
-                case 1:  return "◇";   // ◇ uncommon
-                default: return "○";   // ○ common
+                case 4:  return "*";   // legendary
+                case 3:  return "+";   // epic
+                case 2:  return "=";   // rare
+                case 1:  return "-";   // uncommon
+                default: return ".";   // common
             }
         }
 

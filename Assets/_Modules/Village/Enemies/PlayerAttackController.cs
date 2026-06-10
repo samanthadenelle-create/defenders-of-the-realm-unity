@@ -177,6 +177,20 @@ namespace DeNelle.Village
 
         private void Update()
         {
+            // WO-377: no melee swings / blocks while a Yarn dialogue is on screen (a click
+            // on the dialogue box used to fall through to a swing). HeroLocomotion owns the
+            // gate. If a block was being held when the dialogue opened, drop it cleanly so
+            // the hero doesn't freeze mid-block through the conversation.
+            if (HeroLocomotion.InputSuppressed)
+            {
+                if (_blocking)
+                {
+                    _blocking = false;
+                    _actor?.SetBlocking(false);
+                }
+                return;
+            }
+
             bool attackPressed = false;
 
             // New Input System path.

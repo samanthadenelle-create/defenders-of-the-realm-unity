@@ -99,8 +99,8 @@ namespace DeNelle.Core.UI
         public const float TapTarget = 44f;  // mobile minimum
 
         // Decorative glyphs (default UI font renders these — no font dependency).
-        public const string CrestGlyph = "✦";
-        public const string RuneGlyphs = "ᚨ ᚠ ᛗ ᚱ ᛞ ᛊ ᚲ ᛚ ᛈ ᚺ ᛜ ᛒ ᛖ ᚾ ᚢ ᛁ ";
+        public const string CrestGlyph = "*";
+        public const string RuneGlyphs = "+ x * + = - . + : * = - x * = . ";
 
         // ── Swappable background hook ─────────────────────────────────────────
         // Loaded once; null until the owner drops a texture at the Resources path.

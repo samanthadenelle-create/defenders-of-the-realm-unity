@@ -903,7 +903,7 @@ namespace DeNelle.HUD
             rt.pivot = new Vector2(0.5f, 0.5f);
             rt.sizeDelta = new Vector2(22f, 22f);
             rt.anchoredPosition = offset;
-            var t = AddText(rt, "❖", 18, LGilt, TextAlignmentOptions.Center);
+            var t = AddText(rt, "*", 18, LGilt, TextAlignmentOptions.Center);
             t.raycastTarget = false;
         }
 
@@ -919,7 +919,7 @@ namespace DeNelle.HUD
             // Ornate compass — top-centre, small, above the resource strip. Passive.
             _compassWidget = AddWidgetIcon("Compass", parent,
                 new Vector2(0.465f, 0.90f), new Vector2(0.535f, 0.955f),
-                IconCompass, "✺", 30, LGilt);
+                IconCompass, "*", 30, LGilt);
 
             // Top-right icon cluster — Settings gear + Inventory backpack.
             var cluster = NewRect("TopRightIcons", parent, new Vector2(1f, 1f), new Vector2(1f, 1f));
@@ -932,9 +932,9 @@ namespace DeNelle.HUD
             cluster.sizeDelta = new Vector2(108f, 50f);
 
             BuildIconButton(cluster, new Vector2(0f, 0f), new Vector2(0.48f, 1f),
-                IconSettings, "⚙", () => ShopRequested?.Invoke());
+                IconSettings, "*", () => ShopRequested?.Invoke());
             BuildIconButton(cluster, new Vector2(0.52f, 0f), new Vector2(1f, 1f),
-                IconInventory, "🎒", () => BuildRequested?.Invoke());
+                IconInventory, "#", () => BuildRequested?.Invoke());
         }
 
         // A round rune-framed icon BUTTON: gilt ring seat + sprite-first widget icon
@@ -982,9 +982,9 @@ namespace DeNelle.HUD
             _townActionPanel.sizeDelta = new Vector2(64f, 148f);
 
             BuildIconButton(_townActionPanel, new Vector2(0f, 0.54f), new Vector2(1f, 1f),
-                IconTalk, "💬", () => ShopRequested?.Invoke());
+                IconTalk, "T", () => ShopRequested?.Invoke());
             BuildIconButton(_townActionPanel, new Vector2(0f, 0f), new Vector2(1f, 0.46f),
-                IconQuest, "❢", () => BuildRequested?.Invoke());
+                IconQuest, "!", () => BuildRequested?.Invoke());
         }
 
         // ── Currency strip — thin glass bar, tiny colour dot + amount. ─────────
@@ -994,7 +994,7 @@ namespace DeNelle.HUD
             FramePanelLight(_resourceStrip.gameObject, LParch);
 
             string[] names  = { "Wood", "Iron", "Crystal", "Gold" };
-            string[] glyphs = { "▲", "◆", "❖", "●" };
+            string[] glyphs = { "^", "+", "*", "o" };
             Color[] tints   = { HudTheme.Wood, HudTheme.Iron, HudTheme.Crystal, HudTheme.GoldRes };
             _resourceTexts = new TextMeshProUGUI[4];
 
@@ -1036,7 +1036,7 @@ namespace DeNelle.HUD
             // Tree-of-Life crest tucked top-left of the banner — sprite-FIRST (the
             // hud_tree widget art), with the world-tree glyph kept as the fallback.
             AddWidgetIcon("Crest", _castleBanner, new Vector2(0.015f, 0.42f), new Vector2(0.11f, 0.96f),
-                IconTree, "❦", HudTheme.FontHead, LGilt);
+                IconTree, "*", HudTheme.FontHead, LGilt);
 
             // Caption row — small spaced gilt label so the bar reads as the Heart.
             var caption = NewRect("Caption", _castleBanner, new Vector2(0.11f, 0.56f), new Vector2(0.99f, 0.97f));
@@ -1174,7 +1174,7 @@ namespace DeNelle.HUD
                 }
                 port.localScale = Vector3.one;
                 pring.offsetMin = new Vector2(-2.5f, -2.5f); pring.offsetMax = new Vector2(2.5f, 2.5f);
-                AddText(port, "✦", 18, new Color(LGilt.r, LGilt.g, LGilt.b, 0.85f), TextAlignmentOptions.Center);
+                AddText(port, "*", 18, new Color(LGilt.r, LGilt.g, LGilt.b, 0.85f), TextAlignmentOptions.Center);
 
                 // Name
                 var nameRect = NewRect("Name", frame, new Vector2(0.30f, 0.50f), new Vector2(0.98f, 0.96f));
@@ -1385,7 +1385,7 @@ namespace DeNelle.HUD
             btn.targetGraphic = bimg;
             HudTheme.StyleButtonColors(btn, HudTheme.GoldButton);
             btn.onClick.AddListener(() => BuildRequested?.Invoke());
-            var t = AddText(_buildBtn, "⚒ BUILD", HudTheme.FontBody, HudTheme.Ink, TextAlignmentOptions.Center);
+            var t = AddText(_buildBtn, "BUILD", HudTheme.FontBody, HudTheme.Ink, TextAlignmentOptions.Center);
             t.fontStyle = FontStyles.Bold;
         }
 
@@ -1407,7 +1407,7 @@ namespace DeNelle.HUD
             btn.targetGraphic = bimg;
             HudTheme.StyleButtonColors(btn, HudTheme.GoldButton);
             btn.onClick.AddListener(() => StartWaveRequested?.Invoke());
-            var t = AddText(_startWaveBtn, "▶ Start Next Wave", 14, HudTheme.Ink, TextAlignmentOptions.Center);
+            var t = AddText(_startWaveBtn, "> Start Next Wave", 14, HudTheme.Ink, TextAlignmentOptions.Center);
             t.fontStyle = FontStyles.Bold;
             t.enableAutoSizing = true;
             t.fontSizeMin = 9f;
@@ -1486,7 +1486,7 @@ namespace DeNelle.HUD
             // signal as the status pip) — animated in AnimateLookoutBell().
             _townBell = NewRect("LookoutBell", _townWaveCluster, new Vector2(0.86f, 0.60f), new Vector2(0.99f, 0.99f));
             // Rest = muted ink (was dim cream — invisible on light); pulses gilt→hot.
-            _townBellGlyph = AddText(_townBell, "🔔", HudTheme.FontHead + 2, LInkDim, TextAlignmentOptions.Center);
+            _townBellGlyph = AddText(_townBell, "!", HudTheme.FontHead + 2, LInkDim, TextAlignmentOptions.Center);
             _townBellGlyph.outlineColor = LGlow;
             _townBellGlyph.outlineWidth = 0.06f;
 
@@ -1537,7 +1537,7 @@ namespace DeNelle.HUD
             _townResStrip = NewRect("TownResources", parent, new Vector2(0.30f, 0.955f), new Vector2(0.70f, 1f));
 
             string[] names  = { "Gold", "Wood", "Crystal", "Iron" };
-            string[] glyphs = { "●", "▲", "❖", "◆" };
+            string[] glyphs = { "o", "^", "*", "+" };
             Color[] tints   = { HudTheme.GoldRes, HudTheme.Wood, HudTheme.Crystal, HudTheme.Iron };
             _townResText    = new TextMeshProUGUI[4];
             _townResBadge   = new Image[4];
@@ -1593,7 +1593,7 @@ namespace DeNelle.HUD
 
             // Hero dot — always centred (the map is hero-relative? No: world-anchored
             // at Heart origin; the hero marker tracks the hero's world position).
-            AddMiniMapMarker("Hero", Vector3.zero, HudTheme.HeroDot, "✦", isHero: true);
+            AddMiniMapMarker("Hero", Vector3.zero, HudTheme.HeroDot, "*", isHero: true);
         }
 
         /// <summary>Add a POI marker icon to the mini-map (projected world→map each frame).</summary>
@@ -1624,9 +1624,9 @@ namespace DeNelle.HUD
             _townMetrics = NewRect("TownMetrics", parent, new Vector2(0.30f, 0f), new Vector2(0.70f, 0.05f));
             FramePanelLight(_townMetrics.gameObject, LParch);
 
-            _townHeartText = BuildMetricCol(_townMetrics, 0f, 1f / 3f, "♥ Heart", "100%", HudTheme.HpRed);
-            _townTowerText = BuildMetricCol(_townMetrics, 1f / 3f, 2f / 3f, "⛨ Towers", "0/0", HudTheme.Gold);
-            _townPopText   = BuildMetricCol(_townMetrics, 2f / 3f, 1f, "☖ Pop", "0", HudTheme.Crystal);
+            _townHeartText = BuildMetricCol(_townMetrics, 0f, 1f / 3f, "Heart", "100%", HudTheme.HpRed);
+            _townTowerText = BuildMetricCol(_townMetrics, 1f / 3f, 2f / 3f, "Towers", "0/0", HudTheme.Gold);
+            _townPopText   = BuildMetricCol(_townMetrics, 2f / 3f, 1f, "Pop", "0", HudTheme.Crystal);
         }
 
         private TextMeshProUGUI BuildMetricCol(Transform parent, float x0, float x1, string label, string value, Color tint)
@@ -2143,13 +2143,13 @@ namespace DeNelle.HUD
             switch (k)
             {
                 case "shop":      glyph = "$"; tint = HudTheme.GoldRes; break;
-                case "forge":     glyph = "⚒"; tint = HudTheme.Iron;    break;
-                case "warehouse": glyph = "▦"; tint = HudTheme.Wood;    break;
+                case "forge":     glyph = "F"; tint = HudTheme.Iron;    break;
+                case "warehouse": glyph = "W"; tint = HudTheme.Wood;    break;
                 case "tree":
-                case "resource":  glyph = "▲"; tint = HudTheme.LookoutSafe; break;
+                case "resource":  glyph = "^"; tint = HudTheme.LookoutSafe; break;
                 case "gate":
-                case "enemy":     glyph = "✖"; tint = HudTheme.LookoutIncoming; break;
-                default:          glyph = "•"; tint = HudTheme.TextDim; break;
+                case "enemy":     glyph = "x"; tint = HudTheme.LookoutIncoming; break;
+                default:          glyph = "*"; tint = HudTheme.TextDim; break;
             }
             AddMiniMapMarker(k + "_" + _miniMarkers.Count, new Vector3(worldX, 0f, worldZ), tint, glyph, isHero: false);
         }

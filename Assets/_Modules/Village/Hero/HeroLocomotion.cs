@@ -47,6 +47,25 @@ namespace DeNelle.Village
         /// <summary>Current XZ velocity, exposed for the follow camera / animator.</summary>
         public Vector3 Velocity { get; private set; }
 
+        // WO-377: global player-input suppression. Set true while a Yarn dialogue is on
+        // screen so the player can't move / attack / cast / build during story beats —
+        // a click on the dialogue box used to fall through to the world and fire the
+        // hero's primary attack, breaking the sequence. HeroLocomotion is the canonical
+        // hero-input component, so it OWNS this gate: it subscribes to the Yarn
+        // DialogueRunner's start/complete events (see HookDialogueGate) and raises/clears
+        // the flag. The other per-frame input readers (HeroAbilityInput,
+        // PlayerAttackController, BuildModeController) consult it via this single static
+        // so the whole player-input surface is suppressed from ONE place. Static (not
+        // instance) so those readers don't need a hero reference; defaults false so
+        // outside dialogue everything behaves exactly as before.
+        public static bool InputSuppressed { get; private set; }
+
+        // WO-377: the Yarn runner we hook for dialogue start/complete. Cached so OnDestroy
+        // can unsubscribe and a deferred retry can wire a runner that spins up late
+        // (DialogueService hosts the runner lazily on the first Play). Mirrors the
+        // resilient hook pattern HeroBodySwapper uses for the idle-pose hold (WO-376).
+        private Yarn.Unity.DialogueRunner _dialogueRunner;
+
         // WO-383: teleport-aware warp. SceneTransitionTrigger / seam handoffs set the
         // hero far outside the off-mesh ±50 clamp and onto a separately-baked NavMesh
         // (OuterWorld). A raw transform.position = fights the agent + clamp every frame
@@ -260,12 +279,74 @@ namespace DeNelle.Village
 
             // WO-387: cache the follow camera for the camera-relative movement basis.
             _smartCamera = Object.FindObjectOfType<SmartMobileCamera>();
+
+            // WO-377: hook the Yarn dialogue runner so player input is suppressed while a
+            // dialogue is on screen (and restored when it ends). The runner may already be
+            // hosted (intro/FTUE) or spun up lazily on the first Play — HookDialogueGate
+            // retries next frame until one exists, so a late runner is still wired.
+            HookDialogueGate();
         }
 
         private void OnDestroy()
         {
             if (_waveManager != null)
                 _waveManager.OnWaveCleared.RemoveListener(OnWaveCleared);
+
+            // WO-377: unhook the dialogue events and clear the global gate so a hero
+            // destroyed mid-dialogue (e.g. scene swap) never leaves input stuck off.
+            if (_dialogueRunner != null)
+            {
+                if (_dialogueRunner.onDialogueStart != null)    _dialogueRunner.onDialogueStart.RemoveListener(OnDialogueStarted);
+                if (_dialogueRunner.onDialogueComplete != null) _dialogueRunner.onDialogueComplete.RemoveListener(OnDialogueEnded);
+            }
+            InputSuppressed = false;
+        }
+
+        // WO-377: subscribe to the Yarn DialogueRunner's start/complete events. If no
+        // runner exists yet (DialogueService hosts it lazily), retry next frame so a
+        // runner that spins up just after the hero is still hooked. Mirrors the resilient
+        // hook HeroBodySwapper uses for the WO-376 idle-pose hold.
+        private void HookDialogueGate()
+        {
+            if (_dialogueRunner != null) return; // already hooked
+
+            var runner = Object.FindObjectOfType<Yarn.Unity.DialogueRunner>();
+            if (runner == null)
+            {
+                StartCoroutine(RetryHookDialogueGate());
+                return;
+            }
+
+            _dialogueRunner = runner;
+            if (runner.onDialogueStart != null)    runner.onDialogueStart.AddListener(OnDialogueStarted);
+            if (runner.onDialogueComplete != null) runner.onDialogueComplete.AddListener(OnDialogueEnded);
+        }
+
+        private System.Collections.IEnumerator RetryHookDialogueGate()
+        {
+            // Poll briefly for a lazily-hosted runner (a few seconds is ample; the runner
+            // is created on the first dialogue Play). Stops the instant one is found.
+            for (int i = 0; i < 600 && _dialogueRunner == null; i++)
+            {
+                yield return null;
+                HookDialogueGate();
+            }
+        }
+
+        // WO-377: dialogue opened — suppress player input and hold the hero in place. The
+        // idle POSE is handled by WO-376 (HeroBodySwapper); here we only freeze control:
+        // zero the velocity so the hero stops cleanly, and Update() short-circuits its
+        // input read while the flag is set.
+        private void OnDialogueStarted()
+        {
+            InputSuppressed = true;
+            Velocity = Vector3.zero;
+        }
+
+        // WO-377: dialogue closed — restore normal player input.
+        private void OnDialogueEnded()
+        {
+            InputSuppressed = false;
         }
 
         // DEF-70: called by WaveManager.OnWaveCleared (WaveNumberEvent — int waveId).
@@ -332,6 +413,21 @@ namespace DeNelle.Village
         private void Update()
         {
             TryResolveWaveManager();
+
+            // WO-377: while a Yarn dialogue is on screen, the player has no control —
+            // hold the hero in place (zero velocity, no input read) so a click meant for
+            // the dialogue box can't walk/turn the hero. The idle POSE is held by WO-376
+            // (HeroBodySwapper). We still drive Speed=0 into the animator so the walk
+            // blend settles to idle. Returns BEFORE the auto-walk branch so dialogue
+            // suppression also pauses a scripted tour mid-step.
+            if (InputSuppressed)
+            {
+                Velocity = Vector3.zero;
+                ResolveAnimator();
+                if (_animator != null && _hasSpeedParam) _animator.SetFloat(AnimSpeed, 0f);
+                _actor?.SetLocomotion(0f);
+                return;
+            }
 
             // WO-277 (tutorial auto-walk): while the tutorial owns the hero, IGNORE
             // player input entirely and steer toward the scripted target. We build a

@@ -43,6 +43,12 @@ namespace DeNelle.Village
         {
             if (_abilities == null) return;
 
+            // WO-377: no ability casts / primary attacks while a Yarn dialogue is on
+            // screen — a click on the dialogue box used to fall through and fire slot Q,
+            // breaking the story beat. HeroLocomotion raises this gate on dialogue start
+            // and clears it on complete (one suppression source for the whole input surface).
+            if (HeroLocomotion.InputSuppressed) return;
+
             // PRIMARY ATTACK: left-click / Space / gamepad-South fire slot Q (the
             // class basic strike) at the auto-locked target. Universal, forgiving
             // "attack the thing under the reticle" input — the fix for the player
