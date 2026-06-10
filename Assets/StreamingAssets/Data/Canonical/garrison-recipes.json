@@ -1,0 +1,69 @@
+{
+  "recipes": [
+    {
+      "id": "troll_outpost",
+      "kind": "garrison",
+      "size": "medium",
+      "theme": "troll",
+      "lighting": "troll",
+      "enemies": ["troll", "troll", "orc-berserker"],
+      "levelRange": [3, 6],
+      "threat": 2,
+      "props": [
+        "wall_wood", "gate_wood", "watchtower",
+        "hut", "hut", "hut", "hut",
+        "campfire", "crate", "bones", "spikes", "torch", "banner"
+      ],
+      "element": null
+    },
+    {
+      "id": "ruined_keep",
+      "kind": "garrison",
+      "size": "large",
+      "theme": "ruined",
+      "lighting": "ruined",
+      "enemies": ["troll", "hollow-warrior", "hollow-walker"],
+      "levelRange": [6, 10],
+      "threat": 3,
+      "props": [
+        "stone_tower", "wall_stone", "wall_wood_breached", "watchtower",
+        "hut", "hut",
+        "rubble", "ivy", "bones", "torch", "campfire"
+      ],
+      "element": null
+    },
+    {
+      "id": "hill_fort",
+      "kind": "garrison",
+      "size": "large",
+      "theme": "hill",
+      "lighting": "hill",
+      "enemies": ["orc-berserker", "orc-shaman", "troll"],
+      "levelRange": [9, 13],
+      "threat": 3,
+      "props": [
+        "platform", "wall_wood", "gate_wood", "ramp",
+        "watchtower", "watchtower", "watchtower", "watchtower",
+        "hut", "hut", "hut", "hut",
+        "spikes", "barrel", "banner", "torch"
+      ],
+      "element": null
+    },
+    {
+      "id": "frost_keep",
+      "kind": "dungeon",
+      "size": "medium",
+      "theme": "frost",
+      "lighting": "frost",
+      "enemies": ["hollow-warrior", "hollow-rogue", "hollow-acolyte"],
+      "levelRange": [18, 22],
+      "threat": 3,
+      "props": [
+        "dungeon_floor", "dungeon_wall", "dungeon_pillar", "dungeon_door",
+        "stalagmite", "ice_floe", "icicle", "crystals",
+        "torch", "bones", "altar"
+      ],
+      "element": "ice"
+    }
+  ]
+}

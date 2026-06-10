@@ -276,9 +276,12 @@ namespace DeNelle.Village
             //   cyan/grey/null-slot fallback. ApplyExtractedTexture returns false when no diffuse
             //   was bound (load failed / no texPath).
             bool textured = ApplyExtractedTexture(body, cls);
-            if (cls == HeroClass.Knight && !textured)
+            if (cls == HeroClass.Knight)
             {
-                // Correct Knight bake didn't load — fall back to flat steel, never speckle.
+                // FORCE flat steel for the Knight. The FBX has NO UV-matching texture in-project:
+                // medievalknight3dmodel -> speckled, remesh_12 bake -> MIXED (both wrong UVs). Until a
+                // genuinely NEW clean Knight model is imported (#37), a solid steel knight beats a
+                // speckled/mixed one. (textured result intentionally ignored for the Knight.)
                 ApplyFlatSteelStopgap(body);
             }
             else

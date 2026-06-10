@@ -288,10 +288,35 @@ namespace DeNelle.Village.Hero
             string ctx = _vendorContext.ToLowerInvariant();
             bool armorerOnly = ctx.Contains("armor");
             bool forgeOnly   = ctx.Contains("forge") || ctx.Contains("blacksmith");
+
+            // Full catalog (null-safe — AllWeapons/AllArmors never return null).
+            var allWeapons = new List<WeaponDef>();
+            var allArmors  = new List<ArmorDef>();
+            foreach (var w in GearCatalog.AllWeapons()) if (w != null) allWeapons.Add(w);
+            foreach (var a in GearCatalog.AllArmors())  if (a != null) allArmors.Add(a);
+
+            // Apply the vendor flavour filter.
             var weapons = new List<WeaponDef>();
             var armors  = new List<ArmorDef>();
-            if (!armorerOnly) foreach (var w in GearCatalog.AllWeapons()) if (w != null) weapons.Add(w);
-            if (!forgeOnly)   foreach (var a in GearCatalog.AllArmors())  if (a != null) armors.Add(a);
+            if (!armorerOnly) weapons.AddRange(allWeapons);
+            if (!forgeOnly)   armors.AddRange(allArmors);
+
+            // WO-406: a vendor must NEVER be empty. If the flavour filter excluded
+            // everything BUT the catalog actually has gear (e.g. an "armor"-only vendor
+            // whose armor catalog is empty, or a "forge" vendor whose weapon catalog is
+            // empty), fall back to the general stock so the player always has wares to
+            // buy. Potions are always offered below regardless, so this only guards the
+            // gear rows. (If the catalog itself failed to load, allWeapons+allArmors are
+            // both empty and only potions show — still a non-empty, usable shop.)
+            if (weapons.Count == 0 && armors.Count == 0)
+            {
+                weapons.AddRange(allWeapons);
+                armors.AddRange(allArmors);
+                if ((weapons.Count + armors.Count) > 0)
+                    Debug.LogWarning($"[ShopPanel] Vendor '{_vendorContext}' filter excluded all gear; falling back to general stock ({weapons.Count} weapons, {armors.Count} armors).");
+                else
+                    Debug.LogWarning("[ShopPanel] Gear catalog is empty (weapons.json / armor.json failed to load) — only potions will be offered.");
+            }
 
             // Count rows up front so the scroll content can be sized to fit them all.
             int rowCount = weapons.Count + armors.Count + _potionIds.Count;

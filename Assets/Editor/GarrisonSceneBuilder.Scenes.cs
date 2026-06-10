@@ -1,41 +1,27 @@
 // =============================================================================
-// GarrisonSceneBuilder.Scenes — the THREE themed enemy-garrison raid scenes.
+// GarrisonSceneBuilder.Scenes — the GENERIC recipe->scene realization + the
+// CATALOG-FIRST prop-role map. Partial of GarrisonSceneBuilder.
 // -----------------------------------------------------------------------------
-// Run from: Defenders > Scenes > Build All Garrison Scenes
-// Batchmode: DeNelle.Editor.GarrisonSceneBuilder.BuildAll  (via run-unity-method)
+// One BuildFromRecipe() builds ANY recipe (garrison fort OR dungeon cave). There
+// are NO per-theme methods — theme/size/props/enemies/levelRange/element are all
+// DATA read off the GarrisonRecipe. To add a fort/cave/region: add a JSON line.
 //
-// Partial extension of the existing single-scene GarrisonSceneBuilder. Builds three
-// distinct, additively-loadable garrison scenes from EXISTING assets (polyperfect
-// Low Poly Ultimate Pack first, committed Resources/Structures prefabs as the
-// guaranteed-present fallback, tinted primitives as the last resort):
+// PROP-ROLE MAP: a recipe lists ROLES ("wall_wood", "watchtower", "stalagmite",
+// "ice_floe", "dungeon_pillar"...). ResolveRole() maps each role to a real catalog
+// prefab on disk — polyperfect Low Poly Ultimate Pack first, committed
+// Resources/Structures next, then null => a tinted-primitive stand-in. Every miss
+// is one LogWarning (CLAUDE.md §4). The map is the single source of truth for
+// prop-role -> prefab; extend the map (not the build flow) for new roles.
 //
-//   * Garrison_TrollOutpost — messy wooden troll war camp (campfire + spit, crude
-//     huts, spiked palisade, corner watchtowers, bone/crate scatter, wooden gate).
-//   * Garrison_RuinedKeep   — overgrown stone ruins held by trolls (ruined keep,
-//     wooden reinforcements, breached outer palisade, tents, ivy, underground hint).
-//   * Garrison_HillFort     — organized elevated stronghold (raised platform, full
-//     palisade, command hut + structures, multiple watchtowers, ramp choke, spikes).
-//
-// COMMON to all three: a GarrisonRoot (empty) with children EnemySpawnPoints
-// (6-10 child Transforms), Environment (static geometry) and Props. A
-// GarrisonController is added to the root via REFLECTION (DeNelle.Village is NOT
-// referenced by the Editor asmdef — same pattern the single-scene builder uses for
-// EnemyOutpost) and its spawnPoints[] wired to the EnemySpawnPoints children.
-// Moody lighting (darker than the village, red/orange ambient, deep shadows).
-// NavMesh baked, scene saved, added to EditorBuildSettings.
-//
-// All prefab loads are graceful: a missing pack prefab logs a WARNING (never an
-// error) and the scene degrades (fallback prefab or tinted primitive). No .unity
-// hand-edits. Batchmode-safe (no dialogs). Canon: the village is Elarion.
+// Batchmode-safe. ASCII strings. Canon: the village is Elarion.
 // =============================================================================
 
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
-using UnityEngine.AI;
-using Unity.AI.Navigation;   // NavMeshSurface / CollectObjects
 using UnityEngine.SceneManagement;
+using DeNelle.Core.World;   // GarrisonRecipe
 
 namespace DeNelle.Editor
 {
@@ -47,48 +33,23 @@ namespace DeNelle.Editor
             "Assets/polyperfect/Low Poly Ultimate Pack/_M/Prefabs_M/";
         private const string ResStructRoot = "Assets/Resources/Structures/";
 
-        // Theme identity for each of the three scenes.
-        private enum GarrisonTheme { TrollOutpost, RuinedKeep, HillFort }
+        // Where the hero lands back in OuterWorld after a raid (shared with the castle seam).
+        private static readonly Vector3 OuterWorldReturnPos = new Vector3(0f, 0.5f, -80f);
 
         // ===================================================================
-        //  ENTRY POINTS
+        //  GENERIC RECIPE -> SCENE. Builds Garrison_<id>.unity end to end.
         // ===================================================================
-
-        [MenuItem("Defenders/Scenes/Build All Garrison Scenes")]
-        public static void BuildAll()
+        private static void BuildFromRecipe(GarrisonRecipe recipe)
         {
-            Log("=== Build ALL garrison scenes START ===");
-            BuildThemed(GarrisonTheme.TrollOutpost, "Garrison_TrollOutpost");
-            BuildThemed(GarrisonTheme.RuinedKeep,   "Garrison_RuinedKeep");
-            BuildThemed(GarrisonTheme.HillFort,     "Garrison_HillFort");
-            AssetDatabase.SaveAssets();
-            AssetDatabase.Refresh();
-            Log("=== Build ALL garrison scenes DONE (3 scenes built + baked + saved + in Build Settings) ===");
-        }
-
-        [MenuItem("Defenders/Scenes/Build Garrison - Troll Outpost")]
-        public static void BuildTrollOutpost() => BuildThemed(GarrisonTheme.TrollOutpost, "Garrison_TrollOutpost");
-
-        [MenuItem("Defenders/Scenes/Build Garrison - Ruined Keep")]
-        public static void BuildRuinedKeep() => BuildThemed(GarrisonTheme.RuinedKeep, "Garrison_RuinedKeep");
-
-        [MenuItem("Defenders/Scenes/Build Garrison - Hill Fort")]
-        public static void BuildHillFort() => BuildThemed(GarrisonTheme.HillFort, "Garrison_HillFort");
-
-        // ===================================================================
-        //  CORE — build one themed garrison scene end to end.
-        // ===================================================================
-
-        private static void BuildThemed(GarrisonTheme theme, string sceneName)
-        {
-            Log($"--- Building {sceneName} ({theme}) ---");
+            string sceneName = recipe.SceneName;
+            Log($"--- Building {sceneName} (kind={recipe.Kind}, theme={recipe.LightingToken}, " +
+                $"size={recipe.Size}, levels {recipe.MinLevel}-{recipe.MaxLevel}) ---");
 
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 
-            var root = new GameObject(RootName);   // "GarrisonRoot" (shared const)
+            var root = new GameObject(RootName);
             root.transform.position = Vector3.zero;
 
-            // Child groups per the common spec.
             var environment = new GameObject("Environment");
             environment.transform.SetParent(root.transform, false);
             var props = new GameObject("Props");
@@ -96,48 +57,61 @@ namespace DeNelle.Editor
             var spawnGroup = new GameObject("EnemySpawnPoints");
             spawnGroup.transform.SetParent(root.transform, false);
 
-            // Moody, theme-tinted lighting (darker than the village).
-            BuildMoodyLighting(root.transform, theme);
+            // Footprint from size — drives the enclosure half-extents + spawn count.
+            float half = HalfExtentFor(recipe.Size);   // square half-width in metres
+            bool dungeon = recipe.IsDungeon;
 
-            // Ground (raised earthen platform for the hill fort; flat dirt otherwise).
-            BuildThemedGround(environment.transform, theme);
+            // Moody lighting tinted by the recipe's lighting/theme/element token.
+            BuildMoodyLighting(root.transform, recipe);
 
-            // Hero entry + return seam (reuses the single-scene builder helpers).
-            var entryPos = new Vector3(0f, 0.1f, -30f);
+            // Ground / floor (a dungeon gets a tinted stone floor + perimeter walls; a
+            // garrison gets open earthen ground). Both feed the navmesh via MeshColliders.
+            BuildGroundOrFloor(environment.transform, recipe, half, dungeon);
+
+            // Hero entry + a return seam back to OuterWorld (single-load, generous radius).
+            var entryPos = new Vector3(0f, dungeon ? 0.1f : 0.1f, -(half + 6f));
             var entry = new GameObject("HeroStartPoint_PlayerSpawn");
             entry.transform.SetParent(root.transform, false);
             entry.transform.position = entryPos;
             entry.transform.rotation = Quaternion.LookRotation((Vector3.zero - entryPos).normalized, Vector3.up);
+            BuildReturnSeam(root.transform, half);
 
-            BuildReturnSeam(root.transform);   // from the single-scene partial
+            // The PROPS — the heart of the catalog-first system. Each role string in
+            // recipe.Props is resolved to a real prefab + placed by a layout rule.
+            PlaceRecipeProps(environment.transform, props.transform, recipe, half, dungeon);
 
-            // Theme geometry + props.
-            switch (theme)
-            {
-                case GarrisonTheme.TrollOutpost: BuildTrollOutpostContent(environment.transform, props.transform); break;
-                case GarrisonTheme.RuinedKeep:   BuildRuinedKeepContent(environment.transform, props.transform);   break;
-                case GarrisonTheme.HillFort:     BuildHillFortContent(environment.transform, props.transform);     break;
-            }
+            // Spawn points (6-10), scaled by footprint, biased to the front approach.
+            var spawnPoints = BuildSpawnPoints(spawnGroup.transform, half, dungeon);
 
-            // Spawn points (6-10), laid out for tower-defense waves around the centre.
-            var spawnPoints = BuildSpawnPoints(spawnGroup.transform, theme);
+            // GarrisonController wired to the recipe's enemies + levelRange + threat (reflection).
+            WireGarrisonController(root, spawnPoints, recipe);
 
-            // GarrisonController on the root (reflection — DeNelle.Village not referenced).
-            WireGarrisonController(root, spawnPoints, theme);
-
-            // Bake nav (scene-specific asset path, so the 3 scenes don't collide) + save + register.
-            BakeThemedNavMesh(root.transform, sceneName);
+            // Bake + save + register.
+            BakeNavMesh(root.transform, sceneName);
             string scenePath = $"{ScenesDir}/{sceneName}.unity";
-            SaveThemedScene(scene, scenePath);
-            AddSceneToBuildSettings(scenePath);    // from the single-scene partial
+            SaveSceneTo(scene, scenePath);
+            AddSceneToBuildSettings(scenePath);
 
-            Log($"--- {sceneName} built: {spawnPoints.Count} spawn points, GarrisonController wired, baked + saved. ---");
+            Log($"--- {sceneName} built: {spawnPoints.Count} spawn points, " +
+                $"{(recipe.Props != null ? recipe.Props.Count : 0)} prop role(s), " +
+                $"enemies [{string.Join(",", recipe.EnemyIds)}], baked + saved. ---");
+        }
+
+        private static float HalfExtentFor(string size)
+        {
+            switch ((size ?? "medium").ToLowerInvariant())
+            {
+                case "small":  return 12f;
+                case "large":  return 20f;
+                default:       return 16f;   // medium
+            }
         }
 
         // ===================================================================
-        //  LIGHTING — moody, theme-tinted, darker than the village.
+        //  LIGHTING — moody, tinted by lighting/theme/element token. Unknown tokens
+        //  fall to a neutral dusk so a NEW theme name never breaks the bake.
         // ===================================================================
-        private static void BuildMoodyLighting(Transform parent, GarrisonTheme theme)
+        private static void BuildMoodyLighting(Transform parent, GarrisonRecipe recipe)
         {
             var sunGo = new GameObject("Directional Light");
             sunGo.transform.SetParent(parent, false);
@@ -147,249 +121,363 @@ namespace DeNelle.Editor
             sun.shadows = LightShadows.Soft;
             RenderSettings.sun = sun;
 
-            // Per-theme tint: troll camp = warm firelit dusk; ruined keep = cold green
-            // overgrowth gloom; hill fort = harsh organized amber.
-            Color sunColor; Color ambient; Color fog; float sunI; float fogDensity;
-            switch (theme)
-            {
-                case GarrisonTheme.RuinedKeep:
-                    sunColor = new Color(0.62f, 0.70f, 0.62f); sunI = 0.75f;
-                    ambient  = new Color(0.18f, 0.22f, 0.18f);
-                    fog      = new Color(0.16f, 0.20f, 0.17f); fogDensity = 0.018f;
-                    break;
-                case GarrisonTheme.HillFort:
-                    sunColor = new Color(0.95f, 0.74f, 0.52f); sunI = 0.95f;
-                    ambient  = new Color(0.24f, 0.18f, 0.14f);
-                    fog      = new Color(0.22f, 0.16f, 0.12f); fogDensity = 0.012f;
-                    break;
-                default: // TrollOutpost
-                    sunColor = new Color(0.90f, 0.58f, 0.36f); sunI = 0.80f;
-                    ambient  = new Color(0.22f, 0.15f, 0.12f);
-                    fog      = new Color(0.20f, 0.13f, 0.10f); fogDensity = 0.015f;
-                    break;
-            }
-            sun.color = sunColor;
-            sun.intensity = sunI;
+            Color sunColor, ambient, fog; float sunI, fogDensity;
+            string token = (recipe.LightingToken ?? "troll").ToLowerInvariant();
+            string element = (recipe.Element ?? "").ToLowerInvariant();
 
+            // Element wins over theme for a dungeon's mood (ice => cold blue, fire => ember).
+            if (element == "ice" || token == "frost")
+            {
+                sunColor = new Color(0.70f, 0.82f, 0.95f); sunI = 0.70f;
+                ambient  = new Color(0.20f, 0.26f, 0.34f);
+                fog      = new Color(0.30f, 0.38f, 0.48f); fogDensity = 0.022f;
+            }
+            else if (element == "fire" || token == "ember")
+            {
+                sunColor = new Color(0.98f, 0.55f, 0.30f); sunI = 0.85f;
+                ambient  = new Color(0.26f, 0.13f, 0.08f);
+                fog      = new Color(0.28f, 0.12f, 0.07f); fogDensity = 0.018f;
+            }
+            else if (element == "water")
+            {
+                sunColor = new Color(0.62f, 0.78f, 0.80f); sunI = 0.72f;
+                ambient  = new Color(0.16f, 0.24f, 0.26f);
+                fog      = new Color(0.18f, 0.28f, 0.30f); fogDensity = 0.020f;
+            }
+            else if (token == "ruined")
+            {
+                sunColor = new Color(0.62f, 0.70f, 0.62f); sunI = 0.75f;
+                ambient  = new Color(0.18f, 0.22f, 0.18f);
+                fog      = new Color(0.16f, 0.20f, 0.17f); fogDensity = 0.018f;
+            }
+            else if (token == "hill")
+            {
+                sunColor = new Color(0.95f, 0.74f, 0.52f); sunI = 0.95f;
+                ambient  = new Color(0.24f, 0.18f, 0.14f);
+                fog      = new Color(0.22f, 0.16f, 0.12f); fogDensity = 0.012f;
+            }
+            else if (token == "troll")
+            {
+                sunColor = new Color(0.90f, 0.58f, 0.36f); sunI = 0.80f;
+                ambient  = new Color(0.22f, 0.15f, 0.12f);
+                fog      = new Color(0.20f, 0.13f, 0.10f); fogDensity = 0.015f;
+            }
+            else
+            {
+                // Unknown theme => neutral dusk (never breaks the bake).
+                Warn($"Unknown lighting/theme token '{token}' — using a neutral dusk.");
+                sunColor = new Color(0.85f, 0.80f, 0.72f); sunI = 0.85f;
+                ambient  = new Color(0.22f, 0.22f, 0.22f);
+                fog      = new Color(0.20f, 0.20f, 0.20f); fogDensity = 0.012f;
+            }
+
+            sun.color = sunColor; sun.intensity = sunI;
             RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
             RenderSettings.ambientLight = ambient;
             RenderSettings.fog = true;
             RenderSettings.fogMode = FogMode.ExponentialSquared;
             RenderSettings.fogColor = fog;
-            RenderSettings.fogDensity = fogDensity;
+            RenderSettings.fogDensity = recipe.IsDungeon ? fogDensity * 1.4f : fogDensity;
 
-            Log($"Moody lighting set for {theme} (deep shadows, red/orange or cold-green ambient).");
+            Log($"Moody lighting set (token={token}, element={(string.IsNullOrEmpty(element) ? "none" : element)}).");
         }
 
         // ===================================================================
-        //  GROUND — flat dirt; the hill fort sits on a raised earthen platform.
+        //  GROUND / FLOOR. Garrison: open earthen plane. Dungeon: a tinted stone
+        //  floor plane + a solid perimeter wall ring (enclosure) so it reads as a cave.
         // ===================================================================
-        private static void BuildThemedGround(Transform parent, GarrisonTheme theme)
+        private static void BuildGroundOrFloor(Transform parent, GarrisonRecipe recipe, float half, bool dungeon)
         {
             var ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
-            ground.name = "GarrisonGround";
+            ground.name = dungeon ? "DungeonFloor" : "GarrisonGround";
             ground.transform.SetParent(parent, false);
-            ground.transform.localScale = new Vector3(9f, 1f, 9f);   // 90x90m
+            float planeScale = (half + 8f) / 5f;            // Unity plane is 10m => /5 per half
+            ground.transform.localScale = new Vector3(planeScale, 1f, planeScale);
             MarkStatic(ground);
-            TintMesh(ground, theme == GarrisonTheme.RuinedKeep
-                ? new Color(0.24f, 0.27f, 0.20f)    // mossy
-                : new Color(0.30f, 0.25f, 0.18f));  // dirt
 
-            if (theme == GarrisonTheme.HillFort)
+            string token = (recipe.LightingToken ?? "troll").ToLowerInvariant();
+            Color groundTint =
+                dungeon                 ? new Color(0.20f, 0.21f, 0.24f) :  // stone
+                token == "ruined"       ? new Color(0.24f, 0.27f, 0.20f) :  // mossy
+                token == "frost"        ? new Color(0.55f, 0.62f, 0.70f) :  // snow
+                                          new Color(0.30f, 0.25f, 0.18f);   // dirt
+            TintMesh(ground, groundTint);
+
+            if (dungeon)
             {
-                // Raised earthen/stone platform the fort sits on (a wide low cube). Its
-                // MeshCollider feeds the navmesh; a ramp choke (built in content) reaches it.
+                // A solid perimeter wall ring (cubes) so the cave is enclosed + bakes a
+                // bounded navmesh. The detailed dungeon_wall props decorate on top.
+                BuildEnclosureRing(parent, half + 2f);
+            }
+        }
+
+        // A simple solid wall ring (4 long cubes) enclosing a dungeon footprint.
+        private static void BuildEnclosureRing(Transform parent, float half)
+        {
+            float t = 1.0f, h = 4.0f, len = half * 2f + 2f;
+            var specs = new (Vector3 pos, Vector3 scale)[]
+            {
+                (new Vector3(0f, h * 0.5f, -half), new Vector3(len, h, t)),
+                (new Vector3(0f, h * 0.5f,  half), new Vector3(len, h, t)),
+                (new Vector3(-half, h * 0.5f, 0f), new Vector3(t, h, len)),
+                (new Vector3( half, h * 0.5f, 0f), new Vector3(t, h, len)),
+            };
+            foreach (var s in specs)
+            {
+                var w = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                w.name = "DungeonEnclosure";
+                w.transform.SetParent(parent, false);
+                w.transform.localPosition = s.pos;
+                w.transform.localScale = s.scale;
+                MarkStatic(w);
+                TintMesh(w, new Color(0.16f, 0.16f, 0.19f));
+            }
+        }
+
+        // ===================================================================
+        //  PROP PLACEMENT — the recipe-first heart. Walk recipe.Props (a multiset of
+        //  ROLE strings), bucket them, and place by simple layout rules: enclosure
+        //  roles ring the footprint, structures sit inside, scatter props sprinkle.
+        //  Repeated roles (e.g. four "watchtower") place at distinct ring slots.
+        // ===================================================================
+        private static void PlaceRecipeProps(Transform env, Transform props, GarrisonRecipe recipe,
+            float half, bool dungeon)
+        {
+            var roles = (recipe.Props != null && recipe.Props.Count > 0)
+                ? recipe.Props
+                : DefaultRolesFor(recipe, dungeon);
+
+            // Bucket the role multiset.
+            int watchtowers = 0, huts = 0;
+            bool wallWood = false, wallStone = false, wallWoodBreached = false;
+            bool gate = false, ramp = false, platform = false, stoneTower = false;
+            bool dungeonFloor = false, dungeonWall = false;
+            int dungeonPillars = 0;
+            bool dungeonDoor = false, altar = false;
+            // scatter roles -> count
+            var scatter = new Dictionary<string, int>();
+
+            foreach (var raw in roles)
+            {
+                string role = (raw ?? "").Trim().ToLowerInvariant();
+                switch (role)
+                {
+                    case "wall_wood":          wallWood = true; break;
+                    case "wall_wood_breached": wallWoodBreached = true; break;
+                    case "wall_stone":         wallStone = true; break;
+                    case "gate_wood":
+                    case "gate":               gate = true; break;
+                    case "ramp":               ramp = true; break;
+                    case "platform":           platform = true; break;
+                    case "stone_tower":        stoneTower = true; break;
+                    case "watchtower":         watchtowers++; break;
+                    case "hut":                huts++; break;
+                    case "dungeon_floor":      dungeonFloor = true; break;
+                    case "dungeon_wall":       dungeonWall = true; break;
+                    case "dungeon_pillar":     dungeonPillars++; break;
+                    case "dungeon_door":       dungeonDoor = true; break;
+                    case "altar":              altar = true; break;
+                    default:
+                        // everything else is a scatter prop (campfire/crate/bones/spikes/
+                        // torch/banner/barrel/rubble/ivy/stalagmite/ice_floe/icicle/crystals)
+                        if (!scatter.ContainsKey(role)) scatter[role] = 0;
+                        scatter[role]++;
+                        break;
+                }
+            }
+
+            // Optional raised platform (hill-fort style) — a wide low cube the fort sits on.
+            float top = 0f;
+            if (platform)
+            {
+                top = 2.0f;
                 var plat = GameObject.CreatePrimitive(PrimitiveType.Cube);
                 plat.name = "RaisedPlatform";
-                plat.transform.SetParent(parent, false);
-                plat.transform.localPosition = new Vector3(0f, 1.0f, 4f);
-                plat.transform.localScale = new Vector3(34f, 2.0f, 30f);
+                plat.transform.SetParent(env, false);
+                plat.transform.localPosition = new Vector3(0f, 1.0f, 2f);
+                plat.transform.localScale = new Vector3(half * 1.9f, 2.0f, half * 1.7f);
                 MarkStatic(plat);
                 TintMesh(plat, new Color(0.34f, 0.29f, 0.22f));
             }
+
+            // Enclosure: wood/stone palisade ring (front gap for the gate). Breached =>
+            // random missing segments (chokepoints).
+            if (wallWood || wallWoodBreached)
+                BuildPalisadeRing(env, half, top, wood: true, breached: wallWoodBreached, frontGap: gate);
+            if (wallStone)
+                BuildBrokenStoneWalls(env, half);
+            if (dungeonWall)
+                BuildDungeonWalls(env, half);
+
+            // Gate at the front gap.
+            if (gate)
+                PlaceOne(env, ResolveRole("gate_wood"), new Vector3(0f, top, -half), 0f, "Gate");
+
+            // Ramp choke up to a platform.
+            if (ramp && platform)
+            {
+                var r = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                r.name = "EntryRamp_Choke";
+                r.transform.SetParent(env, false);
+                r.transform.localPosition = new Vector3(0f, top * 0.5f, -(half + 1f));
+                r.transform.localRotation = Quaternion.Euler(-22f, 0f, 0f);
+                r.transform.localScale = new Vector3(7f, 0.5f, 12f);
+                MarkStatic(r);
+                TintMesh(r, new Color(0.32f, 0.27f, 0.20f));
+            }
+
+            // Central stone tower / keep core.
+            if (stoneTower)
+                PlaceOne(env, ResolveRole("stone_tower"), new Vector3(0f, top, half * 0.35f), 0f, "Keep_Core");
+
+            // Watchtowers ring the rear corners/edges (distinct slots per count).
+            PlaceRing(env, "watchtower", watchtowers, half * 0.92f, top, startAngle: 35f, label: "Watchtower");
+
+            // Huts cluster inside.
+            PlaceCluster(env, "hut", huts, half * 0.45f, top, label: "Hut");
+
+            // Dungeon detail: floor tiles accent + pillars in a grid + a door + altar.
+            if (dungeonFloor)
+                ScatterRole(props, "dungeon_floor", 6, seed: 7, area: half * 0.8f, baseY: 0.02f, label: "FloorTile");
+            if (dungeonPillars > 0)
+                PlaceRing(env, "dungeon_pillar", dungeonPillars, half * 0.6f, 0f, startAngle: 0f, label: "Pillar");
+            if (dungeonDoor)
+                PlaceOne(env, ResolveRole("dungeon_door"), new Vector3(0f, 0f, -half), 0f, "DungeonDoor");
+            if (altar)
+                PlaceOne(env, ResolveRole("altar"), new Vector3(0f, 0f, half * 0.4f), 0f, "Altar");
+
+            // Scatter props — deterministic sprinkle per role, count from the multiset
+            // (so listing "bones" twice scatters more). 3 instances per listing.
+            int seed = 101;
+            foreach (var kv in scatter)
+            {
+                int instances = Mathf.Clamp(kv.Value * 3, 3, 9);
+                ScatterRole(props, kv.Key, instances, seed, area: half * 0.85f, baseY: top, label: kv.Key);
+                seed += 17;
+            }
+        }
+
+        // A default role-set when a recipe omits props[] entirely.
+        private static List<string> DefaultRolesFor(GarrisonRecipe recipe, bool dungeon)
+        {
+            if (dungeon)
+                return new List<string> { "dungeon_floor", "dungeon_wall", "dungeon_pillar",
+                                          "dungeon_door", "torch", "bones" };
+            return new List<string> { "wall_wood", "gate_wood", "watchtower", "watchtower",
+                                      "hut", "hut", "campfire", "crate", "torch" };
         }
 
         // ===================================================================
-        //  THEME 1 — TROLL OUTPOST: messy wooden war camp.
+        //  PALISADE / WALL helpers.
         // ===================================================================
-        private static void BuildTrollOutpostContent(Transform env, Transform props)
+        private static void BuildPalisadeRing(Transform parent, float half, float y,
+            bool wood, bool breached, bool frontGap)
         {
-            // Spiked wooden palisade enclosure (a square ring of wood walls, gap at front).
-            BuildPalisadeRing(env, halfX: 16f, halfZ: 14f, y: 0f, frontGapForGate: true, wood: true);
+            GameObject wallPrefab = wood ? ResolveRole("wall_wood") : ResolveRole("wall_stone");
+            const float seg = 3f;
+            float halfX = half, halfZ = half;
 
-            // Wooden gate at the front gap.
-            PlaceOne(env, PickGate(wood: true), new Vector3(0f, 0f, -14f), 0f, "Gate_Wood");
-
-            // 2 corner watchtowers (rear corners — overlook the camp).
-            PlaceOne(env, PickWatchtower(), new Vector3(-15f, 0f, 12f), 0f, "Watchtower_NW");
-            PlaceOne(env, PickWatchtower(), new Vector3( 15f, 0f, 12f), 0f, "Watchtower_NE");
-
-            // 3-4 crude huts/tents scattered (small houses stand in for crude huts).
-            PlaceOne(env, PickHut(), new Vector3(-9f, 0f,  6f),  20f, "Hut_1");
-            PlaceOne(env, PickHut(), new Vector3( 9f, 0f,  6f), -25f, "Hut_2");
-            PlaceOne(env, PickHut(), new Vector3(-6f, 0f, -4f),  40f, "Hut_3");
-            PlaceOne(env, PickHut(), new Vector3( 7f, 0f, -3f), -15f, "Hut_4");
-
-            // Central campfire + roasting spit (Fire prop + a crate stand-in for the spit).
-            PlaceOne(props, PickCampfire(), new Vector3(0f, 0f, 1f), 0f, "Campfire_Central");
-            PlaceOne(props, PickCrate(),    new Vector3(1.6f, 0f, 1f), 30f, "RoastingSpit_Stand");
-
-            // Bone piles / broken crates / banners scatter (chaotic).
-            ScatterProps(props, PickBones(), 4, seed: 11, area: 13f, label: "BonePile");
-            ScatterProps(props, PickCrate(), 5, seed: 23, area: 14f, label: "BrokenCrate");
-            ScatterProps(props, PickBanner(), 3, seed: 31, area: 12f, label: "TrollBanner");
-            ScatterProps(props, PickSpikes(), 6, seed: 41, area: 15f, label: "Spikes");
-            ScatterProps(props, PickTorch(),  4, seed: 53, area: 12f, label: "Torch");
-        }
-
-        // ===================================================================
-        //  THEME 2 — RUINED KEEP: overgrown stone ruins held by trolls.
-        // ===================================================================
-        private static void BuildRuinedKeepContent(Transform env, Transform props)
-        {
-            // Central ruined keep: a stone tower core + partial broken stone walls.
-            PlaceOne(env, PickStoneTower(), new Vector3(0f, 0f, 6f), 0f, "RuinedKeep_Core");
-
-            // Partial outer stone walls with collapsed gaps (chokepoints).
-            BuildBrokenStoneWalls(env, halfX: 17f, halfZ: 15f);
-
-            // Breached outer wooden palisade (trolls' crude reinforcement, full of gaps).
-            BuildPalisadeRing(env, halfX: 20f, halfZ: 18f, y: 0f, frontGapForGate: true, wood: true, breached: true);
-
-            // Wooden troll reinforcements: spikes + crude towers braced against the ruins.
-            PlaceOne(env, PickWatchtower(), new Vector3(-12f, 0f, 10f), 0f, "TrollTower_W");
-            PlaceOne(env, PickWatchtower(), new Vector3( 12f, 0f, 10f), 0f, "TrollTower_E");
-
-            // Tents inside the ruins (crude huts).
-            PlaceOne(env, PickHut(), new Vector3(-7f, 0f, -2f), 30f, "Tent_1");
-            PlaceOne(env, PickHut(), new Vector3( 7f, 0f, -3f), -20f, "Tent_2");
-
-            // Hint of an underground entrance: a dark recessed slab + rubble at the keep base.
-            var hatch = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            hatch.name = "UndergroundEntrance_Hint";
-            hatch.transform.SetParent(env, false);
-            hatch.transform.localPosition = new Vector3(0f, -0.35f, 0f);
-            hatch.transform.localScale = new Vector3(3.5f, 0.6f, 3.5f);
-            MarkStatic(hatch);
-            TintMesh(hatch, new Color(0.07f, 0.08f, 0.07f));
-
-            // Ivy / overgrowth + rubble + bones scatter (the "held by trolls" decay).
-            ScatterProps(props, PickVine(),  6, seed: 13, area: 16f, label: "Ivy");
-            ScatterProps(props, PickRubble(), 7, seed: 27, area: 17f, label: "Rubble");
-            ScatterProps(props, PickBones(),  4, seed: 37, area: 14f, label: "BonePile");
-            ScatterProps(props, PickTorch(),  5, seed: 47, area: 14f, label: "Torch");
-            PlaceOne(props, PickCampfire(), new Vector3(2f, 0f, -4f), 0f, "Campfire");
-        }
-
-        // ===================================================================
-        //  THEME 3 — HILL FORT: organized elevated stronghold.
-        // ===================================================================
-        private static void BuildHillFortContent(Transform env, Transform props)
-        {
-            // Everything sits on the raised platform (y ~2.0 top). Full palisade ring.
-            const float top = 2.0f;
-            BuildPalisadeRing(env, halfX: 15f, halfZ: 13f, y: top, frontGapForGate: true, wood: true, centreZ: 4f);
-
-            // Ramp/stairs choke up to the main gate (front, leading onto the platform).
-            var ramp = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            ramp.name = "EntryRamp_Choke";
-            ramp.transform.SetParent(env, false);
-            ramp.transform.localPosition = new Vector3(0f, top * 0.5f, -11f);
-            ramp.transform.localRotation = Quaternion.Euler(-22f, 0f, 0f);
-            ramp.transform.localScale = new Vector3(7f, 0.5f, 12f);   // narrow choke
-            MarkStatic(ramp);
-            TintMesh(ramp, new Color(0.32f, 0.27f, 0.20f));
-
-            // Main gate at the top of the ramp.
-            PlaceOne(env, PickGate(wood: true), new Vector3(0f, top, -9f), 0f, "MainGate");
-
-            // Multiple watchtowers with line-of-sight (4 around the platform edge).
-            PlaceOne(env, PickWatchtower(), new Vector3(-14f, top, -7f), 0f, "Watchtower_SW");
-            PlaceOne(env, PickWatchtower(), new Vector3( 14f, top, -7f), 0f, "Watchtower_SE");
-            PlaceOne(env, PickWatchtower(), new Vector3(-14f, top, 15f), 0f, "Watchtower_NW");
-            PlaceOne(env, PickWatchtower(), new Vector3( 14f, top, 15f), 0f, "Watchtower_NE");
-
-            // Central command hut + 3 support structures (organized).
-            PlaceOne(env, PickHut(), new Vector3(0f, top, 6f),   0f, "CommandHut");
-            PlaceOne(env, PickHut(), new Vector3(-8f, top, 10f), 25f, "Barracks_1");
-            PlaceOne(env, PickHut(), new Vector3( 8f, top, 10f), -25f, "Barracks_2");
-            PlaceOne(env, PickHut(), new Vector3(0f, top, 13f),  180f, "Storehouse");
-
-            // Defensive spikes + oil barrels along the front line (organized defense).
-            for (int i = -2; i <= 2; i++)
-                PlaceOne(props, PickSpikes(), new Vector3(i * 3f, top, -8f), 0f, $"FrontSpike_{i}");
-            PlaceOne(props, PickBarrel(), new Vector3(-3f, top, -6f), 0f, "OilBarrel_1");
-            PlaceOne(props, PickBarrel(), new Vector3( 3f, top, -6f), 0f, "OilBarrel_2");
-            ScatterProps(props, PickBanner(), 4, seed: 61, area: 12f, baseY: top, label: "WarBanner");
-            ScatterProps(props, PickTorch(),  6, seed: 71, area: 13f, baseY: top, label: "Torch");
-        }
-
-        // ===================================================================
-        //  PALISADE RING — a square ring of wall segments (wood or stone), with an
-        //  optional front gap for the gate and optional "breached" missing segments.
-        // ===================================================================
-        private static void BuildPalisadeRing(Transform parent, float halfX, float halfZ, float y,
-            bool frontGapForGate, bool wood, bool breached = false, float centreZ = 0f)
-        {
-            GameObject wallPrefab = wood ? PickWoodWall() : PickStoneWall();
-            const float seg = 3f;   // segment width (pack walls snap at ~3m)
-
-            // Front + back runs (along X).
             for (float x = -halfX; x <= halfX; x += seg)
             {
-                bool frontGap = frontGapForGate && Mathf.Abs(x) <= seg * 0.6f;
-                if (breached && Hash(x, 1) > 0.72f) continue;   // random breach gaps
-                if (!frontGap)
-                    PlaceOne(parent, wallPrefab, new Vector3(x, y, -halfZ + centreZ), 0f, "Wall_Front");
-                if (breached && Hash(x, 2) > 0.72f) continue;
-                PlaceOne(parent, wallPrefab, new Vector3(x, y, halfZ + centreZ), 0f, "Wall_Back");
+                bool atGate = frontGap && Mathf.Abs(x) <= seg * 0.6f;
+                if (!(breached && Hash(x, 1) > 0.72f) && !atGate)
+                    PlaceOne(parent, wallPrefab, new Vector3(x, y, -halfZ), 0f, "Wall_Front");
+                if (!(breached && Hash(x, 2) > 0.72f))
+                    PlaceOne(parent, wallPrefab, new Vector3(x, y, halfZ), 0f, "Wall_Back");
             }
-            // Side runs (along Z), rotated 90.
             for (float z = -halfZ; z <= halfZ; z += seg)
             {
-                if (breached && Hash(z, 3) > 0.72f) continue;
-                PlaceOne(parent, wallPrefab, new Vector3(-halfX, y, z + centreZ), 90f, "Wall_Left");
-                if (breached && Hash(z, 4) > 0.72f) continue;
-                PlaceOne(parent, wallPrefab, new Vector3( halfX, y, z + centreZ), 90f, "Wall_Right");
+                if (!(breached && Hash(z, 3) > 0.72f))
+                    PlaceOne(parent, wallPrefab, new Vector3(-halfX, y, z), 90f, "Wall_Left");
+                if (!(breached && Hash(z, 4) > 0.72f))
+                    PlaceOne(parent, wallPrefab, new Vector3( halfX, y, z), 90f, "Wall_Right");
             }
         }
 
-        // Partial broken stone walls for the ruined keep — short disconnected runs with
-        // collapsed gaps that read as chokepoints.
-        private static void BuildBrokenStoneWalls(Transform parent, float halfX, float halfZ)
+        // Partial broken stone walls — short disconnected runs (chokepoints) for a ruined keep.
+        private static void BuildBrokenStoneWalls(Transform parent, float half)
         {
-            GameObject stone = PickStoneWall();
-            // A few broken segments per side (deliberate gaps between them).
-            PlaceOne(parent, stone, new Vector3(-halfX, 0f, -4f), 90f, "BrokenWall_W1");
-            PlaceOne(parent, stone, new Vector3(-halfX, 0f,  2f), 90f, "BrokenWall_W2");
-            PlaceOne(parent, stone, new Vector3( halfX, 0f, -2f), 90f, "BrokenWall_E1");
-            PlaceOne(parent, stone, new Vector3( halfX, 0f,  6f), 90f, "BrokenWall_E2");
-            PlaceOne(parent, stone, new Vector3(-6f, 0f, halfZ),  0f, "BrokenWall_N1");
-            PlaceOne(parent, stone, new Vector3( 5f, 0f, halfZ),  0f, "BrokenWall_N2");
+            GameObject stone = ResolveRole("wall_stone");
+            PlaceOne(parent, stone, new Vector3(-half, 0f, -4f), 90f, "BrokenWall_W1");
+            PlaceOne(parent, stone, new Vector3(-half, 0f,  2f), 90f, "BrokenWall_W2");
+            PlaceOne(parent, stone, new Vector3( half, 0f, -2f), 90f, "BrokenWall_E1");
+            PlaceOne(parent, stone, new Vector3( half, 0f,  6f), 90f, "BrokenWall_E2");
+            PlaceOne(parent, stone, new Vector3(-6f, 0f, half),  0f, "BrokenWall_N1");
+            PlaceOne(parent, stone, new Vector3( 5f, 0f, half),  0f, "BrokenWall_N2");
+        }
+
+        // Decorative dungeon wall prefabs lining the enclosure (the solid ring is the collider).
+        private static void BuildDungeonWalls(Transform parent, float half)
+        {
+            GameObject w = ResolveRole("dungeon_wall");
+            const float seg = 3f;
+            for (float x = -half; x <= half; x += seg)
+            {
+                PlaceOne(parent, w, new Vector3(x, 0f, -half), 0f, "DWall_S");
+                PlaceOne(parent, w, new Vector3(x, 0f,  half), 0f, "DWall_N");
+            }
+            for (float z = -half; z <= half; z += seg)
+            {
+                PlaceOne(parent, w, new Vector3(-half, 0f, z), 90f, "DWall_W");
+                PlaceOne(parent, w, new Vector3( half, 0f, z), 90f, "DWall_E");
+            }
+        }
+
+        // Place N copies of a role evenly around a ring of the given radius.
+        private static void PlaceRing(Transform parent, string role, int count, float radius,
+            float y, float startAngle, string label)
+        {
+            if (count <= 0) return;
+            GameObject prefab = ResolveRole(role);
+            for (int i = 0; i < count; i++)
+            {
+                float ang = (startAngle + i * (360f / count)) * Mathf.Deg2Rad;
+                var pos = new Vector3(Mathf.Sin(ang) * radius, y, Mathf.Cos(ang) * radius);
+                float yaw = -startAngle - i * (360f / count);   // face inward-ish
+                PlaceOne(parent, prefab, pos, yaw, $"{label}_{i}");
+            }
+        }
+
+        // Place N copies of a role in a small interior cluster (deterministic).
+        private static void PlaceCluster(Transform parent, string role, int count, float radius,
+            float y, string label)
+        {
+            if (count <= 0) return;
+            GameObject prefab = ResolveRole(role);
+            var rng = new System.Random(role.GetHashCode());
+            for (int i = 0; i < count; i++)
+            {
+                float a = (float)(rng.NextDouble() * 2.0 * Mathf.PI);
+                float rr = radius * (0.4f + 0.6f * (float)rng.NextDouble());
+                var pos = new Vector3(Mathf.Sin(a) * rr, y, Mathf.Cos(a) * rr + radius * 0.3f);
+                PlaceOne(parent, prefab, pos, (float)(rng.NextDouble() * 360.0), $"{label}_{i}");
+            }
         }
 
         // ===================================================================
-        //  SPAWN POINTS — 6-10 child Transforms, laid out for TD waves around the
-        //  centre, biased toward the front approach so defenders meet the hero.
+        //  SPAWN POINTS — 6-10 child Transforms, biased to the front approach so
+        //  defenders meet the hero. Count scales a touch with footprint.
         // ===================================================================
-        private static List<Transform> BuildSpawnPoints(Transform group, GarrisonTheme theme)
+        private static List<Transform> BuildSpawnPoints(Transform group, float half, bool dungeon)
         {
-            float y = theme == GarrisonTheme.HillFort ? 2.0f : 0f;
-            float centreZ = theme == GarrisonTheme.HillFort ? 4f
-                          : theme == GarrisonTheme.RuinedKeep ? 2f : 1f;
-
-            // 8 points: a defensive arc + a couple interior holders.
+            float y = 0f;
+            float f = half / 16f;   // footprint factor (1.0 at medium)
             var positions = new List<Vector3>
             {
-                new Vector3( 0f, y, centreZ - 6f),   // front gate guard
-                new Vector3(-5f, y, centreZ - 4f),
-                new Vector3( 5f, y, centreZ - 4f),
-                new Vector3(-8f, y, centreZ + 2f),
-                new Vector3( 8f, y, centreZ + 2f),
-                new Vector3( 0f, y, centreZ + 4f),   // centre boss-ish holder
-                new Vector3(-6f, y, centreZ + 8f),
-                new Vector3( 6f, y, centreZ + 8f),
+                new Vector3( 0f, y, -6f * f),   // front guard
+                new Vector3(-5f * f, y, -4f * f),
+                new Vector3( 5f * f, y, -4f * f),
+                new Vector3(-8f * f, y,  2f * f),
+                new Vector3( 8f * f, y,  2f * f),
+                new Vector3( 0f, y,  4f * f),    // centre holder
+                new Vector3(-6f * f, y,  8f * f),
+                new Vector3( 6f * f, y,  8f * f),
             };
+            if (half >= 20f)   // large => a couple more
+            {
+                positions.Add(new Vector3(0f, y, 11f * f));
+                positions.Add(new Vector3(0f, y, -10f * f));
+            }
 
             var list = new List<Transform>();
             for (int i = 0; i < positions.Count; i++)
@@ -398,7 +486,7 @@ namespace DeNelle.Editor
                 sp.transform.SetParent(group, false);
                 sp.transform.position = positions[i];
                 sp.transform.rotation = Quaternion.LookRotation(
-                    (new Vector3(0f, y, centreZ - 12f) - positions[i]).normalized, Vector3.up);
+                    (new Vector3(0f, y, -(half + 4f)) - positions[i]).normalized, Vector3.up);
                 list.Add(sp.transform);
             }
             return list;
@@ -406,66 +494,131 @@ namespace DeNelle.Editor
 
         // ===================================================================
         //  GARRISON CONTROLLER — added + wired via reflection (DeNelle.Village not
-        //  referenced by the Editor asmdef; same pattern as the EnemyOutpost host).
+        //  referenced by the Editor asmdef). Wires spawnPoints + enemyTypeIds +
+        //  min/maxLevel + threatLevel straight off the recipe.
         // ===================================================================
-        private static void WireGarrisonController(GameObject root, List<Transform> spawnPoints, GarrisonTheme theme)
+        private static void WireGarrisonController(GameObject root, List<Transform> spawnPoints, GarrisonRecipe recipe)
         {
             var type = FindType("DeNelle.Village.World.Camps.GarrisonController");
             if (type == null)
             {
                 Warn("DeNelle.Village.World.Camps.GarrisonController not found (is it compiled?). " +
-                     "Root placed WITHOUT the controller — add it + wire spawnPoints manually, or re-run after compile.");
+                     "Root placed WITHOUT the controller — re-run after compile.");
                 return;
             }
 
             var comp = root.AddComponent(type);
 
-            // spawnPoints (Transform[]) — public field on the controller.
             var fSpawns = type.GetField("spawnPoints");
             if (fSpawns != null) fSpawns.SetValue(comp, spawnPoints.ToArray());
             else Warn("GarrisonController.spawnPoints field not found via reflection.");
 
-            // threatLevel — a touch tougher for the organized hill fort.
-            var fThreat = type.GetField("threatLevel");
-            if (fThreat != null) fThreat.SetValue(comp, theme == GarrisonTheme.HillFort ? 3 : 2);
+            // enemyTypeIds (string[]) straight from the recipe.
+            var ids = new List<string>(recipe.EnemyIds);
+            SetField(type, comp, "enemyTypeIds", ids.ToArray());
 
-            Log($"GarrisonController wired ({spawnPoints.Count} spawn points, threat " +
-                (theme == GarrisonTheme.HillFort ? 3 : 2) + "). It will Activate() on raid start.");
+            // levelRange band + threat.
+            SetField(type, comp, "minLevel",    recipe.MinLevel);
+            SetField(type, comp, "maxLevel",    recipe.MaxLevel);
+            SetField(type, comp, "threatLevel", recipe.Threat);
+
+            Log($"GarrisonController wired: {spawnPoints.Count} spawn points, enemies " +
+                $"[{string.Join(",", recipe.EnemyIds)}], levels {recipe.MinLevel}-{recipe.MaxLevel}, threat {recipe.Threat}.");
         }
 
         // ===================================================================
-        //  PREFAB PICKERS — graceful resolution: try polyperfect (multiple candidate
-        //  category folders), then the committed Resources/Structures set, then null
-        //  (PlaceOne substitutes a tinted primitive). Every miss is a single WARNING.
+        //  RETURN seam — SceneTransitionTrigger back to OuterWorld (single load,
+        //  generous proximity radius). Added via reflection (DeNelle.Village type).
         // ===================================================================
-        private static GameObject PickWoodWall()   => Resolve("Wall_Medieval_Wood",  "Medieval_M", ResStructRoot + "Wall_Medieval_Wood.prefab");
-        private static GameObject PickStoneWall()  => Resolve("Wall_Medieval_Stone", "Medieval_M", ResStructRoot + "Wall_Medieval_Stone.prefab");
-        private static GameObject PickGate(bool wood) => Resolve("Gate_Medieval_Medium", "Medieval_M", ResStructRoot + "Gate_Medieval_Medium.prefab");
-        private static GameObject PickWatchtower()  => Resolve("Tower_Medieval_Wood",  "Medieval_M", ResStructRoot + "Tower_Medieval_Wood.prefab");
-        private static GameObject PickStoneTower()  => Resolve("Tower_Castle_Round",   "Medieval_M", ResStructRoot + "Tower_Castle_Round.prefab");
-        private static GameObject PickHut()         => Resolve("House_Medieval_Small", "Medieval_M", ResStructRoot + "House_Medieval_Small.prefab");
-        private static GameObject PickCampfire()    => Resolve("Fire",        "Survival_M", null);
-        private static GameObject PickTorch()       => Resolve("Torche_Wall", "Fantasy_M", ResStructRoot + "Torche_Wall.prefab");
-        private static GameObject PickCrate()       => Resolve("Crate_Box",   "Fantasy_M", null);
-        private static GameObject PickBarrel()      => Resolve("Barrel",      "Survival_M", null);
-        private static GameObject PickBanner()      => Resolve("Flag_Medieval", "Medieval_M", null);
-        private static GameObject PickSpikes()      => Resolve("Stakes",      "Medieval_M", null);
-        private static GameObject PickBones()       => Resolve("Skull_Human", "Fantasy_M", null);
-        private static GameObject PickRubble()      => Resolve("Rubble_Stone", "Fantasy_M", null);
-        private static GameObject PickVine()        => Resolve("Prop_Vine1",  "Nature_M", null);
+        private static void BuildReturnSeam(Transform parent, float half)
+        {
+            var seamGo = new GameObject("ReturnToOuterWorld_Seam");
+            seamGo.transform.SetParent(parent, false);
+            seamGo.transform.position = new Vector3(0f, 1.5f, -(half + 8f));
 
-        // Try the named prefab in the given polyperfect category, then a small set of
-        // common alternative categories, then the explicit Resources fallback path.
+            var box = seamGo.AddComponent<BoxCollider>();
+            box.isTrigger = true;
+            box.size = new Vector3(20f, 6f, 10f);
+
+            var transType = FindType("DeNelle.Village.SceneTransitionTrigger");
+            if (transType == null)
+            {
+                Warn("DeNelle.Village.SceneTransitionTrigger not found — return trigger collider " +
+                     "added WITHOUT the behaviour. Re-run after compile.");
+                return;
+            }
+
+            var comp = seamGo.AddComponent(transType);
+            SetField(transType, comp, "targetSceneName", "OuterWorld");
+            SetField(transType, comp, "targetPosition", OuterWorldReturnPos);
+            SetField(transType, comp, "loadAdditive", false);
+            SetField(transType, comp, "ProximityRadius", 16f);
+            Log("Return seam wired: SceneTransitionTrigger -> OuterWorld (single load), proximity 16m.");
+        }
+
+        // ===================================================================
+        //  CATALOG-FIRST PROP-ROLE MAP — the single source of truth that maps a
+        //  recipe ROLE to a real prefab on disk. polyperfect pack first (with a small
+        //  alt-category search), committed Resources/Structures fallback, then null
+        //  (PlaceOne substitutes a tinted primitive). Every miss is ONE LogWarning.
+        // ===================================================================
+        private static GameObject ResolveRole(string role)
+        {
+            switch ((role ?? "").Trim().ToLowerInvariant())
+            {
+                // ---- fort / structure roles ----
+                case "wall_wood":          return Resolve("Wall_Medieval_Wood",  "Medieval_M", ResStructRoot + "Wall_Medieval_Wood.prefab");
+                case "wall_wood_breached": return Resolve("Wall_Medieval_Wood",  "Medieval_M", ResStructRoot + "Wall_Medieval_Wood.prefab");
+                case "wall_stone":         return Resolve("Wall_Medieval_Stone", "Medieval_M", ResStructRoot + "Wall_Medieval_Stone.prefab");
+                case "gate_wood":
+                case "gate":               return Resolve("Gate_Medieval_Medium","Medieval_M", ResStructRoot + "Gate_Medieval_Medium.prefab");
+                case "watchtower":         return Resolve("Tower_Medieval_Wood", "Medieval_M", ResStructRoot + "Tower_Medieval_Wood.prefab");
+                case "stone_tower":        return Resolve("Tower_Castle_Round",  "Medieval_M", ResStructRoot + "Tower_Castle_Round.prefab");
+                case "hut":                return Resolve("House_Medieval_Small","Medieval_M", ResStructRoot + "House_Medieval_Small.prefab");
+                case "well":               return Resolve("Well",                "Medieval_M", ResStructRoot + "Well.prefab");
+
+                // ---- dungeon roles (Fantasy_M has all of these) ----
+                case "dungeon_floor":      return Resolve("Dungeon_Floor_Stone", "Fantasy_M", null);
+                case "dungeon_wall":       return Resolve("Dungeon_Wall_Stone",  "Fantasy_M", null);
+                case "dungeon_pillar":     return Resolve("Dungeon_Pillar_Stone_Round", "Fantasy_M", null);
+                case "dungeon_door":       return Resolve("Dungeon_Door_Stone",  "Fantasy_M", null);
+                case "altar":              return Resolve("Altar",               "Fantasy_M", ResStructRoot + "Altar.prefab");
+
+                // ---- scatter props ----
+                case "campfire":           return Resolve("Fire",        "Survival_M", null);
+                case "torch":              return Resolve("Torche_Wall", "Fantasy_M",  ResStructRoot + "Torche_Wall.prefab");
+                case "crate":              return Resolve("Crate_Box",   "Fantasy_M",  null);
+                case "barrel":             return Resolve("Jar_Big",     "Fantasy_M",  null);
+                case "banner":             return Resolve("Flag_Medieval","Medieval_M", null);
+                case "spikes":             return Resolve("Stakes",      "Medieval_M", null);
+                case "bones":              return Resolve("Skull_Human", "Fantasy_M",  null);
+                case "rubble":             return Resolve("Rubble_Stone","Fantasy_M",  null);
+                case "ivy":                return Resolve("Grave_Dirt",  "Fantasy_M",  null);   // overgrowth stand-in
+
+                // ---- nature: ice + cave (Nature_M/Ice_M, Nature_M/Stones_M) ----
+                case "stalagmite":         return Resolve("Stalags",  "Nature_M/Stones_M", null);
+                case "crystals":           return Resolve("Crystals", "Nature_M/Stones_M", null);
+                case "cave_skull":         return Resolve("Cave_Skull","Nature_M/Stones_M", null);
+                case "ice_floe":           return Resolve("Floe",     "Nature_M/Ice_M", null);
+                case "icicle":             return Resolve("Icicle",   "Nature_M/Ice_M", null);
+
+                default:
+                    Warn($"Unknown prop role '{role}' — no catalog entry; a tinted primitive will stand in.");
+                    return null;
+            }
+        }
+
+        // Try the named prefab in the primary polyperfect category, then a few alt
+        // categories, then the explicit Resources fallback. Note: a category may be a
+        // nested path (e.g. "Nature_M/Stones_M").
         private static readonly string[] AltCategories =
             { "Medieval_M", "Fantasy_M", "Survival_M", "Props_M", "Nature_M", "Tools_M", "Farm_M" };
 
         private static GameObject Resolve(string prefabName, string primaryCategory, string resourcesFallback)
         {
-            // 1) primary polyperfect category
             var go = LoadPoly(primaryCategory, prefabName);
             if (go != null) return go;
 
-            // 2) alternative polyperfect categories (the catalog is occasionally off by folder)
             foreach (var cat in AltCategories)
             {
                 if (cat == primaryCategory) continue;
@@ -473,7 +626,6 @@ namespace DeNelle.Editor
                 if (go != null) return go;
             }
 
-            // 3) committed Resources/Structures fallback (guaranteed present in repo)
             if (!string.IsNullOrEmpty(resourcesFallback))
             {
                 go = AssetDatabase.LoadAssetAtPath<GameObject>(resourcesFallback);
@@ -495,8 +647,6 @@ namespace DeNelle.Editor
         // ===================================================================
         //  PLACEMENT helpers.
         // ===================================================================
-
-        // Instantiate a prefab (or a tinted-cube fallback) at a local pose under parent.
         private static GameObject PlaceOne(Transform parent, GameObject prefab, Vector3 localPos, float yaw, string name)
         {
             GameObject inst;
@@ -507,7 +657,6 @@ namespace DeNelle.Editor
             }
             else
             {
-                // Tinted-cube fallback so the scene still reads + bakes navmesh around it.
                 inst = GameObject.CreatePrimitive(PrimitiveType.Cube);
                 inst.transform.SetParent(parent, false);
                 inst.transform.localScale = new Vector3(2f, 2.5f, 2f);
@@ -520,10 +669,10 @@ namespace DeNelle.Editor
             return inst;
         }
 
-        // Deterministically scatter N copies of a prop within a square area.
-        private static void ScatterProps(Transform parent, GameObject prefab, int count, int seed,
-            float area, string label, float baseY = 0f)
+        private static void ScatterRole(Transform parent, string role, int count, int seed,
+            float area, float baseY, string label)
         {
+            GameObject prefab = ResolveRole(role);
             var rng = new System.Random(seed);
             for (int i = 0; i < count; i++)
             {
@@ -557,55 +706,6 @@ namespace DeNelle.Editor
         {
             float h = Mathf.Sin(v * 12.9898f + salt * 78.233f) * 43758.5453f;
             return h - Mathf.Floor(h);
-        }
-
-        // ===================================================================
-        //  NAVMESH — bake the root's NavMeshSurface and persist the data to a
-        //  PER-SCENE asset path (so the three themed scenes don't overwrite one
-        //  shared nav asset). Use Geometry = Physics Colliders + Collect = All so
-        //  the ground plane + platform + wall MeshColliders are the source.
-        // ===================================================================
-        private static void BakeThemedNavMesh(Transform parent, string sceneName)
-        {
-            var surface = parent.GetComponent<NavMeshSurface>();
-            if (surface == null) surface = parent.gameObject.AddComponent<NavMeshSurface>();
-            surface.collectObjects = CollectObjects.All;
-            surface.useGeometry = NavMeshCollectGeometry.PhysicsColliders;
-            surface.layerMask = ~0;
-            surface.BuildNavMesh();
-
-            var data = surface.navMeshData;
-            if (data == null)
-            {
-                Warn($"{sceneName}: navMeshData null after bake — verify ground/platform MeshColliders.");
-                return;
-            }
-
-            string dir = $"{ScenesDir}/{sceneName}";
-            if (!AssetDatabase.IsValidFolder(dir))
-                AssetDatabase.CreateFolder(ScenesDir, sceneName);
-            string assetPath = $"{dir}/NavMesh-{sceneName}.asset";
-            if (!AssetDatabase.Contains(data))
-            {
-                var existing = AssetDatabase.LoadAssetAtPath<Object>(assetPath);
-                if (existing != null) AssetDatabase.DeleteAsset(assetPath);
-                AssetDatabase.CreateAsset(data, assetPath);
-                Log($"{sceneName}: navmesh asset written -> {assetPath}");
-            }
-        }
-
-        // ===================================================================
-        //  SAVE — themed scenes go straight to their named path.
-        // ===================================================================
-        private static void SaveThemedScene(Scene scene, string scenePath)
-        {
-            if (!AssetDatabase.IsValidFolder(ScenesDir))
-                AssetDatabase.CreateFolder("Assets", "Scenes");
-            EditorSceneManager.MarkSceneDirty(scene);
-            bool ok = EditorSceneManager.SaveScene(scene, scenePath);
-            AssetDatabase.SaveAssets();
-            if (ok) Log("Saved scene -> " + scenePath);
-            else Err("SaveScene FAILED for " + scenePath);
         }
     }
 }

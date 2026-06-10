@@ -66,6 +66,12 @@ namespace DeNelle.Village
         // For now this maps the ACTUAL ids in weapons.json (mage_*, knight_*, ranger_*,
         // aegis_*) onto owned KayKit Fantasy Weapons Bits meshes. The grip values seat
         // the hilt/grip in the palm for a ~1.8m Humanoid hero; tune against a screenshot.
+        // Weapon family — gates the grip-point algorithm. Sword/Blade uses the geometric
+        // hilt-spike inference (grip the HANDLE below the crossguard). Everything else keeps
+        // its proven centre/root grip but the same hook exists to extend later
+        // (Staff -> mid-shaft, Bow -> riser/centre, etc.).
+        private enum WeaponClass { Sword, Dagger, Axe, Hammer, Staff, Wand, Bow, Shield }
+
         private sealed class WeaponVisual
         {
             public string mesh;          // KayKit mesh name under Resources/Heroes/Props/Weapons/
@@ -74,48 +80,49 @@ namespace DeNelle.Village
             public Vector3 gripEuler;    // local rotation on the hand bone
             public float heldLength;     // longest-axis target length (m) after bounds-normalize
             public Color tint;           // fallback-primitive tint when the mesh isn't present
+            public WeaponClass kind;     // family — drives the grip-point inference path
         }
 
         // Per-archetype grip presets (one place to tune each weapon family's seat).
         private static WeaponVisual Sword(string mesh) => new WeaponVisual
         {
-            mesh = mesh, leftHand = false,
+            mesh = mesh, leftHand = false, kind = WeaponClass.Sword,
             gripPos = new Vector3(0f, 0.02f, 0f), gripEuler = new Vector3(0f, 0f, 0f),
             heldLength = 0.95f, tint = new Color(0.74f, 0.75f, 0.78f)
         };
         private static WeaponVisual Dagger(string mesh) => new WeaponVisual
         {
-            mesh = mesh, leftHand = false,
+            mesh = mesh, leftHand = false, kind = WeaponClass.Dagger,
             gripPos = new Vector3(0f, 0.01f, 0f), gripEuler = new Vector3(0f, 0f, 0f),
             heldLength = 0.40f, tint = new Color(0.70f, 0.72f, 0.76f)
         };
         private static WeaponVisual Axe(string mesh) => new WeaponVisual
         {
-            mesh = mesh, leftHand = false,
+            mesh = mesh, leftHand = false, kind = WeaponClass.Axe,
             gripPos = new Vector3(0f, 0.02f, 0f), gripEuler = new Vector3(0f, 0f, 0f),
             heldLength = 0.80f, tint = new Color(0.68f, 0.66f, 0.62f)
         };
         private static WeaponVisual Hammer(string mesh) => new WeaponVisual
         {
-            mesh = mesh, leftHand = false,
+            mesh = mesh, leftHand = false, kind = WeaponClass.Hammer,
             gripPos = new Vector3(0f, 0.02f, 0f), gripEuler = new Vector3(0f, 0f, 0f),
             heldLength = 0.85f, tint = new Color(0.66f, 0.66f, 0.68f)
         };
         private static WeaponVisual Staff(string mesh) => new WeaponVisual
         {
-            mesh = mesh, leftHand = false,
+            mesh = mesh, leftHand = false, kind = WeaponClass.Staff,
             gripPos = new Vector3(0f, 0.05f, 0f), gripEuler = new Vector3(0f, 0f, 0f),
             heldLength = 1.30f, tint = new Color(0.60f, 0.50f, 0.40f)
         };
         private static WeaponVisual Wand(string mesh) => new WeaponVisual
         {
-            mesh = mesh, leftHand = false,
+            mesh = mesh, leftHand = false, kind = WeaponClass.Wand,
             gripPos = new Vector3(0f, 0.01f, 0f), gripEuler = new Vector3(0f, 0f, 0f),
             heldLength = 0.45f, tint = new Color(0.55f, 0.45f, 0.62f)
         };
         private static WeaponVisual Bow(string mesh) => new WeaponVisual
         {
-            mesh = mesh, leftHand = true,   // bow goes in the off/bow (LEFT) hand
+            mesh = mesh, leftHand = true, kind = WeaponClass.Bow,   // bow goes in the off/bow (LEFT) hand
             // owner spec: bow longest->Y, grip=center; TUNABLE — nudge gripEuler on playtest
             // NormalizeInto already seats the bow to spec deterministically: LONGEST axis
             // (limbs/nock-to-nock) -> local +Y (upright), NARROWEST -> +X (thin left-right,
@@ -130,7 +137,7 @@ namespace DeNelle.Village
         };
         private static WeaponVisual Shield(string mesh) => new WeaponVisual
         {
-            mesh = mesh, leftHand = true,   // shields -> LeftHand per spec
+            mesh = mesh, leftHand = true, kind = WeaponClass.Shield,   // shields -> LeftHand per spec
             gripPos = new Vector3(-0.05f, 0f, 0f), gripEuler = new Vector3(0f, -10f, 0f),
             heldLength = 0.55f, tint = new Color(0.58f, 0.60f, 0.64f)
         };
@@ -178,6 +185,27 @@ namespace DeNelle.Village
         // If true, a bow equip is skipped here because HeroBowAttachment owns the
         // ranger's held bow (set when the hero already carries that component).
         private bool _deferBowToBowAttachment;
+
+        // ── Hold-state (idle lowered  vs  combat ready) ──────────────────────────────
+        // Driven off the SAME combat signal the camera/locomotion use: HeroLocomotion
+        // computes `engaged = WaveManager present || moving` and calls ActorAnimator
+        // .SetCombatStance(engaged). We mirror that here (auto fallback below) and expose
+        // SetCombatActive(bool) so any caller (HeroLocomotion / a future CombatState
+        // registry) can drive it authoritatively. The pose is applied at the ATTACH level
+        // — a local-rotation offset on the grip root — so no hero animation clip is needed
+        // for the held-low vs held-ready read (the bonus; the GRIP is the priority).
+        private Transform _gripRoot;          // current weapon's grip-root transform
+        private Vector3 _baseGripEuler;       // the weapon's neutral grip rotation
+        private bool _combatActive;           // current hold state (false = idle/lowered)
+        private bool _combatExplicit;         // a caller drove SetCombatActive -> stop auto-mirroring
+        private WaveManager _waveManager;     // auto-fallback combat signal (same as locomotion)
+
+        // Idle = sword LOWERED at the side: tilt the blade down/back from the ready pose.
+        // Combat = sword DRAWN/raised: the weapon's neutral (base) grip euler.
+        // These are additive offsets on the grip root's LOCAL rotation, applied on top of
+        // the per-weapon base grip. Tune on playtest; only melee blades visibly read it.
+        private static readonly Vector3 IdleHoldOffsetEuler   = new Vector3(55f, 0f, 0f);
+        private static readonly Vector3 CombatHoldOffsetEuler = new Vector3(0f, 0f, 0f);
 
         private void Awake()
         {
@@ -271,11 +299,191 @@ namespace DeNelle.Village
             var gripRoot = new GameObject(PropName);
             NormalizeInto(prop, gripRoot.transform, vis.heldLength);
 
+            // GRIP-POINT INFERENCE (owner's geometric rule). NormalizeInto leaves `prop`
+            // with its LONGEST axis on local +Y and bounds-centre at the gripRoot origin —
+            // but the bounds-centre is mid-blade, NOT where a hand grips. For a SWORD we
+            // re-seat `prop` so the HANDLE (below the crossguard, toward the pommel) sits at
+            // the origin with the BLADE pointing +Y (outward from the hand). Other classes
+            // keep the proven centre/root seat (hook left to extend: staff=mid, bow=riser).
+            if (vis.kind == WeaponClass.Sword || vis.kind == WeaponClass.Dagger)
+                SeatByHandle(prop, gripRoot.transform);
+
             gripRoot.transform.SetParent(hand, false);
             gripRoot.transform.localPosition = vis.gripPos;
-            gripRoot.transform.localRotation = Quaternion.Euler(vis.gripEuler);
 
+            // Hold state: store the base grip euler so the idle<->combat pose can offset
+            // from it; apply the current pose immediately.
+            _gripRoot = gripRoot.transform;
+            _baseGripEuler = vis.gripEuler;
             _currentWeaponProp = gripRoot;
+            ApplyHoldPose();
+        }
+
+        // ── SWORD GRIP-POINT INFERENCE ───────────────────────────────────────────────
+        // Owner's rule (asset-attachment-inference-engine, task #36):
+        //   1. Longest axis -> Y (NormalizeInto already did this; we work in prop-local Y).
+        //   2. Find the HILT = a WIDTH SPIKE: bin vertices along Y, measure the X/Z cross-
+        //      section extent per bin. Profile: thin blade -> WIDE crossguard flare -> thin
+        //      grip. The flare locates the blade/handle boundary.
+        //   3. Grip = centre of the HANDLE segment (between the hilt spike and the pommel
+        //      end, on the SHORT side — the blade is the long side). Re-seat so that grip
+        //      point sits at the origin, blade pointing +Y (outward).
+        //   4. Fallback: no clear spike (glaive / flat profile) -> grip the bottom ~16% of
+        //      the length near the pommel.
+        // Works on prop-LOCAL coordinates (relative to `parent`, the gripRoot) so it is
+        // independent of the mesh's own pivot/scale.
+        private static void SeatByHandle(GameObject prop, Transform parent)
+        {
+            if (!TryLocalBounds(prop, parent, out Bounds b)) return;
+            float yMin = b.center.y - b.extents.y;
+            float yMax = b.center.y + b.extents.y;
+            float length = yMax - yMin;
+            if (length < 1e-4f) return;
+
+            // Sample mesh vertices into Y-bins; per bin track max |x| and |z| (half-width).
+            const int Bins = 48;
+            var widthHi = new float[Bins];       // max cross half-extent per bin
+            var hit = new bool[Bins];
+            CollectWidthProfile(prop, parent, yMin, length, Bins, widthHi, hit);
+
+            // Locate the hilt: the bin with the largest width spike. Compare against the
+            // median width to decide whether the spike is "real" (a crossguard) or the
+            // profile is basically flat (no clear hilt -> fallback).
+            float median = MedianOfHit(widthHi, hit);
+            int spikeBin = -1; float spikeW = 0f;
+            for (int i = 0; i < Bins; i++)
+            {
+                if (!hit[i]) continue;
+                if (widthHi[i] > spikeW) { spikeW = widthHi[i]; spikeBin = i; }
+            }
+
+            // grip point in prop-local Y (relative to parent origin).
+            float gripY;
+            bool bladePointsPositiveY;
+            float binH = length / Bins;
+            bool clearSpike = spikeBin >= 0 && median > 1e-5f && spikeW >= median * 1.6f;
+
+            if (clearSpike)
+            {
+                // The handle is the SHORTER segment on one side of the spike; the blade is
+                // the longer side. Distances from the spike to each end:
+                float spikeY = yMin + (spikeBin + 0.5f) * binH;
+                float toMin = spikeY - yMin;     // length of the segment below the spike
+                float toMax = yMax - spikeY;     // length of the segment above the spike
+                if (toMin <= toMax)
+                {
+                    // handle is below the spike -> blade is above (+Y). Grip = centre of
+                    // [yMin .. spikeY].
+                    gripY = (yMin + spikeY) * 0.5f;
+                    bladePointsPositiveY = true;
+                }
+                else
+                {
+                    // handle is above the spike -> blade is below; we'll flip so blade -> +Y.
+                    gripY = (spikeY + yMax) * 0.5f;
+                    bladePointsPositiveY = false;
+                }
+            }
+            else
+            {
+                // FALLBACK: no clear crossguard. Grip the bottom ~16% near one end (treat the
+                // narrower-tipped end as the pommel). Pick the end whose extreme bin is
+                // narrower as the BLADE TIP, so the pommel/grip is the opposite (wider) end.
+                const float HandleFrac = 0.16f;
+                float wLow = FirstHitWidth(widthHi, hit, false);   // width near yMin
+                float wHigh = FirstHitWidth(widthHi, hit, true);   // width near yMax
+                bool pommelAtMin = wLow >= wHigh; // wider end = pommel/grip side
+                if (pommelAtMin)
+                {
+                    gripY = yMin + length * HandleFrac * 0.5f;
+                    bladePointsPositiveY = true;
+                }
+                else
+                {
+                    gripY = yMax - length * HandleFrac * 0.5f;
+                    bladePointsPositiveY = false;
+                }
+            }
+
+            // 1) Shift so the grip point sits at the parent origin (hand bone).
+            Vector3 lp = prop.transform.localPosition;
+            lp.y -= gripY;
+            prop.transform.localPosition = lp;
+
+            // 2) Ensure the BLADE points +Y (outward from the hand). If the blade is on the
+            //    -Y side, flip 180° about local X — this rotates about the grip point because
+            //    the grip is now at the origin.
+            if (!bladePointsPositiveY)
+            {
+                prop.transform.localRotation =
+                    Quaternion.AngleAxis(180f, Vector3.right) * prop.transform.localRotation;
+                prop.transform.localPosition =
+                    Quaternion.AngleAxis(180f, Vector3.right) * prop.transform.localPosition;
+            }
+        }
+
+        // Bin mesh vertices along prop-local Y; record the max cross-section half-extent
+        // (max(|x|,|z|)) per bin. Vertices are transformed mesh-local -> parent-local so the
+        // profile is measured in the same frame the grip math uses.
+        private static void CollectWidthProfile(
+            GameObject prop, Transform parent, float yMin, float length,
+            int bins, float[] widthHi, bool[] hit)
+        {
+            float inv = bins / length;
+            foreach (var mf in prop.GetComponentsInChildren<MeshFilter>(true))
+            {
+                if (mf == null || mf.sharedMesh == null) continue;
+                var verts = mf.sharedMesh.vertices;
+                Transform mt = mf.transform;
+                for (int v = 0; v < verts.Length; v++)
+                {
+                    Vector3 world = mt.TransformPoint(verts[v]);
+                    Vector3 local = parent.InverseTransformPoint(world);
+                    int bin = Mathf.Clamp((int)((local.y - yMin) * inv), 0, bins - 1);
+                    float w = Mathf.Max(Mathf.Abs(local.x), Mathf.Abs(local.z));
+                    if (!hit[bin] || w > widthHi[bin]) widthHi[bin] = w;
+                    hit[bin] = true;
+                }
+            }
+            // Skinned meshes (rare for a held prop, but be safe): use renderer bounds slabs.
+            foreach (var smr in prop.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+            {
+                if (smr == null || smr.sharedMesh == null) continue;
+                var verts = smr.sharedMesh.vertices;
+                Transform mt = smr.transform;
+                for (int v = 0; v < verts.Length; v++)
+                {
+                    Vector3 world = mt.TransformPoint(verts[v]);
+                    Vector3 local = parent.InverseTransformPoint(world);
+                    int bin = Mathf.Clamp((int)((local.y - yMin) * inv), 0, bins - 1);
+                    float w = Mathf.Max(Mathf.Abs(local.x), Mathf.Abs(local.z));
+                    if (!hit[bin] || w > widthHi[bin]) widthHi[bin] = w;
+                    hit[bin] = true;
+                }
+            }
+        }
+
+        private static float MedianOfHit(float[] vals, bool[] hit)
+        {
+            var list = new List<float>();
+            for (int i = 0; i < vals.Length; i++) if (hit[i]) list.Add(vals[i]);
+            if (list.Count == 0) return 0f;
+            list.Sort();
+            return list[list.Count / 2];
+        }
+
+        // Width of the first hit bin scanning from one end (fromTop=true -> highest Y).
+        private static float FirstHitWidth(float[] widthHi, bool[] hit, bool fromTop)
+        {
+            if (fromTop)
+            {
+                for (int i = widthHi.Length - 1; i >= 0; i--) if (hit[i]) return widthHi[i];
+            }
+            else
+            {
+                for (int i = 0; i < widthHi.Length; i++) if (hit[i]) return widthHi[i];
+            }
+            return 0f;
         }
 
         /// <summary>Removes the currently-shown weapon prop (no-op if none).</summary>
@@ -283,6 +491,54 @@ namespace DeNelle.Village
         {
             DestroyCurrentWeapon();
             _currentWeaponId = null;
+            _gripRoot = null;
+        }
+
+        // ── Hold state: idle (lowered) ↔ combat (drawn/raised) ───────────────────────
+        /// <summary>
+        /// Authoritative hold-state driver. Call from HeroLocomotion / a combat-state
+        /// registry with the SAME `engaged` flag that feeds ActorAnimator.SetCombatStance,
+        /// e.g. <c>GetComponent&lt;EquipmentController&gt;()?.SetCombatActive(engaged);</c>.
+        /// Once called, the auto WaveManager-mirror fallback turns off (the caller owns it).
+        /// false = sword lowered at the side; true = sword drawn/ready.
+        /// </summary>
+        public void SetCombatActive(bool active)
+        {
+            _combatExplicit = true;
+            if (_combatActive == active && _gripRoot != null) { ApplyHoldPose(); return; }
+            _combatActive = active;
+            ApplyHoldPose();
+        }
+
+        /// <summary>Current hold state (false = idle/lowered, true = combat/ready).</summary>
+        public bool CombatActive => _combatActive;
+
+        // Auto-mirror fallback: if no caller drives SetCombatActive, derive the combat
+        // hold the same way HeroLocomotion does — a WaveManager in the scene means "threat
+        // context", so the blade rides ready; otherwise it rests lowered. Cheap poll; the
+        // pose only re-applies on a state change.
+        private void Update()
+        {
+            if (_combatExplicit || _gripRoot == null) return;
+            if (_waveManager == null) _waveManager = Object.FindObjectOfType<WaveManager>();
+            bool active = _waveManager != null;
+            if (active != _combatActive)
+            {
+                _combatActive = active;
+                ApplyHoldPose();
+            }
+        }
+
+        // Apply the held-low vs held-ready local rotation to the grip root (attach-level —
+        // no animation clip). Additive on top of the per-weapon base grip euler.
+        // NOTE (animation hook): if a future pass wants a true arm pose (hand drops to the
+        // hip for idle, raises for combat), drive ActorAnimator.SetCombatStance from the
+        // same SetCombatActive call — the prop offset here and the body pose stay in sync.
+        private void ApplyHoldPose()
+        {
+            if (_gripRoot == null) return;
+            Vector3 offset = _combatActive ? CombatHoldOffsetEuler : IdleHoldOffsetEuler;
+            _gripRoot.localRotation = Quaternion.Euler(_baseGripEuler) * Quaternion.Euler(offset);
         }
 
         // ── ARMOR STUB ───────────────────────────────────────────────────────────

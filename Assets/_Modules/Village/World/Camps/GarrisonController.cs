@@ -65,6 +65,17 @@ namespace DeNelle.Village.World.Camps
         [Tooltip("Threat tier — scales guard HP/damage exactly like EnemyOutpost / CampGuards.")]
         public int threatLevel = 2;
 
+        [Header("Recipe (wired by GarrisonSceneBuilder from garrison-recipes.json)")]
+        [Tooltip("Enemy ids that staff this garrison (EnemyFactory model-map keys, e.g. " +
+                 "\"troll\", \"orc-berserker\", \"hollow-walker\"). Round-robined across the " +
+                 "spawn points. Empty => the legacy Troll/Stonebelly default mix.")]
+        public string[] enemyTypeIds;
+
+        [Tooltip("Inclusive [min,max] level band. Each defender rolls a level in this band and " +
+                 "its stats scale with the level. [0,0] (default) => no level scaling (legacy).")]
+        public int minLevel = 0;
+        public int maxLevel = 0;
+
         [Tooltip("Auto-spawn on Start (handy for opening the scene directly to test). " +
                  "A raid manager that owns the lifetime should leave this OFF and call Activate().")]
         public bool activateOnStart = false;
@@ -88,6 +99,8 @@ namespace DeNelle.Village.World.Camps
         private int _aliveCount;
         private bool _activated;
         private int _prefabCursor;
+        private int _typeCursor;
+        private System.Random _levelRng;
 
         private void Start()
         {
@@ -135,6 +148,9 @@ namespace DeNelle.Village.World.Camps
                 Debug.LogWarning($"[GarrisonController] {name} has no spawn points — no garrison spawned.");
                 return;
             }
+
+            // Deterministic level-roller so a given garrison reads the same every load.
+            _levelRng = new System.Random((name != null ? name.GetHashCode() : 0) ^ 0x5EED);
 
             for (int i = 0; i < points.Count; i++)
             {
@@ -214,14 +230,23 @@ namespace DeNelle.Village.World.Camps
             }
 
             // Canonical path: build a real, hittable Enemy via the ONE shared factory.
-            var def = stonebelly ? BuildStonebellyDef(threatLevel) : BuildTrollDef(threatLevel);
+            // RECIPE-FIRST: when enemyTypeIds[] is supplied (by the recipe-driven builder)
+            // the defender's id + base stats come from that id; otherwise the legacy
+            // Troll/Stonebelly mix is used. Either way a LEVEL is rolled from [minLevel,
+            // maxLevel] and folded into the stat scale (level 1 + threat == legacy).
+            int level = RollLevel();
+            EnemyDef def = (enemyTypeIds != null && enemyTypeIds.Length > 0)
+                ? BuildTypedDef(NextTypeId(), level)
+                : (stonebelly ? BuildStonebellyDef(threatLevel) : BuildTrollDef(threatLevel));
+            ApplyLevelScale(def, level);
+
             var enemy = EnemyFactory.Build(def, pos, rot, _garrisonRoot);
             if (enemy == null)
             {
                 Debug.LogWarning($"[GarrisonController] EnemyFactory returned null for '{def.Id}' at {pos} — skipped.");
                 return;
             }
-            enemy.gameObject.name = $"GarrisonGuard ({def.Id}-{index})";
+            enemy.gameObject.name = $"GarrisonGuard ({def.Id}-Lv{level}-{index})";
 
             var anchor = MakeAnchor($"GuardAnchor-{index}", pos);
             enemy.Configure($"garrison-{def.Id}-{index}", def, anchor);
@@ -358,6 +383,104 @@ namespace DeNelle.Village.World.Camps
                 AggroRadius = 16f,
                 XpReward = 22 + threat * 2,
                 GlimmerReward = 4,
+            };
+        }
+
+        // =====================================================================
+        // RECIPE-DRIVEN level + type helpers.
+        // -----------------------------------------------------------------------------
+        //  * RollLevel    — pick an inclusive level in [minLevel, maxLevel]. When the band
+        //                   is unset ([0,0]) returns 0 == "no level scaling" (legacy).
+        //  * NextTypeId   — round-robin the recipe's enemyTypeIds across spawn points.
+        //  * BuildTypedDef— a stat block for an arbitrary recipe enemy id. Known ids reuse
+        //                   the family templates; unknown ids get a sane generic brute so a
+        //                   new JSON enemy id never crashes the spawn (LogWarning only).
+        //  * ApplyLevelScale — fold the rolled level into HP / damage / size. This is the
+        //                   ONE place levelRange touches combat: ~+8% HP and ~+5% damage per
+        //                   level over 1, on top of the existing threat scale. No new combat
+        //                   code — EnemyFactory + Enemy consume the scaled EnemyDef as-is.
+        // =====================================================================
+
+        private int RollLevel()
+        {
+            int lo = Mathf.Max(0, minLevel);
+            int hi = Mathf.Max(lo, maxLevel);
+            if (hi <= 0) return 0;            // band unset => no level scaling (legacy)
+            if (_levelRng == null) _levelRng = new System.Random();
+            return _levelRng.Next(Mathf.Max(1, lo), hi + 1);
+        }
+
+        private string NextTypeId()
+        {
+            if (enemyTypeIds == null || enemyTypeIds.Length == 0) return "troll";
+            string id = enemyTypeIds[_typeCursor % enemyTypeIds.Length];
+            _typeCursor++;
+            return string.IsNullOrEmpty(id) ? "troll" : id;
+        }
+
+        // Apply the rolled level on top of whatever base def we already built. Level 0/1 is
+        // a no-op (keeps legacy garrisons identical). Each level above 1 adds ~8% HP and
+        // ~5% contact damage + a touch of size so higher-level forts read as tougher.
+        private static void ApplyLevelScale(EnemyDef def, int level)
+        {
+            if (def == null || level <= 1) return;
+            int over = level - 1;
+            float hpScale  = 1f + 0.08f * over;
+            float dmgScale = 1f + 0.05f * over;
+            def.Hp            *= hpScale;
+            def.ContactDamage *= dmgScale;
+            def.Height         = def.Height * (1f + 0.012f * over);
+            def.XpReward      += over * 3;       // higher level => more XP
+            def.DisplayName    = (string.IsNullOrEmpty(def.DisplayName) ? def.Name : def.DisplayName)
+                                 + " (Lv " + level + ")";
+        }
+
+        // A stat block for an arbitrary recipe enemy id. Known family ids reuse a matching
+        // template; everything else gets a generic mid-tier brute (still a real, hittable
+        // Enemy — EnemyFactory.ModelForEnemy maps the id to a model or a capsule fallback).
+        private static EnemyDef BuildTypedDef(string id, int level)
+        {
+            string key = (id ?? "troll").ToLowerInvariant();
+            switch (key)
+            {
+                case "troll":           return BuildTrollDef(2);
+                case "orc-berserker":   return BuildGenericDef(id, "Orc Berserker", "orc", "brute",      "charger",    260f, 2.2f, 13f, 1.7f, 2.4f, 30);
+                case "orc-shaman":      return BuildGenericDef(id, "Orc Shaman",    "orc", "caster",     "skirmisher", 150f, 2.4f,  9f, 1.4f, 1.9f, 28);
+                case "orc-necromancer": return BuildGenericDef(id, "Orc Necromancer","orc","elite",      "skirmisher", 220f, 2.0f, 11f, 1.6f, 2.1f, 40);
+                case "orc-raider":      return BuildGenericDef(id, "Orc Raider",    "orc", "skirmisher", "skirmisher", 170f, 2.8f, 10f, 1.3f, 1.9f, 24);
+                case "hollow-walker":   return BuildGenericDef(id, "Hollow Walker", "hollow","grunt",    "walker",     120f, 2.4f,  8f, 1.4f, 1.8f, 18);
+                case "hollow-warrior":  return BuildGenericDef(id, "Hollow Warrior","hollow","brute",    "charger",    240f, 1.9f, 12f, 1.7f, 2.4f, 28);
+                case "hollow-rogue":    return BuildGenericDef(id, "Hollow Rogue",  "hollow","skirmisher","skirmisher",110f, 3.0f,  9f, 1.1f, 1.7f, 22);
+                case "hollow-acolyte":  return BuildGenericDef(id, "Hollow Acolyte","hollow","caster",   "skirmisher", 140f, 2.3f,  8f, 1.4f, 1.8f, 26);
+                case "necromancer":     return BuildGenericDef(id, "Necromancer",   "hollow","elite",    "skirmisher", 300f, 2.0f, 12f, 1.6f, 2.1f, 50);
+                case "caveman":         return BuildGenericDef(id, "Caveman",       "tribe","brute",     "charger",    220f, 2.2f, 11f, 1.6f, 2.3f, 24);
+                case "feral-wolf":      return BuildGenericDef(id, "Feral Wolf",    "beast","skirmisher","skirmisher", 90f,  3.4f,  8f, 1.0f, 1.4f, 16);
+                case "tiefling-cultist":return BuildGenericDef(id, "Tiefling Cultist","cult","caster",   "skirmisher", 130f, 2.4f,  9f, 1.4f, 1.8f, 24);
+                default:
+                    Debug.LogWarning($"[GarrisonController] Unknown recipe enemy id '{id}' — using a generic brute (EnemyFactory will model-map or capsule-fallback it).");
+                    return BuildGenericDef(id, id, "troll", "brute", "charger", 220f, 2.0f, 11f, 1.6f, 2.2f, 26);
+            }
+        }
+
+        private static EnemyDef BuildGenericDef(string id, string display, string family, string role,
+            string ai, float hp, float moveSpeed, float dmg, float interval, float height, int xp)
+        {
+            return new EnemyDef
+            {
+                Id = id,
+                Name = display,
+                DisplayName = display,
+                Family = family,
+                Role = role,
+                Ai = ai,
+                Hp = hp,
+                MoveSpeed = moveSpeed,
+                ContactDamage = dmg,
+                AttackInterval = interval,
+                Height = height,
+                AggroRadius = 15f,
+                XpReward = xp,
+                GlimmerReward = 5,
             };
         }
 
