@@ -345,11 +345,16 @@ namespace DeNelle.Village
             Vector3 snapped = _grid.SnapToGrid(hit.point);
             _ghost.MoveTo(snapped, _armedYawSteps);
 
-            bool valid = IsValidPlacement(hit, snapped, _armed, out Vector2Int cell, out Vector2Int footprint);
+            bool valid = IsValidPlacement(hit, snapped, _armed, out Vector2Int cell, out Vector2Int footprint, out BuildRejectReason reason);
             _ghost.SetValid(valid);
 
-            if (PlaceConfirmedThisFrame() && valid)
+            // WO-394 — a CLICK that lands on an invalid target must never fail silently:
+            // pop a specific reason toast (+ denied buzz). The ghost already tints red via
+            // SetValid(false); this adds the WHY. Read the place-confirm latch once.
+            if (PlaceConfirmedThisFrame())
             {
+                if (valid)
+                {
                 // PIVOT (owner decision) — placement is now IN-WORLD for ALL types: the
                 // ghost shows the model upright (GhostPreview applies the entry's
                 // OrientationFix) and the player rotates in-world via the R key / touch
@@ -358,16 +363,27 @@ namespace DeNelle.Village
                 // is now dormant — no longer called from placement. Direct place leaves
                 // _armedYawOffset = 0, so PlacedStructureData yaw = yawSteps × 90 only
                 // (this also retires the latent double-rotation).
-                Place(cell, footprint, snapped);
+                    Place(cell, footprint, snapped);
 
-                // STAY-ARMED (CoC-style) — deliberately do NOT clear _armed / hide the
-                // ghost after a place. The same entry stays armed so the next valid tap
-                // drops ANOTHER copy (lay a wall/fence run without re-selecting), and
-                // _armedYawSteps is kept so the run holds its rotation. Each copy still
-                // re-validates + re-charges inside Place(). The player stops by Cancel/
-                // Esc (_input.Cancel → CancelArmed, which fully disarms + hides the ghost)
-                // or by arming a different palette item (Arm() resets state). Do not add
-                // a disarm here.
+                    // STAY-ARMED (CoC-style) — deliberately do NOT clear _armed / hide the
+                    // ghost after a place. The same entry stays armed so the next valid tap
+                    // drops ANOTHER copy (lay a wall/fence run without re-selecting), and
+                    // _armedYawSteps is kept so the run holds its rotation. Each copy still
+                    // re-validates + re-charges inside Place(). The player stops by Cancel/
+                    // Esc (_input.Cancel → CancelArmed, which fully disarms + hides the ghost)
+                    // or by arming a different palette item (Arm() resets state). Do not add
+                    // a disarm here.
+                }
+                else
+                {
+                    // WO-394 — REJECTED click: surface the specific reason. For an
+                    // unaffordable entry, name the shortfall (e.g. "Not enough Wood")
+                    // rather than the generic "Not enough resources".
+                    if (reason == BuildRejectReason.CannotAfford)
+                        BuildFeedbackToast.Show(ShortfallMessage(CostFor(_armed)));
+                    else
+                        BuildFeedbackToast.Show(reason);
+                }
             }
         }
 
@@ -466,21 +482,37 @@ namespace DeNelle.Village
 
             // Affordability is irrelevant for a move (free) — validate placement only.
             bool valid = IsValidPlacement(hit, snapped, CatalogRegistry.Get(_selected.itemId),
-                out Vector2Int cell, out Vector2Int footprint, ignoreCost: true);
+                out Vector2Int cell, out Vector2Int footprint, out BuildRejectReason reason, ignoreCost: true);
             _ghost.SetValid(valid);
 
-            if (PlaceConfirmedThisFrame() && valid)
-                CommitMove(cell, footprint, snapped);
+            if (PlaceConfirmedThisFrame())
+            {
+                if (valid) CommitMove(cell, footprint, snapped);
+                else BuildFeedbackToast.Show(reason);   // WO-394 — say why the move can't land
+            }
         }
 
         /// <summary>
         /// Combined validity: flat upward surface, footprint cells free + in-bounds,
         /// gate-lane clearance, and affordable. Pure over grid + config apart from
-        /// the surface raycast hit (which the caller supplies).
+        /// the surface raycast hit (which the caller supplies). Thin wrapper over the
+        /// reason-aware overload (discards the reason) for callers that only need the
+        /// bool (the ghost-tint frame loop).
         /// </summary>
         private bool IsValidPlacement(RaycastHit hit, Vector3 snapped, CatalogEntry entry,
             out Vector2Int cell, out Vector2Int footprint, bool ignoreCost = false)
+            => IsValidPlacement(hit, snapped, entry, out cell, out footprint, out _, ignoreCost);
+
+        /// <summary>
+        /// WO-394 — the reason-aware validity gate. Same rules as before, but on rejection
+        /// it reports WHICH gate failed (<paramref name="reason"/>) so a rejected CLICK can
+        /// surface a specific message ("No space here", "Not enough resources", …) instead
+        /// of failing silently. The rules themselves are unchanged — only the reason is new.
+        /// </summary>
+        private bool IsValidPlacement(RaycastHit hit, Vector3 snapped, CatalogEntry entry,
+            out Vector2Int cell, out Vector2Int footprint, out BuildRejectReason reason, bool ignoreCost = false)
         {
+            reason = BuildRejectReason.Generic;
             cell = _grid.WorldToCell(snapped);
             // FIX (footprint from CORRECTED bounds) — measure the UPRIGHT, OrientationFix-
             // applied mesh (the SAME geometry the ghost + the placed structure use) so the
@@ -488,13 +520,16 @@ namespace DeNelle.Village
             footprint = _grid.FootprintCells(StructureFactory.MeasureUprightFootprintMetres(entry));
 
             // 1. Flat, upward-facing top (TowerPlacementSystem.IsValidSurface rule).
-            if (hit.collider == null) return false;
-            if (hit.normal.y < 0.85f) return false;
-            if (hit.collider.CompareTag("Tower") || hit.collider.CompareTag("Building")) return false;
+            if (hit.collider == null) { reason = BuildRejectReason.BadSurface; return false; }
+            if (hit.normal.y < 0.85f) { reason = BuildRejectReason.BadSurface; return false; }
+            if (hit.collider.CompareTag("Tower") || hit.collider.CompareTag("Building"))
+            { reason = BuildRejectReason.Occupied; return false; }
 
             // 2. Footprint cells free + in-bounds. (During a MOVE the structure's own
             //    cells were freed on enter, so they read as free and never self-block.)
-            if (!_grid.CanPlace(cell, footprint)) return false;
+            //    Split in-bounds vs occupied so the message can say which.
+            if (!_grid.InBounds(cell, footprint)) { reason = BuildRejectReason.OutOfBounds; return false; }
+            if (!_grid.CanPlace(cell, footprint)) { reason = BuildRejectReason.Occupied; return false; }
 
             // The footprint's world-space AABB on the XZ plane (cellSize × footprint
             // cells, centred on the snapped cell-block). Used by the world-overlap +
@@ -505,13 +540,13 @@ namespace DeNelle.Village
 
             // 3. World overlap — reject if the footprint overlaps an existing placed
             //    structure or a gate collider in the scene (NOT just the cell grid).
-            if (OverlapsExistingStructure(footprintAabb)) return false;
+            if (OverlapsExistingStructure(footprintAabb)) { reason = BuildRejectReason.Occupied; return false; }
 
             // 4. Gate-lane clearance — never wall off the spawn→Heart corridor. Tests
             //    the whole footprint AABB against each gate's real bounds (expanded by
             //    the clearance), so a structure whose body overlaps the gate is caught
             //    even when its origin cell is just outside the radius.
-            if (_gateClearance > 0f && IsTooCloseToGate(footprintAabb)) return false;
+            if (_gateClearance > 0f && IsTooCloseToGate(footprintAabb)) { reason = BuildRejectReason.BlocksGate; return false; }
 
             // 5. Affordable from the persisted multi-resource ledger (EconomyService —
             //    the GameState-backed Wood/Food/Iron/Crystals surface). Crystals-only
@@ -520,7 +555,7 @@ namespace DeNelle.Village
             if (!ignoreCost)
             {
                 DeNelle.Core.Catalog.ResourceCost cost = CostFor(entry);
-                if (!CanAfford(cost)) return false;
+                if (!CanAfford(cost)) { reason = BuildRejectReason.CannotAfford; return false; }
             }
 
             return true;
@@ -1101,6 +1136,30 @@ namespace DeNelle.Village
             if (econ != null) return econ.CanAfford(ToEconomy(cost));
             // Service-less fallback: only Crystals are GameState-readable here.
             return CrystalBalance >= cost.crystals;
+        }
+
+        /// <summary>
+        /// WO-394 — a specific "Not enough &lt;Resource&gt; (N)" message for an unaffordable
+        /// cost: finds the FIRST resource pool the player can't cover and names it + the
+        /// amount needed, so the rejection reason is concrete (not generic). Falls back to
+        /// "Not enough resources" if every pool is somehow covered (shouldn't happen on the
+        /// CannotAfford path) or the service is absent.
+        /// </summary>
+        private static string ShortfallMessage(DeNelle.Core.Catalog.ResourceCost cost)
+        {
+            var econ = EconomyService.Instance;
+            if (econ != null)
+            {
+                if (cost.wood     > 0 && !econ.CanAfford(new ResourceCost(cost.wood, 0, 0, 0)))     return $"Not enough Wood ({cost.wood})";
+                if (cost.iron     > 0 && !econ.CanAfford(new ResourceCost(0, 0, cost.iron, 0)))     return $"Not enough Iron ({cost.iron})";
+                if (cost.food     > 0 && !econ.CanAfford(new ResourceCost(0, cost.food, 0, 0)))     return $"Not enough Food ({cost.food})";
+                if (cost.crystals > 0 && !econ.CanAfford(new ResourceCost(0, 0, 0, cost.crystals))) return $"Not enough Crystals ({cost.crystals})";
+            }
+            else if (cost.crystals > 0 && CrystalBalance < cost.crystals)
+            {
+                return $"Not enough Crystals ({cost.crystals})";
+            }
+            return "Not enough resources";
         }
 
         /// <summary>Spend the cost through the ledger (atomic). No-op for a free cost.</summary>

@@ -189,7 +189,8 @@ namespace DeNelle.Village
             Vector3 pos = SnapToGrid(hit.point);
             _currentMarker.transform.position = pos;
 
-            bool valid = IsValidSurface(hit) && CanPlace(pos);
+            BuildRejectReason reason;
+            bool valid = IsValidSurface(hit, out reason) && CanPlace(pos, out reason);
             Color guideColor = valid ? s_validColor : s_invalidColor;
             if (_markerRenderer != null)
             {
@@ -205,8 +206,24 @@ namespace DeNelle.Village
                 lr.endColor = guideColor;
             }
 
-            if (valid && Input.GetMouseButtonDown(0))
-                PlaceTower(pos);
+            if (Input.GetMouseButtonDown(0))
+            {
+                if (valid) PlaceTower(pos);
+                else SurfaceRejection(reason);   // WO-394 — never fail a click silently
+            }
+        }
+
+        /// <summary>
+        /// WO-394 — pop the build-feedback toast for a rejected tower click. For an
+        /// unaffordable tower it names the crystal shortfall (the tower cost is Crystals);
+        /// other reasons use the shared default message.
+        /// </summary>
+        private void SurfaceRejection(BuildRejectReason reason)
+        {
+            if (reason == BuildRejectReason.CannotAfford && _selectedTower != null)
+                BuildFeedbackToast.Show($"Not enough Crystals ({_selectedTower.cost})");
+            else
+                BuildFeedbackToast.Show(reason);
         }
 
         /// <summary>
@@ -215,12 +232,13 @@ namespace DeNelle.Village
         /// layer (rooftops, props, slopes), so without this check a tower could be
         /// placed in the air on top of whatever the cursor happened to be over.
         /// </summary>
-        private static bool IsValidSurface(RaycastHit hit)
+        private static bool IsValidSurface(RaycastHit hit, out BuildRejectReason reason)
         {
-            if (hit.collider == null) return false;
-            if (hit.normal.y < 0.85f) return false;   // not a flat, upward-facing top
+            reason = BuildRejectReason.Generic;
+            if (hit.collider == null) { reason = BuildRejectReason.BadSurface; return false; }
+            if (hit.normal.y < 0.85f) { reason = BuildRejectReason.BadSurface; return false; }   // not a flat, upward-facing top
             if (hit.collider.CompareTag("Tower") || hit.collider.CompareTag("Building"))
-                return false;                          // standing on a structure
+            { reason = BuildRejectReason.Occupied; return false; }                                // standing on a structure
             return true;
         }
 
@@ -235,8 +253,9 @@ namespace DeNelle.Village
         }
 
         /// <summary>Valid = affordable AND skill-gated AND no tower/building overlap.</summary>
-        private bool CanPlace(Vector3 pos)
+        private bool CanPlace(Vector3 pos, out BuildRejectReason reason)
         {
+            reason = BuildRejectReason.Generic;
             if (_selectedTower == null) return false;
 
             // WO-131 — affordability is gated by the SINGLE crystal source of truth
@@ -253,19 +272,20 @@ namespace DeNelle.Village
                 var svc   = GameStateService.Instance;
                 var state = svc != null ? svc.State : null;
                 if (state == null || state.Resources.Crystals < _selectedTower.cost)
-                    return false;
+                { reason = BuildRejectReason.CannotAfford; return false; }
             }
 
             if (SkillSystem.Instance == null ||
                 !SkillSystem.Instance.HasRequiredSkill(_selectedTower.requiredSkill))
-                return false;
+            { reason = BuildRejectReason.Locked; return false; }   // a prerequisite skill/unlock isn't met
 
             int count = Physics.OverlapSphereNonAlloc(pos, _overlapRadius, _overlapBuffer, _towerBuildingLayer);
             for (int i = 0; i < count; i++)
             {
                 var c = _overlapBuffer[i];
                 if (c == null) continue;
-                if (c.CompareTag("Tower") || c.CompareTag("Building")) return false;
+                if (c.CompareTag("Tower") || c.CompareTag("Building"))
+                { reason = BuildRejectReason.Occupied; return false; }
             }
             return true;
         }

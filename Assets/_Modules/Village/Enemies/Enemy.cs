@@ -380,6 +380,17 @@ namespace DeNelle.Village
                 // Air/ground targeting matrix — flyers can only be hit by anti-air
                 // (or "both") towers. Sourced from the enemies.json "movement" field.
                 _isFlying = def.IsFlying;
+                // WO-397: honour the per-def aggro radius. EnemyDef.AggroRadius was
+                // authored on every roster (enemies.json + the code-built outpost /
+                // camp defs: 14 m guards, 16 m boss) but was NEVER applied — the field
+                // silently fell back to the 7 m inspector default, so a guard with an
+                // intended 14 m aggro only woke at 7 m. Map it here (clamped to the
+                // field's 0–20 inspector range) so the data dial actually governs how
+                // far an enemy detects the hero. A def value <= 0 keeps the prefab/
+                // inspector default (legacy-safe: a hand-placed enemy with no def, or a
+                // def that deliberately opts out of hero aggro, is untouched).
+                if (def.AggroRadius > 0f)
+                    _heroAggroRadius = Mathf.Clamp(def.AggroRadius, 0f, 20f);
             }
 
             EnsureAgent();
@@ -634,25 +645,43 @@ namespace DeNelle.Village
                     transform.rotation, face, 10f * Time.deltaTime);
             }
 
-            // DEF-72 / DEF-21 / DEF-224: resolve the nav destination in priority order:
+            // DEF-72 / DEF-21 / DEF-224 / WO-397: resolve the nav destination in
+            // priority order:
             //   1. _brainPositionOverride  — tactical Vector3 (flank, retreat, etc.)
-            //   2. _brainTarget Transform  — role-based target (Tank/Healer path)
-            //   3. hero aggro              — DEF-224: chase the hero when it is in range
-            //                               (only when no brain override is active, so a
-            //                               brain-driven enemy is never fought over)
-            //   4. _heart                  — default Heart-march
+            //                                A LIVE EnemyBrain drives this EVERY frame
+            //                                (Rush returns target.position), so a
+            //                                brain-steered enemy is decided here and
+            //                                never reaches the steps below.
+            //   2. hero aggro              — DEF-224: chase the hero when it is in
+            //                                range. WO-397: moved ABOVE the static
+            //                                _brainTarget tether. Brain-less enemies
+            //                                that carry only a STATIC tether transform
+            //                                (EnemyOutpost garrison guards tethered to
+            //                                their stand-ring anchor) previously stood
+            //                                idle on the anchor at point-blank because
+            //                                the anchor (step 3) shadowed hero aggro —
+            //                                the "brute idle at melee range" P1. Hero
+            //                                aggro now wins over a static tether, so a
+            //                                tethered guard breaks off to fight the hero
+            //                                when she closes, then (hysteresis) returns
+            //                                to its tether when she leaves. A live brain
+            //                                is unaffected (it decided at step 1).
+            //   3. _brainTarget Transform  — role/tether target (Tank/Healer/outpost
+            //                                anchor / roam anchor) when the hero is out
+            //                                of aggro range.
+            //   4. _heart                  — default Heart-march.
             Vector3 destPos;
             if (_brainPositionOverride.HasValue)
             {
                 destPos = _brainPositionOverride.Value;
             }
-            else if (_brainTarget != null && _brainTarget.gameObject.activeInHierarchy)
-            {
-                destPos = _brainTarget.position;
-            }
             else if (TryGetHeroAggroDestination(out Vector3 heroDest))
             {
                 destPos = heroDest;
+            }
+            else if (_brainTarget != null && _brainTarget.gameObject.activeInHierarchy)
+            {
+                destPos = _brainTarget.position;
             }
             else
             {

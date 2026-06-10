@@ -56,6 +56,7 @@ namespace DeNelle.Village
         private static AudioClip s_levelUp;
         private static AudioClip s_enemyDeath;
         private static AudioClip s_heroHit;
+        private static AudioClip s_buildDenied;
 
         /// <summary>
         /// Plays the tower-fire "pew" through CoreServices.Audio. Quiet by design —
@@ -164,6 +165,19 @@ namespace DeNelle.Village
             if (s_heroHit == null)
                 s_heroHit = Resources.Load<AudioClip>("Sfx/HeroHit") ?? GenerateHeroHit();
             CoreServices.Audio?.PlaySfx(s_heroHit, 0.5f);
+        }
+
+        /// <summary>
+        /// WO-394 — the "build denied" buzz played when a placement is rejected (not
+        /// enough resources / no space / blocks the gate / locked). A short, low,
+        /// dissonant double-blip so the player feels the rejection even before reading
+        /// the reason toast. No-op when the audio service is not yet registered.
+        /// </summary>
+        public static void PlayBuildDenied()
+        {
+            if (s_buildDenied == null)
+                s_buildDenied = Resources.Load<AudioClip>("Sfx/BuildDenied") ?? GenerateBuildDenied();
+            CoreServices.Audio?.PlaySfx(s_buildDenied, 0.55f);
         }
 
         // ── Procedural generation (fresh-clone-safe) ─────────────────────────
@@ -275,6 +289,32 @@ namespace DeNelle.Village
         private static AudioClip GenerateHeroHit()
         {
             return Synth("sfx_hero_hit", dur: 0.11f, f0: 380f, f1: 210f, noise: 0.40f, amp: 0.9f, seed: 0x9A1B, decay: 3.8f);
+        }
+
+        // WO-394 — a low dissonant "denied" buzz: two short descending blips so it
+        // reads as a UI rejection, not a combat hit. Built directly (not via Synth) so
+        // the two-blip gate is explicit.
+        private static AudioClip GenerateBuildDenied()
+        {
+            int n = Mathf.Max(16, (int)(0.20f * Rate));
+            var data = new float[n];
+            double phase = 0;
+            for (int i = 0; i < n; i++)
+            {
+                float t = (float)i / n;
+                // Two blips: ~210 Hz then a lower ~150 Hz, with a silent gap between.
+                float hz = (t < 0.45f) ? 210f : 150f;
+                bool gap = (t >= 0.42f && t < 0.52f);
+                phase += 2.0 * System.Math.PI * hz / Rate;
+                // Square-ish tone (sine + a dissonant 1.5 partial) for a harsher buzz.
+                float s = (float)(System.Math.Sin(phase) * 0.7 + System.Math.Sin(phase * 1.5) * 0.3);
+                float env = gap ? 0f : Mathf.Exp(-3.5f * (t % 0.5f));
+                if (i > n - 64) env *= (n - i) / 64f;
+                data[i] = s * env * 0.7f;
+            }
+            var clip = AudioClip.Create("sfx_build_denied", n, 1, Rate, false);
+            clip.SetData(data, 0);
+            return clip;
         }
     }
 }

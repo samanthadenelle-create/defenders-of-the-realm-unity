@@ -135,6 +135,26 @@ namespace DeNelle.Village
             return true;
         }
 
+        /// <summary>
+        /// True when every cell of <paramref name="footprint"/> at <paramref name="cell"/>
+        /// is within the buildable bounds (ignores occupancy). WO-394 — lets the placement
+        /// gate tell "outside the build area" apart from "no space here" (cells taken).
+        /// </summary>
+        public bool InBounds(Vector2Int cell, Vector2Int footprint)
+        {
+            int fw = Mathf.Max(1, footprint.x);
+            int fh = Mathf.Max(1, footprint.y);
+            int m = Mathf.Max(0, edgeMargin);
+            int minX = m, minZ = m, maxX = gridWidth - m, maxZ = gridHeight - m;
+            for (int dx = 0; dx < fw; dx++)
+                for (int dz = 0; dz < fh; dz++)
+                {
+                    int x = cell.x + dx, z = cell.y + dz;
+                    if (x < minX || z < minZ || x >= maxX || z >= maxZ) return false;
+                }
+            return true;
+        }
+
         /// <summary>Mark a footprint's cells occupied by <paramref name="structureId"/>.</summary>
         public void Occupy(Vector2Int cell, Vector2Int footprint, string structureId)
         {
