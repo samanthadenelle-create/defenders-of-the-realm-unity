@@ -635,7 +635,7 @@ namespace DeNelle.Editor
                 if (t != null && t != gateMarker.transform && t.name == "OuterWorldTransitionTrigger")
                     Object.DestroyImmediate(t.gameObject);
             }
-            var priorNavType = System.Type.GetType("UnityEngine.AI.NavMeshLink, Unity.AI.Navigation");
+            var priorNavType = System.Type.GetType("Unity.AI.Navigation.NavMeshLink, Unity.AI.Navigation");
             if (priorNavType != null)
             {
                 foreach (var oldLink in gateMarker.GetComponents(priorNavType))
@@ -648,7 +648,7 @@ namespace DeNelle.Editor
             // compile-time reference to the type (the AI Navigation package may not be in the Editor asmdef
             // references in a way that resolves the type for all build contexts). This matches the project's
             // pattern for optional/cross-package Editor scripting.
-            var navType = System.Type.GetType("UnityEngine.AI.NavMeshLink, Unity.AI.Navigation");
+            var navType = System.Type.GetType("Unity.AI.Navigation.NavMeshLink, Unity.AI.Navigation");
             if (navType != null)
             {
                 var comp = gateMarker.AddComponent(navType);
