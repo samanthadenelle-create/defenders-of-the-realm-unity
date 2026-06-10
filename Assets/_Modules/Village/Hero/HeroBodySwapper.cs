@@ -265,10 +265,30 @@ namespace DeNelle.Village
             // so the runtime can apply the real texture rather than the
             // stale class tint. Same hook works for Ranger if/when its
             // Send To Unity export lands.
-            ApplyExtractedTexture(body, cls);
-            // Safety net: if Tripo's embedded textures didn't extract, paint
-            // the body with a class tint so the mesh isn't solid white.
-            ApplyClassTint(body, cls);
+            // WO (2026-06-09) KNIGHT SPECKLE STOPGAP — root cause + decision:
+            //   The texture Resources.Load<Texture2D>("Heroes/Textures/medievalknight3dmodel_basecolor")
+            //   DOES load (textureType=Default, sRGB, valid Texture2D — confirmed). It is NOT a null-load
+            //   early-return and NOT a stray normal/metallic map: clearing _BumpMap/_MetallicGlossMap/etc.
+            //   (lines ~564-571) already happens and did NOT fix the speckle. The REAL cause is the parked
+            //   note at SlugFor/Knight: the Knight FBX's mesh material is 'tripo_mat_18e58c3e' and NONE of
+            //   the in-project atlases (medievalknight3dmodel_basecolor, knight_basecolor, remesh_12,
+            //   tripo_1afe2e5e, HumanTank) are UV-matched to THIS mesh. Binding a non-matching atlas means
+            //   each UV island samples an unrelated region of the wrong texture → the blotchy/patchy/
+            //   "speckled" Knight. The clean fix is a fresh Knight model re-import (asset work, out of scope
+            //   here); until then a SOLID presentable steel material beats a speckled one.
+            //   So: Knight bypasses the (mis-sampling) atlas path entirely and gets a flat steel URP/Lit
+            //   on every renderer. Other classes keep their working texture+tint path untouched.
+            if (cls == HeroClass.Knight)
+            {
+                ApplyFlatSteelStopgap(body);
+            }
+            else
+            {
+                ApplyExtractedTexture(body, cls);
+                // Safety net: if Tripo's embedded textures didn't extract, paint
+                // the body with a class tint so the mesh isn't solid white.
+                ApplyClassTint(body, cls);
+            }
             // DEF: the Ranger/Archer fires arrows via the projectile system but held
             // NOTHING — give him a visible bow. Bow goes in the LEFT (off/bow) hand
             // since HeroAimIK draws with the RightHand IK goal. Cosmetic only; the
@@ -623,6 +643,63 @@ namespace DeNelle.Village
             }
             Debug.Log("[HeroBodySwapper] DEF-267 ApplyExtractedTexture: " + cls +
                       " diffuse '" + texPath + "' bound (mode=" + (isCc5Combined ? "CC5-replace" : "Tripo-paint") + ").");
+        }
+
+        /// <summary>
+        /// KNIGHT STOPGAP (2026-06-09): replace EVERY renderer slot on the Knight body with one
+        /// flat, solid steel-grey URP/Lit material — NO basecolor/normal/metallic/occlusion maps.
+        /// The Knight FBX has no UV-matched atlas in-project (mesh material 'tripo_mat_18e58c3e';
+        /// every candidate atlas mis-samples → the speckled/patchy look). A clean solid armour grey
+        /// is presentable for go-live; a correct Knight re-import can restore textures later.
+        /// Knight-ONLY — never called for Ranger/Mage/Cleric, whose textured paths work.
+        /// </summary>
+        private static void ApplyFlatSteelStopgap(GameObject body)
+        {
+            if (body == null) return;
+            Shader lit = Shader.Find("Universal Render Pipeline/Lit")
+                         ?? Shader.Find("Universal Render Pipeline/Simple Lit")
+                         ?? Shader.Find("Standard");
+            if (lit == null)
+            {
+                Debug.LogWarning("[HeroBodySwapper] Knight stopgap: no URP/Lit or Standard shader — skipped.");
+                return;
+            }
+
+            // Believable plate-armour grey (#7A7E85), low metallic so the basecolor (not the
+            // environment reflection) drives the look, moderate smoothness for a soft steel sheen.
+            Color steel = new Color(0.478f, 0.494f, 0.522f, 1f); // #7A7E85
+            var mat = new Material(lit) { name = "Knight (flat steel stopgap)" };
+            if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", steel);
+            if (mat.HasProperty("_Color"))     mat.SetColor("_Color", steel);
+            // Explicitly NO maps — clear any the shader defaults in and disable their keywords so
+            // nothing samples a wrong-UV texture and re-introduces the speckle.
+            if (mat.HasProperty("_BaseMap"))          mat.SetTexture("_BaseMap", null);
+            if (mat.HasProperty("_MainTex"))          mat.SetTexture("_MainTex", null);
+            if (mat.HasProperty("_BumpMap"))          mat.SetTexture("_BumpMap", null);
+            if (mat.HasProperty("_NormalMap"))        mat.SetTexture("_NormalMap", null);
+            if (mat.HasProperty("_MetallicGlossMap")) mat.SetTexture("_MetallicGlossMap", null);
+            if (mat.HasProperty("_SpecGlossMap"))     mat.SetTexture("_SpecGlossMap", null);
+            if (mat.HasProperty("_OcclusionMap"))     mat.SetTexture("_OcclusionMap", null);
+            if (mat.HasProperty("_EmissionMap"))      mat.SetTexture("_EmissionMap", null);
+            mat.DisableKeyword("_NORMALMAP");
+            mat.DisableKeyword("_METALLICSPECGLOSSMAP");
+            mat.DisableKeyword("_OCCLUSIONMAP");
+            mat.DisableKeyword("_EMISSION");
+            if (mat.HasProperty("_Metallic"))   mat.SetFloat("_Metallic", 0.1f);
+            if (mat.HasProperty("_Smoothness")) mat.SetFloat("_Smoothness", 0.35f);
+
+            int slots = 0;
+            foreach (var r in body.GetComponentsInChildren<Renderer>(true))
+            {
+                if (r == null) continue;
+                int count = (r.sharedMaterials != null && r.sharedMaterials.Length > 0)
+                    ? r.sharedMaterials.Length : 1;
+                var mats = new Material[count];
+                for (int i = 0; i < count; i++) { mats[i] = mat; slots++; }
+                r.sharedMaterials = mats;
+            }
+            Debug.Log("[HeroBodySwapper] Knight flat-steel stopgap applied to " + slots +
+                      " slot(s) — solid #7A7E85, no maps (speckle fix; awaiting clean Knight re-import).");
         }
 
         /// <summary>

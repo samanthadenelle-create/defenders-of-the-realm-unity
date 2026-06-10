@@ -278,7 +278,7 @@ namespace DeNelle.Village.Hero
         private void ShowBuy()
         {
             ClearContent();
-            SetStatus("Buy gear or potions. Cost deducted via Economy.");
+            SetStatus("Buy gear or potions. Tap a row or BUY to purchase.");
 
             GearCatalog.Reload(); // pick up any live data change
 
@@ -293,33 +293,103 @@ namespace DeNelle.Village.Hero
             if (!armorerOnly) foreach (var w in GearCatalog.AllWeapons()) if (w != null) weapons.Add(w);
             if (!forgeOnly)   foreach (var a in GearCatalog.AllArmors())  if (a != null) armors.Add(a);
 
-            float y = 0.92f;
+            // Count rows up front so the scroll content can be sized to fit them all.
+            int rowCount = weapons.Count + armors.Count + _potionIds.Count;
+            var listRoot = BuildScrollContent(rowCount);
+
+            float y = 0.999f;
             foreach (var w in weapons)
             {
-                CreateBuyRow(_contentRoot.transform, BuyLabel(w.name, GearAppraisal.Appraise(w)), GearCatalog.GetBuyCost(w), () => TryBuyWeapon(w), ref y);
+                var wCopy = w; // capture for the closure
+                CreateBuyRow(listRoot, BuyLabel(w.name, GearAppraisal.Appraise(w)), GearCatalog.GetBuyCost(w), () => TryBuyWeapon(wCopy), ref y);
             }
             foreach (var a in armors)
             {
-                CreateBuyRow(_contentRoot.transform, BuyLabel(a.name, GearAppraisal.Appraise(a)), GearCatalog.GetBuyCost(a), () => TryBuyArmor(a), ref y);
+                var aCopy = a; // capture for the closure
+                CreateBuyRow(listRoot, BuyLabel(a.name, GearAppraisal.Appraise(a)), GearCatalog.GetBuyCost(a), () => TryBuyArmor(aCopy), ref y);
             }
             foreach (var pid in _potionIds)
             {
                 var cost = new ResourceCost(wood: 4, iron: 0, crystals: 0); // cheap early potions
                 if (pid.Contains("mana")) cost = new ResourceCost(wood: 3, crystals: 1);
-                CreateBuyRow(_contentRoot.transform, pid, cost, () => TryBuyPotion(pid, cost), ref y);
+                string pidCopy = pid; var costCopy = cost; // capture for the closure
+                CreateBuyRow(listRoot, pidCopy, costCopy, () => TryBuyPotion(pidCopy, costCopy), ref y);
             }
+        }
+
+        // Row height as a fraction of the SCROLL CONTENT's height (not the viewport).
+        // Each row occupies this normalized slice; the content is grown to fit all rows
+        // so nothing is pushed off-panel and every BUY button is reachable.
+        private const float RowSlice = 0.085f;
+
+        // Builds a scrollable list area inside _contentRoot and returns the content
+        // transform that rows should be parented to. Rows are still anchored from the
+        // top (y starting at ~1.0) — the content RectTransform is sized to rowCount so
+        // the ScrollRect can pan through every item. Without this the fixed _contentRoot
+        // clipped/overflowed long catalogs and most BUY buttons fell off the panel
+        // (the reported "no way to complete a purchase"). Vertical scroll, clipped.
+        private Transform BuildScrollContent(int rowCount)
+        {
+            // Viewport (masked) fills the content area.
+            var viewport = new GameObject("Viewport", typeof(Image), typeof(Mask), typeof(ScrollRect));
+            viewport.transform.SetParent(_contentRoot.transform, false);
+            var vr = viewport.GetComponent<RectTransform>();
+            vr.anchorMin = Vector2.zero; vr.anchorMax = Vector2.one;
+            vr.offsetMin = Vector2.zero; vr.offsetMax = Vector2.zero;
+            var vImg = viewport.GetComponent<Image>();
+            vImg.color = new Color(0f, 0f, 0f, 0.001f); // near-invisible but a valid mask graphic
+            var mask = viewport.GetComponent<Mask>();
+            mask.showMaskGraphic = false;
+
+            // Content — grown taller than the viewport when there are many rows so the
+            // list can scroll. height multiplier = how many "viewport heights" of rows.
+            var content = new GameObject("ScrollContent", typeof(RectTransform));
+            content.transform.SetParent(viewport.transform, false);
+            var cr = content.GetComponent<RectTransform>();
+            // Anchor to the top of the viewport, stretch horizontally, pivot at top.
+            cr.anchorMin = new Vector2(0f, 1f);
+            cr.anchorMax = new Vector2(1f, 1f);
+            cr.pivot = new Vector2(0.5f, 1f);
+            // Total rows take rowCount * RowSlice of viewport height. If that is <= 1 the
+            // list fits and the content equals the viewport (size delta 0). Otherwise grow.
+            float totalSlices = Mathf.Max(1f, rowCount * RowSlice);
+            // sizeDelta.y in normalized-to-viewport terms: a value of 0 == viewport height.
+            // We express extra height as (totalSlices - 1) * viewportHeight via a layout-free
+            // trick: set anchors to top edge and use sizeDelta height = extra fraction * a
+            // reference. Use the panel reference resolution height slice for a stable size.
+            float viewportPixels = 1920f * (0.76f - 0.08f); // content area height in ref px
+            cr.sizeDelta = new Vector2(0f, Mathf.Max(0f, (totalSlices - 1f) * viewportPixels));
+
+            var scroll = viewport.GetComponent<ScrollRect>();
+            scroll.viewport = vr;
+            scroll.content = cr;
+            scroll.horizontal = false;
+            scroll.vertical = true;
+            scroll.movementType = ScrollRect.MovementType.Clamped;
+            scroll.scrollSensitivity = 25f;
+
+            return content.transform;
         }
 
         private void CreateBuyRow(Transform parent, string label, ResourceCost cost, System.Action buyAction, ref float y)
         {
-            var row = new GameObject("BuyRow_" + label, typeof(Image));
+            // Whole row is a Button now (tap-to-buy) AND keeps an explicit BUY button — both
+            // route to the same purchase action, so "selecting an item" completes the buy.
+            var row = new GameObject("BuyRow_" + label, typeof(Image), typeof(Button));
             row.transform.SetParent(parent, false);
             var rr = row.GetComponent<RectTransform>();
-            rr.anchorMin = new Vector2(0.02f, y - 0.07f);
-            rr.anchorMax = new Vector2(0.98f, y);
+            rr.anchorMin = new Vector2(0.02f, y - RowSlice);
+            rr.anchorMax = new Vector2(0.98f, y - 0.005f);
             rr.offsetMin = Vector2.zero;
             rr.offsetMax = Vector2.zero;
             row.GetComponent<Image>().color = new Color(0.08f, 0.07f, 0.06f, 0.6f);
+            var rowBtn = row.GetComponent<Button>();
+            rowBtn.transition = Selectable.Transition.ColorTint;
+            var rowColors = rowBtn.colors;
+            rowColors.highlightedColor = new Color(0.16f, 0.18f, 0.12f, 0.8f);
+            rowColors.pressedColor = new Color(0.12f, 0.22f, 0.12f, 0.9f);
+            rowBtn.colors = rowColors;
+            rowBtn.onClick.AddListener(() => buyAction());
 
             var nameTxt = new GameObject("N", typeof(TMPro.TextMeshProUGUI));
             nameTxt.transform.SetParent(row.transform, false);
@@ -329,6 +399,7 @@ namespace DeNelle.Village.Hero
             nt.text = label;
             nt.fontSize = 14;
             nt.color = Color.white;
+            nt.raycastTarget = false; // let the row button receive the tap
 
             var priceTxt = new GameObject("P", typeof(TMPro.TextMeshProUGUI));
             priceTxt.transform.SetParent(row.transform, false);
@@ -338,6 +409,7 @@ namespace DeNelle.Village.Hero
             pt.text = CostString(cost);
             pt.fontSize = 12;
             pt.color = new Color(0.75f, 0.85f, 0.65f);
+            pt.raycastTarget = false;
 
             var buyBtn = new GameObject("Buy", typeof(Button), typeof(Image));
             buyBtn.transform.SetParent(row.transform, false);
@@ -356,8 +428,9 @@ namespace DeNelle.Village.Hero
             blt.fontSize = 13;
             blt.color = Color.white;
             blt.alignment = TMPro.TextAlignmentOptions.Center;
+            blt.raycastTarget = false;
 
-            y -= 0.085f;
+            y -= RowSlice;
         }
 
         // WO-300: enrich a buy-row name with its Elarion maker's mark, so a vendor
@@ -383,16 +456,18 @@ namespace DeNelle.Village.Hero
         {
             if (w == null) return;
             var cost = GearCatalog.GetBuyCost(w);
-            if (EconomyService.Instance != null && EconomyService.Instance.TrySpend(cost))
+            if (EconomyService.Instance == null) { SetStatus("Economy unavailable."); return; }
+            if (EconomyService.Instance.TrySpend(cost))
             {
                 if (VillageInventory.Instance != null) VillageInventory.Instance.Add(w.id, 1);
                 var ap = GearAppraisal.Appraise(w);
-                SetStatus(ap != null && ap.isElarionMarked ? $"Bought {w.name}. {ap.Summary()}" : $"Bought {w.name}.");
+                SetStatus(ap != null && ap.isElarionMarked ? $"Purchased {w.name}! {ap.Summary()} (added to inventory — see EQUIP)" : $"Purchased {w.name}! Added to inventory — see EQUIP.");
+                RefreshEco();
                 ShowBuy(); // refresh
             }
             else
             {
-                SetStatus("Cannot afford.");
+                SetStatus($"Not enough resources for {w.name} — needs {CostString(cost)}.");
             }
         }
 
@@ -400,28 +475,40 @@ namespace DeNelle.Village.Hero
         {
             if (a == null) return;
             var cost = GearCatalog.GetBuyCost(a);
-            if (EconomyService.Instance != null && EconomyService.Instance.TrySpend(cost))
+            if (EconomyService.Instance == null) { SetStatus("Economy unavailable."); return; }
+            if (EconomyService.Instance.TrySpend(cost))
             {
                 if (VillageInventory.Instance != null) VillageInventory.Instance.Add(a.id, 1);
                 var ap = GearAppraisal.Appraise(a);
-                SetStatus(ap != null && ap.isElarionMarked ? $"Bought {a.name}. {ap.Summary()}" : $"Bought {a.name}.");
+                SetStatus(ap != null && ap.isElarionMarked ? $"Purchased {a.name}! {ap.Summary()} (added to inventory — see EQUIP)" : $"Purchased {a.name}! Added to inventory — see EQUIP.");
+                RefreshEco();
                 ShowBuy();
             }
             else
             {
-                SetStatus("Cannot afford.");
+                SetStatus($"Not enough resources for {a.name} — needs {CostString(cost)}.");
             }
         }
 
         private void TryBuyPotion(string id, ResourceCost cost)
         {
-            if (EconomyService.Instance != null && EconomyService.Instance.TrySpend(cost))
+            if (EconomyService.Instance == null) { SetStatus("Economy unavailable."); return; }
+            if (EconomyService.Instance.TrySpend(cost))
             {
                 if (VillageInventory.Instance != null) VillageInventory.Instance.Add(id, 1);
-                SetStatus($"Bought {id}.");
+                SetStatus($"Purchased {id}!");
+                RefreshEco();
                 ShowBuy();
             }
-            else SetStatus("Cannot afford.");
+            else SetStatus($"Not enough resources for {id} — needs {CostString(cost)}.");
+        }
+
+        // Force the live economy readout to redraw immediately after a transaction. The
+        // EconomyService.OnChanged event already does this, but calling it directly keeps
+        // the readout correct even if the event order/timing changes. Null-safe.
+        private void RefreshEco()
+        {
+            if (_ecoText != null) UpdateEcoText(_ecoText);
         }
 
         // --- SELL ---
@@ -433,25 +520,32 @@ namespace DeNelle.Village.Hero
             var inv = VillageInventory.Instance;
             if (inv == null) { SetStatus("No inventory."); return; }
 
-            float y = 0.92f;
+            // Build the sellable list first so the scroll content can be sized to it.
+            var sellable = new List<string>();
             foreach (var kv in inv.Counts)
             {
                 if (kv.Value <= 0) continue;
                 string id = kv.Key;
-                int owned = kv.Value;
+                bool isPotion = _potionIds.Contains(id);
+                if (GearCatalog.FindWeapon(id) == null && GearCatalog.FindArmor(id) == null && !isPotion) continue;
+                sellable.Add(id);
+            }
+            var listRoot = BuildScrollContent(sellable.Count);
 
+            float y = 0.999f;
+            foreach (var id in sellable)
+            {
+                int owned = inv.Get(id);
                 WeaponDef w = GearCatalog.FindWeapon(id);
                 ArmorDef a = GearCatalog.FindArmor(id);
-                bool isPotion = _potionIds.Contains(id);
-
-                if (w == null && a == null && !isPotion) continue;
 
                 string display = (w != null ? w.name : (a != null ? a.name : id)) + " x" + owned;
                 ResourceCost refund = w != null ? ScaleCost(GearCatalog.GetBuyCost(w), 0.6f) :
                                     a != null ? ScaleCost(GearCatalog.GetBuyCost(a), 0.6f) :
                                     new ResourceCost(wood: 2);
 
-                CreateSellRow(_contentRoot.transform, display, refund, () => TrySell(id, refund), ref y);
+                string idCopy = id; var refundCopy = refund;
+                CreateSellRow(listRoot, display, refundCopy, () => TrySell(idCopy, refundCopy), ref y);
             }
         }
 
@@ -469,8 +563,8 @@ namespace DeNelle.Village.Hero
             var row = new GameObject("SellRow_" + label, typeof(Image));
             row.transform.SetParent(parent, false);
             var rr = row.GetComponent<RectTransform>();
-            rr.anchorMin = new Vector2(0.02f, y - 0.07f);
-            rr.anchorMax = new Vector2(0.98f, y);
+            rr.anchorMin = new Vector2(0.02f, y - RowSlice);
+            rr.anchorMax = new Vector2(0.98f, y - 0.005f);
             rr.offsetMin = Vector2.zero;
             rr.offsetMax = Vector2.zero;
             row.GetComponent<Image>().color = new Color(0.09f, 0.06f, 0.05f, 0.6f);
@@ -511,7 +605,7 @@ namespace DeNelle.Village.Hero
             blt.color = Color.white;
             blt.alignment = TMPro.TextAlignmentOptions.Center;
 
-            y -= 0.085f;
+            y -= RowSlice;
         }
 
         private void TrySell(string id, ResourceCost refund)
@@ -521,7 +615,8 @@ namespace DeNelle.Village.Hero
             // Consume one via the standard API (added for crafting/equip flows).
             inv.TryConsume(id, 1);
             if (EconomyService.Instance != null) EconomyService.Instance.Grant(refund);
-            SetStatus("Sold.");
+            SetStatus($"Sold for +{CostString(refund)}.");
+            RefreshEco();
             ShowSell();
         }
 
@@ -539,22 +634,31 @@ namespace DeNelle.Village.Hero
                 current += (_activeLoadout.EquippedArmor != null ? _activeLoadout.EquippedArmor.name : "no armor");
             }
             else current += "none";
-            CreateLabel(_contentRoot.transform, current, 0.92f);
 
             var inv = VillageInventory.Instance;
-            if (inv == null) return;
+            if (inv == null) { CreateLabel(_contentRoot.transform, current, 0.92f); return; }
 
-            float y = 0.82f;
+            // Build the equippable list first so the scroll content sizes correctly. The
+            // "Current:" line is row 0 inside the scroll content.
+            var equippable = new List<string>();
             foreach (var kv in inv.Counts)
             {
                 if (kv.Value <= 0) continue;
                 string id = kv.Key;
-                var w = GearCatalog.FindWeapon(id);
-                var a = GearCatalog.FindArmor(id);
-                if (w == null && a == null) continue;
+                if (GearCatalog.FindWeapon(id) == null && GearCatalog.FindArmor(id) == null) continue;
+                equippable.Add(id);
+            }
+            var listRoot = BuildScrollContent(equippable.Count + 1); // +1 for the Current line
 
-                string label = (w != null ? w.name : a.name) + " (owned " + kv.Value + ")";
-                CreateEquipRow(_contentRoot.transform, label, id, w != null, ref y);
+            float y = 0.999f;
+            CreateLabel(listRoot, current, y); y -= RowSlice;
+            foreach (var id in equippable)
+            {
+                int owned = inv.Get(id);
+                var w = GearCatalog.FindWeapon(id);
+                string label = (w != null ? w.name : GearCatalog.FindArmor(id).name) + " (owned " + owned + ")";
+                string idCopy = id; bool isWeapon = w != null;
+                CreateEquipRow(listRoot, label, idCopy, isWeapon, ref y);
             }
         }
 
@@ -578,8 +682,8 @@ namespace DeNelle.Village.Hero
             var row = new GameObject("EquipRow_" + id, typeof(Image));
             row.transform.SetParent(parent, false);
             var rr = row.GetComponent<RectTransform>();
-            rr.anchorMin = new Vector2(0.02f, y - 0.07f);
-            rr.anchorMax = new Vector2(0.98f, y);
+            rr.anchorMin = new Vector2(0.02f, y - RowSlice);
+            rr.anchorMax = new Vector2(0.98f, y - 0.005f);
             rr.offsetMin = Vector2.zero;
             rr.offsetMax = Vector2.zero;
             row.GetComponent<Image>().color = new Color(0.07f, 0.06f, 0.05f, 0.5f);
@@ -611,7 +715,7 @@ namespace DeNelle.Village.Hero
             blt.color = Color.white;
             blt.alignment = TMPro.TextAlignmentOptions.Center;
 
-            y -= 0.085f;
+            y -= RowSlice;
         }
 
         private void TryEquip(string id, bool isWeapon)

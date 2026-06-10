@@ -848,7 +848,10 @@ namespace DeNelle.Editor
             // Disabling the renderer alone proved fragile (the pill reappeared in a live
             // build); remove the MeshRenderer + MeshFilter outright and destroy the collider
             // so it can never render OR block the hero. The transform stays as the marker.
-            var pill = GameObject.Find("Capsule");
+            // Catch the marker whether it's still the raw primitive ("Capsule") OR was already
+            // promoted in a prior pass (its capsule mesh was renamed but never stripped — the
+            // lingering pill). Either way we re-strip the visible mesh below.
+            var pill = GameObject.Find("Capsule") ?? GameObject.Find("HeroStartPoint_PlayerSpawn");
             if (pill != null)
             {
                 pill.name = "HeroStartPoint_PlayerSpawn";
