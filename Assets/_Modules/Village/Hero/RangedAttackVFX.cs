@@ -96,24 +96,15 @@ namespace DeNelle.Village
             Vector3 origin = LaunchOrigin();
             StartCoroutine(PlayCastBurst(origin, FireColor, 0.15f));   // GREEN: fired
 
-            // DEF-PROJ: when the arrow ART sprite is available, fire a real sprite-skinned
-            // arrow (this WINS over the WO-280 placeholder suppression — that flag only
-            // hid the raw primitive, the sprite IS the intended visual).
-            var arrowSprite = ProjectileArtCatalog.ForArrow();
-            if (_arrowPrefab == null && arrowSprite != null)
+            // VFX: fire a real particle-FX-bodied projectile (Storm bolt for the
+            // physical arrow). This WINS over the WO-280 placeholder suppression — that
+            // flag only hid the raw debug primitive; the particle FX IS the intended visual.
+            if (_arrowPrefab == null)
             {
-                var sgo = BuildSpriteProjectile(origin, arrowSprite, DamageElement.None, "RangerArrow");
+                var sgo = BuildVfxProjectile(origin, DamageElement.None, "RangerArrow");
                 var smover = sgo.GetComponent<ProjectileMover>() ?? sgo.AddComponent<ProjectileMover>();
                 smover.Launch(targetWorldPos, _arrowSpeed, _arrowArc,
-                    WithImpactSprite(targetWorldPos, DamageElement.None, WithLandBurst(targetWorldPos, onArrive)));
-                return;
-            }
-
-            // WO-280: no authored prefab + placeholder visuals suppressed → fire the
-            // payload after the same flight time, no debug primitive in the scene.
-            if (_arrowPrefab == null && !PlaceholderProjectilesEnabled())
-            {
-                DeliverWithoutProjectile(origin, targetWorldPos, _arrowSpeed, onArrive);
+                    WithImpactVfx(targetWorldPos, DamageElement.None, WithLandBurst(targetWorldPos, onArrive)));
                 return;
             }
 
@@ -134,24 +125,14 @@ namespace DeNelle.Village
             Vector3 origin = LaunchOrigin();
             StartCoroutine(PlayCastBurst(origin, FireColor, 0.35f));   // GREEN: fired
 
-            // DEF-PROJ: when the arcane-bolt ART sprite is available, fire a real
-            // sprite-skinned orb (wins over the WO-280 primitive suppression).
-            var orbSprite = ProjectileArtCatalog.ForSpellOrb();
-            if (_spellOrbPrefab == null && orbSprite != null)
+            // VFX: fire a real particle-FX-bodied arcane orb (wins over the WO-280
+            // primitive suppression — the FX is the intended visual, not a debug sphere).
+            if (_spellOrbPrefab == null)
             {
-                var sgo = BuildSpriteProjectile(origin, orbSprite, DamageElement.Aether, "MageOrb");
+                var sgo = BuildVfxProjectile(origin, DamageElement.Aether, "MageOrb");
                 var smover = sgo.GetComponent<ProjectileMover>() ?? sgo.AddComponent<ProjectileMover>();
                 smover.Launch(targetWorldPos, _orbSpeed, 0f,
-                    WithImpactSprite(targetWorldPos, DamageElement.Aether, WithLandBurst(targetWorldPos, onArrive)));
-                return;
-            }
-
-            // WO-280: the blue "SpellOrbPlaceholder" SPHERE is the stray debug primitive.
-            // With no authored prefab and placeholders suppressed, skip the visual but
-            // still land the payload after the same flight time (no debug sphere ships).
-            if (_spellOrbPrefab == null && !PlaceholderProjectilesEnabled())
-            {
-                DeliverWithoutProjectile(origin, targetWorldPos, _orbSpeed, onArrive);
+                    WithImpactVfx(targetWorldPos, DamageElement.Aether, WithLandBurst(targetWorldPos, onArrive)));
                 return;
             }
 
@@ -192,14 +173,13 @@ namespace DeNelle.Village
             };
         }
 
-        /// <summary>Wraps the arrival callback so the element-matched impact ART sprite
-        /// pops where the projectile lands (no-op when the sheet isn't sliced yet).</summary>
-        private System.Action WithImpactSprite(Vector3 landPos, DamageElement element, System.Action inner)
+        /// <summary>Wraps the arrival callback so the element-matched particle IMPACT
+        /// burst pops where the projectile lands (no-op when the prefab is missing).</summary>
+        private System.Action WithImpactVfx(Vector3 landPos, DamageElement element, System.Action inner)
         {
             return () =>
             {
-                ProjectileSpriteBillboard.SpawnImpact(
-                    ProjectileArtCatalog.ImpactForElement(element), landPos, 1.0f, 0.35f);
+                ProjectileVFXCatalog.SpawnImpact(landPos, element);
                 inner?.Invoke();
             };
         }
@@ -241,45 +221,19 @@ namespace DeNelle.Village
             yield return null;
         }
 
-        // ── Sprite-skinned projectile (real art) ─────────────────────────────
+        // ── VFX-bodied projectile (real particle FX) ─────────────────────────
 
-        /// <summary>Build a billboard-sprite projectile (no primitive mesh) skinned
-        /// with the given art sprite. The sprite faces the camera each frame while
-        /// pointing along travel (ProjectileMover orients transform.forward).
-        /// A wispy trail tints to the element for readability.</summary>
-        private static GameObject BuildSpriteProjectile(Vector3 origin, Sprite sprite, DamageElement element, string label)
+        /// <summary>Build a projectile whose visual is a real particle-FX body
+        /// (Spells Pack, via ProjectileVFXCatalog), element-matched and oriented along
+        /// travel (ProjectileMover orients the root's transform.forward; the FX is
+        /// parented at local-identity so it rides that orientation).</summary>
+        private static GameObject BuildVfxProjectile(Vector3 origin, DamageElement element, string label)
         {
             var go = new GameObject(label);
             go.transform.position = origin;
 
-            var bb = go.AddComponent<ProjectileSpriteBillboard>();
-            bb.SetSprite(sprite, 1.0f);
-            bb.EnableAutoFollow();
-
-            // Element-tinted trail (subtle; the sprite is the main read).
-            Color tint = element switch
-            {
-                DamageElement.Aether => new Color(0.6f, 0.4f, 1f, 0.7f),
-                DamageElement.Flame  => new Color(1f, 0.5f, 0.15f, 0.7f),
-                DamageElement.Ice    => new Color(0.5f, 0.85f, 1f, 0.7f),
-                _                    => new Color(0.95f, 0.85f, 0.55f, 0.6f), // arrow
-            };
-            var trail = go.AddComponent<TrailRenderer>();
-            trail.time       = 0.16f;
-            trail.startWidth = 0.12f;
-            trail.endWidth   = 0f;
-            trail.numCapVertices = 2;
-            Shader ts = Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Sprites/Default");
-            if (ts != null)
-            {
-                var tmat = new Material(ts);
-                if (tmat.HasProperty("_BaseColor")) tmat.SetColor("_BaseColor", tint);
-                else tmat.color = tint;
-                trail.sharedMaterial = tmat;
-            }
-            trail.startColor = tint;
-            trail.endColor   = new Color(tint.r, tint.g, tint.b, 0f);
-
+            // Parent the cleaned particle FX (physics/demo-scripts stripped) to this root.
+            ProjectileVFXCatalog.SpawnFlying(go.transform, element);
             return go;
         }
 

@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: 1b695686da9a4cf1953e751f929adb2d
+PrefabImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 141539
+  packageName: Spells Pack
+  packageVersion: 1.3.14
+  assetPath: Assets/Spells Pack/Particles/Prefabs/Projectiles/Projectiles/Projectile_Fire.prefab
+  uploadId: 922236

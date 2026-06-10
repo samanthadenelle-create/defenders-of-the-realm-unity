@@ -11,7 +11,10 @@
 //     OnTriggerEnter — enemies here aren't guaranteed trigger colliders, and this
 //     avoids a Rigidbody/collider dependency. (A trigger hit is also honoured if a
 //     collider happens to be present.)
-//   • Builds its own visual (a thin unlit bolt + trail) — no authored prefab.
+//   • VISUAL: a real particle-system FX body (Spells Pack) parented to the
+//     projectile and oriented along travel via ProjectileVFXCatalog. The old
+//     camera-facing sprite-billboard / procedural amber-cube visual was removed
+//     (owner: "the way the projectiles fire is horrible — use VFX instead").
 // =============================================================================
 
 using UnityEngine;
@@ -31,12 +34,11 @@ namespace DeNelle.Village
         private DamageElement _element = DamageElement.None;        // damage typing
         private DamageElement _visualElement = DamageElement.None;  // sprite/impact look
         private float _timer;
-        private TrailRenderer _trail;
-        private Renderer _boltRenderer;                  // procedural fallback bolt
-        private ProjectileSpriteBillboard _billboard;    // art sprite (when sliced)
+        private GameObject _vfxBody;                      // particle FX flying visual
         private Vector3 _lastDir = Vector3.forward;
 
-        private void Awake() => BuildVisual();
+        // No Awake-built visual: the FX body is spawned per-shot in Initialize (it is
+        // element-matched), and cleaned up on Return.
 
         /// <summary>Arm the bolt: fly to <paramref name="target"/> and deal damage on arrival.
         /// The DAMAGE typing is <paramref name="element"/>; the VISUAL sprite uses the same
@@ -54,31 +56,17 @@ namespace DeNelle.Village
             _damage = damage;
             _element = damageElement;
             _timer = 0f;
-            if (_trail != null) _trail.Clear();   // no streak from the last shot's path (pooled reuse)
-
-            // DEF-PROJ: skin with the real art sprite for the VISUAL element when available.
-            // When a sprite is found the procedural amber bolt is hidden (the sprite
-            // is the body); otherwise the bolt remains the visible fallback.
-            _visualElement = visualElement;
-            ApplyArtSprite(visualElement);
 
             if (target != null)
             {
                 _lastDir = (target.WorldPosition - transform.position).normalized;
                 transform.rotation = Quaternion.LookRotation(_lastDir);
             }
-        }
 
-        private void ApplyArtSprite(DamageElement element)
-        {
-            var sprite = ProjectileArtCatalog.ForElement(element);
-            if (_billboard == null)
-                _billboard = gameObject.GetComponent<ProjectileSpriteBillboard>()
-                          ?? gameObject.AddComponent<ProjectileSpriteBillboard>();
-            _billboard.SetSprite(sprite);   // null hides the billboard
-
-            // Hide the procedural bolt when a real sprite is showing.
-            if (_boltRenderer != null) _boltRenderer.enabled = (sprite == null);
+            // VISUAL: spawn the element-matched particle FX body, oriented along travel
+            // (the FX rides this transform, which Update keeps facing the flight dir).
+            _visualElement = visualElement;
+            _vfxBody = ProjectileVFXCatalog.ReskinFlying(_vfxBody, transform, visualElement);
         }
 
         private void Update()
@@ -101,10 +89,7 @@ namespace DeNelle.Village
             Vector3 dir = to.normalized;
             _lastDir = dir;
             transform.position += dir * (_speed * Time.deltaTime);
-            transform.rotation = Quaternion.LookRotation(dir);
-
-            // Camera-face the art sprite (if any), pointing along travel.
-            if (_billboard != null) _billboard.FaceCameraAlongVelocity(dir);
+            transform.rotation = Quaternion.LookRotation(dir);   // FX body rides this, points along travel
         }
 
         // Bonus path if a collider is present — only damages the intended target.
@@ -121,12 +106,14 @@ namespace DeNelle.Village
 
         private void Return(bool didHit = false, Vector3 hitPosition = default)
         {
+            // Tear down the flying FX body (pooled reuse re-spawns a fresh, element-matched
+            // one on the next Initialize). Done on EVERY return (hit or expiry).
+            if (_vfxBody != null) { Destroy(_vfxBody); _vfxBody = null; }
+
             if (didHit)
             {
-                // DEF-PROJ: pop the element-matched impact ART sprite at the hit point
-                // (no-op when the sheet isn't sliced yet — particle VFX still plays).
-                ProjectileSpriteBillboard.SpawnImpact(
-                    ProjectileArtCatalog.ImpactForElement(_visualElement), hitPosition, 1.0f, 0.35f);
+                // Pop the element-matched particle IMPACT burst at the hit point.
+                ProjectileVFXCatalog.SpawnImpact(hitPosition, _visualElement);
 
                 // DEF-VFX-01: fire impact VFX at the hit point via the owning tower.
                 // Walk up to TowerCombat on the nearest tower — projectiles don't hold
@@ -142,48 +129,6 @@ namespace DeNelle.Village
             _target = null;
             if (ProjectilePool.Instance != null) ProjectilePool.Instance.ReturnToPool(this);
             else gameObject.SetActive(false);
-        }
-
-        // --- procedural visual (thin amber bolt + fading trail) ------------------
-        private void BuildVisual()
-        {
-            var bolt = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            bolt.name = "Bolt";
-            bolt.transform.SetParent(transform, false);
-            bolt.transform.localScale = new Vector3(0.1f, 0.1f, 0.55f);   // long along forward (Z)
-            var col = bolt.GetComponent<Collider>();
-            if (col != null) Destroy(col);
-
-            var amber = new Color(1f, 0.78f, 0.25f);
-            var rend = bolt.GetComponent<Renderer>();
-            if (rend != null)
-            {
-                Shader sh = Shader.Find("Universal Render Pipeline/Unlit")
-                            ?? Shader.Find("Unlit/Color") ?? Shader.Find("Sprites/Default");
-                var mat = new Material(sh);
-                if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", amber);
-                else mat.color = amber;
-                rend.sharedMaterial = mat;
-            }
-            _boltRenderer = rend;   // cached so the art sprite can hide it when present
-
-            _trail = gameObject.AddComponent<TrailRenderer>();
-            var trail = _trail;
-            trail.time = 0.14f;
-            trail.startWidth = 0.12f;
-            trail.endWidth = 0f;
-            trail.numCapVertices = 2;
-            Shader ts = Shader.Find("Universal Render Pipeline/Unlit")
-                        ?? Shader.Find("Sprites/Default");
-            if (ts != null)
-            {
-                var tmat = new Material(ts);
-                if (tmat.HasProperty("_BaseColor")) tmat.SetColor("_BaseColor", amber);
-                else tmat.color = amber;
-                trail.sharedMaterial = tmat;
-            }
-            trail.startColor = new Color(1f, 0.82f, 0.35f, 0.9f);
-            trail.endColor = new Color(1f, 0.82f, 0.35f, 0f);
         }
     }
 }
