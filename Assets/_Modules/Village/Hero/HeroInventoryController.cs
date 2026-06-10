@@ -356,26 +356,28 @@ namespace DeNelle.Village
 
             // Left column: WEAPON (filled) + HELM (placeholder cosmetic slot).
             EquipSlotTile(_paperDoll.transform, "WEAPON",
-                          w != null ? WeaponTypeGlyph(w) : "", w != null ? w.name : "Empty",
+                          w != null ? WeaponTypeGlyph(w) : "", w != null ? ItemIconCatalog.ForWeapon(w) : null,
+                          w != null ? w.name : "Empty",
                           w != null ? w.rarity : null, w != null,
                           new Vector2(0.045f, 0.55f), new Vector2(0.315f, 0.80f));
             EquipSlotTile(_paperDoll.transform, "HELM",
-                          "", "Locked", null, false,
+                          "", null, "Locked", null, false,
                           new Vector2(0.045f, 0.18f), new Vector2(0.315f, 0.50f));
 
             // Right column: ARMOR (filled) + TRINKET (placeholder).
             EquipSlotTile(_paperDoll.transform, "ARMOR",
-                          a != null ? ArmorTypeGlyph(a) : "", a != null ? a.name : "Empty",
+                          a != null ? ArmorTypeGlyph(a) : "", a != null ? ItemIconCatalog.ForArmor(a) : null,
+                          a != null ? a.name : "Empty",
                           a != null ? a.rarity : null, a != null,
                           new Vector2(0.685f, 0.55f), new Vector2(0.955f, 0.80f));
             EquipSlotTile(_paperDoll.transform, "TRINKET",
-                          "", "Locked", null, false,
+                          "", null, "Locked", null, false,
                           new Vector2(0.685f, 0.18f), new Vector2(0.955f, 0.50f));
         }
 
         // A framed equipped-slot tile: rarity-tinted frame, icon glyph, label + value.
         // filled=false renders a dim empty/locked socket so the layout always reads.
-        private void EquipSlotTile(Transform parent, string label, string icon, string value,
+        private void EquipSlotTile(Transform parent, string label, string icon, Sprite iconSprite, string value,
                                    string rarity, bool filled, Vector2 min, Vector2 max)
         {
             // On light parchment, DARKEN the rarity hue for text/glyph so it stays
@@ -392,10 +394,14 @@ namespace DeNelle.Village
             // Slot label (top, spaced micro caps).
             AddLabel(tile.transform, label, 0.74f, 0.96f, InkMicro,
                      ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, spacing: 3f);
-            // Icon glyph (center) — a TYPE glyph so the slot reads weapon-vs-armor at a glance.
-            AddLabel(tile.transform, string.IsNullOrEmpty(icon) ? (filled ? "?" : "+") : icon, 0.34f, 0.74f,
-                     filled ? Ink : new Color(0.55f, 0.50f, 0.42f, 0.8f),
-                     ElarionUi.FontHead + 4, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f);
+            // Icon (center) — real item art when present, else a TYPE glyph so the slot
+            // reads weapon-vs-armor at a glance (empty/locked = a "+" hint).
+            Color glyphCol = filled ? Ink : new Color(0.55f, 0.50f, 0.42f, 0.8f);
+            string glyph = string.IsNullOrEmpty(icon) ? (filled ? "?" : "+") : icon;
+            var iconHost = AddImage(tile.transform, "SlotIcon", new Vector2(0.04f, 0.34f), new Vector2(0.96f, 0.74f),
+                                    new Color(0, 0, 0, 0));
+            NoRaycast(iconHost);
+            AddIcon(iconHost.transform, iconSprite, glyph, ElarionUi.FontHead + 4, glyphCol, 1f);
             // Value name (bottom, rarity-INK coloured so it stays readable on light).
             AddLabel(tile.transform, (filled ? RarityGlyph(rarity) + " " : "") + value, 0.04f, 0.32f,
                      filled ? rcInk : InkMicro,
@@ -531,7 +537,7 @@ namespace DeNelle.Village
                                 string.Equals(_loadout.EquippedWeapon.id, w.id, System.StringComparison.OrdinalIgnoreCase);
                 bool locked = w.req != null && level < w.req.level;
                 var def = w;
-                BuildGearCell(content, WeaponTypeGlyph(w), w.name, w.rarity, equipped, locked,
+                BuildGearCell(content, WeaponTypeGlyph(w), ItemIconCatalog.ForWeapon(w), w.name, w.rarity, equipped, locked,
                               locked ? "Lv " + w.req.level : "",
                               () => { _selWeapon = def; _selArmor = null; _selConsumable = null; RebuildSidebar(); });
             }
@@ -551,7 +557,7 @@ namespace DeNelle.Village
                                 string.Equals(_loadout.EquippedArmor.id, a.id, System.StringComparison.OrdinalIgnoreCase);
                 bool locked = a.req != null && level < a.req.level;
                 var def = a;
-                BuildGearCell(content, ArmorTypeGlyph(a), a.name, a.rarity, equipped, locked,
+                BuildGearCell(content, ArmorTypeGlyph(a), ItemIconCatalog.ForArmor(a), a.name, a.rarity, equipped, locked,
                               locked ? "Lv " + a.req.level : "",
                               () => { _selArmor = def; _selWeapon = null; _selConsumable = null; RebuildSidebar(); });
             }
@@ -580,14 +586,14 @@ namespace DeNelle.Village
                 string name = def != null && !string.IsNullOrEmpty(def.DisplayName) ? def.DisplayName : kv.Key;
                 string glyph = ConsumableTypeGlyph(kv.Key, name);
                 var sel = new ConsumableSel { id = kv.Key, def = def, count = kv.Value };
-                BuildGearCell(content, glyph, name + "  x" + kv.Value, "common", false, false, "",
+                BuildGearCell(content, glyph, ItemIconCatalog.ForConsumable(kv.Key, name), name + "  x" + kv.Value, "common", false, false, "",
                               () => { _selConsumable = sel; _selWeapon = null; _selArmor = null; RebuildSidebar(); });
             }
         }
 
         // A single grid cell: rarity-framed glass tile with an icon medallion, name in
         // the rarity colour, a rarity gem, and equipped ✓ / level-lock 🔒 overlays.
-        private void BuildGearCell(Transform content, string icon, string name, string rarity,
+        private void BuildGearCell(Transform content, string icon, Sprite iconSprite, string name, string rarity,
                                    bool equipped, bool locked, string lockText, System.Action onTap)
         {
             Color rc    = RarityColor(rarity);
@@ -625,9 +631,9 @@ namespace DeNelle.Village
                                 new Color(rc.r, rc.g, rc.b, 0.12f));
             NoRaycast(well);
             AddInnerRim(well, new Color(rc.r, rc.g, rc.b, 0.40f));
-            AddLabel(well.transform, string.IsNullOrEmpty(icon) ? "?" : icon, 0f, 1f,
-                     locked ? InkMicro : rcInk,
-                     ElarionUi.FontTitle + 2, TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f);
+            // Sprite-first: real item art when we have it, else the type glyph.
+            AddIcon(well.transform, iconSprite, icon, ElarionUi.FontTitle + 2,
+                    locked ? InkMicro : rcInk, locked ? 0.6f : 1f);
 
             // Name (rarity-INK coloured) along the bottom band — readable on light.
             AddLabel(cell.transform, name, 0.07f, 0.36f,
@@ -704,7 +710,7 @@ namespace DeNelle.Village
 
         // A rarity-tinted name header band + icon medallion at the top of the detail
         // panel. Returns nothing; lays out the shared chrome for any selected item.
-        private void BuildDetailHeader(string icon, string name, string rarity, string subline)
+        private void BuildDetailHeader(string icon, Sprite iconSprite, string name, string rarity, string subline)
         {
             Color rc    = RarityColor(rarity);
             Color rcInk = RarityInk(rarity);
@@ -719,8 +725,9 @@ namespace DeNelle.Village
             var med = AddImage(_sidebarRoot.transform, "DetailIcon", new Vector2(0.36f, 0.815f), new Vector2(0.64f, 0.915f),
                                new Color(rc.r, rc.g, rc.b, 0.14f));
             AddInnerRim(med, new Color(rc.r, rc.g, rc.b, 0.45f));
-            AddLabel(med.transform, string.IsNullOrEmpty(icon) ? "?" : icon, 0f, 1f, rcInk,
-                     ElarionUi.FontHead + 2, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f);
+            // Sprite-first: real item art in the detail medallion, else the type glyph.
+            AddIcon(med.transform, iconSprite, string.IsNullOrEmpty(icon) ? "?" : icon,
+                    ElarionUi.FontHead + 2, rcInk, 1f);
 
             AddLabel(_sidebarRoot.transform, name, 0.745f, 0.795f, rcInk, ElarionUi.FontBody,
                      TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, bold: true);
@@ -755,7 +762,7 @@ namespace DeNelle.Village
                             string.Equals(_loadout.EquippedWeapon.id, w.id, System.StringComparison.OrdinalIgnoreCase);
             WeaponDef cur = _loadout != null ? _loadout.EquippedWeapon : null;
 
-            BuildDetailHeader(WeaponTypeGlyph(w), w.name, w.rarity, Cap(w.rarity) + "  -  " + Cap(w.job));
+            BuildDetailHeader(WeaponTypeGlyph(w), ItemIconCatalog.ForWeapon(w), w.name, w.rarity, Cap(w.rarity) + "  -  " + Cap(w.job));
 
             // Compare-to-equipped stat block (▲/▼ vs the worn weapon).
             float curDmg = cur != null ? cur.damageMult : 0f;
@@ -788,7 +795,7 @@ namespace DeNelle.Village
                             string.Equals(_loadout.EquippedArmor.id, a.id, System.StringComparison.OrdinalIgnoreCase);
             ArmorDef cur = _loadout != null ? _loadout.EquippedArmor : null;
 
-            BuildDetailHeader(ArmorTypeGlyph(a), a.name, a.rarity, Cap(a.rarity) + "  -  " + Cap(a.job));
+            BuildDetailHeader(ArmorTypeGlyph(a), ItemIconCatalog.ForArmor(a), a.name, a.rarity, Cap(a.rarity) + "  -  " + Cap(a.job));
 
             float curDef = cur != null ? cur.defense : 0f;
             StatRow(0.620f, 0.675f, "Defense", $"{a.defense * 100f:0}%", equipped ? 0f : a.defense - curDef);
@@ -816,7 +823,7 @@ namespace DeNelle.Village
         {
             string name = c.def != null && !string.IsNullOrEmpty(c.def.DisplayName) ? c.def.DisplayName : c.id;
             string glyph = ConsumableTypeGlyph(c.id, name);
-            BuildDetailHeader(glyph, name, "common", "Owned  x" + c.count);
+            BuildDetailHeader(glyph, ItemIconCatalog.ForConsumable(c.id, name), name, "common", "Owned  x" + c.count);
 
             if (c.def != null)
             {
@@ -1178,6 +1185,34 @@ namespace DeNelle.Village
             t.raycastTarget = false;
             if (bold) t.fontStyle = TMPro.FontStyles.Bold;
             return t;
+        }
+
+        // Sprite-first icon: if `sprite` is non-null, draw the real item art (preserving
+        // its aspect ratio, inset slightly so it sits inside the well); otherwise fall
+        // back to the existing TYPE GLYPH label. This is the single chokepoint that lets
+        // every icon site (grid cell / paper-doll slot / detail medallion) upgrade to art
+        // without touching its layout. tint = glyph colour; alpha = glyph fade (locked).
+        private static void AddIcon(Transform parent, Sprite sprite, string glyph, int glyphSize,
+                                    Color glyphColor, float alpha)
+        {
+            if (sprite != null)
+            {
+                var go = new GameObject("Icon", typeof(Image));
+                go.transform.SetParent(parent, false);
+                var r = go.GetComponent<RectTransform>();
+                r.anchorMin = new Vector2(0.08f, 0.08f); r.anchorMax = new Vector2(0.92f, 0.92f);
+                r.offsetMin = Vector2.zero; r.offsetMax = Vector2.zero;
+                var img = go.GetComponent<Image>();
+                img.sprite = sprite;
+                img.preserveAspect = true;
+                img.raycastTarget = false;
+                img.color = new Color(1f, 1f, 1f, alpha);
+                return;
+            }
+            // Glyph fallback (unchanged look).
+            AddLabel(parent, string.IsNullOrEmpty(glyph) ? "?" : glyph, 0f, 1f,
+                     new Color(glyphColor.r, glyphColor.g, glyphColor.b, glyphColor.a * alpha),
+                     glyphSize, TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f);
         }
 
         private enum ButtonKind { Gold, Neutral, Confirm, Danger }
