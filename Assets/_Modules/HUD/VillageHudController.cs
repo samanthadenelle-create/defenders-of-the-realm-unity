@@ -42,6 +42,7 @@
 
 using DeNelle.Core;
 using DeNelle.Core.HUD;
+using DeNelle.Core.UI;   // shared ElarionUiKit — ONE visual language with the inventory
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.SceneManagement;
@@ -547,8 +548,7 @@ namespace DeNelle.HUD
         private void BuildResourceStrip(Transform parent)
         {
             _resourceStrip = NewRect("ResourceStrip", parent, new Vector2(0.50f, 0.955f), new Vector2(1f, 1f));
-            HudTheme.StylePanel(_resourceStrip.gameObject, HudTheme.Glass);
-            HudTheme.AddRim(_resourceStrip.gameObject, HudTheme.AccentSoft);
+            FramePanel(_resourceStrip.gameObject, ElarionUiKit.Glass);
 
             string[] names  = { "Wood", "Iron", "Crystal", "Gold" };
             string[] glyphs = { "▲", "◆", "❖", "●" };
@@ -579,8 +579,7 @@ namespace DeNelle.HUD
         private void BuildCastleBanner(Transform parent)
         {
             _castleBanner = NewRect("CastleBanner", parent, new Vector2(0.30f, 0.955f), new Vector2(0.70f, 1f));
-            HudTheme.StylePanel(_castleBanner.gameObject, HudTheme.Glass);
-            HudTheme.AddRim(_castleBanner.gameObject, HudTheme.AccentSoft);
+            FramePanel(_castleBanner.gameObject, ElarionUiKit.Glass);
 
             var track = NewRect("Track", _castleBanner, new Vector2(0.05f, 0.22f), new Vector2(0.95f, 0.78f));
             HudTheme.StyleWell(track.gameObject);
@@ -666,7 +665,11 @@ namespace DeNelle.HUD
                 frame.pivot = new Vector2(0.5f, 1f);
                 frame.anchoredPosition = new Vector2(0f, -i * (PartyRowHeight + PartyRowGap));
                 frame.sizeDelta = new Vector2(0f, PartyRowHeight);
-                HudTheme.StylePanel(frame.gameObject, HudTheme.Glass);
+                // Kit-framed glass row (inner rim = the inventory's crisp depth);
+                // keep the gold underline on the HERO row only (slot 0) to preserve
+                // its existing emphasis.
+                HudTheme.StylePanel(frame.gameObject, ElarionUiKit.Glass);
+                ElarionUiKit.AddInnerRim(frame.gameObject, ElarionUiKit.AccentSoft);
                 if (i == 0) HudTheme.AddRim(frame.gameObject, HudTheme.AccentSoft);
                 _partyFrame[i] = frame.gameObject;
 
@@ -717,8 +720,7 @@ namespace DeNelle.HUD
         private void BuildVitalsCluster(Transform parent)
         {
             _vitalsCluster = NewRect("VitalsCluster", parent, new Vector2(0.02f, 0.165f), new Vector2(0.40f, 0.235f));
-            HudTheme.StylePanel(_vitalsCluster.gameObject, HudTheme.Glass);
-            HudTheme.AddRim(_vitalsCluster.gameObject, HudTheme.AccentSoft);
+            FramePanel(_vitalsCluster.gameObject, ElarionUiKit.Glass);
 
             // HP bar (top half) — REMOVED (WO-382): the hero's HP was shown twice —
             // here (bottom-left red bar) AND in the top-left party panel (slot 0).
@@ -772,8 +774,7 @@ namespace DeNelle.HUD
         private void BuildSkillBar(Transform parent)
         {
             _skillBar = NewRect("SkillBar", parent, new Vector2(0.62f, 0.0f), new Vector2(1.0f, 0.22f));
-            HudTheme.StylePanel(_skillBar.gameObject, HudTheme.GlassDeep);
-            HudTheme.AddRim(_skillBar.gameObject, HudTheme.AccentSoft);
+            FramePanel(_skillBar.gameObject, ElarionUiKit.GlassDeep);
 
             _slotKey      = new TextMeshProUGUI[AbilitySlotCount];
             _slotGlyph    = new TextMeshProUGUI[AbilitySlotCount];
@@ -801,7 +802,7 @@ namespace DeNelle.HUD
                 float y = marginY + row * (cellH + gapY);
                 var cell = NewRect("Slot" + i, _skillBar, new Vector2(x, y), new Vector2(x + cellW, y + cellH));
                 var cellImg = cell.gameObject.AddComponent<Image>();
-                cellImg.color = HudTheme.Cell;
+                cellImg.color = ElarionUiKit.Cell;   // kit cell tint — matches the inventory slots
                 cellImg.sprite = HudTheme.RoundedFrame;
                 cellImg.type = HudTheme.RoundedFrame != null ? Image.Type.Sliced : Image.Type.Simple;
 
@@ -903,8 +904,7 @@ namespace DeNelle.HUD
         private void BuildRepairPrompt(Transform parent)
         {
             var p = NewRect("RepairPrompt", parent, new Vector2(0.30f, 0.42f), new Vector2(0.70f, 0.58f));
-            HudTheme.StylePanel(p.gameObject, HudTheme.GlassDeep);
-            HudTheme.AddRim(p.gameObject, HudTheme.AccentSoft);
+            FramePanel(p.gameObject, ElarionUiKit.GlassDeep);
             _repairPanel = p.gameObject;
 
             var labelRect = NewRect("Label", p, new Vector2(0.05f, 0.52f), new Vector2(0.95f, 0.95f));
@@ -945,8 +945,7 @@ namespace DeNelle.HUD
         {
             _townWaveCluster = NewRect("TownWave", parent, new Vector2(0f, 1f), new Vector2(0f, 1f));
             AnchorTopLeft(_townWaveCluster, x: 12f, y: 12f, width: 300f, height: 118f);
-            HudTheme.StylePanel(_townWaveCluster.gameObject, HudTheme.Glass);
-            HudTheme.AddRim(_townWaveCluster.gameObject, HudTheme.AccentSoft);
+            FramePanel(_townWaveCluster.gameObject, ElarionUiKit.Glass);
 
             // Lookout status badge (pip + label) — top row.
             var badgeRect = NewRect("Lookout", _townWaveCluster, new Vector2(0.04f, 0.66f), new Vector2(0.30f, 0.94f));
@@ -992,8 +991,7 @@ namespace DeNelle.HUD
             _townPassiveXp = NewRect("TownPassiveXp", parent, new Vector2(0f, 1f), new Vector2(0f, 1f));
             // Sits just below the 118px-tall wave cluster (top-left, y:12).
             AnchorTopLeft(_townPassiveXp, x: 12f, y: 136f, width: 248f, height: 26f);
-            HudTheme.StylePanel(_townPassiveXp.gameObject, HudTheme.Glass);
-            HudTheme.AddRim(_townPassiveXp.gameObject, HudTheme.AccentSoft);
+            FramePanel(_townPassiveXp.gameObject, ElarionUiKit.Glass);
 
             var label = NewRect("Label", _townPassiveXp, new Vector2(0.04f, 0.08f), new Vector2(0.96f, 0.92f));
             _townPassiveXpText = AddText(label, "⚡ Towers earning 0 XP/min", 13, HudTheme.Crystal, TextAlignmentOptions.MidlineLeft);
@@ -1021,6 +1019,9 @@ namespace DeNelle.HUD
             {
                 var cell = NewRect("Res_" + names[i], _townResStrip, new Vector2(i * w + 0.01f, 0.08f), new Vector2((i + 1) * w - 0.01f, 0.92f));
                 _townResBadge[i] = HudTheme.StylePanel(cell.gameObject, HudTheme.Glass);
+                // Kit inner rim for the inventory's crisp depth — decorative child,
+                // does NOT touch the badge Image that the +/- flash logic re-tints.
+                ElarionUiKit.AddInnerRim(cell.gameObject, ElarionUiKit.AccentSoft);
 
                 // red low-warn outline overlay (hidden until value < threshold).
                 var outline = NewRect("Low", cell, Vector2.zero, Vector2.one);
@@ -1055,8 +1056,7 @@ namespace DeNelle.HUD
             _townMiniMap.pivot = new Vector2(1f, 1f);
             _townMiniMap.anchoredPosition = new Vector2(-12f, -12f);
             _townMiniMap.sizeDelta = new Vector2(140f, 140f);
-            HudTheme.StylePanel(_townMiniMap.gameObject, HudTheme.GlassDeep);
-            HudTheme.AddRim(_townMiniMap.gameObject, HudTheme.AccentSoft);
+            FramePanel(_townMiniMap.gameObject, ElarionUiKit.GlassDeep);
 
             _townMiniMapInner = NewRect("Inner", _townMiniMap, new Vector2(0.06f, 0.06f), new Vector2(0.94f, 0.94f));
 
@@ -1091,8 +1091,7 @@ namespace DeNelle.HUD
         private void BuildTownMetrics(Transform parent)
         {
             _townMetrics = NewRect("TownMetrics", parent, new Vector2(0.30f, 0f), new Vector2(0.70f, 0.05f));
-            HudTheme.StylePanel(_townMetrics.gameObject, HudTheme.Glass);
-            HudTheme.AddRim(_townMetrics.gameObject, HudTheme.AccentSoft);
+            FramePanel(_townMetrics.gameObject, ElarionUiKit.Glass);
 
             _townHeartText = BuildMetricCol(_townMetrics, 0f, 1f / 3f, "♥ Heart", "100%", HudTheme.HpRed);
             _townTowerText = BuildMetricCol(_townMetrics, 1f / 3f, 2f / 3f, "⛨ Towers", "0/0", HudTheme.Gold);
@@ -1747,6 +1746,28 @@ namespace DeNelle.HUD
         {
             if (_partyFrame == null || slot < 0 || slot >= _partyFrame.Length || _partyFrame[slot] == null) return;
             _partyFrame[slot].SetActive(visible);
+        }
+
+        // =====================================================================
+        //  Kit coherence helpers — bring the HUD onto the shared ElarionUiKit
+        //  visual language (matches the freshly-styled inventory) WITHOUT moving
+        //  anything. Pure construction/decoration; no data/layout change.
+        // =====================================================================
+
+        /// <summary>
+        /// Frame an existing panel GameObject the way the inventory's panels read:
+        /// dark-glass rounded fill (HudTheme.StylePanel) + the soft gold bottom
+        /// underline (HudTheme.AddRim) + the kit's crisp inner hairline rim
+        /// (ElarionUiKit.AddInnerRim) — that inner rim is the depth cue the old
+        /// flat HUD panels lacked. All three are non-raycast decorative children,
+        /// so behaviour is unchanged. Mirrors ElarionUiKit.Panel's framed look on
+        /// a pre-anchored rect.
+        /// </summary>
+        private static void FramePanel(GameObject go, Color fill)
+        {
+            HudTheme.StylePanel(go, fill);
+            ElarionUiKit.AddInnerRim(go, ElarionUiKit.AccentSoft);
+            HudTheme.AddRim(go, HudTheme.AccentSoft);
         }
 
         // =====================================================================
