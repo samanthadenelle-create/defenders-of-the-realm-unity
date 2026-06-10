@@ -56,15 +56,32 @@ namespace DeNelle.Village.Buildings.Progression
         private string _focusBuildingId;
         private ScrollView _scroll;
 
-        // Palette — matches VillageCraftingPanel's amber-on-dark theme.
-        private static readonly Color Gold = new Color(0.99f, 0.86f, 0.50f, 1f);
+        // Palette — LIGHT PARCHMENT theme (WO-393), matched to the light-restyled
+        // sibling screens (HeroInventoryController / VillageHudController). The panel
+        // reads as a warm parchment sheet with DARK INK text; gold is reserved for
+        // FRAMES / accents only — never body text on the light fill (yellow-on-cream
+        // was the unreadable combo this WO fixes). Heading "gold" is a darkened BRONZE
+        // ink (GiltInk) that stays legible on parchment.
+        // Frame / accent gold (rims, button fills) — fine on dark borders, never text.
         private static readonly Color GoldRim = new Color(0.85f, 0.66f, 0.30f, 1f);
-        private static readonly Color Cream = new Color(0.97f, 0.94f, 0.84f, 1f);
-        private static readonly Color Dim = new Color(0.78f, 0.74f, 0.66f, 1f);
-        private static readonly Color Good = new Color(0.55f, 0.85f, 0.45f, 1f);
-        private static readonly Color Bad = new Color(0.85f, 0.45f, 0.40f, 1f);
-        private static readonly Color ShellBg = new Color(0.09f, 0.07f, 0.06f, 0.98f);
-        private static readonly Color CardBg = new Color(0.12f, 0.09f, 0.05f, 1f);
+        private static readonly Color Gold = new Color(0.831f, 0.686f, 0.216f, 1f); // ElarionUi.Gold — button fill
+        // Heading ink: bronze, dark enough to read on parchment (was bright Gold text).
+        private static readonly Color GiltInk = new Color(0.561f, 0.408f, 0.110f, 1f); // ~#8F680C
+        // Body / primary text ink (dark, ~#231910 — reads on light parchment).
+        private static readonly Color Ink = new Color(0.137f, 0.098f, 0.055f, 1f);
+        // Secondary / flavour ink (was the pale "Cream" / "Dim" on dark).
+        private static readonly Color InkDim = new Color(0.345f, 0.290f, 0.220f, 1f);
+        // Affordability tones — DARKENED so they read on the light parchment fill
+        // (was bright green/red that washed out; ~4.5:1 on cream).
+        private static readonly Color Good = new Color(0.20f, 0.46f, 0.18f, 1f);
+        private static readonly Color Bad = new Color(0.62f, 0.16f, 0.13f, 1f);
+        // Aliases kept so the rest of the file's references stay behaviour-identical;
+        // both now map to dark ink so nothing renders light-on-light.
+        private static readonly Color Cream = new Color(0.137f, 0.098f, 0.055f, 1f); // → Ink
+        private static readonly Color Dim = new Color(0.345f, 0.290f, 0.220f, 1f);   // → InkDim
+        // Panel fills — warm parchment (light), lightly translucent.
+        private static readonly Color ShellBg = new Color(0.929f, 0.902f, 0.839f, 0.98f); // ~#EDE6D6 parchment
+        private static readonly Color CardBg = new Color(0.886f, 0.847f, 0.761f, 1f);     // aged-parchment card
 
         public bool IsOpen => _shell != null && _shell.style.display.value != DisplayStyle.None;
 
@@ -236,7 +253,7 @@ namespace DeNelle.Village.Buildings.Progression
             parent.Add(header);
 
             var title = new Label("Upgrade Buildings");
-            title.style.color = new StyleColor(Gold);
+            title.style.color = new StyleColor(GiltInk);
             title.style.fontSize = 20;
             title.style.unityFontStyleAndWeight = FontStyle.Bold;
             header.Add(title);
@@ -244,8 +261,9 @@ namespace DeNelle.Village.Buildings.Progression
             var closeBtn = new Button(Close) { text = "X" };
             closeBtn.style.width = 32; closeBtn.style.height = 28;
             closeBtn.style.fontSize = 14;
-            closeBtn.style.color = new StyleColor(Cream);
-            closeBtn.style.backgroundColor = new StyleColor(new Color(0.18f, 0.10f, 0.06f, 1f));
+            // Dark ink "X" on a deeper-tan parchment chip (reads on the light shell).
+            closeBtn.style.color = new StyleColor(Ink);
+            closeBtn.style.backgroundColor = new StyleColor(new Color(0.84f, 0.78f, 0.66f, 1f));
             Round(closeBtn, 6);
             Border(closeBtn, new Color(0.85f, 0.66f, 0.30f, 0.65f), 1);
             header.Add(closeBtn);
@@ -315,7 +333,7 @@ namespace DeNelle.Village.Buildings.Progression
             card.Add(titleRow);
 
             var name = new Label(def.DisplayName);
-            name.style.color = new StyleColor(Gold);
+            name.style.color = new StyleColor(GiltInk);
             name.style.fontSize = 16;
             name.style.unityFontStyleAndWeight = FontStyle.Bold;
             titleRow.Add(name);
@@ -385,7 +403,8 @@ namespace DeNelle.Village.Buildings.Progression
                 if (magicGated)
                 {
                     var techLine = new Label("Unlocks tech: Arcane Forge");
-                    techLine.style.color = new StyleColor(new Color(0.70f, 0.55f, 0.95f, 1f));
+                    // Darkened aether/violet so it reads on the light parchment card.
+                    techLine.style.color = new StyleColor(new Color(0.38f, 0.24f, 0.58f, 1f));
                     techLine.style.fontSize = 11;
                     techLine.style.whiteSpace = WhiteSpace.Normal;
                     costColumn.Add(techLine);
