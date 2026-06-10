@@ -1,0 +1,394 @@
+// =============================================================================
+// CastleVendorNpcInjector — runtime, NON-DESTRUCTIVE placement of a STATIC vendor
+// NPC at each of the 8 castle storefronts, wired to the existing YarnSpinner
+// structure dialogue. Mirrors VillageNpcInjector's self-bootstrap, but spawns
+// STAND-STILL NPCs (no wander / no follow) and gates to the castle hub scene.
+// -----------------------------------------------------------------------------
+// WHY a runtime injector (not a scene edit / regen):
+//   CastleHubBuilder bakes the 8 storefronts into MainCastle_Hall.unity, each
+//   with an EMPTY marker child named "NPC_<Role>_Interactable" at front-offset
+//   (0,0,6). Re-saving / regenerating that scene to drop real NPC bodies in
+//   carries the project's known scene-resave corruption risk (CLAUDE.md §3), and
+//   the markers are otherwise inert. So this self-bootstrapping DDOL singleton,
+//   on every MainCastle_Hall load, FINDS those markers and spawns a real NPC body
+//   at each — WITHOUT ever touching the .unity file. Idempotent per load.
+//
+// STATIC, not townsfolk: we reuse VillageNpcInjector's townsfolk body source
+//   (the Resources/NPCs People-pack prefabs: mesh + URP material + Animator +
+//   AmbientNPC + TownsfolkBubble), but Configure(arch, wander:FALSE, ...) — which
+//   makes AmbientNPC itself disable the NavMeshAgent and stand its ground (see
+//   AmbientNPC.Start ~line 190). No roam, no follow. The NPC just stands at the
+//   shopfront with its idle sway and faces outward toward the approaching hero.
+//
+// INTERACTION: a slim CastleNpcInteractable (same proximity F / mobile-tap pattern
+//   as BuildingInteractable) opens the ONE parameterized Yarn structure dialogue
+//   via DialogueService.PlayStructure(structureId, label). No new dialogue is
+//   invented — it's the existing StructureMenu / PetHouse node path.
+//
+// Village -> Core only; uses DialogueService + PanelManager exactly as the
+// existing village interaction code does (no reflection, no cross-asmdef ref).
+// =============================================================================
+
+using DeNelle.Core.UI;
+using UnityEngine;
+using UnityEngine.AI;
+using UnityEngine.SceneManagement;
+
+namespace DeNelle.Village
+{
+    /// <summary>Runtime, non-destructive placement of static vendor NPCs at the castle storefronts.</summary>
+    public sealed class CastleVendorNpcInjector : MonoBehaviour
+    {
+        public static CastleVendorNpcInjector Instance { get; private set; }
+
+        private const string TargetScene = "MainCastle_Hall";
+
+        // The empty interact markers CastleHubBuilder bakes under each storefront are
+        // named "NPC_<Role>_Interactable" (role = first token of the structure name).
+        private const string MarkerPrefix = "NPC_";
+        private const string MarkerSuffix = "_Interactable";
+
+        // Resources/NPCs People-pack bodies — same source VillageNpcInjector uses. We
+        // pick a body per role for a little visual variety (smith for the metal trades,
+        // merchant for the commerce stalls, peasants for the rest). All fall back to the
+        // merchant if a specific body is missing.
+        private const string BodySmith    = "NPCs/NPC_Blacksmith";
+        private const string BodyMerchant = "NPCs/NPC_Merchant";
+        private const string BodyPeasantA = "NPCs/NPC_Peasant_Mevina";
+        private const string BodyPeasantB = "NPCs/NPC_Peasant_Tob";
+
+        /// <summary>
+        /// One vendor definition keyed by the marker ROLE (the first token of the
+        /// storefront name, e.g. "Blacksmith"). StructureId is the id the Yarn
+        /// StructureMenu / DialogueCommandBridge + ResourceBuildingProgression expect.
+        /// </summary>
+        private struct Vendor
+        {
+            public string BodyRes;
+            public string StructureId;
+            public string Label;
+            public TownsfolkDialogue.Archetype Arch;
+        }
+
+        // Role -> vendor. The roles come from CastleHubBuilder's 8 structures
+        // (header ~25-27): Blacksmith, Lumbermill, Windmill, EchoHollow, Forge,
+        // ArcaneTower, Jeweler, Marketplace.
+        //
+        // structureId mapping rationale (ids verified against
+        // Buildings/Progression/ResourceBuildingProgression.cs + Resources/Portraits/*):
+        //   - REAL data + portrait exist for: farm, lumbermill, forge, market, pet-house.
+        //   - Blacksmith -> "forge"     (metal/weapon trade shares the forge data)
+        //   - Lumbermill -> "lumbermill"
+        //   - Windmill   -> "farm"      (food production == Farm's Food resource)
+        //   - EchoHollow -> "pet-house" (routes to the dedicated PetHouse Yarn node)
+        //   - Forge      -> "forge"
+        //   - ArcaneTower-> "arcane-tower" (no progression def yet; StructureMenu still
+        //                                   opens gracefully — no yield/portrait, talk works)
+        //   - Jeweler    -> "market"    (commerce; gems are a market good for now)
+        //   - Marketplace-> "market"
+        // The "no def" ids (arcane-tower) are SAFE: CmdStructureStatus tolerates a null
+        // Find() and a missing Portraits/<id> image, so the menu still shows + the Talk
+        // path runs. See "Uncertainty" in the work-order report.
+        private static Vendor VendorFor(string role)
+        {
+            switch (role.ToLowerInvariant())
+            {
+                case "blacksmith":
+                    return new Vendor { BodyRes = BodySmith,    StructureId = "forge",        Label = "Blacksmith", Arch = TownsfolkDialogue.Archetype.Blacksmith };
+                case "lumbermill":
+                    return new Vendor { BodyRes = BodyPeasantB, StructureId = "lumbermill",   Label = "Lumbermill", Arch = TownsfolkDialogue.Archetype.Villager };
+                case "windmill":
+                    return new Vendor { BodyRes = BodyPeasantA, StructureId = "farm",         Label = "Windmill",   Arch = TownsfolkDialogue.Archetype.Villager };
+                case "echohollow":
+                    return new Vendor { BodyRes = BodyPeasantA, StructureId = "pet-house",    Label = "Echo Hollow", Arch = TownsfolkDialogue.Archetype.Villager };
+                case "forge":
+                    return new Vendor { BodyRes = BodySmith,    StructureId = "forge",        Label = "Forge",      Arch = TownsfolkDialogue.Archetype.Blacksmith };
+                case "arcanetower":
+                    return new Vendor { BodyRes = BodyPeasantB, StructureId = "arcane-tower", Label = "Arcane Tower", Arch = TownsfolkDialogue.Archetype.Elder };
+                case "jeweler":
+                    return new Vendor { BodyRes = BodyMerchant, StructureId = "market",       Label = "Jeweler",    Arch = TownsfolkDialogue.Archetype.Quartermaster };
+                case "marketplace":
+                    return new Vendor { BodyRes = BodyMerchant, StructureId = "market",       Label = "Marketplace", Arch = TownsfolkDialogue.Archetype.Quartermaster };
+            }
+            // Unknown role -> generic merchant talking to the market. Never silently skip,
+            // so a future storefront still gets a working NPC.
+            return new Vendor { BodyRes = BodyMerchant, StructureId = "market", Label = role, Arch = TownsfolkDialogue.Archetype.Quartermaster };
+        }
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        private static void Bootstrap()
+        {
+            if (Instance != null) return;
+            new GameObject("CastleVendorNpcInjector").AddComponent<CastleVendorNpcInjector>();
+        }
+
+        private void Awake()
+        {
+            if (Instance != null && Instance != this) { Destroy(gameObject); return; }
+            Instance = this;
+            DontDestroyOnLoad(gameObject);
+
+            SceneManager.sceneLoaded -= OnSceneLoaded;
+            SceneManager.sceneLoaded += OnSceneLoaded;
+            if (SceneManager.GetActiveScene().name == TargetScene) Inject();
+        }
+
+        private void OnDestroy()
+        {
+            if (Instance == this) Instance = null;
+            SceneManager.sceneLoaded -= OnSceneLoaded;
+        }
+
+        private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+        {
+            if (scene.name == TargetScene) Inject();
+        }
+
+        // Holder so re-injection (idempotent) is trivial: clear the prior holder, respawn.
+        private const string HolderName = "CastleVendorNPCs (runtime)";
+
+        private void Inject()
+        {
+            // Idempotent: nuke any prior runtime holder so a re-load doesn't double-spawn.
+            var prior = GameObject.Find(HolderName);
+            if (prior != null) Destroy(prior);
+
+            var holder = new GameObject(HolderName);
+            Transform hero = ResolveHero();
+
+            // Collect the storefront interact markers by name (prefix + suffix). They are
+            // empty children CastleHubBuilder placed at the front of each building.
+            var all = FindObjectsByType<Transform>(FindObjectsSortMode.None);
+            int placed = 0;
+            foreach (var t in all)
+            {
+                if (t == null) continue;
+                string n = t.name;
+                if (!n.StartsWith(MarkerPrefix) || !n.EndsWith(MarkerSuffix)) continue;
+
+                // role = the bit between "NPC_" and "_Interactable" (e.g. "Blacksmith").
+                string role = n.Substring(MarkerPrefix.Length, n.Length - MarkerPrefix.Length - MarkerSuffix.Length);
+                if (string.IsNullOrEmpty(role)) continue;
+
+                if (SpawnVendor(t, role, hero, holder.transform)) placed++;
+            }
+
+            Debug.Log($"[CastleVendorNpcInjector] placed {placed} static vendor NPCs at castle storefronts.");
+        }
+
+        /// <summary>Spawns ONE static NPC at the marker and attaches the interaction.</summary>
+        private bool SpawnVendor(Transform marker, string role, Transform hero, Transform parent)
+        {
+            Vendor v = VendorFor(role);
+
+            var prefab = Resources.Load<GameObject>(v.BodyRes)
+                         ?? Resources.Load<GameObject>(BodyMerchant);
+            if (prefab == null)
+            {
+                Debug.LogWarning($"[CastleVendorNpcInjector] no body prefab for role '{role}' (missing Resources/{v.BodyRes}) — placeholder used.");
+                return SpawnPlaceholder(marker, role, v, hero, parent);
+            }
+
+            // Snap the marker world position onto the baked NavMesh if it's cheap/near, so
+            // the body stands on walkable ground (it never moves, so this is just placement).
+            Vector3 pos = marker.position;
+            if (NavMesh.SamplePosition(pos, out var hit, 4f, NavMesh.AllAreas))
+                pos = hit.position;
+
+            // Face OUTWARD — toward the courtyard / approaching hero. The marker's forward
+            // (+Z local of the building front offset) already points away from the building.
+            Quaternion rot = marker.rotation;
+
+            var go = Instantiate(prefab, pos, rot, parent);
+            go.name = $"CastleVendor_{role}";
+
+            NormalizeToHeroHeight(go);
+
+            // STATIC: Configure with wander=FALSE. AmbientNPC.Start then disables its
+            // NavMeshAgent and the NPC stands its ground (idle sway only — no roam/follow).
+            var npc = go.GetComponent<AmbientNPC>();
+            if (npc != null)
+            {
+                npc.Configure(v.Arch, /*wander*/ false, pos);
+                // Do NOT hand it the hero: with no hero the townsfolk proximity-chatter
+                // bubble stays quiet, so it never competes with the structure dialogue our
+                // CastleNpcInteractable opens. (The idle visual + animator still run.)
+            }
+            // Belt-and-braces: if a NavMeshAgent slips through (e.g. AmbientNPC missing),
+            // make sure nothing tries to move the body.
+            var agent = go.GetComponent<NavMeshAgent>();
+            if (agent != null) { agent.enabled = false; }
+
+            AttachInteraction(go, v, hero);
+            return true;
+        }
+
+        // Minimal capsule fallback if the People-pack body is absent (Models gitignored on
+        // a fresh clone). Getting the INTERACTION working is the priority. // TODO real NPC art
+        private bool SpawnPlaceholder(Transform marker, string role, Vendor v, Transform hero, Transform parent)
+        {
+            var go = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            go.name = $"CastleVendor_{role}_Placeholder";
+            go.transform.SetParent(parent, false);
+
+            Vector3 pos = marker.position;
+            if (NavMesh.SamplePosition(pos, out var hit, 4f, NavMesh.AllAreas)) pos = hit.position;
+            go.transform.position = pos + Vector3.up * 1f;
+            go.transform.rotation = marker.rotation;
+
+            // The capsule's collider would block the hero; the interaction is proximity-based,
+            // so make it non-blocking.
+            var col = go.GetComponent<Collider>();
+            if (col != null) col.isTrigger = true;
+
+            AttachInteraction(go, v, hero);
+            return true;
+        }
+
+        private void AttachInteraction(GameObject body, Vendor v, Transform hero)
+        {
+            var interact = body.AddComponent<CastleNpcInteractable>();
+            interact.Configure(v.StructureId, v.Label, hero);
+        }
+
+        // Reuse VillageNpcInjector's height normalization so the People-pack bodies sit at
+        // ~hero height instead of towering (the packs import at varying native scales).
+        private static void NormalizeToHeroHeight(GameObject go)
+        {
+            float npcScale = 1f;
+            var rends = go.GetComponentsInChildren<Renderer>();
+            if (rends.Length > 0)
+            {
+                Bounds b = rends[0].bounds;
+                for (int i = 1; i < rends.Length; i++) b.Encapsulate(rends[i].bounds);
+                if (b.size.y > 0.01f) npcScale = 1.95f / b.size.y;   // ~hero height (1.8) + a touch
+            }
+            if (npcScale > 0.01f && !Mathf.Approximately(npcScale, 1f))
+            {
+                go.transform.localScale *= npcScale;
+                // Keep any speech bubble at real world size on the rescaled body.
+                var bubbleRoot = go.transform.Find("BubbleRoot");
+                if (bubbleRoot != null) bubbleRoot.localScale = Vector3.one / Mathf.Max(0.01f, npcScale);
+            }
+        }
+
+        // Name-based hero lookup (matches AmbientNPC / VillageNpcInjector): the hero rig is
+        // named "Hero (...)"; the project also tags it "Player".
+        private static Transform ResolveHero()
+        {
+            var tagged = GameObject.FindWithTag("Player");
+            if (tagged != null) return tagged.transform;
+            foreach (var t in FindObjectsByType<Transform>(FindObjectsSortMode.None))
+                if (t != null && t.name.StartsWith("Hero")) return t;
+            return null;
+        }
+    }
+
+    // =========================================================================
+    // CastleNpcInteractable — slim proximity [F] / mobile-tap interaction that
+    // opens the parameterized Yarn structure dialogue for ONE vendor. Mirrors
+    // BuildingInteractable's pattern (ActivateRadius ~6m, registers the shared
+    // MobileInteractButton, only the NEAREST in-range acts on the global F key,
+    // suppressed while a dialogue / modal panel is open) but is keyed by an explicit
+    // structureId instead of a Building component — the castle NPCs have no Building.
+    // =========================================================================
+    [DisallowMultipleComponent]
+    public sealed class CastleNpcInteractable : MonoBehaviour
+    {
+        private const float ActivateRadius = 6f;
+        private const float StructureCloseRadius = ActivateRadius + 4f;
+
+        private string _structureId;
+        private string _label;
+        private Transform _hero;
+        private bool _openedStructure;
+
+        public void Configure(string structureId, string label, Transform hero)
+        {
+            _structureId = structureId;
+            _label = label;
+            _hero = hero;
+        }
+
+        private void Update()
+        {
+            if (_hero == null) { ResolveHero(); return; }
+
+            // Build mode: release + bail (player is authoring, not interacting).
+            if (MobileInteractButton.Suppressed)
+            {
+                MobileInteractButton.Release(this);
+                return;
+            }
+
+            float distSqr = (_hero.position - transform.position).sqrMagnitude;
+            bool inRange = distSqr <= ActivateRadius * ActivateRadius;
+
+            // Walk-away auto-close: if WE opened the structure dialogue and the hero left.
+            if (_openedStructure)
+            {
+                if (!DialogueService.IsRunning) _openedStructure = false;
+                else if (distSqr > StructureCloseRadius * StructureCloseRadius)
+                {
+                    DialogueService.Stop();
+                    _openedStructure = false;
+                }
+            }
+
+            // While any dialogue is on screen, drop our prompt so it doesn't stack under it.
+            if (DialogueService.IsRunning)
+            {
+                MobileInteractButton.Release(this);
+                return;
+            }
+
+            if (inRange)
+                MobileInteractButton.Request(this, "Talk: " + _label, Interact);
+            else
+                MobileInteractButton.Release(this);
+
+            // Desktop [F]: only the NEAREST in-range NPC acts, and only when no modal is open.
+            if (inRange && !PanelManager.AnyOpen && Input.GetKeyDown(KeyCode.F) && IsNearestInRange())
+                Interact();
+        }
+
+        private void Interact()
+        {
+            if (string.IsNullOrEmpty(_structureId)) return;
+            if (DialogueService.PlayStructure(_structureId, _label))
+            {
+                _openedStructure = true;
+                Debug.Log($"[CastleNpcInteractable] {_label} -> structure dialogue '{_structureId}'.");
+            }
+        }
+
+        /// <summary>True when this NPC is the closest in-range CastleNpcInteractable (shared-F arbitration).</summary>
+        private bool IsNearestInRange()
+        {
+            if (_hero == null) return false;
+            float myDistSqr = (_hero.position - transform.position).sqrMagnitude;
+            foreach (var other in FindObjectsByType<CastleNpcInteractable>(
+                         FindObjectsInactive.Exclude, FindObjectsSortMode.None))
+            {
+                if (other == null || other == this) continue;
+                float otherDistSqr = (_hero.position - other.transform.position).sqrMagnitude;
+                if (otherDistSqr > ActivateRadius * ActivateRadius) continue;
+                if (otherDistSqr < myDistSqr) return false;
+            }
+            return true;
+        }
+
+        private void ResolveHero()
+        {
+            var tagged = GameObject.FindWithTag("Player");
+            if (tagged != null) { _hero = tagged.transform; return; }
+            var loco = FindObjectOfType<HeroLocomotion>();
+            if (loco != null) _hero = loco.transform;
+        }
+
+        private void OnDisable()
+        {
+            MobileInteractButton.Release(this);
+        }
+    }
+}

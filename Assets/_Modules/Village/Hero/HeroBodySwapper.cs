@@ -194,6 +194,20 @@ namespace DeNelle.Village
             // Rebind reconnects bone references after the FBX instantiate finishes,
             // else the new mesh T-poses for ~10 frames after a swap.
             anim.Rebind();
+
+            // EquipmentController — activates the real KayKit weapon-mesh equip on the
+            // swapped hero. It lives on the hero ROOT (same object as GearLoadout): its
+            // CacheRig() finds the Animator via transform.Find("HeroBody") (the body we
+            // just swapped/rebound), and Awake/OnEnable resolve GearLoadout via
+            // GetComponent<GearLoadout>() — BOTH only resolve from the root. Ensure the
+            // GearLoadout exists FIRST (lazy-add, same idiom as line ~274 below) so the
+            // controller's OnEnable reads a live loadout and equips on enable. Guard so a
+            // re-run never double-adds ([DisallowMultipleComponent] would also reject it).
+            var equipLoadout = GetComponent<GearLoadout>() ?? gameObject.AddComponent<GearLoadout>();
+            equipLoadout.Refresh();
+            if (GetComponent<EquipmentController>() == null)
+                gameObject.AddComponent<EquipmentController>();
+
             if (controller != null)
             {
                 bool hasSpeedParam = false;
