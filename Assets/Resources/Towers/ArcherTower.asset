@@ -14,6 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: DeNelle.Core::DeNelle.Core.Data.TowerData
   towerName: Archer Tower
   cost: 150
+  targets: 2
   requiredSkill:
     type: 0
     minLevel: 0

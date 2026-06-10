@@ -14,6 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: DeNelle.Core::DeNelle.Core.Data.TowerData
   towerName: Frost Tower
   cost: 200
+  targets: 0
   requiredSkill:
     type: 1
     minLevel: 1
