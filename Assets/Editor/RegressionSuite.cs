@@ -95,11 +95,15 @@ namespace DeNelle.Editor
         private const string TypeWaveManager    = "DeNelle.Village.WaveManager";
         private const string TypeEconomyService = "DeNelle.Village.EconomyService";
 
-        // WO-363 — the hero movement source must stay WORLD-ABSOLUTE (WO-368). A
-        // regression to camera-relative input (WO-367) broke town movement: a camera
-        // mode/angle change re-rotated the input mapping. We STATIC-check the source
-        // (batchmode has no play-mode) for the camera-coupling tokens in the movement
-        // path + assert facing still uses LookRotation on the move/velocity.
+        // WO-387 (supersedes the WO-368 world-absolute premise) — hero movement is
+        // INTENTIONALLY camera-relative in 3rd-person follow and world-absolute in
+        // top-down, owner-validated "much better". The single yaw authority is
+        // SmartMobileCamera.CameraYaw (=> _orbitBehind ? _panYaw : 0f): a pure
+        // player-pan value that returns 0 in top-down/legacy, so a camera mode/angle
+        // change can never spiral the input (the WO-367/368 fear). HeroLocomotion
+        // builds its move as Quaternion.Euler(0, CameraYaw, 0) * (input.x,0,input.y).
+        // We STATIC-check the source (batchmode has no play-mode) that this WO-387
+        // basis is intact + facing still uses LookRotation on the move/velocity.
         private const string HeroLocomotionPath =
             "Assets/_Modules/Village/Hero/HeroLocomotion.cs";
 
@@ -159,15 +163,15 @@ namespace DeNelle.Editor
             Run(results, "layout-validator",         Case_LayoutValidator);
 
             // ── WO-373 / WO-363 CRITICAL hard-gate cases (ship-blockers) ─────────
-            Run(results, "hero-move-world-absolute", Case_HeroMoveWorldAbsolute);
+            Run(results, "hero-move-camera-relative", Case_HeroMoveCameraRelative);
             Run(results, "dialogue-system-prefab",   Case_DialogueSystemPrefab);
             Run(results, "battle-music-resolves",    Case_BattleMusicResolves);
 
             // ── WO-373 Critical Regression Gates (4 pre-ship hard gates) ─────────
-            Run(results, "critical-gate-tree-origin",       Case_GateTreeOrigin);
-            Run(results, "critical-gate-wasd-world-abs",    Case_GateWasdWorldAbsolute);
-            Run(results, "critical-gate-scene-no-errors",   Case_GateSceneLoadsClean);
-            Run(results, "critical-gate-cam-not-relative",  Case_GateCameraNeverRelative);
+            Run(results, "critical-gate-tree-origin",        Case_GateTreeOrigin);
+            Run(results, "critical-gate-wasd-cam-relative",  Case_GateWasdCameraRelative);
+            Run(results, "critical-gate-scene-no-errors",    Case_GateSceneLoadsClean);
+            Run(results, "critical-gate-cam-yaw-authority",  Case_GateCameraYawIsAuthority);
 
             // ── Report ──────────────────────────────────────────────────────────
             int passed = results.Count(r => r.Pass);
@@ -431,54 +435,68 @@ namespace DeNelle.Editor
                 : Fail("LAYOUT_VALIDATE_FAIL — see [LayoutValidator] FAIL lines above");
         }
 
-        // ── WO-363: hero movement stays WORLD-ABSOLUTE (no camera coupling) ────
-        // STATIC source check (batchmode has no play-mode): read HeroLocomotion.cs
-        // and FAIL if the movement path couples input to the camera basis — i.e.
-        // references SmartMobileCamera / CameraYaw / a camera forward|right used in
-        // the move vector. The WO-368 contract: UP=+Z, RIGHT=+X, independent of the
-        // camera, so a camera mode/angle change can never re-rotate input (the WO-367
-        // regression). Also assert facing still uses LookRotation on velocity/move so
-        // a refactor that drops the face-the-direction line is caught too.
-        private static CaseResult Case_HeroMoveWorldAbsolute()
+        // ── WO-387: hero movement is CAMERA-RELATIVE via the CameraYaw authority ──
+        // STATIC source check (batchmode has no play-mode): read HeroLocomotion.cs and
+        // assert the WO-387 intended design (owner-validated "much better"):
+        //   (a) the move basis is rotated by SmartMobileCamera.CameraYaw — i.e.
+        //       Quaternion.Euler(0, yaw|CameraYaw, 0) * new Vector3(input.x,0,input.y);
+        //   (b) facing is still derived from the move/velocity via LookRotation.
+        // NOTE (WO-387 supersedes WO-368): camera-relative here is CORRECT, not a
+        // regression. The old WO-367 "spiral" fear is defused because CameraYaw is a
+        // pure pan value that returns 0 in top-down — so a camera mode change degrades
+        // input to world-absolute rather than re-rotating it. Camera-basis tokens are
+        // therefore EXPECTED in the movement path and must NOT be flagged. We DO still
+        // guard against a velocity-derived yaw feeding back (that WOULD spiral): a
+        // direct camera.forward / camera.right basis instead of the CameraYaw value.
+        private static CaseResult Case_HeroMoveCameraRelative()
         {
             if (!File.Exists(HeroLocomotionPath)) return Fail($"missing {HeroLocomotionPath}");
 
-            // Strip // line comments + /* */ block comments so the doc-comments that
-            // legitimately MENTION the regression (e.g. "WO-367 made this camera-relative")
-            // don't trip the scan — we only care about live code coupling.
+            // Strip // line comments + /* */ block comments so doc-comments don't trip
+            // the scan — we only assert against live code.
             string code = StripComments(File.ReadAllText(HeroLocomotionPath));
 
-            var hits = new List<string>();
-            // Hard camera-coupling tokens: any of these in live code means the
-            // movement basis is (or can be) camera-derived again.
-            foreach (var token in new[] { "SmartMobileCamera", "CameraYaw", "cameraYaw" })
-                if (code.IndexOf(token, StringComparison.Ordinal) >= 0)
-                    hits.Add(token);
+            // (a) The WO-387 camera-relative basis must be present: CameraYaw is read,
+            //     a yaw-only Euler rotation is built from it, and that rotation is applied
+            //     to the input vector (the rotation may flow via an intermediate var, so
+            //     the two halves are matched independently rather than as one expression).
+            bool readsCameraYaw =
+                code.IndexOf("CameraYaw", StringComparison.Ordinal) >= 0;
+            bool buildsYawEuler =
+                System.Text.RegularExpressions.Regex.IsMatch(
+                    code, @"Quaternion\.Euler\s*\(\s*0f?\s*,\s*\w*[Yy]aw\w*\s*,\s*0f?\s*\)");
+            bool rotatesInputVector =
+                System.Text.RegularExpressions.Regex.IsMatch(
+                    code, @"\*\s*new\s+Vector3\s*\(\s*input");
+            if (!readsCameraYaw || !buildsYawEuler || !rotatesInputVector)
+                return Fail("HeroLocomotion no longer uses the WO-387 camera-relative basis " +
+                            "(Quaternion.Euler(0, CameraYaw, 0) * new Vector3(input.x,0,input.y)) — " +
+                            $"readsCameraYaw={readsCameraYaw}, buildsYawEuler={buildsYawEuler}, " +
+                            $"rotatesInputVector={rotatesInputVector}. " +
+                            "WO-387 (owner-validated) wants camera-relative in follow / world-absolute in top-down.");
 
-            // camera.forward / camera.right (or *Camera.forward etc.) used as a basis.
+            // Guard against a velocity-derived basis (camera.forward/right) which WOULD
+            // spiral — the WO-387 design uses the pan-only CameraYaw value, never these.
+            var spiralHits = new List<string>();
             foreach (var m in System.Text.RegularExpressions.Regex.Matches(
                          code, @"[A-Za-z_][A-Za-z0-9_]*\.(forward|right)\b")
                      .Cast<System.Text.RegularExpressions.Match>())
-            {
-                string lhs = m.Value;
-                if (lhs.IndexOf("amera", StringComparison.Ordinal) >= 0) // camera./Camera.
-                    hits.Add(lhs);
-            }
+                if (m.Value.IndexOf("amera", StringComparison.Ordinal) >= 0) // camera./Camera.
+                    spiralHits.Add(m.Value);
+            if (spiralHits.Count > 0)
+                return Fail("HeroLocomotion uses a camera.forward/right basis (velocity-coupled, can spiral) — " +
+                            "WO-387 routes movement through the pan-only CameraYaw value, not camera vectors. " +
+                            "Offending token(s): " + string.Join(", ", spiralHits.Distinct()));
 
-            if (hits.Count > 0)
-                return Fail("HeroLocomotion movement is CAMERA-RELATIVE again (WO-367 regression) — " +
-                            "must be world-absolute new Vector3(input.x,0,input.y) per WO-368. " +
-                            "Offending token(s): " + string.Join(", ", hits.Distinct()));
-
-            // Facing must still be derived from the move/velocity via LookRotation.
+            // (b) Facing must still be derived from the move/velocity via LookRotation.
             bool facesMoveDir =
                 System.Text.RegularExpressions.Regex.IsMatch(
                     code, @"LookRotation\s*\(\s*(Velocity|move|_?velocity)");
             if (!facesMoveDir)
                 return Fail("HeroLocomotion no longer faces the move direction via " +
-                            "Quaternion.LookRotation(Velocity/move...) — facing contract dropped (WO-363).");
+                            "Quaternion.LookRotation(Velocity/move...) — facing contract dropped (WO-363/387).");
 
-            return Pass("movement world-absolute (no camera basis) + faces velocity via LookRotation");
+            return Pass("movement camera-relative via CameraYaw (WO-387) + faces velocity via LookRotation");
         }
 
         // =====================================================================
@@ -487,12 +505,15 @@ namespace DeNelle.Editor
         //  A focused pre-ship verification harness, expressed as 4 independent
         //  cases so a failing run names exactly which ship-blocker broke:
         //    (1) Tree of Life / Heart sits at world (0,0,0).
-        //    (2) WASD player movement works AND is WORLD-ABSOLUTE (not camera-rel),
-        //        re-using the WO-363 OrientationValidator for the facing check.
+        //    (2) WASD player movement works AND uses the WO-387 camera-relative basis
+        //        (Quaternion.Euler(0, CameraYaw, 0) * input), facing the move dir;
+        //        cross-checked against the WO-363 OrientationValidator.
         //    (3) The playable scene loads with no missing scripts / red errors and
         //        a Player/HeroTarget-tagged hero is present (visible).
-        //    (4) A camera mode/angle change can NEVER make movement camera-relative
-        //        (the movement basis is independent of SmartMobileCamera).
+        //    (4) SmartMobileCamera.CameraYaw is the SINGLE yaw authority for the
+        //        movement basis (WO-387) — and because CameraYaw is pan-driven and
+        //        returns 0 in top-down, a camera mode change degrades input to
+        //        world-absolute instead of spiralling it (the WO-367/368 fear).
         //  Static/source + scene-open checks (batchmode has no play-mode); the live
         //  felt loop stays the play-mode follow-up layer (see file footer).
         //
@@ -512,9 +533,9 @@ namespace DeNelle.Editor
             var gates = new (string name, Func<CaseResult> body)[]
             {
                 ("tree-of-life-origin",       Case_GateTreeOrigin),
-                ("wasd-world-absolute",       Case_GateWasdWorldAbsolute),
+                ("wasd-camera-relative",      Case_GateWasdCameraRelative),
                 ("scene-loads-clean",         Case_GateSceneLoadsClean),
-                ("camera-never-relative",     Case_GateCameraNeverRelative),
+                ("camera-yaw-is-authority",   Case_GateCameraYawIsAuthority),
             };
 
             var results = new List<CaseResult>();
@@ -572,14 +593,16 @@ namespace DeNelle.Editor
             return true;
         }
 
-        // ── Gate 2: WASD movement works AND is world-absolute ──────────────────
+        // ── Gate 2: WASD movement works AND uses the WO-387 camera-relative basis ──
         // Source-checks HeroLocomotion: it must (a) read WASD keys, (b) build the
-        // move vector world-absolute (no camera basis — shares the existing
-        // Case_HeroMoveWorldAbsolute scan), and (c) face the move direction. The
-        // facing contract is cross-checked against the WO-363 OrientationValidator:
-        // a synthetic UP input must validate against an UP facing (proves the shared
-        // rule the runtime guard enforces agrees with "faces movement").
-        private static CaseResult Case_GateWasdWorldAbsolute()
+        // move vector via the WO-387 camera-relative basis (CameraYaw fed through a
+        // yaw-only Euler onto the input vector — shares the Case_HeroMoveCameraRelative
+        // intent), and (c) face the move direction. The facing contract is cross-checked
+        // against the WO-363 OrientationValidator: a synthetic UP input must validate
+        // against an UP facing (proves the shared rule the runtime guard enforces agrees
+        // with "faces movement"). NOTE: WO-387 supersedes the old WO-368 world-absolute
+        // assertion — camera-relative is the owner-validated intended behaviour.
+        private static CaseResult Case_GateWasdCameraRelative()
         {
             if (!File.Exists(HeroLocomotionPath)) return Fail($"missing {HeroLocomotionPath}");
             string code = StripComments(File.ReadAllText(HeroLocomotionPath));
@@ -593,17 +616,31 @@ namespace DeNelle.Editor
             if (!readsWasd)
                 return Fail("HeroLocomotion no longer reads WASD (wKey/aKey/sKey/dKey) — movement input gone");
 
-            // (b) world-absolute basis (reuse the camera-coupling scan).
-            var camHits = new List<string>();
-            foreach (var token in new[] { "SmartMobileCamera", "CameraYaw", "cameraYaw" })
-                if (code.IndexOf(token, StringComparison.Ordinal) >= 0) camHits.Add(token);
+            // (b) WO-387 camera-relative basis present: CameraYaw read, a yaw-only Euler
+            //     built from it, and that rotation applied to the input vector (halves
+            //     matched independently — the rotation may flow via an intermediate var).
+            bool readsCameraYaw = code.IndexOf("CameraYaw", StringComparison.Ordinal) >= 0;
+            bool buildsYawEuler =
+                System.Text.RegularExpressions.Regex.IsMatch(
+                    code, @"Quaternion\.Euler\s*\(\s*0f?\s*,\s*\w*[Yy]aw\w*\s*,\s*0f?\s*\)");
+            bool rotatesInputVector =
+                System.Text.RegularExpressions.Regex.IsMatch(
+                    code, @"\*\s*new\s+Vector3\s*\(\s*input");
+            if (!readsCameraYaw || !buildsYawEuler || !rotatesInputVector)
+                return Fail("WASD movement no longer uses the WO-387 camera-relative basis " +
+                            "(Quaternion.Euler(0, CameraYaw, 0) * new Vector3(input...)): " +
+                            $"readsCameraYaw={readsCameraYaw}, buildsYawEuler={buildsYawEuler}, " +
+                            $"rotatesInputVector={rotatesInputVector}");
+
+            // Guard the velocity-coupled basis (camera.forward/right) that WOULD spiral.
+            var spiralHits = new List<string>();
             foreach (var m in System.Text.RegularExpressions.Regex.Matches(
                          code, @"[A-Za-z_][A-Za-z0-9_]*\.(forward|right)\b")
                      .Cast<System.Text.RegularExpressions.Match>())
-                if (m.Value.IndexOf("amera", StringComparison.Ordinal) >= 0) camHits.Add(m.Value);
-            if (camHits.Count > 0)
-                return Fail("WASD movement is CAMERA-RELATIVE (WO-367 regression): " +
-                            string.Join(", ", camHits.Distinct()) + " — must be world-absolute");
+                if (m.Value.IndexOf("amera", StringComparison.Ordinal) >= 0) spiralHits.Add(m.Value);
+            if (spiralHits.Count > 0)
+                return Fail("WASD movement uses a camera.forward/right basis (velocity-coupled, can spiral): " +
+                            string.Join(", ", spiralHits.Distinct()) + " — WO-387 uses the pan-only CameraYaw value");
 
             // (c) faces the move direction.
             bool facesMove = System.Text.RegularExpressions.Regex.IsMatch(
@@ -618,7 +655,7 @@ namespace DeNelle.Editor
             if (DeNelle.Core.Validation.OrientationValidator.IsValid(Vector3.back, Vector3.forward))
                 return Fail("OrientationValidator wrongly accepts facing DOWN while moving UP (WO-363 rule broken)");
 
-            return Pass("WASD read, world-absolute basis (no camera), faces velocity; WO-363 validator agrees");
+            return Pass("WASD read, WO-387 camera-relative basis (via CameraYaw), faces velocity; WO-363 validator agrees");
         }
 
         // ── Gate 3: scene loads clean (no missing scripts) + hero present ──────
@@ -650,29 +687,42 @@ namespace DeNelle.Editor
             return Pass("scene opens with 0 missing scripts + a Player/HeroTarget hero present");
         }
 
-        // ── Gate 4: a camera change can NEVER make movement camera-relative ────
-        // The movement basis must be independent of the camera. Static contract:
-        // HeroLocomotion's source contains no camera-basis coupling AT ALL (so no
-        // camera mode/angle/distance change can re-rotate input). This is the dual
-        // of gate 2(b) but framed as the camera-invariance guarantee; it also fails
-        // if SmartMobileCamera ever WRITES back into the locomotion input frame.
-        private static CaseResult Case_GateCameraNeverRelative()
+        // ── Gate 4: SmartMobileCamera.CameraYaw is the SINGLE yaw authority ────
+        // WO-387 routes the camera-relative movement basis through ONE value:
+        // SmartMobileCamera.CameraYaw (a pure player-pan yaw that returns 0 in
+        // top-down). This gate guarantees that contract instead of the retired
+        // "no camera coupling at all" rule (WO-368), which false-failed the
+        // owner-validated WO-387 design. We assert:
+        //   (a) HeroLocomotion drives its basis off CameraYaw (the named authority);
+        //   (b) it does NOT use a velocity-coupled camera basis (camera.forward/right
+        //       or Camera.main/current) that would spiral — those are the real
+        //       regression, NOT the CameraYaw reference.
+        // Because CameraYaw is pan-only and 0 in top-down, a camera mode/angle change
+        // degrades input to world-absolute rather than re-rotating it (WO-367 fear defused).
+        private static CaseResult Case_GateCameraYawIsAuthority()
         {
             if (!File.Exists(HeroLocomotionPath)) return Fail($"missing {HeroLocomotionPath}");
             string code = StripComments(File.ReadAllText(HeroLocomotionPath));
 
-            var hits = new List<string>();
-            foreach (var token in new[] { "SmartMobileCamera", "CameraYaw", "cameraYaw", "Camera.main", "Camera.current" })
-                if (code.IndexOf(token, StringComparison.Ordinal) >= 0) hits.Add(token);
+            // (a) the named yaw authority must be read.
+            if (code.IndexOf("CameraYaw", StringComparison.Ordinal) < 0)
+                return Fail("HeroLocomotion no longer reads SmartMobileCamera.CameraYaw — " +
+                            "the WO-387 single yaw authority for the camera-relative basis is gone");
+
+            // (b) the spiral-prone velocity-coupled bases must be absent.
+            var spiralHits = new List<string>();
+            foreach (var token in new[] { "Camera.main", "Camera.current" })
+                if (code.IndexOf(token, StringComparison.Ordinal) >= 0) spiralHits.Add(token);
             foreach (var m in System.Text.RegularExpressions.Regex.Matches(
                          code, @"[A-Za-z_][A-Za-z0-9_]*\.(forward|right)\b")
                      .Cast<System.Text.RegularExpressions.Match>())
-                if (m.Value.IndexOf("amera", StringComparison.Ordinal) >= 0) hits.Add(m.Value);
+                if (m.Value.IndexOf("amera", StringComparison.Ordinal) >= 0) spiralHits.Add(m.Value);
 
-            return hits.Count == 0
-                ? Pass("movement basis is camera-invariant — no camera coupling in HeroLocomotion")
-                : Fail("a camera reference is present in the movement path — a camera change could make " +
-                       "movement camera-relative: " + string.Join(", ", hits.Distinct()));
+            return spiralHits.Count == 0
+                ? Pass("movement basis routed through the pan-only CameraYaw authority (WO-387) — " +
+                       "no velocity-coupled camera basis, so a camera change degrades to world-absolute")
+                : Fail("a velocity-coupled camera basis is present (would spiral on a camera change): " +
+                       string.Join(", ", spiralHits.Distinct()) + " — WO-387 routes through CameraYaw only");
         }
 
         // ── WO-373: the Yarn DialogueSystem prefab exists (interaction layer) ──

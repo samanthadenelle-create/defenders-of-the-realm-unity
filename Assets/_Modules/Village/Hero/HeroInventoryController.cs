@@ -61,22 +61,42 @@ namespace DeNelle.Village
 
         private GearLoadout _loadout;     // the live hero's gear model (drives the hero)
 
-        // ── Sleek palette (mirrors ArenaPanel — rebuilt from ElarionUi, no HUD ref) ──
-        // Layered "depth" tones: a deep stone backboard, warm glass panels, recessed
-        // wells, and rarity-driven tints. All sourced from ElarionUi so the screen
-        // reads as ONE designed game (parchment / stone / gold / aether-violet).
-        private static readonly Color Glass      = new Color(0.06f, 0.07f, 0.09f, 0.66f);
-        private static readonly Color GlassDeep  = new Color(0.04f, 0.05f, 0.07f, 0.82f);
-        private static readonly Color Track      = new Color(0.0f,  0.0f,  0.0f,  0.45f);
-        private static readonly Color Cell       = new Color(0.10f, 0.11f, 0.14f, 0.86f);
-        private static readonly Color CellSel     = new Color(0.16f, 0.18f, 0.24f, 0.95f);
-        private static readonly Color AccentSoft  = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.30f);
-        private static readonly Color Accent      = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.85f);
-        // Warm stone backboard behind the paper-doll, so the hero sits in a "niche".
-        private static readonly Color StoneBack   = new Color(0.115f, 0.094f, 0.074f, 0.92f);
-        private static readonly Color StoneNiche  = new Color(0.075f, 0.060f, 0.048f, 0.96f);
-        // Aether tints for the magic / selection language.
-        private static readonly Color AetherSoft  = new Color(ElarionUi.Aether.r, ElarionUi.Aether.g, ElarionUi.Aether.b, 0.30f);
+        // ── LIGHT PARCHMENT palette (north-star: warm-parchment, airy, calm) ──────
+        // SELF-CONTAINED to the inventory (do NOT change the global ElarionUi/Kit
+        // palette — that's a separate pass). This is a TONE INVERSION of the old
+        // dark-glass kit look: light warm-parchment fills, DARK INK text (readable
+        // on light), THIN gilt frames, subtle runic accents. The role names are kept
+        // (Glass/GlassDeep/Cell/etc.) so the layout code below is untouched — only
+        // the VALUES flip dark->light. ALL text colour now routes through the local
+        // Ink* tones (see below) so nothing stays cream-on-light (unreadable).
+        //
+        // Panel fills — warm parchment, lightly translucent so the scrim warms it.
+        private static readonly Color Glass      = new Color(0.929f, 0.902f, 0.839f, 0.97f);  // ~#EDE6D6 parchment
+        private static readonly Color GlassDeep  = new Color(0.965f, 0.945f, 0.890f, 0.985f); // brighter paper (panels/sidebar)
+        // Recessed wells / tracks — a faint warm shadow, NOT black, so it stays light.
+        private static readonly Color Track      = new Color(0.788f, 0.741f, 0.643f, 0.55f);  // soft tan recess
+        // Item cells — clean light paper; selected = a warm gilt-tinted paper.
+        private static readonly Color Cell       = new Color(0.957f, 0.933f, 0.875f, 1f);     // light cell paper
+        private static readonly Color CellSel    = new Color(0.965f, 0.886f, 0.690f, 1f);     // warm gilt-tinted selected paper
+        // Gilt frame accents (thin) — gold rims on a light ground.
+        private static readonly Color AccentSoft = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.45f);
+        private static readonly Color Accent     = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.95f);
+        // Paper-doll "niche": a slightly deeper aged-parchment alcove (still LIGHT).
+        private static readonly Color StoneBack  = new Color(0.886f, 0.847f, 0.761f, 1f);     // aged parchment alcove
+        private static readonly Color StoneNiche = new Color(0.851f, 0.808f, 0.714f, 1f);     // niche backing (light tan)
+        // Aether tint — a faint violet bloom (kept very soft so it reads on light).
+        private static readonly Color AetherSoft = new Color(ElarionUi.Aether.r, ElarionUi.Aether.g, ElarionUi.Aether.b, 0.16f);
+
+        // ── INK text tones (dark, readable on the new light parchment) ────────────
+        // Primary ink ~#2C2115 (matches ElarionUi.Ink), a softer ink for secondary,
+        // and a muted ink for micro/labels. These REPLACE every prior use of the
+        // cream Parchment / ParchmentDim text colours within this screen.
+        private static readonly Color Ink        = new Color(0.157f, 0.118f, 0.078f, 1f);     // primary dark ink
+        private static readonly Color InkDim      = new Color(0.345f, 0.290f, 0.220f, 1f);    // secondary / flavour ink
+        private static readonly Color InkMicro    = new Color(0.439f, 0.376f, 0.286f, 1f);    // micro caps / hints
+        // Gilt-on-light reads as a dark warm bronze for HEADINGS (true gilt is too
+        // pale on parchment); use this where a title used ElarionUi.Gilt on dark.
+        private static readonly Color GiltInk     = new Color(0.561f, 0.408f, 0.110f, 1f);    // bronze heading ink
 
         public bool IsOpen => _ui != null && _ui.activeSelf;
 
@@ -205,18 +225,19 @@ namespace DeNelle.Village
             scaler.matchWidthOrHeight = 0.5f;
             _ui.AddComponent<GraphicRaycaster>();
 
-            // Full-screen dark scrim (alpha ~0.85) that blocks click-through.
+            // Full-screen warm dim that blocks click-through. Kept fairly dark so the
+            // LIGHT parchment panel reads as a lifted, lit sheet floating above it.
             var scrim = AddImage(_ui.transform, "Scrim", Vector2.zero, Vector2.one,
-                                 new Color(0.02f, 0.015f, 0.04f, 0.85f), rounded: false);
+                                 new Color(0.10f, 0.075f, 0.05f, 0.80f), rounded: false);
             // Tapping the scrim closes (a button covering the whole backdrop, behind the panel).
             var scrimBtn = scrim.AddComponent<Button>();
             scrimBtn.transition = Selectable.Transition.None;
             scrimBtn.onClick.AddListener(Close);
 
-            // ── DEPTH: a deep stone backboard, then the warm glass panel above it, so
-            // the modal reads as a layered framed object rather than a flat sheet. ──
+            // ── DEPTH: a thin gilt backboard halo just behind the parchment panel, so
+            // the modal reads as a framed, lifted sheet rather than a flat fill. ──
             AddImage(_ui.transform, "Backboard", new Vector2(0.025f, 0.018f), new Vector2(0.975f, 0.982f),
-                     new Color(0f, 0f, 0f, 0.55f));
+                     new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.35f));
 
             // The main panel fills most of the screen (mobile-first).
             var panel = AddPanel(_ui.transform, new Vector2(0.04f, 0.03f), new Vector2(0.96f, 0.97f), deep: true);
@@ -224,16 +245,17 @@ namespace DeNelle.Village
             // A faint rune strip across the very top edge — a HINT of Elarion magic.
             AddRuneStrip(panel.transform, 0.972f, 0.998f);
 
-            // Header: gilt crest + title with a soft glow shadow beneath it.
+            // Header: bronze crest + title (dark ink on light parchment; the prior soft
+            // dark drop-shadow now reads as a gentle emboss on the light ground).
             AddLabelShadow(panel.transform, ElarionUi.CrestGlyph + "  INVENTORY", 0.940f, 0.985f,
-                           ElarionUi.Gilt, ElarionUi.FontTitle, 0.06f, 0.94f, spacing: 6f);
+                           GiltInk, ElarionUi.FontTitle, 0.06f, 0.94f, spacing: 6f);
             AddRule(panel.transform, 0.932f, 0.06f, 0.94f);
 
             BuildWalletStrip(panel.transform);
 
-            // Close X — top-right, in a circular-feeling glass chip.
+            // Close X — top-right, in a deeper-tan parchment chip (so it reads on light).
             AddButton(panel.transform, "X", new Vector2(0.905f, 0.038f), new Vector2(0.942f, 0.986f),
-                      Glass, Close, ButtonKind.Neutral);
+                      new Color(0.847f, 0.804f, 0.710f, 1f), Close, ButtonKind.Neutral);
 
             // ── Top half: the paper-doll. A recessed stone NICHE the hero stands in,
             // bordered with a soft gold rim so it feels like a display alcove. ──
@@ -250,7 +272,7 @@ namespace DeNelle.Village
             // Grid: left ~62%; Sidebar: right ~36% (a touch wider for the stat block).
             _gridRoot = AddImage(panel.transform, "GridArea",
                                  new Vector2(0.04f, 0.035f), new Vector2(0.625f, 0.50f), Track);
-            AddInnerRim(_gridRoot, new Color(0f, 0f, 0f, 0.4f));
+            AddInnerRim(_gridRoot, AccentSoft);
             _sidebarRoot = AddImage(panel.transform, "SidebarArea",
                                     new Vector2(0.645f, 0.035f), new Vector2(0.96f, 0.50f), GlassDeep);
             AddInnerRim(_sidebarRoot, AccentSoft);
@@ -273,15 +295,18 @@ namespace DeNelle.Village
             // Two recessed coin/crystal wells, each with its own tinted glyph chip,
             // so the wallet reads as currency badges rather than a plain text line.
             var goldWell = AddImage(panel, "GoldWell", new Vector2(0.30f, 0.895f), new Vector2(0.49f, 0.928f), Track);
-            AddLabel(goldWell.transform, "● " + coins, 0f, 1f, ElarionUi.Gilt,
+            AddInnerRim(goldWell, AccentSoft);
+            AddLabel(goldWell.transform, "● " + coins, 0f, 1f, GiltInk,
                      ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.06f, 0.94f, bold: true);
-            AddLabel(goldWell.transform, "GOLD", 0.04f, 0.30f, ElarionUi.ParchmentDim,
+            AddLabel(goldWell.transform, "GOLD", 0.04f, 0.30f, InkMicro,
                      ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.06f, 0.94f, spacing: 2f);
 
             var crysWell = AddImage(panel, "CrystalWell", new Vector2(0.51f, 0.895f), new Vector2(0.70f, 0.928f), Track);
-            AddLabel(crysWell.transform, "◆ " + crystals, 0f, 1f, ElarionUi.Aether,
+            AddInnerRim(crysWell, AccentSoft);
+            // Aether violet darkened so it reads on the light tan well.
+            AddLabel(crysWell.transform, "◆ " + crystals, 0f, 1f, new Color(0.42f, 0.26f, 0.62f, 1f),
                      ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.06f, 0.94f, bold: true);
-            AddLabel(crysWell.transform, "CRYSTALS", 0.04f, 0.30f, ElarionUi.ParchmentDim,
+            AddLabel(crysWell.transform, "CRYSTALS", 0.04f, 0.30f, InkMicro,
                      ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.06f, 0.94f, spacing: 2f);
         }
 
@@ -305,13 +330,13 @@ namespace DeNelle.Village
             string job = HeroJob;
             int level = HeroLevel();
 
-            // Hero name banner (top): big class name + a level pip beside it.
+            // Hero name banner (top): big class name in dark ink + a level pip beside it.
             AddLabelShadow(_paperDoll.transform, HeroDisplayName(job), 0.875f, 0.985f,
-                           ElarionUi.Parchment, ElarionUi.FontHead, 0.20f, 0.80f, spacing: 2f);
+                           Ink, ElarionUi.FontHead, 0.20f, 0.80f, spacing: 2f);
             var lvPip = AddImage(_paperDoll.transform, "LevelPip", new Vector2(0.80f, 0.885f), new Vector2(0.965f, 0.975f),
-                                 new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.22f));
-            AddInnerRim(lvPip, AccentSoft);
-            AddLabel(lvPip.transform, "LV " + level, 0f, 1f, ElarionUi.Gilt,
+                                 new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.85f));
+            AddInnerRim(lvPip, Accent);
+            AddLabel(lvPip.transform, "LV " + level, 0f, 1f, Ink,
                      ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0f, 1f, bold: true);
 
             // ── Center: the class-crest medallion (stand-in for the live hero). ──
@@ -320,9 +345,9 @@ namespace DeNelle.Village
             AddInnerRim(medallion, Accent);
             // A soft aether bloom behind the crest so it reads as "your hero, lit".
             AddImage(medallion.transform, "Bloom", new Vector2(0.12f, 0.12f), new Vector2(0.88f, 0.88f), AetherSoft);
-            AddLabel(medallion.transform, ClassCrest(job), 0.30f, 0.86f, ElarionUi.Gilt,
+            AddLabel(medallion.transform, ClassCrest(job), 0.30f, 0.86f, GiltInk,
                      ElarionUi.FontTitle + 28, TMPro.TextAlignmentOptions.Center, 0.06f, 0.94f, bold: true);
-            AddLabel(medallion.transform, Cap(job).ToUpperInvariant(), 0.10f, 0.26f, ElarionUi.ParchmentDim,
+            AddLabel(medallion.transform, Cap(job).ToUpperInvariant(), 0.10f, 0.26f, InkMicro,
                      ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, spacing: 4f);
 
             // ── Arranged equipped-slot frames around the silhouette. ──
@@ -331,7 +356,7 @@ namespace DeNelle.Village
 
             // Left column: WEAPON (filled) + HELM (placeholder cosmetic slot).
             EquipSlotTile(_paperDoll.transform, "WEAPON",
-                          w != null ? w.icon : "", w != null ? w.name : "Empty",
+                          w != null ? WeaponTypeGlyph(w) : "", w != null ? w.name : "Empty",
                           w != null ? w.rarity : null, w != null,
                           new Vector2(0.045f, 0.55f), new Vector2(0.315f, 0.80f));
             EquipSlotTile(_paperDoll.transform, "HELM",
@@ -340,7 +365,7 @@ namespace DeNelle.Village
 
             // Right column: ARMOR (filled) + TRINKET (placeholder).
             EquipSlotTile(_paperDoll.transform, "ARMOR",
-                          a != null ? a.icon : "", a != null ? a.name : "Empty",
+                          a != null ? ArmorTypeGlyph(a) : "", a != null ? a.name : "Empty",
                           a != null ? a.rarity : null, a != null,
                           new Vector2(0.685f, 0.55f), new Vector2(0.955f, 0.80f));
             EquipSlotTile(_paperDoll.transform, "TRINKET",
@@ -353,24 +378,27 @@ namespace DeNelle.Village
         private void EquipSlotTile(Transform parent, string label, string icon, string value,
                                    string rarity, bool filled, Vector2 min, Vector2 max)
         {
-            Color rc = filled ? RarityColor(rarity) : new Color(0.5f, 0.5f, 0.5f, 1f);
+            // On light parchment, DARKEN the rarity hue for text/glyph so it stays
+            // readable; the frame still uses the bright rarity tint as a thin rim.
+            Color rc    = filled ? RarityColor(rarity) : new Color(0.55f, 0.50f, 0.42f, 1f);
+            Color rcInk = filled ? RarityInk(rarity)   : InkMicro;
 
-            // Rarity frame behind the tile (gives the equipped slot its "this is gear" glow).
+            // Rarity frame behind the tile (a thin tinted rim = "this is gear").
             var frame = AddImage(parent, "SlotFrame_" + label, min, max,
-                                 new Color(rc.r, rc.g, rc.b, filled ? 0.55f : 0.16f));
-            var tile = AddImage(frame.transform, "Slot_" + label, new Vector2(0.04f, 0.05f), new Vector2(0.96f, 0.95f),
-                                filled ? Cell : new Color(Cell.r, Cell.g, Cell.b, 0.5f));
+                                 new Color(rc.r, rc.g, rc.b, filled ? 0.85f : 0.45f));
+            var tile = AddImage(frame.transform, "Slot_" + label, new Vector2(0.06f, 0.07f), new Vector2(0.94f, 0.93f),
+                                filled ? Cell : new Color(Cell.r, Cell.g, Cell.b, 0.65f));
 
             // Slot label (top, spaced micro caps).
-            AddLabel(tile.transform, label, 0.74f, 0.96f, ElarionUi.ParchmentDim,
+            AddLabel(tile.transform, label, 0.74f, 0.96f, InkMicro,
                      ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, spacing: 3f);
-            // Icon glyph (center).
+            // Icon glyph (center) — a TYPE glyph so the slot reads weapon-vs-armor at a glance.
             AddLabel(tile.transform, string.IsNullOrEmpty(icon) ? (filled ? "?" : "+") : icon, 0.34f, 0.74f,
-                     filled ? ElarionUi.Parchment : new Color(0.5f, 0.5f, 0.5f, 0.7f),
+                     filled ? Ink : new Color(0.55f, 0.50f, 0.42f, 0.8f),
                      ElarionUi.FontHead + 4, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f);
-            // Value name (bottom, rarity-coloured).
+            // Value name (bottom, rarity-INK coloured so it stays readable on light).
             AddLabel(tile.transform, (filled ? RarityGlyph(rarity) + " " : "") + value, 0.04f, 0.32f,
-                     filled ? rc : ElarionUi.ParchmentDim,
+                     filled ? rcInk : InkMicro,
                      ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, bold: true);
         }
 
@@ -388,9 +416,12 @@ namespace DeNelle.Village
                 Tab t = tabs[i];
                 bool sel = _tab == t;
                 float cx = x + w * 0.5f;
-                // Active = filled gold pill (dark-ink label) with a bright gilt underline.
-                // Inactive = quiet glass pill (cream label). Clear, escalating state.
-                Color bg = sel ? ElarionUi.GoldButton : Glass;
+                // Active = filled gold pill (dark-ink label) with a bronze underline.
+                // Inactive = quiet parchment pill (dark-ink label). Escalating state.
+                // Inactive pill = a slightly deeper tan than the panel so it reads as a
+                // distinct, tappable chip (plain parchment would vanish into the bg).
+                Color inactive = new Color(0.847f, 0.804f, 0.710f, 1f);
+                Color bg = sel ? ElarionUi.GoldButton : inactive;
                 var btn = AddButton(panel, names[i], new Vector2(cx, w * 0.5f), new Vector2(y0, y1),
                                     bg, () => SelectTab(t), sel ? ButtonKind.Gold : ButtonKind.Neutral);
                 if (sel)
@@ -404,7 +435,7 @@ namespace DeNelle.Village
                     rr.sizeDelta = new Vector2(0f, 3f);
                     rr.anchoredPosition = new Vector2(0f, -4f);
                     var ri = rule.GetComponent<Image>();
-                    ri.color = ElarionUi.Gilt; ri.raycastTarget = false;
+                    ri.color = GiltInk; ri.raycastTarget = false;
                 }
                 x += w + gap;
             }
@@ -500,7 +531,7 @@ namespace DeNelle.Village
                                 string.Equals(_loadout.EquippedWeapon.id, w.id, System.StringComparison.OrdinalIgnoreCase);
                 bool locked = w.req != null && level < w.req.level;
                 var def = w;
-                BuildGearCell(content, w.icon, w.name, w.rarity, equipped, locked,
+                BuildGearCell(content, WeaponTypeGlyph(w), w.name, w.rarity, equipped, locked,
                               locked ? "Lv " + w.req.level : "",
                               () => { _selWeapon = def; _selArmor = null; _selConsumable = null; RebuildSidebar(); });
             }
@@ -520,7 +551,7 @@ namespace DeNelle.Village
                                 string.Equals(_loadout.EquippedArmor.id, a.id, System.StringComparison.OrdinalIgnoreCase);
                 bool locked = a.req != null && level < a.req.level;
                 var def = a;
-                BuildGearCell(content, a.icon, a.name, a.rarity, equipped, locked,
+                BuildGearCell(content, ArmorTypeGlyph(a), a.name, a.rarity, equipped, locked,
                               locked ? "Lv " + a.req.level : "",
                               () => { _selArmor = def; _selWeapon = null; _selConsumable = null; RebuildSidebar(); });
             }
@@ -547,7 +578,7 @@ namespace DeNelle.Village
             {
                 var def = ConsumableCatalog.Find(kv.Key);
                 string name = def != null && !string.IsNullOrEmpty(def.DisplayName) ? def.DisplayName : kv.Key;
-                string glyph = def != null && !string.IsNullOrEmpty(def.Glyph) ? def.Glyph : "!";
+                string glyph = ConsumableTypeGlyph(kv.Key, name);
                 var sel = new ConsumableSel { id = kv.Key, def = def, count = kv.Value };
                 BuildGearCell(content, glyph, name + "  x" + kv.Value, "common", false, false, "",
                               () => { _selConsumable = sel; _selWeapon = null; _selArmor = null; RebuildSidebar(); });
@@ -559,24 +590,26 @@ namespace DeNelle.Village
         private void BuildGearCell(Transform content, string icon, string name, string rarity,
                                    bool equipped, bool locked, string lockText, System.Action onTap)
         {
-            Color rc = RarityColor(rarity);
+            Color rc    = RarityColor(rarity);
+            Color rcInk = RarityInk(rarity);
 
-            // Rarity frame (the tile sits inset inside it, so the rarity reads as a
-            // glowing border). Legendary/epic get a brighter, thicker glow.
+            // Rarity frame (the cell sits inset inside it, so the rarity reads as a thin
+            // tinted rim). Legendary/epic get a stronger rim. On the LIGHT ground a soft
+            // alpha keeps it a quiet gilt-like border, not a loud glow.
             float frameAlpha = RarityFrameStrength(rarity);
             var frame = new GameObject("CellFrame", typeof(Image));
             frame.transform.SetParent(content, false);
             var fimg = frame.GetComponent<Image>();
-            fimg.color = new Color(rc.r, rc.g, rc.b, locked ? frameAlpha * 0.4f : frameAlpha);
+            fimg.color = new Color(rc.r, rc.g, rc.b, locked ? frameAlpha * 0.5f : frameAlpha);
             ApplyRounded(fimg);
 
             var cell = new GameObject("Cell", typeof(Image), typeof(Button));
             cell.transform.SetParent(frame.transform, false);
             var crt = cell.GetComponent<RectTransform>();
-            crt.anchorMin = new Vector2(0.025f, 0.03f); crt.anchorMax = new Vector2(0.975f, 0.97f);
+            crt.anchorMin = new Vector2(0.04f, 0.05f); crt.anchorMax = new Vector2(0.96f, 0.95f);
             crt.offsetMin = Vector2.zero; crt.offsetMax = Vector2.zero;
             var img = cell.GetComponent<Image>();
-            img.color = locked ? new Color(Cell.r, Cell.g, Cell.b, 0.55f)
+            img.color = locked ? new Color(Cell.r, Cell.g, Cell.b, 0.85f)
                        : equipped ? CellSel : Cell;
             ApplyRounded(img);
 
@@ -585,18 +618,20 @@ namespace DeNelle.Village
             StyleButtonColors(btn);
             if (onTap != null) btn.onClick.AddListener(() => onTap());
 
-            // Icon medallion (a recessed round-ish well behind the glyph). Decorative
+            // Icon medallion (a soft recessed well behind the TYPE glyph). On light
+            // parchment the well is a faint warm tint, not a dark hole. Decorative
             // overlays are non-raycast so the whole cell stays a single tap target.
             var well = AddImage(cell.transform, "IconWell", new Vector2(0.28f, 0.40f), new Vector2(0.72f, 0.93f),
-                                new Color(0f, 0f, 0f, 0.30f));
+                                new Color(rc.r, rc.g, rc.b, 0.12f));
             NoRaycast(well);
+            AddInnerRim(well, new Color(rc.r, rc.g, rc.b, 0.40f));
             AddLabel(well.transform, string.IsNullOrEmpty(icon) ? "?" : icon, 0f, 1f,
-                     locked ? new Color(0.6f, 0.6f, 0.6f, 0.8f) : ElarionUi.Parchment,
+                     locked ? InkMicro : rcInk,
                      ElarionUi.FontTitle + 2, TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f);
 
-            // Name (rarity-coloured) along the bottom band.
+            // Name (rarity-INK coloured) along the bottom band — readable on light.
             AddLabel(cell.transform, name, 0.07f, 0.36f,
-                     locked ? new Color(rc.r, rc.g, rc.b, 0.6f) : rc,
+                     locked ? new Color(rcInk.r, rcInk.g, rcInk.b, 0.6f) : rcInk,
                      ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, bold: true);
 
             // Rarity gem — a small tinted pip top-left so the tier reads at a glance.
@@ -613,12 +648,14 @@ namespace DeNelle.Village
             }
             if (locked)
             {
-                // Dim veil + a lock chip, so level-locked gear clearly reads as "not yet".
-                NoRaycast(AddImage(cell.transform, "Veil", Vector2.zero, Vector2.one, new Color(0f, 0f, 0f, 0.35f)));
-                var chip = AddImage(cell.transform, "Locked", new Vector2(0.30f, 0.40f), new Vector2(0.70f, 0.62f),
-                                    new Color(0f, 0f, 0f, 0.78f));
+                // A soft parchment veil + a gilt lock chip, so level-locked gear clearly
+                // reads as "not yet" WITHOUT going dark (stays in the light tone).
+                NoRaycast(AddImage(cell.transform, "Veil", Vector2.zero, Vector2.one,
+                                   new Color(0.965f, 0.945f, 0.890f, 0.45f)));
+                var chip = AddImage(cell.transform, "Locked", new Vector2(0.26f, 0.40f), new Vector2(0.74f, 0.62f),
+                                    new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.90f));
                 NoRaycast(chip);
-                AddLabel(chip.transform, "🔒 " + lockText, 0f, 1f, ElarionUi.Gilt,
+                AddLabel(chip.transform, "[ " + lockText + " ]", 0f, 1f, Ink,
                          ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0f, 1f, bold: true);
             }
         }
@@ -636,7 +673,7 @@ namespace DeNelle.Village
             // Span across the grid (LayoutElement keeps it from being a tiny cell).
             var le = note.AddComponent<LayoutElement>();
             le.preferredWidth = 600f; le.preferredHeight = 120f;
-            AddLabel(note.transform, msg, 0f, 1f, ElarionUi.ParchmentDim, ElarionUi.FontLabel,
+            AddLabel(note.transform, msg, 0f, 1f, InkDim, ElarionUi.FontLabel,
                      TMPro.TextAlignmentOptions.Center, 0f, 1f);
         }
 
@@ -652,11 +689,11 @@ namespace DeNelle.Village
             if (_selWeapon == null && _selArmor == null && _selConsumable == null)
             {
                 AddLabel(_sidebarRoot.transform, "Tap an item\nto view + equip.", 0.4f, 0.6f,
-                         ElarionUi.ParchmentDim, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.06f, 0.94f);
+                         InkDim, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.06f, 0.94f);
                 return;
             }
 
-            AddLabel(_sidebarRoot.transform, "DETAILS", 0.945f, 0.99f, ElarionUi.ParchmentDim,
+            AddLabel(_sidebarRoot.transform, "DETAILS", 0.945f, 0.99f, InkMicro,
                      ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, spacing: 3f);
             AddRule(_sidebarRoot.transform, 0.935f, 0.06f, 0.94f);
 
@@ -669,24 +706,26 @@ namespace DeNelle.Village
         // panel. Returns nothing; lays out the shared chrome for any selected item.
         private void BuildDetailHeader(string icon, string name, string rarity, string subline)
         {
-            Color rc = RarityColor(rarity);
+            Color rc    = RarityColor(rarity);
+            Color rcInk = RarityInk(rarity);
 
-            // Rarity band behind the name (the loudest rarity cue in the panel).
+            // Rarity band behind the name (a soft tinted strip — the loudest rarity cue).
             var band = AddImage(_sidebarRoot.transform, "RarityBand",
                                 new Vector2(0.05f, 0.80f), new Vector2(0.95f, 0.925f),
-                                new Color(rc.r, rc.g, rc.b, 0.20f));
-            AddInnerRim(band, new Color(rc.r, rc.g, rc.b, 0.65f));
+                                new Color(rc.r, rc.g, rc.b, 0.22f));
+            AddInnerRim(band, new Color(rc.r, rc.g, rc.b, 0.75f));
 
-            // Icon medallion above the band.
+            // Icon medallion above the band (TYPE glyph on a soft tinted well).
             var med = AddImage(_sidebarRoot.transform, "DetailIcon", new Vector2(0.36f, 0.815f), new Vector2(0.64f, 0.915f),
-                               new Color(0f, 0f, 0f, 0.30f));
-            AddLabel(med.transform, string.IsNullOrEmpty(icon) ? "?" : icon, 0f, 1f, ElarionUi.Parchment,
+                               new Color(rc.r, rc.g, rc.b, 0.14f));
+            AddInnerRim(med, new Color(rc.r, rc.g, rc.b, 0.45f));
+            AddLabel(med.transform, string.IsNullOrEmpty(icon) ? "?" : icon, 0f, 1f, rcInk,
                      ElarionUi.FontHead + 2, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f);
 
-            AddLabel(_sidebarRoot.transform, name, 0.745f, 0.795f, rc, ElarionUi.FontBody,
+            AddLabel(_sidebarRoot.transform, name, 0.745f, 0.795f, rcInk, ElarionUi.FontBody,
                      TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, bold: true);
             AddLabel(_sidebarRoot.transform, RarityGlyph(rarity) + " " + subline, 0.695f, 0.74f,
-                     ElarionUi.ParchmentDim, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, spacing: 2f);
+                     InkDim, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, spacing: 2f);
         }
 
         // A recessed stat row in the detail well: label left, value right, optional
@@ -694,16 +733,17 @@ namespace DeNelle.Village
         private void StatRow(float y0, float y1, string label, string value, float delta)
         {
             var row = AddImage(_sidebarRoot.transform, "Stat_" + label, new Vector2(0.06f, y0), new Vector2(0.94f, y1), Track);
-            AddLabel(row.transform, label, 0f, 1f, ElarionUi.ParchmentDim, ElarionUi.FontLabel,
+            AddLabel(row.transform, label, 0f, 1f, InkDim, ElarionUi.FontLabel,
                      TMPro.TextAlignmentOptions.Left, 0.06f, 0.55f);
-            AddLabel(row.transform, value, 0f, 1f, ElarionUi.Parchment, ElarionUi.FontLabel,
+            AddLabel(row.transform, value, 0f, 1f, Ink, ElarionUi.FontLabel,
                      TMPro.TextAlignmentOptions.Right, 0.45f, 0.74f, bold: true);
             if (Mathf.Abs(delta) > 0.0001f)
             {
                 bool up = delta > 0f;
+                // Darkened up/down deltas so they read on the light tan stat row.
                 AddLabel(row.transform, up ? "▲" : "▼", 0f, 1f,
-                         up ? ElarionUi.Affordable : ElarionUi.Danger, ElarionUi.FontLabel,
-                         TMPro.TextAlignmentOptions.Right, 0.45f, 0.94f, bold: true);
+                         up ? new Color(0.20f, 0.45f, 0.18f, 1f) : new Color(0.62f, 0.16f, 0.14f, 1f),
+                         ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Right, 0.45f, 0.94f, bold: true);
             }
         }
 
@@ -715,7 +755,7 @@ namespace DeNelle.Village
                             string.Equals(_loadout.EquippedWeapon.id, w.id, System.StringComparison.OrdinalIgnoreCase);
             WeaponDef cur = _loadout != null ? _loadout.EquippedWeapon : null;
 
-            BuildDetailHeader(w.icon, w.name, w.rarity, Cap(w.rarity) + "  -  " + Cap(w.job));
+            BuildDetailHeader(WeaponTypeGlyph(w), w.name, w.rarity, Cap(w.rarity) + "  -  " + Cap(w.job));
 
             // Compare-to-equipped stat block (▲/▼ vs the worn weapon).
             float curDmg = cur != null ? cur.damageMult : 0f;
@@ -729,11 +769,11 @@ namespace DeNelle.Village
                 StatRow(0.500f, 0.555f, "Requires", "Lv " + w.req.level, 0f);
             if (cur != null && !equipped)
                 AddLabel(_sidebarRoot.transform, "vs equipped: " + cur.name, 0.455f, 0.495f,
-                         ElarionUi.ParchmentDim, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f);
+                         InkMicro, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f);
 
             if (!string.IsNullOrEmpty(w.flavor) || !string.IsNullOrEmpty(w.saga))
                 AddLabel(_sidebarRoot.transform, "\"" + (w.flavor ?? w.saga) + "\"", 0.22f, 0.44f,
-                         ElarionUi.ParchmentDim, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.06f, 0.94f);
+                         InkDim, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.06f, 0.94f);
 
             BuildEquipButton(equipped, locked,
                 () => { if (_loadout != null) _loadout.EquipWeaponById(w.id); },
@@ -748,7 +788,7 @@ namespace DeNelle.Village
                             string.Equals(_loadout.EquippedArmor.id, a.id, System.StringComparison.OrdinalIgnoreCase);
             ArmorDef cur = _loadout != null ? _loadout.EquippedArmor : null;
 
-            BuildDetailHeader(a.icon, a.name, a.rarity, Cap(a.rarity) + "  -  " + Cap(a.job));
+            BuildDetailHeader(ArmorTypeGlyph(a), a.name, a.rarity, Cap(a.rarity) + "  -  " + Cap(a.job));
 
             float curDef = cur != null ? cur.defense : 0f;
             StatRow(0.620f, 0.675f, "Defense", $"{a.defense * 100f:0}%", equipped ? 0f : a.defense - curDef);
@@ -761,11 +801,11 @@ namespace DeNelle.Village
                 StatRow(0.500f, 0.555f, "Requires", "Lv " + a.req.level, 0f);
             if (cur != null && !equipped)
                 AddLabel(_sidebarRoot.transform, "vs equipped: " + cur.name, 0.455f, 0.495f,
-                         ElarionUi.ParchmentDim, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f);
+                         InkMicro, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f);
 
             if (!string.IsNullOrEmpty(a.flavor) || !string.IsNullOrEmpty(a.saga))
                 AddLabel(_sidebarRoot.transform, "\"" + (a.flavor ?? a.saga) + "\"", 0.22f, 0.44f,
-                         ElarionUi.ParchmentDim, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.06f, 0.94f);
+                         InkDim, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.06f, 0.94f);
 
             BuildEquipButton(equipped, locked,
                 () => { if (_loadout != null) _loadout.EquipArmorById(a.id); },
@@ -775,7 +815,7 @@ namespace DeNelle.Village
         private void BuildConsumableSidebar(ConsumableSel c)
         {
             string name = c.def != null && !string.IsNullOrEmpty(c.def.DisplayName) ? c.def.DisplayName : c.id;
-            string glyph = c.def != null && !string.IsNullOrEmpty(c.def.Glyph) ? c.def.Glyph : "!";
+            string glyph = ConsumableTypeGlyph(c.id, name);
             BuildDetailHeader(glyph, name, "common", "Owned  x" + c.count);
 
             if (c.def != null)
@@ -789,7 +829,7 @@ namespace DeNelle.Village
             // Consumables aren't "equipped" — v1 surfaces them read-only here.
             // TODO use-consumable — wire to the use-service when its public entry is settled.
             AddLabel(_sidebarRoot.transform, "Use from the combat hotbar.", 0.22f, 0.34f,
-                     ElarionUi.ParchmentDim, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.06f, 0.94f);
+                     InkDim, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.06f, 0.94f);
         }
 
         private void BuildEquipButton(bool equipped, bool locked, System.Action equip, System.Action unequip)
@@ -801,7 +841,7 @@ namespace DeNelle.Village
 
             if (locked)
             {
-                label = "🔒 LOCKED"; color = new Color(ElarionUi.Danger.r, ElarionUi.Danger.g, ElarionUi.Danger.b, 0.4f);
+                label = "LOCKED"; color = new Color(ElarionUi.Danger.r, ElarionUi.Danger.g, ElarionUi.Danger.b, 0.55f);
                 kind = ButtonKind.Danger; action = null;
             }
             else if (equipped)
@@ -871,6 +911,21 @@ namespace DeNelle.Village
             }
         }
 
+        // A DARKENED rarity hue for TEXT/GLYPHS on the light parchment ground. The
+        // bright RarityColor (used for frames/gems/wells) is too pale to read as
+        // text on cream, so labels route through this richer, readable variant.
+        private static Color RarityInk(string rarity)
+        {
+            switch ((rarity ?? "common").ToLowerInvariant())
+            {
+                case "uncommon":  return new Color(0.22f, 0.44f, 0.20f, 1f);   // deep green
+                case "rare":      return new Color(0.16f, 0.33f, 0.62f, 1f);   // deep blue
+                case "epic":      return new Color(0.45f, 0.24f, 0.62f, 1f);   // deep purple
+                case "legendary": return new Color(0.64f, 0.40f, 0.10f, 1f);   // bronze/amber
+                default:          return new Color(0.30f, 0.27f, 0.22f, 1f);   // common ink-grey
+            }
+        }
+
         private static string RarityGlyph(string rarity)
         {
             switch ((rarity ?? "common").ToLowerInvariant())
@@ -895,6 +950,81 @@ namespace DeNelle.Village
                 case "uncommon":  return 0.58f;
                 default:          return 0.40f;
             }
+        }
+
+        // ====================================================================
+        // ITEM TYPE GLYPHS — denote a sword vs staff vs bow vs armor AT A GLANCE
+        // ====================================================================
+        // The catalog has NO explicit type/subType field (GearCatalog WeaponDef/
+        // ArmorDef = id/name/icon/job/rarity only — see GearCatalog.cs), and the
+        // `icon` field is an EMOJI placeholder (🗡️🪄🏹🛡️…) that is (a) astral-plane /
+        // variation-selector heavy = inconsistent in TMP default font + WebGL, and
+        // (b) does not cleanly denote the weapon CLASS. So we derive a TYPE from id +
+        // name keyword matching (then job as a fallback) and map it to ONE clear,
+        // BMP-only glyph per type. All glyphs below are in the Basic-Multilingual-
+        // Plane (Misc Symbols / Dingbats / Geometric / Punctuation) so they render in
+        // the TMP default font on every platform incl. WebGL — NO astral-plane risk.
+        //
+        // When real per-type art lands, swap these returns for sprite icons (mirror
+        // PetPortraitRenderer's render-to-Sprite); the call sites already centralise
+        // here. TYPE GLYPHS are the agreed acceptable bar ("just something to denote").
+        private static string WeaponTypeGlyph(WeaponDef w)
+        {
+            if (w == null) return "?";
+            string k = ((w.id ?? "") + " " + (w.name ?? "")).ToLowerInvariant();
+            // Most specific first.
+            if (Has(k, "dagger", "knife", "dirk", "stiletto"))          return "†"; // † dagger
+            if (Has(k, "bow", "recurve", "longbow", "shortbow"))        return "➶"; // ➶ bow / ranged shot
+            if (Has(k, "wand"))                                         return "❉"; // ❉ wand spark
+            if (Has(k, "staff", "scepter", "sceptre", "stave", "rod"))  return "✦"; // ✦ arcane staff
+            if (Has(k, "censer", "censor", "thurible"))                 return "✚"; // ✚ cleric censer
+            if (Has(k, "axe", "hatchet"))                               return "⚒"; // ⚒ axe
+            if (Has(k, "hammer", "maul", "mace"))                       return "⚒"; // ⚒ hammer/mace
+            if (Has(k, "greatsword", "claymore", "sword", "blade",
+                       "longsword", "saber", "sabre", "edge", "brand",
+                       "breaker", "keeper")) return "⚔";                            // ⚔ sword
+            // Fallback by class.
+            switch ((w.job ?? "").ToLowerInvariant())
+            {
+                case "mage":   return "✦"; // ✦ staff
+                case "ranger": return "➶"; // ➶ bow
+                case "cleric": return "✚"; // ✚ censer
+                case "knight": return "⚔"; // ⚔ sword
+                default:        return "⚔";
+            }
+        }
+
+        private static string ArmorTypeGlyph(ArmorDef a)
+        {
+            if (a == null) return "?";
+            string k = ((a.id ?? "") + " " + (a.name ?? "")).ToLowerInvariant();
+            if (Has(k, "shield", "aegis", "buckler", "ward"))           return "◉"; // ◉ shield boss
+            if (Has(k, "plate", "platemail"))                           return "▣"; // ▣ plate
+            if (Has(k, "chain", "mail", "chainmail"))                   return "❖"; // ❖ mail
+            if (Has(k, "leather", "hide"))                              return "❖"; // ❖ leather
+            if (Has(k, "cloth", "robe", "cloak", "garb", "wanderer"))   return "⁂"; // ⁂ cloth/robe
+            if (Has(k, "helm", "helmet", "hood", "crown", "cap"))       return "◖"; // ◖ helm
+            return "❖";                                                            // ❖ generic armor
+        }
+
+        private static string ConsumableTypeGlyph(string id, string name)
+        {
+            string k = ((id ?? "") + " " + (name ?? "")).ToLowerInvariant();
+            if (Has(k, "potion", "elixir", "draught", "tonic", "heal",
+                       "health", "hp", "regen"))                        return "⚗"; // ⚗ alembic / potion
+            if (Has(k, "mana", "aether", "ether", "arcane"))            return "✧"; // ✧ mana spark
+            if (Has(k, "food", "bread", "meat", "ration", "feast",
+                       "stew", "meal"))                                 return "❀"; // ❀ food / sustenance
+            if (Has(k, "scroll", "tome", "rune"))                       return "✐"; // ✐ scroll
+            if (Has(k, "bomb", "fire", "flask", "oil"))                 return "✵"; // ✵ burst
+            return "•";                                                            // • generic pip
+        }
+
+        private static bool Has(string haystack, params string[] needles)
+        {
+            for (int i = 0; i < needles.Length; i++)
+                if (haystack.IndexOf(needles[i], System.StringComparison.Ordinal) >= 0) return true;
+            return false;
         }
 
         private static string Cap(string s)
@@ -979,22 +1109,25 @@ namespace DeNelle.Village
         }
 
         // A faint runic glyph strip — a HINT of Elarion magic across a header band.
+        // Bronze-tinted (not pale gold) so it actually reads on the light parchment.
         private void AddRuneStrip(Transform parent, float y0, float y1)
         {
             var t = AddLabel(parent, ElarionUi.RuneGlyphs + ElarionUi.RuneGlyphs, y0, y1,
-                             new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.18f),
+                             new Color(GiltInk.r, GiltInk.g, GiltInk.b, 0.42f),
                              ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.06f, 0.94f, spacing: 4f);
             t.raycastTarget = false;
         }
 
-        // A title label with a soft dark drop-shadow behind it (depth + legibility).
+        // A title label with a soft LIGHT emboss behind it. On the light parchment a
+        // dark drop-shadow would muddy dark-ink text, so the offset layer is a pale
+        // parchment highlight (down-right) giving a gentle pressed-into-paper feel.
         private void AddLabelShadow(Transform parent, string text, float y0, float y1, Color color,
                                     int size, float x0, float x1, float spacing)
         {
-            var shadow = AddLabel(parent, text, y0, y1, new Color(0f, 0f, 0f, 0.55f), size,
+            var emboss = AddLabel(parent, text, y0, y1, new Color(1f, 0.98f, 0.92f, 0.55f), size,
                                   TMPro.TextAlignmentOptions.Center, x0, x1, spacing: spacing, bold: true);
-            var srt = shadow.GetComponent<RectTransform>();
-            srt.anchoredPosition += new Vector2(1.5f, -1.5f);
+            var srt = emboss.GetComponent<RectTransform>();
+            srt.anchoredPosition += new Vector2(1f, -1f);
             AddLabel(parent, text, y0, y1, color, size, TMPro.TextAlignmentOptions.Center,
                      x0, x1, spacing: spacing, bold: true);
         }
@@ -1069,7 +1202,10 @@ namespace DeNelle.Village
             StyleButtonColors(btn);
             if (onClick != null) btn.onClick.AddListener(() => onClick());
 
-            Color textColor = kind == ButtonKind.Gold ? ElarionUi.Ink : ElarionUi.Parchment;
+            // On the LIGHT parchment screen, ALL button labels are dark ink (Gold CTA
+            // sits on gold = ink; Neutral sits on light parchment = ink; Confirm/Danger
+            // tints below are kept light/soft enough that ink stays readable).
+            Color textColor = Ink;
             var tt = AddLabel(go.transform, label, 0f, 1f, textColor, ElarionUi.FontBody,
                               TMPro.TextAlignmentOptions.Center, 0f, 1f, spacing: 1f, bold: true);
             tt.raycastTarget = false;

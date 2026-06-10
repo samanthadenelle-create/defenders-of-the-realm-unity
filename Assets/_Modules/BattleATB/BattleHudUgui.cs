@@ -29,17 +29,36 @@ namespace DeNelle.BattleATB
         public Action<BattleAction> OnAction;
         public Action<string, ControlMode> OnControlModeToggled;
 
-        // ── FF7-ish palette (classic blue/grey with gold accents)
-        private static readonly Color PanelBg = new Color(0.12f, 0.18f, 0.35f, 0.92f);
-        private static readonly Color SubPanelBg = new Color(0.10f, 0.15f, 0.30f, 0.95f);
-        private static readonly Color Gold = new Color(0.95f, 0.85f, 0.45f, 1f);
-        private static readonly Color White = Color.white;
-        private static readonly Color HpFillColor = new Color(0.25f, 0.75f, 0.35f, 1f);
-        private static readonly Color MpFillColor = new Color(0.35f, 0.55f, 0.95f, 1f);
-        private static readonly Color AtbFillColor = new Color(0.65f, 0.55f, 0.95f, 1f);
-        private static readonly Color AtbReadyColor = new Color(0.98f, 0.82f, 0.25f, 1f);
-        private static readonly Color ButtonNormal = new Color(0.15f, 0.22f, 0.38f, 1f);
-        private static readonly Color ButtonHighlight = new Color(0.25f, 0.35f, 0.55f, 1f);
+        // ── LIGHT mystical-medieval palette (north-star: warm parchment + dark ink + gilt)
+        // Self-contained; mirrors ElarionUi token VALUES (Parchment/Ink/Gold/Gilt) so the
+        // battle screen matches the (now-light) town HUD + inventory. Do NOT flip the global kit.
+        private static readonly Color Parchment = new Color(0.929f, 0.902f, 0.839f, 0.97f);   // EDE6D6 main panel fill
+        private static readonly Color ParchmentLite = new Color(0.957f, 0.933f, 0.875f, 0.98f); // F4EEDF sub-panel / lighter card
+        private static readonly Color Ink = new Color(0.137f, 0.098f, 0.055f, 1f);              // dark ink text (readable on light)
+        private static readonly Color InkDim = new Color(0.34f, 0.28f, 0.20f, 1f);              // muted ink for secondary text
+        private static readonly Color Gold = new Color(0.831f, 0.686f, 0.216f, 1f);             // ElarionUi.Gold accent
+        private static readonly Color Gilt = new Color(0.933f, 0.784f, 0.282f, 1f);             // ElarionUi.Gilt bright rim/glow
+        private static readonly Color GiltRim = new Color(0.933f, 0.784f, 0.282f, 0.85f);       // thin glowing gilt border
+
+        // Panels / sub-panels now LIGHT parchment
+        private static readonly Color PanelBg = Parchment;
+        private static readonly Color SubPanelBg = ParchmentLite;
+
+        // Text reads as dark ink (kept name `White` to avoid touching call-sites; now ink)
+        private static readonly Color White = new Color(0.137f, 0.098f, 0.055f, 1f);
+
+        // Gauges — deeper saturated fills so they pop on the light parchment track
+        private static readonly Color HpFillColor = new Color(0.27f, 0.62f, 0.32f, 1f);
+        private static readonly Color MpFillColor = new Color(0.22f, 0.46f, 0.90f, 1f);
+        private static readonly Color AtbFillColor = new Color(0.55f, 0.38f, 0.82f, 1f);
+        private static readonly Color AtbReadyColor = new Color(0.83f, 0.62f, 0.16f, 1f);
+
+        // Bar track on a light bg: warm tan recess (not black)
+        private static readonly Color BarTrack = new Color(0.70f, 0.64f, 0.53f, 0.95f);
+
+        // Buttons: soft parchment with gilt highlight; ink label
+        private static readonly Color ButtonNormal = new Color(0.886f, 0.847f, 0.757f, 1f);
+        private static readonly Color ButtonHighlight = new Color(0.957f, 0.886f, 0.690f, 1f);
 
         // ── Roots
         private Canvas _canvas;
@@ -137,19 +156,33 @@ namespace DeNelle.BattleATB
             rt.sizeDelta = new Vector2(700, 70);
 
             var bg = _infoPanel.AddComponent<Image>();
-            bg.color = new Color(0.08f, 0.08f, 0.15f, 0.85f);
+            bg.color = ParchmentLite;
+            AddGiltRim(_infoPanel);
 
-            // Title "The Last Stand"
+            // Title "The Last Stand" — dark gold ink on parchment
             var titleGO = CreateText("The Last Stand", _infoPanel.transform, new Vector2(0, 18), 26, Gold, TextAlignmentOptions.Center);
             _titleText = titleGO.GetComponent<TextMeshProUGUI>();
 
-            // WAVE
-            var waveGO = CreateText("WAVE 1", _infoPanel.transform, new Vector2(-220, -8), 18, Color.yellow, TextAlignmentOptions.Left);
+            // WAVE — ink (readable on light)
+            var waveGO = CreateText("WAVE 1", _infoPanel.transform, new Vector2(-220, -8), 18, Ink, TextAlignmentOptions.Left);
             _waveText = waveGO.GetComponent<TextMeshProUGUI>();
 
-            // Active Turn
-            var turnGO = CreateText("", _infoPanel.transform, new Vector2(220, -8), 18, Color.cyan, TextAlignmentOptions.Right);
+            // Active Turn — muted ink
+            var turnGO = CreateText("", _infoPanel.transform, new Vector2(220, -8), 18, InkDim, TextAlignmentOptions.Right);
             _turnText = turnGO.GetComponent<TextMeshProUGUI>();
+        }
+
+        /// <summary>Thin glowing gilt rim + soft gold drop-glow on a panel (light north-star look).
+        /// Uses uGUI Outline/Shadow on the panel Image — cheap, WebGL-safe, no sprites.</summary>
+        private static void AddGiltRim(GameObject panel)
+        {
+            var outline = panel.AddComponent<Outline>();
+            outline.effectColor = GiltRim;
+            outline.effectDistance = new Vector2(1.5f, -1.5f);
+
+            var glow = panel.AddComponent<Shadow>();
+            glow.effectColor = new Color(Gilt.r, Gilt.g, Gilt.b, 0.28f); // soft gold glow
+            glow.effectDistance = new Vector2(0f, -3f);
         }
 
         private GameObject CreateText(string txt, Transform parent, Vector2 anchoredPos, int fontSize, Color color, TextAlignmentOptions align)
@@ -182,6 +215,7 @@ namespace DeNelle.BattleATB
 
             var bg = _commandPanel.AddComponent<Image>();
             bg.color = PanelBg;
+            AddGiltRim(_commandPanel);
 
             // Classic FF7 vertical command list
             var vlg = _commandPanel.AddComponent<VerticalLayoutGroup>();
@@ -204,6 +238,7 @@ namespace DeNelle.BattleATB
 
             var subBg = _skillsSubPanel.AddComponent<Image>();
             subBg.color = SubPanelBg;
+            AddGiltRim(_skillsSubPanel);
 
             var subVlg = _skillsSubPanel.AddComponent<VerticalLayoutGroup>();
             subVlg.spacing = 2;
@@ -235,8 +270,9 @@ namespace DeNelle.BattleATB
             var tmp = txtGO.AddComponent<TextMeshProUGUI>();
             tmp.text = label;
             tmp.fontSize = 16;
-            tmp.color = Gold;
+            tmp.color = Ink;
             tmp.alignment = TextAlignmentOptions.Center;
+            tmp.fontStyle = FontStyles.Bold;
             var txtRt = txtGO.GetComponent<RectTransform>();
             txtRt.anchorMin = Vector2.zero;
             txtRt.anchorMax = Vector2.one;
@@ -313,6 +349,7 @@ namespace DeNelle.BattleATB
 
             var bg = _partyPanel.AddComponent<Image>();
             bg.color = PanelBg;
+            AddGiltRim(_partyPanel);
 
             var vlg = _partyPanel.AddComponent<VerticalLayoutGroup>();
             vlg.spacing = 4;
@@ -334,7 +371,7 @@ namespace DeNelle.BattleATB
             rt.sizeDelta = new Vector2(400, 46);
 
             var bg = go.AddComponent<Image>();
-            bg.color = new Color(0.08f, 0.08f, 0.12f, 0.9f);
+            bg.color = ParchmentLite;  // lighter card on the parchment panel
 
             var hlg = go.AddComponent<HorizontalLayoutGroup>();
             hlg.spacing = 6;
@@ -346,7 +383,7 @@ namespace DeNelle.BattleATB
             var portRt = portGO.AddComponent<RectTransform>();
             portRt.sizeDelta = new Vector2(38, 38);
             var portImg = portGO.AddComponent<Image>();
-            portImg.color = new Color(0.4f, 0.4f, 0.5f); // grey placeholder
+            portImg.color = new Color(0.74f, 0.66f, 0.50f); // warm tan placeholder (on light)
 
             // Right column: name + bars
             var right = new GameObject("RightCol");
@@ -356,8 +393,8 @@ namespace DeNelle.BattleATB
             var v = right.AddComponent<VerticalLayoutGroup>();
             v.spacing = 1;
 
-            // Name
-            var nameGO = CreateText("Hero", right.transform, Vector2.zero, 13, Gold, TextAlignmentOptions.Left);
+            // Name — ink on light (active state re-tinted in Render)
+            var nameGO = CreateText("Hero", right.transform, Vector2.zero, 13, Ink, TextAlignmentOptions.Left);
             var nameTmp = nameGO.GetComponent<TextMeshProUGUI>();
 
             // HP row
@@ -398,17 +435,17 @@ namespace DeNelle.BattleATB
             var h = row.AddComponent<HorizontalLayoutGroup>();
             h.spacing = 4;
 
-            // Label
-            var lbl = CreateText(label, row.transform, Vector2.zero, 10, Gold, TextAlignmentOptions.Left);
+            // Label — muted ink, readable on light parchment
+            var lbl = CreateText(label, row.transform, Vector2.zero, 10, InkDim, TextAlignmentOptions.Left);
             lbl.GetComponent<RectTransform>().sizeDelta = new Vector2(28, 12);
 
-            // Bar background
+            // Bar background — warm tan recess (not black) on the light card
             var barBg = new GameObject("BarBg");
             barBg.transform.SetParent(row.transform, false);
             var bgRt = barBg.AddComponent<RectTransform>();
             bgRt.sizeDelta = new Vector2(220, 10);
             var bgImg = barBg.AddComponent<Image>();
-            bgImg.color = Color.black;
+            bgImg.color = BarTrack;
 
             // Fill
             var fill = new GameObject("Fill");
@@ -456,7 +493,7 @@ namespace DeNelle.BattleATB
             // Highlight active (simple tint on name or bar)
             foreach (var s in _partySlots)
             {
-                if (s.Name) s.Name.color = (s.Name.text == activeName) ? AtbReadyColor : Gold;
+                if (s.Name) s.Name.color = (s.Name.text == activeName) ? AtbReadyColor : Ink;
             }
         }
 

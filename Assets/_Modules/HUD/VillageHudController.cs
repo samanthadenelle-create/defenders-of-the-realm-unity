@@ -269,6 +269,74 @@ namespace DeNelle.HUD
         private System.Type _heroType;
         private float _contextPollTimer;
 
+        // =====================================================================
+        //  LIGHT PALETTE (self-contained tone inversion — WO light-restyle)
+        // ---------------------------------------------------------------------
+        //  Owner north-star: LIGHT warm-PARCHMENT panels (NOT dark glass), DARK
+        //  ink text, THIN glowing gilt/rune borders, soft low-opacity gold glow,
+        //  airy/ethereal. This is a SKIN, not a relayout — every position, data
+        //  binding and update path is byte-for-byte unchanged. We keep these
+        //  colours LOCAL (do NOT mutate the shared ElarionUiKit/HudTheme tokens)
+        //  so the other not-yet-restyled screens keep their current look.
+        //
+        //  READABILITY (the #1 risk of a tone inversion): the kit's body-text
+        //  token (HudTheme.Text) is CREAM — invisible on light parchment. So we
+        //  drive ALL text off LInk/LInkDim (dark) instead, and flip the legacy
+        //  black drop-shadow outlines (built for light-text-on-dark) to a faint
+        //  PARCHMENT glow (LGlow) — dark ink on warm parchment needs a soft light
+        //  halo, never a black one. Gilt/Gold accents + the gold CTA buttons keep
+        //  their existing ink-on-gold contrast (already correct on a light bg).
+        // =====================================================================
+
+        // Panel fills — light warm parchment, low opacity for the airy/ethereal feel.
+        private static readonly Color LParch     = new Color(0.929f, 0.902f, 0.839f, 0.93f); // #EDE6D6 main panel
+        private static readonly Color LParchDeep = new Color(0.910f, 0.875f, 0.784f, 0.96f); // #E8DFC8 heavier tray
+        private static readonly Color LParchSoft = new Color(0.945f, 0.925f, 0.875f, 0.82f); // airy inset cell
+        // Recessed bar track — a soft warm shadow on light (NOT near-black).
+        private static readonly Color LWell      = new Color(0.40f, 0.34f, 0.24f, 0.30f);
+        // Text — dark ink on the new light bg (ElarionUi.Ink = #231910 dark brown).
+        private static readonly Color LInk        = new Color(0.137f, 0.098f, 0.055f, 1f); // primary dark ink
+        private static readonly Color LInkDim      = new Color(0.314f, 0.255f, 0.176f, 1f); // muted ink (secondary)
+        // Thin glowing gilt/rune rim + soft gold glow (the spec border treatment).
+        private static readonly Color LGilt       = new Color(0.831f, 0.686f, 0.216f, 0.95f); // crisp gilt rune line
+        private static readonly Color LGiltSoft    = new Color(0.831f, 0.686f, 0.216f, 0.42f); // soft glow underline
+        // Faint parchment halo replacing the legacy black text outlines on light.
+        private static readonly Color32 LGlow      = new Color32(255, 250, 238, 150);
+        // Portrait / slot rune-frame fill on light.
+        private static readonly Color LSlotFill    = new Color(0.882f, 0.847f, 0.769f, 0.95f);
+        private static readonly Color LPortrait    = new Color(0.871f, 0.831f, 0.741f, 0.97f);
+
+        /// <summary>
+        /// LIGHT panel frame — warm parchment fill + a thin glowing gilt rune rim
+        /// (crisp inner hairline) + a soft gold glow underline. The light-restyle
+        /// analogue of the dark <see cref="FramePanel"/>: same three decorative,
+        /// non-raycast children, so behaviour is unchanged — only the tone flips.
+        /// </summary>
+        private static void FramePanelLight(GameObject go, Color fill)
+        {
+            HudTheme.StylePanel(go, fill);
+            ElarionUiKit.AddInnerRim(go, LGilt);   // thin glowing gilt rune line
+            HudTheme.AddRim(go, LGiltSoft);        // soft low-opacity gold glow
+        }
+
+        /// <summary>LIGHT recessed bar track — soft warm shadow (not near-black).</summary>
+        private static Image StyleWellLight(GameObject go)
+        {
+            var img = HudTheme.StyleWell(go);
+            if (img != null) img.color = LWell;
+            return img;
+        }
+
+        /// <summary>Re-tint a TMP label to dark ink on light + a faint parchment halo.</summary>
+        private static TextMeshProUGUI Ink(TextMeshProUGUI t, bool dim = false)
+        {
+            if (t == null) return t;
+            t.color = dim ? LInkDim : LInk;
+            t.outlineColor = LGlow;
+            t.outlineWidth = 0.06f;
+            return t;
+        }
+
         private void Awake()
         {
             CoreServices.RegisterHud(this);
@@ -440,9 +508,10 @@ namespace DeNelle.HUD
                 {
                     int total = Mathf.Max(0, Mathf.CeilToInt(_townTimerSeconds));
                     _townTimerText.text = string.Format("Next wave {0:00}:{1:00}", total / 60, total % 60);
-                    // urgency: <10s red, <30s amber, else calm cream.
+                    // urgency: <10s red, <30s amber, else calm DARK INK (was cream —
+                    // invisible on the new light parchment plate).
                     _townTimerText.color = _townTimerSeconds < 10f ? HudTheme.LookoutIncoming
-                        : _townTimerSeconds < 30f ? HudTheme.LookoutAlert : HudTheme.Text;
+                        : _townTimerSeconds < 30f ? HudTheme.LookoutAlert : LInk;
                 }
             }
 
@@ -454,7 +523,8 @@ namespace DeNelle.HUD
                     if (_townResFlash[i] <= 0f || _townResBadge[i] == null) continue;
                     _townResFlash[i] = Mathf.Max(0f, _townResFlash[i] - dt * 2.2f);
                     Color flash = _townResFlashUp[i] ? HudTheme.LookoutSafe : HudTheme.HpRed;
-                    _townResBadge[i].color = Color.Lerp(HudTheme.Glass, flash, _townResFlash[i] * 0.6f);
+                    // LIGHT: rest baseline is the light parchment badge, not dark glass.
+                    _townResBadge[i].color = Color.Lerp(LParch, flash, _townResFlash[i] * 0.6f);
                 }
             }
 
@@ -531,7 +601,7 @@ namespace DeNelle.HUD
                 _bellPulse = 0f;
                 _townBell.localScale = Vector3.one;
                 _townBell.localRotation = Quaternion.identity;
-                _townBellGlyph.color = HudTheme.TextDim;
+                _townBellGlyph.color = LInkDim;
             }
         }
 
@@ -652,7 +722,7 @@ namespace DeNelle.HUD
         private void BuildResourceStrip(Transform parent)
         {
             _resourceStrip = NewRect("ResourceStrip", parent, new Vector2(0.50f, 0.955f), new Vector2(1f, 1f));
-            FramePanel(_resourceStrip.gameObject, ElarionUiKit.Glass);
+            FramePanelLight(_resourceStrip.gameObject, LParch);
 
             string[] names  = { "Wood", "Iron", "Crystal", "Gold" };
             string[] glyphs = { "▲", "◆", "❖", "●" };
@@ -674,7 +744,7 @@ namespace DeNelle.HUD
                 AddText(disc, glyphs[i], 16, HudTheme.Ink, TextAlignmentOptions.Center);
 
                 var amt = NewRect("Amt", cell, new Vector2(0.36f, 0f), new Vector2(0.98f, 1f));
-                _resourceTexts[i] = AddText(amt, "0", 26, HudTheme.Text, TextAlignmentOptions.Left);
+                _resourceTexts[i] = Ink(AddText(amt, "0", 26, LInk, TextAlignmentOptions.Left));
                 _resourceTexts[i].fontStyle = FontStyles.Bold;
             }
         }
@@ -691,27 +761,27 @@ namespace DeNelle.HUD
         private void BuildCastleBanner(Transform parent)
         {
             _castleBanner = NewRect("CastleBanner", parent, new Vector2(0.30f, 0.94f), new Vector2(0.70f, 1f));
-            // Deeper glass + the full kit frame (glass fill + inner hairline rim +
-            // soft gold underline) — the premium framed look the inventory has.
-            FramePanel(_castleBanner.gameObject, ElarionUiKit.GlassDeep);
+            // LIGHT: warm parchment plate + thin glowing gilt rune rim + soft glow.
+            FramePanelLight(_castleBanner.gameObject, LParchDeep);
 
             // Crest leaf glyph (the world-tree mark) tucked top-left of the banner.
             var crest = NewRect("Crest", _castleBanner, new Vector2(0.015f, 0.42f), new Vector2(0.11f, 0.96f));
-            AddText(crest, "❦", HudTheme.FontHead, HudTheme.Gilt, TextAlignmentOptions.Center);
+            AddText(crest, "❦", HudTheme.FontHead, LGilt, TextAlignmentOptions.Center);
 
             // Caption row — small spaced gilt label so the bar reads as the Heart.
             var caption = NewRect("Caption", _castleBanner, new Vector2(0.11f, 0.56f), new Vector2(0.99f, 0.97f));
-            var cap = AddText(caption, "HEART OF ELARION", HudTheme.FontLabel, HudTheme.Gilt, TextAlignmentOptions.MidlineLeft);
+            // Dark-ink caption (gilt-on-light cream washed out); keep the regal spacing.
+            var cap = AddText(caption, "HEART OF ELARION", HudTheme.FontLabel, LInk, TextAlignmentOptions.MidlineLeft);
             cap.fontStyle = FontStyles.Bold;
             cap.characterSpacing = 3f;
-            cap.outlineColor = new Color32(0, 0, 0, 160);
-            cap.outlineWidth = 0.1f;
+            cap.outlineColor = LGlow;
+            cap.outlineWidth = 0.06f;
 
-            // Recessed well track for the fill — given the kit's crisp inner rim so it
-            // reads inset/depthful instead of a flat bar.
+            // Recessed well track for the fill — soft warm shadow + a thin gilt rim
+            // so it reads inset/depthful on the light plate instead of a flat bar.
             var track = NewRect("Track", _castleBanner, new Vector2(0.11f, 0.10f), new Vector2(0.99f, 0.52f));
-            HudTheme.StyleWell(track.gameObject);
-            ElarionUiKit.AddInnerRim(track.gameObject, new Color(0f, 0f, 0f, 0.45f));
+            StyleWellLight(track.gameObject);
+            ElarionUiKit.AddInnerRim(track.gameObject, LGiltSoft);
 
             var fill = NewRect("Fill", track, Vector2.zero, Vector2.one);
             fill.offsetMin = new Vector2(2f, 2f); fill.offsetMax = new Vector2(-2f, -2f);
@@ -735,10 +805,11 @@ namespace DeNelle.HUD
             sheenImg.raycastTarget = false;
 
             // Percentage value centred over the track (kept as _castleText for SetHeartHp).
-            _castleText = AddText(track, "Heart of Elarion — 100%", HudTheme.FontLabel, HudTheme.Text, TextAlignmentOptions.Center);
+            // Dark ink + faint parchment halo so it stays legible over the HP fill.
+            _castleText = AddText(track, "Heart of Elarion — 100%", HudTheme.FontLabel, LInk, TextAlignmentOptions.Center);
             _castleText.fontStyle = FontStyles.Bold;
-            _castleText.outlineColor = new Color32(0, 0, 0, 200);
-            _castleText.outlineWidth = 0.18f;
+            _castleText.outlineColor = LGlow;
+            _castleText.outlineWidth = 0.12f;
         }
 
         // ── Wave readout — floating minimal text, no panel. ───────────────────
@@ -806,26 +877,33 @@ namespace DeNelle.HUD
                 frame.pivot = new Vector2(0.5f, 1f);
                 frame.anchoredPosition = new Vector2(0f, -i * (PartyRowHeight + PartyRowGap));
                 frame.sizeDelta = new Vector2(0f, PartyRowHeight);
-                // Kit-framed glass row (inner rim = the inventory's crisp depth);
-                // keep the gold underline on the HERO row only (slot 0) to preserve
-                // its existing emphasis.
-                HudTheme.StylePanel(frame.gameObject, ElarionUiKit.Glass);
-                ElarionUiKit.AddInnerRim(frame.gameObject, ElarionUiKit.AccentSoft);
-                if (i == 0) HudTheme.AddRim(frame.gameObject, HudTheme.AccentSoft);
+                // LIGHT: warm parchment row + thin glowing gilt rune rim. Slot 0
+                // (hero) keeps the soft gold glow underline for its existing emphasis.
+                HudTheme.StylePanel(frame.gameObject, i == 0 ? LParchDeep : LParch);
+                ElarionUiKit.AddInnerRim(frame.gameObject, LGilt);
+                if (i == 0) HudTheme.AddRim(frame.gameObject, LGiltSoft);
                 _partyFrame[i] = frame.gameObject;
 
-                // Portrait swatch
-                var port = NewRect("Portrait", frame, new Vector2(0.04f, 0.18f), new Vector2(0.26f, 0.90f));
+                // Slim circular rune-framed portrait (light): a round well-disc seat
+                // with a thin gilt rune ring, toward the mockup's circular portraits.
+                var port = NewRect("Portrait", frame, new Vector2(0.05f, 0.16f), new Vector2(0.255f, 0.92f));
                 var pimg = port.gameObject.AddComponent<Image>();
-                pimg.color = HudTheme.PortraitFill;
-                pimg.sprite = HudTheme.RoundedFrame;
-                pimg.type = HudTheme.RoundedFrame != null ? Image.Type.Sliced : Image.Type.Simple;
+                pimg.color = LPortrait;
+                pimg.sprite = HudTheme.Disc;                 // circular seat
                 pimg.raycastTarget = false;
-                AddText(port, "✦", 18, new Color(HudTheme.Gilt.r, HudTheme.Gilt.g, HudTheme.Gilt.b, 0.45f), TextAlignmentOptions.Center);
+                var pring = NewRect("Ring", port, Vector2.zero, Vector2.one);
+                var pringImg = pring.gameObject.AddComponent<Image>();
+                pringImg.color = LGilt;                      // thin gilt rune ring
+                pringImg.sprite = HudTheme.Disc;
+                pringImg.raycastTarget = false;
+                pringImg.transform.SetSiblingIndex(0);       // behind the seat = rim
+                port.localScale = Vector3.one;
+                pring.offsetMin = new Vector2(-1.5f, -1.5f); pring.offsetMax = new Vector2(1.5f, 1.5f);
+                AddText(port, "✦", 18, new Color(LGilt.r, LGilt.g, LGilt.b, 0.85f), TextAlignmentOptions.Center);
 
                 // Name
                 var nameRect = NewRect("Name", frame, new Vector2(0.30f, 0.50f), new Vector2(0.98f, 0.96f));
-                _partyName[i] = AddText(nameRect, i == 0 ? "Hero" : "—", 16, HudTheme.Text, TextAlignmentOptions.Left);
+                _partyName[i] = Ink(AddText(nameRect, i == 0 ? "Hero" : "—", 16, LInk, TextAlignmentOptions.Left));
                 _partyName[i].fontStyle = FontStyles.Bold;
                 _partyName[i].enableAutoSizing = true;
                 _partyName[i].fontSizeMin = 9f;
@@ -833,7 +911,7 @@ namespace DeNelle.HUD
 
                 // HP bar
                 var track = NewRect("HPTrack", frame, new Vector2(0.30f, 0.14f), new Vector2(0.98f, 0.46f));
-                HudTheme.StyleWell(track.gameObject);
+                StyleWellLight(track.gameObject);
                 var fill = NewRect("HPFill", track, Vector2.zero, Vector2.one);
                 fill.offsetMin = new Vector2(1f, 1f); fill.offsetMax = new Vector2(-1f, -1f);
                 var fimg = fill.gameObject.AddComponent<Image>();
@@ -845,9 +923,11 @@ namespace DeNelle.HUD
                 fimg.fillAmount = 1f;
                 fimg.raycastTarget = false;
                 _partyHpFill[i] = fimg;
+                // HP value sits over the red fill — keep CREAM text + dark halo here
+                // (high contrast on the saturated red bar; dark ink would muddy).
                 _partyHpText[i] = AddText(track, "", 12, HudTheme.Text, TextAlignmentOptions.Center);
-                _partyHpText[i].outlineColor = new Color32(0, 0, 0, 160);
-                _partyHpText[i].outlineWidth = 0.1f;
+                _partyHpText[i].outlineColor = new Color32(40, 16, 16, 200);
+                _partyHpText[i].outlineWidth = 0.14f;
 
                 _partyFrame[i].SetActive(i == 0);
             }
@@ -861,7 +941,7 @@ namespace DeNelle.HUD
         private void BuildVitalsCluster(Transform parent)
         {
             _vitalsCluster = NewRect("VitalsCluster", parent, new Vector2(0.02f, 0.165f), new Vector2(0.40f, 0.235f));
-            FramePanel(_vitalsCluster.gameObject, ElarionUiKit.Glass);
+            FramePanelLight(_vitalsCluster.gameObject, LParch);
 
             // HP bar (top half) — REMOVED (WO-382): the hero's HP was shown twice —
             // here (bottom-left red bar) AND in the top-left party panel (slot 0).
@@ -876,7 +956,7 @@ namespace DeNelle.HUD
             // no full-screen XP bar; show level progress visually next to health).
             // Sits in the gap between the HP track top (0.92) and the panel top (1.0).
             var xpTrack = NewRect("XPTrack", _vitalsCluster, new Vector2(0.05f, 0.935f), new Vector2(0.95f, 0.99f));
-            HudTheme.StyleWell(xpTrack.gameObject);
+            StyleWellLight(xpTrack.gameObject);
             var xpFill = NewRect("XPFill", xpTrack, Vector2.zero, Vector2.one);
             xpFill.offsetMin = new Vector2(1f, 1f); xpFill.offsetMax = new Vector2(-1f, -1f);
             _xpLineFill = xpFill.gameObject.AddComponent<Image>();
@@ -890,7 +970,7 @@ namespace DeNelle.HUD
 
             // Mana bar (bottom half)
             var mTrack = NewRect("ManaTrack", _vitalsCluster, new Vector2(0.05f, 0.10f), new Vector2(0.95f, 0.48f));
-            HudTheme.StyleWell(mTrack.gameObject);
+            StyleWellLight(mTrack.gameObject);
             var mFill = NewRect("ManaFill", mTrack, Vector2.zero, Vector2.one);
             mFill.offsetMin = new Vector2(1.5f, 1.5f); mFill.offsetMax = new Vector2(-1.5f, -1.5f);
             _manaFill = mFill.gameObject.AddComponent<Image>();
@@ -901,9 +981,11 @@ namespace DeNelle.HUD
             _manaFill.fillOrigin = 0;
             _manaFill.fillAmount = 1f;
             _manaFill.raycastTarget = false;
+            // Value over the blue mana fill — cream + dark halo keeps it crisp on the
+            // saturated blue (and on the light empty track the dark halo still reads).
             _manaText = AddText(mTrack, "", 13, HudTheme.Text, TextAlignmentOptions.Center);
             _manaText.fontStyle = FontStyles.Bold;
-            _manaText.outlineColor = new Color32(0, 0, 0, 170); _manaText.outlineWidth = 0.1f;
+            _manaText.outlineColor = new Color32(10, 18, 44, 200); _manaText.outlineWidth = 0.14f;
         }
 
         // ── Bottom-RIGHT ability cluster — 2×2 grid of skill cells (RIGHT thumb). ─
@@ -915,7 +997,7 @@ namespace DeNelle.HUD
         private void BuildSkillBar(Transform parent)
         {
             _skillBar = NewRect("SkillBar", parent, new Vector2(0.62f, 0.0f), new Vector2(1.0f, 0.22f));
-            FramePanel(_skillBar.gameObject, ElarionUiKit.GlassDeep);
+            FramePanelLight(_skillBar.gameObject, LParchDeep);
 
             _slotKey      = new TextMeshProUGUI[AbilitySlotCount];
             _slotGlyph    = new TextMeshProUGUI[AbilitySlotCount];
@@ -943,21 +1025,27 @@ namespace DeNelle.HUD
                 float y = marginY + row * (cellH + gapY);
                 var cell = NewRect("Slot" + i, _skillBar, new Vector2(x, y), new Vector2(x + cellW, y + cellH));
                 var cellImg = cell.gameObject.AddComponent<Image>();
-                cellImg.color = ElarionUiKit.Cell;   // kit cell tint — matches the inventory slots
+                cellImg.color = LParchSoft;   // light parchment cell seat
                 cellImg.sprite = HudTheme.RoundedFrame;
                 cellImg.type = HudTheme.RoundedFrame != null ? Image.Type.Sliced : Image.Type.Simple;
+                // thin gilt rune rim per cell (the airy framed look).
+                ElarionUiKit.AddInnerRim(cell.gameObject, LGiltSoft);
 
-                // Accent square (tinted per ability) — fills most of the cell.
+                // Accent square (tinted per ability) — fills most of the cell. Light
+                // rune-frame seat so an unset slot reads parchment, not dark glass;
+                // SetAbilitySlot still recolours this per-ability (kept).
                 var disc = NewRect("Accent", cell, new Vector2(0.10f, 0.36f), new Vector2(0.90f, 0.96f));
                 _slotAccent[i] = disc.gameObject.AddComponent<Image>();
-                _slotAccent[i].color = HudTheme.SlotDisc;
+                _slotAccent[i].color = LSlotFill;
                 _slotAccent[i].sprite = HudTheme.RoundedFrame;
                 _slotAccent[i].type = HudTheme.RoundedFrame != null ? Image.Type.Sliced : Image.Type.Simple;
                 _slotAccent[i].raycastTarget = false;
 
-                _slotGlyph[i] = AddText(disc, "", 30, HudTheme.Text, TextAlignmentOptions.Center);
-                _slotGlyph[i].outlineColor = new Color32(0, 0, 0, 150);
-                _slotGlyph[i].outlineWidth = 0.1f;
+                // Glyph: dark ink (legible on the light seat AND on tinted ability
+                // accents, which SetAbilitySlot sets at 0.85 alpha over the light cell).
+                _slotGlyph[i] = AddText(disc, "", 30, LInk, TextAlignmentOptions.Center);
+                _slotGlyph[i].outlineColor = LGlow;
+                _slotGlyph[i].outlineWidth = 0.06f;
 
                 // Cooldown radial overlay
                 var cd = NewRect("CD", disc, Vector2.zero, Vector2.one);
@@ -973,28 +1061,28 @@ namespace DeNelle.HUD
 
                 // Ability NAME label
                 var nameRect = NewRect("Name", cell, new Vector2(0.02f, 0.0f), new Vector2(0.98f, 0.32f));
-                _slotName[i] = AddText(nameRect, "", 14, HudTheme.Text, TextAlignmentOptions.Center);
+                _slotName[i] = AddText(nameRect, "", 14, LInk, TextAlignmentOptions.Center);
                 _slotName[i].fontStyle = FontStyles.Bold;
                 _slotName[i].enableAutoSizing = true;
                 _slotName[i].fontSizeMin = 8f;
                 _slotName[i].fontSizeMax = 14f;
                 _slotName[i].raycastTarget = false;
-                _slotName[i].outlineColor = new Color32(0, 0, 0, 140);
-                _slotName[i].outlineWidth = 0.08f;
+                _slotName[i].outlineColor = LGlow;
+                _slotName[i].outlineWidth = 0.06f;
 
-                // Hotkey badge (top-right)
+                // Hotkey badge (top-right) — small gilt chip with dark ink letter.
                 var keyBadge = NewRect("KeyBadge", cell, new Vector2(0.70f, 0.70f), new Vector2(1.0f, 1.0f));
                 var keyImg = keyBadge.gameObject.AddComponent<Image>();
                 keyImg.sprite = HudTheme.RoundedFrame;
                 keyImg.type = HudTheme.RoundedFrame != null ? Image.Type.Sliced : Image.Type.Simple;
-                keyImg.color = new Color(0f, 0f, 0f, 0.6f);
+                keyImg.color = new Color(LGilt.r, LGilt.g, LGilt.b, 0.85f);
                 keyImg.raycastTarget = false;
-                _slotKey[i] = AddText(keyBadge, defaultKeys[i], 14, HudTheme.Gold, TextAlignmentOptions.Center);
+                _slotKey[i] = AddText(keyBadge, defaultKeys[i], 14, LInk, TextAlignmentOptions.Center);
                 _slotKey[i].fontStyle = FontStyles.Bold;
 
                 var btn = cell.gameObject.AddComponent<Button>();
                 btn.targetGraphic = cellImg;
-                HudTheme.StyleButtonColors(btn, HudTheme.Cell);
+                HudTheme.StyleButtonColors(btn, LParchSoft);
                 int slot = i;
                 btn.onClick.AddListener(() => AbilityRequested?.Invoke(slot));
             }
@@ -1045,11 +1133,11 @@ namespace DeNelle.HUD
         private void BuildRepairPrompt(Transform parent)
         {
             var p = NewRect("RepairPrompt", parent, new Vector2(0.30f, 0.42f), new Vector2(0.70f, 0.58f));
-            FramePanel(p.gameObject, ElarionUiKit.GlassDeep);
+            FramePanelLight(p.gameObject, LParchDeep);
             _repairPanel = p.gameObject;
 
             var labelRect = NewRect("Label", p, new Vector2(0.05f, 0.52f), new Vector2(0.95f, 0.95f));
-            _repairLabel = AddText(labelRect, "", 20, HudTheme.Text, TextAlignmentOptions.Center);
+            _repairLabel = Ink(AddText(labelRect, "", 20, LInk, TextAlignmentOptions.Center));
             _repairLabel.fontStyle = FontStyles.Bold;
 
             var yes = NewRect("Yes", p, new Vector2(0.10f, 0.10f), new Vector2(0.46f, 0.44f));
@@ -1065,14 +1153,15 @@ namespace DeNelle.HUD
 
             var no = NewRect("No", p, new Vector2(0.54f, 0.10f), new Vector2(0.90f, 0.44f));
             var nimg = no.gameObject.AddComponent<Image>();
-            nimg.color = HudTheme.Glass;
+            nimg.color = LParchSoft;
             nimg.sprite = HudTheme.RoundedFrame;
             nimg.type = HudTheme.RoundedFrame != null ? Image.Type.Sliced : Image.Type.Simple;
             var noBtn = no.gameObject.AddComponent<Button>();
             noBtn.targetGraphic = nimg;
-            HudTheme.StyleButtonColors(noBtn, HudTheme.Glass);
+            HudTheme.StyleButtonColors(noBtn, LParchSoft);
+            ElarionUiKit.AddInnerRim(no.gameObject, LGiltSoft);
             noBtn.onClick.AddListener(() => { RepairCancelRequested?.Invoke(); HideRepairPrompt(); });
-            AddText(no, "Later", HudTheme.FontBody, HudTheme.Text, TextAlignmentOptions.Center);
+            AddText(no, "Later", HudTheme.FontBody, LInk, TextAlignmentOptions.Center);
 
             _repairPanel.SetActive(false);
         }
@@ -1086,7 +1175,7 @@ namespace DeNelle.HUD
         {
             _townWaveCluster = NewRect("TownWave", parent, new Vector2(0f, 1f), new Vector2(0f, 1f));
             AnchorTopLeft(_townWaveCluster, x: 12f, y: 12f, width: 300f, height: 118f);
-            FramePanel(_townWaveCluster.gameObject, ElarionUiKit.Glass);
+            FramePanelLight(_townWaveCluster.gameObject, LParch);
 
             // Lookout status badge (pip + label) — top row.
             var badgeRect = NewRect("Lookout", _townWaveCluster, new Vector2(0.04f, 0.66f), new Vector2(0.30f, 0.94f));
@@ -1101,27 +1190,28 @@ namespace DeNelle.HUD
             // Countdown timer (MM:SS) — top row, large. Leaves room on the right for
             // the lookout bell.
             var timerRect = NewRect("Timer", _townWaveCluster, new Vector2(0.32f, 0.62f), new Vector2(0.86f, 0.97f));
-            _townTimerText = AddText(timerRect, "Next wave —:—", HudTheme.FontHead, HudTheme.Text, TextAlignmentOptions.MidlineRight);
+            _townTimerText = AddText(timerRect, "Next wave —:—", HudTheme.FontHead, LInk, TextAlignmentOptions.MidlineRight);
             _townTimerText.fontStyle = FontStyles.Bold;
-            _townTimerText.outlineColor = new Color32(0, 0, 0, 160);
-            _townTimerText.outlineWidth = 0.12f;
+            _townTimerText.outlineColor = LGlow;
+            _townTimerText.outlineWidth = 0.06f;
 
             // Lookout BELL — top-right of the cluster, beside the timer. Signals an
             // incoming/active wave: it brightens + pulses when the lookout escalates
             // (status ≥ 2). At rest it sits dim. Bound to _lookoutStatus (the same
             // signal as the status pip) — animated in AnimateLookoutBell().
             _townBell = NewRect("LookoutBell", _townWaveCluster, new Vector2(0.86f, 0.60f), new Vector2(0.99f, 0.99f));
-            _townBellGlyph = AddText(_townBell, "🔔", HudTheme.FontHead + 2, HudTheme.TextDim, TextAlignmentOptions.Center);
-            _townBellGlyph.outlineColor = new Color32(0, 0, 0, 160);
-            _townBellGlyph.outlineWidth = 0.12f;
+            // Rest = muted ink (was dim cream — invisible on light); pulses gilt→hot.
+            _townBellGlyph = AddText(_townBell, "🔔", HudTheme.FontHead + 2, LInkDim, TextAlignmentOptions.Center);
+            _townBellGlyph.outlineColor = LGlow;
+            _townBellGlyph.outlineWidth = 0.06f;
 
             // Wave progress label + bar — bottom rows.
             var progLabel = NewRect("ProgLabel", _townWaveCluster, new Vector2(0.04f, 0.34f), new Vector2(0.96f, 0.60f));
-            _townWaveProgText = AddText(progLabel, "Wave 1", 14, HudTheme.TextDim, TextAlignmentOptions.Left);
+            _townWaveProgText = Ink(AddText(progLabel, "Wave 1", 14, LInkDim, TextAlignmentOptions.Left), dim: true);
             _townWaveProgText.fontStyle = FontStyles.Bold;
 
             var progTrack = NewRect("ProgTrack", _townWaveCluster, new Vector2(0.04f, 0.10f), new Vector2(0.96f, 0.30f));
-            HudTheme.StyleWell(progTrack.gameObject);
+            StyleWellLight(progTrack.gameObject);
             var progFill = NewRect("ProgFill", progTrack, Vector2.zero, Vector2.one);
             progFill.offsetMin = new Vector2(1.5f, 1.5f); progFill.offsetMax = new Vector2(-1.5f, -1.5f);
             _townWaveProgFill = progFill.gameObject.AddComponent<Image>();
@@ -1142,10 +1232,13 @@ namespace DeNelle.HUD
             _townPassiveXp = NewRect("TownPassiveXp", parent, new Vector2(0f, 1f), new Vector2(0f, 1f));
             // Sits just below the 118px-tall wave cluster (top-left, y:12).
             AnchorTopLeft(_townPassiveXp, x: 12f, y: 136f, width: 248f, height: 26f);
-            FramePanel(_townPassiveXp.gameObject, ElarionUiKit.Glass);
+            FramePanelLight(_townPassiveXp.gameObject, LParch);
 
             var label = NewRect("Label", _townPassiveXp, new Vector2(0.04f, 0.08f), new Vector2(0.96f, 0.92f));
+            // Aether-violet accent reads on parchment; add a faint light halo for lift.
             _townPassiveXpText = AddText(label, "⚡ Towers earning 0 XP/min", 13, HudTheme.Crystal, TextAlignmentOptions.MidlineLeft);
+            _townPassiveXpText.outlineColor = LGlow;
+            _townPassiveXpText.outlineWidth = 0.06f;
             _townPassiveXpText.fontStyle = FontStyles.Bold;
             _townPassiveXpText.raycastTarget = false;
 
@@ -1169,10 +1262,12 @@ namespace DeNelle.HUD
             for (int i = 0; i < 4; i++)
             {
                 var cell = NewRect("Res_" + names[i], _townResStrip, new Vector2(i * w + 0.01f, 0.08f), new Vector2((i + 1) * w - 0.01f, 0.92f));
-                _townResBadge[i] = HudTheme.StylePanel(cell.gameObject, HudTheme.Glass);
-                // Kit inner rim for the inventory's crisp depth — decorative child,
-                // does NOT touch the badge Image that the +/- flash logic re-tints.
-                ElarionUiKit.AddInnerRim(cell.gameObject, ElarionUiKit.AccentSoft);
+                // LIGHT parchment badge; the +/- flash logic lerps from this base
+                // (LParch) toward green/red — see UpdateTownHud (baseline flipped too).
+                _townResBadge[i] = HudTheme.StylePanel(cell.gameObject, LParch);
+                // Thin glowing gilt rune rim — decorative child, does NOT touch the
+                // badge Image that the +/- flash logic re-tints.
+                ElarionUiKit.AddInnerRim(cell.gameObject, LGiltSoft);
 
                 // red low-warn outline overlay (hidden until value < threshold).
                 var outline = NewRect("Low", cell, Vector2.zero, Vector2.one);
@@ -1190,7 +1285,7 @@ namespace DeNelle.HUD
                 AddText(dot, glyphs[i], 14, HudTheme.Ink, TextAlignmentOptions.Center);
 
                 var amt = NewRect("Amt", cell, new Vector2(0.32f, 0f), new Vector2(0.97f, 1f));
-                _townResText[i] = AddText(amt, "0", 20, HudTheme.Text, TextAlignmentOptions.Left);
+                _townResText[i] = Ink(AddText(amt, "0", 20, LInk, TextAlignmentOptions.Left));
                 _townResText[i].fontStyle = FontStyles.Bold;
             }
         }
@@ -1242,7 +1337,7 @@ namespace DeNelle.HUD
         private void BuildTownMetrics(Transform parent)
         {
             _townMetrics = NewRect("TownMetrics", parent, new Vector2(0.30f, 0f), new Vector2(0.70f, 0.05f));
-            FramePanel(_townMetrics.gameObject, ElarionUiKit.Glass);
+            FramePanelLight(_townMetrics.gameObject, LParch);
 
             _townHeartText = BuildMetricCol(_townMetrics, 0f, 1f / 3f, "♥ Heart", "100%", HudTheme.HpRed);
             _townTowerText = BuildMetricCol(_townMetrics, 1f / 3f, 2f / 3f, "⛨ Towers", "0/0", HudTheme.Gold);
@@ -1256,7 +1351,7 @@ namespace DeNelle.HUD
             var lt = AddText(lab, label, 13, new Color(tint.r, tint.g, tint.b, 0.9f), TextAlignmentOptions.MidlineRight);
             lt.fontStyle = FontStyles.Bold;
             var valRect = NewRect("Val", col, new Vector2(0.52f, 0.05f), new Vector2(0.97f, 0.95f));
-            var vt = AddText(valRect, value, 16, HudTheme.Text, TextAlignmentOptions.MidlineLeft);
+            var vt = Ink(AddText(valRect, value, 16, LInk, TextAlignmentOptions.MidlineLeft));
             vt.fontStyle = FontStyles.Bold;
             return vt;
         }
@@ -1485,7 +1580,8 @@ namespace DeNelle.HUD
             if (_townHeartText != null)
             {
                 _townHeartText.text = Mathf.RoundToInt(pct * 100f) + "%";
-                _townHeartText.color = Color.Lerp(HudTheme.HpRed, HudTheme.Text, Mathf.Clamp01(pct / 0.5f));
+                // healthy endpoint = dark ink (was cream — invisible on light parchment).
+                _townHeartText.color = Color.Lerp(HudTheme.HpRed, LInk, Mathf.Clamp01(pct / 0.5f));
             }
         }
 
@@ -1854,10 +1950,11 @@ namespace DeNelle.HUD
             _slotCooldown[slot].fillAmount = fill;
             if (_slotCdFill != null) _slotCdFill[slot] = fill;
             bool ready = fill <= 0.001f;
+            // LIGHT: dark ink when ready, muted ink while on cooldown (was cream/dim).
             if (_slotName != null && _slotName[slot] != null)
-                _slotName[slot].color = ready ? HudTheme.Text : HudTheme.TextDim;
+                _slotName[slot].color = ready ? LInk : LInkDim;
             if (_slotKey != null && _slotKey[slot] != null)
-                _slotKey[slot].color = ready ? HudTheme.Gold : HudTheme.TextDim;
+                _slotKey[slot].color = ready ? LInk : LInkDim;
         }
 
         /// <summary>Per-class ability cell content (key/glyph/name) — 5-arg path.</summary>

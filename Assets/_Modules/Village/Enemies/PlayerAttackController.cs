@@ -331,6 +331,16 @@ namespace DeNelle.Village
 
             Collider[] hits = Physics.OverlapSphere(transform.position, EffectiveRange(), _enemyLayer);
 
+            // Gear v1: the equipped weapon's damageMult multiplies the melee swing — the SAME
+            // scalar HeroAbilities folds into ability casts (base x talent x level x timing x
+            // WEAPON). Previously the melee basic attack only read the weapon for reach, so a
+            // better blade changed range but not damage; now equipping a stronger weapon is
+            // FELT on every swing (e.g. Iron Longsword's 1.25 = +25% melee damage vs starter).
+            // Same field, same lazy _gear cache used by EffectiveRange — no new stat system.
+            // Graceful: no loadout / no weapon = 1.0, so combat is unchanged.
+            if (_gear == null) _gear = GetComponent<GearLoadout>();
+            float weaponMult = _gear != null ? _gear.WeaponMult : 1f;
+
             bool anyHit = false;
             foreach (var col in hits)
             {
@@ -339,7 +349,7 @@ namespace DeNelle.Village
                 if (damageable == null || !damageable.IsAlive) continue;
                 if (damageable.Faction != CombatFaction.Hostile)      continue;
 
-                float damage = _baseDamage;
+                float damage = _baseDamage * weaponMult;
                 if (isPerfect) damage *= _perfectHitMultiplier;
                 if (riposte)   damage *= RiposteMultiplier;   // parry counter — big hit on the tank
 

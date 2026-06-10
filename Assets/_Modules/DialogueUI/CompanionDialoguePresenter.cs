@@ -28,6 +28,7 @@
 
 using UnityEngine;
 using UnityEngine.UI;
+using DeNelle.Core.UI;
 using Yarn.Unity;
 using Yarn.Unity.Addons.ClassicRPG;
 
@@ -47,10 +48,38 @@ namespace DeNelle.DialogueUI
         // hosted presenter (it mutates the live UI hierarchy; re-running is wasteful).
         private bool _optionLayoutRepaired;
 
+        // One-time guard for the light-parchment reskin + name-banner build (both
+        // mutate the live UI hierarchy once per hosted presenter).
+        private bool _reskinned;
+
+        // The speaker name-banner pieces, built once by BuildNameBannerOnce and
+        // re-bound every line. _bannerRoot is the gilt frame Image (shown/hidden per
+        // line); _bannerLabel is a CLONE of the prefab's own TMP line text (so it
+        // carries the correct, WebGL-safe font asset without this assembly needing a
+        // Unity.TextMeshPro reference). Its text/colour are set via the Graphic base
+        // + reflection, never via a TMPro-typed handle.
+        private GameObject _bannerRoot;
+        private Graphic _bannerLabel;
+        private System.Reflection.PropertyInfo _bannerTextProp;
+
         public override async YarnTask RunLineAsync(LocalizedLine line, LineCancellationToken token)
         {
             TryInjectPortraitTag(line);
+            UpdateNameBanner(line);
             await base.RunLineAsync(line, token);
+        }
+
+        // The base presenter renders TextWithoutCharacterName (it discards the
+        // speaker name). We pull CharacterName back out here and surface it in the
+        // gilt banner; the body text stays name-free so the name never double-renders.
+        private void UpdateNameBanner(LocalizedLine line)
+        {
+            if (_bannerRoot == null) return;   // banner build failed / pieces missing
+            string speaker = line != null ? line.CharacterName : null;
+            bool show = !string.IsNullOrEmpty(speaker);
+            _bannerRoot.SetActive(show);
+            if (show && _bannerLabel != null && _bannerTextProp != null)
+                _bannerTextProp.SetValue(_bannerLabel, speaker);
         }
 
         // -----------------------------------------------------------------------
@@ -80,6 +109,8 @@ namespace DeNelle.DialogueUI
         public override YarnTask OnDialogueStartedAsync()
         {
             RepairOptionsLayoutOnce();
+            ReskinToLightParchmentOnce();
+            BuildNameBannerOnce();
             return base.OnDialogueStartedAsync();
         }
 
@@ -136,6 +167,188 @@ namespace DeNelle.DialogueUI
                 itemsFitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
                 itemsFitter.verticalFit   = ContentSizeFitter.FitMode.PreferredSize;
             }
+        }
+
+        // -----------------------------------------------------------------------
+        // LIGHT-PARCHMENT RESKIN (Phase 1 — procedural, no art).
+        // -----------------------------------------------------------------------
+        // North star = a warm LIGHT parchment box with dark ink text, not the dark
+        // ClassicRPG box. Done as runtime surgery on the prefab's EXISTING objects
+        // (resolved by hierarchy, like RepairOptionsLayoutOnce) so the package + the
+        // prefab asset are untouched, it works in builds, and it's idempotent.
+        //
+        // Prefab hierarchy (verified against DialogueSystem.prefab):
+        //   Container (backgroundImage)  -> the box backboard Image
+        //     Line -> Content -> Icon Holder (portrait niche) + Text (body line)
+        //     Options -> Text (option preface) + Items
+        // Reskin steps:
+        //   1. Container Image -> light parchment fill + rounded sprite + gilt rim.
+        //   2. Body "Text" + option "Text" Graphic.color -> dark ink (readable on light).
+        //   3. "Icon Holder" -> thin gilt niche frame behind the portrait.
+        // All null-guarded; a missing child just skips its step.
+        private void ReskinToLightParchmentOnce()
+        {
+            if (_reskinned) return;
+            _reskinned = true;
+
+            // Warm light parchment for the box (opaque enough to read dark ink on).
+            Color parchment = new Color(0.93f, 0.88f, 0.76f, 0.98f);
+            Color giltRim   = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.85f);
+
+            // 1) Box backboard -> thin gilt FRAME with a light-parchment interior.
+            //    The Container's own Image becomes the gilt frame colour; a parchment
+            //    child inset a few px sits ON TOP, leaving only a hairline gilt edge.
+            Transform container = FindDescendant(transform, "Container");
+            if (container != null)
+            {
+                var bg = container.GetComponent<Image>();
+                if (bg != null)
+                {
+                    bg.color = giltRim;              // becomes the thin frame edge
+                    ElarionUiKit.ApplyRounded(bg);   // rounded 9-slice (flat quad if WebGL build failed)
+                    AddParchmentInterior(container.gameObject, parchment);
+                }
+            }
+
+            // 2) Dark ink on the body + option line text (readable on light parchment).
+            TintLineText(FindDescendant(transform, "Line"), ElarionUi.Ink);
+            TintLineText(FindDescendant(transform, "Options"), ElarionUi.Ink);
+
+            // 3) Frame the portrait with a thin gilt niche (a tinted Image BEHIND
+            //    the existing "Icon Holder", inset so a hairline gilt edge shows).
+            Transform iconHolder = FindDescendant(transform, "Icon Holder");
+            if (iconHolder != null && iconHolder.parent != null
+                && iconHolder.Find("PortraitNiche") == null)
+            {
+                var niche = new GameObject("PortraitNiche", typeof(Image));
+                niche.transform.SetParent(iconHolder, false);
+                var nrt = niche.GetComponent<RectTransform>();
+                nrt.anchorMin = Vector2.zero; nrt.anchorMax = Vector2.one;
+                // Slightly larger than the holder so a gilt frame peeks out around the icon.
+                nrt.offsetMin = new Vector2(-6f, -6f);
+                nrt.offsetMax = new Vector2(6f, 6f);
+                var nimg = niche.GetComponent<Image>();
+                nimg.color = giltRim;
+                ElarionUiKit.ApplyRounded(nimg);
+                nimg.raycastTarget = false;
+                niche.transform.SetAsFirstSibling();   // behind the portrait image
+            }
+        }
+
+        // Recolour the TMP line text under a panel WITHOUT a Unity.TextMeshPro
+        // reference: TMP_Text derives from UnityEngine.UI.Graphic, so we find the
+        // text Graphic by its "Text" child and set Graphic.color (the body/option
+        // line text are the only Graphics named "Text" under these panels).
+        private static void TintLineText(Transform panel, Color ink)
+        {
+            if (panel == null) return;
+            Transform text = FindDescendant(panel, "Text");
+            if (text == null) return;
+            var g = text.GetComponent<Graphic>();
+            if (g != null) g.color = ink;
+        }
+
+        // The light-parchment interior plate: a rounded Image inset a few px inside
+        // the (now gilt) box backboard, so only a hairline gilt frame shows around
+        // it. First-sibling = renders above the gilt backboard but behind the line /
+        // option content that follows it in the hierarchy. Idempotent.
+        private static void AddParchmentInterior(GameObject host, Color parchment)
+        {
+            if (host == null || host.transform.Find("ParchmentInterior") != null) return;
+            var go = new GameObject("ParchmentInterior", typeof(Image));
+            go.transform.SetParent(host.transform, false);
+            var rt = go.GetComponent<RectTransform>();
+            rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one;
+            rt.offsetMin = new Vector2(4f, 4f); rt.offsetMax = new Vector2(-4f, -4f);
+            var img = go.GetComponent<Image>();
+            img.color = parchment;
+            ElarionUiKit.ApplyRounded(img);
+            img.raycastTarget = false;
+            go.transform.SetAsFirstSibling();   // above gilt backboard, behind content
+        }
+
+        // -----------------------------------------------------------------------
+        // SPEAKER NAME BANNER (built once; bound per line by UpdateNameBanner).
+        // -----------------------------------------------------------------------
+        // A small gilt-framed plate with a dark-ink TMP label, positioned at the top
+        // edge of the line box. The base discards the speaker name (renders
+        // TextWithoutCharacterName), so the banner is the only place CharacterName
+        // shows. Built by CLONING the prefab's own line "Text" object so the label
+        // inherits the correct, build-safe TMP font asset WITHOUT this assembly
+        // referencing Unity.TextMeshPro — its .text/.color are driven via reflection
+        // + the Graphic base. Idempotent; degrades to no banner if pieces are absent.
+        private void BuildNameBannerOnce()
+        {
+            if (_bannerRoot != null) return;   // already built
+
+            // Anchor the banner over the box backboard so it reads as the box's title.
+            Transform container = FindDescendant(transform, "Container");
+            if (container == null) return;
+
+            // Source the font/material/component type from the existing body line text.
+            Transform lineTextT = null;
+            Transform line = FindDescendant(transform, "Line");
+            if (line != null) lineTextT = FindDescendant(line, "Text");
+            if (lineTextT == null) return;
+            var srcGraphic = lineTextT.GetComponent<Graphic>();
+            if (srcGraphic == null) return;
+
+            // Gilt frame plate (top-left of the box, overlapping its top edge).
+            _bannerRoot = new GameObject("SpeakerBanner", typeof(Image));
+            _bannerRoot.transform.SetParent(container, false);
+            var rt = _bannerRoot.GetComponent<RectTransform>();
+            rt.anchorMin = new Vector2(0.04f, 1f);
+            rt.anchorMax = new Vector2(0.04f, 1f);
+            rt.pivot = new Vector2(0f, 0f);
+            rt.sizeDelta = new Vector2(360f, 64f);
+            rt.anchoredPosition = new Vector2(24f, -8f);   // nudge just inside the top edge
+            var frame = _bannerRoot.GetComponent<Image>();
+            frame.color = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.95f);
+            ElarionUiKit.ApplyRounded(frame);
+            frame.raycastTarget = false;
+
+            // Inner parchment plate so the dark-ink name reads on a light chip, not on gold.
+            var plate = new GameObject("Plate", typeof(Image));
+            plate.transform.SetParent(_bannerRoot.transform, false);
+            var prt = plate.GetComponent<RectTransform>();
+            prt.anchorMin = Vector2.zero; prt.anchorMax = Vector2.one;
+            prt.offsetMin = new Vector2(3f, 3f); prt.offsetMax = new Vector2(-3f, -3f);
+            var pimg = plate.GetComponent<Image>();
+            pimg.color = new Color(0.96f, 0.92f, 0.82f, 1f);
+            ElarionUiKit.ApplyRounded(pimg);
+            pimg.raycastTarget = false;
+
+            // Label: CLONE the existing TMP line text (keeps the build-safe font).
+            var labelGo = Instantiate(lineTextT.gameObject, plate.transform);
+            labelGo.name = "SpeakerLabel";
+            // Strip any layout components copied from the body text so it fills the plate.
+            foreach (var le in labelGo.GetComponents<LayoutElement>()) Destroy(le);
+            foreach (var csf in labelGo.GetComponents<ContentSizeFitter>()) Destroy(csf);
+            foreach (Transform child in labelGo.transform) Destroy(child.gameObject);
+            var lrt = labelGo.GetComponent<RectTransform>();
+            lrt.anchorMin = Vector2.zero; lrt.anchorMax = Vector2.one;
+            lrt.offsetMin = new Vector2(12f, 0f); lrt.offsetMax = new Vector2(-12f, 0f);
+            lrt.localScale = Vector3.one;
+            lrt.localRotation = Quaternion.identity;
+
+            _bannerLabel = labelGo.GetComponent<Graphic>();
+            if (_bannerLabel != null)
+            {
+                _bannerLabel.color = ElarionUi.Ink;   // dark ink on the light plate
+                _bannerLabel.raycastTarget = false;
+                // TMP_Text.text via reflection (no Unity.TextMeshPro ref in this asmdef).
+                var t = _bannerLabel.GetType();
+                _bannerTextProp = t.GetProperty("text");
+                // Shrink the cloned body font + tighten so the name fits the chip.
+                var fsProp = t.GetProperty("fontSize");
+                if (fsProp != null && fsProp.CanWrite) fsProp.SetValue(_bannerLabel, 34f);
+                if (_bannerTextProp != null && _bannerTextProp.CanWrite)
+                    _bannerTextProp.SetValue(_bannerLabel, "");   // clear the cloned source text
+                // Alignment left as authored; the base never touches this clone (it only
+                // rewrites horizontalAlignment on the body line text), so it stays stable.
+            }
+
+            _bannerRoot.SetActive(false);   // hidden until a named line arrives
         }
 
         // Depth-first search for a descendant by exact name (the panel itself or any

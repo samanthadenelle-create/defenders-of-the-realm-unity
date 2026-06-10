@@ -626,6 +626,22 @@ namespace DeNelle.Editor
         {
             if (gateMarker == null) return;
 
+            // 0. IDEMPOTENCY — this is called on every wire/build (safe to call again). Without a
+            //    cleanup pass it piles up duplicate NavMeshLinks + OuterWorldTransitionTriggers on
+            //    each run (3 triggers were found triple-firing the scene transition). Strip any prior
+            //    wiring first so we always end with EXACTLY one link + one trigger.
+            foreach (var t in gateMarker.GetComponentsInChildren<Transform>(true))
+            {
+                if (t != null && t != gateMarker.transform && t.name == "OuterWorldTransitionTrigger")
+                    Object.DestroyImmediate(t.gameObject);
+            }
+            var priorNavType = System.Type.GetType("UnityEngine.AI.NavMeshLink, Unity.AI.Navigation");
+            if (priorNavType != null)
+            {
+                foreach (var oldLink in gateMarker.GetComponents(priorNavType))
+                    if (oldLink != null) Object.DestroyImmediate(oldLink);
+            }
+
             // 1. NavMeshLink — bridges the navmesh seam when Castle + OuterWorld are both loaded additive.
             //    Tune start/end/width to the actual gate opening width (Quaternius/poly gate ~12-15m).
             // Use reflection / SerializedObject to add the component and configure it without a hard
@@ -758,6 +774,23 @@ namespace DeNelle.Editor
             // 5. Wire the smart camera to follow the hero.
             Village2Playable.WireCameraTargetToHero(hero);
             Log("Camera wired to hero.");
+
+            // 5b. Disable the legacy VillageCamera so SmartMobileCamera is the SOLE follower.
+            //     Both enabled lets VillageCamera's top-down offset (0,8.5,-6.5) bleed through over
+            //     SmartMobileCamera's close 3rd-person (0,2.6,-4.5). Reflection by type-name avoids
+            //     an asmdef dependency on the Village type from this Editor assembly.
+            var mainCamForLegacy = Camera.main;
+            if (mainCamForLegacy != null)
+            {
+                foreach (var comp in mainCamForLegacy.GetComponents<MonoBehaviour>())
+                {
+                    if (comp != null && comp.GetType().Name == "VillageCamera" && comp.enabled)
+                    {
+                        comp.enabled = false;
+                        Log("VillageCamera (legacy top-down) DISABLED — SmartMobileCamera is sole follower.");
+                    }
+                }
+            }
 
             // 6. Ensure HeroLocomotion is enabled (HeroControlEnsurer is often hardcoded to "Village2").
             EnsureHeroControllable(hero);
