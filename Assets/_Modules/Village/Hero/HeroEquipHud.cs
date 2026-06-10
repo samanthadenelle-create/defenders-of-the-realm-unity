@@ -39,6 +39,7 @@ namespace DeNelle.Village
         private static readonly Color Glass     = new Color(0.06f, 0.07f, 0.09f, 0.78f);
         private static readonly Color Cell      = new Color(0.10f, 0.11f, 0.14f, 0.90f);
         private static readonly Color AccentSoft = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.30f);
+        private static readonly Color Track     = new Color(0f, 0f, 0f, 0.40f);
 
         public static HeroEquipHud EnsureExists()
         {
@@ -163,20 +164,21 @@ namespace DeNelle.Village
                 Destroy(ch.gameObject);
             }
 
-            AddLabel(_cluster.transform, "GEAR", 0.92f, 0.99f, ElarionUi.ParchmentDim,
+            // Header chip — gilt crest + GEAR so the cluster reads as a deliberate panel.
+            AddLabel(_cluster.transform, ElarionUi.CrestGlyph + " GEAR", 0.915f, 0.99f, ElarionUi.Gilt,
                      ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, spacing: 3f);
 
-            // Slot 1 — Weapon.
+            // Slot 1 — Weapon (rarity-framed).
             WeaponDef w = _loadout != null ? _loadout.EquippedWeapon : null;
             AddSlot("WPN", w != null ? Glyph(w.icon) : "-",
                     w != null ? RarityColor(w.rarity) : ElarionUi.ParchmentDim,
-                    0.715f, 0.90f);
+                    w != null ? w.rarity : null, 0.715f, 0.90f);
 
             // Slot 2 — Armor.
             ArmorDef a = _loadout != null ? _loadout.EquippedArmor : null;
             AddSlot("ARM", a != null ? Glyph(a.icon) : "-",
                     a != null ? RarityColor(a.rarity) : ElarionUi.ParchmentDim,
-                    0.515f, 0.70f);
+                    a != null ? a.rarity : null, 0.515f, 0.70f);
 
             // Slots 3-4 — first two owned consumables (or empty).
             var owned = SafeOwnedConsumables();
@@ -191,8 +193,8 @@ namespace DeNelle.Village
                 else if (idx == 1) { c2Glyph = g; c2Count = kv.Value; break; }
                 idx++;
             }
-            AddSlot("ITM", c1Glyph, ElarionUi.Parchment, 0.315f, 0.50f, c1Count);
-            AddSlot("ITM", c2Glyph, ElarionUi.Parchment, 0.115f, 0.30f, c2Count);
+            AddSlot("ITM", c1Glyph, ElarionUi.Parchment, null, 0.315f, 0.50f, c1Count);
+            AddSlot("ITM", c2Glyph, ElarionUi.Parchment, null, 0.115f, 0.30f, c2Count);
 
             // The whole cluster is tappable (any slot) -> open inventory.
             // Each slot is a Button; also add a catch-all on the cluster background.
@@ -216,12 +218,20 @@ namespace DeNelle.Village
             }
         }
 
-        private void AddSlot(string tag, string glyph, Color glyphColor, float y0, float y1, int count = -1)
+        private void AddSlot(string tag, string glyph, Color glyphColor, string rarity, float y0, float y1, int count = -1)
         {
+            bool filled = !string.IsNullOrEmpty(rarity);
+            Color rc = filled ? RarityColor(rarity) : new Color(0f, 0f, 0f, 0.4f);
+
+            // Rarity frame behind the slot — the equipped tier glows even in the HUD.
+            var frame = AddImage(_cluster.transform, "Frame_" + tag, new Vector2(0.10f, y0), new Vector2(0.90f, y1),
+                                 new Color(rc.r, rc.g, rc.b, filled ? 0.55f : 0.35f));
+            frame.GetComponent<Image>().raycastTarget = false;
+
             var tile = new GameObject("Slot_" + tag, typeof(Image), typeof(Button));
-            tile.transform.SetParent(_cluster.transform, false);
+            tile.transform.SetParent(frame.transform, false);
             var rt = tile.GetComponent<RectTransform>();
-            rt.anchorMin = new Vector2(0.10f, y0); rt.anchorMax = new Vector2(0.90f, y1);
+            rt.anchorMin = new Vector2(0.06f, 0.06f); rt.anchorMax = new Vector2(0.94f, 0.94f);
             rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
             var img = tile.GetComponent<Image>();
             img.color = Cell;
@@ -241,6 +251,7 @@ namespace DeNelle.Village
             {
                 var chip = AddImage(tile.transform, "Count", new Vector2(0.55f, 0.62f), new Vector2(0.98f, 0.98f),
                                     new Color(0f, 0f, 0f, 0.6f));
+                chip.GetComponent<Image>().raycastTarget = false;
                 AddLabel(chip.transform, "x" + count, 0f, 1f, ElarionUi.Parchment, ElarionUi.FontMicro,
                          TMPro.TextAlignmentOptions.Center, 0f, 1f, bold: true);
             }
