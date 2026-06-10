@@ -302,7 +302,7 @@ namespace DeNelle.Village
             {
                 // WO (2026-06-10) KNIGHT BODY SWAP → human_tank:
                 //   The Knight body is now the clean, textured human_tank model and its OWN
-                //   UV-matched basecolor (HumanTank_basecolor) binds via ApplyExtractedTexture.
+                //   UV-matched basecolor (HeroTank_Diffuse) binds via ApplyExtractedTexture.
                 //   Route the Knight through that real texture instead of forcing flat steel.
                 //   Keep flat steel ONLY as the load-failed fallback so the Knight degrades to
                 //   solid armour grey (not a cyan/null-slot error shape) if the diffuse ever fails
@@ -690,7 +690,7 @@ namespace DeNelle.Village
                 //   the mesh's OWN basecolor means every UV island samples its matching region —
                 //   a real textured Knight, not the flat-steel stopgap. If this load fails,
                 //   ApplyExtractedTexture returns false and Start() falls back to flat steel.
-                HeroClass.Knight => "Heroes/Textures/HumanTank_basecolor",
+                HeroClass.Knight => "Heroes/Textures/HeroTank_Diffuse",
                 // DEF-229 (2026-06-03): the Ranger body is now the CC5/CC_Base adult
                 // archer (InstaLOD-remeshed: ONE combined mesh + ONE baked PBR atlas),
                 // imported Humanoid by PeopleCharacterImporter.ImportRangerCC5 into
@@ -763,6 +763,21 @@ namespace DeNelle.Village
                 {
                     if (baked.HasProperty("_Metallic"))   baked.SetFloat("_Metallic", 0.1f);
                     if (baked.HasProperty("_Smoothness")) baked.SetFloat("_Smoothness", 0.35f);
+
+                    // WO (2026-06-10) KNIGHT BODY SWAP → hero-tank: the rigged AccuRIG CC_Base
+                    // Knight ships a UV-matched NORMAL map alongside its basecolor (copied to
+                    // Heroes/Textures/HeroTank_Normal, imported textureType=NormalMap). Unlike the
+                    // stray import-bound maps cleared above (which read as colour artefacts on the
+                    // OTHER classes), this is the mesh's OWN tangent-space normal — bind it so the
+                    // armour plates/cloth catch surface detail. Knight-ONLY: the other classes ship
+                    // base-color only and keep _BumpMap cleared. Null-guarded — a missing normal
+                    // is a clean no-op (the basecolor still drives the look).
+                    var heroTankNormal = Resources.Load<Texture2D>("Heroes/Textures/HeroTank_Normal");
+                    if (heroTankNormal != null && baked.HasProperty("_BumpMap"))
+                    {
+                        baked.SetTexture("_BumpMap", heroTankNormal);
+                        baked.EnableKeyword("_NORMALMAP");
+                    }
                 }
             }
 
