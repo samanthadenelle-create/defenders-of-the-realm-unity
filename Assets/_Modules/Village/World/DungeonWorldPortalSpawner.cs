@@ -96,7 +96,15 @@ namespace DeNelle.Village.World
         // same convention as NodeDiscoverySystem so discovery survives a reload).
         private const string PrefKeyPrefix = "dotr-dungeon-portal-discovered-";
 
+        // Cap on placement retries. Each retry runs NavMesh.CalculateTriangulation()
+        // (HEAVY on the big OuterWorld mesh). If no portal can ever seat (every region
+        // match fails), the un-capped retry re-ran that triangulation forever on the
+        // main thread = a hard hang on OuterWorld load. After MaxPlaceAttempts failures
+        // we give up (portals simply don't appear) so the game stops grinding.
+        private const int MaxPlaceAttempts = 24;
+
         private bool _placed;
+        private int _placeAttempts;
         private float _retryTimer;
         private Transform _root;
         private Transform _hero;
@@ -198,6 +206,18 @@ namespace DeNelle.Village.World
             {
                 // Couldn't seat any yet (NavMesh maybe still loading) — leave _placed false to retry.
                 if (_root != null) { Destroy(_root.gameObject); _root = null; }
+
+                // ...but CAP the retries: every attempt runs the HEAVY CalculateTriangulation
+                // above, so an outpost that can NEVER seat (all region matches fail) would
+                // re-run it forever on the main thread = a hard hang on OuterWorld load.
+                // After MaxPlaceAttempts, give up: stop retrying (portals just don't appear).
+                _placeAttempts++;
+                if (_placeAttempts >= MaxPlaceAttempts)
+                {
+                    _placed = true;
+                    Debug.LogWarning($"[DungeonWorldPortals] gave up after {_placeAttempts} attempts — " +
+                        "stopping retries to avoid a CalculateTriangulation freeze.");
+                }
             }
         }
 

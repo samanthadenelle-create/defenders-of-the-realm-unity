@@ -31,6 +31,7 @@
 // Canon: the village is Elarion (never Avalon). ASCII-only runtime strings.
 // =============================================================================
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Text;
 using UnityEngine;
@@ -190,13 +191,7 @@ namespace DeNelle.Village.World.Camps
             // open-world "stay cleared on reload" persistence restore entirely.
             if (_suppressClearReward)
             {
-                BuildFortification();
-                // WO-389: the defender's PLACED Arena defenders (units + structures)
-                // port WITH the base and spawn FRIENDLY to auto-fight the raider. The
-                // defense travels with the city — spawn it right after the fortification
-                // is realized, before the (Hostile) garrison. No-op if no defense placed.
-                SpawnDefenders();
-                SpawnGarrison();
+                StartCoroutine(RealizeOutpostRoutine(arena: true));
                 return;
             }
 
@@ -209,14 +204,45 @@ namespace DeNelle.Village.World.Camps
                 return;
             }
 
-            BuildFortification();
-            SpawnGarrison();
+            StartCoroutine(RealizeOutpostRoutine(arena: false));
+        }
 
-            // WO-360: when the player walks into this outpost's combat zone, summon
-            // their Echo (pet) to fight alongside them + show a mini-tutorial. The
-            // trigger is idempotent + session-guarded (Echo persists once summoned),
-            // and is open-world only (the Arena suppresses the open-world beats above).
-            EchoAutoDeployTrigger.Attach(gameObject, GarrisonRing + 6f);
+        // =====================================================================
+        // STAGGERED REALIZATION - spread the ~20 fort pieces + ~7 garrison spawns
+        // across frames so an outpost realized on OuterWorld load (RaidOutpostSystem)
+        // no longer freezes a single frame for multiple seconds. WHAT spawns is
+        // identical to the old synchronous Start(); only the timing changes.
+        // Guards against the outpost being Destroyed mid-build (scene swap / Arena
+        // recreate) by bailing the moment `this` is gone.
+        // =====================================================================
+        private IEnumerator RealizeOutpostRoutine(bool arena)
+        {
+            // 1) Fort pieces — ~2 per frame (yields internally).
+            yield return BuildFortificationStaggered();
+            if (this == null) yield break;
+
+            if (arena)
+            {
+                // WO-389: the defender's PLACED Arena defenders (units + structures)
+                // port WITH the base and spawn FRIENDLY to auto-fight the raider. The
+                // defense travels with the city — spawn it right after the fortification
+                // is realized, before the (Hostile) garrison. No-op if no defense placed.
+                SpawnDefenders();
+                if (this == null) yield break;
+            }
+
+            // 2) Garrison — boss + guards, 1 spawn per frame (yields internally).
+            yield return SpawnGarrisonStaggered();
+            if (this == null) yield break;
+
+            if (!arena)
+            {
+                // WO-360: when the player walks into this outpost's combat zone, summon
+                // their Echo (pet) to fight alongside them + show a mini-tutorial. The
+                // trigger is idempotent + session-guarded (Echo persists once summoned),
+                // and is open-world only (the Arena suppresses the open-world beats).
+                EchoAutoDeployTrigger.Attach(gameObject, GarrisonRing + 6f);
+            }
         }
 
         private void OnDestroy()
@@ -229,17 +255,20 @@ namespace DeNelle.Village.World.Camps
         // FORTIFICATION - the WOOD visual (full reuse of OutpostFoundationGenerator).
         // =====================================================================
 
-        private void BuildFortification()
+        // Staggered fort build — same recipe + same OutpostFoundationGenerator.Realize
+        // path as the synchronous version, but spread ~2 pieces per frame so the ~20
+        // StructureFactory.Create calls don't all hit one frame.
+        private IEnumerator BuildFortificationStaggered()
         {
             // A small ~6x6 wood ring (perimeter walls + corner towers + one gate),
             // generated + realized through the SAME StructureFactory.Create path the
             // village build mode uses. LOCAL cell math against this root only - never
             // the village-scoped PlacementGrid / GameState.BaseLayout singletons.
             // ARENA: realize the SEEDED opponent's base recipe; else auto-gen the
-            // open-world wood fort. SAME OutpostFoundationGenerator.Realize path.
+            // open-world wood fort. SAME OutpostFoundationGenerator path, sliced.
             var recipe = _arenaRecipe ?? OutpostFoundationGenerator.GenerateFootprintRecipe(
                 FortGridWidth, FortGridDepth, OutpostTier.Wood);
-            OutpostFoundationGenerator.Realize(recipe, transform, ~0);
+            yield return OutpostFoundationGenerator.RealizeStaggered(recipe, transform, ~0, piecesPerFrame: 2);
         }
 
         // =====================================================================
@@ -324,9 +353,12 @@ namespace DeNelle.Village.World.Camps
         // auto-fight them via TargetManager. We write NO combat/targeting code.
         // =====================================================================
 
-        private void SpawnGarrison()
+        // Staggered garrison spawn — boss this frame, then 1 guard per frame, so the
+        // ~7 EnemyFactory.Build calls don't all hit one frame. The empty-garrison
+        // handling at the end is IDENTICAL to the synchronous version.
+        private IEnumerator SpawnGarrisonStaggered()
         {
-            if (_spawned) return;
+            if (_spawned) yield break;
             _spawned = true;
 
             _garrisonRoot = new GameObject("[Garrison]").transform;
@@ -335,14 +367,19 @@ namespace DeNelle.Village.World.Camps
 
             // The BOSS holds the centre of the outpost (MiniBoss role).
             SpawnBoss();
+            yield return null;
 
             // The guard ring (charger/walker Enemy). ARENA = a fixed seeded count;
-            // open-world = threat-scaled 5..8.
+            // open-world = threat-scaled 5..8. One guard per frame.
             int guards = _arenaGuardCount >= 0
                 ? _arenaGuardCount
                 : BaseGuardCount + Mathf.Clamp(ThreatLevel / 2, 0, 3);
             for (int i = 0; i < guards; i++)
+            {
+                if (this == null || _garrisonRoot == null) yield break;
                 SpawnGuard(i, guards);
+                yield return null;
+            }
 
             if (_aliveCount == 0)
             {
@@ -357,7 +394,7 @@ namespace DeNelle.Village.World.Camps
                     Debug.LogError($"[EnemyOutpost] ARENA garrison FAILED to spawn for {OutpostId} " +
                                    "(no NavMesh under the raid anchor?) - aborting raid as a NON-win, NOT an auto-win.");
                     OnArenaSpawnFailed?.Invoke(this);
-                    return;
+                    yield break;
                 }
 
                 // OPEN WORLD: treat as cleared so the raid loop never deadlocks waiting on

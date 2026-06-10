@@ -1140,6 +1140,11 @@ namespace DeNelle.Village
                 foreach (var mf in body.GetComponentsInChildren<MeshFilter>(true))
                 {
                     if (mf == null || mf.sharedMesh == null) continue;
+                    // BUILD-SAFE: sharedMesh.vertices THROWS on an FBX mesh that isn't
+                    // Read/Write-enabled (the import default in a player build). Skip those —
+                    // PlantFeetOnGround then degrades to "not measured" and leaves the body
+                    // where SeatOnGround placed it, rather than crashing.
+                    if (!mf.sharedMesh.isReadable) continue;
                     var verts = mf.sharedMesh.vertices;
                     Transform t = mf.transform;
                     for (int i = 0; i < verts.Length; i++)

@@ -33,6 +33,7 @@
 // is allowed. ASCII-only strings. LogWarning, never error (pack-missing-safe).
 // =============================================================================
 
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
@@ -155,33 +156,85 @@ namespace DeNelle.Village.World.Camps
             int built = 0;
             for (int i = 0; i < recipe.Count; i++)
             {
-                var rec = recipe[i];
-                var entry = CatalogRegistry.Get(rec.itemId);
-                if (entry == null)
-                {
-                    Debug.LogWarning($"[OutpostFoundationGenerator] recipe id '{rec.itemId}' not in registry — skipped.");
-                    continue;
-                }
-
-                // LOCAL cell coords -> WORLD via the outpost root's TRS (mirror of
-                // StructureFactory.CreateGroup). cell (0,0) sits at the root origin.
-                Vector3 localOffset = new Vector3(rec.cellX * CellSize, 0f, rec.cellZ * CellSize);
-                Vector3 worldPos = root.TransformPoint(localOffset);
-                Quaternion worldRot = root.rotation *
-                                      Quaternion.Euler(0f, rec.yawSteps * 90f + rec.yawOffset, 0f);
-
-                var go = StructureFactory.Create(entry, new Pose(worldPos, worldRot), root);
-                if (go == null) continue;
-
-                // Carve the navmesh per piece (no full rebake), measuring the UPRIGHT
-                // footprint so the blocker matches the placed mesh.
-                float footprintM = StructureFactory.MeasureUprightFootprintMetres(entry);
-                AddFootprintBlocker(go, footprintM);
-
-                built++;
+                if (RealizePiece(recipe[i], root)) built++;
             }
 
             Debug.Log($"[OutpostFoundationGenerator] Realized {built}/{recipe.Count} fortification piece(s) on '{root.name}'.");
+        }
+
+        /// <summary>
+        /// Coroutine variant of <see cref="Realize"/> that spreads the per-piece
+        /// StructureFactory.Create cost across frames (yield every <paramref name="piecesPerFrame"/>)
+        /// instead of realizing the whole fort in ONE frame — fixing the multi-second
+        /// single-frame stall when RaidOutpostSystem spawns an outpost on OuterWorld load.
+        /// WHAT is built is identical to <see cref="Realize"/>; only the timing changes.
+        /// Re-checks <paramref name="root"/> each batch so a mid-build Destroy bails cleanly.
+        /// </summary>
+        public static IEnumerator RealizeStaggered(IReadOnlyList<PlacedStructureData> recipe, Transform root,
+                                                   LayerMask surfaceMask, int piecesPerFrame = 2)
+        {
+            if (root == null)
+            {
+                Debug.LogWarning("[OutpostFoundationGenerator] RealizeStaggered called with a null root — skipped.");
+                yield break;
+            }
+            if (recipe == null || recipe.Count == 0)
+            {
+                Debug.LogWarning("[OutpostFoundationGenerator] RealizeStaggered called with an empty recipe — skipped.");
+                yield break;
+            }
+
+            SeatRootOnSurface(root, surfaceMask);
+
+            int per = Mathf.Max(1, piecesPerFrame);
+            int built = 0;
+            int inBatch = 0;
+            for (int i = 0; i < recipe.Count; i++)
+            {
+                // The outpost can be Destroyed mid-build (scene swap / Arena recreate) —
+                // bail the moment its root is gone so we never Create against a dead root.
+                if (root == null) yield break;
+
+                if (RealizePiece(recipe[i], root)) built++;
+
+                if (++inBatch >= per)
+                {
+                    inBatch = 0;
+                    yield return null;
+                }
+            }
+
+            Debug.Log($"[OutpostFoundationGenerator] Realized (staggered) {built}/{recipe.Count} fortification piece(s) on '{root.name}'.");
+        }
+
+        // Realize ONE recipe record under root. Shared by Realize + RealizeStaggered so
+        // both produce IDENTICAL pieces (resolve entry -> local cell -> world pose ->
+        // StructureFactory.Create -> per-piece carving footprint blocker). Returns true
+        // if a piece was created.
+        private static bool RealizePiece(PlacedStructureData rec, Transform root)
+        {
+            var entry = CatalogRegistry.Get(rec.itemId);
+            if (entry == null)
+            {
+                Debug.LogWarning($"[OutpostFoundationGenerator] recipe id '{rec.itemId}' not in registry — skipped.");
+                return false;
+            }
+
+            // LOCAL cell coords -> WORLD via the outpost root's TRS (mirror of
+            // StructureFactory.CreateGroup). cell (0,0) sits at the root origin.
+            Vector3 localOffset = new Vector3(rec.cellX * CellSize, 0f, rec.cellZ * CellSize);
+            Vector3 worldPos = root.TransformPoint(localOffset);
+            Quaternion worldRot = root.rotation *
+                                  Quaternion.Euler(0f, rec.yawSteps * 90f + rec.yawOffset, 0f);
+
+            var go = StructureFactory.Create(entry, new Pose(worldPos, worldRot), root);
+            if (go == null) return false;
+
+            // Carve the navmesh per piece (no full rebake), measuring the UPRIGHT
+            // footprint so the blocker matches the placed mesh.
+            float footprintM = StructureFactory.MeasureUprightFootprintMetres(entry);
+            AddFootprintBlocker(go, footprintM);
+            return true;
         }
 
         // =====================================================================

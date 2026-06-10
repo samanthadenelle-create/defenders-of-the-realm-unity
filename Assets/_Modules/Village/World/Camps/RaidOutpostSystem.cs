@@ -96,16 +96,36 @@ namespace DeNelle.Village.World.Camps
             SpawnNow();
         }
 
+        // OWNER (2026-06-10): a ~3-MINUTE DELAY before the outpost/garrison materialises,
+        // so the heavy fort+garrison realization NEVER lands on the city-emerge frame
+        // (that single-frame spike contributed to the OuterWorld-load freeze). The slot is
+        // claimed immediately (so we never double-schedule); the actual realize fires
+        // SpawnDelaySeconds later, once you've settled into the world.
+        private const float SpawnDelaySeconds = 180f;
+
         /// <summary>
-        /// Materialise the outpost now (idempotent). Honors <see cref="Enabled"/> and
-        /// only acts once we are in the outer-world scene. Safe to call from a dev
-        /// toggle after flipping <see cref="Enabled"/> at runtime.
+        /// Claim the spawn + SCHEDULE the outpost to materialise after a delay (idempotent).
+        /// Honors <see cref="Enabled"/> and only acts once we are in the outer-world scene.
         /// </summary>
         public static void SpawnNow()
         {
             if (!Enabled) return;
             if (_spawned) return;
             if (!InOuterWorld()) return;   // re-bootstrap fires on the next scene load
+
+            _spawned = true;   // claim now so re-entry can't double-schedule
+
+            var runner = new GameObject("RaidOutpostDelayedSpawner");
+            Object.DontDestroyOnLoad(runner);
+            runner.AddComponent<DelayedSpawnRunner>();
+            Debug.Log($"[RaidOutpostSystem] Outpost scheduled to materialise in {SpawnDelaySeconds:0}s (delayed off the world-load frame).");
+        }
+
+        // The actual heavy realize — runs SpawnDelaySeconds AFTER we enter the world, so the
+        // fort+garrison build never stalls the city-emerge frame.
+        private static void RealizeOutpost()
+        {
+            if (!InOuterWorld()) return;   // left the world during the delay
 
             var host = new GameObject("RaidOutpostSystem (outpost)");
             Object.DontDestroyOnLoad(host);
@@ -120,8 +140,19 @@ namespace DeNelle.Village.World.Camps
             _outpost = go.AddComponent<EnemyOutpost>();
             _outpost.Configure(region, threat);
 
-            _spawned = true;
             Debug.Log($"[RaidOutpostSystem] Spawned ONE enemy outpost at {OutpostAnchor} ({region}, threat {threat}) - walk east from the village to raid it.");
+        }
+
+        // Tiny host that waits SpawnDelaySeconds then realises the outpost (owner's 3-min delay).
+        private sealed class DelayedSpawnRunner : MonoBehaviour
+        {
+            private void Start() => StartCoroutine(WaitThenSpawn());
+            private System.Collections.IEnumerator WaitThenSpawn()
+            {
+                yield return new WaitForSeconds(SpawnDelaySeconds);
+                RealizeOutpost();
+                Destroy(gameObject);
+            }
         }
 
         private static bool InOuterWorld()

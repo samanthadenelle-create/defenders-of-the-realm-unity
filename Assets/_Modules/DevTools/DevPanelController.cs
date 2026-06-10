@@ -584,7 +584,7 @@ namespace DeNelle.DevTools
             var resources = AddGroup("Resources");
             AddButton(resources, "+100 Crystals", () => GiveCrystals(100));
             AddButton(resources, "+1000 Crystals", () => GiveCrystals(1000));
-            AddButton(resources, "+500 Stone/Iron/Wood", GiveBuildMaterials);
+            AddButton(resources, "Load up (full base): +50k Wood/Stone/Iron", GiveBuildMaterials);
             AddButton(resources, "+5 Wisdom (talents)", () => GiveWisdom(5));
             AddButton(resources, "+25 Wisdom (talents)", () => GiveWisdom(25));
             AddButton(resources, "+150 XP (hero)", () => GiveHeroXp(150f));
@@ -825,15 +825,15 @@ namespace DeNelle.DevTools
             var state = RequireState("give materials");
             if (state == null) return;
 
-            state.Stone += 500;   // legacy build material (BuildMenu costs)
-            state.Iron += 500;
-            state.Wood += 500;
+            state.Stone += 50000;   // legacy build material (BuildMenu costs) — generous one-click load for full-base testing
+            state.Iron += 50000;
+            state.Wood += 50000;
             // Four-harvestable wallet + Magic tech axis (DEF-121).
             var bal = state.Resources;
-            bal.Food += 500;
-            bal.Crystals += 500;
+            bal.Food += 25000;
+            bal.Crystals += 25000;
             state.Resources = bal;
-            state.Magic += 10;
+            state.Magic += 100;
             SaveAndNotifyResources();
             SetStatus($"Topped up — Wood {state.Wood}, Food {state.Resources.Food}, " +
                       $"Iron {state.Iron}, Crystals {state.Resources.Crystals}, Magic {state.Magic}.");
