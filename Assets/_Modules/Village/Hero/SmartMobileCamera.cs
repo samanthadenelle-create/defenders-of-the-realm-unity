@@ -169,11 +169,23 @@ namespace DeNelle.Village
                  "drag) so it converges, never spirals.")]
         [SerializeField] private bool _facingRecenterEnabled = false;
 
-        [Tooltip("Seconds of no-drag before the facing-recenter resumes (only if enabled).")]
-        [SerializeField, Min(0f)] private float _facingRecenterDelay = 2f;
+        [Tooltip("Seconds of no-drag before the facing-recenter resumes (only if enabled). " +
+                 "WO-385: kept SHORT so the seat trails the hero's facing in enclosed hubs instead of " +
+                 "staying world-locked behind a wall — but non-zero so a quick manual pan isn't instantly " +
+                 "yanked back. Suspended entirely while the player is actively dragging.")]
+        [SerializeField, Min(0f)] private float _facingRecenterDelay = 0.4f;
 
-        [Tooltip("Degrees/sec the facing-recenter swings the camera toward the hero's facing.")]
-        [SerializeField, Min(0f)] private float _facingRecenterSpeed = 90f;
+        [Tooltip("Max degrees/sec the facing-recenter swings the camera toward the hero's facing. The " +
+                 "actual step is PROPORTIONAL to the remaining angle (damped) and capped at this, so big " +
+                 "corner turns swing promptly while the swing eases to a stop as it lines up — no overshoot, " +
+                 "no spiral (loop gain < 1).")]
+        [SerializeField, Min(0f)] private float _facingRecenterSpeed = 220f;
+
+        [Tooltip("WO-385: continuous-recenter stiffness (1/sec). The per-frame swing toward the hero's " +
+                 "facing is angleError * this, clamped to _facingRecenterSpeed. Higher = the seat hugs the " +
+                 "hero's back more tightly; lower = a lazier cinematic trail. ~3–5 reads as a smooth " +
+                 "auto-trailing third-person seat that keeps you facing your open side indoors.")]
+        [SerializeField, Min(0.1f)] private float _facingRecenterStiffness = 4f;
 
         [Header("Wall collision (DEF-151)")]
         [Tooltip("When ON, the camera spherecasts from the hero pivot toward its desired position " +
@@ -556,12 +568,24 @@ namespace DeNelle.Village
             {
                 if (!_orbitYawInit) { _panYaw = _target.eulerAngles.y; _orbitYawInit = true; }
 
-                // Gentle facing-recenter (OFF by default). Targets the hero's FACING (never
-                // velocity), suspended while the player is actively dragging (AddYaw resets
-                // _timeSinceLastDrag). Loop gain < 1 (small step, idle-gated) → converges.
+                // Facing-recenter — WO-385: the cure for the "world-locked seat" in enclosed hubs.
+                // The seat continuously TRAILS the hero's FACING (never velocity → no curl/spiral)
+                // after a short post-drag grace, so walking back into the castle and rounding corners
+                // keeps the camera on the hero's open side instead of leaving it pinned behind a wall.
+                // The step is PROPORTIONAL to the remaining angle (angleErr * stiffness), capped at
+                // _facingRecenterSpeed and never overshooting the target — loop gain < 1, converges,
+                // and is fully suspended while the player is actively dragging (AddYaw zeroes the timer).
                 _timeSinceLastDrag += dt;
                 if (_facingRecenterEnabled && _timeSinceLastDrag > _facingRecenterDelay)
-                    _panYaw = Mathf.MoveTowardsAngle(_panYaw, _target.eulerAngles.y, _facingRecenterSpeed * dt);
+                {
+                    float angleErr = Mathf.DeltaAngle(_panYaw, _target.eulerAngles.y);
+                    float maxStep  = _facingRecenterSpeed * dt;
+                    // Damped step: shrink with the remaining error so the swing eases to a stop.
+                    float step = Mathf.Clamp(angleErr * _facingRecenterStiffness * dt, -maxStep, maxStep);
+                    // Never step past the target (kills any chance of overshoot/oscillation).
+                    if (Mathf.Abs(step) > Mathf.Abs(angleErr)) step = angleErr;
+                    _panYaw += step;
+                }
 
                 zoomOffset = Quaternion.Euler(_panPitch, _panYaw, 0f) * zoomOffset;
             }

@@ -48,39 +48,63 @@ namespace DeNelle.BattleATB
             if (!scene.IsValid()) return;
             if (scene.name.IndexOf("ATBBattle", StringComparison.OrdinalIgnoreCase) < 0) return;
 
-            DisableStrayVillageHero();
+            // WO-381 #1 — keep the arena CLEAN: deactivate any stray world visuals
+            // (the village hero, story companions, roaming mobs/pets) that rode into
+            // the ATB scene via DontDestroyOnLoad. Only the two ATB combatant capsules
+            // (+ their swapped models) should be visible — no village structures/props.
+            HideStrayWorldVisuals();
 
             var hero = GameObject.Find("HeroCapsule");
             var enemy = GameObject.Find("EnemyCapsule");
             if (hero != null) SwapHero(hero.transform);
-            if (enemy != null) SwapEnemy(enemy.transform);
+            if (enemy != null) SwapEnemy(enemy.transform, hero != null ? hero.transform : null);
         }
 
-        /// <summary>
-        /// The village hero (DontDestroyOnLoad, HeroLocomotion) can ride into the
-        /// ATB scene and stay player-controllable — a stray "navigable pill" next to
-        /// the turn-based combatant. Deactivate it here so only the ATB combatant
-        /// remains; HeroControlEnsurer re-activates it when the Village scene reloads.
-        /// Reflection: BattleATB does not reference DeNelle.Village.
-        /// </summary>
-        private static void DisableStrayVillageHero()
+        // WO-381 #1 — the set of DeNelle.Village component types whose GameObjects are
+        // STRAY WORLD VISUALS that must not appear in the clean ATB arena. Each rides
+        // into the battle scene via DontDestroyOnLoad (the player hero is locomotion-
+        // controllable; companions + roaming mobs + harvest pets keep wandering). We
+        // deactivate their GameObjects so only the two ATB combatants remain; the
+        // village re-activates / re-spawns them when its scene reloads (HeroControl-
+        // Ensurer for the hero, StoryCompanionInjector for companions, the spawners
+        // for mobs/pets). Resolved by name via reflection — BattleATB must not
+        // reference DeNelle.Village.
+        private static readonly string[] StrayVisualTypeNames =
         {
-            try
+            "DeNelle.Village.HeroLocomotion",            // the player hero pill
+            "DeNelle.Village.StoryCompanion",            // join-order story companions
+            "DeNelle.Village.Enemy",                     // any roaming village/world enemy
+            "DeNelle.Village.PetContextualBehaviour",    // roaming world pets
+            "DeNelle.Village.Worker",                    // harvest workers
+        };
+
+        /// <summary>
+        /// Deactivate every stray world visual (village hero, companions, roaming mobs,
+        /// pets) that survived the scene swap via DontDestroyOnLoad, so the ATB arena
+        /// shows ONLY the two turn-based combatants — no village structures/props/extras.
+        /// Best-effort + null-safe; never blocks the ATB load. (WO-381 #1.)
+        /// </summary>
+        private static void HideStrayWorldVisuals()
+        {
+            foreach (var typeName in StrayVisualTypeNames)
             {
-                var locoType = FindType("DeNelle.Village.HeroLocomotion");
-                if (locoType == null) return;
-                var found = UnityEngine.Object.FindObjectsByType(locoType, FindObjectsSortMode.None);
-                if (found == null) return;
-                foreach (var obj in found)
+                try
                 {
-                    if (obj is Component c && c != null)
+                    var t = FindType(typeName);
+                    if (t == null) continue;
+                    var found = UnityEngine.Object.FindObjectsByType(t, FindObjectsSortMode.None);
+                    if (found == null) continue;
+                    foreach (var obj in found)
                     {
-                        c.gameObject.SetActive(false);
-                        Debug.Log("[AtbCombatantSwapper] Disabled stray village hero in ATB: " + c.gameObject.name);
+                        if (obj is Component c && c != null && c.gameObject.activeSelf)
+                        {
+                            c.gameObject.SetActive(false);
+                            Debug.Log("[AtbCombatantSwapper] WO-381: hid stray world visual in ATB: " + c.gameObject.name);
+                        }
                     }
                 }
+                catch { /* best-effort — never block the ATB load */ }
             }
-            catch { /* best-effort — never block the ATB load */ }
         }
 
         // ── Hero: capsule pill → real class model ────────────────────────────
@@ -118,9 +142,13 @@ namespace DeNelle.BattleATB
             model.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
             StripCamerasAndColliders(model);
 
-            // URP material fix (heroes import with Tripo Phong materials).
-            var fixer = FindType("DeNelle.Core.TripoMaterialFixer");
-            if (fixer != null) { try { model.AddComponent(fixer); } catch { } }
+            // WO-381 #2 — COLOURING: bind the SAME per-class basecolor atlas the village
+            // hero uses (HeroBodySwapper.ApplyExtractedTexture) so the ATB hero reads
+            // textured (skin/clothing), not the blown-out WHITE of the raw FBX. The hero
+            // FBX imports with an unbound/broken _MainTex, so the plain TripoMaterialFixer
+            // rebuild rendered solid white. Setting the fallback texture makes the fixer
+            // paint the real basecolor onto every slot (the village's go-live appearance).
+            ApplyHeroTexturedMaterial(model, slug);
 
             // Size to the slot, then RE-CENTER onto it. Tripo pivots are far off
             // centre, so scaling localScale flings the visible mesh away from the
@@ -157,7 +185,7 @@ namespace DeNelle.BattleATB
         // Mirrors SwapHero. Resources/Enemies now ships runtime-loadable models
         // (Skeleton_*, Orc_*, Necromancer, Dragon — committed), so the "pill" enemy
         // becomes a real foe. Falls back to the violet tint if no model loads.
-        private static void SwapEnemy(Transform capsule)
+        private static void SwapEnemy(Transform capsule, Transform heroCapsule)
         {
             if (capsule.Find("AtbEnemyModel") != null) return;   // already swapped
 
@@ -179,10 +207,12 @@ namespace DeNelle.BattleATB
             var model = UnityEngine.Object.Instantiate(prefab, capsule);
             model.name = "AtbEnemyModel";
             model.transform.localPosition = Vector3.zero;
-            // DEF-259: Enemy stands on the RIGHT, facing the hero on the LEFT (-X). KayKit
-            // enemies' visual forward is +Z, so +90° yaw turns +Z to face -X toward the
-            // hero (mirror of the hero on the left). Tunable.
-            model.transform.localRotation = Quaternion.Euler(0f, 90f, 0f);
+            // WO-381 #3 — ENEMY FACING: turn the enemy to LOOK AT the hero instead of a
+            // hardcoded 90° yaw (which only happened to read right at the fixed left/right
+            // staging and broke if either combatant moved). KayKit enemies' visual forward
+            // is local +Z, so we aim +Z at the hero: yaw the model so +Z points from the
+            // enemy toward the hero capsule's world position (flattened to the ground plane).
+            FaceEnemyTowardHero(model.transform, capsule, heroCapsule);
             StripCamerasAndColliders(model);
 
             // DEF-259 #2: the swapped Skeleton imported with no animator → T-pose. Stamp
@@ -206,6 +236,25 @@ namespace DeNelle.BattleATB
             else NormalizeHeight(model, 2f);
 
             foreach (var r in capsuleRenderers) if (r != null) r.enabled = false;
+        }
+
+        // WO-381 #3 — orient the enemy model so its visual forward (+Z) points at the hero.
+        // Uses world-space LookRotation (the model is a child of the capsule, which itself
+        // carries a scene-builder yaw), flattened to the XZ plane so the enemy never tips.
+        // Falls back to the prior fixed 90° yaw when the hero capsule is missing (dev path),
+        // so the enemy still faces the standard left-staged hero.
+        private static void FaceEnemyTowardHero(Transform model, Transform enemyCapsule, Transform heroCapsule)
+        {
+            if (model == null) return;
+            if (heroCapsule == null)
+            {
+                model.localRotation = Quaternion.Euler(0f, 90f, 0f);
+                return;
+            }
+            Vector3 dir = heroCapsule.position - enemyCapsule.position;
+            dir.y = 0f;
+            if (dir.sqrMagnitude < 0.0001f) { model.localRotation = Quaternion.Euler(0f, 90f, 0f); return; }
+            model.rotation = Quaternion.LookRotation(dir.normalized, Vector3.up);
         }
 
         // Which Resources/Enemies model to show. Default to the standard skeleton grunt
@@ -277,6 +326,37 @@ namespace DeNelle.BattleATB
                 case HeroClassOpt.Knight: return "Knight";
                 case HeroClassOpt.Ranger: return "Ranger";
                 default:                  return "Mage";   // Mage, Cleric (reuses Mage for now), None
+            }
+        }
+
+        // WO-381 #2 — bind the hero's class basecolor atlas via TripoMaterialFixer so the
+        // ATB hero matches the village appearance (textured, not white). The basecolor
+        // paths are the SAME ones HeroBodySwapper.ApplyExtractedTexture uses (the reliably
+        // Resources.Load-able Heroes/Textures/* plain folder). The fixer runs in its own
+        // Start() (deferred a frame), so setting the fallback texture right after AddComponent
+        // lands in time. No fallback tint is set: the fixer keeps _BaseColor white so the
+        // bound atlas controls the look (matching the village). Typed AddComponent
+        // (BattleATB references DeNelle.Core).
+        private static void ApplyHeroTexturedMaterial(GameObject model, string slug)
+        {
+            if (model == null) return;
+            string basecolor = HeroBasecolorPath(slug);
+            var fixer = model.AddComponent<DeNelle.Core.TripoMaterialFixer>();
+            if (!string.IsNullOrEmpty(basecolor))
+                fixer.SetFallbackTexture(basecolor);
+        }
+
+        // The per-class basecolor texture (Resources path, no extension) — mirrors the
+        // canonical map in HeroBodySwapper.ApplyExtractedTexture so the ATB hero shares the
+        // village's exact atlas. Keep in sync if the village repoints a class.
+        private static string HeroBasecolorPath(string slug)
+        {
+            switch (slug)
+            {
+                case "Knight": return "Heroes/Textures/remesh_12_combined_Bake_Diffuse";
+                case "Ranger": return "Heroes/Textures/ranger_basecolor";
+                case "Cleric": return "Heroes/Textures/Cleric_basecolor";
+                default:       return "Heroes/Textures/tripo_mat_9b343081_Pbr_Diffuse"; // Mage (+ None)
             }
         }
 
