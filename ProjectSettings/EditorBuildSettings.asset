@@ -35,6 +35,18 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/MainCastle_Hall.unity
     guid: 0ef9e523aa31ff54b8ca130d950c6f89
+  - enabled: 1
+    path: Assets/Scenes/Garrison_troll_outpost.unity
+    guid: 7988ec65d7b31e44fb0639cf5198c495
+  - enabled: 1
+    path: Assets/Scenes/Garrison_ruined_keep.unity
+    guid: 04dff44f9a0765346b34efda64564140
+  - enabled: 1
+    path: Assets/Scenes/Garrison_hill_fort.unity
+    guid: bcecdbdbfe8a24a4e9fa0b41e313cbf7
+  - enabled: 1
+    path: Assets/Scenes/Garrison_frost_keep.unity
+    guid: 034fd36f1e1dce9469eb06eda5545994
   m_configObjects:
     com.unity.addressableassets: {fileID: 11400000, guid: 16d06bc18dab1cd408b1472b0382cf8a, type: 2}
     com.unity.dt.app-ui: {fileID: 11400000, guid: 1b1c20d82303e4b5781c3ef50ac1449f, type: 2}
