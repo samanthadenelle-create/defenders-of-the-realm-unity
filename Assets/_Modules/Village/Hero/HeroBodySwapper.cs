@@ -265,26 +265,24 @@ namespace DeNelle.Village
             // so the runtime can apply the real texture rather than the
             // stale class tint. Same hook works for Ranger if/when its
             // Send To Unity export lands.
-            // WO (2026-06-09) KNIGHT SPECKLE STOPGAP — root cause + decision:
-            //   The texture Resources.Load<Texture2D>("Heroes/Textures/medievalknight3dmodel_basecolor")
-            //   DOES load (textureType=Default, sRGB, valid Texture2D — confirmed). It is NOT a null-load
-            //   early-return and NOT a stray normal/metallic map: clearing _BumpMap/_MetallicGlossMap/etc.
-            //   (lines ~564-571) already happens and did NOT fix the speckle. The REAL cause is the parked
-            //   note at SlugFor/Knight: the Knight FBX's mesh material is 'tripo_mat_18e58c3e' and NONE of
-            //   the in-project atlases (medievalknight3dmodel_basecolor, knight_basecolor, remesh_12,
-            //   tripo_1afe2e5e, HumanTank) are UV-matched to THIS mesh. Binding a non-matching atlas means
-            //   each UV island samples an unrelated region of the wrong texture → the blotchy/patchy/
-            //   "speckled" Knight. The clean fix is a fresh Knight model re-import (asset work, out of scope
-            //   here); until then a SOLID presentable steel material beats a speckled one.
-            //   So: Knight bypasses the (mis-sampling) atlas path entirely and gets a flat steel URP/Lit
-            //   on every renderer. Other classes keep their working texture+tint path untouched.
-            if (cls == HeroClass.Knight)
+            // WO (2026-06-10) KNIGHT SPECKLE — PROPER FIX:
+            //   The Knight now routes through the SAME normal texture path as every other class.
+            //   The speckle was a wrong-UV atlas (medievalknight3dmodel_basecolor = a different
+            //   model); ApplyExtractedTexture now binds the mesh's OWN UV-matched bake
+            //   (remesh_12_combined_Bake_Diffuse), so each UV island samples its matching region
+            //   and the speckle is gone. The flat-steel stopgap is no longer the routed Knight
+            //   path — it is kept ONLY as a fallback for the (unexpected) case where the correct
+            //   basecolor fails to load, so the Knight degrades to solid steel rather than the
+            //   cyan/grey/null-slot fallback. ApplyExtractedTexture returns false when no diffuse
+            //   was bound (load failed / no texPath).
+            bool textured = ApplyExtractedTexture(body, cls);
+            if (cls == HeroClass.Knight && !textured)
             {
+                // Correct Knight bake didn't load — fall back to flat steel, never speckle.
                 ApplyFlatSteelStopgap(body);
             }
             else
             {
-                ApplyExtractedTexture(body, cls);
                 // Safety net: if Tripo's embedded textures didn't extract, paint
                 // the body with a class tint so the mesh isn't solid white.
                 ApplyClassTint(body, cls);
@@ -460,10 +458,13 @@ namespace DeNelle.Village
         /// Loads a per-class basecolor PNG out of Resources/Textures/
         /// (extracted via Tripo's Send-To-Unity flow on the owner's side)
         /// and assigns it to every URP material on the body. When this
-        /// returns true the subsequent <see cref="ApplyClassTint"/> is a
-        /// no-op for that material (it preserves textures).
+        /// returns true a real diffuse was bound and the subsequent
+        /// <see cref="ApplyClassTint"/> is a no-op for that material (it
+        /// preserves textures). Returns FALSE when no diffuse was bound
+        /// (no texPath for the class, or the texture failed to load) so the
+        /// caller can fall back to a flat material instead of an untextured slot.
         /// </summary>
-        private static void ApplyExtractedTexture(GameObject body, HeroClass cls)
+        private static bool ApplyExtractedTexture(GameObject body, HeroClass cls)
         {
             // DEF-267: separate the two body pipelines.
             //  • CC5 bodies (Ranger / Cleric) = ONE combined mesh + ONE baked PBR atlas, imported
@@ -521,17 +522,20 @@ namespace DeNelle.Village
                 // is 'tripo_mat_18e58c3e', which has NO matching atlas in-project (tripo_1afe2e5e,
                 // remesh_12, knight_basecolor, HumanTank all read wrong). This needs a CLEAN
                 // Knight model re-import, not a texture pick.
-                // WO-330 (2026-06-08): returning null here is what produces the DTT/Village
-                // CYAN SILHOUETTE. When texPath is null, the CC5 `baked` material below is never
-                // built, so the Knight's combined-mesh renderer slots — which import NULL/default
-                // on the AccuRIG single-atlas FBX — are never replaced and render as URP's bright
-                // cyan/magenta error shader (a missing-material fallback). ApplyClassTint can't
-                // rescue it because it only colours EXISTING non-null materials, never a null slot.
-                // Bind the clean medieval-knight atlas (same one the COMPANION Knight already uses
-                // successfully via StoryCompanionInjector.BindClassDiffuse) so `baked` is built and
-                // replaces the null slots with a lit, textured material. Textured-but-imperfect
-                // beats an unlit cyan blob for go-live; a clean Knight re-import can repoint later.
-                HeroClass.Knight => "Heroes/Textures/medievalknight3dmodel_basecolor",
+                // WO (2026-06-10) KNIGHT SPECKLE — PROPER FIX:
+                //   The speckle was a WRONG-UV atlas: 'medievalknight3dmodel_basecolor' is a
+                //   DIFFERENT model's texture, so each UV island of THIS mesh sampled an unrelated
+                //   region → blotchy/patchy/"speckled". The Knight.fbx is a Tripo model that was
+                //   REMESHED (remesh_12) and baked; its CORRECT, UV-matched basecolor is the bake
+                //   that ships in the FBX's sibling Knight.fbm/ folder: remesh_12_combined_Bake_Diffuse.
+                //   That PNG is already copied into the reliably-loadable plain Heroes/Textures/
+                //   folder (textures inside an *.fbm/ import-artifact folder don't Resources.Load
+                //   reliably in a player build — Textures/ is guaranteed-loadable, confirmed
+                //   textureType=Default, sRGB, valid Texture2D). Binding the mesh's OWN bake means
+                //   every UV island samples its matching region → no speckle. If this load fails,
+                //   ApplyExtractedTexture warns + returns and the Start() path falls back to the
+                //   flat-steel stopgap, so the Knight is never left speckled.
+                HeroClass.Knight => "Heroes/Textures/remesh_12_combined_Bake_Diffuse",
                 // DEF-229 (2026-06-03): the Ranger body is now the CC5/CC_Base adult
                 // archer (InstaLOD-remeshed: ONE combined mesh + ONE baked PBR atlas),
                 // imported Humanoid by PeopleCharacterImporter.ImportRangerCC5 into
@@ -555,13 +559,13 @@ namespace DeNelle.Village
                 HeroClass.Cleric => "Heroes/Textures/Cleric_basecolor",
                 _ => null,
             };
-            if (string.IsNullOrEmpty(texPath)) return;
+            if (string.IsNullOrEmpty(texPath)) return false;
             var tex = Resources.Load<Texture2D>(texPath);
             if (tex == null)
             {
                 Debug.LogWarning("[HeroBodySwapper] DEF-267 baked/basecolor diffuse not found at Resources/" +
                                  texPath + " for " + cls + " — body will fall back to a class tint.");
-                return;
+                return false;
             }
 
             // For CC5 combined bodies: build ONE URP/Lit from the single baked atlas and assign it
@@ -643,6 +647,7 @@ namespace DeNelle.Village
             }
             Debug.Log("[HeroBodySwapper] DEF-267 ApplyExtractedTexture: " + cls +
                       " diffuse '" + texPath + "' bound (mode=" + (isCc5Combined ? "CC5-replace" : "Tripo-paint") + ").");
+            return true;
         }
 
         /// <summary>
