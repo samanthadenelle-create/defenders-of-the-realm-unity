@@ -96,7 +96,7 @@ namespace DeNelle.Village.Hero
             CreateEconomyReadout(panel.transform);
 
             // Tabs / mode buttons
-            var tabBar = new GameObject("TabBar");
+            var tabBar = new GameObject("TabBar", typeof(RectTransform));
             tabBar.transform.SetParent(panel.transform, false);
             var tbRect = tabBar.GetComponent<RectTransform>();
             tbRect.anchorMin = new Vector2(0.02f, 0.78f);
@@ -109,7 +109,7 @@ namespace DeNelle.Village.Hero
             CreateTabButton(tabBar.transform, "EQUIP", new Vector2(0.33f, 0), () => ShowEquip());
 
             // Content area (replaced per mode)
-            _contentRoot = new GameObject("Content");
+            _contentRoot = new GameObject("Content", typeof(RectTransform));
             _contentRoot.transform.SetParent(panel.transform, false);
             var cr = _contentRoot.GetComponent<RectTransform>();
             cr.anchorMin = new Vector2(0.02f, 0.08f);

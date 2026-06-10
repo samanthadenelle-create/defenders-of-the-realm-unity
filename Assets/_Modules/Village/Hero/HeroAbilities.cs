@@ -439,8 +439,9 @@ namespace DeNelle.Village
         {
             if (_rangedVfx == null)
                 _rangedVfx = GetComponent<RangedAttackVFX>() ?? gameObject.AddComponent<RangedAttackVFX>();
-            if (_heroClass == "ranger") _rangedVfx.FireArrow(target, onArrive);
-            else                        _rangedVfx.FireSpellOrb(target, onArrive);
+            if (_heroClass == "ranger")      _rangedVfx.FireArrow(target, onArrive);
+            else if (_heroClass == "knight") onArrive?.Invoke();   // melee: resolve instantly, no projectile (a knight doesn't snipe)
+            else                             _rangedVfx.FireSpellOrb(target, onArrive);
         }
 
         /// <summary>

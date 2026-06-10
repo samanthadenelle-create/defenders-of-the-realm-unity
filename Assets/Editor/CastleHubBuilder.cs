@@ -655,11 +655,14 @@ namespace DeNelle.Editor
                 if (comp != null)
                 {
                     var so = new SerializedObject(comp);
-                    var p = so.FindProperty("startPoint"); if (p != null) p.vector3Value = new Vector3(-7f, 0f, -1f);
-                    p = so.FindProperty("endPoint"); if (p != null) p.vector3Value = new Vector3(7f, 0f, -1f);
-                    p = so.FindProperty("width"); if (p != null) p.floatValue = 12f;
-                    p = so.FindProperty("bidirectional"); if (p != null) p.boolValue = true;
-                    p = so.FindProperty("area"); if (p != null) p.intValue = 0;
+                    // The new Unity.AI.Navigation.NavMeshLink serializes as m_StartPoint/m_EndPoint/m_Width
+                    // (NOT the legacy startPoint/endPoint/width) — using the wrong names silently left a
+                    // zero-width, mis-oriented link. Try m_-prefixed first, fall back to the legacy names.
+                    var p = so.FindProperty("m_StartPoint") ?? so.FindProperty("startPoint"); if (p != null) p.vector3Value = new Vector3(-7f, 0f, -1f);
+                    p = so.FindProperty("m_EndPoint") ?? so.FindProperty("endPoint"); if (p != null) p.vector3Value = new Vector3(7f, 0f, -1f);
+                    p = so.FindProperty("m_Width") ?? so.FindProperty("width"); if (p != null) p.floatValue = 12f;
+                    p = so.FindProperty("m_Bidirectional") ?? so.FindProperty("bidirectional"); if (p != null) p.boolValue = true;
+                    p = so.FindProperty("m_Area") ?? so.FindProperty("area"); if (p != null) p.intValue = 0;
                     so.ApplyModifiedProperties();
                 }
             }
@@ -673,11 +676,13 @@ namespace DeNelle.Editor
             //    and teleports the player to the corresponding spot in OuterWorld world space.
             var triggerGo = new GameObject("OuterWorldTransitionTrigger");
             triggerGo.transform.SetParent(gateMarker.transform, false);
-            triggerGo.transform.localPosition = new Vector3(0, 1.5f, -2f);
+            // Sit the trigger slightly NORTH of the gate marker (toward the reachable courtyard),
+            // not 2m south of it — the hero stops at the navmesh edge well short of the marker.
+            triggerGo.transform.localPosition = new Vector3(0, 1.5f, 6f);
 
             var col = triggerGo.AddComponent<BoxCollider>();
             col.isTrigger = true;
-            col.size = new Vector3(16f, 6f, 6f);
+            col.size = new Vector3(16f, 6f, 14f);
 
             // Add the transition behaviour via reflection (matches MineNode / other builder patterns).
             var transType = FindType("DeNelle.Village.SceneTransitionTrigger");
@@ -697,6 +702,11 @@ namespace DeNelle.Editor
 
                 var fAdditive = transType.GetField("loadAdditive");
                 if (fAdditive != null) fAdditive.SetValue(comp, true);
+
+                // Generous proximity so it fires as the hero APPROACHES the south gate — the hero
+                // stops at the navmesh edge ~10-18m short of the marker, so the default 6m never fired.
+                var fRadius = transType.GetField("ProximityRadius");
+                if (fRadius != null) fRadius.SetValue(comp, 18f);
             }
             else
             {

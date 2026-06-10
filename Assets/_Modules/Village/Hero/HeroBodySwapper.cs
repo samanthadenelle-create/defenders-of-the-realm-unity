@@ -558,6 +558,18 @@ namespace DeNelle.Village
                 if (baked.HasProperty("_BaseColor")) baked.SetColor("_BaseColor", Color.white);
                 if (baked.HasProperty("_Color"))     baked.SetColor("_Color", Color.white);
 
+                // Clear stray normal/metallic/occlusion maps the FBX import bound into the shader —
+                // a normal or metallic map sampled in the wrong colour space reads as "speckled"/patchy
+                // colour (the patchy Knight, blotchy Mage). Drive colour from the basecolor atlas ONLY.
+                if (baked.HasProperty("_BumpMap"))          baked.SetTexture("_BumpMap", null);
+                if (baked.HasProperty("_NormalMap"))        baked.SetTexture("_NormalMap", null);
+                if (baked.HasProperty("_MetallicGlossMap")) baked.SetTexture("_MetallicGlossMap", null);
+                if (baked.HasProperty("_SpecGlossMap"))     baked.SetTexture("_SpecGlossMap", null);
+                if (baked.HasProperty("_OcclusionMap"))     baked.SetTexture("_OcclusionMap", null);
+                baked.DisableKeyword("_NORMALMAP");
+                baked.DisableKeyword("_METALLICSPECGLOSSMAP");
+                baked.DisableKeyword("_OCCLUSIONMAP");
+
                 // Knight armour sheen — keep metallic LOW so the basecolor atlas drives the
                 // visible colour. ROOT CAUSE of the "colorless Knight" in the WebGL build:
                 // metallic=0.7 on a flat basecolor (no metallic map) makes ~70% of the surface
