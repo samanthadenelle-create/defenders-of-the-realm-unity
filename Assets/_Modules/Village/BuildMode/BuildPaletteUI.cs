@@ -47,6 +47,15 @@ namespace DeNelle.Village
         [Tooltip("Catalog types the palette lists. Default = Tower (the registered content).")]
         [SerializeField] private CatalogType[] _types = { CatalogType.Tower, CatalogType.Wall, CatalogType.Gate, CatalogType.Resource };
 
+        // Catalog ids defined-but-not-yet-buildable. They stay in the catalog (ready
+        // to unlock + referenced elsewhere) but are filtered out of the build palette
+        // until their unlock feature ships. Central + reversible — no JSON risk.
+        // TODO unlock-gate: remove from set when jeweler unlock ships.
+        private static readonly HashSet<string> NotYetUnlockable = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "jeweler",
+        };
+
         private UIDocument _document;
         private VisualElement _root;
         private VisualElement _strip;
@@ -206,6 +215,7 @@ namespace DeNelle.Village
                 foreach (var e in entries)
                 {
                     if (e == null) continue;
+                    if (e.id != null && NotYetUnlockable.Contains(e.id)) continue;   // unlock-gated — see NotYetUnlockable
                     _strip.Add(BuildCard(e));
                     cards++;
                 }

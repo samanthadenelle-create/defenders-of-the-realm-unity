@@ -57,8 +57,12 @@ namespace DeNelle.Village.Hero
 
             _ui.AddComponent<GraphicRaycaster>();
 
-            // Backdrop
-            var backdrop = new GameObject("Backdrop", typeof(Image));
+            // Backdrop / scrim — full-screen, blocks click-through AND closes on tap-outside.
+            // Mirrors HeroInventoryController's scrim: the backdrop is itself a Button wired to
+            // Close, so tapping anywhere outside the panel dismisses the shop. (Previously this
+            // was a plain Image with no dismiss, so if the small Close button was missed there
+            // was no way out of the modal.)
+            var backdrop = new GameObject("Backdrop", typeof(Image), typeof(Button));
             backdrop.transform.SetParent(_ui.transform, false);
             var bdRect = backdrop.GetComponent<RectTransform>();
             bdRect.anchorMin = Vector2.zero;
@@ -67,6 +71,9 @@ namespace DeNelle.Village.Hero
             bdRect.offsetMax = Vector2.zero;
             var bdImg = backdrop.GetComponent<Image>();
             bdImg.color = new Color(0.04f, 0.03f, 0.02f, 0.65f);
+            var bdBtn = backdrop.GetComponent<Button>();
+            bdBtn.transition = Selectable.Transition.None;
+            bdBtn.onClick.AddListener(Close);
 
             // Panel frame
             var panel = new GameObject("Panel", typeof(Image));
@@ -110,8 +117,10 @@ namespace DeNelle.Village.Hero
             cr.offsetMin = Vector2.zero;
             cr.offsetMax = Vector2.zero;
 
-            // Close
-            CreateBigButton(panel.transform, "Close", new Vector2(0.42f, 0.92f), Close, new Color(0.35f, 0.18f, 0.12f));
+            // Close (X) — top-right corner, large + unmistakable. This is the primary dismiss,
+            // mirroring HeroInventoryController's top-right "X". It sits inside the panel (always
+            // on top of the content) and is wired straight to Close().
+            CreateCloseX(panel.transform);
 
             // Status line
             var statusGo = new GameObject("Status", typeof(TMPro.TextMeshProUGUI));
@@ -226,6 +235,38 @@ namespace DeNelle.Village.Hero
             tt.fontSize = 15;
             tt.color = new Color(0.95f, 0.9f, 0.8f);
             tt.alignment = TMPro.TextAlignmentOptions.Center;
+        }
+
+        // Top-right close (X) — the primary, unmistakable dismiss. Large square touch target in
+        // the panel's top-right corner, wired directly to Close(). Added last in Open() so it
+        // draws on top of the header/content and always receives the tap.
+        private void CreateCloseX(Transform parent)
+        {
+            var go = new GameObject("CloseX", typeof(Button), typeof(Image));
+            go.transform.SetParent(parent, false);
+            var r = go.GetComponent<RectTransform>();
+            r.anchorMin = new Vector2(0.88f, 0.90f);
+            r.anchorMax = new Vector2(0.985f, 0.985f);
+            r.offsetMin = Vector2.zero;
+            r.offsetMax = Vector2.zero;
+            var img = go.GetComponent<Image>();
+            img.color = new Color(0.45f, 0.18f, 0.14f, 0.95f);
+            var btn = go.GetComponent<Button>();
+            btn.transition = Selectable.Transition.None;
+            btn.onClick.AddListener(Close);
+
+            var txt = new GameObject("X", typeof(TMPro.TextMeshProUGUI));
+            txt.transform.SetParent(go.transform, false);
+            var tr = txt.GetComponent<RectTransform>();
+            tr.anchorMin = Vector2.zero; tr.anchorMax = Vector2.one;
+            tr.offsetMin = Vector2.zero; tr.offsetMax = Vector2.zero;
+            var tt = txt.GetComponent<TMPro.TextMeshProUGUI>();
+            tt.text = "X";
+            tt.fontSize = 24;
+            tt.fontStyle = TMPro.FontStyles.Bold;
+            tt.color = Color.white;
+            tt.alignment = TMPro.TextAlignmentOptions.Center;
+            tt.raycastTarget = false; // let the button image take the tap
         }
 
         private void SetStatus(string s)

@@ -396,6 +396,7 @@ namespace DeNelle.Village
                 case "market":       return BuildingType.Lumbermill; // matches Buildings[] Type=5
                 case "lumbermill":   return BuildingType.Lumbermill;
                 case "forge":        return BuildingType.Forge;      // the Armorer
+                case "jeweler":      return BuildingType.Workshop;   // Sable the Jeweler (crafting/upgrade station; Yarn route resolves by name -> TalkToJeweler)
                 default:             return BuildingType.CrystalMine;
             }
         }

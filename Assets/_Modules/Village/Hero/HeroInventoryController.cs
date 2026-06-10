@@ -109,17 +109,31 @@ namespace DeNelle.Village
             {
                 ResolveLoadout();
                 if (_ui == null) BuildRoot();
+                if (_ui == null) return;            // BuildRoot failed hard — nothing to show
                 _ui.SetActive(true);
                 Subscribe();
                 _tab = Tab.Weapons;
                 ClearSelection();
-                RebuildPaperDoll();
-                RebuildGrid();
-                RebuildSidebar();
+                // Each section is isolated so a failure in one (e.g. a single bad
+                // catalog row) leaves the rest of the modal rendered, not blank.
+                SafeRun(RebuildPaperDoll, "RebuildPaperDoll");
+                SafeRun(RebuildGrid,      "RebuildGrid");
+                SafeRun(RebuildSidebar,   "RebuildSidebar");
             }
             catch (System.Exception e)
             {
                 Debug.LogError("[HeroInventoryController] Open failed (UI may be partial): " + e);
+            }
+        }
+
+        // Runs a UI-rebuild step, swallowing+logging any exception so one bad
+        // section can't blank the whole inventory (WebGL hardening).
+        private static void SafeRun(System.Action step, string label)
+        {
+            try { step(); }
+            catch (System.Exception e)
+            {
+                Debug.LogError("[HeroInventoryController] " + label + " failed: " + e);
             }
         }
 
@@ -168,9 +182,9 @@ namespace DeNelle.Village
         private void HandleGearChanged()
         {
             // The hero's equipped pieces changed (here or via auto-equip on level-up).
-            RebuildPaperDoll();
-            RebuildGrid();      // refresh equipped indicators
-            RebuildSidebar();   // refresh Equip/Unequip button state
+            SafeRun(RebuildPaperDoll, "RebuildPaperDoll");
+            SafeRun(RebuildGrid,      "RebuildGrid");      // refresh equipped indicators
+            SafeRun(RebuildSidebar,   "RebuildSidebar");   // refresh Equip/Unequip button state
         }
 
         // ====================================================================
@@ -403,9 +417,9 @@ namespace DeNelle.Village
             ClearSelection();
             // Rebuild the tab strip (so the selected pill updates) by re-opening chrome cheaply:
             // simplest reliable path — rebuild whole UI's tab row + grid + sidebar.
-            RebuildTabsRow();
-            RebuildGrid();
-            RebuildSidebar();
+            SafeRun(RebuildTabsRow, "RebuildTabsRow");
+            SafeRun(RebuildGrid,    "RebuildGrid");
+            SafeRun(RebuildSidebar, "RebuildSidebar");
         }
 
         private void RebuildTabsRow()
@@ -1023,7 +1037,7 @@ namespace DeNelle.Village
             r.anchorMin = new Vector2(x0, y0); r.anchorMax = new Vector2(x1, y1);
             r.offsetMin = Vector2.zero; r.offsetMax = Vector2.zero;
             var t = go.GetComponent<TMPro.TextMeshProUGUI>();
-            t.text = text;
+            t.text = text ?? string.Empty;
             t.fontSize = size;
             t.color = color;
             t.alignment = align;

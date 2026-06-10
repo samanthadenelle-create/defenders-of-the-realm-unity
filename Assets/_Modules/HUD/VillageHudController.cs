@@ -122,6 +122,21 @@ namespace DeNelle.HUD
         private float _xpPollTimer;
         private const float XpPollInterval = 0.25f;
 
+        // ── Wave-timer fallback poll (HUD→Core; WaveManager is in DeNelle.Village) ─
+        // The town countdown is primarily fed by SetCountdown (WaveManager.OnCountdownTick,
+        // pushed via a Village-side bridge). To guarantee a LIVE timer even when no bridge
+        // pushes (and a clean source of truth), the HUD also polls WaveManager via reflection
+        // for CountdownRemaining + Phase (same HUD→Core-safe pattern as the hero XP poll).
+        // The poll only WRITES the timer when the manager is actively counting down; it never
+        // overrides the SetCountdown-driven combat/clear states.
+        private object _waveMgr;                              // cached WaveManager instance (reflection)
+        private System.Type _waveMgrType;
+        private System.Reflection.PropertyInfo _waveCountdownProp; // WaveManager.CountdownRemaining (float)
+        private System.Reflection.PropertyInfo _wavePhaseProp;     // WaveManager.Phase (enum; 1 == Countdown)
+        private System.Reflection.PropertyInfo _waveCurIdProp;     // WaveManager.CurrentWaveId (int)
+        private float _wavePollTimer;
+        private const float WavePollInterval = 0.2f;
+
         // Skill bar cells
         private TextMeshProUGUI[] _slotKey;
         private TextMeshProUGUI[] _slotGlyph;
@@ -195,6 +210,13 @@ namespace DeNelle.HUD
         private Image _townWaveProgFill;             // progress bar
         private Image _townLookoutBadge;             // GREEN/YELLOW/RED/PURPLE status pip
         private TextMeshProUGUI _townLookoutText;
+        // Lookout BELL — a bell glyph beside the timer that pulses/highlights when a
+        // wave is imminent (lookout INCOMING) or active (COMBAT). Bound to the existing
+        // _lookoutStatus (driven by SetCountdown / SetWaveImminent / SetLookoutStatus),
+        // so it shares ONE signal with the status pip — no new data binding.
+        private TextMeshProUGUI _townBellGlyph;      // 🔔 alert glyph
+        private RectTransform _townBell;             // bell rect (pulsed/scaled)
+        private float _bellPulse;                    // 0..1 pulse phase driver
         private float _townTimerSeconds = -1f;       // last countdown (negative = none)
         private int _townWaveCur = 1, _townWaveMax = 0;
         private int _lookoutStatus;                  // 0 safe,1 alert,2 incoming,3 combat
@@ -294,6 +316,7 @@ namespace DeNelle.HUD
                 SetCombatHudVisible(!_combatHudVisible);
 
             AnimateMomentumBadge();
+            AnimateLookoutBell();
             UpdateTownHud();
             UpdateHeroXpLine();
         }
@@ -349,10 +372,61 @@ namespace DeNelle.HUD
             _xpToNextProp = _heroProgType.GetProperty("XpToNext");
         }
 
+        // ── Wave-timer fallback poll — keep the town countdown LIVE from WaveManager. ─
+        // Reflection (HUD cannot reference DeNelle.Village). Only writes the timer while
+        // the manager is in the Countdown phase; combat/clear states stay owned by the
+        // SetCountdown/SetWaveImminent push path so we never fight the bridge.
+        private void PollWaveTimer()
+        {
+            _wavePollTimer -= Time.unscaledDeltaTime;
+            if (_wavePollTimer > 0f) return;
+            _wavePollTimer = WavePollInterval;
+
+            ResolveWaveMgrIfNeeded();
+            if (_waveMgr == null || _wavePhaseProp == null || _waveCountdownProp == null) return;
+
+            try
+            {
+                // WavePhase.Countdown == 1 (see DeNelle.Village.WavePhase). Compare by int
+                // so we don't need the Village enum type at HUD compile time.
+                int phase = System.Convert.ToInt32(_wavePhaseProp.GetValue(_waveMgr));
+                if (phase == 1) // Countdown
+                {
+                    float remaining = (float)_waveCountdownProp.GetValue(_waveMgr);
+                    _townTimerSeconds = remaining;
+                    _townWaveActive = false;
+                    if (_waveCurIdProp != null)
+                    {
+                        int cur = (int)_waveCurIdProp.GetValue(_waveMgr);
+                        if (cur > 0 && cur != _townWaveCur) { _townWaveCur = cur; RefreshTownWaveProgress(); }
+                    }
+                }
+            }
+            catch { _waveMgr = null; /* manager torn down across a reload — re-resolve next tick */ }
+        }
+
+        private void ResolveWaveMgrIfNeeded()
+        {
+            if (_waveMgr != null) return;
+            if (_waveMgrType == null)
+                _waveMgrType = System.Type.GetType("DeNelle.Village.WaveManager, DeNelle.Village");
+            if (_waveMgrType == null) return;
+            var inst = UnityEngine.Object.FindObjectOfType(_waveMgrType);
+            if (inst == null) return;
+            _waveMgr = inst;
+            _waveCountdownProp = _waveMgrType.GetProperty("CountdownRemaining");
+            _wavePhaseProp     = _waveMgrType.GetProperty("Phase");
+            _waveCurIdProp     = _waveMgrType.GetProperty("CurrentWaveId");
+        }
+
         // ── WO-339: per-frame TOWN-HUD animation (timer urgency, res flash, map). ─
         private void UpdateTownHud()
         {
             float dt = Time.unscaledDeltaTime;
+
+            // Keep the countdown sourced live from WaveManager (fallback to the
+            // SetCountdown push path when no manager is present).
+            PollWaveTimer();
 
             // Countdown timer text + urgency colour (only when a wave is pending).
             if (_townTimerText != null)
@@ -429,6 +503,36 @@ namespace DeNelle.HUD
             Transform rig = cam.transform.parent != null ? cam.transform.parent : cam.transform;
             Vector3 p = rig.position;
             rig.position = new Vector3(worldPoint.x, p.y, worldPoint.z - 6f);
+        }
+
+        // ── Lookout bell — pulse + highlight when a wave is imminent/active. ──────
+        // Bound to _lookoutStatus (the lookout signal driven by SetCountdown /
+        // SetWaveImminent / SetLookoutStatus). status 2 = INCOMING (<30s) → amber
+        // pulse; status 3 = COMBAT → red pulse; otherwise the bell rests dim + still.
+        private void AnimateLookoutBell()
+        {
+            if (_townBell == null || _townBellGlyph == null) return;
+            bool ringing = _lookoutStatus >= 2;
+            if (ringing)
+            {
+                // advance the pulse phase (loops); ping-pong gives a clean swing.
+                _bellPulse += Time.unscaledDeltaTime * (_lookoutStatus >= 3 ? 6f : 4f);
+                float swing = Mathf.PingPong(_bellPulse, 1f);
+                float scale = 1f + 0.22f * swing;
+                _townBell.localScale = new Vector3(scale, scale, 1f);
+                // a slight rock so it reads as a ringing bell, not just a throb.
+                _townBell.localRotation = Quaternion.Euler(0f, 0f, (swing - 0.5f) * 22f);
+                Color hot = _lookoutStatus >= 3 ? HudTheme.LookoutCombat : HudTheme.LookoutIncoming;
+                _townBellGlyph.color = Color.Lerp(HudTheme.Gold, hot, swing);
+            }
+            else if (_townBell.localScale.x != 1f || _bellPulse != 0f)
+            {
+                // settle back to rest.
+                _bellPulse = 0f;
+                _townBell.localScale = Vector3.one;
+                _townBell.localRotation = Quaternion.identity;
+                _townBellGlyph.color = HudTheme.TextDim;
+            }
         }
 
         private void AnimateMomentumBadge()
@@ -575,16 +679,42 @@ namespace DeNelle.HUD
             }
         }
 
-        // ── Castle (Heart) HP — top-centre slim bar. VILLAGE-ONLY. ─────────────
+        // ── Castle (Heart) HP — top-centre banner. VILLAGE-ONLY. ───────────────
+        // RESTYLED (premium chrome to match the inventory): the Tree-of-Life banner
+        // was "too basic" (a flat glass strip + a bare fill). It now reads as a
+        // framed reliquary plate — kit-framed glass panel + inner rim, a crest leaf
+        // glyph + a clear "HEART OF ELARION" caption, a recessed well track with its
+        // OWN inner rim, and a styled fill bar that carries a soft gilt highlight
+        // strip along its top edge for depth. The HP value + colour-lerp logic
+        // (SetHeartHp) is UNTOUCHED — only the visual chrome changed; _castleFill /
+        // _castleText are the same objects SetHeartHp drives.
         private void BuildCastleBanner(Transform parent)
         {
-            _castleBanner = NewRect("CastleBanner", parent, new Vector2(0.30f, 0.955f), new Vector2(0.70f, 1f));
-            FramePanel(_castleBanner.gameObject, ElarionUiKit.Glass);
+            _castleBanner = NewRect("CastleBanner", parent, new Vector2(0.30f, 0.94f), new Vector2(0.70f, 1f));
+            // Deeper glass + the full kit frame (glass fill + inner hairline rim +
+            // soft gold underline) — the premium framed look the inventory has.
+            FramePanel(_castleBanner.gameObject, ElarionUiKit.GlassDeep);
 
-            var track = NewRect("Track", _castleBanner, new Vector2(0.05f, 0.22f), new Vector2(0.95f, 0.78f));
+            // Crest leaf glyph (the world-tree mark) tucked top-left of the banner.
+            var crest = NewRect("Crest", _castleBanner, new Vector2(0.015f, 0.42f), new Vector2(0.11f, 0.96f));
+            AddText(crest, "❦", HudTheme.FontHead, HudTheme.Gilt, TextAlignmentOptions.Center);
+
+            // Caption row — small spaced gilt label so the bar reads as the Heart.
+            var caption = NewRect("Caption", _castleBanner, new Vector2(0.11f, 0.56f), new Vector2(0.99f, 0.97f));
+            var cap = AddText(caption, "HEART OF ELARION", HudTheme.FontLabel, HudTheme.Gilt, TextAlignmentOptions.MidlineLeft);
+            cap.fontStyle = FontStyles.Bold;
+            cap.characterSpacing = 3f;
+            cap.outlineColor = new Color32(0, 0, 0, 160);
+            cap.outlineWidth = 0.1f;
+
+            // Recessed well track for the fill — given the kit's crisp inner rim so it
+            // reads inset/depthful instead of a flat bar.
+            var track = NewRect("Track", _castleBanner, new Vector2(0.11f, 0.10f), new Vector2(0.99f, 0.52f));
             HudTheme.StyleWell(track.gameObject);
+            ElarionUiKit.AddInnerRim(track.gameObject, new Color(0f, 0f, 0f, 0.45f));
+
             var fill = NewRect("Fill", track, Vector2.zero, Vector2.one);
-            fill.offsetMin = new Vector2(1.5f, 1.5f); fill.offsetMax = new Vector2(-1.5f, -1.5f);
+            fill.offsetMin = new Vector2(2f, 2f); fill.offsetMax = new Vector2(-2f, -2f);
             _castleFill = fill.gameObject.AddComponent<Image>();
             _castleFill.color = HudTheme.CastleGold;
             _castleFill.sprite = HudTheme.RoundedFrame;
@@ -594,10 +724,21 @@ namespace DeNelle.HUD
             _castleFill.fillAmount = 1f;
             _castleFill.raycastTarget = false;
 
-            _castleText = AddText(track, "Heart of Elarion — 100%", 16, HudTheme.Text, TextAlignmentOptions.Center);
+            // Soft gilt highlight strip along the TOP of the fill — a glassy sheen so
+            // the bar has dimension (decorative child of the fill, non-raycast). It
+            // shares the fill's clip so it tracks the HP width automatically.
+            var sheen = NewRect("Sheen", fill, new Vector2(0f, 0.62f), new Vector2(1f, 1f));
+            var sheenImg = sheen.gameObject.AddComponent<Image>();
+            sheenImg.color = new Color(1f, 1f, 1f, 0.16f);
+            sheenImg.sprite = HudTheme.RoundedFrame;
+            sheenImg.type = HudTheme.RoundedFrame != null ? Image.Type.Sliced : Image.Type.Simple;
+            sheenImg.raycastTarget = false;
+
+            // Percentage value centred over the track (kept as _castleText for SetHeartHp).
+            _castleText = AddText(track, "Heart of Elarion — 100%", HudTheme.FontLabel, HudTheme.Text, TextAlignmentOptions.Center);
             _castleText.fontStyle = FontStyles.Bold;
-            _castleText.outlineColor = new Color32(0, 0, 0, 180);
-            _castleText.outlineWidth = 0.15f;
+            _castleText.outlineColor = new Color32(0, 0, 0, 200);
+            _castleText.outlineWidth = 0.18f;
         }
 
         // ── Wave readout — floating minimal text, no panel. ───────────────────
@@ -957,12 +1098,22 @@ namespace DeNelle.HUD
             _townLookoutText = AddText(badgeRect, "SAFE", 12, HudTheme.Ink, TextAlignmentOptions.Center);
             _townLookoutText.fontStyle = FontStyles.Bold;
 
-            // Countdown timer (MM:SS) — top row, large.
-            var timerRect = NewRect("Timer", _townWaveCluster, new Vector2(0.32f, 0.62f), new Vector2(0.98f, 0.97f));
+            // Countdown timer (MM:SS) — top row, large. Leaves room on the right for
+            // the lookout bell.
+            var timerRect = NewRect("Timer", _townWaveCluster, new Vector2(0.32f, 0.62f), new Vector2(0.86f, 0.97f));
             _townTimerText = AddText(timerRect, "Next wave —:—", HudTheme.FontHead, HudTheme.Text, TextAlignmentOptions.MidlineRight);
             _townTimerText.fontStyle = FontStyles.Bold;
             _townTimerText.outlineColor = new Color32(0, 0, 0, 160);
             _townTimerText.outlineWidth = 0.12f;
+
+            // Lookout BELL — top-right of the cluster, beside the timer. Signals an
+            // incoming/active wave: it brightens + pulses when the lookout escalates
+            // (status ≥ 2). At rest it sits dim. Bound to _lookoutStatus (the same
+            // signal as the status pip) — animated in AnimateLookoutBell().
+            _townBell = NewRect("LookoutBell", _townWaveCluster, new Vector2(0.86f, 0.60f), new Vector2(0.99f, 0.99f));
+            _townBellGlyph = AddText(_townBell, "🔔", HudTheme.FontHead + 2, HudTheme.TextDim, TextAlignmentOptions.Center);
+            _townBellGlyph.outlineColor = new Color32(0, 0, 0, 160);
+            _townBellGlyph.outlineWidth = 0.12f;
 
             // Wave progress label + bar — bottom rows.
             var progLabel = NewRect("ProgLabel", _townWaveCluster, new Vector2(0.04f, 0.34f), new Vector2(0.96f, 0.60f));

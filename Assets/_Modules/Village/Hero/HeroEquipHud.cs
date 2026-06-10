@@ -1,45 +1,39 @@
 // =============================================================================
-// HeroEquipHud — small always-visible quick-equip cluster on the in-world HUD.
+// HeroEquipHud — single compact "open inventory" icon button on the in-world HUD.
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.Village   Namespace: DeNelle.Village
 //
-// A compact bottom-right slot cluster showing the hero's equipped Weapon + Armor
-// and a couple of consumable slots. Tapping ANY slot opens the full inventory
-// modal (HeroInventoryController). Code-built uGUI ONLY (same reliable path +
-// helper recipe as ArenaPanel / HeroInventoryController — UXML doesn't render in
-// builds, PIPELINE_STATE §8).
-//
-// DRIVES THE EXISTING MODEL: reads GearLoadout (EquippedWeapon / EquippedArmor) on
-// the live hero and refreshes on its OnGearChanged event. Consumable slots read
-// the persisted larder via ItemInventory.OwnedConsumables(). No new equip system.
+// One small, clearly-tappable bag/satchel icon button anchored bottom-right.
+// Tapping it opens the full inventory modal (HeroInventoryController). Replaces
+// the former 4-slot quick-equip cluster (Weapon/Armor/2 consumables) — the owner
+// wanted a single compact entry point instead of the always-on slot strip.
+// Code-built uGUI ONLY (same reliable path + helper recipe as ArenaPanel /
+// HeroInventoryController — UXML doesn't render in builds, PIPELINE_STATE §8).
 //
 // Entry points mirror the controller idiom: EnsureExists() spawns a persistent
-// host; it self-builds its overlay and self-heals if the hero spawns later.
-// ASCII-only runtime strings (sprite/text). WebGL-safe (rounded sprite fallback).
+// host; it self-builds its overlay. ASCII/glyph-only runtime strings (sprite/
+// text). WebGL-safe (rounded sprite fallback). No new equip system.
 // =============================================================================
 
-using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using DeNelle.Core.UI;
-using DeNelle.Village.Items;
 
 namespace DeNelle.Village
 {
-    /// <summary>Always-visible quick-equip slot cluster; taps open the inventory modal.</summary>
+    /// <summary>Single compact bag-icon button on the HUD; tap opens the inventory modal.</summary>
     public sealed class HeroEquipHud : MonoBehaviour
     {
         public static HeroEquipHud Instance { get; private set; }
 
-        private GameObject _ui;
-        private GameObject _cluster;
-        private GearLoadout _loadout;
-        private float _heroSearchTimer;
+        // Bag/satchel glyph denotes inventory; falls back to a sack/gear glyph if a
+        // device font lacks it (purposely an emoji that reads universally as "bag").
+        private const string BagGlyph = "\U0001F392"; // 🎒 backpack/satchel
 
-        private static readonly Color Glass     = new Color(0.06f, 0.07f, 0.09f, 0.78f);
+        private GameObject _ui;
+
         private static readonly Color Cell      = new Color(0.10f, 0.11f, 0.14f, 0.90f);
         private static readonly Color AccentSoft = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.30f);
-        private static readonly Color Track     = new Color(0f, 0f, 0f, 0.40f);
 
         public static HeroEquipHud EnsureExists()
         {
@@ -50,8 +44,8 @@ namespace DeNelle.Village
             return Instance;
         }
 
-        // Auto-spawn the quick-equip cluster in the gameplay hubs where a hero +
-        // GearLoadout exist. Mirrors the injector bootstrap idiom (NPCs/HUD).
+        // Auto-spawn the inventory button in the gameplay hubs.
+        // Mirrors the injector bootstrap idiom (NPCs/HUD).
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
         {
@@ -74,61 +68,21 @@ namespace DeNelle.Village
 
         private void OnDestroy()
         {
-            Unsubscribe();
             if (_ui != null) Destroy(_ui);
             if (Instance == this) Instance = null;
         }
 
         private void Start()
         {
-            try { BuildRoot(); ResolveLoadout(); Refresh(); }
+            try { BuildRoot(); }
             catch (System.Exception e)
             {
                 Debug.LogError("[HeroEquipHud] build failed (UI may be partial): " + e);
             }
         }
 
-        private void Update()
-        {
-            // Self-heal: if the hero/loadout wasn't present at Start, retry every ~1s.
-            if (_loadout == null)
-            {
-                _heroSearchTimer += Time.unscaledDeltaTime;
-                if (_heroSearchTimer >= 1f)
-                {
-                    _heroSearchTimer = 0f;
-                    ResolveLoadout();
-                    if (_loadout != null) Refresh();
-                }
-            }
-        }
-
-        // -- hero / gear resolution -----------------------------------------
-        private void ResolveLoadout()
-        {
-            if (_loadout != null) return;
-            var hero = GameObject.FindWithTag("Player");
-            if (hero == null) hero = SafeFindByTag("HeroTarget");
-            if (hero != null)
-            {
-                _loadout = hero.GetComponentInChildren<GearLoadout>();
-                if (_loadout != null) _loadout.OnGearChanged += Refresh;
-            }
-        }
-
-        private static GameObject SafeFindByTag(string tag)
-        {
-            try { return GameObject.FindWithTag(tag); }
-            catch { return null; }
-        }
-
-        private void Unsubscribe()
-        {
-            if (_loadout != null) _loadout.OnGearChanged -= Refresh;
-        }
-
         // ====================================================================
-        // BUILD
+        // BUILD — one compact bag-icon button, bottom-right.
         // ====================================================================
         private void BuildRoot()
         {
@@ -147,114 +101,32 @@ namespace DeNelle.Village
             scaler.matchWidthOrHeight = 0.5f;
             _ui.AddComponent<GraphicRaycaster>();
 
-            // Cluster panel: bottom-right vertical strip of slots.
-            _cluster = AddImage(_ui.transform, "EquipCluster",
-                                new Vector2(0.84f, 0.30f), new Vector2(0.995f, 0.70f), Glass);
-            AddRimUnderline(_cluster);
-        }
-
-        /// <summary>Rebuild the slot tiles from the live equipped gear + owned consumables.</summary>
-        private void Refresh()
-        {
-            if (_cluster == null) return;
-            for (int i = _cluster.transform.childCount - 1; i >= 0; i--)
-            {
-                var ch = _cluster.transform.GetChild(i);
-                if (ch.name == "Accent") continue;       // keep the rim
-                Destroy(ch.gameObject);
-            }
-
-            // Header chip — gilt crest + GEAR so the cluster reads as a deliberate panel.
-            AddLabel(_cluster.transform, ElarionUi.CrestGlyph + " GEAR", 0.915f, 0.99f, ElarionUi.Gilt,
-                     ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, spacing: 3f);
-
-            // Slot 1 — Weapon (rarity-framed).
-            WeaponDef w = _loadout != null ? _loadout.EquippedWeapon : null;
-            AddSlot("WPN", w != null ? Glyph(w.icon) : "-",
-                    w != null ? RarityColor(w.rarity) : ElarionUi.ParchmentDim,
-                    w != null ? w.rarity : null, 0.715f, 0.90f);
-
-            // Slot 2 — Armor.
-            ArmorDef a = _loadout != null ? _loadout.EquippedArmor : null;
-            AddSlot("ARM", a != null ? Glyph(a.icon) : "-",
-                    a != null ? RarityColor(a.rarity) : ElarionUi.ParchmentDim,
-                    a != null ? a.rarity : null, 0.515f, 0.70f);
-
-            // Slots 3-4 — first two owned consumables (or empty).
-            var owned = SafeOwnedConsumables();
-            string c1Glyph = "-", c2Glyph = "-";
-            int c1Count = 0, c2Count = 0;
-            int idx = 0;
-            foreach (var kv in owned)
-            {
-                var def = ConsumableCatalog.Find(kv.Key);
-                string g = def != null && !string.IsNullOrEmpty(def.Glyph) ? def.Glyph : "!";
-                if (idx == 0) { c1Glyph = g; c1Count = kv.Value; }
-                else if (idx == 1) { c2Glyph = g; c2Count = kv.Value; break; }
-                idx++;
-            }
-            AddSlot("ITM", c1Glyph, ElarionUi.Parchment, null, 0.315f, 0.50f, c1Count);
-            AddSlot("ITM", c2Glyph, ElarionUi.Parchment, null, 0.115f, 0.30f, c2Count);
-
-            // The whole cluster is tappable (any slot) -> open inventory.
-            // Each slot is a Button; also add a catch-all on the cluster background.
-            EnsureClusterButton();
-        }
-
-        private static Dictionary<string, int> SafeOwnedConsumables()
-        {
-            try { return ItemInventory.OwnedConsumables() ?? new Dictionary<string, int>(); }
-            catch { return new Dictionary<string, int>(); }
-        }
-
-        private void EnsureClusterButton()
-        {
-            var btn = _cluster.GetComponent<Button>();
-            if (btn == null)
-            {
-                btn = _cluster.AddComponent<Button>();
-                btn.transition = Selectable.Transition.None;
-                btn.onClick.AddListener(OpenInventory);
-            }
-        }
-
-        private void AddSlot(string tag, string glyph, Color glyphColor, string rarity, float y0, float y1, int count = -1)
-        {
-            bool filled = !string.IsNullOrEmpty(rarity);
-            Color rc = filled ? RarityColor(rarity) : new Color(0f, 0f, 0f, 0.4f);
-
-            // Rarity frame behind the slot — the equipped tier glows even in the HUD.
-            var frame = AddImage(_cluster.transform, "Frame_" + tag, new Vector2(0.10f, y0), new Vector2(0.90f, y1),
-                                 new Color(rc.r, rc.g, rc.b, filled ? 0.55f : 0.35f));
+            // Single framed, gold-accent square button anchored bottom-right —
+            // sits where the old 4-slot cluster lived (~0.84..0.995 x, lower band).
+            var frame = AddImage(_ui.transform, "EquipFrame",
+                                 new Vector2(0.855f, 0.305f), new Vector2(0.985f, 0.405f), AccentSoft);
             frame.GetComponent<Image>().raycastTarget = false;
+            AddRimUnderline(frame);
 
-            var tile = new GameObject("Slot_" + tag, typeof(Image), typeof(Button));
-            tile.transform.SetParent(frame.transform, false);
-            var rt = tile.GetComponent<RectTransform>();
+            var button = new GameObject("InventoryButton", typeof(Image), typeof(Button));
+            button.transform.SetParent(frame.transform, false);
+            var rt = button.GetComponent<RectTransform>();
             rt.anchorMin = new Vector2(0.06f, 0.06f); rt.anchorMax = new Vector2(0.94f, 0.94f);
             rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
-            var img = tile.GetComponent<Image>();
+            var img = button.GetComponent<Image>();
             img.color = Cell;
             ApplyRounded(img);
 
-            var btn = tile.GetComponent<Button>();
+            var btn = button.GetComponent<Button>();
             btn.targetGraphic = img;
             StyleButtonColors(btn);
             btn.onClick.AddListener(OpenInventory);
 
-            AddLabel(tile.transform, glyph, 0.28f, 0.95f, glyphColor, ElarionUi.FontHead,
+            // Bag glyph (icon) + small label so the affordance reads as "inventory".
+            AddLabel(button.transform, BagGlyph, 0.30f, 0.98f, ElarionUi.Gilt, ElarionUi.FontHead,
                      TMPro.TextAlignmentOptions.Center, 0.02f, 0.98f, bold: true);
-            AddLabel(tile.transform, tag, 0.02f, 0.28f, ElarionUi.ParchmentDim, ElarionUi.FontMicro,
+            AddLabel(button.transform, "BAG", 0.02f, 0.30f, ElarionUi.ParchmentDim, ElarionUi.FontMicro,
                      TMPro.TextAlignmentOptions.Center, 0.02f, 0.98f, spacing: 2f);
-
-            if (count >= 0)
-            {
-                var chip = AddImage(tile.transform, "Count", new Vector2(0.55f, 0.62f), new Vector2(0.98f, 0.98f),
-                                    new Color(0f, 0f, 0f, 0.6f));
-                chip.GetComponent<Image>().raycastTarget = false;
-                AddLabel(chip.transform, "x" + count, 0f, 1f, ElarionUi.Parchment, ElarionUi.FontMicro,
-                         TMPro.TextAlignmentOptions.Center, 0f, 1f, bold: true);
-            }
         }
 
         private void OpenInventory()
@@ -263,21 +135,7 @@ namespace DeNelle.Village
             catch (System.Exception e) { Debug.LogError("[HeroEquipHud] open inventory failed: " + e); }
         }
 
-        private static string Glyph(string icon) => string.IsNullOrEmpty(icon) ? "?" : icon;
-
         // ── shared visual helpers (mirrored from ArenaPanel) ──────────────────
-        private static Color RarityColor(string rarity)
-        {
-            switch ((rarity ?? "common").ToLowerInvariant())
-            {
-                case "uncommon":  return new Color(0.46f, 0.74f, 0.42f, 1f);
-                case "rare":      return new Color(0.32f, 0.58f, 0.92f, 1f);
-                case "epic":      return new Color(0.66f, 0.42f, 0.86f, 1f);
-                case "legendary": return new Color(0.92f, 0.62f, 0.24f, 1f);
-                default:          return new Color(0.80f, 0.80f, 0.78f, 1f);
-            }
-        }
-
         private static GameObject AddImage(Transform parent, string name, Vector2 min, Vector2 max, Color color)
         {
             var go = new GameObject(name, typeof(Image));

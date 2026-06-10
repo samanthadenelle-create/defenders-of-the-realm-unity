@@ -672,6 +672,47 @@
    }
   },
   {
+   "id": "jeweler",
+   "displayName": "Jeweler",
+   "type": "Resource",
+   "kind": "Cell",
+   "visualPrefabPath": "Structures/House_Medieval_Small",
+   "repo": {
+    "behaviorId": "GameplayBuilding",
+    "singleton": true,
+    "buildCost": 120,
+    "cost": {
+     "wood": 50,
+     "food": 0,
+     "iron": 40,
+     "crystals": 30
+    },
+    "navSurface": "Blocker",
+    "placement": {
+     "mustSitOn": "Ground",
+     "footprint": 3.4,
+     "noOverlap": true,
+     "checkAffordable": true
+    }
+   },
+   "orientation": {
+    "corrected": false,
+    "manual": false,
+    "euler": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "offset": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "scale": 1.0,
+    "note": "zeroed — polyperfect _M prefabs are upright (no -90X needed)"
+   }
+  },
+  {
    "id": "arcane-tower",
    "displayName": "Arcane Tower",
    "type": "Resource",

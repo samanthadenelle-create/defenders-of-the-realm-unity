@@ -43,7 +43,7 @@ namespace DeNelle.Village
             // (procedural cube) if it hasn't been seeded.
             var seeded = Resources.Load<TowerData>("Towers/DevTower");
             _devTower = seeded != null ? seeded : BuildDevTower();
-            Debug.Log("[TowerLoopDev] B = place a free tower (left-click ground), U = upgrade the last-built tower, K = +1 hero level, " +
+            Debug.Log("[TowerLoopDev] B = toggle Build Mode (catalog palette), U = upgrade the last-built tower, K = +1 hero level, " +
                       "J = spawn 'Catapult' catalog entry via StructureFactory.Create (data-only new type). " +
                       "(T is the talent tree.) Tower visual: " +
                       (seeded != null ? "seeded model." : "procedural placeholder — run Defenders > Seed Tower Data."));
@@ -53,9 +53,15 @@ namespace DeNelle.Village
         {
             if (Input.GetKeyDown(KeyCode.B))
             {
-                EnsurePlacement();
-                if (TowerPlacementSystem.Instance != null)
-                    TowerPlacementSystem.Instance.StartPlacing(_devTower);
+                // FIX (build menu not showing) — B used to arm the OLD single-tower
+                // TowerPlacementSystem, which drops a placement marker but has NO
+                // palette: the player got a circle and no way to pick what to build
+                // (incl. the catalog'd jeweler). Route B through the SAME entry point
+                // the production HUD "Build" button uses (BuildButtonBridge →
+                // BuildModeController.Toggle()), which self-creates the grid + ghost +
+                // the code-built BuildPaletteUI populated from CatalogRegistry. The dev
+                // single-tower path is retired (the catalog palette supersedes it).
+                BuildModeController.EnsureExists()?.Toggle();
             }
             else if (Input.GetKeyDown(KeyCode.U))
             {

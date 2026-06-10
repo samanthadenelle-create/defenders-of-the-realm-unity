@@ -45,12 +45,19 @@ namespace DeNelle.DevTools
         private static bool _spawned;
 
         /// <summary>
-        /// Runs once, automatically, after the runtime loads — before the first
-        /// scene's objects run their Awake. Builds the persistent dev-console
-        /// GameObject. The <c>[RuntimeInitializeOnLoadMethod]</c> attribute makes
-        /// this self-starting: nothing in any scene has to call it.
+        /// Runs once, automatically, after the first scene has loaded. Builds the
+        /// persistent dev-console GameObject. The <c>[RuntimeInitializeOnLoadMethod]</c>
+        /// attribute makes this self-starting: nothing in any scene has to call it.
+        /// <para>
+        /// AfterSceneLoad (not BeforeSceneLoad) is deliberate: the console's
+        /// UIDocument needs a PanelSettings WITH A THEME to render, and the most
+        /// reliable source of a themed PanelSettings is a sibling HUD UIDocument
+        /// already alive in the loaded scene (the same adoption pattern
+        /// AdminOverlay / ArenaDefensePaletteUI use). By the time this runs those
+        /// siblings exist; before the scene loads they do not.
+        /// </para>
         /// </summary>
-        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Spawn()
         {
             if (_spawned) return;
@@ -59,33 +66,68 @@ namespace DeNelle.DevTools
             var go = new GameObject(PanelObjectName);
             Object.DontDestroyOnLoad(go);
 
-            // The UIDocument needs a PanelSettings asset to render. The dev panel
-            // loads one from Resources too (DevPanelSettings); if absent it falls
-            // back to any PanelSettings already in Resources so it still draws.
+            // The UIDocument needs a PanelSettings asset to render.
             var document = go.AddComponent<UIDocument>();
-
-            var panelSettings = Resources.Load<PanelSettings>("DevPanelSettings");
-            if (panelSettings != null)
-                document.panelSettings = panelSettings;
-
-            var visualTree = Resources.Load<VisualTreeAsset>(PanelUxmlResourcePath);
-            if (visualTree == null)
-            {
-                Debug.LogWarning(
-                    "[DevBootstrap] DevPanel.uxml not found under a Resources folder " +
-                    $"('{PanelUxmlResourcePath}'). The QA dev console will not auto-spawn — " +
-                    "place DevPanel.uxml in Assets/_Modules/DevTools/Resources/, or add a " +
-                    "DevPanelController to a scene by hand. See docs/port-notes/dev-panel.md.");
-                return;
-            }
-            document.visualTreeAsset = visualTree;
+            document.panelSettings = ResolvePanelSettings();
             document.sortingOrder = PanelSortOrder;
 
-            // The controller binds the UXML in OnEnable; adding it after the
-            // UIDocument is configured means the root is ready.
+            // The controller builds its ENTIRE UI in C# (inline styles) — it does
+            // NOT read DevPanel.uxml (this project's UXML renders empty in player
+            // builds; see DevPanelController.BindElements). So the UXML is OPTIONAL:
+            // assign it only if it happens to be reachable via Resources, purely so
+            // a future UXML-based variant could pick it up. A missing UXML is NOT a
+            // reason to skip the spawn — that was the bug that made the console
+            // unreachable (no toggle target despite F1 firing).
+            var visualTree = Resources.Load<VisualTreeAsset>(PanelUxmlResourcePath);
+            if (visualTree != null)
+                document.visualTreeAsset = visualTree;
+
+            // The controller binds (code-builds) its UI in OnEnable; adding it after
+            // the UIDocument is configured means the root is ready.
             go.AddComponent<DevPanelController>();
 
-            Debug.Log("[DevBootstrap] QA dev console spawned (DEV build only). Press F1 to toggle.");
+            Debug.Log("[DevBootstrap] QA dev console spawned (DEV build only). " +
+                      "Press F1 (or tap the 'DEV' corner chip) to toggle.");
+        }
+
+        /// <summary>
+        /// Resolves a PanelSettings for the dev-console UIDocument. Order:
+        ///   1. A dedicated Resources asset named "DevPanelSettings", if present.
+        ///   2. Adopt one from a sibling UIDocument already in the scene (carries a
+        ///      working themeStyleSheet — the bit a UI-Toolkit panel needs to draw).
+        ///   3. Failing both, create a runtime PanelSettings and borrow a theme from
+        ///      any live UIDocument (mirrors ArenaDefensePaletteUI). This guarantees
+        ///      the console renders even in a scene with no other UI-Toolkit canvas.
+        /// </summary>
+        private static PanelSettings ResolvePanelSettings()
+        {
+            var dedicated = Resources.Load<PanelSettings>("DevPanelSettings");
+            if (dedicated != null) return dedicated;
+
+            // Look for a sibling UIDocument with a usable (themed) PanelSettings.
+            foreach (var doc in Object.FindObjectsByType<UIDocument>(
+                         FindObjectsInactive.Include, FindObjectsSortMode.None))
+            {
+                if (doc != null && doc.panelSettings != null &&
+                    doc.panelSettings.themeStyleSheet != null)
+                    return doc.panelSettings;
+            }
+
+            // Last resort: build one at runtime, borrowing any available theme.
+            var created = ScriptableObject.CreateInstance<PanelSettings>();
+            created.name = "DevRuntimePanelSettings";
+            created.scaleMode = PanelScaleMode.ConstantPixelSize;   // dev tool — fixed px
+            foreach (var doc in Object.FindObjectsByType<UIDocument>(
+                         FindObjectsInactive.Include, FindObjectsSortMode.None))
+            {
+                if (doc != null && doc.panelSettings != null &&
+                    doc.panelSettings.themeStyleSheet != null)
+                {
+                    created.themeStyleSheet = doc.panelSettings.themeStyleSheet;
+                    break;
+                }
+            }
+            return created;
         }
     }
 }
@@ -93,26 +135,25 @@ namespace DeNelle.DevTools
 #endif // DEVELOPMENT_BUILD || UNITY_EDITOR
 
 // =============================================================================
-// INTEGRATOR NOTES — making the auto-spawn work (DEV builds only).
+// INTEGRATOR NOTES — the auto-spawn (DEV builds only).
 // -----------------------------------------------------------------------------
-// This bootstrap is fully automatic IF the panel assets are reachable via
-// Resources.Load. The integrator does ONE of:
+// ZERO per-scene work, ZERO required Resources assets. The bootstrap spawns the
+// console automatically in every scene, in the Editor and in any Development
+// build, then:
+//   - Press F1, OR tap the on-screen "DEV" corner chip (top-right), to toggle it.
 //
-//   A. AUTO-SPAWN (recommended — zero per-scene work):
-//      - Create Assets/_Modules/DevTools/Resources/.
-//      - Move (or copy) DevPanel.uxml + DevPanel.uss into it. Unity finds them
-//        by name; the .uss is referenced by the .uxml's <Style> tag.
-//      - Create a PanelSettings asset there named "DevPanelSettings"
-//        (Assets > Create > UI Toolkit > Panel Settings Asset). Optional — the
-//        panel still renders against an existing PanelSettings if omitted, but
-//        a dedicated one keeps the dev console's scale independent of the HUD.
-//      The bootstrap then spawns the console in every scene, in the Editor and
-//      in any Development build.
+// The console builds its WHOLE UI in C# (DevPanelController, inline styles) — it
+// does NOT depend on DevPanel.uxml/.uss (this project's UXML renders empty in
+// player builds). So the only thing the UIDocument needs to draw is a
+// PanelSettings, which ResolvePanelSettings() supplies in this order:
+//   1. A Resources asset named "DevPanelSettings" (optional override).
+//   2. A themed PanelSettings adopted from a sibling HUD UIDocument in the scene.
+//   3. A runtime-created PanelSettings (theme borrowed if any exists).
 //
-//   B. MANUAL (no Resources folder): skip the above and drop a GameObject with
-//      a UIDocument (Source Asset = DevPanel.uxml) + DevPanelController into
-//      whatever scenes QA needs it in.
+// OPTIONAL polish (not required for the console to work):
+//   - Drop a "DevPanelSettings" PanelSettings asset under any Resources/ folder
+//     to give the dev console its own independent scale/theme.
 //
-// Either way, NOTHING here ships in a release build — the #if and the asmdef
-// define constraint both exclude it.
+// NOTHING here ships in a release build — the #if and the asmdef define
+// constraint both exclude the whole DeNelle.DevTools assembly.
 // =============================================================================

@@ -144,6 +144,11 @@ namespace DeNelle.Village
             // against the live QuestService ledger (survives save/reload).
             ((IActionRegistration)_runner).AddFunction("IsQuestActive",   (Func<string, bool>)FnIsQuestActive);
             ((IActionRegistration)_runner).AddFunction("IsQuestComplete", (Func<string, bool>)FnIsQuestComplete);
+            // Pet-house gate: lets the Echo Hollow node branch on whether the player
+            // already attuned (owns) a given echo species, so the unlock option is
+            // hidden / replaced by an "already bonded" line on re-visit instead of
+            // re-firing the grant. Mirrors the keystone/quest read-function pattern.
+            ((IActionRegistration)_runner).AddFunction("pet_owned", (Func<string, bool>)FnPetOwned);
 
             // Vendor / station UI verbs (WO-106/109/291/304) — formerly on the now-dead
             // NPCCommandBridge. Consolidated here onto the SINGLE live runner so each Yarn
@@ -401,6 +406,14 @@ namespace DeNelle.Village
         // Deploys the CHOSEN species via the self-healed deployer (records the pick
         // to GameState.StarterPetId so it persists). The deploy-once guard makes a
         // repeat call a safe no-op, so re-visiting the pet house never respawns.
+        //
+        // OWNERSHIP GATE: the Echo Hollow Yarn node already hides the unlock option
+        // for an owned species via <<if not pet_owned(...)>> — but we ALSO gate here
+        // so the grant can never double-fire even if the node is reached another way.
+        // Acquire() is the idempotent ownership funnel (PetAcquisitionService): the
+        // FIRST attune records the species in GameState.Pets + OwnedPets and returns
+        // true; any repeat is a no-op (false). Either way we still call DeployChosen
+        // so the chosen Warden is the live starter + is (re)deployed at the Heart.
         // TODO: free-text pet name UI — Yarn can't capture text, so the player picks
         // a species (and gets the catalog name) for now; a code-built name prompt
         // (cf. PetIntroduction) would write GameState.PetName before DeployChosen.
@@ -412,6 +425,18 @@ namespace DeNelle.Village
                 Debug.LogWarning("[DialogueCommandBridge] spawn_named_pet — could not create a PetDeployer.");
                 return;
             }
+
+            // Record ownership exactly once (idempotent). Acquire is the canonical
+            // grant primitive; PetAcquisitionService bootstraps itself on load, but
+            // null-guard in case it isn't present yet.
+            var acq = DeNelle.Pets.PetAcquisitionService.Instance;
+            if (acq != null)
+            {
+                bool firstTime = acq.Acquire(species, DeNelle.Pets.PetAcquisitionSource.Gift);
+                if (!firstTime)
+                    Debug.Log($"[DialogueCommandBridge] spawn_named_pet '{species}' — already owned; not re-granting.");
+            }
+
             deployer.DeployChosen(species);
             Debug.Log($"[DialogueCommandBridge] spawn_named_pet '{species}' → deployed via PetDeployer.");
         }
@@ -510,6 +535,29 @@ namespace DeNelle.Village
             QuestService.Instance != null && QuestService.Instance.IsActive(id);
         private static bool FnIsQuestComplete(string id) =>
             QuestService.Instance != null && QuestService.Instance.IsCompleted(id);
+
+        // Pet-house gate: true when the player has already attuned (owns) this echo
+        // species — the Echo Hollow node hides its unlock option with
+        // <<if not pet_owned("ice-wolf")>>. Reads the canonical roster ownership
+        // (PetAcquisitionService.Owns → GameState.Pets/OwnedPets) AND falls back to
+        // GameState.StarterPetId so a pre-roster save (where the pet-house flow only
+        // recorded the chosen starter id) still reads its starter as owned.
+        private static bool FnPetOwned(string species)
+        {
+            if (string.IsNullOrEmpty(species)) return false;
+
+            var acq = DeNelle.Pets.PetAcquisitionService.Instance;
+            if (acq != null && acq.Owns(species)) return true;
+
+            // StarterPetId fallback — the pet-house pick persists as the catalog id
+            // ("pet-<species>"); resolve it back to a species and compare.
+            var svc = GameStateService.Instance;
+            string starterId = svc != null && svc.State != null ? svc.State.StarterPetId : null;
+            if (string.IsNullOrEmpty(starterId)) return false;
+            var def = DeNelle.Pets.PetCatalog.Find(starterId);
+            return def != null && !string.IsNullOrEmpty(def.Species) &&
+                   string.Equals(def.Species, species.Trim(), StringComparison.OrdinalIgnoreCase);
+        }
 
         // ── Vendor / station UI verbs (consolidated from the dead NPCCommandBridge) ──
         // Each opens the relevant code-built panel, self-healing a host if none exists

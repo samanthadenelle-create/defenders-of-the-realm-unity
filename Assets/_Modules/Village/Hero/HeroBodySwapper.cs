@@ -558,11 +558,20 @@ namespace DeNelle.Village
                 if (baked.HasProperty("_BaseColor")) baked.SetColor("_BaseColor", Color.white);
                 if (baked.HasProperty("_Color"))     baked.SetColor("_Color", Color.white);
 
-                // Make Knight metallic armor as specified (vibrant steel).
+                // Knight armour sheen — keep metallic LOW so the basecolor atlas drives the
+                // visible colour. ROOT CAUSE of the "colorless Knight" in the WebGL build:
+                // metallic=0.7 on a flat basecolor (no metallic map) makes ~70% of the surface
+                // colour come from ENVIRONMENT reflection, not albedo. The editor/Standalone
+                // have rich skybox+reflection so the steel read fine; the WebGL build has weak/
+                // flat environment reflection (reduced reflection probes + URP StripUnusedVariants),
+                // so the metal had almost nothing to reflect and rendered as a desaturated grey/
+                // white "colorless" hero. The companion Knight (StoryCompanionInjector.BindClassDiffuse)
+                // never sets metallic and renders fine — match that. A small metallic + moderate
+                // smoothness still gives an armour highlight without washing out the basecolor.
                 if (cls == HeroClass.Knight)
                 {
-                    if (baked.HasProperty("_Metallic"))   baked.SetFloat("_Metallic", 0.7f);
-                    if (baked.HasProperty("_Smoothness")) baked.SetFloat("_Smoothness", 0.5f);
+                    if (baked.HasProperty("_Metallic"))   baked.SetFloat("_Metallic", 0.1f);
+                    if (baked.HasProperty("_Smoothness")) baked.SetFloat("_Smoothness", 0.35f);
                 }
             }
 

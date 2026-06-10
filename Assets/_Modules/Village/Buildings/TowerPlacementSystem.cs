@@ -63,8 +63,17 @@ namespace DeNelle.Village
         private readonly Collider[] _overlapBuffer = new Collider[16];
         private int _towerBuildingLayer;
 
-        private static readonly Color s_validColor   = new Color(0.2f, 0.9f, 0.3f, 0.45f);
-        private static readonly Color s_invalidColor = new Color(0.9f, 0.2f, 0.2f, 0.45f);
+        // Placement GUIDE colours (not a solid object): a thin, translucent green
+        // ground-shadow ring when valid, dimmed red when blocked. ~35% alpha so it
+        // reads as a subtle projected guide rather than a filled disc.
+        private static readonly Color s_validColor   = new Color(0.30f, 0.95f, 0.40f, 0.35f);
+        private static readonly Color s_invalidColor = new Color(0.90f, 0.25f, 0.25f, 0.35f);
+
+        // Ring geometry — the guide footprint radius + how flat it hugs the ground.
+        private const float MarkerRadius   = 1.6f;     // matches the old disc footprint
+        private const int   MarkerSegments = 48;       // smoothness of the ring
+        private const float MarkerWidth    = 0.08f;    // thinnest readable line weight
+        private const float MarkerGroundLift = 0.03f;  // tiny lift to avoid z-fighting the ground
 
         private void Awake()
         {
@@ -181,10 +190,19 @@ namespace DeNelle.Village
             _currentMarker.transform.position = pos;
 
             bool valid = IsValidSurface(hit) && CanPlace(pos);
+            Color guideColor = valid ? s_validColor : s_invalidColor;
             if (_markerRenderer != null)
             {
-                _markerPropertyBlock.SetColor("_BaseColor", valid ? s_validColor : s_invalidColor);
+                _markerPropertyBlock.SetColor("_BaseColor", guideColor);
+                _markerPropertyBlock.SetColor("_Color", guideColor);
                 _markerRenderer.SetPropertyBlock(_markerPropertyBlock);
+            }
+            // LineRenderer vertex colours modulate the material — set them too so the
+            // green/red guide tint is reliable regardless of the resolved shader.
+            if (_markerRenderer is LineRenderer lr)
+            {
+                lr.startColor = guideColor;
+                lr.endColor = guideColor;
             }
 
             if (valid && Input.GetMouseButtonDown(0))
@@ -289,31 +307,58 @@ namespace DeNelle.Village
             CancelPlacing();   // one tower per StartPlacing; HUD re-arms for the next
         }
 
-        // --- Ghost marker construction (transparent URP cylinder) ----------------
+        // --- Placement guide construction (thin ground-projected ring) -----------
+        // RESTYLE — the marker used to be a SOLID translucent cylinder DISC, which
+        // read as a real object lying on the ground. The placement indicator should
+        // be a subtle GUIDE, not an object: a thin, translucent green line-weight ring
+        // projected flat on the ground (a "footprint shadow"). Built from a LineRenderer
+        // looped into a circle that hugs the ground plane. The renderer is still tinted
+        // green/red each frame via the existing MaterialPropertyBlock path (Update), so
+        // the valid/blocked feedback is preserved — only the look changed.
         private GameObject BuildMarker()
         {
-            var marker = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-            marker.name = "TowerPlacementMarker";
-            marker.transform.localScale = new Vector3(1.6f, 0.05f, 1.6f);
+            var marker = new GameObject("TowerPlacementGuide");
 
-            // The ghost must never block its own overlap test or catch the cursor ray.
-            var col = marker.GetComponent<Collider>();
-            if (col != null) Destroy(col);
+            var lr = marker.AddComponent<LineRenderer>();
+            lr.useWorldSpace = false;                 // points are local → moves with the marker
+            lr.loop = true;                           // closed ring
+            lr.alignment = LineAlignment.TransformZ;  // lie flat in the local XZ plane
+            lr.numCornerVertices = 0;
+            lr.numCapVertices = 0;
+            lr.widthMultiplier = MarkerWidth;         // thinnest readable line weight
+            lr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            lr.receiveShadows = false;
+            lr.positionCount = MarkerSegments;
 
-            var rend = marker.GetComponent<Renderer>();
-            if (rend != null) rend.sharedMaterial = BuildTransparentMaterial();
+            // Orient the ring flat on the ground: rotate the host so the LineRenderer's
+            // local XZ ring lies in the world XZ plane, lifted a hair to avoid z-fighting.
+            marker.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
+
+            // Lay out the circle points in the local plane.
+            for (int i = 0; i < MarkerSegments; i++)
+            {
+                float a = (i / (float)MarkerSegments) * Mathf.PI * 2f;
+                lr.SetPosition(i, new Vector3(Mathf.Cos(a) * MarkerRadius,
+                                              Mathf.Sin(a) * MarkerRadius,
+                                              -MarkerGroundLift));
+            }
+
+            lr.sharedMaterial = BuildGuideMaterial();
             return marker;
         }
 
-        /// <summary>A transparent URP material for the ghost (falls back if URP absent).</summary>
-        private static Material BuildTransparentMaterial()
+        /// <summary>
+        /// A transparent, unlit URP material for the ground guide ring (falls back if
+        /// URP absent). Unlit so the guide is a flat, lighting-independent shadow line;
+        /// alpha-blended so the ~35% green/red tint reads as a subtle projected guide.
+        /// </summary>
+        private static Material BuildGuideMaterial()
         {
-            Shader shader = Shader.Find("Universal Render Pipeline/Lit")
-                            ?? Shader.Find("Universal Render Pipeline/Unlit")
+            Shader shader = Shader.Find("Universal Render Pipeline/Unlit")
+                            ?? Shader.Find("Universal Render Pipeline/Lit")
                             ?? Shader.Find("Sprites/Default");
             var mat = new Material(shader);
 
-            // Flip URP/Lit to transparent so the green/red tint reads as a ghost.
             if (mat.HasProperty("_Surface"))
             {
                 mat.SetFloat("_Surface", 1f);             // 0 opaque / 1 transparent
@@ -321,12 +366,12 @@ namespace DeNelle.Village
                 mat.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
                 mat.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
                 mat.SetFloat("_ZWrite", 0f);
-                mat.SetFloat("_Cull", (float)UnityEngine.Rendering.CullMode.Back);
                 mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
                 mat.DisableKeyword("_ALPHATEST_ON");
                 mat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
             }
             if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", s_validColor);
+            if (mat.HasProperty("_Color"))     mat.SetColor("_Color", s_validColor);
             return mat;
         }
     }

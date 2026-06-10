@@ -51,17 +51,31 @@ tags: structure interaction pet
 // takes its catalog name for now (Aether Sprite / Flame Pup / Ice Wolf). A code-built
 // name-entry UI (cf. PetIntroduction) would write GameState.PetName before deploy.
 <<portrait Portraits/pet-house>>
+// STATEFUL gate (pet re-select fix): each attune option is wrapped in
+// <<if not pet_owned("<species>")>> so an echo the player has ALREADY bonded no
+// longer appears as a selectable unlock. pet_owned(id) is a Yarn function
+// registered in DialogueCommandBridge, backed by PetAcquisitionService.Owns (the
+// canonical roster) with a GameState.StarterPetId fallback for legacy saves. The
+// <<spawn_named_pet>> command is ALSO idempotent (Acquire no-ops on an owned
+// species) so the grant can never double-fire. When an echo is already bonded the
+// Warden offers a "they already walk with you" line instead of re-attuning.
 Echo Warden: Welcome to the Echo Hollow. The echoes here seek a bond. Choose one — they will fight at your side, guard Elarion, and return to you always. #lastline
 
--> A frost-warden — the Ice Wolf. Steady and tough.
+-> A frost-warden — the Ice Wolf. Steady and tough. <<if not pet_owned("ice-wolf")>>
     <<spawn_named_pet "ice-wolf">>
     Echo Warden: The Ice Wolf is attuned to you. It will chill any foe that nears the Heart.
--> A hearth-hound — the Flame Pup. Fierce and fast.
+-> The Ice Wolf already walks with you. <<if pet_owned("ice-wolf")>>
+    Echo Warden: The Ice Wolf is already bonded to you — it answers your call when you need it.
+-> A hearth-hound — the Flame Pup. Fierce and fast. <<if not pet_owned("flame-pup")>>
     <<spawn_named_pet "flame-pup">>
     Echo Warden: The Flame Pup answers your call. Its embers will scorch the enemy.
--> A heart-ward — the Aether Sprite. Quick and arcane.
+-> The Flame Pup already walks with you. <<if pet_owned("flame-pup")>>
+    Echo Warden: The Flame Pup is already bonded to you — its embers are yours to command.
+-> A heart-ward — the Aether Sprite. Quick and arcane. <<if not pet_owned("aether-sprite")>>
     <<spawn_named_pet "aether-sprite">>
     Echo Warden: The Aether Sprite flits to your side. It will ward the Heart with arcane light.
+-> The Aether Sprite already walks with you. <<if pet_owned("aether-sprite")>>
+    Echo Warden: The Aether Sprite is already bonded to you — its arcane light is ever at your side.
 -> Not yet — I will return.
     Echo Warden: The hollow is always open when you are ready.
 ===

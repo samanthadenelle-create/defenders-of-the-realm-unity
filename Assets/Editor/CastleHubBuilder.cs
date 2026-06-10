@@ -236,7 +236,10 @@ namespace DeNelle.Editor
                 (stables,    "EchoHollow_Pets_RoamingArea",     new Vector3( 22, 0,  22)),
                 (houseMed,   "Forge_Armor_Storefront",          new Vector3(-32, 0,   0)),
                 (towerBig,   "ArcaneTower_MagicUpgrades",       new Vector3( 32, 0,   0)),
-                (houseSmall, "Jeweler_Gems_Storefront",         new Vector3(  0, 0, -32)),
+                // Jeweler (Gems) REMOVED from the fixed ring — it was blocking the south door.
+                // It is now a player-PLACEABLE build-catalog entry (id "jeweler" in
+                // structures-catalog.json, behaviorId GameplayBuilding); the owner lays it
+                // wherever she wants via build mode. Do NOT re-add a fixed Jeweler here.
                 (houseLarge, "Marketplace_Monetization",        new Vector3(  0, 0,  32)),
             };
 
@@ -797,14 +800,22 @@ namespace DeNelle.Editor
 
             // Promote the owner's placeholder capsule to the canonical spawn marker so the
             // NavMeshAgent hero spawns on the verified (first-floor) NavMesh — not the upper
-            // quarters anchor, which may sit off-mesh. Hide its renderer so it's an invisible point.
+            // quarters anchor, which may sit off-mesh. STRIP the visible mesh so it's an
+            // invisible transform-only marker (keep the GameObject + its transform/function).
+            // Disabling the renderer alone proved fragile (the pill reappeared in a live
+            // build); remove the MeshRenderer + MeshFilter outright and destroy the collider
+            // so it can never render OR block the hero. The transform stays as the marker.
             var pill = GameObject.Find("Capsule");
             if (pill != null)
             {
                 pill.name = "HeroStartPoint_PlayerSpawn";
-                var r = pill.GetComponent<Renderer>();
-                if (r != null) r.enabled = false;
-                Log("BATCH: promoted 'Capsule' -> HeroStartPoint_PlayerSpawn (renderer hidden).");
+                var mr = pill.GetComponent<MeshRenderer>();
+                if (mr != null) Object.DestroyImmediate(mr);
+                var mf = pill.GetComponent<MeshFilter>();
+                if (mf != null) Object.DestroyImmediate(mf);
+                var col = pill.GetComponent<Collider>();
+                if (col != null) Object.DestroyImmediate(col);
+                Log("BATCH: promoted 'Capsule' -> HeroStartPoint_PlayerSpawn (mesh + collider stripped; invisible marker).");
             }
             else
             {
