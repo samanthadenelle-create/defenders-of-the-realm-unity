@@ -293,7 +293,18 @@ namespace DeNelle.Village
             if (ProjectilePool.Instance == null) return;
             var proj = ProjectilePool.Instance.GetProjectile();
             proj.transform.position = firePos;
-            proj.Initialize(target, damage, element);
+
+            // DEF-PROJ: the projectile's ART look. When the shot carries an element
+            // (empowered), the sprite matches it. An un-empowered shot is physical
+            // (element None) but should still LOOK like its tower type — an Archer
+            // fires an arrow, a Frost tower an ice bolt, a Mage an arcane bolt — so
+            // we derive a VISUAL element from the tower name without changing the
+            // damage typing.
+            DamageElement visual = element != DamageElement.None
+                ? element
+                : ProjectileArtCatalog.ElementForTowerName(_tower != null && _tower.Data != null ? _tower.Data.towerName : name);
+
+            proj.Initialize(target, damage, element, visual);
         }
 
         private static DamageElement AbilityToElement(EmpowermentAbility ability) =>
