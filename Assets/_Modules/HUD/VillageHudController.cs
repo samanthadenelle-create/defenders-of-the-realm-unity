@@ -1883,9 +1883,11 @@ namespace DeNelle.HUD
         /// </summary>
         private bool EvaluateInVillage()
         {
-            // Non-village active scene (dungeon, PatriciaLight, ATB) → not village.
+            // Town context = any recognized HOME/HUB scene (shared source). Was a single
+            // "Village2" check, which hid the whole town chrome on MainCastle_Hall (WO-411
+            // root cause A). Non-hub scenes (dungeon, ATB, OuterWorld field) → not village.
             var active = SceneManager.GetActiveScene();
-            if (active.IsValid() && active.name != VillageSceneName) return false;
+            if (active.IsValid() && !DeNelle.Core.HubScenes.IsHub(active.name)) return false;
 
             ResolveHeroIfNeeded();
             if (_hero == null) return true; // no hero resolved yet → default to village (safe; shows full HUD)

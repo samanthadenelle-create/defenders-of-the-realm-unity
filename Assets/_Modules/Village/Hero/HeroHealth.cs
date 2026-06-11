@@ -311,6 +311,11 @@ namespace DeNelle.Village
 
         private void OnGUI()
         {
+            // WO-411 #2 (duplicate hero bar): this legacy IMGUI bar is suppressed whenever the
+            // real uGUI village HUD is present (VillageHudController registers CoreServices.Hud and
+            // now owns hero vitals). It remains only as a FALLBACK for HUD-less scenes.
+            if (DeNelle.Core.CoreServices.Hud != null) return;
+
             // Compact bar, anchored top-left under the top-left Heart HP bar.
             const float w = 200f, h = 18f, x = 24f, y = 92f;
 
