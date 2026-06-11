@@ -34,9 +34,11 @@ namespace DeNelle.HUD
         private VisualElement _overlay;
         private Label _toast;
         private float _toastUntil;
+        public static HelpMenu Instance { get; private set; }
 
         private void Awake()
         {
+            Instance = this;
             _document = GetComponent<UIDocument>();
             if (_document == null) _document = gameObject.AddComponent<UIDocument>();
             // Borrow whatever PanelSettings the scene already ships. We look
@@ -88,26 +90,9 @@ namespace DeNelle.HUD
             _root.style.left = 0; _root.style.right = 0;
             _root.style.top = 0;  _root.style.bottom = 0;
 
-            // The little launcher button — top-right, BELOW the town mini-map.
-            // Owner 2026-05-25: use a gear glyph (reads as settings) over "?".
-            // The TOWN-HUD mini-map (VillageHudController) is a 140×140 panel
-            // anchored top-right at offset (-12,-12), so it spans top 12→152px.
-            // The gear used to sit at top:80 — squarely UNDER the map — and was
-            // unclickable when the map was open. Park it at top:164 (a 12px gap
-            // below the map's 152px bottom edge) so it is always clear + clickable.
-            var launcher = new Button(ToggleOverlay) { text = "⚙" };
-            launcher.style.position = Position.Absolute;
-            launcher.style.top = 164; launcher.style.right = 20;
-            launcher.style.width = 36; launcher.style.height = 36;
-            launcher.style.fontSize = 18;
-            launcher.style.unityFontStyleAndWeight = FontStyle.Bold;
-            launcher.style.backgroundColor = new Color(0.10f, 0.07f, 0.15f, 0.92f);
-            launcher.style.color = Color.white;
-            launcher.style.borderTopLeftRadius = 18;
-            launcher.style.borderTopRightRadius = 18;
-            launcher.style.borderBottomLeftRadius = 18;
-            launcher.style.borderBottomRightRadius = 18;
-            _root.Add(launcher);
+            // Launcher RETIRED (WO-411): the TOWN-HUD's themed gear (VillageHudController top-right,
+            // hud_settings art) now opens this menu via HelpMenu.Instance.ToggleOverlay() — one gear,
+            // no floating duplicate.
 
             // The overlay panel — hidden until launcher tapped.
             _overlay = new VisualElement { name = "help-overlay" };
@@ -145,7 +130,9 @@ namespace DeNelle.HUD
             card.Add(MakeButton("Report a bug",        OnReportBug));
             card.Add(MakeButton("Controls",            OnShowControls));
             card.Add(MakeButton("Reset Hero & Pet",    OnResetProgress));
-            card.Add(MakeButton("Dev tools",           OnOpenDevTools));
+#if DEVELOPMENT_BUILD || UNITY_EDITOR
+            card.Add(MakeButton("Dev tools",           OnOpenDevTools));   // dev builds only
+#endif
             card.Add(MakeButton("Credits",             OnShowCredits));
             card.Add(MakeButton("Close",               ToggleOverlay));
 
@@ -174,7 +161,7 @@ namespace DeNelle.HUD
         }
 
         // ── Actions ────────────────────────────────────────────────────────────
-        private void ToggleOverlay()
+        public void ToggleOverlay()
         {
             if (_overlay == null) return;
             bool open = _overlay.style.display == DisplayStyle.None;

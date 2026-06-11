@@ -383,13 +383,13 @@ namespace DeNelle.HUD
         {
             if (string.IsNullOrEmpty(name)) return null;
 
-            var packed = RpgIconForWidget(name);
-            if (packed != null) return packed;
-
-            // Standalone custom HUD icon files (Resources/HudIcons/<name>) — e.g. hud_build (tower),
-            // hud_intel (periscope). Individual Sprites, not part of the widget sheet.
+            // Custom standalone icons (Resources/HudIcons/<name>) WIN over the pack — themed art the
+            // owner drops in (hud_build tower, hud_intel periscope, hud_compass, …). Single Sprites.
             var custom = Resources.Load<Sprite>("HudIcons/" + name);
             if (custom != null) return custom;
+
+            var packed = RpgIconForWidget(name);
+            if (packed != null) return packed;
 
             EnsureHudIconsLoaded();
             if (_hudIcons == null) return null;
@@ -1031,7 +1031,7 @@ namespace DeNelle.HUD
             cluster.sizeDelta = new Vector2(280f, 135f);   // ~250% up — same ≈140px size as the TOWN ACTIONS row
 
             BuildIconButton(cluster, new Vector2(0f, 0f), new Vector2(0.48f, 1f),
-                IconSettings, "*", () => ShopRequested?.Invoke());
+                IconSettings, "*", () => HelpMenu.Instance?.ToggleOverlay());   // gear → Help/Settings menu (Report bug, Controls, Dev tools[dev], Credits)
             // Far top-right = enemy scout report / lookout (periscope icon — self-evident).
             BuildIconButton(cluster, new Vector2(0.52f, 0f), new Vector2(1f, 1f),
                 IconIntel, "o", () => IntelRequested?.Invoke());
