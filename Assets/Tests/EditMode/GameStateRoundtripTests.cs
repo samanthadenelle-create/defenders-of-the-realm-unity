@@ -90,6 +90,11 @@ namespace DeNelle.Tests.EditMode
                 { "gate-2", 40 },
                 { "heart", 0 },
             };
+            file.State.GearInventory = new Dictionary<string, int>   // v20 — shop-bought gear counts
+            {
+                { "sword-iron", 2 },
+                { "armor-leather", 1 },
+            };
 
             var back = RoundTrip(file);
             Assert.That(back.State.OwnedItemIds, Is.EqualTo(new List<string> { "item-1", "item-2" }));
@@ -97,6 +102,8 @@ namespace DeNelle.Tests.EditMode
             Assert.That(back.State.Towers[3], Is.EqualTo(3));
             Assert.That(back.State.BuildingDamage["gate-2"], Is.EqualTo(40));
             Assert.That(back.State.BuildingDamage.ContainsKey("heart"), Is.True);
+            Assert.That(back.State.GearInventory["sword-iron"], Is.EqualTo(2), "v20 gear inventory must survive the wire format.");
+            Assert.That(back.State.GearInventory["armor-leather"], Is.EqualTo(1));
         }
 
         [Test]

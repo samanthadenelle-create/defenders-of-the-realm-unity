@@ -115,6 +115,9 @@ namespace DeNelle.Core.State
         // ── ATB / combat (combatSlice) ───────────────────────────────────────
         /// <summary>#29 — shared ATB consumable inventory. Fresh = {0,0,0}.</summary>
         public AtbInventory Inventory = AtbInventory.Empty;
+        /// <summary>Shop-bought gear counts (id → qty). Source of truth for VillageInventory;
+        /// persists + Neon-syncs (v20). Village writes here via GameStateService (Village→Core).</summary>
+        public System.Collections.Generic.Dictionary<string, int> GearInventory = new System.Collections.Generic.Dictionary<string, int>();
         /// <summary>#30 — consecutive ATB defeats. Fresh = 0. Clamped ≥0.</summary>
         public int AtbLossStreak;
 

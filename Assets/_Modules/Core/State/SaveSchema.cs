@@ -27,7 +27,7 @@ namespace DeNelle.Core.State
     {
         // ── Versioning ───────────────────────────────────────────────────────
         /// <summary>CURRENT_SCHEMA_VERSION — bumped whenever the persisted shape changes.</summary>
-        public const int CurrentVersion = 19;  // v19 — arenaDefense placed-defender layout (WO-389); v18 — fold AetherCrystals into Resources.Crystals (single-source-of-truth); v17 — zone graph persistence (WO-164); v16 — party roster (WO-301); v15 — magic tech-axis currency (DEF-121/WO-230); v14 — baseLayout (WO-108); v13 — buildJobs + adSkip (WO-172)
+        public const int CurrentVersion = 20;  // v20 — gear inventory persistence (shop purchases survive reload + Neon sync); v19 — arenaDefense placed-defender layout (WO-389); v18 — fold AetherCrystals into Resources.Crystals (single-source-of-truth); v17 — zone graph persistence (WO-164); v16 — party roster (WO-301); v15 — magic tech-axis currency (DEF-121/WO-230); v14 — baseLayout (WO-108); v13 — buildJobs + adSkip (WO-172)
         /// <summary>SaveExport.format — bumped only if the envelope shape changes.</summary>
         public const int FileFormat = 1;
 
@@ -128,6 +128,7 @@ namespace DeNelle.Core.State
             [JsonProperty("boundWallet")] public string BoundWallet;
             [JsonProperty("heroClass")] public HeroClass? HeroClass;
             [JsonProperty("inventory")] public AtbInventory? Inventory;
+            [JsonProperty("gearInventory")] public Dictionary<string, int> GearInventory;  // v20 — shop-bought gear counts (persists + Neon-syncs); null on old saves → defaults empty
             [JsonProperty("atbLossStreak")] public double? AtbLossStreak;
             [JsonProperty("breachStyle")] public BreachStyle? BreachStyle;
             [JsonProperty("buildingDamage")] public Dictionary<string, double> BuildingDamage;

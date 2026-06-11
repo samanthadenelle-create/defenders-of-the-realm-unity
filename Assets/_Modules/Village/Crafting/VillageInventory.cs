@@ -17,8 +17,9 @@ namespace DeNelle.Village.Crafting
 
         [SerializeField]
         private Dictionary<string, int> _counts = new Dictionary<string, int>();
+        private bool _loaded;   // pulled from persisted GameState.GearInventory yet?
 
-        public IReadOnlyDictionary<string, int> Counts => _counts;
+        public IReadOnlyDictionary<string, int> Counts { get { EnsureLoaded(); return _counts; } }
 
         private void Awake()
         {
@@ -28,7 +29,29 @@ namespace DeNelle.Village.Crafting
                 return;
             }
             Instance = this;
-            // In a full impl this would load from GameState / persistent store.
+            EnsureLoaded();
+        }
+
+        // v20: gear inventory persists via GameState.GearInventory (Neon-synced). Pull once the save
+        // is loaded; push back on every change (below). LAZY so a boot-order race can never overwrite
+        // loaded gear with an empty set before GameStateService is ready (the _loaded latch only sets
+        // once State exists).
+        private void EnsureLoaded()
+        {
+            if (_loaded) return;
+            var st = DeNelle.Core.State.GameStateService.Instance?.State;
+            if (st == null) return;   // save not ready yet — retry on next access
+            if (st.GearInventory != null && st.GearInventory.Count > 0)
+                _counts = new Dictionary<string, int>(st.GearInventory);
+            _loaded = true;
+        }
+
+        private void SyncToState()
+        {
+            var gs = DeNelle.Core.State.GameStateService.Instance;
+            if (gs?.State == null) return;
+            gs.State.GearInventory = new Dictionary<string, int>(_counts);
+            gs.Save();
         }
 
         private void OnDestroy()
@@ -38,6 +61,7 @@ namespace DeNelle.Village.Crafting
 
         public int Get(string id)
         {
+            EnsureLoaded();
             if (string.IsNullOrEmpty(id)) return 0;
             return _counts.TryGetValue(id, out var v) ? v : 0;
         }
@@ -45,17 +69,21 @@ namespace DeNelle.Village.Crafting
         public void Add(string id, int amount)
         {
             if (string.IsNullOrEmpty(id) || amount <= 0) return;
+            EnsureLoaded();
             if (!_counts.ContainsKey(id)) _counts[id] = 0;
             _counts[id] += amount;
+            SyncToState();   // persist the purchase (local save + Neon sync)
             Changed?.Invoke();
         }
 
         public bool TryConsume(string id, int amount)
         {
             if (string.IsNullOrEmpty(id) || amount <= 0) return false;
+            EnsureLoaded();
             if (!_counts.TryGetValue(id, out var have) || have < amount) return false;
             _counts[id] = have - amount;
             if (_counts[id] <= 0) _counts.Remove(id);
+            SyncToState();   // persist the consume
             Changed?.Invoke();
             return true;
         }
@@ -66,10 +94,12 @@ namespace DeNelle.Village.Crafting
             Add(type, amount);
         }
 
-        /// <summary>Clear for testing / reset (does not persist).</summary>
+        /// <summary>Clear for testing / reset.</summary>
         public void Clear()
         {
             _counts.Clear();
+            _loaded = true;        // an explicit clear is intentional state, not a pre-load empty
+            SyncToState();
             Changed?.Invoke();
         }
 

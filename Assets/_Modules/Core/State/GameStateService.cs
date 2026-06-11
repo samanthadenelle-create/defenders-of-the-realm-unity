@@ -318,6 +318,7 @@ namespace DeNelle.Core.State
                 BoundWallet = s.BoundWallet,
                 HeroClass = s.HeroClass.ToNullable(),
                 Inventory = s.Inventory,
+                GearInventory = s.GearInventory,
                 AtbLossStreak = s.AtbLossStreak,
                 BreachStyle = s.BreachStyle,
                 BuildingDamage = new Dictionary<string, double>(s.BuildingDamage),
@@ -380,6 +381,7 @@ namespace DeNelle.Core.State
             if (p.BoundWallet != null) s.BoundWallet = p.BoundWallet;
             s.HeroClass = p.HeroClass.ToOpt();
             if (p.Inventory.HasValue) s.Inventory = p.Inventory.Value;
+            if (p.GearInventory != null) s.GearInventory = p.GearInventory;   // v20; null on old saves → keep default empty
             if (p.AtbLossStreak.HasValue) s.AtbLossStreak = (int)p.AtbLossStreak.Value;
             if (p.BreachStyle.HasValue) s.BreachStyle = p.BreachStyle.Value;
             if (p.BuildingDamage != null) s.BuildingDamage = new SerializableDict<string, double>(p.BuildingDamage);
@@ -666,6 +668,7 @@ namespace DeNelle.Core.State
             // Wipe the hero so onboarding re-prompts. Do NOT unbind the wallet.
             s.HeroClass = HeroClassOpt.None;
             s.Inventory = AtbInventory.Empty;
+            s.GearInventory = new System.Collections.Generic.Dictionary<string, int>();
             s.AtbLossStreak = 0;
             s.BuildingDamage = new SerializableDict<string, double>();
             s.Dungeons = DungeonProgress.Empty();
