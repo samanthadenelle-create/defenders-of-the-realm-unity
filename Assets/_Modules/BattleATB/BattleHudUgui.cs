@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using DeNelle.BattleATB.Engine;
 using DeNelle.BattleATB.State;
+using DeNelle.Core.UI;   // RpgUiCatalog — owner's polished RPG UI pack (sprite-first)
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
@@ -262,6 +263,54 @@ namespace DeNelle.BattleATB
             img.sprite = RoundedSprite();
             img.type = Image.Type.Sliced;
             img.color = color;
+        }
+
+        // ── Sprite-FIRST RPG-pack bar dressing ───────────────────────────────
+        // Skins an existing gauge (track BarBg + its Filled fill) with the pack's
+        // ornate gold gem-socket frame + glossy colored fill, by gauge label. HP→red,
+        // MP→blue, ATB→green frame ONLY (ATB re-tints per frame, so keep its fill the
+        // procedural rounded sprite for the charging→ready colour pop). No-op when the
+        // pack isn't imported (RpgUiCatalog returns null → procedural look preserved).
+        private static void DressPackBar(GameObject barBg, Image fillImg, string label, Color fillColor)
+        {
+            string frameName, fillName;
+            bool swapFill;
+            switch (label)
+            {
+                case "HP": frameName = RpgUiCatalog.BarFrameRed;   fillName = RpgUiCatalog.BarFillRed;   swapFill = true;  break;
+                case "MP": frameName = RpgUiCatalog.BarFrameBlue;  fillName = RpgUiCatalog.BarFillBlue;  swapFill = true;  break;
+                default:   frameName = RpgUiCatalog.BarFrameGreen; fillName = null;                       swapFill = false; break; // ATB
+            }
+
+            var frameSprite = RpgUiCatalog.Get(RpgUiCatalog.RoleBars, frameName);
+            var fillSprite  = swapFill ? RpgUiCatalog.Get(RpgUiCatalog.RoleBars, fillName) : null;
+            if (frameSprite == null && fillSprite == null) return;
+
+            // Swap the fill sprite (keeps Type.Filled + fillAmount); tint to the gauge colour.
+            if (fillImg != null && fillSprite != null)
+            {
+                fillImg.sprite = fillSprite;
+                fillImg.color = fillColor;
+            }
+
+            // Gilded frame overlay over the track (non-raycast, on top so the hollow
+            // ornate frame shows the fill through its centre). The ornate ends overhang
+            // the small track slightly so the gem socket reads.
+            if (frameSprite != null && barBg != null)
+            {
+                var fr = new GameObject("PackBarFrame");
+                fr.transform.SetParent(barBg.transform, false);
+                var frt = fr.AddComponent<RectTransform>();
+                frt.anchorMin = Vector2.zero; frt.anchorMax = Vector2.one;
+                frt.offsetMin = new Vector2(-8f, -5f);
+                frt.offsetMax = new Vector2(8f, 5f);
+                var fimg = fr.AddComponent<Image>();
+                fimg.sprite = frameSprite;
+                fimg.type = Image.Type.Simple;
+                fimg.color = Color.white;
+                fimg.raycastTarget = false;
+                fr.transform.SetAsLastSibling();
+            }
         }
 
         private void CreateInfoPanel()
@@ -709,6 +758,15 @@ namespace DeNelle.BattleATB
             fillImg.fillMethod = Image.FillMethod.Horizontal;
             fillImg.fillOrigin = (int)Image.OriginHorizontal.Left;
             fillImg.color = fillColor;
+
+            // Sprite-FIRST: swap the procedural fill for the RPG pack's glossy colored
+            // bar fill (tinted to this gauge's colour) + drop the pack's gilded gem-socket
+            // frame over the track as a non-raycast overlay. The fillAmount binding is
+            // untouched (still drives the width). No-op when the pack isn't imported, so
+            // these bars keep their clean procedural look. ATB re-tints per frame in
+            // UpdateSlot — for ATB we therefore swap the FRAME only (no fill sprite) so the
+            // charging→ready colour flip stays visible.
+            DressPackBar(barBg, fillImg, label, fillColor);
 
             // Inline numeric value for HP/MP (compact, right-aligned ink)
             if (hasValue)

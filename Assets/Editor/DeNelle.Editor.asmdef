@@ -10,7 +10,8 @@
         "Unity.Localization.Editor",
         "Unity.RenderPipelines.Core.Runtime",
         "Unity.RenderPipelines.Universal.Runtime",
-        "Unity.AI.Navigation"
+        "Unity.AI.Navigation",
+        "UnityEngine.UI"
     ],
     "includePlatforms": [
         "Editor"

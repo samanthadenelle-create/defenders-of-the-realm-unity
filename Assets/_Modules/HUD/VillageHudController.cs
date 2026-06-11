@@ -362,11 +362,37 @@ namespace DeNelle.HUD
         private const string IconAbilityFrame = "hud_ability_frame";
 
         /// <summary>Widget sprite by name, or null (caller keeps its glyph fallback).</summary>
+        // SPRITE-FIRST priority: the owner's polished RPG UI pack (RpgUiCatalog) wins,
+        // then the legacy HudIcons sheet, then null → the caller's code-drawn glyph. The
+        // pack lookup maps each HUD widget name to the matching bronze RPG icon role so
+        // Settings/Inventory/Talk/Quest/Tree/Compass come up as real artwork when the
+        // pack is imported. All paths are WebGL-safe (Resources only) and null-safe.
         private static Sprite WidgetSprite(string name)
         {
+            if (string.IsNullOrEmpty(name)) return null;
+
+            var packed = RpgIconForWidget(name);
+            if (packed != null) return packed;
+
             EnsureHudIconsLoaded();
-            if (_hudIcons == null || string.IsNullOrEmpty(name)) return null;
+            if (_hudIcons == null) return null;
             return _hudIcons.TryGetValue(name, out var s) ? s : null;
+        }
+
+        // Map a HUD widget name to the RpgUiCatalog "icons" sprite (or null when the
+        // pack isn't imported / has no matching icon → fall through to HudIcons/glyph).
+        private static Sprite RpgIconForWidget(string name)
+        {
+            switch (name)
+            {
+                case IconSettings:  return RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, RpgUiCatalog.IconSettings);
+                case IconInventory: return RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, RpgUiCatalog.IconInventory);
+                case IconTalk:      return RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, RpgUiCatalog.IconTalk);
+                case IconQuest:     return RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, RpgUiCatalog.IconQuest);
+                case IconTree:      return RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, RpgUiCatalog.IconTree);
+                case IconCompass:   return RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, RpgUiCatalog.IconCompass);
+                default:            return null;
+            }
         }
 
         private static void EnsureHudIconsLoaded()
@@ -408,6 +434,60 @@ namespace DeNelle.HUD
             img.color = Color.white;
             img.preserveAspect = true;
             img.raycastTarget = false;
+            return true;
+        }
+
+        // =====================================================================
+        //  PACK BAR DRESSING (WO RPG-UI) — ornate gold-frame bar skin, sprite-FIRST.
+        // ---------------------------------------------------------------------
+        //  The RPG pack ships matched bar pairs: a gilded frame "bg" (gem socket +
+        //  pointed ornate ends) and a glossy colored "fill". We dress an EXISTING
+        //  bar (a track rect + its Image.Type.Filled fill) without changing any data
+        //  binding: the fill keeps its fillAmount-driven width, we just swap its
+        //  sprite to the pack's colored fill, and we drop the gilded frame over the
+        //  track as a NON-RAYCAST overlay so the bar reads as the ornate art. When the
+        //  pack is absent both lookups return null → the procedural look is untouched.
+        // =====================================================================
+
+        /// <summary>
+        /// Dress an existing bar (track + its fill Image) with the pack's ornate frame +
+        /// colored fill, sprite-FIRST. `frameName`/`fillName` are RpgUiCatalog "bars"
+        /// sprite ids; `fillTint` re-tints the pack fill (e.g. blue for MP). No-op when
+        /// the pack is missing (procedural look preserved). Returns true when dressed.
+        /// </summary>
+        private static bool TryDressBar(RectTransform track, Image fill, string frameName,
+            string fillName, Color fillTint, bool tintFill)
+        {
+            if (track == null) return false;
+            var frameSprite = RpgUiCatalog.Get(RpgUiCatalog.RoleBars, frameName);
+            var fillSprite  = string.IsNullOrEmpty(fillName)
+                ? null : RpgUiCatalog.Get(RpgUiCatalog.RoleBars, fillName);
+            if (frameSprite == null && fillSprite == null) return false;
+
+            // Swap the fill sprite (keeps Image.Type.Filled + fillAmount binding).
+            if (fill != null && fillSprite != null)
+            {
+                fill.sprite = fillSprite;
+                if (tintFill) fill.color = fillTint;
+                else fill.color = Color.white; // show the pack art's own colours
+            }
+
+            // Drop the gilded frame over the track as a decorative, non-raycast overlay,
+            // rendered LAST so it sits above the fill (the frame art is hollow in the
+            // middle, so the fill shows through). preserveAspect off → it stretches to
+            // the existing bar rect (the bar layout is unchanged).
+            if (frameSprite != null)
+            {
+                var fr = NewRect("PackFrame", track, Vector2.zero, Vector2.one);
+                fr.offsetMin = new Vector2(-10f, -8f);
+                fr.offsetMax = new Vector2(10f, 8f); // ornate ends slightly overhang the track
+                var fimg = fr.gameObject.AddComponent<Image>();
+                fimg.sprite = frameSprite;
+                fimg.type = Image.Type.Simple;
+                fimg.color = Color.white;
+                fimg.raycastTarget = false;
+                fr.SetAsLastSibling();
+            }
             return true;
         }
 
@@ -1074,6 +1154,13 @@ namespace DeNelle.HUD
             sheenImg.type = HudTheme.RoundedFrame != null ? Image.Type.Sliced : Image.Type.Simple;
             sheenImg.raycastTarget = false;
 
+            // Sprite-FIRST ornate dressing — drop the pack's gilded green gem-socket
+            // frame over the Heart bar (FRAME ONLY: the fill keeps its dynamic red↔gold
+            // lerp from SetHeartHp, so we don't swap the fill sprite/colour here). No-op
+            // when the pack isn't imported (procedural look preserved). Text is added
+            // AFTER so it stays on top of the frame.
+            TryDressBar(track, null, RpgUiCatalog.BarFrameGreen, null, Color.white, false);
+
             // Percentage value centred over the track (kept as _castleText for SetHeartHp).
             // Dark ink + faint parchment halo so it stays legible over the HP fill.
             _castleText = AddText(track, "Heart of Elarion — 100%", HudTheme.FontLabel, LInk, TextAlignmentOptions.Center);
@@ -1256,6 +1343,12 @@ namespace DeNelle.HUD
             _manaFill.fillOrigin = 0;
             _manaFill.fillAmount = 1f;
             _manaFill.raycastTarget = false;
+
+            // Sprite-FIRST ornate dressing for the mana bar — the pack's gilded gem-socket
+            // frame + a blue-tinted glossy fill (mana has no dynamic colour change, so
+            // tinting the pack fill blue is safe). No-op when the pack isn't imported.
+            TryDressBar(mTrack, _manaFill, RpgUiCatalog.BarFrameBlue, RpgUiCatalog.BarFillBlue,
+                HudTheme.ManaBlue, true);
             // Value over the blue mana fill — cream + dark halo keeps it crisp on the
             // saturated blue (and on the light empty track the dark halo still reads).
             _manaText = AddText(mTrack, "", 13, HudTheme.Text, TextAlignmentOptions.Center);

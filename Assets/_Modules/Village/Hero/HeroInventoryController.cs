@@ -527,6 +527,19 @@ namespace DeNelle.Village
                 Color bg = sel ? ElarionUi.GoldButton : inactive;
                 var btn = AddButton(host, names[i], new Vector2(cx, w * 0.5f), new Vector2(y0, y1),
                                     bg, () => SelectTab(t), sel ? ButtonKind.Gold : ButtonKind.Neutral);
+                // Sprite-FIRST pack icon tucked in the tab's top-left (decorative, non-
+                // raycast). Only shows when the RPG pack is imported AND the tab has a
+                // matching bronze icon; otherwise the pill stays text-only (unchanged).
+                var tabIcon = TabPackIcon(t);
+                if (tabIcon != null)
+                {
+                    var ic = AddImage(btn.transform, "TabIcon",
+                                      new Vector2(0.04f, 0.30f), new Vector2(0.30f, 0.92f), new Color(0, 0, 0, 0));
+                    NoRaycast(ic);
+                    var im = ic.GetComponent<Image>();
+                    im.sprite = tabIcon; im.color = Color.white; im.type = Image.Type.Simple;
+                    im.preserveAspect = true;
+                }
                 // Active-tab glow halo behind the gold pill (mockup: "active tab glow").
                 if (sel)
                 {
@@ -551,6 +564,20 @@ namespace DeNelle.Village
                     ri.color = GiltInk; ri.raycastTarget = false;
                 }
                 x += w + gap;
+            }
+        }
+
+        // The RPG pack's bronze icon for a tab (Weapons→sword, Armor→shield,
+        // Consumables→health potion), or null (Accessories has no clean pack icon, and
+        // null when the pack isn't imported → the tab stays text-only).
+        private static Sprite TabPackIcon(Tab t)
+        {
+            switch (t)
+            {
+                case Tab.Weapons:     return RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, RpgUiCatalog.IconSword);
+                case Tab.Armor:       return RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, RpgUiCatalog.IconShield);
+                case Tab.Consumables: return RpgUiCatalog.Get(RpgUiCatalog.RolePotion, RpgUiCatalog.PotionHealth);
+                default:              return null; // Outfits/Accessories — no cohesive pack icon
             }
         }
 
@@ -690,7 +717,7 @@ namespace DeNelle.Village
                 string name = def != null && !string.IsNullOrEmpty(def.DisplayName) ? def.DisplayName : kv.Key;
                 string glyph = ConsumableTypeGlyph(kv.Key, name);
                 var sel = new ConsumableSel { id = kv.Key, def = def, count = kv.Value };
-                BuildGearCell(content, glyph, ItemIconCatalog.ForConsumable(kv.Key, name), name + "  x" + kv.Value, "common", false, false, "",
+                BuildGearCell(content, glyph, ConsumableIcon(kv.Key, name), name + "  x" + kv.Value, "common", false, false, "",
                               () => { _selConsumable = sel; _selWeapon = null; _selArmor = null; RebuildSidebar(); });
             }
         }
@@ -936,7 +963,7 @@ namespace DeNelle.Village
         {
             string name = c.def != null && !string.IsNullOrEmpty(c.def.DisplayName) ? c.def.DisplayName : c.id;
             string glyph = ConsumableTypeGlyph(c.id, name);
-            BuildDetailHeader(glyph, ItemIconCatalog.ForConsumable(c.id, name), name, "common", "Owned x" + c.count);
+            BuildDetailHeader(glyph, ConsumableIcon(c.id, name), name, "common", "Owned x" + c.count);
 
             int slot = 0;
             if (c.def != null)
@@ -1128,6 +1155,29 @@ namespace DeNelle.Village
             if (Has(k, "cloth", "robe", "cloak", "garb", "wanderer"))   return "~"; // cloth/robe
             if (Has(k, "helm", "helmet", "hood", "crown", "cap"))       return "^"; // helm
             return "x";                                                            // generic armor
+        }
+
+        // Sprite-FIRST consumable icon: prefer the existing sliced item art
+        // (ItemIconCatalog); when that's absent, use the RPG pack's framed magic-bottle
+        // potion keyed by effect (health=red b1, mana=blue b2, fire/burst=orange b3);
+        // null falls through to the TYPE GLYPH in AddIcon. WebGL-safe (RpgUiCatalog
+        // loads from Resources only). The pack potions are the cohesive upgrade for the
+        // larder cells which otherwise show a bare "+"/"*" glyph.
+        private static Sprite ConsumableIcon(string id, string name)
+        {
+            var art = ItemIconCatalog.ForConsumable(id, name);
+            if (art != null) return art;
+
+            string k = ((id ?? "") + " " + (name ?? "")).ToLowerInvariant();
+            if (Has(k, "mana", "aether", "ether", "arcane"))
+                return RpgUiCatalog.Get(RpgUiCatalog.RolePotion, RpgUiCatalog.PotionMana);
+            if (Has(k, "bomb", "fire", "flask", "oil", "burn"))
+                return RpgUiCatalog.Get(RpgUiCatalog.RolePotion, RpgUiCatalog.PotionFire);
+            if (Has(k, "potion", "elixir", "draught", "tonic", "heal",
+                       "health", "hp", "regen", "life"))
+                return RpgUiCatalog.Get(RpgUiCatalog.RolePotion, RpgUiCatalog.PotionHealth);
+            // Generic consumable → the health bottle reads as a representative potion.
+            return RpgUiCatalog.Get(RpgUiCatalog.RolePotion, RpgUiCatalog.PotionHealth);
         }
 
         private static string ConsumableTypeGlyph(string id, string name)
