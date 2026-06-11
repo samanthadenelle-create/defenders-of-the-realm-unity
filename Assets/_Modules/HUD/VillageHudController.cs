@@ -1104,24 +1104,20 @@ namespace DeNelle.HUD
             _townActionPanel.anchorMax = new Vector2(1f, 0f);
             _townActionPanel.pivot = new Vector2(1f, 0f);
             _townActionPanel.anchoredPosition = new Vector2(-20f, 20f);
-            _townActionPanel.sizeDelta = new Vector2(570f, 135f);   // ~250% up (≈140px buttons — mobile touch size)
+            _townActionPanel.sizeDelta = new Vector2(300f, 300f);   // square footprint for a compact DIAMOND cluster (clears the metrics bar)
 
-            const float w = 0.25f, gap = 0.02f;
-            // BUILD → BuildRequested. Tower icon (self-evident — no label needed).
-            BuildIconButton(_townActionPanel, new Vector2(0f * w, 0f), new Vector2(1f * w - gap, 1f),
+            // DIAMOND layout (mobile-thumb-friendly, bottom-right corner):
+            // BUILD top · TALK left · BAG right · QUESTS bottom.
+            BuildIconButton(_townActionPanel, new Vector2(0.30f, 0.56f), new Vector2(0.70f, 0.98f),
                 IconBuild, "B", () => BuildRequested?.Invoke());
-            // TALK → TalkRequested (routed to the nearest in-range NPC). Gated until in range.
-            _talkButton = BuildIconButton(_townActionPanel, new Vector2(1f * w, 0f), new Vector2(2f * w - gap, 1f),
+            _talkButton = BuildIconButton(_townActionPanel, new Vector2(0.02f, 0.29f), new Vector2(0.42f, 0.71f),
                 IconTalk, "T", () => TalkRequested?.Invoke());
-            // BAG → InventoryRequested (Village bridge opens HeroInventoryController).
-            BuildIconButton(_townActionPanel, new Vector2(2f * w, 0f), new Vector2(3f * w - gap, 1f),
+            BuildIconButton(_townActionPanel, new Vector2(0.58f, 0.29f), new Vector2(0.98f, 0.71f),
                 IconInventory, "G", () => InventoryRequested?.Invoke());
-            // QUESTS → toggles the daily-quest panel on-demand (DailyQuestHud, same assembly).
-            _questButton = BuildIconButton(_townActionPanel, new Vector2(3f * w, 0f), new Vector2(4f * w, 1f),
+            _questButton = BuildIconButton(_townActionPanel, new Vector2(0.30f, 0.02f), new Vector2(0.70f, 0.44f),
                 IconQuest, "!", () => DailyQuestHud.Instance?.Toggle());
 
             SetTalkAvailable(false);   // gated until a talkable NPC is in range
-            // QUESTS is live now (toggles the daily-quest panel) — no longer dimmed.
         }
 
         /// <summary>
@@ -1134,7 +1130,7 @@ namespace DeNelle.HUD
             if (_talkButton == null) return;
             _talkButton.interactable = available;
             var g = _talkButton.targetGraphic;
-            if (g != null) { var c = g.color; c.a = available ? 1f : 0.4f; g.color = c; }
+            if (g != null) { var c = g.color; c.a = available ? 1f : 0.55f; g.color = c; }   // idle = faded, not a harsh black disc
         }
 
         // ── Currency strip — thin glass bar, tiny colour dot + amount. ─────────
@@ -1910,7 +1906,7 @@ namespace DeNelle.HUD
                 // narrows; resources STACK on the left under it; mini-map shrinks
                 // to ~100×100 top-right; metrics bottom span wider as a 2-col feel.
                 AnchorTopLeft(_townWaveCluster, x: 10f, y: 8f, width: 380f, height: 140f);   // gear-clock + plate
-                SetAnchors(_townResStrip, new Vector2(0.0f, 0.83f), new Vector2(0.46f, 0.875f));
+                SetAnchors(_townResStrip, new Vector2(0.0f, 0.74f), new Vector2(0.46f, 0.875f));   // bottom extended down for the resource icons
                 if (_townMiniMap != null) { _townMiniMap.anchoredPosition = new Vector2(-10f, -10f); _townMiniMap.sizeDelta = new Vector2(100f, 100f); }
                 SetAnchors(_townMetrics, new Vector2(0.148f, 0f), new Vector2(0.852f, 0.095f));   // −20%, centered, taller
             }
@@ -1933,9 +1929,9 @@ namespace DeNelle.HUD
                 // WO-339 TOWN HUD landscape: wide top spread — wave cluster top-left,
                 // resource badges top-centre, full-size 140 mini-map top-right.
                 AnchorTopLeft(_townWaveCluster, x: 12f, y: 8f, width: 380f, height: 140f);   // gear-clock + plate
-                SetAnchors(_townResStrip, new Vector2(0.32f, 0.955f), new Vector2(0.68f, 1f));
+                SetAnchors(_townResStrip, new Vector2(0.30f, 0.78f), new Vector2(0.70f, 1f));   // aligned L/R with the bottom bar; tall for the resource icons
                 if (_townMiniMap != null) { _townMiniMap.anchoredPosition = new Vector2(-12f, -12f); _townMiniMap.sizeDelta = new Vector2(140f, 140f); }
-                SetAnchors(_townMetrics, new Vector2(0.28f, 0f), new Vector2(0.62f, 0.13f));   // widened (extended left) + taller for readable numbers
+                SetAnchors(_townMetrics, new Vector2(0.30f, 0f), new Vector2(0.70f, 0.13f));   // aligned L/R with the top bar
             }
         }
 

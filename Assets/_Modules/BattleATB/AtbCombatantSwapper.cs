@@ -136,10 +136,9 @@ namespace DeNelle.BattleATB
             var model = UnityEngine.Object.Instantiate(prefab, capsule);
             model.name = "AtbHeroModel";
             model.transform.localPosition = Vector3.zero;
-            // Hero stands on the LEFT facing the enemy on the RIGHT (+X). The Tripo
-            // heroes' visual forward is local -X (HeroLocomotion WO-32 note), so 180°
-            // yaw turns -X to point +X toward the foe. Tunable if it reads wrong.
-            model.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
+            // Hero stands on the LEFT facing the enemy on the RIGHT (+X). Owner-tuned: this
+            // model's visual forward needed the opposite yaw, so 0° (not 180°) faces the foe.
+            model.transform.localRotation = Quaternion.Euler(0f, 0f, 0f);
             StripCamerasAndColliders(model);
 
             // WO-381 #2 — COLOURING: bind the SAME per-class basecolor atlas the village

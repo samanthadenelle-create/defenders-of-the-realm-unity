@@ -88,6 +88,84 @@ namespace DeNelle.BattleATB
         private static Sprite _circleSprite;       // solid disc (portraits)
         private static Sprite _ringSprite;         // hollow gilt ring (portrait frame)
 
+        // ── Real staged art (Resources/HudIcons/...) — class portraits + per-class
+        // ability icons. WebGL-safe Resources.Load (matches the town HUD convention).
+        // Cached so repeated party renders / skill-menu opens don't re-hit Resources.
+        private static readonly Dictionary<string, Sprite> _iconCache = new Dictionary<string, Sprite>();
+
+        /// <summary>WebGL-safe sprite load from Resources/HudIcons/&lt;key&gt;, cached + null-safe.</summary>
+        private static Sprite LoadHudIcon(string key)
+        {
+            if (string.IsNullOrEmpty(key)) return null;
+            if (_iconCache.TryGetValue(key, out var cached)) return cached;
+            var sp = Resources.Load<Sprite>("HudIcons/" + key);
+            _iconCache[key] = sp; // cache misses too (avoids repeat lookups)
+            return sp;
+        }
+
+        /// <summary>In-battle HeroClass → portrait sprite key (mirrors VillageHudController.PortraitNameForClass).
+        /// Note: the battle engine collapses Cleric→Mage, so the Wizard portrait covers both. The Wizard
+        /// portrait file is "wiard.jpg" (typo in the staged art) — fall back to it if "wizard" is absent.</summary>
+        private static Sprite PortraitFor(HeroClass cls)
+        {
+            switch (cls)
+            {
+                case HeroClass.Knight: return LoadHudIcon("Knight/knight");
+                case HeroClass.Ranger: return LoadHudIcon("Ranger/ranger");
+                case HeroClass.Mage:   return LoadHudIcon("Wizard/wizard") ?? LoadHudIcon("Wizard/wiard");
+                default:               return null;
+            }
+        }
+
+        /// <summary>In-battle HeroClass → Resources folder + filename prefix for ability icons.</summary>
+        private static string AbilityFolderFor(HeroClass cls)
+        {
+            switch (cls)
+            {
+                case HeroClass.Knight: return "Knight";
+                case HeroClass.Ranger: return "Ranger";
+                case HeroClass.Mage:   return "Wizard";
+                default:               return null;
+            }
+        }
+
+        // Per-class ability-icon assignment. The engine ability NAMES (e.g. "Arcane Bolt",
+        // "Shield Slam") do NOT match the staged icon filenames (Wizard_Fireball, Knight_Charge),
+        // so map deterministically by Q/W/E/R slot to a hand-picked icon. Keys are the file stem
+        // AFTER the "&lt;Class&gt;/" folder (LoadHudIcon prepends "HudIcons/&lt;folder&gt;/").
+        private static readonly Dictionary<HeroClass, Dictionary<AbilitySlot, string>> AbilityIconBySlot =
+            new Dictionary<HeroClass, Dictionary<AbilitySlot, string>>
+            {
+                { HeroClass.Knight, new Dictionary<AbilitySlot, string> {
+                    { AbilitySlot.Q, "Knight_Charge" },   // Shield Slam → Charge
+                    { AbilitySlot.W, "knight_parry" },    // Guard       → Parry
+                    { AbilitySlot.E, "Knight_Cleave" },   // Whirlwind   → Cleave
+                    { AbilitySlot.R, "knight_thrust" },   // Last Stand  → Thrust
+                } },
+                { HeroClass.Ranger, new Dictionary<AbilitySlot, string> {
+                    { AbilitySlot.Q, "Ranger_Ranged_Attack" }, // Pierce Shot   → Ranged Attack
+                    { AbilitySlot.W, "Ranger_Barrage" },       // Volley        → Barrage
+                    { AbilitySlot.E, "Ranger_Poison_Arrow" },  // Hunter's Mark → Poison Arrow
+                    { AbilitySlot.R, "ranger_rapid_fire" },    // Rain of Arrows→ Rapid Fire
+                } },
+                { HeroClass.Mage, new Dictionary<AbilitySlot, string> {
+                    { AbilitySlot.Q, "Wizard_Plasma" },    // Arcane Bolt → Plasma
+                    { AbilitySlot.W, "Wizard_Fireball" },  // Flameblast  → Fireball
+                    { AbilitySlot.E, "Wizard_Lightining" },// Frost Nova  → Lightning (only ice-ish icon absent; Lightning reads as a nova)
+                    { AbilitySlot.R, "Wizard_Meteor" },    // Tempest     → Meteor
+                } },
+            };
+
+        /// <summary>Resolve an ability's staged icon by class + slot (best-effort). Null when no class/match.</summary>
+        private static Sprite AbilityIconFor(HeroClass cls, AbilitySlot slot)
+        {
+            string folder = AbilityFolderFor(cls);
+            if (folder == null) return null;
+            if (AbilityIconBySlot.TryGetValue(cls, out var bySlot) && bySlot.TryGetValue(slot, out var stem))
+                return LoadHudIcon(folder + "/" + stem);
+            return null;
+        }
+
         // ── Roots
         private Canvas _canvas;
         private GameObject _commandPanel;
@@ -447,7 +525,7 @@ namespace DeNelle.BattleATB
             _skillsSubPanel.SetActive(false);
         }
 
-        private Button CreateMenuButton(string label, UnityEngine.Events.UnityAction onClick)
+        private Button CreateMenuButton(string label, UnityEngine.Events.UnityAction onClick, Sprite icon = null)
         {
             var go = new GameObject(label);
             go.transform.SetParent(_commandPanel.transform, false);
@@ -490,20 +568,41 @@ namespace DeNelle.BattleATB
             rimOutline.effectColor = new Color(Gold.r, Gold.g, Gold.b, 0.45f);
             rimOutline.effectDistance = new Vector2(1f, -1f);
 
+            // Real ability icon (when supplied) — small square on the left, inside the
+            // gilt rim. Keeps the text label (now left-aligned + inset) as the readable
+            // fallback. No icon → unchanged centred label, so the text/glyph fallback holds.
+            const float iconBox = 30f;
+            if (icon != null)
+            {
+                var iconGO = new GameObject("Icon");
+                iconGO.transform.SetParent(go.transform, false);
+                var iconRt = iconGO.AddComponent<RectTransform>();
+                iconRt.anchorMin = new Vector2(0, 0.5f);
+                iconRt.anchorMax = new Vector2(0, 0.5f);
+                iconRt.pivot = new Vector2(0, 0.5f);
+                iconRt.anchoredPosition = new Vector2(6f, 0f);
+                iconRt.sizeDelta = new Vector2(iconBox, iconBox);
+                var iconImg = iconGO.AddComponent<Image>();
+                iconImg.sprite = icon;
+                iconImg.preserveAspect = true;
+                iconImg.raycastTarget = false;
+            }
+
             var txtGO = new GameObject("Label");
             txtGO.transform.SetParent(go.transform, false);
             var tmp = txtGO.AddComponent<TextMeshProUGUI>();
             tmp.text = label;
             tmp.fontSize = FontBody;
             tmp.color = Ink;
-            tmp.alignment = TextAlignmentOptions.Center;
+            tmp.alignment = icon != null ? TextAlignmentOptions.Left : TextAlignmentOptions.Center;
             tmp.fontStyle = FontStyles.Bold;
             tmp.characterSpacing = 1f;
             var txtRt = txtGO.GetComponent<RectTransform>();
             txtRt.anchorMin = Vector2.zero;
             txtRt.anchorMax = Vector2.one;
-            txtRt.offsetMin = Vector2.zero;
-            txtRt.offsetMax = Vector2.zero;
+            // Inset the label past the icon when one is present so they don't overlap.
+            txtRt.offsetMin = icon != null ? new Vector2(iconBox + 12f, 0f) : Vector2.zero;
+            txtRt.offsetMax = icon != null ? new Vector2(-6f, 0f) : Vector2.zero;
 
             return btn;
         }
@@ -524,12 +623,27 @@ namespace DeNelle.BattleATB
 
             // Dynamic skills from current active member (use engine defs / catalog for the hero class)
             var abilities = GetAbilitiesForActiveHero();
+            HeroClass? activeClass = GetActiveHeroClass();
             foreach (var ab in abilities)
             {
-                var b = CreateMenuButton($"{ab.Name} ({ab.Cost} MP)", () => SubmitAbility(ab.Slot));
+                // Real per-class ability icon (best-effort by slot); null → text-only fallback.
+                Sprite icon = activeClass != null ? AbilityIconFor(activeClass.Value, ab.Slot) : null;
+                var slot = ab.Slot; // capture for the closure (avoid modified-closure on the loop var)
+                var b = CreateMenuButton($"{ab.Name} ({ab.Cost} MP)", () => SubmitAbility(slot), icon);
                 b.transform.SetParent(_skillsSubPanel.transform, false);
                 _skillButtons.Add(b);
             }
+        }
+
+        /// <summary>In-battle HeroClass of the active unit (null when none / not a hero).</summary>
+        private HeroClass? GetActiveHeroClass()
+        {
+            var state = _lastState;
+            if (state == null) return null;
+            string activeId = state.ActiveUnitId;
+            if (string.IsNullOrEmpty(activeId)) return null;
+            var unit = state.Units.FirstOrDefault(u => u.Id == activeId);
+            return unit?.HeroClass;
         }
 
         private List<AbilityDef> GetAbilitiesForActiveHero()
@@ -824,6 +938,25 @@ namespace DeNelle.BattleATB
         private void UpdateSlot(PartySlot slot, BattleUnit u)
         {
             if (slot.Name) slot.Name.text = u.Name ?? "???";
+
+            // Real class portrait (Resources/HudIcons/<Class>/<class>). Fill the inner disc
+            // image; keep the gilt ring/frame untouched. Fall back to the placeholder tan
+            // disc when the sprite is absent (e.g. pack not imported / non-hero unit).
+            if (slot.Portrait != null)
+            {
+                Sprite portrait = (u.HeroClass != null) ? PortraitFor(u.HeroClass.Value) : null;
+                if (portrait != null)
+                {
+                    slot.Portrait.sprite = portrait;
+                    slot.Portrait.color = Color.white;     // show the art unmodified
+                    slot.Portrait.preserveAspect = true;
+                }
+                else
+                {
+                    slot.Portrait.sprite = CircleSprite();  // placeholder disc fallback
+                    slot.Portrait.color = PortraitFill;
+                }
+            }
             if (slot.HpText) slot.HpText.text = $"{u.Hp}/{u.MaxHp}";
             if (slot.HpBar) slot.HpBar.fillAmount = u.MaxHp > 0 ? Mathf.Clamp01((float)u.Hp / u.MaxHp) : 0;
 
