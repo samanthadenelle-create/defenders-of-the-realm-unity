@@ -99,7 +99,37 @@ namespace DeNelle.Core.Debugging
                 sb.Append(" => (timing counters unavailable in this build — see fps/draws/gc above)");
 
             Debug.Log(sb.ToString());
+            LogCensus();
             _accum = 0; _frames = 0; _worst = 0f;
+        }
+
+        // Object census — names WHAT is accumulating. Logs total live GameObjects +
+        // total MonoBehaviours (incl. inactive) + the 8 most-common GameObject names.
+        // If a name's count climbs each sample, THAT is the leak, named.
+        private static readonly Dictionary<string, int> s_counts = new Dictionary<string, int>(1024);
+        private void LogCensus()
+        {
+            var all = Object.FindObjectsByType<Transform>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            int mbs = Object.FindObjectsByType<MonoBehaviour>(FindObjectsInactive.Include, FindObjectsSortMode.None).Length;
+            s_counts.Clear();
+            for (int i = 0; i < all.Length; i++)
+            {
+                string n = all[i].name;
+                s_counts.TryGetValue(n, out int c);
+                s_counts[n] = c + 1;
+            }
+            var sb = new StringBuilder(256);
+            sb.Append("[PERFDIAG-OBJ] totalTransforms=").Append(all.Length)
+              .Append(" totalMonoBehaviours=").Append(mbs).Append(" | top:");
+            for (int rank = 0; rank < 8 && s_counts.Count > 0; rank++)
+            {
+                string bestName = null; int best = -1;
+                foreach (var kv in s_counts) if (kv.Value > best) { best = kv.Value; bestName = kv.Key; }
+                if (bestName == null) break;
+                sb.Append(' ').Append(bestName).Append('x').Append(best);
+                s_counts.Remove(bestName);
+            }
+            Debug.Log(sb.ToString());
         }
     }
 }
