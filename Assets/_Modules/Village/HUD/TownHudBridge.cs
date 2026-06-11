@@ -43,6 +43,7 @@
 using System.Reflection;
 using DeNelle.Core;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace DeNelle.Village
 {
@@ -57,6 +58,9 @@ namespace DeNelle.Village
     {
         private const float RefreshInterval = 0.5f;
         private const int TowersMaxConstant = 12;   // sensible cap (no catalog max exposed here)
+        // WO-403 — the town readouts are only meaningful in the village; gate the feed to
+        // that scene so this DDOL bridge does ZERO work out in OuterWorld (the leak window).
+        private const string VillageSceneName = "Village2";
 
         // WO-361 — passive-XP badge feed. There is NO real passive-XP accrual on towers
         // yet (Tower.cs has no XP concept; the only XP path is wave-clear via WaveXpBridge
@@ -69,15 +73,14 @@ namespace DeNelle.Village
         private object _hud;
         private MethodInfo _setWaveProgress;   // (int current, int total)
         private MethodInfo _setTownMetrics;    // (float heartPct01, int towersBuilt, int towersMax, int pop)
-        private MethodInfo _setMinimapPoi;     // (string kind, float worldX, float worldZ)
-        private MethodInfo _clearMinimapPois;  // ()
         private MethodInfo _setLookoutStatus;  // (int status)
         private MethodInfo _setPassiveXp;      // (int xpPerMin, int towerCount)  — WO-361
         private bool _resolveWarned;
+        // WO-380 / WO-403: the minimap POI setters (_setMinimapPoi / _clearMinimapPois)
+        // and their _poiArgs buffer are gone — the minimap is cut from the HUD.
 
         private readonly object[] _waveArgs      = new object[2];
         private readonly object[] _metricsArgs   = new object[4];
-        private readonly object[] _poiArgs       = new object[3];
         private readonly object[] _lookoutArgs   = new object[1];
         private readonly object[] _passiveXpArgs = new object[2];
 
@@ -101,13 +104,21 @@ namespace DeNelle.Village
             if (_timer > 0f) return;
             _timer = RefreshInterval;
 
+            // WO-403 — only feed the town HUD while the village scene is active. Out in
+            // OuterWorld (or a dungeon / ATB scene) the town readouts are hidden anyway,
+            // so the bridge does no work there — this is the DDOL bridge's leak window.
+            var active = SceneManager.GetActiveScene();
+            if (active.IsValid() && active.name != VillageSceneName) return;
+
             try
             {
                 if (!ResolveHud()) return;
                 PushWaveProgress();
                 PushTownMetrics();
                 PushPassiveXp();
-                PushMinimapPois();
+                // WO-380: the minimap is cut from the HUD (VillageHudController never
+                // builds it), so the POI feed — which scanned WaveSpawnPoint + MineNode
+                // across the whole scene every tick — is removed. (PushMinimapPois gone.)
                 PushLookoutStatus();
             }
             catch (System.Exception e)
@@ -138,13 +149,11 @@ namespace DeNelle.Village
             if (_heart == null) _heart = FindFirstObjectByType<HeartController>();
             float heartPct01 = _heart != null ? Mathf.Clamp01(_heart.Hp / 100f) : 1f;
 
-            // Live towers placed in the world (Tower component); cap at a constant.
-            var towers = FindObjectsByType<Tower>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
-            int towersBuilt = towers != null ? towers.Length : 0;
-
-            // Population = joined companions (party NPCs). Placeholder 0 when none.
-            var companions = FindObjectsByType<StoryCompanion>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
-            int pop = companions != null ? companions.Length : 0;
+            // WO-403 — live tower count + party population read from the O(1) registries
+            // (Tower.ActiveCount / StoryCompanion.Active) instead of FindObjectsByType,
+            // which scanned the whole scene every 0.5s (a suspect in the OuterWorld leak).
+            int towersBuilt = Tower.ActiveCount;
+            int pop = StoryCompanion.Active.Count;
 
             _metricsArgs[0] = heartPct01;
             _metricsArgs[1] = towersBuilt;
@@ -162,57 +171,18 @@ namespace DeNelle.Village
         private void PushPassiveXp()
         {
             if (_setPassiveXp == null) return;
-            var towers = FindObjectsByType<Tower>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
-            int towerCount = towers != null ? towers.Length : 0;
+            // WO-403 — registry read (no scene scan); same live count as the metrics strip.
+            int towerCount = Tower.ActiveCount;
             int xpPerMin = towerCount * IdleXpPerTowerPerMin;
             _passiveXpArgs[0] = xpPerMin;
             _passiveXpArgs[1] = towerCount;
             _setPassiveXp.Invoke(_hud, _passiveXpArgs);
         }
 
-        private void PushMinimapPois()
-        {
-            if (_setMinimapPoi == null) return;
-            // Rebuild the POI set each tick so moving / despawning nodes stay correct.
-            _clearMinimapPois?.Invoke(_hud, null);
-
-            // Heart at the origin (its world position if present, else origin).
-            if (_heart == null) _heart = FindFirstObjectByType<HeartController>();
-            Vector3 heartPos = _heart != null ? _heart.transform.position : Vector3.zero;
-            EmitPoi("heart", heartPos);
-
-            // Enemy gates — one WaveSpawnPoint beyond each cardinal gate.
-            var spawns = FindObjectsByType<WaveSpawnPoint>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
-            if (spawns != null)
-                foreach (var sp in spawns)
-                    if (sp != null) EmitPoi("gate", sp.transform.position);
-
-            // Resource nodes — kind by the node's MineResource.
-            var nodes = FindObjectsByType<MineNode>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
-            if (nodes != null)
-                foreach (var n in nodes)
-                    if (n != null) EmitPoi(PoiKindForResource(n.Resource), n.transform.position);
-        }
-
-        private void EmitPoi(string kind, Vector3 worldPos)
-        {
-            _poiArgs[0] = kind;
-            _poiArgs[1] = worldPos.x;
-            _poiArgs[2] = worldPos.z;
-            _setMinimapPoi.Invoke(_hud, _poiArgs);
-        }
-
-        private static string PoiKindForResource(MineResource r)
-        {
-            switch (r)
-            {
-                case MineResource.Wood:          return "tree";
-                case MineResource.Iron:          return "iron";
-                case MineResource.Food:          return "food";
-                case MineResource.AetherCrystal: return "crystal";
-                default:                         return "resource";
-            }
-        }
+        // WO-380 / WO-403: the minimap is cut from the HUD, so PushMinimapPois /
+        // EmitPoi / PoiKindForResource (which scanned WaveSpawnPoint + MineNode across
+        // the whole scene every tick) have been removed. The _setMinimapPoi /
+        // _clearMinimapPois reflection handles are no longer resolved (see ResolveHud).
 
         private void PushLookoutStatus()
         {
@@ -247,12 +217,6 @@ namespace DeNelle.Village
                 _setTownMetrics = t.GetMethod("SetTownMetrics",
                     BindingFlags.Public | BindingFlags.Instance, null,
                     new[] { typeof(float), typeof(int), typeof(int), typeof(int) }, null);
-                _setMinimapPoi = t.GetMethod("SetMinimapPoi",
-                    BindingFlags.Public | BindingFlags.Instance, null,
-                    new[] { typeof(string), typeof(float), typeof(float) }, null);
-                _clearMinimapPois = t.GetMethod("ClearMinimapPois",
-                    BindingFlags.Public | BindingFlags.Instance, null,
-                    System.Type.EmptyTypes, null);
                 _setLookoutStatus = t.GetMethod("SetLookoutStatus",
                     BindingFlags.Public | BindingFlags.Instance, null,
                     new[] { typeof(int) }, null);
@@ -262,7 +226,7 @@ namespace DeNelle.Village
 
                 if (!_resolveWarned &&
                     _setWaveProgress == null && _setTownMetrics == null &&
-                    _setMinimapPoi == null && _setLookoutStatus == null)
+                    _setLookoutStatus == null)
                 {
                     _resolveWarned = true;
                     Debug.LogWarning("[TownHudBridge] HUD exposes none of the town setters — " +
@@ -272,8 +236,7 @@ namespace DeNelle.Village
 
             // Any one resolved setter is enough to do useful work.
             return _setWaveProgress != null || _setTownMetrics != null ||
-                   _setMinimapPoi != null || _setLookoutStatus != null ||
-                   _setPassiveXp != null;
+                   _setLookoutStatus != null || _setPassiveXp != null;
         }
     }
 }

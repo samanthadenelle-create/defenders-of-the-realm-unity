@@ -33,7 +33,7 @@ namespace DeNelle.Village
         [SerializeField] private WaveManager _wave;
 
         // ── Enemy-count readout (reflection, not on IVillageHud) ──────────────
-        private Object _hud;                 // VillageHudController held as Object
+        private object _hud;                 // VillageHudController held as object (via CoreServices.Hud)
         private MethodInfo _setEnemyCount;   // SetEnemyCount(int live, int total)
         private readonly object[] _countArgs = new object[2];
         private bool _hudResolveGaveUp;
@@ -97,10 +97,15 @@ namespace DeNelle.Village
         // Push the live "X / Y enemies" readout each frame while a wave is active.
         // total = the wave's peak simultaneous live count (so the readout reads as
         // progress toward clearing). Cheap: one cached-MethodInfo invoke/frame.
+        //
+        // WO-403 — the count is only pushed while a wave is ACTIVE (≤ a few seconds of
+        // pushes per wave), and HUD resolution no longer scans the scene (see ResolveHud).
+        // The previous per-frame FindObjectsByType<MonoBehaviour> ran forever whenever
+        // _hud went "fake-null" after a HUD rebuild — a leading OuterWorld-leak suspect.
         private void Update()
         {
-            if (_hud == null || _setEnemyCount == null) ResolveHud();
             if (!_waveActive || _wave == null) return;
+            if (_hud == null || _setEnemyCount == null) ResolveHud();
 
             int live = _wave.LiveEnemies != null ? _wave.LiveEnemies.Count : 0;
             if (live > _waveLivePeak) _waveLivePeak = live;
@@ -115,27 +120,32 @@ namespace DeNelle.Village
             _setEnemyCount.Invoke(_hud, _countArgs);
         }
 
-        // Discover the concrete VillageHudController + its SetEnemyCount(int,int) by
-        // reflection (the setter is not on IVillageHud). Same seam as HeartHudBridge.
+        // Resolve the concrete VillageHudController + its SetEnemyCount(int,int) by
+        // reflection (the setter is not on IVillageHud).
+        //
+        // WO-403 — the HUD is resolved via CoreServices.Hud (an O(1) registry lookup of
+        // the registered IVillageHud, which IS the VillageHudController), NOT a
+        // FindObjectsByType<MonoBehaviour> whole-scene scan. The old scan ran every frame
+        // (a leading OuterWorld-leak suspect); this lookup is free and never scans. The
+        // attempt cap remains a safety net for the brief window before the HUD registers.
         private void ResolveHud()
         {
             if (_hudResolveGaveUp) return;
             if (_hud != null && _setEnemyCount != null) return;
-            if (++_hudResolveAttempts > MaxHudResolveAttempts)
+
+            var hud = CoreServices.Hud as object;
+            if (hud == null)
             {
-                _hudResolveGaveUp = true;
-                Debug.LogWarning("[WaveHudBridge] VillageHudController not found — enemy-count readout disabled.");
+                if (++_hudResolveAttempts > MaxHudResolveAttempts)
+                {
+                    _hudResolveGaveUp = true;
+                    Debug.LogWarning("[WaveHudBridge] VillageHudController not registered — enemy-count readout disabled.");
+                }
                 return;
             }
 
-            if (_hud == null)
-            {
-                foreach (var mb in FindObjectsByType<MonoBehaviour>(FindObjectsInactive.Include))
-                {
-                    if (mb != null && mb.GetType().Name == "VillageHudController") { _hud = mb; break; }
-                }
-            }
-            if (_hud != null && _setEnemyCount == null)
+            _hud = hud;
+            if (_setEnemyCount == null)
             {
                 _setEnemyCount = _hud.GetType().GetMethod("SetEnemyCount",
                     BindingFlags.Public | BindingFlags.Instance, null,

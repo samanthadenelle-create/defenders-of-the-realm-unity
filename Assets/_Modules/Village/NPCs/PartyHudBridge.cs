@@ -66,22 +66,19 @@ namespace DeNelle.Village
             var svc = GameStateService.Instance;
             int rosterCount = (svc != null && svc.State != null) ? svc.State.PartySize : CompanionSlots;
 
-            // Gather companions, stable slot order (lowest instance id = joined first).
-            var all = FindObjectsByType<StoryCompanion>(FindObjectsSortMode.None);
+            // WO-403 — read the live roster from StoryCompanion.Active (an O(1) registry
+            // read, already ordered by join time) instead of FindObjectsByType, which
+            // scanned the WHOLE scene every 0.5s in EVERY scene (DDOL bridge) and was a
+            // suspect in the OuterWorld CPU/GC leak. Copy at most CompanionSlots into the
+            // small scratch buffer; the registry order IS the stable slot order.
+            var roster = StoryCompanion.Active;
             int n = 0;
             for (int i = 0; i < _scratch.Length; i++) _scratch[i] = null;
-            for (int i = 0; i < all.Length && n < CompanionSlots; i++)
+            for (int i = 0; i < roster.Count && n < CompanionSlots; i++)
             {
-                // simple insertion sort by instanceID into the small scratch buffer
-                var c = all[i];
-                int pos = n;
-                while (pos > 0 && _scratch[pos - 1].GetInstanceID() > c.GetInstanceID())
-                {
-                    _scratch[pos] = _scratch[pos - 1];
-                    pos--;
-                }
-                _scratch[pos] = c;
-                n++;
+                var c = roster[i];
+                if (c == null) continue;
+                _scratch[n++] = c;
             }
 
             for (int slot = 0; slot < CompanionSlots; slot++)

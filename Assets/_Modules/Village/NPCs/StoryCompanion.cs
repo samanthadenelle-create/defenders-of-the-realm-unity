@@ -62,6 +62,18 @@ namespace DeNelle.Village
         private float _hp = DefaultMaxHp;
         private bool _fallen;
 
+        // ── WO-403: live roster registry (no whole-scene FindObjectsByType) ───
+        // The HUD party column previously polled FindObjectsByType<StoryCompanion>
+        // every 0.5s (PartyHudBridge) — a whole-scene scan that ran in EVERY scene
+        // (DDOL bridge), a suspect in the OuterWorld CPU/GC leak. Companions now
+        // self-register here on enable, so the party feed is an O(1) registry read
+        // ordered by join time (lowest instance id first), with zero scanning.
+        private static readonly System.Collections.Generic.List<StoryCompanion> _registry
+            = new System.Collections.Generic.List<StoryCompanion>();
+
+        /// <summary>The live companions, ordered by join (lowest instance id first).</summary>
+        public static System.Collections.Generic.IReadOnlyList<StoryCompanion> Active => _registry;
+
         /// <summary>Current HP (party-frame bar reads this).</summary>
         public float Hp => _hp;
 
@@ -276,6 +288,23 @@ namespace DeNelle.Village
         }
 
         // ── Lifecycle ────────────────────────────────────────────────────────
+
+        // WO-403: keep the live roster registry current so the HUD party column can
+        // read it without a per-tick FindObjectsByType scan. Inserted in instance-id
+        // order so the party slots stay stable (join order = lowest id first).
+        private void OnEnable()
+        {
+            if (_registry.Contains(this)) return;
+            int id = GetInstanceID();
+            int pos = _registry.Count;
+            while (pos > 0 && _registry[pos - 1].GetInstanceID() > id) pos--;
+            _registry.Insert(pos, this);
+        }
+
+        private void OnDisable()
+        {
+            _registry.Remove(this);
+        }
 
         private void Start()
         {

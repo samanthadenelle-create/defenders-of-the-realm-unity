@@ -41,6 +41,18 @@ namespace DeNelle.Village
     {
         public const int MaxLevel = 3;
 
+        // ── WO-403: live registry (no whole-scene FindObjectsByType) ──────────
+        // The HUD's town-metrics feed needs a "towers built" count. Polling it via
+        // FindObjectsByType<Tower> every HUD tick (TownHudBridge) was a per-frame
+        // whole-scene scan and a leading suspect in the OuterWorld CPU leak. Each
+        // tower self-registers on enable and de-registers on disable/destroy, so the
+        // count is an O(1) read with zero scanning.
+        private static readonly System.Collections.Generic.List<Tower> _registry
+            = new System.Collections.Generic.List<Tower>();
+
+        /// <summary>Live tower count (registry read — no scene scan).</summary>
+        public static int ActiveCount => _registry.Count;
+
         // ── WO7: Instant Swap — long-press detection ──────────────────────────
 
         /// <summary>
@@ -185,8 +197,21 @@ namespace DeNelle.Village
         // Empty — Initialize() does the level-1 visual (DEF-74 CP1 Issue 2).
         private void Start() { }
 
+        // WO-403: maintain the live registry so the HUD can read the tower count
+        // without a per-frame FindObjectsByType scan.
+        private void OnEnable()
+        {
+            if (!_registry.Contains(this)) _registry.Add(this);
+        }
+
+        private void OnDisable()
+        {
+            _registry.Remove(this);
+        }
+
         private void OnDestroy()
         {
+            _registry.Remove(this);
             // DEF-87 — clean up world-space upgrade UI when the tower is destroyed
             if (_activeUpgradeUI != null) Destroy(_activeUpgradeUI);
         }
