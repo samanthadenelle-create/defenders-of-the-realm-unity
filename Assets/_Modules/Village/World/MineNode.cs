@@ -88,6 +88,18 @@ namespace DeNelle.Village
         private Transform _player;
         private bool  _claimedByWorker;
 
+        // PERF (leak fix): the per-frame interaction poll allocated every frame for every
+        // node — a method-group delegate (Extract), a concatenated label string, and (when
+        // the hero wasn't resolved) a GameObject.FindWithTag scan EACH frame. With 8 nodes
+        // in OuterWorld that churn outpaced the GC and bloated the managed heap to a freeze.
+        // Cache the delegate + label once, and throttle the missing-player re-find. Verified
+        // via PerfLeakHunter (MineNode was the 90% culprit).
+        private System.Action _extractAction;
+        private System.Action _extractReserveAction;
+        private string _label;
+        private float _playerFindTimer;
+        private const float PlayerFindInterval = 0.5f;
+
         private void Awake()
         {
             _extractsLeft = TotalExtracts;
@@ -95,6 +107,12 @@ namespace DeNelle.Village
             var p = GameObject.FindWithTag("Player");
             _player = p != null ? p.transform : null;
             EnsureVisual();
+
+            // PERF (leak fix): cache the interaction delegates + label ONCE so the per-frame
+            // poll never re-allocates a method-group delegate or concatenates the label.
+            _extractAction        = Extract;
+            _extractReserveAction = ExtractReserve;
+            _label                = "Mine " + Resource;
         }
 
         // Give the node a distinct, readable per-resource look (the owner's "we need an
@@ -327,6 +345,12 @@ namespace DeNelle.Village
 
             if (_player == null)
             {
+                // PERF (leak fix): when the hero isn't resolved, throttle the FindWithTag
+                // scan to PlayerFindInterval instead of scanning EVERY frame (×8 nodes =
+                // the per-frame churn that starved the GC into a freeze).
+                _playerFindTimer -= Time.deltaTime;
+                if (_playerFindTimer > 0f) return;
+                _playerFindTimer = PlayerFindInterval;
                 var p = GameObject.FindWithTag("Player");
                 _player = p != null ? p.transform : null;
                 if (_player == null) return;
@@ -338,7 +362,7 @@ namespace DeNelle.Village
             // DEF-203: register the shared on-screen Interact button while in range and
             // off cooldown so touch/mobile (no keyboard) can extract too. Desktop F kept.
             if (inRange && _cooldown <= 0f)
-                MobileInteractButton.Request(this, "Mine " + Resource, Extract);
+                MobileInteractButton.Request(this, _label, _extractAction);
             else
                 MobileInteractButton.Release(this);
 
@@ -369,6 +393,10 @@ namespace DeNelle.Village
 
             if (_player == null)
             {
+                // PERF (leak fix): throttle the missing-hero scan (see Update()).
+                _playerFindTimer -= Time.deltaTime;
+                if (_playerFindTimer > 0f) return;
+                _playerFindTimer = PlayerFindInterval;
                 var p = GameObject.FindWithTag("Player");
                 _player = p != null ? p.transform : null;
                 if (_player == null) return;
@@ -378,7 +406,7 @@ namespace DeNelle.Village
                            <= InteractRadius * InteractRadius;
 
             if (inRange && _cooldown <= 0f)
-                MobileInteractButton.Request(this, "Mine " + Resource, ExtractReserve);
+                MobileInteractButton.Request(this, _label, _extractReserveAction);
             else
                 MobileInteractButton.Release(this);
 

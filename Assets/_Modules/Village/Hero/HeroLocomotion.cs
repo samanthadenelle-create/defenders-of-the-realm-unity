@@ -306,6 +306,13 @@ namespace DeNelle.Village
         // runner exists yet (DialogueService hosts it lazily), retry next frame so a
         // runner that spins up just after the hero is still hooked. Mirrors the resilient
         // hook HeroBodySwapper uses for the WO-376 idle-pose hold.
+        // PERF (coroutine fork-bomb fix): single-flight guard. The retry loop used to call
+        // HookDialogueGate() every frame, which — finding no runner — started ANOTHER retry
+        // coroutine, doubling coroutines every frame (the OuterWorld ~3MB/s retained leak /
+        // freeze; no DialogueRunner exists until you reach the gate). Now only ONE retry runs,
+        // and it polls + hooks directly instead of re-entering the spawner.
+        private bool _retryingHook;
+
         private void HookDialogueGate()
         {
             if (_dialogueRunner != null) return; // already hooked
@@ -313,7 +320,7 @@ namespace DeNelle.Village
             var runner = Object.FindObjectOfType<Yarn.Unity.DialogueRunner>();
             if (runner == null)
             {
-                StartCoroutine(RetryHookDialogueGate());
+                if (!_retryingHook) { _retryingHook = true; StartCoroutine(RetryHookDialogueGate()); }
                 return;
             }
 
@@ -324,13 +331,21 @@ namespace DeNelle.Village
 
         private System.Collections.IEnumerator RetryHookDialogueGate()
         {
-            // Poll briefly for a lazily-hosted runner (a few seconds is ample; the runner
-            // is created on the first dialogue Play). Stops the instant one is found.
+            // Poll directly for a lazily-hosted runner — do NOT call HookDialogueGate() here
+            // (that re-spawns coroutines). Stops the instant one is found or after ~600 frames.
             for (int i = 0; i < 600 && _dialogueRunner == null; i++)
             {
                 yield return null;
-                HookDialogueGate();
+                var runner = Object.FindObjectOfType<Yarn.Unity.DialogueRunner>();
+                if (runner != null)
+                {
+                    _dialogueRunner = runner;
+                    if (runner.onDialogueStart != null)    runner.onDialogueStart.AddListener(OnDialogueStarted);
+                    if (runner.onDialogueComplete != null) runner.onDialogueComplete.AddListener(OnDialogueEnded);
+                    break;
+                }
             }
+            _retryingHook = false;
         }
 
         // WO-377: dialogue opened — suppress player input and hold the hero in place. The

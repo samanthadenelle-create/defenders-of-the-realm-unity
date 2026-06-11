@@ -374,6 +374,11 @@ namespace DeNelle.Village
         /// double-subscribes. If no runner is hosted yet (DialogueService hosts lazily), retry
         /// on the next frame so a runner created just after the swap is still wired.
         /// </summary>
+        // PERF (coroutine fork-bomb fix): single-flight guard — same bug as HeroLocomotion's
+        // gate hook. The retry loop re-called HookDialogueIdle(), which re-started a retry
+        // coroutine each frame when no runner existed. Now one retry runs and polls directly.
+        private bool _retryingHook;
+
         private void HookDialogueIdle()
         {
             if (_dialogueRunner != null) return; // already hooked
@@ -381,7 +386,7 @@ namespace DeNelle.Village
             var runner = Object.FindObjectOfType<Yarn.Unity.DialogueRunner>();
             if (runner == null)
             {
-                StartCoroutine(RetryHookDialogueIdle());
+                if (!_retryingHook) { _retryingHook = true; StartCoroutine(RetryHookDialogueIdle()); }
                 return;
             }
 
@@ -392,13 +397,20 @@ namespace DeNelle.Village
 
         private System.Collections.IEnumerator RetryHookDialogueIdle()
         {
-            // A handful of deferred attempts covers a runner hosted lazily right after the
-            // swap (DialogueService.Host on the first Play) without polling forever.
+            // Poll directly — do NOT call HookDialogueIdle() here (that re-spawns coroutines).
             for (int i = 0; i < 5 && _dialogueRunner == null && this != null; i++)
             {
                 yield return null;
-                HookDialogueIdle();
+                var runner = Object.FindObjectOfType<Yarn.Unity.DialogueRunner>();
+                if (runner != null)
+                {
+                    _dialogueRunner = runner;
+                    if (runner.onDialogueStart != null)    runner.onDialogueStart.AddListener(OnDialogueIdle);
+                    if (runner.onDialogueComplete != null) runner.onDialogueComplete.AddListener(OnDialogueIdle);
+                    break;
+                }
             }
+            _retryingHook = false;
         }
 
         /// <summary>WO-376: re-pin the relaxed idle pose when a dialogue starts/completes.</summary>
