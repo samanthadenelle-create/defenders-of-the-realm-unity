@@ -144,6 +144,13 @@ AddRimUnderline, AddInnerRim.
 - **F4 — HUD widget icons (§5):** wire a real **compass** sprite (today `IconCompass` = a
   *star* → deviation #8) and slice `Assets/Art/UI/HudIcons/hud_widgets_sheet.jpg` →
   `Resources/HudIcons` for Tree/gear/bag/talk/quest/ability-frame, into the kit's icon builders.
+  **TRANSPARENCY (owner, 2026-06-11):** the current RpgUiCatalog icon PNGs (`Tab icons`/`Rpg icons`
+  via `IconSettings`/`IconInventory`/…) have an **opaque dark background baked into the art**, so
+  the HUD icon buttons can't render transparent (clearing the code seat just reveals the sprite's
+  dark frame). F4 must source/slice **frameless, alpha-transparent** icons (candidate unframed sets
+  in the pack: `Tech hud elements/Sprites/Icons 1` and `…/GreenUielements/Icons` — verify alpha +
+  re-point RpgUiCatalog), so gear/bag/intel/talk float with no dark block. The HUD-side seat is
+  already transparent (`BuildIconButton`) — only the art is left.
 
 **Consumers (after the foundation):** WO-411 (town HUD), WO-308 (combat ability bar);
 inventory/ATB/dialogue are already styled and just adopt F1/F2 incrementally.
