@@ -26,7 +26,8 @@
       "crystalCost": 80,
       "model": "mine_crystal",
       "footprint": "small",
-      "buildMenuOrder": 0
+      "buildMenuOrder": 0,
+      "isUpgradable": true
     },
     {
       "id": "farm",
@@ -38,7 +39,8 @@
       "crystalCost": 60,
       "model": "windmill",
       "footprint": "medium",
-      "buildMenuOrder": 1
+      "buildMenuOrder": 1,
+      "isUpgradable": true
     },
     {
       "id": "pet-house",
@@ -86,7 +88,8 @@
       "crystalCost": 70,
       "model": "lumbermill",
       "footprint": "medium",
-      "buildMenuOrder": 5
+      "buildMenuOrder": 5,
+      "isUpgradable": true
     },
     {
       "id": "forge",
@@ -98,7 +101,8 @@
       "crystalCost": 140,
       "model": "blacksmith",
       "footprint": "medium",
-      "buildMenuOrder": 6
+      "buildMenuOrder": 6,
+      "isUpgradable": true
     }
   ]
 }

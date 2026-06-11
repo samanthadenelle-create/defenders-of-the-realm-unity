@@ -90,6 +90,15 @@ namespace DeNelle.Village
         /// <summary>Display order in the build menu (0 first).</summary>
         [JsonProperty("buildMenuOrder")] public int BuildMenuOrder;
 
+        /// <summary>WO-413: capability — opens its UPGRADE flow (Upgrade / Add Perks), never a
+        /// Buy/Sell shop. Resource/production buildings (mine, farm, lumbermill, forge). Data, not
+        /// type/id matching (ARCHITECTURE §2b capability-on-entry).</summary>
+        [JsonProperty("isUpgradable")] public bool IsUpgradable;
+
+        /// <summary>WO-413: capability — opens the Buy/Sell shop dialogue. Mutually distinct from
+        /// IsUpgradable (a building is one or the other, or neither for special panels).</summary>
+        [JsonProperty("isShoppable")] public bool IsShoppable;
+
         /// <summary>
         /// The <see cref="Type"/> string parsed into the <see cref="BuildingType"/>
         /// enum. Falls back to <see cref="BuildingType.CrystalMine"/> with a

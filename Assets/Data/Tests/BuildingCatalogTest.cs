@@ -133,5 +133,33 @@ namespace DeNelle.Data.Tests
                     $"{def.Id} displayName '{def.DisplayName}' looks like a literal, not a canon key.");
             }
         }
+
+        // =====================================================================
+        //  WO-413 — interaction class is DATA on the entry, not type/id matching
+        // =====================================================================
+
+        [Test]
+        public void upgradable_buildings_are_data_flagged_not_name_matched()
+        {
+            // Resource/production buildings open the UPGRADE flow (no Buy/Sell shop). The flag is
+            // on the catalog entry; BuildingInteractable reads it instead of switching on type/id.
+            foreach (var id in new[] { "crystal-mine", "farm", "lumbermill", "forge" })
+            {
+                var def = BuildingCatalog.Find(id);
+                Assert.That(def, Is.Not.Null, $"catalog must contain '{id}'.");
+                Assert.That(def.IsUpgradable, Is.True, $"{id} must be flagged isUpgradable (WO-413).");
+            }
+            // Special-panel buildings are neither upgradable nor shoppable.
+            foreach (var id in new[] { "pet-house", "workshop", "arcane-tower" })
+            {
+                var def = BuildingCatalog.Find(id);
+                Assert.That(def, Is.Not.Null, $"catalog must contain '{id}'.");
+                Assert.That(def.IsUpgradable, Is.False, $"{id} must not be upgradable.");
+            }
+            // No building is BOTH (mutually distinct classifications).
+            foreach (var def in BuildingCatalog.Buildings)
+                Assert.That(def.IsUpgradable && def.IsShoppable, Is.False,
+                    $"{def.Id} cannot be both upgradable and shoppable.");
+        }
     }
 }
