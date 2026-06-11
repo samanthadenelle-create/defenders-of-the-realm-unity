@@ -6,7 +6,10 @@ this session's live findings, and the design docs (see §"Story → WO mapping")
 
 **WO-NUMBERING AUTHORITY = THIS doc (+ `CLI_LANES_WO_NUMBERS.md`), not the filesystem max.** Reserved new
 block **290–305** (minted today). Pre-block: **287** (Threat Intel, L2), **288** (Signature Combat Moves,
-L3) used by CLI today; **289 free**. **Next free WO = 330** (306–329 now used). Every new WO must be slotted into a lane here.
+L3) used by CLI today; **289 free**. **Next free WO = 412** (306–343 used; 339–343 nightly refill;
+**352–390 minted out-of-band 2026-06-08/09** and **391–411 minted on-board (Notion) 2026-06-10/11**,
+both slotted per `CLI_LANES_WO_NUMBERS.md` §"Out-of-band block" sections; **344–351 skipped — do NOT
+mint**). Every new WO must be slotted into a lane here.
 
 **Legend:** ✓ done · ◐ in progress · ▶ ready · ⏸ held · ★ new this session · ⚠ blocked/dep
 **Parallel rule (CLAUDE.md §9):** `VillageSceneBuilder.cs` = ONE writer (Lane 1 serial). `GameState.cs` /
@@ -23,7 +26,7 @@ L3) used by CLI today; **289 free**. **Next free WO = 330** (306–329 now used)
 4. ★ **WO-303** — Wire combat party HUD (`HUDManager`) to live party/combat data (replace demo values).
 5. ▶ Smoke-test the hero anim chain (WO-283/284/285) — visual checks (no T-pose/slide; idle/walk/run + attack/cast/hit/death/victory).
 6. ▶ Build-verify WO-107–111 — `QA_CHECKLIST_FILLED` marks them wired but that's code-inspection only; gate + write RESULT files.
-7. ▶ Dedupe numbering collisions: two WO-106, two WO-282, duplicate WO-110. (Next free WO = 330.)
+7. ▶ Dedupe numbering collisions: two WO-106, two WO-282, duplicate WO-110; **also dup repo files for 329/330/331/333/334 + Notion's divergent 328–339 P0 block (06-08 session)**. (Next free WO = 412.)
 8. ★ **WO-301** — Party persistence (now spec'd; lives in Lane 7).
 9. ~~★ **WO-328**~~ — **CLOSED** (ambiguous / non-reproducible; CLI confirmed no repro). WO-314/317/325/327 tracked independently.
 10. ◐ **WO-329** — Check-in regression test suite (UI static gate + CLI Unity tests + manual QA) — agent authoring; CLI build-verifies the C# tests.
@@ -97,6 +100,7 @@ L3) used by CLI today; **289 free**. **Next free WO = 330** (306–329 now used)
 10. ★ **WO-308** — Ability bar: active-hero skills as icons + cooldown rings + symbols (needs 307).
 11. ★ **WO-309** — Resource bar icons + quantity (food/wood/iron/crystals; rename Gems→Crystals; needs 307).
 12. ★ **WO-322** — Compass not visible (fix CompassHud/bootstrap visibility; needed to orient at exits; coord WO-307).
+13. ⛔ **WO-411** — P1: Town HUD does not match `hud_mobile_town.png`. **BLOCKED on WO-405** (CLI must NOT pick up). 11 deviations: resources wrong corner/icons · duplicate hero health bars · missing Heart of Elarion · missing pet bars · quest tracker is a persistent yellow panel overlapping gear/"i" (should be a MODAL) · BAG a gray panel (should be a right-side icon) · missing 4-button TOWN ACTIONS row (BUILD/TALK/BAG/QUESTS) · wrong compass icon · "Talk: Windmill" building prompt (building interaction must route through TALK → NPC dialogue) · missing wave timer/PLAY banner · missing enemy INTEL panel. Requires UGUI **layout groups** (not manual anchoring). **Verification gate: side-by-side screenshot vs mockup + owner sign-off — NO self-certification.** Actual: `docs/UI_Mockups/WO-411_town_hud_actual_2026-06-11.png`. Spec: `WORK_ORDER_411_town_hud_mockup_match.md`. (Partial down-payment exists uncommitted: TOWN ACTIONS row + BAG-as-icon + INTEL slot.)
 
 ## Lane 5 — World / Exploration  (OuterWorldBuilder + runtime, parallel-safe)
 
@@ -253,7 +257,13 @@ legendary set + ward **WO-295** (L3) · Heart-vs-regions reforge choice **WO-296
 | 305 | Relic-recovery quests | 5 | 290 |
 
 **Pre-290 block (CLI, today):** WO-287 Threat-Assessment Intel → Lane 2 (SPEC) · WO-288 Class Signature
-Combat Moves → Lane 3 (in progress). 289 free; 306–338 used. Next free WO = 339. Latest 339–343 added per nightly refill (Lane 7/10 thin).
+Combat Moves → Lane 3 (in progress). 289 free; 306–343 used (339–343 nightly refill, Lane 7/10 thin).
+**352–390 minted out-of-band 2026-06-08/09**; **391–411 minted on-board 2026-06-10/11** (P0 unified-HUD chain
+405→403→404, plus 400/411, all gated on 405 Done, in L4; building-tier 392/407 in L11; bugs 393/394/398/406/409;
+399 L3, 395 L5, 401 L12, 408 L10 — lane slotting in `CLI_LANES_WO_NUMBERS.md`); 344–351 skipped.
+**Next free WO = 412.**
+⚠ Collisions to dedupe (Lane 0 item 7): duplicate repo files for 329/330/331/333/334; Notion carries a
+different 328–339 P0-bug block from the 06-08 session. Do not reuse these numbers — renumber from 391+ when cleaned.
 
 ---
 
