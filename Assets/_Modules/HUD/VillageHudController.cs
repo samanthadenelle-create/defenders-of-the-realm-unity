@@ -1730,7 +1730,8 @@ namespace DeNelle.HUD
         // ── Top-CENTRE · RESOURCE badges (icon + number, distinct colours). ────
         private void BuildTownResourceBadges(Transform parent)
         {
-            _townResStrip = NewRect("TownResources", parent, new Vector2(0.30f, 0.955f), new Vector2(0.70f, 1f));
+            _townResStrip = NewRect("TownResources", parent, new Vector2(0.30f, 0.90f), new Vector2(0.70f, 1f));
+            ApplyStripBar(_townResStrip.gameObject);   // same Tech-pack wood bar as the bottom strip (cohesive)
 
             string[] names  = { "Gold", "Wood", "Crystal", "Iron" };
             string[] glyphs = { "o", "^", "*", "+" };
@@ -1739,16 +1740,14 @@ namespace DeNelle.HUD
             _townResBadge   = new Image[4];
             _townResOutline = new Image[4];
 
-            float w = 1f / 4f;
+            float w = 0.205f;   // 4 cells inset into 0.09–0.91 of the strip (clear of the wood bar's rolled ends)
             for (int i = 0; i < 4; i++)
             {
-                var cell = NewRect("Res_" + names[i], _townResStrip, new Vector2(i * w + 0.01f, 0.08f), new Vector2((i + 1) * w - 0.01f, 0.92f));
+                var cell = NewRect("Res_" + names[i], _townResStrip, new Vector2(0.09f + i * w, 0.14f), new Vector2(0.09f + (i + 1) * w - 0.012f, 0.86f));
                 // LIGHT parchment badge; the +/- flash logic lerps from this base
                 // (LParch) toward green/red — see UpdateTownHud (baseline flipped too).
                 _townResBadge[i] = HudTheme.StylePanel(cell.gameObject, LParch);
-                // Thin glowing gilt rune rim — decorative child, does NOT touch the
-                // badge Image that the +/- flash logic re-tints.
-                ElarionUiKit.AddInnerRim(cell.gameObject, LGiltSoft);
+                _townResBadge[i].color = new Color(0f, 0f, 0f, 0f);   // transparent — the wood strip bar frames the whole row now
 
                 // red low-warn outline overlay (hidden until value < threshold).
                 var outline = NewRect("Low", cell, Vector2.zero, Vector2.one);
@@ -1758,16 +1757,18 @@ namespace DeNelle.HUD
                 _townResOutline[i].color = new Color(HudTheme.HpRed.r, HudTheme.HpRed.g, HudTheme.HpRed.b, 0f);
                 _townResOutline[i].raycastTarget = false;
 
-                var dot = NewRect("Dot", cell, new Vector2(0.06f, 0.28f), new Vector2(0.30f, 0.72f));
+                var dot = NewRect("Dot", cell, new Vector2(0.02f, 0.08f), new Vector2(0.44f, 0.92f));
                 var dimg = dot.gameObject.AddComponent<Image>();
-                dimg.color = tints[i];
-                dimg.sprite = HudTheme.Disc;
                 dimg.raycastTarget = false;
-                AddText(dot, glyphs[i], 14, HudTheme.Ink, TextAlignmentOptions.Center);
+                var resIcon = WidgetSprite("hud_" + names[i].ToLower());   // hud_gold / hud_wood / hud_crystal / hud_iron
+                if (resIcon != null) { dimg.sprite = resIcon; dimg.color = Color.white; dimg.preserveAspect = true; }
+                else { dimg.color = tints[i]; dimg.sprite = HudTheme.Disc; AddText(dot, glyphs[i], 14, HudTheme.Ink, TextAlignmentOptions.Center); }   // dot fallback until the icon's dropped
 
-                var amt = NewRect("Amt", cell, new Vector2(0.32f, 0f), new Vector2(0.97f, 1f));
-                _townResText[i] = Ink(AddText(amt, "0", 20, LInk, TextAlignmentOptions.Left));
+                var amt = NewRect("Amt", cell, new Vector2(0.46f, 0f), new Vector2(0.98f, 1f));
+                _townResText[i] = AddText(amt, "0", 22, new Color(1f, 0.94f, 0.72f), TextAlignmentOptions.Left);   // bright cream — pops on the wood bar
                 _townResText[i].fontStyle = FontStyles.Bold;
+                _townResText[i].outlineColor = new Color32(28, 16, 6, 235);
+                _townResText[i].outlineWidth = 0.2f;
             }
         }
 
@@ -1829,8 +1830,8 @@ namespace DeNelle.HUD
         private TextMeshProUGUI BuildMetricCol(Transform parent, float x0, float x1, string iconName, string label, string value, Color tint)
         {
             var col = NewRect("Col_" + label, parent, new Vector2(x0, 0f), new Vector2(x1, 1f));
-            // Icon (left half) when a sprite is available; else the text label as fallback.
-            var lab = NewRect("Lab", col, new Vector2(0.06f, 0.08f), new Vector2(0.48f, 0.92f));
+            // Icon on TOP, big number BELOW — vertical stack stays readable in a narrow (mobile) column.
+            var lab = NewRect("Lab", col, new Vector2(0.10f, 0.46f), new Vector2(0.90f, 0.99f));
             var icon = iconName != null ? WidgetSprite(iconName) : null;
             if (icon != null)
             {
@@ -1839,12 +1840,15 @@ namespace DeNelle.HUD
             }
             else
             {
-                var lt = AddText(lab, label, 13, new Color(tint.r, tint.g, tint.b, 0.9f), TextAlignmentOptions.MidlineRight);
+                var lt = AddText(lab, label, 12, new Color(tint.r, tint.g, tint.b, 0.9f), TextAlignmentOptions.Center);
                 lt.fontStyle = FontStyles.Bold;
             }
-            var valRect = NewRect("Val", col, new Vector2(0.52f, 0.05f), new Vector2(0.97f, 0.95f));
-            var vt = Ink(AddText(valRect, value, 16, LInk, TextAlignmentOptions.MidlineLeft));
+            var valRect = NewRect("Val", col, new Vector2(0.0f, 0.02f), new Vector2(1f, 0.44f));
+            var vt = AddText(valRect, value, 24, new Color(1f, 0.94f, 0.72f), TextAlignmentOptions.Center);  // bright cream — pops on the wood bar
             vt.fontStyle = FontStyles.Bold;
+            vt.outlineColor = new Color32(28, 16, 6, 235);   // dark outline → numbers jump off the bar
+            vt.outlineWidth = 0.25f;
+            vt.enableAutoSizing = true; vt.fontSizeMin = 14f; vt.fontSizeMax = 30f;
             return vt;
         }
 
@@ -1931,7 +1935,7 @@ namespace DeNelle.HUD
                 AnchorTopLeft(_townWaveCluster, x: 12f, y: 8f, width: 380f, height: 140f);   // gear-clock + plate
                 SetAnchors(_townResStrip, new Vector2(0.32f, 0.955f), new Vector2(0.68f, 1f));
                 if (_townMiniMap != null) { _townMiniMap.anchoredPosition = new Vector2(-12f, -12f); _townMiniMap.sizeDelta = new Vector2(140f, 140f); }
-                SetAnchors(_townMetrics, new Vector2(0.372f, 0f), new Vector2(0.628f, 0.095f));   // −20%, centered, taller
+                SetAnchors(_townMetrics, new Vector2(0.28f, 0f), new Vector2(0.62f, 0.13f));   // widened (extended left) + taller for readable numbers
             }
         }
 
