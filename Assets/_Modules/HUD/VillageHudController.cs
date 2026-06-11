@@ -332,6 +332,19 @@ namespace DeNelle.HUD
             HudTheme.AddRim(go, LGiltSoft);        // soft low-opacity gold glow
         }
 
+        /// <summary>Frame a thin HUD strip with the Tech-pack menu bar (hud_strip_bar);
+        /// parchment fallback if the sprite is missing. 9-sliced so the ornate ends hold.</summary>
+        private static void ApplyStripBar(GameObject go)
+        {
+            var sprite = WidgetSprite("hud_strip_bar");
+            if (sprite == null) { FramePanelLight(go, LParch); return; }
+            var img = go.GetComponent<Image>() ?? go.AddComponent<Image>();
+            img.sprite = sprite;
+            img.type = Image.Type.Sliced;
+            img.color = Color.white;
+            img.raycastTarget = false;
+        }
+
         /// <summary>LIGHT recessed bar track — soft warm shadow (not near-black).</summary>
         private static Image StyleWellLight(GameObject go)
         {
@@ -701,17 +714,19 @@ namespace DeNelle.HUD
             {
                 if (_townWaveActive)
                 {
-                    _townTimerText.text = "WAVE IN PROGRESS";
+                    _townTimerText.text = "IN WAVE";
                     _townTimerText.color = HudTheme.LookoutCombat;
                 }
                 else if (_townTimerSeconds >= 0f)
                 {
                     int total = Mathf.Max(0, Mathf.CeilToInt(_townTimerSeconds));
-                    _townTimerText.text = string.Format("Next wave {0:00}:{1:00}", total / 60, total % 60);
-                    // urgency: <10s red, <30s amber, else calm DARK INK (was cream —
-                    // invisible on the new light parchment plate).
+                    _townTimerText.text = string.Format("{0:00}:{1:00}", total / 60, total % 60);   // MM:SS only — the clock face has the NEXT WAVE etch
                     _townTimerText.color = _townTimerSeconds < 10f ? HudTheme.LookoutIncoming
                         : _townTimerSeconds < 30f ? HudTheme.LookoutAlert : LInk;
+                }
+                else
+                {
+                    _townTimerText.text = string.Empty;   // idle: clock alone, no center word (owner)
                 }
             }
 
@@ -1317,7 +1332,7 @@ namespace DeNelle.HUD
                 _partyName[i].enableAutoSizing = true; _partyName[i].fontSizeMin = 9f; _partyName[i].fontSizeMax = 15f;
 
                 // HP bar (red, mid-right).
-                var hpTrack = NewRect("HPTrack", frame, new Vector2(0.31f, 0.30f), new Vector2(0.97f, 0.50f));
+                var hpTrack = NewRect("HPTrack", frame, new Vector2(0.31f, 0.30f), new Vector2(0.985f, 0.50f));
                 var hpFill  = NewRect("HPFill", hpTrack, Vector2.zero, Vector2.one);
                 var hfimg = hpFill.gameObject.AddComponent<Image>();
                 hfimg.sprite = hpSprite; hfimg.color = hpSprite != null ? Color.white : HudTheme.HpRed;
@@ -1328,7 +1343,7 @@ namespace DeNelle.HUD
                 _partyHpText[i].outlineColor = new Color32(40, 16, 16, 200); _partyHpText[i].outlineWidth = 0.14f;
 
                 // MP bar (blue, lower-right).
-                var mpTrack = NewRect("MPTrack", frame, new Vector2(0.31f, 0.07f), new Vector2(0.97f, 0.27f));
+                var mpTrack = NewRect("MPTrack", frame, new Vector2(0.31f, 0.07f), new Vector2(0.985f, 0.27f));
                 var mpFill  = NewRect("MPFill", mpTrack, Vector2.zero, Vector2.one);
                 var mfimg = mpFill.gameObject.AddComponent<Image>();
                 mfimg.sprite = mpSprite; mfimg.color = mpSprite != null ? Color.white : new Color(0.30f, 0.50f, 0.95f);
@@ -1636,50 +1651,54 @@ namespace DeNelle.HUD
         private void BuildTownWaveCluster(Transform parent)
         {
             _townWaveCluster = NewRect("TownWave", parent, new Vector2(0f, 1f), new Vector2(0f, 1f));
-            AnchorTopLeft(_townWaveCluster, x: 12f, y: 12f, width: 300f, height: 118f);
-            FramePanelLight(_townWaveCluster.gameObject, LParch);
+            AnchorTopLeft(_townWaveCluster, x: 12f, y: 8f, width: 380f, height: 140f);
 
-            // Lookout status badge (pip + label) — top row.
-            var badgeRect = NewRect("Lookout", _townWaveCluster, new Vector2(0.04f, 0.66f), new Vector2(0.30f, 0.94f));
-            _townLookoutBadge = badgeRect.gameObject.AddComponent<Image>();
-            _townLookoutBadge.sprite = HudTheme.RoundedFrame;
-            _townLookoutBadge.type = HudTheme.RoundedFrame != null ? Image.Type.Sliced : Image.Type.Simple;
-            _townLookoutBadge.color = HudTheme.LookoutSafe;
+            var clockSprite = WidgetSprite("hud_wave_clock");   // gear-clock bezel + parchment face
+            var plateSprite = WidgetSprite("hud_wave_plate");   // pointed dark name plate
+
+            // ── Gear-clock (left) — bezel + face; countdown overlays the face. ──
+            var clock = NewRect("Clock", _townWaveCluster, new Vector2(0f, 0.04f), new Vector2(0.42f, 1f));
+            var clockImg = clock.gameObject.AddComponent<Image>();
+            clockImg.raycastTarget = false;
+            if (clockSprite != null) { clockImg.sprite = clockSprite; clockImg.color = Color.white; clockImg.preserveAspect = true; }
+            else { clockImg.color = new Color(0.93f, 0.88f, 0.74f, 0.96f); }   // parchment fallback
+
+            // Static "NEXT WAVE" etch (top of the face).
+            var subRect = NewRect("ClockSub", clock, new Vector2(0.22f, 0.58f), new Vector2(0.78f, 0.74f));
+            AddText(subRect, "NEXT WAVE", 9, new Color(0.36f, 0.27f, 0.15f, 0.85f), TextAlignmentOptions.Center)
+                .fontStyle = FontStyles.Bold;
+
+            // Countdown (MM:SS) — centre of the clock face.
+            var timerRect = NewRect("Timer", clock, new Vector2(0.14f, 0.34f), new Vector2(0.86f, 0.60f));
+            _townTimerText = AddText(timerRect, "", HudTheme.FontHead + 6, new Color(0.18f, 0.12f, 0.07f), TextAlignmentOptions.Center);
+            _townTimerText.fontStyle = FontStyles.Bold;
+
+            // Lookout BELL — small, lower-right of the clock face; pulses when status ≥ 2.
+            _townBell = NewRect("LookoutBell", clock, new Vector2(0.40f, 0.16f), new Vector2(0.60f, 0.34f));
+            _townBellGlyph = AddText(_townBell, "‹", HudTheme.FontHead, new Color(0.42f, 0.31f, 0.16f, 0.9f), TextAlignmentOptions.Center);
+
+            // ── Pointed name plate (right) — state label; reddens on INCOMING. ──
+            var plate = NewRect("Plate", _townWaveCluster, new Vector2(0.40f, 0.40f), new Vector2(1f, 0.78f));
+            _townLookoutBadge = plate.gameObject.AddComponent<Image>();
             _townLookoutBadge.raycastTarget = false;
-            _townLookoutText = AddText(badgeRect, "SAFE", 12, HudTheme.Ink, TextAlignmentOptions.Center);
+            if (plateSprite != null) { _townLookoutBadge.sprite = plateSprite; _townLookoutBadge.color = Color.white; _townLookoutBadge.type = Image.Type.Simple; }
+            else _townLookoutBadge.color = new Color(0.12f, 0.09f, 0.06f, 0.95f);
+            _townLookoutText = AddText(plate, "", 15, new Color(0.95f, 0.82f, 0.45f), TextAlignmentOptions.Center);
             _townLookoutText.fontStyle = FontStyles.Bold;
 
-            // Countdown timer (MM:SS) — top row, large. Leaves room on the right for
-            // the lookout bell.
-            var timerRect = NewRect("Timer", _townWaveCluster, new Vector2(0.32f, 0.62f), new Vector2(0.86f, 0.97f));
-            _townTimerText = AddText(timerRect, "Next wave —:—", HudTheme.FontHead, LInk, TextAlignmentOptions.MidlineRight);
-            _townTimerText.fontStyle = FontStyles.Bold;
-            _townTimerText.outlineColor = LGlow;
-            _townTimerText.outlineWidth = 0.06f;
-
-            // Lookout BELL — top-right of the cluster, beside the timer. Signals an
-            // incoming/active wave: it brightens + pulses when the lookout escalates
-            // (status ≥ 2). At rest it sits dim. Bound to _lookoutStatus (the same
-            // signal as the status pip) — animated in AnimateLookoutBell().
-            _townBell = NewRect("LookoutBell", _townWaveCluster, new Vector2(0.86f, 0.60f), new Vector2(0.99f, 0.99f));
-            // Rest = muted ink (was dim cream — invisible on light); pulses gilt→hot.
-            _townBellGlyph = AddText(_townBell, "!", HudTheme.FontHead + 2, LInkDim, TextAlignmentOptions.Center);
-            _townBellGlyph.outlineColor = LGlow;
-            _townBellGlyph.outlineWidth = 0.06f;
-
-            // Wave progress label + bar — bottom rows.
-            var progLabel = NewRect("ProgLabel", _townWaveCluster, new Vector2(0.04f, 0.34f), new Vector2(0.96f, 0.60f));
-            _townWaveProgText = Ink(AddText(progLabel, "Wave 1", 14, LInkDim, TextAlignmentOptions.Left), dim: true);
+            // Wave progress (small label + thin bar, below the plate).
+            var progLabel = NewRect("ProgLabel", _townWaveCluster, new Vector2(0.42f, 0.18f), new Vector2(1f, 0.40f));
+            _townWaveProgText = AddText(progLabel, "Wave 1", 12, new Color(0.90f, 0.80f, 0.55f), TextAlignmentOptions.Center);
             _townWaveProgText.fontStyle = FontStyles.Bold;
 
-            var progTrack = NewRect("ProgTrack", _townWaveCluster, new Vector2(0.04f, 0.10f), new Vector2(0.96f, 0.30f));
+            var progTrack = NewRect("ProgTrack", _townWaveCluster, new Vector2(0.42f, 0.04f), new Vector2(1f, 0.16f));
             StyleWellLight(progTrack.gameObject);
             var progFill = NewRect("ProgFill", progTrack, Vector2.zero, Vector2.one);
             progFill.offsetMin = new Vector2(1.5f, 1.5f); progFill.offsetMax = new Vector2(-1.5f, -1.5f);
             _townWaveProgFill = progFill.gameObject.AddComponent<Image>();
             _townWaveProgFill.color = HudTheme.Gold;
             _townWaveProgFill.sprite = HudTheme.RoundedFrame;
-            _townWaveProgFill.type = HudTheme.RoundedFrame != null ? Image.Type.Filled : Image.Type.Filled;
+            _townWaveProgFill.type = Image.Type.Filled;
             _townWaveProgFill.fillMethod = Image.FillMethod.Horizontal;
             _townWaveProgFill.fillOrigin = 0;
             _townWaveProgFill.fillAmount = 0f;
@@ -1799,19 +1818,30 @@ namespace DeNelle.HUD
         private void BuildTownMetrics(Transform parent)
         {
             _townMetrics = NewRect("TownMetrics", parent, new Vector2(0.30f, 0f), new Vector2(0.70f, 0.05f));
-            FramePanelLight(_townMetrics.gameObject, LParch);
+            ApplyStripBar(_townMetrics.gameObject);   // Tech-pack menu bar frame (was cream parchment)
 
-            _townHeartText = BuildMetricCol(_townMetrics, 0f, 1f / 3f, "Heart", "100%", HudTheme.HpRed);
-            _townTowerText = BuildMetricCol(_townMetrics, 1f / 3f, 2f / 3f, "Towers", "0/0", HudTheme.Gold);
-            _townPopText   = BuildMetricCol(_townMetrics, 2f / 3f, 1f, "Pop", "0", HudTheme.Crystal);
+            // Inset the 3 columns from the bar's bracket ends so the icons sit grouped, not spread.
+            _townHeartText = BuildMetricCol(_townMetrics, 0.11f, 0.37f, "Elarion", "Heart", "100%", HudTheme.HpRed);
+            _townTowerText = BuildMetricCol(_townMetrics, 0.37f, 0.63f, IconBuild, "Towers", "0/0", HudTheme.Gold);
+            _townPopText   = BuildMetricCol(_townMetrics, 0.63f, 0.89f, "population", "Pop", "0", HudTheme.Crystal);
         }
 
-        private TextMeshProUGUI BuildMetricCol(Transform parent, float x0, float x1, string label, string value, Color tint)
+        private TextMeshProUGUI BuildMetricCol(Transform parent, float x0, float x1, string iconName, string label, string value, Color tint)
         {
             var col = NewRect("Col_" + label, parent, new Vector2(x0, 0f), new Vector2(x1, 1f));
-            var lab = NewRect("Lab", col, new Vector2(0.04f, 0.05f), new Vector2(0.50f, 0.95f));
-            var lt = AddText(lab, label, 13, new Color(tint.r, tint.g, tint.b, 0.9f), TextAlignmentOptions.MidlineRight);
-            lt.fontStyle = FontStyles.Bold;
+            // Icon (left half) when a sprite is available; else the text label as fallback.
+            var lab = NewRect("Lab", col, new Vector2(0.06f, 0.08f), new Vector2(0.48f, 0.92f));
+            var icon = iconName != null ? WidgetSprite(iconName) : null;
+            if (icon != null)
+            {
+                var img = lab.gameObject.AddComponent<Image>();
+                img.sprite = icon; img.color = Color.white; img.preserveAspect = true; img.raycastTarget = false;
+            }
+            else
+            {
+                var lt = AddText(lab, label, 13, new Color(tint.r, tint.g, tint.b, 0.9f), TextAlignmentOptions.MidlineRight);
+                lt.fontStyle = FontStyles.Bold;
+            }
             var valRect = NewRect("Val", col, new Vector2(0.52f, 0.05f), new Vector2(0.97f, 0.95f));
             var vt = Ink(AddText(valRect, value, 16, LInk, TextAlignmentOptions.MidlineLeft));
             vt.fontStyle = FontStyles.Bold;
@@ -1857,7 +1887,7 @@ namespace DeNelle.HUD
             //  • Build button = upper-RIGHT, lifted off the ability cluster.
             if (portrait)
             {
-                AnchorTopLeft(_partyStack, x: 10f, y: 130f, width: 700f,   // BELOW the wave-status cluster; 250% wide
+                AnchorTopLeft(_partyStack, x: 10f, y: 160f, width: 595f,   // BELOW the wave-status cluster; −15%
                     height: PartyRowHeight * PartySlotCount + PartyRowGap * (PartySlotCount - 1));
                 SetAnchors(_castleBanner,   new Vector2(0.20f, 0.955f), new Vector2(0.72f, 1f));
                 SetAnchors(_waveReadout,    new Vector2(0.20f, 0.89f),  new Vector2(0.80f, 0.95f));
@@ -1875,14 +1905,14 @@ namespace DeNelle.HUD
                 // WO-339 TOWN HUD portrait reflow: wave/timer cluster top-LEFT
                 // narrows; resources STACK on the left under it; mini-map shrinks
                 // to ~100×100 top-right; metrics bottom span wider as a 2-col feel.
-                AnchorTopLeft(_townWaveCluster, x: 10f, y: 10f, width: 260f, height: 110f);
+                AnchorTopLeft(_townWaveCluster, x: 10f, y: 8f, width: 380f, height: 140f);   // gear-clock + plate
                 SetAnchors(_townResStrip, new Vector2(0.0f, 0.83f), new Vector2(0.46f, 0.875f));
                 if (_townMiniMap != null) { _townMiniMap.anchoredPosition = new Vector2(-10f, -10f); _townMiniMap.sizeDelta = new Vector2(100f, 100f); }
-                SetAnchors(_townMetrics, new Vector2(0.06f, 0f), new Vector2(0.94f, 0.05f));
+                SetAnchors(_townMetrics, new Vector2(0.148f, 0f), new Vector2(0.852f, 0.095f));   // −20%, centered, taller
             }
             else
             {
-                AnchorTopLeft(_partyStack, x: 10f, y: 130f, width: 600f,   // BELOW the wave-status cluster; 250% wide
+                AnchorTopLeft(_partyStack, x: 10f, y: 160f, width: 510f,   // BELOW the wave-status cluster; −15%
                     height: PartyRowHeight * PartySlotCount + PartyRowGap * (PartySlotCount - 1));
                 SetAnchors(_castleBanner,   new Vector2(0.36f, 0.94f), new Vector2(0.64f, 0.99f));
                 SetAnchors(_waveReadout,    new Vector2(0.36f, 0.86f), new Vector2(0.64f, 0.925f));
@@ -1898,10 +1928,10 @@ namespace DeNelle.HUD
 
                 // WO-339 TOWN HUD landscape: wide top spread — wave cluster top-left,
                 // resource badges top-centre, full-size 140 mini-map top-right.
-                AnchorTopLeft(_townWaveCluster, x: 12f, y: 12f, width: 300f, height: 118f);
+                AnchorTopLeft(_townWaveCluster, x: 12f, y: 8f, width: 380f, height: 140f);   // gear-clock + plate
                 SetAnchors(_townResStrip, new Vector2(0.32f, 0.955f), new Vector2(0.68f, 1f));
                 if (_townMiniMap != null) { _townMiniMap.anchoredPosition = new Vector2(-12f, -12f); _townMiniMap.sizeDelta = new Vector2(140f, 140f); }
-                SetAnchors(_townMetrics, new Vector2(0.34f, 0f), new Vector2(0.66f, 0.05f));
+                SetAnchors(_townMetrics, new Vector2(0.372f, 0f), new Vector2(0.628f, 0.095f));   // −20%, centered, taller
             }
         }
 
@@ -2257,16 +2287,10 @@ namespace DeNelle.HUD
         {
             _lookoutStatus = status;
             if (_townLookoutBadge == null) return;
-            string label; Color tint;
-            switch (status)
-            {
-                case 3: label = "COMBAT";   tint = HudTheme.LookoutCombat;   break;
-                case 2: label = "INCOMING"; tint = HudTheme.LookoutIncoming; break;
-                case 1: label = "ALERT";    tint = HudTheme.LookoutAlert;    break;
-                default: label = "SAFE";    tint = HudTheme.LookoutSafe;     break;
-            }
-            _townLookoutBadge.color = tint;
-            if (_townLookoutText != null) _townLookoutText.text = label;
+            // No plate text (implied by the clock + overlapped the timer). The plate just reddens
+            // with urgency as a silent state cue; the clock face carries the countdown.
+            _townLookoutBadge.color = (status >= 2) ? HudTheme.LookoutIncoming : Color.white;
+            if (_townLookoutText != null) _townLookoutText.text = string.Empty;
         }
 
         /// <summary>
