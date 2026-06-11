@@ -249,6 +249,7 @@ namespace DeNelle.Village
         {
             var interact = body.AddComponent<CastleNpcInteractable>();
             interact.Configure(v.StructureId, v.Label, hero);
+            BuildingInteractable.MarkNpcCovered(v.StructureId);   // the matching building defers its prompt — NPC owns the talk
         }
 
         // Reuse VillageNpcInjector's height normalization so the People-pack bodies sit at

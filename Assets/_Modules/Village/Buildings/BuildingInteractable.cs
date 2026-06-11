@@ -52,6 +52,19 @@ namespace DeNelle.Village
         private GameObject _promptGo;
         private TextMesh _promptText;
         private bool _openedStructure;   // this building opened the shared structure dialogue
+        private string _myHookId;        // cached structure-dialogue id for this building
+
+        // WO-415: structure ids whose FRONT NPC owns the talk → the matching building defers its
+        // own interact prompt (the NPC opens the same shared dialogue — one trigger, not two).
+        private static readonly System.Collections.Generic.HashSet<string> _npcCovered =
+            new System.Collections.Generic.HashSet<string>();
+
+        /// <summary>Called when an NPC is placed at a structure's front: that structure's building
+        /// stops prompting (the NPC is the single talk trigger; the shared hook is untouched).</summary>
+        public static void MarkNpcCovered(string structureId)
+        {
+            if (!string.IsNullOrEmpty(structureId)) _npcCovered.Add(structureId);
+        }
 
         private void Awake()
         {
@@ -61,6 +74,7 @@ namespace DeNelle.Village
         private void Start()
         {
             ResolveHero();
+            _myHookId = StructureHookIdFor(_building);
         }
 
         private void ResolveHero()
@@ -73,6 +87,15 @@ namespace DeNelle.Village
         private void Update()
         {
             if (_hero == null) { ResolveHero(); return; }
+
+            // WO-415: this structure has a front NPC that owns the talk → defer entirely. Release the
+            // shared button + hide our bubble so only the NPC's CastleNpcInteractable opens the dialogue.
+            if (_myHookId != null && _npcCovered.Contains(_myHookId))
+            {
+                MobileInteractButton.Release(this);
+                if (_promptGo != null) HidePrompt();
+                return;
+            }
 
             // Build mode: the player is AUTHORING (placing structures), not interacting.
             // Release the shared button, hide our world bubble, and skip the in-range

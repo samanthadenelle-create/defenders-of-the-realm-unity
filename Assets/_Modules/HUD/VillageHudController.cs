@@ -1095,6 +1095,7 @@ namespace DeNelle.HUD
         // right-edge Skills panel is the existing bottom-right rune skill bar.
         private RectTransform _townActionPanel;
         private Button _talkButton;    // context-gated: only interactable when an NPC is in range
+        private AttentionGlowUi _talkGlow;   // chasing-comet attention cue around the Talk button
         private Button _questButton;   // dimmed until the hub quest modal exists (follow-up)
         private void BuildTownActionPanel(Transform parent)
         {
@@ -1117,6 +1118,10 @@ namespace DeNelle.HUD
             _questButton = BuildIconButton(_townActionPanel, new Vector2(0.30f, 0.02f), new Vector2(0.70f, 0.44f),
                 IconQuest, "!", () => DailyQuestHud.Instance?.Toggle());
 
+            // Reusable chasing-comet attention cue around the Talk button (also for tutorial focusing).
+            _talkGlow = AttentionGlowUi.Attach((RectTransform)_talkButton.transform,
+                new Color(1f, 0.85f, 0.35f, 1f), HudTheme.Disc);
+
             SetTalkAvailable(false);   // gated until a talkable NPC is in range
         }
 
@@ -1131,6 +1136,7 @@ namespace DeNelle.HUD
             _talkButton.interactable = available;
             var g = _talkButton.targetGraphic;
             if (g != null) { var c = g.color; c.a = available ? 1f : 0.55f; g.color = c; }   // idle = faded, not a harsh black disc
+            if (_talkGlow != null) _talkGlow.gameObject.SetActive(available);   // chasing comet only when a talkable NPC is in range
         }
 
         // ── Currency strip — thin glass bar, tiny colour dot + amount. ─────────
