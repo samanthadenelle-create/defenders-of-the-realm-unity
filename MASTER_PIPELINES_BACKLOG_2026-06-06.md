@@ -129,6 +129,7 @@ mint**). Every new WO must be slotted into a lane here.
 10. ★ **WO-297** — Pet acquisition (tame/egg/rescue) + active slots (reconcile PetDeployer/PetUnlockTracker; needs WO-290).
 11. ★ **WO-298** — Pet skill catalog content + balance (4 branches + signatures; extends PetSkillTreeCatalog).
 12. ★ **WO-325** — Nothing happens at resource node ([G] Upgrade Mine dead + NRE) — fix node interact wiring + null-guard; EconomyService.TrySpend.
+13. ▶ **WO-413** — P1 (Ready): Upgradable buildings wrongly offer the shop menu. **Data-driven** per building (NOT name-matching): `isUpgradable` (windmill, lumbermill, armorer, forge — per Forgemasters doc) → menu = Upgrade / Add Perks / Talk / Leave (NO Buy/Sell); `isShoppable` → Buy / Sell / Talk / Leave. If the upgrade/perk panels don't exist yet, wire the menu correctly + log a follow-up WO for the panels — do NOT ship dead buttons. Ties to WO-411 #9 ("Talk: <building>" prompt) + the buildings-collection capability model (ARCHITECTURE §2b). Canon: `isupgradable-isshoppable-building-rule` memory.
 
 ## Lane 7 — Persistence / Backend  (GameState/SaveSchema = coordinate additive)
 

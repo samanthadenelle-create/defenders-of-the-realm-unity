@@ -195,3 +195,11 @@ The lead session is the **ORCHESTRATOR**, not a solo worker. Division of labor:
 **Discipline:** flow-first triage → an agent verifies AND does it. Commit local; **push only after the
 owner retests/confirms** (felt/gameplay) or a regression passes (data/logic) — "push the ones that
 passed." Ambiguous tickets (no repro / screen / stack) **bounce back for detail** — never work blind.
+
+**Multi-session reconciliation (FIRM RULE — always followed):** multiple sessions/agents edit the
+SAME working tree. There is exactly **ONE committer** (the lead/CLI). When another session or an agent
+worktree leaves changes in the tree, the committer **SAVES their work and merges only the diffs into
+the correct branch by EXPLICIT PATH** — review each diff (guard the mount-sync/garble risk, §0), stage
+by path, never `git add -A`, never blind-replace a file, never let a second session commit/push (two
+committers duel on `.git/index.lock` → stale locks + false "pushed", see memory `sole-git-committer`).
+Other sessions write + signal "ready"; the one committer reconciles. This is non-negotiable.

@@ -59,6 +59,28 @@ chrome ON TOP of the stray panels and doubles the clutter.)
 + ElarionUiKit, layout groups), make the hub a recognized town context (A), and retire/fold the
 redundant bootstrapped panels (B) — so the screen matches the mockup with no overlap.
 
+## Consolidation map (verified via read-only HUD audit, 2026-06-11)
+The clutter is independent bootstrapped HUDs overlapping VillageHudController. Per-element:
+- **#2 duplicate hero bar:** `HeroHealth.cs` draws a SEPARATE OnGUI/IMGUI bar (line ~17) on
+  top of VillageHudController's uGUI vitals → gate/remove the OnGUI bar (keep VillageHud vitals).
+- **#6 BAG:** `HeroEquipHud` (own RuntimeInitialize bootstrap, gated to hub scenes) → gate OFF
+  the hub; BAG becomes an icon in VillageHudController's action row (→ HeroInventoryController.Open).
+- **#5 quest trackers:** `DailyQuestHud` (top-right chips) + `QuestTrackerHud` (top-left cards),
+  both always-on bootstraps → gate OFF the hub; surface via a QUESTS modal. **Modal doesn't exist
+  yet → dim QUESTS + log follow-up WO (don't ship dead button); removing the persistent tracker
+  matches the mockup's "quests = modal" intent.**
+- **#1 resources:** owned by VillageHudController (legacy strip + WO-339 town badges) → reposition
+  to top-LEFT per mockup.
+- **#3 Heart of Elarion:** VillageHudController.BuildCastleBanner (currently top-center) → top-left.
+- **#7 TOWN ACTIONS row:** add BUILD·TALK·BAG·QUESTS to VillageHudController (now visible once
+  fix-A recognizes the hub).
+- **#8 compass:** `CompassHud` is a **UIDocument/UXML** component — UXML does NOT render in player
+  builds (PIPELINE_STATE §8). Likely needs a code-built compass, not just an icon swap. (Separate fix.)
+- **#9 "Talk: <building>":** NOT from `BuildingInteractable` (it correctly shows "Interact:"). The
+  windmill is **misconfigured as a vendor/NPC** (registered "Talk:" via a vendor injector). → **moved
+  to WO-413** (building-capability classification), out of the HUD layer.
+- **#10 wave timer/PLAY · #11 INTEL:** build in VillageHudController town chrome.
+
 ## Requirements
 - **UGUI layout groups** for the clusters — not hand-tuned anchoring (so it holds across
   resolutions / safe areas).
