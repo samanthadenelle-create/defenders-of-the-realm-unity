@@ -82,6 +82,7 @@ namespace DeNelle.Settings
     public sealed class MusicToggleHud : MonoBehaviour
     {
         private Button _btn;
+        private bool _useSprite;   // hud_music sprite as the button face (dim when muted)
 
         private void OnEnable()
         {
@@ -93,7 +94,7 @@ namespace DeNelle.Settings
             _btn = new Button(Toggle) { name = "music-toggle" };
             var s = _btn.style;
             s.position = Position.Absolute;
-            s.bottom = 14f; s.right = 14f;            // bottom-right — clears top bars + ability bar
+            s.top = 200f; s.right = 14f;              // top-right edge, below the icon cluster (was hidden under the bottom TOWN ACTIONS row)
             s.width = 44f; s.height = 44f;
             s.fontSize = 22f;
             s.unityFontStyleAndWeight = FontStyle.Bold;
@@ -102,6 +103,8 @@ namespace DeNelle.Settings
             s.borderTopWidth = 0f; s.borderBottomWidth = 0f; s.borderLeftWidth = 0f; s.borderRightWidth = 0f;
             s.borderTopLeftRadius = 22f; s.borderTopRightRadius = 22f;
             s.borderBottomLeftRadius = 22f; s.borderBottomRightRadius = 22f;
+            var musicSprite = Resources.Load<Sprite>("HudIcons/hud_music");
+            if (musicSprite != null) { _btn.style.backgroundImage = new StyleBackground(musicSprite); _useSprite = true; }
             root.Add(_btn);
             Refresh();
         }
@@ -139,11 +142,20 @@ namespace DeNelle.Settings
         {
             if (_btn == null) return;
             bool on = MusicOn;
-            _btn.text = on ? "♪" : "♪̷";                    // note + slashed note
             _btn.tooltip = on ? "Music: On" : "Music: Off";
-            _btn.style.backgroundColor = on
-                ? new Color(0.16f, 0.52f, 0.34f, 0.92f)    // green = playing
-                : new Color(0.40f, 0.13f, 0.13f, 0.92f);   // red = muted
+            if (_useSprite)
+            {
+                _btn.text = string.Empty;
+                _btn.style.backgroundColor = Color.clear;
+                _btn.style.opacity = on ? 1f : 0.4f;        // full when playing, dim when muted
+            }
+            else
+            {
+                _btn.text = on ? "♪" : "♪̷";                // note + slashed note (glyph fallback)
+                _btn.style.backgroundColor = on
+                    ? new Color(0.16f, 0.52f, 0.34f, 0.92f)
+                    : new Color(0.40f, 0.13f, 0.13f, 0.92f);
+            }
         }
     }
 

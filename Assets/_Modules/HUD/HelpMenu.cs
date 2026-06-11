@@ -66,7 +66,7 @@ namespace DeNelle.HUD
             // top-right mini-map otherwise drew over + ate the gear's raycasts.
             // UIToolkit panels and uGUI Screen-Space-Overlay canvases sort by
             // their own sortingOrder, so this must exceed the town canvas.
-            _document.sortingOrder = 160;
+            _document.sortingOrder = 2700;   // above the town HUD (140) + inventory modal (2600) — settings menu is top-most
             BuildUi();
         }
 
@@ -123,7 +123,7 @@ namespace DeNelle.HUD
             var title = new Label("Help");
             title.style.fontSize = 22;
             title.style.unityFontStyleAndWeight = FontStyle.Bold;
-            title.style.color = new Color(0.95f, 0.90f, 0.78f);
+            title.style.color = Color.white;
             title.style.marginBottom = 16;
             card.Add(title);
 
@@ -154,7 +154,7 @@ namespace DeNelle.HUD
             b.style.marginTop = 6; b.style.marginBottom = 6;
             b.style.fontSize = 14;
             b.style.backgroundColor = new Color(0.18f, 0.12f, 0.28f, 1f);
-            b.style.color = new Color(0.95f, 0.92f, 0.85f);
+            b.style.color = Color.white;
             b.style.borderTopLeftRadius = 8; b.style.borderTopRightRadius = 8;
             b.style.borderBottomLeftRadius = 8; b.style.borderBottomRightRadius = 8;
             return b;

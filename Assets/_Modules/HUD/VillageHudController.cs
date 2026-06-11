@@ -371,6 +371,7 @@ namespace DeNelle.HUD
         private const string IconQuest        = "hud_quest";
         private const string IconBuild        = "hud_build";    // standalone Resources/HudIcons/hud_build (tower)
         private const string IconIntel        = "hud_intel";    // standalone Resources/HudIcons/hud_intel (periscope/lookout)
+        private const string IconHeart        = "hud_heart";    // standalone Resources/HudIcons/hud_heart (Heart-of-Elarion crest)
         private const string IconAbilityFrame = "hud_ability_frame";
 
         /// <summary>Widget sprite by name, or null (caller keeps its glyph fallback).</summary>
@@ -1167,7 +1168,7 @@ namespace DeNelle.HUD
             // Tree-of-Life crest tucked top-left of the banner — sprite-FIRST (the
             // hud_tree widget art), with the world-tree glyph kept as the fallback.
             AddWidgetIcon("Crest", _castleBanner, new Vector2(0.015f, 0.42f), new Vector2(0.11f, 0.96f),
-                IconTree, "*", HudTheme.FontHead, LGilt);
+                IconHeart, "*", HudTheme.FontHead, LGilt);
 
             // Caption row — small spaced gilt label so the bar reads as the Heart.
             var caption = NewRect("Caption", _castleBanner, new Vector2(0.11f, 0.56f), new Vector2(0.99f, 0.97f));
