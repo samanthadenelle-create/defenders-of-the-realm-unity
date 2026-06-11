@@ -1730,10 +1730,10 @@ namespace DeNelle.HUD
         // ── Top-CENTRE · RESOURCE badges (icon + number, distinct colours). ────
         private void BuildTownResourceBadges(Transform parent)
         {
-            _townResStrip = NewRect("TownResources", parent, new Vector2(0.30f, 0.90f), new Vector2(0.70f, 1f));
+            _townResStrip = NewRect("TownResources", parent, new Vector2(0.30f, 0.75f), new Vector2(0.70f, 1f));   // 2.5× taller for the resource icons
             ApplyStripBar(_townResStrip.gameObject);   // same Tech-pack wood bar as the bottom strip (cohesive)
 
-            string[] names  = { "Gold", "Wood", "Crystal", "Iron" };
+            string[] names  = { "Food", "Wood", "Crystal", "Iron" };   // icon = hud_food/hud_wood/hud_crystal/hud_iron
             string[] glyphs = { "o", "^", "*", "+" };
             Color[] tints   = { HudTheme.GoldRes, HudTheme.Wood, HudTheme.Crystal, HudTheme.Iron };
             _townResText    = new TextMeshProUGUI[4];
