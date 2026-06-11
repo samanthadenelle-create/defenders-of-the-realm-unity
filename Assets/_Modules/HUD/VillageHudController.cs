@@ -70,6 +70,11 @@ namespace DeNelle.HUD
         public UnityEvent BuildRequested = new UnityEvent();
         public UnityEvent SkillsRequested = new UnityEvent();
         public UnityEvent ShopRequested = new UnityEvent();
+        // Context-gated Talk affordance. Raised when the player taps Talk; a Village-side
+        // bridge (TalkHudBridge) reflects this event + drives SetTalkAvailable from the
+        // talkable-NPC-in-range registry. Kept OFF IVillageHud (Core) on purpose — least
+        // cross-level exposure: only HUD + the Village bridge know "Talk" exists.
+        public UnityEvent TalkRequested = new UnityEvent();
         public AbilitySlotEvent AbilityRequested = new AbilitySlotEvent();
         public UnityEvent RepairConfirmRequested = new UnityEvent();
         public UnityEvent RepairCancelRequested = new UnityEvent();
@@ -1019,7 +1024,7 @@ namespace DeNelle.HUD
 
         // A round rune-framed icon BUTTON: gilt ring seat + sprite-first widget icon
         // (glyph fallback) + a Button raising the given action.
-        private void BuildIconButton(Transform parent, Vector2 anchorMin, Vector2 anchorMax,
+        private Button BuildIconButton(Transform parent, Vector2 anchorMin, Vector2 anchorMax,
             string widgetName, string glyph, UnityEngine.Events.UnityAction action)
         {
             var cell = NewRect("Icon_" + widgetName, parent, anchorMin, anchorMax);
@@ -1043,6 +1048,7 @@ namespace DeNelle.HUD
             btn.targetGraphic = seat;
             HudTheme.StyleButtonColors(btn, LPortrait);
             if (action != null) btn.onClick.AddListener(action);
+            return btn;
         }
 
         // ── WO-403/404 · RIGHT-edge TOWN action panel — Talk + Quest rune buttons. ─
@@ -1052,6 +1058,7 @@ namespace DeNelle.HUD
         // gated with the rest of the town chrome by ApplyContext. The COMBAT mode's
         // right-edge Skills panel is the existing bottom-right rune skill bar.
         private RectTransform _townActionPanel;
+        private Button _talkButton;   // context-gated: only interactable when an NPC is in range
         private void BuildTownActionPanel(Transform parent)
         {
             _townActionPanel = NewRect("TownActions", parent, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
@@ -1061,10 +1068,26 @@ namespace DeNelle.HUD
             _townActionPanel.anchoredPosition = new Vector2(-12f, 0f);
             _townActionPanel.sizeDelta = new Vector2(64f, 148f);
 
-            BuildIconButton(_townActionPanel, new Vector2(0f, 0.54f), new Vector2(1f, 1f),
-                IconTalk, "T", () => ShopRequested?.Invoke());
+            // Talk → TalkRequested (the Village bridge routes it to the nearest in-range
+            // NPC's dialogue). Default OFF — SetTalkAvailable enables it only in range.
+            _talkButton = BuildIconButton(_townActionPanel, new Vector2(0f, 0.54f), new Vector2(1f, 1f),
+                IconTalk, "T", () => TalkRequested?.Invoke());
             BuildIconButton(_townActionPanel, new Vector2(0f, 0f), new Vector2(1f, 0.46f),
                 IconQuest, "!", () => BuildRequested?.Invoke());
+            SetTalkAvailable(false);   // gated until a talkable NPC is in range
+        }
+
+        /// <summary>
+        /// Enable/disable + brighten/dim the Talk button. Driven by the Village-side
+        /// TalkHudBridge from the talkable-NPC-in-range registry. Presentation only — the
+        /// HUD knows nothing about which NPC or its dialogue.
+        /// </summary>
+        public void SetTalkAvailable(bool available)
+        {
+            if (_talkButton == null) return;
+            _talkButton.interactable = available;
+            var g = _talkButton.targetGraphic;
+            if (g != null) { var c = g.color; c.a = available ? 1f : 0.4f; g.color = c; }
         }
 
         // ── Currency strip — thin glass bar, tiny colour dot + amount. ─────────

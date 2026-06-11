@@ -318,6 +318,7 @@ namespace DeNelle.Village
             if (MobileInteractButton.Suppressed)
             {
                 MobileInteractButton.Release(this);
+                TalkPromptRegistry.Deregister(transform);
                 return;
             }
 
@@ -339,13 +340,21 @@ namespace DeNelle.Village
             if (DialogueService.IsRunning)
             {
                 MobileInteractButton.Release(this);
+                TalkPromptRegistry.Deregister(transform);
                 return;
             }
 
             if (inRange)
+            {
                 MobileInteractButton.Request(this, "Talk: " + _label, Interact);
+                // Gate the HUD Talk button on this same in-range signal (no new scan).
+                TalkPromptRegistry.Register(transform, Interact);
+            }
             else
+            {
                 MobileInteractButton.Release(this);
+                TalkPromptRegistry.Deregister(transform);
+            }
 
             // Desktop [F]: only the NEAREST in-range NPC acts, and only when no modal is open.
             if (inRange && !PanelManager.AnyOpen && Input.GetKeyDown(KeyCode.F) && IsNearestInRange())
@@ -389,6 +398,7 @@ namespace DeNelle.Village
         private void OnDisable()
         {
             MobileInteractButton.Release(this);
+            TalkPromptRegistry.Deregister(transform);
         }
     }
 }
