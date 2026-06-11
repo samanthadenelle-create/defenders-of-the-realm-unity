@@ -260,6 +260,14 @@ namespace DeNelle.Village
             var vs = _runner != null ? _runner.VariableStorage : null;
             if (vs == null) return;
 
+            // WO-413: Buy/Sell appear ONLY for buildings that aren't upgradable (data-driven via
+            // BuildingCatalog.IsUpgradable — NOT name matching). Upgradable buildings (farm/lumbermill/
+            // forge/mine) show Upgrade/Talk/Leave, never a shop. This one var gates the Yarn menu for
+            // BOTH interaction paths (BuildingInteractable + the castle vendor NPC). Unknown ids (no
+            // catalog entry) default to shoppable so real vendors keep Buy/Sell.
+            var capDef = DeNelle.Village.Buildings.BuildingCatalog.Find(structureId);
+            vs.SetValue("$structureCanShop", !(capDef != null && capDef.IsUpgradable));
+
             // NOTE: $structureName is seeded by DialogueService.PlayStructure from the
             // building's sign label (DisplayLabel) and intentionally NOT overwritten here,
             // so the dialogue title matches the world sign. We only fill yield/cost/level.

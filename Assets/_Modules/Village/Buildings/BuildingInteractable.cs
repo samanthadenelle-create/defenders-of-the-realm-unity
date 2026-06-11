@@ -194,30 +194,9 @@ namespace DeNelle.Village
             // Upgrade/Talk), scoped to their own domain by $structureId. One node, the
             // parameter differs. Falls through to the legacy panels for the rest
             // (ArcaneTower → Hero Talents, Workshop → Crafting).
-            // WO-413: an UPGRADABLE building opens its UPGRADE panel — never the Buy/Sell shop
-            // dialogue. Data-driven via the catalog (BuildingDef.IsUpgradable), NOT type/id matching.
-            // (Add-Perks / Talk options inside the upgrade flow are a logged follow-up, not shipped
-            // as dead buttons — see WORK_ORDER_413.)
-            var def = (!string.IsNullOrEmpty(_building.BuildingId)
-                          ? BuildingCatalog.Find(_building.BuildingId) : null)
-                      ?? BuildingCatalog.Find(_building.Type);
-            if (def != null && def.IsUpgradable && TryPanelFor(_building, out PanelId upPanel))
-            {
-                string upCtx = ContextIdFor(_building);
-                bool upOk = string.IsNullOrEmpty(upCtx)
-                    ? PanelRouter.Open(upPanel)
-                    : PanelRouter.Open(upPanel, upCtx);
-                if (upOk)
-                {
-                    _openedStructure = false;
-                    Debug.Log($"[BuildingInteractable] {_building.Type} → UPGRADE panel {upPanel} (WO-413 upgradable; no shop).");
-                    return;
-                }
-                Debug.Log($"[BuildingInteractable] {_building.Type} → upgrade panel not ready.");
-                ShowFloatingNote($"{LabelFor(_building.Type)} — coming soon");
-                return;
-            }
-
+            // WO-413: upgradable-vs-shop is decided IN the Yarn menu (StructureMenu gates Buy/Sell on
+            // $structureCanShop, seeded from BuildingCatalog.IsUpgradable in DialogueCommandBridge) —
+            // ONE chokepoint that also covers the castle vendor-NPC path (CastleNpcInteractable).
             string hookId = StructureHookIdFor(_building);
             if (hookId != null)
             {

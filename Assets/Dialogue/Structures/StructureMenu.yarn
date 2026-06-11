@@ -18,10 +18,10 @@ tags: structure interaction
 -> Upgrade — {$upgradeCostText} <<if !$structureMaxed>>
     <<structure_upgrade $structureId>>
     {$structureName}: {$upgradeResult}
--> Buy
+-> Buy <<if $structureCanShop>>
     {$structureName}: Take a look at what I have.
     <<OpenShop $structureId>>
--> Sell
+-> Sell <<if $structureCanShop>>
     {$structureName}: Show me what you'd part with.
     <<OpenShop $structureId>>
 -> Talk
