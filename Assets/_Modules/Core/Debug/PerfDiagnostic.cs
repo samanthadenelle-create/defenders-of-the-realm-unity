@@ -93,6 +93,13 @@ namespace DeNelle.Core.Debugging
                 }
             }
 
+            // Managed-heap fork: retained leak (heapMB climbs) vs transient churn (heapMB flat, gc/frame high).
+            long heapMB = System.GC.GetTotalMemory(false) >> 20;
+            sb.Append(" | heapMB=").Append(heapMB)
+              .Append(" gc0=").Append(System.GC.CollectionCount(0))
+              .Append(" gc1=").Append(System.GC.CollectionCount(1))
+              .Append(" gc2=").Append(System.GC.CollectionCount(2));
+
             if (cpu >= 0 || gpu >= 0)
                 sb.Append(" => ").Append(cpu > gpu ? "CPU-BOUND (script/main-thread)" : "GPU-BOUND (rendering)");
             else
