@@ -3,6 +3,14 @@
 This file is read by every agent (UI and CLI) before starting work.
 Rules here are **non-negotiable**. Do not skip them to ship faster.
 
+**Architecture law (BINDING):** read `docs/ARCHITECTURE_PRINCIPLES.md` first. The
+project follows the owner's **HP B2B** architecture — bounded context per component,
+scope deliberately limited; **presentation is a separate layer that never touches the
+objects**; queue by **player-felt vs. holistic leverage**, never smuggle structural
+refactors into player-facing work. **Decision lens: what is right, not what is easy** —
+when they diverge, name it explicitly. We stay true-north by **holding each other
+accountable to the real goal: deliver QUALITY, not fast.**
+
 **Navigation:** before grepping or exploring, check the README system —
 `PROJECT_INDEX.md` (root files), `Assets/README.md` (asset folders),
 `Assets/_Modules/README.md` (code module map; each module has its own README),
