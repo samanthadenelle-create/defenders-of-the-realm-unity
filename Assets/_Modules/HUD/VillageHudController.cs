@@ -1028,14 +1028,16 @@ namespace DeNelle.HUD
             string widgetName, string glyph, UnityEngine.Events.UnityAction action)
         {
             var cell = NewRect("Icon_" + widgetName, parent, anchorMin, anchorMax);
-            // round parchment seat + gilt rune ring (the airy framed look).
+            // TRANSPARENT backing (owner: no yellow background) — the seat stays as the
+            // invisible click target (raycast on a clear Image still receives taps); the
+            // icon floats on the dark HUD. Seat + rim both clear.
             var seat = cell.gameObject.AddComponent<Image>();
-            seat.color = LPortrait;
+            seat.color = new Color(0f, 0f, 0f, 0f);
             seat.sprite = HudTheme.Disc;
             var ring = NewRect("Ring", cell, Vector2.zero, Vector2.one);
             ring.offsetMin = new Vector2(-1.5f, -1.5f); ring.offsetMax = new Vector2(1.5f, 1.5f);
             var ringImg = ring.gameObject.AddComponent<Image>();
-            ringImg.color = LGilt;
+            ringImg.color = new Color(0f, 0f, 0f, 0f);
             ringImg.sprite = HudTheme.Disc;
             ringImg.raycastTarget = false;
             ring.SetAsFirstSibling(); // behind the seat = rim
