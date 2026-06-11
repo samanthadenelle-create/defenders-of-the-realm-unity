@@ -255,22 +255,24 @@ namespace DeNelle.Village
         // reads, scoped to THIS building's own domain data (so it can never show
         // out-of-domain options). Resource buildings (farm/lumbermill/forge) get a live
         // upgrade line; others (market/pet-house) fall back to name-only (no upgrade).
-        private void CmdStructureStatus(string structureId)
+        private void CmdStructureStatus(string _argUnused)
         {
             var vs = _runner != null ? _runner.VariableStorage : null;
             if (vs == null) return;
+
+            // The Yarn command arg arrives as the LITERAL "$structureId" (a bare command-arg doesn't
+            // interpolate in this Yarn build) — so use the real id PlayStructure stashed. This was a
+            // long-standing bug: structure_status never saw a real id → resource buildings never
+            // resolved (no Upgrade line, wrong shop gate). Fixed via DialogueService.CurrentStructureId.
+            string structureId = DialogueService.CurrentStructureId;
 
             // NOTE: $structureName is seeded by DialogueService.PlayStructure from the
             // building's sign label (DisplayLabel) and intentionally NOT overwritten here,
             // so the dialogue title matches the world sign. We only fill yield/cost/level.
             var def = Prog.ResourceBuildingProgression.Find(structureId);
 
-            // WO-413: Buy/Sell appear ONLY for NON-resource buildings. The resource/production
-            // buildings (farm/lumbermill/forge/mine) ARE the upgradable ones (they carry a
-            // ResourceBuildingProgression def) → they show Upgrade/Talk/Leave, never a shop. Using the
-            // already-resolved `def` keeps this in-assembly (Tutorial can't reference Buildings'
-            // BuildingCatalog) and consistent with BuildingDef.IsUpgradable. Gates the Yarn menu for
-            // BOTH interaction paths (BuildingInteractable + the castle vendor NPC).
+            // WO-413: resource/production buildings (farm/lumbermill/forge) ARE the upgradable ones →
+            // they show Upgrade/Talk/Leave, never a Buy/Sell shop. Non-resource (def==null) can shop.
             vs.SetValue("$structureCanShop", def == null);
             if (def == null)
             {

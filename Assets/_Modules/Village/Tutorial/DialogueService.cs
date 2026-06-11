@@ -121,9 +121,16 @@ namespace DeNelle.Village
             if (Current != null && Current.IsDialogueRunning) Current.Stop();
         }
 
+        /// <summary>The structureId of the most recent <see cref="PlayStructure"/> call.
+        /// CmdStructureStatus reads THIS rather than the Yarn command arg: a bare command-arg
+        /// (&lt;&lt;structure_status $structureId&gt;&gt;) arrives as the literal "$structureId" — it does
+        /// not interpolate — so the arg can't be trusted. One dialogue runs at a time.</summary>
+        public static string CurrentStructureId { get; private set; }
+
         public static bool PlayStructure(string structureId, string displayName = null)
         {
             if (string.IsNullOrEmpty(structureId)) return false;
+            CurrentStructureId = structureId;
 
             DialogueRunner runner = Current ?? Host();
             if (runner == null) return false;
