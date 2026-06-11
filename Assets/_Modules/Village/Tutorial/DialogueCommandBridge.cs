@@ -266,20 +266,26 @@ namespace DeNelle.Village
             // resolved (no Upgrade line, wrong shop gate). Fixed via DialogueService.CurrentStructureId.
             string structureId = DialogueService.CurrentStructureId;
 
-            // NOTE: $structureName is seeded by DialogueService.PlayStructure from the
-            // building's sign label (DisplayLabel) and intentionally NOT overwritten here,
-            // so the dialogue title matches the world sign. We only fill yield/cost/level.
-            var def = Prog.ResourceBuildingProgression.Find(structureId);
+            // WO-413 capability model — read the building's DECLARED caps from the catalog
+            // (DeNelle.Village.BuildingCatalog, same assembly). The menu gates Buy/Sell on IsShoppable,
+            // the Upgrade option on IsUpgradable, and (Phase 2) routes the Upgrade flow by UpgradeType
+            // (resource / gear / spells). Forge = shop + upgrade; arcane = upgrade(spells); market = shop.
+            var caps = DeNelle.Village.BuildingCatalog.Find(structureId);
+            vs.SetValue("$structureCanShop",    caps != null && caps.IsShoppable);
+            vs.SetValue("$structureCanUpgrade", caps != null && caps.IsUpgradable);
+            vs.SetValue("$upgradeType",         caps != null && caps.UpgradeType != null ? caps.UpgradeType : "");
 
-            // WO-413: resource/production buildings (farm/lumbermill/forge) ARE the upgradable ones →
-            // they show Upgrade/Talk/Leave, never a Buy/Sell shop. Non-resource (def==null) can shop.
-            vs.SetValue("$structureCanShop", def == null);
+            // NOTE: $structureName is seeded by DialogueService.PlayStructure from the building's sign
+            // label and intentionally NOT overwritten here. Resource-upgrade buildings (farm/lumbermill/
+            // forge) get a live level/cost/maxed line below; other upgradables (arcane → spells) have no
+            // resource cost here — Phase 2 opens their own flow — so they are never "maxed".
+            var def = Prog.ResourceBuildingProgression.Find(structureId);
             if (def == null)
             {
                 vs.SetValue("$structureLevel", 0f);
                 vs.SetValue("$structureYield", 0f);
                 vs.SetValue("$upgradeCostText", "");
-                vs.SetValue("$structureMaxed", true);   // non-resource building → no upgrade option
+                vs.SetValue("$structureMaxed", false);   // $structureCanUpgrade now gates the option
                 return;
             }
 

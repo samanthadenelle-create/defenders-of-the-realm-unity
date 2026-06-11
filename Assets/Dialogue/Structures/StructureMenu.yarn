@@ -15,7 +15,7 @@ tags: structure interaction
 
 {$structureName}: Need something?
 
--> Upgrade — {$upgradeCostText} <<if !$structureMaxed>>
+-> Upgrade — {$upgradeCostText} <<if $structureCanUpgrade>>
     <<structure_upgrade $structureId>>
     {$structureName}: {$upgradeResult}
 -> Buy <<if $structureCanShop>>

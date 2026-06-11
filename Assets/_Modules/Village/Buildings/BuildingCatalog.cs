@@ -95,9 +95,15 @@ namespace DeNelle.Village
         /// type/id matching (ARCHITECTURE §2b capability-on-entry).</summary>
         [JsonProperty("isUpgradable")] public bool IsUpgradable;
 
-        /// <summary>WO-413: capability — opens the Buy/Sell shop dialogue. Mutually distinct from
-        /// IsUpgradable (a building is one or the other, or neither for special panels).</summary>
+        /// <summary>WO-413: capability — offers the Buy/Sell gear shop. NOT mutually exclusive with
+        /// IsUpgradable: e.g. the Forge both sells gear AND upgrades (Buy·Sell·Upgrade·Talk·Leave).</summary>
         [JsonProperty("isShoppable")] public bool IsShoppable;
+
+        /// <summary>WO-413 (extends IsUpgradable, doesn't replace it): the KIND of upgrade this
+        /// building's Upgrade flow opens — "resource" (level/yield, e.g. farm/lumbermill/mine),
+        /// "gear" (forge/armorer), or "spells" (arcane tower → DoT/AoE/mana, its own system). Empty
+        /// when IsUpgradable is false. Lets the menu route Upgrade to the right panel/flow.</summary>
+        [JsonProperty("upgradeType")] public string UpgradeType = "";
 
         /// <summary>
         /// The <see cref="Type"/> string parsed into the <see cref="BuildingType"/>

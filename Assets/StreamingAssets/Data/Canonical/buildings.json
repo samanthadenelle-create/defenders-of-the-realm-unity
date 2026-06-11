@@ -27,7 +27,8 @@
       "model": "mine_crystal",
       "footprint": "small",
       "buildMenuOrder": 0,
-      "isUpgradable": true
+      "isUpgradable": true,
+      "upgradeType": "resource"
     },
     {
       "id": "farm",
@@ -40,7 +41,8 @@
       "model": "windmill",
       "footprint": "medium",
       "buildMenuOrder": 1,
-      "isUpgradable": true
+      "isUpgradable": true,
+      "upgradeType": "resource"
     },
     {
       "id": "pet-house",
@@ -76,7 +78,9 @@
       "crystalCost": 220,
       "model": "tower_A",
       "footprint": "large",
-      "buildMenuOrder": 4
+      "buildMenuOrder": 4,
+      "isUpgradable": true,
+      "upgradeType": "spells"
     },
     {
       "id": "lumbermill",
@@ -89,7 +93,8 @@
       "model": "lumbermill",
       "footprint": "medium",
       "buildMenuOrder": 5,
-      "isUpgradable": true
+      "isUpgradable": true,
+      "upgradeType": "resource"
     },
     {
       "id": "forge",
@@ -102,7 +107,9 @@
       "model": "blacksmith",
       "footprint": "medium",
       "buildMenuOrder": 6,
-      "isUpgradable": true
+      "isUpgradable": true,
+      "upgradeType": "gear",
+      "isShoppable": true
     }
   ]
 }

@@ -138,28 +138,37 @@ namespace DeNelle.Data.Tests
         //  WO-413 — interaction class is DATA on the entry, not type/id matching
         // =====================================================================
 
-        [Test]
-        public void upgradable_buildings_are_data_flagged_not_name_matched()
+        private static void AssertCap(string id, bool upgradable, string upgradeType)
         {
-            // Resource/production buildings open the UPGRADE flow (no Buy/Sell shop). The flag is
-            // on the catalog entry; BuildingInteractable reads it instead of switching on type/id.
-            foreach (var id in new[] { "crystal-mine", "farm", "lumbermill", "forge" })
-            {
-                var def = BuildingCatalog.Find(id);
-                Assert.That(def, Is.Not.Null, $"catalog must contain '{id}'.");
-                Assert.That(def.IsUpgradable, Is.True, $"{id} must be flagged isUpgradable (WO-413).");
-            }
-            // Special-panel buildings are neither upgradable nor shoppable.
-            foreach (var id in new[] { "pet-house", "workshop", "arcane-tower" })
-            {
-                var def = BuildingCatalog.Find(id);
-                Assert.That(def, Is.Not.Null, $"catalog must contain '{id}'.");
-                Assert.That(def.IsUpgradable, Is.False, $"{id} must not be upgradable.");
-            }
-            // No building is BOTH (mutually distinct classifications).
+            var def = BuildingCatalog.Find(id);
+            Assert.That(def, Is.Not.Null, $"catalog must contain '{id}'.");
+            Assert.That(def.IsUpgradable, Is.EqualTo(upgradable), $"{id} isUpgradable.");
+            Assert.That(def.UpgradeType, Is.EqualTo(upgradeType), $"{id} upgradeType must be '{upgradeType}'.");
+        }
+
+        [Test]
+        public void building_capabilities_are_data_on_the_entry()
+        {
+            // Interaction caps (isUpgradable + upgradeType + isShoppable) are DATA on the entry — the
+            // menu reads them; never type/id matching. upgradeType routes the Upgrade flow.
+            AssertCap("crystal-mine", true, "resource");
+            AssertCap("farm",         true, "resource");
+            AssertCap("lumbermill",   true, "resource");
+            AssertCap("forge",        true, "gear");
+            AssertCap("arcane-tower", true, "spells");
+
+            // The Forge SELLS gear AND upgrades — caps are NOT mutually exclusive (Buy·Sell·Upgrade).
+            Assert.That(BuildingCatalog.Find("forge").IsShoppable, Is.True, "forge must be shoppable (sells gear).");
+
+            // Own-panel buildings aren't upgradable via this menu.
+            foreach (var id in new[] { "pet-house", "workshop" })
+                Assert.That(BuildingCatalog.Find(id).IsUpgradable, Is.False, $"{id} must not be upgradable.");
+
+            // Consistency: an upgradable building always declares a non-empty upgradeType.
             foreach (var def in BuildingCatalog.Buildings)
-                Assert.That(def.IsUpgradable && def.IsShoppable, Is.False,
-                    $"{def.Id} cannot be both upgradable and shoppable.");
+                if (def.IsUpgradable)
+                    Assert.That(string.IsNullOrEmpty(def.UpgradeType), Is.False,
+                        $"{def.Id} is upgradable but has no upgradeType.");
         }
     }
 }
