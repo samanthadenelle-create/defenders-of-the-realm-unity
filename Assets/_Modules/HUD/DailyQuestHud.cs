@@ -26,10 +26,27 @@ namespace DeNelle.HUD
         private readonly System.Collections.Generic.HashSet<string> _celebrated =
             new System.Collections.Generic.HashSet<string>();
         private bool _initialized;
+        public static DailyQuestHud Instance { get; private set; }
 
         private void Awake()
         {
+            Instance = this;
             _doc = GetComponent<UIDocument>();
+        }
+
+        private void OnDestroy()
+        {
+            if (Instance == this) Instance = null;
+        }
+
+        /// <summary>Show/hide the daily-quest list — driven by the TOWN ACTIONS "Quests" button
+        /// (WO-411: quests are on-demand, not a free-floating top-right panel).</summary>
+        public void Toggle()
+        {
+            if (_stack == null) return;
+            bool show = _stack.style.display == DisplayStyle.None;
+            _stack.style.display = show ? DisplayStyle.Flex : DisplayStyle.None;
+            _stack.pickingMode = show ? PickingMode.Position : PickingMode.Ignore;
         }
 
         private void OnEnable()
@@ -61,6 +78,7 @@ namespace DeNelle.HUD
             _stack.style.flexDirection = FlexDirection.Column;
             _stack.style.alignItems = Align.FlexEnd;
             _stack.pickingMode = PickingMode.Ignore;
+            _stack.style.display = DisplayStyle.None;   // hidden by default — shown by the Quests button (Toggle)
             _root.Add(_stack);
 
             Repaint();

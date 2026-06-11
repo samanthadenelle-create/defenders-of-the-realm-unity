@@ -55,8 +55,8 @@ namespace DeNelle.HUD
     {
         public const int AbilitySlotCount = 4;
         private const int PartySlotCount = 4; // hero + up to 3 companions
-        private const float PartyRowHeight = 56f;
-        private const float PartyRowGap = 5f;
+        private const float PartyRowHeight = 112f;   // 200% (dark-stone player frame: portrait + HP/MP)
+        private const float PartyRowGap = 7f;
 
         // ── Context-awareness constants ───────────────────────────────────────
         // The town footprint reaches ~45u; OuterWorld regions lie beyond ~70u
@@ -155,9 +155,12 @@ namespace DeNelle.HUD
         private Image[] _slotCooldown;
         private float[] _slotCdFill;
 
-        // Party frames (slot 0 = hero, 1..3 = companions)
+        // Party frames (slot 0 = hero, 1..3 = companions) — dark-stone player frame:
+        // portrait (class) + red HP + blue MP.
         private GameObject[] _partyFrame;
         private Image[] _partyHpFill;
+        private Image[] _partyMpFill;
+        private Image[] _partyPortrait;
         private TextMeshProUGUI[] _partyName;
         private TextMeshProUGUI[] _partyHpText;
 
@@ -1098,12 +1101,12 @@ namespace DeNelle.HUD
             // BAG → InventoryRequested (Village bridge opens HeroInventoryController).
             BuildIconButton(_townActionPanel, new Vector2(2f * w, 0f), new Vector2(3f * w - gap, 1f),
                 IconInventory, "G", () => InventoryRequested?.Invoke());
-            // QUESTS → QuestsRequested (hub quest modal — follow-up; dimmed, not dead).
+            // QUESTS → toggles the daily-quest panel on-demand (DailyQuestHud, same assembly).
             _questButton = BuildIconButton(_townActionPanel, new Vector2(3f * w, 0f), new Vector2(4f * w, 1f),
-                IconQuest, "!", () => QuestsRequested?.Invoke());
+                IconQuest, "!", () => DailyQuestHud.Instance?.Toggle());
 
             SetTalkAvailable(false);   // gated until a talkable NPC is in range
-            if (_questButton != null) _questButton.interactable = false;   // QUESTS modal = follow-up
+            // QUESTS is live now (toggles the daily-quest panel) — no longer dimmed.
         }
 
         /// <summary>
@@ -1271,13 +1274,19 @@ namespace DeNelle.HUD
         // ── Top-left party stack — slim glass rows. ───────────────────────────
         private void BuildPartyFrames(Transform parent)
         {
-            _partyFrame   = new GameObject[PartySlotCount];
-            _partyHpFill  = new Image[PartySlotCount];
-            _partyName    = new TextMeshProUGUI[PartySlotCount];
-            _partyHpText  = new TextMeshProUGUI[PartySlotCount];
+            _partyFrame    = new GameObject[PartySlotCount];
+            _partyHpFill   = new Image[PartySlotCount];
+            _partyMpFill   = new Image[PartySlotCount];
+            _partyPortrait = new Image[PartySlotCount];
+            _partyName     = new TextMeshProUGUI[PartySlotCount];
+            _partyHpText   = new TextMeshProUGUI[PartySlotCount];
+
+            var frameSprite = WidgetSprite("player_frame_bg");   // dark-stone P1 frame (ring + banner + tracks)
+            var hpSprite    = WidgetSprite("player_hp_fill");    // red HP fill
+            var mpSprite    = WidgetSprite("player_mp_fill");    // blue MP fill
 
             _partyStack = NewRect("PartyStack", parent, new Vector2(0f, 1f), new Vector2(0f, 1f));
-            AnchorTopLeft(_partyStack, x: 10f, y: 10f, width: 240f,
+            AnchorTopLeft(_partyStack, x: 10f, y: 10f, width: 268f,
                 height: PartyRowHeight * PartySlotCount + PartyRowGap * (PartySlotCount - 1));
 
             for (int i = 0; i < PartySlotCount; i++)
@@ -1286,64 +1295,87 @@ namespace DeNelle.HUD
                 frame.pivot = new Vector2(0.5f, 1f);
                 frame.anchoredPosition = new Vector2(0f, -i * (PartyRowHeight + PartyRowGap));
                 frame.sizeDelta = new Vector2(0f, PartyRowHeight);
-                // LIGHT: warm parchment row + thin glowing gilt rune rim. Slot 0
-                // (hero) keeps the soft gold glow underline for its existing emphasis.
-                HudTheme.StylePanel(frame.gameObject, i == 0 ? LParchDeep : LParch);
-                ElarionUiKit.AddInnerRim(frame.gameObject, LGilt);
-                if (i == 0) HudTheme.AddRim(frame.gameObject, LGiltSoft);
+
+                // Dark-stone frame art (P1) as the backing — dark panel fallback if absent.
+                var frImg = frame.gameObject.AddComponent<Image>();
+                if (frameSprite != null) { frImg.sprite = frameSprite; frImg.color = Color.white; }
+                else frImg.color = new Color(0.10f, 0.09f, 0.11f, 0.96f);
+                frImg.raycastTarget = false;
                 _partyFrame[i] = frame.gameObject;
 
-                // Slim circular rune-framed portrait (light): a round well-disc seat
-                // with a thin gilt rune ring, toward the mockup's circular portraits.
-                var port = NewRect("Portrait", frame, new Vector2(0.05f, 0.16f), new Vector2(0.255f, 0.92f));
+                // Portrait (class image) in the circle on the left.
+                var port = NewRect("Portrait", frame, new Vector2(0.035f, 0.12f), new Vector2(0.26f, 0.94f));
                 var pimg = port.gameObject.AddComponent<Image>();
-                pimg.color = LPortrait;
-                pimg.sprite = HudTheme.Disc;                 // circular seat
-                pimg.raycastTarget = false;
-                var pring = NewRect("Ring", port, Vector2.zero, Vector2.one);
-                var pringImg = pring.gameObject.AddComponent<Image>();
-                pringImg.raycastTarget = false;
-                pringImg.transform.SetSiblingIndex(0);       // behind the seat = rim
-                // Sprite-first: the runic ability-circle frame art rings the portrait;
-                // fall back to a flat gilt disc rim when the widget art is missing.
-                if (!TrySetWidget(pringImg, IconAbilityFrame))
-                {
-                    pringImg.color = LGilt;                  // thin gilt rune ring
-                    pringImg.sprite = HudTheme.Disc;
-                }
-                port.localScale = Vector3.one;
-                pring.offsetMin = new Vector2(-2.5f, -2.5f); pring.offsetMax = new Vector2(2.5f, 2.5f);
-                AddText(port, "*", 18, new Color(LGilt.r, LGilt.g, LGilt.b, 0.85f), TextAlignmentOptions.Center);
+                pimg.raycastTarget = false; pimg.preserveAspect = true; pimg.color = Color.white;
+                _partyPortrait[i] = pimg;
 
-                // Name
-                var nameRect = NewRect("Name", frame, new Vector2(0.30f, 0.50f), new Vector2(0.98f, 0.96f));
-                _partyName[i] = Ink(AddText(nameRect, i == 0 ? "Hero" : "—", 16, LInk, TextAlignmentOptions.Left));
+                // Name (banner, upper-right) — gold ink.
+                var nameRect = NewRect("Name", frame, new Vector2(0.31f, 0.52f), new Vector2(0.97f, 0.95f));
+                _partyName[i] = AddText(nameRect, i == 0 ? "Hero" : "—", 15,
+                    new Color(0.95f, 0.88f, 0.62f), TextAlignmentOptions.Left);
                 _partyName[i].fontStyle = FontStyles.Bold;
-                _partyName[i].enableAutoSizing = true;
-                _partyName[i].fontSizeMin = 9f;
-                _partyName[i].fontSizeMax = 16f;
+                _partyName[i].enableAutoSizing = true; _partyName[i].fontSizeMin = 9f; _partyName[i].fontSizeMax = 15f;
 
-                // HP bar
-                var track = NewRect("HPTrack", frame, new Vector2(0.30f, 0.14f), new Vector2(0.98f, 0.46f));
-                StyleWellLight(track.gameObject);
-                var fill = NewRect("HPFill", track, Vector2.zero, Vector2.one);
-                fill.offsetMin = new Vector2(1f, 1f); fill.offsetMax = new Vector2(-1f, -1f);
-                var fimg = fill.gameObject.AddComponent<Image>();
-                fimg.color = HudTheme.HpRed;
-                fimg.sprite = HudTheme.RoundedFrame;
-                fimg.type = HudTheme.RoundedFrame != null ? Image.Type.Filled : Image.Type.Filled;
-                fimg.fillMethod = Image.FillMethod.Horizontal;
-                fimg.fillOrigin = 0;
-                fimg.fillAmount = 1f;
-                fimg.raycastTarget = false;
-                _partyHpFill[i] = fimg;
-                // HP value sits over the red fill — keep CREAM text + dark halo here
-                // (high contrast on the saturated red bar; dark ink would muddy).
-                _partyHpText[i] = AddText(track, "", 12, HudTheme.Text, TextAlignmentOptions.Center);
-                _partyHpText[i].outlineColor = new Color32(40, 16, 16, 200);
-                _partyHpText[i].outlineWidth = 0.14f;
+                // HP bar (red, mid-right).
+                var hpTrack = NewRect("HPTrack", frame, new Vector2(0.31f, 0.30f), new Vector2(0.97f, 0.50f));
+                var hpFill  = NewRect("HPFill", hpTrack, Vector2.zero, Vector2.one);
+                var hfimg = hpFill.gameObject.AddComponent<Image>();
+                hfimg.sprite = hpSprite; hfimg.color = hpSprite != null ? Color.white : HudTheme.HpRed;
+                hfimg.type = Image.Type.Filled; hfimg.fillMethod = Image.FillMethod.Horizontal; hfimg.fillOrigin = 0; hfimg.fillAmount = 1f;
+                hfimg.raycastTarget = false;
+                _partyHpFill[i] = hfimg;
+                _partyHpText[i] = AddText(hpTrack, "", 11, HudTheme.Text, TextAlignmentOptions.Center);
+                _partyHpText[i].outlineColor = new Color32(40, 16, 16, 200); _partyHpText[i].outlineWidth = 0.14f;
+
+                // MP bar (blue, lower-right).
+                var mpTrack = NewRect("MPTrack", frame, new Vector2(0.31f, 0.07f), new Vector2(0.97f, 0.27f));
+                var mpFill  = NewRect("MPFill", mpTrack, Vector2.zero, Vector2.one);
+                var mfimg = mpFill.gameObject.AddComponent<Image>();
+                mfimg.sprite = mpSprite; mfimg.color = mpSprite != null ? Color.white : new Color(0.30f, 0.50f, 0.95f);
+                mfimg.type = Image.Type.Filled; mfimg.fillMethod = Image.FillMethod.Horizontal; mfimg.fillOrigin = 0; mfimg.fillAmount = 1f;
+                mfimg.raycastTarget = false;
+                _partyMpFill[i] = mfimg;
 
                 _partyFrame[i].SetActive(i == 0);
+            }
+
+            RefreshHeroPortrait();
+        }
+
+        /// <summary>Loads the hero's class portrait (slot 0) from GameState.HeroClass.</summary>
+        private void RefreshHeroPortrait()
+        {
+            if (_partyPortrait == null || _partyPortrait.Length == 0 || _partyPortrait[0] == null) return;
+            var svc = DeNelle.Core.State.GameStateService.Instance;
+            var hc = svc != null && svc.State != null ? svc.State.HeroClass : DeNelle.Core.State.HeroClassOpt.None;
+            var sp = WidgetSprite(PortraitNameForClass(hc));
+            if (sp != null) _partyPortrait[0].sprite = sp;
+            // Hero's roster name (Mage→Thrain, Knight→Grom, Ranger→Sylas, Cleric→Elara) — not "Hero".
+            if (_partyName != null && _partyName.Length > 0 && _partyName[0] != null)
+                _partyName[0].text = NameForClass(hc);
+        }
+
+        private static string NameForClass(DeNelle.Core.State.HeroClassOpt hc)
+        {
+            switch (hc)
+            {
+                case DeNelle.Core.State.HeroClassOpt.Mage:   return "Thrain";
+                case DeNelle.Core.State.HeroClassOpt.Knight: return "Grom";
+                case DeNelle.Core.State.HeroClassOpt.Ranger: return "Sylas";
+                case DeNelle.Core.State.HeroClassOpt.Cleric: return "Elara";
+                default: return "Hero";
+            }
+        }
+
+        private static string PortraitNameForClass(DeNelle.Core.State.HeroClassOpt hc)
+        {
+            switch (hc)
+            {
+                case DeNelle.Core.State.HeroClassOpt.Knight: return "Knight/knight";
+                case DeNelle.Core.State.HeroClassOpt.Ranger: return "Ranger/ranger";
+                case DeNelle.Core.State.HeroClassOpt.Mage:   return "Wizard/wiard";
+                case DeNelle.Core.State.HeroClassOpt.Cleric: return "Healer/healer";
+                default: return null;
             }
         }
 
@@ -1825,7 +1857,7 @@ namespace DeNelle.HUD
             //  • Build button = upper-RIGHT, lifted off the ability cluster.
             if (portrait)
             {
-                AnchorTopLeft(_partyStack, x: 10f, y: 10f, width: 280f,
+                AnchorTopLeft(_partyStack, x: 10f, y: 130f, width: 700f,   // BELOW the wave-status cluster; 250% wide
                     height: PartyRowHeight * PartySlotCount + PartyRowGap * (PartySlotCount - 1));
                 SetAnchors(_castleBanner,   new Vector2(0.20f, 0.955f), new Vector2(0.72f, 1f));
                 SetAnchors(_waveReadout,    new Vector2(0.20f, 0.89f),  new Vector2(0.80f, 0.95f));
@@ -1850,7 +1882,7 @@ namespace DeNelle.HUD
             }
             else
             {
-                AnchorTopLeft(_partyStack, x: 10f, y: 10f, width: 240f,
+                AnchorTopLeft(_partyStack, x: 10f, y: 130f, width: 600f,   // BELOW the wave-status cluster; 250% wide
                     height: PartyRowHeight * PartySlotCount + PartyRowGap * (PartySlotCount - 1));
                 SetAnchors(_castleBanner,   new Vector2(0.36f, 0.94f), new Vector2(0.64f, 0.99f));
                 SetAnchors(_waveReadout,    new Vector2(0.36f, 0.86f), new Vector2(0.64f, 0.925f));
@@ -2374,6 +2406,9 @@ namespace DeNelle.HUD
             _hpMax = max > 0f ? max : 1f;
             if (_hpFill != null) _hpFill.fillAmount = Mathf.Clamp01(_hpCurrent / _hpMax);
             if (_hpText != null) _hpText.text = Mathf.RoundToInt(current) + "/" + Mathf.RoundToInt(max);
+            // Re-resolve the hero name/portrait once the class loads (in case it wasn't ready at build).
+            if (_partyName != null && _partyName.Length > 0 && _partyName[0] != null && _partyName[0].text == "Hero")
+                RefreshHeroPortrait();
             SetPartyMember(0, _partyName != null && _partyName[0] != null ? _partyName[0].text : "Hero", current, max);
         }
 

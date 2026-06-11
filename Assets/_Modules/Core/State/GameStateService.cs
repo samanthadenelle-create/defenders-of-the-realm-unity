@@ -251,9 +251,6 @@ namespace DeNelle.Core.State
         /// <summary>
         /// Adds <paramref name="amount"/> crystals to the live state (negative to
         /// spend; clamped &gt;= 0), persists, and raises <see cref="ResourcesChanged"/>.
-        /// The convenience seam AdminOverlay's reflective "+crystals" actions look
-        /// for ("if AddCrystals isn't defined, owner adds it"), so callers needn't
-        /// reach into the Resources struct directly.
         /// </summary>
         public void AddCrystals(int amount)
         {
