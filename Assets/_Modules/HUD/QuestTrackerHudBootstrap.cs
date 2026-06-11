@@ -26,6 +26,9 @@ namespace DeNelle.HUD
         private static void SpawnInScene(Scene scene)
         {
             if (!scene.IsValid()) return;
+            // WO-411: no free-floating story-quest tracker on the town hub — quests reach via the
+            // TOWN ACTIONS "Quests" button there. Still spawns in combat/dungeon play scenes.
+            if (DeNelle.Core.HubScenes.IsHub(scene.name)) return;
 
             foreach (var existing in UnityEngine.Object.FindObjectsByType<QuestTrackerHud>(
                          FindObjectsInactive.Include, FindObjectsSortMode.None))

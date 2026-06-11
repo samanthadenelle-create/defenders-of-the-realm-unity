@@ -68,17 +68,52 @@ namespace DeNelle.Village
 
         private void OnDestroy()
         {
+            UnityEngine.SceneManagement.SceneManager.sceneLoaded -= OnSceneLoaded;
+            if (_invEvent != null && _invListener != null) _invEvent.RemoveListener(_invListener);
             if (_ui != null) Destroy(_ui);
             if (Instance == this) Instance = null;
         }
 
         private void Start()
         {
-            try { BuildRoot(); }
-            catch (System.Exception e)
+            // WO-411: NO free-floating BAG panel anymore — the TOWN ACTIONS row's BAG drives this. Wire
+            // the HUD's InventoryRequested (DeNelle.HUD; Village can't reference it → reflection) to
+            // OpenInventory. Re-wire on each scene load (the HUD may not be up when we Start).
+            UnityEngine.SceneManagement.SceneManager.sceneLoaded += OnSceneLoaded;
+            TryWireToHud();
+        }
+
+        private void OnSceneLoaded(UnityEngine.SceneManagement.Scene s, UnityEngine.SceneManagement.LoadSceneMode m)
+            => TryWireToHud();
+
+        private UnityEngine.Events.UnityAction _invListener;
+        private UnityEngine.Events.UnityEvent _invEvent;
+        private static System.Type _hudType;
+
+        private void TryWireToHud()
+        {
+            if (_hudType == null) _hudType = ResolveHudType();
+            if (_hudType == null) return;
+            var hud = FindObjectOfType(_hudType) as Component;
+            if (hud == null) return;
+            var field = _hudType.GetField("InventoryRequested",
+                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+            var evt = field != null ? field.GetValue(hud) as UnityEngine.Events.UnityEvent : null;
+            if (evt == null || ReferenceEquals(evt, _invEvent)) return;
+            if (_invEvent != null && _invListener != null) _invEvent.RemoveListener(_invListener);
+            _invListener = OpenInventory;
+            evt.AddListener(_invListener);
+            _invEvent = evt;
+        }
+
+        private static System.Type ResolveHudType()
+        {
+            foreach (var asm in System.AppDomain.CurrentDomain.GetAssemblies())
             {
-                Debug.LogError("[HeroEquipHud] build failed (UI may be partial): " + e);
+                var t = asm.GetType("DeNelle.HUD.VillageHudController", false);
+                if (t != null) return t;
             }
+            return null;
         }
 
         // ====================================================================

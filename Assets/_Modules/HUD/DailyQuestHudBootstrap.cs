@@ -26,6 +26,10 @@ namespace DeNelle.HUD
         private static void SpawnInScene(Scene scene)
         {
             if (!scene.IsValid()) return;
+            // WO-411: don't free-float the quest bar on the town hub — on a hub scene, quests surface
+            // through the TOWN ACTIONS "Quests" button (a modal), not a persistent corner panel. Still
+            // spawns in combat/dungeon play scenes.
+            if (DeNelle.Core.HubScenes.IsHub(scene.name)) return;
 
             foreach (var existing in UnityEngine.Object.FindObjectsByType<DailyQuestHud>(
                          FindObjectsInactive.Include, FindObjectsSortMode.None))

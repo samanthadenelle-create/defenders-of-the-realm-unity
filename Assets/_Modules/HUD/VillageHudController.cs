@@ -75,6 +75,11 @@ namespace DeNelle.HUD
         // talkable-NPC-in-range registry. Kept OFF IVillageHud (Core) on purpose — least
         // cross-level exposure: only HUD + the Village bridge know "Talk" exists.
         public UnityEvent TalkRequested = new UnityEvent();
+        // TOWN ACTIONS row — least-exposed: the HUD raises these; Village-side bridges open the
+        // actual panels (HUD → Core/event only; never references HeroInventoryController/quests).
+        public UnityEvent InventoryRequested = new UnityEvent();   // BAG → HeroInventoryController (Village bridge)
+        public UnityEvent QuestsRequested = new UnityEvent();      // QUESTS → quest modal (follow-up; dimmed for now)
+        public UnityEvent IntelRequested = new UnityEvent();       // far top-right (periscope) → enemy scout report / lookout
         public AbilitySlotEvent AbilityRequested = new AbilitySlotEvent();
         public UnityEvent RepairConfirmRequested = new UnityEvent();
         public UnityEvent RepairCancelRequested = new UnityEvent();
@@ -364,6 +369,8 @@ namespace DeNelle.HUD
         private const string IconInventory    = "hud_inventory";
         private const string IconTalk         = "hud_talk";
         private const string IconQuest        = "hud_quest";
+        private const string IconBuild        = "hud_build";    // standalone Resources/HudIcons/hud_build (tower)
+        private const string IconIntel        = "hud_intel";    // standalone Resources/HudIcons/hud_intel (periscope/lookout)
         private const string IconAbilityFrame = "hud_ability_frame";
 
         /// <summary>Widget sprite by name, or null (caller keeps its glyph fallback).</summary>
@@ -378,6 +385,11 @@ namespace DeNelle.HUD
 
             var packed = RpgIconForWidget(name);
             if (packed != null) return packed;
+
+            // Standalone custom HUD icon files (Resources/HudIcons/<name>) — e.g. hud_build (tower),
+            // hud_intel (periscope). Individual Sprites, not part of the widget sheet.
+            var custom = Resources.Load<Sprite>("HudIcons/" + name);
+            if (custom != null) return custom;
 
             EnsureHudIconsLoaded();
             if (_hudIcons == null) return null;
@@ -898,7 +910,9 @@ namespace DeNelle.HUD
             // IDLE / village UI — base canvas (NEVER hidden by the battle-HUD gate).
             BuildResourceStrip(_safeArea);
             BuildCastleBanner(_safeArea);
-            BuildBuildButton(_safeArea);
+            // BUILD now lives in the TOWN ACTIONS row (BuildTownActionPanel) — the separate pill is a
+            // duplicate (WO-411). _buildBtn stays null; ApplyContext's SetActiveSafe is null-safe.
+            // BuildBuildButton(_safeArea);
             BuildStartWaveButton(_safeArea);
             BuildRepairPrompt(_safeArea);
             BuildPartyFrames(_safeArea);
@@ -1013,13 +1027,14 @@ namespace DeNelle.HUD
             cluster.pivot = new Vector2(1f, 1f);
             // Drop below the top resource strip band so the gear/backpack never
             // overlap the resources (battle) or the compass row (town).
-            cluster.anchoredPosition = new Vector2(-12f, -78f);
-            cluster.sizeDelta = new Vector2(108f, 50f);
+            cluster.anchoredPosition = new Vector2(-55f, -55f);   // inset ≈ resource-bar height from top + right
+            cluster.sizeDelta = new Vector2(280f, 135f);   // ~250% up — same ≈140px size as the TOWN ACTIONS row
 
             BuildIconButton(cluster, new Vector2(0f, 0f), new Vector2(0.48f, 1f),
                 IconSettings, "*", () => ShopRequested?.Invoke());
+            // Far top-right = enemy scout report / lookout (periscope icon — self-evident).
             BuildIconButton(cluster, new Vector2(0.52f, 0f), new Vector2(1f, 1f),
-                IconInventory, "#", () => BuildRequested?.Invoke());
+                IconIntel, "o", () => IntelRequested?.Invoke());
         }
 
         // A round rune-framed icon BUTTON: gilt ring seat + sprite-first widget icon
@@ -1060,23 +1075,34 @@ namespace DeNelle.HUD
         // gated with the rest of the town chrome by ApplyContext. The COMBAT mode's
         // right-edge Skills panel is the existing bottom-right rune skill bar.
         private RectTransform _townActionPanel;
-        private Button _talkButton;   // context-gated: only interactable when an NPC is in range
+        private Button _talkButton;    // context-gated: only interactable when an NPC is in range
+        private Button _questButton;   // dimmed until the hub quest modal exists (follow-up)
         private void BuildTownActionPanel(Transform parent)
         {
-            _townActionPanel = NewRect("TownActions", parent, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
-            _townActionPanel.anchorMin = new Vector2(1f, 0.5f);
-            _townActionPanel.anchorMax = new Vector2(1f, 0.5f);
-            _townActionPanel.pivot = new Vector2(1f, 0.5f);
-            _townActionPanel.anchoredPosition = new Vector2(-12f, 0f);
-            _townActionPanel.sizeDelta = new Vector2(64f, 148f);
+            // TOWN ACTIONS row (mockup #42): BUILD · TALK · BAG · QUESTS, bottom-right edge.
+            _townActionPanel = NewRect("TownActions", parent, new Vector2(1f, 0f), new Vector2(1f, 0f));
+            _townActionPanel.anchorMin = new Vector2(1f, 0f);
+            _townActionPanel.anchorMax = new Vector2(1f, 0f);
+            _townActionPanel.pivot = new Vector2(1f, 0f);
+            _townActionPanel.anchoredPosition = new Vector2(-20f, 20f);
+            _townActionPanel.sizeDelta = new Vector2(570f, 135f);   // ~250% up (≈140px buttons — mobile touch size)
 
-            // Talk → TalkRequested (the Village bridge routes it to the nearest in-range
-            // NPC's dialogue). Default OFF — SetTalkAvailable enables it only in range.
-            _talkButton = BuildIconButton(_townActionPanel, new Vector2(0f, 0.54f), new Vector2(1f, 1f),
+            const float w = 0.25f, gap = 0.02f;
+            // BUILD → BuildRequested. Tower icon (self-evident — no label needed).
+            BuildIconButton(_townActionPanel, new Vector2(0f * w, 0f), new Vector2(1f * w - gap, 1f),
+                IconBuild, "B", () => BuildRequested?.Invoke());
+            // TALK → TalkRequested (routed to the nearest in-range NPC). Gated until in range.
+            _talkButton = BuildIconButton(_townActionPanel, new Vector2(1f * w, 0f), new Vector2(2f * w - gap, 1f),
                 IconTalk, "T", () => TalkRequested?.Invoke());
-            BuildIconButton(_townActionPanel, new Vector2(0f, 0f), new Vector2(1f, 0.46f),
-                IconQuest, "!", () => BuildRequested?.Invoke());
+            // BAG → InventoryRequested (Village bridge opens HeroInventoryController).
+            BuildIconButton(_townActionPanel, new Vector2(2f * w, 0f), new Vector2(3f * w - gap, 1f),
+                IconInventory, "G", () => InventoryRequested?.Invoke());
+            // QUESTS → QuestsRequested (hub quest modal — follow-up; dimmed, not dead).
+            _questButton = BuildIconButton(_townActionPanel, new Vector2(3f * w, 0f), new Vector2(4f * w, 1f),
+                IconQuest, "!", () => QuestsRequested?.Invoke());
+
             SetTalkAvailable(false);   // gated until a talkable NPC is in range
+            if (_questButton != null) _questButton.interactable = false;   // QUESTS modal = follow-up
         }
 
         /// <summary>
