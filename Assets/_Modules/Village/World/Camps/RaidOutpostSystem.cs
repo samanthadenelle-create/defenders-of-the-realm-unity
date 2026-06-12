@@ -101,7 +101,11 @@ namespace DeNelle.Village.World.Camps
         // (that single-frame spike contributed to the OuterWorld-load freeze). The slot is
         // claimed immediately (so we never double-schedule); the actual realize fires
         // SpawnDelaySeconds later, once you've settled into the world.
-        private const float SpawnDelaySeconds = 180f;
+        // OWNER (2026-06-11): was 180s (3 min) — so long that the owner roamed OuterWorld and
+        // NEVER found the outpost; it simply hadn't materialised yet. Cut to a short delay that
+        // still lands OFF the city-emerge load-spike frame, but lets you actually reach the
+        // outpost (walk east to the anchor ~70m out) and find it built + garrisoned.
+        private const float SpawnDelaySeconds = 10f;
 
         /// <summary>
         /// Claim the spawn + SCHEDULE the outpost to materialise after a delay (idempotent).
