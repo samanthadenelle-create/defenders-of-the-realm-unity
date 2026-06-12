@@ -167,7 +167,13 @@ namespace DeNelle.Village
         // reverts to trailing the hero. Tethered to the hero so it never chases off
         // across the map. The registry is the SAME list the hero's reticle reads.
         private const float EngageRange   = 16f;   // start fighting a hostile within this of the companion
-        private const float AttackRange   = 12f;   // hold + shoot from here (ranged kit)
+        private const float AttackRange   = 12f;   // ranged kit (Mage/Cleric/Ranger): hold + shoot from here
+        // WO-398: the Knight is a MELEE tank — he must close to weapon reach and strike,
+        // never snipe from the 12 m ranged hold like the casters. A single shared
+        // AttackRange (12 m) + the projectile-for-everyone FireAt() made the Knight deal
+        // damage at range (the reported bug). MeleeAttackRange gates the Knight's engage/
+        // strike to weapon reach so he only damages enemies he's actually next to.
+        private const float MeleeAttackRange = 2.4f; // Knight weapon reach (close + strike here)
         private const float AttackCooldown = 1.1f;
         private const float AttackDamage  = 14f;   // support DPS — chips, doesn't carry
         private const float LeashFromHero = 22f;   // don't engage past this from the hero (stay with the party)
@@ -635,10 +641,16 @@ namespace DeNelle.Village
             Vector3 flat = tp - transform.position; flat.y = 0f;
             float dist = flat.magnitude;
 
+            // WO-398: melee classes (Knight tank) hold + strike at weapon reach; ranged
+            // classes (Mage/Cleric/Ranger) hold + shoot from the 12 m ranged distance. One
+            // effective range governs BOTH the approach (close until inside it) and the
+            // damage gate below, so the Knight closes to his target and only hits in reach.
+            float effectiveRange = (_hero == HeroClass.Knight) ? MeleeAttackRange : AttackRange;
+
             // Close to attack range; hold once inside it.
             if (_agent != null && _agent.enabled && _agent.isOnNavMesh)
             {
-                if (dist > AttackRange) { _agent.isStopped = false; _agent.SetDestination(tp); }
+                if (dist > effectiveRange) { _agent.isStopped = false; _agent.SetDestination(tp); }
                 else _agent.isStopped = true;
             }
 
@@ -647,9 +659,9 @@ namespace DeNelle.Village
                 transform.rotation = Quaternion.Slerp(
                     transform.rotation, Quaternion.LookRotation(flat, Vector3.up), Time.deltaTime * 8f);
 
-            // Fire on cooldown when in range.
+            // Strike on cooldown when in range.
             _attackTimer -= Time.deltaTime;
-            if (dist <= AttackRange && _attackTimer <= 0f)
+            if (dist <= effectiveRange && _attackTimer <= 0f)
             {
                 _attackTimer = AttackCooldown;
                 FireAt(foe);
@@ -657,20 +669,27 @@ namespace DeNelle.Village
             return true;
         }
 
-        /// <summary>Launches a class projectile at the foe; damages it on arrival via
-        /// the Core IDamageable seam (so it gets the normal hit feedback).</summary>
+        /// <summary>Strikes the foe; damages it via the Core IDamageable seam (so it gets
+        /// the normal hit feedback). WO-398: the Knight is MELEE — he resolves damage
+        /// instantly on the in-reach foe with NO projectile (a tank doesn't snipe). Only the
+        /// ranged classes launch a travelling projectile (Ranger arrow / Mage-Cleric orb),
+        /// mirroring the player-hero rule in HeroAbilities.LaunchProjectile.</summary>
         private void FireAt(Enemy foe)
         {
-            if (_ranged == null)
-                _ranged = GetComponent<RangedAttackVFX>() ?? gameObject.AddComponent<RangedAttackVFX>();
-
             var dmg = foe.GetComponent<EnemyDamageable>() as IDamageable;
-            Vector3 target = foe.transform.position + Vector3.up;
             System.Action onArrive = () =>
             {
                 if (dmg != null && dmg.IsAlive) dmg.TakeDamage(AttackDamage, DamageElement.None);
             };
 
+            // WO-398: Knight melee — no projectile; the foe is already in weapon reach
+            // (UpdateCombat gated this call to MeleeAttackRange), so apply the hit now.
+            if (_hero == HeroClass.Knight) { onArrive(); return; }
+
+            if (_ranged == null)
+                _ranged = GetComponent<RangedAttackVFX>() ?? gameObject.AddComponent<RangedAttackVFX>();
+
+            Vector3 target = foe.transform.position + Vector3.up;
             if (_hero == HeroClass.Ranger) _ranged.FireArrow(target, onArrive);
             else                           _ranged.FireSpellOrb(target, onArrive);
         }
