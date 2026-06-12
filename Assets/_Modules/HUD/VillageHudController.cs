@@ -1142,7 +1142,14 @@ namespace DeNelle.HUD
             // DISC under the Talk icon (the "black shade under talk" the owner flagged).
             // A CanvasGroup fades the icon/glyph for the idle state while the seat stays
             // clear, so dimming reads as a faded icon, never a dark backing plate.
-            var cg = _talkButton.GetComponent<CanvasGroup>() ?? _talkButton.gameObject.AddComponent<CanvasGroup>();
+            // CRITICAL (telemetry 2026-06-12): UnityEngine.Object must NOT use the C# ?? operator.
+            // GetComponent returns a Unity "fake-null" that ?? does NOT treat as null, so the
+            // AddComponent fallback never runs, cg stays the fake-null, and cg.alpha throws
+            // MissingComponentException — which (called from BuildTownActionPanel during Build())
+            // aborted the ENTIRE HUD build, shipping a PARTIAL HUD (broken talk/portrait/comet/BAG/
+            // overlapping text). TryGetComponent returns a real bool and is the safe form.
+            if (!_talkButton.TryGetComponent(out CanvasGroup cg))
+                cg = _talkButton.gameObject.AddComponent<CanvasGroup>();
             cg.alpha = available ? 1f : 0.55f;
             if (_talkGlow != null) _talkGlow.gameObject.SetActive(available);   // chasing comet only when a talkable NPC is in range
         }
