@@ -156,6 +156,7 @@ namespace DeNelle.Editor
             Run(results, "structures-kit-present",   Case_StructuresKitPresent);
             Run(results, "no-duplicate-landmines",   Case_NoDuplicateLandmines);
             Run(results, "perf-lint-reentrancy",     Case_PerFrameReentrancyLint);
+            Run(results, "yarn-command-prefix",      Case_YarnCommandPrefix);
             Run(results, "scene-opens-village2",     () => Case_SceneOpens(PlayableScenePath));
             Run(results, "core-wiring-village2",     Case_CoreWiring);
             Run(results, "layout-validator",         Case_LayoutValidator);
@@ -509,6 +510,46 @@ namespace DeNelle.Editor
                 list.Add((name, body, isEnum));
             }
             return list;
+        }
+
+        // ── Yarn `<<command: ...>>` prefix lint (the "No Command command:" class) ──
+        // Yarn dispatches a custom command with the BARE verb: `<<StartQuest x>>`.
+        // Writing `<<command: StartQuest x>>` makes Yarn parse the command NAME as
+        // "command:" and throw "No Command 'command:' has been registered" — silently
+        // killing that vendor / quest / bridge call (2026-06-12 regression). This case
+        // FAILS on any `<<command:` occurrence (with or without trailing space) in any
+        // .yarn under Assets/. The full documented detector + its self-tests live in
+        // Assets/Tests/EditMode/YarnCommandPrefixLintTests.cs; this mirror keeps the
+        // headless RunAll gate RED on a re-introduced `command:` prefix too.
+        private static CaseResult Case_YarnCommandPrefix()
+        {
+            var rx = new System.Text.RegularExpressions.Regex(
+                @"<<\s*command\s*:",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+            var offenders = new List<string>();
+            if (Directory.Exists("Assets"))
+            {
+                foreach (var file in Directory.GetFiles("Assets", "*.yarn", SearchOption.AllDirectories))
+                {
+                    string text;
+                    try { text = File.ReadAllText(file); }
+                    catch (IOException) { continue; }
+                    if (!rx.IsMatch(text)) continue;
+
+                    string[] lines = text.Replace("\r\n", "\n").Split('\n');
+                    for (int i = 0; i < lines.Length; i++)
+                        if (rx.IsMatch(lines[i]))
+                            offenders.Add($"{Path.GetFileName(file)}:{i + 1} — {lines[i].Trim()}");
+                }
+            }
+
+            return offenders.Count == 0
+                ? Pass("no `<<command:` prefix in any .yarn (vendor/quest bridge calls use bare verbs)")
+                : Fail("INVALID `<<command: Verb ...>>` Yarn syntax (Yarn has no `command:` keyword — " +
+                       "it throws \"No Command 'command:' registered\" and kills that bridge call): " +
+                       string.Join(" | ", offenders) +
+                       " — delete the `command:` token so the verb is bare, e.g. `<<StartQuest x>>`");
         }
 
         // ── A canonical scene opens without missing scripts / NRE ──────────────
