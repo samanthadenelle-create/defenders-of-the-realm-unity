@@ -1,64 +1,10 @@
 {
+  "_note": "Gear v1 armor catalog. defense = fractional incoming-damage reduction (0.04 = 4%). hpBonus is carried for a later pass (v1 applies defense only, to avoid HeroHealth maxHp surgery untested). job 'any' = all classes. req level-gated like weapons. PRICING (buy*): iron-primary (plate/mail) + food (hides/padding); crystals gate the rare+ Oathweld wards; tiered common floor -> legendary sink.",
   "armor": [
-    {
-      "id": "starter_knight_plate",
-      "name": "Iron Plate",
-      "icon": "",
-      "job": "knight",
-      "rarity": "common",
-      "defense": 0.09,
-      "hpBonus": 5,
-      "req": { "level": 1 },
-      "buyWood": 8,
-      "buyIron": 10
-    },
-    {
-      "id": "starter_ranger_leather",
-      "name": "Leather Jerkin",
-      "icon": "",
-      "job": "ranger",
-      "rarity": "common",
-      "defense": 0.05,
-      "hpBonus": 2,
-      "req": { "level": 1 },
-      "buyWood": 10,
-      "buyIron": 4
-    },
-    {
-      "id": "starter_mage_robes",
-      "name": "Woven Robes",
-      "icon": "",
-      "job": "mage",
-      "rarity": "common",
-      "defense": 0.03,
-      "hpBonus": 0,
-      "req": { "level": 1 },
-      "buyWood": 9,
-      "buyCrystals": 2
-    },
-    {
-      "id": "starter_cleric_light",
-      "name": "Light Acolyte Armor",
-      "icon": "",
-      "job": "cleric",
-      "rarity": "common",
-      "defense": 0.06,
-      "hpBonus": 3,
-      "req": { "level": 1 },
-      "buyWood": 9,
-      "buyIron": 4
-    },
-    {
-      "id": "starter_knight_shield",
-      "name": "Heater Shield",
-      "icon": "",
-      "job": "knight",
-      "rarity": "common",
-      "defense": 0.06,
-      "hpBonus": 8,
-      "req": { "level": 1 },
-      "buyWood": 6,
-      "buyIron": 7
-    }
+    { "id": "armor_cloth",   "name": "Wanderer's Cloth", "icon": "🧥", "job": "any", "rarity": "common",   "defense": 0.04, "hpBonus": 10, "req": { "level": 1 }, "buyWood": 20, "buyFood": 30, "buyIron": 10 },
+    { "id": "armor_leather", "name": "Tanned Leather",    "icon": "🧥", "job": "any", "rarity": "uncommon", "defense": 0.08, "hpBonus": 25, "req": { "level": 3 }, "buyWood": 40, "buyFood": 80, "buyIron": 60 },
+    { "id": "armor_chain",   "name": "Chainmail Vest",    "icon": "🛡️", "job": "any", "rarity": "rare",     "defense": 0.14, "hpBonus": 45, "req": { "level": 6 }, "buyFood": 50, "buyIron": 400, "buyCrystals": 10, "flavor": "Each ring closed by an Oathweld hand. A ward that turned a killing blow — power you could carry.", "makersMark": "Oathweld" },
+    { "id": "armor_plate",   "name": "Elarion Plate",     "icon": "🛡️", "job": "any", "rarity": "epic",     "defense": 0.20, "hpBonus": 75, "req": { "level": 10 }, "buyWood": 100, "buyIron": 900, "buyCrystals": 50, "flavor": "Oathweld plate from the Bright Centuries. It did not dull, it did not rust, and it never wearied the wearer.", "makersMark": "Oathweld" },
+    { "id": "aegis_plate",   "name": "Aegis of Elarion",  "icon": "🛡️", "job": "any", "rarity": "legendary", "defense": 0.28, "hpBonus": 100, "req": { "level": 10 }, "buyWood": 300, "buyIron": 2000, "buyCrystals": 200, "setId": "aegis", "makersMark": "Oathweld", "saga": "The reforged Aegis — Borin's steel, Halvard's Oathweld plating, Pell's Heartwood core, Wren's Last Pressing. Worn with a full Aegis weapon, the Oathweld returns a portion of damage taken as a ward on the Heart." }
   ]
 }

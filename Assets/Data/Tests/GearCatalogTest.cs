@@ -79,5 +79,23 @@ namespace DeNelle.Data.Tests
                     $"{a.id} defense must be a 0..0.9 fraction.");
             }
         }
+
+        // verify-then-regress: gear must be PRICED, not all "Free" (the WO-406 content gap).
+        // Catches a regression that strips the buy* costs back to 0 -> free shop.
+        [Test]
+        public void every_weapon_is_priced_not_free()
+        {
+            foreach (var w in GearCatalog.AllWeapons())
+                Assert.That(w.buyWood + w.buyFood + w.buyIron + w.buyCrystals, Is.GreaterThan(0),
+                    $"{w.id} must have a buy cost (regression to all-Free shop).");
+        }
+
+        [Test]
+        public void every_armor_is_priced_not_free()
+        {
+            foreach (var a in GearCatalog.AllArmors())
+                Assert.That(a.buyWood + a.buyFood + a.buyIron + a.buyCrystals, Is.GreaterThan(0),
+                    $"{a.id} must have a buy cost (regression to all-Free shop).");
+        }
     }
 }
