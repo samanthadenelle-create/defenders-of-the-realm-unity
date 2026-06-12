@@ -347,8 +347,11 @@ namespace DeNelle.Village
 
             if (inRange)
             {
-                MobileInteractButton.Request(this, "Talk: " + _label, Interact);
-                // Gate the HUD Talk button on this same in-range signal (no new scan).
+                // WO-416: do NOT raise the shared MobileInteractButton for talk NPCs. The HUD
+                // TALK button (+ its glow) is the canonical interaction trigger now, so the old
+                // bottom-centre "Talk: <name>" element was a redundant duplicate at vendors. We
+                // still register with TalkPromptRegistry so the HUD TALK button fires us, and the
+                // desktop [F] path below is untouched.
                 TalkPromptRegistry.Register(transform, Interact);
             }
             else
