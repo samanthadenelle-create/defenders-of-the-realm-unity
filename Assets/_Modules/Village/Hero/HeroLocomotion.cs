@@ -426,6 +426,17 @@ namespace DeNelle.Village
                 _waveManager.OnWaveCleared.AddListener(OnWaveCleared);
         }
 
+        // True only while a wave is genuinely live (Countdown or Active). Matches the
+        // canonical combat signal used by HeroPoseController / CameraModeController /
+        // BattleMusicManager — an idle WaveManager sitting in the hub is NOT combat, so
+        // the hero keeps a relaxed idle in town and only draws ready when a wave runs.
+        private bool IsWaveInCombat()
+        {
+            if (_waveManager == null) return false;
+            var phase = _waveManager.Phase;
+            return phase == WavePhase.Countdown || phase == WavePhase.Active;
+        }
+
         private void Update()
         {
             TryResolveWaveManager();
@@ -532,10 +543,13 @@ namespace DeNelle.Village
             // canonical (re-resolves on body swap, guards missing params).
             _actor?.SetLocomotion(Velocity.magnitude);
 
-            // Battle Ready (stance) vs casual Idle: when engaged (wave manager present or moving in
-            // threat context) use combat stance for ready pose; speed=0 + !combat = casual idle.
-            // This gives type-appropriate idle/battle ready in Village + world scenes.
-            bool engaged = _waveManager != null || Velocity.magnitude > 0.1f;
+            // Battle Ready (stance) vs casual Idle: combat stance ONLY when actually in
+            // combat — a live wave (Countdown/Active phase). Merely having a WaveManager in
+            // the scene is NOT combat (the hub/town keeps one idle), so presence alone must
+            // NOT raise the ready pose, or the hero stands weapon-ready in town. Movement is
+            // intentionally NOT a combat trigger here: walking around town is relaxed, not
+            // battle-ready. speed=0/moving + !combat = casual idle/walk; in-wave = ready.
+            bool engaged = IsWaveInCombat();
             _actor?.SetCombatStance(engaged);
 
             // Edge/floor clamp + ground-snap ONLY when off the NavMesh (the transform

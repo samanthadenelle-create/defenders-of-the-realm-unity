@@ -573,14 +573,18 @@ namespace DeNelle.Village
         public bool CombatActive => _combatActive;
 
         // Auto-mirror fallback: if no caller drives SetCombatActive, derive the combat
-        // hold the same way HeroLocomotion does — a WaveManager in the scene means "threat
-        // context", so the blade rides ready; otherwise it rests lowered. Cheap poll; the
-        // pose only re-applies on a state change.
+        // hold the same way HeroLocomotion does — the blade rides ready ONLY while a wave is
+        // genuinely live (Countdown/Active), not merely because a WaveManager exists in the
+        // scene. The hub/town keeps an idle WaveManager, so presence alone must NOT draw the
+        // weapon, or the hero holds it combat-ready in town. Cheap poll; the pose only
+        // re-applies on a state change.
         private void Update()
         {
             if (_combatExplicit || _gripRoot == null) return;
             if (_waveManager == null) _waveManager = Object.FindObjectOfType<WaveManager>();
-            bool active = _waveManager != null;
+            bool active = _waveManager != null &&
+                          (_waveManager.Phase == WavePhase.Countdown ||
+                           _waveManager.Phase == WavePhase.Active);
             if (active != _combatActive)
             {
                 _combatActive = active;

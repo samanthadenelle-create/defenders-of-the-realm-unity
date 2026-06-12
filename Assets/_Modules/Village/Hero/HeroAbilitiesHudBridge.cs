@@ -46,7 +46,7 @@ namespace DeNelle.Village
         private void Awake()
         {
             _abilities = GetComponent<HeroAbilities>();
-            _health = GetComponent<HeroHealth>(); // optional — HUD HP bar stays full if absent
+            _health = GetComponent<HeroHealth>(); // optional — re-resolved lazily in Update (HeroHealth may be added later by HeroHealthBootstrap)
         }
 
         // True once the HUD reflection methods + AbilityRequested event are bound to the
@@ -143,6 +143,14 @@ namespace DeNelle.Village
             // (castle/OuterWorld) or the HUD streamed in after enable.
             if (_hud == null || !_hudBound) EnsureHud();
             if (_abilities == null || _hud == null) return;
+
+            // HeroHealth is added by HeroHealthBootstrap, which can run AFTER this
+            // bridge's Awake — so _health may have been null then. Re-resolve here
+            // (cheap GetComponent on the same GameObject) so the HP bar binds in the
+            // castle/OuterWorld too, where nothing wired it at edit time (WO-411 #2:
+            // the IMGUI fallback is suppressed once the uGUI HUD exists, so without
+            // this push the hero HP bar never moves on contact damage).
+            if (_health == null) _health = GetComponent<HeroHealth>();
 
             // WO-36 (visual half): re-target the Q/W/E/R cells to the active hero's
             // loadout whenever the class changes — the HUD builds them once showing
@@ -318,6 +326,48 @@ namespace DeNelle.Village
             if (_abilities == null) return;
             var slot = (AbilitySlot)Mathf.Clamp(slotIndex, 0, 3);
             _abilities.TryCast(slot);
+        }
+    }
+
+    /// <summary>
+    /// Persistent bootstrap that attaches <see cref="HeroAbilitiesHudBridge"/> to the
+    /// hero (the HeroAbilities GameObject) whenever a scene containing a hero loads.
+    /// <para>
+    /// WHY (castle HP-bar bug): the bridge is the only thing that pushes hero HP →
+    /// the HUD party-frame bar (SetHeroHp → SetPartyMember 0). At edit time it is
+    /// wired ONLY by VillageSceneBuilder.WireHeroAbilitiesHudBridge — which runs for
+    /// Village2 alone. In MainCastle_Hall (and OuterWorld), where waves now run, the
+    /// bridge was never on the hero, so the hero HP bar never moved on damage even
+    /// though HeroHealth tracked it correctly. This mirrors HeroHealthBootstrap:
+    /// attach the bridge at runtime in any gameplay scene so the HP/mana/ability push
+    /// works everywhere. Idempotent ([DisallowMultipleComponent]).
+    /// </para>
+    /// </summary>
+    internal sealed class HeroAbilitiesHudBridgeBootstrap : MonoBehaviour
+    {
+        private float _retry;
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        private static void Boot()
+        {
+            var go = new GameObject("HeroAbilitiesHudBridgeBootstrap");
+            DontDestroyOnLoad(go);
+            go.AddComponent<HeroAbilitiesHudBridgeBootstrap>();
+        }
+
+        private void Update()
+        {
+            _retry -= Time.deltaTime;
+            if (_retry > 0f) return;
+            _retry = 0.5f;
+
+            // Attach to the hero (HeroAbilities GameObject) if it isn't already wired.
+            // The bridge self-resolves the HUD at runtime (EnsureHud), so a null
+            // serialized _hud in the castle is fine. Re-checks every 0.5s because the
+            // hero may spawn a frame or two after scene load.
+            var hero = FindAnyObjectByType<HeroAbilities>();
+            if (hero != null && hero.GetComponent<HeroAbilitiesHudBridge>() == null)
+                hero.gameObject.AddComponent<HeroAbilitiesHudBridge>();
         }
     }
 }
