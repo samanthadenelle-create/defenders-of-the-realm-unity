@@ -151,9 +151,13 @@ namespace DeNelle.HUD
             card.Add(MakeButton("Report a bug",        OnReportBug));
             card.Add(MakeButton("Controls",            OnShowControls));
             card.Add(MakeButton("Reset Hero & Pet",    OnResetProgress));
-#if DEVELOPMENT_BUILD || UNITY_EDITOR
-            card.Add(MakeButton("Dev tools",           OnOpenDevTools));   // dev builds only
-#endif
+            // WO-2026-06-12: "Dev tools" routes to AdminOverlay, which itself SHIPS in release
+            // builds (it is NOT #if-gated — see AdminOverlay.cs). Gating only the entry point to
+            // dev builds left the owner with no Settings-bar route to the live AdminOverlay in a
+            // player build (chord-only). Always surface the entry so the Settings bar reaches the
+            // owner-only overlay everywhere AdminOverlay exists. AdminOverlay's own owner-wallet /
+            // chord gate is the access control; this is just the launcher.
+            card.Add(MakeButton("Dev tools",           OnOpenDevTools));
             card.Add(MakeButton("Credits",             OnShowCredits));
             card.Add(MakeButton("Close",               Close));
 
