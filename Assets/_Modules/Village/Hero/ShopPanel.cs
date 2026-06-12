@@ -540,8 +540,11 @@ namespace DeNelle.Village.Hero
             var content = new GameObject("ScrollContent", typeof(RectTransform));
             content.transform.SetParent(viewport.transform, false);
             var cr = content.GetComponent<RectTransform>();
-            // Anchor to the top of the viewport, stretch horizontally, pivot at top.
-            cr.anchorMin = new Vector2(0f, 1f);
+            // WO-412: STRETCH to fill the viewport vertically too (anchorMin.y = 0) so the
+            // "sizeDelta 0 == viewport height" assumption below actually holds. It was anchored to
+            // the top EDGE (anchorMin.y = 1) → sizeDelta 0 = ZERO height → the content collapsed and
+            // every row (including the always-present potions) rendered invisible (= the empty BUY tab).
+            cr.anchorMin = new Vector2(0f, 0f);
             cr.anchorMax = new Vector2(1f, 1f);
             cr.pivot = new Vector2(0.5f, 1f);
             // Total rows take rowCount * RowSlice of viewport height. If that is <= 1 the
