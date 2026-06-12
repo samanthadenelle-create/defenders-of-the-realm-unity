@@ -66,6 +66,20 @@ namespace DeNelle.Village
             new Vector3( 22f, 0f, -60f),   // wide right
         };
 
+        // Cardinal sides to MIRROR the south cluster onto, by Y rotation. The south template
+        // above (positions + GatePosition) is rotated by each angle, so every side gets an
+        // identical fan of spawns marching toward its OWN gate. Owner can hand-nudge offsets
+        // per side afterward. Convention (matches WaveSpawnPoint.Configure): 0 N, 1 E, 2 S, 3 W.
+        // Quaternion.Euler(0,θ,0) maps south (0,0,-50): θ=90→west(-50,0,0), 180→north(0,0,+50), 270→east(+50,0,0).
+        private struct SpawnSide { public float Angle; public string Dir; public int GateIndex; }
+        private static readonly SpawnSide[] Sides =
+        {
+            new SpawnSide { Angle =   0f, Dir = "south", GateIndex = 2 },
+            new SpawnSide { Angle =  90f, Dir = "west",  GateIndex = 3 },
+            new SpawnSide { Angle = 180f, Dir = "north", GateIndex = 0 },
+            new SpawnSide { Angle = 270f, Dir = "east",  GateIndex = 1 },
+        };
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
         {
@@ -113,29 +127,33 @@ namespace DeNelle.Village
             var holder = new GameObject(HolderName);
 
             int placed = 0;
-            for (int i = 0; i < SpawnLocalPositions.Length; i++)
+            foreach (var side in Sides)
             {
-                Vector3 pos = SpawnLocalPositions[i];
+                var rot = Quaternion.Euler(0f, side.Angle, 0f);
+                Vector3 gate = rot * GatePosition;   // mirror the south gate target onto this side
 
-                // Snap onto the baked walkable floor so enemies spawned here land on the
-                // NavMesh and can path to the Heart. Generous radius (8m) because the
-                // approach lane geometry may not be perfectly centred under the marker.
-                if (NavMesh.SamplePosition(pos, out var hit, 8f, NavMesh.AllAreas))
-                    pos = hit.position;
+                for (int i = 0; i < SpawnLocalPositions.Length; i++)
+                {
+                    Vector3 pos = rot * SpawnLocalPositions[i];
 
-                var go = new GameObject($"WaveSpawnPoint_Castle_{i}");
-                go.transform.SetParent(holder.transform, false);
-                go.transform.position = pos;
+                    // Snap onto the baked walkable floor so enemies spawned here land on the
+                    // NavMesh and can path to the Heart. Generous radius (8m) because the
+                    // approach lane geometry may not be perfectly centred under the marker.
+                    if (NavMesh.SamplePosition(pos, out var hit, 8f, NavMesh.AllAreas))
+                        pos = hit.position;
 
-                var sp = go.AddComponent<WaveSpawnPoint>();
-                // gateIndex 2 = South, direction "south" — matches the cardinal
-                // convention (0 N, 1 E, 2 S, 3 W). The castle has a single south gate.
-                sp.Configure($"spawn-castle-{i}", 2, "south", GatePosition);
+                    var go = new GameObject($"WaveSpawnPoint_Castle_{side.Dir}_{i}");
+                    go.transform.SetParent(holder.transform, false);
+                    go.transform.position = pos;
 
-                placed++;
+                    var sp = go.AddComponent<WaveSpawnPoint>();
+                    sp.Configure($"spawn-castle-{side.Dir}-{i}", side.GateIndex, side.Dir, gate);
+
+                    placed++;
+                }
             }
 
-            Debug.Log($"[CastleSpawnPointInjector] placed {placed} wave spawn points outside the south gate (approach z~-60..-64, marching to Heart at origin).");
+            Debug.Log($"[CastleSpawnPointInjector] placed {placed} wave spawn points on 4 sides (S/W/N/E), each fan marching toward its gate to the Heart at origin.");
         }
     }
 }
