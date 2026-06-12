@@ -114,7 +114,8 @@ namespace DeNelle.HUD
 
         private void ResolveUiElements()
         {
-            var doc = GetComponent<UIDocument>() ?? FindObjectOfType<UIDocument>();
+            // No ?? on UnityEngine.Object: GetComponent can return a fake-null that ?? won't fall through.
+            var doc = GetComponent<UIDocument>(); if (doc == null) doc = FindObjectOfType<UIDocument>();
             if (doc?.rootVisualElement != null)
             {
                 _xpFill     = doc.rootVisualElement.Q<VisualElement>("xp-fill");

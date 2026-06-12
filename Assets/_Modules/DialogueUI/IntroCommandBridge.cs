@@ -37,46 +37,77 @@ namespace DeNelle.DialogueUI
             _runner = runner;
 
             var reg = (IActionRegistration)_runner;
-            reg.AddCommandHandler("fade_from_black", (System.Action<float>)(d => Fade(Color.black, 1f, 0f, d)));
-            reg.AddCommandHandler("fade_to_black",   (System.Action<float>)(d => Fade(Color.black, 0f, 1f, d)));
-            reg.AddCommandHandler("fade_to_white",   (System.Action<float>)(d => Fade(Color.white, 0f, 1f, d)));
-            reg.AddCommandHandler("fade_from_white", (System.Action<float>)(d => Fade(Color.white, 1f, 0f, d)));
-            reg.AddCommandHandler("play_sfx",        (System.Action<string>)CmdPlaySfx);
-            reg.AddCommandHandler("play_music",      (System.Action<string>)CmdPlayMusic);
-            reg.AddCommandHandler("transition_to",   (System.Action<string>)CmdTransitionTo);
+            // IMPORTANT (re-entrancy guard): every handler is registered as a YarnTask-returning
+            // delegate that yields ONE frame (YieldFrame) before returning. The intro screens fire
+            // several commands back-to-back (e.g. <<fade_from_black>> then <<play_sfx>>). Under
+            // YarnSpinner v3, when a command handler completes SYNCHRONOUSLY the runner calls
+            // Dialogue.SignalContentComplete() then Dialogue.Continue() inline — and Continue() pumps
+            // the VM straight into the NEXT command on the same stack frame. That nested command, also
+            // synchronous, would call SignalContentComplete() again while the outer Continue() is still
+            // unwinding → "SignalContentComplete can only be called when a command is being dispatched".
+            // Yielding a frame makes each handler's task NOT complete synchronously, so the runner takes
+            // its await branch (await dispatchResult.Task) instead of re-entering — the signal still
+            // fires, just not nested. (Mirrors the village bridge's IEnumerator-blocking model.)
+            reg.AddCommandHandler("fade_from_black", (System.Func<float, YarnTask>)(d => CmdFade(Color.black, 1f, 0f, d)));
+            reg.AddCommandHandler("fade_to_black",   (System.Func<float, YarnTask>)(d => CmdFade(Color.black, 0f, 1f, d)));
+            reg.AddCommandHandler("fade_to_white",   (System.Func<float, YarnTask>)(d => CmdFade(Color.white, 0f, 1f, d)));
+            reg.AddCommandHandler("fade_from_white", (System.Func<float, YarnTask>)(d => CmdFade(Color.white, 1f, 0f, d)));
+            reg.AddCommandHandler("play_sfx",        (System.Func<string, YarnTask>)CmdPlaySfx);
+            reg.AddCommandHandler("play_music",      (System.Func<string, YarnTask>)CmdPlayMusic);
+            reg.AddCommandHandler("transition_to",   (System.Func<string, YarnTask>)CmdTransitionTo);
         }
+
+        // A handler must NOT complete synchronously, or the runner re-enters the next command inline
+        // and double-fires SignalContentComplete (see Install). Yielding one frame defers completion.
+        private static YarnTask YieldFrame() => YarnTask.Yield();
 
         // ── Audio ────────────────────────────────────────────────────────────
 
-        private static void CmdPlaySfx(string id)
+        private static async YarnTask CmdPlaySfx(string id)
         {
-            if (string.IsNullOrEmpty(id)) return;
-            var clip = Resources.Load<AudioClip>("Sfx/" + id);   // atmospheric clips may not exist yet
-            if (clip != null) CoreServices.Audio?.PlaySfx(clip, 0.8f);
+            if (!string.IsNullOrEmpty(id))
+            {
+                var clip = Resources.Load<AudioClip>("Sfx/" + id);   // atmospheric clips may not exist yet
+                if (clip != null) CoreServices.Audio?.PlaySfx(clip, 0.8f);
+            }
+            await YieldFrame();
         }
 
-        private static void CmdPlayMusic(string id)
+        private static async YarnTask CmdPlayMusic(string id)
         {
             // The only track the intro asks for today.
             if (id == "title_theme") CoreServices.Audio?.PlayMusic(MusicTrack.Title);
+            await YieldFrame();
         }
 
         // ── Scene transition ──────────────────────────────────────────────────
 
-        private void CmdTransitionTo(string target)
+        private async YarnTask CmdTransitionTo(string target)
         {
             // The intro ends by handing off to hero select. Stop the runner first so it
             // doesn't keep ticking into the next scene.
             if (_runner != null && _runner.IsDialogueRunning) _runner.Stop();
+            await YieldFrame();
             SceneRouter.GoHeroSelect();
         }
 
         // ── Fade overlay (runtime UI Toolkit, no UGUI dependency) ─────────────
 
+        // Command wrapper: start the fade (a coroutine animates it), then yield a frame so the
+        // handler never completes synchronously (see Install — re-entrancy guard). The fade visual
+        // keeps running on its own coroutine; we don't block the narrative on the full fade duration.
+        private async YarnTask CmdFade(Color color, float fromA, float toA, float seconds)
+        {
+            Fade(color, fromA, toA, seconds);
+            await YieldFrame();
+        }
+
         private void EnsureFade()
         {
             if (_fade != null) return;
-            _fadeDoc = gameObject.GetComponent<UIDocument>() ?? gameObject.AddComponent<UIDocument>();
+            // Unity overloads == against fake-null, so `?? AddComponent` returns a fake-null and never
+            // falls through. Use TryGetComponent and add only when genuinely absent.
+            if (!gameObject.TryGetComponent(out _fadeDoc)) _fadeDoc = gameObject.AddComponent<UIDocument>();
             if (_fadeDoc.panelSettings == null)
             {
                 // Borrow a live panel so the overlay actually renders.

@@ -187,6 +187,10 @@ namespace DeNelle.Village
             go.name = "CompanionIntroducer";
 
             NormalizeToHeroHeight(go);
+            // A8 (telemetry "NPCs floating"): scaling about a non-feet pivot lifts the
+            // model's feet off the floor; re-seat so the renderer-bounds bottom rests on
+            // the navmesh ground Y.
+            SeatFeetOnGround(go, pos.y);
 
             // STATIC: configure the ambient driver to stand still (no wander/follow), the
             // same as the vendors. Belt-and-braces disable any NavMeshAgent so nothing moves it.
@@ -264,6 +268,19 @@ namespace DeNelle.Village
                 var bubbleRoot = go.transform.Find("BubbleRoot");
                 if (bubbleRoot != null) bubbleRoot.localScale = Vector3.one / Mathf.Max(0.01f, npcScale);
             }
+        }
+
+        // A8: drop the body so the bottom of its combined renderer bounds rests on the
+        // given ground Y. Counters pivot-at-center prefabs floating after rescale.
+        private static void SeatFeetOnGround(GameObject go, float groundY)
+        {
+            var rends = go.GetComponentsInChildren<Renderer>();
+            if (rends.Length == 0) return;
+            Bounds b = rends[0].bounds;
+            for (int i = 1; i < rends.Length; i++) b.Encapsulate(rends[i].bounds);
+            float delta = groundY - b.min.y;
+            if (Mathf.Abs(delta) > 0.01f)
+                go.transform.position += new Vector3(0f, delta, 0f);
         }
 
         private static Transform ResolveHero()

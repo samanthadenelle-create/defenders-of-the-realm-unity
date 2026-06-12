@@ -158,7 +158,7 @@ namespace DeNelle.Editor
                 foreach (var smr in go.GetComponentsInChildren<SkinnedMeshRenderer>(true))
                     smr.sharedMaterial = mat;
 
-            var anim = go.GetComponent<Animator>() ?? go.AddComponent<Animator>();
+            if (!go.TryGetComponent(out Animator anim)) anim = go.AddComponent<Animator>();
             anim.runtimeAnimatorController = controller;
             anim.applyRootMotion = false;
 

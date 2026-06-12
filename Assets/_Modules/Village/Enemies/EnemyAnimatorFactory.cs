@@ -60,7 +60,8 @@ namespace DeNelle.Village
         public static void Apply(GameObject visual, string modelName)
         {
             if (visual == null) return;
-            var anim = visual.GetComponentInChildren<Animator>() ?? visual.AddComponent<Animator>();
+            var anim = visual.GetComponentInChildren<Animator>();
+            if (anim == null) anim = visual.AddComponent<Animator>();
             anim.applyRootMotion = false;
 
             var ctrl = Resources.Load<RuntimeAnimatorController>("Enemies/" + Controller(RigFor(modelName)));

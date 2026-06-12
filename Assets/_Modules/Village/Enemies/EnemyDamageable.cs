@@ -60,7 +60,10 @@ namespace DeNelle.Village
             {
                 if (this == null) return null;                 // adapter itself destroyed
                 if (_enemy == null)
-                    _enemy = GetComponent<Enemy>() ?? GetComponentInParent<Enemy>();
+                {
+                    _enemy = GetComponent<Enemy>();
+                    if (_enemy == null) _enemy = GetComponentInParent<Enemy>();
+                }
                 return _enemy != null ? _enemy : null;         // fake-null -> real null
             }
         }
@@ -104,7 +107,8 @@ namespace DeNelle.Village
         {
             // Best-effort early cache; the E accessor self-heals if Enemy isn't on the
             // object yet at Awake (RequireComponent add-order) or sits on a parent.
-            _enemy = GetComponent<Enemy>() ?? GetComponentInParent<Enemy>();
+            _enemy = GetComponent<Enemy>();
+            if (_enemy == null) _enemy = GetComponentInParent<Enemy>();
         }
 
         /// <summary>Routes ability / pet damage into the existing <see cref="Enemy.TakeDamage"/>.</summary>

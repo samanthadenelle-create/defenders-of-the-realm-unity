@@ -352,7 +352,9 @@ namespace DeNelle.Village
                 StripEmbeddedFbxArtifacts(vis);
 
                 SetLayerRecursive(vis, 2);   // Ignore Raycast — never blocks gameplay rays
-                var anim = vis.GetComponent<Animator>() ?? vis.AddComponent<Animator>();
+                // GetComponent returns a Unity fake-null on miss, so `??` does NOT fall
+                // through (it would assign the fake-null and the next access throws).
+                if (!vis.TryGetComponent(out Animator anim)) anim = vis.AddComponent<Animator>();
                 var ctrl = Resources.Load<RuntimeAnimatorController>("Heroes/" + slug);
                 if (ctrl != null) anim.runtimeAnimatorController = ctrl;   // idle/walk, not a T-pose
                 // CRITICAL: same as HeroBodySwapper — the Idle/Walk clips carry baked

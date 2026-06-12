@@ -41,11 +41,13 @@ using System.Collections.Generic;
 using Cysharp.Threading.Tasks;
 using DeNelle.Core;
 using DeNelle.Core.State;
+using DeNelle.Core.UI;
 using DeNelle.HUD;
 using DeNelle.Village;
 using DeNelle.Wallet;
 using UnityEngine;
 using UnityEngine.UIElements;
+using PanelMgr = DeNelle.Core.UI.PanelManager;
 
 namespace DeNelle.DevTools
 {
@@ -126,6 +128,13 @@ namespace DeNelle.DevTools
         private bool _bound;
         private bool _isOpen;
 
+        // DEF-212 single-modal arbiter handle. The dev console MUST route through
+        // PanelManager like every other in-game modal (HelpMenu / AdminOverlay):
+        // otherwise a global back/ESC (PanelManager.CloseOpen) can't dismiss it and
+        // it neither closes nor is closed-by the other modals — leaving a panel the
+        // player "cannot close" (F8 telemetry). See docs/MASTER_CATALOG/hud.md.
+        private PanelHandle _panelHandle;
+
         // ── Live metrics readout (the "decked-out" telemetry; dev-only) ───────
         // A code-built panel of label:value rows refreshed a few times a second
         // while the console is open. Keyed by a short id so UpdateMetrics() can
@@ -193,6 +202,10 @@ namespace DeNelle.DevTools
         private void OnEnable()
         {
             BindElements();
+            // Register with the single-modal arbiter so a global back/ESC (CloseOpen)
+            // can dismiss the console and opening it closes any other open panel.
+            if (_panelHandle == null)
+                _panelHandle = PanelMgr.Register("DevConsole", Close, () => _isOpen);
             SetOpen(_openOnStart);
         }
 
@@ -201,6 +214,9 @@ namespace DeNelle.DevTools
             if (_closeButton != null) _closeButton.clicked -= Close;
             if (_cornerTap != null)
                 _cornerTap.UnregisterCallback<ClickEvent>(OnCornerTapped);
+            // Clear our slot if we were the open panel, so we never leave a stale
+            // "open" record that suppresses world prompts after we're gone.
+            if (_panelHandle != null) PanelMgr.NotifyClosed(_panelHandle);
             _bound = false;
         }
 
@@ -310,10 +326,25 @@ namespace DeNelle.DevTools
         {
             _isOpen = open;
             if (_window != null)
+            {
                 _window.style.display = open ? DisplayStyle.Flex : DisplayStyle.None;
+                // Belt-and-braces: a hidden window must never be pickable. display:None
+                // already removes it from layout/picking, but flipping pickingMode too
+                // guarantees a closed console returns input to the world (no trapped taps).
+                _window.pickingMode = open ? PickingMode.Position : PickingMode.Ignore;
+            }
             // Hide the corner chip while open (the window covers that corner anyway).
             if (_cornerTap != null)
                 _cornerTap.style.display = open ? DisplayStyle.None : DisplayStyle.Flex;
+
+            // Single-modal arbiter (DEF-212): opening closes any other open panel;
+            // closing clears our slot so nothing thinks a modal still owns the screen.
+            if (_panelHandle != null)
+            {
+                if (open) PanelMgr.NotifyOpened(_panelHandle);
+                else PanelMgr.NotifyClosed(_panelHandle);
+            }
+
             if (open)
             {
                 RefreshToggleButtons();

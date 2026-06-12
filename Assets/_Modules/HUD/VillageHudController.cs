@@ -339,7 +339,7 @@ namespace DeNelle.HUD
         {
             var sprite = WidgetSprite("hud_strip_bar");
             if (sprite == null) { FramePanelLight(go, LParch); return; }
-            var img = go.GetComponent<Image>() ?? go.AddComponent<Image>();
+            if (!go.TryGetComponent(out Image img)) img = go.AddComponent<Image>();
             img.sprite = sprite;
             img.type = Image.Type.Sliced;
             img.color = Color.white;

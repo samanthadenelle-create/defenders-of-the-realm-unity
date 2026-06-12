@@ -416,7 +416,7 @@ namespace DeNelle.Village
             // Animation + turning fixes for core TD battle characters.
             // Attach guarded driver (so Enemy.cs can call SetLocomotion/PlayAttack/Die
             // and the HeroAnimatorFactory-style or Enemy shared controllers play).
-            var actor = GetComponent<ActorAnimator>() ?? gameObject.AddComponent<ActorAnimator>();
+            if (!TryGetComponent(out ActorAnimator actor)) actor = gameObject.AddComponent<ActorAnimator>();
             _actor = actor;
 
             if (_agent != null)

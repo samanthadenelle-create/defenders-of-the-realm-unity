@@ -530,8 +530,10 @@ namespace DeNelle.Village
             Enemy foe = tm.GetClosestTarget(transform.position, _abilityRange);
             if (foe == null || !foe.IsAlive) return;
 
-            if (_ranged == null)
-                _ranged = GetComponent<RangedAttackVFX>() ?? gameObject.AddComponent<RangedAttackVFX>();
+            // GetComponent returns a Unity fake-null on miss, so `??` does NOT fall
+            // through; use TryGetComponent so a real component is always assigned.
+            if (_ranged == null && !TryGetComponent(out _ranged))
+                _ranged = gameObject.AddComponent<RangedAttackVFX>();
 
             var dmg = foe.GetComponent<EnemyDamageable>() as IDamageable;
             Vector3 baseTarget = foe.transform.position + Vector3.up;
@@ -686,8 +688,10 @@ namespace DeNelle.Village
             // (UpdateCombat gated this call to MeleeAttackRange), so apply the hit now.
             if (_hero == HeroClass.Knight) { onArrive(); return; }
 
-            if (_ranged == null)
-                _ranged = GetComponent<RangedAttackVFX>() ?? gameObject.AddComponent<RangedAttackVFX>();
+            // GetComponent returns a Unity fake-null on miss, so `??` does NOT fall
+            // through; use TryGetComponent so a real component is always assigned.
+            if (_ranged == null && !TryGetComponent(out _ranged))
+                _ranged = gameObject.AddComponent<RangedAttackVFX>();
 
             Vector3 target = foe.transform.position + Vector3.up;
             if (_hero == HeroClass.Ranger) _ranged.FireArrow(target, onArrive);

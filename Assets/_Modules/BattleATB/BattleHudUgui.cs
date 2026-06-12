@@ -912,7 +912,9 @@ namespace DeNelle.BattleATB
                 activeName = active?.Name ?? "";
             }
             if (_turnText) _turnText.text = string.IsNullOrEmpty(activeName) ? "" : activeName + "'s Turn";
-            if (_waveText) _waveText.text = "WAVE 1";  // wave info can come from runtime or setup in full integration
+            // Real, scaled wave from the live battle state (BattleScaling drives difficulty by it).
+            // Floor at 1 so a dungeon/dev battle (Wave 0) still reads "WAVE 1" rather than "WAVE 0".
+            if (_waveText) _waveText.text = "WAVE " + Mathf.Max(1, state.Wave);
 
             // Party slots (first 4 party members)
             int idx = 0;

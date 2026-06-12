@@ -103,7 +103,7 @@ namespace DeNelle.Village
             _locomotion     = GetComponent<HeroLocomotion>();
             _abilities      = GetComponent<HeroAbilities>();
             _impactFeedback = GetComponent<HeroImpactFeedback>();
-            _actor          = GetComponent<ActorAnimator>() ?? gameObject.AddComponent<ActorAnimator>();
+            if (!TryGetComponent(out _actor)) _actor = gameObject.AddComponent<ActorAnimator>();
 
             // Capture the spawn point as the respawn anchor. Resolved later in
             // HandleDeath against the Heart if the recorded point is unsafe.

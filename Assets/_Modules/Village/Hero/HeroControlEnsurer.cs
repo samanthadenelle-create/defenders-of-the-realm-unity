@@ -95,7 +95,7 @@ namespace DeNelle.Village
             }
 
             if (!hero.activeSelf) hero.SetActive(true);
-            var l = hero.GetComponent<HeroLocomotion>() ?? hero.AddComponent<HeroLocomotion>();
+            if (!hero.TryGetComponent(out HeroLocomotion l)) l = hero.AddComponent<HeroLocomotion>();
             l.enabled = true;
             if (hero.GetComponent<HeroDeathLogger>() == null) hero.AddComponent<HeroDeathLogger>();
             // Open-world combat readability: reticle over the nearest hostile target.

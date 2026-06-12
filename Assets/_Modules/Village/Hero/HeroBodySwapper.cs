@@ -209,7 +209,7 @@ namespace DeNelle.Village
             // GearLoadout exists FIRST (lazy-add, same idiom as line ~274 below) so the
             // controller's OnEnable reads a live loadout and equips on enable. Guard so a
             // re-run never double-adds ([DisallowMultipleComponent] would also reject it).
-            var equipLoadout = GetComponent<GearLoadout>() ?? gameObject.AddComponent<GearLoadout>();
+            if (!TryGetComponent(out GearLoadout equipLoadout)) equipLoadout = gameObject.AddComponent<GearLoadout>();
             equipLoadout.Refresh();
             if (GetComponent<EquipmentController>() == null)
                 gameObject.AddComponent<EquipmentController>();
@@ -332,7 +332,7 @@ namespace DeNelle.Village
             // dedicated HeroBowAttachment on LeftHand to avoid duplicate back+held).
             // Re-apply later from shop equip flows. Applier now uses corrected scales/pos/euler
             // proportional to ~1.8m hero (see GearVisualApplier for exact values).
-            var loadout = GetComponent<GearLoadout>() ?? gameObject.AddComponent<GearLoadout>();
+            if (!TryGetComponent(out GearLoadout loadout)) loadout = gameObject.AddComponent<GearLoadout>();
             loadout.Refresh();
             GearVisualApplier.Apply(body.transform, loadout);
 
@@ -343,7 +343,7 @@ namespace DeNelle.Village
             // Die. HeroLocomotion/Abilities already resolve and drive it; re-attach here post-swap
             // so Village + World scenes get correct hero anims (Idle/BattleReady, Movement,
             // Attack/Cast per class, Hit, Death) without falling back to T-pose or legacy only.
-            var actor = GetComponent<ActorAnimator>() ?? gameObject.AddComponent<ActorAnimator>();
+            if (!TryGetComponent(out ActorAnimator actor)) actor = gameObject.AddComponent<ActorAnimator>();
             // WO-376: spawn RELAXED, not in a combat/battle-ready stance. The hero loads
             // into a town/dialogue context, not a fight — forcing the combat stance here
             // was the wrong default (the WO is explicit: "Don't force SetPose(Combat) by

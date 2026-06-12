@@ -119,6 +119,9 @@ namespace DeNelle.BattleATB
                 _runtimeState.OnTurnResolved.RemoveListener(HandleTurnResolved);
                 _runtimeState.OnOutcome.RemoveListener(HandleOutcome);
             }
+            // WO-93: drop the idle-timeout listener so a re-entered scene doesn't double-wire.
+            var mgr = ATBCombatManager.Instance;
+            if (mgr != null) mgr.onEnemyAutoAttack.RemoveListener(HandleIdleTimeout);
             _subscribed = false;
         }
 
@@ -154,7 +157,32 @@ namespace DeNelle.BattleATB
             _hudUgui.Render(_runtimeState);
 
             // WO-68: arm the turn-timer now that the battle is live.
-            ATBCombatManager.Instance?.StartCombat();
+            // WO-93: wire the previously-dangling idle-timeout event so it actually
+            // does something. When the player idles past maxTurnTime, force a Defend
+            // for the active hero (a fair "you turtled" consequence) routed through the
+            // same engine path as a normal click — instead of the event firing into the
+            // void. AddListener is idempotent-safe here because Start runs once per scene.
+            var mgr = ATBCombatManager.Instance;
+            if (mgr != null)
+            {
+                mgr.onEnemyAutoAttack.RemoveListener(HandleIdleTimeout); // guard double-wire
+                mgr.onEnemyAutoAttack.AddListener(HandleIdleTimeout);
+                mgr.StartCombat();
+            }
+        }
+
+        /// <summary>
+        /// WO-93 — the idle turn-timer expired. Apply the punitive default: force the
+        /// active player to Defend (turtle) so idling has a real, fair consequence and
+        /// the battle never stalls waiting on the player. No-op if the engine isn't
+        /// awaiting a player action (AI turn / battle over). Routes through the same
+        /// ChooseAction path a HUD click would, and resets the idle timer for the next turn.
+        /// </summary>
+        private void HandleIdleTimeout()
+        {
+            if (_runtimeState == null || !_runtimeState.IsAwaitingPlayer()) return;
+            _runtimeState.ChooseAction(BattleAction.MakeDefend());
+            ATBCombatManager.Instance?.OnPlayerActed(); // re-arm for the next player turn
         }
 
         /// <summary>
@@ -752,7 +780,11 @@ namespace DeNelle.BattleATB
         private static ActorAnimator GetActorOnCapsule(Transform capsule)
         {
             if (capsule == null) return null;
-            return capsule.GetComponent<ActorAnimator>() ?? capsule.GetComponentInChildren<ActorAnimator>(true);
+            // Don't use ?? — GetComponent returns Unity fake-null (a non-null managed ref to a
+            // destroyed/absent native object), so ?? never falls through. Unity's == handles it.
+            var a = capsule.GetComponent<ActorAnimator>();
+            if (a == null) a = capsule.GetComponentInChildren<ActorAnimator>(true);
+            return a;
         }
 
         private bool IsCasterHeroClass()

@@ -240,7 +240,8 @@ namespace DeNelle.Village
                     var e = _enemyBuf[i];
                     if (e == null) continue;
                     // Robust lookup (expert 2026-06-02): root first, then parent chain.
-                    var d = e.GetComponent<IDamageable>() ?? e.GetComponentInParent<IDamageable>();
+                    var d = e.GetComponent<IDamageable>();
+                    if (d == null) d = e.GetComponentInParent<IDamageable>();
                     if (d == null || !d.IsAlive || d.Faction != CombatFaction.Hostile) continue;
                     if (!_candidates.Contains(d)) _candidates.Add(d);
                 }

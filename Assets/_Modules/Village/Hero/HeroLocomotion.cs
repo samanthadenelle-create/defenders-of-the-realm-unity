@@ -253,7 +253,7 @@ namespace DeNelle.Village
             _agent.stoppingDistance = 0f;
             _agent.obstacleAvoidanceType = ObstacleAvoidanceType.NoObstacleAvoidance;
 
-            _actor = GetComponent<ActorAnimator>() ?? gameObject.AddComponent<ActorAnimator>();
+            if (!TryGetComponent(out _actor)) _actor = gameObject.AddComponent<ActorAnimator>();
         }
 
         private void Start()

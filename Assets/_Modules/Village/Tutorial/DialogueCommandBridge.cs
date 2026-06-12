@@ -149,6 +149,15 @@ namespace DeNelle.Village
             // hidden / replaced by an "already bonded" line on re-visit instead of
             // re-firing the grant. Mirrors the keystone/quest read-function pattern.
             ((IActionRegistration)_runner).AddFunction("pet_owned", (Func<string, bool>)FnPetOwned);
+            // A7 re-select fix: the Echo Hollow gates its WHOLE selection on this. The design
+            // grants one Echo deploy slot to start (PetAcquisitionService.DefaultMaxSlots == 1);
+            // a returning player who already bonded an Echo must NOT be able to attune a SECOND
+            // species until a free slot opens (Fenn's questline raises MaxSlots). True when the
+            // player owns at least one Echo AND has no free deploy slot — the node then shows a
+            // "you already have <pet>" line and offers no fresh selection options.
+            ((IActionRegistration)_runner).AddFunction("pet_select_closed", (Func<bool>)FnPetSelectClosed);
+            // Display name of the Echo the player already bonded — for the "already have <pet>" line.
+            ((IActionRegistration)_runner).AddFunction("owned_pet_name", (Func<string>)FnOwnedPetName);
 
             // Vendor / station UI verbs (WO-106/109/291/304) — formerly on the now-dead
             // NPCCommandBridge. Consolidated here onto the SINGLE live runner so each Yarn
@@ -584,6 +593,47 @@ namespace DeNelle.Village
             var def = DeNelle.Pets.PetCatalog.Find(starterId);
             return def != null && !string.IsNullOrEmpty(def.Species) &&
                    string.Equals(def.Species, species.Trim(), StringComparison.OrdinalIgnoreCase);
+        }
+
+        // A7: returns the species id of the Echo the player already owns, or null. Checks the
+        // catalog species against PetAcquisitionService.Owns (canonical roster) and falls back to
+        // the StarterPetId (legacy/intro saves). First match wins — the design grants one Echo.
+        private static string FnOwnedSpecies()
+        {
+            var acq = DeNelle.Pets.PetAcquisitionService.Instance;
+            if (acq != null)
+                foreach (var def in DeNelle.Pets.PetCatalog.Pets)
+                    if (def != null && !string.IsNullOrEmpty(def.Species) && acq.Owns(def.Species))
+                        return def.Species;
+
+            var svc = GameStateService.Instance;
+            string starterId = svc != null && svc.State != null ? svc.State.StarterPetId : null;
+            if (string.IsNullOrEmpty(starterId)) return null;
+            var sDef = DeNelle.Pets.PetCatalog.Find(starterId);
+            return sDef != null && !string.IsNullOrEmpty(sDef.Species) ? sDef.Species : null;
+        }
+
+        // A7 whole-node gate: TRUE when the player already owns an Echo AND has no free deploy slot,
+        // so the Echo Hollow must NOT offer a second attune (re-select). The design starts with one
+        // slot (DefaultMaxSlots); Fenn's questline raises MaxSlots, which re-opens selection. With no
+        // PetAcquisitionService instance we fall back to "owns any" so selection still closes after a
+        // pick (a fresh second pick can't be granted into a single slot anyway).
+        private static bool FnPetSelectClosed()
+        {
+            if (string.IsNullOrEmpty(FnOwnedSpecies())) return false; // owns nothing → selection open
+            var acq = DeNelle.Pets.PetAcquisitionService.Instance;
+            if (acq == null) return true;                              // owns one, no service → closed
+            return acq.FilledSlotCount >= acq.MaxSlots;                // closed only when no slot is free
+        }
+
+        // A7: the display name of the Echo the player already bonded, for the "already have <pet>"
+        // line. Falls back to the species id, then a generic word, so the line is never blank.
+        private static string FnOwnedPetName()
+        {
+            string species = FnOwnedSpecies();
+            if (string.IsNullOrEmpty(species)) return "your Echo";
+            var def = DeNelle.Pets.PetCatalog.FindBySpecies(species);
+            return def != null && !string.IsNullOrEmpty(def.Name) ? def.Name : species;
         }
 
         // ── Vendor / station UI verbs (consolidated from the dead NPCCommandBridge) ──

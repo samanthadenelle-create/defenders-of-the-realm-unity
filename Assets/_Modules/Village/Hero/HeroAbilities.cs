@@ -345,7 +345,8 @@ namespace DeNelle.Village
                     // correct — cannot heal a tree." def.Damage carries the amount.
                     if (HealHandler == null || !HealHandler(def.Damage))
                     {
-                        var heroHp = GetComponent<HeroHealth>() ?? HeroHealth.Instance;
+                        var heroHp = GetComponent<HeroHealth>();
+                        if (heroHp == null) heroHp = HeroHealth.Instance;
                         if (heroHp != null) heroHp.Heal(def.Damage);
                         VFXManager.Play(VFXType.Cast_Heal, origin + Vector3.up * 1.2f);
                     }
@@ -438,7 +439,9 @@ namespace DeNelle.Village
         private void LaunchProjectile(Vector3 target, System.Action onArrive)
         {
             if (_rangedVfx == null)
-                _rangedVfx = GetComponent<RangedAttackVFX>() ?? gameObject.AddComponent<RangedAttackVFX>();
+            {
+                if (!TryGetComponent(out _rangedVfx)) _rangedVfx = gameObject.AddComponent<RangedAttackVFX>();
+            }
             if (_heroClass == "ranger")      _rangedVfx.FireArrow(target, onArrive);
             else if (_heroClass == "knight") onArrive?.Invoke();   // melee: resolve instantly, no projectile (a knight doesn't snipe)
             else                             _rangedVfx.FireSpellOrb(target, onArrive);
@@ -451,7 +454,10 @@ namespace DeNelle.Village
         /// </summary>
         private float WeaponMult()
         {
-            if (_gear == null) _gear = GetComponent<GearLoadout>() ?? gameObject.AddComponent<GearLoadout>();
+            if (_gear == null)
+            {
+                if (!TryGetComponent(out _gear)) _gear = gameObject.AddComponent<GearLoadout>();
+            }
             return _gear.WeaponMult;
         }
 

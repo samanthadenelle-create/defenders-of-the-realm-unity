@@ -23,6 +23,7 @@ using System.Reflection;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using DeNelle.Core.State;   // direct hero-class read (see ResolveHeroSlug)
+using DeNelle.BattleATB.Engine;   // Defs.ENEMY_DEFS — validate breach ids against engine keys
 
 namespace DeNelle.BattleATB
 {
@@ -256,10 +257,71 @@ namespace DeNelle.BattleATB
             model.rotation = Quaternion.LookRotation(dir.normalized, Vector3.up);
         }
 
-        // Which Resources/Enemies model to show. Default to the standard skeleton grunt
-        // (matches BattleController's "skeleton" fallback def). TODO: read the live encounter
-        // def to vary the model (necromancer/orc/dragon) per battle.
-        private static string ResolveEnemySlug() => "Skeleton_Warrior";
+        // Which Resources/Enemies model to show for the enemy that triggered THIS battle.
+        // The swapper is a scene-load hook with no BattleController reference, so we read the
+        // same handoff BattleController builds its roster from: SceneRouter.PendingBattle.
+        // BreachedIds carries the engine def ids (WaveManager passes Enemy.EngineDefId, see
+        // BattleController.BuildEnemyRoster) — we take the FIRST breacher (the front-of-roster
+        // foe the camera stages) and map its engine def id → a Resources/Enemies model slug.
+        // If there is no handoff (dev / direct-play), we vary deterministically by wave so the
+        // model is never a hard-coded constant. Mirrors the breach-id heuristics in
+        // BattleController.MapToEngineDef (BattleATB cannot reference BattleController's private
+        // method, so the small mapping is duplicated here and must be kept in sync).
+        private static string ResolveEnemySlug()
+        {
+            var handoff = DeNelle.Core.SceneRouter.PendingBattle;
+
+            // Prefer the actual breaching enemy that triggered the battle.
+            if (handoff != null && handoff.BreachedIds != null && handoff.BreachedIds.Length > 0)
+            {
+                string first = handoff.BreachedIds[0];
+                if (!string.IsNullOrEmpty(first))
+                    return ModelSlugForEngineDef(EngineDefFor(first));
+            }
+
+            // No handoff → deterministic by wave (cycles the roster, never a constant).
+            int wave = handoff != null ? handoff.Wave : 0;
+            string[] cycle = { "skeleton", "goblin", "bruiser", "necromancer" };
+            string defId = cycle[Mathf.Abs(wave) % cycle.Length];
+            return ModelSlugForEngineDef(defId);
+        }
+
+        // Normalize a breach id (engine key OR village enemies.json id) to a valid ENEMY_DEFS
+        // engine key. Mirror of BattleController.MapToEngineDef (kept deliberately small).
+        private static string EngineDefFor(string id)
+        {
+            if (string.IsNullOrEmpty(id)) return "skeleton";
+            if (Defs.ENEMY_DEFS.ContainsKey(id)) return id;     // already a valid engine key
+
+            string lower = id.ToLowerInvariant();
+            if (lower == "hollow-warrior") return "bruiser";
+            if (lower == "hollow-walker")  return "skeleton";
+            if (lower == "hollow-rogue")   return "skeleton";
+            if (lower.Contains("necro"))   return "necromancer";
+            if (lower.Contains("warrior") || lower.Contains("tank") || lower.Contains("bruiser")
+                || lower.Contains("bulwark") || lower.Contains("boss")
+                || lower.Contains("dragon")) return "bruiser";
+            if (lower.Contains("goblin"))  return "goblin";
+            return "skeleton";
+        }
+
+        // Map an ENEMY_DEFS engine key → a Resources/Enemies model slug (the prefab/FBX name).
+        // The engine has 7 archetype defs; Resources ships a richer model set, so several defs
+        // share a model. EnemyControllerFor() then stamps the matching animator by this slug.
+        private static string ModelSlugForEngineDef(string engineDef)
+        {
+            switch (engineDef)
+            {
+                case "goblin":            return "Skeleton_Minion";   // small grunt
+                case "bruiser":           return "Skeleton_Golem";    // heavy tank → large rig
+                case "necromancer":       return "Necromancer";
+                case "hollow-captain":    return "Orc_Berserker";     // elite captain
+                case "hollow-king":       return "Dragon";            // boss
+                case "hollow-apprentice": return "Skeleton_Mage";     // caster minion
+                case "skeleton":
+                default:                  return "Skeleton_Warrior";  // standard grunt
+            }
+        }
 
         // ── Enemy animator (DEF-259 #2: no-T-pose) ───────────────────────────
         // Mirror of DeNelle.Village.EnemyAnimatorFactory's rig→controller map. We
@@ -271,7 +333,11 @@ namespace DeNelle.BattleATB
             if (model == null) return;
             try
             {
-                var anim = model.GetComponentInChildren<Animator>() ?? model.AddComponent<Animator>();
+                // NOTE: do NOT use ?? here — GetComponentInChildren returns Unity's "fake-null"
+                // (a non-null managed ref wrapping a destroyed/absent native object), so ?? would
+                // never fall through and we'd skip AddComponent. Unity's overloaded == handles it.
+                var anim = model.GetComponentInChildren<Animator>();
+                if (anim == null) anim = model.AddComponent<Animator>();
                 anim.applyRootMotion = false; // turn-based stage: no locomotion drift
                 var ctrl = Resources.Load<RuntimeAnimatorController>("Enemies/" + EnemyControllerFor(modelName));
                 if (ctrl != null) anim.runtimeAnimatorController = ctrl;
@@ -298,7 +364,7 @@ namespace DeNelle.BattleATB
         // ── Enemy: tint the capsule (fallback when no model in Resources) ────
         private static void TintEnemy(Transform capsule)
         {
-            var r = capsule.GetComponent<Renderer>() ?? capsule.GetComponentInChildren<Renderer>();
+            var r = capsule.GetComponent<Renderer>(); if (r == null) r = capsule.GetComponentInChildren<Renderer>();
             if (r == null) return;
             if (r.sharedMaterial != null && r.sharedMaterial.name == "AtbEnemyTint") return;
             var sh = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");

@@ -102,7 +102,7 @@ namespace DeNelle.Village
             if (_arrowPrefab == null)
             {
                 var sgo = BuildVfxProjectile(origin, DamageElement.None, "RangerArrow");
-                var smover = sgo.GetComponent<ProjectileMover>() ?? sgo.AddComponent<ProjectileMover>();
+                if (!sgo.TryGetComponent(out ProjectileMover smover)) smover = sgo.AddComponent<ProjectileMover>();
                 smover.Launch(targetWorldPos, _arrowSpeed, _arrowArc,
                     WithImpactVfx(targetWorldPos, DamageElement.None, WithLandBurst(targetWorldPos, onArrive)));
                 return;
@@ -112,7 +112,7 @@ namespace DeNelle.Village
                 ? Instantiate(_arrowPrefab, origin, Quaternion.identity)
                 : BuildPlaceholderArrow(origin);
 
-            var mover = go.GetComponent<ProjectileMover>() ?? go.AddComponent<ProjectileMover>();
+            if (!go.TryGetComponent(out ProjectileMover mover)) mover = go.AddComponent<ProjectileMover>();
             mover.Launch(targetWorldPos, _arrowSpeed, _arrowArc, WithLandBurst(targetWorldPos, onArrive));
         }
 
@@ -130,7 +130,7 @@ namespace DeNelle.Village
             if (_spellOrbPrefab == null)
             {
                 var sgo = BuildVfxProjectile(origin, DamageElement.Aether, "MageOrb");
-                var smover = sgo.GetComponent<ProjectileMover>() ?? sgo.AddComponent<ProjectileMover>();
+                if (!sgo.TryGetComponent(out ProjectileMover smover)) smover = sgo.AddComponent<ProjectileMover>();
                 smover.Launch(targetWorldPos, _orbSpeed, 0f,
                     WithImpactVfx(targetWorldPos, DamageElement.Aether, WithLandBurst(targetWorldPos, onArrive)));
                 return;
@@ -140,7 +140,7 @@ namespace DeNelle.Village
                 ? Instantiate(_spellOrbPrefab, origin, Quaternion.identity)
                 : BuildPlaceholderOrb(origin);
 
-            var mover = go.GetComponent<ProjectileMover>() ?? go.AddComponent<ProjectileMover>();
+            if (!go.TryGetComponent(out ProjectileMover mover)) mover = go.AddComponent<ProjectileMover>();
             mover.Launch(targetWorldPos, _orbSpeed, 0f, WithLandBurst(targetWorldPos, onArrive));
         }
 

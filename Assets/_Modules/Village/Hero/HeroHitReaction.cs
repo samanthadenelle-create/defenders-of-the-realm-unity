@@ -58,11 +58,12 @@ namespace DeNelle.Village
         {
             // Start() / OnEnable run after HeroHealth.Awake, so the instance + its
             // events exist. Resolve on the same GameObject, fall back to the singleton.
-            _health = GetComponent<HeroHealth>() ?? HeroHealth.Instance;
+            _health = GetComponent<HeroHealth>();
+            if (_health == null) _health = HeroHealth.Instance;
             if (_health == null) return;
 
             _lastHp = _health.Hp;
-            _actor = GetComponent<ActorAnimator>() ?? gameObject.AddComponent<ActorAnimator>();
+            if (!TryGetComponent(out _actor)) _actor = gameObject.AddComponent<ActorAnimator>();
             _health.OnHealthChanged += HandleHealthChanged;
             _health.OnDied         += HandleDied;
         }

@@ -161,7 +161,7 @@ namespace DeNelle.Village
         private void Awake()
         {
             _animator    = GetComponentInChildren<Animator>();
-            _actor       = GetComponent<ActorAnimator>() ?? gameObject.AddComponent<ActorAnimator>();
+            if (!TryGetComponent(out _actor)) _actor = gameObject.AddComponent<ActorAnimator>();
             _abilities   = GetComponent<HeroAbilities>();
             _audioSource = GetComponent<AudioSource>();
             if (_audioSource == null)

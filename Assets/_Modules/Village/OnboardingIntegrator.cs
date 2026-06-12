@@ -89,7 +89,7 @@ namespace DeNelle.Village
             // ── Resolve the village-side gameplay components (same assembly) ──
             _buildMenu    = FindObjectOfType<BuildMenu>();
             _waveManager  = FindObjectOfType<WaveManager>();
-            _controller   = GetComponent<VillageController>() ?? FindObjectOfType<VillageController>();
+            _controller   = GetComponent<VillageController>(); if (_controller == null) _controller = FindObjectOfType<VillageController>();
             _petDeployer  = FindObjectOfType<DeNelle.Pets.PetDeployer>();
 
             // ── Resolve OnboardingFlow by reflection (cross-asmdef) ──────────

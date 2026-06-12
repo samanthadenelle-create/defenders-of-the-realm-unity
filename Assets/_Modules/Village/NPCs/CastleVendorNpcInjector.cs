@@ -203,6 +203,10 @@ namespace DeNelle.Village
             go.name = $"CastleVendor_{role}";
 
             NormalizeToHeroHeight(go);
+            // A8 (telemetry "NPCs floating"): scaling about a non-feet pivot lifts the
+            // model's feet off the floor; re-seat so the renderer-bounds bottom sits on
+            // the navmesh ground Y, not the (now-scaled) pivot.
+            SeatFeetOnGround(go, pos.y);
 
             // STATIC: Configure with wander=FALSE. AmbientNPC.Start then disables its
             // NavMeshAgent and the NPC stands its ground (idle sway only — no roam/follow).
@@ -271,6 +275,21 @@ namespace DeNelle.Village
                 var bubbleRoot = go.transform.Find("BubbleRoot");
                 if (bubbleRoot != null) bubbleRoot.localScale = Vector3.one / Mathf.Max(0.01f, npcScale);
             }
+        }
+
+        // A8: drop the body so the bottom of its combined renderer bounds rests on the
+        // given ground Y. Counters pivot-at-center prefabs floating after rescale.
+        private static void SeatFeetOnGround(GameObject go, float groundY)
+        {
+            var rends = go.GetComponentsInChildren<Renderer>();
+            if (rends.Length == 0) return;
+            Bounds b = rends[0].bounds;
+            for (int i = 1; i < rends.Length; i++) b.Encapsulate(rends[i].bounds);
+            float bottomY = b.min.y;
+            float delta = groundY - bottomY;
+            // Only correct a meaningful hover/sink; ignore sub-cm jitter.
+            if (Mathf.Abs(delta) > 0.01f)
+                go.transform.position += new Vector3(0f, delta, 0f);
         }
 
         // Name-based hero lookup (matches AmbientNPC / VillageNpcInjector): the hero rig is

@@ -65,6 +65,15 @@ tags: structure interaction pet
 // <<spawn_named_pet>> command is ALSO idempotent (Acquire no-ops on an owned
 // species) so the grant can never double-fire. When an echo is already bonded the
 // Warden offers a "they already walk with you" line instead of re-attuning.
+// A7 WHOLE-NODE re-select gate: a returning player who has ALREADY bonded an Echo and has no
+// free deploy slot gets a DIFFERENT greeting and NO selection options — they cannot re-select a
+// second Echo until a slot opens (Fenn's questline raises the cap). pet_select_closed() is backed
+// by PetAcquisitionService (owns-any AND slots-full); owned_pet_name() names the bonded Echo.
+<<if pet_select_closed()>>
+Echo Warden: Welcome back. {owned_pet_name()} already walks with you — the bond is whole. The hollow has no new echo to offer you yet. #lastline
+-> I'll return when I can take another.
+    Echo Warden: When your bond can hold another, the echoes will be waiting.
+<<else>>
 Echo Warden: Welcome to the Echo Hollow. The echoes here seek a bond. Choose one — they will fight at your side, guard Elarion, and return to you always. #lastline
 
 -> A frost-warden — the Ice Wolf. Steady and tough. <<if not pet_owned("ice-wolf")>>
@@ -84,4 +93,5 @@ Echo Warden: Welcome to the Echo Hollow. The echoes here seek a bond. Choose one
     Echo Warden: The Aether Sprite is already bonded to you — its arcane light is ever at your side.
 -> Not yet — I will return.
     Echo Warden: The hollow is always open when you are ready.
+<<endif>>
 ===

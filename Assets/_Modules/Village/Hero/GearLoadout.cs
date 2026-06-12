@@ -147,7 +147,9 @@ namespace DeNelle.Village
         private AegisSetEffect EnsureSetEffect()
         {
             if (_setEffect == null)
-                _setEffect = GetComponent<AegisSetEffect>() ?? gameObject.AddComponent<AegisSetEffect>();
+            {
+                if (!TryGetComponent(out _setEffect)) _setEffect = gameObject.AddComponent<AegisSetEffect>();
+            }
             return _setEffect;
         }
 
