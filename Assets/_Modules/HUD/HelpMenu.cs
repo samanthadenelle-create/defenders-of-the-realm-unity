@@ -20,6 +20,7 @@ using UnityEngine;
 using UnityEngine.Networking;
 using UnityEngine.SceneManagement;
 using UnityEngine.UIElements;
+using DeNelle.Core.UI;
 
 namespace DeNelle.HUD
 {
@@ -35,6 +36,13 @@ namespace DeNelle.HUD
         private Label _toast;
         private float _toastUntil;
         public static HelpMenu Instance { get; private set; }
+
+        // DEF-212 modal arbiter handle. The gear/Help menu is a full-screen modal
+        // (its backdrop is pickingMode.Position and eats input), so it MUST route
+        // through PanelManager like every other panel — otherwise it stacks over
+        // open content (e.g. the dialogue portrait) and an invisible-but-pickable
+        // backdrop can trap the player when another panel opens behind it.
+        private PanelHandle _panelHandle;
 
         private void Awake()
         {
@@ -68,7 +76,19 @@ namespace DeNelle.HUD
             // their own sortingOrder, so this must exceed the town canvas.
             _document.sortingOrder = 2700;   // above the town HUD (140) + inventory modal (2600) — settings menu is top-most
             BuildUi();
+            // DEF-212: register with the single-modal arbiter AFTER BuildUi so _overlay exists.
+            // Opening the Help menu now closes any other open panel; closing clears our slot.
+            _panelHandle = PanelManager.Register("Help", Close, () => IsOpen);
         }
+
+        private void OnDestroy()
+        {
+            if (Instance == this) Instance = null;
+        }
+
+        /// <summary>True while the Help overlay is visible (its backdrop is pickable).</summary>
+        public bool IsOpen =>
+            _overlay != null && _overlay.style.display != DisplayStyle.None;
 
         private void Update()
         {
@@ -135,7 +155,7 @@ namespace DeNelle.HUD
             card.Add(MakeButton("Dev tools",           OnOpenDevTools));   // dev builds only
 #endif
             card.Add(MakeButton("Credits",             OnShowCredits));
-            card.Add(MakeButton("Close",               ToggleOverlay));
+            card.Add(MakeButton("Close",               Close));
 
             // Toast (status messages) — appears low-center, fades after 3 s.
             _toast = new Label(string.Empty);
@@ -172,12 +192,22 @@ namespace DeNelle.HUD
         }
 
         // ── Actions ────────────────────────────────────────────────────────────
-        public void ToggleOverlay()
+        public void ToggleOverlay() => SetOpen(!IsOpen);
+
+        /// <summary>Explicitly hide the Help overlay (Close button + modal-arbiter close).</summary>
+        public void Close() => SetOpen(false);
+
+        private void SetOpen(bool open)
         {
             if (_overlay == null) return;
-            bool open = _overlay.style.display == DisplayStyle.None;
             _overlay.style.display = open ? DisplayStyle.Flex : DisplayStyle.None;
             _overlay.pickingMode = open ? PickingMode.Position : PickingMode.Ignore;
+            // Route through the modal arbiter (DEF-212): opening closes any other open
+            // panel; closing clears our slot so an invisible backdrop can never linger
+            // and trap input. NotifyOpened/Closed are no-ops if state is unchanged, so
+            // the Close callback the handle invokes won't recurse.
+            if (open) PanelManager.NotifyOpened(_panelHandle);
+            else PanelManager.NotifyClosed(_panelHandle);
         }
 
         private void OnReportBug()
@@ -328,9 +358,11 @@ namespace DeNelle.HUD
         private void OnOpenDevTools()
         {
             var admin = UnityEngine.Object.FindFirstObjectByType<AdminOverlay>();
-            if (admin != null) admin.Toggle();
-            else ShowToast("Admin overlay not in scene yet.");
-            ToggleOverlay(); // close the Help menu so the admin overlay is unobscured
+            if (admin == null) { ShowToast("Admin overlay not in scene yet."); return; }
+            // Close Help FIRST, then open Admin. Both route through PanelManager, so the
+            // arbiter also enforces single-modal; doing it explicitly keeps order clear.
+            Close();
+            admin.Open();
         }
 
         private void ShowToast(string message)

@@ -17,6 +17,7 @@ using DeNelle.Core.Catalog;
 using DeNelle.Core.UI;
 using UnityEngine;
 using UnityEngine.UIElements;
+using PanelMgr = DeNelle.Core.UI.PanelManager;
 
 namespace DeNelle.HUD
 {
@@ -34,6 +35,9 @@ namespace DeNelle.HUD
         private VisualElement _overlay;
         private Label _status;
         private bool _bound;
+
+        // DEF-212 modal arbiter handle (same discipline as HelpMenu / the shop panels).
+        private PanelHandle _panelHandle;
 
         // Dev orient tool — catalog id the owner types in.
         private TextField _orientIdField;
@@ -60,9 +64,25 @@ namespace DeNelle.HUD
                 }
             }
             if (_document.panelSettings == null) { enabled = false; return; }
-            _document.sortingOrder = 170; // above HelpMenu (160, raised over the town mini-map canvas)
+            // DEF: HelpMenu sits at sortingOrder 2700 (it raised itself over the town
+            // mini-map canvas long after this 170 comment was written). At 170 the admin
+            // overlay opened BENEATH the Help panel + town HUD, so "Dev tools" appeared to
+            // do nothing. Sit just above HelpMenu so the dev panel is actually visible.
+            _document.sortingOrder = 2710; // just above HelpMenu (2700)
             BuildUi();
+            // Route through the single-modal arbiter (DEF-212) so opening the admin overlay
+            // closes any other open panel (incl. Help) and closing clears the slot.
+            _panelHandle = PanelMgr.Register("Admin", Close, () => IsOpen);
         }
+
+        private void OnDestroy()
+        {
+            PanelMgr.NotifyClosed(_panelHandle);
+        }
+
+        /// <summary>True while the admin overlay is visible (its backdrop is pickable).</summary>
+        public bool IsOpen =>
+            _overlay != null && _overlay.style.display != DisplayStyle.None;
 
         private void Update()
         {
@@ -210,12 +230,9 @@ namespace DeNelle.HUD
                 return;
             }
 
-            // Hide the admin overlay so the orient panel is unobstructed.
-            if (_overlay != null)
-            {
-                _overlay.style.display = DisplayStyle.None;
-                _overlay.pickingMode = PickingMode.Ignore;
-            }
+            // Hide the admin overlay so the orient panel is unobstructed (route through
+            // the arbiter so the modal slot is cleared, not just the display flag).
+            Close();
             SetStatus($"Orienting '{id}'. Confirm in the panel — recipe logs to Console ([OrientRecipe]).");
         }
 
@@ -247,7 +264,15 @@ namespace DeNelle.HUD
             return true;
         }
 
-        public void Toggle()
+        public void Toggle() => SetOpen(!IsOpen);
+
+        /// <summary>Show the admin overlay (Help menu's "Dev tools" routes here).</summary>
+        public void Open() => SetOpen(true);
+
+        /// <summary>Hide the admin overlay (Close button + modal-arbiter close).</summary>
+        public void Close() => SetOpen(false);
+
+        private void SetOpen(bool open)
         {
             if (_overlay == null) return;
             // Resolve gate on demand.
@@ -257,9 +282,12 @@ namespace DeNelle.HUD
                 // (it's the only way to get here at all right now). The chord
                 // requires Ctrl+Shift+A so it's not a stranger trigger.
             }
-            bool open = _overlay.style.display == DisplayStyle.None;
             _overlay.style.display = open ? DisplayStyle.Flex : DisplayStyle.None;
             _overlay.pickingMode = open ? PickingMode.Position : PickingMode.Ignore;
+            // Single-modal arbiter (DEF-212): opening closes any other open panel; closing
+            // clears our slot so the invisible-but-pickable backdrop can't trap input.
+            if (open) PanelMgr.NotifyOpened(_panelHandle);
+            else PanelMgr.NotifyClosed(_panelHandle);
             if (open) SetStatus("Ready.");
         }
 
