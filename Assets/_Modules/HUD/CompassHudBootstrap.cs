@@ -1,13 +1,19 @@
 // =============================================================================
 // CompassHudBootstrap — auto-spawns a CompassHud in any scene that has a
-// recognisable hero + a UIDocument to hang the overlay off. Same
-// RuntimeInitializeOnLoadMethod pattern as the Help menu / GameStateService
-// bootstraps. Idempotent + scene-scoped — no duplicate compasses across loads.
+// recognisable hero. Same RuntimeInitializeOnLoadMethod pattern as the Help
+// menu / GameStateService bootstraps. Idempotent + scene-scoped — no duplicate
+// compasses across loads.
+//
+// WO-322 RE-FIX (2026-06-12): CompassHud is now a CODE-BUILT uGUI overlay (its
+// own ScreenSpaceOverlay Canvas) — it no longer needs a UIDocument or a
+// PanelSettings. The previous bootstrap REQUIRED a PanelSettings-bearing
+// UIDocument in the scene and BAILED forever when none existed (the main HUD,
+// VillageHudController, is pure uGUI with NO PanelSettings) → the compass never
+// spawned. We drop that requirement entirely: spawn as soon as a hero exists.
 // =============================================================================
 
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using UnityEngine.UIElements;
 
 namespace DeNelle.HUD
 {
@@ -36,44 +42,15 @@ namespace DeNelle.HUD
             var hero = FindHero();
             if (hero == null) return; // No hero in this scene (e.g., Title/HeroSelect) → no compass.
 
-            // WO-322 ROOT CAUSE: the compass spawned itself but NEVER got a
-            // PanelSettings. It relied on CompassHud.Awake scanning the scene for a
-            // UIDocument to borrow one from — but at AfterSceneLoad the sibling HUD
-            // UIDocuments (DailyQuest/QuestTracker) may not have spawned yet, so the
-            // scan came up empty and CompassHud.Awake did `enabled = false`
-            // PERMANENTLY (the spawned GameObject then satisfied the existing-instance
-            // guard above, so it was never retried). Result: no compass, ever.
-            //
-            // FIX — mirror DailyQuestHudBootstrap / QuestTrackerHudBootstrap exactly:
-            // resolve the PanelSettings HERE and BAIL (return, no GameObject) if none
-            // is available yet, so the NEXT sceneLoaded retries. Assign PanelSettings
-            // BEFORE adding the CompassHud component so its UIDocument renders.
-            var panel = FindPanelSettings();
-            if (panel == null) return; // retry on next sceneLoaded once a panel exists.
-
             var go = new GameObject("CompassHud");
             SceneManager.MoveGameObjectToScene(go, scene);
-            var ui = go.AddComponent<UIDocument>();
-            ui.panelSettings = panel;
-            ui.sortingOrder = 90; // below Help menu (100), above default HUD chrome
             var compass = go.AddComponent<CompassHud>();
             compass.Hero = hero;
 
-            // Hook a tiny ticker that refreshes the enemy target list every
-            // ~0.5 s so we don't FindObjectsByType every frame.
+            // Refresh the enemy target list ~2 Hz so we don't FindObjectsByType
+            // every frame.
             var ticker = go.AddComponent<EnemyTargetTicker>();
             ticker.Compass = compass;
-        }
-
-        private static PanelSettings FindPanelSettings()
-        {
-            // Borrow from any existing UIDocument in the scene (no Resources-by-name
-            // load). Mirrors DailyQuestHudBootstrap / QuestTrackerHudBootstrap.
-            var docs = UnityEngine.Object.FindObjectsByType<UIDocument>(
-                FindObjectsInactive.Include, FindObjectsSortMode.None);
-            foreach (var d in docs)
-                if (d != null && d.panelSettings != null) return d.panelSettings;
-            return null;
         }
 
         /// <summary>
