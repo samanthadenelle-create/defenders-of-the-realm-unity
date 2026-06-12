@@ -257,17 +257,37 @@ namespace DeNelle.Village
             Vector3 host = transform.lossyScale;
             _canvas.transform.localScale = new Vector3(
                 InvAxis(host.x), InvAxis(host.y), InvAxis(host.z));
+
+            // WO-302 follow-on: _heightOffset is a WORLD-space height (callers derive
+            // it from world renderer bounds). The canvas is a child, so its
+            // localPosition.y is multiplied by the host's lossyScale.y — on a large
+            // (e.g. ~100×) People-family host that flung the bar hundreds of metres
+            // up ("green bar floating mid-field with no owner"). Convert the world
+            // offset into the host's local units so the bar sits the same world
+            // distance above the head regardless of host scale.
+            _canvas.transform.localPosition = new Vector3(0f, _heightOffset * InvAxis(host.y), 0f);
         }
 
-        // Inverse of one lossyScale axis, made safe: a non-finite or near-zero scale
-        // collapses to 1 (no compensation) instead of dividing toward infinity and
-        // blowing the bar up to fill the screen.
+        // Inverse of one lossyScale axis, made safe.
+        //
+        // WO-302 ROOT CAUSE (re-fix 2026-06-12): the previous version clamped the
+        // DIVISOR to [0.05, 50] before inverting. The orc/troll People-family
+        // meshes import at a LARGE root scale (> 50). When the host scale exceeded
+        // 50 the divisor was capped at 50, so the canvas world scale ended up
+        // host/50 (e.g. a host scaled ~100 → bar rendered ~2× = the persistent
+        // "giant green pill"). Capping the divisor is exactly wrong: the bigger
+        // the host, the MORE compensation it needs, not less.
+        //
+        // Fix: divide by the host's ACTUAL scale so the canvas world scale is
+        // truly ~1 on every axis no matter how large the host. We keep ONLY the
+        // genuine safety guards — a non-finite scale, and a near-zero floor so a
+        // degenerate (collapsed) host can't divide toward infinity.
         private static float InvAxis(float s)
         {
             if (float.IsNaN(s) || float.IsInfinity(s)) return 1f;
             float a = Mathf.Abs(s);
-            if (a < 0.01f) return 1f;                 // degenerate → don't amplify
-            return 1f / Mathf.Clamp(a, 0.05f, 50f);
+            if (a < 0.0001f) return 1f;   // degenerate / collapsed host → don't amplify
+            return 1f / a;                // full per-axis compensation (no upper cap)
         }
 
         // Stretches a child rect to fill the canvas, optionally inset (negative
