@@ -111,6 +111,18 @@ namespace DeNelle.Village
             // replay for testing — dev builds no longer auto-replay every entry.
             bool always = HasAlwaysFlag();
 
+            // SINGLE-TRIGGER (owner 2026-06-12): the walk-up companion-introducer NPC is
+            // now the SOLE companion intro+recruit trigger (CastleCompanionIntroducerInjector).
+            // When it's active, do NOT auto-host the full Yarn CompanionMeeting on entry —
+            // the player must walk up to the introducer instead, so there are never two
+            // intros. The -yarnAlways dev flag still forces it for testing.
+            if (!always && CastleCompanionIntroducerInjector.Active)
+            {
+                Debug.Log("[CompanionMeetingTrigger] Walk-up companion introducer is active — " +
+                          "skipping the auto-hosted CompanionMeeting (the NPC owns the intro+recruit).");
+                return;
+            }
+
             // FAST PATH (default "Start New") — owner: fast into battle. The full Yarn
             // CompanionMeeting is the deep, blocking FTUE; it must ONLY play when the
             // player opted into the full tutorial ("Play Intro"). On the fast path the

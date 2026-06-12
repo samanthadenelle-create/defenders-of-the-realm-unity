@@ -249,23 +249,37 @@ namespace DeNelle.Village
             // silent skip-into-combat instead.
             try
             {
-                // Build the lightweight sub-components we need (companion + dialogue).
-                BuildSubComponents();
+                // SINGLE-TRIGGER (owner 2026-06-12): when the walk-up companion-introducer
+                // NPC is active, it OWNS the companion intro+recruit — the player walks up
+                // to it to meet + recruit the first companion. So the fast-path brief
+                // companion HOOK (spawn-guide + intro lines) is SKIPPED here to avoid a
+                // second, auto-firing intro. The wave-loop handoff below (FinishTutorial)
+                // still runs unchanged, so combat starts exactly as before.
+                if (!CastleCompanionIntroducerInjector.Active)
+                {
+                    // Build the lightweight sub-components we need (companion + dialogue).
+                    BuildSubComponents();
 
-                // Spawn the guide companion (a DIFFERENT class) and take over its bubble
-                // so the hook reads as the companion speaking.
-                _companionSpawner?.Spawn();
-                BindCompanionBubble();
+                    // Spawn the guide companion (a DIFFERENT class) and take over its bubble
+                    // so the hook reads as the companion speaking.
+                    _companionSpawner?.Spawn();
+                    BindCompanionBubble();
 
-                string speaker = SpeakerName();
-                string shortName = _companionSpawner != null ? _companionSpawner.CompanionShortName : "your guide";
+                    string speaker = SpeakerName();
+                    string shortName = _companionSpawner != null ? _companionSpawner.CompanionShortName : "your guide";
 
-                // THE HOOK — a little story + an immediate call to action (3 lines).
-                _dialogue?.Say(speaker,
-                    $"You made it. I'm {shortName} — and the enemy is already at the gate.",
-                    "No time for a tour. Elarion holds because we hold the line.",
-                    "Defend the gate — I'm right beside you. GO!");
-                await WaitForDialogue();
+                    // THE HOOK — a little story + an immediate call to action (3 lines).
+                    _dialogue?.Say(speaker,
+                        $"You made it. I'm {shortName} — and the enemy is already at the gate.",
+                        "No time for a tour. Elarion holds because we hold the line.",
+                        "Defend the gate — I'm right beside you. GO!");
+                    await WaitForDialogue();
+                }
+                else
+                {
+                    Debug.Log("[TutorialDirector] Walk-up companion introducer is active — skipping the " +
+                              "fast-path companion hook (the NPC owns the intro+recruit); handing off to gameplay.");
+                }
             }
             catch (Exception ex)
             {

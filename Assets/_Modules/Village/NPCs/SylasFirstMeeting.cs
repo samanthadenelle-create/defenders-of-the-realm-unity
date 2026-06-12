@@ -133,6 +133,12 @@ namespace DeNelle.Village
                 if (s_ranThisSession) return false;
                 if (ForceRun) return true;
 
+                // SINGLE-TRIGGER (owner 2026-06-12): when the walk-up companion-introducer
+                // NPC is active it is the SOLE intro+recruit path — this auto-firing beat
+                // must stand down so the recruit can't fire twice (NPC + this both calling
+                // RecruitCompanion). The NPC plays the same "SylasFirstMeeting" Yarn node.
+                if (CastleCompanionIntroducerInjector.Active) return false;
+
                 var svc = GameStateService.Instance;
                 if (svc == null || svc.State == null) return false;
 
