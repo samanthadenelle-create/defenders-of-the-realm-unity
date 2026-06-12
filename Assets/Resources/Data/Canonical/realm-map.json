@@ -1,0 +1,117 @@
+{
+  "_comment": "Canonical Realm Map data for Defenders of the Realm. The Realm Map is the region-progression overworld: the village (Elarion) is the home base; each region is a fog-shrouded node the player discovers (gate met) then clears (one-time main objective done). Mirrors the shape the React v1 regions system uses (src/contracts/region.ts RegionDef + src/state/slices/regionsSlice.ts RegionProgress) so both engines read the same source of truth. Realm Map is a later-week / v1.1 feature; this file is authored ahead of the Unity port of the regions system.",
+  "_sources": {
+    "designDoc": "defenders-of-the-realm/docs/map-content-dungeons-design.md (§2 The Realm Map)",
+    "regionsSpec": "defenders-of-the-realm/docs/realms-spec.md (Wintermere zone reference only — 'realm' there is the social-group system, NOT this map)",
+    "regionContract": "defenders-of-the-realm/src/contracts/region.ts (RegionDef, RegionGate, RegionId, RegionState)",
+    "regionRunContract": "defenders-of-the-realm/src/contracts/region-run.ts (ActiveRegionRun, RegionRunResult)",
+    "regionsSlice": "defenders-of-the-realm/src/state/slices/regionsSlice.ts (RegionProgress — the v9→v10 save migration seed)",
+    "regionCatalog": "defenders-of-the-realm/src/modules/realm/region-content/index.ts + thornwood.ts (ALL_REGIONS — authored RegionDef catalog, the verbatim source for ids/titles/biomes/gates/rewards)",
+    "mapLayout": "defenders-of-the-realm/src/modules/realm/realm-map-layout.ts (AVALON_POINT, REGION_POINTS — verbatim node coordinates)",
+    "biomeElements": "defenders-of-the-realm/src/assets/biomeElements.ts (Element taxonomy + BIOME_ELEMENTS palette)",
+    "narrativeBible": "defenders-unity/docs/narrative-bible.md (Avalon, the Withering, the Wound — canon)"
+  },
+  "_schemaNotes": {
+    "regionDef": "Each entry in `regions` mirrors React's RegionDef exactly: id, title, biome, propSet, waveCount, elementBias, gate, clearReward. The Unity loader can deserialize a region entry straight into a RegionDef record. Extra fields (description, mapPoint, mapOrder, dungeonRegion) are additive map metadata not present on RegionDef — a typed loader should treat them as optional.",
+    "gate": "RegionGate is a discriminated union on `kind`: 'bestWave' { value:int } unlocks when the player has cleared >= value village waves; 'regionCleared' { regionId } unlocks when a prerequisite region is cleared. This is the exact union from src/contracts/region.ts.",
+    "state": "RegionState ('locked'|'discovered'|'cleared'|'threatened') is DERIVED at runtime from RegionProgress, never stored in this file. 'threatened' is a transient Weekly-Realm-Threat overlay only.",
+    "progressLedger": "`progressLedger` documents the persisted RegionProgress shape (two flat maps discovered/cleared keyed by region id). It is the v10 save-migration seed (emptyRegionProgress() => { discovered:{}, cleared:{} }). It is NOT authored content — it is here so the Unity SaveSchema/loader knows the persisted shape."
+  },
+  "version": 1,
+  "homeBase": {
+    "id": "avalon",
+    "title": "Elarion",
+    "epithet": "the last green sanctuary",
+    "description": "The home base — the village the Keeper tends and the Heart, Elarion, at its centre. Not a region: it has no gate and is never cleared. All persistent buildings, the economy, towers, walls and pets live here, and the player always returns. The Realm Map is the world Elarion sits inside, reached from the village Wayshrine.",
+    "mapPoint": { "x": 50, "y": 50 },
+    "isRegion": false
+  },
+  "regions": [
+    {
+      "id": "thornwood",
+      "title": "The Thornwood",
+      "description": "Region 1 — the first region beyond Elarion. A deep, choked forest whose canopy keeps out the sun; its enemy mix skews nature and poison. A low bestWave gate means a player who has held the village for a few waves discovers the road out early. The Thornwood's main objective is a five-wave forest defense of a young Heart-sapling.",
+      "biome": "forest",
+      "propSet": "forest-thicket",
+      "waveCount": 5,
+      "elementBias": ["nature", "poison"],
+      "gate": { "kind": "bestWave", "value": 3 },
+      "clearReward": { "crystals": 120, "food": 40 },
+      "mapPoint": { "x": 30, "y": 32 },
+      "mapOrder": 1,
+      "dungeonRegion": false,
+      "adjacency": ["avalon", "mirewood"]
+    },
+    {
+      "id": "mirewood",
+      "title": "The Mirewood",
+      "description": "Region 2 — a drowned, venomous swamp downriver of the Thornwood. Stagnant water and creeping rot; the mire itself is venomous and its denizens wear that venom as a weapon. Discovered only after the Thornwood is cleared. A six-wave defense.",
+      "biome": "swamp",
+      "propSet": "swamp-mire",
+      "waveCount": 6,
+      "elementBias": ["poison", "water"],
+      "gate": { "kind": "regionCleared", "regionId": "thornwood" },
+      "clearReward": { "crystals": 180, "food": 60 },
+      "mapPoint": { "x": 70, "y": 30 },
+      "mapOrder": 2,
+      "dungeonRegion": false,
+      "adjacency": ["thornwood", "hollowfrost"]
+    },
+    {
+      "id": "hollowfrost",
+      "title": "Hollowfrost Vale",
+      "description": "Region 3 — a glacier-locked hollow past the Mirewood, where the cold never breaks. Its creatures move slow and certain, like the slow grind of the ice itself. Discovered only after the Mirewood is cleared. A seven-wave defense.",
+      "biome": "ice",
+      "propSet": "ice-hollow",
+      "waveCount": 7,
+      "elementBias": ["ice", "water"],
+      "gate": { "kind": "regionCleared", "regionId": "mirewood" },
+      "clearReward": { "crystals": 240, "coins": 8 },
+      "mapPoint": { "x": 80, "y": 64 },
+      "mapOrder": 3,
+      "dungeonRegion": false,
+      "adjacency": ["mirewood", "emberwastes"]
+    },
+    {
+      "id": "emberwastes",
+      "title": "The Emberwastes",
+      "description": "Region 4 — cracked, magma-veined badlands beyond the frost. Black earth bleeding magma; the things here treat heat the way other creatures treat air. The hard region. Discovered only after Hollowfrost Vale is cleared. An eight-wave defense.",
+      "biome": "fire",
+      "propSet": "fire-waste",
+      "waveCount": 8,
+      "elementBias": ["fire", "earth"],
+      "gate": { "kind": "regionCleared", "regionId": "hollowfrost" },
+      "clearReward": { "crystals": 320, "coins": 12 },
+      "mapPoint": { "x": 26, "y": 70 },
+      "mapOrder": 4,
+      "dungeonRegion": false,
+      "adjacency": ["hollowfrost", "starfall-reach"]
+    },
+    {
+      "id": "starfall-reach",
+      "title": "The Starfall Reach",
+      "description": "Region 5 — the far frontier, where the sky tore open and the stars fell through. Reality is thin here, and what crosses over wears starlight like armour. The last and hardest region. Discovered only after the Emberwastes is cleared. A ten-wave defense.",
+      "biome": "cosmic",
+      "propSet": "cosmic-rift",
+      "waveCount": 10,
+      "elementBias": ["cosmic", "void"],
+      "gate": { "kind": "regionCleared", "regionId": "emberwastes" },
+      "clearReward": { "crystals": 480, "coins": 24 },
+      "mapPoint": { "x": 54, "y": 84 },
+      "mapOrder": 5,
+      "dungeonRegion": false,
+      "adjacency": ["emberwastes"]
+    }
+  ],
+  "withering": {
+    "_comment": "The Withering is the creeping corruption that seeps from the Wound. On the Realm Map it is a corrupted border around the parchment's edge — atmospheric only, never a punishing timer (the cozy covenant forbids FOMO countdowns). Later it becomes the visual home of the Weekly Realm Threat event.",
+    "edgeBorder": true,
+    "weeklyRealmThreat": false
+  },
+  "progressLedger": {
+    "_comment": "Documents the persisted RegionProgress shape (regionsSlice.ts). NOT authored content — this is the runtime save shape, shown here so the Unity SaveSchema/loader matches it. emptyRegionProgress() is the v9→v10 migration seed.",
+    "_shape": "{ discovered: Record<regionId, true>, cleared: Record<regionId, true> }",
+    "discovered": {},
+    "cleared": {}
+  }
+}

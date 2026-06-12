@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "zones": [
+    { "id": "ice",    "name": "Ice Gate",    "color": "#9bd4f5", "glow": "#c6f3ff", "sectorAngleRadians": 3.926990817 },
+    { "id": "fire",   "name": "Fire Gate",   "color": "#ff8a4c", "glow": "#ff7e38", "sectorAngleRadians": 0.785398163 },
+    { "id": "aether", "name": "Aether Gate", "color": "#b78cff", "glow": "#9d6fff", "sectorAngleRadians": 2.356194490 }
+  ],
+  "levels": [
+    null,
+    { "level": 1, "name": "Arcane Spire", "range": 14, "damage": 12, "cooldownSeconds": 1.1, "height": 3.2 },
+    { "level": 2, "name": "Runed Spire",  "range": 17, "damage": 22, "cooldownSeconds": 0.9, "height": 3.9 },
+    { "level": 3, "name": "Warded Spire", "range": 21, "damage": 40, "cooldownSeconds": 0.7, "height": 4.6 }
+  ],
+  "slotsPerZone": 3,
+  "slotFanAngleRadians": 0.34,
+  "slotRadiusOffset": 4,
+  "notes": "Towers sit just OUTSIDE the square wall at the diagonal corners (sectorAngle + (slotInZone - 1) * fanAngle). Radius = halfSize * sqrt(2) + slotRadiusOffset. Ported from React src/modules/village/buildings/towerConstants.ts."
+}

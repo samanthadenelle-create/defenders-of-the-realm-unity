@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "halfSize": 25,
+  "tiers": [
+    {
+      "level": 0,
+      "name": "Wooden Fence",
+      "emoji": "🪵",
+      "effect": "A simple palisade — no protection yet.",
+      "heartDamageMultiplier": 1.0,
+      "targetHeight": 3.0,
+      "meshStraight": "kaykit/medieval/walls/fence_wood_straight.gltf",
+      "meshGate":     "kaykit/medieval/walls/fence_wood_straight_gate.gltf"
+    },
+    {
+      "level": 1,
+      "name": "Stone Wall",
+      "emoji": "🧱",
+      "effect": "The Heart takes 15% less damage from attackers.",
+      "heartDamageMultiplier": 0.85,
+      "targetHeight": 3.8,
+      "meshStraight": "kaykit/medieval/walls/fence_stone_straight.gltf",
+      "meshGate":     "kaykit/medieval/walls/fence_stone_straight_gate.gltf"
+    },
+    {
+      "level": 2,
+      "name": "Steel Wall",
+      "emoji": "⚙️",
+      "effect": "The Heart takes 30% less damage from attackers.",
+      "heartDamageMultiplier": 0.70,
+      "targetHeight": 4.5,
+      "meshStraight": "kaykit/medieval/walls/wall_straight.gltf",
+      "meshGate":     "kaykit/medieval/walls/wall_straight_gate.gltf"
+    },
+    {
+      "level": 3,
+      "name": "Spiked Steel Wall",
+      "emoji": "🛡️",
+      "effect": "The Heart takes 30% less damage. Spikes wound enemies crossing the wall.",
+      "heartDamageMultiplier": 0.70,
+      "targetHeight": 5.2,
+      "spikeDamagePerSecond": 9,
+      "meshStraight": "kaykit/medieval/walls/wall_straight.gltf",
+      "meshGate":     "kaykit/medieval/walls/wall_straight_gate.gltf"
+    }
+  ],
+  "notes": "Square perimeter — halfSize is half the length of one side; total perimeter = 8 * halfSize. Four cardinal gates (N/E/S/W). Ported from React src/modules/village/walls/constants.ts."
+}
