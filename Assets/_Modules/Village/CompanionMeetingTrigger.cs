@@ -98,9 +98,11 @@ namespace DeNelle.Village
             }
         }
 
-        private static bool IsVillageScene(string sceneName) =>
-            !string.IsNullOrEmpty(sceneName) &&
-            sceneName.IndexOf("Village", StringComparison.OrdinalIgnoreCase) >= 0;
+        // Widened from a "Village"-contains check to the canonical hub list so the FTUE
+        // companion meeting also fires in the castle hub (MainCastle_Hall), not just the
+        // abandoned Village2 — the companion-never-joins gate. HubScenes.IsHub covers
+        // Village2 AND the castle, so the village flow is preserved.
+        private static bool IsVillageScene(string sceneName) => HubScenes.IsHub(sceneName);
 
         private static void TryHost()
         {

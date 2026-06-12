@@ -27,6 +27,7 @@
 
 using System;
 using Cysharp.Threading.Tasks;
+using DeNelle.Core;
 using DeNelle.Core.State;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -43,8 +44,6 @@ namespace DeNelle.Village
     [DisallowMultipleComponent]
     public sealed class ElaraWaveThreeJoin : MonoBehaviour
     {
-        private const string TargetScene = "Village2";
-
         /// <summary>The one-shot SeenTutorials key — once set the beat never replays.</summary>
         private const string SeenKey = "elara_wave3_join";
 
@@ -86,7 +85,10 @@ namespace DeNelle.Village
 
         private void Awake()
         {
-            if (SceneManager.GetActiveScene().name != TargetScene) { Destroy(gameObject); return; }
+            // Widened from an exact "Village2" match to the canonical hub list so the
+            // wave-3 join can also fire in the castle hub (MainCastle_Hall), not just the
+            // abandoned Village2 — same companion-never-joins gate as the first meeting.
+            if (!HubScenes.IsHub(SceneManager.GetActiveScene().name)) { Destroy(gameObject); return; }
         }
 
         private void Update()

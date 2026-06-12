@@ -44,6 +44,7 @@
 
 using System;
 using Cysharp.Threading.Tasks;
+using DeNelle.Core;
 using DeNelle.Core.State;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -60,7 +61,6 @@ namespace DeNelle.Village
     public sealed class SylasFirstMeeting : MonoBehaviour
     {
         // ── Tuning ───────────────────────────────────────────────────────────
-        private const string TargetScene = "Village2";
 
         /// <summary>The one-shot SeenTutorials key — once set the beat never replays.</summary>
         private const string SeenKey = "sylas_first_meeting";
@@ -104,8 +104,11 @@ namespace DeNelle.Village
 
         private void Awake()
         {
-            // Only ever needed in the Village scene; clean up elsewhere.
-            if (SceneManager.GetActiveScene().name != TargetScene)
+            // Only ever needed in a home/hub scene (Village2 OR the castle hub); clean up
+            // elsewhere. Widened from an exact "Village2" match to HubScenes.IsHub so the
+            // first-meeting beat can also fire in MainCastle_Hall — the companion-never-joins
+            // gate (the recruit machinery was complete but never reached off Village2).
+            if (!HubScenes.IsHub(SceneManager.GetActiveScene().name))
             {
                 Destroy(gameObject);
             }

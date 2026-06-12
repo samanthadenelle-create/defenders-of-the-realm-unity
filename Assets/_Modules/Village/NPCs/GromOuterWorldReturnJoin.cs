@@ -30,6 +30,7 @@
 
 using System;
 using Cysharp.Threading.Tasks;
+using DeNelle.Core;
 using DeNelle.Core.State;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -45,8 +46,6 @@ namespace DeNelle.Village
     [DisallowMultipleComponent]
     public sealed class GromOuterWorldReturnJoin : MonoBehaviour
     {
-        private const string TargetScene = "Village2";
-
         /// <summary>The one-shot SeenTutorials key — once set the beat never replays.</summary>
         private const string SeenKey = "grom_world_return_join";
 
@@ -81,7 +80,12 @@ namespace DeNelle.Village
 
         private void Awake()
         {
-            if (SceneManager.GetActiveScene().name != TargetScene) { Destroy(gameObject); return; }
+            // Widened from an exact "Village2" match to the canonical hub list so the
+            // first-return join can bootstrap in the castle hub (MainCastle_Hall) too. The
+            // venture-out/return detection is GEOMETRIC (FarRadius/HomeRadius from origin),
+            // so it still only fires after a real OuterWorld round-trip — this only lets the
+            // watcher live in the castle hub instead of self-destructing off Village2.
+            if (!HubScenes.IsHub(SceneManager.GetActiveScene().name)) { Destroy(gameObject); return; }
         }
 
         private void Update()

@@ -18,6 +18,7 @@
 // =============================================================================
 
 using System.Collections.Generic;
+using DeNelle.Core;
 using DeNelle.Core.State;
 using UnityEngine;
 using UnityEngine.AI;
@@ -29,8 +30,6 @@ namespace DeNelle.Village
     public sealed class StoryCompanionInjector : MonoBehaviour
     {
         public static StoryCompanionInjector Instance { get; private set; }
-
-        private const string TargetScene = "Village2";
 
         // The live companions, keyed by class, so a re-load / roster change replaces
         // rather than duplicates them. WO (party-of-4): the injector now spawns ONE
@@ -85,7 +84,7 @@ namespace DeNelle.Village
         public void SetHeroClassOverride(HeroClass? heroClass)
         {
             s_heroClassOverride = heroClass;
-            if (SceneManager.GetActiveScene().name == TargetScene) Spawn();
+            if (HubScenes.IsHub(SceneManager.GetActiveScene().name)) Spawn();
         }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -113,7 +112,7 @@ namespace DeNelle.Village
             var svc = GameStateService.Instance;
             if (svc != null) svc.PlayerChanged.AddListener(OnRosterMaybeChanged);
 
-            if (SceneManager.GetActiveScene().name == TargetScene) Spawn();
+            if (HubScenes.IsHub(SceneManager.GetActiveScene().name)) Spawn();
         }
 
         private void OnDestroy()
@@ -129,12 +128,12 @@ namespace DeNelle.Village
         // the roster + replaces any prior companion, so this is idempotent).
         private void OnRosterMaybeChanged()
         {
-            if (SceneManager.GetActiveScene().name == TargetScene) Spawn();
+            if (HubScenes.IsHub(SceneManager.GetActiveScene().name)) Spawn();
         }
 
         private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
         {
-            if (scene.name == TargetScene) Spawn();
+            if (HubScenes.IsHub(scene.name)) Spawn();
         }
 
         // ── Spawn ────────────────────────────────────────────────────────────
