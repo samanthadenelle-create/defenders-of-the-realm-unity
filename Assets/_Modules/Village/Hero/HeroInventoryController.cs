@@ -124,42 +124,95 @@ namespace DeNelle.Village
         }
 
         /// <summary>Open the inventory modal (builds the overlay if needed).</summary>
+        // HARDENING (owner: "opens nothing"): EVERY stage is now isolated so a throw in
+        // one stage can never leave the player with a blank screen + a single vague log.
+        // The two stages that used to ride the broad outer try/catch — ResolveLoadout()
+        // and BuildRoot() — are now individually guarded and emit a SPECIFIC message
+        // naming the stage and the live hero/loadout state. A half-built root (BuildRoot
+        // threw partway, leaving a non-null-but-broken _ui) is detected and torn down so
+        // the NEXT Open() rebuilds from scratch instead of re-activating garbage.
         public void Open()
         {
-            try
+            // 1) Resolve the live hero's loadout. A null loadout is NOT fatal — the modal
+            //    still opens (paper-doll falls back to the default starter armor display),
+            //    so a missing/just-spawned hero never produces "opens nothing".
+            SafeRun(ResolveLoadout, "ResolveLoadout");
+
+            // 2) Build the chrome. If this throws, tear down any partial root so it can't
+            //    be re-activated broken on the next Open(), and bail with a loud, specific
+            //    message — this is the most likely real "opens nothing" culprit.
+            if (_ui == null)
             {
-                ResolveLoadout();
-                if (_ui == null) BuildRoot();
-                if (_ui == null) return;            // BuildRoot failed hard — nothing to show
-                _ui.SetActive(true);
-                // Join the single-modal arbiter: opening the bag closes any other open
-                // modal (Help/Dev/Shop) and registers this one so it can't get stuck.
+                try { BuildRoot(); }
+                catch (System.Exception e)
+                {
+                    Debug.LogError("[HeroInventoryController] BuildRoot FAILED — inventory could not open. "
+                                   + DescribeState() + "\n" + e);
+                    if (_ui != null) { Destroy(_ui); _ui = null; }
+                    _gridRoot = _sidebarRoot = _paperDoll = _tabsRoot = null;
+                    return;
+                }
+            }
+            if (_ui == null)
+            {
+                Debug.LogError("[HeroInventoryController] BuildRoot produced no UI (root is null) — "
+                               + "inventory has nothing to show. " + DescribeState());
+                return;
+            }
+
+            _ui.SetActive(true);
+
+            // 3) Modal arbiter registration (isolated: a PanelManager hiccup must not blank
+            //    the already-built, already-active modal).
+            SafeRun(() =>
+            {
                 if (_panelHandle == null)
                     _panelHandle = DeNelle.Core.UI.PanelManager.Register("Inventory", Close, () => IsOpen);
                 DeNelle.Core.UI.PanelManager.NotifyOpened(_panelHandle);
-                Subscribe();
-                _tab = Tab.Weapons;
-                ClearSelection();
-                // Each section is isolated so a failure in one (e.g. a single bad
-                // catalog row) leaves the rest of the modal rendered, not blank.
-                SafeRun(RebuildPaperDoll, "RebuildPaperDoll");
-                SafeRun(RebuildGrid,      "RebuildGrid");
-                SafeRun(RebuildSidebar,   "RebuildSidebar");
-            }
-            catch (System.Exception e)
-            {
-                Debug.LogError("[HeroInventoryController] Open failed (UI may be partial): " + e);
-            }
+            }, "PanelManager.Register/NotifyOpened");
+
+            SafeRun(Subscribe, "Subscribe");
+            _tab = Tab.Weapons;
+            ClearSelection();
+
+            // 4) Each content section is isolated so a failure in one (e.g. a single bad
+            //    catalog row) leaves the rest of the modal rendered, not blank.
+            SafeRun(RebuildPaperDoll, "RebuildPaperDoll");
+            SafeRun(RebuildGrid,      "RebuildGrid");
+            SafeRun(RebuildSidebar,   "RebuildSidebar");
+        }
+
+        // A one-line snapshot of the live hero/data state, appended to failure logs so the
+        // exact open-time condition (no hero? no loadout? empty catalog?) is obvious in the
+        // console on the next playtest — the goal: never silently "open nothing" again.
+        private string DescribeState()
+        {
+            string hero;
+            try { hero = GameObject.FindWithTag("Player") != null ? "Player-found" : "Player-MISSING"; }
+            catch { hero = "Player-tag-error"; }
+            int weapons = 0, armors = 0;
+            try { weapons = GearCatalog.AllWeapons().Count; armors = GearCatalog.AllArmors().Count; }
+            catch { /* catalog read failed — reported as 0 below */ }
+            string job = "?";
+            try { job = HeroJob; } catch { /* loadout/abilities not ready */ }
+            return "[state hero=" + hero
+                   + " loadout=" + (_loadout != null ? "present" : "NULL")
+                   + " equippedArmor=" + (_loadout != null && _loadout.EquippedArmor != null ? _loadout.EquippedArmor.id : "none")
+                   + " job=" + job
+                   + " catalog(weapons=" + weapons + ",armor=" + armors + ")]";
         }
 
         // Runs a UI-rebuild step, swallowing+logging any exception so one bad
-        // section can't blank the whole inventory (WebGL hardening).
-        private static void SafeRun(System.Action step, string label)
+        // section can't blank the whole inventory (WebGL hardening). The log now names
+        // the failing section AND the live hero/data state so the exact open-time failure
+        // point is obvious in the console on the next playtest.
+        private void SafeRun(System.Action step, string label)
         {
             try { step(); }
             catch (System.Exception e)
             {
-                Debug.LogError("[HeroInventoryController] " + label + " failed: " + e);
+                Debug.LogError("[HeroInventoryController] " + label + " FAILED (rest of inventory still shown). "
+                               + DescribeState() + "\n" + e);
             }
         }
 
@@ -431,7 +484,7 @@ namespace DeNelle.Village
 
             // ── The six ring sockets, placed by angle around the medallion. ──
             WeaponDef w = _loadout != null ? _loadout.EquippedWeapon : null;
-            ArmorDef  a = _loadout != null ? _loadout.EquippedArmor  : null;
+            ArmorDef  a = ResolveDisplayArmor();
 
             // Socket radius (distance from centre, in ringHost-normalised units) + tile
             // half-size. Sockets ride the gap between the medallion (r=0.30) and the disc
@@ -1039,6 +1092,20 @@ namespace DeNelle.Village
         {
             var prog = _loadout != null ? _loadout.GetComponent<HeroProgression>() : null;
             return prog != null ? prog.Level : 1;
+        }
+
+        // The armor to SHOW in the paper-doll's ARMOR socket. Prefers the live loadout's
+        // equipped piece; but if the loadout is null OR somehow has no armor (e.g. the modal
+        // opened a frame before GearLoadout.Refresh ran on a just-spawned hero), fall back to
+        // the SAME default the loadout itself resolves — GearCatalog.BestArmor(job, level),
+        // which for a fresh level-1 hero is the existing starter "Wanderer's Cloth"
+        // (armor_cloth). This guarantees a fresh player always SEES their basic armor on the
+        // paper-doll, sourced entirely from the existing armor.json catalog (no new item/art).
+        private ArmorDef ResolveDisplayArmor()
+        {
+            if (_loadout != null && _loadout.EquippedArmor != null) return _loadout.EquippedArmor;
+            try { return GearCatalog.BestArmor(HeroJob, HeroLevel()); }
+            catch { return null; }
         }
 
         private static bool JobEligible(string itemJob, string heroJob)

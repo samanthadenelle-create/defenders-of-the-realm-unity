@@ -137,8 +137,42 @@ namespace DeNelle.Village
             WeaponMult   = weapon;
             ArmorDefense = armor;
 
+            // Drive the body's armor visual tier off the equipped piece. EquipmentController
+            // owns the asset-attach layer (the canonical instance); GearLoadout simply tells
+            // it WHICH tier is worn. NOTE: SetArmorTier is presently a recorded NO-OP on the
+            // visual side (armor body art not yet authored) — this wire makes the tier flow
+            // so the body-attach lights up automatically the moment that art lands, with no
+            // further plumbing. Weapon mesh attach is already driven via OnGearChanged.
+            PushArmorTierToBody();
+
             // Activate / refresh the Oathweld ward driver (lazily attached, self-guards).
             EnsureSetEffect().Refresh();
+        }
+
+        private EquipmentController _equipment;
+
+        // Map the equipped armor to a coarse visual tier (0 = none) and hand it to the
+        // EquipmentController. Tier is derived from the existing rarity ladder so it needs
+        // no new data: common=1 … legendary=5. Graceful: no armor or no controller = tier 0
+        // / no-op (combat + existing visuals unchanged).
+        private void PushArmorTierToBody()
+        {
+            if (_equipment == null) _equipment = GetComponent<EquipmentController>();
+            if (_equipment == null) return;   // controller not attached on this hero — skip
+            _equipment.SetArmorTier(ArmorVisualTier(EquippedArmor));
+        }
+
+        private static int ArmorVisualTier(ArmorDef a)
+        {
+            if (a == null) return 0;
+            switch ((a.rarity ?? "common").ToLowerInvariant())
+            {
+                case "uncommon":  return 2;
+                case "rare":      return 3;
+                case "epic":      return 4;
+                case "legendary": return 5;
+                default:          return 1;   // common starter (e.g. Wanderer's Cloth)
+            }
         }
 
         private AegisSetEffect _setEffect;

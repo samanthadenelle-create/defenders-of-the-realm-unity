@@ -644,13 +644,17 @@ namespace DeNelle.Village
         /// Entry point for armor visuals. Wired now so callers (GearLoadout, shop/equip
         /// UI) can drive it, but visually a NO-OP today.
         /// </summary>
-        // TODO armor texture-swap — assets incoming; for now no-op (record the tier so the
-        // visual pass can read it once the armor textures/meshes land).
+        // WIRE STATUS: GearLoadout now CALLS this with the worn armor's tier on every equip
+        // change (GearLoadout.PushArmorTierToBody), so the tier flows in live. The VISUAL is
+        // still intentionally a recorded NO-OP — body armor art (textures/plate meshes) is not
+        // yet authored, and the task brief is explicit: do the paper-doll display, but do NOT
+        // force a risky body-mesh attach. The moment armor art lands, implement the swap here
+        // (material/texture on HeroBody, or plate pieces parented to Chest/Shoulder/Leg bones
+        // keyed off _armorTier) and the wire above lights it up with no further plumbing.
         public void SetArmorTier(int tier)
         {
             _armorTier = Mathf.Max(0, tier);
-            // No visual yet. When armor art lands: swap the body's material/texture (or
-            // attach plate pieces to Chest/Shoulder/Leg bones) keyed off _armorTier.
+            // No body visual yet (art-gated) — tier recorded for the future visual pass.
         }
 
         /// <summary>Current armor tier (0 = none). Exposed for the future armor visual pass.</summary>
