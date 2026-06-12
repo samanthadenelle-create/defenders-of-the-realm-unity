@@ -152,6 +152,7 @@ namespace DeNelle.HUD
         private TextMeshProUGUI[] _slotGlyph;
         private TextMeshProUGUI[] _slotName;
         private Image[] _slotAccent;
+        private Image[] _slotIcon;     // real ability art (by hero class + slot), replaces the glyph
         private Image[] _slotCooldown;
         private float[] _slotCdFill;
 
@@ -1472,6 +1473,7 @@ namespace DeNelle.HUD
             _slotGlyph    = new TextMeshProUGUI[AbilitySlotCount];
             _slotName     = new TextMeshProUGUI[AbilitySlotCount];
             _slotAccent   = new Image[AbilitySlotCount];
+            _slotIcon     = new Image[AbilitySlotCount];
             _slotCooldown = new Image[AbilitySlotCount];
             _slotCdFill   = new float[AbilitySlotCount];
 
@@ -1519,6 +1521,14 @@ namespace DeNelle.HUD
                 _slotAccent[i].sprite = HudTheme.Disc;   // circular ability seat
                 _slotAccent[i].type = HudTheme.Disc != null ? Image.Type.Simple : Image.Type.Simple;
                 _slotAccent[i].raycastTarget = false;
+
+                // Real ability ICON art (by class+slot) — on the disc, under the glyph + cooldown.
+                // Hidden (zero alpha) until SetAbilitySlot resolves it; falls back to the glyph.
+                var abIcon = NewRect("AbIcon", disc, new Vector2(0.13f, 0.13f), new Vector2(0.87f, 0.87f));
+                _slotIcon[i] = abIcon.gameObject.AddComponent<Image>();
+                _slotIcon[i].raycastTarget = false;
+                _slotIcon[i].preserveAspect = true;
+                _slotIcon[i].color = new Color(1f, 1f, 1f, 0f);
 
                 // Glyph: dark ink (legible on the light seat AND on tinted ability
                 // accents, which SetAbilitySlot sets at 0.85 alpha over the light cell).
@@ -1906,7 +1916,7 @@ namespace DeNelle.HUD
                 SetAnchors(_buildBtn,       new Vector2(0.84f, 0.255f), new Vector2(0.99f, 0.33f));
                 // Small "Start Next Wave" pill BESIDE the wave timer (top-left), just
                 // right of the narrowed TownWave cluster. Portrait: cluster width 260px.
-                SetAnchors(_startWaveBtn,   new Vector2(0.26f, 0.94f),  new Vector2(0.46f, 0.985f));
+                SetAnchors(_startWaveBtn,   new Vector2(0.38f, 0.70f),  new Vector2(0.62f, 0.765f));   // centered BELOW the resource bar (was hidden under it)
 
                 // WO-339 TOWN HUD portrait reflow: wave/timer cluster top-LEFT
                 // narrows; resources STACK on the left under it; mini-map shrinks
@@ -1930,7 +1940,7 @@ namespace DeNelle.HUD
                 SetAnchors(_buildBtn,       new Vector2(0.88f, 0.36f),  new Vector2(0.995f, 0.45f));
                 // Small "Start Next Wave" pill BESIDE the wave timer (top-left), just
                 // right of the TownWave cluster (x:12 + width 300px ≈ 0.29 on 1080-ref).
-                SetAnchors(_startWaveBtn,   new Vector2(0.295f, 0.945f), new Vector2(0.45f, 0.99f));
+                SetAnchors(_startWaveBtn,   new Vector2(0.41f, 0.705f), new Vector2(0.59f, 0.77f));   // centered BELOW the resource bar (was hidden under it)
 
                 // WO-339 TOWN HUD landscape: wide top spread — wave cluster top-left,
                 // resource badges top-centre, full-size 140 mini-map top-right.
@@ -2469,6 +2479,20 @@ namespace DeNelle.HUD
             if (slot < 0 || slot >= AbilitySlotCount) return;
             if (_slotKey != null && _slotKey[slot] != null && !string.IsNullOrEmpty(key)) _slotKey[slot].text = key;
             if (_slotGlyph != null && _slotGlyph[slot] != null) _slotGlyph[slot].text = string.IsNullOrEmpty(glyph) ? "?" : glyph;
+            // Real ability art (by hero class + slot) wins over the glyph when present.
+            if (_slotIcon != null && _slotIcon[slot] != null)
+            {
+                var svc = DeNelle.Core.State.GameStateService.Instance;
+                var hc = svc != null && svc.State != null ? svc.State.HeroClass : DeNelle.Core.State.HeroClassOpt.None;
+                var iconKey = AbilityIconForClassSlot(hc, slot);
+                var sp = iconKey != null ? WidgetSprite(iconKey) : null;
+                if (sp != null)
+                {
+                    _slotIcon[slot].sprite = sp;
+                    _slotIcon[slot].color = Color.white;
+                    if (_slotGlyph != null && _slotGlyph[slot] != null) _slotGlyph[slot].text = "";
+                }
+            }
             if (_slotName != null && _slotName[slot] != null)
                 _slotName[slot].text = string.IsNullOrEmpty(name) ? "" : name;
             if (_slotAccent != null && _slotAccent[slot] != null && !string.IsNullOrEmpty(accentHex)
@@ -2476,6 +2500,28 @@ namespace DeNelle.HUD
             {
                 c.a = 0.85f;
                 _slotAccent[slot].color = c;
+            }
+        }
+
+        // Per-class ability icon by slot (Q/W/E/R). Names match the staged Resources/HudIcons/<Class>/
+        // art; WidgetSprite is null-safe so a miss falls back to the glyph.
+        private static string AbilityIconForClassSlot(DeNelle.Core.State.HeroClassOpt hc, int slot)
+        {
+            switch (hc)
+            {
+                case DeNelle.Core.State.HeroClassOpt.Knight:
+                    return slot == 0 ? "Knight/Knight_Charge" : slot == 1 ? "Knight/knight_parry"
+                         : slot == 2 ? "Knight/Knight_Cleave" : "Knight/knight_thrust";
+                case DeNelle.Core.State.HeroClassOpt.Mage:
+                    return slot == 0 ? "Wizard/Wizard_Plasma" : slot == 1 ? "Wizard/Wizard_Fireball"
+                         : slot == 2 ? "Wizard/Wizard_Lightining" : "Wizard/Wizard_Meteor";
+                case DeNelle.Core.State.HeroClassOpt.Ranger:
+                    return slot == 0 ? "Ranger/Ranger_Ranged_Attack" : slot == 1 ? "Ranger/Ranger_Barrage"
+                         : slot == 2 ? "Ranger/Ranger_Poison_Arrow" : "Ranger/ranger_rapid_fire";
+                case DeNelle.Core.State.HeroClassOpt.Cleric:
+                    return slot == 0 ? "Healer/Healer_Heal" : slot == 1 ? "Healer/Healer_Group_Heal"
+                         : slot == 2 ? "Healer/Healer_Holy" : "Healer/Healer_Smite";
+                default: return null;
             }
         }
 
