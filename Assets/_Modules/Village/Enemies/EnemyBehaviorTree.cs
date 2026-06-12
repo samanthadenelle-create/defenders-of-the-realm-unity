@@ -50,9 +50,20 @@ namespace DeNelle.Village
             _enemy = GetComponent<Enemy>();
             _brain = GetComponent<EnemyBrain>();
 
-            // Resolve hero target (same pattern as EnemyBrain.Awake — FindWithTag once).
-            var heroGo = GameObject.FindWithTag("Player");
-            _target = heroGo != null ? heroGo.transform : null;
+            // WO-419: resolve the hero by the canonical "HeroTarget" tag FIRST (matches
+            // EnemyBrain — the hero rig is tagged HeroTarget for enemy AI, not Player), with
+            // "Player" as the fallback. Re-acquired each tick in Evaluate() while null, so an
+            // enemy that inits before the hero streams in (additive OuterWorld load) still aggros.
+            _target = TryFindByTag("HeroTarget") ?? TryFindByTag("Player");
+        }
+
+        private float _nextReacquire;
+
+        // Guarded tag lookup — FindWithTag throws if the tag is undefined in the project.
+        private static Transform TryFindByTag(string tag)
+        {
+            try { var go = GameObject.FindWithTag(tag); return go != null ? go.transform : null; }
+            catch { return null; }
         }
 
         private void Start()
@@ -76,7 +87,18 @@ namespace DeNelle.Village
         }
 
         /// <summary>Evaluate the BT this frame. Called by EnemyBrain.Update().</summary>
-        public void Evaluate() => _root?.Evaluate();
+        public void Evaluate()
+        {
+            // WO-419: re-acquire the hero while the target is null (it may stream in after Awake
+            // under additive scene load). Throttled to 0.5s; stops once found, so no per-frame
+            // scan once the enemy has aggroed.
+            if (_target == null && Time.time >= _nextReacquire)
+            {
+                _nextReacquire = Time.time + 0.5f;
+                _target = TryFindByTag("HeroTarget") ?? TryFindByTag("Player");
+            }
+            _root?.Evaluate();
+        }
 
         // ── Tree construction ─────────────────────────────────────────────────
 
