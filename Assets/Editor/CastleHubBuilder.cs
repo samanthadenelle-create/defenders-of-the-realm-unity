@@ -469,11 +469,15 @@ namespace DeNelle.Editor
             // above the visual tiles (0.01) and below the hero spawn (0.1).
             CreateInvisibleFloor(floorRoot.transform, "CourtyardFloor_Nav", new Vector3(0f, 0.05f, 0f), new Vector3(9f, 1f, 9f));
 
-            // Gate bridge: spans the south gate (z -50) + drawbridge approach (z -58) and
-            // OVERLAPS the main floor (which ends ~z -45) so the two fuse into ONE connected
-            // mesh — that overlap is what lets the agent cross the gate. ~12m wide (gate
-            // opening), ~18m deep (z -42 .. -60).
-            CreateInvisibleFloor(floorRoot.transform, "GateBridge_Nav", new Vector3(0f, 0.05f, -51f), new Vector3(1.2f, 1f, 1.8f));
+            // Gate bridges: ONE oriented walkable strip CENTERED ON EACH of the 4 recipe gate
+            // openings (S/W/N/E), spanning from the courtyard THROUGH the opening and >=10m OUT
+            // onto the OuterWorld terrain. The gates are no longer at fixed (0,0,-50): the owner
+            // re-authored them via Resources/Data/castle-south-recipe.json (south gate ~(-4.37,
+            // 0,-40.6)) mirrored 90/180/270 around world origin (same math as CastleWallsFromRecipe).
+            // A single hardcoded (0,0,-51) bridge missed the real opening (x off by ~4.4m) and never
+            // covered W/N/E at all -> uncrossable gates. Drive the strips off the recipe so a regen
+            // stays correct even if the owner re-authors the gates.
+            BuildGateExitStrips(floorRoot.transform);
 
             // Keep interior + entrance bridge: GroundLevel_Keep_Hall_Entry (the keep building)
             // sits at origin with 4 wall colliders + a doorway. The walls carve the navmesh and
@@ -492,6 +496,117 @@ namespace DeNelle.Editor
             // StairwayBuilder (BuildGrandStair) — its step MeshColliders bake as the climb, with
             // a chord NavMeshLink as the backup. No hidden-ramp-under-cosmetic-stairs mismatch.
         }
+
+        // =====================================================================
+        //  GATE EXIT STRIPS — recipe-driven walkable nav strips through all 4 gates.
+        // -----------------------------------------------------------------------------
+        //  Reads the SAME recipe CastleWallsFromRecipe builds the walls from
+        //  (Resources/Data/castle-south-recipe.json) to find the SOUTH gate opening,
+        //  then mirrors it 90/180/270 around world origin (identical rotation math:
+        //  worldPos = Quaternion.Euler(0,angle,0) * southLocalPos, parent at origin) to
+        //  get the W/N/E gate openings. For EACH gate it drops one invisible, renderer-off
+        //  walkable plane (MeshCollider kept) oriented so its long axis points OUTWARD
+        //  through the wall: it starts INSIDE the courtyard (overlapping the main
+        //  CourtyardFloor_Nav so the two fuse), passes THROUGH the gate opening, and
+        //  extends >=10m OUT onto the OuterWorld terrain so spawn/load/blend + the
+        //  NavMeshLink endpoint land on walkable mesh. Parameterized off the recipe so a
+        //  re-author of the gates keeps the strips aligned automatically.
+        //
+        //  Strip footprint (per gate, in the gate's own outward frame BEFORE rotation):
+        //   • width  (across the opening) ~12m  — matches the medium gate clear span
+        //   • length (courtyard -> out)   ~26m  — ~8m inside the wall to overlap the
+        //     courtyard floor + ~18m outward (well past the >=10m requirement) onto terrain.
+        //  A Unity Plane is 10x10m at scale 1, centered on its transform, so we size it
+        //  via localScale and rotate it by the side angle so the length axis runs radially
+        //  outward from origin.
+        // =====================================================================
+        private const string GateStripRootName = "GateExitStrips_Nav";
+
+        private struct GatePose { public Vector3 worldPos; public float yaw; public string label; }
+
+        private static void BuildGateExitStrips(Transform parent)
+        {
+            // Recipe south gate (local under a parent at origin -> world == local).
+            Vector3 southGate = ReadSouthGatePos();
+
+            // 4 sides: south is the authored side (0deg), W/N/E are it rotated around origin.
+            // Match CastleWallsFromRecipe: world = Quaternion.Euler(0,angle,0) * southPos.
+            var poses = new[]
+            {
+                MakeGatePose(southGate,   0f,   "South"),
+                MakeGatePose(southGate,  90f,   "West"),
+                MakeGatePose(southGate, 180f,   "North"),
+                MakeGatePose(southGate, 270f,   "East"),
+            };
+
+            const float halfWidth   = 6f;   // 12m across the opening
+            const float insideReach = 8f;   // overlap courtyard floor (inside the wall)
+            const float outsideReach = 18f; // >=10m out onto terrain
+            float length = insideReach + outsideReach; // 26m total along the radial axis
+            float centerOffset = (outsideReach - insideReach) * 0.5f; // shift strip center outward
+
+            foreach (var g in poses)
+            {
+                // Outward direction in world XZ for this side (south faces -Z at yaw 0).
+                Quaternion yawRot = Quaternion.Euler(0f, g.yaw, 0f);
+                Vector3 outward = yawRot * Vector3.back; // south(-Z) rotated to this side
+
+                // Center the strip between the courtyard-overlap end and the terrain end.
+                Vector3 center = g.worldPos + outward * centerOffset;
+                center.y = 0.05f; // same plane as CourtyardFloor_Nav so they fuse
+
+                // Plane is 10m square at scale 1: X = width axis, Z = length axis. The
+                // length axis must run OUTWARD (along 'outward'); a plane's local +Z maps to
+                // world via the yaw rotation, and at yaw 0 local +Z = world +Z while outward
+                // = world -Z, so the |length| sizing is symmetric and orientation-agnostic.
+                var strip = GameObject.CreatePrimitive(PrimitiveType.Plane);
+                strip.name = $"GateExit_{g.label}_Nav";
+                strip.transform.SetParent(parent, false);
+                strip.transform.position = center;
+                strip.transform.rotation = yawRot; // align the strip's length axis radially
+                strip.transform.localScale = new Vector3(halfWidth * 2f / 10f, 1f, length / 10f);
+
+                var r = strip.GetComponent<MeshRenderer>();
+                if (r != null) r.enabled = false;
+                if (strip.GetComponent<MeshCollider>() == null) strip.AddComponent<MeshCollider>();
+            }
+        }
+
+        // Build a gate pose by rotating the authored south gate around world origin (parent at 0).
+        private static GatePose MakeGatePose(Vector3 southGate, float angle, string label)
+        {
+            Vector3 world = Quaternion.Euler(0f, angle, 0f) * southGate;
+            return new GatePose { worldPos = world, yaw = angle, label = label };
+        }
+
+        // Read the SOUTH gate position from the recipe (the SAME data the walls are built from),
+        // so the nav strips track any re-author. Falls back to the captured default if absent.
+        private static Vector3 ReadSouthGatePos()
+        {
+            Vector3 fallback = new Vector3(-4.37f, 0f, -40.6f);
+            var ta = Resources.Load<TextAsset>("Data/castle-south-recipe");
+            if (ta == null)
+            {
+                Debug.LogWarning("[CastleHubBuilder] castle-south-recipe not found — using fallback south gate " + fallback);
+                return fallback;
+            }
+
+            // Reuse the recipe shape (same fields CastleWallsFromRecipe parses).
+            var recipe = JsonUtility.FromJson<GateRecipe>(ta.text);
+            if (recipe != null && recipe.pieces != null)
+            {
+                foreach (var p in recipe.pieces)
+                {
+                    if (p != null && p.name == "Gate_South" && p.pos != null && p.pos.Length == 3)
+                        return new Vector3(p.pos[0], p.pos[1], p.pos[2]);
+                }
+            }
+            Debug.LogWarning("[CastleHubBuilder] Gate_South not found in recipe — using fallback " + fallback);
+            return fallback;
+        }
+
+        [System.Serializable] private class GatePiece  { public string name; public string prefab; public float[] pos; public float[] rot; public float[] scale; }
+        [System.Serializable] private class GateRecipe { public GatePiece[] pieces; public float[] parentPos; public float[] parentRot; }
 
         // =====================================================================
         //  GRAND STAIR (WO-384) — consume the reusable DeNelle.Village.StairwayBuilder
