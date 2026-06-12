@@ -62,6 +62,12 @@ namespace DeNelle.Village
 
         private GearLoadout _loadout;     // the live hero's gear model (drives the hero)
 
+        // DEF-212 single-modal arbiter. The inventory is a full-screen, click-eating
+        // modal exactly like HelpMenu / AdminOverlay / CosmeticShop; without this it
+        // could stack over an open Help menu (and vice-versa) in MainCastle_Hall —
+        // the same gap ModalPanelDisciplineTests pins for the other panels.
+        private DeNelle.Core.UI.PanelHandle _panelHandle;
+
         // ── LIGHT PARCHMENT palette (north-star: warm-parchment, airy, calm) ──────
         // SELF-CONTAINED to the inventory (do NOT change the global ElarionUi/Kit
         // palette — that's a separate pass). This is a TONE INVERSION of the old
@@ -132,6 +138,11 @@ namespace DeNelle.Village
                 if (_ui == null) BuildRoot();
                 if (_ui == null) return;            // BuildRoot failed hard — nothing to show
                 _ui.SetActive(true);
+                // Join the single-modal arbiter: opening the bag closes any other open
+                // modal (Help/Dev/Shop) and registers this one so it can't get stuck.
+                if (_panelHandle == null)
+                    _panelHandle = DeNelle.Core.UI.PanelManager.Register("Inventory", Close, () => IsOpen);
+                DeNelle.Core.UI.PanelManager.NotifyOpened(_panelHandle);
                 Subscribe();
                 _tab = Tab.Weapons;
                 ClearSelection();
@@ -166,6 +177,8 @@ namespace DeNelle.Village
             _ui = null;
             _gridRoot = _sidebarRoot = _paperDoll = _tabsRoot = null;
             ClearSelection();
+            // Release the modal slot so no invisible backdrop lingers / traps input.
+            if (_panelHandle != null) DeNelle.Core.UI.PanelManager.NotifyClosed(_panelHandle);
         }
 
         public void Toggle() { if (IsOpen) Close(); else Open(); }

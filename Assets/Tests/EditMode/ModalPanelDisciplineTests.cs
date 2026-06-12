@@ -130,6 +130,35 @@ namespace DeNelle.Tests.EditMode
                 "on top instead of disappearing behind the Help panel.");
         }
 
+        [Test]
+        public void Inventory_RoutesThroughPanelManager()
+        {
+            string src = ReadModuleSource("Village/Hero/HeroInventoryController.cs");
+            Assert.IsTrue(src.Contains("PanelManager.Register") || src.Contains("PanelMgr.Register"),
+                "HeroInventoryController (the BAG inventory) must register with PanelManager so it joins " +
+                "single-modal discipline (no stuck pickable backdrop in the hub).");
+            Assert.IsTrue(
+                (src.Contains("PanelManager.NotifyOpened") || src.Contains("PanelMgr.NotifyOpened")) &&
+                (src.Contains("PanelManager.NotifyClosed") || src.Contains("PanelMgr.NotifyClosed")),
+                "HeroInventoryController must announce open/close to PanelManager.");
+        }
+
+        [Test]
+        public void BagWiring_SelfHeals_SoInventoryAlwaysOpens()
+        {
+            // The "BAG opens nothing" bug: HeroEquipHud wired the InventoryRequested event ONCE with no
+            // retry, so in the castle (HUD spawned in the same scene-load, not ready at Start) the bind
+            // silently no-op'd and BAG fired into the void. The fix re-attempts until the wire lands —
+            // the same self-heal idiom the working BUILD/TALK bridges use. Guard the retry exists.
+            string src = ReadModuleSource("Village/Hero/HeroEquipHud.cs");
+            Assert.IsTrue(src.Contains("_wired"),
+                "HeroEquipHud must track whether the inventory wire landed and RETRY until it does — " +
+                "without the retry the BAG button opens nothing in the castle hub.");
+            Assert.IsTrue(src.Contains("void Update"),
+                "HeroEquipHud must re-attempt the wire each frame until bound (Update self-heal), " +
+                "matching the working BUILD/TALK bridges.");
+        }
+
         // ── helpers ──────────────────────────────────────────────────────────────
 
         private static string ReadModuleSource(string relativePath)

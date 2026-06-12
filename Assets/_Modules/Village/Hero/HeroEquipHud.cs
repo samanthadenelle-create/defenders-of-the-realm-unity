@@ -84,7 +84,28 @@ namespace DeNelle.Village
         }
 
         private void OnSceneLoaded(UnityEngine.SceneManagement.Scene s, UnityEngine.SceneManagement.LoadSceneMode m)
-            => TryWireToHud();
+        {
+            // A scene just (re)loaded — the HUD it carries is a fresh instance, so the
+            // event we previously bound to is stale. Force a re-resolve + re-wire.
+            _wired = false;
+            TryWireToHud();
+        }
+
+        // ROOT-CAUSE FIX (BAG dead in MainCastle_Hall): the old wiring fired ONCE at
+        // Start + on sceneLoaded. In the castle hub the HUD is spawned by a sibling
+        // [RuntimeInitializeOnLoadMethod] bootstrap (VillageHudBootstrap) in the SAME
+        // scene-load — so when our Start ran the VillageHudController could not yet be
+        // found (or had not built InventoryRequested), the one-shot wire silently
+        // no-op'd, and nothing ever re-attempted → BAG raised InventoryRequested into
+        // the void. We now retry every frame until the wire lands (then stop), the
+        // same self-healing idiom BuildButtonBridge/TalkHudBridge rely on.
+        private bool _wired;
+
+        private void Update()
+        {
+            if (_wired) return;
+            TryWireToHud();
+        }
 
         private UnityEngine.Events.UnityAction _invListener;
         private UnityEngine.Events.UnityEvent _invEvent;
@@ -93,17 +114,21 @@ namespace DeNelle.Village
         private void TryWireToHud()
         {
             if (_hudType == null) _hudType = ResolveHudType();
-            if (_hudType == null) return;
+            if (_hudType == null) return;                 // HUD assembly not loaded yet — retry next frame
             var hud = FindObjectOfType(_hudType) as Component;
-            if (hud == null) return;
+            if (hud == null) return;                      // HUD not spawned yet — retry next frame
             var field = _hudType.GetField("InventoryRequested",
                 System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
             var evt = field != null ? field.GetValue(hud) as UnityEngine.Events.UnityEvent : null;
-            if (evt == null || ReferenceEquals(evt, _invEvent)) return;
+            if (evt == null) return;                      // event not constructed yet — retry next frame
+            // Already bound to THIS scene's HUD event → done; stop the per-frame retry.
+            if (ReferenceEquals(evt, _invEvent)) { _wired = true; return; }
+            // New (or first) event instance — detach the stale listener, bind the new one.
             if (_invEvent != null && _invListener != null) _invEvent.RemoveListener(_invListener);
             _invListener = OpenInventory;
             evt.AddListener(_invListener);
             _invEvent = evt;
+            _wired = true;                                // wired — Update() goes quiet until the next scene load
         }
 
         private static System.Type ResolveHudType()
