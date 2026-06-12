@@ -8,13 +8,13 @@
 // ledger through the command bridges rather than hand-granting.
 //
 // THE RECRUIT (not hand-granted):
-//   <<command: StartQuest companion.sylas>>     -> QuestService ledger (quest opens)
-//   <<command: RecruitCompanion Ranger>>        -> GameStateService.AddToParty("Ranger")
+//   <<StartQuest companion.sylas>>     -> QuestService ledger (quest opens)
+//   <<RecruitCompanion Ranger>>        -> GameStateService.AddToParty("Ranger")
 //                                                  fires PlayerChanged -> StoryCompanionInjector
 //                                                  spawns Sylas's body (follows + fights),
 //                                                  PartyHudBridge grows the party frame.
-//   <<command: SetQuestFlag companion.sylas met>>-> persisted met-flag
-//   <<command: CompleteQuest companion.sylas>>   -> ledger marks the meeting done
+//   <<SetQuestFlag companion.sylas met>>-> persisted met-flag
+//   <<CompleteQuest companion.sylas>>   -> ledger marks the meeting done
 // All four verbs are registered in BOTH DialogueCommandBridge (FTUE host) and
 // NPCCommandBridge (world-NPC host), so this node works from either launch path.
 //
@@ -66,16 +66,16 @@ tags: companion recruit sylas
 // Ranger companion by canon; if the player themselves chose Ranger, the standalone
 // SylasFirstMeeting.cs beat handles the different-class substitution - this Yarn
 // path is the explicit, story-first recruit and names the Ranger directly.
-<<command: StartQuest companion.sylas>>
-<<command: RecruitCompanion Ranger>>
-<<command: SetQuestFlag companion.sylas met>>
+<<StartQuest companion.sylas>>
+<<RecruitCompanion Ranger>>
+<<SetQuestFlag companion.sylas met>>
 <<set $sylasMet to true>>
 
 Sylas: <i>He lowers the bow, and something in his shoulders eases.</i> Then it's settled. I walk where you walk, Keeper - and I put an arrow in whatever finds us first.
 Sylas: Stay near the wall when the horns sound. Out here, I'll go first - I always have.
 Sylas: Lead on. Let's see what the dark side of this land is hiding.
 
-<<command: CompleteQuest companion.sylas>>
+<<CompleteQuest companion.sylas>>
 ===
 
 title: SylasDecline
