@@ -49,10 +49,42 @@ namespace DeNelle.Village
             _health = GetComponent<HeroHealth>(); // optional — HUD HP bar stays full if absent
         }
 
+        // True once the HUD reflection methods + AbilityRequested event are bound to the
+        // current _hud. Reset when _hud is lost so a new HUD (scene reload) rebinds.
+        private bool _hudBound;
+
         private void OnEnable()
         {
-            if (_hud == null) return;
+            // Force a fresh per-class push on (re)enable — the HUD may have rebuilt its
+            // cells (e.g. after a scene reload) back to the Mage defaults.
+            _lastPushedClass = null;
+            EnsureHud();
+        }
 
+        // WO-428 / WO-421 — runtime HUD resolution. The serialized _hud is wired ONLY by
+        // the edit-time VillageSceneBuilder, so in the castle hub / OuterWorld (scenes it
+        // never builds) _hud is null and this whole bridge no-ops: the hero HP bar never
+        // moves and the mana / cooldown / ability-slot pushes never land. Mirror the
+        // self-resolving pattern of WaveHudBridge / ComboHudBridge / HeartHudBridge — find
+        // the HUD by component-type name (DeNelle.Village cannot reference DeNelle.HUD) and
+        // bind once. Re-binds if the HUD is lost and a new one streams in.
+        private void EnsureHud()
+        {
+            if (_hud == null)
+            {
+                _hudBound = false; // lost/never-resolved — must (re)bind once a HUD is found
+                foreach (var mb in FindObjectsByType<MonoBehaviour>(FindObjectsInactive.Include))
+                {
+                    if (mb != null && mb.GetType().Name == "VillageHudController") { _hud = mb; break; }
+                }
+                if (_hud == null) return;
+            }
+            if (_hudBound) return;
+            BindHud();
+        }
+
+        private void BindHud()
+        {
             // Resolve the state-out push methods first so they bind even if the
             // AbilityRequested click event is absent.
             _setMana = _hud.GetType().GetMethod("SetMana",
@@ -78,10 +110,6 @@ namespace DeNelle.Village
                                  "(int,string,string,string,string) not found via reflection — " +
                                  "the ability bar will keep its default Mage glyphs/names.");
 
-            // Force a fresh per-class push on (re)enable — the HUD may have rebuilt
-            // its cells (e.g. after a scene reload) back to the Mage defaults.
-            _lastPushedClass = null;
-
             var field = _hud.GetType().GetField("AbilityRequested",
                 BindingFlags.Public | BindingFlags.Instance);
             _abilityRequestedEvent = field?.GetValue(_hud) as UnityEvent<int>;
@@ -89,16 +117,19 @@ namespace DeNelle.Village
             {
                 Debug.LogWarning("[HeroAbilitiesHudBridge] VillageHudController.AbilityRequested " +
                                  "not found — HUD ability clicks will be silent.");
+                _hudBound = true; // HUD + push methods resolved; only the click event is absent
                 return;
             }
             _onAbilityRequested = OnAbilityClicked;
             _abilityRequestedEvent.AddListener(_onAbilityRequested);
+            _hudBound = true;
         }
 
         private void OnDisable()
         {
             if (_abilityRequestedEvent != null && _onAbilityRequested != null)
                 _abilityRequestedEvent.RemoveListener(_onAbilityRequested);
+            _hudBound = false; // rebind on next enable (the HUD may rebuild across scenes)
         }
 
         // Pushes the live mana bar + per-slot cooldown sweep into the HUD every
@@ -108,6 +139,9 @@ namespace DeNelle.Village
         // even though HeroAbilities is tracking them correctly (WO-07 fix).
         private void Update()
         {
+            // Resolve/re-resolve the HUD at runtime if the serialized ref was absent
+            // (castle/OuterWorld) or the HUD streamed in after enable.
+            if (_hud == null || !_hudBound) EnsureHud();
             if (_abilities == null || _hud == null) return;
 
             // WO-36 (visual half): re-target the Q/W/E/R cells to the active hero's
