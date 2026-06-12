@@ -596,9 +596,21 @@ namespace DeNelle.Village
                     }
                 }
 
-                // Fallback (snap disabled, lift carrying, or no navmesh nearby): preserve
-                // the original floor-at-0 behavior — never let the hero sink below Y=0.
-                if (p.y < 0f) { p.y = 0f; _fallSpeed = 0f; }
+                // Fallback (snap disabled, lift carrying, or no navmesh nearby). DEF-147 /
+                // WO-254 hover-exploit ROOT FIX: when the snap finds no navmesh within
+                // SnapSampleRadius — the exact case of the "walk off a ramp edge to float
+                // above enemies" cheese, where the hero hangs HIGH over a gap with no mesh
+                // below — the old code only clamped at Y=0 and otherwise PRESERVED the
+                // airborne Y forever (the hover). Apply the same gravity-like fall toward the
+                // world floor (Y=0) so the hero always descends instead of suspending midair.
+                // The lift-carry case is excluded above (snap-gated), so this never fights the
+                // rampart lift. Once at/below the floor, clamp to 0 and reset the fall.
+                if (GroundSnapEnabled && !IsLiftCarrying() && p.y > 0f)
+                {
+                    _fallSpeed = Mathf.Min(_fallSpeed + FallAccel * Time.deltaTime, FallSpeedMax);
+                    p.y = Mathf.MoveTowards(p.y, 0f, _fallSpeed * Time.deltaTime);
+                }
+                if (p.y <= 0f) { p.y = 0f; _fallSpeed = 0f; }
                 transform.position = p;
             }
             else
