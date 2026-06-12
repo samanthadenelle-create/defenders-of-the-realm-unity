@@ -155,6 +155,7 @@ namespace DeNelle.Editor
             Run(results, "catalog-prefabs-resolve",  Case_CatalogPrefabsResolve);
             Run(results, "structures-kit-present",   Case_StructuresKitPresent);
             Run(results, "no-duplicate-landmines",   Case_NoDuplicateLandmines);
+            Run(results, "perf-lint-reentrancy",     Case_PerFrameReentrancyLint);
             Run(results, "scene-opens-village2",     () => Case_SceneOpens(PlayableScenePath));
             Run(results, "core-wiring-village2",     Case_CoreWiring);
             Run(results, "layout-validator",         Case_LayoutValidator);
@@ -354,6 +355,146 @@ namespace DeNelle.Editor
             return fails.Count == 0
                 ? Pass("1 DoorController, no Core.Debug/Addressables shadow")
                 : Fail(string.Join(" | ", fails));
+        }
+
+        // ── Per-frame self-multiply / re-entrancy lint (fork-bomb + OptionItem class) ──
+        // SYSTEMATIC guard for the failure shape this project shipped TWICE:
+        //   (1) commit 69138fe — HookDialogueGate/HookDialogueIdle's retry COROUTINE
+        //       re-called its own spawner every frame -> coroutines doubled -> ~3MB/s
+        //       retained-heap leak / GC-thrash freeze.
+        //   (2) 2026-06-12 — OptionItem.Update -> Submit()'s inline YarnTask continuation
+        //       re-presented options on the same call stack -> runaway recursion freeze.
+        // Both: a per-frame-reachable body (Update/LateUpdate OR an IEnumerator loop) that
+        // re-spawns / re-enters with NO single-flight guard. This case scans the gameplay
+        // modules + the vendored Yarn ClassicRPG addon (where OptionItem lives) and FAILS
+        // on an UNGUARDED instance. The full, documented detector + its self-tests live in
+        // Assets/Tests/EditMode/PerFrameReentrancyLintTests.cs (run under -runTests); this
+        // mirror keeps the headless RunAll gate RED on a re-introduced fork-bomb too.
+        private static CaseResult Case_PerFrameReentrancyLint()
+        {
+            string[] roots =
+            {
+                "Assets/_Modules",
+                "Packages/dev.yarnspinner.unity.addons.classicrpg/Runtime",
+            };
+            string[] knownGuards =
+            {
+                "_retryingHook", "_submitting", "s_submitting", "s_submitInFlight",
+                "_submitted", "_wired", "_hooked", "_started", "_running", "_inFlight",
+                "s_lastSubmitFrame", "_dispatching", "_firing",
+            };
+            string[] reentrantVerbs = { "Submit", "OnSubmit" };
+
+            var offenders = new List<string>();
+            foreach (var root in roots)
+            {
+                if (!Directory.Exists(root)) continue;
+                foreach (var file in Directory.GetFiles(root, "*.cs", SearchOption.AllDirectories))
+                {
+                    string raw = File.ReadAllText(file);
+                    string code = StripComments(raw);
+
+                    // class-wide guard opt-out: a known guard token, or a generic
+                    // single-flight bool (assigned true AND gated by an if-early-out).
+                    bool guarded = knownGuards.Any(code.Contains);
+                    if (!guarded)
+                    {
+                        foreach (System.Text.RegularExpressions.Match bm in
+                                 System.Text.RegularExpressions.Regex.Matches(code, @"\bbool\s+([A-Za-z_]\w*)\b"))
+                        {
+                            string nm = bm.Groups[1].Value;
+                            bool setTrue = System.Text.RegularExpressions.Regex.IsMatch(
+                                code, @"\b" + System.Text.RegularExpressions.Regex.Escape(nm) + @"\s*=\s*true\b");
+                            bool gated = System.Text.RegularExpressions.Regex.IsMatch(
+                                code, @"if\s*\(\s*!?\s*" + System.Text.RegularExpressions.Regex.Escape(nm) + @"\b");
+                            if (setTrue && gated) { guarded = true; break; }
+                        }
+                    }
+                    if (guarded) continue;
+
+                    var methods = ExtractMethodsForLint(code);
+                    var spawners = new HashSet<string>(
+                        methods.Where(m => m.body.Contains("StartCoroutine(")).Select(m => m.name));
+
+                    foreach (var m in methods)
+                    {
+                        bool isUpdate = m.name == "Update" || m.name == "LateUpdate";
+                        if (!isUpdate && !m.isEnumerator) continue;
+
+                        string why = null;
+                        if (isUpdate && m.body.Contains("StartCoroutine("))
+                            why = "Update/LateUpdate directly spawns StartCoroutine";
+                        if (why == null && m.isEnumerator)
+                            foreach (var callee in spawners)
+                            {
+                                if (callee == m.name) continue;
+                                if (System.Text.RegularExpressions.Regex.IsMatch(
+                                        m.body, @"\b" + System.Text.RegularExpressions.Regex.Escape(callee) + @"\s*\("))
+                                { why = $"coroutine re-invokes spawner '{callee}'"; break; }
+                            }
+                        if (why == null && isUpdate)
+                        {
+                            var v = reentrantVerbs.FirstOrDefault(vv =>
+                                System.Text.RegularExpressions.Regex.IsMatch(
+                                    m.body, @"\b" + System.Text.RegularExpressions.Regex.Escape(vv) + @"\s*\("));
+                            if (v != null) why = $"Update calls re-entrant '{v}('";
+                        }
+                        if (why == null) continue;
+
+                        // inline escape hatch: a // perf-lint-ok marker in the raw text near
+                        // this method's signature opts it out (the marker is comment-stripped
+                        // from `code`, so we check the raw source around the method name).
+                        var sigM = System.Text.RegularExpressions.Regex.Match(
+                            raw, @"\b" + System.Text.RegularExpressions.Regex.Escape(m.name) + @"\s*\(\s*\)\s*\{");
+                        if (sigM.Success)
+                        {
+                            int s = sigM.Index;
+                            int len = Math.Min(2000, raw.Length - s);
+                            if (raw.Substring(s, len).Contains("perf-lint-ok")) continue;
+                        }
+                        offenders.Add($"{Path.GetFileName(file)}:{m.name} — {why} (no single-flight guard)");
+                    }
+                }
+            }
+
+            return offenders.Count == 0
+                ? Pass("no unguarded per-frame fork-bomb / re-entrant-submit smell")
+                : Fail("per-frame self-multiply / re-entrancy smell (fork-bomb class): " +
+                       string.Join(" | ", offenders) +
+                       " — add a single-flight guard or a // perf-lint-ok marker " +
+                       "(see PerFrameReentrancyLintTests.cs)");
+        }
+
+        // Lightweight method extractor for the per-frame lint: (name, brace-matched body,
+        // isEnumerator). Heuristic — anchors on  <returnType> Name(<args>) {  and reads the
+        // token before the name as the return type. Shared shape with the EditMode test.
+        private static List<(string name, string body, bool isEnumerator)> ExtractMethodsForLint(string code)
+        {
+            var list = new List<(string, string, bool)>();
+            foreach (System.Text.RegularExpressions.Match sig in
+                     System.Text.RegularExpressions.Regex.Matches(
+                         code, @"(?<ret>[A-Za-z_][\w\.<>,\s]*?)\s+(?<name>[A-Za-z_]\w*)\s*\([^;{}]*\)\s*(?:where[^\{]*)?\{"))
+            {
+                string ret = sig.Groups["ret"].Value.Trim();
+                string name = sig.Groups["name"].Value;
+                if (name == "if" || name == "for" || name == "foreach" || name == "while" ||
+                    name == "switch" || name == "catch" || name == "using" || name == "lock" ||
+                    name == "fixed") continue;
+
+                int open = code.IndexOf('{', sig.Index + sig.Length - 1);
+                if (open < 0) continue;
+                int depth = 0, end = -1;
+                for (int i = open; i < code.Length; i++)
+                {
+                    if (code[i] == '{') depth++;
+                    else if (code[i] == '}') { depth--; if (depth == 0) { end = i; break; } }
+                }
+                if (end < 0) continue;
+                string body = code.Substring(open, end - open + 1);
+                bool isEnum = ret.EndsWith("IEnumerator") || ret.EndsWith("IEnumerator>");
+                list.Add((name, body, isEnum));
+            }
+            return list;
         }
 
         // ── A canonical scene opens without missing scripts / NRE ──────────────
