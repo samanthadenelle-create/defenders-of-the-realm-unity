@@ -56,32 +56,28 @@ namespace DeNelle.Village.Buildings.Progression
         private string _focusBuildingId;
         private ScrollView _scroll;
 
-        // Palette — LIGHT PARCHMENT theme (WO-393), matched to the light-restyled
-        // sibling screens (HeroInventoryController / VillageHudController). The panel
-        // reads as a warm parchment sheet with DARK INK text; gold is reserved for
-        // FRAMES / accents only — never body text on the light fill (yellow-on-cream
-        // was the unreadable combo this WO fixes). Heading "gold" is a darkened BRONZE
-        // ink (GiltInk) that stays legible on parchment.
-        // Frame / accent gold (rims, button fills) — fine on dark borders, never text.
-        private static readonly Color GoldRim = new Color(0.85f, 0.66f, 0.30f, 1f);
-        private static readonly Color Gold = new Color(0.831f, 0.686f, 0.216f, 1f); // ElarionUi.Gold — button fill
-        // Heading ink: bronze, dark enough to read on parchment (was bright Gold text).
-        private static readonly Color GiltInk = new Color(0.561f, 0.408f, 0.110f, 1f); // ~#8F680C
-        // Body / primary text ink (dark, ~#231910 — reads on light parchment).
-        private static readonly Color Ink = new Color(0.137f, 0.098f, 0.055f, 1f);
-        // Secondary / flavour ink (was the pale "Cream" / "Dim" on dark).
-        private static readonly Color InkDim = new Color(0.345f, 0.290f, 0.220f, 1f);
-        // Affordability tones — DARKENED so they read on the light parchment fill
-        // (was bright green/red that washed out; ~4.5:1 on cream).
-        private static readonly Color Good = new Color(0.20f, 0.46f, 0.18f, 1f);
-        private static readonly Color Bad = new Color(0.62f, 0.16f, 0.13f, 1f);
-        // Aliases kept so the rest of the file's references stay behaviour-identical;
-        // both now map to dark ink so nothing renders light-on-light.
-        private static readonly Color Cream = new Color(0.137f, 0.098f, 0.055f, 1f); // → Ink
-        private static readonly Color Dim = new Color(0.345f, 0.290f, 0.220f, 1f);   // → InkDim
-        // Panel fills — warm parchment (light), lightly translucent.
-        private static readonly Color ShellBg = new Color(0.929f, 0.902f, 0.839f, 0.98f); // ~#EDE6D6 parchment
-        private static readonly Color CardBg = new Color(0.886f, 0.847f, 0.761f, 1f);     // aged-parchment card
+        // Palette — DARK-GLASS + RUNIC-GOLD shared presentation language. Every
+        // colour SOURCES from ElarionUi (the ONE in-game theme) so this panel reads
+        // as the SAME designed game as the town HUD / store / build-info preview
+        // (which all route through ElarionUi.StylePanel / StyleButton). The earlier
+        // WO-393 light-parchment local palette is retired here: this surface now
+        // matches the dark-stone sibling screens, with runic gold reserved for
+        // frames / titles / the primary CTA and parchment cream for body text.
+        // Frame / accent gold (rims) — soft runic gold over the dark stone.
+        private static readonly Color GoldRim = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.55f);
+        // Heading "gilt" — bright runic gold on the dark stone (high contrast).
+        private static readonly Color GiltInk = ElarionUi.Gilt;
+        // Secondary / flavour text — muted parchment.
+        private static readonly Color InkDim = ElarionUi.ParchmentDim;
+        // Affordability tones — the shared theme green / red, harmonised with the palette.
+        private static readonly Color Good = ElarionUi.Affordable;
+        private static readonly Color Bad = ElarionUi.Danger;
+        // Secondary-text alias kept so the rest of the file's references stay
+        // behaviour-identical; maps to the dark-theme muted parchment.
+        private static readonly Color Dim = ElarionUi.ParchmentDim;         // → secondary text
+        // Panel fills — earthy stone (the dark-glass language), sourced from ElarionUi.
+        private static readonly Color ShellBg = ElarionUi.PanelStone;       // modal sheet
+        private static readonly Color CardBg = ElarionUi.PanelStoneDark;    // recessed card
 
         public bool IsOpen => _shell != null && _shell.style.display.value != DisplayStyle.None;
 
@@ -191,9 +187,11 @@ namespace DeNelle.Village.Buildings.Progression
             _shell.style.maxWidth = new Length(95, LengthUnit.Percent);
             _shell.style.maxHeight = new Length(92, LengthUnit.Percent);
             _shell.style.flexDirection = FlexDirection.Column;
-            _shell.style.backgroundColor = new StyleColor(ShellBg);
-            Round(_shell, 12);
-            Border(_shell, GoldRim, 2);
+            // Dark-glass stone sheet + runic-gold rim — the shared theme panel (matches
+            // the town HUD / build-info preview). StylePanel applies fill + rounding +
+            // gold border; we override the radius to the shell's larger corner.
+            ElarionUi.StylePanel(_shell);
+            ElarionUi.SetRadius(_shell, ElarionUi.RadiusLg);
             _root.Add(_shell);
 
             BuildHeader(_shell);
@@ -218,19 +216,19 @@ namespace DeNelle.Village.Buildings.Progression
             footer.style.paddingLeft = 14; footer.style.paddingRight = 14;
             footer.style.paddingTop = 8; footer.style.paddingBottom = 10;
             footer.style.borderTopWidth = 1;
-            footer.style.borderTopColor = new StyleColor(new Color(0.85f, 0.66f, 0.30f, 0.45f));
+            footer.style.borderTopColor = new StyleColor(GoldRim);
             _shell.Add(footer);
 
             _walletLabel = new Label();
-            _walletLabel.style.color = new StyleColor(Cream);
-            _walletLabel.style.fontSize = 12;
+            _walletLabel.style.color = new StyleColor(InkDim);
+            _walletLabel.style.fontSize = ElarionUi.FontLabel;
             _walletLabel.style.whiteSpace = WhiteSpace.Normal;
             footer.Add(_walletLabel);
 
             // Toast line (upgrade feedback), hidden by default.
             _toast = new Label();
             _toast.style.color = new StyleColor(Good);
-            _toast.style.fontSize = 12;
+            _toast.style.fontSize = ElarionUi.FontLabel;
             _toast.style.unityTextAlign = TextAnchor.MiddleCenter;
             _toast.style.paddingBottom = 6;
             _toast.style.display = DisplayStyle.None;
@@ -249,23 +247,25 @@ namespace DeNelle.Village.Buildings.Progression
             header.style.paddingLeft = 16; header.style.paddingRight = 10;
             header.style.paddingTop = 10; header.style.paddingBottom = 10;
             header.style.borderBottomWidth = 1;
-            header.style.borderBottomColor = new StyleColor(new Color(0.85f, 0.66f, 0.30f, 0.45f));
+            header.style.borderBottomColor = new StyleColor(GoldRim);
             parent.Add(header);
 
-            var title = new Label("Upgrade Buildings");
+            // Gilt crest glyph + title — the shared header voice (matches MakeTitle).
+            var title = new Label(ElarionUi.CrestGlyph + "  Upgrade Buildings");
             title.style.color = new StyleColor(GiltInk);
-            title.style.fontSize = 20;
+            title.style.fontSize = ElarionUi.FontTitle;
             title.style.unityFontStyleAndWeight = FontStyle.Bold;
+            title.style.letterSpacing = 1.5f;
             header.Add(title);
 
+            // Close — a themed Danger chip (red glass, parchment "X"), consistent with
+            // the shared button language but compact for the corner.
             var closeBtn = new Button(Close) { text = "X" };
-            closeBtn.style.width = 32; closeBtn.style.height = 28;
-            closeBtn.style.fontSize = 14;
-            // Dark ink "X" on a deeper-tan parchment chip (reads on the light shell).
-            closeBtn.style.color = new StyleColor(Ink);
-            closeBtn.style.backgroundColor = new StyleColor(new Color(0.84f, 0.78f, 0.66f, 1f));
-            Round(closeBtn, 6);
-            Border(closeBtn, new Color(0.85f, 0.66f, 0.30f, 0.65f), 1);
+            ElarionUi.StyleButton(closeBtn, ElarionUi.ButtonKind.Danger);
+            closeBtn.style.width = 32; closeBtn.style.minHeight = 28; closeBtn.style.height = 28;
+            closeBtn.style.fontSize = ElarionUi.FontBody;
+            closeBtn.style.paddingLeft = 0; closeBtn.style.paddingRight = 0;
+            closeBtn.style.marginTop = 0; closeBtn.style.marginBottom = 0;
             header.Add(closeBtn);
         }
 
@@ -317,13 +317,14 @@ namespace DeNelle.Village.Buildings.Progression
             card.style.paddingLeft = 12; card.style.paddingRight = 12;
             card.style.paddingTop = 10; card.style.paddingBottom = 10;
             card.style.backgroundColor = new StyleColor(CardBg);
-            Round(card, 8);
-            // DEF-186: the interacted building's card gets a bright gold rim so the
-            // player sees the panel opened ON that building (the Lumbermill, say).
+            Round(card, ElarionUi.RadiusMd);
+            // DEF-186: the interacted building's card gets a bright gilt rim so the
+            // player sees the panel opened ON that building (the Lumbermill, say);
+            // others wear the soft runic-gold hairline of the dark-glass language.
             if (focused)
-                Border(card, new Color(1f, 0.80f, 0.34f, 1f), 2);
+                Border(card, ElarionUi.Gilt, 2);
             else
-                Border(card, new Color(0.85f, 0.66f, 0.30f, 0.35f), 1);
+                Border(card, new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.35f), 1);
 
             // Title row: name + level badge.
             var titleRow = new VisualElement();
@@ -334,15 +335,17 @@ namespace DeNelle.Village.Buildings.Progression
 
             var name = new Label(def.DisplayName);
             name.style.color = new StyleColor(GiltInk);
-            name.style.fontSize = 16;
+            name.style.fontSize = ElarionUi.FontHead;
             name.style.unityFontStyleAndWeight = FontStyle.Bold;
             titleRow.Add(name);
 
             // WO-237: clear current → next tier badge so the player sees what the
             // upgrade moves them TO, not just where they are. Maxed shows "Lv N · MAX".
             var levelBadge = new Label(maxed ? $"Lv {level} · MAX" : $"Lv {level} → {level + 1}");
-            levelBadge.style.color = new StyleColor(Cream);
-            levelBadge.style.fontSize = 13;
+            // Aether-violet level badge — the theme's runic/progression accent (matches
+            // the build-info tier badge), reading clean on the dark stone card.
+            levelBadge.style.color = new StyleColor(ElarionUi.Aether);
+            levelBadge.style.fontSize = ElarionUi.FontLabel;
             levelBadge.style.unityFontStyleAndWeight = FontStyle.Bold;
             titleRow.Add(levelBadge);
 
@@ -366,7 +369,7 @@ namespace DeNelle.Village.Buildings.Progression
             }
             var yieldLine = new Label(yieldText);
             yieldLine.style.color = new StyleColor(Dim);
-            yieldLine.style.fontSize = 12;
+            yieldLine.style.fontSize = ElarionUi.FontLabel;
             yieldLine.style.marginTop = 4;
             card.Add(yieldLine);
 
@@ -382,7 +385,7 @@ namespace DeNelle.Village.Buildings.Progression
             {
                 var maxLine = new Label("Fully upgraded.");
                 maxLine.style.color = new StyleColor(Good);
-                maxLine.style.fontSize = 12;
+                maxLine.style.fontSize = ElarionUi.FontLabel;
                 costRow.Add(maxLine);
             }
             else
@@ -403,30 +406,22 @@ namespace DeNelle.Village.Buildings.Progression
                 if (magicGated)
                 {
                     var techLine = new Label("Unlocks tech: Arcane Forge");
-                    // Darkened aether/violet so it reads on the light parchment card.
-                    techLine.style.color = new StyleColor(new Color(0.38f, 0.24f, 0.58f, 1f));
-                    techLine.style.fontSize = 11;
+                    // Aether/violet — the theme's runic/magic accent, reading on dark stone.
+                    techLine.style.color = new StyleColor(ElarionUi.Aether);
+                    techLine.style.fontSize = ElarionUi.FontMicro;
                     techLine.style.whiteSpace = WhiteSpace.Normal;
                     costColumn.Add(techLine);
                 }
 
                 var upBtn = new Button(() => OnUpgradeClicked(def.BuildingId)) { text = magicGated ? "Empower" : "Upgrade" };
+                // The shared CTA button language: gilt-rimmed gold glass when affordable
+                // (dark-ink label), stone-grey Disabled when short — same as the build /
+                // store / inventory buttons. StyleButton owns fill / radius / hover-press.
+                ElarionUi.StyleButton(upBtn, affordable ? ElarionUi.ButtonKind.Gold : ElarionUi.ButtonKind.Disabled);
                 upBtn.style.minWidth = 110;
                 upBtn.style.height = 40; // tap-friendly target
-                upBtn.style.fontSize = 14;
-                upBtn.style.unityFontStyleAndWeight = FontStyle.Bold;
                 upBtn.style.marginLeft = 10;
-                Round(upBtn, 8);
                 upBtn.SetEnabled(affordable);
-                upBtn.style.color = new StyleColor(affordable
-                    ? new Color(0.10f, 0.08f, 0.04f, 1f)
-                    : new Color(0.55f, 0.50f, 0.42f, 1f));
-                upBtn.style.backgroundColor = new StyleColor(affordable
-                    ? Gold
-                    : new Color(0.30f, 0.24f, 0.18f, 1f));
-                Border(upBtn,
-                    affordable ? new Color(1f, 0.78f, 0.32f, 1f) : new Color(0.50f, 0.40f, 0.22f, 1f),
-                    2);
                 costRow.Add(upBtn);
             }
 
@@ -449,7 +444,7 @@ namespace DeNelle.Village.Buildings.Progression
 
             var prefix = new Label("Next: ");
             prefix.style.color = new StyleColor(Dim);
-            prefix.style.fontSize = 12;
+            prefix.style.fontSize = ElarionUi.FontLabel;
             wrap.Add(prefix);
 
             bool hasHarvest = lvlDef != null && lvlDef.UpgradeCost != null && lvlDef.UpgradeCost.Count > 0;
@@ -464,7 +459,7 @@ namespace DeNelle.Village.Buildings.Progression
                     bool ok = have >= c.Amount;
                     wrap.Add(MakeCostChip(
                         $"{c.Amount} {ResourceBuildingProgression.LabelFor(c.Resource)}",
-                        have, ok, i > 0));
+                        have, ok, i > 0, ResourceIcon(c.Resource)));
                     any = true;
                 }
             }
@@ -474,7 +469,7 @@ namespace DeNelle.Village.Buildings.Progression
             {
                 int haveMagic = ResourceLedger.MagicBalance();
                 bool ok = haveMagic >= lvlDef.MagicCost;
-                wrap.Add(MakeCostChip($"{lvlDef.MagicCost} Magic", haveMagic, ok, any));
+                wrap.Add(MakeCostChip($"{lvlDef.MagicCost} Magic", haveMagic, ok, any, null));
                 any = true;
             }
 
@@ -482,7 +477,7 @@ namespace DeNelle.Village.Buildings.Progression
             {
                 var none = new Label("—");
                 none.style.color = new StyleColor(Dim);
-                none.style.fontSize = 12;
+                none.style.fontSize = ElarionUi.FontLabel;
                 wrap.Add(none);
             }
 
@@ -490,19 +485,82 @@ namespace DeNelle.Village.Buildings.Progression
         }
 
         /// <summary>
-        /// A single colored cost line "{need} {Res} ({have})": Good when affordable,
-        /// Bad when short. <paramref name="leadingSep"/> prepends a separator dot so the
-        /// chips read as a list without depending on flex gaps.
+        /// A single colored cost line "{need} {Res} ({have})": Good (theme green) when
+        /// affordable, Bad (theme red) when short. When a resource <paramref name="icon"/>
+        /// is supplied it is shown as a small badge ahead of the text (the same per-resource
+        /// art the town HUD uses), so the player reads the resource at a glance — the
+        /// affordability colour still carries the have/need state. <paramref name="leadingSep"/>
+        /// prepends a separator dot so the chips read as a list without depending on flex gaps.
         /// </summary>
-        private static Label MakeCostChip(string needText, int have, bool affordable, bool leadingSep)
+        private static VisualElement MakeCostChip(string needText, int have, bool affordable, bool leadingSep, Sprite icon)
         {
-            var lbl = new Label((leadingSep ? "·  " : "") + $"{needText} ({have})");
+            var chip = new VisualElement();
+            chip.style.flexDirection = FlexDirection.Row;
+            chip.style.alignItems = Align.Center;
+            chip.style.marginLeft = leadingSep ? 4 : 0;
+            chip.style.marginRight = 2;
+
+            if (leadingSep)
+            {
+                var sep = new Label("·  ");
+                sep.style.color = new StyleColor(Dim);
+                sep.style.fontSize = ElarionUi.FontLabel;
+                chip.Add(sep);
+            }
+
+            // Per-resource icon badge (town-HUD art), sprite-FIRST: shown only when the
+            // art resolved — otherwise the chip is text-only (WebGL-safe, never blank).
+            if (icon != null)
+            {
+                var badge = new VisualElement();
+                badge.style.width = 14; badge.style.height = 14;
+                badge.style.marginRight = 4;
+                badge.style.flexShrink = 0;
+                badge.style.backgroundImage = new StyleBackground(icon);
+                // Tint to the affordability colour so the icon reads with the have/need state.
+                badge.style.unityBackgroundImageTintColor = new StyleColor(affordable ? Good : Bad);
+                chip.Add(badge);
+            }
+
+            var lbl = new Label($"{needText} ({have})");
             lbl.style.color = new StyleColor(affordable ? Good : Bad);
-            lbl.style.fontSize = 12;
-            lbl.style.marginLeft = leadingSep ? 4 : 0;
-            lbl.style.marginRight = 2;
+            lbl.style.fontSize = ElarionUi.FontLabel;
             lbl.style.unityFontStyleAndWeight = affordable ? FontStyle.Normal : FontStyle.Bold;
-            return lbl;
+            chip.Add(lbl);
+            return chip;
+        }
+
+        // ── Resource icon resolver (town-HUD art, WebGL-safe, cached) ─────────
+        // The town HUD shows per-resource icons at Resources/HudIcons/hud_<res>
+        // (hud_wood / hud_iron / hud_food / hud_crystal). We reuse that SAME art so
+        // the upgrade panel reads as one game. Sprite-first: null when absent — the
+        // cost chip then renders text-only (never blank). Cached per resource.
+        private static readonly System.Collections.Generic.Dictionary<HarvestResource, Sprite> _resIcons
+            = new System.Collections.Generic.Dictionary<HarvestResource, Sprite>();
+
+        private static Sprite ResourceIcon(HarvestResource res)
+        {
+            if (_resIcons.TryGetValue(res, out var cached)) return cached;
+            string id;
+            switch (res)
+            {
+                case HarvestResource.Wood:     id = "hud_wood";    break;
+                case HarvestResource.Iron:     id = "hud_iron";    break;
+                case HarvestResource.Food:     id = "hud_food";    break;
+                case HarvestResource.Crystals: id = "hud_crystal"; break;
+                default:                       id = null;          break;
+            }
+            Sprite sp = null;
+            if (id != null)
+            {
+                try { sp = Resources.Load<Sprite>("HudIcons/" + id); }
+                catch (System.Exception e)
+                {
+                    Debug.LogWarning("[BuildingUpgradePanel] resource icon load failed for " + id + ": " + e.Message);
+                }
+            }
+            _resIcons[res] = sp;
+            return sp;
         }
 
         private void RefreshWallet()
