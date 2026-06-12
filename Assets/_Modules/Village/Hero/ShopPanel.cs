@@ -480,30 +480,35 @@ namespace DeNelle.Village.Hero
             int rowCount = weapons.Count + armors.Count + _potionIds.Count;
             var listRoot = BuildScrollContent(rowCount);
 
-            float y = 0.999f;
             foreach (var w in weapons)
             {
                 var wCopy = w; // capture for the closure
-                CreateBuyRow(listRoot, BuyLabel(w.name, GearAppraisal.Appraise(w)), GearCatalog.GetBuyCost(w), () => TryBuyWeapon(wCopy), ref y);
+                CreateBuyRow(listRoot, BuyLabel(w.name, GearAppraisal.Appraise(w)), GearCatalog.GetBuyCost(w), () => TryBuyWeapon(wCopy));
             }
             foreach (var a in armors)
             {
                 var aCopy = a; // capture for the closure
-                CreateBuyRow(listRoot, BuyLabel(a.name, GearAppraisal.Appraise(a)), GearCatalog.GetBuyCost(a), () => TryBuyArmor(aCopy), ref y);
+                CreateBuyRow(listRoot, BuyLabel(a.name, GearAppraisal.Appraise(a)), GearCatalog.GetBuyCost(a), () => TryBuyArmor(aCopy));
             }
             foreach (var pid in _potionIds)
             {
                 var cost = new ResourceCost(wood: 4, iron: 0, crystals: 0); // cheap early potions
                 if (pid.Contains("mana")) cost = new ResourceCost(wood: 3, crystals: 1);
                 string pidCopy = pid; var costCopy = cost; // capture for the closure
-                CreateBuyRow(listRoot, pidCopy, costCopy, () => TryBuyPotion(pidCopy, costCopy), ref y);
+                CreateBuyRow(listRoot, pidCopy, costCopy, () => TryBuyPotion(pidCopy, costCopy));
             }
         }
 
-        // Row height as a fraction of the SCROLL CONTENT's height (not the viewport).
-        // Each row occupies this normalized slice; the content is grown to fit all rows
-        // so nothing is pushed off-panel and every BUY button is reachable.
-        private const float RowSlice = 0.085f;
+        // Fixed PIXEL height per row (reference-resolution px). Rows are laid out by a
+        // VerticalLayoutGroup (top-down), so this is each row's LayoutElement height and
+        // the content auto-grows (ContentSizeFitter) to exactly fit all rows. This
+        // replaced the old normalized-fraction placement, whose row anchors were a
+        // fraction of the *content* height while the slice was a fraction of the
+        // *viewport* — so any list longer than one viewport pushed later rows into
+        // NEGATIVE anchor space, off the content, unreachable even by scrolling (the
+        // reported "items loaded from the catalog but the panel showed nothing").
+        private const float RowHeightPx = 86f;   // ~RowSlice * panel-content height, fixed px
+        private const float RowGapPx    = 6f;    // spacing between rows
 
         // Builds a scrollable list area inside _contentRoot and returns the content
         // transform that rows should be parented to. Rows are still anchored from the
@@ -535,27 +540,35 @@ namespace DeNelle.Village.Hero
             var mask = viewport.GetComponent<Mask>();
             mask.showMaskGraphic = false;
 
-            // Content — grown taller than the viewport when there are many rows so the
-            // list can scroll. height multiplier = how many "viewport heights" of rows.
+            // Content — TOP-anchored, full width, height AUTO-COMPUTED by a
+            // ContentSizeFitter from the stacked rows. A VerticalLayoutGroup lays the
+            // rows out top-down at a fixed pixel height each, so the content is always
+            // exactly tall enough to hold every row (it grows past the viewport => the
+            // ScrollRect pans; it stays short => no scroll). This is robust for ANY
+            // rowCount, unlike the prior normalized-fraction math (see RowHeightPx note).
             var content = new GameObject("ScrollContent", typeof(RectTransform));
             content.transform.SetParent(viewport.transform, false);
             var cr = content.GetComponent<RectTransform>();
-            // WO-412: STRETCH to fill the viewport vertically too (anchorMin.y = 0) so the
-            // "sizeDelta 0 == viewport height" assumption below actually holds. It was anchored to
-            // the top EDGE (anchorMin.y = 1) → sizeDelta 0 = ZERO height → the content collapsed and
-            // every row (including the always-present potions) rendered invisible (= the empty BUY tab).
-            cr.anchorMin = new Vector2(0f, 0f);
+            // Anchor to the TOP edge, stretched horizontally; pivot top so the layout
+            // group fills downward from the top of the viewport.
+            cr.anchorMin = new Vector2(0f, 1f);
             cr.anchorMax = new Vector2(1f, 1f);
             cr.pivot = new Vector2(0.5f, 1f);
-            // Total rows take rowCount * RowSlice of viewport height. If that is <= 1 the
-            // list fits and the content equals the viewport (size delta 0). Otherwise grow.
-            float totalSlices = Mathf.Max(1f, rowCount * RowSlice);
-            // sizeDelta.y in normalized-to-viewport terms: a value of 0 == viewport height.
-            // We express extra height as (totalSlices - 1) * viewportHeight via a layout-free
-            // trick: set anchors to top edge and use sizeDelta height = extra fraction * a
-            // reference. Use the panel reference resolution height slice for a stable size.
-            float viewportPixels = 1920f * (0.76f - 0.08f); // content area height in ref px
-            cr.sizeDelta = new Vector2(0f, Mathf.Max(0f, (totalSlices - 1f) * viewportPixels));
+            cr.anchoredPosition = Vector2.zero;
+            cr.sizeDelta = new Vector2(0f, 0f); // height driven by the ContentSizeFitter
+
+            var vlg = content.AddComponent<VerticalLayoutGroup>();
+            vlg.childAlignment = TextAnchor.UpperCenter;
+            vlg.spacing = RowGapPx;
+            vlg.padding = new RectOffset(6, 6, 6, 6);
+            vlg.childControlWidth = true;
+            vlg.childControlHeight = true;     // honor each row's LayoutElement height
+            vlg.childForceExpandWidth = true;
+            vlg.childForceExpandHeight = false;
+
+            var fitter = content.AddComponent<ContentSizeFitter>();
+            fitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
+            fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
             var scroll = viewport.GetComponent<ScrollRect>();
             scroll.viewport = vr;
@@ -568,17 +581,15 @@ namespace DeNelle.Village.Hero
             return content.transform;
         }
 
-        private void CreateBuyRow(Transform parent, string label, ResourceCost cost, System.Action buyAction, ref float y)
+        private void CreateBuyRow(Transform parent, string label, ResourceCost cost, System.Action buyAction)
         {
             // Whole row is a Button now (tap-to-buy) AND keeps an explicit BUY button — both
             // route to the same purchase action, so "selecting an item" completes the buy.
-            var row = new GameObject("BuyRow_" + label, typeof(Image), typeof(Button));
+            var row = new GameObject("BuyRow_" + label, typeof(Image), typeof(Button), typeof(LayoutElement));
             row.transform.SetParent(parent, false);
-            var rr = row.GetComponent<RectTransform>();
-            rr.anchorMin = new Vector2(0.02f, y - RowSlice);
-            rr.anchorMax = new Vector2(0.98f, y - 0.005f);
-            rr.offsetMin = Vector2.zero;
-            rr.offsetMax = Vector2.zero;
+            var le = row.GetComponent<LayoutElement>();
+            le.preferredHeight = RowHeightPx;
+            le.minHeight = RowHeightPx;
             row.GetComponent<Image>().color = RowPaper;
             AddRowGiltRim(row.transform); // thin rune-frame around the item row
             var rowBtn = row.GetComponent<Button>();
@@ -630,8 +641,6 @@ namespace DeNelle.Village.Hero
             blt.color = Color.white;
             blt.alignment = TMPro.TextAlignmentOptions.Center;
             blt.raycastTarget = false;
-
-            y -= RowSlice;
         }
 
         // WO-300: enrich a buy-row name with its Elarion maker's mark, so a vendor
@@ -734,7 +743,6 @@ namespace DeNelle.Village.Hero
             }
             var listRoot = BuildScrollContent(sellable.Count);
 
-            float y = 0.999f;
             foreach (var id in sellable)
             {
                 int owned = inv.Get(id);
@@ -747,7 +755,7 @@ namespace DeNelle.Village.Hero
                                     new ResourceCost(wood: 2);
 
                 string idCopy = id; var refundCopy = refund;
-                CreateSellRow(listRoot, display, refundCopy, () => TrySell(idCopy, refundCopy), ref y);
+                CreateSellRow(listRoot, display, refundCopy, () => TrySell(idCopy, refundCopy));
             }
         }
 
@@ -760,15 +768,13 @@ namespace DeNelle.Village.Hero
                 Mathf.RoundToInt(c.Crystals * f));
         }
 
-        private void CreateSellRow(Transform parent, string label, ResourceCost refund, System.Action sellAction, ref float y)
+        private void CreateSellRow(Transform parent, string label, ResourceCost refund, System.Action sellAction)
         {
-            var row = new GameObject("SellRow_" + label, typeof(Image));
+            var row = new GameObject("SellRow_" + label, typeof(Image), typeof(LayoutElement));
             row.transform.SetParent(parent, false);
-            var rr = row.GetComponent<RectTransform>();
-            rr.anchorMin = new Vector2(0.02f, y - RowSlice);
-            rr.anchorMax = new Vector2(0.98f, y - 0.005f);
-            rr.offsetMin = Vector2.zero;
-            rr.offsetMax = Vector2.zero;
+            var le = row.GetComponent<LayoutElement>();
+            le.preferredHeight = RowHeightPx;
+            le.minHeight = RowHeightPx;
             row.GetComponent<Image>().color = RowPaper;
             AddRowGiltRim(row.transform);
 
@@ -808,8 +814,6 @@ namespace DeNelle.Village.Hero
             blt.fontSize = 13;
             blt.color = Color.white;
             blt.alignment = TMPro.TextAlignmentOptions.Center;
-
-            y -= RowSlice;
         }
 
         private void TrySell(string id, ResourceCost refund)
@@ -855,18 +859,19 @@ namespace DeNelle.Village.Hero
             }
             var listRoot = BuildScrollContent(equippable.Count + 1); // +1 for the Current line
 
-            float y = 0.999f;
-            CreateLabel(listRoot, current, y); y -= RowSlice;
+            CreateLabelRow(listRoot, current);
             foreach (var id in equippable)
             {
                 int owned = inv.Get(id);
                 var w = GearCatalog.FindWeapon(id);
                 string label = (w != null ? w.name : GearCatalog.FindArmor(id).name) + " (owned " + owned + ")";
                 string idCopy = id; bool isWeapon = w != null;
-                CreateEquipRow(listRoot, label, idCopy, isWeapon, ref y);
+                CreateEquipRow(listRoot, label, idCopy, isWeapon);
             }
         }
 
+        // Absolute-positioned label on a NON-layout parent (e.g. _contentRoot directly,
+        // the "no inventory" fallback). y is a normalized top anchor within the parent.
         private void CreateLabel(Transform parent, string txt, float y)
         {
             var go = new GameObject("Label", typeof(TMPro.TextMeshProUGUI));
@@ -882,15 +887,29 @@ namespace DeNelle.Village.Hero
             t.color = InkDim; // soft ink, readable on parchment
         }
 
-        private void CreateEquipRow(Transform parent, string label, string id, bool isWeapon, ref float y)
+        // Layout-child label for the scroll content (VerticalLayoutGroup). Fixed pixel
+        // height via LayoutElement so it stacks like a row and the content sizes to it.
+        private void CreateLabelRow(Transform parent, string txt)
         {
-            var row = new GameObject("EquipRow_" + id, typeof(Image));
+            var go = new GameObject("LabelRow", typeof(TMPro.TextMeshProUGUI), typeof(LayoutElement));
+            go.transform.SetParent(parent, false);
+            var le = go.GetComponent<LayoutElement>();
+            le.preferredHeight = RowHeightPx * 0.5f;
+            le.minHeight = RowHeightPx * 0.5f;
+            var t = go.GetComponent<TMPro.TextMeshProUGUI>();
+            t.text = txt;
+            t.fontSize = 13;
+            t.color = InkDim;
+            t.alignment = TMPro.TextAlignmentOptions.Left;
+        }
+
+        private void CreateEquipRow(Transform parent, string label, string id, bool isWeapon)
+        {
+            var row = new GameObject("EquipRow_" + id, typeof(Image), typeof(LayoutElement));
             row.transform.SetParent(parent, false);
-            var rr = row.GetComponent<RectTransform>();
-            rr.anchorMin = new Vector2(0.02f, y - RowSlice);
-            rr.anchorMax = new Vector2(0.98f, y - 0.005f);
-            rr.offsetMin = Vector2.zero;
-            rr.offsetMax = Vector2.zero;
+            var le = row.GetComponent<LayoutElement>();
+            le.preferredHeight = RowHeightPx;
+            le.minHeight = RowHeightPx;
             row.GetComponent<Image>().color = RowPaper;
             AddRowGiltRim(row.transform);
 
@@ -920,8 +939,6 @@ namespace DeNelle.Village.Hero
             blt.fontSize = 13;
             blt.color = Color.white;
             blt.alignment = TMPro.TextAlignmentOptions.Center;
-
-            y -= RowSlice;
         }
 
         private void TryEquip(string id, bool isWeapon)

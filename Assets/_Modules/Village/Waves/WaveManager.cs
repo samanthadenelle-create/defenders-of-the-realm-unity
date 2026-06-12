@@ -515,6 +515,20 @@ namespace DeNelle.Village
                     FindObjectsByType<WaveSpawnPoint>(FindObjectsSortMode.None));
             }
 
+            // A wave with no spawn markers can spawn ZERO enemies and then "clear"
+            // itself instantly (each spawn path no-ops on an empty list), so the
+            // countdown/loop appears to run but nothing ever attacks. Warn LOUDLY
+            // once at loop-start so a missing-markers scene (e.g. MainCastle_Hall
+            // before the spawn points are placed) is obvious instead of silent.
+            if (_spawnPoints == null || _spawnPoints.Count == 0)
+            {
+                Debug.LogWarning(
+                    "[WaveManager] No WaveSpawnPoint markers found in the scene — waves " +
+                    "will spawn NO enemies and each wave will self-clear instantly. Place " +
+                    "WaveSpawnPoint markers (tag 'SpawnPoint', ~12 m outside each gate) so " +
+                    "the wave loop has somewhere to spawn. See docs/port-notes/week4-waves.md.");
+            }
+
             if (_enemyRoot == null) _enemyRoot = transform;
         }
 
@@ -690,6 +704,21 @@ namespace DeNelle.Village
                     e.ReachedHeart  += HandleEnemyReachedHeart;
                     _liveEnemies.Add(e);
                 }
+            }
+
+            // ROBUSTNESS (castle / missing-markers): if every ground-spawn path produced
+            // ZERO enemies and this is not a boss/apex wave, the wave would otherwise
+            // self-clear on the next TickActiveWave (LiveEnemies == 0) and silently
+            // advance — the timer/loop "runs" but no enemy ever appears. Surface it with
+            // one clear warning so the cause (no spawn points / empty roster) is obvious.
+            bool willHaveBoss = !string.IsNullOrEmpty(wave.Boss) || wave.IsApexBossWave;
+            if (_liveEnemies.Count == 0 && !willHaveBoss)
+            {
+                Debug.LogWarning(
+                    $"[WaveManager] Wave {waveId} started but spawned ZERO enemies — it will " +
+                    "self-clear instantly. Likely cause: no WaveSpawnPoint markers in the " +
+                    "scene (place them, tag 'SpawnPoint', ~12 m outside each gate) or an empty " +
+                    "enemy roster/catalog.");
             }
 
             // A boss, if the wave names one, releases immediately at the north spawn.

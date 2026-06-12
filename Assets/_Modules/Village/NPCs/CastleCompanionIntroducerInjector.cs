@@ -153,7 +153,7 @@ namespace DeNelle.Village
             // the bastion before the Talk prompt lights — "stepped out of the keep -> meet your
             // companion." Fixed + navmesh-snapped so it's robust no matter where in the keep the
             // hero spawned. (hero is still resolved below, for facing.)
-            Vector3 basePos = new Vector3(-4f, 0f, -30f);
+            Vector3 basePos = new Vector3(0f, 0f, 20f); // owner 2026-06-12: 20m NORTH of spawn
             if (NavMesh.SamplePosition(basePos, out var hit, 6f, NavMesh.AllAreas))
                 basePos = hit.position;
 
@@ -305,6 +305,7 @@ namespace DeNelle.Village
     public sealed class CompanionIntroducerInteractable : MonoBehaviour
     {
         private const float ActivateRadius = 6f;
+        private const float AutoFireRadius = 4f; // owner 2026-06-12: auto-start the meeting on close approach
 
         private string _node;
         private string _label;
@@ -347,7 +348,9 @@ namespace DeNelle.Village
                 // Register with the proximity registry so the HUD TALK button fires us (the
                 // canonical mobile trigger). Desktop [F] handled just below.
                 TalkPromptRegistry.Register(transform, Interact);
-                if (!PanelManager.AnyOpen && Input.GetKeyDown(KeyCode.F))
+                // Owner 2026-06-12: AUTO-start the meeting on close approach (no Talk press) —
+                // the Talk prompt still shows at ActivateRadius; within AutoFireRadius it fires.
+                if (!PanelManager.AnyOpen && (Input.GetKeyDown(KeyCode.F) || distSqr <= AutoFireRadius * AutoFireRadius))
                     Interact();
             }
             else

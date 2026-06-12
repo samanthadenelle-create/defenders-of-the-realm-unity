@@ -464,10 +464,11 @@ namespace DeNelle.Editor
             var floorRoot = new GameObject(NavFloorName);
             floorRoot.transform.SetParent(parent, false);
 
-            // Main interior floor: a Unity Plane is 10x10m at scale 1, so scale 9 = 90x90m,
-            // covering the full -45..+45 interior (corner towers ±42, walls ±44). y sits just
-            // above the visual tiles (0.01) and below the hero spawn (0.1).
-            CreateInvisibleFloor(floorRoot.transform, "CourtyardFloor_Nav", new Vector3(0f, 0.05f, 0f), new Vector3(9f, 1f, 9f));
+            // Main interior floor (owner 2026-06-12: "make the entire zone larger, 15m+ each side
+            // so it triggers the world transition"): scale 13 = 130x130m, covering ±65 — ~22m PAST
+            // every gate (gates ±43) so the hero walks out far enough to trip the OuterWorld seam.
+            // y=0 (gate base) + forced walkable (CreateInvisibleFloor) so the gate arch can't seal it.
+            CreateInvisibleFloor(floorRoot.transform, "CourtyardFloor_Nav", new Vector3(0f, 0f, 0f), new Vector3(13f, 1f, 13f));
 
             // Gate bridges: ONE oriented walkable strip CENTERED ON EACH of the 4 recipe gate
             // openings (S/W/N/E), spanning from the courtyard THROUGH the opening and >=10m OUT
@@ -478,6 +479,10 @@ namespace DeNelle.Editor
             // covered W/N/E at all -> uncrossable gates. Drive the strips off the recipe so a regen
             // stays correct even if the owner re-authors the gates.
             BuildGateExitStrips(floorRoot.transform);
+
+            // WO-168 technique: exclude the gate arch meshes from the bake so they don't seal
+            // the opening (they voxelize solid across it). The walkable floor stays continuous.
+            ExcludeGatesFromNavBake();
 
             // Keep interior + entrance bridge: GroundLevel_Keep_Hall_Entry (the keep building)
             // sits at origin with 4 wall colliders + a doorway. The walls carve the navmesh and
@@ -553,7 +558,7 @@ namespace DeNelle.Editor
 
                 // Center the strip between the courtyard-overlap end and the terrain end.
                 Vector3 center = g.worldPos + outward * centerOffset;
-                center.y = 0.05f; // same plane as CourtyardFloor_Nav so they fuse
+                center.y = 0f; // OWNER-VALIDATED 2026-06-12: at the gate base (y=0), forced walkable
 
                 // Plane is 10m square at scale 1: X = width axis, Z = length axis. The
                 // length axis must run OUTWARD (along 'outward'); a plane's local +Z maps to
@@ -685,6 +690,53 @@ namespace DeNelle.Editor
             var r = plane.GetComponent<MeshRenderer>();
             if (r != null) r.enabled = false;
             if (plane.GetComponent<MeshCollider>() == null) plane.AddComponent<MeshCollider>();
+
+            // WO-168 lesson + owner 2026-06-12: FORCE the floor walkable so the gate arch
+            // (which voxelizes solid across the opening) cannot carve/seal it on bake.
+            AddWalkableNavMeshModifier(plane);
+        }
+
+        // Force a GameObject's baked navmesh area to Walkable (overrideArea) so a forced floor
+        // plane cannot be carved/sealed by overlapping gate geometry. Reflection on
+        // Unity.AI.Navigation.NavMeshModifier (matches this file's no-hard-dep style).
+        private static void AddWalkableNavMeshModifier(GameObject go)
+        {
+            var t = FindType("Unity.AI.Navigation.NavMeshModifier");
+            if (t == null) return;
+            var mod = go.GetComponent(t);
+            if (mod == null) mod = go.AddComponent(t);
+            var pOverride = t.GetProperty("overrideArea");
+            if (pOverride != null) pOverride.SetValue(mod, true);
+            var pArea = t.GetProperty("area");
+            if (pArea != null) pArea.SetValue(mod, 0); // 0 = Walkable
+        }
+
+        // WO-168 technique (mirrors VillageSceneBuilder's gate-nav fix): exclude the gate arch
+        // meshes from the NavMesh bake so they don't voxelize SOLID across the opening and seal
+        // the gate. NavMeshAgent ignores physics colliders, so excluding the gate from the BAKE
+        // leaves the opening walkable while the hero still passes through. Adds a NavMeshModifier
+        // with ignoreFromBuild=true to each CastleSide_*/Gate_* object.
+        private static void ExcludeGatesFromNavBake()
+        {
+            var t = FindType("Unity.AI.Navigation.NavMeshModifier");
+            if (t == null) { Err("ExcludeGatesFromNavBake: NavMeshModifier type not found — gates may seal."); return; }
+            var pIgnore = t.GetProperty("ignoreFromBuild");
+            int excluded = 0;
+            foreach (var side in new[] { "South", "West", "North", "East" })
+            {
+                var sideRoot = GameObject.Find("CastleSide_" + side);
+                if (sideRoot == null) continue;
+                foreach (var tr in sideRoot.GetComponentsInChildren<Transform>(true))
+                {
+                    if (tr.name.IndexOf("Gate", System.StringComparison.OrdinalIgnoreCase) < 0) continue;
+                    var go = tr.gameObject;
+                    var mod = go.GetComponent(t);
+                    if (mod == null) mod = go.AddComponent(t);
+                    if (pIgnore != null) pIgnore.SetValue(mod, true);
+                    excluded++;
+                }
+            }
+            Log("ExcludeGatesFromNavBake: excluded " + excluded + " gate object(s) from the bake (WO-168 technique).");
         }
 
         // Non-destructive: add ONLY the invisible floor to whatever castle scene is open,
@@ -1212,8 +1264,9 @@ namespace DeNelle.Editor
             var root = GameObject.Find(RootName);
             var marker = new GameObject("WorldGate_ConnectToOuterWorld_Marker");
             if (root != null) marker.transform.SetParent(root.transform, false);
-            // ~4m OUTSIDE the opening (south, -z): sits on the outbound strip, radius covers the
-            // opening so it fires as the hero steps THROUGH the gate (not back at spawn).
+            // ~4m OUTSIDE the opening (south, -z). The owner validated 2026-06-12 that with a
+            // walkable PLANE fusing the navmesh through the gate, the hero reaches this point and
+            // the seam fires (the gap, not the trigger, was the bug). Keep this validated placement.
             marker.transform.position = new Vector3(gate.x, 1.5f, gate.z - 4f);
 
             var transType = FindType("DeNelle.Village.SceneTransitionTrigger");
@@ -1231,6 +1284,78 @@ namespace DeNelle.Editor
 
             Log("BATCH-RECIPE: exit seam placed at recipe gate " + marker.transform.position +
                 " (radius 9, target OuterWorld (0,0.5,-80)).");
+        }
+
+        // =====================================================================
+        //  BATCH-WAVE — add the COMBAT CORE to the castle (owner 2026-06-12): a WaveManager
+        //  + 4 WaveSpawnPoints 12m outside each gate, so the wave timer + DEFEND/Start button
+        //  actually work. MainCastle_Hall had NO WaveManager, so the timer read Wave 0 and the
+        //  Start button never wired (StartWaveHudBridge only attaches when a WaveManager exists).
+        //  Mirrors Village2Playable.ImportWaveManager. Run AFTER the navmesh bake — spawn points
+        //  must sit on the baked floor (now ±65). No re-bake needed (gameplay objects, not geometry).
+        // =====================================================================
+        public static void BatchAddCastleWaveSystem()
+        {
+            const string scenePath = "Assets/Scenes/MainCastle_Hall.unity";
+            var scene = EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Single);
+            Log("BATCH-WAVE: opened " + scenePath);
+
+            var rootGo = GameObject.Find(RootName);
+            Transform root = rootGo != null ? rootGo.transform
+                : (GameObject.Find(RootName + "_FloorHost") ?? new GameObject(RootName + "_FloorHost")).transform;
+
+            // Heart = lose condition (optional; null is fine — waves still spawn + the player fights).
+            Component heart = null;
+            var heartType = FindType("DeNelle.Village.HeartController");
+            if (heartType != null)
+            {
+                var hs = Object.FindObjectsByType(heartType, FindObjectsInactive.Include, FindObjectsSortMode.None);
+                if (hs != null && hs.Length > 0) heart = hs[0] as Component;
+            }
+
+            PlaceCastleSpawnPoints(root);
+            var wm = Village2Playable.ImportWaveManager(root, heart);
+            Log("BATCH-WAVE: WaveManager " + (wm != null ? "wired" : "FAILED") +
+                ", heart " + (heart != null ? "wired" : "null (no lose-condition yet)"));
+
+            EditorSceneManager.MarkSceneDirty(scene);
+            EditorSceneManager.SaveScene(scene);
+            Log("BATCH-WAVE: castle combat core added + saved.");
+        }
+
+        // 4 WaveSpawnPoints, 12m OUTSIDE each gate (recipe-driven, mirrored x4) — on the ±65
+        // walkable floor so spawned enemies aren't stranded. WaveManager finds them by COMPONENT
+        // type at Start; Configure(spawnId, gateIndex, direction, gatePosition) heads enemies
+        // from the spawn through the gate toward the interior.
+        private static void PlaceCastleSpawnPoints(Transform root)
+        {
+            var spType = FindType("DeNelle.Village.WaveSpawnPoint");
+            if (spType == null) { Err("PlaceCastleSpawnPoints: WaveSpawnPoint type not found."); return; }
+            var cfg = spType.GetMethod("Configure");
+
+            Vector3 south = ReadSouthGatePos(); // recipe Gate_South center
+            var sides = new (string dir, float angle)[] { ("S", 0f), ("W", 90f), ("N", 180f), ("E", 270f) };
+            int i = 0, made = 0;
+            foreach (var s in sides)
+            {
+                Quaternion rot = Quaternion.Euler(0f, s.angle, 0f);
+                Vector3 gate = rot * south;            // gate center (mirror of south)
+                Vector3 outward = rot * Vector3.back;  // south outward = -Z, rotated per side
+                Vector3 spawn = gate + outward * 12f;
+                spawn.y = 0f;
+
+                string name = "WaveSpawnPoint-" + s.dir;
+                var existing = root.Find(name);
+                if (existing != null) Object.DestroyImmediate(existing.gameObject);
+                var go = new GameObject(name);
+                go.transform.SetParent(root, false);
+                go.transform.position = spawn;
+                try { go.tag = "SpawnPoint"; } catch { /* tag optional; discovery is by component */ }
+                var sp = go.AddComponent(spType);
+                if (cfg != null) cfg.Invoke(sp, new object[] { "spawn-" + i, i, s.dir, gate });
+                made++; i++;
+            }
+            Log("PlaceCastleSpawnPoints: placed " + made + " WaveSpawnPoints 12m outside each gate.");
         }
 
         private static Transform FindHeroParentInCastle(Scene scene)
