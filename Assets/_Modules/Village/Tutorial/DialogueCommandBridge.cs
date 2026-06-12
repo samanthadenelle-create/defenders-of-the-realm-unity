@@ -257,14 +257,25 @@ namespace DeNelle.Village
         // upgrade line; others (market/pet-house) fall back to name-only (no upgrade).
         private void CmdStructureStatus(string _argUnused)
         {
-            var vs = _runner != null ? _runner.VariableStorage : null;
-            if (vs == null) return;
-
             // The Yarn command arg arrives as the LITERAL "$structureId" (a bare command-arg doesn't
             // interpolate in this Yarn build) — so use the real id PlayStructure stashed. This was a
             // long-standing bug: structure_status never saw a real id → resource buildings never
             // resolved (no Upgrade line, wrong shop gate). Fixed via DialogueService.CurrentStructureId.
             string structureId = DialogueService.CurrentStructureId;
+
+            // Force the speaker portrait HERE (folded in from the old <<portrait Portraits/{$structureId}>>
+            // entry command), UNCONDITIONALLY — before the variable-storage guard — so it matches the
+            // original <<portrait>> behaviour. StructureMenu used to fire TWO back-to-back synchronous
+            // commands at node entry; under Yarn v3 the first command's OnCommandReceivedAsync calls
+            // Dialogue.Continue(), which pumps the VM into the second command inline, and the nested
+            // SignalContentComplete throws "can only be called when a command is being dispatched" —
+            // aborting Talk entirely. Folding the portrait into this single command keeps the prologue
+            // to ONE command so it can't re-enter itself. (PetHouse keeps its own single <<portrait>>.)
+            if (!string.IsNullOrEmpty(structureId))
+                DeNelle.Core.DialoguePortrait.Forced = "Portraits/" + structureId;
+
+            var vs = _runner != null ? _runner.VariableStorage : null;
+            if (vs == null) return;
 
             // WO-413 capability model — read the building's DECLARED caps from the catalog
             // (DeNelle.Village.BuildingCatalog, same assembly). The menu gates Buy/Sell on IsShoppable,

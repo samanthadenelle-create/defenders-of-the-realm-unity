@@ -1135,8 +1135,15 @@ namespace DeNelle.HUD
         {
             if (_talkButton == null) return;
             _talkButton.interactable = available;
-            var g = _talkButton.targetGraphic;
-            if (g != null) { var c = g.color; c.a = available ? 1f : 0.55f; g.color = c; }   // idle = faded, not a harsh black disc
+            // Dim the WHOLE button via a CanvasGroup — NOT the targetGraphic's alpha.
+            // The seat (targetGraphic) is intentionally a fully-transparent black disc
+            // that only exists as the click/raycast target (owner: "no yellow/black
+            // backing"); writing alpha 0.55 onto it painted a visible 55%-opacity BLACK
+            // DISC under the Talk icon (the "black shade under talk" the owner flagged).
+            // A CanvasGroup fades the icon/glyph for the idle state while the seat stays
+            // clear, so dimming reads as a faded icon, never a dark backing plate.
+            var cg = _talkButton.GetComponent<CanvasGroup>() ?? _talkButton.gameObject.AddComponent<CanvasGroup>();
+            cg.alpha = available ? 1f : 0.55f;
             if (_talkGlow != null) _talkGlow.gameObject.SetActive(available);   // chasing comet only when a talkable NPC is in range
         }
 

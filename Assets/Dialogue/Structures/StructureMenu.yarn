@@ -10,7 +10,13 @@ tags: structure interaction
 //                 building's $structureId so the panel shows the right flavour.
 //   Upgrade     = the live option (levels + perks via the economy backend).
 //   Talk        = narrative/questline seed (e.g. the Forge's "forgotten hammer").
-<<portrait Portraits/{$structureId}>>
+// NOTE: only ONE command runs at node entry on purpose. Two back-to-back synchronous
+// commands (<<portrait>> then <<structure_status>>) tripped a Yarn v3 re-entrancy bug —
+// each synchronous command's OnCommandReceivedAsync calls Dialogue.Continue(), which
+// pumps the VM into the NEXT command inline, and the nested SignalContentComplete then
+// throws "can only be called when a command is being dispatched", aborting the whole
+// dialogue (Talk did nothing). structure_status now ALSO forces the portrait, so the
+// node opens with a single command and the prologue can't re-enter itself.
 <<structure_status $structureId>>
 
 {$structureName}: Need something?
