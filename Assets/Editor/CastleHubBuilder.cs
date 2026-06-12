@@ -1103,6 +1103,136 @@ namespace DeNelle.Editor
             Log("BATCH-BAKE: saved scene + assets. Done.");
         }
 
+        // =====================================================================
+        //  BATCH-RECIPE — the "make the castle from the script" pipeline (owner 2026-06-12).
+        //  Rebuilds the 4 wall sides FROM castle-south-recipe.json (the source of truth for
+        //  the owner's hand-dialed offsets), RE-PLACES the OuterWorld exit seam ONTO the recipe
+        //  south gate (the committed trigger sat at z=-83.77, off-mesh & 43m past the opening
+        //  -> unreachable -> "can't exit", PROVEN by CastleGateNavVerify), rebuilds the
+        //  recipe-driven walkable floor + gate strips + stair, bakes the NavMesh, saves, then
+        //  VERIFIES the hero can path spawn -> gate within ProximityRadius. Fully reproducible:
+        //  no hand-editing; a re-run reproduces the owner's layout AND a crossable gate.
+        // =====================================================================
+        public static void BatchRebuildCastleFromRecipeAndBake()
+        {
+            const string scenePath = "Assets/Scenes/MainCastle_Hall.unity";
+            var scene = EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Single);
+            Log("BATCH-RECIPE: opened " + scenePath);
+
+            // 1. Walls from the recipe (+ mirror x4 around world origin).
+            CastleWallsFromRecipe.Recreate();
+            Log("BATCH-RECIPE: walls rebuilt from castle-south-recipe.json + mirrored x4.");
+
+            // 2. Exit seam ONTO the recipe gate so the hero can actually reach + trip it.
+            EnsureExitSeamAtRecipeGate();
+
+            // 3. Recipe-driven walkable floor + gate exit strips + keep interior + grand stair.
+            foreach (var n in new[] { "Plane", "Plane (1)" })
+            {
+                var stray = GameObject.Find(n);
+                if (stray != null) { Object.DestroyImmediate(stray); Log("BATCH-RECIPE: removed leftover hand-plane '" + n + "'."); }
+            }
+            var floorRoot = GameObject.Find(RootName);
+            Transform parent = floorRoot != null ? floorRoot.transform
+                : (GameObject.Find(RootName + "_FloorHost") ?? new GameObject(RootName + "_FloorHost")).transform;
+            BuildNavMeshFloor(parent);
+            var strayStair = GameObject.Find("MainStairs_Poly_ToUpperBattlements");
+            if (strayStair != null) Object.DestroyImmediate(strayStair);
+            if (GameObject.Find("GrandStair_CourtyardToBattlements") == null) BuildGrandStair(parent);
+            Log("BATCH-RECIPE: floor + recipe gate strips + stair ensured.");
+
+            // 4. Bake every NavMeshSurface (Physics Colliders, All) + persist the asset.
+            //    (Mirrors BatchAddFloorAndBakeCastle's proven bake block.)
+            var surfType = FindType("Unity.AI.Navigation.NavMeshSurface");
+            if (surfType == null)
+            {
+                Err("BATCH-RECIPE: NavMeshSurface type not resolved — bake skipped.");
+            }
+            else
+            {
+                var surfaces = Object.FindObjectsByType(surfType, FindObjectsSortMode.None);
+                Log("BATCH-RECIPE: NavMeshSurface count = " + surfaces.Length);
+                foreach (var s in surfaces)
+                {
+                    var ug = surfType.GetProperty("useGeometry");
+                    if (ug != null) ug.SetValue(s, System.Enum.ToObject(ug.PropertyType, 1)); // PhysicsColliders
+                    var co = surfType.GetProperty("collectObjects");
+                    if (co != null) co.SetValue(s, System.Enum.ToObject(co.PropertyType, 0)); // All
+
+                    var build = surfType.GetMethod("BuildNavMesh", System.Type.EmptyTypes);
+                    if (build != null) { build.Invoke(s, null); Log("BATCH-RECIPE: BuildNavMesh() invoked."); }
+
+                    var dataProp = surfType.GetProperty("navMeshData");
+                    var data = dataProp != null ? dataProp.GetValue(s) as Object : null;
+                    if (data != null)
+                    {
+                        if (!System.IO.Directory.Exists("Assets/Scenes/MainCastle_Hall"))
+                            AssetDatabase.CreateFolder("Assets/Scenes", "MainCastle_Hall");
+                        string assetPath = "Assets/Scenes/MainCastle_Hall/NavMesh-NavMeshSurface.asset";
+                        if (!AssetDatabase.Contains(data))
+                        {
+                            var existingData = AssetDatabase.LoadAssetAtPath<Object>(assetPath);
+                            if (existingData != null) AssetDatabase.DeleteAsset(assetPath);
+                            AssetDatabase.CreateAsset(data, assetPath);
+                            Log("BATCH-RECIPE: navmesh asset written -> " + assetPath);
+                        }
+                        else Log("BATCH-RECIPE: navmesh data already an asset (updated in place).");
+                    }
+                    else Err("BATCH-RECIPE: surface.navMeshData null after bake.");
+                }
+            }
+
+            // 5. Save scene + assets.
+            EditorSceneManager.MarkSceneDirty(scene);
+            EditorSceneManager.SaveScene(scene);
+            AssetDatabase.SaveAssets();
+            Log("BATCH-RECIPE: saved scene + assets.");
+
+            // 6. PROVE the gate is crossable (behavioral, in-session, post-bake).
+            bool ok = CastleGateNavVerify.VerifyOpenScene(out string detail);
+            Log("BATCH-RECIPE: gate-nav verify -> " + (ok ? "GATE_NAV_OK" : "GATE_NAV_FAIL") + " :: " + detail);
+        }
+
+        // Place the OuterWorld exit seam ONTO the recipe south gate opening so the hero reaches
+        // it as it crosses the gate. Removes any prior (mis-placed) marker/trigger first.
+        private static void EnsureExitSeamAtRecipeGate()
+        {
+            Vector3 gate = ReadSouthGatePos(); // recipe Gate_South, e.g. (-4.37,0,-40.6)
+
+            var priorMarker = GameObject.Find("WorldGate_ConnectToOuterWorld_Marker");
+            if (priorMarker != null) Object.DestroyImmediate(priorMarker);
+            var transTypeClean = FindType("DeNelle.Village.SceneTransitionTrigger");
+            if (transTypeClean != null)
+                foreach (var c in Object.FindObjectsByType(transTypeClean, FindObjectsSortMode.None))
+                {
+                    var mb = c as MonoBehaviour;
+                    if (mb != null) Object.DestroyImmediate(mb.gameObject);
+                }
+
+            var root = GameObject.Find(RootName);
+            var marker = new GameObject("WorldGate_ConnectToOuterWorld_Marker");
+            if (root != null) marker.transform.SetParent(root.transform, false);
+            // ~4m OUTSIDE the opening (south, -z): sits on the outbound strip, radius covers the
+            // opening so it fires as the hero steps THROUGH the gate (not back at spawn).
+            marker.transform.position = new Vector3(gate.x, 1.5f, gate.z - 4f);
+
+            var transType = FindType("DeNelle.Village.SceneTransitionTrigger");
+            if (transType == null) { Err("BATCH-RECIPE: SceneTransitionTrigger not found — exit seam NOT wired."); return; }
+
+            var comp = marker.AddComponent(transType);
+            transType.GetField("targetSceneName")?.SetValue(comp, "OuterWorld");
+            transType.GetField("targetPosition")?.SetValue(comp, new Vector3(0f, 0.5f, -80f));
+            transType.GetField("loadAdditive")?.SetValue(comp, true);
+            transType.GetField("ProximityRadius")?.SetValue(comp, 9f);
+
+            var col = marker.AddComponent<BoxCollider>();
+            col.isTrigger = true;
+            col.size = new Vector3(14f, 6f, 12f);
+
+            Log("BATCH-RECIPE: exit seam placed at recipe gate " + marker.transform.position +
+                " (radius 9, target OuterWorld (0,0.5,-80)).");
+        }
+
         private static Transform FindHeroParentInCastle(Scene scene)
         {
             foreach (var root in scene.GetRootGameObjects())
