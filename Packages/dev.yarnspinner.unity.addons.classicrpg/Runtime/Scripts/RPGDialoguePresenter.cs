@@ -663,6 +663,17 @@ namespace Yarn.Unity.Addons.ClassicRPG
                 Destroy(item.gameObject);
             }
 
+            // RUNAWAY-RECURSION FIX: open the global option-submit gate for this
+            // fresh options view. OptionItem keeps a static "submit in flight"
+            // guard that is set the instant any option submits and stays set
+            // while that submit's continuation runs inline (which may re-enter
+            // here to present the NEXT options). Resetting it HERE — once per new
+            // view, before any new item is instantiated/auto-selected — is what
+            // lets each option set accept exactly one submit while a re-entrant
+            // submit during the previous selection's unwind is ignored. See
+            // OptionItem.Submit / OptionItem.BeginOptionsView for the mechanism.
+            OptionItem.BeginOptionsView();
+
             // Create a completion source we can use to be notified that a
             // choice was made
             YarnTaskCompletionSource<DialogueOption> completion = new();

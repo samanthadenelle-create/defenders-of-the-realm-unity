@@ -47,6 +47,49 @@ namespace Yarn.Unity.Addons.ClassicRPG
         // raises Submit) only fires the choice once.
         private bool _submitted = false;
 
+        // RUNAWAY-RECURSION FIX (crash: thousands of repeated OptionItem.Submit /
+        // OptionItem.Update frames freeze the game on an options-after-options
+        // dialogue):
+        // ----------------------------------------------------------------------
+        // onSubmit -> completion.TrySetResult resumes the presenter's
+        // `await completion.Task` SYNCHRONOUSLY INLINE (UniTask/YarnTask
+        // continuations run on the current call stack, not a scheduler). So the
+        // dialogue advances and RE-PRESENTS a fresh set of options WITHIN this
+        // same Submit() / Update() call frame. The new first OptionItem is
+        // auto-selected, and because `Keyboard.wasPressedThisFrame` stays true
+        // for the WHOLE frame, that brand-new instance immediately submits again
+        // -> next options -> ... unbounded recursion until the stack blows.
+        //
+        // The per-INSTANCE `_submitted` flag cannot stop this: every cascade
+        // level is a DIFFERENT, freshly-instantiated OptionItem with
+        // `_submitted == false`. The guard must be GLOBAL to the option system.
+        //
+        // s_submitInFlight: set the instant ANY option begins submitting, and
+        // only cleared when a NEW options view is freshly built
+        // (RPGDialoguePresenter.RunOptionsAsync -> OptionItem.BeginOptionsView()).
+        // While a submit's continuation is unwinding, NO OptionItem (old or new)
+        // may submit, so the re-entrant cascade is ignored.
+        //
+        // s_lastSubmitFrame: a same-frame backstop. Even once the next options
+        // view legitimately resets s_submitInFlight, the still-held Space key
+        // reads as pressed for the rest of THIS frame; refusing a second submit
+        // within the same frame index prevents the immediate re-trigger while
+        // leaving the very next frame free for a genuine new keypress.
+        private static bool s_submitInFlight = false;
+        private static int s_lastSubmitFrame = -1;
+
+        /// <summary>
+        /// Called by the presenter when a fresh options view is shown, before any
+        /// option can be chosen. Clears the global in-flight submit guard so the
+        /// new option set can accept exactly one submit. Re-entrant submits that
+        /// arrive while the previous selection's continuation is still unwinding
+        /// are ignored because this has not yet been called for the new view.
+        /// </summary>
+        public static void BeginOptionsView()
+        {
+            s_submitInFlight = false;
+        }
+
         public bool Selected { get => selectionIcon.activeInHierarchy; set => selectionIcon.SetActive(value); }
         public string Text { get => text.text; set => text.text = value; }
 
@@ -106,8 +149,26 @@ namespace Yarn.Unity.Addons.ClassicRPG
 
         private void Submit()
         {
+            // Per-instance guard: this option already fired.
             if (_submitted) { return; }
+
+            // GLOBAL guard: a submit is already being processed (its inline
+            // continuation may be re-presenting options on this very call stack).
+            // Refuse so the new option set's auto-selected item cannot cascade.
+            if (s_submitInFlight) { return; }
+
+            // Same-frame backstop: a single held Space must not satisfy two
+            // option views in the same frame.
+            if (s_lastSubmitFrame == Time.frameCount) { return; }
+
             _submitted = true;
+            s_submitInFlight = true;
+            s_lastSubmitFrame = Time.frameCount;
+
+            // onSubmit -> completion.TrySetResult resumes the presenter inline.
+            // s_submitInFlight stays true for the whole synchronous unwind and is
+            // only reset by BeginOptionsView() when a genuinely new options view
+            // is built, so any re-entrant submit during the unwind is ignored.
             onSubmit?.Invoke();
         }
 
