@@ -432,7 +432,54 @@ namespace DeNelle.HUD
             if (grant == null) { SetStatus("Resources: EconomyService.GrantSpendable(int,int,int,int) not found."); return; }
 
             grant.Invoke(eco, new object[] { 50000, 25000, 50000, 25000 }); // wood, food, iron, crystals
+
+            // GrantSpendable fires EconomyService.OnChanged, which HeartHudBridge uses to
+            // refresh the on-screen resource bar. Belt-and-braces: push the wallet straight
+            // to the VillageHudController too so the bar populates immediately even if the
+            // bridge isn't subscribed yet in this scene (e.g. the castle hub bootstrap race).
+            PingResourceBar(eco, ecoType);
+
             SetStatus("Loaded: +50k Wood, +50k Iron, +25k Food, +25k Crystals (shop + upgrades) — now buy something.");
+        }
+
+        /// <summary>
+        /// Forces the on-screen top resource bar to refresh from the EconomyService
+        /// wallet immediately after a grant. EconomyService.Snapshot is a struct in
+        /// DeNelle.Village (read by reflection — HUD can't reference Village), but the
+        /// VillageHudController lives in THIS assembly so its SetResources is called
+        /// directly. Guarantees the bar populates even if HeartHudBridge isn't yet
+        /// subscribed in the loaded scene.
+        /// </summary>
+        private void PingResourceBar(object eco, Type ecoType)
+        {
+            if (eco == null || ecoType == null) return;
+
+            var hud = UnityEngine.Object.FindAnyObjectByType<VillageHudController>();
+            if (hud == null) return;
+
+            var snapProp = ecoType.GetProperty("Snapshot", BindingFlags.Public | BindingFlags.Instance);
+            if (snapProp == null) return;
+            var snap = snapProp.GetValue(eco);
+            if (snap == null) return;
+
+            var snapType = snap.GetType();
+            int wood     = GetIntField(snapType, snap, "Wood");
+            int iron     = GetIntField(snapType, snap, "Iron");
+            int food     = GetIntField(snapType, snap, "Food");
+            int crystals = GetIntField(snapType, snap, "Crystals");
+
+            // HUD signature: SetResources(wood, iron, food, gems).
+            hud.SetResources(wood, iron, food, crystals);
+            hud.SetCrystals(crystals);
+        }
+
+        private static int GetIntField(Type t, object obj, string name)
+        {
+            var f = t.GetField(name, BindingFlags.Public | BindingFlags.Instance);
+            if (f != null && f.GetValue(obj) is int vi) return vi;
+            var p = t.GetProperty(name, BindingFlags.Public | BindingFlags.Instance);
+            if (p != null && p.GetValue(obj) is int pi) return pi;
+            return 0;
         }
 
         private void OnReplayTutorial()

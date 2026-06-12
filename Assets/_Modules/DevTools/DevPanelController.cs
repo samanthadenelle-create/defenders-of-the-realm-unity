@@ -779,16 +779,36 @@ namespace DeNelle.DevTools
         //  Actions — RESOURCES
         // =====================================================================
 
-        /// <summary>Adds <paramref name="amount"/> crystals to the live game state.</summary>
+        /// <summary>Adds <paramref name="amount"/> crystals — routed through
+        /// EconomyService.GrantSpendable so the grant lands in the economy AND fires
+        /// EconomyService.OnChanged (which HeartHudBridge uses to refresh the on-screen
+        /// resource bar). Writing GameState directly (as this used to) only raised
+        /// GameStateService.ResourcesChanged — which reaches the HUD bar only IF the
+        /// EconomyService→GameState bridge happens to be attached; the GrantSpendable
+        /// path is the single correct, bootstrap-robust grant. Falls back to a direct
+        /// GameState write only if the economy service hasn't bootstrapped yet.</summary>
         private void GiveCrystals(int amount)
         {
+            var eco = EconomyService.Instance;
+            if (eco != null)
+            {
+                eco.GrantSpendable(crystals: amount);
+                int now = 0;
+                var svc = GameStateService.Instance;
+                if (svc != null && svc.State != null) now = svc.State.Resources.Crystals;
+                PingHud();
+                SetStatus($"Gave {amount} crystals — now {now}.");
+                return;
+            }
+
+            // Fallback: economy service not alive yet — at least fill the GameState wallet.
             var state = RequireState("give crystals");
             if (state == null) return;
-
             var r = state.Resources;
             r.Crystals += amount;
             state.Resources = r;
             SaveAndNotifyResources();
+            PingHud();
             SetStatus($"Gave {amount} crystals — now {r.Crystals}.");
         }
 
@@ -882,6 +902,7 @@ namespace DeNelle.DevTools
             state.Stone += 50000;   // legacy build material (BuildMenu costs) — generous one-click load for full-base testing
             state.Magic += 100;     // Magic tech axis (DEF-121) — building-upgrade gate
             SaveAndNotifyResources();
+            PingHud();              // force the on-screen resource bar to populate immediately
             SetStatus($"Topped up — Wood {state.Wood}, Food {state.Resources.Food}, " +
                       $"Iron {state.Iron}, Crystals {state.Resources.Crystals}, Magic {state.Magic}.");
         }
@@ -1166,6 +1187,37 @@ namespace DeNelle.DevTools
             if (service == null) return;
             service.Save();
             service.ResourcesChanged.Invoke();
+        }
+
+        /// <summary>
+        /// Robustly refreshes the on-screen top resource bar immediately after a dev
+        /// grant. The normal path is EconomyService.OnChanged → HeartHudBridge →
+        /// VillageHudController.SetResources, but that depends on the bridge being
+        /// present + subscribed in the loaded scene. The dev panel can reach BOTH the
+        /// EconomyService (its live wallet snapshot) and the VillageHudController
+        /// directly (DevTools may reference gameplay modules), so it pushes the wallet
+        /// to the bar itself — guaranteeing the bar populates the moment a grant lands,
+        /// even in a scene (e.g. the castle hub) where the bridge race could lag.
+        /// </summary>
+        private static void PingHud()
+        {
+            var hud = FindFirst<VillageHudController>();
+            if (hud == null) return;
+
+            var eco = EconomyService.Instance;
+            if (eco != null)
+            {
+                // HUD signature is SetResources(wood, iron, food, gems).
+                var snap = eco.Snapshot;
+                hud.SetResources(snap.Wood, snap.Iron, snap.Food, snap.Crystals);
+                hud.SetCrystals(snap.Crystals);
+                return;
+            }
+
+            // No economy service — fall back to the persisted GameState crystal count.
+            var svc = GameStateService.Instance;
+            if (svc != null && svc.State != null)
+                hud.SetCrystals(svc.State.Resources.Crystals);
         }
 
         /// <summary>Finds the HeartController in the loaded scene, or null.</summary>
