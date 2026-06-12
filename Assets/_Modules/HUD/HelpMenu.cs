@@ -123,6 +123,7 @@ namespace DeNelle.HUD
             var title = new Label("Help");
             title.style.fontSize = 22;
             title.style.unityFontStyleAndWeight = FontStyle.Bold;
+            { var tf = HelpFont(); if (tf != null) title.style.unityFont = tf; }
             title.style.color = Color.white;
             title.style.marginBottom = 16;
             card.Add(title);
@@ -147,12 +148,22 @@ namespace DeNelle.HUD
             _root.Add(_toast);
         }
 
+        // WO-417: explicit font so the settings text renders even if the borrowed PanelSettings'
+        // theme has no default font (blank purple rows = backgrounds draw, glyphs don't).
+        private static Font _helpFont;
+        private static Font HelpFont()
+        {
+            if (_helpFont == null) _helpFont = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            return _helpFont;
+        }
+
         private static Button MakeButton(string label, Action onClick)
         {
             var b = new Button(onClick) { text = label };
             b.style.height = 40;
             b.style.marginTop = 6; b.style.marginBottom = 6;
             b.style.fontSize = 14;
+            var f = HelpFont(); if (f != null) b.style.unityFont = f;
             b.style.backgroundColor = new Color(0.18f, 0.12f, 0.28f, 1f);
             b.style.color = Color.white;
             b.style.borderTopLeftRadius = 8; b.style.borderTopRightRadius = 8;
