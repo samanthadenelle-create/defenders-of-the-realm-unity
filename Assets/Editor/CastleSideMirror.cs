@@ -6,9 +6,9 @@
 // WORKFLOW (owner + agent split):
 //   1. Owner hand-builds the SOUTH side — wall · gate · wall · corner tower, made
 //      walkable / turret-wide, positioned by eye — as children of ONE parent
-//      GameObject named "CastleSide_South", and that parent sits at (0,0,0).
-//      (Everything is relative to the Heart at origin, owner's constraint, so a
-//      pure Y-rotation around the parent pivot swings the whole side to each face.)
+//      GameObject named "CastleSide_South". The parent can sit ANYWHERE (clone the
+//      existing south wall in place); the mirror always pivots around the Heart at
+//      world origin (0,0,0), so there's no need to move it or zero its transform.
 //   2. Owner runs  Defenders ▸ Castle ▸ Mirror South Side ×4 .
 //   3. This clones CastleSide_South into West / North / East copies rotated
 //      90 / 180 / 270° around origin. Re-runnable: it deletes prior copies first,
@@ -50,17 +50,9 @@ namespace DeNelle.Editor
                 return;
             }
 
-            // The parent MUST sit at origin so a Y rotation pivots its children around
-            // the Heart (otherwise the copies swing around the parent's own offset).
-            if (south.transform.position.sqrMagnitude > 0.0001f)
-            {
-                bool go = EditorUtility.DisplayDialog("Castle Side Mirror",
-                    $"'{SouthName}' is at {south.transform.position}, not (0,0,0).\n\n" +
-                    "The mirror pivots around the parent's position, so for a clean 4-sided fort it should sit at origin. " +
-                    "Move it to (0,0,0) (children keep their local offsets) for best results.\n\nMirror anyway?",
-                    "Mirror anyway", "Cancel");
-                if (!go) return;
-            }
+            // NOTE: the south group can sit ANYWHERE — it need not be at (0,0,0). The mirror
+            // always pivots around the Heart at WORLD ORIGIN (below), so cloning the existing
+            // south wall in place and just naming its parent is enough.
 
             int made = 0;
             foreach (var (angle, label) in Sides)
@@ -73,9 +65,12 @@ namespace DeNelle.Editor
 
                 var clone = Object.Instantiate(south, south.transform.parent);
                 clone.name = cloneName;
-                // Same pivot (origin); rotate the whole side — children ride along.
-                clone.transform.position = south.transform.position;
-                clone.transform.rotation = Quaternion.Euler(0f, angle, 0f) * south.transform.rotation;
+                // Rigidly swing the WHOLE side around the Heart at WORLD ORIGIN — rotate both
+                // its position and its orientation by the angle. Works wherever the south group
+                // sits (it need NOT be at 0,0,0); the pivot is always the Heart at (0,0,0).
+                var rot = Quaternion.Euler(0f, angle, 0f);
+                clone.transform.position = rot * south.transform.position;
+                clone.transform.rotation = rot * south.transform.rotation;
                 Undo.RegisterCreatedObjectUndo(clone, "Mirror Castle Side");
                 made++;
             }
