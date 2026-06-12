@@ -151,7 +151,14 @@ namespace DeNelle.BattleATB
             _hudUgui.Build(); // creates its own ScreenSpaceOverlay Canvas + Scaler (1920x1080 ref)
 
             // Wire callbacks (same surface the engine/state expect).
-            _hudUgui.OnAction = action => _runtimeState.ChooseAction(action);
+            // WO-93 fix: route through SubmitPlayerAction (the WO-169 single entry
+            // point) instead of calling _runtimeState.ChooseAction directly. The
+            // direct call bypassed ATBCombatManager.OnPlayerActed(), so the idle
+            // "you turtled" timeout could fire right after the player acted.
+            // SubmitPlayerAction is a strict superset: it guards on IsAwaitingPlayer()
+            // (closing a stale-click hole), plays the hero swing anim, resets the idle
+            // timer via OnPlayerActed(), then calls the same ChooseAction(action).
+            _hudUgui.OnAction = action => SubmitPlayerAction(action);
 
             // Initial paint of the FF7 layout.
             _hudUgui.Render(_runtimeState);

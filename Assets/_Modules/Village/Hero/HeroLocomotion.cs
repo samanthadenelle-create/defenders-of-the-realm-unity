@@ -1,17 +1,18 @@
 // =============================================================================
 // HeroLocomotion — WASD / dpad walking for Hero (Blaise) in the village.
 // -----------------------------------------------------------------------------
-// Minimal kinematic transform translation, mirroring the Pet.cs movement
-// pattern (no Rigidbody, no NavMeshAgent — pure transform). Reads input from
-// either Keyboard.current (WASD / arrows) or Gamepad.current (left stick /
-// dpad) via the new Input System. activeInputHandler is set to "Both" in
-// ProjectSettings so the new input package is live.
-//
-// Wiring: VillageSceneBuilder.BuildHero adds this component onto the hero
-// root. The hero is a primitive Capsule with an auto-collider, so wall
-// collisions are handled by Unity's depenetration on transform move (good
-// enough for tower-defense pacing). Movement is in the XZ plane only; Y is
-// preserved so the hero stays grounded.
+// CORRECTED 2026-06-12 — the old header LIED: it claimed "no NavMeshAgent — pure
+// transform". The code is the OPPOSITE and trusting that comment mis-diagnosed
+// every movement bug this session. HeroLocomotion is a NavMeshAgent driven
+// KINEMATICALLY by input: Awake gets-or-adds a NavMeshAgent (updateRotation off,
+// high speed so Move never caps), reads input -> eased Velocity -> _agent.Move(step)
+// when on the navmesh, else transform.position += step (off-mesh fallback); facing
+// via manual LookRotation. So debug "can't move / can't exit" via the NavMesh BAKE,
+// not colliders. Input is camera-relative in follow (rotated by
+// SmartMobileCamera.CameraYaw), world-absolute in top-down; read from Keyboard.current
+// (WASD / arrows) or Gamepad.current via the new Input System (activeInputHandler
+// "Both"). WarpTo disables -> warps -> re-enables the agent for scene-seam crossings.
+// Movement is in the XZ plane; the agent keeps the hero grounded.
 // =============================================================================
 
 using System.Collections.Generic;

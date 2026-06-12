@@ -367,10 +367,15 @@ namespace DeNelle.Core.Quests
 
         private static bool FeatureShipped(string feature) => feature switch
         {
-            "harvesting"    => false,
-            "tower-build"   => false,
-            "cosmetic-shop" => false,
-            "hero-talents"  => false,
+            // FLAG-6: these were stale-gated false but their systems are now
+            // shipped — harvesting (MineNode + OfflineHarvestService + WorkerManager),
+            // tower-build (BuildModeController), cosmetic-shop (CosmeticCatalog +
+            // GlimmerCurrencyService + CosmeticShopPanel), hero-talents
+            // (HeroTalentCatalog + WisdomCurrencyService + TalentTreePanel).
+            "harvesting"    => true,
+            "tower-build"   => true,
+            "cosmetic-shop" => true,
+            "hero-talents"  => true,
             _ => true,
         };
 
