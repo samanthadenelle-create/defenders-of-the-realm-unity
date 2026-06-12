@@ -171,6 +171,9 @@ namespace DeNelle.Editor
             Run(results, "critical-gate-scene-no-errors",    Case_GateSceneLoadsClean);
             Run(results, "critical-gate-cam-yaw-authority",  Case_GateCameraYawIsAuthority);
 
+            // ── Home-hub must be EXITABLE (behavioral NavMesh gate, not a grep) ──
+            Run(results, "castle-gate-exitable",             Case_CastleGateExitable);
+
             // ── Report ──────────────────────────────────────────────────────────
             int passed = results.Count(r => r.Pass);
             int failed = results.Count - passed;
@@ -226,6 +229,17 @@ namespace DeNelle.Editor
 
         private static CaseResult Pass(string detail = "")  => new CaseResult(null, true,  detail);
         private static CaseResult Fail(string detail)       => new CaseResult(null, false, detail);
+
+        // ── Castle home-hub exitable (BEHAVIORAL — a real NavMesh path query, NOT a
+        //    source-grep). The "can't exit the castle" recurring bug as a gate: opens
+        //    MainCastle_Hall, loads the committed navmesh, and proves a PathComplete
+        //    route from the spawn to within ProximityRadius of the OuterWorld seam.
+        //    Delegates to CastleGateNavVerify (same DeNelle.Editor asmdef).
+        private static CaseResult Case_CastleGateExitable()
+        {
+            bool ok = CastleGateNavVerify.Verify(out string detail);
+            return ok ? Pass(detail) : Fail(detail);
+        }
 
         // =====================================================================
         //  CASES

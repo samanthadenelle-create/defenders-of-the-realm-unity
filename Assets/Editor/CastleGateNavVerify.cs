@@ -46,6 +46,94 @@ namespace DeNelle.Editor
             Debug.Log("[CastleGateNavVerify] " + (ok ? "GATE_NAV_OK" : "GATE_NAV_FAIL") + " :: " + detail);
         }
 
+        // RUNTIME diagnostic for "reach gate, nothing happens": dumps the actual state of
+        // the SceneTransitionTrigger seam (active? enabled? position? radius? target?),
+        // whether OuterWorld is loadable, and which objects carry the Player/HeroTarget tag
+        // the trigger's ResolveHero() looks for. Catches the factors a navmesh path-query
+        // cannot (a disabled/inactive trigger, a missing hero tag, an unloadable target).
+        public static void DiagnoseExitRuntime()
+        {
+            EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
+            Debug.Log("[ExitDiag] opened " + ScenePath);
+
+            var transType = FindType("DeNelle.Village.SceneTransitionTrigger");
+            if (transType == null) { Debug.LogError("[ExitDiag] SceneTransitionTrigger TYPE not found (not compiled?)"); return; }
+
+            var comps = UnityEngine.Object.FindObjectsByType(transType, FindObjectsInactive.Include, FindObjectsSortMode.None);
+            Debug.Log("[ExitDiag] SceneTransitionTrigger count (incl inactive) = " + comps.Length);
+            foreach (var c in comps)
+            {
+                var mb = c as MonoBehaviour;
+                if (mb == null) continue;
+                var go = mb.gameObject;
+                string tgt = transType.GetField("targetSceneName")?.GetValue(mb) as string ?? "?";
+                object rad = transType.GetField("ProximityRadius")?.GetValue(mb);
+                object tpos = transType.GetField("targetPosition")?.GetValue(mb);
+                object add = transType.GetField("loadAdditive")?.GetValue(mb);
+                Debug.Log($"[ExitDiag] trigger '{go.name}' worldPos={mb.transform.position} " +
+                          $"activeInHierarchy={go.activeInHierarchy} compEnabled={mb.enabled} " +
+                          $"target={tgt} radius={rad} warpTo={tpos} additive={add} " +
+                          $"parent={(go.transform.parent != null ? go.transform.parent.name : "<root>")} " +
+                          $"parentActive={(go.transform.parent != null ? go.transform.parent.gameObject.activeInHierarchy.ToString() : "n/a")}");
+            }
+
+            Debug.Log("[ExitDiag] CanStreamedLevelBeLoaded(OuterWorld) = " + Application.CanStreamedLevelBeLoaded("OuterWorld"));
+
+            foreach (var tag in new[] { "Player", "HeroTarget" })
+            {
+                try
+                {
+                    var gos = GameObject.FindGameObjectsWithTag(tag);
+                    Debug.Log($"[ExitDiag] tag '{tag}': {gos.Length} object(s)" +
+                              (gos.Length == 0 ? " (hero is likely runtime-spawned — tag applied at spawn)" : ": " +
+                               string.Join(", ", System.Array.ConvertAll(gos, g => g.name + "@" + g.transform.position))));
+                }
+                catch (System.Exception e) { Debug.Log($"[ExitDiag] tag '{tag}': ERROR {e.Message}"); }
+            }
+
+            var spawn = GameObject.Find("HeroStartPoint_PlayerSpawn") ?? GameObject.Find("Capsule");
+            Debug.Log("[ExitDiag] spawn marker = " + (spawn != null ? spawn.name + "@" + spawn.transform.position : "<none>"));
+            Debug.Log("[ExitDiag] DONE");
+        }
+
+        // MEASURE the REAL placed gate geometry (no extrapolation): for each CastleSide_*,
+        // read the gate child's actual world-space renderer bounds (center, size, floor Y)
+        // so the exit plane can be fit to what is actually there. Read-only.
+        public static void MeasureGates()
+        {
+            EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
+            Debug.Log("[GateMeasure] opened " + ScenePath);
+
+            foreach (var side in new[] { "South", "West", "North", "East" })
+            {
+                var parent = GameObject.Find("CastleSide_" + side);
+                if (parent == null) { Debug.LogWarning("[GateMeasure] CastleSide_" + side + " NOT FOUND"); continue; }
+
+                Transform gate = null;
+                foreach (var t in parent.GetComponentsInChildren<Transform>(true))
+                    if (t.name.IndexOf("Gate", System.StringComparison.OrdinalIgnoreCase) >= 0) { gate = t; break; }
+                if (gate == null) { Debug.LogWarning("[GateMeasure] no Gate child under CastleSide_" + side); continue; }
+
+                var rends = gate.GetComponentsInChildren<Renderer>(true);
+                if (rends.Length == 0) { Debug.LogWarning("[GateMeasure] '" + gate.name + "' has no renderers"); continue; }
+                Bounds b = rends[0].bounds;
+                foreach (var r in rends) b.Encapsulate(r.bounds);
+
+                Debug.Log($"[GateMeasure] {side}: gate='{gate.name}' worldPos={gate.position} " +
+                          $"boundsCenter={b.center} boundsSize={b.size} minY={b.min.y:F3} maxY={b.max.y:F3}");
+            }
+
+            var floor = GameObject.Find("CourtyardFloor_Nav");
+            if (floor != null)
+            {
+                var fr = floor.GetComponentInChildren<Renderer>();
+                Debug.Log($"[GateMeasure] CourtyardFloor_Nav transform.y={floor.transform.position.y}" +
+                          (fr != null ? $" rendererBoundsY={fr.bounds.center.y:F3}" : ""));
+            }
+            else Debug.Log("[GateMeasure] CourtyardFloor_Nav not found (built at bake)");
+            Debug.Log("[GateMeasure] DONE");
+        }
+
         // Opens the scene then verifies (menu/standalone use).
         public static bool Verify(out string detail)
         {
