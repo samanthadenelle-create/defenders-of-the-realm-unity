@@ -1,5 +1,8 @@
 // =============================================================================
-// ShopPanel — basic working vendor / gear shop UI (buy, sell, equip).
+// ShopPanel — vendor / gear shop UI (buy, sell, equip), routed through the SHARED
+// presentation kit (DeNelle.Core.UI.ElarionUiKit) so the store reads as the SAME
+// designed game as the town HUD: dark-glass panels + gold-rune frames + RPG-pack
+// art, instead of its old private light-parchment styling.
 // -----------------------------------------------------------------------------
 // Code-built (no UXML), screen-space overlay, large touch targets for mobile.
 // Opened via Yarn "OpenShop" (or "OpenShop armorer") from NPCCommandBridge.
@@ -13,7 +16,12 @@
 // Sell refunds ~60% of buy cost. Equip updates the active hero (by tag "Player"
 // or first HeroLocomotion) immediately.
 //
-// Keep simple + functional per chunk request.
+// PRESENTATION: every surface is assembled from ElarionUiKit (BuildModalCanvas /
+// Scrim / Panel / Header / Well / Button / Card / Label) sourcing the canonical
+// ElarionUi dark-glass + gold palette — NO private colour block, NO bespoke gilt
+// frames. The scroll list still uses a VerticalLayoutGroup + ContentSizeFitter +
+// per-row LayoutElement (the rendering fix that cured the "no stock" bug) — only
+// COLOURS / SPRITES / frames moved to the kit, never the layout mechanism.
 // =============================================================================
 
 using System.Collections.Generic;
@@ -27,44 +35,10 @@ namespace DeNelle.Village.Hero
 {
     public sealed class ShopPanel : MonoBehaviour
     {
-        // ── LIGHT PARCHMENT palette (matches HeroInventoryController's light feel) ──
-        // SELF-CONTAINED to the shop (do NOT mutate the global ElarionUi palette —
-        // these are local LIGHT values, a tone inversion of the old dark-glass shop).
-        // Warm parchment fills, DARK INK text (readable on light), THIN gilt/rune
-        // frames. Gold accent tones borrow ElarionUi.Gold's hue so the merchant skin
-        // stays cohesive with the inventory/HUD. ASCII-only runtime strings; WebGL-safe.
-        //
-        // Panel + surfaces — warm parchment, lightly translucent so the scrim warms it.
-        private static readonly Color PanelPaper   = new Color(0.945f, 0.918f, 0.851f, 0.985f); // ~#F1EAD9 main panel
-        private static readonly Color HeaderPaper  = new Color(0.965f, 0.945f, 0.890f, 1f);      // brighter header band
-        private static readonly Color Scrim        = new Color(0.10f, 0.08f, 0.05f, 0.55f);      // warm dim behind modal
-        // Rows — clean light paper; cost/refund tones picked for contrast on paper.
-        private static readonly Color RowPaper     = new Color(0.957f, 0.933f, 0.875f, 1f);      // light row paper
-        private static readonly Color RowAlt       = new Color(0.929f, 0.902f, 0.831f, 1f);      // (reserved) subtle alt
-        private static readonly Color RowHover     = new Color(0.969f, 0.910f, 0.741f, 1f);      // warm gilt-tinted hover
-        private static readonly Color RowPress     = new Color(0.835f, 0.886f, 0.741f, 1f);      // soft green confirm press
-        private static readonly Color WellPaper    = new Color(0.886f, 0.847f, 0.761f, 0.6f);    // recessed scroll well (faint tan)
-        // Tab bar — inactive = soft tan, active = gilt glow with a brighter rim.
-        private static readonly Color TabRest      = new Color(0.882f, 0.847f, 0.761f, 1f);      // inactive tab (tan)
-        private static readonly Color TabActive    = new Color(0.969f, 0.886f, 0.620f, 1f);      // active tab (gilt glow)
-        // Gilt frame accents (thin) — gold rims on a light ground.
-        private static readonly Color GiltRim      = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.85f);
-        private static readonly Color GiltRimSoft  = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.40f);
-        // Action buttons on light: green BUY, bronze SELL, blue EQUIP — kept saturated
-        // enough to carry white text legibly.
-        private static readonly Color BuyGreen     = new Color(0.30f, 0.55f, 0.28f, 1f);
-        private static readonly Color SellBronze   = new Color(0.62f, 0.42f, 0.20f, 1f);
-        private static readonly Color EquipBlue    = new Color(0.27f, 0.40f, 0.58f, 1f);
-        private static readonly Color CloseRed      = new Color(0.72f, 0.30f, 0.26f, 1f);
-
-        // ── INK text tones (dark, readable on the light parchment) ────────────────
-        private static readonly Color Ink          = new Color(0.157f, 0.118f, 0.078f, 1f);      // primary dark ink
-        private static readonly Color InkDim        = new Color(0.345f, 0.290f, 0.220f, 1f);     // secondary / flavour ink
-        // Bronze heading ink — true gilt is too pale on parchment, so titles read bronze.
-        private static readonly Color GiltInk      = new Color(0.521f, 0.380f, 0.102f, 1f);      // bronze heading ink
-        // Affordable green ink (cost/refund/eco accents) — darkened to read on paper.
-        private static readonly Color CostInk      = new Color(0.255f, 0.412f, 0.235f, 1f);      // green cost ink
-        private static readonly Color RefundInk    = new Color(0.541f, 0.392f, 0.157f, 1f);      // bronze refund ink
+        // Selected-tab tint — a brighter gold wash over the kit's Gold button so the
+        // active mode reads selected; inactive tabs use the kit's neutral Quiet glass.
+        private static readonly Color TabSelectedTint = new Color(1.18f, 1.12f, 0.95f, 1f);
+        private static readonly Color TabRestTint     = Color.white;
 
         private GameObject _ui;
         private string _vendorContext;
@@ -81,194 +55,73 @@ namespace DeNelle.Village.Hero
         {
             Close();
 
-            _vendorContext = vendorContext ?? "";
+            _vendorContext = vendorContext == null ? "" : vendorContext;
             ResolveActiveHero();
 
-            _ui = new GameObject("ShopPanelUI");
-            _ui.transform.SetParent(null, false);
+            // Modal canvas + tap-outside-to-close scrim, both from the shared kit.
+            _ui = ElarionUiKit.BuildModalCanvas("ShopPanelUI", 1000);
+            ElarionUiKit.Scrim(_ui.transform, onTapClose: Close);
 
-            var canvas = _ui.AddComponent<Canvas>();
-            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvas.sortingOrder = 1000;
-
-            var scaler = _ui.AddComponent<CanvasScaler>();
-            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(1080, 1920);
-            scaler.matchWidthOrHeight = 0.5f;
-
-            _ui.AddComponent<GraphicRaycaster>();
-
-            // Backdrop / scrim — full-screen, blocks click-through AND closes on tap-outside.
-            // Mirrors HeroInventoryController's scrim: the backdrop is itself a Button wired to
-            // Close, so tapping anywhere outside the panel dismisses the shop. (Previously this
-            // was a plain Image with no dismiss, so if the small Close button was missed there
-            // was no way out of the modal.)
-            var backdrop = new GameObject("Backdrop", typeof(Image), typeof(Button));
-            backdrop.transform.SetParent(_ui.transform, false);
-            var bdRect = backdrop.GetComponent<RectTransform>();
-            bdRect.anchorMin = Vector2.zero;
-            bdRect.anchorMax = Vector2.one;
-            bdRect.offsetMin = Vector2.zero;
-            bdRect.offsetMax = Vector2.zero;
-            var bdImg = backdrop.GetComponent<Image>();
-            bdImg.color = Scrim;
-            var bdBtn = backdrop.GetComponent<Button>();
-            bdBtn.transition = Selectable.Transition.None;
-            bdBtn.onClick.AddListener(Close);
-
-            // Panel frame
-            var panel = new GameObject("Panel", typeof(Image));
-            panel.transform.SetParent(_ui.transform, false);
-            var pr = panel.GetComponent<RectTransform>();
-            pr.anchorMin = new Vector2(0.1f, 0.1f);
-            pr.anchorMax = new Vector2(0.9f, 0.9f);
-            pr.offsetMin = Vector2.zero;
-            pr.offsetMax = Vector2.zero;
-            var pImg = panel.GetComponent<Image>();
-            pImg.color = PanelPaper;
-
-            // Gilt rune-frame around the panel (thin gold border via an Outline image
-            // sitting just behind the panel paper). Drawn as a slightly larger image
-            // behind the panel so a 2px gold rim shows on all sides — the cohesive
-            // gilt frame from the inventory look, on the light ground.
-            AddPanelGiltFrame(panel.transform);
+            // Framed dark-glass panel (deep) — the canonical store backboard.
+            var panelGo = ElarionUiKit.Panel(_ui.transform, new Vector2(0.1f, 0.1f), new Vector2(0.9f, 0.9f), deep: true);
+            var panel = panelGo.transform;
 
             // Header
             string title = "Vendor Wares";
             if (_vendorContext.ToLowerInvariant().Contains("armor")) title = "Armorer's Shop";
             else if (_vendorContext.ToLowerInvariant().Contains("forge") || _vendorContext.ToLowerInvariant().Contains("blacksmith")) title = "Blacksmith's Forge";
-            CreateHeader(panel.transform, title);
+            ElarionUiKit.Header(panel, title, x0: 0.04f, x1: 0.96f, y0: 0.9f, y1: 0.97f);
 
             // Economy readout (live)
-            CreateEconomyReadout(panel.transform);
+            CreateEconomyReadout(panel);
 
-            // Tabs / mode buttons
+            // Tabs / mode buttons — kit buttons; the active one is brightened via tint.
             var tabBar = new GameObject("TabBar", typeof(RectTransform));
-            tabBar.transform.SetParent(panel.transform, false);
+            tabBar.transform.SetParent(panel, false);
             var tbRect = tabBar.GetComponent<RectTransform>();
             tbRect.anchorMin = new Vector2(0.02f, 0.78f);
             tbRect.anchorMax = new Vector2(0.98f, 0.86f);
             tbRect.offsetMin = Vector2.zero;
             tbRect.offsetMax = Vector2.zero;
 
-            CreateTabButton(tabBar.transform, "BUY", new Vector2(-0.33f, 0), () => ShowBuy());
-            CreateTabButton(tabBar.transform, "SELL", new Vector2(0f, 0), () => ShowSell());
-            CreateTabButton(tabBar.transform, "EQUIP", new Vector2(0.33f, 0), () => ShowEquip());
+            CreateTabButton(tabBar.transform, "BUY", new Vector2(0.02f, 0.32f), () => ShowBuy());
+            CreateTabButton(tabBar.transform, "SELL", new Vector2(0.355f, 0.655f), () => ShowSell());
+            CreateTabButton(tabBar.transform, "EQUIP", new Vector2(0.69f, 0.98f), () => ShowEquip());
             _tabBar = tabBar; // kept so ShowBuy/Sell/Equip can light the active tab
 
             // Content area (replaced per mode)
             _contentRoot = new GameObject("Content", typeof(RectTransform));
-            _contentRoot.transform.SetParent(panel.transform, false);
+            _contentRoot.transform.SetParent(panel, false);
             var cr = _contentRoot.GetComponent<RectTransform>();
             cr.anchorMin = new Vector2(0.02f, 0.08f);
             cr.anchorMax = new Vector2(0.98f, 0.76f);
             cr.offsetMin = Vector2.zero;
             cr.offsetMax = Vector2.zero;
 
-            // Close (X) — top-right corner, large + unmistakable. This is the primary dismiss,
-            // mirroring HeroInventoryController's top-right "X". It sits inside the panel (always
-            // on top of the content) and is wired straight to Close().
-            CreateCloseX(panel.transform);
+            // Close (X) — top-right corner, kit danger button. Added last so it draws on
+            // top of the header/content and always receives the tap.
+            ElarionUiKit.Button(panel, "X", ElarionUiKit.ButtonKind.Danger,
+                                new Vector2(0.9f, 0.9f), new Vector2(0.985f, 0.985f), Close);
 
             // Status line
             var statusGo = new GameObject("Status", typeof(TMPro.TextMeshProUGUI));
-            statusGo.transform.SetParent(panel.transform, false);
+            statusGo.transform.SetParent(panel, false);
             var sRect = statusGo.GetComponent<RectTransform>();
             sRect.anchorMin = new Vector2(0.02f, 0.01f);
             sRect.anchorMax = new Vector2(0.98f, 0.07f);
+            sRect.offsetMin = Vector2.zero;
+            sRect.offsetMax = Vector2.zero;
             _statusText = statusGo.GetComponent<TMPro.TextMeshProUGUI>();
-            _statusText.fontSize = 14;
-            _statusText.color = InkDim; // soft ink, readable on parchment
+            _statusText.fontSize = ElarionUi.FontLabel;
+            _statusText.color = ElarionUi.ParchmentDim; // soft cream on dark glass
             _statusText.alignment = TMPro.TextAlignmentOptions.Center;
+            _statusText.raycastTarget = false;
             SetStatus("Browse wares. Transactions use Wood / Iron / Crystals.");
 
             // Default to Buy
             ShowBuy();
 
             Debug.Log($"[ShopPanel] Opened for vendor '{_vendorContext}'. Economy + inventory driven.");
-        }
-
-        // Thin gilt rune-frame: a gold image one notch larger than the panel, sitting
-        // BEHIND the panel paper so a 2px gold rim peeks out on every side. Cheap, no
-        // sprite/9-slice needed, and reads as the inventory's gilt frame on the light
-        // parchment. Parented to the panel and pushed to the back of the sibling order.
-        private void AddPanelGiltFrame(Transform panel)
-        {
-            var frame = new GameObject("GiltFrame", typeof(Image));
-            frame.transform.SetParent(panel, false);
-            frame.transform.SetAsFirstSibling(); // draw behind the panel's children
-            var fr = frame.GetComponent<RectTransform>();
-            fr.anchorMin = Vector2.zero;
-            fr.anchorMax = Vector2.one;
-            // grow 3px past the panel on each side so the gold rim shows
-            fr.offsetMin = new Vector2(-3f, -3f);
-            fr.offsetMax = new Vector2(3f, 3f);
-            frame.GetComponent<Image>().color = GiltRim;
-            frame.GetComponent<Image>().raycastTarget = false;
-            // NOTE: this frame is a child of the panel, so it renders ON TOP of the
-            // panel paper, not behind it. To make it a rim, the panel paper is opaque
-            // and centered, so the 3px overhang is the only gold visible — a clean
-            // gilt border. (Children always draw above their parent's own graphic.)
-        }
-
-        // Thin gilt rune-frame around a single item row: a soft-gold image one notch
-        // larger than the row, behind the row paper, so a 1px gold rim shows. Mirrors
-        // AddPanelGiltFrame at row scale. raycast off so the row button still takes taps.
-        private void AddRowGiltRim(Transform row)
-        {
-            var rim = new GameObject("RowRim", typeof(Image));
-            rim.transform.SetParent(row, false);
-            rim.transform.SetAsFirstSibling();
-            var rr = rim.GetComponent<RectTransform>();
-            rr.anchorMin = Vector2.zero;
-            rr.anchorMax = Vector2.one;
-            rr.offsetMin = new Vector2(-1.5f, -1.5f);
-            rr.offsetMax = new Vector2(1.5f, 1.5f);
-            rim.GetComponent<Image>().color = GiltRimSoft;
-            rim.GetComponent<Image>().raycastTarget = false;
-        }
-
-        private void CreateHeader(Transform parent, string txt)
-        {
-            // Header band — a brighter paper strip with a thin gilt rule beneath, so
-            // the title sits in a defined masthead rather than floating on the panel.
-            var band = new GameObject("HeaderBand", typeof(Image));
-            band.transform.SetParent(parent, false);
-            var bandR = band.GetComponent<RectTransform>();
-            bandR.anchorMin = new Vector2(0.02f, 0.875f);
-            bandR.anchorMax = new Vector2(0.98f, 0.975f);
-            bandR.offsetMin = Vector2.zero;
-            bandR.offsetMax = Vector2.zero;
-            var bandImg = band.GetComponent<Image>();
-            bandImg.color = HeaderPaper;
-            bandImg.raycastTarget = false;
-
-            // thin gilt rule under the masthead
-            var rule = new GameObject("HeaderRule", typeof(Image));
-            rule.transform.SetParent(parent, false);
-            var ruleR = rule.GetComponent<RectTransform>();
-            ruleR.anchorMin = new Vector2(0.06f, 0.873f);
-            ruleR.anchorMax = new Vector2(0.94f, 0.879f);
-            ruleR.offsetMin = Vector2.zero;
-            ruleR.offsetMax = Vector2.zero;
-            rule.GetComponent<Image>().color = GiltRimSoft;
-            rule.GetComponent<Image>().raycastTarget = false;
-
-            var go = new GameObject("Header", typeof(TMPro.TextMeshProUGUI));
-            go.transform.SetParent(parent, false);
-            var r = go.GetComponent<RectTransform>();
-            r.anchorMin = new Vector2(0.02f, 0.88f);
-            r.anchorMax = new Vector2(0.98f, 0.97f);
-            r.offsetMin = Vector2.zero;
-            r.offsetMax = Vector2.zero;
-            var t = go.GetComponent<TMPro.TextMeshProUGUI>();
-            t.fontSize = 22;
-            t.fontStyle = TMPro.FontStyles.Bold;
-            t.characterSpacing = 4f;
-            t.color = GiltInk; // bronze ink reads on the light masthead
-            t.alignment = TMPro.TextAlignmentOptions.Center;
-            // small crest glyph flanking the vendor name for the runic merchant feel
-            t.text = ElarionUi.CrestGlyph + "  " + txt + "  " + ElarionUi.CrestGlyph;
         }
 
         private void CreateEconomyReadout(Transform parent)
@@ -281,9 +134,10 @@ namespace DeNelle.Village.Hero
             r.offsetMin = Vector2.zero;
             r.offsetMax = Vector2.zero;
             var t = go.GetComponent<TMPro.TextMeshProUGUI>();
-            t.fontSize = 14;
-            t.color = CostInk; // green-bronze resource ink, readable on parchment
+            t.fontSize = ElarionUi.FontLabel;
+            t.color = ElarionUi.Gilt; // gold resource ink on dark glass
             t.alignment = TMPro.TextAlignmentOptions.Center;
+            t.raycastTarget = false;
             _ecoText = t;
             UpdateEcoText(t);
             // Live update while open — store the handler so Close() can unsubscribe (the old
@@ -302,128 +156,27 @@ namespace DeNelle.Village.Hero
             t.text = $"Wood: {e.Wood}   Iron: {e.Iron}   Food: {e.Food}   Crystals: {e.Crystals}";
         }
 
-        private void CreateTabButton(Transform parent, string label, Vector2 anchorX, System.Action onClick, Color? tint = null)
+        // A mode tab built from the shared kit Button (Gold kind). anchorX = (min,max)
+        // fractions across the tab bar. The active tab is brightened by HighlightTab.
+        private void CreateTabButton(Transform parent, string label, Vector2 anchorX, System.Action onClick)
         {
-            var go = new GameObject("Tab_" + label, typeof(Button), typeof(Image));
-            go.transform.SetParent(parent, false);
-            var r = go.GetComponent<RectTransform>();
-            r.anchorMin = new Vector2(0.5f + anchorX.x - 0.14f, 0.1f);
-            r.anchorMax = new Vector2(0.5f + anchorX.x + 0.14f, 0.9f);
-            r.offsetMin = Vector2.zero;
-            r.offsetMax = Vector2.zero;
-            var img = go.GetComponent<Image>();
-            img.color = tint ?? TabRest; // inactive tan by default; active set via HighlightTab
-            var btn = go.GetComponent<Button>();
-            btn.transition = Selectable.Transition.None; // we drive the active glow ourselves
-            btn.onClick.AddListener(() => onClick());
-
-            // thin gilt rim under the tab — a soft gold underline strip
-            var underline = new GameObject("TabRule", typeof(Image));
-            underline.transform.SetParent(go.transform, false);
-            var ur = underline.GetComponent<RectTransform>();
-            ur.anchorMin = new Vector2(0.1f, 0f); ur.anchorMax = new Vector2(0.9f, 0.06f);
-            ur.offsetMin = Vector2.zero; ur.offsetMax = Vector2.zero;
-            underline.GetComponent<Image>().color = GiltRimSoft;
-            underline.GetComponent<Image>().raycastTarget = false;
-
-            var txt = new GameObject("Label", typeof(TMPro.TextMeshProUGUI));
-            txt.transform.SetParent(go.transform, false);
-            var tr = txt.GetComponent<RectTransform>();
-            tr.anchorMin = Vector2.zero; tr.anchorMax = Vector2.one; tr.offsetMin = Vector2.zero; tr.offsetMax = Vector2.zero;
-            var tt = txt.GetComponent<TMPro.TextMeshProUGUI>();
-            tt.text = label;
-            tt.fontSize = 16;
-            tt.fontStyle = TMPro.FontStyles.Bold;
-            tt.characterSpacing = 2f;
-            tt.color = Ink; // dark ink label, readable on the light tab
-            tt.alignment = TMPro.TextAlignmentOptions.Center;
+            ElarionUiKit.Button(parent, label, ElarionUiKit.ButtonKind.Gold,
+                                new Vector2(anchorX.x, 0.05f), new Vector2(anchorX.y, 0.95f), onClick);
         }
 
-        // Light the active tab with the gilt glow + a bright rim; dim the rest to tan.
-        // Called by ShowBuy/ShowSell/ShowEquip so the current mode is always obvious.
-        // Null-safe: a no-op until the tab bar exists.
+        // Light the active tab brighter; dim the rest. The kit names its buttons
+        // "Btn_<label>", and tints the targetGraphic Image — so we just brighten the
+        // selected one's image colour. Null-safe: a no-op until the tab bar exists.
         private void HighlightTab(string activeLabel)
         {
             if (_tabBar == null) return;
             foreach (Transform child in _tabBar.transform)
             {
                 if (child == null) continue;
-                bool isActive = child.name == "Tab_" + activeLabel;
+                bool isActive = child.name == "Btn_" + activeLabel;
                 var img = child.GetComponent<Image>();
-                if (img != null) img.color = isActive ? TabActive : TabRest;
-                // brighten the gilt underline on the active tab
-                var rule = child.Find("TabRule");
-                if (rule != null)
-                {
-                    var rImg = rule.GetComponent<Image>();
-                    if (rImg != null) rImg.color = isActive ? GiltRim : GiltRimSoft;
-                }
-                // bronze-bold the active label so the text reads selected too
-                var lbl = child.Find("Label");
-                if (lbl != null)
-                {
-                    var lt = lbl.GetComponent<TMPro.TextMeshProUGUI>();
-                    if (lt != null) lt.color = isActive ? GiltInk : Ink;
-                }
+                if (img != null) img.color = isActive ? TabSelectedTint : TabRestTint;
             }
-        }
-
-        private void CreateBigButton(Transform parent, string label, Vector2 anchor, System.Action onClick, Color? bg = null)
-        {
-            var go = new GameObject("Btn_" + label, typeof(Button), typeof(Image));
-            go.transform.SetParent(parent, false);
-            var r = go.GetComponent<RectTransform>();
-            r.anchorMin = new Vector2(anchor.x - 0.08f, anchor.y - 0.03f);
-            r.anchorMax = new Vector2(anchor.x + 0.08f, anchor.y + 0.03f);
-            r.offsetMin = Vector2.zero;
-            r.offsetMax = Vector2.zero;
-            var img = go.GetComponent<Image>();
-            img.color = bg ?? TabRest;
-            var btn = go.GetComponent<Button>();
-            btn.onClick.AddListener(() => onClick());
-
-            var txt = new GameObject("L", typeof(TMPro.TextMeshProUGUI));
-            txt.transform.SetParent(go.transform, false);
-            var tr = txt.GetComponent<RectTransform>();
-            tr.anchorMin = Vector2.zero; tr.anchorMax = Vector2.one;
-            var tt = txt.GetComponent<TMPro.TextMeshProUGUI>();
-            tt.text = label;
-            tt.fontSize = 15;
-            tt.fontStyle = TMPro.FontStyles.Bold;
-            tt.color = Ink; // dark ink on the light button
-            tt.alignment = TMPro.TextAlignmentOptions.Center;
-        }
-
-        // Top-right close (X) — the primary, unmistakable dismiss. Large square touch target in
-        // the panel's top-right corner, wired directly to Close(). Added last in Open() so it
-        // draws on top of the header/content and always receives the tap.
-        private void CreateCloseX(Transform parent)
-        {
-            var go = new GameObject("CloseX", typeof(Button), typeof(Image));
-            go.transform.SetParent(parent, false);
-            var r = go.GetComponent<RectTransform>();
-            r.anchorMin = new Vector2(0.88f, 0.90f);
-            r.anchorMax = new Vector2(0.985f, 0.985f);
-            r.offsetMin = Vector2.zero;
-            r.offsetMax = Vector2.zero;
-            var img = go.GetComponent<Image>();
-            img.color = CloseRed; // muted brick red — clear dismiss, white X reads on it
-            var btn = go.GetComponent<Button>();
-            btn.transition = Selectable.Transition.None;
-            btn.onClick.AddListener(Close);
-
-            var txt = new GameObject("X", typeof(TMPro.TextMeshProUGUI));
-            txt.transform.SetParent(go.transform, false);
-            var tr = txt.GetComponent<RectTransform>();
-            tr.anchorMin = Vector2.zero; tr.anchorMax = Vector2.one;
-            tr.offsetMin = Vector2.zero; tr.offsetMax = Vector2.zero;
-            var tt = txt.GetComponent<TMPro.TextMeshProUGUI>();
-            tt.text = "X";
-            tt.fontSize = 24;
-            tt.fontStyle = TMPro.FontStyles.Bold;
-            tt.color = Color.white;
-            tt.alignment = TMPro.TextAlignmentOptions.Center;
-            tt.raycastTarget = false; // let the button image take the tap
         }
 
         private void SetStatus(string s)
@@ -483,19 +236,22 @@ namespace DeNelle.Village.Hero
             foreach (var w in weapons)
             {
                 var wCopy = w; // capture for the closure
-                CreateBuyRow(listRoot, BuyLabel(w.name, GearAppraisal.Appraise(w)), GearCatalog.GetBuyCost(w), () => TryBuyWeapon(wCopy));
+                CreateBuyRow(listRoot, BuyLabel(w.name, GearAppraisal.Appraise(w)), GearCatalog.GetBuyCost(w), () => TryBuyWeapon(wCopy), null);
             }
             foreach (var a in armors)
             {
                 var aCopy = a; // capture for the closure
-                CreateBuyRow(listRoot, BuyLabel(a.name, GearAppraisal.Appraise(a)), GearCatalog.GetBuyCost(a), () => TryBuyArmor(aCopy));
+                CreateBuyRow(listRoot, BuyLabel(a.name, GearAppraisal.Appraise(a)), GearCatalog.GetBuyCost(a), () => TryBuyArmor(aCopy), null);
             }
             foreach (var pid in _potionIds)
             {
                 var cost = new ResourceCost(wood: 4, iron: 0, crystals: 0); // cheap early potions
                 if (pid.Contains("mana")) cost = new ResourceCost(wood: 3, crystals: 1);
                 string pidCopy = pid; var costCopy = cost; // capture for the closure
-                CreateBuyRow(listRoot, pidCopy, costCopy, () => TryBuyPotion(pidCopy, costCopy));
+                // Pack potion art on the row when present (red heal / blue mana bottle).
+                var potionIcon = RpgUiCatalog.Get(RpgUiCatalog.RolePotion,
+                    pid.Contains("mana") ? RpgUiCatalog.PotionMana : RpgUiCatalog.PotionHealth);
+                CreateBuyRow(listRoot, pidCopy, costCopy, () => TryBuyPotion(pidCopy, costCopy), potionIcon);
             }
         }
 
@@ -511,23 +267,17 @@ namespace DeNelle.Village.Hero
         private const float RowGapPx    = 6f;    // spacing between rows
 
         // Builds a scrollable list area inside _contentRoot and returns the content
-        // transform that rows should be parented to. Rows are still anchored from the
-        // top (y starting at ~1.0) — the content RectTransform is sized to rowCount so
-        // the ScrollRect can pan through every item. Without this the fixed _contentRoot
-        // clipped/overflowed long catalogs and most BUY buttons fell off the panel
-        // (the reported "no way to complete a purchase"). Vertical scroll, clipped.
+        // transform that rows should be parented to. The content RectTransform is sized
+        // to rowCount by a VerticalLayoutGroup + ContentSizeFitter so the ScrollRect can
+        // pan through every item. This is the rendering FIX — do not revert it.
+        // Vertical scroll, clipped, with a kit Well backing the tray.
         private Transform BuildScrollContent(int rowCount)
         {
-            // Recessed well backing — a faint tan panel behind the scroll list so the
-            // rows sit in a defined tray (the parchment mockup's inset). Non-masking,
-            // non-interactive; drawn first so the viewport/rows render on top of it.
-            var well = new GameObject("ScrollWell", typeof(Image));
-            well.transform.SetParent(_contentRoot.transform, false);
-            var wr = well.GetComponent<RectTransform>();
-            wr.anchorMin = Vector2.zero; wr.anchorMax = Vector2.one;
-            wr.offsetMin = new Vector2(-2f, -2f); wr.offsetMax = new Vector2(2f, 2f);
-            well.GetComponent<Image>().color = WellPaper;
-            well.GetComponent<Image>().raycastTarget = false;
+            // Recessed well backing — the kit's dark recessed tray so the rows sit in a
+            // defined inset. Non-interactive; drawn first so the viewport/rows sit on top.
+            var well = ElarionUiKit.Well(_contentRoot.transform, Vector2.zero, Vector2.one);
+            var wImg = well.GetComponent<Image>();
+            if (wImg != null) wImg.raycastTarget = false;
 
             // Viewport (masked) fills the content area.
             var viewport = new GameObject("Viewport", typeof(Image), typeof(Mask), typeof(ScrollRect));
@@ -581,66 +331,49 @@ namespace DeNelle.Village.Hero
             return content.transform;
         }
 
-        private void CreateBuyRow(Transform parent, string label, ResourceCost cost, System.Action buyAction)
+        // A buy row built from kit pieces: a dark-glass Cell panel (LayoutElement-sized
+        // for the scroll layout), an optional pack-art icon well on the left, the item
+        // name + cost labels, and a green Confirm BUY button. The whole row is also a
+        // tap-to-buy Button. iconSprite may be null (no art / gear).
+        private void CreateBuyRow(Transform parent, string label, ResourceCost cost, System.Action buyAction, Sprite iconSprite)
         {
-            // Whole row is a Button now (tap-to-buy) AND keeps an explicit BUY button — both
-            // route to the same purchase action, so "selecting an item" completes the buy.
             var row = new GameObject("BuyRow_" + label, typeof(Image), typeof(Button), typeof(LayoutElement));
             row.transform.SetParent(parent, false);
             var le = row.GetComponent<LayoutElement>();
             le.preferredHeight = RowHeightPx;
             le.minHeight = RowHeightPx;
-            row.GetComponent<Image>().color = RowPaper;
-            AddRowGiltRim(row.transform); // thin rune-frame around the item row
+            var rowImg = row.GetComponent<Image>();
+            rowImg.color = ElarionUiKit.Cell; // dark-glass row tile
+            ElarionUiKit.ApplyRounded(rowImg);
             var rowBtn = row.GetComponent<Button>();
-            rowBtn.transition = Selectable.Transition.ColorTint;
-            var rowColors = rowBtn.colors;
-            rowColors.normalColor = Color.white;     // multiplies the RowPaper image -> stays paper
-            rowColors.highlightedColor = RowHover;   // warm gilt-tinted hover
-            rowColors.pressedColor = RowPress;       // soft green confirm press
-            rowColors.fadeDuration = 0.08f;
-            rowBtn.colors = rowColors;
+            rowBtn.targetGraphic = rowImg;
+            ElarionUiKit.StyleButtonColors(rowBtn);
             rowBtn.onClick.AddListener(() => buyAction());
 
-            var nameTxt = new GameObject("N", typeof(TMPro.TextMeshProUGUI));
-            nameTxt.transform.SetParent(row.transform, false);
-            var nr = nameTxt.GetComponent<RectTransform>();
-            nr.anchorMin = new Vector2(0.04f, 0.15f); nr.anchorMax = new Vector2(0.5f, 0.85f);
-            var nt = nameTxt.GetComponent<TMPro.TextMeshProUGUI>();
-            nt.text = label;
-            nt.fontSize = 14;
-            nt.color = Ink; // dark ink, readable on light row
-            nt.raycastTarget = false; // let the row button receive the tap
+            float nameX0 = 0.04f;
+            if (iconSprite != null)
+            {
+                // Recessed icon well with the pack art (potion bottle), left side.
+                var iconWell = ElarionUiKit.AddImage(row.transform, "IconWell",
+                    new Vector2(0.03f, 0.15f), new Vector2(0.15f, 0.85f), new Color(0f, 0f, 0f, 0.30f));
+                iconWell.GetComponent<Image>().raycastTarget = false;
+                var ic = ElarionUiKit.AddImage(iconWell.transform, "Icon",
+                    new Vector2(0.1f, 0.1f), new Vector2(0.9f, 0.9f), Color.white, rounded: false);
+                var icImg = ic.GetComponent<Image>();
+                icImg.sprite = iconSprite;
+                icImg.preserveAspect = true;
+                icImg.raycastTarget = false;
+                nameX0 = 0.17f;
+            }
 
-            var priceTxt = new GameObject("P", typeof(TMPro.TextMeshProUGUI));
-            priceTxt.transform.SetParent(row.transform, false);
-            var pr = priceTxt.GetComponent<RectTransform>();
-            pr.anchorMin = new Vector2(0.5f, 0.15f); pr.anchorMax = new Vector2(0.72f, 0.85f);
-            var pt = priceTxt.GetComponent<TMPro.TextMeshProUGUI>();
-            pt.text = CostString(cost);
-            pt.fontSize = 13;
-            pt.fontStyle = TMPro.FontStyles.Bold;
-            pt.color = CostInk; // green cost ink
-            pt.raycastTarget = false;
+            ElarionUiKit.Label(row.transform, label, 0.15f, 0.85f, ElarionUi.Parchment,
+                ElarionUi.FontBody, TMPro.TextAlignmentOptions.Left, nameX0, 0.5f);
 
-            var buyBtn = new GameObject("Buy", typeof(Button), typeof(Image));
-            buyBtn.transform.SetParent(row.transform, false);
-            var br = buyBtn.GetComponent<RectTransform>();
-            br.anchorMin = new Vector2(0.74f, 0.15f); br.anchorMax = new Vector2(0.98f, 0.85f);
-            buyBtn.GetComponent<Image>().color = BuyGreen;
-            var bb = buyBtn.GetComponent<Button>();
-            bb.onClick.AddListener(() => buyAction());
+            ElarionUiKit.Label(row.transform, CostString(cost), 0.15f, 0.85f, ElarionUi.Gilt,
+                ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Left, 0.5f, 0.72f, bold: true);
 
-            var bl = new GameObject("BL", typeof(TMPro.TextMeshProUGUI));
-            bl.transform.SetParent(buyBtn.transform, false);
-            var blr = bl.GetComponent<RectTransform>();
-            blr.anchorMin = Vector2.zero; blr.anchorMax = Vector2.one;
-            var blt = bl.GetComponent<TMPro.TextMeshProUGUI>();
-            blt.text = "BUY";
-            blt.fontSize = 13;
-            blt.color = Color.white;
-            blt.alignment = TMPro.TextAlignmentOptions.Center;
-            blt.raycastTarget = false;
+            ElarionUiKit.Button(row.transform, "BUY", ElarionUiKit.ButtonKind.Confirm,
+                new Vector2(0.74f, 0.15f), new Vector2(0.98f, 0.85f), buyAction);
         }
 
         // WO-300: enrich a buy-row name with its Elarion maker's mark, so a vendor
@@ -768,6 +501,8 @@ namespace DeNelle.Village.Hero
                 Mathf.RoundToInt(c.Crystals * f));
         }
 
+        // A sell row from kit pieces: dark-glass Cell tile + name + bronze refund + a
+        // gold SELL button. LayoutElement-sized so the scroll layout stacks it.
         private void CreateSellRow(Transform parent, string label, ResourceCost refund, System.Action sellAction)
         {
             var row = new GameObject("SellRow_" + label, typeof(Image), typeof(LayoutElement));
@@ -775,45 +510,18 @@ namespace DeNelle.Village.Hero
             var le = row.GetComponent<LayoutElement>();
             le.preferredHeight = RowHeightPx;
             le.minHeight = RowHeightPx;
-            row.GetComponent<Image>().color = RowPaper;
-            AddRowGiltRim(row.transform);
+            var rowImg = row.GetComponent<Image>();
+            rowImg.color = ElarionUiKit.Cell;
+            ElarionUiKit.ApplyRounded(rowImg);
 
-            var nameTxt = new GameObject("N", typeof(TMPro.TextMeshProUGUI));
-            nameTxt.transform.SetParent(row.transform, false);
-            var nr = nameTxt.GetComponent<RectTransform>();
-            nr.anchorMin = new Vector2(0.04f, 0.15f); nr.anchorMax = new Vector2(0.55f, 0.85f);
-            var nt = nameTxt.GetComponent<TMPro.TextMeshProUGUI>();
-            nt.text = label;
-            nt.fontSize = 13;
-            nt.color = Ink;
+            ElarionUiKit.Label(row.transform, label, 0.15f, 0.85f, ElarionUi.Parchment,
+                ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Left, 0.04f, 0.55f);
 
-            var refTxt = new GameObject("R", typeof(TMPro.TextMeshProUGUI));
-            refTxt.transform.SetParent(row.transform, false);
-            var pr = refTxt.GetComponent<RectTransform>();
-            pr.anchorMin = new Vector2(0.55f, 0.15f); pr.anchorMax = new Vector2(0.72f, 0.85f);
-            var pt = refTxt.GetComponent<TMPro.TextMeshProUGUI>();
-            pt.text = "+" + CostString(refund);
-            pt.fontSize = 13;
-            pt.fontStyle = TMPro.FontStyles.Bold;
-            pt.color = RefundInk; // bronze refund ink
+            ElarionUiKit.Label(row.transform, "+" + CostString(refund), 0.15f, 0.85f, ElarionUi.Gilt,
+                ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Left, 0.55f, 0.72f, bold: true);
 
-            var sellBtn = new GameObject("Sell", typeof(Button), typeof(Image));
-            sellBtn.transform.SetParent(row.transform, false);
-            var br = sellBtn.GetComponent<RectTransform>();
-            br.anchorMin = new Vector2(0.74f, 0.15f); br.anchorMax = new Vector2(0.98f, 0.85f);
-            sellBtn.GetComponent<Image>().color = SellBronze;
-            var bb = sellBtn.GetComponent<Button>();
-            bb.onClick.AddListener(() => sellAction());
-
-            var bl = new GameObject("BL", typeof(TMPro.TextMeshProUGUI));
-            bl.transform.SetParent(sellBtn.transform, false);
-            var blr = bl.GetComponent<RectTransform>();
-            blr.anchorMin = Vector2.zero; blr.anchorMax = Vector2.one;
-            var blt = bl.GetComponent<TMPro.TextMeshProUGUI>();
-            blt.text = "SELL";
-            blt.fontSize = 13;
-            blt.color = Color.white;
-            blt.alignment = TMPro.TextAlignmentOptions.Center;
+            ElarionUiKit.Button(row.transform, "SELL", ElarionUiKit.ButtonKind.Gold,
+                new Vector2(0.74f, 0.15f), new Vector2(0.98f, 0.85f), sellAction);
         }
 
         private void TrySell(string id, ResourceCost refund)
@@ -874,17 +582,8 @@ namespace DeNelle.Village.Hero
         // the "no inventory" fallback). y is a normalized top anchor within the parent.
         private void CreateLabel(Transform parent, string txt, float y)
         {
-            var go = new GameObject("Label", typeof(TMPro.TextMeshProUGUI));
-            go.transform.SetParent(parent, false);
-            var r = go.GetComponent<RectTransform>();
-            r.anchorMin = new Vector2(0.02f, y - 0.06f);
-            r.anchorMax = new Vector2(0.98f, y);
-            r.offsetMin = Vector2.zero;
-            r.offsetMax = Vector2.zero;
-            var t = go.GetComponent<TMPro.TextMeshProUGUI>();
-            t.text = txt;
-            t.fontSize = 13;
-            t.color = InkDim; // soft ink, readable on parchment
+            ElarionUiKit.Label(parent, txt, y - 0.06f, y, ElarionUi.ParchmentDim,
+                ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Left, 0.02f, 0.98f);
         }
 
         // Layout-child label for the scroll content (VerticalLayoutGroup). Fixed pixel
@@ -898,11 +597,13 @@ namespace DeNelle.Village.Hero
             le.minHeight = RowHeightPx * 0.5f;
             var t = go.GetComponent<TMPro.TextMeshProUGUI>();
             t.text = txt;
-            t.fontSize = 13;
-            t.color = InkDim;
+            t.fontSize = ElarionUi.FontLabel;
+            t.color = ElarionUi.ParchmentDim;
             t.alignment = TMPro.TextAlignmentOptions.Left;
+            t.raycastTarget = false;
         }
 
+        // An equip row from kit pieces: dark-glass Cell tile + name + a gold EQUIP button.
         private void CreateEquipRow(Transform parent, string label, string id, bool isWeapon)
         {
             var row = new GameObject("EquipRow_" + id, typeof(Image), typeof(LayoutElement));
@@ -910,35 +611,15 @@ namespace DeNelle.Village.Hero
             var le = row.GetComponent<LayoutElement>();
             le.preferredHeight = RowHeightPx;
             le.minHeight = RowHeightPx;
-            row.GetComponent<Image>().color = RowPaper;
-            AddRowGiltRim(row.transform);
+            var rowImg = row.GetComponent<Image>();
+            rowImg.color = ElarionUiKit.Cell;
+            ElarionUiKit.ApplyRounded(rowImg);
 
-            var nameTxt = new GameObject("N", typeof(TMPro.TextMeshProUGUI));
-            nameTxt.transform.SetParent(row.transform, false);
-            var nr = nameTxt.GetComponent<RectTransform>();
-            nr.anchorMin = new Vector2(0.04f, 0.15f); nr.anchorMax = new Vector2(0.62f, 0.85f);
-            var nt = nameTxt.GetComponent<TMPro.TextMeshProUGUI>();
-            nt.text = label;
-            nt.fontSize = 13;
-            nt.color = Ink;
+            ElarionUiKit.Label(row.transform, label, 0.15f, 0.85f, ElarionUi.Parchment,
+                ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Left, 0.04f, 0.62f);
 
-            var eqBtn = new GameObject("Equip", typeof(Button), typeof(Image));
-            eqBtn.transform.SetParent(row.transform, false);
-            var br = eqBtn.GetComponent<RectTransform>();
-            br.anchorMin = new Vector2(0.65f, 0.15f); br.anchorMax = new Vector2(0.98f, 0.85f);
-            eqBtn.GetComponent<Image>().color = EquipBlue;
-            var bb = eqBtn.GetComponent<Button>();
-            bb.onClick.AddListener(() => TryEquip(id, isWeapon));
-
-            var bl = new GameObject("BL", typeof(TMPro.TextMeshProUGUI));
-            bl.transform.SetParent(eqBtn.transform, false);
-            var blr = bl.GetComponent<RectTransform>();
-            blr.anchorMin = Vector2.zero; blr.anchorMax = Vector2.one;
-            var blt = bl.GetComponent<TMPro.TextMeshProUGUI>();
-            blt.text = "EQUIP";
-            blt.fontSize = 13;
-            blt.color = Color.white;
-            blt.alignment = TMPro.TextAlignmentOptions.Center;
+            ElarionUiKit.Button(row.transform, "EQUIP", ElarionUiKit.ButtonKind.Gold,
+                new Vector2(0.65f, 0.15f), new Vector2(0.98f, 0.85f), () => TryEquip(id, isWeapon));
         }
 
         private void TryEquip(string id, bool isWeapon)

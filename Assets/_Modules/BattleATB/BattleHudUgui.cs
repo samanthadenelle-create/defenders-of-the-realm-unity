@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using DeNelle.BattleATB.Engine;
 using DeNelle.BattleATB.State;
-using DeNelle.Core.UI;   // RpgUiCatalog — owner's polished RPG UI pack (sprite-first)
+using DeNelle.Core.UI;   // ElarionUiKit / ElarionUi / RpgUiCatalog — the SHARED presentation layer
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
@@ -13,21 +13,24 @@ namespace DeNelle.BattleATB
     /// <summary>
     /// FF7-style Active Battle HUD implemented as pure code-built uGUI (Canvas + Image + TMP + Layouts).
     /// Matches the requested layout: Command window bottom-left (Attack/Skills/Item/Defend + dynamic skills sub),
-    /// Party status bottom-right (4 slots: portrait placeholder, name, HP/MP/ATB bars+text),
+    /// Party status bottom-right (4 slots: portrait, name, HP/MP/ATB bars+text),
     /// Top info ("The Last Stand", WAVE, active turn).
     ///
     /// Designed to replace the overly complex previous VisualElement-based BattleHud.
     /// Keeps the same callback surface (OnAction, OnControlModeToggled) for drop-in with BattleController / ATBRuntimeState.
     /// Uses existing BattleState for data (units, HP, ATB visual fill, active unit, wave, etc.).
     ///
-    /// VISUAL STYLE: cohesive with the town/combat HUD + inventory rework — warm light parchment
-    /// panels, thin gilt/rune rims, dark-ink text, ROUNDED panels/cards/bars (procedural sprites),
-    /// circular rune-framed party portraits, a clean ATB gauge with a gold "ready" pop, and the
-    /// ElarionUi crest glyph + typography ladder. Mirrors ElarionUi token VALUES locally (this
-    /// assembly references Core data, not Core.UI styling) so the battle screen reads as ONE UI.
+    /// VISUAL STYLE: routes ENTIRELY through the shared presentation layer
+    /// <see cref="ElarionUiKit"/> (DeNelle.Core.UI) so the combat HUD renders the SAME
+    /// dark-glass + gold-rune + RPG-pack art as the town HUD / inventory / store —
+    /// NO private parchment styling. Panels = ElarionUiKit.Panel (dark glass + soft
+    /// gold rim); bars = ElarionUiKit.Bar(BarKind) (town-HUD ornate gauge); portraits =
+    /// ElarionUiKit.Portrait + PortraitForClass; buttons = ElarionUiKit.Button. The ATB
+    /// gauge keeps its charging->ready colour pop by re-tinting its fill per frame.
     ///
     /// Self-contained: creates its own ScreenSpaceOverlay Canvas + Scaler if none provided.
-    /// No UXML/UIDocument — pure uGUI + procedural sprites so it works in player builds (WebGL-safe).
+    /// No UXML/UIDocument — pure uGUI + the kit's procedural sprites so it works in player
+    /// builds (WebGL-safe).
     /// </summary>
     public sealed class BattleHudUgui : MonoBehaviour
     {
@@ -35,62 +38,17 @@ namespace DeNelle.BattleATB
         public Action<BattleAction> OnAction;
         public Action<string, ControlMode> OnControlModeToggled;
 
-        // ── LIGHT mystical-medieval palette (north-star: warm parchment + dark ink + gilt)
-        // Self-contained; mirrors ElarionUi token VALUES (Parchment/Ink/Gold/Gilt) so the
-        // battle screen matches the (now-light) town HUD + inventory. Do NOT flip the global kit.
-        private static readonly Color Parchment = new Color(0.929f, 0.902f, 0.839f, 0.97f);   // EDE6D6 main panel fill
-        private static readonly Color ParchmentLite = new Color(0.957f, 0.933f, 0.875f, 0.98f); // F4EEDF sub-panel / lighter card
-        private static readonly Color Ink = new Color(0.137f, 0.098f, 0.055f, 1f);              // dark ink text (readable on light)
-        private static readonly Color InkDim = new Color(0.34f, 0.28f, 0.20f, 1f);              // muted ink for secondary text
-        private static readonly Color Gold = new Color(0.831f, 0.686f, 0.216f, 1f);             // ElarionUi.Gold accent
-        private static readonly Color Gilt = new Color(0.933f, 0.784f, 0.282f, 1f);             // ElarionUi.Gilt bright rim/glow
-        private static readonly Color GiltRim = new Color(0.933f, 0.784f, 0.282f, 0.85f);       // thin glowing gilt border
+        // ── Per-frame ATB colours (kept local — the kit's BarKind.Atb gives the base
+        // fill, but combat re-tints the fill each frame for the charging->ready pop).
+        private static readonly Color AtbFillColor = ElarionUi.Aether;                       // Aether violet (charging)
+        private static readonly Color AtbReadyColor = ElarionUi.Gilt;                        // Gilt gold (ready)
 
-        // Panels / sub-panels now LIGHT parchment
-        private static readonly Color PanelBg = Parchment;
-        private static readonly Color SubPanelBg = ParchmentLite;
+        // Decorative crest glyph (shared with the kit's headers).
+        private const string CrestGlyph = "*";
 
-        // Text reads as dark ink (kept name `White` to avoid touching call-sites; now ink)
-        private static readonly Color White = new Color(0.137f, 0.098f, 0.055f, 1f);
-
-        // Gauges — deeper saturated fills so they pop on the light parchment track
-        private static readonly Color HpFillColor = new Color(0.27f, 0.62f, 0.32f, 1f);
-        private static readonly Color MpFillColor = new Color(0.22f, 0.46f, 0.90f, 1f);
-        private static readonly Color AtbFillColor = new Color(0.55f, 0.38f, 0.82f, 1f);   // Aether violet (charging)
-        private static readonly Color AtbReadyColor = new Color(0.93f, 0.78f, 0.28f, 1f);  // Gilt gold (ready)
-
-        // Bar track on a light bg: warm tan recess (not black)
-        private static readonly Color BarTrack = new Color(0.70f, 0.64f, 0.53f, 0.95f);
-
-        // Buttons: soft parchment with gilt highlight; ink label
-        private static readonly Color ButtonNormal = new Color(0.886f, 0.847f, 0.757f, 1f);
-        private static readonly Color ButtonHighlight = new Color(0.957f, 0.886f, 0.690f, 1f);
-        private static readonly Color ButtonPressed = new Color(0.80f, 0.72f, 0.55f, 1f);
-
-        // Portrait placeholder ring + fill (rune-framed circle look)
-        private static readonly Color PortraitFill = new Color(0.74f, 0.66f, 0.50f, 1f);
-
-        // ── ElarionUi parity tokens (local mirror — keeps battle screen on the one ladder)
-        private const string CrestGlyph = "*"; // decorative crest (font-safe ASCII)
-        private const int FontTitle = 24;
-        private const int FontHead = 18;
-        private const int FontBody = 15;
-        private const int FontLabel = 13;
-        private const int FontMicro = 11;
-        private const float RadiusPanel = 14f;
-        private const float RadiusCard = 10f;
-        private const float RadiusButton = 9f;
-
-        // ── Procedural sprite cache (rounded panels/bars + circular portraits/rings) ─
-        // Built once, reused across every Image so the look is cohesive and WebGL-safe
-        // (no texture assets, no UXML — survives the player-build trap).
-        private static Sprite _roundedSprite;     // 9-slice rounded rect (panels, cards, buttons, bars)
-        private static Sprite _circleSprite;       // solid disc (portraits)
-        private static Sprite _ringSprite;         // hollow gilt ring (portrait frame)
-
-        // ── Real staged art (Resources/HudIcons/...) — class portraits + per-class
-        // ability icons. WebGL-safe Resources.Load (matches the town HUD convention).
-        // Cached so repeated party renders / skill-menu opens don't re-hit Resources.
+        // ── Real staged art (Resources/HudIcons/...) — per-class ability icons for the
+        // skill menu. Class PORTRAITS now resolve through ElarionUiKit.PortraitForClass.
+        // Cached so repeated skill-menu opens don't re-hit Resources.
         private static readonly Dictionary<string, Sprite> _iconCache = new Dictionary<string, Sprite>();
 
         /// <summary>WebGL-safe sprite load from Resources/HudIcons/&lt;key&gt;, cached + null-safe.</summary>
@@ -103,16 +61,17 @@ namespace DeNelle.BattleATB
             return sp;
         }
 
-        /// <summary>In-battle HeroClass → portrait sprite key (mirrors VillageHudController.PortraitNameForClass).
-        /// Note: the battle engine collapses Cleric→Mage, so the Wizard portrait covers both. The Wizard
-        /// portrait file is "wiard.jpg" (typo in the staged art) — fall back to it if "wizard" is absent.</summary>
+        /// <summary>In-battle HeroClass -> the shared kit class-portrait resolver. Routes
+        /// through ElarionUiKit.PortraitForClass so combat + town render the SAME portrait
+        /// (incl. the Wizard "wiard" typo fix + Healer fallback). The battle engine collapses
+        /// Cleric->Mage, so Mage maps to the Wizard art.</summary>
         private static Sprite PortraitFor(HeroClass cls)
         {
             switch (cls)
             {
-                case HeroClass.Knight: return LoadHudIcon("Knight/knight");
-                case HeroClass.Ranger: return LoadHudIcon("Ranger/ranger");
-                case HeroClass.Mage:   return LoadHudIcon("Wizard/wizard") ?? LoadHudIcon("Wizard/wiard");
+                case HeroClass.Knight: return ElarionUiKit.PortraitForClass("Knight");
+                case HeroClass.Ranger: return ElarionUiKit.PortraitForClass("Ranger");
+                case HeroClass.Mage:   return ElarionUiKit.PortraitForClass("Wizard");
                 default:               return null;
             }
         }
@@ -251,197 +210,41 @@ namespace DeNelle.BattleATB
             _skillsSubPanel.SetActive(false);
         }
 
-        // ── Procedural sprite builders ───────────────────────────────────────
-        // Cheap runtime textures (built once) give the cohesive ROUNDED parchment
-        // look without shipping art. Rounded panels/cards/bars + circular portraits.
+        // ── Shared-kit dressing helpers ──────────────────────────────────────
+        // Every panel/card/button/bar/portrait is built from ElarionUiKit so the
+        // combat HUD reads as ONE UI with town. These thin wrappers adapt the kit's
+        // fraction-anchored builders to this HUD's pixel-anchored / LayoutGroup roots.
 
-        /// <summary>9-slice rounded-rect sprite shared by every panel/card/button/bar.</summary>
-        private static Sprite RoundedSprite()
+        /// <summary>Dress a pixel-anchored panel root's own Image as a kit dark-glass panel
+        /// (rounded glass fill + soft gold underline rim + faint inner rim). The Image must
+        /// already exist on <paramref name="panelGO"/>.</summary>
+        private static void DressGlassPanel(GameObject panelGO, bool deep)
         {
-            if (_roundedSprite != null) return _roundedSprite;
-            const int size = 48;
-            const int radius = 14;
-            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
-            for (int y = 0; y < size; y++)
+            var img = panelGO.GetComponent<Image>();
+            if (img != null)
             {
-                for (int x = 0; x < size; x++)
-                {
-                    float a = RoundedRectAlpha(x, y, size, size, radius);
-                    tex.SetPixel(x, y, new Color(1f, 1f, 1f, a));
-                }
+                img.color = deep ? ElarionUiKit.GlassDeep : ElarionUiKit.Glass;
+                ElarionUiKit.ApplyRounded(img);
             }
-            tex.Apply();
-            // Border = radius so the corners 9-slice cleanly and edges stay crisp.
-            _roundedSprite = Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f),
-                100f, 0, SpriteMeshType.FullRect, new Vector4(radius, radius, radius, radius));
-            return _roundedSprite;
+            ElarionUiKit.AddRimUnderline(panelGO);
+            ElarionUiKit.AddInnerRim(panelGO, ElarionUiKit.AccentSoft);
         }
 
-        /// <summary>Solid anti-aliased disc — party portraits.</summary>
-        private static Sprite CircleSprite()
+        /// <summary>A header label (gilt crest + spaced gold title) pinned across the top of
+        /// a panel root, via the shared kit Label primitive.</summary>
+        private static TextMeshProUGUI PanelHeader(GameObject panelGO, string text)
         {
-            if (_circleSprite != null) return _circleSprite;
-            const int size = 64;
-            float r = size * 0.5f - 1f;
-            float cx = (size - 1) * 0.5f, cy = (size - 1) * 0.5f;
-            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
-            for (int y = 0; y < size; y++)
-            {
-                for (int x = 0; x < size; x++)
-                {
-                    float d = Mathf.Sqrt((x - cx) * (x - cx) + (y - cy) * (y - cy));
-                    float a = Mathf.Clamp01(r - d + 0.5f);
-                    tex.SetPixel(x, y, new Color(1f, 1f, 1f, a));
-                }
-            }
-            tex.Apply();
-            _circleSprite = Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f));
-            return _circleSprite;
-        }
-
-        /// <summary>Hollow ring — gilt rune frame around a portrait.</summary>
-        private static Sprite RingSprite()
-        {
-            if (_ringSprite != null) return _ringSprite;
-            const int size = 64;
-            float ro = size * 0.5f - 1f;
-            float ri = ro - 5f; // ring thickness
-            float cx = (size - 1) * 0.5f, cy = (size - 1) * 0.5f;
-            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
-            for (int y = 0; y < size; y++)
-            {
-                for (int x = 0; x < size; x++)
-                {
-                    float d = Mathf.Sqrt((x - cx) * (x - cx) + (y - cy) * (y - cy));
-                    float aOut = Mathf.Clamp01(ro - d + 0.5f);
-                    float aIn = Mathf.Clamp01(d - ri + 0.5f);
-                    float a = Mathf.Min(aOut, aIn);
-                    tex.SetPixel(x, y, new Color(1f, 1f, 1f, a));
-                }
-            }
-            tex.Apply();
-            _ringSprite = Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f));
-            return _ringSprite;
-        }
-
-        /// <summary>Coverage of a rounded-rect at pixel (x,y) — 1 inside, 0 outside, AA on the arc.</summary>
-        private static float RoundedRectAlpha(int x, int y, int w, int h, int radius)
-        {
-            float px = x + 0.5f, py = y + 0.5f;
-            float dx = Mathf.Max(Mathf.Max(radius - px, px - (w - radius)), 0f);
-            float dy = Mathf.Max(Mathf.Max(radius - py, py - (h - radius)), 0f);
-            if (dx <= 0f || dy <= 0f) return 1f;                 // straight edges / interior
-            float d = Mathf.Sqrt(dx * dx + dy * dy);
-            return Mathf.Clamp01(radius - d + 0.5f);             // AA corner arc
-        }
-
-        /// <summary>Make an Image render as a rounded parchment panel/card/button/bar.</summary>
-        private static void MakeRounded(Image img, Color color)
-        {
-            img.sprite = RoundedSprite();
-            img.type = Image.Type.Sliced;
-            img.color = color;
-        }
-
-        // ── Sprite-FIRST RPG-pack bar dressing ───────────────────────────────
-        // Skins an existing gauge (track BarBg + its Filled fill) with the pack's
-        // ornate gold gem-socket frame + glossy colored fill, by gauge label. HP→red,
-        // MP→blue, ATB→green frame ONLY (ATB re-tints per frame, so keep its fill the
-        // procedural rounded sprite for the charging→ready colour pop). No-op when the
-        // pack isn't imported (RpgUiCatalog returns null → procedural look preserved).
-        private static void DressPackBar(GameObject barBg, Image fillImg, string label, Color fillColor)
-        {
-            string frameName, fillName;
-            bool swapFill;
-            switch (label)
-            {
-                case "HP": frameName = RpgUiCatalog.BarFrameRed;   fillName = RpgUiCatalog.BarFillRed;   swapFill = true;  break;
-                case "MP": frameName = RpgUiCatalog.BarFrameBlue;  fillName = RpgUiCatalog.BarFillBlue;  swapFill = true;  break;
-                default:   frameName = RpgUiCatalog.BarFrameGreen; fillName = null;                       swapFill = false; break; // ATB
-            }
-
-            var frameSprite = RpgUiCatalog.Get(RpgUiCatalog.RoleBars, frameName);
-            var fillSprite  = swapFill ? RpgUiCatalog.Get(RpgUiCatalog.RoleBars, fillName) : null;
-            if (frameSprite == null && fillSprite == null) return;
-
-            // Swap the fill sprite (keeps Type.Filled + fillAmount); tint to the gauge colour.
-            if (fillImg != null && fillSprite != null)
-            {
-                fillImg.sprite = fillSprite;
-                fillImg.color = fillColor;
-            }
-
-            // Gilded frame overlay over the track (non-raycast, on top so the hollow
-            // ornate frame shows the fill through its centre). The ornate ends overhang
-            // the small track slightly so the gem socket reads.
-            if (frameSprite != null && barBg != null)
-            {
-                var fr = new GameObject("PackBarFrame");
-                fr.transform.SetParent(barBg.transform, false);
-                var frt = fr.AddComponent<RectTransform>();
-                frt.anchorMin = Vector2.zero; frt.anchorMax = Vector2.one;
-                frt.offsetMin = new Vector2(-8f, -5f);
-                frt.offsetMax = new Vector2(8f, 5f);
-                var fimg = fr.AddComponent<Image>();
-                fimg.sprite = frameSprite;
-                fimg.type = Image.Type.Simple;
-                fimg.color = Color.white;
-                fimg.raycastTarget = false;
-                fr.transform.SetAsLastSibling();
-            }
-        }
-
-        private void CreateInfoPanel()
-        {
-            _infoPanel = new GameObject("BattleInfoPanel");
-            var rt = _infoPanel.AddComponent<RectTransform>();
-            rt.SetParent(_canvas.transform, false);
-            rt.anchorMin = new Vector2(0.5f, 1f);
-            rt.anchorMax = new Vector2(0.5f, 1f);
+            var lbl = ElarionUiKit.Label(panelGO.transform, CrestGlyph + " " + text, 0f, 1f,
+                                         ElarionUi.Gilt, ElarionUi.FontLabel,
+                                         TextAlignmentOptions.Center, 0f, 1f, spacing: 3f, bold: true);
+            var rt = lbl.GetComponent<RectTransform>();
+            rt.anchorMin = new Vector2(0, 1);
+            rt.anchorMax = new Vector2(1, 1);
             rt.pivot = new Vector2(0.5f, 1f);
-            rt.anchoredPosition = new Vector2(0, -24);
-            rt.sizeDelta = new Vector2(720, 76);
-
-            var bg = _infoPanel.AddComponent<Image>();
-            MakeRounded(bg, ParchmentLite);
-            AddGiltRim(_infoPanel);
-
-            // Title "✦ The Last Stand ✦" — gilt gold crest + letter-spaced ink-gold title
-            var titleGO = CreateText($"{CrestGlyph}  The Last Stand  {CrestGlyph}", _infoPanel.transform, new Vector2(0, 18), FontTitle, Gold, TextAlignmentOptions.Center);
-            _titleText = titleGO.GetComponent<TextMeshProUGUI>();
-            _titleText.characterSpacing = 6f;
-            _titleText.GetComponent<RectTransform>().sizeDelta = new Vector2(700, 34);
-
-            // Thin gilt rule under the title (cohesive with ElarionUi.MakeRule)
-            var rule = new GameObject("TitleRule");
-            rule.transform.SetParent(_infoPanel.transform, false);
-            var ruleRt = rule.AddComponent<RectTransform>();
-            ruleRt.anchoredPosition = new Vector2(0, -2);
-            ruleRt.sizeDelta = new Vector2(360, 2);
-            var ruleImg = rule.AddComponent<Image>();
-            MakeRounded(ruleImg, new Color(Gold.r, Gold.g, Gold.b, 0.55f));
-
-            // WAVE — ink (readable on light)
-            var waveGO = CreateText("WAVE 1", _infoPanel.transform, new Vector2(-228, -12), FontHead, Ink, TextAlignmentOptions.Left);
-            _waveText = waveGO.GetComponent<TextMeshProUGUI>();
-            _waveText.characterSpacing = 2f;
-
-            // Active Turn — muted ink
-            var turnGO = CreateText("", _infoPanel.transform, new Vector2(228, -12), FontHead, InkDim, TextAlignmentOptions.Right);
-            _turnText = turnGO.GetComponent<TextMeshProUGUI>();
-        }
-
-        /// <summary>Thin glowing gilt rim + soft gold drop-glow on a panel (light north-star look).
-        /// Uses uGUI Outline/Shadow on the panel Image — cheap, WebGL-safe, no sprites.</summary>
-        private static void AddGiltRim(GameObject panel)
-        {
-            var outline = panel.AddComponent<Outline>();
-            outline.effectColor = GiltRim;
-            outline.effectDistance = new Vector2(1.5f, -1.5f);
-
-            var glow = panel.AddComponent<Shadow>();
-            glow.effectColor = new Color(Gilt.r, Gilt.g, Gilt.b, 0.28f); // soft gold glow
-            glow.effectDistance = new Vector2(0f, -3f);
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+            rt.anchoredPosition = new Vector2(0, -6);
+            rt.sizeDelta = new Vector2(0, 20);
+            return lbl;
         }
 
         private GameObject CreateText(string txt, Transform parent, Vector2 anchoredPos, int fontSize, Color color, TextAlignmentOptions align)
@@ -461,6 +264,46 @@ namespace DeNelle.BattleATB
             return go;
         }
 
+        private void CreateInfoPanel()
+        {
+            _infoPanel = new GameObject("BattleInfoPanel");
+            var rt = _infoPanel.AddComponent<RectTransform>();
+            rt.SetParent(_canvas.transform, false);
+            rt.anchorMin = new Vector2(0.5f, 1f);
+            rt.anchorMax = new Vector2(0.5f, 1f);
+            rt.pivot = new Vector2(0.5f, 1f);
+            rt.anchoredPosition = new Vector2(0, -24);
+            rt.sizeDelta = new Vector2(720, 76);
+
+            _infoPanel.AddComponent<Image>();
+            DressGlassPanel(_infoPanel, deep: false);
+
+            // Title "* The Last Stand *" — gilt crest + letter-spaced gold title (parchment-on-glass)
+            var titleGO = CreateText($"{CrestGlyph}  The Last Stand  {CrestGlyph}", _infoPanel.transform, new Vector2(0, 18), ElarionUi.FontTitle, ElarionUi.Gilt, TextAlignmentOptions.Center);
+            _titleText = titleGO.GetComponent<TextMeshProUGUI>();
+            _titleText.characterSpacing = 6f;
+            _titleText.GetComponent<RectTransform>().sizeDelta = new Vector2(700, 34);
+
+            // Thin gilt rule under the title (shared kit accent colour)
+            var rule = new GameObject("TitleRule");
+            rule.transform.SetParent(_infoPanel.transform, false);
+            var ruleRt = rule.AddComponent<RectTransform>();
+            ruleRt.anchoredPosition = new Vector2(0, -2);
+            ruleRt.sizeDelta = new Vector2(360, 2);
+            var ruleImg = rule.AddComponent<Image>();
+            ruleImg.color = ElarionUiKit.Accent;
+            ElarionUiKit.ApplyRounded(ruleImg);
+
+            // WAVE — parchment cream (readable on dark glass)
+            var waveGO = CreateText("WAVE 1", _infoPanel.transform, new Vector2(-228, -12), ElarionUi.FontHead, ElarionUi.Parchment, TextAlignmentOptions.Left);
+            _waveText = waveGO.GetComponent<TextMeshProUGUI>();
+            _waveText.characterSpacing = 2f;
+
+            // Active Turn — muted parchment
+            var turnGO = CreateText("", _infoPanel.transform, new Vector2(228, -12), ElarionUi.FontHead, ElarionUi.ParchmentDim, TextAlignmentOptions.Right);
+            _turnText = turnGO.GetComponent<TextMeshProUGUI>();
+        }
+
         private void CreateCommandPanel()
         {
             _commandPanel = new GameObject("CommandPanel");
@@ -472,19 +315,11 @@ namespace DeNelle.BattleATB
             rt.anchoredPosition = new Vector2(30, 30);
             rt.sizeDelta = new Vector2(272, 208);
 
-            var bg = _commandPanel.AddComponent<Image>();
-            MakeRounded(bg, PanelBg);
-            AddGiltRim(_commandPanel);
+            _commandPanel.AddComponent<Image>();
+            DressGlassPanel(_commandPanel, deep: false);
 
-            // Small rune crest header on the command box (cohesive accent)
-            var header = CreateText($"{CrestGlyph} COMMAND", _commandPanel.transform, Vector2.zero, FontLabel, Gold, TextAlignmentOptions.Center);
-            var headerRt = header.GetComponent<RectTransform>();
-            headerRt.anchorMin = new Vector2(0, 1);
-            headerRt.anchorMax = new Vector2(1, 1);
-            headerRt.pivot = new Vector2(0.5f, 1f);
-            headerRt.anchoredPosition = new Vector2(0, -6);
-            headerRt.sizeDelta = new Vector2(0, 20);
-            header.GetComponent<TextMeshProUGUI>().characterSpacing = 3f;
+            // Small rune crest header on the command box (shared kit header)
+            PanelHeader(_commandPanel, "COMMAND");
 
             // Classic FF7 vertical command list
             var vlg = _commandPanel.AddComponent<VerticalLayoutGroup>();
@@ -510,9 +345,8 @@ namespace DeNelle.BattleATB
             subRt.anchoredPosition = new Vector2(12, 0);
             subRt.sizeDelta = new Vector2(228, 168);
 
-            var subBg = _skillsSubPanel.AddComponent<Image>();
-            MakeRounded(subBg, SubPanelBg);
-            AddGiltRim(_skillsSubPanel);
+            _skillsSubPanel.AddComponent<Image>();
+            DressGlassPanel(_skillsSubPanel, deep: true);
 
             var subVlg = _skillsSubPanel.AddComponent<VerticalLayoutGroup>();
             subVlg.childControlHeight = false;
@@ -525,6 +359,10 @@ namespace DeNelle.BattleATB
             _skillsSubPanel.SetActive(false);
         }
 
+        /// <summary>One command/skill button, skinned through the shared kit (rounded glass
+        /// quiet-fill + the kit's StyleButtonColors brightness feedback). Built as a sized
+        /// LayoutElement child so it sits in the FF7 vertical command list; an optional ability
+        /// icon sits on the left with the label inset past it.</summary>
         private Button CreateMenuButton(string label, UnityEngine.Events.UnityAction onClick, Sprite icon = null)
         {
             var go = new GameObject(label);
@@ -536,41 +374,20 @@ namespace DeNelle.BattleATB
             le.preferredHeight = 40;
 
             var img = go.AddComponent<Image>();
-            MakeRounded(img, ButtonNormal);
+            img.color = ElarionUiKit.FillFor(ElarionUiKit.ButtonKind.Quiet);
+            ElarionUiKit.ApplyRounded(img);
 
             var btn = go.AddComponent<Button>();
             btn.onClick.AddListener(onClick);
             btn.targetGraphic = img;
-            btn.transition = Selectable.Transition.ColorTint;
+            ElarionUiKit.StyleButtonColors(btn);
 
-            var colors = btn.colors;
-            colors.normalColor = Color.white;            // tint multiplies the parchment sprite
-            colors.highlightedColor = new Color(1f, 1f, 1f, 1f);
-            colors.pressedColor = new Color(0.90f, 0.84f, 0.66f, 1f);
-            colors.selectedColor = Color.white;
-            colors.fadeDuration = 0.08f;
-            btn.colors = colors;
-
-            // Thin gilt rune rim around each command (circular-rune-frame feel, rounded)
-            var rim = new GameObject("Rim");
-            rim.transform.SetParent(go.transform, false);
-            var rimRt = rim.AddComponent<RectTransform>();
-            rimRt.anchorMin = Vector2.zero;
-            rimRt.anchorMax = Vector2.one;
-            rimRt.offsetMin = Vector2.zero;
-            rimRt.offsetMax = Vector2.zero;
-            var rimImg = rim.AddComponent<Image>();
-            rimImg.sprite = RoundedSprite();
-            rimImg.type = Image.Type.Sliced;
-            rimImg.color = new Color(Gilt.r, Gilt.g, Gilt.b, 0.0f); // invisible fill; outline provides the rim
-            rimImg.raycastTarget = false;
-            var rimOutline = rim.AddComponent<Outline>();
-            rimOutline.effectColor = new Color(Gold.r, Gold.g, Gold.b, 0.45f);
-            rimOutline.effectDistance = new Vector2(1f, -1f);
+            // Thin gilt rune rim around each command (shared kit accent line).
+            ElarionUiKit.AddInnerRim(go, ElarionUiKit.AccentSoft);
 
             // Real ability icon (when supplied) — small square on the left, inside the
-            // gilt rim. Keeps the text label (now left-aligned + inset) as the readable
-            // fallback. No icon → unchanged centred label, so the text/glyph fallback holds.
+            // rim. Keeps the text label (now left-aligned + inset) as the readable
+            // fallback. No icon → unchanged centred label.
             const float iconBox = 30f;
             if (icon != null)
             {
@@ -592,11 +409,12 @@ namespace DeNelle.BattleATB
             txtGO.transform.SetParent(go.transform, false);
             var tmp = txtGO.AddComponent<TextMeshProUGUI>();
             tmp.text = label;
-            tmp.fontSize = FontBody;
-            tmp.color = Ink;
+            tmp.fontSize = ElarionUi.FontBody;
+            tmp.color = ElarionUi.Parchment;
             tmp.alignment = icon != null ? TextAlignmentOptions.Left : TextAlignmentOptions.Center;
             tmp.fontStyle = FontStyles.Bold;
             tmp.characterSpacing = 1f;
+            tmp.raycastTarget = false;
             var txtRt = txtGO.GetComponent<RectTransform>();
             txtRt.anchorMin = Vector2.zero;
             txtRt.anchorMax = Vector2.one;
@@ -687,19 +505,11 @@ namespace DeNelle.BattleATB
             rt.anchoredPosition = new Vector2(-30, 30);
             rt.sizeDelta = new Vector2(432, 232);
 
-            var bg = _partyPanel.AddComponent<Image>();
-            MakeRounded(bg, PanelBg);
-            AddGiltRim(_partyPanel);
+            _partyPanel.AddComponent<Image>();
+            DressGlassPanel(_partyPanel, deep: false);
 
-            // Party header crest (cohesive with command box header)
-            var header = CreateText($"{CrestGlyph} PARTY", _partyPanel.transform, Vector2.zero, FontLabel, Gold, TextAlignmentOptions.Center);
-            var headerRt = header.GetComponent<RectTransform>();
-            headerRt.anchorMin = new Vector2(0, 1);
-            headerRt.anchorMax = new Vector2(1, 1);
-            headerRt.pivot = new Vector2(0.5f, 1f);
-            headerRt.anchoredPosition = new Vector2(0, -6);
-            headerRt.sizeDelta = new Vector2(0, 20);
-            header.GetComponent<TextMeshProUGUI>().characterSpacing = 3f;
+            // Party header crest (shared kit header — cohesive with command box)
+            PanelHeader(_partyPanel, "PARTY");
 
             var vlg = _partyPanel.AddComponent<VerticalLayoutGroup>();
             vlg.childControlHeight = false;
@@ -718,6 +528,9 @@ namespace DeNelle.BattleATB
             }
         }
 
+        /// <summary>One party slot, built from the shared kit: a dark-glass card carrying a
+        /// kit Portrait (circular class disc + gilt ring) and stacked kit Bars (HP/MP/ATB).
+        /// Renders the SAME pieces as the town party frame.</summary>
         private PartySlot CreatePartySlot()
         {
             var go = new GameObject("PartySlot");
@@ -728,7 +541,8 @@ namespace DeNelle.BattleATB
             le.preferredHeight = 48;
 
             var bg = go.AddComponent<Image>();
-            MakeRounded(bg, ParchmentLite);  // lighter rounded card on the parchment panel
+            bg.color = ElarionUiKit.Cell;          // lighter dark-glass card on the panel
+            ElarionUiKit.ApplyRounded(bg);
 
             var hlg = go.AddComponent<HorizontalLayoutGroup>();
             hlg.childControlHeight = false;
@@ -739,28 +553,14 @@ namespace DeNelle.BattleATB
             hlg.spacing = 8;
             hlg.padding = new RectOffset(6, 6, 4, 4);
 
-            // Circular rune-framed portrait (disc fill + gilt ring overlay)
+            // Circular rune-framed portrait — built by the shared kit (disc + gilt ring).
             var portWrap = new GameObject("Portrait");
             portWrap.transform.SetParent(go.transform, false);
             var portRt = portWrap.AddComponent<RectTransform>();
             portRt.sizeDelta = new Vector2(40, 40);
             var portLe = portWrap.AddComponent<LayoutElement>();
             portLe.minWidth = 40; portLe.preferredWidth = 40;
-            var portImg = portWrap.AddComponent<Image>();
-            portImg.sprite = CircleSprite();
-            portImg.color = PortraitFill; // warm tan placeholder disc (real sprite assignable later)
-
-            var ringGO = new GameObject("Ring");
-            ringGO.transform.SetParent(portWrap.transform, false);
-            var ringRt = ringGO.AddComponent<RectTransform>();
-            ringRt.anchorMin = Vector2.zero;
-            ringRt.anchorMax = Vector2.one;
-            ringRt.offsetMin = new Vector2(-2, -2);
-            ringRt.offsetMax = new Vector2(2, 2);
-            var ringImg = ringGO.AddComponent<Image>();
-            ringImg.sprite = RingSprite();
-            ringImg.color = new Color(Gold.r, Gold.g, Gold.b, 0.8f); // gilt rune frame (re-tints gold when active)
-            ringImg.raycastTarget = false;
+            var portrait = ElarionUiKit.Portrait(portWrap.transform, null, active: false);
 
             // Right column: name + bars
             var right = new GameObject("RightCol");
@@ -776,28 +576,21 @@ namespace DeNelle.BattleATB
             v.childAlignment = TextAnchor.MiddleLeft;
             v.spacing = 1;
 
-            // Name — ink on light (active state re-tinted in Render)
-            var nameGO = CreateText("Hero", right.transform, Vector2.zero, FontLabel, Ink, TextAlignmentOptions.Left);
+            // Name — parchment cream on dark glass (active state re-tinted in Render)
+            var nameGO = CreateText("Hero", right.transform, Vector2.zero, ElarionUi.FontLabel, ElarionUi.Parchment, TextAlignmentOptions.Left);
             var nameTmp = nameGO.GetComponent<TextMeshProUGUI>();
             nameTmp.characterSpacing = 1f;
 
-            // HP row (bar + inline value)
-            var hpRow = CreateBarRow(right.transform, "HP", HpFillColor, out var hpText);
-            var hpBar = FindFill(hpRow);
-
-            // MP row
-            var mpRow = CreateBarRow(right.transform, "MP", MpFillColor, out var mpText);
-            var mpBar = FindFill(mpRow);
-
-            // ATB row (no inline value — the gauge speaks for itself)
-            var atbRow = CreateBarRow(right.transform, "ATB", AtbFillColor, out _);
-            var atbBar = FindFill(atbRow);
+            // HP / MP / ATB rows — each a kit Bar inside a sized row container.
+            var hpBar = CreateBarRow(right.transform, "HP", ElarionUiKit.BarKind.Hp, out var hpText);
+            var mpBar = CreateBarRow(right.transform, "MP", ElarionUiKit.BarKind.Mp, out var mpText);
+            var atbBar = CreateBarRow(right.transform, "ATB", ElarionUiKit.BarKind.Atb, out _);
 
             var slot = new PartySlot
             {
                 Root = go,
-                Portrait = portImg,
-                PortraitRing = ringImg,
+                Portrait = portrait.image,
+                PortraitRing = portrait.ring,
                 Name = nameTmp,
                 HpBar = hpBar,
                 HpText = hpText,
@@ -808,19 +601,14 @@ namespace DeNelle.BattleATB
             return slot;
         }
 
-        /// <summary>Find the rounded fill Image inside a bar-row's BarBg.</summary>
-        private static Image FindFill(GameObject barBg)
-        {
-            var fillT = barBg.transform.Find("Fill");
-            return fillT != null ? fillT.GetComponent<Image>() : barBg.GetComponentInChildren<Image>(true);
-        }
-
         /// <summary>
-        /// One label + a clean rounded gauge + an optional inline value, laid out in a row.
-        /// The gauge: warm tan rounded track with a rounded saturated fill that reads clean
-        /// against the light parchment. Returns the BarBg (track); the fill is its "Fill" child.
+        /// One label + a shared-kit <see cref="ElarionUiKit.Bar"/> gauge laid out in a row.
+        /// The kit Bar (Well track + filled rounded fill + RPG-pack ornate frame, with an
+        /// optional inline value for HP/MP) fills the sized track container, so combat renders
+        /// the IDENTICAL ornate bar as town. Returns the fill Image so the caller drives
+        /// fillAmount; the inline value label (HP/MP only) is returned via <paramref name="valueText"/>.
         /// </summary>
-        private GameObject CreateBarRow(Transform parent, string label, Color fillColor, out TextMeshProUGUI valueText)
+        private Image CreateBarRow(Transform parent, string label, ElarionUiKit.BarKind kind, out TextMeshProUGUI valueText)
         {
             valueText = null;
             var row = new GameObject(label + "Row");
@@ -838,62 +626,33 @@ namespace DeNelle.BattleATB
             h.childAlignment = TextAnchor.MiddleLeft;
             h.spacing = 5;
 
-            // Label — muted ink, readable on light parchment
-            var lbl = CreateText(label, row.transform, Vector2.zero, FontMicro, InkDim, TextAlignmentOptions.Left);
+            // Label — muted parchment, readable on dark glass
+            var lbl = CreateText(label, row.transform, Vector2.zero, ElarionUi.FontMicro, ElarionUi.ParchmentDim, TextAlignmentOptions.Left);
             var lblRt = lbl.GetComponent<RectTransform>();
             lblRt.sizeDelta = new Vector2(26, 12);
             var lblLe = lbl.AddComponent<LayoutElement>();
             lblLe.minWidth = 26; lblLe.preferredWidth = 26;
 
-            // Bar background — warm tan ROUNDED recess on the light card
-            var barBg = new GameObject("BarBg");
-            barBg.transform.SetParent(row.transform, false);
-            var bgRt = barBg.AddComponent<RectTransform>();
+            // Track container (sized) — the kit Bar fills it by fraction.
             bool hasValue = label == "HP" || label == "MP";
             float trackW = hasValue ? 196f : 250f;
-            bgRt.sizeDelta = new Vector2(trackW, 9);
-            var bgLe = barBg.AddComponent<LayoutElement>();
-            bgLe.minWidth = trackW; bgLe.preferredWidth = trackW;
-            bgLe.minHeight = 9; bgLe.preferredHeight = 9;
-            var bgImg = barBg.AddComponent<Image>();
-            MakeRounded(bgImg, BarTrack);
+            var track = new GameObject("Track");
+            track.transform.SetParent(row.transform, false);
+            var trackRt = track.AddComponent<RectTransform>();
+            trackRt.sizeDelta = new Vector2(trackW, 9);
+            var trackLe = track.AddComponent<LayoutElement>();
+            trackLe.minWidth = trackW; trackLe.preferredWidth = trackW;
+            trackLe.minHeight = 9; trackLe.preferredHeight = 9;
 
-            // Fill — rounded, horizontally filled
-            var fill = new GameObject("Fill");
-            fill.transform.SetParent(barBg.transform, false);
-            var fillRt = fill.AddComponent<RectTransform>();
-            fillRt.anchorMin = Vector2.zero;
-            fillRt.anchorMax = Vector2.one;
-            fillRt.offsetMin = new Vector2(1, 1);
-            fillRt.offsetMax = new Vector2(-1, -1);
-            var fillImg = fill.AddComponent<Image>();
-            fillImg.sprite = RoundedSprite();
-            fillImg.type = Image.Type.Filled;
-            fillImg.fillMethod = Image.FillMethod.Horizontal;
-            fillImg.fillOrigin = (int)Image.OriginHorizontal.Left;
-            fillImg.color = fillColor;
+            // Shared kit Bar — fills the track container. HP/MP carry an inline value label.
+            var bar = ElarionUiKit.Bar(track.transform, kind, Vector2.zero, Vector2.one, withValue: hasValue);
 
-            // Sprite-FIRST: swap the procedural fill for the RPG pack's glossy colored
-            // bar fill (tinted to this gauge's colour) + drop the pack's gilded gem-socket
-            // frame over the track as a non-raycast overlay. The fillAmount binding is
-            // untouched (still drives the width). No-op when the pack isn't imported, so
-            // these bars keep their clean procedural look. ATB re-tints per frame in
-            // UpdateSlot — for ATB we therefore swap the FRAME only (no fill sprite) so the
-            // charging→ready colour flip stays visible.
-            DressPackBar(barBg, fillImg, label, fillColor);
-
-            // Inline numeric value for HP/MP (compact, right-aligned ink)
-            if (hasValue)
+            if (hasValue && bar.valueLabel != null)
             {
-                var valGO = CreateText("", row.transform, Vector2.zero, FontMicro, Ink, TextAlignmentOptions.Right);
-                var valRt = valGO.GetComponent<RectTransform>();
-                valRt.sizeDelta = new Vector2(62, 12);
-                var valLe = valGO.AddComponent<LayoutElement>();
-                valLe.minWidth = 62; valLe.preferredWidth = 62;
-                valueText = valGO.GetComponent<TextMeshProUGUI>();
+                valueText = bar.valueLabel as TextMeshProUGUI;
             }
 
-            return barBg; // return the bg so caller can get the fill child
+            return bar.fill; // caller drives fill.fillAmount
         }
 
         // ── Public API for BattleController to drive ─────────────────────────
@@ -925,15 +684,15 @@ namespace DeNelle.BattleATB
                 UpdateSlot(s, u);
             }
 
-            // Highlight active member: name goes gold + portrait ring brightens to gilt.
+            // Highlight active member: name goes gilt + portrait ring brightens to gilt.
             foreach (var s in _partySlots)
             {
                 bool isActive = s.Name && s.Name.text == activeName && !string.IsNullOrEmpty(activeName);
-                if (s.Name) s.Name.color = isActive ? AtbReadyColor : Ink;
-                if (s.PortraitRing)
+                if (s.Name) s.Name.color = isActive ? AtbReadyColor : ElarionUi.Parchment;
+                if (s.PortraitRing != null)
                     s.PortraitRing.color = isActive
-                        ? new Color(Gilt.r, Gilt.g, Gilt.b, 1f)
-                        : new Color(Gold.r, Gold.g, Gold.b, 0.8f);
+                        ? ElarionUi.Gilt
+                        : new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.85f);
             }
         }
 
@@ -941,9 +700,9 @@ namespace DeNelle.BattleATB
         {
             if (slot.Name) slot.Name.text = u.Name ?? "???";
 
-            // Real class portrait (Resources/HudIcons/<Class>/<class>). Fill the inner disc
-            // image; keep the gilt ring/frame untouched. Fall back to the placeholder tan
-            // disc when the sprite is absent (e.g. pack not imported / non-hero unit).
+            // Real class portrait via the shared kit resolver (ElarionUiKit.PortraitForClass).
+            // Fill the inner disc image; keep the gilt ring/frame untouched. Fall back to the
+            // kit placeholder disc when the sprite is absent (pack not imported / non-hero unit).
             if (slot.Portrait != null)
             {
                 Sprite portrait = (u.HeroClass != null) ? PortraitFor(u.HeroClass.Value) : null;
@@ -955,8 +714,8 @@ namespace DeNelle.BattleATB
                 }
                 else
                 {
-                    slot.Portrait.sprite = CircleSprite();  // placeholder disc fallback
-                    slot.Portrait.color = PortraitFill;
+                    slot.Portrait.sprite = ElarionUiKit.CircleSprite;  // placeholder disc fallback
+                    slot.Portrait.color = ElarionUiKit.PortraitPlaceholder;
                 }
             }
             if (slot.HpText) slot.HpText.text = $"{u.Hp}/{u.MaxHp}";
@@ -968,7 +727,8 @@ namespace DeNelle.BattleATB
             if (slot.MpText) slot.MpText.text = $"{curRes}/{maxRes}";
             if (slot.MpBar) slot.MpBar.fillAmount = maxRes > 0 ? Mathf.Clamp01((float)curRes / maxRes) : 0;
 
-            // ATB — use visual simulation or unit Atb (double)
+            // ATB — use visual simulation or unit Atb (double). Keep the charging->ready
+            // colour pop by re-tinting the kit Bar's fill per frame.
             float atb = 0f;
             if (_visualAtb.TryGetValue(u.Id, out float vis)) atb = vis;
             else if (u.Atb > 0) atb = Mathf.Clamp01((float)u.Atb);

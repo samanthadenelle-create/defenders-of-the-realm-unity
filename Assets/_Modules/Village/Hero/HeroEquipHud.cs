@@ -26,14 +26,7 @@ namespace DeNelle.Village
     {
         public static HeroEquipHud Instance { get; private set; }
 
-        // Bag/satchel glyph denotes inventory; falls back to a sack/gear glyph if a
-        // device font lacks it (purposely an emoji that reads universally as "bag").
-        private const string BagGlyph = "\U0001F392"; // 🎒 backpack/satchel
-
         private GameObject _ui;
-
-        private static readonly Color Cell      = new Color(0.10f, 0.11f, 0.14f, 0.90f);
-        private static readonly Color AccentSoft = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.30f);
 
         public static HeroEquipHud EnsureExists()
         {
@@ -163,158 +156,51 @@ namespace DeNelle.Village
 
             // Single framed, gold-accent square button anchored bottom-right —
             // sits where the old 4-slot cluster lived (~0.84..0.995 x, lower band).
-            var frame = AddImage(_ui.transform, "EquipFrame",
-                                 new Vector2(0.855f, 0.305f), new Vector2(0.985f, 0.405f), AccentSoft);
-            frame.GetComponent<Image>().raycastTarget = false;
-            AddRimUnderline(frame);
+            // Routed through the shared presentation kit (dark glass + gold rune)
+            // so it reads as the same designed game as the town HUD / inventory.
+            var frame = ElarionUiKit.Panel(_ui.transform,
+                                           new Vector2(0.855f, 0.305f), new Vector2(0.985f, 0.405f),
+                                           deep: false, innerRim: false);
 
-            var button = new GameObject("InventoryButton", typeof(Image), typeof(Button));
-            button.transform.SetParent(frame.transform, false);
-            var rt = button.GetComponent<RectTransform>();
-            rt.anchorMin = new Vector2(0.06f, 0.06f); rt.anchorMax = new Vector2(0.94f, 0.94f);
-            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
-            var img = button.GetComponent<Image>();
-            img.color = Cell;
-            ApplyRounded(img);
+            // The BAG button: a kit Gold CTA carrying the chest/bag icon from the RPG
+            // pack (IconInventory) instead of the old emoji glyph. The icon is dropped
+            // over the button as a decorative, non-raycast overlay so the whole tile is
+            // one tap target. A small "BAG" caption keeps the affordance legible when
+            // the pack art is absent.
+            var btn = ElarionUiKit.Button(frame.transform, "", ElarionUiKit.ButtonKind.Gold,
+                                          new Vector2(0.06f, 0.30f), new Vector2(0.94f, 0.94f),
+                                          OpenInventory);
 
-            var btn = button.GetComponent<Button>();
-            btn.targetGraphic = img;
-            StyleButtonColors(btn);
-            btn.onClick.AddListener(OpenInventory);
+            var chest = RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, RpgUiCatalog.IconInventory);
+            var iconGo = ElarionUiKit.AddImage(btn.transform, "BagIcon",
+                                               new Vector2(0.18f, 0.05f), new Vector2(0.82f, 0.95f),
+                                               Color.white, rounded: false);
+            var iconImg = iconGo.GetComponent<Image>();
+            iconImg.raycastTarget = false;
+            if (chest != null)
+            {
+                iconImg.sprite = chest;
+                iconImg.type = Image.Type.Simple;
+                iconImg.preserveAspect = true;
+            }
+            else
+            {
+                // Pack not imported — keep the affordance via a clear text glyph.
+                iconImg.color = new Color(0f, 0f, 0f, 0f);
+                ElarionUiKit.Label(iconGo.transform, "[ ]", 0f, 1f, ElarionUi.Ink,
+                                   ElarionUi.FontHead, TMPro.TextAlignmentOptions.Center,
+                                   0f, 1f, bold: true);
+            }
 
-            // Bag glyph (icon) + small label so the affordance reads as "inventory".
-            AddLabel(button.transform, BagGlyph, 0.30f, 0.98f, ElarionUi.Gilt, ElarionUi.FontHead,
-                     TMPro.TextAlignmentOptions.Center, 0.02f, 0.98f, bold: true);
-            AddLabel(button.transform, "BAG", 0.02f, 0.30f, ElarionUi.ParchmentDim, ElarionUi.FontMicro,
-                     TMPro.TextAlignmentOptions.Center, 0.02f, 0.98f, spacing: 2f);
+            ElarionUiKit.Label(btn.transform, "BAG", 0.02f, 0.26f, ElarionUi.Ink,
+                               ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center,
+                               0.02f, 0.98f, spacing: 2f);
         }
 
         private void OpenInventory()
         {
             try { HeroInventoryController.EnsureExists().Open(); }
             catch (System.Exception e) { Debug.LogError("[HeroEquipHud] open inventory failed: " + e); }
-        }
-
-        // ── shared visual helpers (mirrored from ArenaPanel) ──────────────────
-        private static GameObject AddImage(Transform parent, string name, Vector2 min, Vector2 max, Color color)
-        {
-            var go = new GameObject(name, typeof(Image));
-            go.transform.SetParent(parent, false);
-            var r = go.GetComponent<RectTransform>();
-            r.anchorMin = min; r.anchorMax = max;
-            r.offsetMin = Vector2.zero; r.offsetMax = Vector2.zero;
-            var img = go.GetComponent<Image>();
-            img.color = color;
-            ApplyRounded(img);
-            return go;
-        }
-
-        private static void ApplyRounded(Image img)
-        {
-            var sprite = RoundedSprite;
-            if (sprite != null) { img.sprite = sprite; img.type = Image.Type.Sliced; }
-        }
-
-        private void AddRimUnderline(GameObject panel)
-        {
-            var go = new GameObject("Accent", typeof(Image));
-            go.transform.SetParent(panel.transform, false);
-            var rt = go.GetComponent<RectTransform>();
-            rt.anchorMin = new Vector2(0.06f, 0f);
-            rt.anchorMax = new Vector2(0.94f, 0f);
-            rt.pivot = new Vector2(0.5f, 0f);
-            rt.sizeDelta = new Vector2(0f, 1.5f);
-            rt.anchoredPosition = new Vector2(0f, 1.5f);
-            var img = go.GetComponent<Image>();
-            img.color = AccentSoft;
-            img.raycastTarget = false;
-            go.transform.SetAsLastSibling();
-        }
-
-        private static TMPro.TextMeshProUGUI AddLabel(Transform parent, string text, float y0, float y1,
-            Color color, int size, TMPro.TextAlignmentOptions align,
-            float x0 = 0.03f, float x1 = 0.97f, float spacing = 0f, bool bold = false)
-        {
-            var go = new GameObject("Label", typeof(TMPro.TextMeshProUGUI));
-            go.transform.SetParent(parent, false);
-            var r = go.GetComponent<RectTransform>();
-            r.anchorMin = new Vector2(x0, y0); r.anchorMax = new Vector2(x1, y1);
-            r.offsetMin = Vector2.zero; r.offsetMax = Vector2.zero;
-            var t = go.GetComponent<TMPro.TextMeshProUGUI>();
-            t.text = text;
-            t.fontSize = size;
-            t.color = color;
-            t.alignment = align;
-            t.characterSpacing = spacing;
-            t.raycastTarget = false;
-            if (bold) t.fontStyle = TMPro.FontStyles.Bold;
-            return t;
-        }
-
-        private static void StyleButtonColors(Button button)
-        {
-            if (button == null) return;
-            button.transition = Selectable.Transition.ColorTint;
-            var cb = button.colors;
-            cb.normalColor      = Color.white;
-            cb.highlightedColor = new Color(1.10f, 1.10f, 1.10f, 1f);
-            cb.pressedColor     = new Color(0.82f, 0.82f, 0.82f, 1f);
-            cb.selectedColor    = cb.highlightedColor;
-            cb.disabledColor    = new Color(0.5f, 0.5f, 0.5f, 0.5f);
-            cb.colorMultiplier  = 1f;
-            cb.fadeDuration     = 0.07f;
-            button.colors = cb;
-        }
-
-        // ── Procedural rounded sprite (lazily built once; WebGL failure-safe) ──
-        private static Sprite _rounded;
-        private static bool _roundedTried;
-        private static Sprite RoundedSprite
-        {
-            get
-            {
-                if (!_roundedTried)
-                {
-                    _roundedTried = true;
-                    try { _rounded = BuildRoundedSprite(); }
-                    catch (System.Exception e)
-                    {
-                        Debug.LogWarning("[HeroEquipHud] rounded sprite build failed (flat quad): " + e.Message);
-                        _rounded = null;
-                    }
-                }
-                return _rounded;
-            }
-        }
-
-        private static Sprite BuildRoundedSprite()
-        {
-            const int size = 32;
-            const int radius = 6;
-            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false) { filterMode = FilterMode.Bilinear };
-            var px = new Color32[size * size];
-            for (int y = 0; y < size; y++)
-            {
-                for (int x = 0; x < size; x++)
-                {
-                    float d = RoundedRectDistance(x, y, size, size, radius);
-                    byte alpha = (byte)Mathf.Clamp((int)((1f - d) * 255f), 0, 255);
-                    px[y * size + x] = new Color32(255, 255, 255, alpha);
-                }
-            }
-            tex.SetPixels32(px);
-            tex.Apply();
-            return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 100f,
-                                 0, SpriteMeshType.FullRect, new Vector4(radius, radius, radius, radius));
-        }
-
-        private static float RoundedRectDistance(int x, int y, int w, int h, int radius)
-        {
-            float fx = x + 0.5f, fy = y + 0.5f;
-            float dx = Mathf.Max(Mathf.Max(radius - fx, fx - (w - radius)), 0f);
-            float dy = Mathf.Max(Mathf.Max(radius - fy, fy - (h - radius)), 0f);
-            float dist = Mathf.Sqrt(dx * dx + dy * dy) - radius;
-            return Mathf.Clamp01(dist + 0.5f);
         }
     }
 }

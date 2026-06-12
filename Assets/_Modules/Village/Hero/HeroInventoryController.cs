@@ -68,42 +68,36 @@ namespace DeNelle.Village
         // the same gap ModalPanelDisciplineTests pins for the other panels.
         private DeNelle.Core.UI.PanelHandle _panelHandle;
 
-        // ── LIGHT PARCHMENT palette (north-star: warm-parchment, airy, calm) ──────
-        // SELF-CONTAINED to the inventory (do NOT change the global ElarionUi/Kit
-        // palette — that's a separate pass). This is a TONE INVERSION of the old
-        // dark-glass kit look: light warm-parchment fills, DARK INK text (readable
-        // on light), THIN gilt frames, subtle runic accents. The role names are kept
-        // (Glass/GlassDeep/Cell/etc.) so the layout code below is untouched — only
-        // the VALUES flip dark->light. ALL text colour now routes through the local
-        // Ink* tones (see below) so nothing stays cream-on-light (unreadable).
+        // ── DARK-GLASS palette — SOURCED from the shared presentation layer ───────
+        // This screen now reads in the SAME dark glass + gold-rune language as the
+        // town HUD / store / combat HUD. The role names (Glass/GlassDeep/Cell/etc.)
+        // are kept so the layout code below is untouched — only the VALUES route to
+        // the canonical ElarionUiKit / ElarionUi tones. Text routes through the
+        // cream Parchment tones (readable on dark glass), headings through Gilt.
         //
-        // Panel fills — warm parchment, lightly translucent so the scrim warms it.
-        private static readonly Color Glass      = new Color(0.929f, 0.902f, 0.839f, 0.97f);  // ~#EDE6D6 parchment
-        private static readonly Color GlassDeep  = new Color(0.965f, 0.945f, 0.890f, 0.985f); // brighter paper (panels/sidebar)
-        // Recessed wells / tracks — a faint warm shadow, NOT black, so it stays light.
-        private static readonly Color Track      = new Color(0.788f, 0.741f, 0.643f, 0.55f);  // soft tan recess
-        // Item cells — clean light paper; selected = a warm gilt-tinted paper.
-        private static readonly Color Cell       = new Color(0.957f, 0.933f, 0.875f, 1f);     // light cell paper
-        private static readonly Color CellSel    = new Color(0.965f, 0.886f, 0.690f, 1f);     // warm gilt-tinted selected paper
-        // Gilt frame accents (thin) — gold rims on a light ground.
-        private static readonly Color AccentSoft = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.45f);
-        private static readonly Color Accent     = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.95f);
-        // Paper-doll "niche": a slightly deeper aged-parchment alcove (still LIGHT).
-        private static readonly Color StoneBack  = new Color(0.886f, 0.847f, 0.761f, 1f);     // aged parchment alcove
-        private static readonly Color StoneNiche = new Color(0.851f, 0.808f, 0.714f, 1f);     // niche backing (light tan)
-        // Aether tint — a faint violet bloom (kept very soft so it reads on light).
+        // Panel + surface fills (the consolidated dark-glass tints from the kit).
+        private static readonly Color Glass      = ElarionUiKit.Glass;
+        private static readonly Color GlassDeep  = ElarionUiKit.GlassDeep;
+        private static readonly Color Track      = ElarionUiKit.Track;
+        private static readonly Color Cell       = ElarionUiKit.Cell;
+        private static readonly Color CellSel    = ElarionUiKit.CellSelected;
+        // Gilt frame accents (thin gold rims on the dark glass).
+        private static readonly Color AccentSoft = ElarionUiKit.AccentSoft;
+        private static readonly Color Accent     = ElarionUiKit.Accent;
+        // Paper-doll "niche": the warm stone alcove the hero stands in.
+        private static readonly Color StoneBack  = ElarionUiKit.StoneNiche;
+        private static readonly Color StoneNiche = ElarionUiKit.StoneNiche;
+        // Aether tint — a faint violet bloom over the dark ground.
         private static readonly Color AetherSoft = new Color(ElarionUi.Aether.r, ElarionUi.Aether.g, ElarionUi.Aether.b, 0.16f);
 
-        // ── INK text tones (dark, readable on the new light parchment) ────────────
-        // Primary ink ~#2C2115 (matches ElarionUi.Ink), a softer ink for secondary,
-        // and a muted ink for micro/labels. These REPLACE every prior use of the
-        // cream Parchment / ParchmentDim text colours within this screen.
-        private static readonly Color Ink        = new Color(0.157f, 0.118f, 0.078f, 1f);     // primary dark ink
-        private static readonly Color InkDim      = new Color(0.345f, 0.290f, 0.220f, 1f);    // secondary / flavour ink
-        private static readonly Color InkMicro    = new Color(0.439f, 0.376f, 0.286f, 1f);    // micro caps / hints
-        // Gilt-on-light reads as a dark warm bronze for HEADINGS (true gilt is too
-        // pale on parchment); use this where a title used ElarionUi.Gilt on dark.
-        private static readonly Color GiltInk     = new Color(0.561f, 0.408f, 0.110f, 1f);    // bronze heading ink
+        // ── TEXT tones — cream parchment on the dark glass (readable), gilt for
+        // headings. These restore the canonical ElarionUi text language (the role
+        // names Ink/InkDim/InkMicro/GiltInk are kept so call sites are untouched).
+        private static readonly Color Ink        = ElarionUi.Parchment;                       // primary text on dark glass
+        private static readonly Color InkDim      = ElarionUi.ParchmentDim;                   // secondary / flavour
+        private static readonly Color InkMicro    = new Color(ElarionUi.ParchmentDim.r, ElarionUi.ParchmentDim.g, ElarionUi.ParchmentDim.b, 0.85f); // micro caps / hints
+        // Headings read as warm gilt on the dark ground.
+        private static readonly Color GiltInk     = ElarionUi.Gilt;                            // gilt heading
 
         public bool IsOpen => _ui != null && _ui.activeSelf;
 
@@ -239,22 +233,19 @@ namespace DeNelle.Village
             scaler.matchWidthOrHeight = 0.5f;
             _ui.AddComponent<GraphicRaycaster>();
 
-            // Full-screen warm dim that blocks click-through. Kept fairly dark so the
-            // LIGHT parchment panel reads as a lifted, lit sheet floating above it.
-            var scrim = AddImage(_ui.transform, "Scrim", Vector2.zero, Vector2.one,
-                                 new Color(0.10f, 0.075f, 0.05f, 0.80f), rounded: false);
-            // Tapping the scrim closes (a button covering the whole backdrop, behind the panel).
-            var scrimBtn = scrim.AddComponent<Button>();
-            scrimBtn.transition = Selectable.Transition.None;
-            scrimBtn.onClick.AddListener(Close);
+            // Full-screen dark dim that blocks click-through + tap-to-close, built by
+            // the shared kit so the backdrop matches every other modal in the game.
+            ElarionUiKit.Scrim(_ui.transform, Close);
 
-            // ── DEPTH: a thin gilt backboard halo just behind the parchment panel, so
-            // the modal reads as a framed, lifted sheet rather than a flat fill. ──
+            // ── DEPTH: a thin gilt backboard halo just behind the panel, so the modal
+            // reads as a framed, lifted sheet rather than a flat fill. ──
             AddImage(_ui.transform, "Backboard", new Vector2(0.025f, 0.018f), new Vector2(0.975f, 0.982f),
                      new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.35f));
 
-            // The main panel fills most of the screen (mobile-first).
-            var panel = AddPanel(_ui.transform, new Vector2(0.04f, 0.03f), new Vector2(0.96f, 0.97f), deep: true);
+            // The main panel fills most of the screen (mobile-first) — the shared
+            // dark-glass framed panel (gold rim) from the presentation layer.
+            var panel = ElarionUiKit.Panel(_ui.transform, new Vector2(0.04f, 0.03f), new Vector2(0.96f, 0.97f),
+                                           deep: true, innerRim: true);
 
             // ── MOCKUP #41 LAYOUT (WO-400) ──────────────────────────────────────
             //   [ rune strip ............................................... ]  top
@@ -292,9 +283,8 @@ namespace DeNelle.Village
 
             // ── LEFT column (~28%): the paper-doll RING. A recessed aged-parchment
             // alcove the hero "stands" in, with a soft gold rim = a display niche. ──
-            var niche = AddImage(panel.transform, "PaperDollNiche",
-                                 new Vector2(0.04f, 0.115f), new Vector2(0.335f, 0.822f), StoneNiche);
-            AddInnerRim(niche, AccentSoft);
+            var niche = ElarionUiKit.Niche(panel.transform,
+                                           new Vector2(0.04f, 0.115f), new Vector2(0.335f, 0.822f));
             _paperDoll = AddImage(niche.transform, "PaperDollArea",
                                   new Vector2(0.03f, 0.02f), new Vector2(0.97f, 0.98f), new Color(0, 0, 0, 0));
 
@@ -302,12 +292,11 @@ namespace DeNelle.Village
             // with a compact horizontal DETAIL / EQUIP strip beneath it. The grid is the
             // mockup's "center/right ~70% item grid (4-5 cols)"; the strip carries the
             // selected-item icon + stats + the EQUIP CTA laid out left-to-right. ──
-            _gridRoot = AddImage(panel.transform, "GridArea",
-                                 new Vector2(0.355f, 0.305f), new Vector2(0.96f, 0.822f), Track);
-            AddInnerRim(_gridRoot, AccentSoft);
-            _sidebarRoot = AddImage(panel.transform, "SidebarArea",
-                                    new Vector2(0.355f, 0.115f), new Vector2(0.96f, 0.293f), GlassDeep);
-            AddInnerRim(_sidebarRoot, AccentSoft);
+            _gridRoot = ElarionUiKit.Well(panel.transform,
+                                          new Vector2(0.355f, 0.305f), new Vector2(0.96f, 0.822f));
+            _sidebarRoot = ElarionUiKit.Panel(panel.transform,
+                                              new Vector2(0.355f, 0.115f), new Vector2(0.96f, 0.293f),
+                                              deep: true, innerRim: true);
 
             // ── Footer bar: Sort / Filter on the left, resource wells on the right. ──
             BuildFooterBar(panel.transform);
@@ -1062,21 +1051,14 @@ namespace DeNelle.Village
         // ====================================================================
         // HELPERS — rarity
         // ====================================================================
+        // Canonical rarity colour — routed to the shared kit's ONE rarity map.
         private static Color RarityColor(string rarity)
         {
-            switch ((rarity ?? "common").ToLowerInvariant())
-            {
-                case "uncommon":  return new Color(0.46f, 0.74f, 0.42f, 1f);   // green
-                case "rare":      return new Color(0.32f, 0.58f, 0.92f, 1f);   // blue
-                case "epic":      return new Color(0.66f, 0.42f, 0.86f, 1f);   // purple
-                case "legendary": return new Color(0.92f, 0.62f, 0.24f, 1f);   // orange
-                default:          return new Color(0.80f, 0.80f, 0.78f, 1f);   // common grey
-            }
+            return ElarionUiKit.RarityColor(rarity);
         }
 
-        // A DARKENED rarity hue for TEXT/GLYPHS on the light parchment ground. The
-        // bright RarityColor (used for frames/gems/wells) is too pale to read as
-        // text on cream, so labels route through this richer, readable variant.
+        // A rarity hue for TEXT/GLYPHS. On the dark glass the bright RarityColor reads
+        // fine, but we keep this richer variant for labels so each tier stays vivid.
         private static Color RarityInk(string rarity)
         {
             switch ((rarity ?? "common").ToLowerInvariant())
@@ -1091,28 +1073,13 @@ namespace DeNelle.Village
 
         private static string RarityGlyph(string rarity)
         {
-            switch ((rarity ?? "common").ToLowerInvariant())
-            {
-                case "legendary": return "*";
-                case "epic":      return "+";
-                case "rare":      return "=";
-                case "uncommon":  return "-";
-                default:          return ".";
-            }
+            return ElarionUiKit.RarityGlyph(rarity);
         }
 
-        // How loud the rarity frame glows: common is a quiet hairline, legendary a
-        // strong gilt halo — so the tiers feel visibly escalating.
+        // How loud the rarity frame glows — routed to the shared kit's escalation map.
         private static float RarityFrameStrength(string rarity)
         {
-            switch ((rarity ?? "common").ToLowerInvariant())
-            {
-                case "legendary": return 0.95f;
-                case "epic":      return 0.85f;
-                case "rare":      return 0.72f;
-                case "uncommon":  return 0.58f;
-                default:          return 0.40f;
-            }
+            return ElarionUiKit.RarityFrameStrength(rarity);
         }
 
         // ====================================================================
@@ -1222,37 +1189,28 @@ namespace DeNelle.Village
         // ====================================================================
         // SLEEK uGUI helpers (mirrored from ArenaPanel.cs)
         // ====================================================================
+        // The framed dark-glass panel — routes to the shared presentation kit.
         private GameObject AddPanel(Transform parent, Vector2 min, Vector2 max, bool deep = false)
         {
-            var p = AddImage(parent, "Panel", min, max, deep ? GlassDeep : Glass);
-            AddRimUnderline(p);
-            return p;
+            return ElarionUiKit.Panel(parent, min, max, deep: deep, innerRim: false);
         }
 
+        // Fraction-anchored Image — delegates to the shared kit primitive.
         private static GameObject AddImage(Transform parent, string name, Vector2 min, Vector2 max,
             Color color, bool rounded = true)
         {
-            var go = new GameObject(name, typeof(Image));
-            go.transform.SetParent(parent, false);
-            var r = go.GetComponent<RectTransform>();
-            r.anchorMin = min; r.anchorMax = max;
-            r.offsetMin = Vector2.zero; r.offsetMax = Vector2.zero;
-            var img = go.GetComponent<Image>();
-            img.color = color;
-            if (rounded) ApplyRounded(img);
-            return go;
+            return ElarionUiKit.AddImage(parent, name, min, max, color, rounded);
         }
 
         private static void ApplyRounded(Image img)
         {
-            var sprite = RoundedSprite;
-            if (sprite != null) { img.sprite = sprite; img.type = Image.Type.Sliced; }
+            ElarionUiKit.ApplyRounded(img);
         }
 
         // A circular Image positioned by CENTER + RADIUS in the parent's normalised
         // space (cx,cy in 0..1; radius in 0..1 of the parent's WIDTH so it stays round
-        // when the parent is square). Uses the soft circle sprite; WebGL-safe (falls
-        // back to the rounded quad if the circle build fails).
+        // when the parent is square). Uses the shared kit circle sprite; WebGL-safe
+        // (falls back to the kit rounded quad if the circle build fails).
         private static GameObject AddCircle(Transform parent, string name, float cx, float cy, float radius, Color color)
         {
             var go = new GameObject(name, typeof(Image));
@@ -1263,9 +1221,9 @@ namespace DeNelle.Village
             r.offsetMin = Vector2.zero; r.offsetMax = Vector2.zero;
             var img = go.GetComponent<Image>();
             img.color = color;
-            var sprite = CircleSprite;
+            var sprite = ElarionUiKit.CircleSprite;
             if (sprite != null) { img.sprite = sprite; img.type = Image.Type.Simple; }
-            else ApplyRounded(img);
+            else ElarionUiKit.ApplyRounded(img);
             return go;
         }
 
@@ -1293,35 +1251,13 @@ namespace DeNelle.Village
 
         private void AddRimUnderline(GameObject panel)
         {
-            var go = new GameObject("Accent", typeof(Image));
-            go.transform.SetParent(panel.transform, false);
-            var rt = go.GetComponent<RectTransform>();
-            rt.anchorMin = new Vector2(0.06f, 0f);
-            rt.anchorMax = new Vector2(0.94f, 0f);
-            rt.pivot = new Vector2(0.5f, 0f);
-            rt.sizeDelta = new Vector2(0f, 1.5f);
-            rt.anchoredPosition = new Vector2(0f, 1.5f);
-            var img = go.GetComponent<Image>();
-            img.color = AccentSoft;
-            img.raycastTarget = false;
-            go.transform.SetAsLastSibling();
+            ElarionUiKit.AddRimUnderline(panel);
         }
 
-        // A 1px inner rim hugging an element's edges — gives panels/wells/tiles a
-        // crisp framed "depth" without a heavy stone border.
+        // A 1px inner rim hugging an element's edges — delegates to the shared kit.
         private void AddInnerRim(GameObject host, Color color)
         {
-            var go = new GameObject("Rim", typeof(Image));
-            go.transform.SetParent(host.transform, false);
-            var rt = go.GetComponent<RectTransform>();
-            rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one;
-            rt.offsetMin = new Vector2(1f, 1f); rt.offsetMax = new Vector2(-1f, -1f);
-            var img = go.GetComponent<Image>();
-            img.color = new Color(color.r, color.g, color.b, color.a * 0.5f);
-            ApplyRounded(img);
-            img.raycastTarget = false;
-            // Render behind siblings added after it so content stays on top.
-            go.transform.SetAsFirstSibling();
+            ElarionUiKit.AddInnerRim(host, color);
         }
 
         // A faint runic glyph strip — a HINT of Elarion magic across a header band.
@@ -1458,115 +1394,7 @@ namespace DeNelle.Village
 
         private static void StyleButtonColors(Button button)
         {
-            if (button == null) return;
-            button.transition = Selectable.Transition.ColorTint;
-            var cb = button.colors;
-            cb.normalColor      = Color.white;
-            cb.highlightedColor = new Color(1.10f, 1.10f, 1.10f, 1f);
-            cb.pressedColor     = new Color(0.82f, 0.82f, 0.82f, 1f);
-            cb.selectedColor    = cb.highlightedColor;
-            cb.disabledColor    = new Color(0.5f, 0.5f, 0.5f, 0.5f);
-            cb.colorMultiplier  = 1f;
-            cb.fadeDuration     = 0.07f;
-            button.colors = cb;
-        }
-
-        // ── Procedural rounded sprite (lazily built once; WebGL failure-safe) ──
-        private static Sprite _rounded;
-        private static bool _roundedTried;
-        private static Sprite RoundedSprite
-        {
-            get
-            {
-                if (!_roundedTried)
-                {
-                    _roundedTried = true;
-                    try { _rounded = BuildRoundedSprite(); }
-                    catch (System.Exception e)
-                    {
-                        Debug.LogWarning("[HeroInventoryController] rounded sprite build failed (flat quad): " + e.Message);
-                        _rounded = null;
-                    }
-                }
-                return _rounded;
-            }
-        }
-
-        private static Sprite BuildRoundedSprite()
-        {
-            const int size = 32;
-            const int radius = 6;
-            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false) { filterMode = FilterMode.Bilinear };
-            var px = new Color32[size * size];
-            for (int y = 0; y < size; y++)
-            {
-                for (int x = 0; x < size; x++)
-                {
-                    float d = RoundedRectDistance(x, y, size, size, radius);
-                    byte a = (byte)Mathf.Clamp((int)((1f - d) * 255f), 0, 255);
-                    px[y * size + x] = new Color32(255, 255, 255, a);
-                }
-            }
-            tex.SetPixels32(px);
-            tex.Apply();
-            return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 100f,
-                                 0, SpriteMeshType.FullRect, new Vector4(radius, radius, radius, radius));
-        }
-
-        private static float RoundedRectDistance(int x, int y, int w, int h, int radius)
-        {
-            float fx = x + 0.5f, fy = y + 0.5f;
-            float dx = Mathf.Max(Mathf.Max(radius - fx, fx - (w - radius)), 0f);
-            float dy = Mathf.Max(Mathf.Max(radius - fy, fy - (h - radius)), 0f);
-            float dist = Mathf.Sqrt(dx * dx + dy * dy) - radius;
-            return Mathf.Clamp01(dist + 0.5f);
-        }
-
-        // ── Procedural soft CIRCLE sprite (lazily built once; WebGL failure-safe) ──
-        // Used for the mockup-#41 rune ring + circular equipped-slot sockets. A solid
-        // white disc with a 1px antialiased edge; tint via the Image colour.
-        private static Sprite _circle;
-        private static bool _circleTried;
-        private static Sprite CircleSprite
-        {
-            get
-            {
-                if (!_circleTried)
-                {
-                    _circleTried = true;
-                    try { _circle = BuildCircleSprite(); }
-                    catch (System.Exception e)
-                    {
-                        Debug.LogWarning("[HeroInventoryController] circle sprite build failed (rounded quad): " + e.Message);
-                        _circle = null;
-                    }
-                }
-                return _circle;
-            }
-        }
-
-        private static Sprite BuildCircleSprite()
-        {
-            const int size = 64;
-            float c = (size - 1) * 0.5f;
-            float rOuter = c;                  // touches the texture edge
-            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false) { filterMode = FilterMode.Bilinear };
-            var px = new Color32[size * size];
-            for (int y = 0; y < size; y++)
-            {
-                for (int x = 0; x < size; x++)
-                {
-                    float dx = x - c, dy = y - c;
-                    float dist = Mathf.Sqrt(dx * dx + dy * dy);
-                    // 1px antialiased falloff at the rim.
-                    float a = Mathf.Clamp01(rOuter - dist);
-                    px[y * size + x] = new Color32(255, 255, 255, (byte)(a * 255f));
-                }
-            }
-            tex.SetPixels32(px);
-            tex.Apply();
-            return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 100f,
-                                 0, SpriteMeshType.FullRect);
+            ElarionUiKit.StyleButtonColors(button);
         }
     }
 }

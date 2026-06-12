@@ -483,6 +483,372 @@ namespace DeNelle.Core.UI
         }
 
         // =====================================================================
+        // BAR — the town-HUD vitals/progress bar (Well track + filled rounded
+        // fill + optional inline value), ported from VillageHudController so the
+        // combat HUD / store / inventory render the IDENTICAL ornate bar.
+        // =====================================================================
+
+        /// <summary>Which vital/progress a bar shows — drives the fill colour + pack frame/fill ids.</summary>
+        public enum BarKind { Hp, Mp, Xp, Atb, Castle }
+
+        /// <summary>Handle returned by <see cref="Bar"/>: the track rect, the
+        /// fillAmount-driven fill Image, and the optional inline value label.</summary>
+        public sealed class BarHandle
+        {
+            /// <summary>The recessed Well track the fill rides in.</summary>
+            public RectTransform track;
+            /// <summary>The Image.Type.Filled fill — drive its fillAmount [0..1].</summary>
+            public Image fill;
+            /// <summary>Optional inline value label centred over the fill (null if not requested).</summary>
+            public TMP_Text valueLabel;
+        }
+
+        /// <summary>
+        /// A complete vitals/progress bar: a recessed <see cref="Well"/> track with a
+        /// rounded Image.Type.Filled fill (horizontal, origin-left, fillAmount=1) in the
+        /// kind's colour, dressed sprite-FIRST with the RPG pack's ornate frame + colored
+        /// fill (procedural rounded fallback when the pack is absent), and — when
+        /// <paramref name="withValue"/> — a centred cream value label with a dark halo.
+        /// Anchored by fraction-of-parent. Returns a <see cref="BarHandle"/> so callers
+        /// drive fill.fillAmount + valueLabel.text without re-implementing the recipe.
+        /// </summary>
+        public static BarHandle Bar(Transform parent, BarKind kind,
+                                    Vector2 anchorMin, Vector2 anchorMax, bool withValue = false)
+        {
+            var trackGo = Well(parent, anchorMin, anchorMax);
+            var track = trackGo.GetComponent<RectTransform>();
+
+            var fillGo = new GameObject("Fill", typeof(Image));
+            fillGo.transform.SetParent(trackGo.transform, false);
+            var fr = fillGo.GetComponent<RectTransform>();
+            fr.anchorMin = Vector2.zero; fr.anchorMax = Vector2.one;
+            fr.offsetMin = new Vector2(1.5f, 1.5f); fr.offsetMax = new Vector2(-1.5f, -1.5f);
+            var fill = fillGo.GetComponent<Image>();
+            fill.color = BarFillColor(kind);
+            ApplyRounded(fill);
+            fill.type = Image.Type.Filled;
+            fill.fillMethod = Image.FillMethod.Horizontal;
+            fill.fillOrigin = 0;
+            fill.fillAmount = 1f;
+            fill.raycastTarget = false;
+
+            DressBar(track, fill, kind);
+
+            TMP_Text valueLabel = null;
+            if (withValue)
+            {
+                valueLabel = Label(trackGo.transform, "", 0f, 1f, ElarionUi.Parchment,
+                                   ElarionUi.FontLabel, TextAlignmentOptions.Center, 0f, 1f, bold: true);
+                valueLabel.outlineColor = new Color32(10, 10, 14, 200);
+                valueLabel.outlineWidth = 0.14f;
+                valueLabel.raycastTarget = false;
+            }
+
+            return new BarHandle { track = track, fill = fill, valueLabel = valueLabel };
+        }
+
+        /// <summary>The canonical fill colour for a bar kind (sourced from ElarionUi).</summary>
+        public static Color BarFillColor(BarKind kind)
+        {
+            switch (kind)
+            {
+                case BarKind.Hp:     return ElarionUi.HpRed;
+                case BarKind.Mp:     return ElarionUi.ManaBlue;
+                case BarKind.Xp:     return new Color(1f, 0.85f, 0.15f, 1f); // yellow XP strip
+                case BarKind.Atb:    return ElarionUi.Aether;
+                case BarKind.Castle: return ElarionUi.Gold;
+                default:             return ElarionUi.Gold;
+            }
+        }
+
+        /// <summary>
+        /// Dress an existing bar (track + its Image.Type.Filled fill) with the RPG pack's
+        /// ornate frame + colored fill, sprite-FIRST — the port of
+        /// VillageHudController.TryDressBar. The fill keeps its fillAmount binding; we
+        /// swap its sprite to the pack's colored fill and drop the gilded frame over the
+        /// track as a NON-RAYCAST overlay rendered last (the frame art is hollow so the
+        /// fill shows through). No-op (procedural look preserved) when the pack is absent.
+        /// Returns true when the pack art dressed the bar.
+        /// </summary>
+        public static bool DressBar(RectTransform track, Image fill, BarKind kind)
+        {
+            if (track == null) return false;
+
+            string frameName, fillName;
+            bool tintFill;
+            Color fillTint = BarFillColor(kind);
+            BarPackIds(kind, out frameName, out fillName, out tintFill);
+
+            var frameSprite = RpgUiCatalog.Get(RpgUiCatalog.RoleBars, frameName);
+            var fillSprite  = string.IsNullOrEmpty(fillName)
+                ? null : RpgUiCatalog.Get(RpgUiCatalog.RoleBars, fillName);
+            if (frameSprite == null && fillSprite == null) return false;
+
+            // Swap the fill sprite (keeps Image.Type.Filled + fillAmount binding).
+            if (fill != null && fillSprite != null)
+            {
+                fill.sprite = fillSprite;
+                fill.color = tintFill ? fillTint : Color.white; // pack art's own colours unless tinted
+            }
+
+            // Drop the gilded frame over the track as a decorative, non-raycast overlay
+            // rendered LAST so it sits above the fill; it stretches to the bar rect.
+            if (frameSprite != null)
+            {
+                var fr = AddImage(track, "PackFrame", Vector2.zero, Vector2.one, Color.white, rounded: false)
+                            .GetComponent<RectTransform>();
+                fr.offsetMin = new Vector2(-10f, -8f);
+                fr.offsetMax = new Vector2(10f, 8f); // ornate ends slightly overhang the track
+                var fimg = fr.GetComponent<Image>();
+                fimg.sprite = frameSprite;
+                fimg.type = Image.Type.Simple;
+                fimg.color = Color.white;
+                fimg.raycastTarget = false;
+                fr.SetAsLastSibling();
+            }
+            return true;
+        }
+
+        /// <summary>Map a bar kind to its RpgUiCatalog "bars" frame/fill ids + whether to tint the fill.</summary>
+        private static void BarPackIds(BarKind kind, out string frameName, out string fillName, out bool tintFill)
+        {
+            switch (kind)
+            {
+                case BarKind.Hp:
+                    frameName = RpgUiCatalog.BarFrameRed; fillName = RpgUiCatalog.BarFillRed; tintFill = false; break;
+                case BarKind.Mp:
+                    // Pack MP fill is green-glow; tint it blue (mana has no dynamic colour change).
+                    frameName = RpgUiCatalog.BarFrameBlue; fillName = RpgUiCatalog.BarFillBlue; tintFill = true; break;
+                case BarKind.Atb:
+                    frameName = RpgUiCatalog.BarFrameBlue; fillName = RpgUiCatalog.BarFillBlue; tintFill = true; break;
+                case BarKind.Xp:
+                case BarKind.Castle:
+                default:
+                    // Generic gold/green socket frame; tint the fill to the kind colour.
+                    frameName = RpgUiCatalog.BarFrameGreen; fillName = RpgUiCatalog.BarFillGreen; tintFill = true; break;
+            }
+        }
+
+        // =====================================================================
+        // PORTRAIT — circular class disc + gilt ring (ported from BattleHudUgui
+        // CircleSprite/RingSprite) so combat + town frame portraits IDENTICALLY.
+        // =====================================================================
+
+        /// <summary>Handle returned by <see cref="Portrait"/>: the disc Image + its ring frame.</summary>
+        public sealed class PortraitHandle
+        {
+            /// <summary>The circular portrait disc (assign .sprite to show class art).</summary>
+            public Image image;
+            /// <summary>The hollow ring frame around the disc (gilt when active, gold when not).</summary>
+            public Image ring;
+        }
+
+        /// <summary>
+        /// A circular portrait: a disc Image (shows <paramref name="sprite"/> when present,
+        /// else a warm tan placeholder disc) inside a hollow gilt ring frame. The ring is
+        /// brighter gilt when <paramref name="active"/>, soft gold otherwise. Fills its
+        /// parent rect (size the parent). Returns a <see cref="PortraitHandle"/>.
+        /// </summary>
+        public static PortraitHandle Portrait(Transform parent, Sprite sprite, bool active = false)
+        {
+            var discGo = new GameObject("Portrait", typeof(Image));
+            discGo.transform.SetParent(parent, false);
+            var dr = discGo.GetComponent<RectTransform>();
+            dr.anchorMin = Vector2.zero; dr.anchorMax = Vector2.one;
+            dr.offsetMin = Vector2.zero; dr.offsetMax = Vector2.zero;
+            var disc = discGo.GetComponent<Image>();
+            if (sprite != null) { disc.sprite = sprite; disc.color = Color.white; disc.preserveAspect = true; }
+            else { disc.sprite = CircleSprite; disc.color = PortraitPlaceholder; }
+            disc.raycastTarget = false;
+
+            var ringGo = new GameObject("Ring", typeof(Image));
+            ringGo.transform.SetParent(parent, false);
+            var rr = ringGo.GetComponent<RectTransform>();
+            rr.anchorMin = Vector2.zero; rr.anchorMax = Vector2.one;
+            rr.offsetMin = Vector2.zero; rr.offsetMax = Vector2.zero;
+            var ring = ringGo.GetComponent<Image>();
+            ring.sprite = RingSprite;
+            ring.color = active ? ElarionUi.Gilt : new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.85f);
+            ring.raycastTarget = false;
+            ringGo.transform.SetAsLastSibling();
+
+            return new PortraitHandle { image = disc, ring = ring };
+        }
+
+        /// <summary>Warm tan placeholder fill for a portrait disc with no class art yet.</summary>
+        public static readonly Color PortraitPlaceholder = new Color(0.74f, 0.66f, 0.50f, 1f);
+
+        /// <summary>
+        /// ONE shared class-portrait resolver (consolidates BattleHudUgui.PortraitFor +
+        /// VillageHudController.PortraitNameForClass). Loads
+        /// Resources/HudIcons/&lt;Class&gt;/&lt;class&gt;; FIXES the Wizard "wiard" typo by
+        /// trying "wizard" then "wiard"; and degrades gracefully when the Healer art is
+        /// absent (falls back to the RPG-pack heart icon, then null). Accepts the canonical
+        /// class words: Knight / Ranger / Wizard|Mage / Healer|Cleric (case-insensitive).
+        /// Returns null when nothing resolves (callers keep their placeholder disc).
+        /// </summary>
+        public static Sprite PortraitForClass(string cls)
+        {
+            if (string.IsNullOrEmpty(cls)) return null;
+            switch (cls.Trim().ToLowerInvariant())
+            {
+                case "knight": return Resources.Load<Sprite>("HudIcons/Knight/knight");
+                case "ranger": return Resources.Load<Sprite>("HudIcons/Ranger/ranger");
+                case "mage":
+                case "wizard":
+                {
+                    var sp = Resources.Load<Sprite>("HudIcons/Wizard/wizard");
+                    if (sp == null) sp = Resources.Load<Sprite>("HudIcons/Wizard/wiard"); // staged-art typo
+                    return sp;
+                }
+                case "cleric":
+                case "healer":
+                {
+                    var sp = Resources.Load<Sprite>("HudIcons/Healer/healer");
+                    if (sp == null) sp = RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, RpgUiCatalog.IconHeart); // graceful fallback
+                    return sp; // may be null — caller keeps its placeholder disc
+                }
+                default: return null;
+            }
+        }
+
+        // =====================================================================
+        // PARTY FRAME ROW — the town-HUD party-row recipe (portrait + name banner
+        // + HP/MP bars on player_frame_bg / player_hp_fill), extracted so combat
+        // and town render the IDENTICAL frame (ported from BuildPartyFrames).
+        // =====================================================================
+
+        /// <summary>Handle returned by <see cref="PartyFrameRow"/>: the row's live pieces.</summary>
+        public sealed class PartyRowHandle
+        {
+            /// <summary>The row's root rect (parent it / position it).</summary>
+            public RectTransform root;
+            /// <summary>The class portrait disc Image (assign .sprite via <see cref="PortraitForClass"/>).</summary>
+            public Image portrait;
+            /// <summary>The name banner label (gold ink).</summary>
+            public TMP_Text nameLabel;
+            /// <summary>The HP fill (Image.Type.Filled) — drive fillAmount.</summary>
+            public Image hpFill;
+            /// <summary>The MP fill (Image.Type.Filled) — drive fillAmount.</summary>
+            public Image mpFill;
+            /// <summary>Optional HP value label centred on the HP bar.</summary>
+            public TMP_Text hpText;
+        }
+
+        /// <summary>
+        /// The town-HUD party-row: a dark-stone frame (player_frame_bg art, sprite-FIRST
+        /// with a dark-panel fallback) carrying a circular class portrait, a gold name
+        /// banner, and stacked HP (red) + MP (blue) bars dressed with the player_hp_fill /
+        /// player_mp_fill art. Fills its parent rect (size + position the parent). Returns
+        /// a <see cref="PartyRowHandle"/> so callers drive the portrait/name/fills without
+        /// re-implementing the frame. Identical recipe for combat + town.
+        /// </summary>
+        public static PartyRowHandle PartyFrameRow(Transform parent, string initialName = "Hero")
+        {
+            var frameSprite = Resources.Load<Sprite>("HudIcons/player_frame_bg");
+            var hpSprite    = Resources.Load<Sprite>("HudIcons/player_hp_fill");
+            var mpSprite    = Resources.Load<Sprite>("HudIcons/player_mp_fill");
+
+            var rootGo = new GameObject("PartyRow", typeof(Image));
+            rootGo.transform.SetParent(parent, false);
+            var root = rootGo.GetComponent<RectTransform>();
+            root.anchorMin = Vector2.zero; root.anchorMax = Vector2.one;
+            root.offsetMin = Vector2.zero; root.offsetMax = Vector2.zero;
+            var frImg = rootGo.GetComponent<Image>();
+            if (frameSprite != null) { frImg.sprite = frameSprite; frImg.color = Color.white; }
+            else { frImg.color = new Color(0.10f, 0.09f, 0.11f, 0.96f); ApplyRounded(frImg); }
+            frImg.raycastTarget = false;
+
+            // Portrait (class disc) in the circle on the left.
+            var portWrap = AddImage(rootGo.transform, "PortraitWrap",
+                                    new Vector2(0.035f, 0.12f), new Vector2(0.26f, 0.94f),
+                                    new Color(0f, 0f, 0f, 0f), rounded: false);
+            portWrap.GetComponent<Image>().raycastTarget = false;
+            var portrait = Portrait(portWrap.transform, null, active: true);
+
+            // Name banner (upper-right) — gold ink, auto-sizing.
+            var nameLabel = Label(rootGo.transform, initialName, 0.52f, 0.95f,
+                                  new Color(0.95f, 0.88f, 0.62f), ElarionUi.FontHead,
+                                  TextAlignmentOptions.Left, 0.31f, 0.97f, bold: true);
+            nameLabel.enableAutoSizing = true; nameLabel.fontSizeMin = 9f; nameLabel.fontSizeMax = 15f;
+
+            // HP bar (red, mid-right).
+            var hp = Bar(rootGo.transform, BarKind.Hp,
+                         new Vector2(0.31f, 0.30f), new Vector2(0.985f, 0.50f), withValue: true);
+            if (hpSprite != null) { hp.fill.sprite = hpSprite; hp.fill.color = Color.white; }
+
+            // MP bar (blue, lower-right).
+            var mp = Bar(rootGo.transform, BarKind.Mp,
+                         new Vector2(0.31f, 0.07f), new Vector2(0.985f, 0.27f), withValue: false);
+            if (mpSprite != null) { mp.fill.sprite = mpSprite; mp.fill.color = Color.white; }
+
+            return new PartyRowHandle
+            {
+                root = root,
+                portrait = portrait.image,
+                nameLabel = nameLabel,
+                hpFill = hp.fill,
+                mpFill = mp.fill,
+                hpText = hp.valueLabel
+            };
+        }
+
+        // =====================================================================
+        // PANEL / BUTTON — pack-frame-over-glass variants (RpgUiCatalog
+        // RolePanel / RoleButton), sprite-FIRST with the procedural fallback.
+        // =====================================================================
+
+        /// <summary>
+        /// A <see cref="Panel"/> dressed sprite-FIRST with the RPG pack's ornate panel
+        /// frame (RolePanel) over the dark glass: when the pack art is present the panel's
+        /// Image shows the framed plate; when absent it is the procedural glass+rim panel.
+        /// Anchored by fraction-of-parent. Returns the panel GameObject.
+        /// </summary>
+        public static GameObject PanelFramed(Transform parent, Vector2 anchorMin, Vector2 anchorMax,
+                                             bool deep = false, string packSpriteName = null)
+        {
+            var p = Panel(parent, anchorMin, anchorMax, deep: deep, innerRim: true);
+            var packSprite = RpgUiCatalog.Get(RpgUiCatalog.RolePanel, packSpriteName);
+            if (packSprite != null)
+            {
+                var img = p.GetComponent<Image>();
+                if (img != null)
+                {
+                    img.sprite = packSprite;
+                    img.type = Image.Type.Sliced;
+                    img.color = Color.white;
+                }
+            }
+            return p;
+        }
+
+        /// <summary>
+        /// A <see cref="Button"/> dressed sprite-FIRST with the RPG pack's button frame
+        /// (RoleButton) over the kind fill: pack art when present, procedural rounded glass
+        /// otherwise. Same state feedback + label rules as <see cref="Button"/>. Returns
+        /// the Button so callers wire interactable / extra listeners.
+        /// </summary>
+        public static Button ButtonPack(Transform parent, string label, ButtonKind kind,
+                                        Vector2 anchorMin, Vector2 anchorMax, Action onClick = null,
+                                        string packSpriteName = null)
+        {
+            var btn = Button(parent, label, kind, anchorMin, anchorMax, onClick);
+            var packSprite = RpgUiCatalog.Get(RpgUiCatalog.RoleButton,
+                string.IsNullOrEmpty(packSpriteName) ? RpgUiCatalog.ButtonGold : packSpriteName);
+            if (packSprite != null && btn != null)
+            {
+                var img = btn.targetGraphic as Image;
+                if (img != null)
+                {
+                    img.sprite = packSprite;
+                    img.type = Image.Type.Sliced;
+                    img.color = Color.white;
+                }
+            }
+            return btn;
+        }
+
+        // =====================================================================
         // PRIMITIVES — shared image / rim builders + the rounded sprite.
         // =====================================================================
 
@@ -597,6 +963,92 @@ namespace DeNelle.Core.UI
             float dy = Mathf.Max(Mathf.Max(radius - fy, fy - (h - radius)), 0f);
             float dist = Mathf.Sqrt(dx * dx + dy * dy) - radius;
             return Mathf.Clamp01(dist + 0.5f);
+        }
+
+        // ── Circle + ring sprites (ported from BattleHudUgui; lazily built once) ──
+        // The portrait disc + gilt ring frame, shared so combat/town portraits match.
+        private static Sprite _circle;
+        private static bool _circleTried;
+        private static Sprite _ring;
+        private static bool _ringTried;
+
+        /// <summary>Solid white AA disc for a portrait fill (null if the build failed under WebGL).</summary>
+        public static Sprite CircleSprite
+        {
+            get
+            {
+                if (!_circleTried)
+                {
+                    _circleTried = true;
+                    try { _circle = BuildCircleSprite(); }
+                    catch (Exception e)
+                    {
+                        Debug.LogWarning("[ElarionUiKit] circle sprite build failed: " + e.Message);
+                        _circle = null;
+                    }
+                }
+                return _circle;
+            }
+        }
+
+        /// <summary>Hollow white AA ring for a portrait frame (null if the build failed under WebGL).</summary>
+        public static Sprite RingSprite
+        {
+            get
+            {
+                if (!_ringTried)
+                {
+                    _ringTried = true;
+                    try { _ring = BuildRingSprite(); }
+                    catch (Exception e)
+                    {
+                        Debug.LogWarning("[ElarionUiKit] ring sprite build failed: " + e.Message);
+                        _ring = null;
+                    }
+                }
+                return _ring;
+            }
+        }
+
+        private static Sprite BuildCircleSprite()
+        {
+            const int size = 64;
+            float r = size * 0.5f - 1f;
+            float cx = (size - 1) * 0.5f, cy = (size - 1) * 0.5f;
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    float d = Mathf.Sqrt((x - cx) * (x - cx) + (y - cy) * (y - cy));
+                    float a = Mathf.Clamp01(r - d + 0.5f);
+                    tex.SetPixel(x, y, new Color(1f, 1f, 1f, a));
+                }
+            }
+            tex.Apply();
+            return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f));
+        }
+
+        private static Sprite BuildRingSprite()
+        {
+            const int size = 64;
+            float ro = size * 0.5f - 1f;
+            float ri = ro - 5f; // ring thickness
+            float cx = (size - 1) * 0.5f, cy = (size - 1) * 0.5f;
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    float d = Mathf.Sqrt((x - cx) * (x - cx) + (y - cy) * (y - cy));
+                    float aOut = Mathf.Clamp01(ro - d + 0.5f);
+                    float aIn = Mathf.Clamp01(d - ri + 0.5f);
+                    float a = Mathf.Min(aOut, aIn);
+                    tex.SetPixel(x, y, new Color(1f, 1f, 1f, a));
+                }
+            }
+            tex.Apply();
+            return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f));
         }
     }
 }

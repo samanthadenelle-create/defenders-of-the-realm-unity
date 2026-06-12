@@ -1616,20 +1616,13 @@ namespace DeNelle.HUD
         // size and position changed. Final anchors set in ApplyResponsiveLayout.
         private void BuildStartWaveButton(Transform parent)
         {
-            _startWaveBtn = NewRect("StartWaveBtn", parent, new Vector2(0.30f, 0.945f), new Vector2(0.43f, 0.99f));
-            var bimg = _startWaveBtn.gameObject.AddComponent<Image>();
-            bimg.color = HudTheme.GoldButton;
-            bimg.sprite = HudTheme.RoundedFrame;
-            bimg.type = HudTheme.RoundedFrame != null ? Image.Type.Sliced : Image.Type.Simple;
-            var btn = _startWaveBtn.gameObject.AddComponent<Button>();
-            btn.targetGraphic = bimg;
-            HudTheme.StyleButtonColors(btn, HudTheme.GoldButton);
-            btn.onClick.AddListener(() => StartWaveRequested?.Invoke());
-            var t = AddText(_startWaveBtn, "> Start Next Wave", 14, HudTheme.Ink, TextAlignmentOptions.Center);
-            t.fontStyle = FontStyles.Bold;
-            t.enableAutoSizing = true;
-            t.fontSizeMin = 9f;
-            t.fontSizeMax = 14f;
+            // Built through the shared kit so the CTA reads in ONE visual language.
+            // Final anchors are (re)set in ApplyResponsiveLayout; these are placeholders.
+            var swBtn = ElarionUiKit.Button(parent, "> Start Next Wave",
+                ElarionUiKit.ButtonKind.Gold,
+                new Vector2(0.02f, 0.80f), new Vector2(0.24f, 0.85f),
+                onClick: () => StartWaveRequested?.Invoke());
+            _startWaveBtn = swBtn.GetComponent<RectTransform>();
             _startWaveBtn.gameObject.SetActive(false);
         }
 
@@ -1928,9 +1921,9 @@ namespace DeNelle.HUD
                 SetAnchors(_vitalsCluster,  new Vector2(0.02f, 0.235f), new Vector2(0.46f, 0.30f));
                 // Build entry lifts to the upper-right, clear of the skill cluster.
                 SetAnchors(_buildBtn,       new Vector2(0.84f, 0.255f), new Vector2(0.99f, 0.33f));
-                // Small "Start Next Wave" pill BESIDE the wave timer (top-left), just
-                // right of the narrowed TownWave cluster. Portrait: cluster width 260px.
-                SetAnchors(_startWaveBtn,   new Vector2(0.38f, 0.70f),  new Vector2(0.62f, 0.765f));   // centered BELOW the resource bar (was hidden under it)
+                // Small "Start Next Wave" pill TOP-LEFT, sitting just BELOW the party
+                // stack (top-left, ~0..0.25 wide) so it reads with the wave/timer cluster.
+                SetAnchors(_startWaveBtn,   new Vector2(0.02f, 0.80f),  new Vector2(0.24f, 0.85f));
 
                 // WO-339 TOWN HUD portrait reflow: wave/timer cluster top-LEFT
                 // narrows; resources STACK on the left under it; mini-map shrinks
@@ -1952,9 +1945,9 @@ namespace DeNelle.HUD
                 // Vitals bottom-left above the (smaller) landscape joystick.
                 SetAnchors(_vitalsCluster,  new Vector2(0.02f, 0.30f),  new Vector2(0.30f, 0.37f));
                 SetAnchors(_buildBtn,       new Vector2(0.88f, 0.36f),  new Vector2(0.995f, 0.45f));
-                // Small "Start Next Wave" pill BESIDE the wave timer (top-left), just
-                // right of the TownWave cluster (x:12 + width 300px ≈ 0.29 on 1080-ref).
-                SetAnchors(_startWaveBtn,   new Vector2(0.41f, 0.705f), new Vector2(0.59f, 0.77f));   // centered BELOW the resource bar (was hidden under it)
+                // Small "Start Next Wave" pill TOP-LEFT, sitting just BELOW the party
+                // stack (top-left) so it reads with the wave/timer cluster.
+                SetAnchors(_startWaveBtn,   new Vector2(0.02f, 0.83f),  new Vector2(0.22f, 0.88f));
 
                 // WO-339 TOWN HUD landscape: wide top spread — wave cluster top-left,
                 // resource badges top-centre, full-size 140 mini-map top-right.
