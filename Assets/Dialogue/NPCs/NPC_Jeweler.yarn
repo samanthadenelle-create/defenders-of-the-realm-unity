@@ -10,14 +10,14 @@ title: TalkToJeweler
     -> Show me what it can do.
         Sable: Bring me a flawless crystal. The kind that only surfaces when the veil's thin. Then I'll show you what aether can really do.
         <<set $q_jeweler_stage = 1>>
-        <<command: StartQuest vendor.jeweler>>
+        <<StartQuest vendor.jeweler>>
         Sable: "Aether's Facet." Chase the rare spawn — and be quick, it fades.
     -> Just browse the gems.
-        <<command: OpenShop "jeweler">>
+        <<OpenShop "jeweler">>
 <<elseif $q_jeweler_stage == 1>>
     Sable: Did you catch a flawless one before it faded?
     -> Here it is.
-        <<command: AdvanceQuest vendor.jeweler>>
+        <<AdvanceQuest vendor.jeweler>>
         <<set $q_jeweler_stage = 2>>
         Sable: <i>She holds it to the light.</i> Exquisite. Now — your first heartgem. Hold still while I cut and socket it. This is where aether stops being a resource and starts being power.
     -> Still chasing it.
@@ -25,20 +25,20 @@ title: TalkToJeweler
 <<elseif $q_jeweler_stage == 2>>
     Sable: Is the heartgem socketed and settled?
     -> It's set.
-        <<command: AdvanceQuest vendor.jeweler>>
+        <<AdvanceQuest vendor.jeweler>>
         <<set $q_jeweler_stage = 3>>
         Sable: <i>She lowers her voice.</i> Now — a confession. I've been selling cut aether to a broker outside Elarion. Coin's coin. I could cut your gems cheaper if you... look elsewhere. Or you tell the village, and earn their trust instead.
         -> Keep your secret. (cheaper gems)
             Sable: Sensible. Our little arrangement. Come back for discounted facets.
-            <<command: AdvanceQuest vendor.jeweler>>
-            <<command: GiveKeystone "FirstHeartgem">>
+            <<AdvanceQuest vendor.jeweler>>
+            <<GiveKeystone "FirstHeartgem">>
             <<set $q_jeweler_stage = 9>>
             Sable: The First Heartgem is yours. Discretion suits you.
         -> Report the broker. (village trust)
             Sable: <i>She stiffens, then nods.</i> ...You're right. I'll come clean. Better the village's trust than a stranger's coin.
             <<set $sableChoiceReported = true>>
-            <<command: AdvanceQuest vendor.jeweler>>
-            <<command: GiveKeystone "FirstHeartgem">>
+            <<AdvanceQuest vendor.jeweler>>
+            <<GiveKeystone "FirstHeartgem">>
             <<set $q_jeweler_stage = 9>>
             Sable: The First Heartgem is yours, honestly earned. Tell Coppin to watch his roads — that broker pays in dirty Glimmer.
     -> Not yet.
@@ -46,9 +46,9 @@ title: TalkToJeweler
 <<else>>
     Sable: The Heartgem-bearer. My finest work walks on your gear. What do you need cut?
     -> Browse gems.
-        <<command: OpenShop "jeweler">>
+        <<OpenShop "jeweler">>
     -> Upgrade the lapidary.
-        <<command: OpenUpgrade "jeweler">>
+        <<OpenUpgrade "jeweler">>
     -> Nothing today.
         Sable: Mind who's buying, hm?
 <<endif>>

@@ -14,14 +14,14 @@ title: TalkToForge
     -> Can you forge me something better?
         Borin: Not 'til the forge is lit. Bring me wood and iron and we'll talk about a real weapon.
         <<set $q_forge_stage = 1>>
-        <<command: StartQuest vendor.forge>>
+        <<StartQuest vendor.forge>>
         Borin: "The Last Ember," I'm calling it. Get me that fuel.
     -> Just browse your wares.
-        <<command: OpenShop "forge">>
+        <<OpenShop "forge">>
 <<elseif $q_forge_stage == 1>>
     Borin: Back already? Did you bring the wood and iron to relight the forge?
     -> Here's your fuel.
-        <<command: AdvanceQuest vendor.forge>>
+        <<AdvanceQuest vendor.forge>>
         <<set $q_forge_stage = 2>>
         Borin: <i>The forge roars to life.</i> Now THAT'S a sound I've missed. Next: bring me one flawless Aether Crystal to quench the first true blade.
     -> Not yet.
@@ -29,7 +29,7 @@ title: TalkToForge
 <<elseif $q_forge_stage == 2>>
     Borin: Got that flawless crystal? A blade's only as true as what cools it.
     -> Quench it.
-        <<command: AdvanceQuest vendor.forge>>
+        <<AdvanceQuest vendor.forge>>
         <<set $q_forge_stage = 3>>
         Borin: <i>Steam hisses.</i> She's perfect. But steel's only proven in the field — go clear the Stonebelly raid at the west gate, then bring her back to me.
     -> Still hunting one.
@@ -37,8 +37,8 @@ title: TalkToForge
 <<elseif $q_forge_stage == 3>>
     Borin: Did the blade hold against the trolls?
     -> The west gate's clear.
-        <<command: AdvanceQuest vendor.forge>>
-        <<command: GiveKeystone "Emberbrand">>
+        <<AdvanceQuest vendor.forge>>
+        <<GiveKeystone "Emberbrand">>
         <<set $q_forge_stage = 9>>
         Borin: Then it's done — the Emberbrand is yours, and the Last Ember burns again. <i>He lowers his voice.</i> That ore wasn't soured by chance. The rot traces back to the Stone Mountains. Someone's fouling it on purpose.
         Borin: Tell Warden Alric the forge stands ready. And mind the Mountains.
@@ -59,13 +59,13 @@ title: TalkToForge
         Borin: The Emberbrand-bearer returns. Forge is hot — what'll it be?
     <<endif>>
     -> Craft a weapon.
-        <<command: OpenCraft "forge">>
+        <<OpenCraft "forge">>
     -> Browse the forge wares.
-        <<command: OpenShop "forge">>
+        <<OpenShop "forge">>
     -> Upgrade my gear.
-        <<command: OpenUpgrade "forge">>
+        <<OpenUpgrade "forge">>
     -> Equip what I have.
-        <<command: OpenEquip>>
+        <<OpenEquip>>
     -> The Forgemasters' saga.
         <<jump SagaBorin>>
     -> Nothing today.

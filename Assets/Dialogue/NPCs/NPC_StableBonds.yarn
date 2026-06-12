@@ -7,7 +7,7 @@
 // in a Yarn local ($petbond_<x>_stage) for cheap branching.
 //
 // PERK SEAM (do NOT rewire Pet.cs here): at a species' bond capstone we fire
-//   <<command: SetQuestFlag petbond.<species> perk_unlocked>>
+//   <<SetQuestFlag petbond.<species> perk_unlocked>>
 // The pet system reads QuestService.HasFlag("petbond.<species>", "perk_unlocked")
 // to enable that species' signature perk. Pure flag handshake — nothing else touched.
 //
@@ -48,7 +48,7 @@ title: BondSproutling
 <<if $petbond_sproutling_stage == 0>>
     Fenn: A Sproutling? Gentle little thing. It roots where the land's gone sour. Cleanse a blighted harvest site in the Verdant, then leave an offering — don't grab. Let it choose you.
     -> I'll cleanse the site.
-        <<command: StartQuest petbond.sproutling>>
+        <<StartQuest petbond.sproutling>>
         <<set $petbond_sproutling_stage = 1>>
         Fenn: Clear the rot first. A Sproutling won't show until the soil breathes again.
     -> Maybe later.
@@ -56,7 +56,7 @@ title: BondSproutling
 <<elseif $petbond_sproutling_stage == 1>>
     Fenn: Is the harvest site clean? Did you leave the offering?
     -> The site's clean. I left food at the roots.
-        <<command: AdvanceQuest petbond.sproutling>>
+        <<AdvanceQuest petbond.sproutling>>
         <<set $petbond_sproutling_stage = 2>>
         Fenn: <i>He smiles.</i> Then it'll follow you home. Walk slow on the way back — let the bond set.
     -> Not yet.
@@ -64,9 +64,9 @@ title: BondSproutling
 <<elseif $petbond_sproutling_stage == 2>>
     Fenn: Did it follow you all the way home?
     -> It's at the stables now.
-        <<command: AdvanceQuest petbond.sproutling>>
-        <<command: SetQuestFlag petbond.sproutling perk_unlocked>>
-        <<command: CompleteQuest petbond.sproutling>>
+        <<AdvanceQuest petbond.sproutling>>
+        <<SetQuestFlag petbond.sproutling perk_unlocked>>
+        <<CompleteQuest petbond.sproutling>>
         <<set $petbond_sproutling_stage = 9>>
         Fenn: Bonded. Feel that? It'll pull more from a node than any tool — and keep drawing while you sleep. That's Photosynth. Earned, not bought.
     -> It wandered off.
@@ -85,7 +85,7 @@ title: BondCraghound
 <<if $petbond_craghound_stage == 0>>
     Fenn: A Craghound earns no bond by rope. There's a wounded one out in the Stone Mountains, hunted. Stand over it through a raid — body between it and the spears. Survive that together and it's yours for life.
     -> I'll shield the hound.
-        <<command: StartQuest petbond.craghound>>
+        <<StartQuest petbond.craghound>>
         <<set $petbond_craghound_stage = 1>>
         Fenn: Don't carry it. Don't cage it. Just don't let it fall. Loyalty's forged under fire.
     -> Not yet.
@@ -93,7 +93,7 @@ title: BondCraghound
 <<elseif $petbond_craghound_stage == 1>>
     Fenn: Did the hound live through the raid?
     -> We held. It's still breathing.
-        <<command: AdvanceQuest petbond.craghound>>
+        <<AdvanceQuest petbond.craghound>>
         <<set $petbond_craghound_stage = 2>>
         Fenn: Then it's chosen you. Bring it back through the west gate — let it see the walls it'll guard.
     -> It didn't make it.
@@ -101,9 +101,9 @@ title: BondCraghound
 <<elseif $petbond_craghound_stage == 2>>
     Fenn: Is the hound inside the walls?
     -> It's home, guarding the west wall.
-        <<command: AdvanceQuest petbond.craghound>>
-        <<command: SetQuestFlag petbond.craghound perk_unlocked>>
-        <<command: CompleteQuest petbond.craghound>>
+        <<AdvanceQuest petbond.craghound>>
+        <<SetQuestFlag petbond.craghound perk_unlocked>>
+        <<CompleteQuest petbond.craghound>>
         <<set $petbond_craghound_stage = 9>>
         Fenn: Stone-hide and all. Set it on a wall and arrows break against it — it'll taunt the foe and soak what would've cracked our stone. A Guardian true.
     -> Still on the road.
@@ -122,7 +122,7 @@ title: BondFrostkit
 <<if $petbond_frostkit_stage == 0>>
     Fenn: A Frostkit hunts the Frost Peaks — small, quick, and colder than the wind it rides. Clear the peaks of what's hunting it, then close the distance slow. Move when it looks away. Freeze when it watches.
     -> I'll make the approach.
-        <<command: StartQuest petbond.frostkit>>
+        <<StartQuest petbond.frostkit>>
         <<set $petbond_frostkit_stage = 1>>
         Fenn: Patience and stillness. Rush it and you'll get nothing but frostbite.
     -> Not yet.
@@ -130,7 +130,7 @@ title: BondFrostkit
 <<elseif $petbond_frostkit_stage == 1>>
     Fenn: Did you clear the peaks and close the gap?
     -> It let me near. It's following.
-        <<command: AdvanceQuest petbond.frostkit>>
+        <<AdvanceQuest petbond.frostkit>>
         <<set $petbond_frostkit_stage = 2>>
         Fenn: Then bring it down from the cold. Let it learn the warmth of a bonded stall.
     -> It bolted.
@@ -138,9 +138,9 @@ title: BondFrostkit
 <<elseif $petbond_frostkit_stage == 2>>
     Fenn: Has the Frostkit settled in?
     -> It's bonded and warm.
-        <<command: AdvanceQuest petbond.frostkit>>
-        <<command: SetQuestFlag petbond.frostkit perk_unlocked>>
-        <<command: CompleteQuest petbond.frostkit>>
+        <<AdvanceQuest petbond.frostkit>>
+        <<SetQuestFlag petbond.frostkit perk_unlocked>>
+        <<CompleteQuest petbond.frostkit>>
         <<set $petbond_frostkit_stage = 9>>
         Fenn: Now watch it fight. Every strike leaves a rime of frost — the enemy slows, staggers. A Striker that buys you time as much as blood.
     -> Not settled.
@@ -159,7 +159,7 @@ title: BondEmberpup
 <<if $petbond_emberpup_stage == 0>>
     Fenn: An Emberpup whelps in the Ashen Wastes — where the ground still burns. It runs TO danger, not from it. To bond it, prove you'll stand in the fire beside it. Clear the worst of the Wastes and let it see you don't flinch.
     -> I'll stand in the fire.
-        <<command: StartQuest petbond.emberpup>>
+        <<StartQuest petbond.emberpup>>
         <<set $petbond_emberpup_stage = 1>>
         Fenn: Hottest part of the Wastes, mind. An Emberpup respects nothing less.
     -> Not yet.
@@ -167,7 +167,7 @@ title: BondEmberpup
 <<elseif $petbond_emberpup_stage == 1>>
     Fenn: Did you face the worst of the Ashen Wastes?
     -> I cleared it. It's at my heel.
-        <<command: AdvanceQuest petbond.emberpup>>
+        <<AdvanceQuest petbond.emberpup>>
         <<set $petbond_emberpup_stage = 2>>
         Fenn: Then it's claimed you for pack. Bring it home — it'll fret in cold air a while, that's just the ash settling.
     -> It snapped and ran.
@@ -175,9 +175,9 @@ title: BondEmberpup
 <<elseif $petbond_emberpup_stage == 2>>
     Fenn: Has the Emberpup taken to the stables?
     -> It's bonded — restless, but mine.
-        <<command: AdvanceQuest petbond.emberpup>>
-        <<command: SetQuestFlag petbond.emberpup perk_unlocked>>
-        <<command: CompleteQuest petbond.emberpup>>
+        <<AdvanceQuest petbond.emberpup>>
+        <<SetQuestFlag petbond.emberpup perk_unlocked>>
+        <<CompleteQuest petbond.emberpup>>
         <<set $petbond_emberpup_stage = 9>>
         Fenn: Send it into the thick of a fight. Its bite leaves a burn that eats away after — and the more dangerous the field, the harder it hits. A Striker for the deep end.
     -> Still restless.
@@ -196,7 +196,7 @@ title: BondMirewing
 <<if $petbond_mirewing_stage == 0>>
     Fenn: A Mirewing? Now there's a gentle one. It nests where the Mire festers, drawn to sickness so it can mend it. You won't fight your way to a Warden — you'll heal your way there. Cleanse the poisoned waters and it'll come to the clean.
     -> I'll cleanse the Mire.
-        <<command: StartQuest petbond.mirewing>>
+        <<StartQuest petbond.mirewing>>
         <<set $petbond_mirewing_stage = 1>>
         Fenn: No blade does this. Find the source of the rot and stop it. Mercy's the bait.
     -> Not yet.
@@ -204,7 +204,7 @@ title: BondMirewing
 <<elseif $petbond_mirewing_stage == 1>>
     Fenn: Did you cleanse the poisoned waters?
     -> The waters run clean. It came to me.
-        <<command: AdvanceQuest petbond.mirewing>>
+        <<AdvanceQuest petbond.mirewing>>
         <<set $petbond_mirewing_stage = 2>>
         Fenn: Of course it did — you gave the Mire mercy. Bring it home gently, on the wing.
     -> The rot's still spreading.
@@ -212,9 +212,9 @@ title: BondMirewing
 <<elseif $petbond_mirewing_stage == 2>>
     Fenn: Is the Mirewing nesting in the stables?
     -> It's bonded and roosting.
-        <<command: AdvanceQuest petbond.mirewing>>
-        <<command: SetQuestFlag petbond.mirewing perk_unlocked>>
-        <<command: CompleteQuest petbond.mirewing>>
+        <<AdvanceQuest petbond.mirewing>>
+        <<SetQuestFlag petbond.mirewing perk_unlocked>>
+        <<CompleteQuest petbond.mirewing>>
         <<set $petbond_mirewing_stage = 9>>
         Fenn: Deploy it and feel the air change. It cleanses poison off your party and mends wounds slow and steady — a healing aura wherever it flies. The kindest beast I know.
     -> Not yet roosting.
@@ -233,7 +233,7 @@ title: BondGlimmermoth
 <<if $petbond_glimmermoth_stage == 0>>
     Fenn: A Glimmermoth follows the crystal light. It'll bond to whoever feeds it the brightest gem — and there's only one cutter in Elarion who makes them flawless. See Sable the Jeweler first. You'll need a flawless heartgem to coax one in.
     -> I'll get a flawless gem from Sable.
-        <<command: StartQuest petbond.glimmermoth>>
+        <<StartQuest petbond.glimmermoth>>
         <<set $petbond_glimmermoth_stage = 1>>
         Fenn: Flawless, mind — a Glimmermoth turns its nose up at a clouded stone.
     -> Not yet.
@@ -241,7 +241,7 @@ title: BondGlimmermoth
 <<elseif $petbond_glimmermoth_stage == 1>>
     Fenn: Did Sable cut you a flawless heartgem?
     -> I have the flawless gem.
-        <<command: AdvanceQuest petbond.glimmermoth>>
+        <<AdvanceQuest petbond.glimmermoth>>
         <<set $petbond_glimmermoth_stage = 2>>
         Fenn: Then take it to a crystal node at dusk and hold it out. The Glimmermoth will find you.
     -> Not yet.
@@ -249,9 +249,9 @@ title: BondGlimmermoth
 <<elseif $petbond_glimmermoth_stage == 2>>
     Fenn: Did the moth take the gem?
     -> It's bonded to me now.
-        <<command: AdvanceQuest petbond.glimmermoth>>
-        <<command: SetQuestFlag petbond.glimmermoth perk_unlocked>>
-        <<command: CompleteQuest petbond.glimmermoth>>
+        <<AdvanceQuest petbond.glimmermoth>>
+        <<SetQuestFlag petbond.glimmermoth perk_unlocked>>
+        <<CompleteQuest petbond.glimmermoth>>
         <<set $petbond_glimmermoth_stage = 9>>
         Fenn: Set it on a crystal node and watch the yield climb — and it sniffs out the rare timed seams before they fade. A Harvester worth a vault.
     -> It flew off with the gem.
@@ -270,7 +270,7 @@ title: BondStoneback
 <<if $petbond_stoneback_stage == 0>>
     Fenn: A Stoneback Calf? The Stonebelly raiders keep one caged — using it for cover, the cowards. Clear the camp and break the cage. Free a beast and it bonds on the spot. No taming. Just kindness, the fast way.
     -> I'll free the calf.
-        <<command: StartQuest petbond.stoneback>>
+        <<StartQuest petbond.stoneback>>
         <<set $petbond_stoneback_stage = 1>>
         Fenn: Clear the whole camp first — a calf won't follow you out through a fight it can still hear.
     -> Not yet.
@@ -278,9 +278,9 @@ title: BondStoneback
 <<elseif $petbond_stoneback_stage == 1>>
     Fenn: Did you clear the camp and break the cage?
     -> It's free. It came straight to me.
-        <<command: AdvanceQuest petbond.stoneback>>
-        <<command: SetQuestFlag petbond.stoneback perk_unlocked>>
-        <<command: CompleteQuest petbond.stoneback>>
+        <<AdvanceQuest petbond.stoneback>>
+        <<SetQuestFlag petbond.stoneback perk_unlocked>>
+        <<CompleteQuest petbond.stoneback>>
         <<set $petbond_stoneback_stage = 9>>
         Fenn: <i>Warmly.</i> That's the warmest bond there is — the one you set loose. It'll walk as mobile cover for your party and haul extra resource besides. A Guardian that carries its own keep.
     -> The camp still stands.
@@ -303,7 +303,7 @@ title: BondAetherFox
 <<elseif $petbond_aetherfox_stage == 0>>
     Fenn: <i>His eyes go wide.</i> You've mended enough that the rare ones stir. An Aether Fox has been seen near the healed places — pure aether, half a dream. It won't be tracked or caged. Walk the restored ground at the edge of the Spire's light and let it find you worthy.
     -> I'll walk the healed ground.
-        <<command: StartQuest petbond.aetherfox>>
+        <<StartQuest petbond.aetherfox>>
         <<set $petbond_aetherfox_stage = 1>>
         Fenn: Bring no weapon drawn. The Fox judges the hand, not the blade.
     -> Not yet.
@@ -311,7 +311,7 @@ title: BondAetherFox
 <<elseif $petbond_aetherfox_stage == 1>>
     Fenn: Did the Aether Fox show itself?
     -> It judged me worthy. It walks with me.
-        <<command: AdvanceQuest petbond.aetherfox>>
+        <<AdvanceQuest petbond.aetherfox>>
         <<set $petbond_aetherfox_stage = 2>>
         Fenn: <i>Hushed.</i> Then you've truly turned the tide. Bring it to the Heart — let the Tree and the Fox know each other.
     -> It vanished.
@@ -319,9 +319,9 @@ title: BondAetherFox
 <<elseif $petbond_aetherfox_stage == 2>>
     Fenn: Has the Fox bonded at the Heart?
     -> It's bonded — the air around it hums.
-        <<command: AdvanceQuest petbond.aetherfox>>
-        <<command: SetQuestFlag petbond.aetherfox perk_unlocked>>
-        <<command: CompleteQuest petbond.aetherfox>>
+        <<AdvanceQuest petbond.aetherfox>>
+        <<SetQuestFlag petbond.aetherfox perk_unlocked>>
+        <<CompleteQuest petbond.aetherfox>>
         <<set $petbond_aetherfox_stage = 9>>
         Fenn: Deploy it and your every spell and ability costs a touch less — its aura threads aether back into the world. The rarest Warden there is. The wilds are whole again, friend. You did that.
     -> Not yet.

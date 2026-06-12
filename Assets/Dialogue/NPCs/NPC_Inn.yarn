@@ -14,14 +14,14 @@ title: TalkToInn
     -> Anything I can do for YOU, Brom?
         Brom: Now that you mention it — raiders have been casing the inn. Stay for the next surprise raid and help me hold the hearth?
         <<set $q_inn_stage = 1>>
-        <<command: StartQuest vendor.inn>>
+        <<StartQuest vendor.inn>>
         Brom: "Last Call," the regulars are calling it. Don't let them burn my roof.
     -> Just rest a moment.
         Brom: Hearth's warm. Mind the door.
 <<elseif $q_inn_stage == 1>>
     Brom: Are the raiders dealt with? My shutters can't take much more.
     -> The inn's safe.
-        <<command: AdvanceQuest vendor.inn>>
+        <<AdvanceQuest vendor.inn>>
         <<set $q_inn_stage = 2>>
         Brom: Hah! Drinks on the house. Stay on a while — I'll make this hearth your rally point. Fall in the field and you'll wake up right here.
     -> Not yet.
@@ -29,8 +29,8 @@ title: TalkToInn
 <<elseif $q_inn_stage == 2>>
     Brom: Shall I set the hearth as your rally and respawn point?
     -> Make it my home base.
-        <<command: AdvanceQuest vendor.inn>>
-        <<command: GiveKeystone "Hearthstone">>
+        <<AdvanceQuest vendor.inn>>
+        <<GiveKeystone "Hearthstone">>
         <<set $q_inn_stage = 9>>
         Brom: Done — the Hearthstone's yours. Fall anywhere, you wake here. <i>He leans in.</i> And listen... a traveler passed through, hooded, cold-eyed, asking after the Heart. Matched every tale of that Necromancer. He's real, and he's been here. Tell Alric.
     -> Not yet.
@@ -52,7 +52,7 @@ title: TalkToInn
 // and works through ANY launch path (NPC station OR DialogueService). ──
 title: RumorBoard
 ---
-<<command: OpenRumorBoard>>
+<<OpenRumorBoard>>
 Brom: Here's the talk, then —
 <<if $q_forge_stage > 0 and $q_forge_stage < 9>>
     Brom: Borin's forge is lit but his work's not done — he's still waiting on you.

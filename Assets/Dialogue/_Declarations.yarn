@@ -124,7 +124,7 @@ tags: system
 //                      (keystone BondedBeast) and the per-species bond hub is unlocked.
 // $petbond_<x>_stage : per-species bond progress (0 not begun → 9 bonded/companion).
 // The PERK SEAM: reaching a species' bond tier fires
-//   <<command: SetQuestFlag petbond.<species> perk_unlocked>>
+//   <<SetQuestFlag petbond.<species> perk_unlocked>>
 // which the pet system reads via QuestService.HasFlag("petbond.<species>",
 // "perk_unlocked") to enable that species' signature perk. We do NOT rewire Pet.cs
 // here — this is a clean flag-based seam only.

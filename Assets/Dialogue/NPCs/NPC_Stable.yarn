@@ -9,14 +9,14 @@ title: TalkToStable
     -> Teach me to tame one.
         Fenn: Tame one of the wild ones out past the gate and I'll teach you to fight beside it.
         <<set $q_stable_stage = 1>>
-        <<command: StartQuest vendor.stable>>
+        <<StartQuest vendor.stable>>
         Fenn: "Wild Hearts." Go gentle — a frightened beast bites the hand that grabs.
     -> Just visit the stables.
-        <<command: OpenShop "stable">>
+        <<OpenShop "stable">>
 <<elseif $q_stable_stage == 1>>
     Fenn: Did you tame one of the wild ones?
     -> It follows me now.
-        <<command: AdvanceQuest vendor.stable>>
+        <<AdvanceQuest vendor.stable>>
         <<set $q_stable_stage = 2>>
         Fenn: <i>He grins.</i> Look at that bond. Now let's train it an ability — I'll teach the guard stance that swats arrows from the sky. Stand it beside me.
     -> Not yet.
@@ -24,7 +24,7 @@ title: TalkToStable
 <<elseif $q_stable_stage == 2>>
     Fenn: Has the beast learned its ability?
     -> It's trained.
-        <<command: AdvanceQuest vendor.stable>>
+        <<AdvanceQuest vendor.stable>>
         <<set $q_stable_stage = 3>>
         Fenn: Now put it to honest work — send it to auto-harvest a node, or set it to guard an outpost. A bonded beast earns its feed.
     -> Not yet.
@@ -32,8 +32,8 @@ title: TalkToStable
 <<elseif $q_stable_stage == 3>>
     Fenn: Is your beast working a node or guarding an outpost?
     -> It's earning its keep.
-        <<command: AdvanceQuest vendor.stable>>
-        <<command: GiveKeystone "BondedBeast">>
+        <<AdvanceQuest vendor.stable>>
+        <<GiveKeystone "BondedBeast">>
         <<set $q_stable_stage = 9>>
         Fenn: Then take the Bonded Beast token, and an extra stall besides — you've room for another now. The wilds are coming back to us, one kind hand at a time.
     -> Not yet.
@@ -44,9 +44,9 @@ title: TalkToStable
     -> Tell me about the wild ones. <<if $q_wildhearts_open == 1>>
         <<detour WildHearts>>
     -> Manage my pets.
-        <<command: OpenShop "stable">>
+        <<OpenShop "stable">>
     -> Upgrade the stables.
-        <<command: OpenUpgrade "stable">>
+        <<OpenUpgrade "stable">>
     -> Nothing today.
         Fenn: Go on, they'll follow.
 <<endif>>

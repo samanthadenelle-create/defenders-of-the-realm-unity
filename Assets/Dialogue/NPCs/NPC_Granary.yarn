@@ -9,14 +9,14 @@ title: TalkToGranary
     -> Let me help the mill.
         Mother Wren: Get my mill turning and feed the folk — full bellies make full ranks.
         <<set $q_granary_stage = 1>>
-        <<command: StartQuest vendor.granary>>
+        <<StartQuest vendor.granary>>
         Mother Wren: That's the way. Build me up and we'll all eat.
     -> Just trade food.
-        <<command: OpenShop "granary">>
+        <<OpenShop "granary">>
 <<elseif $q_granary_stage == 1>>
     Mother Wren: Is the mill turning again?
     -> The mill's restored.
-        <<command: AdvanceQuest vendor.granary>>
+        <<AdvanceQuest vendor.granary>>
         <<set $q_granary_stage = 2>>
         Mother Wren: Flour on the air — bless you. Now feed the folk 'til the village grows. Reach the next population mark and you'll see the gatherers move quicker.
     -> Not yet.
@@ -24,7 +24,7 @@ title: TalkToGranary
 <<elseif $q_granary_stage == 2>>
     Mother Wren: Has the village grown? More mouths, more hands.
     -> Population's up.
-        <<command: AdvanceQuest vendor.granary>>
+        <<AdvanceQuest vendor.granary>>
         <<set $q_granary_stage = 3>>
         Mother Wren: Then put those hands to work — send folk to a gathering node and let it fill while you're off adventuring. Idle hands and all that.
     -> Not yet.
@@ -32,8 +32,8 @@ title: TalkToGranary
 <<elseif $q_granary_stage == 3>>
     Mother Wren: Are the workers earning their keep at the nodes?
     -> The node's running itself.
-        <<command: AdvanceQuest vendor.granary>>
-        <<command: GiveKeystone "FullGranary">>
+        <<AdvanceQuest vendor.granary>>
+        <<GiveKeystone "FullGranary">>
         <<set $q_granary_stage = 9>>
         Mother Wren: Then take the Full Granary, with my love. The ranks are fed and the stores brim even while you sleep. Warden Alric can raise a proper village on full bellies now.
     -> Not yet.
@@ -52,9 +52,9 @@ title: TalkToGranary
         Mother Wren: The Granary-keeper returns. Bellies are full, ranks are full. What do you need?
     <<endif>>
     -> Trade food.
-        <<command: OpenShop "granary">>
+        <<OpenShop "granary">>
     -> Upgrade the mill.
-        <<command: OpenUpgrade "granary">>
+        <<OpenUpgrade "granary">>
     -> The Forgemasters' saga.
         <<jump SagaWren>>
     -> Nothing today.
