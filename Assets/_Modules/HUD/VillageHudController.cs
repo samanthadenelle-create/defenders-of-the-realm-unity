@@ -1114,8 +1114,13 @@ namespace DeNelle.HUD
                 IconBuild, "B", () => BuildRequested?.Invoke());
             _talkButton = BuildIconButton(_townActionPanel, new Vector2(0.02f, 0.29f), new Vector2(0.42f, 0.71f),
                 IconTalk, "T", () => TalkRequested?.Invoke());
+            // BAG → InventoryRequested. Same shared treatment as its BUILD/TALK/QUESTS
+            // siblings: BuildIconButton (gilt ring seat + HudTheme.StyleButtonColors) with
+            // the IconInventory chest sprite from RpgUiCatalog (RoleIcons → icon_inventory).
+            // Glyph fallback "I" (Inventory) is a legible mnemonic in the sibling-initial
+            // convention (B/T) for when the RPG sprite pack isn't imported — was a stray "G".
             BuildIconButton(_townActionPanel, new Vector2(0.58f, 0.29f), new Vector2(0.98f, 0.71f),
-                IconInventory, "G", () => InventoryRequested?.Invoke());
+                IconInventory, "I", () => InventoryRequested?.Invoke());
             _questButton = BuildIconButton(_townActionPanel, new Vector2(0.30f, 0.02f), new Vector2(0.70f, 0.44f),
                 IconQuest, "!", () => DailyQuestHud.Instance?.Toggle());
 
