@@ -1,0 +1,177 @@
+// =============================================================================
+// EnemyPool — a persistent object pool for wave/roam enemies, so the spawners no
+// longer Instantiate a fresh skinned-mesh + NavMeshAgent + Animator + AddComponent
+// stack per enemy per wave and Destroy it on death. Full GameObject churn on every
+// spawn is the project's biggest GC-churn / stray-accumulation source (owner:
+// "use pooling to control strays — we had leaks before"); on mobile / WebGL the
+// repeated allocation is an OOM risk. Pooling reuses the body instead.
+// -----------------------------------------------------------------------------
+// Modelled EXACTLY on ProjectilePool / VfxPool (the proven project idiom):
+//   • self-bootstraps (RuntimeInitializeOnLoadMethod) — no scene wiring,
+//   • DontDestroyOnLoad so pooled bodies survive a Village↔OuterWorld transition,
+//   • queue-backed, drain-and-expand, dead-ref skip on acquire (the scene-unload
+//     NRE guard ProjectilePool documents).
+//
+// KEYED POOLS: enemy bodies are heterogeneous (a skeleton, an orc, a troll, a
+// prefab-authored enemy all differ), so a single queue can't be reused blindly.
+// The pool is keyed by a STRING — the EnemyDef model id for factory-built bodies,
+// or the prefab name for prefab-built ones — and holds one queue per key. Get()
+// only ever returns a body built for that exact key, so a reused skeleton is never
+// handed out where an orc was asked for.
+//
+// THE RESET CONTRACT (Enemy.ResetForPool / Enemy.PrepareForReuse) is where pooling
+// bugs hide — a missed reset spawns an enemy that is dead / untargetable / has
+// stale HP / double-subscribed events. The exhaustive contract lives on Enemy.cs
+// (it owns the private state); this pool only orchestrates release/acquire + the
+// GameObject (de)activation and re-parent/warp.
+//
+// USAGE (the spawners):
+//   Enemy e = EnemyPool.Get(key, prefabOrNull, def, pos, rot, parent);
+//   ... e.Configure(...) as before ...
+// and on death Enemy.Die calls EnemyPool.Release(this) instead of Destroy.
+// =============================================================================
+
+using System.Collections.Generic;
+using UnityEngine;
+
+namespace DeNelle.Village
+{
+    /// <summary>
+    /// Persistent, self-installed pool of reusable <see cref="Enemy"/> bodies,
+    /// keyed by model/prefab so each key reuses only bodies of its own kind.
+    /// </summary>
+    public sealed class EnemyPool : MonoBehaviour
+    {
+        public static EnemyPool Instance { get; private set; }
+
+        // One queue of dormant bodies per key (EnemyDef model id / prefab name).
+        private readonly Dictionary<string, Queue<Enemy>> _pools =
+            new Dictionary<string, Queue<Enemy>>();
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        private static void Bootstrap()
+        {
+            if (Instance != null) return;
+            new GameObject("EnemyPool").AddComponent<EnemyPool>();   // Awake handles DDOL
+        }
+
+        private void Awake()
+        {
+            if (Instance != null && Instance != this) { Destroy(gameObject); return; }
+            Instance = this;
+            DontDestroyOnLoad(gameObject);
+        }
+
+        private void OnDestroy() { if (Instance == this) Instance = null; }
+
+        // =====================================================================
+        //  Acquire
+        // =====================================================================
+
+        /// <summary>
+        /// Leases an enemy body for <paramref name="key"/> at the given pose, reusing
+        /// a dormant pooled body if one exists or building a fresh one otherwise.
+        /// The CALLER still calls <see cref="Enemy.Configure"/> (+ wave-scaling +
+        /// event hooks) exactly as before — Get only provides a clean, re-armed body.
+        ///
+        /// Build source: if <paramref name="prefab"/> is non-null a fresh body is
+        /// <c>Instantiate</c>d from it (matching the spawner's prefab path); otherwise
+        /// it is built via <see cref="EnemyFactory.Build"/> from <paramref name="def"/>
+        /// (the skinned path). A reused body skips both — it is just re-placed,
+        /// re-enabled and reset.
+        /// </summary>
+        /// <param name="key">Pool key — the EnemyDef model id or the prefab name.</param>
+        /// <param name="prefab">Prefab to Instantiate when building fresh (may be null → factory).</param>
+        /// <param name="def">EnemyDef used by the factory build path / the reset.</param>
+        /// <param name="pos">Spawn position (already NavMesh-snapped by the caller).</param>
+        /// <param name="rot">Spawn rotation.</param>
+        /// <param name="parent">Parent transform for the body (may be null).</param>
+        public static Enemy Get(string key, Enemy prefab, EnemyDef def,
+                                Vector3 pos, Quaternion rot, Transform parent)
+        {
+            if (Instance == null) Bootstrap();
+            return Instance.GetInternal(key, prefab, def, pos, rot, parent);
+        }
+
+        private Enemy GetInternal(string key, Enemy prefab, EnemyDef def,
+                                  Vector3 pos, Quaternion rot, Transform parent)
+        {
+            string poolKey = string.IsNullOrEmpty(key) ? "_default" : key;
+
+            Enemy enemy = null;
+            if (_pools.TryGetValue(poolKey, out var queue))
+            {
+                // Skip any destroyed entries (scene-unload NRE guard, per ProjectilePool).
+                while (enemy == null && queue.Count > 0) enemy = queue.Dequeue();
+            }
+
+            if (enemy == null)
+            {
+                // Pool drained / first use for this key — build a fresh body. Stamp
+                // the key so Release routes it back to the same queue on death.
+                enemy = prefab != null
+                    ? Instantiate(prefab, pos, rot, parent)
+                    : EnemyFactory.Build(def, pos, rot, parent);
+                if (enemy == null) return null;
+
+                // Some prefab/placeholder bodies don't carry the damageable adapter;
+                // the factory always does. Guarantee it so the hero can hit a reused
+                // body (the spawners also belt-and-brace this, but keep it here).
+                if (enemy.GetComponent<EnemyDamageable>() == null)
+                    enemy.gameObject.AddComponent<EnemyDamageable>();
+
+                enemy.SetPoolKey(poolKey);
+                return enemy;
+            }
+
+            // Reused body — re-home, re-place and re-arm it for a fresh spawn.
+            Transform t = enemy.transform;
+            if (parent != null && t.parent != parent) t.SetParent(parent, false);
+            t.SetPositionAndRotation(pos, rot);
+            enemy.gameObject.SetActive(true);
+
+            // The reset contract (HP / dead flag / animator / agent warp / events /
+            // registry / AI state / ledger) lives on Enemy — it owns the private state.
+            enemy.PrepareForReuse(pos, rot);
+            return enemy;
+        }
+
+        // =====================================================================
+        //  Release
+        // =====================================================================
+
+        /// <summary>
+        /// Returns a dead/consumed enemy body to its key's pool: the body has already
+        /// run <see cref="Enemy.ResetForPool"/> (unsubscribe / unregister / forget /
+        /// stop coroutines / disable). If the pool singleton is gone (shutdown) the
+        /// body is simply destroyed so nothing leaks.
+        /// </summary>
+        public static void Release(Enemy enemy)
+        {
+            if (enemy == null) return;
+            if (Instance == null) { Destroy(enemy.gameObject); return; }
+            Instance.ReleaseInternal(enemy);
+        }
+
+        private void ReleaseInternal(Enemy enemy)
+        {
+            // Enemy.Die already invoked ResetForPool (events/registry/ledger/coroutines
+            // dropped) before calling us. Deactivate + re-home under this DDOL root so
+            // the dormant body survives scene loads and can't tick / be hit / be found.
+            enemy.gameObject.SetActive(false);
+            if (enemy.transform.parent != transform)
+                enemy.transform.SetParent(transform, false);
+
+            string poolKey = enemy.PoolKey;
+            if (string.IsNullOrEmpty(poolKey)) poolKey = "_default";
+
+            if (!_pools.TryGetValue(poolKey, out var queue))
+            {
+                queue = new Queue<Enemy>();
+                _pools[poolKey] = queue;
+            }
+            // Guard against a double-release leaving the same body twice in the queue.
+            if (!queue.Contains(enemy)) queue.Enqueue(enemy);
+        }
+    }
+}

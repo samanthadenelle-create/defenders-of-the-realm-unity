@@ -112,6 +112,15 @@ namespace DeNelle.Village
         /// </summary>
         private const float DeathHoldSeconds = 1.6f;
 
+        /// <summary>
+        /// Lifetime cap for an authored per-type hit/death VFX prefab spawned via
+        /// <see cref="EnemyTypeVfxSet"/>. These prefabs were previously Instantiated
+        /// with NO Destroy (a hard GameObject leak per hit / per kill); they now
+        /// self-destruct after this window — long enough for the burst to finish,
+        /// short enough that nothing accumulates.
+        /// </summary>
+        private const float TypeVfxSelfDestructSeconds = 3f;
+
         // ── Runtime refs / state ──────────────────────────────────────────────
 
         private NavMeshAgent _agent;
@@ -120,6 +129,18 @@ namespace DeNelle.Village
         private float _attackCooldown;
         private bool _dead;
         private bool _navWarned;
+
+        // ── Pooling (EnemyPool) ───────────────────────────────────────────────
+        // The key the EnemyPool files this body under (EnemyDef model id / prefab
+        // name) so Release routes it back to the queue it can be reused from. Set
+        // once by the pool when the body is first built; survives reuse.
+        private string _poolKey;
+
+        /// <summary>The EnemyPool key this body is filed under (set by the pool).</summary>
+        public string PoolKey => _poolKey;
+
+        /// <summary>Stamps the pool key (called by <see cref="EnemyPool"/> on first build).</summary>
+        public void SetPoolKey(string key) => _poolKey = key;
         private bool _telegraphing;   // DEF-48: true during wind-up — blocks double-trigger
         private IDamageableStructure _currentTarget;
 
@@ -1044,7 +1065,14 @@ namespace DeNelle.Village
                 {
                     GameObject hitPrefab = _typeVfxSet != null ? _typeVfxSet.RandomHitVfxPrefab() : null;
                     if (hitPrefab != null)
-                        Instantiate(hitPrefab, hitPos, Quaternion.identity);
+                    {
+                        // LEAK FIX (#3): the SO hit-VFX prefab was Instantiated with NO
+                        // Destroy — every non-lethal hit leaked a GameObject forever
+                        // (a HARD leak; the procedural VfxPool path self-returns). Give
+                        // the spawned VFX a bounded lifetime so it self-destructs.
+                        var hitGo = Instantiate(hitPrefab, hitPos, Quaternion.identity);
+                        if (hitGo != null) Destroy(hitGo, TypeVfxSelfDestructSeconds);
+                    }
                     else
                         VfxPool.SpawnHitImpact(hitPos);
                 }
@@ -1093,6 +1121,139 @@ namespace DeNelle.Village
             if (!_dead) Die(killed: false);
         }
 
+        // =====================================================================
+        //  Pooling reset contract (EnemyPool) — EXHAUSTIVE on purpose.
+        //  A missed reset = an enemy that spawns dead / untargetable / with stale
+        //  HP / double-subscribed events. RELEASE tears the body down to a clean
+        //  dormant state; REUSE re-arms it for a fresh spawn (the spawner then
+        //  calls Configure(), which re-seeds stats / agent / id as it always has).
+        // =====================================================================
+
+        /// <summary>
+        /// RELEASE side — called by <see cref="Die"/> right before the body returns
+        /// to the <see cref="EnemyPool"/>. Drops EVERYTHING that must not survive into
+        /// the next reuse: live coroutines, the targeting registry membership, the
+        /// damage-attribution ledger (keyed on BOTH this Enemy and its EnemyDamageable
+        /// — the hero/pet record against the adapter, ProgressionManager drains against
+        /// the Enemy, so both buckets must be forgotten or they leak across reuses),
+        /// the brain nav overrides, the contact target, status timers and VFX/tint
+        /// state. The GameObject is left ACTIVE here; the pool deactivates it (so the
+        /// death-hold animation has already played by the time Die calls us).
+        /// </summary>
+        public void ResetForPool()
+        {
+            // 1. Stop every coroutine this body started (telegraph wind-up, secondary
+            //    death burst, hit-flash is owned by EnemyHitReaction's OnDisable).
+            StopAllCoroutines();
+            _telegraphing = false;
+
+            // 2. Leave the targeting registry so the reticle/towers/pets can't pick a
+            //    pooled body. (Die already unregistered on death; idempotent here.)
+            TargetManager.Unregister(this);
+
+            // 3. Forget the damage ledger under BOTH keys (see summary) so a reused
+            //    body never inherits a previous life's attribution. ReportKill already
+            //    Drained this Enemy on a real kill; Forget is idempotent + also clears
+            //    the adapter-keyed bucket that Record() actually wrote to.
+            DeNelle.Core.Combat.DamageAttribution.Forget(this);
+            var dmg = GetComponent<EnemyDamageable>();
+            if (dmg != null) DeNelle.Core.Combat.DamageAttribution.Forget(dmg);
+
+            // 4. Clear AI / nav overrides so the reused body re-acquires from scratch
+            //    (brain re-scores on its own interval; these clear the Enemy-side seam).
+            _brainTarget = null;
+            _brainPositionOverride = null;
+            _currentTarget = null;
+            _heroAggroEngaged = false;
+            _heroTransform = null;
+            _heroResolveTimer = 0f;
+
+            // 5. Halt + detach the agent so a dormant body never paths.
+            if (_agent != null && _agent.isOnNavMesh) _agent.isStopped = true;
+
+            // 6. Clear the next-hit VFX/tint stamps so a reused body starts neutral.
+            _nextNumberTint = null;
+            _nextImpactElement = null;
+        }
+
+        /// <summary>
+        /// ACQUIRE side — called by <see cref="EnemyPool.Get"/> on a REUSED body right
+        /// after it is re-enabled + re-placed. Re-arms the body to a live, full-HP,
+        /// targetable, animating state. Stat-specific re-seeding (HP from def, agent
+        /// speed, id) is then done by the spawner's <see cref="Configure"/> call (and
+        /// <see cref="ApplyWaveScaling"/>) exactly as on a fresh spawn — so this method
+        /// only undoes the DEATH state the body was pooled in.
+        /// </summary>
+        /// <param name="pos">Re-spawn position (already NavMesh-snapped by the pool).</param>
+        /// <param name="rot">Re-spawn rotation.</param>
+        public void PrepareForReuse(Vector3 pos, Quaternion rot)
+        {
+            // Resolve refs (the body's components persist across pooling, but re-cache
+            // defensively in case anything was lost — mirrors Awake).
+            EnsureAgent();
+            EnsureAnimator();
+            EnsureAudio();
+            EnsureHitReaction();
+
+            // 1. Clear the dead latch FIRST so Update()/targeting see a live enemy.
+            _dead = false;
+            _telegraphing = false;
+            _navWarned = false;
+            _attackCooldown = 0f;
+            _currentTarget = null;
+            _brainTarget = null;
+            _brainPositionOverride = null;
+            _heroAggroEngaged = false;
+            _heroTransform = null;
+            _heroResolveTimer = 0f;
+            _nextNumberTint = null;
+            _nextImpactElement = null;
+
+            // 2. Restore HP to full so the body isn't handed out at 0 HP / instantly
+            //    re-dead. Configure() re-seeds _maxHp from the def right after this;
+            //    we set _hp = _maxHp so there is never a 1-frame zero-HP window.
+            _hp = _maxHp;
+
+            // 3. Reset the Animator out of its latched Death state (the Dead bool is a
+            //    sticky latch — without clearing it the reused body stays collapsed).
+            _actor?.Revive();
+            if (_animator != null)
+            {
+                if (_hasDeadParam) _animator.SetBool(AnimDead, false);
+                if (_hasSpeedParam) _animator.SetFloat(AnimSpeed, 0f);
+                // Rebind drops any in-flight death-clip pose so the controller restarts
+                // clean at its default (idle) state on the next frame.
+                if (_animator.runtimeAnimatorController != null && _animator.isActiveAndEnabled)
+                    _animator.Rebind();
+            }
+
+            // 4. Re-place + warp the agent onto the NavMesh and re-enable pathing so a
+            //    reused body actually moves (Warp is the supported way to teleport a
+            //    NavMeshAgent; SetPosition alone desyncs the internal agent state).
+            if (_agent != null)
+            {
+                if (_agent.isOnNavMesh) _agent.isStopped = true;
+                _agent.Warp(pos);
+                if (_agent.isOnNavMesh) _agent.isStopped = false;
+            }
+
+            // 5. Status timers (freeze/slow/burn) live on EnemyDamageable and key off
+            //    Time.time + seconds; by the time a body is reused, Time.time has long
+            //    passed any expiry set on its previous life, so IsFrozen/IsSlowed/
+            //    IsBurning already read false. No explicit clear needed for the normal
+            //    case. (Edge case: a multi-minute status applied the frame before death
+            //    could carry over — flagged for the owner playtest.)
+
+            // 6. Re-register with the targeting registry. OnEnable already fired
+            //    Register when the pool SetActive(true)'d us, but Register dedups, so
+            //    this belt-and-braces a body whose OnEnable ran before _dead cleared.
+            TargetManager.Register(this);
+
+            // 7. Reset the path throttle so the first reuse frame re-paths immediately.
+            _pathRefreshTimer = 0f;
+            _lastPathedDestination = Vector3.zero;
+        }
+
         /// <param name="killed">
         /// True when HP reached zero (a real defender kill — grants shared XP);
         /// false when force-removed (ATB breach) — no XP, just drop its ledger.
@@ -1135,7 +1296,14 @@ namespace DeNelle.Village
                         // DEF-46: per-type death VFX — SO prefab when assigned, else VfxPool.
                         GameObject deathPrefab = _typeVfxSet != null ? _typeVfxSet.RandomDeathVfxPrefab() : null;
                         if (deathPrefab != null)
-                            Instantiate(deathPrefab, deathPos, Quaternion.identity);
+                        {
+                            // LEAK FIX (#3): the SO death-VFX prefab was Instantiated with
+                            // NO Destroy — every kill leaked a GameObject forever. Bound
+                            // its lifetime so it self-destructs (the VfxPool path already
+                            // self-returns; this matches that behaviour).
+                            var deathGo = Instantiate(deathPrefab, deathPos, Quaternion.identity);
+                            if (deathGo != null) Destroy(deathGo, TypeVfxSelfDestructSeconds);
+                        }
                         else
                             VfxPool.SpawnDeathBurst(deathPos);
                     }
@@ -1184,19 +1352,36 @@ namespace DeNelle.Village
             if (killed && _def != null && _def.GlimmerReward > 0)
                 TryAwardGlimmer(_def.GlimmerReward);
 
-            // Play the death (collapse) animation, then destroy. The Dead bool
-            // latches the controller's Death state from anywhere; the GameObject
-            // is held DeathHoldSeconds so the collapse clip is visible before
-            // it is removed. With no Animator the enemy is destroyed at once.
+            // Play the death (collapse) animation, then RETURN TO THE POOL (no longer
+            // Destroy — pooling reuses the body to kill the per-spawn GameObject churn
+            // / stray accumulation). The Dead bool latches the controller's Death state;
+            // the body is held DeathHoldSeconds so the collapse clip is visible, then
+            // ResetForPool tears it down and EnemyPool.Release parks it dormant. With no
+            // Animator there is nothing to hold for, so it is released this frame.
             if (_animator != null)
             {
                 if (_hasDeadParam) _animator.SetBool(AnimDead, true);
-                Destroy(gameObject, DeathHoldSeconds);
+                StartCoroutine(ReturnToPoolAfterDeathHold());
             }
             else
             {
-                Destroy(gameObject);
+                ResetForPool();
+                EnemyPool.Release(this);
             }
+        }
+
+        /// <summary>
+        /// Holds the dead body <see cref="DeathHoldSeconds"/> so its collapse clip is
+        /// visible, then resets it and returns it to the <see cref="EnemyPool"/>. This
+        /// replaces the old <c>Destroy(gameObject, DeathHoldSeconds)</c>. If the body
+        /// were re-killed in that window the dead latch prevents a second Die; and if
+        /// the pool is gone (shutdown) Release falls back to Destroy.
+        /// </summary>
+        private System.Collections.IEnumerator ReturnToPoolAfterDeathHold()
+        {
+            yield return new WaitForSeconds(DeathHoldSeconds);
+            ResetForPool();
+            EnemyPool.Release(this);
         }
 
         // ---------------------------------------------------------------------

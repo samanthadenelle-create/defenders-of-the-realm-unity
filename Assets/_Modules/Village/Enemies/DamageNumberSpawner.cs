@@ -23,6 +23,7 @@
 // with no active camera simply skips the float without throwing.
 // =============================================================================
 
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace DeNelle.Village
@@ -92,10 +93,11 @@ namespace DeNelle.Village
             Camera cam = Camera.main;
             if (cam == null) return null;
 
-            var go = new GameObject("DamageNumber");
-            go.transform.position = worldPos;
-
-            var num = go.AddComponent<DamageNumberSpawner>();
+            // POOLED: reuse a dormant number (GameObject + TextMesh + material) instead
+            // of new GameObject / AddComponent / Destroy per hit. In a busy wave this is
+            // a hit-rate GC source; the pool drops it to ~zero in steady state. Same
+            // shape as VfxPool — SetActive cycle under a DontDestroyOnLoad root.
+            var num = Acquire(worldPos);
             num.Build(amount, cam);
             return num;
         }
@@ -128,12 +130,61 @@ namespace DeNelle.Village
             Camera cam = Camera.main;
             if (cam == null) return null;
 
-            var go = new GameObject("FloatingLabel");
-            go.transform.position = worldPos;
-
-            var n = go.AddComponent<DamageNumberSpawner>();
+            var n = Acquire(worldPos);
             n.BuildLabel(label, color, scale, cam);
             return n;
+        }
+
+        // ── Pool (SetActive cycle under a DontDestroyOnLoad root) ─────────────
+        // Mirrors VfxPool: a dormant number is just disabled + re-homed, then
+        // re-armed by Build/BuildLabel on the next Spawn. Self-installs lazily.
+        private static readonly Queue<DamageNumberSpawner> s_pool =
+            new Queue<DamageNumberSpawner>();
+        private static Transform s_root;
+
+        private static Transform Root()
+        {
+            if (s_root == null)
+            {
+                var go = new GameObject("DamageNumberPool");
+                Object.DontDestroyOnLoad(go);
+                s_root = go.transform;
+            }
+            return s_root;
+        }
+
+        /// <summary>Leases a number GameObject from the pool (or builds one), positioned
+        /// at <paramref name="worldPos"/> and active. Skips destroyed entries (scene-unload
+        /// guard, per ProjectilePool).</summary>
+        private static DamageNumberSpawner Acquire(Vector3 worldPos)
+        {
+            DamageNumberSpawner num = null;
+            while (num == null && s_pool.Count > 0) num = s_pool.Dequeue();   // skip dead refs
+
+            if (num == null)
+            {
+                var go = new GameObject("DamageNumber");
+                go.transform.SetParent(Root(), false);
+                num = go.AddComponent<DamageNumberSpawner>();
+            }
+
+            // Re-parent out of the pool root so the world-space number floats freely.
+            num.transform.SetParent(null, false);
+            num.transform.position = worldPos;
+            num.gameObject.SetActive(true);
+            return num;
+        }
+
+        /// <summary>Returns a spent number to the pool: deactivated, re-homed, alpha-reset.
+        /// Replaces the old <c>Destroy(gameObject)</c> at end-of-life.</summary>
+        private void Recycle()
+        {
+            // Clear the visible glyph so a dormant number can't flash stale text for a
+            // frame before its next Build re-arms it.
+            if (_text != null) _text.text = string.Empty;
+            transform.SetParent(Root(), false);
+            gameObject.SetActive(false);
+            if (!s_pool.Contains(this)) s_pool.Enqueue(this);
         }
 
         /// <summary>
@@ -146,6 +197,8 @@ namespace DeNelle.Village
             _faceCamera = cam;
             _startPos = _tf.position;
             _age = 0f;
+            _lifetime = Lifetime;   // reset (a reused body may have been a longer label)
+            _rise = RiseDistance;
 
             // 0..1 magnitude ramp → size + colour. A normal melee hit sits low on
             // the ramp; a buffed ability hit pushes toward the big end.
@@ -158,12 +211,14 @@ namespace DeNelle.Village
 
             _startColor = Color.Lerp(NormalColor, BigColor, t);
 
-            _text = gameObject.AddComponent<TextMesh>();
+            // POOLED: reuse the TextMesh on a recycled body; only build it once.
+            if (_text == null) _text = gameObject.AddComponent<TextMesh>();
             _text.text = Mathf.RoundToInt(amount).ToString();
             _text.anchor = TextAnchor.MiddleCenter;
             _text.alignment = TextAlignment.Center;
             _text.characterSize = BaseCharacterSize;
             _text.fontSize = 96;            // crisp glyphs; size is driven by characterSize + scale
+            _text.fontStyle = FontStyle.Normal;   // reset (a reused label was Bold)
             _text.richText = false;
             _text.color = _startColor;
 
@@ -193,7 +248,8 @@ namespace DeNelle.Village
             _tf.localScale = Vector3.one * _baseScale;
             _startColor = color;
 
-            _text = gameObject.AddComponent<TextMesh>();
+            // POOLED: reuse the TextMesh on a recycled body; only build it once.
+            if (_text == null) _text = gameObject.AddComponent<TextMesh>();
             _text.text = label;
             _text.anchor = TextAnchor.MiddleCenter;
             _text.alignment = TextAlignment.Center;
@@ -219,7 +275,7 @@ namespace DeNelle.Village
             float k = _age / _lifetime;        // 0..1 progress
             if (k >= 1f)
             {
-                UnityEngine.Object.Destroy(gameObject);
+                Recycle();   // POOLED: return to the pool instead of Destroy
                 return;
             }
 

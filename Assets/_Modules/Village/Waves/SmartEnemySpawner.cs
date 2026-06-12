@@ -150,7 +150,12 @@ namespace DeNelle.Village
                         ? Quaternion.LookRotation(toHeartDir)
                         : Quaternion.LookRotation(heading);
 
-                    Enemy enemy = EnemyFactory.Build(def, pos, rot, enemyRoot);
+                    // POOLED: reuse a dormant body of this model instead of building a
+                    // fresh skinned GameObject every wave (per-spawn churn was the main
+                    // GC / stray source). Keyed by model id so a reused skeleton is never
+                    // handed out where an orc/troll was asked for.
+                    Enemy enemy = EnemyPool.Get("model:" + EnemyFactory.ModelForEnemy(def),
+                                                null, def, pos, rot, enemyRoot);
                     if (enemy == null) continue;
 
                     if (enemy.GetComponent<EnemyDamageable>() == null)

@@ -136,19 +136,23 @@ namespace DeNelle.Village
                         ? Quaternion.LookRotation(toHeart)
                         : Quaternion.identity;
 
-                    var go = Instantiate(entry.Prefab, pos, rot, enemyRoot);
-                    if (go == null) continue;
-
-                    // Wire Enemy (null def → use prefab inspector stats).
-                    var enemy = go.GetComponent<Enemy>();
-                    if (enemy == null)
+                    // POOLED: the WaveEnemyGroup authors a GameObject prefab; resolve its
+                    // Enemy component so EnemyPool can reuse a dormant body of this prefab
+                    // (keyed by prefab name) instead of Instantiate-per-spawn. A prefab
+                    // with no Enemy is a wiring error — skip it as before.
+                    Enemy prefabEnemy = entry.Prefab.GetComponent<Enemy>();
+                    if (prefabEnemy == null)
                     {
                         Debug.LogWarning(
                             $"[EnemyGroupSpawner] Prefab '{entry.Prefab.name}' in group " +
                             $"'{group.GroupName}' is missing an Enemy component — skipped.");
-                        Destroy(go);
                         continue;
                     }
+
+                    Enemy enemy = EnemyPool.Get("prefab:" + entry.Prefab.name,
+                                                prefabEnemy, null, pos, rot, enemyRoot);
+                    if (enemy == null) continue;
+                    var go = enemy.gameObject;
 
                     string instanceId = $"grp-w{waveId}-{entry.Role}-{instanceCounter++}";
                     enemy.Configure(instanceId, null, heart);
@@ -250,8 +254,11 @@ namespace DeNelle.Village
                         ? Quaternion.LookRotation(toHeart)
                         : Quaternion.identity;
 
-                    // Build the body via the shared factory (skinned, hittable, agent).
-                    Enemy enemy = EnemyFactory.Build(member.Def, pos, rot, enemyRoot);
+                    // POOLED: reuse a dormant body of this model via EnemyPool instead
+                    // of building a fresh skinned body every wave (the shared factory is
+                    // still the fresh-build path inside the pool). Keyed by model id.
+                    Enemy enemy = EnemyPool.Get("model:" + EnemyFactory.ModelForEnemy(member.Def),
+                                                null, member.Def, pos, rot, enemyRoot);
                     if (enemy == null) continue;
 
                     string instanceId = $"grp-w{waveId}-{member.Role}-{instanceCounter++}";

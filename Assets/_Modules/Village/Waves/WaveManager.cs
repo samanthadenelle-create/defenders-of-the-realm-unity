@@ -372,9 +372,14 @@ namespace DeNelle.Village
                 Debug.LogError($"[WaveManager] Prefab is null for enemy data: {def.Id}. Assign an enemy prefab to WaveManager._enemyPrefab in the inspector. Using primitive placeholder.");
             }
 
-            Enemy enemy = _enemyPrefab != null
-                ? Instantiate(_enemyPrefab, pos, rot, _enemyRoot)
-                : EnemyFactory.Build(def, pos, rot, _enemyRoot);   // skinned, no more pill
+            // POOLED (same path as SpawnOne): reuse a dead body instead of churning a
+            // fresh GameObject. The external caller owns this enemy's lifecycle; on its
+            // death Enemy.Die returns it to the pool like any other.
+            string poolKey = _enemyPrefab != null
+                ? "prefab:" + _enemyPrefab.name
+                : "model:" + EnemyFactory.ModelForEnemy(def);
+            Enemy enemy = EnemyPool.Get(poolKey, _enemyPrefab, def, pos, rot, _enemyRoot);
+            if (enemy == null) return null;
 
             // The hero/pet target sweeps find enemies via GetComponentInParent
             // <IDamageable>, which resolves to EnemyDamageable. The placeholder
@@ -1039,14 +1044,23 @@ namespace DeNelle.Village
                     pos, out var hit, 8f, UnityEngine.AI.NavMesh.AllAreas))
                 pos = hit.position;
 
-            Enemy enemy = _enemyPrefab != null
-                ? Instantiate(_enemyPrefab, pos, rot, _enemyRoot)
-                : EnemyFactory.Build(def, pos, rot, _enemyRoot);   // skinned, no more pill
+            // POOLED: route through EnemyPool so a dead enemy's body is reused instead
+            // of Instantiate-per-spawn / Destroy-on-death (the per-spawn GameObject churn
+            // that was the main GC / stray-accumulation source). The pool keys on the
+            // prefab name (prefab path) or the EnemyDef model id (factory path) so a
+            // reused body matches the kind asked for; it builds fresh on a drain. The
+            // CALLER still Configures + scales + hooks events below, exactly as before.
+            string poolKey = _enemyPrefab != null
+                ? "prefab:" + _enemyPrefab.name
+                : "model:" + EnemyFactory.ModelForEnemy(def);
+            Enemy enemy = EnemyPool.Get(poolKey, _enemyPrefab, def, pos, rot, _enemyRoot);
+            if (enemy == null) return;
 
             // The hero/pet target sweeps find enemies via GetComponentInParent<IDamageable>,
             // which resolves to EnemyDamageable. The placeholder capsule (and some prefabs)
             // don't carry it — add it so the hero/pets can actually ACQUIRE + DAMAGE this
             // wave enemy. Without it the enemy marches + attacks but is INVULNERABLE to you.
+            // (EnemyPool also guarantees this on a fresh build; kept for prefab parity.)
             if (enemy.GetComponent<EnemyDamageable>() == null)
                 enemy.gameObject.AddComponent<EnemyDamageable>();
 
