@@ -1,0 +1,115 @@
+{
+  "version": 1,
+  "_comment": "WeaponSkill -> animation-cycle mapping. The OWNER GOAL: animation is determined by JOB TYPE + WEAPON-SKILL, so each class skill plays its matching swing/cast instead of one generic Cast trigger. KEYS: 'class' is the abilities.json class id (mage|knight|ranger|cleric; Wizard art folder == mage, Healer art folder == cleric). 'skill' is the weaponskill name from Resources/HudIcons/<Class>/ (the per-class skill icon set the HUD shows). 'slot' (q/w/e/r) ties the skill to the abilities.json ability that fires it (this is what the runtime actually casts today — the skill name is the design label for that slot). RUNTIME CONTRACT: 'trigger' is the canonical AnimParams verb the ActorAnimator must fire (Cast|Attack|WindUp|Victory|Block). 'combo' (>=0) is the Combo int set BEFORE an Attack trigger so a multi-clip class (Knight) plays a DIFFERENT swing per skill via the Attack0/1/2 states the HeroAnimatorFactory builds. 'clip' is the Assets/Action FBX basename the factory should bind to that state. 'clipExists'=true means the FBX is present today; false means MISSING -> 'fallbackClip' (an existing clip) is used until art lands. This file is the SINGLE source the HeroAnimatorFactory reads to build per-skill states AND the runtime (HeroAbilities / BattleController) reads to pick the right trigger+combo per cast. Dual-copy: Resources copy WINS at load; keep StreamingAssets copy in sync.",
+  "_notes": {
+    "knight": "Knight has the RICHEST clip set (10+ melee swings) -> full per-skill coverage achievable now. Each skill maps to a distinct Attack combo index; HeroAnimatorFactory must be extended from 3 Attack states to 4 (one per skill) OR reuse 3 + 1 cast-style for Charge.",
+    "ranger": "Ranger is the BIGGEST GAP: only Ranger_Aim_Idle exists (no draw/fire/volley/trap clips). Every ranger skill falls back to the aim pose today. Needs 3-4 bow clips retargeted via HeroAnimatorFactory before per-skill coverage is real.",
+    "wizard": "Wizard (mage) has 12 cast clips -> easy per-skill distinct casts (1H/2H/area variants). Currently the factory only binds one (Wizard_Spell_Cast).",
+    "healer": "No Healer art folder + abilities.json has NO cleric class (Cleric routes to mage loadout in code). Only Wizard_Heal exists for healing. Smite/Holy/Group_Heal reuse Wizard cast clips until a Healer set is acquired."
+  },
+  "fallbackByTrigger": {
+    "Cast": "Wizard_Spell_Cast",
+    "Attack": "standing melee attack horizontal"
+  },
+  "skills": [
+    {
+      "class": "knight", "skill": "Cleave", "slot": "w",
+      "trigger": "Attack", "combo": 0,
+      "clip": "standing melee attack horizontal", "clipExists": true, "fallbackClip": "standing melee attack horizontal",
+      "_note": "Wide horizontal swing reads as a cleave. Maps to the cleave ability (knight W)."
+    },
+    {
+      "class": "knight", "skill": "thrust", "slot": "q",
+      "trigger": "Attack", "combo": 1,
+      "clip": "standing melee combo attack ver. 1", "clipExists": true, "fallbackClip": "standing melee attack horizontal",
+      "_note": "Forward stab-style combo = thrust. Maps to the strike ability (knight Q / Shield Bash)."
+    },
+    {
+      "class": "knight", "skill": "parry", "slot": "e",
+      "trigger": "Block", "combo": -1,
+      "clip": "standing block idle", "clipExists": true, "fallbackClip": "standing melee attack horizontal",
+      "_note": "Knight E is the heal/ward (Oath Ward) today but the PARRY weaponskill should read as a defensive block stance. Use the Block bool. If E must keep the heal cast, fall back to Cast."
+    },
+    {
+      "class": "knight", "skill": "Charge", "slot": "r",
+      "trigger": "Attack", "combo": 2,
+      "clip": "standing melee run jump attack", "clipExists": true, "fallbackClip": "standing melee combo attack ver. 2",
+      "_note": "Ultimate (Lantern Charge, cleave) = the lunging run-jump attack. Maps to knight R."
+    },
+
+    {
+      "class": "ranger", "skill": "Ranged_Attack", "slot": "q",
+      "trigger": "Cast", "combo": -1,
+      "clip": "Ranger_Fire", "clipExists": false, "fallbackClip": "Ranger_Aim_Idle",
+      "_note": "Basic shot (Quick Shot). NEEDS a bow draw+release clip; today only the aim idle exists -> falls back to the static aim pose. Ranger uses Cast trigger as the 'fire' verb (factory maps ranger cast clip = Ranger_Aim_Idle)."
+    },
+    {
+      "class": "ranger", "skill": "Poison_Arrow", "slot": "w",
+      "trigger": "Cast", "combo": -1,
+      "clip": "Ranger_Aimed_Shot", "clipExists": false, "fallbackClip": "Ranger_Aim_Idle",
+      "_note": "Snare Trap (snare). Needs an aimed/charged shot clip; falls back to aim idle."
+    },
+    {
+      "class": "ranger", "skill": "rapid_fire", "slot": "e",
+      "trigger": "Cast", "combo": -1,
+      "clip": "Ranger_Rapid_Fire", "clipExists": false, "fallbackClip": "Ranger_Aim_Idle",
+      "_note": "Ranger E is the heal (Mending Salve) today; the rapid_fire weaponskill wants a fast multi-shot. No clip -> aim idle. If E keeps the heal, use a cast/channel pose."
+    },
+    {
+      "class": "ranger", "skill": "Barrage", "slot": "r",
+      "trigger": "Cast", "combo": -1,
+      "clip": "Ranger_Volley", "clipExists": false, "fallbackClip": "Ranger_Aim_Idle",
+      "_note": "Ultimate (Storm of Arrows, aoe). Needs an upward volley clip; falls back to aim idle."
+    },
+
+    {
+      "class": "mage", "skill": "Fireball", "slot": "q",
+      "trigger": "Cast", "combo": -1,
+      "clip": "Standing 1H Magic Attack 01", "clipExists": true, "fallbackClip": "Wizard_Spell_Cast",
+      "_note": "Snappy single-hand cast = Arcane Bolt / Fireball (mage Q strike). One-hand forward cast reads as a bolt/fireball."
+    },
+    {
+      "class": "mage", "skill": "Lightining", "slot": "w",
+      "trigger": "Cast", "combo": -1,
+      "clip": "Standing 2H Magic Area Attack 01", "clipExists": true, "fallbackClip": "Wizard_Spell_Cast",
+      "_note": "Frost Nova / Lightning (mage W aoe). Two-hand AREA cast reads as a burst nova."
+    },
+    {
+      "class": "mage", "skill": "Plasma", "slot": "e",
+      "trigger": "Cast", "combo": -1,
+      "clip": "Wizard_Heal", "clipExists": true, "fallbackClip": "Wizard_Spell_Cast",
+      "_note": "Mage E is Healing Beacon (heal). The Plasma weaponskill icon sits in this slot; the heal-cast pose plays. If a true plasma offensive is wanted, swap the ability effect first."
+    },
+    {
+      "class": "mage", "skill": "Meteor", "slot": "r",
+      "trigger": "Cast", "combo": -1,
+      "clip": "Standing 2H Magic Attack 03", "clipExists": true, "fallbackClip": "Wizard_Spell_Cast",
+      "_note": "Ultimate (Meteor Strike, meteor). Big two-hand overhead cast reads as calling down a meteor."
+    },
+
+    {
+      "class": "cleric", "skill": "Smite", "slot": "q",
+      "trigger": "Cast", "combo": -1,
+      "clip": "Standing 1H Magic Attack 02", "clipExists": true, "fallbackClip": "Wizard_Spell_Cast",
+      "_note": "Cleric uses the mage loadout (abilities.json has no cleric). Smite = offensive single-hand cast. Shares Wizard art."
+    },
+    {
+      "class": "cleric", "skill": "Holy", "slot": "w",
+      "trigger": "Cast", "combo": -1,
+      "clip": "Standing 2H Cast Spell 01", "clipExists": true, "fallbackClip": "Wizard_Spell_Cast",
+      "_note": "Holy = two-hand channel cast. Shares Wizard art."
+    },
+    {
+      "class": "cleric", "skill": "Heal", "slot": "e",
+      "trigger": "Cast", "combo": -1,
+      "clip": "Wizard_Heal", "clipExists": true, "fallbackClip": "Wizard_Spell_Cast",
+      "_note": "Heal (heal effect). Wizard_Heal is the dedicated heal clip the Cleric.controller already binds as its cast."
+    },
+    {
+      "class": "cleric", "skill": "Group_Heal", "slot": "r",
+      "trigger": "Cast", "combo": -1,
+      "clip": "Standing 2H Magic Area Attack 02", "clipExists": true, "fallbackClip": "Wizard_Heal",
+      "_note": "Ultimate group heal = a two-hand AREA cast (reuses the area-attack pose as an area-heal gesture). Shares Wizard art."
+    }
+  ]
+}
