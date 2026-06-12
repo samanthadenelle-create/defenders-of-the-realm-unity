@@ -3,6 +3,17 @@
 This file is read by every agent (UI and CLI) before starting work.
 Rules here are **non-negotiable**. Do not skip them to ship faster.
 
+**MANDATORY FIRST STEP (BINDING — read before ANY work, every session):** read
+`docs/MASTER_CATALOG.md` — the exhaustive, file-by-file catalog of every
+class/method/asset/scene/data-file/doc, with the architecture map + a prioritized
+stale/risk ledger. Then read the relevant `docs/MASTER_CATALOG/<area>.md` section
+for whatever you're about to touch. It is verified **from the actual code, NOT from
+comments** (comments lie — e.g. `HeroLocomotion`'s "pure transform" header hides that
+it's a `NavMeshAgent`; trusting it mis-diagnoses every movement bug). **Be the
+subject-matter expert BEFORE you change anything.** No fixing, building, or
+claiming-fixed on assumptions — this supersedes guess-and-grep. Keep the catalog
+current when systems change.
+
 **Architecture law (BINDING):** read `docs/ARCHITECTURE_PRINCIPLES.md` first. The
 project follows the owner's **HP B2B** architecture — bounded context per component,
 scope deliberately limited; **presentation is a separate layer that never touches the
