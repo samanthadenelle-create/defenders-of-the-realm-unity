@@ -112,6 +112,17 @@ namespace DeNelle.Village
             return SpawnFlying(mover, element);
         }
 
+        /// <summary>Re-play the persistent flying particle FX already parented under
+        /// <paramref name="host"/> (built ONCE by MoverProjectilePool and reused per lease).
+        /// Clears + restarts every child ParticleSystem so a pooled body's flying streak is
+        /// fresh each shot without a per-shot Instantiate/Destroy. No-op when there is no FX
+        /// body (e.g. a placeholder body whose visual is a mesh + TrailRenderer).</summary>
+        public static void ReplayFlying(GameObject host)
+        {
+            if (host == null) return;
+            PlayAll(host);
+        }
+
         /// <summary>Fire a one-shot impact burst for <paramref name="element"/> at
         /// <paramref name="position"/>; it self-destroys after its particle lifetime.
         /// No-op when the prefab is missing.</summary>
@@ -120,12 +131,41 @@ namespace DeNelle.Village
             var prefab = Load(ImpactPath(element));
             if (prefab == null) return;
 
+            // Pool the impact burst (GC-free, no per-shot transient GameObject) when the
+            // pool is up; fall back to the legacy Instantiate+Destroy otherwise.
+            if (ImpactFXPool.Instance != null)
+            {
+                ImpactFXPool.Instance.Play(prefab, position, Quaternion.identity, -1f, prepared: false);
+                return;
+            }
+
             var go = Object.Instantiate(prefab, position, Quaternion.identity);
             CleanToVisualOnly(go);
             FixUrpShaders(go);
             PlayAll(go);
             Object.Destroy(go, LongestLifetime(go) + 0.3f);
         }
+
+        // ---------------------------------------------------------------------
+        // POOL HOOKS (used by ImpactFXPool — keeps the clean/URP/replay logic here)
+        // ---------------------------------------------------------------------
+
+        /// <summary>Prepare a freshly-Instantiated catalog FX instance for pooled reuse:
+        /// strip physics/demo-scripts and remap built-in particle shaders to URP. Called
+        /// ONCE by the pool when it first builds a body for a given prefab.</summary>
+        internal static void PreparePooledInstance(GameObject go)
+        {
+            if (go == null) return;
+            CleanToVisualOnly(go);
+            FixUrpShaders(go);
+        }
+
+        /// <summary>Replay all particle systems on a pooled FX body.</summary>
+        internal static void ReplayPooled(GameObject go) => PlayAll(go);
+
+        /// <summary>The on-screen lifetime (seconds) of a pooled FX body, so the pool knows
+        /// when to reclaim it.</summary>
+        internal static float PooledLifetime(GameObject go) => LongestLifetime(go) + 0.3f;
 
         // ---------------------------------------------------------------------
         // LOAD + CLEAN + URP FIXUP

@@ -99,19 +99,20 @@ namespace DeNelle.Village
             // VFX: fire a real particle-FX-bodied projectile (Storm bolt for the
             // physical arrow). This WINS over the WO-280 placeholder suppression — that
             // flag only hid the raw debug primitive; the particle FX IS the intended visual.
+            // POOLED: the body is LEASED from MoverProjectilePool (GC-free) instead of a
+            // per-shot Instantiate; it returns itself to the pool on Arrive.
             if (_arrowPrefab == null)
             {
-                var sgo = BuildVfxProjectile(origin, DamageElement.None, "RangerArrow");
-                if (!sgo.TryGetComponent(out ProjectileMover smover)) smover = sgo.AddComponent<ProjectileMover>();
+                var smover = LeaseMover(ProjectileBodyKind.RangerArrowVfx, origin);
                 smover.Launch(targetWorldPos, _arrowSpeed, _arrowArc,
                     WithImpactVfx(targetWorldPos, DamageElement.None, WithLandBurst(targetWorldPos, onArrive)));
                 return;
             }
 
-            var go = _arrowPrefab != null
-                ? Instantiate(_arrowPrefab, origin, Quaternion.identity)
-                : BuildPlaceholderArrow(origin);
-
+            // Authored prefab path (rare — only when an _arrowPrefab is assigned): kept as a
+            // per-shot Instantiate. The body is unbound, so ProjectileMover self-destructs on
+            // arrival via its legacy path. (No pool key for an arbitrary authored prefab.)
+            var go = Instantiate(_arrowPrefab, origin, Quaternion.identity);
             if (!go.TryGetComponent(out ProjectileMover mover)) mover = go.AddComponent<ProjectileMover>();
             mover.Launch(targetWorldPos, _arrowSpeed, _arrowArc, WithLandBurst(targetWorldPos, onArrive));
         }
@@ -127,19 +128,17 @@ namespace DeNelle.Village
 
             // VFX: fire a real particle-FX-bodied arcane orb (wins over the WO-280
             // primitive suppression — the FX is the intended visual, not a debug sphere).
+            // POOLED: leased from MoverProjectilePool (GC-free), returns itself on Arrive.
             if (_spellOrbPrefab == null)
             {
-                var sgo = BuildVfxProjectile(origin, DamageElement.Aether, "MageOrb");
-                if (!sgo.TryGetComponent(out ProjectileMover smover)) smover = sgo.AddComponent<ProjectileMover>();
+                var smover = LeaseMover(ProjectileBodyKind.MageOrbVfx, origin);
                 smover.Launch(targetWorldPos, _orbSpeed, 0f,
                     WithImpactVfx(targetWorldPos, DamageElement.Aether, WithLandBurst(targetWorldPos, onArrive)));
                 return;
             }
 
-            var go = _spellOrbPrefab != null
-                ? Instantiate(_spellOrbPrefab, origin, Quaternion.identity)
-                : BuildPlaceholderOrb(origin);
-
+            // Authored prefab path (rare): per-shot Instantiate, unbound, self-destructs.
+            var go = Instantiate(_spellOrbPrefab, origin, Quaternion.identity);
             if (!go.TryGetComponent(out ProjectileMover mover)) mover = go.AddComponent<ProjectileMover>();
             mover.Launch(targetWorldPos, _orbSpeed, 0f, WithLandBurst(targetWorldPos, onArrive));
         }
@@ -221,81 +220,31 @@ namespace DeNelle.Village
             yield return null;
         }
 
-        // ── VFX-bodied projectile (real particle FX) ─────────────────────────
+        // ── Pooled projectile body lease ─────────────────────────────────────
 
-        /// <summary>Build a projectile whose visual is a real particle-FX body
-        /// (Spells Pack, via ProjectileVFXCatalog), element-matched and oriented along
-        /// travel (ProjectileMover orients the root's transform.forward; the FX is
-        /// parented at local-identity so it rides that orientation).</summary>
-        private static GameObject BuildVfxProjectile(Vector3 origin, DamageElement element, string label)
+        /// <summary>Lease a ProjectileMover-bodied projectile of <paramref name="kind"/> from
+        /// MoverProjectilePool at <paramref name="origin"/> (GC-free reuse). Falls back to a
+        /// fresh one-off body if the pool isn't booted yet (pre-AfterSceneLoad) so a shot is
+        /// never dropped. The caller arms it via ProjectileMover.Launch — behavior identical
+        /// to the old per-shot Instantiate; only the body's lifecycle changed.</summary>
+        private static ProjectileMover LeaseMover(ProjectileBodyKind kind, Vector3 origin)
         {
-            var go = new GameObject(label);
-            go.transform.position = origin;
+            if (MoverProjectilePool.Instance != null)
+                return MoverProjectilePool.Instance.Acquire(kind, origin, Quaternion.identity);
 
-            // Parent the cleaned particle FX (physics/demo-scripts stripped) to this root.
+            // Fallback (pool not yet bootstrapped): build a one-off VFX body the old way.
+            // Unbound → ProjectileMover self-destructs on arrival via its legacy path.
+            DamageElement element = kind == ProjectileBodyKind.MageOrbVfx ? DamageElement.Aether : DamageElement.None;
+            var go = new GameObject(kind.ToString());
+            go.transform.position = origin;
             ProjectileVFXCatalog.SpawnFlying(go.transform, element);
-            return go;
+            if (!go.TryGetComponent(out ProjectileMover mover)) mover = go.AddComponent<ProjectileMover>();
+            return mover;
         }
 
         // ── Code-built placeholder projectiles ────────────────────────────────
-
-        private static GameObject BuildPlaceholderArrow(Vector3 origin)
-        {
-            var go = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-            go.name = "ArrowPlaceholder";
-            go.transform.position   = origin;
-            go.transform.localScale = new Vector3(0.06f, 0.35f, 0.06f);
-            Object.Destroy(go.GetComponent<Collider>());
-
-            var rend = go.GetComponent<Renderer>();
-            if (rend != null)
-            {
-                var mat = new Material(Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard"));
-                mat.color = new Color(0.55f, 0.35f, 0.1f); // brown wood
-                rend.material = mat;
-            }
-
-            // Trail renderer for the feather-dust effect.
-            var trail = go.AddComponent<TrailRenderer>();
-            trail.time     = 0.12f;
-            trail.startWidth = 0.03f;
-            trail.endWidth   = 0f;
-            trail.material   = new Material(Shader.Find("Sprites/Default") ?? Shader.Find("Universal Render Pipeline/Unlit"));
-            trail.startColor = new Color(0.9f, 0.8f, 0.5f, 0.7f);
-            trail.endColor   = new Color(0.9f, 0.8f, 0.5f, 0f);
-
-            return go;
-        }
-
-        private static GameObject BuildPlaceholderOrb(Vector3 origin)
-        {
-            var go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            go.name = "SpellOrbPlaceholder";
-            go.transform.position   = origin;
-            go.transform.localScale = Vector3.one * 0.22f;
-            Object.Destroy(go.GetComponent<Collider>());
-
-            var rend = go.GetComponent<Renderer>();
-            if (rend != null)
-            {
-                var mat = new Material(Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard"));
-                mat.color = new Color(0.35f, 0.5f, 1f);  // blue-purple
-                // Enable emission for the glow effect.
-                mat.EnableKeyword("_EMISSION");
-                mat.SetColor("_EmissionColor", new Color(0.15f, 0.3f, 1f) * 1.8f);
-                rend.material = mat;
-            }
-
-            // Wispy trail.
-            var trail = go.AddComponent<TrailRenderer>();
-            trail.time      = 0.2f;
-            trail.startWidth = 0.15f;
-            trail.endWidth   = 0f;
-            trail.material   = new Material(Shader.Find("Sprites/Default") ?? Shader.Find("Universal Render Pipeline/Unlit"));
-            trail.startColor = new Color(0.4f, 0.55f, 1f, 0.8f);
-            trail.endColor   = new Color(0.4f, 0.55f, 1f, 0f);
-
-            return go;
-        }
+        // (Suppressed by default per WO-280.) The placeholder body visuals now live in
+        // MoverProjectilePool's ProjectileBodyVisual so they pool alongside the VFX bodies;
+        // they are built there, not here, when re-enabled.
     }
 }

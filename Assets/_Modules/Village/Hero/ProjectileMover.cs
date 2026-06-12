@@ -13,6 +13,13 @@
 //   arrow.GetComponent<ProjectileMover>().Launch(target.position, 18f, 0.4f);
 //
 // ARC: 0 = straight line, positive = upward parabola (arrow gravity feel).
+//
+// POOLING (hero/companion shots):
+//   When a body is leased from MoverProjectilePool it is BOUND to that pool via
+//   BindToPool. On Arrive a pool-bound body RELEASES back to the pool (no Destroy);
+//   an UNBOUND body (e.g. DefenseTower's per-shot primitive bolt) keeps the legacy
+//   Destroy(gameObject). So this stays drop-in for the non-pooled caller. The
+//   per-lease reset contract is in ResetForLease (called by the pool on Acquire).
 // =============================================================================
 
 using UnityEngine;
@@ -43,6 +50,41 @@ namespace DeNelle.Village
         private float   _t;
         private bool    _launched;
         private System.Action _onArrive;   // DEF (combat feel): payload fired when the projectile lands
+
+        // ── Pooling ───────────────────────────────────────────────────────────
+        // Set once when leased from MoverProjectilePool. When non-null, Arrive
+        // releases this body back to the pool instead of Destroy'ing it.
+        private MoverProjectilePool _pool;
+        private ProjectileBodyKind  _poolKind;
+        private bool _pooled;
+
+        /// <summary>Bind this body to a pool (called once by MoverProjectilePool on creation).
+        /// Pool-bound bodies are returned to the pool on arrival instead of being destroyed.</summary>
+        public void BindToPool(MoverProjectilePool pool, ProjectileBodyKind kind)
+        {
+            _pool     = pool;
+            _poolKind = kind;
+            _pooled   = pool != null;
+        }
+
+        /// <summary>Per-lease RESET (MoverProjectilePool.Acquire). Stops any in-flight motion,
+        /// clears the trail so the next shot doesn't streak from the old land point, drops any
+        /// stale onArrive payload, and replays the flying particle FX. Launch then re-arms the
+        /// flight fresh. Reset is invisible to gameplay — Launch fully re-specifies the shot.</summary>
+        public void ResetForLease()
+        {
+            _launched      = false;
+            _onArrive      = null;
+            _t             = 0f;
+            _totalDistance = 0f;
+
+            // Clear any trail streak carried over from the previous shot.
+            var trail = GetComponent<TrailRenderer>();
+            if (trail != null) trail.Clear();
+
+            // Replay the persistent flying particle FX child (built once by the pool).
+            ProjectileVFXCatalog.ReplayFlying(gameObject);
+        }
 
         // ── Public API ────────────────────────────────────────────────────────
 
@@ -104,8 +146,15 @@ namespace DeNelle.Village
 
             if (ImpactFX != null)
             {
-                var fx = Instantiate(ImpactFX, transform.position, Quaternion.identity);
-                Destroy(fx, _impactFXLifetime);
+                // Pooled impact FX (GC-free) when the pool is up; falls back to the legacy
+                // Instantiate+Destroy if it isn't (e.g. a non-pooled caller pre-bootstrap).
+                if (ImpactFXPool.Instance != null)
+                    ImpactFXPool.Instance.Play(ImpactFX, transform.position, Quaternion.identity, _impactFXLifetime);
+                else
+                {
+                    var fx = Instantiate(ImpactFX, transform.position, Quaternion.identity);
+                    Destroy(fx, _impactFXLifetime);
+                }
             }
 
             // DEF (combat feel): fire the on-arrival payload — damage + status land WHEN the
@@ -115,7 +164,12 @@ namespace DeNelle.Village
             _onArrive = null;
             onArrive?.Invoke();
 
-            Destroy(gameObject);
+            // Pool-bound (hero/companion) bodies return to the pool; unbound bodies
+            // (DefenseTower's per-shot primitive) keep the legacy self-destruct.
+            if (_pooled && _pool != null)
+                _pool.Release(this, _poolKind);
+            else
+                Destroy(gameObject);
         }
     }
 }
