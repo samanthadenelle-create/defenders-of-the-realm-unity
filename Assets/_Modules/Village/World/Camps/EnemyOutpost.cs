@@ -160,6 +160,21 @@ namespace DeNelle.Village.World.Camps
         }
 
         /// <summary>
+        /// Same as <see cref="Configure(RegionId,int)"/> but with an explicit id suffix so
+        /// multiple open-world outposts that happen to share a region (e.g. the 4 cardinal
+        /// raid outposts) get DISTINCT persistence keys — clearing one never marks another
+        /// cleared. Pass a stable suffix (e.g. "E"/"W"/"N"/"S").
+        /// </summary>
+        public void Configure(RegionId region, int threat, string idSuffix)
+        {
+            Region = region;
+            ThreatLevel = Mathf.Max(0, threat);
+            OutpostId = string.IsNullOrEmpty(idSuffix)
+                ? "raid_" + region
+                : "raid_" + region + "_" + idSuffix;
+        }
+
+        /// <summary>
         /// ARENA-MVP entry: configure this outpost as a SEEDED async-PvP opponent base
         /// instead of an open-world raid. Reuses the ENTIRE spawn/clear/combat path —
         /// only the fortification recipe, garrison size, persistence id and clear-loot

@@ -66,23 +66,63 @@ namespace DeNelle.Village.World.Camps
         public static void Disable() => _enabled = false;
 
         // ---------------------------------------------------------------------
-        // Placement. ONE outpost at a reachable Goldfields-edge anchor (+X, the
-        // nearest tier-1 region). Far enough OUTSIDE the village wall footprint
-        // (~+/-42 X, +/-33 Z) that ZoneManager classifies it as Goldfields, but
-        // close enough to walk to from the east gate. Runtime only - NO scene edit.
+        // Placement. FOUR outposts, one at each CARDINAL edge anchor (E/W/N/E),
+        // mirroring the original east anchor 90/180/270 deg around world origin —
+        // the same cardinal-mirror pattern used for the castle's 4 gate exits. Each
+        // is far enough OUTSIDE the village wall footprint (~+/-42 X, +/-33 Z) that
+        // ZoneManager classifies it into a region, but close enough to walk to from
+        // the matching gate. Runtime only - NO scene edit. The owner now has a raid
+        // target out of EVERY gate.
         // ---------------------------------------------------------------------
-        private static readonly Vector3 OutpostAnchor = new Vector3(70f, 0f, 0f);
+        private readonly struct CardinalOutpost
+        {
+            public readonly Vector3 Anchor;
+            public readonly string IdSuffix;   // unique persistence-key suffix per cardinal
+            public CardinalOutpost(Vector3 anchor, string idSuffix)
+            {
+                Anchor = anchor;
+                IdSuffix = idSuffix;
+            }
+        }
+
+        /// <summary>The 4 cardinal outpost anchors (east kept at the original (70,0,0)).</summary>
+        private static readonly CardinalOutpost[] OutpostAnchors =
+        {
+            new CardinalOutpost(new Vector3( 70f, 0f,   0f), "E"),   // east  (original)
+            new CardinalOutpost(new Vector3(-70f, 0f,   0f), "W"),   // west
+            new CardinalOutpost(new Vector3(  0f, 0f,  70f), "N"),   // north
+            new CardinalOutpost(new Vector3(  0f, 0f, -70f), "S"),   // south
+        };
+
+        /// <summary>Number of cardinal outposts this system materialises (regression-checked = 4).</summary>
+        public static int CardinalOutpostCount => OutpostAnchors.Length;
+
+        /// <summary>Read-only copy of the cardinal anchor positions (for tests / tooling).</summary>
+        public static Vector3[] OutpostAnchorPositions()
+        {
+            var result = new Vector3[OutpostAnchors.Length];
+            for (int i = 0; i < OutpostAnchors.Length; i++) result[i] = OutpostAnchors[i].Anchor;
+            return result;
+        }
 
         /// <summary>Scene the outpost lives in (outer world). Bootstrap only spawns
         /// once we are in this additive world scene so it never appears in the
         /// village. Matched case-insensitively.</summary>
         private const string OuterWorldSceneName = "OuterWorld";
 
+        // Per-anchor realize guard: index aligned to OutpostAnchors. _spawned is the
+        // SCHEDULE claim (one delayed runner); _realized[i] is the per-cardinal realize
+        // guard so a re-realize never double-builds anchor i AND one anchor never blocks
+        // the others.
         private static bool _spawned;
-        private static EnemyOutpost _outpost;
+        private static readonly bool[] _realized = new bool[OutpostAnchors.Length];
+        private static readonly EnemyOutpost[] _outposts = new EnemyOutpost[OutpostAnchors.Length];
 
-        /// <summary>The live outpost spawned this session (null until spawned).</summary>
-        public static EnemyOutpost Outpost => _outpost;
+        /// <summary>The live outposts spawned this session (entries null until realized).</summary>
+        public static EnemyOutpost[] Outposts => (EnemyOutpost[])_outposts.Clone();
+
+        /// <summary>The first live outpost (east), or null until realized. Back-compat.</summary>
+        public static EnemyOutpost Outpost => _outposts.Length > 0 ? _outposts[0] : null;
 
         // ---------------------------------------------------------------------
         // Self-bootstrap. Runs after EVERY scene load; returns instantly when the
@@ -122,29 +162,43 @@ namespace DeNelle.Village.World.Camps
             var runner = new GameObject("RaidOutpostDelayedSpawner");
             Object.DontDestroyOnLoad(runner);
             runner.AddComponent<DelayedSpawnRunner>();
-            Debug.Log($"[RaidOutpostSystem] Outpost scheduled to materialise in {SpawnDelaySeconds:0}s (delayed off the world-load frame).");
+            Debug.Log($"[RaidOutpostSystem] {OutpostAnchors.Length} cardinal outposts scheduled to materialise in {SpawnDelaySeconds:0}s (delayed off the world-load frame).");
         }
 
         // The actual heavy realize — runs SpawnDelaySeconds AFTER we enter the world, so the
-        // fort+garrison build never stalls the city-emerge frame.
+        // fort+garrison build never stalls the city-emerge frame. Builds ALL 4 cardinal
+        // outposts, each guarded per-anchor so one anchor failing/already-built never blocks
+        // the other three.
         private static void RealizeOutpost()
         {
             if (!InOuterWorld()) return;   // left the world during the delay
 
-            var host = new GameObject("RaidOutpostSystem (outpost)");
+            var host = new GameObject("RaidOutpostSystem (outposts)");
             Object.DontDestroyOnLoad(host);
 
-            RegionId region = ZoneManager.GetZone(OutpostAnchor);
-            int threat = ZoneManager.ThreatLevel(OutpostAnchor);
+            for (int i = 0; i < OutpostAnchors.Length; i++)
+            {
+                if (_realized[i]) continue;   // per-anchor guard: never double-build anchor i
+                _realized[i] = true;
 
-            var go = new GameObject($"EnemyOutpost_{region}");
-            go.transform.SetParent(host.transform, false);
-            go.transform.position = OutpostAnchor;
+                CardinalOutpost cardinal = OutpostAnchors[i];
+                Vector3 anchor = cardinal.Anchor;
 
-            _outpost = go.AddComponent<EnemyOutpost>();
-            _outpost.Configure(region, threat);
+                RegionId region = ZoneManager.GetZone(anchor);
+                int threat = ZoneManager.ThreatLevel(anchor);
 
-            Debug.Log($"[RaidOutpostSystem] Spawned ONE enemy outpost at {OutpostAnchor} ({region}, threat {threat}) - walk east from the village to raid it.");
+                var go = new GameObject($"EnemyOutpost_{region}_{cardinal.IdSuffix}");
+                go.transform.SetParent(host.transform, false);
+                go.transform.position = anchor;
+
+                var outpost = go.AddComponent<EnemyOutpost>();
+                outpost.Configure(region, threat, cardinal.IdSuffix);
+                _outposts[i] = outpost;
+
+                Debug.Log($"[RaidOutpostSystem] Spawned cardinal outpost {cardinal.IdSuffix} at {anchor} ({region}, threat {threat}) - walk out the {cardinal.IdSuffix} gate to raid it.");
+            }
+
+            Debug.Log($"[RaidOutpostSystem] {OutpostAnchors.Length} cardinal enemy outposts realized (one per gate exit).");
         }
 
         // Tiny host that waits SpawnDelaySeconds then realises the outpost (owner's 3-min delay).
