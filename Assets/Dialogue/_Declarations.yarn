@@ -37,6 +37,15 @@ tags: system
 <<declare $upgradeCostText = "">>
 <<declare $upgradeResult = "">>
 
+// — Structure interaction capability gates (WO-413; bridge sets these live from
+//   BuildingCatalog in CmdStructureStatus). MUST be declared or the StructureMenu
+//   <<if $structureCanUpgrade>> / <<if $structureCanShop>> gates read a phantom
+//   default-false and the Upgrade / Buy / Sell options never appear ("nothing to
+//   upgrade") even though the building IS upgradable. $upgradeType routes the flow. —
+<<declare $structureCanUpgrade = false>>
+<<declare $structureCanShop = false>>
+<<declare $upgradeType = "">>
+
 // — Bools: progression + soul-freed flags —
 <<declare $structureMaxed = false>>
 <<declare $tutorialComplete = false>>
