@@ -195,33 +195,34 @@ namespace DeNelle.Village
 
         private void Update()
         {
-            // Deferred resolution — exits immediately once fully wired.
-            if (_hud == null || _heart == null)
+            // WO-424: the RESOURCE bar / crystal feed must NOT be gated on a HeartController.
+            // The castle hub and OuterWorld have no Heart of Elarion (it's a Village structure),
+            // so requiring _heart here meant this bridge never subscribed to EconomyService nor
+            // pushed the wallet in those scenes — the bar read 0/0/0/0 and harvested resources
+            // (which DO fire EconomyService.OnChanged) were dropped on the floor. Gate only on
+            // the HUD; the Heart is optional and its HP push is independently guarded on _heart.
+            if (_hud == null)
             {
                 Resolve();
-                if (_hud == null || _heart == null) return;
-                // Resolved this frame — subscribe and push the current state now.
-                TrySubscribeHeart();
-                TrySubscribeEconomy();
-                PushHp(_heart.Hp);
-                PushCrystals();
-                PushResources();
-                _crystalPollTimer = 0f;
-                return;
+                if (_hud == null) return;
             }
 
-            // If subscription was deferred (e.g. heart resolved before Awake race,
-            // or EconomyService bootstrapped after this bridge), pick it up here.
+            // Keep trying to find a Heart cheaply (bounded by MaxResolveAttempts inside Resolve),
+            // but never block the wallet feed on it.
+            if (_heart == null) Resolve();
+
+            // Subscriptions are idempotent; TrySubscribeHeart no-ops while _heart is null.
             TrySubscribeHeart();
             TrySubscribeEconomy();
 
-            // Crystal poll — GameStateService has no change event; throttle to 0.5s.
-            // The wallet is event-driven (EconomyService.OnChanged) but is re-pushed
-            // here too as a safety net for the bootstrap-order race above.
+            // Crystal poll — GameStateService has no change event; throttle to 0.5s. The wallet
+            // is event-driven (EconomyService.OnChanged) but re-pushed here too as a safety net
+            // for the bootstrap-order race (and to cover the first frame the HUD resolves).
             _crystalPollTimer -= Time.deltaTime;
             if (_crystalPollTimer <= 0f)
             {
                 _crystalPollTimer = CrystalPollInterval;
+                if (_heart != null) PushHp(_heart.Hp);
                 PushCrystals();
                 PushResources();
             }
