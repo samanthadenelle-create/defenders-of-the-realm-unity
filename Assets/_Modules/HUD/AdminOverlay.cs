@@ -117,19 +117,14 @@ namespace DeNelle.HUD
             card.Add(title);
             card.Add(ElarionUi.MakeRule());
 
-            card.Add(Button("Trigger next wave",      OnTriggerWave));
-            card.Add(Button("+100 crystals",          () => OnGiveCrystals(100)));
-            card.Add(Button("+1000 crystals",         () => OnGiveCrystals(1000)));
-            card.Add(Button("Mark Onboarded = true",  () => OnSetOnboarded(true)));
-            card.Add(Button("Mark Onboarded = false", () => OnSetOnboarded(false)));
-            card.Add(Button("Save now",               OnSave));
-            card.Add(Button("Reset save (carve-out)", OnReset));
-            card.Add(Button("Replay Tutorial (clear Yarn)", OnReplayTutorial));
-
-            // ── Dev orient tool: type a catalog id, open the 3-axis panel ───────
-            card.Add(BuildOrientRow());
-
-            card.Add(Button("Close",                  Toggle));
+            // Owner-trimmed (2026-06-11): only the two controls used live remain — a WORKING
+            // full-resource grant (through the same EconomyService wallet the shop spends from,
+            // so you can actually buy) + the Yarn/tutorial reset. The rest (wave trigger,
+            // onboarded toggles, save, reset-save, orient tool) are dropped from the panel; their
+            // handlers stay in the file in case they're wanted back.
+            card.Add(Button("Load resources (full base)",   OnLoadResources));
+            card.Add(Button("Reset Yarn (replay tutorial)", OnReplayTutorial));
+            card.Add(Button("Close",                        Toggle));
 
             _status = new Label(string.Empty);
             _status.style.color = ElarionUi.ParchmentDim;
@@ -384,6 +379,29 @@ namespace DeNelle.HUD
             // behaves like a real New Game -> tutorial runs -> companion joins.
             UnityEngine.SceneManagement.SceneManager.LoadScene("Village2");
             SetStatus("Reset(): new game -> FTUE gate cleared, reloading Village2 (tutorial + companion re-fire).");
+        }
+
+        /// <summary>
+        /// Grants a full base of SPENDABLE resources through EconomyService.Grant — the same
+        /// faucet harvest uses — so wood/iron land in the in-session wallet the shop spends from
+        /// AND the HUD bar updates (OnChanged). HUD asmdef can't reference DeNelle.Village, so
+        /// EconomyService is reached by reflection (same idiom as the orient menu / wave manager).
+        /// </summary>
+        private void OnLoadResources()
+        {
+            var ecoType = Type.GetType("DeNelle.Village.EconomyService, DeNelle.Village");
+            var instProp = ecoType?.GetProperty("Instance", BindingFlags.Public | BindingFlags.Static);
+            var eco = instProp?.GetValue(null);
+            if (eco == null) { SetStatus("Resources: EconomyService not alive yet."); return; }
+
+            // Grant(int wood = 0, int food = 0, int iron = 0, int crystals = 0) convenience overload.
+            var grant = ecoType.GetMethod("Grant",
+                BindingFlags.Public | BindingFlags.Instance, null,
+                new[] { typeof(int), typeof(int), typeof(int), typeof(int) }, null);
+            if (grant == null) { SetStatus("Resources: EconomyService.Grant(int,int,int,int) not found."); return; }
+
+            grant.Invoke(eco, new object[] { 50000, 25000, 50000, 25000 }); // wood, food, iron, crystals
+            SetStatus("Loaded: +50k Wood, +50k Iron, +25k Food, +25k Crystals — now buy something.");
         }
 
         private void OnReplayTutorial()
