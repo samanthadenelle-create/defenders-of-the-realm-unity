@@ -66,7 +66,14 @@ namespace DeNelle.Village
         /// <summary>Dev override — skip the tutorial entirely (still marks onboarded + kicks waves).</summary>
         public static bool ForceSkip;
 
-        private const string TargetScene = "Village2";
+        // FTUE scene gate. Widened from a hardcoded "Village2" to the canonical hub
+        // list (DeNelle.Core.HubScenes) so the tutorial / companion-meeting also runs
+        // in the castle-start hub (MainCastle_Hall), not just the abandoned Village2 —
+        // this was the companion-never-meets-you root cause: Awake() self-destructed in
+        // MainCastle_Hall because the active scene != "Village2", so neither the Yarn
+        // CompanionMeeting nor the fast-path brief hook ever fired in the castle.
+        // HubScenes.IsHub covers Village2 AND the castle, so the old flow is preserved.
+        // (CompanionMeetingTrigger / StoryCompanionInjector already gate on IsHub.)
         private static bool s_ranThisSession;   // belt-and-braces: one run per session
 
         // 3× a Level-1 tower cost — the post-battle supply grant (WO-277 economy).
@@ -105,8 +112,10 @@ namespace DeNelle.Village
 
         private void Awake()
         {
-            // Only ever needed in the Village scene; clean up elsewhere.
-            if (SceneManager.GetActiveScene().name != TargetScene)
+            // Only ever needed in a home/hub scene (Village2 OR the castle hub); clean
+            // up elsewhere. Gated on the canonical HubScenes list, NOT a hardcoded
+            // "Village2", so the FTUE runs in MainCastle_Hall too (companion-meeting fix).
+            if (!HubScenes.IsHub(SceneManager.GetActiveScene().name))
             {
                 Destroy(gameObject);
                 return;
