@@ -286,6 +286,46 @@ namespace DeNelle.Village
             Grant(new ResourceCost(wood, food, iron, crystals));
         }
 
+        /// <summary>
+        /// DEV grant that lands Wood/Iron in BOTH spendable wallets the game keeps.
+        /// <para>
+        /// Wood/Iron currently live in two stores that do not sync: this service's
+        /// in-session pool (what ShopPanel + the HUD resource bar read) and
+        /// GameState.Wood / GameState.Iron (what the building-upgrade flow's
+        /// ResourceLedger reads + spends). A plain <see cref="Grant(int,int,int,int)"/>
+        /// only fills the in-session pool, so dev-granted Wood/Iron was invisible to
+        /// the upgrade flow; writing GameState directly only filled the other one, so
+        /// it was invisible to the shop + HUD. This method writes BOTH so one dev
+        /// action yields Wood/Iron the shop AND the structure-upgrade flow can spend,
+        /// and the HUD reflects it. Food/Crystals are already GameState-backed, so the
+        /// normal Grant path keeps them single-sourced.
+        /// </para>
+        /// </summary>
+        public void GrantSpendable(int wood = 0, int food = 0, int iron = 0, int crystals = 0)
+        {
+            // Mirror Wood/Iron into the persisted GameState wallet the upgrade flow spends.
+            var gs = GameStateService.Instance;
+            if (gs != null && gs.State != null)
+            {
+                if (wood > 0) gs.State.Wood = Mathf.Max(0, gs.State.Wood + wood);
+                if (iron > 0) gs.State.Iron = Mathf.Max(0, gs.State.Iron + iron);
+            }
+
+            // Grant fills the in-session Wood/Iron pool (shop + HUD bar) and routes
+            // Food/Crystals through GameState (AddFood/AddCrystals -> Save + ResourcesChanged).
+            Grant(new ResourceCost(wood, food, iron, crystals));
+
+            // Persist + announce the GameState Wood/Iron mutation so the upgrade flow
+            // sees it and any GameState-bound listeners refresh. (Grant already raised
+            // OnChanged for the in-session pool; if Food/Crystals were > 0 it also fired
+            // ResourcesChanged, but a Wood/Iron-only grant would not, so do it here.)
+            if (gs != null && gs.State != null && (wood > 0 || iron > 0))
+            {
+                gs.Save();
+                gs.ResourcesChanged.Invoke();
+            }
+        }
+
         // ── Unified resource income API (WO-106 continuation) ─────────────────
         // All new pet harvesting, outpost ticks, node claims, troop rewards, etc.
         // MUST go through here (or the Grant overloads) so in-session mirrors,

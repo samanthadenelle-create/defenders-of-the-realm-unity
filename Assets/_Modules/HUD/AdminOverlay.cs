@@ -410,9 +410,11 @@ namespace DeNelle.HUD
         }
 
         /// <summary>
-        /// Grants a full base of SPENDABLE resources through EconomyService.Grant — the same
-        /// faucet harvest uses — so wood/iron land in the in-session wallet the shop spends from
-        /// AND the HUD bar updates (OnChanged). HUD asmdef can't reference DeNelle.Village, so
+        /// Grants a full base of SPENDABLE resources through EconomyService.GrantSpendable —
+        /// which lands Wood/Iron in BOTH wallets the game keeps: the in-session pool the shop +
+        /// HUD bar read AND GameState.Wood/Iron the structure-upgrade flow (ResourceLedger)
+        /// spends. Plain Grant only filled the in-session pool, so dev-granted Wood/Iron was
+        /// unspendable in the upgrade flow. HUD asmdef can't reference DeNelle.Village, so
         /// EconomyService is reached by reflection (same idiom as the orient menu / wave manager).
         /// </summary>
         private void OnLoadResources()
@@ -422,14 +424,15 @@ namespace DeNelle.HUD
             var eco = instProp?.GetValue(null);
             if (eco == null) { SetStatus("Resources: EconomyService not alive yet."); return; }
 
-            // Grant(int wood = 0, int food = 0, int iron = 0, int crystals = 0) convenience overload.
-            var grant = ecoType.GetMethod("Grant",
+            // GrantSpendable(int wood = 0, int food = 0, int iron = 0, int crystals = 0) —
+            // mirrors Wood/Iron into GameState so the upgrade flow can spend them too.
+            var grant = ecoType.GetMethod("GrantSpendable",
                 BindingFlags.Public | BindingFlags.Instance, null,
                 new[] { typeof(int), typeof(int), typeof(int), typeof(int) }, null);
-            if (grant == null) { SetStatus("Resources: EconomyService.Grant(int,int,int,int) not found."); return; }
+            if (grant == null) { SetStatus("Resources: EconomyService.GrantSpendable(int,int,int,int) not found."); return; }
 
             grant.Invoke(eco, new object[] { 50000, 25000, 50000, 25000 }); // wood, food, iron, crystals
-            SetStatus("Loaded: +50k Wood, +50k Iron, +25k Food, +25k Crystals — now buy something.");
+            SetStatus("Loaded: +50k Wood, +50k Iron, +25k Food, +25k Crystals (shop + upgrades) — now buy something.");
         }
 
         private void OnReplayTutorial()

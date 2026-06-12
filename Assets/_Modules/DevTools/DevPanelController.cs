@@ -825,15 +825,31 @@ namespace DeNelle.DevTools
             var state = RequireState("give materials");
             if (state == null) return;
 
+            // Wood/Iron live in TWO spendable wallets that don't sync: the EconomyService
+            // in-session pool (ShopPanel + the HUD resource bar) and GameState.Wood/Iron
+            // (the structure-upgrade flow's ResourceLedger). Writing GameState directly
+            // (as this used to) filled only the upgrade wallet, so the shop + HUD bar saw
+            // nothing. Route Wood/Iron through EconomyService.GrantSpendable so ONE dev
+            // action lands them in BOTH — Food/Crystals are GameState-backed inside it.
+            var eco = EconomyService.Instance;
+            if (eco != null)
+            {
+                eco.GrantSpendable(wood: 50000, food: 25000, iron: 50000, crystals: 25000);
+            }
+            else
+            {
+                // Fallback if the economy service hasn't bootstrapped yet: at least fill
+                // the persisted GameState wallet the upgrade flow + HUD-via-GameState read.
+                state.Wood += 50000;
+                state.Iron += 50000;
+                var bal0 = state.Resources;
+                bal0.Food += 25000;
+                bal0.Crystals += 25000;
+                state.Resources = bal0;
+            }
+
             state.Stone += 50000;   // legacy build material (BuildMenu costs) — generous one-click load for full-base testing
-            state.Iron += 50000;
-            state.Wood += 50000;
-            // Four-harvestable wallet + Magic tech axis (DEF-121).
-            var bal = state.Resources;
-            bal.Food += 25000;
-            bal.Crystals += 25000;
-            state.Resources = bal;
-            state.Magic += 100;
+            state.Magic += 100;     // Magic tech axis (DEF-121) — building-upgrade gate
             SaveAndNotifyResources();
             SetStatus($"Topped up — Wood {state.Wood}, Food {state.Resources.Food}, " +
                       $"Iron {state.Iron}, Crystals {state.Resources.Crystals}, Magic {state.Magic}.");
