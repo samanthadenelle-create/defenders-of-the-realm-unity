@@ -35,10 +35,12 @@ namespace DeNelle.Village.Hero
 {
     public sealed class ShopPanel : MonoBehaviour
     {
-        // Selected-tab tint — a brighter gold wash over the kit's Gold button so the
-        // active mode reads selected; inactive tabs use the kit's neutral Quiet glass.
-        private static readonly Color TabSelectedTint = new Color(1.18f, 1.12f, 0.95f, 1f);
-        private static readonly Color TabRestTint     = Color.white;
+        // Active-tab tint vs. inactive: the active mode reads bright gilt; inactive tabs
+        // are clearly muted (dimmed gold) so the selected mode stands out at a glance.
+        // Applied as a multiply tint over the kit's Gold button image (works whether the
+        // button is the procedural rounded glass or the RPG-pack gold frame).
+        private static readonly Color TabSelectedTint = new Color(1.15f, 1.10f, 0.92f, 1f);
+        private static readonly Color TabRestTint     = new Color(0.58f, 0.55f, 0.50f, 1f);
 
         private GameObject _ui;
         private string _vendorContext;
@@ -369,11 +371,21 @@ namespace DeNelle.Village.Hero
             ElarionUiKit.Label(row.transform, label, 0.15f, 0.85f, ElarionUi.Parchment,
                 ElarionUi.FontBody, TMPro.TextAlignmentOptions.Left, nameX0, 0.5f);
 
-            ElarionUiKit.Label(row.transform, CostString(cost), 0.15f, 0.85f, ElarionUi.Gilt,
+            // Price tag tinted by affordability: gold-green when the player can pay,
+            // muted danger-red when they cannot (the canonical Affordable/Danger state
+            // colours from ElarionUi, so the store speaks the same state language as the
+            // rest of the game). Falls back to gilt if the economy isn't resolvable.
+            bool affordable = EconomyService.Instance == null || EconomyService.Instance.CanAfford(cost);
+            Color priceColor = EconomyService.Instance == null ? ElarionUi.Gilt
+                             : (affordable ? ElarionUi.Affordable : ElarionUi.Danger);
+            ElarionUiKit.Label(row.transform, CostString(cost), 0.15f, 0.85f, priceColor,
                 ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Left, 0.5f, 0.72f, bold: true);
 
-            ElarionUiKit.Button(row.transform, "BUY", ElarionUiKit.ButtonKind.Confirm,
+            // BUY is the primary CTA -> the gold kit button (dark-ink label). Dimmed +
+            // non-interactable when unaffordable so the affordance reads disabled.
+            var buyBtn = ElarionUiKit.Button(row.transform, "BUY", ElarionUiKit.ButtonKind.Gold,
                 new Vector2(0.74f, 0.15f), new Vector2(0.98f, 0.85f), buyAction);
+            if (buyBtn != null) buyBtn.interactable = affordable;
         }
 
         // WO-300: enrich a buy-row name with its Elarion maker's mark, so a vendor
@@ -517,10 +529,14 @@ namespace DeNelle.Village.Hero
             ElarionUiKit.Label(row.transform, label, 0.15f, 0.85f, ElarionUi.Parchment,
                 ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Left, 0.04f, 0.55f);
 
-            ElarionUiKit.Label(row.transform, "+" + CostString(refund), 0.15f, 0.85f, ElarionUi.Gilt,
+            // Refund reads as a GAIN -> affordable-green "+" tag (consistent with the
+            // buy-side state colours; a sale always credits the player).
+            ElarionUiKit.Label(row.transform, "+" + CostString(refund), 0.15f, 0.85f, ElarionUi.Affordable,
                 ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Left, 0.55f, 0.72f, bold: true);
 
-            ElarionUiKit.Button(row.transform, "SELL", ElarionUiKit.ButtonKind.Gold,
+            // SELL is the secondary action -> the kit's neutral Quiet glass button (not
+            // the gold CTA, so BUY stays the visually dominant primary action).
+            ElarionUiKit.Button(row.transform, "SELL", ElarionUiKit.ButtonKind.Quiet,
                 new Vector2(0.74f, 0.15f), new Vector2(0.98f, 0.85f), sellAction);
         }
 
