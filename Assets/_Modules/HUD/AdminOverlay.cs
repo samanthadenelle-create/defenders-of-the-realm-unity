@@ -77,25 +77,35 @@ namespace DeNelle.HUD
             if (_built) return true;
             _document = GetComponent<UIDocument>();
             if (_document == null) _document = gameObject.AddComponent<UIDocument>();
+            // OWN PanelSettings (2026-06-13). We USED to BORROW another UIDocument's
+            // panelSettings (HelpMenu's, or the onboarding asset) — but a PanelSettings backs
+            // only ONE live panel, so HelpMenu's doc + this doc fought over the same asset and
+            // AdminOverlay ended up panel=<null>: "Dev tools" opened (display=Flex) but rendered
+            // NOTHING ("clicking devtools disappears"). Create our OWN uniquely-named runtime
+            // PanelSettings (borrow only the themeStyleSheet for fonts/colors), so the dev panel
+            // is independent of HelpMenu's lifecycle. Mirrors the HelpMenu own-PanelSettings fix.
             if (_document.panelSettings == null)
             {
-                foreach (var existing in UnityEngine.Object.FindObjectsByType<UIDocument>(
-                             FindObjectsInactive.Include, FindObjectsSortMode.None))
+                var ps = ScriptableObject.CreateInstance<PanelSettings>();
+                ps.name = "AdminRuntimePanelSettings";
+                if (fallback != null && fallback.themeStyleSheet != null)
                 {
-                    if (existing == _document || existing.panelSettings == null) continue;
-                    _document.panelSettings = existing.panelSettings;
-                    break;
+                    ps.themeStyleSheet = fallback.themeStyleSheet;
                 }
-            }
-            // Last resort: caller-supplied PanelSettings (T-030 — MainCastle_Hall has no
-            // scene UIDocument, so the borrow above finds nothing; HelpMenu hands us its own).
-            if (_document.panelSettings == null && fallback != null)
-                _document.panelSettings = fallback;
-            if (_document.panelSettings == null)
-            {
-                // Don't permanently disable — a later Open() can retry with a fallback once
-                // another panel (HelpMenu) has a live PanelSettings to lend.
-                return false;
+                else
+                {
+                    foreach (var existing in UnityEngine.Object.FindObjectsByType<UIDocument>(
+                                 FindObjectsInactive.Include, FindObjectsSortMode.None))
+                    {
+                        if (existing == _document || existing.panelSettings == null) continue;
+                        if (existing.panelSettings.themeStyleSheet != null)
+                        {
+                            ps.themeStyleSheet = existing.panelSettings.themeStyleSheet;
+                            break;
+                        }
+                    }
+                }
+                _document.panelSettings = ps;
             }
             // DEF: HelpMenu sits at sortingOrder 2700 (it raised itself over the town
             // mini-map canvas long after this 170 comment was written). At 170 the admin
