@@ -22,7 +22,7 @@
       "_comment": "WO-316 FAMILY COMPOSITION: each wave is authored as ONE Hollow squad with a ROLE MIX (tank + healer + a few DPS), not a clone-swarm. WaveManager.SpawnComposedFamilyGroups buckets these batches by enemies.json 'family', stamps each member's EnemyRole from its 'role' (brute->Tank, caster->Healer, skirmisher->Ranged, grunt->DPS), and releases the whole squad as ONE coordinated group (formation spread + 'hold then charge together'). Keep all batches in a wave on the SAME family + SAME spawnPoint so they compose into a single cohesive squad. Counts scale up per wave.",
       "waveId": 1,
       "name": "First Light",
-      "countdownSeconds": 300,
+      "countdownSeconds": 45,
       "enemies": [
         {
           "type": "hollow-walker",
