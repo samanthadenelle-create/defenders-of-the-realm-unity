@@ -180,7 +180,8 @@ namespace DeNelle.Village
         // and recompute the validity only on the target-eval cadence (~2s), caching the result
         // between ticks. The destination barely moves frame-to-frame and Enemy.DriveNav already
         // throttles the actual SetDestination (DEF-56), so per-frame revalidation was pure waste.
-        private readonly NavMeshPath _rushPath = new NavMeshPath();
+        private NavMeshPath _rushPath;   // lazily created — `new NavMeshPath()` in a field initializer throws
+                                         // (Unity: InitializeNavMeshPath not allowed from a MonoBehaviour ctor).
         private float _rushPathTimer;
         private bool  _rushPathValid = true;   // assume reachable until first check proves otherwise
 
@@ -580,6 +581,7 @@ namespace DeNelle.Village
                         _rushPathTimer -= Time.deltaTime;
                         if (_rushPathTimer <= 0f)
                         {
+                            if (_rushPath == null) _rushPath = new NavMeshPath();   // lazy (ctor illegal at field-init)
                             _rushPathTimer = TargetEvalInterval;
                             _rushPathValid =
                                 _navAgent.CalculatePath(target.position, _rushPath) &&
