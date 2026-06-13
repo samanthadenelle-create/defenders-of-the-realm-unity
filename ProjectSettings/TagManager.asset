@@ -7,6 +7,7 @@ TagManager:
   - Tower
   - Building
   - HeartTarget
+  - Player
   layers:
   - Default
   - TransparentFX
