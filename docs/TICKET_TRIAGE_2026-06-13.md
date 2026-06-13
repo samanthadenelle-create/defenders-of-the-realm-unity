@@ -54,6 +54,16 @@ Owner model: agents provide suggested guidance; the orchestrator (CLI) has final
 
 **Owner flags (not blind-fixed):** WO-419 NavMesh-seam vs targeting (playtest to confirm); WO-333 primary obsolete (reclassify); `HeroTarget` tag undefined in TagManager = architect call; `buildingDesc.market` may need an en.json string.
 
+## ✅ OWNER-CONFIRMED IN PLAYTEST (2026-06-13, build e6581ba) — "tested all 3 good"
+- **HUD reliability** (`5e94255`+`73a93af`) — no more disappearing/BAG-dead/controls-frozen; hero+companion health bars show in town. ✅
+- **Store** (`ec5cbc9`) — Jeweler is its own storefront, real sign names. ✅
+- **Seam** (`46490f6`) — castle→OuterWorld fade-to-black blend. ✅
+- **Castle single-level CoC** (`09c6115`+rebakes) — 2nd level gone, concentric inner wall, flat navmesh; **enemies path outer gate → inner-wall gap → Heart cleanly** (the redesign's whole purpose). ✅
+- **Town props** (`9cbc2d7`+dedup) — Tree of Life at Heart center (single), keep removed. ✅
+
+**Polish (minor, owner-deferred):** Anvil placed at the blacksmith but not easily visible — bump scale + verify Tripo material in the polish pass.
+**Active next:** WO-410 (0.1fps GC storm — RCA in progress) + the polish list.
+
 ## Counts
 - **Raw entries:** 210 — session_start 23, scene_loaded 114, possible_softlock 8 (noise), flagged 57, exception 4, error 4. **Signal = 65** (flagged + exception + error).
 - **Unique canonical tickets:** 38 (T-001 … T-038).
