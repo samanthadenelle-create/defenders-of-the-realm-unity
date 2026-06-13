@@ -90,6 +90,11 @@ namespace DeNelle.HUD
         public bool IsOpen =>
             _overlay != null && _overlay.style.display != DisplayStyle.None;
 
+        /// <summary>The live PanelSettings this menu rendered with — lent to AdminOverlay
+        /// so "Dev tools" works in scenes that ship no UIDocument of their own (T-030).</summary>
+        public PanelSettings ActivePanelSettings =>
+            _document != null ? _document.panelSettings : null;
+
         private void Update()
         {
             if (_toast != null && _toastUntil > 0f && Time.unscaledTime > _toastUntil)
@@ -359,8 +364,23 @@ namespace DeNelle.HUD
         /// </summary>
         private void OnOpenDevTools()
         {
-            var admin = UnityEngine.Object.FindFirstObjectByType<AdminOverlay>();
-            if (admin == null) { ShowToast("Admin overlay not in scene yet."); return; }
+            // Find the AdminOverlay (its bootstrap spawns one per scene). In MainCastle_Hall
+            // the scene ships NO UIDocument/PanelSettings, so AdminOverlay.Awake couldn't
+            // borrow one and never built its UI — Open() then silently no-op'd and "dev
+            // tools went nowhere" (T-030). We spawn-or-find it and hand it OUR live
+            // PanelSettings (the Help menu just rendered with it) so it can build now.
+            var admin = UnityEngine.Object.FindFirstObjectByType<AdminOverlay>(FindObjectsInactive.Include);
+            if (admin == null)
+            {
+                var go = new GameObject("AdminOverlay");
+                SceneManager.MoveGameObjectToScene(go, gameObject.scene);
+                admin = go.AddComponent<AdminOverlay>();
+            }
+            if (!admin.TryBuild(ActivePanelSettings))
+            {
+                ShowToast("Dev tools unavailable — no UI panel settings in this scene.");
+                return;
+            }
             // Close Help FIRST, then open Admin. Both route through PanelManager, so the
             // arbiter also enforces single-modal; doing it explicitly keeps order clear.
             Close();

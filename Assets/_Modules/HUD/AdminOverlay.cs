@@ -49,8 +49,31 @@ namespace DeNelle.HUD
         private Type _waveManagerType;
         private object _waveManagerInstance;
 
+        // True once BuildUi() has actually run (i.e. a PanelSettings was found and the
+        // overlay VisualElements exist). When false, Open() would silently no-op — the
+        // T-030 "dev tools goes nowhere" failure in scenes (MainCastle_Hall) that ship
+        // NO UIDocument/PanelSettings of their own, so the Awake-time borrow finds none.
+        private bool _built;
+
         private void Awake()
         {
+            TryBuild(null);
+            // Route through the single-modal arbiter (DEF-212) so opening the admin overlay
+            // closes any other open panel (incl. Help) and closing clears the slot.
+            // Registered even if the UI hasn't built yet — re-registering is harmless and
+            // the handle is needed the moment a later TryBuild() succeeds.
+            _panelHandle = PanelMgr.Register("Admin", Close, () => IsOpen);
+        }
+
+        /// <summary>
+        /// Build the overlay UI if it hasn't been built yet. Needs a PanelSettings, which
+        /// it borrows from any UIDocument already in the scene; callers may pass an explicit
+        /// <paramref name="fallback"/> (e.g. HelpMenu's live PanelSettings) for scenes that
+        /// ship no UIDocument of their own. Returns true once the UI exists.
+        /// </summary>
+        public bool TryBuild(PanelSettings fallback)
+        {
+            if (_built) return true;
             _document = GetComponent<UIDocument>();
             if (_document == null) _document = gameObject.AddComponent<UIDocument>();
             if (_document.panelSettings == null)
@@ -63,16 +86,24 @@ namespace DeNelle.HUD
                     break;
                 }
             }
-            if (_document.panelSettings == null) { enabled = false; return; }
+            // Last resort: caller-supplied PanelSettings (T-030 — MainCastle_Hall has no
+            // scene UIDocument, so the borrow above finds nothing; HelpMenu hands us its own).
+            if (_document.panelSettings == null && fallback != null)
+                _document.panelSettings = fallback;
+            if (_document.panelSettings == null)
+            {
+                // Don't permanently disable — a later Open() can retry with a fallback once
+                // another panel (HelpMenu) has a live PanelSettings to lend.
+                return false;
+            }
             // DEF: HelpMenu sits at sortingOrder 2700 (it raised itself over the town
             // mini-map canvas long after this 170 comment was written). At 170 the admin
             // overlay opened BENEATH the Help panel + town HUD, so "Dev tools" appeared to
             // do nothing. Sit just above HelpMenu so the dev panel is actually visible.
             _document.sortingOrder = 2710; // just above HelpMenu (2700)
             BuildUi();
-            // Route through the single-modal arbiter (DEF-212) so opening the admin overlay
-            // closes any other open panel (incl. Help) and closing clears the slot.
-            _panelHandle = PanelMgr.Register("Admin", Close, () => IsOpen);
+            _built = true;
+            return true;
         }
 
         private void OnDestroy()
