@@ -48,6 +48,49 @@ namespace DeNelle.Village
         /// <summary>Current XZ velocity, exposed for the follow camera / animator.</summary>
         public Vector3 Velocity { get; private set; }
 
+        // WO-423: face-the-target on attack. The player hero previously only faced its
+        // MOVE direction (LookRotation on Velocity), so standing still froze facing at the
+        // last travel dir — attacks/projectiles fired the wrong way. FaceToward lets the
+        // attack/cast code request a brief yaw-slew toward the target; the existing
+        // rotation update (the SOLE rotation writer — _agent.updateRotation=false) honors
+        // it while there is ~no movement input, and movement input cancels it immediately
+        // (we never fight LookRotation(Velocity)). Mirrors the companion slerp pattern
+        // (StoryCompanion ~L612) but as a target-yaw + timer the locomotion already owns.
+        private bool  _facingActive;        // a FaceToward request is in flight
+        private float _faceTargetYaw;       // desired root Y-euler (degrees) to slew toward
+        private float _faceHoldRemaining;   // seconds the face-request stays valid
+        private const float FaceYawDegPerSec = 540f; // yaw slew rate while facing a target
+
+        /// <summary>
+        /// WO-423 — request a brief yaw-slew so the hero turns to face <paramref name="worldPoint"/>
+        /// before/while attacking. Only applies while movement input is ~0 (so it never fights
+        /// the move-direction LookRotation); a fresh movement input cancels it. Lasts up to
+        /// <paramref name="hold"/> seconds — long enough to cover the attack's impact delay.
+        /// Null-safe: a worldPoint level with the hero (no horizontal delta) is ignored.
+        /// </summary>
+        public void FaceToward(Vector3 worldPoint, float hold = 0.35f)
+        {
+            Vector3 to = worldPoint - transform.position;
+            to.y = 0f;
+            if (to.sqrMagnitude < 0.0004f) return;   // target is on top of the hero — nothing to face
+
+            _faceTargetYaw    = Quaternion.LookRotation(to.normalized, Vector3.up).eulerAngles.y;
+            _faceHoldRemaining = Mathf.Max(0f, hold);
+            _facingActive     = true;
+        }
+
+        /// <summary>
+        /// WO-423 — pure, edit-mode-testable shortest-arc yaw slew: step <paramref name="currentYaw"/>
+        /// toward <paramref name="targetYaw"/> by at most <paramref name="maxDelta"/> degrees,
+        /// wrapping across the ±180° seam so it always turns the short way. Degrees in/out.
+        /// </summary>
+        public static float StepYaw(float currentYaw, float targetYaw, float maxDelta)
+        {
+            float delta = Mathf.DeltaAngle(currentYaw, targetYaw); // shortest signed arc, [-180,180]
+            if (Mathf.Abs(delta) <= maxDelta) return targetYaw;
+            return currentYaw + Mathf.Sign(delta) * maxDelta;
+        }
+
         // WO-377: global player-input suppression. Set true while a Yarn dialogue is on
         // screen so the player can't move / attack / cast / build during story beats —
         // a click on the dialogue box used to fall through to the world and fire the
@@ -505,6 +548,35 @@ namespace DeNelle.Village
                 ? _accelMetresPerSec2
                 : _decelMetresPerSec2) * Time.deltaTime;
             Velocity = Vector3.MoveTowards(Velocity, targetVelocity, maxStep);
+
+            // WO-423: face-the-attack-target yaw slew. A fresh movement input cancels the
+            // request immediately (we never fight the move-direction LookRotation below);
+            // otherwise, while there is ~no movement input, slew the root yaw toward the
+            // requested target for up to the hold duration. This is the SOLE rotation writer
+            // (updateRotation=false), so honoring the request here is enough — no animator
+            // turn-in-place (v1 = yaw slew only, deferred Lane 3 WO).
+            bool hasMoveInput = input.sqrMagnitude > 0.0001f;
+            if (_facingActive)
+            {
+                if (hasMoveInput)
+                {
+                    _facingActive = false;   // player took back control of facing
+                }
+                else
+                {
+                    _faceHoldRemaining -= Time.deltaTime;
+                    if (_faceHoldRemaining <= 0f)
+                    {
+                        _facingActive = false;
+                    }
+                    else
+                    {
+                        float curYaw  = transform.eulerAngles.y;
+                        float nextYaw = StepYaw(curYaw, _faceTargetYaw, FaceYawDegPerSec * Time.deltaTime);
+                        transform.rotation = Quaternion.Euler(0f, nextYaw, 0f);
+                    }
+                }
+            }
 
             if (Velocity.sqrMagnitude > 0.0001f)
             {

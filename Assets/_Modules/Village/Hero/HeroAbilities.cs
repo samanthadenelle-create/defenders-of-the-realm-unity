@@ -267,6 +267,12 @@ namespace DeNelle.Village
             // to outgoing damage inside ResolveEffect. Heals are unaffected.
             _pendingTimingBonus = AttackTimingBonus.NotifyCast(origin);
 
+            // WO-423: for OFFENSIVE abilities, turn to face the foe BEFORE resolving the
+            // effect so the cast/projectile reads as aimed at the target instead of the
+            // hero's last move direction. Self / non-targeted abilities (Heal) skip this.
+            // Null-guarded: no locomotion or no resolvable foe leaves facing untouched.
+            FaceCastTarget(def, origin);
+
             ResolveEffect(def, origin);
             return true;
         }
@@ -285,6 +291,11 @@ namespace DeNelle.Village
 
         // Gear v1: lazily-attached equipped-gear loadout — its WeaponMult joins the damage chain.
         private GearLoadout _gear;
+
+        // WO-423: cached locomotion (the sole rotation writer) so offensive casts can yaw-slew
+        // the hero to face the foe before the effect resolves. Lives on the hero root alongside
+        // this component; resolved lazily and only while null (survives the body swap).
+        private HeroLocomotion _loco;
 
         // DEF-47: timing bonus captured by TryCast() from AttackTimingBonus,
         // consumed by the next ResolveEffect() damage call, then reset to 1.
@@ -305,6 +316,36 @@ namespace DeNelle.Village
         /// <summary>When set, Heal effects route here (repair the tower) instead of
         /// healing the caster. Returns true when it handled the heal. Null = heal hero.</summary>
         public System.Func<float, bool> HealHandler;
+
+        /// <summary>
+        /// WO-423: turn the hero to face the OFFENSIVE ability's foe/impact point before the
+        /// effect resolves, so a stationary caster's spell/projectile reads as aimed at the
+        /// target instead of the last move direction. Self / non-targeted (Heal) abilities are
+        /// skipped. Resolves the same point the effect will use: the explicit aim override
+        /// (DTT crosshair), else the reticle-locked target in reach, else the nearest hostile,
+        /// else the live boss. Null-guarded — no locomotion or no resolvable foe = no facing.
+        /// </summary>
+        private void FaceCastTarget(AbilityDef def, Vector3 origin)
+        {
+            if (def.EffectEnum == AbilityEffect.Heal) return;   // self/non-targeted — don't turn
+
+            if (_loco == null) _loco = GetComponent<HeroLocomotion>();
+            if (_loco == null) return;
+
+            Vector3 atk = AimPointOverride ?? origin;
+
+            // Find the world point the effect targets (mirrors ResolveEffect's resolution).
+            Vector3? facePoint = AimPointOverride;   // DTT: face the crosshair directly
+            if (facePoint == null)
+            {
+                float maxR = def.Range + _enemyHitRadius;
+                var foe = InReach(LockedTarget, atk, maxR) ? LockedTarget : NearestHostile(atk, maxR);
+                if (foe == null) foe = LiveBoss();
+                if (foe != null) facePoint = foe.WorldPosition;
+            }
+
+            if (facePoint.HasValue) _loco.FaceToward(facePoint.Value);
+        }
 
         private void ResolveEffect(AbilityDef def, Vector3 origin)
         {

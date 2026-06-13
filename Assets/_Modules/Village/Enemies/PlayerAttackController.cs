@@ -151,6 +151,15 @@ namespace DeNelle.Village
         // route to PlayCast so they cast instead of swinging.
         private ActorAnimator _actor;
         private HeroAbilities _abilities;   // class source (knight = combo, casters = cast)
+
+        // WO-423: face-the-target on swing. The hero used to fire its melee/360° hit toward
+        // its last MOVE direction, so a stationary attack faced the wrong way. StartAttack
+        // resolves the intended target (the reticle-locked one, else the nearest hostile in
+        // reach) and asks HeroLocomotion — the sole rotation writer — to yaw-slew toward it
+        // before the swing lands; the impact delay covers the turn. Both components sit on
+        // the hero root, so they're plain sibling GetComponent lookups.
+        private HeroLocomotion     _loco;
+        private HeroTargetIndicator _targetIndicator;
         private int   _comboIndex;
         private float _lastSwingTime;
         private const int   ComboLength    = 3;     // Knight melee combo swings
@@ -163,6 +172,8 @@ namespace DeNelle.Village
             _animator    = GetComponentInChildren<Animator>();
             if (!TryGetComponent(out _actor)) _actor = gameObject.AddComponent<ActorAnimator>();
             _abilities   = GetComponent<HeroAbilities>();
+            _loco            = GetComponent<HeroLocomotion>();          // WO-423: sole rotation writer
+            _targetIndicator = GetComponent<HeroTargetIndicator>();     // WO-423: reticle-locked target
             _audioSource = GetComponent<AudioSource>();
             if (_audioSource == null)
                 _audioSource = gameObject.AddComponent<AudioSource>();
@@ -291,6 +302,13 @@ namespace DeNelle.Village
             _swingStartTime = Time.time;
             _isInSwing      = true;
 
+            // WO-423: turn to face the intended target BEFORE the swing plays, so the
+            // hit (a 360° OverlapSphere in ResolveAttack) and any weapon VFX read as
+            // facing the foe instead of the last move direction. Prefer the reticle's
+            // locked target; else the nearest hostile inside attack reach. HeroLocomotion
+            // (the sole rotation writer) slews the yaw; the _impactFrameDelay covers it.
+            FaceAttackTarget();
+
             // WO-285: melee classes swing a cycling combo; casters (Mage/Cleric) cast
             // instead of swinging. Class resolved live from HeroAbilities (set after the
             // body swap). The combo index resets after a short idle gap so consecutive
@@ -327,6 +345,40 @@ namespace DeNelle.Village
             }
 
             StartCoroutine(ResolveAttack());
+        }
+
+        /// <summary>
+        /// WO-423: resolve the intended swing target and ask HeroLocomotion to yaw-slew
+        /// toward it. Target priority: the reticle-locked <see cref="HeroTargetIndicator.CurrentTarget"/>,
+        /// else the nearest living hostile inside the effective attack reach. Null-guarded —
+        /// no locomotion or no target leaves facing untouched (attack proceeds as before).
+        /// </summary>
+        private void FaceAttackTarget()
+        {
+            if (_loco == null) return;
+
+            // 1) reticle-locked target (registry — exactly what the ring shows).
+            IDamageable target = _targetIndicator != null ? _targetIndicator.CurrentTarget : null;
+            if (target != null && !target.IsAlive) target = null;
+
+            // 2) fall back to the nearest hostile inside the swing's reach.
+            if (target == null)
+            {
+                float range = EffectiveRange();
+                Collider[] hits = Physics.OverlapSphere(transform.position, range, _enemyLayer);
+                float bestSqr = float.MaxValue;
+                foreach (var col in hits)
+                {
+                    if (col == null) continue;
+                    var d = col.GetComponentInParent<IDamageable>();
+                    if (d == null || !d.IsAlive || d.Faction != CombatFaction.Hostile) continue;
+                    float sqr = (d.WorldPosition - transform.position).sqrMagnitude;
+                    if (sqr < bestSqr) { bestSqr = sqr; target = d; }
+                }
+            }
+
+            if (target == null) return;   // nothing to face — swing as before
+            _loco.FaceToward(target.WorldPosition);
         }
 
         private IEnumerator ResolveAttack()
