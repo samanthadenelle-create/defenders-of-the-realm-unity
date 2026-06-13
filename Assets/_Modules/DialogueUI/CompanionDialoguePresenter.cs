@@ -533,6 +533,72 @@ namespace DeNelle.DialogueUI
 
             FlowTrace.Warn("UI", $"after Yarn end: Time.timeScale={Time.timeScale}" +
                 (Time.timeScale <= 0.001f ? "  (STUCK PAUSED — input/anim frozen)" : ""));
+
+            LogUiToolkitBlockerState();
+        }
+
+        // ── UI TOOLKIT LAYER TRACE (does not change behaviour) ───────────────
+        // The CanvasGroup dump above sees only uGUI. The remaining "dev tools dead
+        // after Yarn" symptom is at the UI Toolkit layer: the Settings (HelpMenu)
+        // overlay opens after Yarn, but the click on its "Dev tools" button never
+        // reaches the callback — i.e. some UIDocument's rootVisualElement is sitting
+        // over Settings with pickingMode=Position and swallowing the pointer, OR the
+        // EventSystem that drives UI Toolkit pointer input died/duplicated after Yarn.
+        // Dump every UIDocument (ordered topmost-first by sortingOrder) + the live
+        // EventSystem so one F8 run names the exact interceptor.
+        private void LogUiToolkitBlockerState()
+        {
+            // Fully-qualify all UIElements types: this file imports UnityEngine.UI, whose
+            // Image type would clash with UnityEngine.UIElements.Image if we `using` it.
+            var docs = UnityEngine.Object.FindObjectsByType<UnityEngine.UIElements.UIDocument>(
+                FindObjectsInactive.Include, FindObjectsSortMode.None);
+
+            // Topmost panel first — the highest sortingOrder draws + picks over the rest.
+            System.Array.Sort(docs, (a, b) =>
+            {
+                float sa = a != null ? a.sortingOrder : float.MinValue;
+                float sb = b != null ? b.sortingOrder : float.MinValue;
+                return sb.CompareTo(sa);
+            });
+
+            foreach (var doc in docs)
+            {
+                if (doc == null) continue;
+                bool active = doc.enabled && doc.gameObject.activeInHierarchy;
+                bool hasPanel = doc.panelSettings != null;
+                float sort = doc.panelSettings != null ? doc.panelSettings.sortingOrder : float.NaN;
+                var root = doc.rootVisualElement;
+                bool hasRoot = root != null;
+                string picking = hasRoot ? root.pickingMode.ToString() : "n/a";
+                string display = hasRoot ? root.style.display.value.ToString() : "n/a";
+                int childCount = hasRoot ? root.childCount : 0;
+                float rw = hasRoot ? root.resolvedStyle.width : 0f;
+                float rh = hasRoot ? root.resolvedStyle.height : 0f;
+
+                FlowTrace.Warn("UI",
+                    $"after Yarn end: UIDocument '{doc.name}' active={active} hasPanelSettings={hasPanel} " +
+                    $"panelSortingOrder={sort} hasRoot={hasRoot} rootPicking={picking} rootDisplay={display} " +
+                    $"rootChildCount={childCount} rootResolved={rw:0}x{rh:0}");
+
+                // Candidate pointer interceptor: an ACTIVE document whose root is pickable
+                // (Position) AND (near) full-screen — that would sit over Settings and eat
+                // every click without drawing anything obvious.
+                bool fullScreen = rw >= Screen.width * 0.95f && rh >= Screen.height * 0.95f;
+                if (active && hasRoot && root.pickingMode == UnityEngine.UIElements.PickingMode.Position && fullScreen)
+                    FlowTrace.Warn("UI",
+                        $"after Yarn end: CANDIDATE UI-TOOLKIT INTERCEPTOR — UIDocument '{doc.name}' " +
+                        $"is active, rootPicking=Position, full-screen ({rw:0}x{rh:0} vs screen {Screen.width}x{Screen.height}) " +
+                        $"panelSortingOrder={sort} — may swallow clicks over Settings");
+            }
+
+            // A disabled/duplicated EventSystem after Yarn kills ALL UI clicks (uGUI + UITK).
+            var es = UnityEngine.EventSystems.EventSystem.current;
+            if (es == null)
+                FlowTrace.Warn("UI", "after Yarn end: EventSystem.current is NULL — no UI clicks of any kind will register");
+            else
+                FlowTrace.Warn("UI",
+                    $"after Yarn end: EventSystem.current '{es.name}' enabled={es.enabled} " +
+                    $"activeInHierarchy={es.gameObject.activeInHierarchy}");
         }
     }
 }

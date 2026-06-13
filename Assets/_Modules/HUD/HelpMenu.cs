@@ -132,6 +132,23 @@ namespace DeNelle.HUD
             _overlay.style.display = DisplayStyle.None;
             _root.Add(_overlay);
 
+            // ── POINTER-REACH TRACE (does not change behaviour) ──────────────
+            // "Dev tools dead after Yarn": the Settings overlay OPENS after a Yarn
+            // dialogue, but the click on its buttons never reaches OnOpenDevTools.
+            // Register at TrickleDown (capture phase) on the Settings root so the next
+            // F8 run shows whether ANY pointer event reaches this panel after Yarn,
+            // and which element is the target/captures it. If this never fires while a
+            // click is happening, a higher panel (see CompanionDialoguePresenter's
+            // UIDocument dump) is intercepting before Settings ever sees the pointer.
+            _overlay.RegisterCallback<PointerDownEvent>(evt =>
+            {
+                var target = evt.target as VisualElement;
+                FlowTrace.Step("UI",
+                    $"pointer hit Settings overlay — target='{(target != null ? target.name : "?")}' " +
+                    $"type={(evt.target != null ? evt.target.GetType().Name : "null")} " +
+                    $"pos={evt.position} (TrickleDown/capture on help-overlay)");
+            }, TrickleDown.TrickleDown);
+
             // The card routes through the shared StylePanel (dark stone fill + runic-gold
             // rim + rounding) so it reads as part of the TOWN-HUD presentation language.
             var card = new VisualElement();
@@ -160,7 +177,9 @@ namespace DeNelle.HUD
             // player build (chord-only). Always surface the entry so the Settings bar reaches the
             // owner-only overlay everywhere AdminOverlay exists. AdminOverlay's own owner-wallet /
             // chord gate is the access control; this is just the launcher.
-            card.Add(MakeButton("Dev tools",           OnOpenDevTools));
+            var devToolsButton = MakeButton("Dev tools", OnOpenDevTools);
+            FlowTrace.Step("UI", "Dev tools button wired (HelpMenu Settings card)");
+            card.Add(devToolsButton);
             card.Add(MakeButton("Credits",             OnShowCredits));
             card.Add(MakeButton("Close",               Close, ElarionUi.ButtonKind.Gold));
 
