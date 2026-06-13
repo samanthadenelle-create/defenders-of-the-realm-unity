@@ -197,6 +197,13 @@ namespace DeNelle.HUD
 
         private CanvasGroup _rootGroup;
 
+        // WO-421 RC2: the ward "forgetting" ambiance dim. SetForgettingLevel only
+        // STORES the target here; Update() applies it conditionally + lerped so the
+        // hero plate / vitals never wash out while combat is live (see ApplyForgettingDim).
+        private float _forgettingLevel;       // 0 = wards lit, 1 = deep / forgotten
+        private float _rootDimAlpha = 1f;     // current eased root alpha for the dim
+        private bool _hudHiddenByModal;       // SetHudVisible(false) — modal owns root alpha
+
         // ── WO-337: BATTLE-HUD group ──────────────────────────────────────────
         // The combat-only clusters (abilities, hero vitals, wave/enemy readout,
         // momentum badge) live under their OWN canvas + CanvasGroup at a higher
@@ -627,6 +634,27 @@ namespace DeNelle.HUD
             AnimateLookoutBell();
             UpdateTownHud();
             UpdateHeroXpLine();
+            ApplyForgettingDim();
+        }
+
+        // WO-421 RC2: apply the ward "forgetting" ambiance dim to the root group,
+        // but ONLY out of combat — and eased, never a hard snap. While combat is
+        // live (the BATTLE-HUD group is shown) hold the root at full alpha so the
+        // hero plate / vitals stay bright in deep OuterWorld where no wards are lit.
+        private void ApplyForgettingDim()
+        {
+            if (_rootGroup == null) return;
+            // A full-screen modal (SetHudVisible) owns the root alpha while open — don't fight it.
+            if (_hudHiddenByModal) return;
+
+            // Combat is "live" when the battle cluster (abilities + hero vitals) is up.
+            bool combatLive = _battleHudGroup != null && _battleHudGroup.alpha > 0.5f;
+
+            // Out of combat the dim follows the forgetting level (1 → 0.55); in combat
+            // it eases back to full so the hero plate never reads washed out.
+            float target = combatLive ? 1f : Mathf.Lerp(1f, 0.55f, _forgettingLevel);
+            _rootDimAlpha = Mathf.MoveTowards(_rootDimAlpha, target, 0.8f * Time.unscaledDeltaTime);
+            _rootGroup.alpha = _rootDimAlpha;
         }
 
         // ── Hero XP yellow line (above the HP bar) — cheap poll of HeroProgression. ─
@@ -2433,7 +2461,11 @@ namespace DeNelle.HUD
 
         public void SetForgettingLevel(float level01)
         {
-            if (_rootGroup != null) _rootGroup.alpha = Mathf.Lerp(1f, 0.55f, Mathf.Clamp01(level01));
+            // WO-421 RC2: do NOT dim the root immediately/unconditionally — that washed
+            // out the combat hero plate in deep OuterWorld (no lit wards → whole HUD at
+            // 55%). Store the target; Update() applies it lerped + only when combat is
+            // NOT live (see ApplyForgettingDim).
+            _forgettingLevel = Mathf.Clamp01(level01);
         }
 
         public void SetWardsReadout(int wardsLit, int wardsTotal, string summary) { /* surfaced in the Arcane Tower panel */ }
@@ -2494,9 +2526,13 @@ namespace DeNelle.HUD
         public void SetHudVisible(bool visible)
         {
             if (_rootGroup == null) return;
+            _hudHiddenByModal = !visible;     // WO-421 RC2: while a modal hides the HUD, the
+                                              // forgetting dim must not re-show the root group.
             _rootGroup.alpha = visible ? 1f : 0f;
             _rootGroup.interactable = visible;
             _rootGroup.blocksRaycasts = visible;
+            // On restore, resync the eased dim baseline so it doesn't snap from 0 → target.
+            if (visible) _rootDimAlpha = 1f;
         }
 
         // =====================================================================
