@@ -400,6 +400,13 @@ namespace DeNelle.Village
 
         // ── Internal ──────────────────────────────────────────────────────────
 
-        private void NotifyChanged() => OnChanged?.Invoke(Snapshot);
+        private void NotifyChanged()
+        {
+            var snap = Snapshot;
+            int subs = OnChanged?.GetInvocationList()?.Length ?? 0;
+            DeNelle.Core.Diagnostics.FlowTrace.Step("Eco",
+                $"OnChanged fired W{snap.Wood} I{snap.Iron} F{snap.Food} C{snap.Crystals} (subscribers={subs})");
+            OnChanged?.Invoke(snap);
+        }
     }
 }

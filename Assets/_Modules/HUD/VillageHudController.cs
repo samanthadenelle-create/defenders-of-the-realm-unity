@@ -2339,6 +2339,8 @@ namespace DeNelle.HUD
 
         public void SetResources(int wood, int iron, int food, int gems)
         {
+            DeNelle.Core.Diagnostics.FlowTrace.Step("Eco",
+                $"HUD.SetResources W{wood} I{iron} F{food} C{gems} (battleTexts={(_resourceTexts != null)}, townTexts={(_townResText != null)})");
             if (_resourceTexts != null && _resourceTexts.Length >= 4)
             {
                 _resourceTexts[0].text = wood.ToString();

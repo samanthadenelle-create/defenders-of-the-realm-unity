@@ -644,6 +644,16 @@ namespace DeNelle.Village.Hero
         private void RefreshEco()
         {
             if (_ecoText != null) UpdateEcoText(_ecoText);
+
+            // Owner: "connect the economy and the HUD to sync on subtract." A purchase
+            // deducts from EconomyService (TrySpend), which fires OnChanged -> HeartHudBridge
+            // -> HUD.SetResources. But that bridge resolves off the Heart and may not be live
+            // in the castle hub, so the town resource bar didn't visibly drop on a buy. Push
+            // the fresh snapshot straight to the town HUD here too (idempotent, and the bridge
+            // pushes the same values when it IS live) so the subtraction always shows.
+            var eco = EconomyService.Instance;
+            if (eco != null)
+                DeNelle.Core.CoreServices.Hud?.SetResources(eco.Wood, eco.Iron, eco.Food, eco.Crystals);
         }
 
         // --- SELL ---

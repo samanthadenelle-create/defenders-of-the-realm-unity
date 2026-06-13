@@ -185,12 +185,19 @@ namespace DeNelle.Village
         /// </summary>
         private void PushResources(ResourceSnapshot snapshot)
         {
-            if (_setResources == null || _hud == null) return;
+            if (_setResources == null || _hud == null)
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("Eco",
+                    $"HeartHudBridge.PushResources SKIPPED — setResources={(_setResources != null)} hud={(_hud != null)} (HUD will NOT reflect the change)");
+                return;
+            }
             _resourceArgs[0] = snapshot.Wood;
             _resourceArgs[1] = snapshot.Iron;
             _resourceArgs[2] = snapshot.Food;
             _resourceArgs[3] = snapshot.Crystals;
             _setResources.Invoke(_hud, _resourceArgs);
+            DeNelle.Core.Diagnostics.FlowTrace.Step("Eco",
+                $"HeartHudBridge pushed HUD W{snapshot.Wood} I{snapshot.Iron} F{snapshot.Food} C{snapshot.Crystals}");
         }
 
         private void Update()
