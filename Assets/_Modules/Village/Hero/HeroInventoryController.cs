@@ -53,7 +53,7 @@ namespace DeNelle.Village
         private GameObject _sidebarRoot;  // re-built per selection
         private GameObject _paperDoll;    // rebuilt on equip-change
         private GameObject _tabsRoot;     // tab row host (rebuilt on tab change)
-        private Tab _tab = Tab.Weapons;
+        private Tab _tab = Tab.Weapons;  // Default to weapons + armor focus for this inventory view.
 
         // The current selection (one of these is non-null while a cell is selected).
         private WeaponDef _selWeapon;
@@ -536,13 +536,11 @@ namespace DeNelle.Village
             NoRaycast(row);
             AddInnerRim(row, new Color(rc.r, rc.g, rc.b, filled ? 0.55f : 0.30f));
 
-            // LEFT: square icon socket, dressed SPRITE-FIRST with the tech-pack's ornate
-            // socket plate (rarity-tinted); procedural tint + inner rim remain the fallback.
-            var sock = AddImage(row.transform, "Socket", new Vector2(0.06f, 0.14f), new Vector2(0.34f, 0.86f),
-                                new Color(rc.r, rc.g, rc.b, filled ? 0.18f : 0.10f));
+            // LEFT: ornate gear socket from Tech hud elements pack (Profile tabs / Green UI make rich frames for weapons & armor).
+            // Tinted to rarity. Large touch-friendly size.
+            Color socketTint = filled ? rc : AccentSoft;
+            var sock = ElarionUiKit.TechGearSocket(row.transform, "TechSocket", new Vector2(0.04f, 0.10f), new Vector2(0.32f, 0.90f), socketTint, isWeapon: label == "WEAPON");
             NoRaycast(sock);
-            DressSocket(sock, new Color(rc.r, rc.g, rc.b, filled ? 0.55f : 0.30f));
-            AddInnerRim(sock, new Color(rc.r, rc.g, rc.b, filled ? 0.60f : 0.35f));
             Color glyphCol = filled ? rcInk : new Color(InkDim.r, InkDim.g, InkDim.b, 0.7f);
             string glyph = string.IsNullOrEmpty(icon) ? (filled ? "?" : "+") : icon;
             AddIcon(sock.transform, iconSprite, glyph, ElarionUi.FontHead, glyphCol, filled ? 1f : 0.7f);
@@ -818,13 +816,12 @@ namespace DeNelle.Village
             // Icon medallion (a soft recessed well behind the TYPE glyph). On light
             // parchment the well is a faint warm tint, not a dark hole. Decorative
             // overlays are non-raycast so the whole cell stays a single tap target.
-            var well = AddImage(cell.transform, "IconWell", new Vector2(0.28f, 0.40f), new Vector2(0.72f, 0.93f),
-                                new Color(rc.r, rc.g, rc.b, 0.12f));
-            NoRaycast(well);
-            DressSocket(well, new Color(rc.r, rc.g, rc.b, locked ? 0.30f : 0.55f));
-            AddInnerRim(well, new Color(rc.r, rc.g, rc.b, 0.40f));
-            // Sprite-first: real item art when we have it, else the type glyph.
-            AddIcon(well.transform, iconSprite, icon, ElarionUi.FontTitle + 2,
+            // Use Tech hud elements pack socket (Healing Tabs/Profile for weapons) - same flow as paper doll and vendor buy rows.
+            var techSock = ElarionUiKit.TechGearSocket(cell.transform, "TechIconWell", new Vector2(0.26f, 0.38f), new Vector2(0.74f, 0.95f),
+                new Color(rc.r, rc.g, rc.b, locked ? 0.30f : 0.55f), isWeapon: true);
+            NoRaycast(techSock);
+            // Sprite-first: real item art when we have it, else the type glyph (sword icons etc from pack or catalog).
+            AddIcon(techSock.transform, iconSprite, icon, ElarionUi.FontTitle + 2,
                     locked ? InkMicro : rcInk, locked ? 0.6f : 1f);
 
             // Name (rarity-INK coloured) along the bottom band — readable on light.
@@ -913,14 +910,13 @@ namespace DeNelle.Village
             Color rc    = RarityColor(rarity);
             Color rcInk = RarityInk(rarity);
 
-            // Icon medallion (upper-left of the block).
-            var med = AddImage(_sidebarRoot.transform, "DetailIcon",
-                               new Vector2(0.060f, 0.40f), new Vector2(0.190f, 0.92f),
-                               new Color(rc.r, rc.g, rc.b, 0.14f));
-            NoRaycast(med);
-            DressSocket(med, new Color(rc.r, rc.g, rc.b, 0.55f));
-            AddInnerRim(med, new Color(rc.r, rc.g, rc.b, 0.55f));
-            AddIcon(med.transform, iconSprite, string.IsNullOrEmpty(icon) ? "?" : icon,
+            // Tech pack frame for the selected gear detail icon (differentiated weapon vs armor).
+            // Replaces plain medallion with ornate socket from Profile tabs / Healing tabs.
+            var techMed = ElarionUiKit.TechGearSocket(_sidebarRoot.transform, "TechDetailSocket",
+                new Vector2(0.060f, 0.40f), new Vector2(0.190f, 0.92f), new Color(rc.r, rc.g, rc.b, 0.14f),
+                isWeapon: _selWeapon != null);
+            NoRaycast(techMed);
+            AddIcon(techMed.transform, iconSprite, string.IsNullOrEmpty(icon) ? "?" : icon,
                     ElarionUi.FontHead, rcInk, 1f);
 
             // Name + rarity band below the medallion.
@@ -989,9 +985,15 @@ namespace DeNelle.Village
 
             DetailFlavour(!string.IsNullOrEmpty(w.flavor) ? w.flavor : w.saga);
 
-            BuildEquipButton(equipped, locked,
-                () => { if (_loadout != null) _loadout.EquipWeaponById(w.id); },
-                () => { /* weapons have no explicit unequip in v1 */ });
+            // Prominent Equip CTA skinned from Tech pack Play Buttons (ornate gold frame, large thumb target).
+            var equipBtn = ElarionUiKit.TechPrimaryButton(_sidebarRoot.transform, equipped ? "EQUIPPED" : (locked ? "LOCKED" : "EQUIP"),
+                                                            new Vector2(0.72f, 0.25f), new Vector2(0.98f, 0.75f),
+                                                            () =>
+                                                            {
+                                                                if (_loadout != null && !equipped && !locked)
+                                                                    _loadout.EquipWeaponById(w.id);
+                                                            });
+            if (equipped || locked) equipBtn.interactable = false;
         }
 
         private void BuildArmorSidebar(ArmorDef a)
@@ -1017,9 +1019,18 @@ namespace DeNelle.Village
 
             DetailFlavour(!string.IsNullOrEmpty(a.flavor) ? a.flavor : a.saga);
 
-            BuildEquipButton(equipped, locked,
-                () => { if (_loadout != null) _loadout.EquipArmorById(a.id); },
-                () => { /* no explicit unequip in v1 */ });
+            // Prominent Equip CTA skinned from Tech pack (large ornate Play-button frame for armor focus).
+            var equipBtn = ElarionUiKit.TechPrimaryButton(_sidebarRoot.transform, equipped ? "EQUIPPED" : (locked ? "LOCKED" : "EQUIP"),
+                                                            new Vector2(0.72f, 0.25f), new Vector2(0.98f, 0.75f),
+                                                            () =>
+                                                            {
+                                                                if (_loadout != null && !locked)
+                                                                {
+                                                                    if (equipped) _loadout.EquipArmorById(null);
+                                                                    else _loadout.EquipArmorById(a.id);
+                                                                }
+                                                            });
+            if (locked) equipBtn.interactable = false;
         }
 
         private void BuildConsumableSidebar(ConsumableSel c)

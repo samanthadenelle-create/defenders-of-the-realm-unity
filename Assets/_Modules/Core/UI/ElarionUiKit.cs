@@ -911,11 +911,14 @@ namespace DeNelle.Core.UI
                                              bool deep = false, string packSpriteName = null)
         {
             var p = Panel(parent, anchorMin, anchorMax, deep: deep, innerRim: true);
-            var packSprite = RpgUiCatalog.Get(RpgUiCatalog.RolePanel, packSpriteName);
-            if (packSprite != null)
+            // Only dress with a pack panel sprite when the caller EXPLICITLY names one. A null/empty
+            // name must mean "plain dark-glass" — NOT a silent default: RpgUiCatalog.Get(role, null)
+            // falls through to the FIRST sprite in the role (a gold grid panel), which is what made the
+            // store read as an empty gold grid even after asking for no sprite.
+            if (!string.IsNullOrEmpty(packSpriteName))
             {
-                var img = p.GetComponent<Image>();
-                if (img != null)
+                var packSprite = RpgUiCatalog.Get(RpgUiCatalog.RolePanel, packSpriteName);
+                if (packSprite != null && p.GetComponent<Image>() is Image img)
                 {
                     img.sprite = packSprite;
                     img.type = Image.Type.Sliced;
@@ -935,13 +938,18 @@ namespace DeNelle.Core.UI
                                         Vector2 anchorMin, Vector2 anchorMax, Action onClick = null,
                                         string packSpriteName = null)
         {
+            // The procedural gold button already carries the label clearly.
             var btn = Button(parent, label, kind, anchorMin, anchorMax, onClick);
-            var packSprite = RpgUiCatalog.Get(RpgUiCatalog.RoleButton,
-                string.IsNullOrEmpty(packSpriteName) ? RpgUiCatalog.ButtonGold : packSpriteName);
-            if (packSprite != null && btn != null)
+            // IMPORTANT: the default RoleButton sprite (ButtonGold = "Play buttons/button 3") and the
+            // rest of the pack's button art live in the Play-buttons folder with the word PLAY baked
+            // INTO the graphic — overlaying it on a LABELED button makes BUY/SELL/EQUIP all read
+            // "PLAY". So we only overlay a pack sprite when the caller EXPLICITLY supplies one (and is
+            // responsible for it being text-free); otherwise the clean procedural gold button + label
+            // is used. This is what fixes "PLAY everywhere" on the store tabs / inventory / equip.
+            if (!string.IsNullOrEmpty(packSpriteName) && btn != null)
             {
-                var img = btn.targetGraphic as Image;
-                if (img != null)
+                var packSprite = RpgUiCatalog.Get(RpgUiCatalog.RoleButton, packSpriteName);
+                if (packSprite != null && btn.targetGraphic is Image img)
                 {
                     img.sprite = packSprite;
                     img.type = Image.Type.Sliced;
