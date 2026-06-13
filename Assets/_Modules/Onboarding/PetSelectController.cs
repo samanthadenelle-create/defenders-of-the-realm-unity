@@ -126,6 +126,16 @@ namespace DeNelle.Onboarding
                 return;
             }
 
+            // T-029: even when the auto-skip is OFF (editor testing) or the player
+            // re-reaches this surface another way, NEVER re-offer a free pick once
+            // a starter pet is bonded. Show the "you already have <pet>" state with
+            // a hint on how to get another — no second pick, no overwrite.
+            if (HasStarterPet())
+            {
+                BindAlreadyChosen();
+                return;
+            }
+
             BindElements();
         }
 
@@ -148,6 +158,27 @@ namespace DeNelle.Onboarding
             var svc = GameStateService.Instance;
             if (svc == null || svc.State == null) return false;
             return !string.IsNullOrEmpty(svc.State.StarterPetId);
+        }
+
+        /// <summary>
+        /// The persisted starter pet's display name (from pets.json), or a neutral
+        /// "Warden" fallback when the id is unknown to the intro catalog. Used by
+        /// the already-chosen state so the message names the bonded companion.
+        /// </summary>
+        private static string ChosenPetName()
+        {
+            var svc = GameStateService.Instance;
+            string id = svc != null && svc.State != null ? svc.State.StarterPetId : null;
+            if (!string.IsNullOrEmpty(id))
+            {
+                var pets = IntroPetCatalog.Pets;
+                for (int i = 0; i < pets.Count; i++)
+                {
+                    if (pets[i] != null && pets[i].Id == id && !string.IsNullOrEmpty(pets[i].Name))
+                        return pets[i].Name;
+                }
+            }
+            return "your Warden";
         }
 
         // =====================================================================
@@ -234,6 +265,95 @@ namespace DeNelle.Onboarding
             _confirmButton.clicked += OnConfirmClicked;
 
             RefreshConfirmEnabled();
+            _bound = true;
+        }
+
+        // =====================================================================
+        //  Already-chosen state (T-029) — no second pick, no overwrite
+        // =====================================================================
+
+        /// <summary>
+        /// Builds the returning-player state: a player who already bonded a starter
+        /// pet does NOT get the card row. Instead we name their existing Warden and
+        /// hint at how to gain another (the village/store path), then a single
+        /// "Continue" CTA routes onward. The chosen pet is NEVER re-picked or
+        /// overwritten here — this surface is read-only for a bonded player.
+        ///
+        /// Built fully in code (no UXML — renders blank in player builds), mirroring
+        /// the BindElements idiom. Copy is inline-literal (not a CanonStrings key) so
+        /// it never shows the "[[missing:…]]" placeholder if en.json lacks the key —
+        /// the pet NAME is the only canonical value and comes from pets.json.
+        /// </summary>
+        private void BindAlreadyChosen()
+        {
+            var rootDoc = _document != null ? _document.rootVisualElement : null;
+            if (rootDoc == null)
+            {
+                Debug.LogWarning("[PetSelectController] No UIDocument root — already-chosen state will not display.");
+                return;
+            }
+
+            rootDoc.Clear();
+
+            _root = new VisualElement { name = "pet-select-root" };
+            _root.style.flexGrow = 1f;
+            _root.style.position = Position.Absolute;
+            _root.style.top = 0; _root.style.left = 0; _root.style.right = 0; _root.style.bottom = 0;
+            _root.style.backgroundColor = ScreenBg;
+            _root.style.flexDirection = FlexDirection.Column;
+            _root.style.alignItems = Align.Center;
+            _root.style.justifyContent = Justify.Center;
+            _root.style.paddingLeft = 24; _root.style.paddingRight = 24;
+            rootDoc.Add(_root);
+
+            string petName = ChosenPetName();
+
+            var heading = new Label("You already have a Warden") { name = "pet-already-title" };
+            heading.style.fontSize = 30;
+            heading.style.unityFontStyleAndWeight = FontStyle.Bold;
+            heading.style.color = TitleText;
+            heading.style.unityTextAlign = TextAnchor.MiddleCenter;
+            _root.Add(heading);
+
+            var bonded = new Label($"{petName} walks the watch beside you. A Warden bonds once — that bond can't be traded away.")
+            { name = "pet-already-bonded" };
+            bonded.style.marginTop = 12;
+            bonded.style.fontSize = 15;
+            bonded.style.unityFontStyleAndWeight = FontStyle.Italic;
+            bonded.style.color = SubtitleText;
+            bonded.style.unityTextAlign = TextAnchor.MiddleCenter;
+            bonded.style.whiteSpace = WhiteSpace.Normal;
+            bonded.style.maxWidth = 640;
+            _root.Add(bonded);
+
+            var hint = new Label("Want another companion? More Wardens can be found out in the realm — earned through quests or summoned at the marketplace.")
+            { name = "pet-already-hint" };
+            hint.style.marginTop = 18;
+            hint.style.fontSize = 13;
+            hint.style.color = BlurbText;
+            hint.style.unityTextAlign = TextAnchor.MiddleCenter;
+            hint.style.whiteSpace = WhiteSpace.Normal;
+            hint.style.maxWidth = 600;
+            _root.Add(hint);
+
+            var continueButton = new Button { name = "pet-already-continue", text = "Continue" };
+            continueButton.style.marginTop = 28;
+            continueButton.style.minWidth = 200;
+            continueButton.style.height = 52;
+            continueButton.style.fontSize = 15;
+            continueButton.style.unityFontStyleAndWeight = FontStyle.Bold;
+            continueButton.style.backgroundColor = Amber;
+            continueButton.style.color = ConfirmText;
+            SetBorderRadius(continueButton, 12);
+            SetBorderWidth(continueButton, 0);
+            continueButton.clicked += () =>
+            {
+                if (_advancing) return;
+                _advancing = true;
+                SceneRouter.GoCastle();
+            };
+            _root.Add(continueButton);
+
             _bound = true;
         }
 
@@ -458,11 +578,18 @@ namespace DeNelle.Onboarding
             var svc = GameStateService.Instance;
             if (svc != null && svc.State != null)
             {
-                // There is no GameStateService.ChooseStarterPet mutator; the
-                // starter-pet id is a plain persisted field, so set it on the SO
-                // and Save() through the same Core save layer every mutator uses.
-                svc.State.StarterPetId = _selectedPetId;
-                svc.Save();
+                // T-029 guard: a Warden bonds ONCE. If the save already records a
+                // starter pet, never overwrite it — route on without re-persisting
+                // (defense-in-depth; the already-chosen state should have prevented
+                // a pick reaching here at all).
+                if (string.IsNullOrEmpty(svc.State.StarterPetId))
+                {
+                    // There is no GameStateService.ChooseStarterPet mutator; the
+                    // starter-pet id is a plain persisted field, so set it on the SO
+                    // and Save() through the same Core save layer every mutator uses.
+                    svc.State.StarterPetId = _selectedPetId;
+                    svc.Save();
+                }
             }
             else
             {
