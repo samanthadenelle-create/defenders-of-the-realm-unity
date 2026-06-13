@@ -115,6 +115,7 @@ namespace DeNelle.Village
         private Transform _petTransform;        // WO-145: resolved by "PetTarget" tag (null-safe).
         private float     _healCooldown;
         private float     _suppressTimer;
+        private float     _heroResolveTimer;   // WO-419: throttles periodic hero re-acquire.
 
         private EnemyTacticalState _tacticalState = EnemyTacticalState.Rush;
 
@@ -387,6 +388,18 @@ namespace DeNelle.Village
             {
                 _bt.Evaluate();
                 return;
+            }
+
+            // WO-419: re-acquire the hero on a 1s cadence (matches Enemy.ResolveHeroTransform) so a
+            // brain-driven enemy that cached null/stale at Awake under additive OuterWorld streaming
+            // still engages. Only re-finds when the cached ref is gone (cheap). Explicit null check
+            // on the UnityEngine.Object (?? would return a fake-null); the TryFindByTag chain below is
+            // safe because TryFindByTag returns a real null literal, not a destroyed-object reference.
+            _heroResolveTimer -= Time.deltaTime;
+            if (_heroTransform == null && _heroResolveTimer <= 0f)
+            {
+                _heroResolveTimer = 1f;
+                _heroTransform = TryFindByTag("HeroTarget") ?? TryFindByTag("Player");
             }
 
             // WO-147: drive the consolidated perception sensor on the (LOD-scaled)
