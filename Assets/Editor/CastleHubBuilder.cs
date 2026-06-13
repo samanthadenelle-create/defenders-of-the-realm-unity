@@ -1564,14 +1564,20 @@ namespace DeNelle.Editor
             transType.GetField("targetSceneName")?.SetValue(comp, "OuterWorld");
             transType.GetField("targetPosition")?.SetValue(comp, new Vector3(0f, 0.5f, -80f));
             transType.GetField("loadAdditive")?.SetValue(comp, true);
-            transType.GetField("ProximityRadius")?.SetValue(comp, 14f);
+            // Radius 14 -> 20: the in-game SeamTrace proved the hero's CLOSEST approach is
+            // ~16.7m (he stops at the courtyard navmesh edge short of the interior marker; the
+            // castle + OuterWorld are two separate navmeshes that don't join, which is the whole
+            // reason this seam is proximity-based). 14m never fired. A continuous-navmesh rebake
+            // reported GATE_NAV_OK but that was a SamplePosition false-green (the agent still can't
+            // traverse). 20m fires reliably right at the edge the hero actually reaches.
+            transType.GetField("ProximityRadius")?.SetValue(comp, 20f);
 
             var col = marker.AddComponent<BoxCollider>();
             col.isTrigger = true;
-            col.size = new Vector3(14f, 6f, 12f);
+            col.size = new Vector3(20f, 6f, 16f);
 
             Log("BATCH-RECIPE: exit seam placed INTERIOR of recipe gate " + marker.transform.position +
-                " (gate.z+3, radius 14, target OuterWorld (0,0.5,-80)).");
+                " (gate.z+3, radius 20, target OuterWorld (0,0.5,-80)).");
         }
 
         // =====================================================================
