@@ -376,6 +376,12 @@ namespace DeNelle.Village
                 if (!vis.TryGetComponent(out Animator anim)) anim = vis.AddComponent<Animator>();
                 var ctrl = Resources.Load<RuntimeAnimatorController>("Heroes/" + slug);
                 if (ctrl != null) anim.runtimeAnimatorController = ctrl;   // idle/walk, not a T-pose
+                // WO-53 (perf): off-screen animator culling. BuildPlaceholder is the SINGLE
+                // body-build path for every companion (party companions + Arena defenders +
+                // Arena attackers), so culling here covers all of them. CullUpdateTransforms
+                // keeps the state machine running while skipping transform/mesh writes when
+                // off-camera — NOT CullCompletely (can desync gameplay-driven anim events).
+                if (anim != null) anim.cullingMode = AnimatorCullingMode.CullUpdateTransforms;
                 // CRITICAL: same as HeroBodySwapper — the Idle/Walk clips carry baked
                 // root curves; with applyRootMotion ON the companion drives itself in a
                 // slow circle ("that circle thing the hero does"). StoryCompanion moves

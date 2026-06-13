@@ -73,6 +73,15 @@ namespace DeNelle.Village
             if (anim == null) anim = visual.AddComponent<Animator>();
             anim.applyRootMotion = false;
 
+            // WO-53 (perf): off-screen animator culling. EVERY enemy in the project is
+            // built through EnemyFactory.Build -> EnemyAnimatorFactory.Apply (the single
+            // enemy-creation path), so setting it ONCE here culls every wave/roaming/
+            // tribe/outpost/garrison enemy at spawn — no per-call-site edits needed.
+            // CullUpdateTransforms keeps the state machine (and any anim events Enemy.cs
+            // drives) running while skipping transform/mesh writes when off-camera; we do
+            // NOT use CullCompletely (it can desync gameplay-driven anim events).
+            if (anim != null) anim.cullingMode = AnimatorCullingMode.CullUpdateTransforms;
+
             EnemyRig rig = RigFor(modelName);
             string ctrlName = Controller(rig);
             var ctrl = Resources.Load<RuntimeAnimatorController>("Enemies/" + ctrlName);

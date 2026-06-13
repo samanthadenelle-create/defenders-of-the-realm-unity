@@ -123,6 +123,13 @@ namespace DeNelle.Village
                 var go = Instantiate(prefab, pos, Quaternion.identity, root);
                 go.name = prefab.name;
 
+                // WO-53 (perf): off-screen animator culling on the spawned townsfolk
+                // Animator. CullUpdateTransforms keeps the state machine running while
+                // skipping transform/mesh writes when the NPC is off-camera — NOT
+                // CullCompletely (which can desync gameplay-driven anim events).
+                var npcAnim = go.GetComponentInChildren<Animator>();
+                if (npcAnim != null) npcAnim.cullingMode = AnimatorCullingMode.CullUpdateTransforms;
+
                 // NORMALIZE to roughly hero height. Owner 2026-06-02 (DEF-134): the old flat
                 // x2 made the People-pack NPCs tower 3-4x over the hero — in the close
                 // defend-the-tower camera they merged with the player and their speech bubbles
