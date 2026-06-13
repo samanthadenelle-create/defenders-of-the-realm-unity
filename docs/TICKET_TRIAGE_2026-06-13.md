@@ -42,6 +42,18 @@ Owner model: agents provide suggested guidance; the orchestrator (CLI) has final
 
 > Diagnostic logs now in the build: `[VillageHudController] BAG tapped → raising…`, `[HeroEquipHud] OpenInventory entered…`. If inventory STILL fails, these pinpoint the exact broken link.
 
+## WAVE 4 — backlog RCA (6 WOs verified + resolved; staged, build held while owner playtests)
+| WO | Verified RCA | Commit / disposition |
+|---|---|---|
+| WO-424 harvest not in HUD | Dual-wallet: harvester credited GameState.Wood/Iron via ResourceLedger, but HUD reads EconomyService._wood/_iron. | `b41f519` route harvester → EconomyService.Grant |
+| WO-428 hero HP bar never moves | My T-004 combat-gate (fce9e2f) hid the cluster unless a wave was active, but HeroHealth damages every frame. | `edb7a71` gate = waveActive OR heroHurt |
+| WO-413 upgradable bldg offers shop | Armorer shared structureId "forge" (isShoppable). | `0015092` split armorer id + market entry |
+| WO-417 Settings/DevTools rows blank | NOT layering — borrowed PanelSettings theme has no Font (HelpMenu fixed, AdminOverlay wasn't). | `1efeb40` AdminOverlay explicit font |
+| WO-419 enemies don't attack post-transition | Prior fix targeted a non-existent `HeroTarget` tag; real latent defect = EnemyBrain no periodic re-acquire. **Likely actually a NavMesh seam — needs owner playtest.** | `84c1fe6` EnemyBrain 1s re-acquire (hardening) |
+| WO-333 30%-HP defense modal | **Modal never existed** (PatriciaLight retired; escalation = breach→ATB) — reclassify, don't rebuild. Real secondary: skill popup behind death screen. | `f98df1f` force-close popup on game-over |
+
+**Owner flags (not blind-fixed):** WO-419 NavMesh-seam vs targeting (playtest to confirm); WO-333 primary obsolete (reclassify); `HeroTarget` tag undefined in TagManager = architect call; `buildingDesc.market` may need an en.json string.
+
 ## Counts
 - **Raw entries:** 210 — session_start 23, scene_loaded 114, possible_softlock 8 (noise), flagged 57, exception 4, error 4. **Signal = 65** (flagged + exception + error).
 - **Unique canonical tickets:** 38 (T-001 … T-038).
