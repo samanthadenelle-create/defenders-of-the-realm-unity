@@ -55,6 +55,20 @@ namespace DeNelle.Village.Hero
 
         private readonly List<string> _potionIds = new List<string> { "minor-heal-potion", "minor-mana-potion" };
 
+        // WO-444: the ACTUAL built stock, recorded as ShowBuy creates each row. This is
+        // the store's real output (independent of the selection logic), so the AutoPilot
+        // bot can read it AFTER ShowBuy and assert it against VendorStockContract.AllowedFor
+        // — catching a filter regression even if the filter and the contract drift apart.
+        private readonly List<(string id, GearKind kind)> _currentStock = new List<(string id, GearKind kind)>();
+
+        /// <summary>The store's ACTUAL built stock (id + category) after the last ShowBuy,
+        /// for the AutoPilot bot to assert against <see cref="VendorStockContract"/>.</summary>
+        public IReadOnlyList<(string id, GearKind kind)> CurrentStock => _currentStock;
+
+        /// <summary>The vendor context this panel last opened/built for (lowercased not guaranteed;
+        /// pass through VendorStockContract.AllowedFor which lowercases).</summary>
+        public string VendorContext => _vendorContext;
+
         public void Open(string vendorContext = null, string displayName = null)
         {
             Close();
@@ -251,12 +265,16 @@ namespace DeNelle.Village.Hero
 
             GearCatalog.Reload(); // pick up any live data change
 
-            // De-hardcoded: enumerate the real catalog (weapons.json / armor.json) instead of a
-            // fixed starter-id list (which showed nothing if the json ids differed). Vendor
-            // flavour: forge sells weapons, armorer sells armor, a generic vendor sells both.
+            // Fresh build -> reset the recorded actual stock for the bot's assertion.
+            _currentStock.Clear();
+
+            // WO-444: ONE CONTRACT. VendorStockContract is the single source of truth for
+            // which gear categories this vendor TYPE sells (forge -> Weapon, armorer ->
+            // Armor, market -> Potion, jeweler -> Armor, unknown -> all). Replaces the old
+            // ad-hoc ctx.Contains armorerOnly/forgeOnly checks that fell through to "sell
+            // everything" for market/jeweler — the bug that put swords in the marketplace.
             string ctx = _vendorContext.ToLowerInvariant();
-            bool armorerOnly = ctx.Contains("armor");
-            bool forgeOnly   = ctx.Contains("forge") || ctx.Contains("blacksmith");
+            GearKind allowed = VendorStockContract.AllowedFor(ctx);
 
             // Full catalog (null-safe — AllWeapons/AllArmors never return null).
             var allWeapons = new List<WeaponDef>();
@@ -264,45 +282,51 @@ namespace DeNelle.Village.Hero
             foreach (var w in GearCatalog.AllWeapons()) if (w != null) allWeapons.Add(w);
             foreach (var a in GearCatalog.AllArmors())  if (a != null) allArmors.Add(a);
 
-            // Apply the vendor flavour filter.
+            // Apply the contract filter.
             var weapons = new List<WeaponDef>();
             var armors  = new List<ArmorDef>();
-            if (!armorerOnly) weapons.AddRange(allWeapons);
-            if (!forgeOnly)   armors.AddRange(allArmors);
+            if ((allowed & GearKind.Weapon) != 0) weapons.AddRange(allWeapons);
+            if ((allowed & GearKind.Armor)  != 0) armors.AddRange(allArmors);
+            bool potionsAllowed = (allowed & GearKind.Potion) != 0;
 
-            // WO-406: a vendor must NEVER be empty. If the flavour filter excluded
-            // everything BUT the catalog actually has gear (e.g. an "armor"-only vendor
-            // whose armor catalog is empty, or a "forge" vendor whose weapon catalog is
-            // empty), fall back to the general stock so the player always has wares to
-            // buy. Potions are always offered below regardless, so this only guards the
-            // gear rows. (If the catalog itself failed to load, allWeapons+allArmors are
-            // both empty and only potions show — still a non-empty, usable shop.)
-            if (weapons.Count == 0 && armors.Count == 0)
+            // WO-406 never-empty safeguard: if the contract yields an EMPTY shop (no
+            // weapons, no armors, AND no potions) but the catalog actually HAS gear, fall
+            // back to the general default so the player always has wares to buy. This guards
+            // both a category-empty catalog (an Armor-only vendor whose armor.json is empty)
+            // and a Potion-only vendor with no gear but whose potions are configured. (If the
+            // catalog itself failed to load AND no potions are configured, the shop is
+            // genuinely empty and only that is logged.)
+            bool wouldBeEmpty = weapons.Count == 0 && armors.Count == 0 &&
+                                (!potionsAllowed || _potionIds.Count == 0);
+            if (wouldBeEmpty && (allWeapons.Count + allArmors.Count) > 0)
             {
-                weapons.AddRange(allWeapons);
-                armors.AddRange(allArmors);
-                if ((weapons.Count + armors.Count) > 0)
-                    Debug.LogWarning($"[ShopPanel] Vendor '{_vendorContext}' filter excluded all gear; falling back to general stock ({weapons.Count} weapons, {armors.Count} armors).");
-                else
-                    Debug.LogWarning("[ShopPanel] Gear catalog is empty (weapons.json / armor.json failed to load) — only potions will be offered.");
+                weapons.Clear(); weapons.AddRange(allWeapons);
+                armors.Clear();  armors.AddRange(allArmors);
+                potionsAllowed = true;
+                Debug.LogWarning($"[ShopPanel] Vendor '{_vendorContext}' contract ({allowed}) yielded an empty shop; falling back to general stock ({weapons.Count} weapons, {armors.Count} armors, +potions).");
+            }
+            else if (wouldBeEmpty)
+            {
+                Debug.LogWarning("[ShopPanel] Gear catalog is empty (weapons.json / armor.json failed to load) and no potions allowed/configured — shop has no wares.");
             }
 
             // Count rows up front so the scroll content can be sized to fit them all.
-            int rowCount = weapons.Count + armors.Count + _potionIds.Count;
+            int potionCount = potionsAllowed ? _potionIds.Count : 0;
+            int rowCount = weapons.Count + armors.Count + potionCount;
 
             // STORE CONTENTS DUMP (owner directive): log exactly what the merchant will stock,
             // so a "no stock" report can be split into (a) catalog gave us nothing vs (b) we had
             // stock but it didn't render. Lists every id by section.
-            FlowTrace.Step("Store", $"ShowBuy vendor='{_vendorContext}' -> stocking {rowCount} rows " +
-                $"({weapons.Count} weapons, {armors.Count} armors, {_potionIds.Count} potions)");
+            FlowTrace.Step("Store", $"ShowBuy vendor='{_vendorContext}' allowed={allowed} -> stocking {rowCount} rows " +
+                $"({weapons.Count} weapons, {armors.Count} armors, {potionCount} potions)");
             if (rowCount == 0)
-                FlowTrace.Warn("Store", "STOCK EMPTY: catalog returned no weapons/armors and no potions configured.");
+                FlowTrace.Warn("Store", "STOCK EMPTY: catalog returned no weapons/armors and no potions allowed/configured.");
             else
             {
                 var sb = new System.Text.StringBuilder();
                 foreach (var w in weapons) sb.Append("W:").Append(w != null ? w.name : "<null>").Append(' ');
                 foreach (var a in armors)  sb.Append("A:").Append(a != null ? a.name : "<null>").Append(' ');
-                foreach (var p in _potionIds) sb.Append("P:").Append(p).Append(' ');
+                if (potionsAllowed) foreach (var p in _potionIds) sb.Append("P:").Append(p).Append(' ');
                 FlowTrace.Step("Store", "stock = " + sb.ToString().TrimEnd());
             }
 
@@ -321,6 +345,7 @@ namespace DeNelle.Village.Hero
                 try
                 {
                     CreateBuyRow(listRoot, BuyLabel(w.name, GearAppraisal.Appraise(w)), GearCatalog.GetBuyCost(w), () => TryBuyWeapon(wCopy), null);
+                    _currentStock.Add((w.id, GearKind.Weapon)); // record ACTUAL built stock for the bot's assertion
                     built++;
                 }
                 catch (System.Exception ex) { failed++; FlowTrace.Fail("Store", $"weapon row '{(w != null ? w.id : "<null>")}' threw: {ex.Message}"); }
@@ -331,10 +356,12 @@ namespace DeNelle.Village.Hero
                 try
                 {
                     CreateBuyRow(listRoot, BuyLabel(a.name, GearAppraisal.Appraise(a)), GearCatalog.GetBuyCost(a), () => TryBuyArmor(aCopy), null);
+                    _currentStock.Add((a.id, GearKind.Armor)); // record ACTUAL built stock for the bot's assertion
                     built++;
                 }
                 catch (System.Exception ex) { failed++; FlowTrace.Fail("Store", $"armor row '{(a != null ? a.id : "<null>")}' threw: {ex.Message}"); }
             }
+            if (potionsAllowed)
             foreach (var pid in _potionIds)
             {
                 var cost = new ResourceCost(wood: 4, iron: 0, crystals: 0); // cheap early potions
@@ -346,6 +373,7 @@ namespace DeNelle.Village.Hero
                     var potionIcon = RpgUiCatalog.Get(RpgUiCatalog.RolePotion,
                         pid.Contains("mana") ? RpgUiCatalog.PotionMana : RpgUiCatalog.PotionHealth);
                     CreateBuyRow(listRoot, pidCopy, costCopy, () => TryBuyPotion(pidCopy, costCopy), potionIcon);
+                    _currentStock.Add((pidCopy, GearKind.Potion)); // record ACTUAL built stock for the bot's assertion
                     built++;
                 }
                 catch (System.Exception ex) { failed++; FlowTrace.Fail("Store", $"potion row '{pid}' threw: {ex.Message}"); }
