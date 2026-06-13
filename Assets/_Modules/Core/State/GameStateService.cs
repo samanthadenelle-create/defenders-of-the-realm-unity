@@ -651,13 +651,23 @@ namespace DeNelle.Core.State
             // other accessor guards _state; Reset() must too). Fixes 16 save/reset tests.
             if (_state == null) _state = ScriptableObject.CreateInstance<GameState>();
             var s = _state;
+            // PET-ACQUISITION REWORK (owner 2026-06-13): a New Game starts with NO pet —
+            // the pet is acquired ONLY from the Echo Hollow pet-shop (PetHouse Yarn node →
+            // <<spawn_named_pet>> → PetAcquisitionService.Acquire), never pre-granted. So a
+            // New Game must clear EVERY pet-ownership field, not just the roster: OwnedPets
+            // (the PetSpecies enum mirror) and PetName previously survived the reset, which
+            // left a "ghost" owned pet on a repeat New Game (the "pet not reset on start new"
+            // flag). Reset them all here so the loop is repeatable from a true blank slate.
             s.Pets = new List<PetData>();
             s.StarterPetId = null;
+            s.OwnedPets = new List<PetSpecies>();   // pet-acquisition rework — clear the owned-species mirror.
+            s.PetName = null;                        // pet-acquisition rework — clear the player-named starter.
+            s.PetBonds = new List<int> { 0, 0, 0 };  // (re)zero guardian bond ranks for the fresh pet.
             s.Onboarded = false;
             s.BestWave = 0;
             s.Resources = ResourceBalance.Starter;
             s.OwnedItemIds = new List<string>();
-            s.PetBonds = new List<int> { 0, 0, 0 };
+            // (PetBonds reset moved up into the pet-acquisition-rework block above.)
             s.Voidshards = 5;
             s.AetherCrystals = 0;
             s.Towers = GameState.NewZeroed(Constants.TowerSlots);

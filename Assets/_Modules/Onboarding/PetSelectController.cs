@@ -224,7 +224,10 @@ namespace DeNelle.Onboarding
             _title.style.unityTextAlign = TextAnchor.MiddleCenter;
             header.Add(_title);
 
-            _subtitle = new Label(CanonStrings.Locale(SubtitleKey)) { name = "pet-select-subtitle" };
+            // PET-ACQUISITION REWORK (owner 2026-06-13): this screen no longer grants a
+            // pet — it's a teaser. Point the player at the Echo Hollow, where the bond
+            // actually happens, so the copy doesn't promise a pick this screen won't keep.
+            _subtitle = new Label("Echoes await in Elarion. Visit the Echo Hollow in town to bond your first companion.") { name = "pet-select-subtitle" };
             _subtitle.style.marginTop = 8;
             _subtitle.style.fontSize = 15;
             _subtitle.style.unityFontStyleAndWeight = FontStyle.Italic;
@@ -570,33 +573,21 @@ namespace DeNelle.Onboarding
         }
 
         /// <summary>
-        /// Persists the chosen starter pet and loads the Village (single route
-        /// path shared by the confirm button and the DEF-230 auto-advance).
+        /// Routes onward to the Castle — the end of the intro flow.
+        ///
+        /// PET-ACQUISITION REWORK (owner 2026-06-13): this screen is NO LONGER the
+        /// pet-granting path. The pet is acquired SOLELY from the Echo Hollow pet-shop
+        /// (the PetHouse Yarn node → <<spawn_named_pet>> → PetAcquisitionService.Acquire
+        /// + PetDeployer.DeployChosen). So this controller must NOT write
+        /// GameState.StarterPetId or otherwise pre-grant/pre-spawn a pet — doing so
+        /// pre-empted the store as the single opener (the owner's "change option back").
+        /// The card tap is now a non-binding preview; whatever the player taps, we route
+        /// on WITHOUT persisting ownership, and they bond their Echo at the Hollow in-town.
+        /// (The screen could be retired entirely; it is kept as a teaser + routed to the
+        /// Hollow rather than deleted.)
         /// </summary>
         private void RouteToVillage()
         {
-            var svc = GameStateService.Instance;
-            if (svc != null && svc.State != null)
-            {
-                // T-029 guard: a Warden bonds ONCE. If the save already records a
-                // starter pet, never overwrite it — route on without re-persisting
-                // (defense-in-depth; the already-chosen state should have prevented
-                // a pick reaching here at all).
-                if (string.IsNullOrEmpty(svc.State.StarterPetId))
-                {
-                    // There is no GameStateService.ChooseStarterPet mutator; the
-                    // starter-pet id is a plain persisted field, so set it on the SO
-                    // and Save() through the same Core save layer every mutator uses.
-                    svc.State.StarterPetId = _selectedPetId;
-                    svc.Save();
-                }
-            }
-            else
-            {
-                Debug.LogWarning("[PetSelectController] No GameStateService — the pet choice " +
-                                 "was NOT persisted. Routing onward anyway.");
-            }
-
             SceneRouter.GoCastle();
         }
     }

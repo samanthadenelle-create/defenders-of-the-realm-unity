@@ -131,12 +131,23 @@ namespace DeNelle.Pets
                 return;
             }
 
-            // WO-185: deploy the pet the player chose at the pet-select screen, not
-            // a hardcoded default. The onboarding flow writes the pick to
-            // GameState.StarterPetId; resolve that to a species here. Falls back to
-            // the ice-wolf (the original sole starter) when no choice is recorded —
-            // e.g. a pre-WO-185 save, or the Defend-the-Tower express path that
-            // skips pet-select.
+            // PET-ACQUISITION REWORK (owner 2026-06-13): the pet is acquired ONLY from
+            // the Echo Hollow pet-shop (PetHouse Yarn node → <<spawn_named_pet>> →
+            // PetDeployer.DeployChosen, which records GameState.StarterPetId BEFORE this
+            // runs). There is NO pre-granted default starter anymore — so if no pet has
+            // been chosen/owned, DEPLOY NOTHING. This is the fix for both failure modes:
+            //   • "never spawns" — the old tutorial <<spawn_starting_pet>> path was
+            //     removed (CompanionMeeting.yarn) so nothing chose a pet; and
+            //   • "always spawns a default ice-wolf" — the old ResolveStarterSpecies()
+            //     fell back to "ice-wolf" with zero ownership, conjuring a pet the
+            //     player never acquired.
+            // The store path is unaffected: DeployChosen() sets StarterPetId first, so
+            // HasChosenOrOwnedPet() is true by the time it calls through here.
+            if (!HasChosenOrOwnedPet())
+            {
+                // No pet acquired yet — the Echo Hollow is the only opener. Nothing to deploy.
+                return;
+            }
             string starterSpecies = ResolveStarterSpecies();
 
             foreach (var def in defs)
@@ -290,6 +301,12 @@ namespace DeNelle.Pets
             for (int i = 0; i < _deployed.Count; i++)
                 if (_deployed[i] != null) return _deployed[i];
 
+            // PET-ACQUISITION REWORK (owner 2026-06-13): only summon the Echo if the
+            // player has actually acquired one from the Echo Hollow. No pet owned →
+            // no Echo to summon at the outpost (don't conjure the default starter).
+            if (!HasChosenOrOwnedPet())
+                return null;
+
             var defs = PetCatalog.Pets;
             if (defs == null || defs.Count == 0)
             {
@@ -320,9 +337,31 @@ namespace DeNelle.Pets
             return pet;
         }
 
-        // Fallback starter species when GameState records no pick (pre-WO-185
-        // saves, or the express Defend-the-Tower path that skips pet-select).
+        // Fallback starter species used ONCE a pet is owned but the recorded id no
+        // longer resolves (e.g. a renamed catalog entry). NOT used to conjure a pet
+        // for a player who owns none — HasChosenOrOwnedPet() gates that (pet-acquisition
+        // rework, owner 2026-06-13).
         private const string DefaultStarterSpecies = "ice-wolf";
+
+        /// <summary>
+        /// PET-ACQUISITION REWORK (owner 2026-06-13): true only when the player has
+        /// actually acquired a pet — either the Echo Hollow store recorded the chosen
+        /// starter (<c>GameState.StarterPetId</c>, set by <see cref="DeployChosen"/>)
+        /// OR the canonical owned roster (<c>GameState.Pets</c>/<c>OwnedPets</c>, set by
+        /// PetAcquisitionService.Acquire) holds at least one pet. When false, the deploy
+        /// path is a no-op so NO default pet is ever conjured for a player who never
+        /// visited the pet-shop. Null-guarded throughout (no GameState = nothing owned).
+        /// </summary>
+        private static bool HasChosenOrOwnedPet()
+        {
+            var svc = DeNelle.Core.State.GameStateService.Instance;
+            var state = svc != null ? svc.State : null;
+            if (state == null) return false;
+            if (!string.IsNullOrEmpty(state.StarterPetId)) return true;
+            if (state.Pets != null && state.Pets.Count > 0) return true;
+            if (state.OwnedPets != null && state.OwnedPets.Count > 0) return true;
+            return false;
+        }
 
         /// <summary>
         /// WO-185: resolves the species of the player's chosen starter pet from
