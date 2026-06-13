@@ -37,8 +37,16 @@ namespace DeNelle.Village
                  "too early before you reach the gate.")]
         public float ProximityRadius = 6f;
 
+        [Tooltip("CONFIRM-TO-CROSS (default ON). When true the seam NEVER auto-teleports on proximity " +
+                 "or trigger-enter; instead it shows an 'Press F to travel to <destination>' prompt while " +
+                 "the hero is in range and only crosses when the interact key (F / on-screen Interact " +
+                 "button) is pressed. This stops accidental warps when walking past a gate. Set false " +
+                 "only for a seam that should auto-cross (legacy behaviour).")]
+        public bool requireConfirm = true;
+
         private bool _fired;
         private Transform _hero;
+        private bool _promptShown;   // confirm-mode: an in-range prompt is currently up
 
         // --- SEAMTRACE diagnostics (temporary; strip once the exit bug is closed) ---
         // Owner directive 2026-06-13: instrument the WHOLE exit path so one F8 run shows
@@ -87,7 +95,43 @@ namespace DeNelle.Village
                 Debug.Log($"[SeamTrace] '{name}' heroDist={dist:F1}m  closestEver={_minDist:F1}m  radius={ProximityRadius}m  {(dist <= ProximityRadius ? "IN-RANGE" : "out")}");
             }
 
-            if ((_hero.position - transform.position).sqrMagnitude <= ProximityRadius * ProximityRadius)
+            bool inRange = (_hero.position - transform.position).sqrMagnitude <= ProximityRadius * ProximityRadius;
+
+            if (requireConfirm)
+            {
+                // CONFIRM-TO-CROSS: never auto-teleport. Show a prompt while in range and
+                // only cross on an explicit interact press THIS frame (F on desktop, the
+                // shared on-screen Interact button on mobile — same input the buildings/
+                // vendors use, MobileInteractButton fires its onTap = Cross).
+                if (inRange)
+                {
+                    string dest = FriendlyDestinationName();
+                    if (!_promptShown)
+                    {
+                        Debug.Log($"[SeamTrace] '{name}' IN RANGE ({dist:F1}m) -> showing CONFIRM prompt for '{dest}'.");
+                        _promptShown = true;
+                    }
+                    // Re-request every frame so the shared button stays up while in range
+                    // and routes its tap to this gate's crossing.
+                    MobileInteractButton.Request(this, $"Press F: Travel to {dest}", () => Cross(_hero));
+
+                    if (Input.GetKeyDown(KeyCode.F))
+                    {
+                        Debug.Log($"[SeamTrace] '{name}' CONFIRM key (F) pressed in range -> firing Cross().");
+                        Cross(_hero);
+                    }
+                }
+                else if (_promptShown)
+                {
+                    // Left range — drop the prompt.
+                    MobileInteractButton.Release(this);
+                    _promptShown = false;
+                }
+                return;
+            }
+
+            // Legacy AUTO-CROSS (requireConfirm == false): proximity fires the crossing.
+            if (inRange)
             {
                 Debug.Log($"[SeamTrace] '{name}' IN RANGE ({dist:F1}m <= {ProximityRadius}m) -> firing Cross().");
                 Cross(_hero);
@@ -99,7 +143,53 @@ namespace DeNelle.Village
         {
             if (_fired || other == null) return;
             if (other.tag != "Player" && other.tag != "HeroTarget") return;
+            // Confirm-to-cross: trigger-enter must NOT auto-cross either — the player has
+            // to press F / tap Interact. The Update() proximity loop already shows the
+            // prompt + handles the confirmed crossing while in range.
+            if (requireConfirm) return;
             Cross(other.transform);
+        }
+
+        // Release the shared interact button if this gate is torn down while prompting.
+        private void OnDisable()
+        {
+            if (_promptShown)
+            {
+                MobileInteractButton.Release(this);
+                _promptShown = false;
+            }
+        }
+
+        // Map the raw target scene name to a friendly, player-facing destination.
+        private string FriendlyDestinationName()
+        {
+            string s = targetSceneName ?? "";
+            switch (s)
+            {
+                case "OuterWorld": return "the Outer World";
+                case "Garrison_troll_outpost": return "Troll Outpost";
+                case "Garrison_ruined_keep": return "Ruined Keep";
+                case "Garrison_frost_keep": return "Frost Keep";
+                case "MainCastle_Hall": return "the Castle";
+                case "Village2": return "the Village";
+            }
+            // Generic cleanup: strip a leading "Garrison_" / "Outpost_" prefix and
+            // Title-Case the underscore-separated remainder (e.g. "Garrison_dark_cave"
+            // -> "Dark Cave"). Falls back to the raw name if empty.
+            string body = s;
+            if (body.StartsWith("Garrison_")) body = body.Substring("Garrison_".Length);
+            else if (body.StartsWith("Outpost_")) body = body.Substring("Outpost_".Length);
+            body = body.Replace('_', ' ').Trim();
+            if (body.Length == 0) return string.IsNullOrEmpty(s) ? "the destination" : s;
+
+            var parts = body.Split(' ');
+            for (int i = 0; i < parts.Length; i++)
+            {
+                if (parts[i].Length == 0) continue;
+                parts[i] = char.ToUpperInvariant(parts[i][0]) +
+                           (parts[i].Length > 1 ? parts[i].Substring(1) : "");
+            }
+            return string.Join(" ", parts);
         }
 
         private void Cross(Transform player)
