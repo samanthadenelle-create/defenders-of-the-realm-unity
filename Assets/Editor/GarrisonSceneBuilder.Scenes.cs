@@ -34,7 +34,12 @@ namespace DeNelle.Editor
         private const string ResStructRoot = "Assets/Resources/Structures/";
 
         // Where the hero lands back in OuterWorld after a raid (shared with the castle seam).
-        private static readonly Vector3 OuterWorldReturnPos = new Vector3(0f, 0.5f, -80f);
+        // SOUTH-GATE SEAM FIX (2026-06-13): was (0,0.5,-80) — the OuterWorld MIDPOINT/south-region
+        // depth (Mirewood @ (0,0,-90)), which "yanked the hero to the middle of OuterWorld" (owner).
+        // OuterWorld's four regions fan out from world ORIGIN (300x300 terrain centered on 0), so
+        // land at the near-origin hub (just south of 0, facing into the world) to match the castle
+        // seam (CastleHubBuilder EnsureExitSeamAtRecipeGate / WireOuterWorldConnection).
+        private static readonly Vector3 OuterWorldReturnPos = new Vector3(0f, 0.5f, -12f);
 
         // ===================================================================
         //  GENERIC RECIPE -> SCENE. Builds Garrison_<id>.unity end to end.

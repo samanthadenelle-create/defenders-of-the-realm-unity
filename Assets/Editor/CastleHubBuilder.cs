@@ -431,9 +431,11 @@ namespace DeNelle.Editor
         // =====================================================================
         private const string InnerRingName = "InnerWallRing_CoC";
         private const float  InnerRingHalfExtent = 18f;   // square half-side from origin
-        // 7m half => 14m clear opening. Must be >= the 12m-wide outer gate exit strip
-        // (BuildGateExitStrips halfWidth 6 => 12m) so the NavMeshAgent + strip pass cleanly.
-        private const float  InnerRingGateGapHalf = 7f;
+        // SOUTH-GATE INVISIBLE-WALL FIX (2026-06-13): 8m half => 16m clear opening. Must be >= the
+        // outer gate exit strip (BuildGateExitStrips halfWidth 7.5 => 15m) PLUS margin so the inner
+        // ring never pinches the gate lane narrower than the strip — a 14m inner gap vs a 15m strip
+        // would re-introduce the pinch the strip widening just removed. 16m clears the 15m strip + 1m.
+        private const float  InnerRingGateGapHalf = 8f;
 
         private static void BuildInnerWallRing(Transform parent, GameObject wallStone)
         {
@@ -720,7 +722,17 @@ namespace DeNelle.Editor
                 MakeGatePose(southGate, 270f,   "East"),
             };
 
-            const float halfWidth   = 6f;   // 12m across the opening
+            // SOUTH-GATE INVISIBLE-WALL FIX (2026-06-13): widen the walkable strip 12m -> 15m so
+            // the BAKED nav lane through the gate is as wide as the masonry opening. The perimeter
+            // seam-fill protects a 15m clear opening (GateClearHalf 7.5) and the inner ring leaves a
+            // 14m gap, but this exit strip only carved a 12m walkable lane through the mouth. After
+            // agent-radius erosion + the flanking-wall/seam-filler voxelization eating inward, the
+            // 12m lane pinched to a sliver offset from the masonry centre -> the hero's NavMeshAgent
+            // had to veer around the pinch on the way back into town ("invisible wall near the south
+            // gate, walk around it", owner — seen a few times). 7.5 half-width matches GateClearHalf
+            // so the nav lane fills the full opening. Strip is invisible (renderer off) — walls stay
+            // visually intact; only the walk lane widens.
+            const float halfWidth   = 7.5f; // 15m across the opening (matches GateClearHalf masonry clear)
             const float insideReach = 8f;   // overlap courtyard floor (inside the wall)
             const float outsideReach = 18f; // >=10m out onto terrain
             float length = insideReach + outsideReach; // 26m total along the radial axis
@@ -1036,11 +1048,15 @@ namespace DeNelle.Editor
                 var fScene = transType.GetField("targetSceneName");
                 if (fScene != null) fScene.SetValue(comp, "OuterWorld");
 
-                // Target position in OuterWorld space — adjust this to where the "castle approach" lives
-                // in your OuterWorld layout (e.g. a road south of the Village area or a custom entrance).
-                // When the Castle root is at (0,0,0), this is the world pos the player appears at after crossing south.
+                // Target position in OuterWorld space.
+                // SOUTH-GATE SEAM FIX (2026-06-13): OLD (0,0.5,-80) landed the hero deep in / past
+                // the SOUTH region (Mirewood @ (0,0,-90)) = "yanked to the middle" (owner). OuterWorld's
+                // four regions fan out from world ORIGIN (300x300 terrain centered on 0); land just
+                // SOUTH of origin so the hero faces into the world from where they entered. Mirrors
+                // EnsureExitSeamAtRecipeGate. (If OuterWorld gets a real castle-gate art marker later,
+                // measure its mouth and target that + a few metres inward.)
                 var fPos = transType.GetField("targetPosition");
-                if (fPos != null) fPos.SetValue(comp, new Vector3(0f, 0.5f, -80f));
+                if (fPos != null) fPos.SetValue(comp, new Vector3(0f, 0.5f, -12f));
 
                 var fAdditive = transType.GetField("loadAdditive");
                 if (fAdditive != null) fAdditive.SetValue(comp, true);
@@ -1056,7 +1072,7 @@ namespace DeNelle.Editor
                                  "Trigger collider was still added — you can attach the behaviour manually or re-run after compile.");
             }
 
-            Debug.Log("[CastleHubBuilder] Wired gate marker with NavMeshLink + SceneTransitionTrigger (target OuterWorld at ~ (0, 0.5, -80)).");
+            Debug.Log("[CastleHubBuilder] Wired gate marker with NavMeshLink + SceneTransitionTrigger (target OuterWorld near-origin hub ~ (0, 0.5, -12)).");
         }
 
         // =====================================================================
@@ -1145,16 +1161,19 @@ namespace DeNelle.Editor
 
                 var col = connector.AddComponent<BoxCollider>();
                 col.isTrigger = true;
-                col.size = new Vector3(28f, 6f, 20f); // matches the OuterWorld exit seam (radius 28)
+                col.size = new Vector3(12f, 6f, 10f); // small "at the gate" trigger (radius 12)
 
                 var comp = connector.AddComponent(transType);
                 if (fScene    != null) fScene.SetValue(comp, sceneName);
                 if (fPos      != null) fPos.SetValue(comp, targetPosition);
                 if (fAdditive != null) fAdditive.SetValue(comp, false); // destination level = single-load
-                if (fRadius   != null) fRadius.SetValue(comp, 28f);      // hero stops ~21.7m out (SeamTrace); 28 covers it + margin
+                // radius 28 was a GAME-BREAKER: 4 gates surround the ~35m spawn, so a few steps tripped one ->
+                // fade-to-black/yanked out. 12 only fires AT the gate; the widened nav lane (gate strip 7.5 / inner
+                // gap 8) lets the hero reach close enough to cross deliberately.
+                if (fRadius   != null) fRadius.SetValue(comp, 12f);
 
                 Log($"WireOutpostConnectors: placed OutpostConnector_{sceneName} at world {worldPos} " +
-                    $"(gate yaw {yaw}, entry {targetPosition}, single-load, radius 28).");
+                    $"(gate yaw {yaw}, entry {targetPosition}, single-load, radius 12).");
             }
 
             Log($"WireOutpostConnectors: {OutpostConnectors.Length} inbound outpost seam(s) wired (W/N/E gates).");
@@ -1738,7 +1757,17 @@ namespace DeNelle.Editor
 
             var comp = marker.AddComponent(transType);
             transType.GetField("targetSceneName")?.SetValue(comp, "OuterWorld");
-            transType.GetField("targetPosition")?.SetValue(comp, new Vector3(0f, 0.5f, -80f));
+            // SOUTH-GATE SEAM FIX (2026-06-13): land NEAR the OuterWorld entry, not its midpoint.
+            // OLD value (0,0.5,-80) dropped the hero deep in / past the SOUTH region (Mirewood is
+            // centered at (0,0,-90) — OuterWorldBuilder.RegionCenter), i.e. "yanked to the middle
+            // of OuterWorld" (owner). OuterWorld has NO authored castle-entry/gate marker; its four
+            // regions (E/W/S/N at ±90) fan out from the world ORIGIN (ExteriorTerrain at (-150,-150)
+            // => 300x300 terrain centered on (0,0,0)), so origin IS the natural arrival hub. Land a
+            // few metres SOUTH of origin (-12) so the hero faces INTO the world from the direction
+            // they entered (castle is north of OuterWorld) and can walk out to any region.
+            // NOTE: if/when OuterWorld gains a real castle-gate art marker, measure the exact mouth
+            // from that art and set targetPosition to it + a few metres inward (see report flag).
+            transType.GetField("targetPosition")?.SetValue(comp, new Vector3(0f, 0.5f, -12f));
             transType.GetField("loadAdditive")?.SetValue(comp, true);
             // Radius 14 -> 20: the in-game SeamTrace proved the hero's CLOSEST approach is
             // ~16.7m (he stops at the courtyard navmesh edge short of the interior marker; the
@@ -1749,14 +1778,17 @@ namespace DeNelle.Editor
             // Radius 20 -> 28: owner-playtest SeamTrace showed the hero's closestEver = 21.7m
             // (the WO-449 wall-layer rebake shifted the navmesh edge ~5m further out than the
             // 16.7m we sized 20 for), so 20 missed by 1.7m and never fired. 28 covers 21.7 + margin.
-            transType.GetField("ProximityRadius")?.SetValue(comp, 28f);
+            // Radius 12, NOT 28: 28 was a GAME-BREAKER — with 4 gates surrounding the ~35m courtyard spawn, a
+            // few steps tripped one and yanked the player out (fade-to-black). 12 only fires when the hero is AT
+            // the gate; the widened nav lane (gate exit strip 7.5 / inner-ring gap 8) lets the hero reach it.
+            transType.GetField("ProximityRadius")?.SetValue(comp, 12f);
 
             var col = marker.AddComponent<BoxCollider>();
             col.isTrigger = true;
-            col.size = new Vector3(28f, 6f, 20f);
+            col.size = new Vector3(12f, 6f, 10f);
 
             Log("BATCH-RECIPE: exit seam placed INTERIOR of recipe gate " + marker.transform.position +
-                " (gate.z+3, radius 28, target OuterWorld (0,0.5,-80)).");
+                " (gate.z+3, radius 12, target OuterWorld (0,0.5,-12) near-origin hub).");
         }
 
         // =====================================================================
