@@ -48,6 +48,7 @@ using UnityEngine.SceneManagement;
 using DeNelle.Core.Diagnostics;
 using DeNelle.Core.UI;
 using DeNelle.Village;
+using DeNelle.Village.Hero;
 
 namespace DeNelle.DevTools
 {
@@ -65,6 +66,7 @@ namespace DeNelle.DevTools
         private const float GlobalCapSeconds   = 240f;  // ~4 min hard cap on the whole run
         private const float WalkToGateTimeout   = 25f;   // per-gate approach
         private const float VendorTimeout       = 20f;   // per-vendor open+actuate+close
+        private const float ContractTimeout     = 12f;   // per-vendor-context contract assertion
         private const float HudPanelTimeout     = 15f;   // per-panel open+actuate+close
         private const float WaveTimeout         = 20f;   // wait for the wave phase to advance
         private const float ExitTimeout         = 30f;   // walk into the south exit
@@ -156,6 +158,11 @@ namespace DeNelle.DevTools
             {
                 yield return RunPhase("WalkToEachGate", WalkToEachGate());
                 yield return RunPhase("OpenEachVendor", OpenEachVendor());
+                // Runs even if building discovery found 0 vendors: it opens shops DIRECTLY
+                // by context (the castle storefronts route through CastleNpcInteractable +
+                // DialogueService, NOT BuildingInteractable), so the contract assertion is
+                // not gated on building discovery.
+                yield return RunPhase("AssertVendorContracts", AssertVendorContracts());
                 yield return RunPhase("OpenEachHUDPanel", OpenEachHUDPanel());
                 yield return RunPhase("TriggerWave", TriggerWave());
                 yield return RunPhase("AttemptExitCastle", AttemptExitCastle());
@@ -275,6 +282,7 @@ namespace DeNelle.DevTools
             {
                 case "WalkToEachGate":    return WalkToGateTimeout * 6f; // covers multiple gates
                 case "OpenEachVendor":    return VendorTimeout * 12f;
+                case "AssertVendorContracts": return ContractTimeout * 8f; // covers the known-context set
                 case "OpenEachHUDPanel":  return HudPanelTimeout * 8f;
                 case "TriggerWave":       return WaveTimeout;
                 case "AttemptExitCastle": return ExitTimeout;
@@ -435,16 +443,37 @@ namespace DeNelle.DevTools
         // =====================================================================
         private IEnumerator OpenEachVendor()
         {
-            var buildings = UnityEngine.Object.FindObjectsByType<BuildingInteractable>(
-                FindObjectsSortMode.None);
+            // ROBUST DISCOVERY: FindObjectsByType spans ALL loaded scenes, but the castle's
+            // additive OuterWorld (and any runtime-injected buildings) can load a beat after
+            // MainCastle_Hall becomes active. So RETRY for up to ~5s before concluding 0 —
+            // a building can spawn shortly after scene load. (FindObjectsSortMode.None.)
+            BuildingInteractable[] buildings = null;
+            float t0Discover = Time.realtimeSinceStartup;
+            int attempts = 0;
+            while (Time.realtimeSinceStartup - t0Discover < 5f)
+            {
+                attempts++;
+                buildings = UnityEngine.Object.FindObjectsByType<BuildingInteractable>(
+                    FindObjectsSortMode.None);
+                if (buildings != null && buildings.Length > 0) break;
+                yield return Wait(0.5f);
+            }
+
             if (buildings == null || buildings.Length == 0)
             {
-                FlowTrace.Warn("Auto", "OpenEachVendor: no BuildingInteractable in scene.");
-                _lastDetail = "0 vendors";
+                // NOTE: in MainCastle_Hall this is EXPECTED — the castle storefronts route
+                // through CastleNpcInteractable (spawned by CastleVendorNpcInjector) +
+                // DialogueService, NOT BuildingInteractable. The AssertVendorContracts phase
+                // below covers vendors directly by context, so 0 here is not a dead end.
+                FlowTrace.Step("Auto", $"OpenEachVendor: 0 BuildingInteractable after {attempts} attempt(s) over ~5s. " +
+                    "MainCastle_Hall vendors use CastleNpcInteractable, not BuildingInteractable — covered by AssertVendorContracts.");
+                _lastDetail = "0 BuildingInteractable (castle uses CastleNpcInteractable)";
                 yield break;
             }
             Shuffle(buildings);   // seeded vendor order
-            FlowTrace.Step("Auto", $"OpenEachVendor: {buildings.Length} building(s) found.");
+            FlowTrace.Step("Auto", $"OpenEachVendor: {buildings.Length} building(s) found (after {attempts} discovery attempt(s)).");
+            foreach (var b in buildings)
+                if (b != null) FlowTrace.Step("Auto", $"OpenEachVendor: discovered BuildingInteractable '{b.name}'.");
 
             int opened = 0;
             foreach (var bi in buildings)
@@ -519,6 +548,143 @@ namespace DeNelle.DevTools
                 yield return Wait(SettleSeconds);
             }
             _lastDetail = $"{opened}/{buildings.Length} vendor surfaces opened";
+        }
+
+        // =====================================================================
+        //  PHASE: AssertVendorContracts
+        //  The point of the chain: bots judge whether a vendor sells the RIGHT
+        //  category. For each KNOWN vendor context the game uses, open the shop for
+        //  that context and assert its ACTUAL built stock (ShopPanel.CurrentStock)
+        //  stays within VendorStockContract.AllowedFor(context). A violation is a
+        //  LogError (FlowTrace.Fail) -> break-log -> ticket. Runs even if building
+        //  discovery found 0 vendors, because it opens shops DIRECTLY by context via
+        //  ShopPanel.Open — the same seam DialogueCommandBridge.OpenShop uses.
+        //
+        //  Known contexts: the spec set {forge, market, jeweler, armorer} PLUS the
+        //  contexts the castle actually wires (CastleVendorNpcInjector.VendorFor):
+        //  lumbermill, farm, pet-house, arcane-tower. The jeweler is modeled as Armor
+        //  in the contract today (the crystal/jewelry adornment arc). The non-shop
+        //  ids (lumbermill/farm/pet-house/arcane-tower) still resolve a contract
+        //  (Potion / general default) and a stock, so asserting them is valid and
+        //  cheap — and catches a future regression if one of them starts stocking gear.
+        // =====================================================================
+        private IEnumerator AssertVendorContracts()
+        {
+            // The known vendor-context set: the spec minimum plus the contexts the
+            // castle storefronts actually open (verified against CastleVendorNpcInjector).
+            var contexts = new List<string>
+            {
+                "forge", "market", "jeweler", "armorer",
+                "lumbermill", "farm", "pet-house", "arcane-tower",
+            };
+            Shuffle(contexts); // seeded order so different bots probe contexts differently
+
+            // One reusable ShopPanel host: find an existing one, else create our own.
+            // Re-Open(ctx) closes the prior surface, so vendors never stack. We destroy
+            // the host we created at the end.
+            ShopPanel panel = UnityEngine.Object.FindObjectOfType<ShopPanel>();
+            bool createdHost = false;
+            GameObject host = null;
+            if (panel == null)
+            {
+                host = new GameObject("AutoPilotShopPanelHost");
+                panel = host.AddComponent<ShopPanel>();
+                createdHost = true;
+            }
+
+            int checkedCount = 0, violations = 0, emptyWarns = 0;
+            foreach (var ctx in contexts)
+            {
+                try
+                {
+                    FlowTrace.Step("Auto", $"AssertVendorContracts: opening shop for context '{ctx}'.");
+                    panel.Open(ctx);
+                }
+                catch (Exception ex)
+                {
+                    FlowTrace.Fail("Auto", $"AssertVendorContracts: Open('{ctx}') threw — {ex.Message}");
+                    continue;
+                }
+
+                // Wait a frame so ShowBuy (called inside Open) has built the rows + populated
+                // CurrentStock. (Open->ShowBuy is synchronous, but a frame is cheap insurance.)
+                yield return null;
+
+                try
+                {
+                    string vc = panel.VendorContext;
+                    var allowed = VendorStockContract.AllowedFor(vc);
+                    var stock = panel.CurrentStock;
+                    int n = stock != null ? stock.Count : 0;
+
+                    bool compliant = true;
+                    if (stock != null)
+                    {
+                        foreach (var item in stock)
+                        {
+                            if ((allowed & item.kind) == 0)
+                            {
+                                compliant = false;
+                                violations++;
+                                FlowTrace.Fail("Auto", $"VENDOR CONTRACT VIOLATION: '{vc}' allows {allowed} but stocked {item.id} ({item.kind})");
+                            }
+                        }
+                    }
+
+                    if (n == 0)
+                    {
+                        // A vendor should not be empty when its contract allows a category the
+                        // catalog actually has stock for. Weapon/Armor come from GearCatalog;
+                        // Potion is the panel's built-in potion list (always available), so an
+                        // allowed-Potion vendor that built nothing is the meaningful empty case.
+                        bool catalogHasWeapons = SafeAny(GearCatalog.AllWeapons());
+                        bool catalogHasArmors  = SafeAny(GearCatalog.AllArmors());
+                        bool shouldHaveStock =
+                            ((allowed & GearKind.Weapon) != 0 && catalogHasWeapons) ||
+                            ((allowed & GearKind.Armor)  != 0 && catalogHasArmors)  ||
+                            ((allowed & GearKind.Potion) != 0);
+                        if (shouldHaveStock)
+                        {
+                            emptyWarns++;
+                            FlowTrace.Warn("Auto", $"AssertVendorContracts: vendor '{vc}' (allows {allowed}) built EMPTY stock though the catalog has matching wares.");
+                        }
+                        else
+                        {
+                            FlowTrace.Step("Auto", $"AssertVendorContracts: '{vc}' empty (allows {allowed}; catalog has no matching gear) — not flagged.");
+                        }
+                    }
+                    else if (compliant)
+                    {
+                        FlowTrace.Step("Auto", $"AssertVendorContracts: '{vc}' COMPLIES — {n} item(s), all within {allowed}.");
+                    }
+
+                    checkedCount++;
+                }
+                catch (Exception ex)
+                {
+                    FlowTrace.Fail("Auto", $"AssertVendorContracts: assertion for '{ctx}' threw — {ex.Message}");
+                }
+
+                yield return Wait(SettleSeconds);
+            }
+
+            // Close/dispose: re-Open's Close ran per ctx; destroy our host so nothing lingers.
+            // (ShopPanel.Close is private + the panel doesn't register with PanelManager, so
+            // destroying the host is the bot's clean teardown.) Belt-and-braces CloseOpen too.
+            try { PanelManager.CloseOpen(); } catch { }
+            if (createdHost && host != null) UnityEngine.Object.Destroy(host);
+
+            _lastDetail = $"{checkedCount} contexts checked, {violations} violation(s), {emptyWarns} empty-warn(s)";
+            FlowTrace.Step("Auto", $"AssertVendorContracts: {_lastDetail}.");
+        }
+
+        // Null-safe "any element" over an IEnumerable (GearCatalog returns lists that are
+        // never null per its contract, but guard anyway).
+        private static bool SafeAny<T>(System.Collections.Generic.IEnumerable<T> seq)
+        {
+            if (seq == null) return false;
+            foreach (var _ in seq) return true;
+            return false;
         }
 
         // =====================================================================
