@@ -1183,6 +1183,13 @@ namespace DeNelle.HUD
                 IconBuild, "B", () => BuildRequested?.Invoke());
             _talkButton = BuildIconButton(_townActionPanel, new Vector2(0.02f, 0.29f), new Vector2(0.42f, 0.71f),
                 IconTalk, "T", () => TalkRequested?.Invoke());
+            // T-010/T-016 (the "black shape under the Talk icon"): Talk is the only icon button
+            // that gets DISABLED (when no NPC is in range). Unity's ColorTint then paints the
+            // button's targetGraphic (the seat, which carries the HudTheme.Disc sprite) with the
+            // dark disabledColor -> a visible black disc under the icon. Dimming is already done
+            // via the CanvasGroup in SetTalkAvailable, so disable the ColorTint transition here so
+            // the disabled state never tints the seat dark. interactable still gates the tap.
+            _talkButton.transition = UnityEngine.UI.Selectable.Transition.None;
             // BAG → InventoryRequested. Same shared treatment as its BUILD/TALK/QUESTS
             // siblings: BuildIconButton (gilt ring seat + HudTheme.StyleButtonColors) with
             // the IconInventory chest sprite from RpgUiCatalog (RoleIcons → icon_inventory).
