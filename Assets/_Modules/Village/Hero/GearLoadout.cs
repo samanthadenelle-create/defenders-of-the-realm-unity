@@ -21,6 +21,7 @@
 // =============================================================================
 
 using UnityEngine;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
 {
@@ -112,6 +113,12 @@ namespace DeNelle.Village
 
             EquippedWeapon = GearCatalog.BestWeapon(job, level);
             EquippedArmor  = GearCatalog.BestArmor(job, level);
+
+            // WO-425 one-shot diagnostic: definitively shows null-weapon (#1 data) vs has-weapon
+            // (#2 missing mesh art) on the next playtest. Refresh is NOT hot (OnEnable + OnLevelUp
+            // only), so a single Step per call is correct — no Once/Throttle guard needed.
+            FlowTrace.Step("Gear", $"Refresh: job='{job}' level={level} " +
+                $"bestWeapon='{EquippedWeapon?.id ?? "<null>"}' bestArmor='{EquippedArmor?.id ?? "<null>"}'");
 
             ApplyStats(job);
             OnGearChanged?.Invoke();
