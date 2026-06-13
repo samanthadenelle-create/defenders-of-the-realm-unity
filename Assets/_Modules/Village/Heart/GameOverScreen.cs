@@ -24,6 +24,7 @@ using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
 using DeNelle.Core;
 using DeNelle.Core.UI;
+using DeNelle.Village.UI;   // WO-333: force-close LevelUpSkillPopup on game-over
 
 namespace DeNelle.Village
 {
@@ -203,6 +204,11 @@ namespace DeNelle.Village
         {
             if (_shown) return;
             _shown = true;
+            // WO-333: the level-up skill-point panel (LevelUpSkillPopup) is a persistent
+            // HUD layer that otherwise stays open BEHIND the game-over overlay. Force-close
+            // any open instances before we build the overlay. Null-guarded per CLAUDE.md §10.
+            foreach (var p in FindObjectsByType<LevelUpSkillPopup>(FindObjectsSortMode.None))
+                if (p != null) p.Hide();
             // DEF-141 / WO-235: the somber Defeat track (GameOver.mp3) belongs to the
             // Heartwood/root destruction ONLY. Hero death is silence (single tone) — so
             // we gate the music on the death context. Null-guarded per CLAUDE.md §10.

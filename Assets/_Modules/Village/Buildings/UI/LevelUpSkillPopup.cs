@@ -133,7 +133,9 @@ namespace DeNelle.Village.UI
             }
         }
 
-        private void Hide()
+        // DEF/WO-333 — internal so the death/game-over screen can force-close any open
+        // skill popup that would otherwise sit BEHIND the game-over overlay.
+        internal void Hide()
         {
             if (_overlay != null) _overlay.style.display = DisplayStyle.None;
         }
