@@ -219,6 +219,16 @@ namespace DeNelle.Village
         private float _bulwarkUntil;            // Time.time while the Knight soak is active
         private static readonly List<Enemy> s_aoeBuf = new List<Enemy>(32); // shared AoE scratch
 
+        // WO-410 (perf): the Cleric's heal scan (FindMostWoundedAlly) runs EVERY FRAME
+        // while idle — when nobody is wounded the cooldown is NOT consumed, so it re-fires
+        // each Update. It used to FindObjectsByType<StoryCompanion>() + <Pet>() (two array
+        // allocs) every one of those frames. Cache the rosters and only re-scan the scene
+        // for membership on a throttle; HP is still read live off the cached refs each call.
+        private StoryCompanion[] _alliesCache;
+        private DeNelle.Pets.Pet[] _petsCache;
+        private float _allyCacheTimer;
+        private const float AllyCacheInterval = 0.5f;
+
         // ── Runtime ──────────────────────────────────────────────────────────
         private HeroClass _hero = HeroClass.Knight;
         private Transform _heroT;
@@ -460,8 +470,18 @@ namespace DeNelle.Village
                 }
             }
 
+            // WO-410: refresh the cached rosters only on a throttle (membership changes
+            // rarely), not every frame. The per-frame array allocs were the GC source.
+            _allyCacheTimer -= Time.deltaTime;
+            if (_alliesCache == null || _petsCache == null || _allyCacheTimer <= 0f)
+            {
+                _allyCacheTimer = AllyCacheInterval;
+                _alliesCache = FindObjectsByType<StoryCompanion>(FindObjectsSortMode.None);
+                _petsCache   = FindObjectsByType<DeNelle.Pets.Pet>(FindObjectsSortMode.None);
+            }
+
             // — Other companions (including a wounded self) —
-            var companions = FindObjectsByType<StoryCompanion>(FindObjectsSortMode.None);
+            var companions = _alliesCache;
             foreach (var c in companions)
             {
                 if (c == null || !c.IsAlive) continue;
@@ -476,7 +496,7 @@ namespace DeNelle.Village
             }
 
             // — Pet(s) —
-            var pets = FindObjectsByType<DeNelle.Pets.Pet>(FindObjectsSortMode.None);
+            var pets = _petsCache;
             foreach (var p in pets)
             {
                 if (p == null || !p.IsAlive) continue;
@@ -712,18 +732,18 @@ namespace DeNelle.Village
         }
 
         /// <summary>
-        /// Name-based Keeper lookup (matches AmbientNPC / VillageNpcInjector): the
-        /// village hero rig is named "Hero (...)"; the project defines no "Player"
-        /// tag, so FindGameObjectWithTag would throw. Returns null when none yet.
+        /// Resolves the Keeper. WO-410 (perf): this previously swept EVERY Transform in
+        /// the scene via FindObjectsByType&lt;Transform&gt; — run ~1Hz per companion (4×),
+        /// it was a per-second GC/CPU spike on MainCastle_Hall. The hero rig owns the
+        /// single HeroLocomotion component, so a TYPED lookup finds it directly without
+        /// touching every Transform. (We can't use FindWithTag("Player") — that tag is
+        /// not declared in TagManager.asset and would throw.) The caller caches the
+        /// result in _heroT and only re-resolves when it goes null.
         /// </summary>
         private static Transform ResolveHeroFallback()
         {
-            foreach (var t in
-                     UnityEngine.Object.FindObjectsByType<Transform>(FindObjectsSortMode.None))
-            {
-                if (t != null && t.name.StartsWith("Hero")) return t;
-            }
-            return null;
+            var hero = UnityEngine.Object.FindFirstObjectByType<HeroLocomotion>();
+            return hero != null ? hero.transform : null;
         }
 
         // ── Follow (trail-the-hero, never block) ─────────────────────────────
