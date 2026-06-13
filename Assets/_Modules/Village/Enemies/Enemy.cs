@@ -414,6 +414,18 @@ namespace DeNelle.Village
                     _heroAggroRadius = Mathf.Clamp(def.AggroRadius, 0f, 20f);
             }
 
+            // DPS-MAGE (owner 2026-06-13): caster-role enemies (orc-shaman, hollow-acolyte,
+            // orc-necromancer, future overboss) should HOLD DISTANCE and fire ranged, not charge.
+            // Spawned enemies carry no inspector TacticalData, so everyone defaulted to Rush (even
+            // casters). Assign the shared runtime Kiter archetype → EnemyBrain enters the Kite
+            // state (standoff band ~10 m, back off at 6 m) and fires Enemy.RangedAttack on
+            // cooldown. The spawner wires the EnemyBrain before Configure, so it's present.
+            if (def != null && def.Role == "caster")
+            {
+                var brain = GetComponent<EnemyBrain>();
+                if (brain != null) brain.SetTactics(EnemyBrain.KiterTactics);
+            }
+
             EnsureAgent();
             if (_agent != null)
             {

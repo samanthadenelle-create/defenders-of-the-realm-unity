@@ -107,6 +107,36 @@ namespace DeNelle.Village
                  "Leave blank for default role-only targeting (Rush to target).")]
         [SerializeField] private TacticalData _tactics;
 
+        /// <summary>
+        /// Assign tactical config at RUNTIME (spawned enemies have no inspector SO, so they
+        /// all defaulted to Rush — even casters charged). EnemyFactory/Enemy.Configure calls
+        /// this to give caster-role enemies the Kiter archetype. Null-safe; ignores null.
+        /// </summary>
+        public void SetTactics(TacticalData t) { if (t != null) _tactics = t; }
+
+        // Shared runtime Kiter config (WO-145 Tactic B): hold ~10 m, back off inside 6 m,
+        // gentle weave, fire ranged every 1.6 s. ONE instance reused across all caster
+        // enemies — DPS-mage behaviour: "casts from a distance, AI keeps its distance"
+        // (owner request 2026-06-13). Built lazily; Date/Random-free so it's deterministic.
+        private static TacticalData s_kiterTactics;
+        public static TacticalData KiterTactics
+        {
+            get
+            {
+                if (s_kiterTactics == null)
+                {
+                    s_kiterTactics = ScriptableObject.CreateInstance<TacticalData>();
+                    s_kiterTactics.name = "TacticalData_Kiter(runtime)";
+                    s_kiterTactics.Archetype = EnemyArchetype.Kiter;
+                    s_kiterTactics.KiteDesiredRange = 10f;
+                    s_kiterTactics.KiteMinRange = 6f;
+                    s_kiterTactics.KiteStrafeJitter = 1.5f;
+                    s_kiterTactics.KiteAttackCooldown = 1.6f;
+                }
+                return s_kiterTactics;
+            }
+        }
+
         // ── Runtime ───────────────────────────────────────────────────────────
 
         private Enemy    _enemy;

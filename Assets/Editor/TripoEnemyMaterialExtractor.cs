@@ -36,8 +36,13 @@ namespace DeNelle.Editor
             int ok = 0;
             foreach (var p in WightFbx)
                 if (ExtractFor(p)) ok++;
+            // PERSIST: ExtractTextures + the reimport only modify the in-memory AssetDatabase;
+            // without SaveAssets the externalObjects remap is dropped to the .meta on disk so the
+            // NEXT Unity session (the player build) reimports the FBX raw → magenta again (Troll
+            // regressed exactly this way 2026-06-13). SaveAssets flushes the .meta now.
+            AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
-            Debug.Log($"[TripoExtract] DONE — extracted {ok}/{WightFbx.Length}. TRIPO_EXTRACT_OK");
+            Debug.Log($"[TripoExtract] DONE — extracted {ok}/{WightFbx.Length} (saved). TRIPO_EXTRACT_OK");
         }
 
         /// <summary>Extract embedded textures for one FBX into its sibling .fbm folder and
