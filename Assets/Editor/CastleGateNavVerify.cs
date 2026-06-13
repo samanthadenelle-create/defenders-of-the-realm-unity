@@ -193,7 +193,13 @@ namespace DeNelle.Editor
 
             // 4. Sample spawn + trigger onto the navmesh; compute the path.
             bool sSpawn = NavMesh.SamplePosition(spawn, out NavMeshHit hSpawn, 5f, NavMesh.AllAreas);
-            bool sTrig  = NavMesh.SamplePosition(triggerPos, out NavMeshHit hTrig, 14f, NavMesh.AllAreas);
+            // T-001 honesty fix (2026-06-13): tolerance 14f -> 1.0f. A 14m snap let the sampler
+            // jump the trigger onto ANY nearby walkable patch — even when the gate strip never
+            // fused — and reported a false PathComplete/EXITABLE (memory batchmode-spatial-verify-traps:
+            // "SamplePosition tolerance snaps a target back and fakes a complete path"). At 1.0m the
+            // trigger must sit on genuinely-connected mesh for the path to resolve, so an unfused gate
+            // now correctly reads GATE_NAV_FAIL.
+            bool sTrig  = NavMesh.SamplePosition(triggerPos, out NavMeshHit hTrig, 1.0f, NavMesh.AllAreas);
             Debug.Log($"[CastleGateNavVerify] spawn={spawn} onMesh={sSpawn}({(sSpawn ? hSpawn.position.ToString() : "-")})");
             Debug.Log($"[CastleGateNavVerify] trigger={triggerPos} radius={radius} onMesh={sTrig}({(sTrig ? hTrig.position.ToString() : "-")})");
             Debug.Log($"[CastleGateNavVerify] recipeSouthGate={recipeGate}");

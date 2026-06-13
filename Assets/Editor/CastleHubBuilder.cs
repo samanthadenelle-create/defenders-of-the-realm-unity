@@ -131,29 +131,31 @@ namespace DeNelle.Editor
             }
 
             // Main perimeter walls (poly stone segments + Quaternius plaster for beauty/detail)
+            // T-007: the SHIPPING walls come from CastleWallsFromRecipe.Recreate() (the
+            // recipe-driven CastleSide_* geometry; outside this method's legacy path). These
+            // legacy poly-stone runs are the placeholder shell only. The old loops used
+            // `Mathf.Abs(x) > 1` which skipped THREE south/north cells (x = -1,0,1) for the
+            // gate -> a ~26m hole far wider than a 12-15m gate, leaving the wall visibly
+            // "not connected" on each flank of the opening. Skip ONLY the center cell (x==0)
+            // so the gate opening is one cell wide and the flanking segments connect.
             if (wallStone != null)
             {
-                // South wall segments (skip center for gate)
+                // South wall segments (skip ONLY the center cell for the gate)
                 for (int x = -3; x <= 3; x++)
                 {
-                    if (Mathf.Abs(x) > 1)
-                    {
-                        var w = (GameObject)PrefabUtility.InstantiatePrefab(wallStone);
-                        w.transform.SetParent(wallsRoot.transform, false);
-                        w.transform.localPosition = new Vector3(x * 13f, 0f, -44f);
-                        w.name = $"Wall_South_{x}";
-                    }
+                    if (x == 0) continue;
+                    var w = (GameObject)PrefabUtility.InstantiatePrefab(wallStone);
+                    w.transform.SetParent(wallsRoot.transform, false);
+                    w.transform.localPosition = new Vector3(x * 13f, 0f, -44f);
+                    w.name = $"Wall_South_{x}";
                 }
-                // North wall
+                // North wall (solid — no gate on the north legacy run)
                 for (int x = -3; x <= 3; x++)
                 {
-                    if (Mathf.Abs(x) > 1)
-                    {
-                        var w = (GameObject)PrefabUtility.InstantiatePrefab(wallStone);
-                        w.transform.SetParent(wallsRoot.transform, false);
-                        w.transform.localPosition = new Vector3(x * 13f, 0f, 44f);
-                        w.name = $"Wall_North_{x}";
-                    }
+                    var w = (GameObject)PrefabUtility.InstantiatePrefab(wallStone);
+                    w.transform.SetParent(wallsRoot.transform, false);
+                    w.transform.localPosition = new Vector3(x * 13f, 0f, 44f);
+                    w.name = $"Wall_North_{x}";
                 }
                 // East/West simplified (add more Quaternius runs for full beauty)
             }
@@ -417,6 +419,11 @@ namespace DeNelle.Editor
             // qFloorWood tiles only cover the central ~±16 plaza; this fills the rest.
             BuildNavMeshFloor(root.transform);
 
+            // T-002/T-005: Heart of Elarion — the enemy target + lose condition. Without it
+            // WaveManager._heart is null and Enemy.DriveNav() early-returns (enemies freeze /
+            // "no enemy engagement"). Clean scale-1 anchor at the north-centre plaza.
+            WireCastleHeart(root.transform);
+
             Debug.Log("[CastleHubBuilder] CastleHubRoot complete. 8 structures + keep + upper battlements + gate marker placed.\n" +
                       "Next: Save under Assets/Scenes/ (e.g. MainCastle_Hall.unity), Bake NavMesh (NavMeshSurface recommended), wire NPC points + connection via existing systems (WorldSceneLoader, Economy, Yarn, base-build on battlements).");
             Selection.activeGameObject = root;
@@ -574,6 +581,13 @@ namespace DeNelle.Editor
                 var r = strip.GetComponent<MeshRenderer>();
                 if (r != null) r.enabled = false;
                 if (strip.GetComponent<MeshCollider>() == null) strip.AddComponent<MeshCollider>();
+
+                // T-006: FORCE each of the 4 gate strips walkable so the gate arch (which
+                // voxelizes solid across the opening) cannot carve/seal the strip on bake —
+                // same protection CreateInvisibleFloor applies to the main courtyard floor.
+                // Without this, a quadrant's strip could bake un-walkable -> that side's gate
+                // is uncrossable even though the geometry is present.
+                AddWalkableNavMeshModifier(strip);
             }
         }
 
@@ -1193,6 +1207,11 @@ namespace DeNelle.Editor
             if (GameObject.Find("GrandStair_CourtyardToBattlements") == null) BuildGrandStair(parent);
             Log("BATCH-RECIPE: floor + recipe gate strips + stair ensured.");
 
+            // 3b. T-002/T-005: place the Heart of Elarion (lose-condition + enemy target) so
+            //     WaveManager._heart is non-null and Enemy.DriveNav() advances (enemies were
+            //     frozen with no target). Clean scale-1 anchor (no collider-scale trap).
+            WireCastleHeart(parent);
+
             // 4. Bake every NavMeshSurface (Physics Colliders, All) + persist the asset.
             //    (Mirrors BatchAddFloorAndBakeCastle's proven bake block.)
             var surfType = FindType("Unity.AI.Navigation.NavMeshSurface");
@@ -1264,10 +1283,16 @@ namespace DeNelle.Editor
             var root = GameObject.Find(RootName);
             var marker = new GameObject("WorldGate_ConnectToOuterWorld_Marker");
             if (root != null) marker.transform.SetParent(root.transform, false);
-            // ~4m OUTSIDE the opening (south, -z). The owner validated 2026-06-12 that with a
-            // walkable PLANE fusing the navmesh through the gate, the hero reaches this point and
-            // the seam fires (the gap, not the trigger, was the bug). Keep this validated placement.
-            marker.transform.position = new Vector3(gate.x, 1.5f, gate.z - 4f);
+            // T-001 FIX (2026-06-13): seat the trigger INTERIOR-reachable, not 4m OUTSIDE.
+            // The old (gate.z - 4) placement put the seam on the fragile fused-strip navmesh
+            // OUTSIDE the wall, which the NavMeshAgent hero often could not reach (it stalled
+            // at the gate-opening navmesh edge and never tripped the seam -> "cannot exit /
+            // 3rd time / seam issue", 6 occurrences). Move it 3m INSIDE the courtyard side of
+            // the opening (gate.z + 3) where the main CourtyardFloor_Nav is solid + reachable,
+            // and raise the proximity radius 9 -> 14 so it fires as the hero approaches the
+            // gate from the courtyard. This mirrors WireOuterWorldConnection's interior radius-18
+            // reasoning (the hero stops at the navmesh edge well short of the opening).
+            marker.transform.position = new Vector3(gate.x, 1.5f, gate.z + 3f);
 
             var transType = FindType("DeNelle.Village.SceneTransitionTrigger");
             if (transType == null) { Err("BATCH-RECIPE: SceneTransitionTrigger not found — exit seam NOT wired."); return; }
@@ -1276,14 +1301,102 @@ namespace DeNelle.Editor
             transType.GetField("targetSceneName")?.SetValue(comp, "OuterWorld");
             transType.GetField("targetPosition")?.SetValue(comp, new Vector3(0f, 0.5f, -80f));
             transType.GetField("loadAdditive")?.SetValue(comp, true);
-            transType.GetField("ProximityRadius")?.SetValue(comp, 9f);
+            transType.GetField("ProximityRadius")?.SetValue(comp, 14f);
 
             var col = marker.AddComponent<BoxCollider>();
             col.isTrigger = true;
             col.size = new Vector3(14f, 6f, 12f);
 
-            Log("BATCH-RECIPE: exit seam placed at recipe gate " + marker.transform.position +
-                " (radius 9, target OuterWorld (0,0.5,-80)).");
+            Log("BATCH-RECIPE: exit seam placed INTERIOR of recipe gate " + marker.transform.position +
+                " (gate.z+3, radius 14, target OuterWorld (0,0.5,-80)).");
+        }
+
+        // =====================================================================
+        //  HEART OF ELARION (T-002 / T-005) — the enemy target + lose condition.
+        // -----------------------------------------------------------------------------
+        //  CastleHubBuilder never placed a Heart, so WaveManager._heart stayed null and
+        //  Enemy.DriveNav() early-returned (enemies froze -> "no enemy engagement" T-005,
+        //  "no tree of life / what does the enemy target" T-002).
+        //
+        //  COLLIDER-SCALE TRAP (memory heart-collider-scale-trap; mirrors
+        //  Village2Playable.B1_WireHeart): HeartController.Awake() auto-adds a CapsuleCollider
+        //  (r2, h8 LOCAL). Hosting it on a SCALED visible tree turns that into a giant plaza
+        //  blocker (the Tree-of-Life-blocked-the-whole-plaza bug). So the HeartController lives
+        //  on a CLEAN scale-1 anchor "HeartOfElarion"; an optional decorative tree mesh is a
+        //  collider-stripped child for looks only.
+        //
+        //  POSITION: (0,0,12) — the north-centre plaza in front of the keep (the keep occupies
+        //  origin). y=0 sits on the courtyard floor / baked navmesh. Tag "HeartTarget" (the tag
+        //  EnemyBrain.FindClosestTarget searches). _useAuthoredTransform=true so Awake() does not
+        //  re-scale/re-snap it to origin.
+        //
+        //  Idempotent: re-running reuses the existing anchor + skips a duplicate controller, so
+        //  there is EXACTLY ONE HeartController in the scene.
+        // =====================================================================
+        private const string HeartAnchorName = "HeartOfElarion";
+
+        private static void WireCastleHeart(Transform parent)
+        {
+            var heartType = FindType("DeNelle.Village.HeartController");
+            if (heartType == null)
+            {
+                Err("WireCastleHeart: DeNelle.Village.HeartController not found (is it compiled?). " +
+                    "Heart NOT placed — WaveManager._heart stays null and enemies will freeze. Re-run after compile.");
+                return;
+            }
+
+            // Reuse an existing anchor (idempotent) so we never create a second HeartController.
+            var existing = GameObject.Find(HeartAnchorName);
+            GameObject anchor = existing != null ? existing : new GameObject(HeartAnchorName);
+            if (existing == null && parent != null) anchor.transform.SetParent(parent, false);
+
+            // North-centre plaza, in front of the keep. CLEAN scale-1 anchor (no collider-scale trap).
+            anchor.transform.position = new Vector3(0f, 0f, 12f);
+            anchor.transform.localScale = Vector3.one;
+
+            // Tag "HeartTarget" so EnemyBrain.FindClosestTarget can find it. The tag may not be
+            // defined in TagManager (setting an undefined tag throws) — guard like
+            // PlaceCastleSpawnPoints. EnemyBrain.TryFindByTag also guards undefined tags, and the
+            // WaveManager wires _heart by component reference, so an unset tag is non-fatal.
+            try { anchor.tag = "HeartTarget"; }
+            catch { Err("WireCastleHeart: tag 'HeartTarget' is not defined in TagManager — add it (ProjectSettings/TagManager.asset) so EnemyBrain tag-search finds the Heart. WaveManager still wires _heart by reference."); }
+
+            if (anchor.GetComponent(heartType) == null)
+            {
+                var heart = anchor.AddComponent(heartType);
+                var so = new SerializedObject(heart);
+                var prop = so.FindProperty("_useAuthoredTransform");
+                if (prop != null) { prop.boolValue = true; so.ApplyModifiedPropertiesWithoutUndo(); }
+                else Err("WireCastleHeart: HeartController._useAuthoredTransform not found — Heart may snap to origin at Play.");
+                Log($"WireCastleHeart: HeartController added on '{HeartAnchorName}' at {anchor.transform.position} (scale 1).");
+            }
+            else Log("WireCastleHeart: HeartController already on the anchor — idempotent skip.");
+
+            // Defensive: ensure EXACTLY one HeartController in the scene.
+            var hearts = Object.FindObjectsByType(heartType, FindObjectsInactive.Include, FindObjectsSortMode.None);
+            if (hearts.Length != 1)
+                Err($"WireCastleHeart: expected 1 HeartController, found {hearts.Length}. Remove the extras.");
+        }
+
+        // Standalone wire-in for an ALREADY-SAVED MainCastle_Hall (mirrors
+        // WireCurrentCastleToOuterWorld): adds the Heart idempotently without a full rebuild,
+        // so the CLI can apply T-002/T-005 on the committed scene then rebake.
+        [MenuItem("Defenders/Scenes/Add Heart To Current Castle")]
+        public static void AddHeartToCurrentCastle()
+        {
+            var scene = EditorSceneManager.GetActiveScene();
+            var rootGo = GameObject.Find(RootName);
+            Transform parent = rootGo != null ? rootGo.transform
+                : (GameObject.Find(RootName + "_FloorHost") ?? new GameObject(RootName + "_FloorHost")).transform;
+
+            WireCastleHeart(parent);
+
+            EditorSceneManager.MarkSceneDirty(scene);
+            Debug.Log("[CastleHubBuilder] Added Heart of Elarion (HeartTarget) at (0,0,12). " +
+                      "Save the scene; a NavMesh REBAKE is recommended so the Heart's blocker capsule is reflected. " +
+                      "WaveManager now has a non-null _heart -> enemies engage.");
+            var heartGo = GameObject.Find(HeartAnchorName);
+            if (heartGo != null) Selection.activeGameObject = heartGo;
         }
 
         // =====================================================================
@@ -1304,7 +1417,11 @@ namespace DeNelle.Editor
             Transform root = rootGo != null ? rootGo.transform
                 : (GameObject.Find(RootName + "_FloorHost") ?? new GameObject(RootName + "_FloorHost")).transform;
 
-            // Heart = lose condition (optional; null is fine — waves still spawn + the player fights).
+            // T-002/T-005: ensure the Heart exists FIRST so WaveManager._heart is non-null
+            // (a null heart freezes Enemy.DriveNav -> "no enemy engagement"). Idempotent.
+            WireCastleHeart(root);
+
+            // Heart = lose condition + enemy target. Now resolvable (placed above).
             Component heart = null;
             var heartType = FindType("DeNelle.Village.HeartController");
             if (heartType != null)
