@@ -27,6 +27,7 @@ namespace DeNelle.Editor
         {
             "Assets/Resources/Enemies/Demon.fbx",
             "Assets/Resources/Enemies/OgreMage.fbx",
+            "Assets/Resources/Enemies/Troll.fbx",   // 2026-06-13: untextured (externalObjects:{}) — featured in the brute wave
         };
 
         [MenuItem("Defenders/Art/Extract Wight (Demon+OgreMage) Tripo Textures")]

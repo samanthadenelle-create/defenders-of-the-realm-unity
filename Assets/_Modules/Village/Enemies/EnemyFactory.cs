@@ -97,15 +97,15 @@ namespace DeNelle.Village
                 // Orc Warband: upright already, just a -90 yaw so +X-forward faces +Z.
                 skinOpts.LocalRotation = Quaternion.Euler(0f, -90f, 0f);
             }
-            else if (model == "Demon" || model == "OgreMage")
+            else if (model == "Demon" || model == "OgreMage" || model == "Troll")
             {
-                // WIGHT FIX (owner playtest 2026-06-13): unlike the orcs, these Tripo
-                // exports import LYING FACE-DOWN — a pure yaw left them flat. Pitch up
-                // with X=-90 to stand them, plus the -90 yaw to face like the orcs/heroes.
-                // If they end up standing-but-facing-wrong, tune the Y; if still face-down,
-                // flip X to +90 (the export's pitch sign is what's uncertain, not the need).
+                // TRIPO HumanoidLarge creatures (owner playtest 2026-06-13): Demon/OgreMage/Troll
+                // are the same Tripo export class (externalObjects:{} → raw, lying FACE-DOWN). A pure
+                // yaw left them flat; pitch up with X=-90 to stand, plus the -90 yaw to face like the
+                // orcs/heroes. Troll added 2026-06-13 for the orc/brute wave variety. If any end up
+                // standing-but-facing-wrong, tune the Y; if still face-down, flip X to +90.
                 skinOpts.LocalRotation = Quaternion.Euler(-90f, -90f, 0f);
-                skinOpts.FixTripoMaterials = true;   // raw Phong → needs the runtime URP fixer
+                skinOpts.FixTripoMaterials = true;   // belt-and-braces; the import extract already URP-ifies it
             }
             var vis = VisualFactory.Skin(go.transform, "Enemies/" + model, skinOpts);
             if (vis != null)

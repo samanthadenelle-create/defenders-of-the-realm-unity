@@ -48,73 +48,25 @@
       ]
     },
     {
+      "_comment": "WAVE 2 = ORC WARBAND (enemy-variety 2026-06-13). A cohesive greenskin squad — berserker brutes + a shaman caster + a necromancer elite — so wave 2 is a DISTINCT faction, not another Hollow clone-swarm. All 'orc' family → composes as one orc squad.",
       "waveId": 2,
-      "name": "The Tide Widens",
+      "name": "The Warband Comes",
       "countdownSeconds": 300,
       "enemies": [
-        {
-          "type": "hollow-walker",
-          "count": 3,
-          "spawnPoint": "spawn-0",
-          "delay": 0,
-          "interval": 1.2
-        },
-        {
-          "type": "hollow-rogue",
-          "count": 2,
-          "spawnPoint": "spawn-0",
-          "delay": 0,
-          "interval": 1.2
-        },
-        {
-          "type": "hollow-warrior",
-          "count": 1,
-          "spawnPoint": "spawn-0",
-          "delay": 0,
-          "interval": 1.2
-        },
-        {
-          "type": "hollow-acolyte",
-          "count": 1,
-          "spawnPoint": "spawn-0",
-          "delay": 0,
-          "interval": 1.2
-        }
+        { "type": "orc-berserker",  "count": 3, "spawnPoint": "spawn-0", "delay": 0,   "interval": 1.2 },
+        { "type": "orc-shaman",     "count": 1, "spawnPoint": "spawn-0", "delay": 0.6, "interval": 1.2 },
+        { "type": "orc-necromancer","count": 1, "spawnPoint": "spawn-0", "delay": 1.2, "interval": 1.2 }
       ]
     },
     {
+      "_comment": "WAVE 3 = BRUTE BAND (enemy-variety 2026-06-13). Cave Trolls + an Ogre (the 'troll' brute family — big slow silhouettes) with a pair of orc-berserkers for front-line pressure. The heavy payoff wave before the apex dragon.",
       "waveId": 3,
-      "name": "Bone and Bough",
+      "name": "The Deep Ones",
       "countdownSeconds": 300,
       "enemies": [
-        {
-          "type": "hollow-walker",
-          "count": 4,
-          "spawnPoint": "spawn-0",
-          "delay": 0,
-          "interval": 1.1
-        },
-        {
-          "type": "hollow-rogue",
-          "count": 2,
-          "spawnPoint": "spawn-0",
-          "delay": 0,
-          "interval": 1.1
-        },
-        {
-          "type": "hollow-warrior",
-          "count": 2,
-          "spawnPoint": "spawn-0",
-          "delay": 0,
-          "interval": 1.1
-        },
-        {
-          "type": "hollow-acolyte",
-          "count": 1,
-          "spawnPoint": "spawn-0",
-          "delay": 0,
-          "interval": 1.1
-        }
+        { "type": "troll",         "count": 2, "spawnPoint": "spawn-0", "delay": 0,   "interval": 1.6 },
+        { "type": "ogre",          "count": 1, "spawnPoint": "spawn-0", "delay": 1.5, "interval": 1.6 },
+        { "type": "orc-berserker", "count": 2, "spawnPoint": "spawn-0", "delay": 0.4, "interval": 1.2 }
       ]
     },
     {

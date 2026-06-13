@@ -175,6 +175,23 @@
       "height": 2.6,
       "boss": false,
       "flavor": "A lumbering brute of the deep places - slow, but each blow lands like a falling oak."
+    },
+    {
+      "id": "ogre",
+      "name": "Ogre",
+      "displayName": "Ogre",
+      "family": "troll",
+      "role": "brute",
+      "spawn": ["wave", "world"],
+      "modelKey": "OgreMage",
+      "ai": "charger",
+      "hp": 280,
+      "moveSpeed": 2.0,
+      "contactDamage": 12,
+      "attackInterval": 1.6,
+      "height": 2.4,
+      "boss": false,
+      "flavor": "A hulking ogre dragged up from the warrens - it swings a whole tree and calls it a club."
     }
   ]
 }
