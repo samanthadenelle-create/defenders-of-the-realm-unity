@@ -71,6 +71,12 @@ Run for **every file you touched**. If the check fails, fix before returning.
 **Never ship a C# file with mismatched braces.** CLI will revert it and the
 work order goes back to the queue.
 
+**NUL-byte guard (WO-434):** the compile gate (`DeNelle.Editor.CompileGate.Run`)
+now also scans every `.cs` under `Assets/` for embedded/trailing NUL bytes (`\x00`)
+and REJECTS the gate (withholds the `COMPILE_GATE_OK` marker) if any are found —
+this catches §0 mount-garbled files that look byte-clean on Windows/HEAD but carry
+NULs that poison a commit and break compilation.
+
 ---
 
 ## 2. Work Order Protocol
@@ -144,7 +150,8 @@ Use `CoreServices.Hud` and `CoreServices.Audio` for cross-module calls.
 - Village name: **Elarion** (never "Avalon" — retired, DESIGN-DECISIONS.md #1)
 - Heart of Elarion: the world tree / stone reliquary at scene centre (0,0,0)
 - No Keep building — removed (DESIGN-DECISIONS.md #3)
-- Hero tags: `HeroTarget` (for enemy AI), `Player` (for locomotion/trigger detection)
+- Hero tag: **`Player`** (one tag per GameObject — locomotion, camera, HUD, triggers all `FindWithTag("Player")`; set in `HeroControlEnsurer.Ensure`, WO-450)
+- Enemy AI finds the hero by **component** (`FindFirstObjectByType<HeroLocomotion>()`), NOT a `HeroTarget` tag — that tag was never declared; a GameObject has only one tag
 - Enemy spawn tags: `SpawnPoint` — placed 12m outside each gate
 
 ---

@@ -145,14 +145,11 @@ namespace DeNelle.Village
             var hc = FindAnyObjectByType<HeartController>();
             _heartTransform = hc != null ? hc.transform : null;
 
-            // "HeroTarget" may be undefined (FindWithTag throws) — TryFindByTag guards
-            // it; "Player" is a built-in tag and always safe.
-            _heroTransform = TryFindByTag("HeroTarget");
-            if (_heroTransform == null)
-            {
-                var playerGo = GameObject.FindWithTag("Player");
-                _heroTransform = playerGo != null ? playerGo.transform : null;
-            }
+            // WO-450: resolve the hero by component (HeroLocomotion — every hero variant
+            // carries it), not the (undeclared) "HeroTarget" tag; the hero now carries the
+            // built-in "Player" tag as a fallback.
+            var loco = FindFirstObjectByType<HeroLocomotion>();
+            _heroTransform = loco != null ? loco.transform : TryFindByTag("Player");
 
             _petTransform = TryFindByTag("PetTarget");
         }

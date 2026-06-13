@@ -95,6 +95,12 @@ namespace DeNelle.Village
             }
 
             if (!hero.activeSelf) hero.SetActive(true);
+            // WO-450: canonical hero tag = "Player" (now declared in TagManager). This is the
+            // runtime convergence point every hero variant flows through (real/swapped/emergency),
+            // so tag the root here to activate all FindWithTag("Player") consumers (camera, HUD,
+            // triggers). A GameObject has ONE tag — enemy AI no longer relies on a "HeroTarget"
+            // tag; it resolves the hero by component (HeroLocomotion) instead.
+            if (!hero.CompareTag("Player")) hero.tag = "Player";
             if (!hero.TryGetComponent(out HeroLocomotion l)) l = hero.AddComponent<HeroLocomotion>();
             l.enabled = true;
             if (hero.GetComponent<HeroDeathLogger>() == null) hero.AddComponent<HeroDeathLogger>();
@@ -204,6 +210,7 @@ namespace DeNelle.Village
         {
             var go = GameObject.CreatePrimitive(PrimitiveType.Capsule);
             go.name = "Hero (Blaise)";                       // so camera / NPCs find it by name
+            go.tag = "Player";                               // WO-450: canonical hero tag for all consumers
             go.transform.position = new Vector3(6f, 1f, 4f); // BuildHero's spawn (capsule centre at y=1)
 
             // Drop the primitive collider so HeroLocomotion's CapsuleCast can't

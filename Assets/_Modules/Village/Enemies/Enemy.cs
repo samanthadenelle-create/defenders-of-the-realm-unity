@@ -774,12 +774,12 @@ namespace DeNelle.Village
         }
 
         /// <summary>
-        /// Lazily resolves (and periodically refreshes) the hero transform by tag.
-        /// Matches EnemyBrain's lookup order: the canonical "HeroTarget" tag first,
-        /// then the built-in "Player" tag the village hero actually carries. Both
-        /// are guarded — Unity throws on an undefined tag — and the result is
-        /// re-checked on an interval so an enemy that spawned before the hero (or
-        /// after a hero respawn) still acquires it.
+        /// Lazily resolves (and periodically refreshes) the hero transform.
+        /// WO-450: resolves by COMPONENT (HeroLocomotion — the one component every hero
+        /// variant carries) rather than the (undeclared) "HeroTarget" tag; falls back to
+        /// the built-in "Player" tag the village hero now carries. The result is re-checked
+        /// on an interval so an enemy that spawned before the hero (or after a hero respawn)
+        /// still acquires it.
         /// </summary>
         private void ResolveHeroTransform()
         {
@@ -790,7 +790,8 @@ namespace DeNelle.Village
             _heroResolveTimer = 1f;   // cheap: at most once/sec per enemy
             if (valid) return;
 
-            _heroTransform = SafeFindByTag("HeroTarget") ?? SafeFindByTag("Player");
+            var loco = FindFirstObjectByType<HeroLocomotion>();   // WO-450: component lookup
+            _heroTransform = loco != null ? loco.transform : SafeFindByTag("Player");
         }
 
         /// <summary>Null-safe tag lookup tolerating an undefined tag (Unity throws otherwise).</summary>

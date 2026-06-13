@@ -50,11 +50,11 @@ namespace DeNelle.Village
             _enemy = GetComponent<Enemy>();
             _brain = GetComponent<EnemyBrain>();
 
-            // WO-419: resolve the hero by the canonical "HeroTarget" tag FIRST (matches
-            // EnemyBrain — the hero rig is tagged HeroTarget for enemy AI, not Player), with
-            // "Player" as the fallback. Re-acquired each tick in Evaluate() while null, so an
-            // enemy that inits before the hero streams in (additive OuterWorld load) still aggros.
-            _target = TryFindByTag("HeroTarget") ?? TryFindByTag("Player");
+            // WO-450: resolve the hero by component (HeroLocomotion), not the (undeclared)
+            // "HeroTarget" tag — the hero now carries the "Player" tag (one tag per object).
+            // Re-acquired each tick in Evaluate() while null, so an enemy that inits before the
+            // hero streams in (additive OuterWorld load) still aggros.
+            _target = FindHeroTransform();
         }
 
         private float _nextReacquire;
@@ -64,6 +64,15 @@ namespace DeNelle.Village
         {
             try { var go = GameObject.FindWithTag(tag); return go != null ? go.transform : null; }
             catch { return null; }
+        }
+
+        /// <summary>WO-450: resolve the hero by component (every hero variant carries
+        /// HeroLocomotion), with a "Player"-tag fallback. Null-safe, tag-independent.</summary>
+        private static Transform FindHeroTransform()
+        {
+            var loco = FindFirstObjectByType<HeroLocomotion>();
+            if (loco != null) return loco.transform;
+            return TryFindByTag("Player");
         }
 
         private void Start()
@@ -95,7 +104,7 @@ namespace DeNelle.Village
             if (_target == null && Time.time >= _nextReacquire)
             {
                 _nextReacquire = Time.time + 0.5f;
-                _target = TryFindByTag("HeroTarget") ?? TryFindByTag("Player");
+                _target = FindHeroTransform();   // WO-450: component lookup
             }
             _root?.Evaluate();
         }

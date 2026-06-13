@@ -304,16 +304,9 @@ namespace DeNelle.Village
             var hc = FindAnyObjectByType<HeartController>();
             _heartTransform = hc != null ? hc.transform : null;
 
-            // WO-49/WO-92: prefer tagged lookup; fall back to "Player" tag for
-            // scenes that haven't been updated to use HeroTarget yet. "HeroTarget"
-            // may be undefined (FindWithTag throws) — TryFindByTag guards it; "Player"
-            // is a built-in tag and always safe.
-            _heroTransform = TryFindByTag("HeroTarget");
-            if (_heroTransform == null)
-            {
-                var playerGo = GameObject.FindWithTag("Player");
-                _heroTransform = playerGo != null ? playerGo.transform : null;
-            }
+            // WO-450: resolve the hero by component (HeroLocomotion), not the (undeclared)
+            // "HeroTarget" tag. The hero now carries the "Player" tag (one tag per object).
+            _heroTransform = FindHeroTransform();
 
             // WO-145 (Tactic A): resolve the player's pet by tag (null-safe). The pet
             // is DeNelle.Pets — we never reference it for AI, only target its tagged
@@ -337,6 +330,20 @@ namespace DeNelle.Village
             {
                 return null;   // tag not defined in this project — no candidate.
             }
+        }
+
+        /// <summary>
+        /// WO-450: resolve the hero by COMPONENT, not tag. A GameObject has exactly one
+        /// tag and the hero now carries "Player" (HeroControlEnsurer) — the old "HeroTarget"
+        /// tag was never declared and always missed. HeroLocomotion is the single component
+        /// every hero variant (real/swapped/emergency) carries, so it is the canonical
+        /// scene-agnostic hero handle. Falls back to the "Player" tag for safety. Null-safe.
+        /// </summary>
+        private static Transform FindHeroTransform()
+        {
+            var loco = FindFirstObjectByType<HeroLocomotion>();
+            if (loco != null) return loco.transform;
+            return TryFindByTag("Player");
         }
 
         /// <summary>Hero/pet struck this enemy — provoke it to chase + hit back.</summary>
@@ -383,7 +390,7 @@ namespace DeNelle.Village
                 // Lazily resolve the hero if it wasn't present at Awake (the enemy was
                 // just struck, so the hero definitely exists now).
                 if (_heroTransform == null)
-                    _heroTransform = TryFindByTag("HeroTarget") ?? TryFindByTag("Player");
+                    _heroTransform = FindHeroTransform();   // WO-450: component lookup
             }
             if (Time.time < _provokedUntil && _heroTransform != null)
             {
@@ -410,7 +417,7 @@ namespace DeNelle.Village
             if (_heroTransform == null && _heroResolveTimer <= 0f)
             {
                 _heroResolveTimer = 1f;
-                _heroTransform = TryFindByTag("HeroTarget") ?? TryFindByTag("Player");
+                _heroTransform = FindHeroTransform();   // WO-450: component lookup
             }
 
             // WO-147: drive the consolidated perception sensor on the (LOD-scaled)
@@ -981,15 +988,15 @@ namespace DeNelle.Village
         // ── WO-49/WO-92: tag-based fallback target finding ─────────────────────
 
         /// <summary>
-        /// Falls back to tag-based search when role targeting returns nothing.
-        /// Searches "HeroTarget" then "HeartTarget" tags.
+        /// Falls back to component/tag search when role targeting returns nothing.
+        /// WO-450: hero by component (HeroLocomotion); Heart still by "HeartTarget" tag.
         /// </summary>
         private Transform FindClosestTarget()
         {
-            // "HeroTarget"/"HeartTarget" may be undefined (FindWithTag throws on an
-            // undefined tag) — TryFindByTag guards both.
-            var hero = TryFindByTag("HeroTarget");
+            // WO-450: resolve the hero by component, not the (undeclared) "HeroTarget" tag.
+            var hero = FindHeroTransform();
             if (hero != null) return hero;
+            // "HeartTarget" may be undefined (FindWithTag throws) — TryFindByTag guards it.
             var heart = TryFindByTag("HeartTarget");
             return heart != null ? heart : _heartTransform;
         }
