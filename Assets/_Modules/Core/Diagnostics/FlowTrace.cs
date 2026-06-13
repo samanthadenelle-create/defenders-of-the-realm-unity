@@ -76,5 +76,48 @@ namespace DeNelle.Core.Diagnostics
             s_seen.Clear();
             s_nextAt.Clear();
         }
+
+        // --- performance timing -------------------------------------------------
+        // Owner: "we log everything even performance depending on what part of the class
+        // we call." A scoped stopwatch: wrap a block to log how long it took, and WARN when
+        // it exceeds a budget (so a frame-hitch / slow load surfaces as a tagged log line,
+        // not a guessed-at stutter). The [Flow:<system>] tag names the part being measured.
+        //
+        // USAGE:  using (FlowTrace.Measure("Store", "ShowBuy", warnAboveMs: 16f)) { ...work... }
+        //   -> "[Flow:Store] ShowBuy took 7.4ms"   (or a Warn if it ran past 16ms = one frame)
+        public static Scope Measure(string system, string what, float warnAboveMs = 0f)
+        {
+            return new Scope(system, what, warnAboveMs);
+        }
+
+        /// <summary>Disposable timing scope returned by <see cref="Measure"/>. Logs elapsed ms on dispose.</summary>
+        public readonly struct Scope : System.IDisposable
+        {
+            private readonly string _system;
+            private readonly string _what;
+            private readonly float _warnAboveMs;
+            private readonly float _startMs;
+            private readonly bool _active;
+
+            internal Scope(string system, string what, float warnAboveMs)
+            {
+                _system = system;
+                _what = what;
+                _warnAboveMs = warnAboveMs;
+                _active = Enabled;
+                _startMs = _active ? Time.realtimeSinceStartup * 1000f : 0f;
+            }
+
+            public void Dispose()
+            {
+                if (!_active) return;
+                float ms = Time.realtimeSinceStartup * 1000f - _startMs;
+                string msg = $"{_what} took {ms:F1}ms";
+                if (_warnAboveMs > 0f && ms > _warnAboveMs)
+                    Debug.LogWarning($"[Flow:{_system}] {msg} (over {_warnAboveMs:F0}ms budget)");
+                else
+                    Debug.Log($"[Flow:{_system}] {msg}");
+            }
+        }
     }
 }

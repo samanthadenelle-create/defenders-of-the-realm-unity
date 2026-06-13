@@ -30,6 +30,7 @@ using UnityEngine.UI;
 using DeNelle.Village;
 using DeNelle.Village.Crafting;
 using DeNelle.Core.UI;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village.Hero
 {
@@ -288,28 +289,68 @@ namespace DeNelle.Village.Hero
 
             // Count rows up front so the scroll content can be sized to fit them all.
             int rowCount = weapons.Count + armors.Count + _potionIds.Count;
+
+            // STORE CONTENTS DUMP (owner directive): log exactly what the merchant will stock,
+            // so a "no stock" report can be split into (a) catalog gave us nothing vs (b) we had
+            // stock but it didn't render. Lists every id by section.
+            FlowTrace.Step("Store", $"ShowBuy vendor='{_vendorContext}' -> stocking {rowCount} rows " +
+                $"({weapons.Count} weapons, {armors.Count} armors, {_potionIds.Count} potions)");
+            if (rowCount == 0)
+                FlowTrace.Warn("Store", "STOCK EMPTY: catalog returned no weapons/armors and no potions configured.");
+            else
+            {
+                var sb = new System.Text.StringBuilder();
+                foreach (var w in weapons) sb.Append("W:").Append(w != null ? w.name : "<null>").Append(' ');
+                foreach (var a in armors)  sb.Append("A:").Append(a != null ? a.name : "<null>").Append(' ');
+                foreach (var p in _potionIds) sb.Append("P:").Append(p).Append(' ');
+                FlowTrace.Step("Store", "stock = " + sb.ToString().TrimEnd());
+            }
+
             var listRoot = BuildScrollContent(rowCount);
 
+            // Owner directive: try/catch + log EVERY object we turn into a row, so one bad
+            // item (null field, appraisal throw, missing icon) logs and is skipped instead of
+            // silently aborting the whole list — the classic "store shows nothing, no error".
+            // Wrapped in a perf Measure scope (16ms = one frame budget) so a slow store-build
+            // surfaces as a tagged log line, not a guessed-at stutter.
+            using var _buildTimer = FlowTrace.Measure("Store", "ShowBuy row build", warnAboveMs: 16f);
+            int built = 0, failed = 0;
             foreach (var w in weapons)
             {
                 var wCopy = w; // capture for the closure
-                CreateBuyRow(listRoot, BuyLabel(w.name, GearAppraisal.Appraise(w)), GearCatalog.GetBuyCost(w), () => TryBuyWeapon(wCopy), null);
+                try
+                {
+                    CreateBuyRow(listRoot, BuyLabel(w.name, GearAppraisal.Appraise(w)), GearCatalog.GetBuyCost(w), () => TryBuyWeapon(wCopy), null);
+                    built++;
+                }
+                catch (System.Exception ex) { failed++; FlowTrace.Fail("Store", $"weapon row '{(w != null ? w.id : "<null>")}' threw: {ex.Message}"); }
             }
             foreach (var a in armors)
             {
                 var aCopy = a; // capture for the closure
-                CreateBuyRow(listRoot, BuyLabel(a.name, GearAppraisal.Appraise(a)), GearCatalog.GetBuyCost(a), () => TryBuyArmor(aCopy), null);
+                try
+                {
+                    CreateBuyRow(listRoot, BuyLabel(a.name, GearAppraisal.Appraise(a)), GearCatalog.GetBuyCost(a), () => TryBuyArmor(aCopy), null);
+                    built++;
+                }
+                catch (System.Exception ex) { failed++; FlowTrace.Fail("Store", $"armor row '{(a != null ? a.id : "<null>")}' threw: {ex.Message}"); }
             }
             foreach (var pid in _potionIds)
             {
                 var cost = new ResourceCost(wood: 4, iron: 0, crystals: 0); // cheap early potions
                 if (pid.Contains("mana")) cost = new ResourceCost(wood: 3, crystals: 1);
                 string pidCopy = pid; var costCopy = cost; // capture for the closure
-                // Pack potion art on the row when present (red heal / blue mana bottle).
-                var potionIcon = RpgUiCatalog.Get(RpgUiCatalog.RolePotion,
-                    pid.Contains("mana") ? RpgUiCatalog.PotionMana : RpgUiCatalog.PotionHealth);
-                CreateBuyRow(listRoot, pidCopy, costCopy, () => TryBuyPotion(pidCopy, costCopy), potionIcon);
+                try
+                {
+                    // Pack potion art on the row when present (red heal / blue mana bottle).
+                    var potionIcon = RpgUiCatalog.Get(RpgUiCatalog.RolePotion,
+                        pid.Contains("mana") ? RpgUiCatalog.PotionMana : RpgUiCatalog.PotionHealth);
+                    CreateBuyRow(listRoot, pidCopy, costCopy, () => TryBuyPotion(pidCopy, costCopy), potionIcon);
+                    built++;
+                }
+                catch (System.Exception ex) { failed++; FlowTrace.Fail("Store", $"potion row '{pid}' threw: {ex.Message}"); }
             }
+            FlowTrace.Step("Store", $"row build complete: {built} rows built, {failed} failed (of {rowCount} planned).");
 
             FinalizeScroll(); // force the content to size to the rows NOW (anti-collapse)
         }
@@ -425,6 +466,32 @@ namespace DeNelle.Village.Hero
             Debug.Log($"[ShopPanel] FinalizeScroll: rows={_scrollContent.childCount}, " +
                       $"contentH={_scrollContent.rect.height:F0}, " +
                       $"contentAreaH={(contentArea != null ? contentArea.rect.height : -1f):F0}");
+
+            // PER-ROW VISIBILITY (owner directive: trace the contents all the way to the
+            // merchant screen). The earlier diagnostic proved rows exist with height, yet the
+            // store reads empty -> the rows are present but not VISIBLE. For the first few rows
+            // log: actual height, vertical position, whether the row Image is enabled + its alpha,
+            // and whether it falls inside the viewport rect. This separates "row tile invisible"
+            // (Cell alpha ~0 / Image disabled) from "row clipped outside the mask" (position).
+            int n = _scrollContent.childCount;
+            float viewportH = contentArea != null ? contentArea.rect.height : 0f;
+            int visibleTiles = 0;
+            for (int i = 0; i < n; i++)
+            {
+                var child = _scrollContent.GetChild(i) as RectTransform;
+                if (child == null) continue;
+                var cimg = child.GetComponent<Image>();
+                float a = cimg != null ? cimg.color.a : -1f;
+                bool imgOn = cimg != null && cimg.enabled && child.gameObject.activeInHierarchy;
+                if (imgOn && a > 0.02f) visibleTiles++;
+                if (i < 3)
+                    FlowTrace.Step("Store", $"row[{i}] '{child.name}' h={child.rect.height:F0} " +
+                        $"posY={child.anchoredPosition.y:F0} active={child.gameObject.activeInHierarchy} " +
+                        $"imgEnabled={(cimg != null && cimg.enabled)} alpha={a:F2}");
+            }
+            FlowTrace.Step("Store", $"render summary: {visibleTiles}/{n} row tiles have a visible Image " +
+                $"(alpha>0.02 & enabled & active); viewportH={viewportH:F0}. " +
+                $"If visibleTiles>0 but you see nothing -> mask/clip or draw-order; if 0 -> Cell alpha/Image disabled.");
         }
 
         // A buy row built from kit pieces: a dark-glass Cell panel (LayoutElement-sized
@@ -793,6 +860,8 @@ namespace DeNelle.Village.Hero
         {
             _scrollContent = null; // the old content is about to be destroyed; drop the stale ref
             if (_contentRoot == null) return;
+            int destroyed = _contentRoot.transform.childCount;
+            FlowTrace.Step("Store", $"ClearContent: destroying {destroyed} content children (tab switch / re-open).");
             for (int i = _contentRoot.transform.childCount - 1; i >= 0; i--)
             {
                 var c = _contentRoot.transform.GetChild(i);
