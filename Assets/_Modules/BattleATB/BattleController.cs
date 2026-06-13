@@ -671,6 +671,25 @@ namespace DeNelle.BattleATB
         /// </summary>
         private static string ResolveReturnScene()
         {
+            // RETURN-POINT (return-point feature): prefer the scene the player actually fought
+            // from (stashed on GoBattle), so the round-trip lands where they left — not the
+            // Village2 default. Falls through to the handoff's ReturnScene, then Village.
+            string fromReturnPoint = SceneRouter.Return?.Scene;
+            if (!string.IsNullOrEmpty(fromReturnPoint))
+            {
+                if (string.Equals(fromReturnPoint, SceneRouter.ATBBattle,
+                        System.StringComparison.OrdinalIgnoreCase))
+                {
+                    Debug.LogWarning(
+                        "[BattleController] Return-point scene was ATBBattle — would restart " +
+                        "the fight. Falling back to handoff/Village. (return-point feature)");
+                }
+                else
+                {
+                    return fromReturnPoint;
+                }
+            }
+
             BattleParams handoff = SceneRouter.PendingBattle;
             if (handoff != null && !string.IsNullOrEmpty(handoff.ReturnScene))
             {

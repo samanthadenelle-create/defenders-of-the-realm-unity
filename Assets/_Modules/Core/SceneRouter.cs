@@ -56,6 +56,26 @@ namespace DeNelle.Core
     }
 
     /// <summary>
+    /// RETURN-POINT (return-point feature): the scene + hero pose the player left
+    /// when a battle launched, so the ATB round-trip lands back exactly where they
+    /// fought from — not the Village2 default. Stashed by
+    /// <see cref="SceneRouter.GoBattle"/> on a STATIC (it must survive the ATB scene's
+    /// Single load tearing the whole world down — same handoff lifetime as
+    /// <see cref="SceneRouter.PendingBattle"/>), read by BattleController to choose the
+    /// return scene, and consumed once on the far-side load to warp the hero home.
+    /// </summary>
+    [Serializable]
+    public sealed class ReturnPoint
+    {
+        /// <summary>Active scene name the battle was launched from.</summary>
+        public string Scene;
+        /// <summary>Hero world position at launch (skipped/zero if no hero was found).</summary>
+        public Vector3 Position;
+        /// <summary>Hero heading (Y euler) at launch, for restoring facing.</summary>
+        public float Yaw;
+    }
+
+    /// <summary>
     /// Hand-off parameters for the "Defend the Tower" (Patricia Light) scene.
     /// Stashed on <see cref="SceneRouter.PendingPatriciaLight"/> by
     /// <see cref="SceneRouter.GoPatriciaLight"/> and read by the scene's
@@ -185,6 +205,11 @@ namespace DeNelle.Core
             if (Fader != null)
                 await Fader.FadeOut(fadeSeconds);
 
+            // RETURN-POINT (return-point feature): if a battle stashed a return point, arm a
+            // one-shot sceneLoaded handler BEFORE the load so the hero is warped back to where
+            // they fought the instant the destination scene is active. Self-clearing.
+            ArmReturnPointRestore();
+
             var op = SceneManager.LoadSceneAsync(sceneName);
             if (op != null)
             {
@@ -194,6 +219,103 @@ namespace DeNelle.Core
 
             if (Fader != null)
                 await Fader.FadeIn(fadeSeconds);
+        }
+
+        // =====================================================================
+        //  RETURN-POINT restore (return-point feature)
+        // =====================================================================
+
+        /// <summary>
+        /// RETURN-POINT (return-point feature): if <see cref="Return"/> is set, subscribes a
+        /// ONE-SHOT <see cref="SceneManager.sceneLoaded"/> handler that finds the hero in the
+        /// freshly-loaded scene and warps it to the stashed pose (reusing HeroLocomotion.WarpTo
+        /// — disables the agent, moves, re-warps onto the NavMesh, raises OnTeleported for the
+        /// follow camera), then clears <see cref="Return"/> and unsubscribes. Null-guarded; a
+        /// no-op when nothing was stashed.
+        /// </summary>
+        private static void ArmReturnPointRestore()
+        {
+            if (Return == null) return;
+
+            // Capture once; the handler runs after the load completes.
+            SceneManager.sceneLoaded += OnReturnSceneLoaded;
+        }
+
+        private static void OnReturnSceneLoaded(Scene scene, LoadSceneMode mode)
+        {
+            // One-shot: always detach, even on an early-out / failure path.
+            SceneManager.sceneLoaded -= OnReturnSceneLoaded;
+
+            ReturnPoint rp = Return;
+            Return = null;            // consume regardless of outcome
+            if (rp == null) return;
+
+            try
+            {
+                GameObject hero = null;
+                try { hero = GameObject.FindWithTag("Player"); }
+                catch { hero = null; }
+
+                var loco = (hero != null) ? FindHeroLocomotionOn(hero) : FindHeroLocomotion();
+                if (loco == null)
+                {
+                    Debug.LogWarning("[SceneRouter] Return-point restore: no HeroLocomotion found — warp skipped.");
+                    return;
+                }
+
+                Quaternion rot = Quaternion.Euler(0f, rp.Yaw, 0f);
+
+                // Reuse HeroLocomotion.WarpTo(Vector3, Quaternion?) via reflection (no
+                // Core→Village reference). Signature verified: it disables the agent, moves,
+                // re-warps onto the NavMesh and raises OnTeleported for the camera.
+                var warp = loco.GetType().GetMethod(
+                    "WarpTo",
+                    new[] { typeof(Vector3), typeof(Quaternion?) });
+                if (warp != null)
+                {
+                    warp.Invoke(loco, new object[] { rp.Position, (Quaternion?)rot });
+                    Debug.Log($"[SceneRouter] Return-point restored hero to {rp.Position} in '{scene.name}'.");
+                }
+                else
+                {
+                    // Last-ditch fallback: plain transform move so the player at least lands home.
+                    loco.transform.SetPositionAndRotation(rp.Position, rot);
+                    Debug.LogWarning("[SceneRouter] Return-point: WarpTo not found — used transform fallback.");
+                }
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning("[SceneRouter] Return-point restore threw (non-fatal): " + e.Message);
+            }
+        }
+
+        /// <summary>
+        /// RETURN-POINT helper: finds the active <c>HeroLocomotion</c> by type name via
+        /// reflection so DeNelle.Core never references DeNelle.Village. Returns the component
+        /// as a <see cref="MonoBehaviour"/>, or null if none is present.
+        /// </summary>
+        private static MonoBehaviour FindHeroLocomotion()
+        {
+            try
+            {
+                var t = System.Type.GetType("DeNelle.Village.HeroLocomotion, DeNelle.Village");
+                if (t == null) return null;
+                var found = UnityEngine.Object.FindFirstObjectByType(t);
+                return found as MonoBehaviour;
+            }
+            catch { return null; }
+        }
+
+        /// <summary>RETURN-POINT helper: the HeroLocomotion on a specific hero GameObject (or null).</summary>
+        private static MonoBehaviour FindHeroLocomotionOn(GameObject go)
+        {
+            try
+            {
+                var t = System.Type.GetType("DeNelle.Village.HeroLocomotion, DeNelle.Village");
+                if (t == null) return null;
+                return go.GetComponent(t) as MonoBehaviour;
+            }
+            catch { return null; }
         }
 
         // =====================================================================
@@ -339,11 +461,73 @@ namespace DeNelle.Core
         public static UniTask GoBattle(BattleParams p)
         {
             PendingBattle = p;
+
+            // RETURN-POINT (return-point feature): stash the scene + hero pose we are
+            // leaving BEFORE the ATB scene loads Single and tears this world down, so the
+            // round-trip returns to where the player fought instead of the Village2 default.
+            StashReturnPoint(p);
+
             return LoadSceneWithFade(ATBBattle);
         }
 
         /// <summary>The last <see cref="BattleParams"/> handed to <see cref="GoBattle"/>.</summary>
         public static BattleParams PendingBattle { get; private set; }
+
+        /// <summary>
+        /// RETURN-POINT (return-point feature): the scene + hero pose to restore after a
+        /// battle resolves. Set by <see cref="GoBattle"/>, read by BattleController to pick
+        /// the return scene, and consumed once by <see cref="RestoreReturnPointOnLoad"/>.
+        /// </summary>
+        public static ReturnPoint Return { get; set; }
+
+        /// <summary>
+        /// RETURN-POINT (return-point feature): captures the active scene name and the hero's
+        /// current world pose into <see cref="Return"/>, and pins
+        /// <see cref="BattleParams.ReturnScene"/> to that scene so the Village2 default can
+        /// never win on the far side. Fully null-guarded — if no hero is found the position is
+        /// skipped but the scene is still recorded. SceneRouter lives in DeNelle.Core, which
+        /// must not reference DeNelle.Village, so the hero is reached by the "Player" tag and
+        /// (fallback) by reflection — never a direct HeroLocomotion type reference.
+        /// </summary>
+        private static void StashReturnPoint(BattleParams p)
+        {
+            string activeScene = SceneManager.GetActiveScene().name;
+            var rp = new ReturnPoint { Scene = activeScene };
+
+            try
+            {
+                GameObject hero = null;
+                try { hero = GameObject.FindWithTag("Player"); }
+                catch { hero = null; } // "Player" tag may be undefined in some scenes
+
+                if (hero == null)
+                {
+                    // Fallback: locate the HeroLocomotion host by type name (reflection — no
+                    // Core→Village asmdef reference).
+                    var loco = FindHeroLocomotion();
+                    if (loco != null) hero = loco.gameObject;
+                }
+
+                if (hero != null)
+                {
+                    rp.Position = hero.transform.position;
+                    rp.Yaw = hero.transform.eulerAngles.y;
+                }
+                else
+                {
+                    Debug.LogWarning("[SceneRouter] Return-point: no hero found — scene stashed, position skipped.");
+                }
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning("[SceneRouter] Return-point stash threw (non-fatal): " + e.Message);
+            }
+
+            Return = rp;
+
+            // Pin the return scene so BattleParams' Village2 default can never win.
+            if (p != null) p.ReturnScene = activeScene;
+        }
 
         /// <summary>
         /// Go to the "Defend the Tower" (Patricia Light) shooter scene with a
