@@ -33,6 +33,15 @@ Owner model: agents provide suggested guidance; the orchestrator (CLI) has final
 
 **Notion sync (2026-06-13):** WO-410 (P0 0.1fps GC storm) triaged → linked to the pooling pass; WO-166/WO-178 backfilled as Done; WO-331 (WebGL SignalContentComplete crash) linked to the T-031 dialogue-defer fix. Owner closes WOs as playtest confirms.
 
+## WAVE 3 — post-NRE-fix retest (01:31Z session: ZERO exceptions, NRE storm gone, tree visible). RCA-verified resolutions:
+| Bug | Verified RCA (evidence) | Commit |
+|---|---|---|
+| **"no inventory"** (persisted through sort-order fix) | Player.log had ZERO HeroInventoryController/HeroEquipHud logs on BAG tap → `OpenInventory` never called → upstream of Open(). VillageHudController is re-spawned per scene load → its `InventoryRequested` is a new instance each time; the DDOL HeroEquipHud bound to the DYING HUD's event during the swap → BAG fired into a dead instance. | `ee80743` — static `InventoryRequestedStatic` (can't go stale) + diagnostic logs |
+| **`[ShopPanel] Opened for vendor '$structureId'`** / "oathkeeper" | `<<OpenShop $structureId>>` passed the literal (yarn bare-arg trap). "Oathkeeper" = the knight weapon `knight_oath`, NOT a vendor — shop stock was correct, generic title confused it. | `50608a3` — CurrentStructureId fallback + themed titles |
+| **Start-New Yarn reset** (owner request) | OnStartNew never reset save/dialogue state → stale Yarn `$`-toggles carried across runs. | `a006dbb` — ResetToNewGame + DialogueResetService (Clear VariableStorage + DialogueEventBus) |
+
+> Diagnostic logs now in the build: `[VillageHudController] BAG tapped → raising…`, `[HeroEquipHud] OpenInventory entered…`. If inventory STILL fails, these pinpoint the exact broken link.
+
 ## Counts
 - **Raw entries:** 210 — session_start 23, scene_loaded 114, possible_softlock 8 (noise), flagged 57, exception 4, error 4. **Signal = 65** (flagged + exception + error).
 - **Unique canonical tickets:** 38 (T-001 … T-038).
