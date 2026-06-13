@@ -217,5 +217,3 @@ namespace DeNelle.Village
         }
     }
 }
-</content>
-</invoke>
