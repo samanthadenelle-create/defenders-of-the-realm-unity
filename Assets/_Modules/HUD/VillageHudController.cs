@@ -760,7 +760,12 @@ namespace DeNelle.HUD
         // restore (same contract as SetCombatHudVisible).
         private void ApplyCombatGate()
         {
-            bool show = _waveCombatActive && _combatHudVisible;
+            // WO-428: HeroHealth deals contact damage EVERY frame regardless of wave phase,
+            // so gate the vitals/party cluster on "wave active OR hero hurt" — otherwise the
+            // HP bar is hidden exactly when it changes (hero damaged in the idle hub = bar
+            // never appears to move). Still hidden at full HP in a quiet hub (the T-004 intent).
+            bool heroHurt = _hpMax > 0f && _hpCurrent < _hpMax - 0.01f;
+            bool show = (_waveCombatActive || heroHurt) && _combatHudVisible;
             if (show == _lastCombatGate && _vitalsCluster != null
                 && _vitalsCluster.gameObject.activeSelf == show) return;
             _lastCombatGate = show;
