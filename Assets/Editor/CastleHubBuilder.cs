@@ -1166,14 +1166,19 @@ namespace DeNelle.Editor
                 var comp = connector.AddComponent(transType);
                 if (fScene    != null) fScene.SetValue(comp, sceneName);
                 if (fPos      != null) fPos.SetValue(comp, targetPosition);
-                if (fAdditive != null) fAdditive.SetValue(comp, false); // destination level = single-load
+                // ADDITIVE (was single-load — owner playtest 2026-06-13): single-load
+                // REPLACED the castle scene, which destroyed the hero (the crossing's
+                // WarpTo then had no player → black screen, "still has NO hero"). The
+                // working OuterWorld seam is additive so the hero survives + warps across;
+                // the raid design (RaidOutpostSystem) also uses additive Garrison_* scenes.
+                if (fAdditive != null) fAdditive.SetValue(comp, true);  // hero survives the crossing
                 // radius 28 was a GAME-BREAKER: 4 gates surround the ~35m spawn, so a few steps tripped one ->
                 // fade-to-black/yanked out. 12 only fires AT the gate; the widened nav lane (gate strip 7.5 / inner
                 // gap 8) lets the hero reach close enough to cross deliberately.
                 if (fRadius   != null) fRadius.SetValue(comp, 12f);
 
                 Log($"WireOutpostConnectors: placed OutpostConnector_{sceneName} at world {worldPos} " +
-                    $"(gate yaw {yaw}, entry {targetPosition}, single-load, radius 12).");
+                    $"(gate yaw {yaw}, entry {targetPosition}, additive, radius 12).");
             }
 
             Log($"WireOutpostConnectors: {OutpostConnectors.Length} inbound outpost seam(s) wired (W/N/E gates).");

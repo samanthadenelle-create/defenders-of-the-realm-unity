@@ -92,12 +92,21 @@ namespace DeNelle.Village
             // materials were extracted to external URP .mats at import; Demon/OgreMage ship raw
             // FbxSurfacePhong → magenta/unlit). Treat them like the orcs: same -90 yaw + attach the
             // runtime Tripo→URP material fixer. By name so we never blanket-rotate the rig class.
-            bool tripoForwardX = EnemyAnimatorFactory.RigFor(model) == EnemyRig.OrcWarband
-                || model == "Demon" || model == "OgreMage";
-            if (tripoForwardX)
+            if (EnemyAnimatorFactory.RigFor(model) == EnemyRig.OrcWarband)
+            {
+                // Orc Warband: upright already, just a -90 yaw so +X-forward faces +Z.
                 skinOpts.LocalRotation = Quaternion.Euler(0f, -90f, 0f);
-            if (model == "Demon" || model == "OgreMage")
+            }
+            else if (model == "Demon" || model == "OgreMage")
+            {
+                // WIGHT FIX (owner playtest 2026-06-13): unlike the orcs, these Tripo
+                // exports import LYING FACE-DOWN — a pure yaw left them flat. Pitch up
+                // with X=-90 to stand them, plus the -90 yaw to face like the orcs/heroes.
+                // If they end up standing-but-facing-wrong, tune the Y; if still face-down,
+                // flip X to +90 (the export's pitch sign is what's uncertain, not the need).
+                skinOpts.LocalRotation = Quaternion.Euler(-90f, -90f, 0f);
                 skinOpts.FixTripoMaterials = true;   // raw Phong → needs the runtime URP fixer
+            }
             var vis = VisualFactory.Skin(go.transform, "Enemies/" + model, skinOpts);
             if (vis != null)
             {

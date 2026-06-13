@@ -12,12 +12,12 @@ back to flow-first triage, not a patch.
 | 4 | **Vendor categories + economy** | Each vendor lists **only its type** (armorer=armor, smith=weapons, market=potions); buying **deducts** the wallet and the **HUD number drops visibly**. | `VendorStockContract` + `HeartHudBridge` economy push | |
 | 5 | **Hero faces target** | Hero **turns to face** the enemy on attack/cast (incl. AoE/Meteor at range). | `HeroAbilities.FaceCastTarget` via `ResolveBlastCentre` | |
 | 6 | **Tree of Life grounded** | Tree sits **on the ground**, plaza walkable around it (no giant invisible blocker). | Baked trunk capsule (Heart collider-scale fix) | ✅ **PASS** |
-| 7 | **Knight no extreme-range snipe** | Knight melee (Strike/Snare) only connects **in reach** — no cross-map hits. | `HeroAbilities` InReach gate (WO-398) | 🔧 **FIX APPLIED — retest.** RCA: reach gated from `atk` (=target's own pos, ~0) not the hero → always passed. Changed `atk`→`origin` at HeroAbilities.cs:428/354. |
+| 7 | **Knight no extreme-range snipe** | Knight melee (Strike/Snare) only connects **in reach** — no cross-map hits. | `HeroAbilities` InReach gate (WO-398) | ✅ **PASS** (build 3, owner-confirmed) — `atk`→`origin` reach fix. |
 | 8 | **Enemy variety** | A wave is **mixed** (goblins/orcs/skeletons/etc.), not all one type. | enemy roster / spawn variety | 🔧 **FIX APPLIED — retest.** "Wight" = Demon/OgreMage (new Tripo FBX): shipped raw Phong (magenta) + no rotation. Added `-90°` yaw + `FixTripoMaterials=true` for both in EnemyFactory.cs. |
 | 9 | **Build mode / tower placement** | Place an **archer tower** — it shows the **tower model**, NOT a lumber pile. Note any tower that still looks like a wood stack. | #22 catalog `Tower_Medieval_Wood`→`Tower_Castle_Round` | ✅ **PASS** |
 | 10 | **Through-wall targeting** | Hero **cannot** target/hit an enemy through a wall (LoS blocked). | `HeroTargetIndicator.HasLoS` linecast on Structure layer (WO-449) | ✅ **PASS** |
 | 11 | **Dialogue options clean** | Yarn option buttons are **readable, no overlap/ghosting**. | dialogue panel | ✅ **PASS** |
-| 12 | **General feel** | No **invisible walls** near south gate (or note where you snag); **return-point** lands you back where you left after a battle; flag **any new fade/black** screens. | seam nav lane + `SceneRouter` return-point | ✅ **invisible walls fixed**; no accidental fades. (return-point not yet retested — blocked on the seam fix to cross.) |
+| 12 | **General feel** | No **invisible walls** near south gate (or note where you snag); **return-point** lands you back where you left after a battle; flag **any new fade/black** screens. | seam nav lane + `SceneRouter` return-point | ✅ **invisible walls fixed**; no accidental fades; **return-point PASS** (owner: "respawned at correct spot"). |
 
 ## Known-open going in (expected, not regressions)
 - **South-gate ~34m nav reach:** the hero is a NavMeshAgent and stops at the navmesh edge; if
