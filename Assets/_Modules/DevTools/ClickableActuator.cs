@@ -65,20 +65,34 @@ namespace DeNelle.DevTools
         /// Actuate every safe, interactable button on the live surfaces. When
         /// <paramref name="uiToolkitRoot"/> is supplied, only that UI Toolkit
         /// subtree is swept for UITK buttons (uGUI is always swept globally);
-        /// pass null to sweep every UIDocument in the scene. Returns the number
-        /// of buttons clicked.
+        /// pass null to sweep every UIDocument in the scene. When <paramref name="rng"/>
+        /// is supplied (fleet mode), the button lists are shuffled with it so
+        /// different bots click in different orders. Returns the number of buttons
+        /// clicked.
         /// </summary>
-        public static int ActuateAll(VisualElement uiToolkitRoot = null)
+        public static int ActuateAll(VisualElement uiToolkitRoot = null, System.Random rng = null)
         {
             int clicked = 0;
-            clicked += ActuateUGui();
-            clicked += ActuateUiToolkit(uiToolkitRoot);
+            clicked += ActuateUGui(rng);
+            clicked += ActuateUiToolkit(uiToolkitRoot, rng);
             FlowTrace.Step("Auto", $"ClickableActuator: actuated {clicked} clickable(s).");
             return clicked;
         }
 
+        // Fisher-Yates in-place shuffle (seeded). No-op when rng is null so the
+        // default single-run order is preserved.
+        private static void Shuffle<T>(IList<T> list, System.Random rng)
+        {
+            if (rng == null || list == null) return;
+            for (int i = list.Count - 1; i > 0; i--)
+            {
+                int j = rng.Next(i + 1);
+                T tmp = list[i]; list[i] = list[j]; list[j] = tmp;
+            }
+        }
+
         // ── uGUI (UnityEngine.UI.Button) ─────────────────────────────────────
-        private static int ActuateUGui()
+        private static int ActuateUGui(System.Random rng = null)
         {
             int clicked = 0;
             UGuiButton[] buttons;
@@ -95,6 +109,7 @@ namespace DeNelle.DevTools
             }
 
             if (buttons == null) return 0;
+            Shuffle(buttons, rng);   // seeded click order (no-op when rng null)
             foreach (var b in buttons)
             {
                 if (clicked >= MaxClicksPerSurface) break;
@@ -115,7 +130,7 @@ namespace DeNelle.DevTools
         }
 
         // ── UI Toolkit (UnityEngine.UIElements.Button) ───────────────────────
-        private static int ActuateUiToolkit(VisualElement explicitRoot)
+        private static int ActuateUiToolkit(VisualElement explicitRoot, System.Random rng = null)
         {
             int clicked = 0;
 
@@ -157,6 +172,7 @@ namespace DeNelle.DevTools
                     continue;
                 }
 
+                Shuffle(uiButtons, rng);   // seeded click order (no-op when rng null)
                 foreach (var b in uiButtons)
                 {
                     if (clicked >= MaxClicksPerSurface) break;

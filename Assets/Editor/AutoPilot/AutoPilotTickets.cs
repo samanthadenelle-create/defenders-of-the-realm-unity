@@ -72,9 +72,41 @@ namespace DeNelle.Editor
             public string Kind;          // the raw break kind
             public string Sample;        // first raw message seen
             public string NormalizedKey; // dedupe key
-            public int Count;
+            public int Count;            // total raw occurrences across all runs
             public string Scene;
             public string Stack;
+            // DISTINCT runs that reproduced this break — the hit-rank signal. A break
+            // seen by many runs is high-priority; a 1-of-N fluke is low.
+            public readonly HashSet<string> Runs = new HashSet<string>();
+        }
+
+        // One scanned source: the root run, or a fleet run dir (autopilot-runs/<id>).
+        private struct RunSource
+        {
+            public string Id;
+            public string BreakLog;
+            public string SummaryPath;
+        }
+
+        // Find-or-create a ticket for a dedupe key, seeding the immutable fields once.
+        private static Ticket GetOrAdd(Dictionary<string, Ticket> tickets, string key,
+            string category, string kind, string sample, string norm, string scene, string stack)
+        {
+            if (!tickets.TryGetValue(key, out var t))
+            {
+                t = new Ticket
+                {
+                    Category = category,
+                    Kind = kind,
+                    Sample = sample,
+                    NormalizedKey = norm,
+                    Count = 0,
+                    Scene = scene,
+                    Stack = stack,
+                };
+                tickets[key] = t;
+            }
+            return t;
         }
 
         public static void Emit()
@@ -83,96 +115,124 @@ namespace DeNelle.Editor
             log.AppendLine("=== AutoPilotTickets: break-log + summary -> triaged tickets ===");
 
             string dir = Application.persistentDataPath;
-            string breakLog = Path.Combine(dir, "break-log.jsonl");
-            string summaryPath = Path.Combine(dir, "autopilot-summary.json");
 
-            // ── load summary (best-effort) ───────────────────────────────────
-            RunSummary summary = default;
-            bool haveSummary = false;
+            // ── enumerate every run source ───────────────────────────────────
+            // FLEET: each headless instance launched with --run=<id> wrote into
+            // persistentDataPath/autopilot-runs/<id>/. We scan ALL of them plus the
+            // root (a lone, non-fleet run). Each source = one "run" for hit-ranking.
+            var runs = new List<RunSource>();
+            // root (single-run / no --run)
+            runs.Add(new RunSource
+            {
+                Id = "root",
+                BreakLog = Path.Combine(dir, "break-log.jsonl"),
+                SummaryPath = Path.Combine(dir, "autopilot-summary.json"),
+            });
             try
             {
-                if (File.Exists(summaryPath))
+                string runsRoot = Path.Combine(dir, "autopilot-runs");
+                if (Directory.Exists(runsRoot))
                 {
-                    summary = JsonUtility.FromJson<RunSummary>(File.ReadAllText(summaryPath));
-                    haveSummary = true;
-                    log.AppendLine($"summary: {summary.totalSeconds:0.0}s, aborted={summary.aborted}, " +
-                                   $"{(summary.phases != null ? summary.phases.Length : 0)} phase(s)");
+                    foreach (var runDir in Directory.GetDirectories(runsRoot))
+                    {
+                        runs.Add(new RunSource
+                        {
+                            Id = Path.GetFileName(runDir),
+                            BreakLog = Path.Combine(runDir, "break-log.jsonl"),
+                            SummaryPath = Path.Combine(runDir, "autopilot-summary.json"),
+                        });
+                    }
                 }
-                else log.AppendLine($"summary: NOT FOUND ({summaryPath})");
             }
-            catch (Exception ex) { log.AppendLine("summary parse error: " + ex.Message); }
+            catch (Exception ex) { log.AppendLine("run-dir scan error: " + ex.Message); }
 
-            // ── load + group breaks ──────────────────────────────────────────
             var tickets = new Dictionary<string, Ticket>();
             int parsedLines = 0, badLines = 0;
-            if (File.Exists(breakLog))
+            int runsWithSummary = 0, runsWithBreakLog = 0;
+            // The "representative" summary shown in the report header: prefer the root,
+            // else the first run that produced one. (Per-run summaries differ.)
+            RunSummary summary = default;
+            bool haveSummary = false;
+
+            foreach (var run in runs)
             {
-                foreach (var line in File.ReadAllLines(breakLog))
+                // summary (best-effort, per run)
+                RunSummary runSummary = default;
+                bool runHasSummary = false;
+                try
                 {
-                    if (string.IsNullOrWhiteSpace(line)) continue;
-                    BreakRecord rec;
-                    try { rec = JsonUtility.FromJson<BreakRecord>(line); }
-                    catch { badLines++; continue; }
-                    if (string.IsNullOrEmpty(rec.kind)) { badLines++; continue; }
-                    parsedLines++;
-
-                    string category = Classify(rec);
-                    if (category == null) continue;   // not ticket-worthy (session_start, scene_loaded)
-
-                    string norm = Normalize(rec.message);
-                    string key = rec.kind + "|" + category + "|" + norm;
-                    if (!tickets.TryGetValue(key, out var t))
+                    if (File.Exists(run.SummaryPath))
                     {
-                        t = new Ticket
-                        {
-                            Category = category,
-                            Kind = rec.kind,
-                            Sample = rec.message ?? "",
-                            NormalizedKey = norm,
-                            Count = 0,
-                            Scene = rec.scene ?? "?",
-                            Stack = rec.stack ?? "",
-                        };
-                        tickets[key] = t;
+                        runSummary = JsonUtility.FromJson<RunSummary>(File.ReadAllText(run.SummaryPath));
+                        runHasSummary = true;
+                        runsWithSummary++;
+                        if (!haveSummary) { summary = runSummary; haveSummary = true; }
                     }
-                    t.Count++;
                 }
-                log.AppendLine($"break-log: {parsedLines} parsed, {badLines} unparseable, {tickets.Count} unique ticket(s)");
-            }
-            else log.AppendLine($"break-log: NOT FOUND ({breakLog})");
+                catch (Exception ex) { log.AppendLine($"summary parse error [{run.Id}]: " + ex.Message); }
 
-            // ── phase failures from the summary become tickets too ───────────
-            if (haveSummary && summary.phases != null)
-            {
-                foreach (var p in summary.phases)
+                // break-log (per run)
+                if (File.Exists(run.BreakLog))
                 {
-                    if (p.status == "ok") continue;
-                    string category = p.status == "timeout" ? "hang" : "bug";
-                    string key = "phase|" + category + "|" + p.phase;
-                    if (!tickets.TryGetValue(key, out var t))
+                    runsWithBreakLog++;
+                    foreach (var line in File.ReadAllLines(run.BreakLog))
                     {
-                        t = new Ticket
-                        {
-                            Category = category,
-                            Kind = "phase_" + p.status,
-                            Sample = $"AutoPilot phase '{p.phase}' {p.status} after {p.seconds:0.0}s" +
-                                     (string.IsNullOrEmpty(p.detail) ? "" : $" ({p.detail})"),
-                            NormalizedKey = p.phase,
-                            Count = 0,
-                            Scene = "?",
-                            Stack = "",
-                        };
-                        tickets[key] = t;
+                        if (string.IsNullOrWhiteSpace(line)) continue;
+                        BreakRecord rec;
+                        try { rec = JsonUtility.FromJson<BreakRecord>(line); }
+                        catch { badLines++; continue; }
+                        if (string.IsNullOrEmpty(rec.kind)) { badLines++; continue; }
+                        parsedLines++;
+
+                        string category = Classify(rec);
+                        if (category == null) continue;   // breadcrumb (session_start/scene_loaded)
+
+                        string norm = Normalize(rec.message);
+                        string key = rec.kind + "|" + category + "|" + norm;
+                        var t = GetOrAdd(tickets, key, category, rec.kind, rec.message ?? "",
+                                         norm, rec.scene ?? "?", rec.stack ?? "");
+                        t.Count++;
+                        t.Runs.Add(run.Id);
                     }
-                    t.Count++;
+                }
+
+                // phase failures from this run's summary become tickets too
+                if (runHasSummary && runSummary.phases != null)
+                {
+                    foreach (var p in runSummary.phases)
+                    {
+                        if (p.status == "ok") continue;
+                        string category = p.status == "timeout" ? "hang" : "bug";
+                        string key = "phase|" + category + "|" + p.phase;
+                        var t = GetOrAdd(tickets, key, category, "phase_" + p.status,
+                            $"AutoPilot phase '{p.phase}' {p.status} after {p.seconds:0.0}s" +
+                            (string.IsNullOrEmpty(p.detail) ? "" : $" ({p.detail})"),
+                            p.phase, "?", "");
+                        t.Count++;
+                        t.Runs.Add(run.Id);
+                    }
                 }
             }
+
+            int totalRuns = runsWithBreakLog > 0 ? runsWithBreakLog : runs.Count;
+            log.AppendLine($"runs scanned: {runs.Count} source(s) " +
+                           $"({runsWithBreakLog} with break-log, {runsWithSummary} with summary)");
+            log.AppendLine($"break-log: {parsedLines} parsed, {badLines} unparseable, {tickets.Count} unique ticket(s)");
 
             // ── write outputs ────────────────────────────────────────────────
+            // Rank: by DISTINCT runs reproducing (desc) — a break hit by many runs is
+            // higher priority — then by severity, then raw count.
             var sorted = new List<Ticket>(tickets.Values);
-            sorted.Sort((a, b) => Severity(a.Category).CompareTo(Severity(b.Category)));
+            sorted.Sort((a, b) =>
+            {
+                int sev = Severity(a.Category).CompareTo(Severity(b.Category));
+                if (sev != 0) return sev;
+                int byRuns = b.Runs.Count.CompareTo(a.Runs.Count);
+                if (byRuns != 0) return byRuns;
+                return b.Count.CompareTo(a.Count);
+            });
 
-            try { WriteMarkdown(sorted, summary, haveSummary); WriteJson(sorted); }
+            try { WriteMarkdown(sorted, summary, haveSummary, totalRuns, runsWithSummary, runs.Count); WriteJson(sorted, totalRuns); }
             catch (Exception ex) { log.AppendLine("write error: " + ex.Message); }
 
             int bugs = 0, hangs = 0, warns = 0, notes = 0;
@@ -194,7 +254,7 @@ namespace DeNelle.Editor
             // OK is "the emitter ran and produced the report" — bugs found are still a
             // successful EMIT (the run did its job). FAIL is reserved for the emitter
             // being unable to produce tickets at all (no inputs).
-            if (!File.Exists(breakLog) && !haveSummary)
+            if (runsWithBreakLog == 0 && !haveSummary)
             {
                 log.AppendLine("AUTOPILOT_TICKETS_FAIL");
                 Debug.LogError(log.ToString());
@@ -253,7 +313,8 @@ namespace DeNelle.Editor
             return s.ToLowerInvariant();
         }
 
-        private static void WriteMarkdown(List<Ticket> tickets, RunSummary summary, bool haveSummary)
+        private static void WriteMarkdown(List<Ticket> tickets, RunSummary summary, bool haveSummary,
+                                          int totalRuns, int runsWithSummary, int sourceCount)
         {
             Directory.CreateDirectory("Builds");
             var sb = new StringBuilder();
@@ -261,10 +322,14 @@ namespace DeNelle.Editor
             sb.AppendLine();
             sb.AppendLine($"_Generated {DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture)}_");
             sb.AppendLine();
+            sb.AppendLine($"**Fleet coverage:** {sourceCount} run source(s) scanned, " +
+                          $"{totalRuns} with a break-log, {runsWithSummary} produced a summary. " +
+                          "Each ticket is ranked by how many DISTINCT runs reproduced it.");
+            sb.AppendLine();
 
             if (haveSummary)
             {
-                sb.AppendLine("## Run summary");
+                sb.AppendLine("## Sample run summary (first run found)");
                 sb.AppendLine();
                 sb.AppendLine($"- Total: {summary.totalSeconds:0.0}s  |  aborted: {summary.aborted}");
                 if (summary.phases != null)
@@ -292,7 +357,8 @@ namespace DeNelle.Editor
                         sb.AppendLine($"### {t.Category.ToUpperInvariant()}");
                         sb.AppendLine();
                     }
-                    sb.AppendLine($"- **[{t.Kind}] x{t.Count}** (scene: {t.Scene})");
+                    int k = t.Runs.Count;
+                    sb.AppendLine($"- **[{t.Kind}] x{t.Count}** — reproduced in {k}/{totalRuns} runs (scene: {t.Scene})");
                     sb.AppendLine($"  - {t.Sample}");
                     if (!string.IsNullOrEmpty(t.Stack))
                     {
@@ -305,7 +371,7 @@ namespace DeNelle.Editor
             File.WriteAllText(Path.Combine("Builds", "autopilot-tickets.md"), sb.ToString());
         }
 
-        private static void WriteJson(List<Ticket> tickets)
+        private static void WriteJson(List<Ticket> tickets, int totalRuns)
         {
             Directory.CreateDirectory("Builds");
             // Hand-roll the JSON array (JsonUtility can't serialize a bare List<T>
@@ -320,6 +386,8 @@ namespace DeNelle.Editor
                 sb.Append("\"category\":").Append(JsonStr(t.Category)).Append(",");
                 sb.Append("\"kind\":").Append(JsonStr(t.Kind)).Append(",");
                 sb.Append("\"count\":").Append(t.Count).Append(",");
+                sb.Append("\"reproducedInRuns\":").Append(t.Runs.Count).Append(",");
+                sb.Append("\"totalRuns\":").Append(totalRuns).Append(",");
                 sb.Append("\"scene\":").Append(JsonStr(t.Scene)).Append(",");
                 sb.Append("\"message\":").Append(JsonStr(t.Sample));
                 sb.Append("}");

@@ -67,8 +67,20 @@ namespace DeNelle.DevTools
         private const float ExitTimeout         = 30f;   // walk into the south exit
         private const float SettleSeconds        = 0.4f;  // brief pause after an open/close
 
+        // Default seed when no --seed arg is supplied — a fixed value keeps a lone
+        // run fully deterministic. Fleet runs pass distinct seeds to diverge paths.
+        public const int DefaultSeed = 12345;
+
         // Set true when started from the dev-panel button — then we DON'T quit on done.
         private bool _quitOnDone = true;
+
+        // Fleet variation: a seeded RNG shuffles the work order within phases (gates,
+        // vendors, panels, click order) so different seeds explore different paths.
+        private System.Random _rng = new System.Random(DefaultSeed);
+        private int _seed = DefaultSeed;
+        // When set (fleet mode --run=<id>), summary is written under
+        // persistentDataPath/autopilot-runs/<id>/ alongside this run's break-log.
+        private string _runId;
 
         private HeroLocomotion _hero;
         private float _runStartRealtime;
@@ -83,7 +95,21 @@ namespace DeNelle.DevTools
         /// </summary>
         public void Begin(bool quitOnDone)
         {
+            Begin(quitOnDone, DefaultSeed, null);
+        }
+
+        /// <summary>
+        /// Fleet-aware start. <paramref name="seed"/> drives the per-run path variation
+        /// (work-order shuffles + click order); <paramref name="runId"/>, when non-null,
+        /// namespaces the summary into persistentDataPath/autopilot-runs/&lt;id&gt;/ to
+        /// match the BreakCaptureHarness output for the same run.
+        /// </summary>
+        public void Begin(bool quitOnDone, int seed, string runId)
+        {
             _quitOnDone = quitOnDone;
+            _seed = seed;
+            _runId = string.IsNullOrEmpty(runId) ? null : runId;
+            _rng = new System.Random(seed);
             StartCoroutine(RunAll());
         }
 
@@ -101,7 +127,7 @@ namespace DeNelle.DevTools
             if (_started) yield break;
             _started = true;
             _runStartRealtime = Time.realtimeSinceStartup;
-            FlowTrace.Step("Auto", $"AutoPilot START (quitOnDone={_quitOnDone}, scene='{ActiveScene()}').");
+            FlowTrace.Step("Auto", $"AutoPilot START (quitOnDone={_quitOnDone}, seed={_seed}, run='{_runId ?? "<none>"}', scene='{ActiveScene()}').");
 
             yield return RunPhase("ResolveHero", ResolveHero(), abortIfFailed: true);
             // If the hero never resolved, RunAll short-circuits to the summary.
@@ -255,6 +281,7 @@ namespace DeNelle.DevTools
                 _lastDetail = "0 gates";
                 yield break;
             }
+            Shuffle(gates);   // seeded order so different bots probe gates differently
             FlowTrace.Step("Auto", $"WalkToEachGate: {gates.Length} gate(s) found.");
 
             int reached = 0;
@@ -319,6 +346,7 @@ namespace DeNelle.DevTools
                 _lastDetail = "0 vendors";
                 yield break;
             }
+            Shuffle(buildings);   // seeded vendor order
             FlowTrace.Step("Auto", $"OpenEachVendor: {buildings.Length} building(s) found.");
 
             int opened = 0;
@@ -361,7 +389,7 @@ namespace DeNelle.DevTools
                     if (surfaceOpened)
                     {
                         FlowTrace.Step("Auto", $"OpenEachVendor: '{name}' opened a structure dialogue.");
-                        ClickableActuator.ActuateAll();
+                        ClickableActuator.ActuateAll(null, _rng);
                         yield return Wait(SettleSeconds);
                         DialogueService.Stop();
                         opened++;
@@ -379,7 +407,7 @@ namespace DeNelle.DevTools
                         if (PanelManager.AnyOpen)
                         {
                             FlowTrace.Step("Auto", $"OpenEachVendor: '{name}' opened BuildingUpgrade panel.");
-                            ClickableActuator.ActuateAll();
+                            ClickableActuator.ActuateAll(null, _rng);
                             yield return Wait(SettleSeconds);
                             PanelManager.CloseOpen();
                             opened++;
@@ -404,7 +432,11 @@ namespace DeNelle.DevTools
         private IEnumerator OpenEachHUDPanel()
         {
             int opened = 0, registered = 0;
-            foreach (PanelId id in Enum.GetValues(typeof(PanelId)))
+            // Seeded panel order so different bots open panels in different sequences.
+            var panelIds = new List<PanelId>();
+            foreach (PanelId pid in Enum.GetValues(typeof(PanelId))) panelIds.Add(pid);
+            Shuffle(panelIds);
+            foreach (PanelId id in panelIds)
             {
                 if (!PanelRouter.IsRegistered(id)) continue;
                 registered++;
@@ -428,7 +460,7 @@ namespace DeNelle.DevTools
                     opened++;
                 }
 
-                ClickableActuator.ActuateAll();
+                ClickableActuator.ActuateAll(null, _rng);
                 yield return Wait(SettleSeconds);
 
                 PanelManager.CloseOpen();
@@ -536,7 +568,17 @@ namespace DeNelle.DevTools
                     aborted = _abortRun,
                     phases = _phases.ToArray(),
                 };
-                string path = Path.Combine(Application.persistentDataPath, "autopilot-summary.json");
+                // Fleet mode: write into persistentDataPath/autopilot-runs/<id>/ so it
+                // sits beside this run's break-log.jsonl and the aggregator can count
+                // it as one run's coverage. Default (no --run) -> root, unchanged.
+                string baseDir = Application.persistentDataPath;
+                string outDir = baseDir;
+                if (!string.IsNullOrEmpty(_runId))
+                {
+                    outDir = Path.Combine(Path.Combine(baseDir, "autopilot-runs"), _runId);
+                    Directory.CreateDirectory(outDir);
+                }
+                string path = Path.Combine(outDir, "autopilot-summary.json");
                 File.WriteAllText(path, JsonUtility.ToJson(summary, true));
                 FlowTrace.Step("Auto", $"AutoPilot summary written -> {path}");
             }
@@ -558,6 +600,18 @@ namespace DeNelle.DevTools
         {
             a.y = 0f; b.y = 0f;
             return Vector3.Distance(a, b);
+        }
+
+        // Seeded Fisher-Yates in-place shuffle of the per-phase work order so distinct
+        // seeds explore distinct paths. Uses _rng (seeded in Begin). Null-safe.
+        private void Shuffle<T>(IList<T> list)
+        {
+            if (list == null || _rng == null) return;
+            for (int i = list.Count - 1; i > 0; i--)
+            {
+                int j = _rng.Next(i + 1);
+                T tmp = list[i]; list[i] = list[j]; list[j] = tmp;
+            }
         }
 
         // Realtime wait — never freezes under timeScale=0 (F8 flag flow).

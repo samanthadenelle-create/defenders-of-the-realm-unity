@@ -54,6 +54,7 @@ namespace DeNelle.Core.Diagnostics
         readonly HashSet<string> _seen = new HashSet<string>();
         int _shotCount;
         string _logPath;
+        string _outDir;        // per-run output dir (persistentDataPath/autopilot-runs/<id>) or persistentDataPath
         bool _fileOk;
 
         Transform _hero;
@@ -98,7 +99,14 @@ namespace DeNelle.Core.Diagnostics
             try
             {
                 _fileOk = Application.platform != RuntimePlatform.WebGLPlayer;
-                _logPath = Path.Combine(Application.persistentDataPath, "break-log.jsonl");
+
+                // Per-run output namespacing for FLEET mode: when launched with
+                // --run=<id> (one of N parallel headless bots), redirect the
+                // break log + screenshots into persistentDataPath/autopilot-runs/<id>/
+                // so concurrent instances don't CLOBBER one shared break-log.jsonl.
+                // No --run -> unchanged default path (normal single-player behavior).
+                _outDir = ResolveOutDir();
+                _logPath = Path.Combine(_outDir, "break-log.jsonl");
                 _lastProgressTime = Time.realtimeSinceStartup;
                 _nextWatchdog = Time.realtimeSinceStartup + WatchdogInterval;
 
@@ -110,6 +118,51 @@ namespace DeNelle.Core.Diagnostics
                 Record("session_start", "BreakCaptureHarness online", null, screenshot: false);
             }
             catch (Exception e) { SafeWarn(e); }
+        }
+
+        // Resolve the output directory: persistentDataPath/autopilot-runs/<id> when a
+        // --run=<id> arg is present (fleet mode), else persistentDataPath (default).
+        // Fully guarded — a diagnostic must never throw at startup; on any failure we
+        // fall back to the plain persistentDataPath.
+        string ResolveOutDir()
+        {
+            string baseDir = Application.persistentDataPath;
+            try
+            {
+                string runId = ParseRunId();
+                if (string.IsNullOrEmpty(runId)) return baseDir;
+
+                string dir = Path.Combine(Path.Combine(baseDir, "autopilot-runs"), runId);
+                Directory.CreateDirectory(dir);
+                Debug.Log($"[BreakCapture] fleet run --run={runId}: namespaced output -> {dir}");
+                return dir;
+            }
+            catch (Exception e) { SafeWarn(e); return baseDir; }
+        }
+
+        // Parse --run=<id> from the command line (sanitized to a safe folder token).
+        static string ParseRunId()
+        {
+            try
+            {
+                var args = Environment.GetCommandLineArgs();
+                if (args == null) return null;
+                foreach (var a in args)
+                {
+                    if (string.IsNullOrEmpty(a)) continue;
+                    if (a.StartsWith("--run=", StringComparison.OrdinalIgnoreCase))
+                    {
+                        string id = a.Substring("--run=".Length).Trim();
+                        if (string.IsNullOrEmpty(id)) return null;
+                        var clean = new StringBuilder(id.Length);
+                        foreach (char c in id)
+                            clean.Append(char.IsLetterOrDigit(c) || c == '-' || c == '_' ? c : '_');
+                        return clean.ToString();
+                    }
+                }
+            }
+            catch { }
+            return null;
         }
 
         void OnDestroy()
@@ -196,7 +249,7 @@ namespace DeNelle.Core.Diagnostics
         {
             if (_noteMode) return;                                 // already flagging
             // screenshot the CLEAN frame first (the note box draws next frame)
-            try { ScreenCapture.CaptureScreenshot(Path.Combine(Application.persistentDataPath, $"flag_{_flagCount:00}.png")); }
+            try { ScreenCapture.CaptureScreenshot(Path.Combine(_outDir ?? Application.persistentDataPath, $"flag_{_flagCount:00}.png")); }
             catch { }
             _noteBuffer = "";
             _noteShowFrame = Time.frameCount + 1;
@@ -292,7 +345,7 @@ namespace DeNelle.Core.Diagnostics
             {
                 try
                 {
-                    string shot = Path.Combine(Application.persistentDataPath, $"break_{_shotCount:00}_{kind}.png");
+                    string shot = Path.Combine(_outDir ?? Application.persistentDataPath, $"break_{_shotCount:00}_{kind}.png");
                     ScreenCapture.CaptureScreenshot(shot);
                     _shotCount++;
                 }

@@ -52,8 +52,14 @@ namespace DeNelle.DevTools
                 go.hideFlags = HideFlags.HideAndDontSave;
                 var driver = go.AddComponent<AutoPilotDriver>();
 
-                FlowTrace.Step("Auto", "AutoPilotInstaller: --autopilot requested — starting bot (quitOnDone=true).");
-                driver.Begin(quitOnDone: true);
+                // Fleet support: each parallel instance gets its own --seed (varies the
+                // explore path) and --run=<id> (namespaces its output folder). Defaults
+                // keep a lone run deterministic + writing to the root path.
+                int seed = ParseInt("--seed=", AutoPilotDriver.DefaultSeed);
+                string runId = ParseString("--run=");
+
+                FlowTrace.Step("Auto", $"AutoPilotInstaller: --autopilot requested — starting bot (quitOnDone=true, seed={seed}, run='{runId ?? "<none>"}').");
+                driver.Begin(quitOnDone: true, seed: seed, runId: runId);
             }
             catch (Exception e)
             {
@@ -84,6 +90,42 @@ namespace DeNelle.DevTools
             catch { }
 
             return false;
+        }
+
+        /// <summary>Parse an int CLI arg of the form "<prefix><n>" (e.g. "--seed=7"); fallback if absent/bad.</summary>
+        private static int ParseInt(string prefix, int fallback)
+        {
+            try
+            {
+                var args = Environment.GetCommandLineArgs();
+                if (args != null)
+                    foreach (var a in args)
+                        if (!string.IsNullOrEmpty(a) && a.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                        {
+                            string v = a.Substring(prefix.Length).Trim();
+                            if (int.TryParse(v, out int n)) return n;
+                        }
+            }
+            catch { }
+            return fallback;
+        }
+
+        /// <summary>Parse a string CLI arg of the form "<prefix><value>" (e.g. "--run=3"); null if absent/empty.</summary>
+        private static string ParseString(string prefix)
+        {
+            try
+            {
+                var args = Environment.GetCommandLineArgs();
+                if (args != null)
+                    foreach (var a in args)
+                        if (!string.IsNullOrEmpty(a) && a.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                        {
+                            string v = a.Substring(prefix.Length).Trim();
+                            return string.IsNullOrEmpty(v) ? null : v;
+                        }
+            }
+            catch { }
+            return null;
         }
     }
 }
