@@ -450,21 +450,31 @@ namespace DeNelle.Village
 
                 case AbilityEffect.Aoe:
                 case AbilityEffect.Cleave:
-                    // blast centred on the aim point (the crosshair cluster)
-                    Blast(atk, def.Range, dmg, element, def.Freeze);
-                    SpawnVfx(atk, def, def.Range);
+                {
+                    // WO-398 follow-up: cap the blast CENTRE to the caster's cast reach so a
+                    // melee class (knight Bulwark Slam / Lantern Charge) can't centre its slam
+                    // on the 45m auto-reticle target — it now lands on a nearby foe / itself.
+                    // Ranged classes have a 45m reach so this is a no-op for them (aim in range).
+                    Vector3 centre = ResolveBlastCentre(atk, origin);
+                    Blast(centre, def.Range, dmg, element, def.Freeze);
+                    SpawnVfx(centre, def, def.Range);
                     break;
+                }
 
                 case AbilityEffect.Meteor:
                 {
-                    // blast centred on the nearest enemy cluster to the aim point
-                    var foe = NearestHostile(atk, float.MaxValue);
+                    // blast centred on the nearest enemy cluster to the aim point — WO-398
+                    // follow-up: bounded by the caster's cast reach (no-op at 45m for ranged
+                    // casters like the Mage; caps any melee meteor to its short reach).
+                    var foe = NearestHostile(atk, CastReach());
                     // WO-125 Bug 1: Meteor's 1000u sweep already encloses the orbiting
                     // dragon (it's a layer-8 IDamageable with a collider), so this is a
                     // belt-and-braces fallback for the rare case the sweep misses it.
                     if (foe == null && AimPointOverride == null)
                         foe = LiveBoss();
-                    Vector3 target = foe != null ? foe.WorldPosition : atk;
+                    // WO-398 follow-up: when no foe is in reach, fall back to the reach-capped
+                    // centre (self for melee, the in-reach aim for ranged) — never the raw 45m aim.
+                    Vector3 target = foe != null ? foe.WorldPosition : ResolveBlastCentre(atk, origin);
                     // DEF (combat feel): hurl a visible orb to the target, then EXPLODE on arrival
                     // (blast + impact VFX), so the ultimate reads as a meteor streaking in and
                     // landing rather than an instant area-pop. Same proven projectile pattern as
@@ -544,6 +554,53 @@ namespace DeNelle.Village
         {
             if (target == null || !target.IsAlive) return false;
             return (target.WorldPosition - origin).sqrMagnitude <= maxRange * maxRange;
+        }
+
+        // ── WO-398 follow-up: gate AoE/Cleave/Meteor blast CENTRE by cast reach ──
+        // The snipe WO-398 missed: HeroTargetIndicator feeds AimPointOverride the 45m
+        // auto-reticle target (Defend-the-Tower's real crosshair setter is gone — removed
+        // 2026-06-09 — so AimPointOverride is ALWAYS the reticle in the live game). The
+        // Strike/Snare branch was gated by InReach, but Aoe/Cleave/Meteor blasted directly
+        // on that 45m point, so the Knight's Bulwark Slam (W, cleave) / Lantern Charge (R)
+        // landed their blast around an enemy 45m away — a melee "slam" sniping across the
+        // map. These helpers cap the blast CENTRE to the caster's cast reach, mirroring the
+        // WO-398 InReach pattern, so a melee class blasts only nearby foes while ranged
+        // classes keep their long reach (a bow/staff is MEANT to reach the locked target).
+
+        /// <summary>
+        /// The max distance from the hero this class may CENTRE an AoE/Cleave/Meteor blast.
+        /// Melee classes (knight) are capped to the equipped weapon's melee reach (the same
+        /// reach the basic swing uses) + the enemy hit radius, so a slam can't snipe; ranged
+        /// classes (mage/ranger) keep the full reticle acquire reach so their area spells
+        /// still reach the locked foe across the field. Graceful: no gear → a melee default.
+        /// </summary>
+        private float CastReach()
+        {
+            bool melee = _heroClass == "knight" || _heroClass == "cleric";
+            if (!melee) return RangedCastReach;   // ranged/caster: unchanged long reach
+
+            if (_gear == null) TryGetComponent(out _gear);
+            var w = _gear != null ? _gear.EquippedWeapon : null;
+            float reach = (w != null && w.reach > 0f) ? w.reach : MeleeDefaultReach;
+            return reach + _enemyHitRadius;
+        }
+        private const float MeleeDefaultReach = 3.4f;   // matches the knight's starter melee reach
+        private const float RangedCastReach   = 45f;    // HeroTargetIndicator's reticle acquire range
+
+        /// <summary>
+        /// The world point an AoE/Cleave/Meteor blast should be centred on, capped to
+        /// <see cref="CastReach"/> of the hero. If the aim point is within reach, blast there;
+        /// otherwise snap to the nearest hostile actually in reach; otherwise fall back to the
+        /// hero's own position (a self-centred blast) rather than the distant aim — so a melee
+        /// class never lands an area hit 45m away. Ranged classes have a 45m reach so their
+        /// aim point is virtually always in range and this is a no-op for them.
+        /// </summary>
+        private Vector3 ResolveBlastCentre(Vector3 atk, Vector3 origin)
+        {
+            float reach = CastReach();
+            if ((atk - origin).sqrMagnitude <= reach * reach) return atk;   // aim is in reach
+            var foe = NearestHostile(origin, reach);
+            return foe != null ? foe.WorldPosition : origin;                // snap, else self
         }
 
         /// <summary>
