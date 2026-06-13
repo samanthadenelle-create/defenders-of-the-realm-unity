@@ -110,6 +110,33 @@
       "isUpgradable": true,
       "upgradeType": "gear",
       "isShoppable": true
+    },
+    {
+      "id": "armorer",
+      "type": "Forge",
+      "displayName": "forge",
+      "descriptionKey": "buildingDesc.forge",
+      "hp": 190,
+      "maxHp": 190,
+      "crystalCost": 140,
+      "model": "blacksmith",
+      "footprint": "medium",
+      "buildMenuOrder": 7,
+      "isUpgradable": true,
+      "upgradeType": "gear"
+    },
+    {
+      "id": "market",
+      "type": "Workshop",
+      "displayName": "market",
+      "descriptionKey": "buildingDesc.market",
+      "hp": 170,
+      "maxHp": 170,
+      "crystalCost": 130,
+      "model": "market",
+      "footprint": "medium",
+      "buildMenuOrder": 8,
+      "isShoppable": true
     }
   ]
 }

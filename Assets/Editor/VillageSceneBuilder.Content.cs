@@ -472,7 +472,7 @@ namespace DeNelle.Editor
             // Upgrade-district building in the NE outer quadrant. Position (+22, 0, +22):
             // >24 m from every gate (clears the 8 m guard) and >=12 m from the pet-house
             // plot. Fbx building_blacksmith (KayKit). Nameplate "Armorer" via DisplayLabel.
-            new BuildingPlacement { Type = 6, Id = "forge", Label = "Armorer",
+            new BuildingPlacement { Type = 6, Id = "armorer", Label = "Armorer",
                 X = 22f, Z = 22f, YawDeg = 225f, Fbx = "building_blacksmith",
                 PlaceholderColor = new Color(0.58f, 0.58f, 0.62f), FenceKind = "stone" },
         };

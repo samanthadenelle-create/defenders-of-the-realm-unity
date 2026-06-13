@@ -31,22 +31,23 @@ namespace DeNelle.Data.Tests
         // =====================================================================
 
         [Test]
-        public void buildings_json_loads_exactly_seven_buildings()
+        public void buildings_json_loads_exactly_nine_buildings()
         {
             Assert.That(BuildingCatalog.Buildings, Is.Not.Null,
                 "BuildingCatalog.Buildings must never be null.");
-            // Canon grew to 7: original 5 + lumbermill + forge (food/economy stations).
-            // NOTE (owner roundtable 2026-06-07): intent is mill/granary/armorer + farm->node;
-            // data currently has lumbermill+forge and farm still present — granary not yet added,
-            // farm not yet moved out. Update this count if the canonical set changes.
-            Assert.That(BuildingCatalog.Buildings.Count, Is.EqualTo(7),
-                "buildings.json must hydrate the seven canonical gameplay buildings.");
+            // Canon grew to 9: original 5 + lumbermill + forge + armorer + market.
+            // WO-413: armorer is its own entry (upgrades gear, NOT shoppable) so it no
+            // longer collides with the shoppable forge id; market is the vendor entry so
+            // Jeweler/Marketplace Find("market") resolves (Buy/Sell). Update this count if
+            // the canonical set changes.
+            Assert.That(BuildingCatalog.Buildings.Count, Is.EqualTo(9),
+                "buildings.json must hydrate the nine canonical gameplay buildings.");
         }
 
         [Test]
-        public void all_seven_canonical_building_ids_are_present()
+        public void all_nine_canonical_building_ids_are_present()
         {
-            foreach (var id in new[] { "crystal-mine", "farm", "pet-house", "workshop", "arcane-tower", "lumbermill", "forge" })
+            foreach (var id in new[] { "crystal-mine", "farm", "pet-house", "workshop", "arcane-tower", "lumbermill", "forge", "armorer", "market" })
             {
                 Assert.That(BuildingCatalog.Find(id), Is.Not.Null,
                     $"buildings.json must contain the '{id}' building.");
@@ -155,10 +156,21 @@ namespace DeNelle.Data.Tests
             AssertCap("farm",         true, "resource");
             AssertCap("lumbermill",   true, "resource");
             AssertCap("forge",        true, "gear");
+            AssertCap("armorer",      true, "gear");
             AssertCap("arcane-tower", true, "spells");
 
             // The Forge SELLS gear AND upgrades — caps are NOT mutually exclusive (Buy·Sell·Upgrade).
             Assert.That(BuildingCatalog.Find("forge").IsShoppable, Is.True, "forge must be shoppable (sells gear).");
+
+            // WO-413: the Armorer upgrades gear but must NOT be shoppable — it shared the
+            // forge's id and wrongly inherited Buy/Sell. forge stays the sole legit dual
+            // (upgrade + shop); armorer is upgrade-only.
+            Assert.That(BuildingCatalog.Find("armorer").IsShoppable, Is.False,
+                "armorer must NOT be shoppable (upgrades gear only — the WO-413 fix).");
+            foreach (var def in BuildingCatalog.Buildings)
+                if (def.IsShoppable && def.IsUpgradable)
+                    Assert.That(def.Id, Is.EqualTo("forge"),
+                        $"forge must be the sole shoppable+upgradable building, found '{def.Id}'.");
 
             // Own-panel buildings aren't upgradable via this menu.
             foreach (var id in new[] { "pet-house", "workshop" })

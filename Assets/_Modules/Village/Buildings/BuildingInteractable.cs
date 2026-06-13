@@ -289,7 +289,8 @@ namespace DeNelle.Village
             if (id.Length > 0)
             {
                 if (id.Contains("lumbermill")) return "lumbermill";
-                if (id == "forge" || id.Contains("armorer")) return "forge";
+                if (id.Contains("armorer")) return "armorer";
+                if (id == "forge") return "forge";
                 if (id.Contains("farm")) return "farm";
                 if (id.Contains("market")) return "market";
                 if (id.Contains("pet")) return "pet-house";
