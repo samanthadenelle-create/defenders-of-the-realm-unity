@@ -73,14 +73,14 @@ namespace DeNelle.Village.Walls
             default,
             new WallTierDef(WallTier.Wood, "Wood Palisade",
                             upWood: 0, upIron: 0, upCrystals: 0,
-                            prefabPath: "Structures/Walls/Wall_Wood"),
+                            prefabPath: "Walls/wood_wall"),      // owner art, imported 2026-06-12
             new WallTierDef(WallTier.Iron, "Iron-Banded Wall",
                             upWood: 0, upIron: 120, upCrystals: 0,
-                            prefabPath: "Structures/Walls/Wall_Iron"),
+                            prefabPath: "Walls/iron_wall"),      // owner art, imported 2026-06-12
             // Reinforced Steel — rune-tempered. Iron + Crystals (the magic-temper arc).
             new WallTierDef(WallTier.ReinforcedSteel, "Reinforced Steel",
                             upWood: 0, upIron: 200, upCrystals: 40,
-                            prefabPath: "Structures/Walls/Wall_ReinforcedSteel"),
+                            prefabPath: "Walls/steel_wall"),     // PENDING owner art (runic steel)
         };
 
         /// <summary>The tier def for a 1..3 index (clamped).</summary>
