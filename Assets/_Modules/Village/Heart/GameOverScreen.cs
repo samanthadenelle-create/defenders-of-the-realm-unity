@@ -19,9 +19,11 @@
 
 using UnityEngine;
 using UnityEngine.UI;
+using TMPro;
 using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
 using DeNelle.Core;
+using DeNelle.Core.UI;
 
 namespace DeNelle.Village
 {
@@ -222,64 +224,47 @@ namespace DeNelle.Village
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             scaler.referenceResolution = new Vector2(1280f, 720f);
 
-            // Full-screen dark backdrop.
-            var bgGo = new GameObject("BG");
-            bgGo.transform.SetParent(_overlay.transform, false);
-            var bg = bgGo.AddComponent<Image>();
-            bg.color = new Color(0.02f, 0.0f, 0.04f, 0.88f);
-            var bgRt = bg.rectTransform;
-            bgRt.anchorMin = Vector2.zero; bgRt.anchorMax = Vector2.one;
-            bgRt.offsetMin = Vector2.zero; bgRt.offsetMax = Vector2.zero;
+            var rootT = _overlay.transform;
 
-            // Narrative + key prompts (proven build-safe font path from ThreatSkullPlate).
-            var txtGo = new GameObject("Text");
-            txtGo.transform.SetParent(_overlay.transform, false);
-            var txt = txtGo.AddComponent<Text>();
-            txt.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            txt.alignment = TextAnchor.MiddleCenter;
-            txt.color = new Color(1f, 0.86f, 0.55f);
-            txt.fontSize = 38;
-            txt.supportRichText = true;
-            txt.text =
-                "<b>" + title + "</b>\n\n" +
-                body + "\n\n" +
-                "Tap a button below  —  or press [ R ] / [ Esc ]";
-            var rt = txt.rectTransform;
-            rt.anchorMin = new Vector2(0.08f, 0.40f); rt.anchorMax = new Vector2(0.92f, 0.78f);
-            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+            // Full-screen dark scrim behind the modal — the shared kit scrim tint.
+            ElarionUiKit.Scrim(rootT);
 
-            // Tap buttons (mobile) — side by side under the text.
-            _retryBtn = BuildTapButton("TRY AGAIN", new Color(0.18f, 0.46f, 0.24f),
-                                       new Vector2(0.16f, 0.16f), new Vector2(0.48f, 0.28f));
-            _exitBtn  = BuildTapButton("LEAVE",     new Color(0.46f, 0.20f, 0.20f),
-                                       new Vector2(0.52f, 0.16f), new Vector2(0.84f, 0.28f));
+            // Framed dark-glass card (the TOWN-HUD panel language: deep glass + gold rim).
+            var card = ElarionUiKit.Panel(rootT, new Vector2(0.10f, 0.30f), new Vector2(0.90f, 0.82f),
+                                          deep: true, innerRim: true);
+            var cardT = card.transform;
+
+            // Gilt title banner (kit Header glyph + gilt rule) — the "fallen" headline.
+            ElarionUiKit.Header(cardT, title, x0: 0.06f, x1: 0.94f, y0: 0.80f, y1: 0.94f);
+
+            // Body narrative — warm parchment, centred, multi-line.
+            ElarionUiKit.Label(cardT, body, 0.40f, 0.76f, ElarionUi.Parchment,
+                               ElarionUi.FontHead, TextAlignmentOptions.Center,
+                               0.08f, 0.92f);
+
+            // Prompt hint — muted parchment under the body.
+            ElarionUiKit.Label(cardT, "Tap a button below  —  or press [ R ] / [ Esc ]",
+                               0.30f, 0.40f, ElarionUi.ParchmentDim,
+                               ElarionUi.FontLabel, TextAlignmentOptions.Center,
+                               0.08f, 0.92f);
+
+            // Tap buttons (mobile) — kit Confirm (green) / Danger (red), side by side.
+            // Manual hit-testing in Update() (no EventSystem in builds), so we keep
+            // their RectTransforms rather than relying on Button.onClick.
+            _retryBtn = BuildTapButton("TRY AGAIN", ElarionUiKit.ButtonKind.Confirm,
+                                       new Vector2(0.10f, 0.08f), new Vector2(0.49f, 0.24f), cardT);
+            _exitBtn  = BuildTapButton("LEAVE",     ElarionUiKit.ButtonKind.Danger,
+                                       new Vector2(0.51f, 0.08f), new Vector2(0.90f, 0.24f), cardT);
         }
 
-        /// <summary>A code-built tap button (Image + centred Text). Returns its RectTransform
-        /// for manual hit-testing in <see cref="Update"/> (no EventSystem in builds).</summary>
-        private RectTransform BuildTapButton(string label, Color bg, Vector2 anchorMin, Vector2 anchorMax)
+        /// <summary>A code-built tap button styled via the shared kit (rounded glass fill +
+        /// rim + bold parchment label). Returns its RectTransform for manual hit-testing in
+        /// <see cref="Update"/> (no EventSystem in builds — we don't wire Button.onClick).</summary>
+        private RectTransform BuildTapButton(string label, ElarionUiKit.ButtonKind kind,
+                                             Vector2 anchorMin, Vector2 anchorMax, Transform parent)
         {
-            var go = new GameObject("Btn_" + label);
-            go.transform.SetParent(_overlay.transform, false);
-            var img = go.AddComponent<Image>();
-            img.color = bg;
-            var rt = img.rectTransform;
-            rt.anchorMin = anchorMin; rt.anchorMax = anchorMax;
-            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
-
-            var lblGo = new GameObject("Label");
-            lblGo.transform.SetParent(go.transform, false);
-            var lbl = lblGo.AddComponent<Text>();
-            lbl.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            lbl.alignment = TextAnchor.MiddleCenter;
-            lbl.color = Color.white;
-            lbl.fontSize = 30;
-            lbl.fontStyle = FontStyle.Bold;
-            lbl.text = label;
-            var lrt = lbl.rectTransform;
-            lrt.anchorMin = Vector2.zero; lrt.anchorMax = Vector2.one;
-            lrt.offsetMin = Vector2.zero; lrt.offsetMax = Vector2.zero;
-            return rt;
+            var btn = ElarionUiKit.Button(parent, label, kind, anchorMin, anchorMax);
+            return btn.GetComponent<RectTransform>();
         }
     }
 }

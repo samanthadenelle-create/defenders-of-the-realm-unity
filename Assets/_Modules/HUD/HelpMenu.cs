@@ -119,38 +119,35 @@ namespace DeNelle.HUD
             _overlay.style.position = Position.Absolute;
             _overlay.style.left = 0; _overlay.style.right = 0;
             _overlay.style.top = 0;  _overlay.style.bottom = 0;
-            _overlay.style.backgroundColor = new Color(0f, 0f, 0f, 0.78f);
+            // Full-screen dim behind the modal — sourced from the shared palette.
+            _overlay.style.backgroundColor = ElarionUi.Scrim;
             _overlay.style.alignItems = Align.Center;
             _overlay.style.justifyContent = Justify.Center;
             _overlay.style.display = DisplayStyle.None;
             _root.Add(_overlay);
 
+            // The card routes through the shared StylePanel (dark stone fill + runic-gold
+            // rim + rounding) so it reads as part of the TOWN-HUD presentation language.
             var card = new VisualElement();
             card.style.minWidth = 380;
             card.style.maxWidth = 480;
             card.style.paddingTop = 24;    card.style.paddingBottom = 24;
             card.style.paddingLeft = 28;   card.style.paddingRight = 28;
-            card.style.backgroundColor = new Color(0.07f, 0.05f, 0.11f, 0.98f);
-            card.style.borderTopLeftRadius = 14; card.style.borderTopRightRadius = 14;
-            card.style.borderBottomLeftRadius = 14; card.style.borderBottomRightRadius = 14;
-            card.style.borderTopWidth = 1;  card.style.borderBottomWidth = 1;
-            card.style.borderLeftWidth = 1; card.style.borderRightWidth = 1;
-            var rim = new Color(0.78f, 0.66f, 0.16f, 0.6f);
-            card.style.borderTopColor = rim;   card.style.borderBottomColor = rim;
-            card.style.borderLeftColor = rim;  card.style.borderRightColor = rim;
+            ElarionUi.StylePanel(card, dark: true);
             _overlay.Add(card);
 
             var title = new Label("Help");
-            title.style.fontSize = 22;
+            title.style.fontSize = ElarionUi.FontTitle;
             title.style.unityFontStyleAndWeight = FontStyle.Bold;
             { var tf = HelpFont(); if (tf != null) title.style.unityFont = tf; }
-            title.style.color = Color.white;
+            title.style.color = ElarionUi.Gilt;
+            title.style.letterSpacing = 1.5f;
             title.style.marginBottom = 16;
             card.Add(title);
 
             card.Add(MakeButton("Report a bug",        OnReportBug));
             card.Add(MakeButton("Controls",            OnShowControls));
-            card.Add(MakeButton("Reset Hero & Pet",    OnResetProgress));
+            card.Add(MakeButton("Reset Hero & Pet",    OnResetProgress, ElarionUi.ButtonKind.Danger));
             // WO-2026-06-12: "Dev tools" routes to AdminOverlay, which itself SHIPS in release
             // builds (it is NOT #if-gated — see AdminOverlay.cs). Gating only the entry point to
             // dev builds left the owner with no Settings-bar route to the live AdminOverlay in a
@@ -159,15 +156,16 @@ namespace DeNelle.HUD
             // chord gate is the access control; this is just the launcher.
             card.Add(MakeButton("Dev tools",           OnOpenDevTools));
             card.Add(MakeButton("Credits",             OnShowCredits));
-            card.Add(MakeButton("Close",               Close));
+            card.Add(MakeButton("Close",               Close, ElarionUi.ButtonKind.Gold));
 
             // Toast (status messages) — appears low-center, fades after 3 s.
             _toast = new Label(string.Empty);
             _toast.style.position = Position.Absolute;
             _toast.style.bottom = 80; _toast.style.left = 0; _toast.style.right = 0;
             _toast.style.unityTextAlign = TextAnchor.MiddleCenter;
-            _toast.style.color = Color.white;
-            _toast.style.fontSize = 14;
+            { var tf = HelpFont(); if (tf != null) _toast.style.unityFont = tf; }
+            _toast.style.color = ElarionUi.Parchment;
+            _toast.style.fontSize = ElarionUi.FontBody;
             _toast.style.display = DisplayStyle.None;
             _root.Add(_toast);
         }
@@ -181,17 +179,17 @@ namespace DeNelle.HUD
             return _helpFont;
         }
 
-        private static Button MakeButton(string label, Action onClick)
+        private static Button MakeButton(string label, Action onClick,
+                                         ElarionUi.ButtonKind kind = ElarionUi.ButtonKind.Neutral)
         {
             var b = new Button(onClick) { text = label };
-            b.style.height = 40;
+            // Shared themed button: stone/gold/green/red fill + hover/press feedback +
+            // rounding + rim, sourced from the palette (TOWN-HUD language). StyleButton
+            // sets size/colour/border; we keep the explicit font so glyphs render even
+            // when the borrowed PanelSettings' theme has no default font (WO-417).
+            ElarionUi.StyleButton(b, kind);
             b.style.marginTop = 6; b.style.marginBottom = 6;
-            b.style.fontSize = 14;
             var f = HelpFont(); if (f != null) b.style.unityFont = f;
-            b.style.backgroundColor = new Color(0.18f, 0.12f, 0.28f, 1f);
-            b.style.color = Color.white;
-            b.style.borderTopLeftRadius = 8; b.style.borderTopRightRadius = 8;
-            b.style.borderBottomLeftRadius = 8; b.style.borderBottomRightRadius = 8;
             return b;
         }
 

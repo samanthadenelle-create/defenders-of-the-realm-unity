@@ -120,18 +120,23 @@ namespace DeNelle.HUD
             strip.sizeDelta = new Vector2(CompassWidth, CompassHeight);
             strip.anchoredPosition = new Vector2(0f, -CompassTop);
 
+            // Dark-glass chip — the shared kit's primary panel glass tint, so the
+            // compass reads as part of the same TOWN-HUD presentation language.
             var stripBg = strip.gameObject.AddComponent<Image>();
-            stripBg.color = new Color(0.06f, 0.07f, 0.09f, 0.66f);
+            stripBg.color = ElarionUiKit.Glass;
+            ElarionUiKit.ApplyRounded(stripBg);
             stripBg.raycastTarget = false;
 
-            // Thin faint-gold rim drawn as a slightly larger plate behind the chip.
+            // Thin faint-gold rim drawn as a slightly larger plate behind the chip —
+            // the kit's soft gold accent (matches every framed panel's rim).
             var rim = NewRect("CompassRim", strip);
             rim.anchorMin = Vector2.zero; rim.anchorMax = Vector2.one;
             rim.offsetMin = new Vector2(-1f, -1f);
             rim.offsetMax = new Vector2(1f, 1f);
             rim.SetAsFirstSibling();
             var rimImg = rim.gameObject.AddComponent<Image>();
-            rimImg.color = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.30f);
+            rimImg.color = ElarionUiKit.AccentSoft;
+            ElarionUiKit.ApplyRounded(rimImg);
             rimImg.raycastTarget = false;
 
             _compassLabel = AddText(strip, "N", 18f, ElarionUi.Parchment, TextAlignmentOptions.Center);
