@@ -59,6 +59,16 @@ namespace DeNelle.Village
         [Tooltip("Seconds between target re-scans (the reticle follows every frame).")]
         [SerializeField, Min(0.02f)] private float _scanInterval = 0.12f;
 
+        // WO-449: line-of-sight gate. The hero could lock + attack THROUGH a wall because
+        // acquisition was range + forward-arc only (no LoS). This mask names the blockers
+        // that should occlude targeting — wall/structure/Default layers — NOT the Enemy or
+        // Player layers (or the target's own collider would block itself). When unset
+        // (value == 0) the LoS gate degrades OFF so a misconfigured mask never blanks ALL
+        // targets (see HasLoS / the call-site degrade guards).
+        [Tooltip("WO-449: layers that BLOCK line-of-sight to a target (walls/structures/" +
+                 "Default). Do NOT include Enemy or Player. Leave empty to disable the LoS gate.")]
+        [SerializeField] private LayerMask _losMask;
+
         [Tooltip("Height (m) above the target's position to float the reticle.")]
         [SerializeField] private float _headHeight = 2.2f;
 
@@ -213,6 +223,9 @@ namespace DeNelle.Village
 
         private void CycleTarget()
         {
+            // WO-449: RebuildCandidates() now applies the additive LoS gate, so the cycle
+            // list only contains hostiles with a clear line-of-sight — a manual Tab/shoulder
+            // cycle can no longer lock a target through a wall either.
             RebuildCandidates();
             if (_candidates.Count == 0) { _locked = null; return; }
             int idx = _locked != null ? _candidates.IndexOf(_locked) : -1;
@@ -243,6 +256,7 @@ namespace DeNelle.Village
                     var d = e.GetComponent<IDamageable>();
                     if (d == null) d = e.GetComponentInParent<IDamageable>();
                     if (d == null || !d.IsAlive || d.Faction != CombatFaction.Hostile) continue;
+                    if (!HasLoS(d)) continue;   // WO-449: additive LoS gate — no targeting through walls
                     if (!_candidates.Contains(d)) _candidates.Add(d);
                 }
             }
@@ -257,6 +271,7 @@ namespace DeNelle.Village
                 if (c == null) continue;
                 var d = c.GetComponentInParent<IDamageable>();
                 if (d == null || !d.IsAlive || d.Faction != CombatFaction.Hostile) continue;
+                if (!HasLoS(d)) continue;   // WO-449: additive LoS gate — no targeting through walls
                 if (!_candidates.Contains(d)) _candidates.Add(d);
             }
 
@@ -291,6 +306,22 @@ namespace DeNelle.Village
                 if (Vector3.Dot(fwd, to.normalized) >= _facingDot) return cand;
             }
             return null;
+        }
+
+        // WO-449: true when the hero has a clear line-of-sight to the target (no wall/
+        // structure between them) — so the hero can't lock + cast THROUGH a wall. We
+        // linecast from an eye point on the hero to a TORSO point on the target (not feet)
+        // so the ground/terrain doesn't false-block a target on a slope or a curb.
+        // DEGRADE: an unset mask (value == 0) means "no blockers configured" → treat LoS as
+        // always clear (fall back to range + arc only) so a misconfig never blanks targeting.
+        private bool HasLoS(IDamageable target)
+        {
+            if (target == null) return false;
+            if (_losMask.value == 0) return true;   // degrade: LoS gate disabled
+            Vector3 eye = transform.position + Vector3.up * 1.4f;
+            Vector3 torso = target.WorldPosition + Vector3.up * 1.0f;
+            // Clear when the linecast hits NOTHING between eye and torso.
+            return !Physics.Linecast(eye, torso, _losMask, QueryTriggerInteraction.Ignore);
         }
 
         private void SetVisible(bool on)
