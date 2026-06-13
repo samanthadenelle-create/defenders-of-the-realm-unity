@@ -97,20 +97,19 @@ namespace DeNelle.Village
                 // Orc Warband: upright already, just a -90 yaw so +X-forward faces +Z.
                 skinOpts.LocalRotation = Quaternion.Euler(0f, -90f, 0f);
             }
-            else if (model == "Demon")
+            else if (model == "Demon" || model == "OgreMage")
             {
-                // WIGHT — now AccuRIG'd (CC_Base Humanoid, isHuman=True 2026-06-13): it imports
-                // UPRIGHT like the orcs, so it needs the SAME orc-style -90 yaw, NOT the old
-                // face-down X=-90 pitch (which would tip the standing rig over). Texture links
-                // via Demon.fbm so FixTripoMaterials is unnecessary.
+                // AccuRIG'd CC_Base Humanoid (isHuman=True 2026-06-13): wight + ogre-mage import
+                // UPRIGHT like the orcs → the SAME orc-style -90 yaw, NOT the old face-down X=-90
+                // pitch (which would tip the standing rig over). Textures link via <name>.fbm so
+                // FixTripoMaterials is unnecessary.
                 skinOpts.LocalRotation = Quaternion.Euler(0f, -90f, 0f);
             }
-            else if (model == "OgreMage" || model == "Troll")
+            else if (model == "Troll")
             {
-                // STILL raw-Tripo HumanoidLarge (face-down export class): pitch up with X=-90 to
-                // stand + the -90 yaw to face. OgreMage awaits AccuRIG (Generic); Troll mapped to
-                // Humanoid from the raw skeleton. If either ends up facing-wrong, tune the Y; if
-                // still face-down, flip X. (Move them to the Demon branch once AccuRIG'd upright.)
+                // STILL raw-Tripo HumanoidLarge (face-down export class — not yet AccuRIG'd): pitch
+                // up with X=-90 to stand + the -90 yaw to face. If facing-wrong, tune the Y; if
+                // still face-down, flip X. (Move to the Demon/OgreMage branch once AccuRIG'd.)
                 skinOpts.LocalRotation = Quaternion.Euler(-90f, -90f, 0f);
                 skinOpts.FixTripoMaterials = true;
             }

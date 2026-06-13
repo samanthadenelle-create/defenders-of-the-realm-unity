@@ -172,6 +172,43 @@ namespace DeNelle.Editor
             Debug.Log("[Finalize] DONE — FINALIZE_DEMON_OK");
         }
 
+        /// <summary>
+        /// Finalize the AccuRIG'd OgreMage: Humanoid + extract its EMBEDDED textures (its export
+        /// shipped a 13.8MB FBX with embedded textures, empty .fbm) + cap to 1024 + verify isHuman.
+        /// </summary>
+        [MenuItem("Defenders/Art/Finalize OgreMage — Humanoid + extract + 1024 cap")]
+        public static void FinalizeOgreMage()
+        {
+            const string p = "Assets/Resources/Enemies/OgreMage.fbx";
+            var imp = AssetImporter.GetAtPath(p) as ModelImporter;
+            if (imp == null) { Debug.LogWarning("[Finalize] no ModelImporter for OgreMage.fbx"); return; }
+            imp.animationType = ModelImporterAnimationType.Human;
+            imp.avatarSetup   = ModelImporterAvatarSetup.CreateFromThisModel;
+            imp.SaveAndReimport();
+
+            // textures are embedded → pull them into OgreMage.fbm so the material links _BaseMap.
+            ExtractFor(p);
+
+            foreach (var o in AssetDatabase.LoadAllAssetsAtPath(p))
+                if (o is Avatar av)
+                    Debug.Log($"[Finalize] OgreMage avatar isValid={av.isValid} isHuman={av.isHuman} " +
+                              $"{(av.isValid && av.isHuman ? "-> ANIMATES" : "-> still not humanoid")}");
+
+            foreach (var guid in AssetDatabase.FindAssets("t:Texture2D",
+                         new[] { "Assets/Resources/Enemies/OgreMage.fbm" }))
+            {
+                var tp = AssetDatabase.GUIDToAssetPath(guid);
+                if (AssetImporter.GetAtPath(tp) is TextureImporter ti && ti.maxTextureSize > 1024)
+                {
+                    ti.maxTextureSize = 1024;
+                    ti.SaveAndReimport();
+                    Debug.Log($"[Finalize] capped {tp} -> 1024");
+                }
+            }
+            AssetDatabase.SaveAssets();
+            Debug.Log("[Finalize] DONE — FINALIZE_OGREMAGE_OK");
+        }
+
         /// <summary>Extract embedded textures for one FBX into its sibling .fbm folder and
         /// reimport so the material links _BaseMap. Returns true if extraction ran.</summary>
         public static bool ExtractFor(string fbxPath)
