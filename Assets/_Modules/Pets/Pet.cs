@@ -124,6 +124,19 @@ namespace DeNelle.Pets
         // WO-128: cooldown remaining on the anti-ranged disrupt strike.
         private float _antiRangedCdRemaining;
 
+        // ── Target-hunt throttle (WO-410 perf #4) ────────────────────────────
+        // The two OverlapSphere scans (NearestHostile @60m + NearestRangedThreat
+        // @45m, each up to 48 GetComponentInParent calls) ran EVERY FRAME per
+        // deployed Defend pet — CPU scales with pet count. Mirror EnemyBrain's
+        // _targetEvalTimer idiom: re-run the scans only on an interval and reuse
+        // the cached foe/threat between ticks. The cheap per-frame work (move
+        // toward the cached target + attack timing) still runs every frame, so
+        // combat feel is unchanged — only the SCAN cadence drops.
+        private const float HuntScanInterval = 0.2f;   // seconds between re-scans
+        private float _huntTimer;                       // counts down to next re-scan
+        private IDamageable _cachedFoe;                 // last NearestHostile result
+        private IDamageable _cachedRangedThreat;        // last NearestRangedThreat result
+
         // ── Level progression (PetProgression drives these) ──────────────────
         // Stat multipliers from the pet's level. Default 1 (level 1 = base def
         // stats). _baseMaxHp captures the configured max so HP scaling is applied
@@ -349,15 +362,34 @@ namespace DeNelle.Pets
             // integrator drives that), Fortify holds its wall span.
             if (_mode != PetMode.Defend) return;
 
+            // WO-410 perf #4 — THROTTLE the target HUNT scans. The two
+            // OverlapSphere sweeps (ranged threat @45m + nearest foe @60m) are
+            // the expensive part and scale with deployed pet count; re-run them
+            // only on the interval and reuse the cached picks between ticks.
+            // Drop a cached target that died / was destroyed so we never aim at a
+            // corpse (explicit null/alive checks — never ?? on a UnityObject /
+            // IDamageable). Everything below (move + attack) still runs per-frame.
+            _huntTimer -= dt;
+            bool foeValid = _cachedFoe != null && _cachedFoe.IsAlive;
+            bool threatValid = _cachedRangedThreat != null && _cachedRangedThreat.IsAlive;
+            if (_huntTimer <= 0f || (!foeValid && !threatValid))
+            {
+                _huntTimer = HuntScanInterval;
+                _cachedRangedThreat = _antiRangedEnabled ? NearestRangedThreat() : null;
+                _cachedFoe = NearestHostile();
+                foeValid = _cachedFoe != null && _cachedFoe.IsAlive;
+                threatValid = _cachedRangedThreat != null && _cachedRangedThreat.IsAlive;
+            }
+
             // WO-128 — anti-ranged ability: ranged attackers (archers / kiters /
             // casters that hold standoff) are the threat melee defenders struggle
-            // to reach. When enabled and one is in range, the pet ABANDONS the
-            // nearest-foe rule, dashes onto that ranged threat, and disrupts its
-            // fire with a status effect on a cooldown. Returns true once it has
-            // handled this frame so the normal hunt below is skipped.
-            if (_antiRangedEnabled && UpdateAntiRanged(dt)) return;
+            // to reach. When one is cached, the pet ABANDONS the nearest-foe rule,
+            // dashes onto that ranged threat, and disrupts its fire with a status
+            // effect on a cooldown. Returns true once it has handled this frame so
+            // the normal hunt below is skipped.
+            if (_antiRangedEnabled && threatValid && UpdateAntiRanged(dt, _cachedRangedThreat)) return;
 
-            var foe = NearestHostile();
+            var foe = foeValid ? _cachedFoe : null;
             if (foe == null)
             {
                 // field clear — drift back to the home post (petData.ts: a
@@ -454,9 +486,13 @@ namespace DeNelle.Pets
         /// this returns false and the pet's normal hunt runs unchanged.
         /// </summary>
         /// <returns>True when a ranged threat was handled this frame.</returns>
-        private bool UpdateAntiRanged(float dt)
+        /// <param name="threat">
+        /// The cached ranged threat resolved by the throttled hunt scan (WO-410).
+        /// Guaranteed non-null + alive by the caller — the per-frame move/attack
+        /// here is cheap; only the OverlapSphere scan that found it is throttled.
+        /// </param>
+        private bool UpdateAntiRanged(float dt, IDamageable threat)
         {
-            var threat = NearestRangedThreat();
             if (threat == null) return false;
 
             Vector3 threatPos = threat.WorldPosition;

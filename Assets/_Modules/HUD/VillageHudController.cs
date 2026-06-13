@@ -131,6 +131,9 @@ namespace DeNelle.HUD
         private Image _manaFill;
         private TextMeshProUGUI _manaText;
         private float _hpCurrent, _hpMax = 1f;
+        // WO-410: change-gate per-frame HUD string rebuilds (timer + enemy count) so the
+        // TMP mesh only regenerates when the displayed integer actually changes.
+        private int _lastTimerTotal = int.MinValue, _lastLive = int.MinValue, _lastTotal = int.MinValue;
 
         // Hero XP — a thin yellow line ABOVE the HP bar, in the same vitals panel
         // (owner: no full-screen XP bar; show progress visually next to health).
@@ -799,17 +802,23 @@ namespace DeNelle.HUD
                 {
                     _townTimerText.text = "IN WAVE";
                     _townTimerText.color = HudTheme.LookoutCombat;
+                    _lastTimerTotal = int.MinValue;
                 }
                 else if (_townTimerSeconds >= 0f)
                 {
                     int total = Mathf.Max(0, Mathf.CeilToInt(_townTimerSeconds));
-                    _townTimerText.text = string.Format("{0:00}:{1:00}", total / 60, total % 60);   // MM:SS only — the clock face has the NEXT WAVE etch
+                    if (total != _lastTimerTotal)   // WO-410: reformat only when the second ticks, not every frame
+                    {
+                        _lastTimerTotal = total;
+                        _townTimerText.text = string.Format("{0:00}:{1:00}", total / 60, total % 60);   // MM:SS only — the clock face has the NEXT WAVE etch
+                    }
                     _townTimerText.color = _townTimerSeconds < 10f ? HudTheme.LookoutIncoming
                         : _townTimerSeconds < 30f ? HudTheme.LookoutAlert : LInk;
                 }
                 else
                 {
                     _townTimerText.text = string.Empty;   // idle: clock alone, no center word (owner)
+                    _lastTimerTotal = int.MinValue;
                 }
             }
 
@@ -2649,11 +2658,16 @@ namespace DeNelle.HUD
             if (total <= 0)
             {
                 _enemyCountText.text = "";
+                _lastLive = _lastTotal = int.MinValue;
                 return;
             }
-            _enemyCountText.text = live + " / " + total + " enemies";
-            float clearPct = total > 0 ? 1f - Mathf.Clamp01((float)live / total) : 0f;
-            _enemyCountText.color = Color.Lerp(HudTheme.TextDim, HudTheme.Gold, clearPct);
+            if (live != _lastLive || total != _lastTotal)   // WO-410: rebuild only on spawn/kill, not every frame
+            {
+                _lastLive = live; _lastTotal = total;
+                _enemyCountText.text = live + " / " + total + " enemies";
+                float clearPct = total > 0 ? 1f - Mathf.Clamp01((float)live / total) : 0f;
+                _enemyCountText.color = Color.Lerp(HudTheme.TextDim, HudTheme.Gold, clearPct);
+            }
         }
 
         /// <summary>Live mana bar — pushed every frame by HeroAbilitiesHudBridge.</summary>

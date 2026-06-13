@@ -174,6 +174,16 @@ namespace DeNelle.Village
         // WO-92: cached NavMeshAgent for NavMesh path validation.
         private NavMeshAgent _navAgent;
 
+        // WO-410 (perf): the Rush path-validity check is the #1 GC source (~13-22MB/frame
+        // at OuterWorld caps) — it allocated a new NavMeshPath() and ran a full CalculatePath
+        // EVERY frame, per enemy. Reuse ONE path object (CalculatePath overwrites it each call)
+        // and recompute the validity only on the target-eval cadence (~2s), caching the result
+        // between ticks. The destination barely moves frame-to-frame and Enemy.DriveNav already
+        // throttles the actual SetDestination (DEF-56), so per-frame revalidation was pure waste.
+        private readonly NavMeshPath _rushPath = new NavMeshPath();
+        private float _rushPathTimer;
+        private bool  _rushPathValid = true;   // assume reachable until first check proves otherwise
+
         // ── Public properties (EnemyGroupCoordinator needs these) ─────────────
 
         /// <summary>Current tactical posture. Read by <see cref="EnemyGroupCoordinator"/>.</summary>
@@ -559,11 +569,24 @@ namespace DeNelle.Village
                     // Rush: go directly to the target's position.
                     // WO-92: validate that a complete NavMesh path exists before
                     // committing to this destination.
+                    // WO-410 (perf): throttle this validity check to the target-eval cadence
+                    // (~2s) and reuse a single pooled NavMeshPath instead of allocating one
+                    // per frame, per enemy. The destination barely moves frame-to-frame, and
+                    // Enemy.DriveNav already throttles the real SetDestination (DEF-56) — so
+                    // the cached validity is good enough and the per-frame alloc + full path
+                    // scan (the #1 GC source) is eliminated. Per-frame movement is untouched.
                     if (_navAgent != null && _navAgent.isOnNavMesh)
                     {
-                        var path = new NavMeshPath();
-                        if (!_navAgent.CalculatePath(target.position, path) ||
-                            path.status != NavMeshPathStatus.PathComplete)
+                        _rushPathTimer -= Time.deltaTime;
+                        if (_rushPathTimer <= 0f)
+                        {
+                            _rushPathTimer = TargetEvalInterval;
+                            _rushPathValid =
+                                _navAgent.CalculatePath(target.position, _rushPath) &&
+                                _rushPath.status == NavMeshPathStatus.PathComplete;
+                        }
+
+                        if (!_rushPathValid)
                         {
                             Debug.LogWarning(
                                 $"[EnemyBrain] {name}: No complete NavMesh path to target '{target.name}' — holding.", this);

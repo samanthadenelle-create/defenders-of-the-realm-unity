@@ -259,11 +259,55 @@ namespace DeNelle.Village
         private bool     _held;   // Telegraph holds indefinitely until ReturnToPool
         private Queue<PooledVfx> _returnPool;
 
+        // ── Alpha cache (WO-410 perf) ─────────────────────────────────────────
+        // GetComponentsInChildren<Renderer>() allocated a fresh array EVERY frame
+        // for the whole lifetime of each active effect. Cache the renderers once,
+        // and drive alpha through a shared MaterialPropertyBlock so we never touch
+        // .material (no per-instance material instantiation) and never allocate
+        // per frame. Renderers are children of this same GameObject and are built
+        // once in the factory, so the set is stable across pool reuse — but we
+        // still re-cache lazily (null guard) to stay correct if that ever changes.
+        private Renderer[] _cachedRenderers;
+        private Color[]    _baseColors;         // RGB authored by the factory, alpha overridden per frame
+        private bool[]     _hasBaseColorProp;   // shader exposes _BaseColor
+        private bool[]     _hasColorProp;       // shader exposes _Color
+        private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
+        private static readonly int ColorId     = Shader.PropertyToID("_Color");
+        [System.NonSerialized] private MaterialPropertyBlock _mpb;
+
         internal PooledVfx Init(float maxScale, VfxKind kind)
         {
             _maxScale = maxScale;
             _kind     = kind;
             return this;
+        }
+
+        /// <summary>
+        /// Caches the child renderers and their authored base colours once, so the
+        /// per-frame alpha write neither allocates a Renderer[] nor instantiates a
+        /// per-instance material. Safe to call repeatedly; rebuilds the cache.
+        /// </summary>
+        private void CacheRenderers()
+        {
+            _cachedRenderers  = GetComponentsInChildren<Renderer>(includeInactive: true);
+            int n = _cachedRenderers.Length;
+            _baseColors       = new Color[n];
+            _hasBaseColorProp = new bool[n];
+            _hasColorProp     = new bool[n];
+            for (int i = 0; i < n; i++)
+            {
+                var r = _cachedRenderers[i];
+                var sh = r != null ? r.sharedMaterial : null;
+                if (sh == null) continue;
+                bool hasBase = sh.HasProperty(BaseColorId);
+                bool hasCol  = sh.HasProperty(ColorId);
+                _hasBaseColorProp[i] = hasBase;
+                _hasColorProp[i]     = hasCol;
+                // Snapshot the authored RGB so the MPB can preserve it each frame.
+                _baseColors[i] = hasBase ? sh.GetColor(BaseColorId)
+                               : hasCol  ? sh.GetColor(ColorId)
+                               : Color.white;
+            }
         }
 
         // ── Public ───────────────────────────────────────────────────────────
@@ -276,6 +320,7 @@ namespace DeNelle.Village
             _elapsed    = 0f;
             _playing    = true;
             _held       = false;
+            if (_cachedRenderers == null) CacheRenderers();
             transform.position = worldPos;
             gameObject.SetActive(true);
         }
@@ -286,6 +331,7 @@ namespace DeNelle.Village
             _elapsed = 0f;
             _playing = true;
             _held    = true;
+            if (_cachedRenderers == null) CacheRenderers();
             transform.position = worldPos;
             gameObject.SetActive(true);
         }
@@ -335,23 +381,30 @@ namespace DeNelle.Village
 
         private void ApplyAlpha(float a)
         {
-            foreach (var r in GetComponentsInChildren<Renderer>())
+            // Lazy-cache on first use (and re-cache after pool reuse via Play/PlayHeld).
+            if (_cachedRenderers == null) CacheRenderers();
+            _mpb ??= new MaterialPropertyBlock();
+
+            var renderers = _cachedRenderers;
+            for (int i = 0; i < renderers.Length; i++)
             {
-                if (r == null || r.sharedMaterial == null) continue;
-                // Clone the material once per renderer to avoid cross-effect
-                // contamination via sharedMaterial (pool instances share factories).
-                // Cost is paid at pool creation time (Awake), not per frame.
-                var mat = r.material;   // auto-clones on first access
-                if (mat.HasProperty("_BaseColor"))
+                var r = renderers[i];
+                if (r == null) continue;
+                // Drive colour via a per-renderer MaterialPropertyBlock: no per-frame
+                // Renderer[] alloc and no .material instantiation (override is local to
+                // this renderer, so pooled instances can't contaminate each other).
+                r.GetPropertyBlock(_mpb);
+                if (_hasBaseColorProp[i])
                 {
-                    var c = mat.GetColor("_BaseColor"); c.a = a;
-                    mat.SetColor("_BaseColor", c);
+                    var c = _baseColors[i]; c.a = a;
+                    _mpb.SetColor(BaseColorId, c);
                 }
-                if (mat.HasProperty("_Color"))
+                if (_hasColorProp[i])
                 {
-                    var c = mat.GetColor("_Color"); c.a = a;
-                    mat.SetColor("_Color", c);
+                    var c = _baseColors[i]; c.a = a;
+                    _mpb.SetColor(ColorId, c);
                 }
+                r.SetPropertyBlock(_mpb);
             }
         }
     }

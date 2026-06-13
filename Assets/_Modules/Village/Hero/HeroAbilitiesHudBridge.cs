@@ -4,6 +4,7 @@
 // + BuildMenuHudBridge.
 // =============================================================================
 
+using System;
 using System.Reflection;
 using UnityEngine;
 using UnityEngine.Events;
@@ -26,16 +27,29 @@ namespace DeNelle.Village
         // updated on cast (WO-07). VillageHudController.SetMana / SetAbilityCooldown
         // are resolved by reflection — DeNelle.Village cannot reference DeNelle.HUD
         // (same asmdef-isolation seam as the AbilityRequested wiring above).
-        private MethodInfo _setMana;        // SetMana(float current, float max)
-        private MethodInfo _setHeroHp;      // SetHeroHp(float current, float max)
-        private MethodInfo _setCooldown;    // SetAbilityCooldown(int slot, float remaining, float total)
+        // WO-410 perf (#3): the per-frame state-out pushes (mana / hero-HP / cooldown)
+        // were `MethodInfo.Invoke` calls that BOX ~16 value-types into reused object[]
+        // every frame AND allocate a marshalling buffer per Invoke — ~23 KB/s in every
+        // gameplay scene, present even in the idle hub. These three are now resolved
+        // ONCE into typed delegates (no boxing, no Invoke buffer) and called directly.
+        // Re-resolved only when the HUD instance changes (scene reload — same self-heal
+        // trigger BindHud already drives). The per-class slot pushes (_setSlot /
+        // _setSlotColor) stay MethodInfo: they fire only on class change, not per frame.
+        private Action<float, float> _setMana;        // SetMana(float current, float max)
+        private Action<float, float> _setHeroHp;      // SetHeroHp(float current, float max)
+        private Action<int, float, float> _setCooldown; // SetAbilityCooldown(int slot, float remaining, float total)
         private MethodInfo _setSlot;        // SetAbilitySlot(int slot, string key, string glyph, string name, string description) — WO-36 visual
         private MethodInfo _setSlotColor;   // SetAbilitySlot(int,string,string,string,string,string accentHex) — DEF blank-buttons (rune-disc tint)
-        private readonly object[] _manaArgs = new object[2];
-        private readonly object[] _heroHpArgs = new object[2];
-        private readonly object[] _cdArgs = new object[3];
         private readonly object[] _slotArgs = new object[5];
         private readonly object[] _slotColorArgs = new object[6];
+
+        // WO-410 perf (#3): change-gate the per-frame pushes — skip the HUD call (and the
+        // downstream TMP rebuild) when the value hasn't moved since last frame. NaN seeds
+        // force the first frame to push. Cooldown is tracked per-slot (4 entries).
+        private float _lastMana = float.NaN, _lastMaxMana = float.NaN;
+        private float _lastHp = float.NaN, _lastMaxHp = float.NaN;
+        private readonly float[] _lastCdRemaining = { float.NaN, float.NaN, float.NaN, float.NaN };
+        private readonly float[] _lastCdTotal = { float.NaN, float.NaN, float.NaN, float.NaN };
 
         // WO-36 (visual half): the Q/W/E/R cells are built once showing the Mage
         // kit. Re-target them to the active hero's loadout whenever the class
@@ -86,23 +100,44 @@ namespace DeNelle.Village
         private void BindHud()
         {
             // Resolve the state-out push methods first so they bind even if the
-            // AbilityRequested click event is absent.
-            _setMana = _hud.GetType().GetMethod("SetMana",
+            // AbilityRequested click event is absent. WO-410 perf (#3): bind the three
+            // per-frame pushes into typed delegates (one-time CreateDelegate, then no
+            // boxing / no Invoke buffer per frame). Reset the change-gate caches so the
+            // first frame against this (possibly new) HUD always pushes.
+            var hudType = _hud.GetType();
+
+            var setManaMi = hudType.GetMethod("SetMana",
                 BindingFlags.Public | BindingFlags.Instance, null,
                 new[] { typeof(float), typeof(float) }, null);
-            _setHeroHp = _hud.GetType().GetMethod("SetHeroHp",
+            _setMana = setManaMi != null
+                ? (Action<float, float>)Delegate.CreateDelegate(typeof(Action<float, float>), _hud, setManaMi)
+                : null;
+
+            var setHeroHpMi = hudType.GetMethod("SetHeroHp",
                 BindingFlags.Public | BindingFlags.Instance, null,
                 new[] { typeof(float), typeof(float) }, null);
-            _setCooldown = _hud.GetType().GetMethod("SetAbilityCooldown",
+            _setHeroHp = setHeroHpMi != null
+                ? (Action<float, float>)Delegate.CreateDelegate(typeof(Action<float, float>), _hud, setHeroHpMi)
+                : null;
+
+            var setCooldownMi = hudType.GetMethod("SetAbilityCooldown",
                 BindingFlags.Public | BindingFlags.Instance, null,
                 new[] { typeof(int), typeof(float), typeof(float) }, null);
-            _setSlot = _hud.GetType().GetMethod("SetAbilitySlot",
+            _setCooldown = setCooldownMi != null
+                ? (Action<int, float, float>)Delegate.CreateDelegate(typeof(Action<int, float, float>), _hud, setCooldownMi)
+                : null;
+
+            // Force the first post-bind frame to push (new HUD may have reset its bars).
+            _lastMana = _lastMaxMana = float.NaN;
+            _lastHp = _lastMaxHp = float.NaN;
+            for (int i = 0; i < 4; i++) { _lastCdRemaining[i] = float.NaN; _lastCdTotal[i] = float.NaN; }
+            _setSlot = hudType.GetMethod("SetAbilitySlot",
                 BindingFlags.Public | BindingFlags.Instance, null,
                 new[] { typeof(int), typeof(string), typeof(string), typeof(string), typeof(string) }, null);
             // DEF blank-buttons: the 6-arg overload also pushes the ability's accent
             // colour so the HUD tints the code-built rune disc per ability. Optional —
             // a HUD without it (older build) still gets symbols via the 5-arg path.
-            _setSlotColor = _hud.GetType().GetMethod("SetAbilitySlot",
+            _setSlotColor = hudType.GetMethod("SetAbilitySlot",
                 BindingFlags.Public | BindingFlags.Instance, null,
                 new[] { typeof(int), typeof(string), typeof(string), typeof(string), typeof(string), typeof(string) }, null);
             if (_setSlot == null)
@@ -157,18 +192,29 @@ namespace DeNelle.Village
             // the Mage kit, so a Knight/Ranger would otherwise see Mage glyphs.
             PushClassLoadoutIfChanged();
 
+            // WO-410 perf (#3): cached typed delegates + change-gate. No boxing, no
+            // Invoke buffer; skip the call entirely (and its downstream TMP rebuild)
+            // when the value hasn't moved since last frame.
             if (_setMana != null)
             {
-                _manaArgs[0] = _abilities.Mana;
-                _manaArgs[1] = _abilities.MaxMana;
-                _setMana.Invoke(_hud, _manaArgs);
+                float mana = _abilities.Mana, maxMana = _abilities.MaxMana;
+                if (mana != _lastMana || maxMana != _lastMaxMana)
+                {
+                    _lastMana = mana;
+                    _lastMaxMana = maxMana;
+                    _setMana(mana, maxMana);
+                }
             }
 
             if (_setHeroHp != null && _health != null)
             {
-                _heroHpArgs[0] = _health.Hp;
-                _heroHpArgs[1] = _health.MaxHp;
-                _setHeroHp.Invoke(_hud, _heroHpArgs);
+                float hp = _health.Hp, maxHp = _health.MaxHp;
+                if (hp != _lastHp || maxHp != _lastMaxHp)
+                {
+                    _lastHp = hp;
+                    _lastMaxHp = maxHp;
+                    _setHeroHp(hp, maxHp);
+                }
             }
 
             if (_setCooldown != null)
@@ -177,10 +223,14 @@ namespace DeNelle.Village
                 {
                     var slot = (AbilitySlot)i;
                     var def = AbilityCatalog.Find(_abilities.HeroClass, slot);
-                    _cdArgs[0] = i;
-                    _cdArgs[1] = _abilities.CooldownRemaining(slot);
-                    _cdArgs[2] = def != null ? def.Cooldown : 0f;
-                    _setCooldown.Invoke(_hud, _cdArgs);
+                    float remaining = _abilities.CooldownRemaining(slot);
+                    float total = def != null ? def.Cooldown : 0f;
+                    if (remaining != _lastCdRemaining[i] || total != _lastCdTotal[i])
+                    {
+                        _lastCdRemaining[i] = remaining;
+                        _lastCdTotal[i] = total;
+                        _setCooldown(i, remaining, total);
+                    }
                 }
             }
         }
