@@ -19,6 +19,9 @@
 // whole run if something wedges between phases.
 //
 // PHASES (in order):
+//   BootToGameplay    — load MainCastle_Hall (skips the Title->PetSelect UI flow
+//                       a headless bot can't drive); the additive OuterWorld load
+//                       fires via the existing WorldSceneLoader.
 //   ResolveHero       — find the HeroLocomotion (abort gracefully if absent).
 //   WalkToEachGate    — drive the hero to every SceneTransitionTrigger.
 //   OpenEachVendor    — open each BuildingInteractable's surface (as it would),
@@ -66,6 +69,12 @@ namespace DeNelle.DevTools
         private const float WaveTimeout         = 20f;   // wait for the wave phase to advance
         private const float ExitTimeout         = 30f;   // walk into the south exit
         private const float SettleSeconds        = 0.4f;  // brief pause after an open/close
+        private const float BootTimeout          = 30f;   // load MainCastle_Hall + settle
+        private const float ResolveHeroTimeout   = 15f;   // hero may spawn after scene load
+
+        // The gameplay scene the bot must be in before it can drive. Loading it
+        // single-mode triggers WorldSceneLoader's additive OuterWorld load.
+        private const string GameplayScene = "MainCastle_Hall";
 
         // Default seed when no --seed arg is supplied — a fixed value keeps a lone
         // run fully deterministic. Fleet runs pass distinct seeds to diverge paths.
@@ -129,6 +138,18 @@ namespace DeNelle.DevTools
             _runStartRealtime = Time.realtimeSinceStartup;
             FlowTrace.Step("Auto", $"AutoPilot START (quitOnDone={_quitOnDone}, seed={_seed}, run='{_runId ?? "<none>"}', scene='{ActiveScene()}').");
 
+            // Skip Yarn: a background suppressor dismisses any dialogue that auto-starts
+            // (e.g. the companion intro SylasFirstMeeting on entering MainCastle_Hall) so a
+            // headless bot never stalls inside a conversation it can't read. This is the
+            // concrete first case of the owner's "bot decides from a tag what to skip" idea —
+            // dialogue is the prime skip; a future BotHints/tag pass generalizes per-scene
+            // (ATB / Arena coverage) what each bot exercises vs skips.
+            StartCoroutine(SuppressDialogue());
+
+            // FIRST: get into the gameplay scene. Headless can't drive the
+            // Title->PetSelect->MainCastle_Hall UI flow, so jump straight there.
+            yield return RunPhase("BootToGameplay", BootToGameplay(), abortIfFailed: true);
+
             yield return RunPhase("ResolveHero", ResolveHero(), abortIfFailed: true);
             // If the hero never resolved, RunAll short-circuits to the summary.
             if (_hero != null)
@@ -151,6 +172,26 @@ namespace DeNelle.DevTools
             else
             {
                 FlowTrace.Step("Auto", "AutoPilot done — editor left open (quitOnDone=false).");
+            }
+        }
+
+        // Background guard: dismiss any Yarn dialogue that auto-starts, so the bot never
+        // stalls inside a conversation it cannot read headless. Runs ~1/sec for the bot's
+        // lifetime (the host GameObject is destroyed on quit, ending this loop).
+        private IEnumerator SuppressDialogue()
+        {
+            while (true)
+            {
+                try
+                {
+                    if (DialogueService.IsRunning)
+                    {
+                        DialogueService.Stop();
+                        FlowTrace.Step("Auto", "SuppressDialogue: dismissed an auto-started dialogue (skip-Yarn).");
+                    }
+                }
+                catch (System.Exception ex) { FlowTrace.Warn("Auto", "SuppressDialogue: " + ex.Message); }
+                yield return Wait(1f);
             }
         }
 
@@ -237,9 +278,63 @@ namespace DeNelle.DevTools
                 case "OpenEachHUDPanel":  return HudPanelTimeout * 8f;
                 case "TriggerWave":       return WaveTimeout;
                 case "AttemptExitCastle": return ExitTimeout;
-                case "ResolveHero":       return 10f;
+                case "BootToGameplay":    return BootTimeout;
+                case "ResolveHero":       return ResolveHeroTimeout;
                 default:                  return 30f;
             }
+        }
+
+        // =====================================================================
+        //  PHASE: BootToGameplay (FIRST)
+        //  A headless bot can't drive the Title->PetSelect->MainCastle_Hall UI
+        //  flow, so if we're not already in the gameplay scene, load it directly.
+        //  MainCastle_Hall is in Build Settings, so LoadScene-by-name works
+        //  headless; its single load triggers the additive OuterWorld load via the
+        //  existing WorldSceneLoader. We then wait (realtime) for the active scene
+        //  to BE MainCastle_Hall plus a few frames so its Awake/Start has run.
+        // =====================================================================
+        private IEnumerator BootToGameplay()
+        {
+            if (ActiveScene() == GameplayScene)
+            {
+                FlowTrace.Step("Auto", $"BootToGameplay -> already in '{GameplayScene}', nothing to load.");
+                _lastDetail = "already in gameplay scene";
+                yield break;
+            }
+
+            FlowTrace.Step("Auto", $"BootToGameplay -> loading {GameplayScene} (from '{ActiveScene()}').");
+            try
+            {
+                SceneManager.LoadScene(GameplayScene);
+            }
+            catch (Exception ex)
+            {
+                FlowTrace.Fail("Auto", $"BootToGameplay: LoadScene('{GameplayScene}') threw — {ex.Message}");
+                _lastDetail = "LoadScene threw";
+                yield break;
+            }
+
+            float t0 = Time.realtimeSinceStartup;
+            bool arrived = false;
+            while (Time.realtimeSinceStartup - t0 < BootTimeout)
+            {
+                if (ActiveScene() == GameplayScene) { arrived = true; break; }
+                yield return null;
+            }
+
+            if (!arrived)
+            {
+                FlowTrace.Fail("Auto", $"BootToGameplay: '{GameplayScene}' never became active within {BootTimeout:0}s — aborting.");
+                _lastDetail = "scene never active";
+                yield break;
+            }
+
+            // Give the scene a couple of frames so Awake/Start (and the additive
+            // OuterWorld load it kicks off) get a chance to run before ResolveHero.
+            for (int i = 0; i < 3; i++) yield return null;
+
+            FlowTrace.Step("Auto", $"BootToGameplay -> arrived in '{GameplayScene}'.");
+            _lastDetail = $"loaded {GameplayScene}";
         }
 
         // =====================================================================
@@ -247,8 +342,10 @@ namespace DeNelle.DevTools
         // =====================================================================
         private IEnumerator ResolveHero()
         {
-            // Poll briefly — the hero may spawn a frame or two after scene load.
-            for (int i = 0; i < 120 && _hero == null; i++)
+            // Poll — the hero may spawn a moment after scene load (the BootToGameplay
+            // additive OuterWorld load + hero spawn can lag the active-scene swap).
+            float t0 = Time.realtimeSinceStartup;
+            while (_hero == null && Time.realtimeSinceStartup - t0 < ResolveHeroTimeout)
             {
                 _hero = UnityEngine.Object.FindAnyObjectByType<HeroLocomotion>();
                 if (_hero != null) break;

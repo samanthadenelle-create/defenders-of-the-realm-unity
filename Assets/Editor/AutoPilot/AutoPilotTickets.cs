@@ -116,18 +116,13 @@ namespace DeNelle.Editor
 
             string dir = Application.persistentDataPath;
 
-            // ── enumerate every run source ───────────────────────────────────
-            // FLEET: each headless instance launched with --run=<id> wrote into
-            // persistentDataPath/autopilot-runs/<id>/. We scan ALL of them plus the
-            // root (a lone, non-fleet run). Each source = one "run" for hit-ranking.
+            // ── enumerate every FLEET run source ─────────────────────────────
+            // FLEET-ONLY: each headless instance launched with --run=<id> wrote into
+            // persistentDataPath/autopilot-runs/<id>/. We scan ONLY those — the root
+            // break-log.jsonl is deliberately DROPPED because it accumulates stale,
+            // pre-fix errors across every build of the day and pollutes the ranking.
+            // Each fleet dir = one "run" for hit-ranking.
             var runs = new List<RunSource>();
-            // root (single-run / no --run)
-            runs.Add(new RunSource
-            {
-                Id = "root",
-                BreakLog = Path.Combine(dir, "break-log.jsonl"),
-                SummaryPath = Path.Combine(dir, "autopilot-summary.json"),
-            });
             try
             {
                 string runsRoot = Path.Combine(dir, "autopilot-runs");
@@ -146,11 +141,26 @@ namespace DeNelle.Editor
             }
             catch (Exception ex) { log.AppendLine("run-dir scan error: " + ex.Message); }
 
+            // No fleet runs at all → emit a clean, empty (OK, 0 tickets) report. We do
+            // NOT fall back to the root break-log (that's the stale-error trap).
+            if (runs.Count == 0)
+            {
+                log.AppendLine("no fleet runs found — " +
+                    $"'{Path.Combine(dir, "autopilot-runs")}' has zero run folders. " +
+                    "Nothing to triage (root break-log.jsonl is intentionally NOT scanned).");
+                try { WriteMarkdown(new List<Ticket>(), default, false, 0, 0, 0, 0); WriteJson(new List<Ticket>(), 0); }
+                catch (Exception ex) { log.AppendLine("write error: " + ex.Message); }
+                log.AppendLine("=== verdict ===");
+                log.AppendLine("AUTOPILOT_TICKETS_OK: 0");
+                Debug.Log(log.ToString());
+                return;
+            }
+
             var tickets = new Dictionary<string, Ticket>();
-            int parsedLines = 0, badLines = 0;
+            int parsedLines = 0, badLines = 0, filteredArtifacts = 0;
             int runsWithSummary = 0, runsWithBreakLog = 0;
-            // The "representative" summary shown in the report header: prefer the root,
-            // else the first run that produced one. (Per-run summaries differ.)
+            // The "representative" summary shown in the report header: the first fleet
+            // run that produced one. (Per-run summaries differ.)
             RunSummary summary = default;
             bool haveSummary = false;
 
@@ -183,6 +193,10 @@ namespace DeNelle.Editor
                         catch { badLines++; continue; }
                         if (string.IsNullOrEmpty(rec.kind)) { badLines++; continue; }
                         parsedLines++;
+
+                        // -nographics render/video-subsystem noise is NOT a bug — it
+                        // only appears because the headless run has no renderer. Drop it.
+                        if (IsRenderArtifact(rec.message)) { filteredArtifacts++; continue; }
 
                         string category = Classify(rec);
                         if (category == null) continue;   // breadcrumb (session_start/scene_loaded)
@@ -217,7 +231,9 @@ namespace DeNelle.Editor
             int totalRuns = runsWithBreakLog > 0 ? runsWithBreakLog : runs.Count;
             log.AppendLine($"runs scanned: {runs.Count} source(s) " +
                            $"({runsWithBreakLog} with break-log, {runsWithSummary} with summary)");
-            log.AppendLine($"break-log: {parsedLines} parsed, {badLines} unparseable, {tickets.Count} unique ticket(s)");
+            log.AppendLine($"break-log: {parsedLines} parsed, {badLines} unparseable, " +
+                           $"{filteredArtifacts} render-artifact record(s) filtered (-nographics), " +
+                           $"{tickets.Count} unique ticket(s)");
 
             // ── write outputs ────────────────────────────────────────────────
             // Rank: by DISTINCT runs reproducing (desc) — a break hit by many runs is
@@ -232,7 +248,7 @@ namespace DeNelle.Editor
                 return b.Count.CompareTo(a.Count);
             });
 
-            try { WriteMarkdown(sorted, summary, haveSummary, totalRuns, runsWithSummary, runs.Count); WriteJson(sorted, totalRuns); }
+            try { WriteMarkdown(sorted, summary, haveSummary, totalRuns, runsWithSummary, runs.Count, filteredArtifacts); WriteJson(sorted, totalRuns); }
             catch (Exception ex) { log.AppendLine("write error: " + ex.Message); }
 
             int bugs = 0, hangs = 0, warns = 0, notes = 0;
@@ -264,6 +280,33 @@ namespace DeNelle.Editor
                 log.AppendLine($"AUTOPILOT_TICKETS_OK: {total}");
                 Debug.Log(log.ToString());
             }
+        }
+
+        // Known headless render/video-subsystem noise. These messages only appear
+        // because -nographics has no renderer/GfxDevice — they are NOT gameplay or
+        // script bugs, so they must never become tickets. Conservative substring
+        // match: only clear graphics/video-subsystem strings (case-insensitive).
+        private static readonly string[] RenderArtifactNeedles =
+        {
+            "video decode shader pass",
+            "could not find material hidden/video",
+            "videodecode",
+            "videocomposite",
+            "custom render path shader needs to have at least 1 passes",
+            "could not find video",
+            "d3d11",
+            "direct3d",
+            "no graphics device",
+            "gfxdevice",
+        };
+
+        private static bool IsRenderArtifact(string message)
+        {
+            if (string.IsNullOrEmpty(message)) return false;
+            string m = message.ToLowerInvariant();
+            foreach (var needle in RenderArtifactNeedles)
+                if (m.Contains(needle)) return true;
+            return false;
         }
 
         // session_start / scene_loaded are breadcrumbs, not tickets.
@@ -314,7 +357,7 @@ namespace DeNelle.Editor
         }
 
         private static void WriteMarkdown(List<Ticket> tickets, RunSummary summary, bool haveSummary,
-                                          int totalRuns, int runsWithSummary, int sourceCount)
+                                          int totalRuns, int runsWithSummary, int sourceCount, int filteredArtifacts)
         {
             Directory.CreateDirectory("Builds");
             var sb = new StringBuilder();
@@ -325,6 +368,8 @@ namespace DeNelle.Editor
             sb.AppendLine($"**Fleet coverage:** {sourceCount} run source(s) scanned, " +
                           $"{totalRuns} with a break-log, {runsWithSummary} produced a summary. " +
                           "Each ticket is ranked by how many DISTINCT runs reproduced it.");
+            sb.AppendLine();
+            sb.AppendLine($"_{filteredArtifacts} render-artifact records filtered (-nographics)_");
             sb.AppendLine();
 
             if (haveSummary)
