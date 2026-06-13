@@ -531,9 +531,16 @@ namespace DeNelle.Village
         private static void ApplyFlat(Renderer renderer, Color colour)
         {
             if (renderer == null) return;
-            Shader s = Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Unlit/Color");
+            // WO-395a — same magenta-prompt fix as CrystalMineNode.ApplyFlat. The URP/
+            // built-in unlit shaders return NULL via Shader.Find in a player/WebGL build
+            // (not in the Always-Included list), and the old early-return left the Quad on
+            // Unity's default (legacy Standard) material → magenta under URP. End the chain
+            // in "Sprites/Default" (always shipped) so the prompt never goes pink.
+            Shader s = Shader.Find("Universal Render Pipeline/Unlit")
+                       ?? Shader.Find("Unlit/Color")
+                       ?? Shader.Find("Sprites/Default");
             if (s == null) return;
-            var mat = new Material(s);
+            var mat = new Material(s) { color = colour };
             if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", colour);
             if (mat.HasProperty("_Color"))     mat.SetColor("_Color",     colour);
             renderer.sharedMaterial = mat;

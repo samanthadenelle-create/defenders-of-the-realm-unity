@@ -297,9 +297,21 @@ namespace DeNelle.Village
         private static void ApplyFlat(Renderer renderer, Color colour)
         {
             if (renderer == null) return;
-            Shader s = Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Unlit/Color");
+            // WO-395a — magenta-prompt fix. The upgrade bubble ("[G] Upgrade Mine T1->2")
+            // rendered MAGENTA in builds: Shader.Find("Universal Render Pipeline/Unlit")
+            // (and "Unlit/Color") return NULL in a player/WebGL build because those URP/
+            // built-in shaders aren't in the Always-Included list (no project material
+            // references them). The old code then `return`ed early, leaving the Quad
+            // primitive on Unity's DEFAULT material (legacy Standard) which URP cannot
+            // render → the pink error shader. The robust seam used by the sibling world
+            // prompts (TownsfolkBubble / BuildingInteractable) ends the chain in
+            // "Sprites/Default" — a shader Unity ALWAYS ships in the build — so the quad
+            // never falls back to the magenta default. Match that pattern here.
+            Shader s = Shader.Find("Universal Render Pipeline/Unlit")
+                       ?? Shader.Find("Unlit/Color")
+                       ?? Shader.Find("Sprites/Default");
             if (s == null) return;
-            var mat = new Material(s);
+            var mat = new Material(s) { color = colour };
             if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", colour);
             if (mat.HasProperty("_Color"))     mat.SetColor("_Color",     colour);
             renderer.sharedMaterial = mat;
