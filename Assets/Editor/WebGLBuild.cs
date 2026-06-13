@@ -64,6 +64,15 @@ namespace DeNelle.Editor
             bool debugExceptions = System.Environment.GetCommandLineArgs()
                 .Any(a => a.Equals("-debugExceptions", System.StringComparison.OrdinalIgnoreCase));
 
+            // WO-408 DEFECT 2: BuildOptions.Development was hardcoded on the ship
+            // build, which DISABLES Unity's code/data compression entirely (no .br,
+            // oversized .wasm/.data). The default ship path must NOT be a dev build.
+            // Pass `-devBuild` on the batchmode command line to explicitly opt into a
+            // Development player (DevTools QA panel + readable stack traces) when
+            // verifying; otherwise the default is BuildOptions.None (compressed ship).
+            bool devBuild = System.Environment.GetCommandLineArgs()
+                .Any(a => a.Equals("-devBuild", System.StringComparison.OrdinalIgnoreCase));
+
             PlayerSettings.SetScriptingBackend(NamedBuildTarget.WebGL, ScriptingImplementation.IL2CPP);
             // WO-126: itch.io is a static host and does NOT send `Content-Encoding: br`,
             // so Brotli payloads fail to load there. Pass `-noBrotli` to ship UNCOMPRESSED
@@ -89,6 +98,8 @@ namespace DeNelle.Editor
             PlayerSettings.SetManagedStrippingLevel(NamedBuildTarget.WebGL, ManagedStrippingLevel.Minimal);
             PlayerSettings.runInBackground = false;
 
+            Debug.Log($"[WebGLBuild] buildOptions = {(devBuild ? "Development (-devBuild: uncompressed QA build)" : "None (compressed ship build)")}");
+
             string dir = Path.GetFullPath(OutputDir);
             Directory.CreateDirectory(dir);
 
@@ -102,10 +113,10 @@ namespace DeNelle.Editor
                 locationPathName = dir,   // WebGL outputs a DIRECTORY, not a single file
                 target = BuildTarget.WebGL,
                 targetGroup = BuildTargetGroup.WebGL,
-                // DEV verification build: BuildOptions.Development enables the DevTools
-                // QA panel (gear / F1 force-wave) + readable C# stack traces in the F12
-                // console. *** FLIP BACK TO BuildOptions.None FOR THE LAUNCH BUILD. ***
-                options = BuildOptions.Development,
+                // WO-408 DEFECT 2: default to None (compressed ship build). Development
+                // disables all code/data compression (no .br, oversized payload) and is
+                // now opt-in via `-devBuild` for verification builds only.
+                options = devBuild ? BuildOptions.Development : BuildOptions.None,
             };
 
             BuildReport report = BuildPipeline.BuildPlayer(options);

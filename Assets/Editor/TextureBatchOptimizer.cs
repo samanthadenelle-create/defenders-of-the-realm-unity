@@ -41,6 +41,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using UnityEditor;
+using UnityEditor.Build;   // WO-408: NamedBuildTarget for the version-safe WebGL platform token
 using UnityEngine;
 
 namespace DeNelle.Editor
@@ -53,7 +54,15 @@ namespace DeNelle.Editor
         // squeeze further. Applies to all crunched formats below.
         public const int CrunchQuality = 50;
 
-        private const string WebGLPlatform = "WebGL";
+        // WO-408 DEFECT 1 (decisive fix): Unity 6 renamed the WebGL build target
+        // platform string from "WebGL" to "Web". A hardcoded "WebGL" literal here
+        // wrote per-texture overrides under a name the Unity 6 build pipeline IGNORES,
+        // so every override was a silent no-op (textures shipped at full size).
+        // NamedBuildTarget.WebGL.TargetName is the canonical, version-safe token
+        // (resolves to the correct platform string for whatever editor version is
+        // running) — used for GetPlatformTextureSettings / SetPlatformTextureSettings
+        // / TextureImporterPlatformSettings.name at every call site below.
+        private static readonly string WebGLPlatform = NamedBuildTarget.WebGL.TargetName;
         private const string QaSubDir = "Builds/TextureAudit/QA";
 
         // Root folders that hold SHIPPING art. Demo/Example/Editor subfolders are
@@ -66,6 +75,7 @@ namespace DeNelle.Editor
             "Assets/Art",
             "Assets/Spells Pack",
             "Assets/Lana Studio",
+            "Assets/Quaternius",   // WO-408: gitignored pack — its texture metas drift / never got the WebGL override; scan it too (missing root is skipped with a warning)
         };
 
         private const string ModulesRoot = "Assets/_Modules";
