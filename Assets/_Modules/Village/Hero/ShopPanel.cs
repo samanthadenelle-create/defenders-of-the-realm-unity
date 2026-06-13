@@ -71,10 +71,22 @@ namespace DeNelle.Village.Hero
             var panelGo = ElarionUiKit.Panel(_ui.transform, new Vector2(0.22f, 0.08f), new Vector2(0.78f, 0.92f), deep: true);
             var panel = panelGo.transform;
 
-            // Header
-            string title = "Vendor Wares";
-            if (_vendorContext.ToLowerInvariant().Contains("armor")) title = "Armorer's Shop";
-            else if (_vendorContext.ToLowerInvariant().Contains("forge") || _vendorContext.ToLowerInvariant().Contains("blacksmith")) title = "Blacksmith's Forge";
+            // Header — read as a named storefront, not a generic "Vendor Wares" wall. The
+            // structure flow passes the building's own id ("forge"/"market"/"jeweler"/…) so
+            // every shop gets a themed title; the hand-authored NPC vendors keep their named
+            // signs. Unknown ids titleize the id ("lumbermill" → "Lumbermill") rather than
+            // falling through to a bare default.
+            string vc = _vendorContext.ToLowerInvariant();
+            string title;
+            if (vc.Contains("armor")) title = "Armorer's Shop";
+            else if (vc.Contains("forge") || vc.Contains("blacksmith")) title = "Blacksmith's Forge";
+            else if (vc.Contains("market")) title = "Market Stalls";
+            else if (vc.Contains("jewel")) title = "Jeweler's Bench";
+            else if (vc.Contains("lumber")) title = "Lumbermill Stores";
+            else if (vc.Contains("granary") || vc.Contains("farm")) title = "Granary Goods";
+            else if (vc.Contains("stable")) title = "Stable Supplies";
+            else if (string.IsNullOrEmpty(_vendorContext)) title = "Vendor Wares";
+            else title = TitleizeVendor(_vendorContext) + " Wares";
             ElarionUiKit.Header(panel, title, x0: 0.04f, x1: 0.96f, y0: 0.9f, y1: 0.97f);
 
             // Economy readout (live)
@@ -127,6 +139,17 @@ namespace DeNelle.Village.Hero
             ShowBuy();
 
             Debug.Log($"[ShopPanel] Opened for vendor '{_vendorContext}'. Economy + inventory driven.");
+        }
+
+        // Turn a raw vendor/structure id ("pet-house", "lumber_yard") into a display
+        // word for the header fallback. Keeps the storefront from reading as a generic
+        // "Vendor Wares" when an id has no bespoke title above.
+        private static string TitleizeVendor(string id)
+        {
+            if (string.IsNullOrEmpty(id)) return "Vendor";
+            id = id.Replace('-', ' ').Replace('_', ' ').Trim();
+            if (id.Length == 0) return "Vendor";
+            return char.ToUpper(id[0]) + (id.Length > 1 ? id.Substring(1) : "");
         }
 
         private void CreateEconomyReadout(Transform parent)

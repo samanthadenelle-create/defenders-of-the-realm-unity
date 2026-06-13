@@ -753,6 +753,16 @@ namespace DeNelle.Village
         // (the panels build their own Canvas). Behaviour identical to the old bridge.
         private void CmdOpenShop(string vendor)
         {
+            // Yarn bare command-arg trap: the StructureMenu node fires <<OpenShop $structureId>>,
+            // but a bare command-arg does NOT interpolate in this Yarn build — `vendor` arrives as
+            // the LITERAL "$structureId" (the shop then read that as the vendor and showed generic
+            // placeholder text, e.g. the Oathkeeper/structure storefront). Same trap CmdStructureStatus
+            // already handles. The hardcoded NPC vendors pass a REAL quoted string ("armorer",
+            // "forge", …) which must be preserved — so only fall back to the C#-stashed structure id
+            // when the arg is an uninterpolated Yarn var ("$…") or empty.
+            if (string.IsNullOrEmpty(vendor) || vendor.StartsWith("$"))
+                vendor = DialogueService.CurrentStructureId;
+
             Debug.Log($"[DialogueCommandBridge] OpenShop: {vendor}");
             var panel = FindObjectOfType<DeNelle.Village.Hero.ShopPanel>();
             if (panel == null)
