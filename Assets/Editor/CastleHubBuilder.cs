@@ -315,6 +315,11 @@ namespace DeNelle.Editor
             platform.transform.localScale = new Vector3(44, 0.8f, 44);
             platform.name = "BattlementsPlatform_Wide42m_ForPlayerTowers_LOS_DownToCourtyard";
             Object.DestroyImmediate(platform.GetComponent<Collider>());
+            // T-008 (texture the inside of the castle structure): the battlements platform is the
+            // large interior surface the player sees from the courtyard; as a raw primitive it
+            // rendered flat default-white. Skin it with the SAME stone material the exterior walls
+            // use (M_21_Grey_Light_LPUP) so the interior reads as finished stone matching outside.
+            ApplyInteriorStoneMaterial(platform);
 
             // Crenellated feel + Quaternius modular walls around edge
             if (qWallStraight != null)
@@ -361,13 +366,13 @@ namespace DeNelle.Editor
             // destroyed — the stair top must overlap that nav plane or the bake won't fuse).
             BuildGrandStair(root.transform);
 
-            if (qStairsExt != null)
-            {
-                var qs = (GameObject)PrefabUtility.InstantiatePrefab(qStairsExt);
-                qs.transform.SetParent(upper.transform, false);
-                qs.transform.localPosition = new Vector3(-2, 0, -20);
-                qs.name = "QuaterniusStairs_UpperAccess";
-            }
+            // T-009 (steps should be removed): the old decorative "QuaterniusStairs_UpperAccess"
+            // prop sat on the upper battlements (localPos -2,0,-20, y~11) leading NOWHERE — the
+            // REAL 2-level climb is the GrandStair built above. It read as a redundant/floating
+            // staircase, which is the stray "steps" the owner flagged. REMOVED from the build path.
+            // (The functional GrandStair_CourtyardToBattlements + the already-removed stray
+            // MainStairs_Poly_ToUpperBattlements are unaffected.) Suppress unused-local warning.
+            _ = qStairsExt;
 
             // === BEAUTY + DEFENSIVE DRESSING (vines, crates, balconies from Quaternius) ===
             if (qVine1 != null)
@@ -450,6 +455,47 @@ namespace DeNelle.Editor
                 Debug.LogWarning($"[CastleHubBuilder] Missing Quaternius prefab: {path}");
             }
             return go;
+        }
+
+        // =====================================================================
+        //  T-008 — interior stone material. Reuses the EXACT palette material the exterior
+        //  Wall_Medieval_Stone prefab renders with (polyperfect single-atlas palette
+        //  M_21_Grey_Light_LPUP) so interior surfaces match the outside. No new art authored.
+        //  Idempotent + graceful: LogWarning (not error) if the material is absent (pack not
+        //  imported on this machine) and leave the default material in place.
+        // =====================================================================
+        private const string InteriorStoneMatPath =
+            "Assets/polyperfect/Low Poly Ultimate Pack/Materials/Colors/M_21_Grey_Light_LPUP.mat";
+
+        private static Material _interiorStoneMat;
+
+        private static Material LoadInteriorStoneMaterial()
+        {
+            if (_interiorStoneMat != null) return _interiorStoneMat;
+            _interiorStoneMat = AssetDatabase.LoadAssetAtPath<Material>(InteriorStoneMatPath);
+            if (_interiorStoneMat == null)
+                Debug.LogWarning("[CastleHubBuilder] Interior stone material not found (pack not imported?): " +
+                                 InteriorStoneMatPath + " — interior left untextured.");
+            return _interiorStoneMat;
+        }
+
+        private static void ApplyInteriorStoneMaterial(GameObject go)
+        {
+            if (go == null) return;
+            var mat = LoadInteriorStoneMaterial();
+            if (mat == null) return;
+            foreach (var r in go.GetComponentsInChildren<MeshRenderer>(true))
+                if (r != null) r.sharedMaterial = mat;
+        }
+
+        // Apply the interior stone material to the interior shell surfaces present in the OPEN
+        // scene (the battlements platform primitive — the large flat interior surface). Used by
+        // the batch rebake so the committed scene's interior is textured without a full rebuild.
+        private static void ApplyInteriorStoneToScene()
+        {
+            var platform = GameObject.Find("BattlementsPlatform_Wide42m_ForPlayerTowers_LOS_DownToCourtyard");
+            if (platform != null) { ApplyInteriorStoneMaterial(platform); Log("BATCH-RECIPE: interior stone material applied to battlements platform (T-008)."); }
+            else Log("BATCH-RECIPE: battlements platform not found — interior texture pass skipped (T-008).");
         }
 
         // =====================================================================
@@ -1204,8 +1250,17 @@ namespace DeNelle.Editor
             BuildNavMeshFloor(parent);
             var strayStair = GameObject.Find("MainStairs_Poly_ToUpperBattlements");
             if (strayStair != null) Object.DestroyImmediate(strayStair);
+            // T-009: also strip the redundant floating decorative stair from any prior build that
+            // is baked into the saved scene (the real climb is GrandStair_CourtyardToBattlements).
+            var floatingStair = GameObject.Find("QuaterniusStairs_UpperAccess");
+            if (floatingStair != null) { Object.DestroyImmediate(floatingStair); Log("BATCH-RECIPE: removed redundant floating QuaterniusStairs_UpperAccess (T-009)."); }
             if (GameObject.Find("GrandStair_CourtyardToBattlements") == null) BuildGrandStair(parent);
             Log("BATCH-RECIPE: floor + recipe gate strips + stair ensured.");
+
+            // 3c. T-008: texture the interior shell on the saved scene (the battlements platform
+            //     primitive was default-white). Reuse the exterior wall stone material so a
+            //     rebake leaves the interior reading as finished stone. Idempotent.
+            ApplyInteriorStoneToScene();
 
             // 3b. T-002/T-005: place the Heart of Elarion (lose-condition + enemy target) so
             //     WaveManager._heart is non-null and Enemy.DriveNav() advances (enemies were

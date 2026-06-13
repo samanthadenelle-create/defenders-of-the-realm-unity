@@ -66,6 +66,17 @@ namespace DeNelle.Editor
                 placed++;
             }
 
+            // T-007 — CLOSE THE WALL SEAMS. The authored recipe places ONE corner tower + two
+            // wall runs flanking a gate, but leaves real gaps: (a) between the corner tower and
+            // the start of the wall run, and (b) at the towerless far end of the run, which only
+            // closes once the NEXT side's mirrored corner tower lands there. With one base wall
+            // length these read as disconnected segments / a visible seam between a run and the
+            // tower. We MEASURE the actual world-space renderer bounds of the placed pieces (never
+            // guess a length) and drop filler Wall_Medieval_Stone segments into every gap along the
+            // south wall line — EXCEPT the intentional gate opening. Done BEFORE the mirror so the
+            // fillers mirror x4 and every side closes identically. Does NOT move any authored piece.
+            CloseSouthWallSeams(parent.transform, recipe);
+
             // Mirror south -> West/North/East around world origin (the Heart at 0,0,0).
             foreach (var (angle, label) in Sides)
             {
@@ -83,5 +94,120 @@ namespace DeNelle.Editor
 
         private static Vector3 V(float[] a, Vector3 fallback = default)
             => (a != null && a.Length == 3) ? new Vector3(a[0], a[1], a[2]) : fallback;
+
+        // =====================================================================
+        //  T-007 — fill gaps along the SOUTH wall line so the perimeter reads as ONE connected
+        //  wall (run abuts its corner tower; the towerless far end reaches the adjacent side's
+        //  mirrored corner). MEASURE-not-guess: we use each placed piece's real world-space
+        //  renderer bounds. The only gap we preserve is the authored gate opening.
+        // =====================================================================
+        private const float GateClearHalf = 7.5f;  // keep ~15m clear around the gate centre (4 gates)
+        private const float MinGap        = 1.0f;   // ignore hairline seams below this
+
+        private static void CloseSouthWallSeams(Transform southParent, Recipe recipe)
+        {
+            var wallPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(PolyRoot + "Wall_Medieval_Stone.prefab");
+            if (wallPrefab == null) { Debug.LogWarning("[CastleWallsFromRecipe] Wall_Medieval_Stone prefab missing — seam fill skipped (T-007)."); return; }
+
+            // Wall line geometry: z and the base wall length come from MEASURED bounds, not constants.
+            // Gate centre (world X) from the recipe so we never wall over the opening.
+            float gateX = 0f, lineZ = -40.6f;
+            bool gotGate = false;
+            if (recipe.pieces != null)
+                foreach (var p in recipe.pieces)
+                    if (p != null && p.name == "Gate_South" && p.pos != null && p.pos.Length == 3)
+                    { gateX = p.pos[0]; lineZ = p.pos[2]; gotGate = true; }
+            if (!gotGate) Debug.LogWarning("[CastleWallsFromRecipe] Gate_South not in recipe — using fallback gate centre 0 (T-007).");
+
+            // Measure the X-extent the existing south pieces already cover, and the base wall length
+            // (the un-scaled Wall_Medieval_Stone footprint along X) from a placed wall renderer.
+            float minX = float.MaxValue, maxX = float.MinValue, baseWallLen = 0f;
+            foreach (Transform child in southParent)
+            {
+                var rends = child.GetComponentsInChildren<MeshRenderer>(true);
+                if (rends.Length == 0) continue;
+                Bounds b = rends[0].bounds;
+                for (int i = 1; i < rends.Length; i++) b.Encapsulate(rends[i].bounds);
+                minX = Mathf.Min(minX, b.min.x);
+                maxX = Mathf.Max(maxX, b.max.x);
+                if (child.name.StartsWith("Wall_South"))
+                {
+                    float sx = Mathf.Abs(child.localScale.x);
+                    if (sx > 0.001f) baseWallLen = Mathf.Max(baseWallLen, b.size.x / sx);
+                }
+            }
+            if (baseWallLen < 0.5f) baseWallLen = 10f; // safety fallback if no wall measured
+
+            // Target span: from the south corner tower (left) to the adjacent East side's mirrored
+            // corner tower, which lands near world X = +|towerLocalX| after a 270deg mirror.
+            float towerLocalX = -42.33f;
+            if (recipe.pieces != null)
+                foreach (var p in recipe.pieces)
+                    if (p != null && p.name != null && p.name.StartsWith("CornerTower") && p.pos != null && p.pos.Length == 3)
+                        towerLocalX = p.pos[0];
+            float spanMin = Mathf.Min(minX, towerLocalX + 2f);     // start inside the corner tower
+            float spanMax = Mathf.Max(maxX, Mathf.Abs(towerLocalX)); // reach the mirrored opposite corner
+
+            // Build an occupancy list of [min,max] X intervals the EXISTING pieces cover, plus the
+            // gate opening as a permanent "occupied" (do-not-fill) interval.
+            var occupied = new System.Collections.Generic.List<(float a, float b)>();
+            foreach (Transform child in southParent)
+            {
+                var rends = child.GetComponentsInChildren<MeshRenderer>(true);
+                if (rends.Length == 0) continue;
+                Bounds bb = rends[0].bounds;
+                for (int i = 1; i < rends.Length; i++) bb.Encapsulate(rends[i].bounds);
+                occupied.Add((bb.min.x, bb.max.x));
+            }
+            occupied.Add((gateX - GateClearHalf, gateX + GateClearHalf)); // protect the gate opening
+            occupied.Sort((u, v) => u.a.CompareTo(v.a));
+
+            // Merge intervals, then fill every gap between consecutive intervals (and the leading/
+            // trailing gap to spanMin/spanMax) with right-sized scaled wall segments.
+            var merged = new System.Collections.Generic.List<(float a, float b)>();
+            foreach (var iv in occupied)
+            {
+                if (merged.Count > 0 && iv.a <= merged[merged.Count - 1].b + 0.01f)
+                {
+                    var last = merged[merged.Count - 1];
+                    merged[merged.Count - 1] = (last.a, Mathf.Max(last.b, iv.b));
+                }
+                else merged.Add(iv);
+            }
+
+            int fillers = 0;
+            float cursor = spanMin;
+            for (int i = 0; i <= merged.Count; i++)
+            {
+                float gapEnd = (i < merged.Count) ? merged[i].a : spanMax;
+                FillGap(southParent, wallPrefab, cursor, gapEnd, lineZ, baseWallLen, ref fillers);
+                if (i < merged.Count) cursor = Mathf.Max(cursor, merged[i].b);
+            }
+
+            Debug.Log($"[CastleWallsFromRecipe] T-007 seam fill: base wall len {baseWallLen:F2}m, " +
+                      $"span [{spanMin:F1},{spanMax:F1}] on z={lineZ:F1}, gate clear ±{GateClearHalf} @x={gateX:F1} — added {fillers} filler segment(s).");
+        }
+
+        // Fill [from,to] along the south wall line with one scaled Wall_Medieval_Stone (skips a gap
+        // narrower than MinGap; a single scaled segment spans any width cleanly for a low-poly wall).
+        private static void FillGap(Transform parent, GameObject wallPrefab, float from, float to,
+                                    float lineZ, float baseWallLen, ref int fillers)
+        {
+            float gap = to - from;
+            if (gap < MinGap) return;
+            float centerX = (from + to) * 0.5f;
+            float scaleX  = gap / baseWallLen;
+
+            var go = (GameObject)PrefabUtility.InstantiatePrefab(wallPrefab);
+            go.name = "Wall_South_SeamFill_" + (fillers + 1);
+            go.transform.SetParent(parent, false);
+            // South recipe pieces face rot Y=180 (parent at origin, no rot) — match so the filler
+            // renders the same face as the authored runs.
+            go.transform.localPosition    = new Vector3(centerX, 0f, lineZ);
+            go.transform.localEulerAngles = new Vector3(0f, 180f, 0f);
+            go.transform.localScale       = new Vector3(scaleX, 1f, 1f);
+            Undo.RegisterCreatedObjectUndo(go, "Recreate Castle Walls");
+            fillers++;
+        }
     }
 }
