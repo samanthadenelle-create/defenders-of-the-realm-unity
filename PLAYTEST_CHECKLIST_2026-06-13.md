@@ -10,7 +10,7 @@ back to flow-first triage, not a patch.
 | 2 | **Dev tools after Yarn** | After ANY companion/vendor dialogue closes, the corner DEV panel + Settings→DevTools are **still clickable**. | `OnboardingPanelGuard` neutralises the onboarding UITK panel in gameplay scenes | |
 | 3 | **Wave start timing** | First wave begins **~45s** after entering the castle (not 5 min). | `waves.json` wave-1 `countdownSeconds` 300→45 | ✅ **PASS** |
 | 4 | **Vendor categories + economy** | Each vendor lists **only its type** (armorer=armor, smith=weapons, market=potions); buying **deducts** the wallet and the **HUD number drops visibly**. | `VendorStockContract` + `HeartHudBridge` economy push | |
-| 5 | **Hero faces target** | Hero **turns to face** the enemy on attack/cast (incl. AoE/Meteor at range). | `HeroAbilities.FaceCastTarget` via `ResolveBlastCentre` | |
+| 5 | **Hero faces target** | Hero **turns to face** the enemy on attack/cast (incl. AoE/Meteor at range). | `HeroAbilities.FaceCastTarget` via `ResolveBlastCentre` | ✅ **PASS** (build 4) |
 | 6 | **Tree of Life grounded** | Tree sits **on the ground**, plaza walkable around it (no giant invisible blocker). | Baked trunk capsule (Heart collider-scale fix) | ✅ **PASS** |
 | 7 | **Knight no extreme-range snipe** | Knight melee (Strike/Snare) only connects **in reach** — no cross-map hits. | `HeroAbilities` InReach gate (WO-398) | ✅ **PASS** (build 3, owner-confirmed) — `atk`→`origin` reach fix. |
 | 8 | **Enemy variety** | A wave is **mixed** (goblins/orcs/skeletons/etc.), not all one type. | enemy roster / spawn variety | 🔧 **FIX APPLIED — retest.** "Wight" = Demon/OgreMage (new Tripo FBX): shipped raw Phong (magenta) + no rotation. Added `-90°` yaw + `FixTripoMaterials=true` for both in EnemyFactory.cs. |

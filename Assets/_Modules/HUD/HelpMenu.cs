@@ -50,19 +50,32 @@ namespace DeNelle.HUD
             Instance = this;
             _document = GetComponent<UIDocument>();
             if (_document == null) _document = gameObject.AddComponent<UIDocument>();
-            // Borrow whatever PanelSettings the scene already ships. We look
-            // for an existing UIDocument in the active scene and reuse its
-            // panel settings — works regardless of which PanelSettings asset
-            // the scene happens to use.
+            // OWN, privately-named PanelSettings (RCA 2026-06-13). We USED to BORROW
+            // another UIDocument's panelSettings — but in the castle hub the only one
+            // available is the shared "OnboardingPanelSettings" asset, and
+            // OnboardingPanelGuard disables EVERY doc whose panel is named
+            // "OnboardingPanelSettings" (it matches by NAME) in non-onboarding scenes —
+            // tearing our borrowed panel down → panel=<null>, so Settings (and the dev
+            // tools that borrow our panel) rendered nothing ("still cant get to settings").
+            // Create our OWN PanelSettings with a unique name the guard can't match, and
+            // borrow only the themeStyleSheet so fonts/colors still inherit. WO-417's
+            // explicit LegacyRuntime.ttf guarantees text renders even if no theme is found.
+            // (Pattern: DevBootstrap / ArenaDefensePaletteUI runtime PanelSettings.)
             if (_document.panelSettings == null)
             {
+                var ps = ScriptableObject.CreateInstance<PanelSettings>();
+                ps.name = "HelpRuntimePanelSettings";
                 foreach (var existing in UnityEngine.Object.FindObjectsByType<UIDocument>(
                              FindObjectsInactive.Include, FindObjectsSortMode.None))
                 {
                     if (existing == _document || existing.panelSettings == null) continue;
-                    _document.panelSettings = existing.panelSettings;
-                    break;
+                    if (existing.panelSettings.themeStyleSheet != null)
+                    {
+                        ps.themeStyleSheet = existing.panelSettings.themeStyleSheet;
+                        break;
+                    }
                 }
+                _document.panelSettings = ps;
             }
             if (_document.panelSettings == null)
             {
