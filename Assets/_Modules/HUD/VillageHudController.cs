@@ -766,10 +766,15 @@ namespace DeNelle.HUD
             // never appears to move). Still hidden at full HP in a quiet hub (the T-004 intent).
             bool heroHurt = _hpMax > 0f && _hpCurrent < _hpMax - 0.01f;
             bool show = (_waveCombatActive || heroHurt) && _combatHudVisible;
-            if (show == _lastCombatGate && _vitalsCluster != null
-                && _vitalsCluster.gameObject.activeSelf == show) return;
+            // Owner: hero + companion HEALTH BARS should be visible in TOWN, not only in combat.
+            // Show the party stack (HP bars/portraits) in the hub OR combat; keep the bottom-left
+            // vitals cluster (mana/XP — the context-free bit T-004 hid) combat-only.
+            bool showParty = (InVillage || show) && _combatHudVisible;
+            if (show == _lastCombatGate
+                && _vitalsCluster != null && _vitalsCluster.gameObject.activeSelf == show
+                && _partyStack != null && _partyStack.activeSelf == showParty) return;
             _lastCombatGate = show;
-            SetActiveSafe(_partyStack, show);
+            SetActiveSafe(_partyStack, showParty);
             SetActiveSafe(_vitalsCluster, show);
         }
 
@@ -941,6 +946,11 @@ namespace DeNelle.HUD
 
             go.AddComponent<GraphicRaycaster>();
             _rootGroup = go.AddComponent<CanvasGroup>();
+            // Failsafe (HUD-disappearing/BAG-dead/controls-frozen): a fresh HUD must ALWAYS
+            // start visible + interactive. If an Arena setup screen latched SetHudVisible(false)
+            // (alpha 0 + blocksRaycasts off) and didn't restore, a respawn could otherwise
+            // inherit a suppressed look. Explicitly reset so the base HUD can't come up dead.
+            _rootGroup.alpha = 1f; _rootGroup.interactable = true; _rootGroup.blocksRaycasts = true;
 
             // Safe-area root — all clusters live under this so notch/rounded
             // corners never clip the HUD on phones.
@@ -1635,6 +1645,11 @@ namespace DeNelle.HUD
             // MOCKUP ALIGN: dark-glass framed panel (NOT light parchment) so the bottom-
             // right ability cluster reads in the shared dark-glass + gold language.
             FramePanel(_skillBar.gameObject, ElarionUiKit.GlassDeep);
+            // The skill-bar BACKGROUND frame must not eat taps — only the ability buttons need
+            // them. The battle skill bar sits in the bottom-right (higher canvas) near the town
+            // BAG diamond; a raycastable frame there could intercept the BAG tap. The ability
+            // button seats keep their own raycast, so this only frees the dead background.
+            if (_skillBar.TryGetComponent<UnityEngine.UI.Image>(out var skillFrame)) skillFrame.raycastTarget = false;
 
             // MOCKUP ALIGN: two labeled rows — "SPELLS" (top row, slots 0/1) and
             // "WEAPON SKILLS" (bottom row, slots 2/3), matching hud_mobile_combat's

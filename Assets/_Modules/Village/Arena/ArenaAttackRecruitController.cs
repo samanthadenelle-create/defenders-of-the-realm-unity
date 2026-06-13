@@ -58,7 +58,20 @@ namespace DeNelle.Village.Arena
 
         private void OnDestroy()
         {
+            // Defensive HUD restore: if this controller is torn down (scene change,
+            // destroyed object, exception) while a recruit session was active, Exit()/
+            // Launch() may never have run — so the base HUD would stay alpha=0 /
+            // non-interactive (HUD vanishes, BAG dead, controls frozen). Re-show it from
+            // EVERY teardown path. Idempotent: a second SetVisible(true) is harmless.
+            if (IsActive) ArenaHudBridge.SetVisible(true);
             if (Instance == this) Instance = null;
+        }
+
+        private void OnDisable()
+        {
+            // Mirror OnDestroy's defensive restore for the disable path (the GameObject
+            // being deactivated counts as "left the screen by another path").
+            if (IsActive) ArenaHudBridge.SetVisible(true);
         }
 
         /// <summary>Ensure a controller exists (entry point for a HUD "Attack" button).</summary>
