@@ -2,6 +2,7 @@
 // MainCastle_Hall so the owner can judge the Wood->Iron->Reinforced-Steel look in-game.
 // PREVIEW ONLY — a castle rebake will wipe this row (it's not in BuildCastleHub).
 // Batchmode: DeNelle.Editor.WallPreview.PlaceInCastle
+using System.Collections.Generic;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -41,49 +42,54 @@ namespace DeNelle.Editor
 
                 for (int i = 0; i < RunLength; i++)
                 {
+                    // Parent wrapper (no rotation) so the per-axis box-fit maps cleanly to WORLD
+                    // axes even though the mesh child is rotated -90X to stand upright (owner: the
+                    // FBX imports lying on its back; -90X stands it up — same as the Tree of Life).
+                    var seg = new GameObject($"Wall_{name}_{i}");
+                    seg.transform.SetParent(row.transform, false);
+                    float x = (i - (RunLength - 1) / 2f) * TargetSize.x;   // contiguous, centred run
+                    seg.transform.localPosition = new Vector3(x, 0f, z);
+
                     var go = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
                     if (go == null) go = Object.Instantiate(prefab);
-                    go.name = $"Wall_{name}_{i}";
-                    go.transform.SetParent(row.transform, false);
-                    float x = (i - (RunLength - 1) / 2f) * TargetSize.x;   // contiguous, centred run
-                    go.transform.localPosition = new Vector3(x, 0f, z);
-                    go.transform.localRotation = Quaternion.identity;
+                    go.transform.SetParent(seg.transform, false);
+                    go.transform.localPosition = Vector3.zero;
+                    go.transform.localRotation = Quaternion.Euler(-90f, 0f, 0f);   // stand it upright
 
-                    // Normalize to the exact 1.5 x 3.0 x 1.5 box (per-axis from world bounds).
+                    // Box-fit to 1.5 x 3.0 x 1.5 via the PARENT (world-aligned) from the rotated
+                    // child's world bounds (-90X is axis-aligned, so no shear).
                     var rends = go.GetComponentsInChildren<Renderer>(true);
                     if (rends.Length > 0)
                     {
                         var b = rends[0].bounds;
                         for (int k = 1; k < rends.Length; k++) b.Encapsulate(rends[k].bounds);
-                        var s = go.transform.localScale;
+                        var s = seg.transform.localScale;
                         if (b.size.x > 0.0001f) s.x *= TargetSize.x / b.size.x;
                         if (b.size.y > 0.0001f) s.y *= TargetSize.y / b.size.y;
                         if (b.size.z > 0.0001f) s.z *= TargetSize.z / b.size.z;
-                        go.transform.localScale = s;
-                        // Owner: rotate each segment 90deg on Y so the decorated face fronts the run
-                        // (footprint is symmetric 1.5x1.5, so this keeps the 1.5x3x1.5 box clean).
-                        go.transform.localRotation = Quaternion.Euler(0f, 90f, 0f);
-                        // Ground-seat (re-measure after scale + rotation).
+                        seg.transform.localScale = s;
+                        // Ground-seat the parent (re-measure after scale + rotation).
                         var r2 = go.GetComponentsInChildren<Renderer>(true);
                         var b2 = r2[0].bounds;
                         for (int k = 1; k < r2.Length; k++) b2.Encapsulate(r2[k].bounds);
-                        go.transform.position += new Vector3(0f, -b2.min.y, 0f);
+                        seg.transform.position += new Vector3(0f, -b2.min.y, 0f);
                     }
 
-                    // Tripo color fixer — these are Tripo meshes; the fixer makes their baked
-                    // vertex/albedo colors render under URP (they import as flat Lit otherwise).
-                    var tripoFix = FindType("DeNelle.Core.TripoMaterialFixer");
-                    if (tripoFix != null && go.GetComponent(tripoFix) == null) go.AddComponent(tripoFix);
-
-                    if (name == "Steel")
-                    {
+                    // Assign the tier's textured URP material (Tripo basecolor/normal/metallic;
+                    // steel also emissive so the runes glow). Falls back to the Tripo fixer (grey)
+                    // if a tier's textures aren't imported yet.
+                    var mat = BuildTierMaterial(name.ToLower());
+                    if (mat != null)
                         foreach (var r in go.GetComponentsInChildren<Renderer>(true))
-                            foreach (var m in r.sharedMaterials)
-                                if (m != null && m.HasProperty("_EmissionColor"))
-                                {
-                                    m.EnableKeyword("_EMISSION");
-                                    m.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
-                                }
+                        {
+                            var ms = r.sharedMaterials;
+                            for (int j = 0; j < ms.Length; j++) ms[j] = mat;
+                            r.sharedMaterials = ms;
+                        }
+                    else
+                    {
+                        var tripoFix = FindType("DeNelle.Core.TripoMaterialFixer");
+                        if (tripoFix != null && go.GetComponent(tripoFix) == null) go.AddComponent(tripoFix);
                     }
                 }
                 Debug.Log($"[WallPreview] placed {RunLength}x {name} run (1.5x3x1.5 each) at z={z}.");
@@ -102,6 +108,54 @@ namespace DeNelle.Editor
                 if (t != null) return t;
             }
             return null;
+        }
+
+        private static readonly Dictionary<string, Material> _matCache = new Dictionary<string, Material>();
+
+        // URP/Lit material for a tier from its Tripo maps in Resources/Walls/Textures/{tier}_*.
+        private static Material BuildTierMaterial(string tier)
+        {
+            if (_matCache.TryGetValue(tier, out var cached) && cached != null) return cached;
+            var baseTex = Resources.Load<Texture2D>($"Walls/Textures/{tier}_basecolor");
+            if (baseTex == null) return null;   // this tier's textures not imported yet
+
+            // Import-type fixups: normal map as NormalMap; metallic/roughness linear.
+            SetImporter($"Walls/Textures/{tier}_normal", TextureImporterType.NormalMap, false);
+            SetImporter($"Walls/Textures/{tier}_metallic", TextureImporterType.Default, true);
+            SetImporter($"Walls/Textures/{tier}_roughness", TextureImporterType.Default, true);
+            var normalTex = Resources.Load<Texture2D>($"Walls/Textures/{tier}_normal");
+            var metalTex = Resources.Load<Texture2D>($"Walls/Textures/{tier}_metallic");
+
+            var mat = new Material(Shader.Find("Universal Render Pipeline/Lit")) { name = $"Wall_{tier}_Mat" };
+            mat.SetTexture("_BaseMap", baseTex);
+            if (normalTex != null) { mat.SetTexture("_BumpMap", normalTex); mat.EnableKeyword("_NORMALMAP"); }
+            if (metalTex != null)
+            {
+                mat.SetTexture("_MetallicGlossMap", metalTex);
+                mat.EnableKeyword("_METALLICSPECGLOSSMAP");
+                mat.SetFloat("_Metallic", 1f);
+                mat.SetFloat("_GlossMapScale", tier == "wood" ? 0.2f : 0.45f); // smoothness control
+            }
+            if (tier == "steel")
+            {
+                mat.EnableKeyword("_EMISSION");
+                mat.SetTexture("_EmissionMap", baseTex);      // bright blue runes in basecolor emit
+                mat.SetColor("_EmissionColor", new Color(0.45f, 0.65f, 1f) * 1.6f);
+                mat.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
+            }
+            _matCache[tier] = mat;
+            return mat;
+        }
+
+        private static void SetImporter(string resPath, TextureImporterType type, bool linear)
+        {
+            var p = $"Assets/Resources/{resPath}.JPEG";
+            var imp = AssetImporter.GetAtPath(p) as TextureImporter;
+            if (imp == null) return;
+            bool changed = false;
+            if (imp.textureType != type) { imp.textureType = type; changed = true; }
+            if (linear && imp.sRGBTexture) { imp.sRGBTexture = false; changed = true; }
+            if (changed) imp.SaveAndReimport();
         }
     }
 }
