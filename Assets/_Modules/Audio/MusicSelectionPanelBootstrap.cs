@@ -16,6 +16,7 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UIElements;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Audio
 {
@@ -41,11 +42,17 @@ namespace DeNelle.Audio
         {
             if (!scene.IsValid()) return;
 
-            // One panel per scene.
+            // GLOBAL dedupe (across ALL loaded scenes) — not per-scene. The
+            // additive OuterWorld load fires sceneLoaded with a new scene and a
+            // per-scene check missed the live instance, spawning a duplicate.
             foreach (var existing in Object.FindObjectsByType<MusicSelectionPanel>(
                          FindObjectsInactive.Include, FindObjectsSortMode.None))
             {
-                if (existing != null && existing.gameObject.scene == scene) return;
+                if (existing != null)
+                {
+                    FlowTrace.Warn("UI", "duplicate MusicSelectionPanel suppressed (one already exists)");
+                    return;
+                }
             }
 
             var panel = FindPanelSettings();
@@ -57,6 +64,7 @@ namespace DeNelle.Audio
             ui.panelSettings = panel;
             ui.sortingOrder = 96; // matches the panel's own sortingOrder
             go.AddComponent<MusicSelectionPanel>();
+            FlowTrace.Step("UI", "MusicSelectionPanel created (single instance)");
         }
 
         private static PanelSettings FindPanelSettings()

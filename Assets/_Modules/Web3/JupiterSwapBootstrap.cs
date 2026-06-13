@@ -27,6 +27,7 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UIElements;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Web3
 {
@@ -70,11 +71,16 @@ namespace DeNelle.Web3
             if (!scene.IsValid()) return;
             if (!IsAllowedScene(scene.name)) return;
 
-            // Idempotent — one host per scene.
+            // GLOBAL dedupe (across ALL loaded scenes) — see HelpMenuBootstrap.
+            // One host total, not one per scene.
             foreach (var existing in Object.FindObjectsByType<JupiterSwapService>(
                          FindObjectsInactive.Include, FindObjectsSortMode.None))
             {
-                if (existing != null && existing.gameObject.scene == scene) return;
+                if (existing != null)
+                {
+                    FlowTrace.Warn("UI", "duplicate JupiterSwapHost suppressed (one already exists)");
+                    return;
+                }
             }
 
             // The panel UXML ships in Assets/_Modules/Web3/Resources/ so this
@@ -115,6 +121,7 @@ namespace DeNelle.Web3
             // controller (binds the UXML in OnEnable, once the doc is configured).
             go.AddComponent<JupiterSwapService>();
             go.AddComponent<JupiterSwapPanelController>();
+            FlowTrace.Step("UI", "JupiterSwapHost created (single instance)");
         }
 
         private static bool IsAllowedScene(string sceneName)

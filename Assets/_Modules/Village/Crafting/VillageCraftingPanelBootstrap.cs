@@ -18,6 +18,7 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UIElements;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village.Crafting
 {
@@ -38,11 +39,15 @@ namespace DeNelle.Village.Crafting
         {
             if (!scene.IsValid()) return;
 
-            // One panel per scene — bail if it's already alive.
+            // GLOBAL dedupe (across ALL loaded scenes) — see HelpMenuBootstrap.
             foreach (var existing in UnityEngine.Object.FindObjectsByType<VillageCraftingPanel>(
                          FindObjectsInactive.Include, FindObjectsSortMode.None))
             {
-                if (existing != null && existing.gameObject.scene == scene) return;
+                if (existing != null)
+                {
+                    FlowTrace.Warn("UI", "duplicate VillageCraftingPanel suppressed (one already exists)");
+                    return;
+                }
             }
 
             if (FindHero() == null) return; // Title / HeroSelect skip.
@@ -57,6 +62,7 @@ namespace DeNelle.Village.Crafting
             ui.sortingOrder = 120; // above HUD chips / below admin overlay
             go.AddComponent<VillageCraftingPanel>();
             go.AddComponent<VillageCraftingPanelInput>();
+            FlowTrace.Step("UI", "VillageCraftingPanel created (single instance)");
         }
 
         private static Transform FindHero()

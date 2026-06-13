@@ -6,6 +6,7 @@
 
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.HUD
 {
@@ -25,14 +26,22 @@ namespace DeNelle.HUD
         private static void SpawnInScene(Scene scene)
         {
             if (!scene.IsValid()) return;
+            // GLOBAL dedupe (across ALL loaded scenes) — see HelpMenuBootstrap.
+            // A per-scene check let the additive OuterWorld load spawn a second
+            // AdminOverlay that intercepted the Dev-tools button.
             foreach (var existing in UnityEngine.Object.FindObjectsByType<AdminOverlay>(
                          FindObjectsInactive.Include, FindObjectsSortMode.None))
             {
-                if (existing != null && existing.gameObject.scene == scene) return;
+                if (existing != null)
+                {
+                    FlowTrace.Warn("UI", "duplicate AdminOverlay suppressed (one already exists)");
+                    return;
+                }
             }
             var go = new GameObject("AdminOverlay");
             SceneManager.MoveGameObjectToScene(go, scene);
             go.AddComponent<AdminOverlay>();
+            FlowTrace.Step("UI", "AdminOverlay created (single instance)");
         }
     }
 }

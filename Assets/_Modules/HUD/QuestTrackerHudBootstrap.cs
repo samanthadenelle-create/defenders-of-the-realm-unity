@@ -7,6 +7,7 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UIElements;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.HUD
 {
@@ -30,10 +31,15 @@ namespace DeNelle.HUD
             // TOWN ACTIONS "Quests" button there. Still spawns in combat/dungeon play scenes.
             if (DeNelle.Core.HubScenes.IsHub(scene.name)) return;
 
+            // GLOBAL dedupe (across ALL loaded scenes) — see HelpMenuBootstrap.
             foreach (var existing in UnityEngine.Object.FindObjectsByType<QuestTrackerHud>(
                          FindObjectsInactive.Include, FindObjectsSortMode.None))
             {
-                if (existing != null && existing.gameObject.scene == scene) return;
+                if (existing != null)
+                {
+                    FlowTrace.Warn("UI", "duplicate QuestTrackerHud suppressed (one already exists)");
+                    return;
+                }
             }
 
             if (FindHero() == null) return; // Title/HeroSelect skip.
@@ -47,6 +53,7 @@ namespace DeNelle.HUD
             ui.panelSettings = panel;
             ui.sortingOrder = 80; // above wave timer / below modals (same band as daily chips)
             go.AddComponent<QuestTrackerHud>();
+            FlowTrace.Step("UI", "QuestTrackerHud created (single instance)");
         }
 
         private static Transform FindHero()

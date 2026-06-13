@@ -7,6 +7,7 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UIElements;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.HUD
 {
@@ -27,10 +28,15 @@ namespace DeNelle.HUD
         {
             if (!scene.IsValid()) return;
 
+            // GLOBAL dedupe (across ALL loaded scenes) — see HelpMenuBootstrap.
             foreach (var existing in UnityEngine.Object.FindObjectsByType<ClanChatPanel>(
                          FindObjectsInactive.Include, FindObjectsSortMode.None))
             {
-                if (existing != null && existing.gameObject.scene == scene) return;
+                if (existing != null)
+                {
+                    FlowTrace.Warn("UI", "duplicate ClanChatPanel suppressed (one already exists)");
+                    return;
+                }
             }
 
             if (FindHero() == null) return; // Title / HeroSelect skip.
@@ -44,6 +50,7 @@ namespace DeNelle.HUD
             ui.panelSettings = panel;
             ui.sortingOrder = 85; // above the daily-quest stack (80), below modals
             go.AddComponent<ClanChatPanel>();
+            FlowTrace.Step("UI", "ClanChatPanel created (single instance)");
         }
 
         private static Transform FindHero()

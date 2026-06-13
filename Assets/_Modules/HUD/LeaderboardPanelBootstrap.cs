@@ -8,6 +8,7 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UIElements;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.HUD
 {
@@ -28,10 +29,15 @@ namespace DeNelle.HUD
         {
             if (!scene.IsValid()) return;
 
+            // GLOBAL dedupe (across ALL loaded scenes) — see HelpMenuBootstrap.
             foreach (var existing in UnityEngine.Object.FindObjectsByType<LeaderboardPanel>(
                          FindObjectsInactive.Include, FindObjectsSortMode.None))
             {
-                if (existing != null && existing.gameObject.scene == scene) return;
+                if (existing != null)
+                {
+                    FlowTrace.Warn("UI", "duplicate LeaderboardPanel suppressed (one already exists)");
+                    return;
+                }
             }
 
             if (FindHero() == null) return; // Title / HeroSelect skip.
@@ -45,6 +51,7 @@ namespace DeNelle.HUD
             ui.panelSettings = panel;
             ui.sortingOrder = 86; // just above ClanChatPanel (85), below modals
             go.AddComponent<LeaderboardPanel>();
+            FlowTrace.Step("UI", "LeaderboardPanel created (single instance)");
         }
 
         private static Transform FindHero()

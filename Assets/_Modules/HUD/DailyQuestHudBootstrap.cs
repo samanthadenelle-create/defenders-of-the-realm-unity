@@ -7,6 +7,7 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UIElements;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.HUD
 {
@@ -29,10 +30,15 @@ namespace DeNelle.HUD
             // WO-411: spawns HIDDEN now (DailyQuestHud.Build → display:None); the TOWN ACTIONS "Quests"
             // button toggles it on-demand instead of free-floating top-right.
 
+            // GLOBAL dedupe (across ALL loaded scenes) — see HelpMenuBootstrap.
             foreach (var existing in UnityEngine.Object.FindObjectsByType<DailyQuestHud>(
                          FindObjectsInactive.Include, FindObjectsSortMode.None))
             {
-                if (existing != null && existing.gameObject.scene == scene) return;
+                if (existing != null)
+                {
+                    FlowTrace.Warn("UI", "duplicate DailyQuestHud suppressed (one already exists)");
+                    return;
+                }
             }
 
             if (FindHero() == null) return; // Title/HeroSelect skip.
@@ -46,6 +52,7 @@ namespace DeNelle.HUD
             ui.panelSettings = panel;
             ui.sortingOrder = 80; // above wave timer / below modals
             go.AddComponent<DailyQuestHud>();
+            FlowTrace.Step("UI", "DailyQuestHud created (single instance)");
         }
 
         private static Transform FindHero()

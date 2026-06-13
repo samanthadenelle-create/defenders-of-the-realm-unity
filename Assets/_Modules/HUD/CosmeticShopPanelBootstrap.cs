@@ -7,6 +7,7 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UIElements;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.HUD
 {
@@ -27,10 +28,17 @@ namespace DeNelle.HUD
         {
             if (!scene.IsValid()) return;
 
+            // GLOBAL dedupe (across ALL loaded scenes) — not per-scene. The
+            // additive OuterWorld load fired sceneLoaded with a new scene and a
+            // per-scene check missed the live instance, spawning a duplicate.
             foreach (var existing in UnityEngine.Object.FindObjectsByType<CosmeticShopPanel>(
                          FindObjectsInactive.Include, FindObjectsSortMode.None))
             {
-                if (existing != null && existing.gameObject.scene == scene) return;
+                if (existing != null)
+                {
+                    FlowTrace.Warn("UI", "duplicate CosmeticShopPanel suppressed (one already exists)");
+                    return;
+                }
             }
 
             if (FindHero() == null) return; // skip Title / HeroSelect
@@ -44,6 +52,7 @@ namespace DeNelle.HUD
             ui.panelSettings = panel;
             ui.sortingOrder = 95; // above HUD chips, below Help (100)
             go.AddComponent<CosmeticShopPanel>();
+            FlowTrace.Step("UI", "CosmeticShopPanel created (single instance)");
         }
 
         private static Transform FindHero()

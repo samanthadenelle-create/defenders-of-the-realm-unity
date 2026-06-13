@@ -14,6 +14,7 @@
 
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.HUD
 {
@@ -33,10 +34,15 @@ namespace DeNelle.HUD
         private static void SpawnInScene(Scene scene)
         {
             if (!scene.IsValid()) return;
+            // GLOBAL dedupe (across ALL loaded scenes) — see HelpMenuBootstrap.
             foreach (var existing in UnityEngine.Object.FindObjectsByType<CompassHud>(
                          FindObjectsInactive.Include, FindObjectsSortMode.None))
             {
-                if (existing != null && existing.gameObject.scene == scene) return;
+                if (existing != null)
+                {
+                    FlowTrace.Warn("UI", "duplicate CompassHud suppressed (one already exists)");
+                    return;
+                }
             }
 
             var hero = FindHero();
@@ -51,6 +57,7 @@ namespace DeNelle.HUD
             // every frame.
             var ticker = go.AddComponent<EnemyTargetTicker>();
             ticker.Compass = compass;
+            FlowTrace.Step("UI", "CompassHud created (single instance)");
         }
 
         /// <summary>

@@ -12,6 +12,7 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UIElements;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.HUD
 {
@@ -32,10 +33,15 @@ namespace DeNelle.HUD
         {
             if (!scene.IsValid()) return;
 
+            // GLOBAL dedupe (across ALL loaded scenes) — see HelpMenuBootstrap.
             foreach (var existing in Object.FindObjectsByType<HeroTalentPanel>(
                          FindObjectsInactive.Include, FindObjectsSortMode.None))
             {
-                if (existing != null && existing.gameObject.scene == scene) return;
+                if (existing != null)
+                {
+                    FlowTrace.Warn("UI", "duplicate HeroTalentPanel suppressed (one already exists)");
+                    return;
+                }
             }
 
             if (FindHero() == null) return; // Title / HeroSelect skip.
@@ -50,6 +56,7 @@ namespace DeNelle.HUD
             doc.sortingOrder = 110; // above HUD, above HelpMenu (100)
             go.AddComponent<HeroTalentPanel>();
             go.AddComponent<HeroTalentHotkey>();
+            FlowTrace.Step("UI", "HeroTalentPanel created (single instance)");
         }
 
         private static Transform FindHero()

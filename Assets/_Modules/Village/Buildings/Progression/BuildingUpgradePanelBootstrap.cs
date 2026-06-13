@@ -17,6 +17,7 @@
 // =============================================================================
 
 using DeNelle.Village;
+using DeNelle.Core.Diagnostics;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UIElements;
@@ -39,10 +40,15 @@ namespace DeNelle.Village.Buildings.Progression
         {
             if (!scene.IsValid()) return;
 
+            // GLOBAL dedupe (across ALL loaded scenes) — see HelpMenuBootstrap.
             foreach (var existing in Object.FindObjectsByType<BuildingUpgradePanel>(
                          FindObjectsInactive.Include, FindObjectsSortMode.None))
             {
-                if (existing != null && existing.gameObject.scene == scene) return;
+                if (existing != null)
+                {
+                    FlowTrace.Warn("UI", "duplicate BuildingUpgradePanel suppressed (one already exists)");
+                    return;
+                }
             }
 
             if (FindHero() == null) return; // Title / HeroSelect skip.
@@ -61,6 +67,7 @@ namespace DeNelle.Village.Buildings.Progression
             // speed/size fields actually pay out (consumes HarvestInterval +
             // effective yield → ResourceLedger.Credit). Shares the panel's lifetime.
             go.AddComponent<ResourceBuildingHarvester>();
+            FlowTrace.Step("UI", "BuildingUpgradePanel created (single instance)");
         }
 
         private static Transform FindHero()
