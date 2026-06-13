@@ -61,9 +61,13 @@ namespace DeNelle.Village
 
         private static void OnSceneLoaded(Scene scene, LoadSceneMode mode)
         {
-            // Only wire in the village (the HUD Build button lives there).
-            if (scene.name != null && scene.name.IndexOf("Village", System.StringComparison.OrdinalIgnoreCase) >= 0)
-                TryWire();
+            // Castle-hub fix: the HUD Build button lives wherever VillageHudController
+            // is — Village2 AND MainCastle_Hall — so the old "Village"-only scene-name
+            // filter wrongly skipped wiring in the castle hub (Build fired nothing).
+            // TryWire() is null-guarded (no-ops when no HUD) and idempotent (compares
+            // s_subscribedEvent by reference + detaches the old listener on a HUD
+            // reload), so calling it unconditionally is safe and won't double-subscribe.
+            TryWire();
         }
 
         /// <summary>
