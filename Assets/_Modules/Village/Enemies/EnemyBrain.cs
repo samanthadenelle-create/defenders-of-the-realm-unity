@@ -116,6 +116,7 @@ namespace DeNelle.Village
         private float     _healCooldown;
         private float     _suppressTimer;
         private float     _heroResolveTimer;   // WO-419: throttles periodic hero re-acquire.
+        private float     _provokedHeroResolveTimer;   // Audit P3: throttles retaliation-path hero re-acquire.
 
         private EnemyTacticalState _tacticalState = EnemyTacticalState.Rush;
 
@@ -388,9 +389,15 @@ namespace DeNelle.Village
             if (Time.time < _provokedUntil)
             {
                 // Lazily resolve the hero if it wasn't present at Awake (the enemy was
-                // just struck, so the hero definitely exists now).
-                if (_heroTransform == null)
+                // just struck, so the hero definitely exists now). Audit P3: FindHeroTransform
+                // is an O(n) scene scan — throttle it (0.5s) so an enemy provoked while the hero
+                // is absent doesn't spam the lookup every frame for the whole provoke window.
+                _provokedHeroResolveTimer -= Time.deltaTime;
+                if (_heroTransform == null && _provokedHeroResolveTimer <= 0f)
+                {
+                    _provokedHeroResolveTimer = 0.5f;
                     _heroTransform = FindHeroTransform();   // WO-450: component lookup
+                }
             }
             if (Time.time < _provokedUntil && _heroTransform != null)
             {
@@ -414,7 +421,11 @@ namespace DeNelle.Village
             // on the UnityEngine.Object (?? would return a fake-null); the TryFindByTag chain below is
             // safe because TryFindByTag returns a real null literal, not a destroyed-object reference.
             _heroResolveTimer -= Time.deltaTime;
-            if (_heroTransform == null && _heroResolveTimer <= 0f)
+            // Audit P2 (enemies-ai): treat a DISABLED (not just destroyed) hero as invalid so a
+            // stale ref to a deactivated hero gets re-resolved — matches Enemy.cs's activeInHierarchy
+            // check. Explicit null test first (?? would return a fake-null on the UnityEngine.Object).
+            bool heroValid = _heroTransform != null && _heroTransform.gameObject.activeInHierarchy;
+            if (!heroValid && _heroResolveTimer <= 0f)
             {
                 _heroResolveTimer = 1f;
                 _heroTransform = FindHeroTransform();   // WO-450: component lookup

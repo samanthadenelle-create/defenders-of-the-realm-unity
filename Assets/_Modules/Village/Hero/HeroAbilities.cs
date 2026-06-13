@@ -338,10 +338,25 @@ namespace DeNelle.Village
             Vector3? facePoint = AimPointOverride;   // DTT: face the crosshair directly
             if (facePoint == null)
             {
-                float maxR = def.Range + _enemyHitRadius;
-                var foe = InReach(LockedTarget, atk, maxR) ? LockedTarget : NearestHostile(atk, maxR);
-                if (foe == null) foe = LiveBoss();
-                if (foe != null) facePoint = foe.WorldPosition;
+                // Audit P2 (hero-combat): blast abilities resolve their CENTRE through
+                // ResolveBlastCentre/CastReach in ResolveEffect — face the SAME point so the
+                // hero turns toward where the blast actually lands, not the raw def.Range gate.
+                switch (def.EffectEnum)
+                {
+                    case AbilityEffect.Aoe:
+                    case AbilityEffect.Cleave:
+                    case AbilityEffect.Meteor:
+                        facePoint = ResolveBlastCentre(atk, origin);
+                        break;
+                    default:   // Strike / Snare — single-target reach gate (unchanged)
+                    {
+                        float maxR = def.Range + _enemyHitRadius;
+                        var foe = InReach(LockedTarget, atk, maxR) ? LockedTarget : NearestHostile(atk, maxR);
+                        if (foe == null) foe = LiveBoss();
+                        if (foe != null) facePoint = foe.WorldPosition;
+                        break;
+                    }
+                }
             }
 
             if (facePoint.HasValue) _loco.FaceToward(facePoint.Value);

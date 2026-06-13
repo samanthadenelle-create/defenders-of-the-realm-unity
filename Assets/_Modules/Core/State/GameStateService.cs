@@ -288,6 +288,8 @@ namespace DeNelle.Core.State
             {
                 Pets = s.Pets,
                 StarterPetId = s.StarterPetId,
+                PetName = s.PetName,   // Audit P2 (save-load) — persist the player-named starter
+
                 Onboarded = s.Onboarded,
                 BestWave = s.BestWave,
                 Resources = s.Resources,
@@ -352,6 +354,7 @@ namespace DeNelle.Core.State
             var s = _state;
             if (p.Pets != null) s.Pets = p.Pets;
             if (p.StarterPetId != null) s.StarterPetId = p.StarterPetId;
+            if (p.PetName != null) s.PetName = p.PetName;   // Audit P2 (save-load) — restore named starter
             if (p.Onboarded.HasValue) s.Onboarded = p.Onboarded.Value;
             if (p.BestWave.HasValue) s.BestWave = (int)p.BestWave.Value;
             if (p.Resources.HasValue) s.Resources = p.Resources.Value;

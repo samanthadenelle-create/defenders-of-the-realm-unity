@@ -560,9 +560,11 @@ namespace DeNelle.Onboarding
         // =====================================================================
 
         /// <summary>
-        /// Confirm tapped: writes the chosen starter-pet id to
-        /// <see cref="GameState.StarterPetId"/> and Save()s, then routes to the
-        /// Village — the end of the intro flow.
+        /// Confirm tapped: routes to the Castle — the end of the intro flow.
+        /// Audit P3 / PET-ACQUISITION REWORK (owner 2026-06-13): this screen NO LONGER
+        /// grants a pet. The card tap is a non-binding preview; the actual pet is acquired
+        /// from the Echo Hollow pet-shop (PetHouse Yarn node → &lt;&lt;spawn_named_pet&gt;&gt;
+        /// → PetAcquisitionService.Acquire). Nothing is persisted here. See RouteToVillage().
         /// </summary>
         private void OnConfirmClicked()
         {

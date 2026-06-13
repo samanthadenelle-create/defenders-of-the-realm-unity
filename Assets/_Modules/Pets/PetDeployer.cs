@@ -200,7 +200,14 @@ namespace DeNelle.Pets
                 {
                     var svc = DeNelle.Core.State.GameStateService.Instance;
                     if (svc != null && svc.State != null)
+                    {
                         svc.State.StarterPetId = def.Id;
+                        // Audit P1 fix (missing Save): persist the starter immediately —
+                        // HasChosenOrOwnedPet checks StarterPetId first, so acquiring a
+                        // pet then quitting without saving loses it. Mirrors
+                        // PetAcquisitionService.Acquire which saves after mutation.
+                        svc.Save();
+                    }
                 }
                 else
                 {

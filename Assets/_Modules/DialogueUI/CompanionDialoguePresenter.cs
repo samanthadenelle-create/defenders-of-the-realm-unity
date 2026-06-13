@@ -639,7 +639,10 @@ namespace DeNelle.DialogueUI
                 {
                     if (a == null) continue;
                     string assetName = (a.actionMap != null && a.actionMap.asset != null) ? a.actionMap.asset.name : null;
-                    if (assetName == "DialogueAdvance" || a.name == "Advance")
+                    // Audit P2 (dialogue-yarn): match ONLY the DialogueAdvance asset's action.
+                    // The old `|| a.name == "Advance"` fallback was too broad — it would disable
+                    // any unrelated action named "Advance" from another system.
+                    if (assetName == "DialogueAdvance")
                     {
                         a.Disable();
                         disabled++;

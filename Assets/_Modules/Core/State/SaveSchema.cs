@@ -101,6 +101,9 @@ namespace DeNelle.Core.State
         {
             [JsonProperty("pets")] public List<PetData> Pets;
             [JsonProperty("starterPetId")] public string StarterPetId;
+            // Audit P2 (save-load): the player-named starter pet (WO-277) must round-trip;
+            // additive-default-on-read — null on old saves keeps the SO's value.
+            [JsonProperty("petName")] public string PetName;
             [JsonProperty("onboarded")] public bool? Onboarded;
             [JsonProperty("bestWave")] public double? BestWave;
             [JsonProperty("resources")] public ResourceBalance? Resources;

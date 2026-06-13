@@ -112,7 +112,9 @@ namespace DeNelle.Village
                     if (mb != null && mb.GetType().Name == "VillageHudController") { _hud = mb; break; }
                 }
             }
-            if (_hud != null && _setHeartHp == null)
+            // Audit P3 (economy-store): check ALL three reflected methods, not just _setHeartHp —
+            // the asymmetric guard would never retry SetCrystals/SetResources if only one resolved.
+            if (_hud != null && (_setHeartHp == null || _setCrystals == null || _setResources == null))
             {
                 var t = _hud.GetType();
                 _setHeartHp = t.GetMethod("SetHeartHp", BindingFlags.Public | BindingFlags.Instance, null,

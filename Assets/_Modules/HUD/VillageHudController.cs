@@ -2371,10 +2371,13 @@ namespace DeNelle.HUD
                 $"HUD.SetResources W{wood} I{iron} F{food} C{gems} (battleTexts={(_resourceTexts != null)}, townTexts={(_townResText != null)})");
             if (_resourceTexts != null && _resourceTexts.Length >= 4)
             {
-                _resourceTexts[0].text = wood.ToString();
-                _resourceTexts[1].text = iron.ToString();
-                _resourceTexts[2].text = gems.ToString();
-                _resourceTexts[3].text = food.ToString();
+                // Audit P1 fix (per-element null checks): guard each slot like
+                // SetCrystals does — a single null entry would NRE the whole update
+                // and drop the rest of the resource strip.
+                if (_resourceTexts[0] != null) _resourceTexts[0].text = wood.ToString();
+                if (_resourceTexts[1] != null) _resourceTexts[1].text = iron.ToString();
+                if (_resourceTexts[2] != null) _resourceTexts[2].text = gems.ToString();
+                if (_resourceTexts[3] != null) _resourceTexts[3].text = food.ToString();
             }
             // WO-339 TOWN badges — order: 0 Gold(food), 1 Wood, 2 Crystal(gems), 3 Iron.
             // (the legacy battle strip has no Gold slot; the town strip surfaces it as

@@ -237,6 +237,12 @@ namespace DeNelle.Core
         {
             if (Return == null) return;
 
+            // Audit P1 fix (return-point double-subscribe): if GoBattle arms again
+            // while a prior load is still pending, a second handler would subscribe —
+            // handler#1 clears Return, handler#2 then sees null and skips the warp
+            // (wrong scene on return). Always detach before attaching so exactly one
+            // handler is ever active.
+            SceneManager.sceneLoaded -= OnReturnSceneLoaded;
             // Capture once; the handler runs after the load completes.
             SceneManager.sceneLoaded += OnReturnSceneLoaded;
         }

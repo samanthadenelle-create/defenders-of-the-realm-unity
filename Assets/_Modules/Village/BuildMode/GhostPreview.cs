@@ -36,6 +36,10 @@ namespace DeNelle.Village
         // like the placed structure (WYSIWYG) — yaw outermost, orientation inner.
         private OrientationFix _orientation;
         private readonly List<Renderer> _renderers = new List<Renderer>();
+        // Audit P2 (build-mode): every transparent ghost material is a `new Material(shader)`
+        // instance; track them so Clear() can Destroy() them instead of leaking one set per
+        // re-arm for the rest of the session.
+        private readonly List<Material> _createdMaterials = new List<Material>();
         private MaterialPropertyBlock _mpb;
 
         /// <summary>
@@ -168,6 +172,11 @@ namespace DeNelle.Village
         public void Clear()
         {
             _renderers.Clear();
+            // Audit P2 (build-mode): destroy the ghost's owned material instances so re-arming
+            // doesn't leak a Material set per entry.
+            for (int i = 0; i < _createdMaterials.Count; i++)
+                if (_createdMaterials[i] != null) Destroy(_createdMaterials[i]);
+            _createdMaterials.Clear();
             if (_visual != null) Destroy(_visual);
             _visual = null;
             _builtForId = null;
@@ -217,6 +226,7 @@ namespace DeNelle.Village
                                 ?? Shader.Find("Universal Render Pipeline/Lit")
                                 ?? Shader.Find("Sprites/Default");
                 var mat = new Material(shader);
+                _createdMaterials.Add(mat);   // Audit P2: tracked for Destroy() in Clear()
                 if (mat.HasProperty("_Surface"))
                 {
                     mat.SetFloat("_Surface", 1f);   // transparent

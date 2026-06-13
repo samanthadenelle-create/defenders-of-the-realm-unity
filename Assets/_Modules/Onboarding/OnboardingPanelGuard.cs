@@ -90,10 +90,47 @@ namespace DeNelle.Onboarding
         private static void EnforceForActiveScene()
         {
             string active = SceneManager.GetActiveScene().name;
-            if (IsOnboardingScene(active)) return;
 
             UIDocument[] docs = Object.FindObjectsByType<UIDocument>(
                 FindObjectsInactive.Include, FindObjectsSortMode.None);
+
+            // Audit P1 fix (no restore on return to onboarding): returning to an
+            // onboarding scene (e.g. Village -> Title via PauseController.GoTitle)
+            // previously early-returned, leaving panels we had disabled in the prior
+            // gameplay scene dead (display=None, pickingMode=Ignore, enabled=false) —
+            // the Title UI never came back. Instead, RESTORE the OnboardingPanelSettings
+            // documents here so the onboarding UI is live again.
+            if (IsOnboardingScene(active))
+            {
+                int restored = 0;
+                foreach (var doc in docs)
+                {
+                    if (doc == null) continue;
+                    var settings = doc.panelSettings;
+                    if (settings == null) continue;
+                    if (settings.name != OnboardingPanelName) continue;
+
+                    if (!doc.enabled) doc.enabled = true;
+
+                    var root = doc.rootVisualElement;
+                    if (root != null)
+                    {
+                        root.style.display = DisplayStyle.Flex;   // renders again
+                        root.pickingMode = PickingMode.Position;  // accepts pointer events
+                    }
+
+                    restored++;
+                }
+
+                if (restored > 0)
+                {
+                    FlowTrace.Step("UI",
+                        $"OnboardingPanelGuard restored {restored} OnboardingPanelSettings " +
+                        $"UIDocument(s) on return to onboarding scene '{active}' " +
+                        "(re-enables Title/HeroSelect/PetSelect UI after a gameplay scene disabled it)");
+                }
+                return;
+            }
 
             int neutralised = 0;
             foreach (var doc in docs)
