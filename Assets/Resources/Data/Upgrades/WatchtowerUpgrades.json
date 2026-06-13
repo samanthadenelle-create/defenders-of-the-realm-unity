@@ -1,0 +1,40 @@
+{
+  "upgrades": [
+    {
+      "id": "watchtower_range",
+      "title": "Extended Sightlines",
+      "description": "Increases raid warning radius by 50%",
+      "woodCost": 60,
+      "stoneCost": 40,
+      "ironCost": 0,
+      "crystalCost": 0,
+      "boosts": [
+        { "stat": "IntelRadius", "value": 1.5, "type": "multiply" }
+      ]
+    },
+    {
+      "id": "watchtower_intel",
+      "title": "Signal Lanterns",
+      "description": "Raid warnings now include enemy count and direction",
+      "woodCost": 40,
+      "stoneCost": 0,
+      "ironCost": 60,
+      "crystalCost": 20,
+      "boosts": [
+        { "stat": "IntelQuality", "value": 1, "type": "add" }
+      ]
+    },
+    {
+      "id": "watchtower_early",
+      "title": "Far Watch",
+      "description": "Raid warning fires 30 seconds earlier",
+      "woodCost": 80,
+      "stoneCost": 30,
+      "ironCost": 40,
+      "crystalCost": 0,
+      "boosts": [
+        { "stat": "WarningLeadTime", "value": 30, "type": "add" }
+      ]
+    }
+  ]
+}
