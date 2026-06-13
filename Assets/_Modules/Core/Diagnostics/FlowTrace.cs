@@ -23,22 +23,61 @@ namespace DeNelle.Core.Diagnostics
         /// <summary>Master switch. Leave on while we are stabilising the loop.</summary>
         public static bool Enabled = true;
 
+        // --- per-category gating (INSTRUMENTATION_STANDARD §1.2) -----------------
+        // The category is the existing first arg ("system"), so call sites never change.
+        // s_only == null  => all categories allowed (default; no shipped-behaviour change).
+        // s_only != null  => allow-list: only these categories log.
+        // s_muted         => deny-set: these never log (applied after the allow-list).
+        private static System.Collections.Generic.HashSet<string> s_only;
+        private static readonly System.Collections.Generic.HashSet<string> s_muted = new System.Collections.Generic.HashSet<string>();
+
+        /// <summary>Allow-list: log ONLY these systems (mutes all others). Pass none to clear.</summary>
+        public static void Only(params string[] systems)
+        {
+            s_only = (systems == null || systems.Length == 0)
+                ? null
+                : new System.Collections.Generic.HashSet<string>(systems);
+        }
+
+        /// <summary>Deny-set: these systems never log (applied on top of any allow-list).</summary>
+        public static void Mute(params string[] systems)
+        {
+            if (systems == null) return;
+            foreach (var s in systems) if (!string.IsNullOrEmpty(s)) s_muted.Add(s);
+        }
+
+        /// <summary>Clear all category filters — every system logs again (still gated by Enabled).</summary>
+        public static void AllOn()
+        {
+            s_only = null;
+            s_muted.Clear();
+        }
+
+        /// <summary>O(1) gate: master switch + category allow-list + mute-set.</summary>
+        private static bool Allowed(string system)
+        {
+            if (!Enabled) return false;
+            if (s_only != null && !s_only.Contains(system)) return false;
+            if (s_muted.Count > 0 && s_muted.Contains(system)) return false;
+            return true;
+        }
+
         /// <summary>Log a flow step you reached. Cheap; safe to leave in hot paths only via Throttle.</summary>
         public static void Step(string system, string message)
         {
-            if (Enabled) Debug.Log($"[Flow:{system}] {message}");
+            if (Allowed(system)) Debug.Log($"[Flow:{system}] {message}");
         }
 
         /// <summary>Log a flow anomaly (missing ref, fallback taken, unexpected branch).</summary>
         public static void Warn(string system, string message)
         {
-            if (Enabled) Debug.LogWarning($"[Flow:{system}] {message}");
+            if (Allowed(system)) Debug.LogWarning($"[Flow:{system}] {message}");
         }
 
         /// <summary>Log an error-level flow failure (exception caught, hard stop).</summary>
         public static void Fail(string system, string message)
         {
-            if (Enabled) Debug.LogError($"[Flow:{system}] {message}");
+            if (Allowed(system)) Debug.LogError($"[Flow:{system}] {message}");
         }
 
         // --- throttled logging (for per-frame / per-spawn hot paths) ---
@@ -50,7 +89,7 @@ namespace DeNelle.Core.Diagnostics
         /// </summary>
         public static void Throttle(string system, string key, float everySeconds, string message)
         {
-            if (!Enabled) return;
+            if (!Allowed(system)) return;
             float now = Time.realtimeSinceStartup;
             string k = system + "/" + key;
             if (s_nextAt.TryGetValue(k, out float next) && now < next) return;
@@ -64,7 +103,7 @@ namespace DeNelle.Core.Diagnostics
         /// <summary>Log only the FIRST time this (system,key) is hit this play session.</summary>
         public static void Once(string system, string key, string message)
         {
-            if (!Enabled) return;
+            if (!Allowed(system)) return;
             string k = system + "/" + key;
             if (!s_seen.Add(k)) return;
             Debug.Log($"[Flow:{system}] {message}");

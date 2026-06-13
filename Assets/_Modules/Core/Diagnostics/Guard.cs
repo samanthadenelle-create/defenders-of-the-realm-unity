@@ -79,9 +79,12 @@ namespace DeNelle.Core.Diagnostics
 
         private static void Report(string system, string what, Exception ex)
         {
-            // FlowTrace.Fail routes to Debug.LogError -> captured by BreakCaptureHarness.
-            // Include the exception type + message; the full stack still prints to the Unity log.
-            FlowTrace.Fail(system, $"{what} FAILED: {ex.GetType().Name}: {ex.Message}");
+            // Log error-level DIRECTLY (not via FlowTrace.Fail) so the safety net survives even
+            // when FlowTrace is later compile-stripped on a ship build (see INSTRUMENTATION_
+            // STANDARD §1.3/§1.6): Guard changes control flow and must always record. Same
+            // [Flow:<system>] tag for grep + BreakCaptureHarness capture (Debug.LogError ->
+            // break-log.jsonl). The full stack still prints to the Unity log.
+            Debug.LogError($"[Flow:{system}] {what} FAILED: {ex.GetType().Name}: {ex.Message}");
         }
     }
 }

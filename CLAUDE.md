@@ -243,3 +243,8 @@ on a hypothesis wastes credits and owner time. The standing loop:
 Helpers live in `Assets/_Modules/Core/Diagnostics/` (`FlowTrace.cs`, `Guard.cs`,
 `BreakCaptureHarness.cs`). Set `FlowTrace.Enabled=false` (or strip calls) once a system
 is proven stable — leave traces in while a system is being stabilised.
+
+**Authoring standard:** how to write code to this directive from the first line —
+toggle/lifecycle, where-to-instrument checklist, Guard usage, regression authoring,
+conventions — lives in `docs/INSTRUMENTATION_STANDARD.md`. §12 is the *rule*; that doc is
+the *method*.

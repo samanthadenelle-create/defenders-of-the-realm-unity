@@ -28,6 +28,7 @@ indexed separately in `../PROJECT_INDEX.md`.
 - `CATALOG_SYSTEM.md`, `refactor-feature-modules-spec.md`, `addressables-implementation-plan.md`
 - `ANIMATION_PIPELINE.md` — **canonical animation method** (Shared + per-type, Humanoid retarget; all current/future models)
 - `unity-decisions.md`, `UNITY_BEST_PRACTICES_AUDIT.md`
+- `INSTRUMENTATION_STANDARD.md` — how new code is written observable-first (FlowTrace/Guard/regression authoring standard; the *method* that operationalizes `CLAUDE.md §12`)
 
 ## Game design specs
 
