@@ -360,9 +360,18 @@ namespace DeNelle.Village
                     // shows + companions hit); fall back to the OverlapSphere search. This
                     // fixes "ring locks but my hits do 0" — the physics sweep was finding a
                     // different/no enemy than the registry-locked one.
-                    var foe = (LockedTarget != null && LockedTarget.IsAlive)
+                    // WO-398: the locked target comes from HeroTargetIndicator's 45m acquire
+                    // ring, so accepting it unconditionally let melee slots (knight Shield
+                    // Bash, def.Range ~3.4) hit-scan at ranged distances. Gate the locked
+                    // target by the ability's own reach (def.Range + hit radius); if it's out
+                    // of reach, re-resolve to the nearest hostile actually IN range — which
+                    // may be null (no target in reach -> no damage). dcd76ba fixed the
+                    // COMPANION knight; this closes the player-hero path. Ranged abilities are
+                    // unchanged: their def.Range already covers the locked target's distance.
+                    float maxR = def.Range + _enemyHitRadius;
+                    var foe = InReach(LockedTarget, atk, maxR)
                         ? LockedTarget
-                        : NearestHostile(atk, def.Range + _enemyHitRadius);
+                        : NearestHostile(atk, maxR);
                     // WO-125 Bug 1: the apex dragon orbits at altitude ~22-34u — far
                     // outside a short-slot sweep (Q ~13u) — so an OverlapSphere from the
                     // hero's feet can never reach it. In village mode (no aim override),
@@ -482,6 +491,18 @@ namespace DeNelle.Village
                 if (freezeSeconds > 0f)
                     target.ApplyStatus(StatusEffect.Freeze, freezeSeconds);
             }
+        }
+
+        /// <summary>
+        /// WO-398: true when <paramref name="target"/> is alive AND within
+        /// <paramref name="maxRange"/> of <paramref name="origin"/>. Used to gate the
+        /// 45m reticle-locked target against a melee ability's own reach so melee slots
+        /// can't hit-scan distant enemies.
+        /// </summary>
+        private static bool InReach(IDamageable target, Vector3 origin, float maxRange)
+        {
+            if (target == null || !target.IsAlive) return false;
+            return (target.WorldPosition - origin).sqrMagnitude <= maxRange * maxRange;
         }
 
         /// <summary>
