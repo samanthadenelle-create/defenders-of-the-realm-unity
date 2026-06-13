@@ -176,10 +176,40 @@ namespace DeNelle.HUD
         }
 
         // ── Compass strip ─────────────────────────────────────────────────────
+        // WO-448: the readout was driven by Hero.eulerAngles.y — the hero BODY
+        // yaw. That body only rotates via LookRotation(Velocity) (HeroLocomotion),
+        // so standing still freezes the facing at the last move direction, and in
+        // third-person follow it does NOT match where the player is LOOKING (the
+        // camera orbits independently via _panYaw). The owner was "guessing on
+        // direction" because the compass showed body-yaw, not view-yaw.
+        //
+        // FIX: derive the heading from the CAMERA's flattened world forward —
+        // i.e. "up on screen = where you're heading". That tracks the view in
+        // both follow and top-down modes and never goes stale when idle. Hero
+        // forward is the fallback only when there is no camera.
+        //
+        // Cardinal math uses Unity's standard world axes: +Z = North, +X = East,
+        // -Z = South, -X = West. yaw is the compass bearing of the heading vector
+        // measured CLOCKWISE from +Z (North): yaw = atan2(x, z). So a heading of
+        // +Z → 0° (N), +X → 90° (E), -Z → 180° (S, the OuterWorld/south gate),
+        // -X → 270° (W).
         private void UpdateCompass()
         {
-            if (Hero == null || _compassLabel == null) return;
-            float yaw = Hero.eulerAngles.y;
+            if (_compassLabel == null) return;
+
+            Vector3 fwd;
+            if (_camera != null)            fwd = _camera.transform.forward;
+            else if (Hero != null)          fwd = Hero.forward;
+            else                            return;
+
+            fwd.y = 0f;
+            if (fwd.sqrMagnitude < 1e-4f) fwd = Vector3.forward; // looking straight down → default N
+            fwd.Normalize();
+
+            // Clockwise bearing from +Z (North), in [0,360): atan2(East, North).
+            float yaw = Mathf.Atan2(fwd.x, fwd.z) * Mathf.Rad2Deg;
+            if (yaw < 0f) yaw += 360f;
+
             string heading;
             if      (yaw < 22.5f  || yaw >= 337.5f) heading = "N";
             else if (yaw < 67.5f)                   heading = "NE";
@@ -213,8 +243,12 @@ namespace DeNelle.HUD
             float halfFov = FovDegrees * 0.5f;
             float stripW  = _stripTicks.rect.width;
             Vector3 heroPos = Hero.position;
-            // Hero forward flattened to the ground plane.
-            Vector3 fwd = Hero.forward; fwd.y = 0f;
+            // WO-448: plot bearings against the SAME heading the readout shows —
+            // the camera's flattened forward ("up = where you're looking") — so a
+            // tick's left/right position agrees with the displayed cardinal. Falls
+            // back to hero forward when there is no camera.
+            Vector3 fwd = (_camera != null ? _camera.transform.forward : Hero.forward);
+            fwd.y = 0f;
             if (fwd.sqrMagnitude < 1e-4f) fwd = Vector3.forward;
             fwd.Normalize();
 
