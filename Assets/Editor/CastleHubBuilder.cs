@@ -260,6 +260,23 @@ namespace DeNelle.Editor
                 npc.transform.SetParent(inst.transform, false);
                 npc.transform.localPosition = new Vector3(0, 0, 6); // front offset; rotate building if needed for facing
 
+                // OWNER 2026-06-12: an Anvil in front of the hammering blacksmith NPC. Placed just
+                // ahead of the NPC point (child at (0,0,6)) at local (0,0,5), child of the storefront.
+                if (name == "Blacksmith_Weapons_Storefront")
+                {
+                    var anvilPrefab = Resources.Load<GameObject>("Structures/Anvil");
+                    if (anvilPrefab == null)
+                        Debug.LogWarning("[CastleHubBuilder] Resources/Structures/Anvil not found — Blacksmith Anvil skipped.");
+                    else
+                    {
+                        var anvil = (GameObject)PrefabUtility.InstantiatePrefab(anvilPrefab);
+                        anvil.transform.SetParent(inst.transform, false);
+                        anvil.transform.localPosition = new Vector3(0f, 0f, 5f);
+                        anvil.name = "Anvil";
+                        Log("Placed Anvil at the Blacksmith storefront (local (0,0,5)).");
+                    }
+                }
+
                 // Optional crate/vine dressing for storefront vibe (Quaternius)
                 if (qCrate != null && i % 2 == 0)
                 {
@@ -283,13 +300,10 @@ namespace DeNelle.Editor
             var keepRoot = new GameObject("MainKeep_CastleWithTwoLevels_Home");
             keepRoot.transform.SetParent(root.transform, false);
 
-            if (castleCore != null)
-            {
-                var keep = (GameObject)PrefabUtility.InstantiatePrefab(castleCore);
-                keep.transform.SetParent(keepRoot.transform, false);
-                keep.transform.localPosition = Vector3.zero;
-                keep.name = "GroundLevel_Keep_Hall_Entry";
-            }
+            // OWNER 2026-06-12: the keep PREFAB + its interior floor are REMOVED (owner deleted them
+            // in the scene). The keepRoot, home space, and HeroStartPoint below are KEPT (the hero
+            // spawns under them). castleCore is no longer instantiated here.
+            _ = castleCore;
 
             // Labeled home space (ground + upper access). Dress further with Quaternius floors/walls + KayKit furniture bits.
             var home = new GameObject("PlayerHeroHall_PersonalQuarters_HomeSpace");
@@ -600,13 +614,9 @@ namespace DeNelle.Editor
             // the opening (they voxelize solid across it). The walkable floor stays continuous.
             ExcludeGatesFromNavBake();
 
-            // Keep interior + entrance bridge: GroundLevel_Keep_Hall_Entry (the keep building)
-            // sits at origin with 4 wall colliders + a doorway. The walls carve the navmesh and
-            // seal the spawn hall (hero spawns inside, can't exit). Fill the keep footprint with
-            // floor, RAISED slightly (y 0.12) to sit above any door threshold/step the walls cut,
-            // so the interior is walkable AND threads out through the entrance to the courtyard.
-            // ~26x26m covers the keep + overlaps the courtyard floor on every side.
-            CreateInvisibleFloor(floorRoot.transform, "KeepInterior_Nav", new Vector3(0f, 0.12f, 0f), new Vector3(2.6f, 1f, 2.6f));
+            // OWNER 2026-06-12: the keep prefab was removed, so there is no keep interior to bridge.
+            // The KeepInterior_Nav floor plane is removed — the main CourtyardFloor_Nav covers the
+            // origin where the keep used to sit.
 
             // SINGLE-LEVEL PIVOT (owner 2026-06-12): NO upper-battlements nav plane. The second
             // level was removed (enemy AI could not reach it), so there is no y~11.5 walkable
@@ -1312,6 +1322,11 @@ namespace DeNelle.Editor
             //     frozen with no target). Clean scale-1 anchor (no collider-scale trap).
             WireCastleHeart(parent);
 
+            // 3c. OWNER 2026-06-12 town cleanup on the ALREADY-SAVED scene: this batch path does NOT
+            //     rebuild the 8 structures, so capture the owner's manual edits (deleted keep+floor,
+            //     stray test tree, stray anvil) and ensure the Anvil sits at the blacksmith. Idempotent.
+            EnsureCastleTownProps();
+
             // 4. Bake every NavMeshSurface (Physics Colliders, All) + persist the asset.
             //    (Mirrors BatchAddFloorAndBakeCastle's proven bake block.)
             var surfType = FindType("Unity.AI.Navigation.NavMeshSurface");
@@ -1362,6 +1377,108 @@ namespace DeNelle.Editor
             // 6. PROVE the gate is crossable (behavioral, in-session, post-bake).
             bool ok = CastleGateNavVerify.VerifyOpenScene(out string detail);
             Log("BATCH-RECIPE: gate-nav verify -> " + (ok ? "GATE_NAV_OK" : "GATE_NAV_FAIL") + " :: " + detail);
+        }
+
+        // =====================================================================
+        //  ENSURE CASTLE TOWN PROPS (owner 2026-06-12) — idempotent cleanup applied to the
+        //  ALREADY-SAVED scene. BatchRebuildCastleFromRecipeAndBake does NOT rebuild the 8
+        //  structures, so the owner's manual edits must be captured here so a re-bake reproduces
+        //  her layout: she deleted the keep prefab + its interior floor, dropped a test Tree_Of_Life
+        //  south of the Heart, and dropped a stray Anvil in the courtyard. This:
+        //   1. Destroys leftover GroundLevel_Keep_Hall_Entry + KeepInterior_Nav, and an EMPTY keep
+        //      root (only if it holds no meaningful children — the hero spawn lives under it).
+        //   2. Removes orphan Tree_Of_Life objects NOT parented to the Heart anchor (her south test
+        //      placement). The real tree is TreeOfLife_Visual under HeartOfElarion — left intact.
+        //   3. Ensures the Anvil is at the blacksmith: destroys any stray Anvil not under the
+        //      Blacksmith storefront, then adds one at local (0,0,5) if the storefront lacks it.
+        //  Guards all nulls; safe to run repeatedly.
+        // =====================================================================
+        private static void EnsureCastleTownProps()
+        {
+            // 1. Leftover keep prefab + its nav floor (owner deleted the keep).
+            var keepPrefab = GameObject.Find("GroundLevel_Keep_Hall_Entry");
+            if (keepPrefab != null) { Object.DestroyImmediate(keepPrefab); Log("EnsureCastleTownProps: destroyed leftover GroundLevel_Keep_Hall_Entry."); }
+            var keepNav = GameObject.Find("KeepInterior_Nav");
+            if (keepNav != null) { Object.DestroyImmediate(keepNav); Log("EnsureCastleTownProps: destroyed leftover KeepInterior_Nav."); }
+
+            // An EMPTY keep root — only destroy if it has no meaningful children. The hero spawn
+            // (HeroStartPoint...) lives under it via the home space, so if that subtree exists we
+            // leave the root and only strip the keep prefab/floor (handled above).
+            var keepRoot = GameObject.Find("MainKeep_CastleWithTwoLevels_Home");
+            if (keepRoot != null)
+            {
+                bool hasHeroStart = keepRoot.GetComponentsInChildren<Transform>(true)
+                    .Any(t => t != null && t.name.StartsWith("HeroStartPoint"));
+                bool hasMeaningfulChildren = keepRoot.transform.childCount > 0;
+                if (!hasHeroStart && !hasMeaningfulChildren)
+                {
+                    Object.DestroyImmediate(keepRoot);
+                    Log("EnsureCastleTownProps: destroyed EMPTY MainKeep_CastleWithTwoLevels_Home (no children, no hero spawn).");
+                }
+                else
+                    Log("EnsureCastleTownProps: kept MainKeep root (hero spawn / children present).");
+            }
+
+            // 2. Orphan south test tree(s): any GameObject named Tree_Of_Life NOT under the Heart
+            //    anchor. The real centerpiece is TreeOfLife_Visual under HeartOfElarion — untouched.
+            var heartAnchor = GameObject.Find(HeartAnchorName);
+            Transform heartTf = heartAnchor != null ? heartAnchor.transform : null;
+            foreach (var t in CollectAllTransforms())
+            {
+                if (t == null || t.name != "Tree_Of_Life") continue;
+                if (heartTf != null && t.IsChildOf(heartTf)) continue; // safety; real tree is named TreeOfLife_Visual anyway
+                Log("EnsureCastleTownProps: destroyed orphan Tree_Of_Life at " + t.position + " (owner's test placement).");
+                Object.DestroyImmediate(t.gameObject);
+            }
+
+            // 3. Anvil at the blacksmith. Destroy any stray Anvil not under the Blacksmith storefront,
+            //    then ensure the storefront has exactly one.
+            var blacksmith = GameObject.Find("Blacksmith_Weapons_Storefront");
+            Transform blacksmithTf = blacksmith != null ? blacksmith.transform : null;
+            foreach (var t in CollectAllTransforms())
+            {
+                if (t == null || t.name != "Anvil") continue;
+                if (blacksmithTf != null && t.IsChildOf(blacksmithTf)) continue;
+                Log("EnsureCastleTownProps: destroyed stray Anvil at " + t.position + " (not under the Blacksmith).");
+                Object.DestroyImmediate(t.gameObject);
+            }
+
+            if (blacksmith != null)
+            {
+                bool hasAnvil = false;
+                foreach (Transform c in blacksmith.transform)
+                    if (c != null && c.name == "Anvil") { hasAnvil = true; break; }
+                if (!hasAnvil)
+                {
+                    var anvilPrefab = Resources.Load<GameObject>("Structures/Anvil");
+                    if (anvilPrefab == null)
+                        Debug.LogWarning("[CastleHubBuilder] EnsureCastleTownProps: Resources/Structures/Anvil not found — Blacksmith Anvil not added.");
+                    else
+                    {
+                        var anvil = (GameObject)PrefabUtility.InstantiatePrefab(anvilPrefab);
+                        anvil.transform.SetParent(blacksmith.transform, false);
+                        anvil.transform.localPosition = new Vector3(0f, 0f, 5f);
+                        anvil.name = "Anvil";
+                        Log("EnsureCastleTownProps: added Anvil at the Blacksmith storefront (local (0,0,5)).");
+                    }
+                }
+                else Log("EnsureCastleTownProps: Blacksmith already has an Anvil — idempotent skip.");
+            }
+            else Log("EnsureCastleTownProps: Blacksmith_Weapons_Storefront not found — Anvil placement skipped.");
+        }
+
+        // Collect every Transform in the open scene (all root objects + descendants), so cleanup
+        // can find orphan props regardless of where the owner dropped them in the hierarchy.
+        private static List<Transform> CollectAllTransforms()
+        {
+            var all = new List<Transform>();
+            var scene = EditorSceneManager.GetActiveScene();
+            foreach (var root in scene.GetRootGameObjects())
+            {
+                if (root == null) continue;
+                all.AddRange(root.GetComponentsInChildren<Transform>(true));
+            }
+            return all;
         }
 
         // Place the OuterWorld exit seam ONTO the recipe south gate opening so the hero reaches
@@ -1478,33 +1595,32 @@ namespace DeNelle.Editor
             // anchor — no collider-scale trap), bounds-scaled to a ~9m visible height (raw Tripo
             // fbx native size is unknown/large) and ground-seated at Play so it can't float or
             // displace (tripo-mesh-displacement-trap). Idempotent by child name.
+            // OWNER 2026-06-12: "Tree IS the Heart at center." Swap the placeholder for the owner's
+            // authored fbx (Assets/Art/Tree_Of_Life.fbx) at her exact transform — explicit scale 7,
+            // upright via Euler(-90,0,0), riding the Heart anchor at the world center (0,0,12). This
+            // is editor code, so AssetDatabase is fine. FORCE-REPLACE the old TreeOfLife_Visual so a
+            // re-run swaps the placeholder out instead of skip-if-exists.
             const string TreeChildName = "TreeOfLife_Visual";
-            if (anchor.transform.Find(TreeChildName) == null)
+            var priorTree = anchor.transform.Find(TreeChildName);
+            if (priorTree != null) Object.DestroyImmediate(priorTree.gameObject);
+
+            var treePrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Art/Tree_Of_Life.fbx");
+            if (treePrefab == null)
+                Debug.LogWarning("[CastleHubBuilder] WireCastleHeart: Assets/Art/Tree_Of_Life.fbx not found — Heart is functional but has no visible mesh.");
+            else
             {
-                var treePrefab = Resources.Load<GameObject>("Structures/tree_of_life");
-                if (treePrefab == null)
-                    Log("WireCastleHeart: Resources/Structures/tree_of_life not found — Heart is functional but has no visible mesh (LogWarning).");
-                else
-                {
-                    var tree = Object.Instantiate(treePrefab);
-                    tree.name = TreeChildName;
-                    tree.transform.SetParent(anchor.transform, false);
-                    tree.transform.localPosition = Vector3.zero;
-                    tree.transform.localRotation = Quaternion.identity;
-                    foreach (var c in tree.GetComponentsInChildren<Collider>()) Object.DestroyImmediate(c);
-                    var rends = tree.GetComponentsInChildren<Renderer>();
-                    if (rends.Length > 0)
-                    {
-                        var b = rends[0].bounds;
-                        for (int i = 1; i < rends.Length; i++) b.Encapsulate(rends[i].bounds);
-                        if (b.size.y > 0.001f) tree.transform.localScale *= (9f / b.size.y);
-                    }
-                    var matFix = FindType("DeNelle.Core.TreeOfLifeMaterialFixer");
-                    if (matFix != null && tree.GetComponent(matFix) == null) tree.AddComponent(matFix);
-                    var seat = FindType("DeNelle.Village.SeatOnGroundOnStart");
-                    if (seat != null && tree.GetComponent(seat) == null) tree.AddComponent(seat);
-                    Log("WireCastleHeart: visible TreeOfLife added (bounds-scaled to ~9m, colliders stripped, ground-seated).");
-                }
+                var tree = Object.Instantiate(treePrefab);
+                tree.name = TreeChildName;
+                tree.transform.SetParent(anchor.transform, false);
+                tree.transform.localPosition = Vector3.zero;
+                tree.transform.localScale = Vector3.one * 7f;            // owner's explicit scale
+                tree.transform.localRotation = Quaternion.Euler(-90f, 0f, 0f); // owner's orientation — stands the fbx upright
+                foreach (var c in tree.GetComponentsInChildren<Collider>()) Object.DestroyImmediate(c);
+                var matFix = FindType("DeNelle.Core.TreeOfLifeMaterialFixer");
+                if (matFix != null && tree.GetComponent(matFix) == null) tree.AddComponent(matFix);
+                var seat = FindType("DeNelle.Village.SeatOnGroundOnStart");
+                if (seat != null && tree.GetComponent(seat) == null) tree.AddComponent(seat);
+                Log("WireCastleHeart: visible TreeOfLife added from Assets/Art/Tree_Of_Life.fbx (scale 7, Euler(-90,0,0), colliders stripped, ground-seated).");
             }
 
             // Defensive: ensure EXACTLY one HeartController in the scene.
