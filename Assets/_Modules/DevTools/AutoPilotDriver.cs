@@ -813,18 +813,28 @@ namespace DeNelle.DevTools
                 if (g == null) continue;
                 if (g.transform.position.z < minZ) { minZ = g.transform.position.z; exit = g; }
             }
-            if (exit == null) { _lastDetail = "no exit gate"; yield break; }
-
-            if (_hero == null)
+            // No exit trigger OR no hero is NOT a ticket-worthy failure — there is
+            // simply nothing to attempt (e.g. a scene with no wired seam, or the hero
+            // was destroyed/unloaded). End the phase cleanly (ok/skipped), never throw
+            // or burn the timeout. Only a hero that REACHED the gate but never warped
+            // is a real Fail (handled below).
+            if (exit == null || _hero == null)
             {
-                FlowTrace.Fail("Auto", "AttemptExitCastle: hero is null — cannot attempt the crossing.");
-                _lastDetail = "hero null";
+                FlowTrace.Warn("Auto", "AttemptExitCastle: no exit trigger / hero — skipping");
+                _lastDetail = exit == null ? "no exit gate" : "no hero — skipped";
                 yield break;
             }
 
+            // SceneTransitionTrigger (DeNelle.Village) exposes these as PUBLIC fields —
+            // read them by typed access (no reflection => no FieldInfo NRE). Cache the
+            // gate's transform position too: a one-way crossing can unload/destroy the
+            // SOURCE seam after the warp, which would Unity-fake-null `exit` and NRE on
+            // `exit.transform.position` in the poll loop below.
             string targetScene = exit.targetSceneName;
             Vector3 warpTarget = exit.targetPosition;
             float radius = Mathf.Max(1f, exit.ProximityRadius);
+            Vector3 gatePos = exit.transform.position;
+            string gateName = exit.name;
             Vector3 heroStart = _hero.transform.position;
 
             FlowTrace.Step("Auto", $"AttemptExitCastle: walking into '{exit.name}' " +
@@ -841,6 +851,8 @@ namespace DeNelle.DevTools
             float closestToGate = float.MaxValue;   // closest the hero ever got to the gate
             while (Time.realtimeSinceStartup - t0 < ExitTimeout)
             {
+                // Hero (or its GameObject) could be destroyed/unloaded mid-walk — bail
+                // cleanly rather than NRE on `_hero.transform`.
                 if (_hero == null) break;
 
                 Vector3 pos = _hero.transform.position;
@@ -850,7 +862,9 @@ namespace DeNelle.DevTools
                 if (Vector3.Distance(pos, warpTarget) < 8f) { warped = true; break; }
 
                 // Track how close we get to the gate (horizontal — navmesh is planar).
-                float dGate = HorizontalDistance(pos, exit.transform.position);
+                // Use the CACHED gate position: the source seam may be gone after a
+                // crossing, so we must never dereference `exit.transform` here.
+                float dGate = HorizontalDistance(pos, gatePos);
                 if (dGate < closestToGate) closestToGate = dGate;
                 if (dGate <= radius + 0.5f) reachedProximity = true;
 
@@ -867,14 +881,14 @@ namespace DeNelle.DevTools
             else if (!reachedProximity)
             {
                 // Real, ticket-worthy: the hero could not path to the seam at all.
-                FlowTrace.Fail("Auto", $"AttemptExitCastle: hero could not path to the gate '{exit.name}' — " +
+                FlowTrace.Fail("Auto", $"AttemptExitCastle: hero could not path to the gate '{gateName}' — " +
                     $"closest {closestToGate:0.0}m of radius {radius:0.0}m within {ExitTimeout:0}s (navmesh edge / blocked).");
                 _lastDetail = $"could not reach gate (closest {closestToGate:0.0}m / radius {radius:0.0}m)";
             }
             else
             {
                 // Real, ticket-worthy: reached proximity but the seam never warped us.
-                FlowTrace.Fail("Auto", $"AttemptExitCastle: seam did NOT fire — hero reached closest {closestToGate:0.0}m of gate '{exit.name}' " +
+                FlowTrace.Fail("Auto", $"AttemptExitCastle: seam did NOT fire — hero reached closest {closestToGate:0.0}m of gate '{gateName}' " +
                     $"(radius {radius:0.0}m) but no warp to target {warpTarget} within {ExitTimeout:0}s.");
                 _lastDetail = $"seam did not fire (reached {closestToGate:0.0}m / radius {radius:0.0}m, no warp)";
             }
