@@ -83,8 +83,11 @@ namespace DeNelle.Village.Hero
             // when the pack art is absent. T-024: a THIN, minimized footprint suited to
             // web UI — a slim centred column (not a full-screen sheet) so the store reads
             // as a compact dark-glass drawer rather than taking over the screen.
+            // Backboard: plain DEEP dark-glass (NOT the panel_inventory grid-of-slots sprite —
+            // that decorative gold grid made the store read as "empty slots / no stock" even with
+            // 18 real rows on top). Dark glass = the rows show clearly, same as the town HUD.
             var panelGo = ElarionUiKit.PanelFramed(_ui.transform, new Vector2(0.22f, 0.08f), new Vector2(0.78f, 0.92f),
-                                                   deep: true, packSpriteName: RpgUiCatalog.PanelInventory);
+                                                   deep: true, packSpriteName: null);
             var panel = panelGo.transform;
 
             // Header — read as a named storefront, not a generic "Vendor Wares" wall. The

@@ -259,6 +259,109 @@ namespace DeNelle.Core.UI
         }
 
         // =====================================================================
+        // TECH HUD ELEMENTS — direct use of the "Tech hud elements" sprite pack
+        // for ornate frames, play-button CTAs, loading bars (cooldowns/stats),
+        // profile tabs (sockets), RPG icons, etc. Used for the full combat/vendor/
+        // inventory restyle (WO-437/415/405).
+        // Sprites are 9-slice friendly in many cases; we treat as sliced + tint.
+        // =====================================================================
+
+        /// <summary>
+        /// Big thumb-friendly CTA button skinned from Tech pack Play Buttons / Menu Bars.
+        /// Primary = gilt ornate frame (Equip, Buy, etc.). Falls back to kit button.
+        /// </summary>
+        public static Button TechPrimaryButton(Transform parent, string label,
+                                               Vector2 anchorMin, Vector2 anchorMax,
+                                               Action onClick = null)
+        {
+            // IMPORTANT: the pack's "Play buttons" sprite has the word PLAY baked INTO the art,
+            // so a button using it reads "PLAY" no matter what label is passed (BUY/SELL/EQUIP all
+            // showed "PLAY"). It is a literal Play/Start button, not a generic CTA frame. Use the
+            // clean procedural gold button so the real label renders. (Swap in a confirmed
+            // text-FREE ornate frame later if one exists in the pack.)
+            Sprite frame = null;
+
+            var go = new GameObject("TechBtn_" + label, typeof(Image), typeof(Button));
+            go.transform.SetParent(parent, false);
+            var rt = go.GetComponent<RectTransform>();
+            rt.anchorMin = anchorMin; rt.anchorMax = anchorMax;
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+
+            var img = go.GetComponent<Image>();
+            if (frame != null)
+            {
+                img.sprite = frame;
+                img.type = Image.Type.Sliced;
+                img.color = Color.white;
+            }
+            else
+            {
+                img.color = ElarionUi.GoldButton;
+                ApplyRounded(img);
+            }
+
+            var btn = go.GetComponent<Button>();
+            btn.targetGraphic = img;
+            if (onClick != null) btn.onClick.AddListener(() => onClick());
+
+            // Guarantee large mobile target.
+            if (rt.rect.height < 56f) rt.sizeDelta = new Vector2(rt.sizeDelta.x, 56f);
+
+            Color ink = ElarionUi.Ink;
+            var lbl = Label(go.transform, label, 0.08f, 0.92f, ink, ElarionUi.FontBody,
+                            TextAlignmentOptions.Center, 0.05f, 0.95f, bold: true);
+            lbl.raycastTarget = false;
+
+            return btn;
+        }
+
+        /// <summary>
+        /// Ornate gear/weapon/armor socket frame from Tech hud elements pack.
+        /// Uses Profile tabs (clean modern frames) and Healing Tabs (more ornate RPG style) for variety.
+        /// Weapons get a slightly more "active" frame (e.g. Healing Tabs H1-H3 or Profiletab 2), Armor gets solid profile tabs.
+        /// Tints to rarity. Large touch target. Returns the host so caller can parent an icon/child on top.
+        /// Falls back to procedural rim if pack sprites not present (fresh clone note: pack may need re-import).
+        /// </summary>
+        public static GameObject TechGearSocket(Transform parent, string name,
+                                                Vector2 anchorMin, Vector2 anchorMax,
+                                                Color tint, bool isWeapon = false)
+        {
+            Sprite frame = null;
+            try
+            {
+                if (isWeapon)
+                {
+                    // Weapons: more "sword/play" energy - try Healing Tabs first (ornate borders), then Profiletab 2
+                    frame = Resources.Load<Sprite>("Tech hud elements/Sprites/Healing Tabs/H1");
+                    if (frame == null) frame = Resources.Load<Sprite>("Tech hud elements/Sprites/Profile tabs/Profiletab 2/Profiletab 2");
+                    if (frame == null) frame = Resources.Load<Sprite>("Tech hud elements/Sprites/GreenUielements/Buttons/Button 1");
+                }
+                else
+                {
+                    // Armor: solid protective frames - Profiletab 1/3, Shield elements
+                    frame = Resources.Load<Sprite>("Tech hud elements/Sprites/Profile tabs/Profiletab 1/Profiletab 1");
+                    if (frame == null) frame = Resources.Load<Sprite>("Tech hud elements/Sprites/Profile tabs/Profiletab 3/Profiletab 3");
+                    if (frame == null) frame = Resources.Load<Sprite>("Tech hud elements/Sprites/GreenUielements/Shield/Shield 1");
+                }
+            }
+            catch { /* safe - pack may be partial */ }
+
+            var host = AddImage(parent, name, anchorMin, anchorMax, new Color(tint.r, tint.g, tint.b, 0.18f));
+            var img = host.GetComponent<Image>();
+            if (frame != null)
+            {
+                img.sprite = frame;
+                img.type = Image.Type.Sliced;
+                img.color = new Color(tint.r, tint.g, tint.b, 0.95f);
+            }
+            else
+            {
+                AddInnerRim(host, new Color(tint.r, tint.g, tint.b, 0.6f));
+            }
+            return host;
+        }
+
+        // =====================================================================
         // SLOT — universal rarity-framed item / gear slot.
         // =====================================================================
 
