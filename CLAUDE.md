@@ -83,7 +83,7 @@ work order goes back to the queue.
 - Save to project root as `WORK_ORDER_NNN_short_name.md`
 - Mark **Status: READY TO IMPLEMENT** when spec is complete
 - Include files to edit, acceptance criteria, and what NOT to touch
-- **WO-numbering authority = `MASTER_PIPELINES_BACKLOG_2026-06-06.md` + `CLI_LANES_WO_NUMBERS.md`, NOT the filesystem max.** Reserved new block **290–305** (minted 2026-06-06: quests, crafting, pets, persistence, HUD). 287–288 also used; 289 free. **Next free WO = 412** (through 411 used; 344–351 reserved, do not mint). Always slot a new WO into a lane in the master doc.
+- **WO-numbering authority = `MASTER_PIPELINES_BACKLOG_2026-06-06.md` + `CLI_LANES_WO_NUMBERS.md`, NOT the filesystem max.** Reserved new block **290–305** (minted 2026-06-06: quests, crafting, pets, persistence, HUD). 287–288 also used; 289 free. **Next free WO = 430** (through 429 used; 344–351 reserved, do not mint; 412–428 minted on-board 06-11/12; 429 = ex-repo-414 store-stock spec, renumbered). Always slot a new WO into a lane in the master doc.
 - **LIVE BOARD (source of truth mirror) = Notion "Work Orders" DB** in *Defenders of the Realm — Pipelines*: https://app.notion.com/p/f3115f05ecf940cf8968bd82bbbdff9f (data source `5f66b263-c732-4075-b94a-f5f4de9f8087`). The git docs + Notion are kept in sync; full WO spec files stay in the repo. We migrated off Linear (free-tier 250-issue cap). See `NOTION_SOURCE_OF_TRUTH.md`.
 
 ### Completing work orders
@@ -214,3 +214,32 @@ the correct branch by EXPLICIT PATH** — review each diff (guard the mount-sync
 by path, never `git add -A`, never blind-replace a file, never let a second session commit/push (two
 committers duel on `.git/index.lock` → stale locks + false "pushed", see memory `sole-git-committer`).
 Other sessions write + signal "ready"; the one committer reconciles. This is non-negotiable.
+
+---
+
+## 12. Debugging Directive — INSTRUMENT, don't guess (BINDING)
+
+Owner mandate (2026-06-13, from B2B-scale practice): **we do not guess at bugs — we
+instrument the flow and let the data tell us where it dies.** Repeated symptom-patching
+on a hypothesis wastes credits and owner time. The standing loop:
+
+1. **Trace the flow first.** Add `DeNelle.Core.Diagnostics.FlowTrace` calls at every
+   meaningful step/branch of the failing system (request → resolve → fallback → render).
+   `Step` (reached it), `Warn` (fallback/anomaly), `Fail` (hard stop), `Throttle` (hot
+   loop, ~1/sec), `Once` (first hit), `Measure` (perf scope: `using var t = FlowTrace.
+   Measure("Sys","what", warnAboveMs:16f)`). Every line is `[Flow:<system>]`-tagged and
+   captured by the F8 `BreakCaptureHarness` (break-log.jsonl + Player.log).
+2. **Guard every risky object op.** Wrap parse / list-build / service-lookup / UI
+   construction in `Guard.Try(...)` / `Guard.TryEach(...)` — one bad object logs (via
+   `FlowTrace.Fail`) and is skipped, never silently blanks a screen. **No silent failures:**
+   a catch that swallows without logging is forbidden.
+3. **Capture real data, then look.** A run produces `[Flow:*]` lines that pinpoint the
+   dead step — fix THAT, don't re-theorize. Split every "shows nothing" into *data-empty*
+   vs *built-but-invisible* vs *threw-and-skipped* using the trace, before touching code.
+4. **Prefer headless capture.** These traces run in a headless batchmode play session
+   (no owner playtest needed) — use it to self-serve diagnosis on passive flows
+   (spawns, roster, seam-online, catalog load) before asking the owner to retest.
+
+Helpers live in `Assets/_Modules/Core/Diagnostics/` (`FlowTrace.cs`, `Guard.cs`,
+`BreakCaptureHarness.cs`). Set `FlowTrace.Enabled=false` (or strip calls) once a system
+is proven stable — leave traces in while a system is being stabilised.
