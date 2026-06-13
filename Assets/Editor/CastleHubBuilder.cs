@@ -1431,6 +1431,25 @@ namespace DeNelle.Editor
                 Object.DestroyImmediate(t.gameObject);
             }
 
+            // 2b. Dedup TreeOfLife_Visual: a prior Resources placeholder tree (plain instance) can
+            //     survive WireCastleHeart's direct-child force-replace, leaving TWO trees. Keep the
+            //     Art-fbx prefab instance, destroy every other "TreeOfLife_Visual".
+            var allTreeTf = CollectAllTransforms();
+            Transform keepTree = null;
+            foreach (var t in allTreeTf)
+            {
+                if (t == null || t.name != "TreeOfLife_Visual") continue;
+                bool isPrefabInst = PrefabUtility.GetCorrespondingObjectFromSource(t.gameObject) != null;
+                bool keepIsPrefab = keepTree != null && PrefabUtility.GetCorrespondingObjectFromSource(keepTree.gameObject) != null;
+                if (keepTree == null || (isPrefabInst && !keepIsPrefab)) keepTree = t;
+            }
+            foreach (var t in allTreeTf)
+            {
+                if (t == null || t.name != "TreeOfLife_Visual" || t == keepTree) continue;
+                Log("EnsureCastleTownProps: destroyed duplicate TreeOfLife_Visual at " + t.position + ".");
+                Object.DestroyImmediate(t.gameObject);
+            }
+
             // 3. Anvil at the blacksmith. Destroy any stray Anvil not under the Blacksmith storefront,
             //    then ensure the storefront has exactly one.
             var blacksmith = GameObject.Find("Blacksmith_Weapons_Storefront");
