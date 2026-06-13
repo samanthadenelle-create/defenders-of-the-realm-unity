@@ -36,6 +36,7 @@
 
 using DeNelle.Core;
 using DeNelle.Core.State;
+using DeNelle.Core.UI;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -49,20 +50,24 @@ namespace DeNelle.Onboarding
     [RequireComponent(typeof(UIDocument))]
     public sealed class PetSelectController : MonoBehaviour
     {
-        // ── Palette (inline — mirrors the old SelectScreen.uss values) ───────
-        private static readonly Color ScreenBg   = new Color(0.024f, 0.016f, 0.047f); // rgb(6,4,12)
-        private static readonly Color CardBg      = new Color(0.102f, 0.071f, 0.165f, 0.98f); // rgba(26,18,42,.98)
-        private static readonly Color CardBgActive= new Color(0.149f, 0.102f, 0.204f, 0.98f); // rgba(38,26,52,.98)
-        private static readonly Color CardBorder  = new Color(0.486f, 0.227f, 0.929f, 0.30f); // rgba(124,58,237,.30)
-        private static readonly Color Amber       = new Color(0.961f, 0.651f, 0.137f);        // rgb(245,166,35)
-        private static readonly Color PortraitBg  = new Color(0.486f, 0.227f, 0.929f, 0.10f); // rgba(124,58,237,.10)
-        private static readonly Color TitleText   = new Color(0.929f, 0.914f, 0.980f);        // rgb(237,233,250)
-        private static readonly Color SubtitleText= new Color(0.659f, 0.627f, 0.737f);        // rgb(168,160,188)
-        private static readonly Color BlurbText   = new Color(0.729f, 0.698f, 0.824f, 0.85f); // rgba(186,178,210,.85)
-        private static readonly Color GlyphColorBase = new Color(0.769f, 0.710f, 0.992f);     // rgb(196,181,253)
-        private static readonly Color ConfirmText = new Color(0.086f, 0.055f, 0.024f);        // rgb(22,14,6)
-        private static readonly Color ConfirmDisabledText = new Color(0.929f, 0.914f, 0.980f, 0.35f);
-        private static readonly Color ConfirmDisabledBg   = new Color(1f, 1f, 1f, 0.06f);
+        // ── Palette — SOURCED from the shared ElarionUi town-HUD language ─────
+        // (WO restyle: matches the hero-select / town HUD — dark glass + ornate
+        // gold-rune frames — replacing the retired hardcoded purple/amber so the
+        // onboarding chain reads as ONE designed game. Role-named locals keep the
+        // layout below unchanged while every colour resolves canonically.)
+        private static readonly Color ScreenBg   = ElarionUi.PanelStoneDark;                                       // full-screen stone
+        private static readonly Color CardBg      = ElarionUi.PanelStoneDark;                                       // card rest fill
+        private static readonly Color CardBgActive= ElarionUi.PanelStone;                                           // card selected fill
+        private static readonly Color CardBorder  = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.55f); // soft gold rim
+        private static readonly Color Amber       = ElarionUi.Gold;                                                 // role line / accents → runic gold
+        private static readonly Color PortraitBg  = new Color(0f, 0f, 0f, 0.30f);                                   // dark backing well (town-HUD niche)
+        private static readonly Color TitleText   = ElarionUi.Parchment;                                            // primary text
+        private static readonly Color SubtitleText= ElarionUi.ParchmentDim;                                         // subtitle text
+        private static readonly Color BlurbText   = new Color(ElarionUi.ParchmentDim.r, ElarionUi.ParchmentDim.g, ElarionUi.ParchmentDim.b, 0.85f); // muted flavour
+        private static readonly Color GlyphColorBase = ElarionUi.Gilt;                                              // glyph fallback accent
+        private static readonly Color ConfirmText = ElarionUi.Ink;                                                  // dark ink on gold CTA
+        private static readonly Color ConfirmDisabledText = new Color(ElarionUi.Parchment.r, ElarionUi.Parchment.g, ElarionUi.Parchment.b, 0.35f);
+        private static readonly Color ConfirmDisabledBg   = ElarionUi.Disabled;                                     // inert stone grey
 
         // ── en.json keys for the screen's own copy ───────────────────────────
         private const string TitleKey = "petSelect.title";

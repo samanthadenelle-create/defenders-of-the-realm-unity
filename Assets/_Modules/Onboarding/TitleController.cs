@@ -47,6 +47,7 @@
 using Cysharp.Threading.Tasks;
 using DeNelle.Core;
 using DeNelle.Core.State;
+using DeNelle.Core.UI;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -102,15 +103,19 @@ namespace DeNelle.Onboarding
         // tap before the scene actually swaps).
         private bool _advancing;
 
-        // ── Inline palette (no USS dependency — WebGL-safe) ─────────────────
-        private static readonly Color ColBackground  = new Color(0.024f, 0.016f, 0.047f, 1f);
-        private static readonly Color ColPanelDark    = new Color(0.071f, 0.047f, 0.118f, 0.96f);
-        private static readonly Color ColCardIdle     = new Color(0.102f, 0.071f, 0.165f, 0.98f);
-        private static readonly Color ColCardActive   = new Color(0.149f, 0.102f, 0.204f, 1f);
-        private static readonly Color ColAmber        = new Color(0.961f, 0.651f, 0.137f, 1f);
-        private static readonly Color ColVioletBorder = new Color(0.486f, 0.227f, 0.929f, 0.35f);
-        private static readonly Color ColTextBright   = new Color(0.929f, 0.914f, 0.980f, 1f);
-        private static readonly Color ColTextMuted    = new Color(0.729f, 0.698f, 0.824f, 0.90f);
+        // ── Palette — SOURCED from the shared ElarionUi town-HUD language ────
+        // (WO restyle: the onboarding screens read as ONE designed game, matching
+        // the town HUD — dark glass + ornate gold-rune frames — not the retired
+        // hardcoded purple/amber. Role-named locals keep the layout code below
+        // unchanged while every colour now resolves from the canonical palette.)
+        private static readonly Color ColBackground  = ElarionUi.PanelStoneDark;                                   // full-screen stone
+        private static readonly Color ColPanelDark    = ElarionUi.PanelStone;                                       // roster panel fill
+        private static readonly Color ColCardIdle     = ElarionUi.PanelStoneDark;                                   // card rest fill
+        private static readonly Color ColCardActive   = ElarionUi.PanelStone;                                       // card selected fill
+        private static readonly Color ColAmber        = ElarionUi.Gold;                                             // CTA / accents → runic gold
+        private static readonly Color ColVioletBorder = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.55f); // soft gold rim
+        private static readonly Color ColTextBright   = ElarionUi.Parchment;                                        // primary text
+        private static readonly Color ColTextMuted    = ElarionUi.ParchmentDim;                                     // secondary text
 
         // Panel-render diagnostic (temporary).
         private bool _titleBuilt;
@@ -588,7 +593,7 @@ namespace DeNelle.Onboarding
                 }
                 else
                 {
-                    _dragonStage.style.backgroundColor = new Color(0.05f, 0.035f, 0.11f, 1f);
+                    _dragonStage.style.backgroundColor = ElarionUi.PanelStoneDark;
                     Debug.LogWarning("[TitleController] Resources/heart-wing not found — dragon stage is a flat band.");
                 }
             }
@@ -735,7 +740,7 @@ namespace DeNelle.Onboarding
             portrait.style.minHeight = 96f;   // taller slot so the head + torso read clearly
             portrait.style.alignItems = Align.Center;
             portrait.style.justifyContent = Justify.Center;
-            portrait.style.backgroundColor = new Color(0.486f, 0.227f, 0.929f, 0.10f);
+            portrait.style.backgroundColor = new Color(0f, 0f, 0f, 0.30f);   // dark backing well (town-HUD niche)
             portrait.pickingMode = PickingMode.Ignore;
 
             string slug = SlugFor(info.Hero);
@@ -918,7 +923,7 @@ namespace DeNelle.Onboarding
             _detailCard.style.borderBottomRightRadius = r;
             SetBorderWidth(_detailCard, 1f);
             SetBorderColor(_detailCard, ColVioletBorder);
-            _detailCard.style.backgroundColor = new Color(0.149f, 0.102f, 0.204f, 0.85f);
+            _detailCard.style.backgroundColor = ElarionUi.PanelStone;
 
             // ── Left: hero info + stat block ────────────────────────────────
             var info = new VisualElement { name = "title-hero-statblock" };
@@ -970,8 +975,8 @@ namespace DeNelle.Onboarding
             confirm.style.borderTopRightRadius = br;
             confirm.style.borderBottomLeftRadius = br;
             confirm.style.borderBottomRightRadius = br;
-            confirm.style.backgroundColor = ColAmber;
-            confirm.style.color = new Color(0.086f, 0.055f, 0.024f, 1f);
+            confirm.style.backgroundColor = ElarionUi.GoldButton;
+            confirm.style.color = ElarionUi.Ink;   // dark ink on gold CTA (town-HUD button)
             _detailCard.Add(confirm);
         }
 

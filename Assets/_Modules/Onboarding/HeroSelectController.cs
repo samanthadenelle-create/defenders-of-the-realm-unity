@@ -69,15 +69,18 @@ namespace DeNelle.Onboarding
         // WO-327: ConfirmKey ("heroSelect.jumpAction" / "Jump into the Action") was
         // removed with the DTT-crashing button.
 
-        // -- Palette (inline; no USS dependency) -----------------------------
-        private static readonly Color ColBackground   = new Color(0.024f, 0.016f, 0.047f, 1f);
-        private static readonly Color ColPanelDark     = new Color(0.071f, 0.047f, 0.118f, 1f);
-        private static readonly Color ColCardIdle      = new Color(0.102f, 0.071f, 0.165f, 0.98f);
-        private static readonly Color ColCardActive    = new Color(0.149f, 0.102f, 0.204f, 1f);
-        private static readonly Color ColAmber         = new Color(0.961f, 0.651f, 0.137f, 1f);
-        private static readonly Color ColVioletBorder  = new Color(0.486f, 0.227f, 0.929f, 0.35f);
-        private static readonly Color ColTextBright    = new Color(0.929f, 0.914f, 0.980f, 1f);
-        private static readonly Color ColTextMuted     = new Color(0.729f, 0.698f, 0.824f, 0.90f);
+        // -- Palette — SOURCED from the shared ElarionUi town-HUD language ----
+        // (WO restyle: matches the town HUD — dark glass + ornate gold-rune
+        // frames — not the retired hardcoded purple/amber. Role-named locals keep
+        // the layout below unchanged while every colour resolves canonically.)
+        private static readonly Color ColBackground   = ElarionUi.PanelStoneDark;                                     // full-screen stone
+        private static readonly Color ColPanelDark     = ElarionUi.PanelStone;                                         // roster panel fill
+        private static readonly Color ColCardIdle      = ElarionUi.PanelStoneDark;                                     // card rest fill
+        private static readonly Color ColCardActive    = ElarionUi.PanelStone;                                         // card selected fill
+        private static readonly Color ColAmber         = ElarionUi.Gold;                                               // accents / eyebrow → runic gold
+        private static readonly Color ColVioletBorder  = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.55f); // soft gold rim
+        private static readonly Color ColTextBright    = ElarionUi.Parchment;                                          // primary text
+        private static readonly Color ColTextMuted     = ElarionUi.ParchmentDim;                                       // secondary text
 
         [Header("UI")]
         [Tooltip("UIDocument hosting the hero-select panel. Falls back to the component on this GameObject.")]
@@ -231,8 +234,8 @@ namespace DeNelle.Onboarding
             }
             else
             {
-                // No art on disk — deep indigo band rather than a raw black gap.
-                _dragonStage.style.backgroundColor = new Color(0.05f, 0.035f, 0.11f, 1f);
+                // No art on disk — deep stone band rather than a raw black gap.
+                _dragonStage.style.backgroundColor = ElarionUi.PanelStoneDark;
                 Debug.LogWarning("[HeroSelectController] Resources/heart-wing not found — dragon stage is a flat band.");
             }
 
@@ -244,7 +247,7 @@ namespace DeNelle.Onboarding
             brand.style.paddingBottom = 12f;
             brand.style.paddingLeft = 24f;
             brand.style.paddingRight = 24f;
-            brand.style.backgroundColor = new Color(0.024f, 0.016f, 0.047f, 0.55f);
+            brand.style.backgroundColor = new Color(ElarionUi.PanelStoneDark.r, ElarionUi.PanelStoneDark.g, ElarionUi.PanelStoneDark.b, 0.55f); // legibility scrim over the art
             brand.pickingMode = PickingMode.Ignore;
 
             var title = new Label(CanonStrings.Locale(TitleKey));
@@ -541,7 +544,7 @@ namespace DeNelle.Onboarding
             _detailCard.style.borderBottomRightRadius = r;
             SetBorderWidth(_detailCard, 1f);
             SetBorderColor(_detailCard, ColVioletBorder);
-            _detailCard.style.backgroundColor = new Color(0.149f, 0.102f, 0.204f, 0.85f);
+            _detailCard.style.backgroundColor = ElarionUi.PanelStone;
 
             _detailName = new Label(string.Empty);
             _detailName.style.fontSize = 20f;
@@ -824,16 +827,19 @@ namespace DeNelle.Onboarding
             btn.style.borderBottomRightRadius = r;
             if (secondary)
             {
+                // Neutral stone "quiet" button — gold hairline rim, parchment text.
                 SetBorderWidth(btn, 2f);
-                SetBorderColor(btn, new Color(0.769f, 0.710f, 0.992f, 0.45f));
-                btn.style.backgroundColor = new Color(1f, 1f, 1f, 0.05f);
-                btn.style.color = new Color(0.769f, 0.710f, 0.992f, 1f);
+                SetBorderColor(btn, new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.55f));
+                btn.style.backgroundColor = ElarionUi.PanelStone;
+                btn.style.color = ElarionUi.Parchment;
             }
             else
             {
-                SetBorderWidth(btn, 0f);
-                btn.style.backgroundColor = ColAmber;
-                btn.style.color = new Color(0.086f, 0.055f, 0.024f, 1f);
+                // Primary gold CTA — dark ink on runic gold (town-HUD button).
+                SetBorderWidth(btn, 1f);
+                SetBorderColor(btn, new Color(ElarionUi.Gilt.r, ElarionUi.Gilt.g, ElarionUi.Gilt.b, 0.9f));
+                btn.style.backgroundColor = ElarionUi.GoldButton;
+                btn.style.color = ElarionUi.Ink;
             }
         }
     }
