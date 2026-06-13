@@ -186,8 +186,120 @@ namespace DeNelle.Village
             Reg("wait_for_event", (Func<string, IEnumerator>)CmdWaitForEvent);
         }
 
-        private void Reg(string name, Delegate handler) =>
-            ((IActionRegistration)_runner).AddCommandHandler(name, handler);
+        // ROOT-CAUSE FIX (T-031 / T-019 — Yarn v3 SignalContentComplete re-entrancy):
+        // -------------------------------------------------------------------------
+        // Yarn v3's DialogueRunner.OnCommandReceivedAsync handles a SYNCHRONOUS command
+        // (a plain Action handler that returns inline) by calling Dialogue.SignalContentComplete()
+        // and THEN Dialogue.Continue() on the SAME call stack (DialogueRunner.cs ~L703/746).
+        // That inline Continue() pumps the VM straight into the NEXT piece of content — and if
+        // that next content is ANOTHER synchronous command (two back-to-back <<cmd>> lines, which
+        // ~50 of our nodes have: every vendor "AdvanceQuest then GiveKeystone", the FTUE, the saga,
+        // the soul awakenings, …), it dispatches command #2 nested INSIDE command #1's dispatch.
+        // When the inner delivery advances the VM, its _executionState leaves DeliveringContent,
+        // so the OUTER frame's completion path then calls SignalContentComplete() while the VM is
+        // no longer dispatching a command → InvalidOperationException
+        // ("SignalContentComplete can only be called when a command is being dispatched"),
+        // which ABORTS the running dialogue (Talk dies; re-entering restarts the node but the
+        // option stack is corrupted → "breaks other options"). The earlier folded-portrait patch
+        // only fixed ONE site (StructureMenu node entry); the hazard is project-wide.
+        //
+        // The fix routes EVERY non-blocking command through a one-frame coroutine. The VM then sees
+        // the command as ASYNC (CommandDispatchResult.Task is not IsCompletedSuccessfully on the same
+        // frame — WaitForCoroutine completes via a YarnTaskCompletionSource next frame), so it takes
+        // the `await dispatchResult.Task` branch instead of the inline SignalContentComplete+Continue.
+        // The VM resumes on a CLEAN stack next frame — never nesting one command dispatch inside
+        // another — so SignalContentComplete can never fire out of context. This makes the contract
+        // safe for ALL current and FUTURE two-command nodes without editing every .yarn file.
+        //
+        // wait_for_event is registered DIRECTLY (it already returns IEnumerator and gates for real).
+        // The original handler's work still runs synchronously within the first coroutine step, so
+        // command ordering and side effects (set portrait, advance quest, open panel) are unchanged.
+
+        // Register a command, wrapping plain Action-family handlers so the VM dispatches them
+        // asynchronously (one frame) — eliminating the inline command-dispatch re-entrancy.
+        private void Reg(string name, Delegate handler)
+        {
+            // IEnumerator/Task/Coroutine-returning handlers are already async to the VM — pass through.
+            Type ret = handler.Method.ReturnType;
+            bool alreadyAsync =
+                typeof(IEnumerator).IsAssignableFrom(ret) ||
+                typeof(Coroutine).IsAssignableFrom(ret) ||
+                typeof(System.Threading.Tasks.Task).IsAssignableFrom(ret) ||
+                ret == typeof(Cysharp.Threading.Tasks.UniTask);
+
+            if (alreadyAsync)
+            {
+                ((IActionRegistration)_runner).AddCommandHandler(name, handler);
+                return;
+            }
+
+            RegisterDeferred(name, handler);
+        }
+
+        // Wrap a void/Action-family handler into a Func<…, IEnumerator> of the SAME arity so the
+        // Yarn source-generator/dispatcher sees the correct parameter count, while the VM treats it
+        // as an async (coroutine) command. Args flow through to the original handler via DynamicInvoke
+        // (commands fire only on dialogue beats, never per-frame — the reflection cost is irrelevant).
+        private void RegisterDeferred(string name, Delegate inner)
+        {
+            int argc = inner.Method.GetParameters().Length;
+            var reg = (IActionRegistration)_runner;
+            switch (argc)
+            {
+                case 0:
+                    reg.AddCommandHandler(name, (Func<IEnumerator>)(() => RunDeferred(inner)));
+                    break;
+                case 1:
+                    reg.AddCommandHandler(name, (Func<string, IEnumerator>)((a) => RunDeferred(inner, a)));
+                    break;
+                case 2:
+                    reg.AddCommandHandler(name, (Func<string, string, IEnumerator>)((a, b) => RunDeferred(inner, a, b)));
+                    break;
+                case 3:
+                    reg.AddCommandHandler(name, (Func<string, string, string, IEnumerator>)((a, b, c) => RunDeferred(inner, a, b, c)));
+                    break;
+                default:
+                    // Unsupported arity — register directly (synchronous) rather than drop the command.
+                    Debug.LogWarning($"[DialogueCommandBridge] '{name}' has {argc} params — registered synchronously (no deferral wrapper for this arity).");
+                    reg.AddCommandHandler(name, inner);
+                    break;
+            }
+        }
+
+        // The shared deferral coroutine: run the original handler THIS frame (preserving ordering and
+        // side effects), then yield a frame so the VM's completion runs on a fresh stack. Args arrive
+        // as strings from Yarn; DynamicInvoke coerces them to the handler's parameter types (int/float/
+        // string) exactly as the direct registration would have.
+        private IEnumerator RunDeferred(Delegate inner, params object[] rawArgs)
+        {
+            object[] args = CoerceArgs(inner, rawArgs);
+            try { inner.DynamicInvoke(args); }
+            catch (Exception ex)
+            {
+                Debug.LogError($"[DialogueCommandBridge] command '{inner.Method.Name}' threw — dialogue continues. " + ex);
+            }
+            yield return null;
+        }
+
+        // Convert the string args Yarn passes into the parameter types the original handler declares
+        // (Yarn itself would do this for a directly-registered typed handler; we do it here because the
+        // wrapper receives strings). Unparseable values fall back to default so a beat never hard-faults.
+        private static object[] CoerceArgs(Delegate inner, object[] rawArgs)
+        {
+            var ps = inner.Method.GetParameters();
+            var outArgs = new object[ps.Length];
+            for (int i = 0; i < ps.Length; i++)
+            {
+                Type t = ps[i].ParameterType;
+                string s = (rawArgs != null && i < rawArgs.Length) ? rawArgs[i] as string : null;
+                if (t == typeof(string)) { outArgs[i] = s; }
+                else if (t == typeof(int)) { outArgs[i] = int.TryParse(s, out int iv) ? iv : 0; }
+                else if (t == typeof(float)) { outArgs[i] = float.TryParse(s, out float fv) ? fv : 0f; }
+                else if (t == typeof(bool)) { outArgs[i] = bool.TryParse(s, out bool bv) && bv; }
+                else { outArgs[i] = s; }
+            }
+            return outArgs;
+        }
 
         // ── Camera ───────────────────────────────────────────────────────────
 
