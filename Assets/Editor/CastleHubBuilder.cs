@@ -425,7 +425,9 @@ namespace DeNelle.Editor
         // =====================================================================
         private const string InnerRingName = "InnerWallRing_CoC";
         private const float  InnerRingHalfExtent = 18f;   // square half-side from origin
-        private const float  InnerRingGateGapHalf = 7f;   // 14m clear gate opening, centered per side
+        // 7m half => 14m clear opening. Must be >= the 12m-wide outer gate exit strip
+        // (BuildGateExitStrips halfWidth 6 => 12m) so the NavMeshAgent + strip pass cleanly.
+        private const float  InnerRingGateGapHalf = 7f;
 
         private static void BuildInnerWallRing(Transform parent, GameObject wallStone)
         {
@@ -448,6 +450,25 @@ namespace DeNelle.Editor
             if (baseLen < 0.5f) baseLen = 13f; // safety fallback
 
             float R = InnerRingHalfExtent;
+
+            // --- ALIGN INNER GATE GAPS TO THE OUTER GATES (fix: hero was stopped 17.4m out) ---
+            // FlowTrace proof: the seam trigger at the perimeter gate runs, but the hero's closest
+            // approach was 17.4m (trigger radius 14m) — the inner ring (half-extent ~18m) blocked
+            // him. The inner gaps were CENTERED on each side (lateral 0), but the OUTER cardinal
+            // gates are laterally OFFSET (south gate.x ~ -4.37), so the inner gap and the outer
+            // gate / 12m exit strip did NOT line up — the hero hit inner wall instead of pathing
+            // THROUGH to the seam. Fix: center each side's gap on the SAME recipe-derived lateral
+            // offset the outer gates use, so courtyard -> inner gap -> exit strip -> seam is one
+            // continuous walkable lane after the bake.
+            //
+            // Derivation (recipe, NOT hardcoded): outer gate world pos for a side =
+            // Quaternion.Euler(0,yaw,0) * southGate (see BuildGateExitStrips/MakeGatePose). The
+            // lateral offset of that gate along this side's 'along' axis (= rot * +X) is
+            //   Dot(rot*southGate, rot*right) = Dot(southGate, Vector3.right) = southGate.x.
+            // i.e. by the x4 rotational symmetry every side's lateral offset is the SAME value,
+            // the recipe south gate's X. Read it from the recipe so it tracks any re-author.
+            float gateLateral = ReadSouthGatePos().x;
+
             // 4 sides: outward cardinal + yaw so the wall faces along the side. South faces -Z.
             var sides = new (string label, float yaw)[] { ("South", 0f), ("West", 90f), ("North", 180f), ("East", 270f) };
 
@@ -459,17 +480,23 @@ namespace DeNelle.Editor
                 Vector3 along   = rot * Vector3.right;           // +X rotated — runs along the side
                 Vector3 sideCenter = outward * R;                // midpoint of this side, on the ring
 
-                // The side spans [-R, +R] along 'along'. Two wall runs flank a centered gate gap:
-                //   left  run: from -R to -gap
-                //   right run: from +gap to +R
+                // The side spans [-R, +R] along 'along'. The gate gap is centered on gateLateral
+                // (the outer gate's lateral offset), NOT on 0. Two wall runs flank that gap:
+                //   left  run: from -R               to (gateLateral - gapHalf)
+                //   right run: from (gateLateral + gapHalf) to +R
+                // No segment spans the gap lane, so the bake leaves it walkable and the inner gap
+                // sits directly in front of the outer gate / exit strip.
                 // The wall prefab tiles on its local X; 'along' = rot * +X, so the segment rotation
                 // is simply the side yaw (identity for South, where the wall faces ±Z as authored).
-                BuildRingSideRun(ring.transform, wallStone, sideCenter, along, rot, -R, -InnerRingGateGapHalf, baseLen, label + "_L", ref placed);
-                BuildRingSideRun(ring.transform, wallStone, sideCenter, along, rot,  InnerRingGateGapHalf,  R, baseLen, label + "_R", ref placed);
+                float gapMin = gateLateral - InnerRingGateGapHalf;
+                float gapMax = gateLateral + InnerRingGateGapHalf;
+                BuildRingSideRun(ring.transform, wallStone, sideCenter, along, rot, -R,     gapMin, baseLen, label + "_L", ref placed);
+                BuildRingSideRun(ring.transform, wallStone, sideCenter, along, rot,  gapMax, R,      baseLen, label + "_R", ref placed);
             }
 
             Log($"BuildInnerWallRing: CoC inner ring built — half-extent {R}m, 4 sides, " +
-                $"{InnerRingGateGapHalf * 2f}m gate gap per side, {placed} wall segment(s). Enemies path outer gate -> inner gap -> Heart.");
+                $"{InnerRingGateGapHalf * 2f}m gate gap per side centered on recipe gate lateral {gateLateral:F2}m " +
+                $"(aligned to outer gates), {placed} wall segment(s). Path: courtyard -> inner gap -> outer gate strip -> seam.");
         }
 
         // One straight wall run along a ring side, from 'a' to 'b' (offsets along 'along' from the
