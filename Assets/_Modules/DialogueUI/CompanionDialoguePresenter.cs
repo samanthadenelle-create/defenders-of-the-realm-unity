@@ -122,7 +122,62 @@ namespace DeNelle.DialogueUI
             Transform items = FindDescendant(transform, "Items");
             if (items == null) return;
             for (int i = 0; i < items.childCount; i++)
-                TintAllTextGraphics(items.GetChild(i), ink);
+            {
+                Transform item = items.GetChild(i);
+                TintAllTextGraphics(item, ink);
+                // WO-391 DEFECT 1: option-on-option overlap. The ClassicRPG "Option
+                // Item" prefab root is a fixed height with label wrap ON and no
+                // LayoutElement, so a 2-line option ("Not yet" wrapped) renders on top
+                // of the next option. The option items are re-Instantiated every time
+                // options show (same place TintOptionItems already runs), so we fix the
+                // row height here per freshly-built item: add/configure a LayoutElement
+                // whose preferredHeight is driven by the item's own label preferred
+                // height, forcing the Items VerticalLayoutGroup (childControlHeight is
+                // set true once in RepairOptionsLayoutOnce) to give a tall option enough
+                // vertical space instead of letting it bleed onto its neighbour.
+                EnsureOptionItemRowHeight(item);
+            }
+        }
+
+        // WO-391 DEFECT 1 helper: size one option item's row from its label's real
+        // preferred height. Reads the TMP label preferred height through the same
+        // Graphic/reflection approach the rest of this file uses (no Unity.TextMeshPro
+        // asmdef ref): the label is the one Graphic under the item that is NOT an Image
+        // (TMP_Text derives from Graphic). We query TMP's "preferredHeight" property by
+        // name, clamp to >= 60, add a little padding, and write it to a LayoutElement
+        // on the item root. Idempotent (reuses an existing LayoutElement) + null-guarded.
+        private static void EnsureOptionItemRowHeight(Transform item)
+        {
+            if (item == null) return;
+
+            // Find the label Graphic (the TMP_Text — every Graphic under the item that
+            // is not an Image), matching TintAllTextGraphics' identification.
+            Graphic label = null;
+            var graphics = item.GetComponentsInChildren<Graphic>(true);
+            foreach (var g in graphics)
+                if (g != null && !(g is Image)) { label = g; break; }
+
+            float labelPreferred = 0f;
+            if (label != null)
+            {
+                // TMP exposes a read-only "preferredHeight" property; read it via
+                // reflection so we never need a TMPro-typed handle.
+                var phProp = label.GetType().GetProperty("preferredHeight");
+                if (phProp != null && phProp.CanRead)
+                {
+                    object v = phProp.GetValue(label);
+                    if (v is float f) labelPreferred = f;
+                }
+            }
+
+            // preferredHeight = label height + vertical padding, clamped to a sane floor.
+            float preferred = labelPreferred + 16f;
+            if (preferred < 60f) preferred = 60f;
+
+            var le = item.GetComponent<LayoutElement>();
+            if (le == null) le = item.gameObject.AddComponent<LayoutElement>();
+            le.minHeight       = 60f;
+            le.preferredHeight = preferred;
         }
 
         // Recolour the option item's TEXT to ink. The ClassicRPG "Option Item"
@@ -195,6 +250,24 @@ namespace DeNelle.DialogueUI
             if (_optionLayoutRepaired) return;
             _optionLayoutRepaired = true;   // attempt once even if pieces are missing
 
+            // WO-391 DEFECT 2: body text over the name banner + first option. The
+            // Line body TMP ships with verticalAlignment = Middle (512) + autosize OFF
+            // in a fixed box, so a 3-line line overflows both up (over the banner) and
+            // down (over the first option). Re-author the body TMP to top-align +
+            // auto-size (fontSizeMax 45 / min 28) so it grows the text DOWN from the top
+            // and shrinks to fit rather than spilling out of its box. Set via reflection
+            // on the body "Line"/"Text" TMP (no Unity.TextMeshPro asmdef ref).
+            Transform lineRoot = FindDescendant(transform, "Line");
+            if (lineRoot != null)
+            {
+                Transform bodyText = FindDescendant(lineRoot, "Text");
+                if (bodyText != null)
+                {
+                    var bodyGraphic = bodyText.GetComponent<Graphic>();
+                    ApplyBodyTextTopAlignAutoSize(bodyGraphic);
+                }
+            }
+
             // The presenter's optionComponents transform is named "Options" in the
             // ClassicRPG prefab; its line text is "Text" and the option list "Items".
             Transform options = FindDescendant(transform, "Options");
@@ -242,6 +315,20 @@ namespace DeNelle.DialogueUI
                 if (itemsFitter == null) itemsFitter = items.gameObject.AddComponent<ContentSizeFitter>();
                 itemsFitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
                 itemsFitter.verticalFit   = ContentSizeFitter.FitMode.PreferredSize;
+
+                // WO-391 DEFECT 1: the inner "Items" VerticalLayoutGroup ships with
+                // childControlHeight = false, so it honours each option item's stale
+                // fixed RectTransform height and a 2-line option overlaps the next.
+                // Turn childControlHeight ON so the group reads each item's PREFERRED
+                // height (the per-item LayoutElement we set in EnsureOptionItemRowHeight)
+                // and reflows tall options downward instead of overlapping. childForce-
+                // ExpandHeight stays off so rows are sized to content, not stretched.
+                var itemsVlg = items.GetComponent<VerticalLayoutGroup>();
+                if (itemsVlg != null)
+                {
+                    itemsVlg.childControlHeight     = true;
+                    itemsVlg.childForceExpandHeight = false;
+                }
             }
         }
 
@@ -309,6 +396,49 @@ namespace DeNelle.DialogueUI
                 nimg.raycastTarget = false;
                 niche.transform.SetAsFirstSibling();   // behind the portrait image
             }
+        }
+
+        // WO-391 DEFECT 2 helper: top-align + auto-size the body line TMP via
+        // reflection (no Unity.TextMeshPro asmdef ref — we poke the properties by name
+        // on the TMP component, matching how BuildNameBannerOnce already sets fontSize/
+        // text). TMP's "verticalAlignment" is the enum VerticalAlignmentOptions where
+        // Top = 256 (Middle = 512 is the overflow-causing default), so we convert the
+        // raw value to the property's own enum type before assigning. "enableAutoSizing"
+        // is a bool; "fontSizeMax"/"fontSizeMin" are floats. Idempotent + null-guarded;
+        // any property the TMP build lacks is simply skipped.
+        private static void ApplyBodyTextTopAlignAutoSize(Graphic tmp)
+        {
+            if (tmp == null) return;
+            var t = tmp.GetType();
+
+            // verticalAlignment = Top (256). The property type is the TMP enum, so
+            // build the enum value from its underlying int via Enum.ToObject.
+            const int VerticalAlignmentTop = 256;
+            var vaProp = t.GetProperty("verticalAlignment");
+            if (vaProp != null && vaProp.CanWrite)
+            {
+                try
+                {
+                    object topValue = vaProp.PropertyType.IsEnum
+                        ? System.Enum.ToObject(vaProp.PropertyType, VerticalAlignmentTop)
+                        : (object)VerticalAlignmentTop;
+                    vaProp.SetValue(tmp, topValue);
+                }
+                catch { /* unknown TMP build: skip */ }
+            }
+
+            // enableAutoSizing = true.
+            var autoProp = t.GetProperty("enableAutoSizing");
+            if (autoProp != null && autoProp.CanWrite && autoProp.PropertyType == typeof(bool))
+                autoProp.SetValue(tmp, true);
+
+            // fontSizeMax 45 / fontSizeMin 28 — the autosize clamp band.
+            var maxProp = t.GetProperty("fontSizeMax");
+            if (maxProp != null && maxProp.CanWrite && maxProp.PropertyType == typeof(float))
+                maxProp.SetValue(tmp, 45f);
+            var minProp = t.GetProperty("fontSizeMin");
+            if (minProp != null && minProp.CanWrite && minProp.PropertyType == typeof(float))
+                minProp.SetValue(tmp, 28f);
         }
 
         // Recolour the TMP line text under a panel WITHOUT a Unity.TextMeshPro
