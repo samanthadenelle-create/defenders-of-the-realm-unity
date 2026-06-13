@@ -22,6 +22,7 @@
 
 using System.Collections.Generic;
 using DeNelle.Core.Services;
+using DeNelle.Core.UI;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -44,14 +45,15 @@ namespace DeNelle.HUD
         private readonly Dictionary<LeaderboardMetric, Button> _tabButtons =
             new Dictionary<LeaderboardMetric, Button>();
 
-        // Palette — matches ClanChatPanel for a consistent HUD look.
-        private static readonly Color PanelBg     = new Color(0.07f, 0.05f, 0.11f, 0.96f);
-        private static readonly Color Accent      = new Color(0.78f, 0.55f, 1f, 1f);
-        private static readonly Color Gold        = new Color(0.97f, 0.92f, 0.74f, 1f);
-        private static readonly Color Body        = new Color(0.96f, 0.94f, 0.88f, 1f);
-        private static readonly Color Muted       = new Color(0.66f, 0.7f, 0.78f, 1f);
-        private static readonly Color RowAlt       = new Color(1f, 1f, 1f, 0.04f);
-        private static readonly Color LocalRowBg  = new Color(0.78f, 0.55f, 1f, 0.16f);
+        // Palette — sourced from the canonical Elarion town-HUD theme so the
+        // leaderboard reads as ONE designed UI (dark stone + ornate gold rune frame).
+        private static readonly Color PanelBg     = ElarionUi.PanelStoneDark;
+        private static readonly Color Accent      = ElarionUi.Aether;
+        private static readonly Color Gold        = ElarionUi.Gilt;
+        private static readonly Color Body        = ElarionUi.Parchment;
+        private static readonly Color Muted       = ElarionUi.ParchmentDim;
+        private static readonly Color RowAlt      = new Color(1f, 1f, 1f, 0.04f);
+        private static readonly Color LocalRowBg  = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.16f);
 
         private void Awake()
         {
@@ -107,7 +109,7 @@ namespace DeNelle.HUD
             _panel.style.maxHeight = 560;
             _panel.style.backgroundColor = new StyleColor(PanelBg);
             SetRadius(_panel, 12);
-            SetBorder(_panel, 1, new Color(0.78f, 0.55f, 1f, 0.4f));
+            SetBorder(_panel, 2, new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.55f));
             _panel.style.paddingLeft = 12; _panel.style.paddingRight = 12;
             _panel.style.paddingTop = 10;  _panel.style.paddingBottom = 10;
             _panel.style.flexDirection = FlexDirection.Column;
@@ -236,7 +238,7 @@ namespace DeNelle.HUD
             {
                 bool active = kv.Key == _metric;
                 kv.Value.style.backgroundColor = new StyleColor(
-                    active ? new Color(0.18f, 0.14f, 0.26f, 1f) : new Color(0.10f, 0.08f, 0.16f, 1f));
+                    active ? ElarionUi.Aether : ElarionUi.AetherDim);
                 kv.Value.style.color = new StyleColor(active ? Gold : Muted);
                 kv.Value.style.unityFontStyleAndWeight = active ? FontStyle.Bold : FontStyle.Normal;
             }

@@ -356,7 +356,7 @@ namespace DeNelle.HUD
             _toast.style.position = Position.Absolute;
             _toast.style.bottom = 40; _toast.style.left = 0; _toast.style.right = 0;
             _toast.style.unityTextAlign = TextAnchor.MiddleCenter;
-            _toast.style.color = new Color(0.95f, 0.92f, 0.85f);
+            _toast.style.color = ShopTheme.Parchment;
             _toast.style.fontSize = 13;
             _toast.style.display = DisplayStyle.None;
             _root.Add(_toast);
@@ -404,7 +404,7 @@ namespace DeNelle.HUD
             if (!anyCard)
             {
                 var empty = new Label("Nothing here yet - check back next season.");
-                empty.style.color = new Color(0.7f, 0.65f, 0.6f);
+                empty.style.color = ShopTheme.ParchmentDim;
                 empty.style.unityFontStyleAndWeight = FontStyle.Italic;
                 empty.style.fontSize = 13;
                 empty.style.marginTop = 12;

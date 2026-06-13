@@ -9,6 +9,7 @@
 // =============================================================================
 
 using DeNelle.Core.Quests;
+using DeNelle.Core.UI;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -96,7 +97,7 @@ namespace DeNelle.HUD
             if (today == null) return;
 
             var header = new Label("Daily Quests");
-            header.style.color = new StyleColor(new Color(0.97f, 0.92f, 0.74f, 1f));
+            header.style.color = new StyleColor(ElarionUi.Gilt);
             header.style.fontSize = 13;
             header.style.unityFontStyleAndWeight = FontStyle.Bold;
             header.style.marginBottom = 4;
@@ -135,8 +136,8 @@ namespace DeNelle.HUD
             s.left = Length.Percent(50);
             s.translate = new Translate(Length.Percent(-50), 0, 0);
             s.paddingLeft = 20; s.paddingRight = 20; s.paddingTop = 12; s.paddingBottom = 12;
-            s.backgroundColor = new StyleColor(new Color(0.14f, 0.34f, 0.20f, 0.96f));
-            s.color = new StyleColor(new Color(0.95f, 1f, 0.85f, 1f));
+            s.backgroundColor = new StyleColor(new Color(ElarionUi.Affordable.r, ElarionUi.Affordable.g, ElarionUi.Affordable.b, 0.96f));
+            s.color = new StyleColor(ElarionUi.Parchment);
             s.unityFontStyleAndWeight = FontStyle.Bold;
             s.fontSize = 16;
             s.unityTextAlign = TextAnchor.MiddleCenter;
@@ -144,7 +145,7 @@ namespace DeNelle.HUD
             s.borderTopLeftRadius = 10; s.borderTopRightRadius = 10;
             s.borderBottomLeftRadius = 10; s.borderBottomRightRadius = 10;
             s.borderTopWidth = 1; s.borderBottomWidth = 1; s.borderLeftWidth = 1; s.borderRightWidth = 1;
-            var rim = new StyleColor(new Color(0.5f, 0.9f, 0.6f, 1f));
+            var rim = new StyleColor(ElarionUi.Affordable);
             s.borderTopColor = rim; s.borderBottomColor = rim; s.borderLeftColor = rim; s.borderRightColor = rim;
             toast.pickingMode = PickingMode.Ignore;
             _root.Add(toast);
@@ -175,13 +176,13 @@ namespace DeNelle.HUD
             chip.Add(titleRow);
 
             var label = new Label(ResolveLabel(q));
-            label.style.color = new StyleColor(new Color(0.96f, 0.94f, 0.88f, 1f));
+            label.style.color = new StyleColor(ElarionUi.Parchment);
             label.style.fontSize = 12;
             label.style.flexGrow = 1;
             titleRow.Add(label);
 
             var progress = new Label($"{q.Progress}/{q.Target}");
-            progress.style.color = new StyleColor(new Color(0.75f, 0.78f, 0.82f, 1f));
+            progress.style.color = new StyleColor(ElarionUi.ParchmentDim);
             progress.style.fontSize = 11;
             progress.style.marginLeft = 8;
             titleRow.Add(progress);
@@ -212,21 +213,15 @@ namespace DeNelle.HUD
         }
 
         private static Color BgFor(string slot, bool done) => done
-            ? new Color(0.16f, 0.30f, 0.18f, 0.92f)
-            : slot switch
-            {
-                "combat"      => new Color(0.20f, 0.07f, 0.06f, 0.92f),
-                "exploration" => new Color(0.06f, 0.13f, 0.20f, 0.92f),
-                "wildcard"    => new Color(0.14f, 0.07f, 0.22f, 0.92f),
-                _ => new Color(0.10f, 0.10f, 0.12f, 0.92f),
-            };
+            ? new Color(ElarionUi.Affordable.r * 0.35f, ElarionUi.Affordable.g * 0.35f, ElarionUi.Affordable.b * 0.35f, 0.92f)
+            : new Color(ElarionUi.PanelStoneDark.r, ElarionUi.PanelStoneDark.g, ElarionUi.PanelStoneDark.b, 0.92f);
 
         private static Color RimFor(string slot) => slot switch
         {
-            "combat"      => new Color(0.92f, 0.45f, 0.28f, 1f),
-            "exploration" => new Color(0.40f, 0.80f, 0.95f, 1f),
-            "wildcard"    => new Color(0.78f, 0.55f, 1f, 1f),
-            _ => new Color(0.6f, 0.6f, 0.6f, 1f),
+            "combat"      => ElarionUi.Danger,
+            "exploration" => ElarionUi.ManaBlue,
+            "wildcard"    => ElarionUi.Aether,
+            _ => ElarionUi.Gold,
         };
     }
 }

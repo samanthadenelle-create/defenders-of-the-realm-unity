@@ -11,6 +11,7 @@
 // =============================================================================
 
 using DeNelle.Core.Quests;
+using DeNelle.Core.UI;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -75,7 +76,7 @@ namespace DeNelle.HUD
             if (ids == null || ids.Count == 0) return; // nothing active → empty (no header noise)
 
             var header = new Label("Quests");
-            header.style.color = new StyleColor(new Color(0.97f, 0.92f, 0.74f, 1f));
+            header.style.color = new StyleColor(ElarionUi.Gilt);
             header.style.fontSize = 13;
             header.style.unityFontStyleAndWeight = FontStyle.Bold;
             header.style.marginBottom = 4;
@@ -103,15 +104,15 @@ namespace DeNelle.HUD
             card.style.borderTopRightRadius = 8;
             card.style.borderBottomLeftRadius = 8;
             card.style.borderBottomRightRadius = 8;
-            card.style.backgroundColor = new StyleColor(new Color(0.09f, 0.11f, 0.16f, 0.92f));
+            card.style.backgroundColor = new StyleColor(ElarionUi.PanelStoneDark);
             card.style.borderLeftWidth = 0; card.style.borderRightWidth = 0;
             card.style.borderTopWidth = 1;  card.style.borderBottomWidth = 1;
-            var rim = new StyleColor(new Color(0.85f, 0.74f, 0.42f, 1f));
+            var rim = new StyleColor(ElarionUi.Gold);
             card.style.borderTopColor = rim;
             card.style.borderBottomColor = rim;
 
             var title = new Label(def != null && !string.IsNullOrEmpty(def.Title) ? def.Title : id);
-            title.style.color = new StyleColor(new Color(0.97f, 0.94f, 0.86f, 1f));
+            title.style.color = new StyleColor(ElarionUi.Parchment);
             title.style.fontSize = 13;
             title.style.unityFontStyleAndWeight = FontStyle.Bold;
             card.Add(title);
@@ -120,7 +121,7 @@ namespace DeNelle.HUD
                 ? stage.ObjectiveText
                 : "…";
             var obj = new Label(objective);
-            obj.style.color = new StyleColor(new Color(0.78f, 0.82f, 0.88f, 1f));
+            obj.style.color = new StyleColor(ElarionUi.ParchmentDim);
             obj.style.fontSize = 12;
             obj.style.marginTop = 2;
             obj.style.whiteSpace = WhiteSpace.Normal;

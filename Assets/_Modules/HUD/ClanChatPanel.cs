@@ -18,6 +18,7 @@
 
 using System.Collections.Generic;
 using DeNelle.Core.Services;
+using DeNelle.Core.UI;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -102,15 +103,16 @@ namespace DeNelle.HUD
             _panel.style.bottom = 16;
             _panel.style.width = 360;
             _panel.style.maxHeight = 460;
-            _panel.style.backgroundColor = new StyleColor(new Color(0.07f, 0.05f, 0.11f, 0.95f));
+            _panel.style.backgroundColor = new StyleColor(ElarionUi.PanelStoneDark);
             _panel.style.borderTopLeftRadius = 12; _panel.style.borderTopRightRadius = 12;
             _panel.style.borderBottomLeftRadius = 12; _panel.style.borderBottomRightRadius = 12;
-            _panel.style.borderLeftWidth = 1; _panel.style.borderRightWidth = 1;
-            _panel.style.borderTopWidth = 1; _panel.style.borderBottomWidth = 1;
-            _panel.style.borderLeftColor   = new StyleColor(new Color(0.78f, 0.55f, 1f, 0.4f));
-            _panel.style.borderRightColor  = new StyleColor(new Color(0.78f, 0.55f, 1f, 0.4f));
-            _panel.style.borderTopColor    = new StyleColor(new Color(0.78f, 0.55f, 1f, 0.4f));
-            _panel.style.borderBottomColor = new StyleColor(new Color(0.78f, 0.55f, 1f, 0.4f));
+            _panel.style.borderLeftWidth = 2; _panel.style.borderRightWidth = 2;
+            _panel.style.borderTopWidth = 2; _panel.style.borderBottomWidth = 2;
+            var panelRim = new StyleColor(new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.55f));
+            _panel.style.borderLeftColor   = panelRim;
+            _panel.style.borderRightColor  = panelRim;
+            _panel.style.borderTopColor    = panelRim;
+            _panel.style.borderBottomColor = panelRim;
             _panel.style.paddingLeft = 12; _panel.style.paddingRight = 12;
             _panel.style.paddingTop = 10;  _panel.style.paddingBottom = 10;
             _panel.style.flexDirection = FlexDirection.Column;
@@ -133,7 +135,7 @@ namespace DeNelle.HUD
             _panel.Add(_header);
 
             _headerTitle = new Label("Clan Chat");
-            _headerTitle.style.color = new StyleColor(new Color(0.97f, 0.92f, 0.74f, 1f));
+            _headerTitle.style.color = new StyleColor(ElarionUi.Gilt);
             _headerTitle.style.fontSize = 14;
             _headerTitle.style.unityFontStyleAndWeight = FontStyle.Bold;
             _headerTitle.style.flexGrow = 1;
@@ -264,7 +266,7 @@ namespace DeNelle.HUD
             if (msgs == null || msgs.Count == 0)
             {
                 var hint = new Label("Send a phrase below to start the chat.");
-                hint.style.color = new StyleColor(new Color(0.7f, 0.7f, 0.75f, 0.85f));
+                hint.style.color = new StyleColor(ElarionUi.ParchmentDim);
                 hint.style.fontSize = 11;
                 hint.style.unityFontStyleAndWeight = FontStyle.Italic;
                 hint.style.marginTop = 6; hint.style.marginBottom = 6;
@@ -294,12 +296,12 @@ namespace DeNelle.HUD
 
             var meta = new Label((m.SenderId == localAccountId ? "You" : (m.SenderName ?? "?"))
                                  + (m.IsCustom ? " · custom" : ""));
-            meta.style.color = new StyleColor(new Color(0.66f, 0.7f, 0.78f, 1f));
+            meta.style.color = new StyleColor(ElarionUi.ParchmentDim);
             meta.style.fontSize = 10;
             row.Add(meta);
 
             var body = new Label(m.Text ?? "…");
-            body.style.color = new StyleColor(new Color(0.96f, 0.94f, 0.88f, 1f));
+            body.style.color = new StyleColor(ElarionUi.Parchment);
             body.style.fontSize = 12;
             body.style.whiteSpace = WhiteSpace.Normal;
             row.Add(body);
@@ -322,7 +324,7 @@ namespace DeNelle.HUD
                 {
                     lastCategory = p.Category;
                     var divider = new Label(ResolveCategoryLabel(p.Category));
-                    divider.style.color = new StyleColor(new Color(0.78f, 0.55f, 1f, 0.85f));
+                    divider.style.color = new StyleColor(new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.85f));
                     divider.style.fontSize = 10;
                     divider.style.unityFontStyleAndWeight = FontStyle.Bold;
                     divider.style.width = new Length(100, LengthUnit.Percent);
@@ -350,8 +352,8 @@ namespace DeNelle.HUD
             chip.style.marginBottom = 4;
             chip.style.paddingLeft = 8; chip.style.paddingRight = 8;
             chip.style.paddingTop = 2;  chip.style.paddingBottom = 2;
-            chip.style.backgroundColor = new StyleColor(new Color(0.18f, 0.14f, 0.26f, 1f));
-            chip.style.color = new StyleColor(new Color(0.96f, 0.94f, 0.88f, 1f));
+            chip.style.backgroundColor = new StyleColor(ElarionUi.AetherDim);
+            chip.style.color = new StyleColor(ElarionUi.Parchment);
             chip.style.borderTopLeftRadius = 10; chip.style.borderTopRightRadius = 10;
             chip.style.borderBottomLeftRadius = 10; chip.style.borderBottomRightRadius = 10;
             return chip;
