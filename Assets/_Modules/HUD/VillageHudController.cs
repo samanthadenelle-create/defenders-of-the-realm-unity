@@ -78,6 +78,18 @@ namespace DeNelle.HUD
         // TOWN ACTIONS row — least-exposed: the HUD raises these; Village-side bridges open the
         // actual panels (HUD → Core/event only; never references HeroInventoryController/quests).
         public UnityEvent InventoryRequested = new UnityEvent();   // BAG → HeroInventoryController (Village bridge)
+        // ROOT-CAUSE BRIDGE (T-022 "no inventory"): the per-instance InventoryRequested above is
+        // recreated EVERY scene load — VillageHudController is NOT DontDestroyOnLoad; the bootstrap
+        // re-spawns a fresh controller (and a fresh `new UnityEvent()`) on each hub load (see
+        // VillageHudBootstrap header "We do NOT DontDestroyOnLoad the host"). The Village-side bridge
+        // (HeroEquipHud, a DontDestroyOnLoad singleton) re-binds via reflection self-heal, but the
+        // hand-off is timing-fragile across the destroy-old / spawn-new HUD swap on entering
+        // MainCastle_Hall — when it binds to the dying HUD's event the BAG fires into the void and
+        // OpenInventory never runs (verified: no [HeroEquipHud] log on tap). A STATIC event is
+        // instance-independent: the bridge subscribes ONCE and every HUD instance's BAG fires it, so
+        // the link can never go stale across a HUD re-instance. The BAG raises BOTH (belt-and-braces).
+        public static event System.Action InventoryRequestedStatic;
+        public static void RaiseInventoryRequested() => InventoryRequestedStatic?.Invoke();
         public UnityEvent QuestsRequested = new UnityEvent();      // QUESTS → quest modal (follow-up; dimmed for now)
         public UnityEvent IntelRequested = new UnityEvent();       // far top-right (periscope) → enemy scout report / lookout
         public AbilitySlotEvent AbilityRequested = new AbilitySlotEvent();
@@ -1196,7 +1208,12 @@ namespace DeNelle.HUD
             // Glyph fallback "I" (Inventory) is a legible mnemonic in the sibling-initial
             // convention (B/T) for when the RPG sprite pack isn't imported — was a stray "G".
             BuildIconButton(_townActionPanel, new Vector2(0.58f, 0.29f), new Vector2(0.98f, 0.71f),
-                IconInventory, "I", () => InventoryRequested?.Invoke());
+                IconInventory, "I", () =>
+                {
+                    Debug.Log("[VillageHudController] BAG tapped → raising InventoryRequested (instance + static).");
+                    InventoryRequested?.Invoke();        // legacy per-instance event (Village bridge self-heal)
+                    RaiseInventoryRequested();           // instance-independent static bridge (never goes stale)
+                });
             _questButton = BuildIconButton(_townActionPanel, new Vector2(0.30f, 0.02f), new Vector2(0.70f, 0.44f),
                 IconQuest, "!", () => DailyQuestHud.Instance?.Toggle());
 

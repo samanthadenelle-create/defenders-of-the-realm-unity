@@ -63,6 +63,7 @@ namespace DeNelle.Village
         {
             UnityEngine.SceneManagement.SceneManager.sceneLoaded -= OnSceneLoaded;
             if (_invEvent != null && _invListener != null) _invEvent.RemoveListener(_invListener);
+            DetachStaticHook();
             if (_ui != null) Destroy(_ui);
             if (Instance == this) Instance = null;
         }
@@ -73,7 +74,49 @@ namespace DeNelle.Village
             // the HUD's InventoryRequested (DeNelle.HUD; Village can't reference it → reflection) to
             // OpenInventory. Re-wire on each scene load (the HUD may not be up when we Start).
             UnityEngine.SceneManagement.SceneManager.sceneLoaded += OnSceneLoaded;
+            // ROOT-CAUSE FIX (T-022 BAG dead): subscribe ONCE to the HUD's STATIC inventory
+            // event. The per-instance InventoryRequested below is recreated every scene load
+            // (the HUD is NOT DontDestroyOnLoad — VillageHudBootstrap re-spawns it), so the
+            // reflection self-heal can bind to a dying HUD and the BAG fires into the void.
+            // The static event is instance-independent: bind it once here (DontDestroyOnLoad
+            // singleton) and every HUD instance's BAG reaches OpenInventory. Kept ALONGSIDE the
+            // per-instance wire (belt-and-braces); OpenInventory guards against double-open.
+            TryWireStaticHook();
             TryWireToHud();
+        }
+
+        // ── Instance-independent static bridge (survives HUD re-instancing) ──────
+        private bool _staticWired;
+
+        private void TryWireStaticHook()
+        {
+            if (_staticWired) return;
+            if (_hudType == null) _hudType = ResolveHudType();
+            if (_hudType == null) return;                 // HUD assembly not loaded yet — retry next frame
+            var evt = _hudType.GetEvent("InventoryRequestedStatic",
+                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+            if (evt == null) return;                      // older HUD without the static hook — fall back to instance wire
+            var handler = System.Delegate.CreateDelegate(
+                evt.EventHandlerType, this,
+                typeof(HeroEquipHud).GetMethod(nameof(OpenInventory),
+                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance));
+            evt.AddEventHandler(null, handler);
+            _staticWired = true;
+            Debug.Log("[HeroEquipHud] static InventoryRequested hook attached (instance-independent).");
+        }
+
+        private void DetachStaticHook()
+        {
+            if (!_staticWired || _hudType == null) return;
+            var evt = _hudType.GetEvent("InventoryRequestedStatic",
+                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+            if (evt == null) return;
+            var handler = System.Delegate.CreateDelegate(
+                evt.EventHandlerType, this,
+                typeof(HeroEquipHud).GetMethod(nameof(OpenInventory),
+                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance));
+            evt.RemoveEventHandler(null, handler);
+            _staticWired = false;
         }
 
         private void OnSceneLoaded(UnityEngine.SceneManagement.Scene s, UnityEngine.SceneManagement.LoadSceneMode m)
@@ -81,6 +124,7 @@ namespace DeNelle.Village
             // A scene just (re)loaded — the HUD it carries is a fresh instance, so the
             // event we previously bound to is stale. Force a re-resolve + re-wire.
             _wired = false;
+            TryWireStaticHook();
             TryWireToHud();
         }
 
@@ -96,6 +140,7 @@ namespace DeNelle.Village
 
         private void Update()
         {
+            if (!_staticWired) TryWireStaticHook();
             if (_wired) return;
             TryWireToHud();
         }
@@ -122,6 +167,7 @@ namespace DeNelle.Village
             evt.AddListener(_invListener);
             _invEvent = evt;
             _wired = true;                                // wired — Update() goes quiet until the next scene load
+            Debug.Log("[HeroEquipHud] per-instance InventoryRequested listener attached to live HUD.");
         }
 
         private static System.Type ResolveHudType()
@@ -197,8 +243,16 @@ namespace DeNelle.Village
                                0.02f, 0.98f, spacing: 2f);
         }
 
+        // Both the static bridge and the per-instance UnityEvent fire on a single BAG tap
+        // (belt-and-braces). Debounce to one Open() per frame so the two paths don't
+        // double-open / fight the panel.
+        private int _lastOpenFrame = -1;
+
         private void OpenInventory()
         {
+            if (Time.frameCount == _lastOpenFrame) return;   // already handled this tap this frame
+            _lastOpenFrame = Time.frameCount;
+            Debug.Log("[HeroEquipHud] OpenInventory entered — opening inventory modal.");
             try { HeroInventoryController.EnsureExists().Open(); }
             catch (System.Exception e) { Debug.LogError("[HeroEquipHud] open inventory failed: " + e); }
         }
