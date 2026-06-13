@@ -1,0 +1,35 @@
+<svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <rect x="0" y="0" width="1024" height="1024" fill="#1c2230"/>
+  <!-- soft warm glow -->
+  <circle cx="512" cy="400" r="260" fill="#f0d890" opacity="0.12"/>
+  <circle cx="512" cy="370" r="150" fill="#fff4d0" opacity="0.12"/>
+
+  <!-- veil (light, behind circlet) -->
+  <path d="M300 360 Q300 760 360 880 L664 880 Q724 760 724 360 Q620 460 512 460 Q404 460 300 360 Z"
+        fill="#e9eef5" opacity="0.18" stroke="#c9d6e5" stroke-width="3"/>
+  <path d="M340 400 Q340 720 390 850 L420 850 Q372 720 372 400 Z" fill="#ffffff" opacity="0.14"/>
+  <path d="M684 400 Q684 720 634 850 L604 850 Q652 720 652 400 Z" fill="#ffffff" opacity="0.14"/>
+
+  <!-- circlet band (gold) -->
+  <path d="M300 380 Q512 300 724 380 Q512 470 300 380 Z" fill="#caa23c" stroke="#7a5a14" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M300 380 Q512 300 724 380 Q512 420 300 380 Z" fill="#e7c45e" stroke="#7a5a14" stroke-width="5"/>
+  <path d="M312 376 Q512 312 712 376" fill="none" stroke="#fff0bf" stroke-width="5" opacity="0.85"/>
+
+  <!-- center ornament gem -->
+  <path d="M512 300 L548 350 L512 400 L476 350 Z" fill="#fff4d0" stroke="#7a5a14" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M512 320 L532 350 L512 378 L492 350 Z" fill="#f0d890"/>
+  <circle cx="512" cy="350" r="9" fill="#ffffff" opacity="0.9"/>
+
+  <!-- side filigree -->
+  <g fill="#e7c45e" stroke="#7a5a14" stroke-width="4">
+    <circle cx="392" cy="362" r="13"/>
+    <circle cx="632" cy="362" r="13"/>
+  </g>
+
+  <!-- glow sparks -->
+  <g fill="#fff4d0">
+    <path d="M512 250 l4 12 12 4 -12 4 -4 12 -4 -12 -12 -4 12 -4 z" opacity="0.9"/>
+    <path d="M620 300 l3 8 8 3 -8 3 -3 8 -3 -8 -8 -3 8 -3 z" opacity="0.7"/>
+    <path d="M404 300 l3 8 8 3 -8 3 -3 8 -3 -8 -8 -3 8 -3 z" opacity="0.7"/>
+  </g>
+</svg>

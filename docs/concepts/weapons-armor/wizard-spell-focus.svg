@@ -1,0 +1,37 @@
+<svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <rect x="0" y="0" width="1024" height="1024" fill="#1c2230"/>
+  <!-- ambient glow -->
+  <circle cx="512" cy="512" r="320" fill="#6a3fb0" opacity="0.14"/>
+  <circle cx="512" cy="512" r="200" fill="#9a6fe0" opacity="0.14"/>
+
+  <!-- orbiting ring (back half) -->
+  <path d="M232 512 A280 110 -18 0 1 792 512" fill="none" stroke="#3a2766" stroke-width="22" stroke-linecap="round"/>
+  <path d="M232 512 A280 110 -18 0 1 792 512" fill="none" stroke="#6e4bb8" stroke-width="9" stroke-linecap="round" opacity="0.8"/>
+
+  <!-- faceted ward-orb -->
+  <g stroke="#2a1547" stroke-width="6" stroke-linejoin="round">
+    <!-- octahedral gem -->
+    <path d="M512 320 L640 512 L512 704 L384 512 Z" fill="#5e3fa6"/>
+    <path d="M512 320 L640 512 L512 512 Z" fill="#7a52c8"/>
+    <path d="M512 320 L384 512 L512 512 Z" fill="#9a6fe0"/>
+    <path d="M512 512 L640 512 L512 704 Z" fill="#4a3186"/>
+    <path d="M512 512 L384 512 L512 704 Z" fill="#6e4bb8"/>
+  </g>
+  <!-- bright core -->
+  <path d="M512 420 L572 512 L512 604 L452 512 Z" fill="#c8aef5" opacity="0.55"/>
+  <circle cx="512" cy="512" r="34" fill="#eadcff" opacity="0.9"/>
+
+  <!-- orbiting ring (front half) -->
+  <path d="M792 512 A280 110 -18 0 1 232 512" fill="none" stroke="#4a3186" stroke-width="22" stroke-linecap="round"/>
+  <path d="M792 512 A280 110 -18 0 1 232 512" fill="none" stroke="#b591f0" stroke-width="9" stroke-linecap="round" opacity="0.85"/>
+  <!-- ring node gems -->
+  <circle cx="792" cy="488" r="20" fill="#9a6fe0" stroke="#2a1547" stroke-width="5"/>
+  <circle cx="232" cy="536" r="20" fill="#9a6fe0" stroke="#2a1547" stroke-width="5"/>
+
+  <!-- sparks -->
+  <g fill="#e8e2ff">
+    <path d="M512 250 l5 14 14 5 -14 5 -5 14 -5 -14 -14 -5 14 -5 z" opacity="0.9"/>
+    <path d="M650 360 l3 9 9 3 -9 3 -3 9 -3 -9 -9 -3 9 -3 z" opacity="0.7"/>
+    <path d="M380 660 l3 9 9 3 -9 3 -3 9 -3 -9 -9 -3 9 -3 z" opacity="0.7"/>
+  </g>
+</svg>

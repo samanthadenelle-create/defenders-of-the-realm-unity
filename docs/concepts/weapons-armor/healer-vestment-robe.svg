@@ -1,0 +1,45 @@
+<svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <rect x="0" y="0" width="1024" height="1024" fill="#1c2230"/>
+  <!-- warm glow behind robe -->
+  <ellipse cx="512" cy="560" rx="290" ry="390" fill="#f0d890" opacity="0.10"/>
+
+  <!-- collar / yoke -->
+  <path d="M512 140 L430 220 L450 300 L574 300 L594 220 Z" fill="#e7c45e" stroke="#7a5a14" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M512 160 L470 290 L554 290 Z" fill="#f4f7fb" stroke="#7a5a14" stroke-width="4"/>
+
+  <!-- outer vestment (white, flowing) -->
+  <path d="M512 290 L304 410 L256 880 L368 906 L424 580 L424 906 L600 906 L600 580 L656 906 L768 880 L720 410 Z"
+        fill="#eef2f8" stroke="#a9b8cc" stroke-width="7" stroke-linejoin="round"/>
+  <!-- left lit panel -->
+  <path d="M512 290 L304 410 L256 880 L368 906 L424 580 L466 310 Z" fill="#ffffff" stroke="#a9b8cc" stroke-width="6" stroke-linejoin="round"/>
+  <!-- right shade panel -->
+  <path d="M558 310 L600 580 L600 906 L656 906 L720 410 Z" fill="#dde4ee" stroke="#a9b8cc" stroke-width="6" stroke-linejoin="round"/>
+
+  <!-- central front sash (gold) -->
+  <path d="M512 290 L470 906 L554 906 Z" fill="#f4f7fb" stroke="#a9b8cc" stroke-width="4"/>
+  <path d="M512 300 L496 906 L528 906 Z" fill="#e7c45e" stroke="#7a5a14" stroke-width="4"/>
+  <path d="M512 300 L504 906 L512 906 Z" fill="#fff0bf"/>
+
+  <!-- gold trim lines -->
+  <g stroke="#caa23c" stroke-width="6" fill="none" opacity="0.95">
+    <path d="M424 600 L256 870"/>
+    <path d="M600 600 L768 870"/>
+    <path d="M450 300 L424 600 M574 300 L600 600"/>
+  </g>
+
+  <!-- hem gold band -->
+  <path d="M256 868 L368 894 L424 880 L600 880 L656 894 L768 868 L772 906 L252 906 Z"
+        fill="#e7c45e" stroke="#7a5a14" stroke-width="5" stroke-linejoin="round"/>
+
+  <!-- sleeve cuffs gold -->
+  <g fill="#e7c45e" stroke="#7a5a14" stroke-width="4">
+    <path d="M300 400 L340 400 L330 470 L292 460 Z"/>
+    <path d="M724 400 L684 400 L694 470 L732 460 Z"/>
+  </g>
+
+  <!-- sacred glyph on chest -->
+  <g fill="#fff0bf" stroke="#caa23c" stroke-width="3">
+    <path d="M512 360 l0 80 M482 392 l60 0" stroke="#caa23c" stroke-width="9"/>
+    <circle cx="512" cy="400" r="34" fill="none" stroke="#e7c45e" stroke-width="6"/>
+  </g>
+</svg>

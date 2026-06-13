@@ -1,0 +1,40 @@
+<svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <rect x="0" y="0" width="1024" height="1024" fill="#1c2230"/>
+
+  <!-- Pauldrons -->
+  <path d="M250 320 Q300 250 400 270 L420 380 L260 410 Z" fill="#b9c4d2" stroke="#16202c" stroke-width="6"/>
+  <path d="M774 320 Q724 250 624 270 L604 380 L764 410 Z" fill="#b9c4d2" stroke="#16202c" stroke-width="6"/>
+  <path d="M250 320 Q300 250 400 270 L390 320 L280 340 Z" fill="#d9e2ee" stroke="#16202c" stroke-width="4"/>
+  <path d="M774 320 Q724 250 624 270 L634 320 L744 340 Z" fill="#8e9bac" stroke="#16202c" stroke-width="4"/>
+
+  <!-- Neck collar -->
+  <path d="M430 250 Q512 215 594 250 L594 320 Q512 295 430 320 Z" fill="#9aa6b4" stroke="#16202c" stroke-width="6"/>
+  <path d="M430 250 Q512 215 594 250 L594 285 Q512 262 430 285 Z" fill="#cdd7e3" stroke="#16202c" stroke-width="3"/>
+
+  <!-- Main cuirass -->
+  <path d="M330 350 Q512 320 694 350 L672 700 Q512 800 352 700 Z" fill="#aab6c5" stroke="#16202c" stroke-width="7"/>
+
+  <!-- Left chest facet (highlight) -->
+  <path d="M512 360 L356 365 L368 660 Q440 730 512 760 Z" fill="#c8d2df" stroke="#16202c" stroke-width="4"/>
+  <!-- Right chest facet (shadow) -->
+  <path d="M512 360 L668 365 L656 660 Q584 730 512 760 Z" fill="#8d99aa" stroke="#16202c" stroke-width="4"/>
+
+  <!-- Center ridge -->
+  <path d="M512 348 L524 760 L500 760 Z" fill="#e4ecf5" stroke="#16202c" stroke-width="3"/>
+
+  <!-- Heart-blue trim border -->
+  <path d="M330 350 Q512 320 694 350" fill="none" stroke="#3b8fe0" stroke-width="10" stroke-linecap="round"/>
+  <path d="M352 700 Q512 800 672 700" fill="none" stroke="#3b8fe0" stroke-width="10" stroke-linecap="round"/>
+
+  <!-- Heart emblem (blue) -->
+  <path d="M512 460 C480 420 420 440 420 495 C420 545 490 580 512 605 C534 580 604 545 604 495 C604 440 544 420 512 460 Z" fill="#2f6fb0" stroke="#16202c" stroke-width="5"/>
+  <path d="M512 470 C492 446 456 458 456 492 C456 522 498 545 512 562 C512 540 512 500 512 470 Z" fill="#7cc0ff"/>
+
+  <!-- Abdominal plate lines -->
+  <path d="M375 600 Q512 645 649 600" fill="none" stroke="#16202c" stroke-width="4"/>
+  <path d="M390 660 Q512 710 634 660" fill="none" stroke="#16202c" stroke-width="4"/>
+
+  <!-- Rivets -->
+  <circle cx="370" cy="385" r="9" fill="#5fb6ff" stroke="#16202c" stroke-width="3"/>
+  <circle cx="654" cy="385" r="9" fill="#5fb6ff" stroke="#16202c" stroke-width="3"/>
+</svg>

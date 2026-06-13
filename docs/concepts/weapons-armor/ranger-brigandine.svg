@@ -1,0 +1,38 @@
+<svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <rect x="0" y="0" width="1024" height="1024" fill="#1c2230"/>
+
+  <!-- Shoulder pads (leather) -->
+  <path d="M280 330 Q330 280 410 295 L425 380 L300 410 Z" fill="#6e5740" stroke="#16202c" stroke-width="6"/>
+  <path d="M744 330 Q694 280 614 295 L599 380 L724 410 Z" fill="#6e5740" stroke="#16202c" stroke-width="6"/>
+  <path d="M280 330 Q330 280 410 295 L405 330 L310 350 Z" fill="#82684c"/>
+  <path d="M744 330 Q694 280 614 295 L619 330 L714 350 Z" fill="#56432f"/>
+
+  <!-- Main brigandine body -->
+  <path d="M340 360 Q512 330 684 360 L660 720 Q512 800 364 720 Z" fill="#5a4632" stroke="#16202c" stroke-width="7"/>
+  <!-- Left highlight -->
+  <path d="M512 360 L344 365 L360 700 Q436 760 512 770 Z" fill="#6e5740" stroke="#16202c" stroke-width="3"/>
+  <!-- Right shadow -->
+  <path d="M512 360 L680 365 L664 700 Q588 760 512 770 Z" fill="#473627" stroke="#16202c" stroke-width="3"/>
+
+  <!-- Layered plate rows (riveted) -->
+  <path d="M360 420 Q512 395 664 420 L660 470 Q512 445 364 470 Z" fill="#4a3a28" stroke="#16202c" stroke-width="3"/>
+  <path d="M362 500 Q512 478 662 500 L658 555 Q512 532 366 555 Z" fill="#4a3a28" stroke="#16202c" stroke-width="3"/>
+  <path d="M366 585 Q512 565 658 585 L652 645 Q512 620 372 645 Z" fill="#4a3a28" stroke="#16202c" stroke-width="3"/>
+
+  <!-- Brass/frost rivets on rows -->
+  <g fill="#bfe4ff" stroke="#16202c" stroke-width="2">
+    <circle cx="430" cy="445" r="6"/><circle cx="512" cy="438" r="6"/><circle cx="594" cy="445" r="6"/>
+    <circle cx="430" cy="525" r="6"/><circle cx="512" cy="518" r="6"/><circle cx="594" cy="525" r="6"/>
+    <circle cx="436" cy="612" r="6"/><circle cx="512" cy="603" r="6"/><circle cx="588" cy="612" r="6"/>
+  </g>
+
+  <!-- Frost-blue cross straps -->
+  <path d="M360 380 L660 700" stroke="#5fb6ff" stroke-width="16" stroke-linecap="round"/>
+  <path d="M664 380 L364 700" stroke="#3b8fe0" stroke-width="16" stroke-linecap="round"/>
+  <!-- Center buckle -->
+  <rect x="486" y="512" width="52" height="42" rx="8" fill="#7cc0ff" stroke="#16202c" stroke-width="4"/>
+  <rect x="500" y="524" width="24" height="18" rx="3" fill="#1b3a5c"/>
+
+  <!-- Neck opening -->
+  <path d="M440 350 Q512 320 584 350 L580 400 Q512 375 444 400 Z" fill="#2b2016" stroke="#16202c" stroke-width="5"/>
+</svg>

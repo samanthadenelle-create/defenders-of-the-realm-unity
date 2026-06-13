@@ -1,0 +1,34 @@
+<svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <rect x="0" y="0" width="1024" height="1024" fill="#1c2230"/>
+  <!-- warding glow -->
+  <circle cx="512" cy="300" r="220" fill="#6a3fb0" opacity="0.16"/>
+  <circle cx="512" cy="290" r="130" fill="#9a6fe0" opacity="0.14"/>
+
+  <!-- hat cone: tall, pointed, slightly bent tip -->
+  <!-- back cone shade -->
+  <path d="M512 150 L590 720 L434 720 Z" fill="#3a2766" stroke="#1a0f33" stroke-width="6" stroke-linejoin="round"/>
+  <!-- main cone -->
+  <path d="M512 150 L560 720 L512 720 Z" fill="#5a3c9c" stroke="#1a0f33" stroke-width="6" stroke-linejoin="round"/>
+  <!-- left lit facet -->
+  <path d="M512 150 L512 720 L434 720 Z" fill="#6e4bb8" stroke="#1a0f33" stroke-width="6" stroke-linejoin="round"/>
+  <!-- bent tip highlight -->
+  <path d="M512 150 L498 330 L526 330 Z" fill="#8a64d8" stroke="#1a0f33" stroke-width="5" stroke-linejoin="round"/>
+
+  <!-- hatband -->
+  <path d="M430 640 L594 640 L600 712 L424 712 Z" fill="#2a1b4d" stroke="#1a0f33" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M430 640 L512 640 L512 712 L424 712 Z" fill="#352260" stroke="#1a0f33" stroke-width="4"/>
+
+  <!-- wide brim -->
+  <ellipse cx="512" cy="730" rx="290" ry="78" fill="#4a3186" stroke="#1a0f33" stroke-width="7"/>
+  <ellipse cx="512" cy="718" rx="290" ry="70" fill="#5e3f9e" stroke="#1a0f33" stroke-width="6"/>
+  <path d="M222 718 A290 70 0 0 1 802 718 L802 724 A290 70 0 0 0 222 724 Z" fill="#3a2766"/>
+  <ellipse cx="512" cy="714" rx="200" ry="46" fill="#6e4bb8" opacity="0.55"/>
+
+  <!-- star / ward glints on cone -->
+  <g fill="#e8e2ff">
+    <path d="M500 420 l5 14 14 5 -14 5 -5 14 -5 -14 -14 -5 14 -5 z" opacity="0.95"/>
+    <path d="M538 520 l3 9 9 3 -9 3 -3 9 -3 -9 -9 -3 9 -3 z" opacity="0.8"/>
+    <path d="M486 560 l3 8 8 3 -8 3 -3 8 -3 -8 -8 -3 8 -3 z" opacity="0.7"/>
+    <circle cx="512" cy="300" r="6" opacity="0.9"/>
+  </g>
+</svg>

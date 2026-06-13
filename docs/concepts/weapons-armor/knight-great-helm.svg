@@ -1,0 +1,39 @@
+<svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <rect x="0" y="0" width="1024" height="1024" fill="#1c2230"/>
+
+  <!-- Plume -->
+  <path d="M512 95 L470 130 L455 240 L500 200 Z" fill="#2f6fb0" stroke="#16202c" stroke-width="4"/>
+  <path d="M512 95 L554 130 L569 240 L524 200 Z" fill="#4a96e0" stroke="#16202c" stroke-width="4"/>
+  <path d="M512 95 L496 210 L512 245 L528 210 Z" fill="#7cc0ff" stroke="#16202c" stroke-width="4"/>
+
+  <!-- Crest mount -->
+  <rect x="486" y="232" width="52" height="32" rx="6" fill="#9aa6b4" stroke="#16202c" stroke-width="5"/>
+
+  <!-- Helm dome -->
+  <path d="M360 470 Q360 270 512 262 Q664 270 664 470 Z" fill="#b9c4d2" stroke="#16202c" stroke-width="6"/>
+  <path d="M512 262 Q664 270 664 470 L572 470 L512 300 Z" fill="#8e9bac" stroke="#16202c" stroke-width="4"/>
+  <path d="M412 320 Q470 280 512 300 L470 470 L398 470 Z" fill="#d9e2ee" stroke="#16202c" stroke-width="4"/>
+
+  <!-- Face plate body -->
+  <path d="M360 470 L664 470 L648 760 Q512 830 376 760 Z" fill="#aab6c5" stroke="#16202c" stroke-width="6"/>
+  <path d="M512 470 L664 470 L648 760 Q580 795 512 800 Z" fill="#8693a4" stroke="#16202c" stroke-width="4"/>
+
+  <!-- Central ridge -->
+  <path d="M512 300 L520 470 L520 800 L512 800 L504 470 Z" fill="#e4ecf5" stroke="#16202c" stroke-width="3"/>
+
+  <!-- Visor slit with blue glow -->
+  <rect x="388" y="520" width="248" height="34" rx="10" fill="#0e1622" stroke="#16202c" stroke-width="5"/>
+  <rect x="398" y="529" width="228" height="16" rx="8" fill="#5fb6ff"/>
+  <rect x="398" y="529" width="228" height="7" rx="4" fill="#bfe4ff"/>
+
+  <!-- Breathing slits -->
+  <rect x="468" y="620" width="14" height="90" rx="6" fill="#0e1622" stroke="#16202c" stroke-width="3"/>
+  <rect x="505" y="620" width="14" height="100" rx="6" fill="#0e1622" stroke="#16202c" stroke-width="3"/>
+  <rect x="542" y="620" width="14" height="90" rx="6" fill="#0e1622" stroke="#16202c" stroke-width="3"/>
+
+  <!-- Blue rivets / trim -->
+  <circle cx="392" cy="488" r="11" fill="#3b8fe0" stroke="#16202c" stroke-width="3"/>
+  <circle cx="632" cy="488" r="11" fill="#3b8fe0" stroke="#16202c" stroke-width="3"/>
+  <circle cx="404" cy="740" r="10" fill="#3b8fe0" stroke="#16202c" stroke-width="3"/>
+  <circle cx="620" cy="740" r="10" fill="#3b8fe0" stroke="#16202c" stroke-width="3"/>
+</svg>

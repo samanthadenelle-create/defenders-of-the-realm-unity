@@ -1,0 +1,54 @@
+<svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <rect x="0" y="0" width="1024" height="1024" fill="#1c2230"/>
+  <defs>
+    <radialGradient id="emberGlow" cx="50%" cy="38%" r="42%">
+      <stop offset="0%" stop-color="#FF9900" stop-opacity="0.55"/>
+      <stop offset="55%" stop-color="#FF4400" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#FF4400" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- ambient ember glow behind blade -->
+  <ellipse cx="512" cy="380" rx="230" ry="320" fill="url(#emberGlow)"/>
+
+  <!-- flame wreath around blade (outer ember tongues) -->
+  <path d="M512 96 L572 200 L548 280 L600 360 L560 470 L606 560 L512 640
+           L418 560 L464 470 L424 360 L476 280 L452 200 Z"
+        fill="#FF4400" opacity="0.85"/>
+  <path d="M512 130 L556 210 L536 285 L578 360 L544 460 L582 545 L512 612
+           L442 545 L480 460 L446 360 L488 285 L468 210 Z"
+        fill="#FF6A00" opacity="0.9"/>
+  <!-- flame licks -->
+  <path d="M572 200 L636 250 L596 300 Z" fill="#FF9900"/>
+  <path d="M452 200 L388 250 L428 300 Z" fill="#FF9900"/>
+  <path d="M600 360 L668 410 L612 446 Z" fill="#FF9900" opacity="0.9"/>
+  <path d="M424 360 L356 410 L412 446 Z" fill="#FF9900" opacity="0.9"/>
+
+  <!-- blade core -->
+  <path d="M512 150 L552 250 L540 560 L512 620 L484 560 L472 250 Z"
+        fill="#FFC766" stroke="#3a2410" stroke-width="3"/>
+  <!-- blade facet (left darker) -->
+  <path d="M512 150 L484 560 L512 620 L512 150 Z" fill="#FF9900" opacity="0.85"/>
+  <!-- blade highlight (right) -->
+  <path d="M512 150 L552 250 L540 560 L512 620 Z" fill="#FFE3A8" opacity="0.6"/>
+  <!-- central fuller line -->
+  <path d="M512 175 L512 600" stroke="#FF4400" stroke-width="5" opacity="0.8"/>
+
+  <!-- crossguard -->
+  <path d="M392 632 L632 632 L612 676 L548 660 L476 660 L412 676 Z"
+        fill="#5a4326" stroke="#2a1d0e" stroke-width="3"/>
+  <path d="M392 632 L632 632 L624 650 L400 650 Z" fill="#7a5e36"/>
+  <!-- guard ember gems -->
+  <circle cx="430" cy="646" r="11" fill="#FF6A00"/>
+  <circle cx="594" cy="646" r="11" fill="#FF6A00"/>
+
+  <!-- grip -->
+  <rect x="488" y="660" width="48" height="170" rx="10" fill="#3a2a16" stroke="#21160a" stroke-width="3"/>
+  <path d="M492 672 L532 700 M492 706 L532 734 M492 740 L532 768 M492 774 L532 802"
+        stroke="#5a4326" stroke-width="6"/>
+
+  <!-- pommel -->
+  <circle cx="512" cy="852" r="34" fill="#5a4326" stroke="#2a1d0e" stroke-width="4"/>
+  <circle cx="512" cy="852" r="15" fill="#FF6A00"/>
+  <circle cx="506" cy="846" r="5" fill="#FFC766"/>
+</svg>

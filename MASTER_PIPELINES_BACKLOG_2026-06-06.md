@@ -6,10 +6,12 @@ this session's live findings, and the design docs (see §"Story → WO mapping")
 
 **WO-NUMBERING AUTHORITY = THIS doc (+ `CLI_LANES_WO_NUMBERS.md`), not the filesystem max.** Reserved new
 block **290–305** (minted today). Pre-block: **287** (Threat Intel, L2), **288** (Signature Combat Moves,
-L3) used by CLI today; **289 free**. **Next free WO = 412** (306–343 used; 339–343 nightly refill;
-**352–390 minted out-of-band 2026-06-08/09** and **391–411 minted on-board (Notion) 2026-06-10/11**,
-both slotted per `CLI_LANES_WO_NUMBERS.md` §"Out-of-band block" sections; **344–351 skipped — do NOT
-mint**). Every new WO must be slotted into a lane here.
+L3) used by CLI today; **289 free**. **Next free WO = 430** (306–343 used; 339–343 nightly refill;
+**352–390 minted out-of-band 2026-06-08/09**, **391–411 minted on-board (Notion) 2026-06-10/11**,
+**412–428 minted on-board (Notion) 2026-06-11/12** — playtest bug sweep + vendor/storefront chain —
+and **429** = the owner's "store stock from DB" spec renumbered from a colliding repo WO-414
+(2026-06-12 reconcile); all slotted per `CLI_LANES_WO_NUMBERS.md` §"Out-of-band block" sections;
+**344–351 skipped — do NOT mint**). Every new WO must be slotted into a lane here.
 
 **Legend:** ✓ done · ◐ in progress · ▶ ready · ⏸ held · ★ new this session · ⚠ blocked/dep
 **Parallel rule (CLAUDE.md §9):** `VillageSceneBuilder.cs` = ONE writer (Lane 1 serial). `GameState.cs` /
@@ -26,7 +28,7 @@ mint**). Every new WO must be slotted into a lane here.
 4. ★ **WO-303** — Wire combat party HUD (`HUDManager`) to live party/combat data (replace demo values).
 5. ▶ Smoke-test the hero anim chain (WO-283/284/285) — visual checks (no T-pose/slide; idle/walk/run + attack/cast/hit/death/victory).
 6. ▶ Build-verify WO-107–111 — `QA_CHECKLIST_FILLED` marks them wired but that's code-inspection only; gate + write RESULT files.
-7. ▶ Dedupe numbering collisions: two WO-106, two WO-282, duplicate WO-110; **also dup repo files for 329/330/331/333/334 + Notion's divergent 328–339 P0 block (06-08 session)**. (Next free WO = 412.)
+7. ▶ Dedupe numbering collisions: two WO-106, two WO-282, duplicate WO-110; **also dup repo files for 329/330/331/333/334 + Notion's divergent 328–339 P0 block (06-08 session)**; repo-414 vs board-414 resolved 06-12 (repo spec → WO-429). (Next free WO = 430.)
 8. ★ **WO-301** — Party persistence (now spec'd; lives in Lane 7).
 9. ~~★ **WO-328**~~ — **CLOSED** (ambiguous / non-reproducible; CLI confirmed no repro). WO-314/317/325/327 tracked independently.
 10. ◐ **WO-329** — Check-in regression test suite (UI static gate + CLI Unity tests + manual QA) — agent authoring; CLI build-verifies the C# tests.
@@ -69,7 +71,9 @@ mint**). Every new WO must be slotted into a lane here.
 18. ★ **WO-330** — **DTT hero cyan silhouette** — hero renders as solid bright-cyan unlit shape; fix URP material assignment in HeroBodySwapper / hero prefab (see screenshot docs/screenshots/dtt_bugs.png).
 19. ★ **WO-331** — **DTT keyboard hotkeys** — ability bar buttons (Snare Trap/Mercury Salve/Storm of Arrows/ATTACK) have no key bindings; add 1/2/3/Space hotkeys, serialized inspector fields, shown as labels on buttons.
 20. ★ **WO-332** — **DTT aim sensitivity** — mouse rotation far too fast; add serialized `_aimSensitivity` field (default 0.8), clamp vertical ±40°. Coordinate with WO-318 (aim-north fix).
-21. ★ **WO-333** — **Tree of Life <30% HP → defense modal broken** (**HIGH**) — logic existed and worked; modal (Defend the Tower / Enter Battle ATB) no longer fires when HeartController drops ≤30% HP. Most likely: scene reference to modal went null after a VillageSceneBuilder rebuild. FIX the wiring — do NOT rewrite. Secondary: skill-point panel stays open behind death screen — force-close all HUD panels on `HeartController.OnHeartDestroyed`.
+21. ★ **WO-419** — Enemies do not attack after castle → OuterWorld transition (06-11 playtest; Notion spec).
+22. ★ **WO-423** — Hero attacks without facing target — rotate-to-target + turn anim blending (Notion spec).
+23. ★ **WO-333** — **Tree of Life <30% HP → defense modal broken** (**HIGH**) — logic existed and worked; modal (Defend the Tower / Enter Battle ATB) no longer fires when HeartController drops ≤30% HP. Most likely: scene reference to modal went null after a VillageSceneBuilder rebuild. FIX the wiring — do NOT rewrite. Secondary: skill-point panel stays open behind death screen — force-close all HUD panels on `HeartController.OnHeartDestroyed`.
 
 ## Lane 3 — Combat Feel / Animation  (sequential within — biggest UX gain)
 
@@ -102,6 +106,13 @@ mint**). Every new WO must be slotted into a lane here.
 12. ★ **WO-322** — Compass not visible (fix CompassHud/bootstrap visibility; needed to orient at exits; coord WO-307).
 13. ⛔ **WO-411** — P1: Town HUD does not match `hud_mobile_town.png`. **BLOCKED on WO-405** (CLI must NOT pick up). 11 deviations: resources wrong corner/icons · duplicate hero health bars · missing Heart of Elarion · missing pet bars · quest tracker is a persistent yellow panel overlapping gear/"i" (should be a MODAL) · BAG a gray panel (should be a right-side icon) · missing 4-button TOWN ACTIONS row (BUILD/TALK/BAG/QUESTS) · wrong compass icon · "Talk: Windmill" building prompt (building interaction must route through TALK → NPC dialogue) · missing wave timer/PLAY banner · missing enemy INTEL panel. Requires UGUI **layout groups** (not manual anchoring). **Verification gate: side-by-side screenshot vs mockup + owner sign-off — NO self-certification.** Actual: `docs/UI_Mockups/WO-411_town_hud_actual_2026-06-11.png`. Spec: `WORK_ORDER_411_town_hud_mockup_match.md`. (Partial down-payment exists uncommitted: TOWN ACTIONS row + BAG-as-icon + INTEL slot.)
 
+14. ★ **WO-414** — Black circle under TALK button (AttentionGlowUi first-frame color; NOT gated by 405). *(Note: the repo's old WO-414 store-stock spec was renumbered → WO-429, Lane 7.)*
+15. ★ **WO-415** — Vendor storefront UI (armor first) from Tech hud elements pack (after 412 fix; isShoppable only per WO-413 canon).
+16. ★ **WO-416** — Hide floating "Talk: <target>" world prompt — TALK-button glow is the trigger (supersedes WO-411 #9).
+17. ★ **WO-417** — **P1 DO FIRST:** Settings + Dev Tools panels render labels under the row layer — all rows blank (owner's test harness).
+18. ★ **WO-421** — Battle HUD broken — skill bar empty, no abilities showing (in WO-405 design-set scope).
+19. ★ **WO-428** — Hero damage not shown on HUD — health bar never moves (one-shot-init bug family w/ 414/419).
+
 ## Lane 5 — World / Exploration  (OuterWorldBuilder + runtime, parallel-safe)
 
 1. ▶ **WO-164** — Zone foundation (ThreatLevel/depth/ZoneState) — **keystone, do FIRST** (Lanes 2 & 5 read it).
@@ -114,6 +125,9 @@ mint**). Every new WO must be slotted into a lane here.
 8. ▶ **WO-154 / WO-143** — Rare timed crystal spawns / roaming raids.
 9. ★ **WO-305** — Relic-recovery quests (lost Elarion blades → lore + saga components). Needs WO-290; serialize OuterWorldBuilder edits.
 10. ★ **WO-324** — Dungeon: placeholder pill lantern NPC + 2-circle exit → real prefab + portal VFX (WO-250/272).
+
+11. ★ **WO-418** — Castle → OuterWorld transition hard pop — blend the two scenes (Notion spec).
+12. ★ **WO-426** — Enable the node/outpost claim loop in OuterWorld (builds on WO-106 ClaimableCamp; ties WO-159/239).
 
 ## Lane 6 — Economy / Progression  (Core+Village code+data, parallel-safe)
 
@@ -131,6 +145,10 @@ mint**). Every new WO must be slotted into a lane here.
 12. ★ **WO-325** — Nothing happens at resource node ([G] Upgrade Mine dead + NRE) — fix node interact wiring + null-guard; EconomyService.TrySpend.
 13. ▶ **WO-413** — P1 (Ready): Upgradable buildings wrongly offer the shop menu. **Data-driven** per building (NOT name-matching): `isUpgradable` (windmill, lumbermill, armorer, forge — per Forgemasters doc) → menu = Upgrade / Add Perks / Talk / Leave (NO Buy/Sell); `isShoppable` → Buy / Sell / Talk / Leave. If the upgrade/perk panels don't exist yet, wire the menu correctly + log a follow-up WO for the panels — do NOT ship dead buttons. Ties to WO-411 #9 ("Talk: <building>" prompt) + the buildings-collection capability model (ARCHITECTURE §2b). Canon: `isupgradable-isshoppable-building-rule` memory.
 
+14. ★ **WO-412** — Vendor Wares BUY tab empty (◐ layout root-cause fixed `ca89d9b`; build-test + gear-catalog runtime load still open).
+15. ★ **WO-424** — Harvested resources not added to HUD resource count (EconomyService bank → HUD counter).
+16. ★ **WO-425** — Hero spawns unarmed — grant default weapon at start (integrates EQUIP flow, WO-412/415/423).
+
 ## Lane 7 — Persistence / Backend  (GameState/SaveSchema = coordinate additive)
 
 1. ★ **WO-301** — Party persistence: wallet-keyed roster in GameState + local fallback id (renders via WO-303).
@@ -143,6 +161,7 @@ mint**). Every new WO must be slotted into a lane here.
 8. ▶ **WO-121** — Metrics / analytics dashboard.
 9. ▶ **WO-118** — Rewarded ads route.
 10. ▶ **DEF-121** — Resource economy correction (server-authoritative).
+11. ★ **WO-429** — Store stock served from the Neon DB (`StoreService` + offline-first local-catalog fallback; backend GET endpoint in React repo; renumbered from repo WO-414). Coordinate w/ WO-412/406.
 
 ## Lane 8 — Monetization / Store  (fully isolated, ~70% built — do NOT greenfield)
 
@@ -178,6 +197,7 @@ mint**). Every new WO must be slotted into a lane here.
 8. ▶ **WO-54** — LOD setup.
 9. ▶ **WO-57** — Mobile quality settings.
 10. ⏸ **WO-282** — Heroes → Addressables (HELD — daytime play-verified session).
+11. ★ **WO-410** — **P0:** 0.1 fps in MainCastle_Hall — main-thread GC storm (13–22 MB alloc/frame) + combat-object leak (PERFDIAG logs on the Notion row).
 
 ## Lane 11 — Build Mode / Player Base  (keystone — mostly own files in BuildMode/*)
 
@@ -209,6 +229,7 @@ mint**). Every new WO must be slotted into a lane here.
 13. ▶ **WO-116** — NPC dialogue / bark system.
 14. ▶ **WO-235** — Death & spire-destroyed screens.
 15. ▶ **WO-133** — Onboarding FTUE wiring.
+16. ★ **WO-422** — Echo Warden re-offers pet selection after a pet is chosen — gate it + unlock-story dialogue + unlock quest (check pet block 290–305 first; ties WO-297/299).
 
 ---
 
@@ -262,7 +283,10 @@ Combat Moves → Lane 3 (in progress). 289 free; 306–343 used (339–343 night
 **352–390 minted out-of-band 2026-06-08/09**; **391–411 minted on-board 2026-06-10/11** (P0 unified-HUD chain
 405→403→404, plus 400/411, all gated on 405 Done, in L4; building-tier 392/407 in L11; bugs 393/394/398/406/409;
 399 L3, 395 L5, 401 L12, 408 L10 — lane slotting in `CLI_LANES_WO_NUMBERS.md`); 344–351 skipped.
-**Next free WO = 412.**
+**412–428 minted on-board 2026-06-11/12** (owner playtest sweep: vendor chain 412→415, building-menu 413,
+HUD/UI bugs 414/416/417/421/428, world 418/419/426, combat 423, economy 424/425, pets 422; 420/427 used
+on-board, titles not mirrored — do NOT mint). **429** = store-stock-from-DB (repo WO-414 renumbered —
+collided with Notion's WO-414 TALK-glow fix). **Next free WO = 430.**
 ⚠ Collisions to dedupe (Lane 0 item 7): duplicate repo files for 329/330/331/333/334; Notion carries a
 different 328–339 P0-bug block from the 06-08 session. Do not reuse these numbers — renumber from 391+ when cleaned.
 

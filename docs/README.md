@@ -5,6 +5,7 @@ indexed separately in `../PROJECT_INDEX.md`.
 
 ## Start here / canon
 
+- `HANDOVER.md` — **the single operator's manual a new session reads first** (how we work, the binding rules, this-session's new canon, the build/gate/bake cycle, resume points)
 - `NORTH_STAR.md`, `NORTH_STAR_PROGRESS.md` — vision + progress against it
 - `DESIGN-DECISIONS.md` — **binding creative decisions** (Elarion naming, no Keep, etc.)
 - `GAME_DESCRIPTION.md`, `BRAND_BIBLE.md`, `PI_PITCH.md`, `whitepaper.md`

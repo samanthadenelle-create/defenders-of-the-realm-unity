@@ -1,0 +1,40 @@
+<svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <rect x="0" y="0" width="1024" height="1024" fill="#1c2230"/>
+  <!-- crystal glow -->
+  <circle cx="512" cy="240" r="180" fill="#6a3fb0" opacity="0.18"/>
+  <circle cx="512" cy="240" r="110" fill="#9a6fe0" opacity="0.16"/>
+
+  <!-- wooden shaft -->
+  <rect x="496" y="240" width="32" height="650" rx="10" fill="#6b4a2c" stroke="#2c1c0e" stroke-width="6"/>
+  <rect x="496" y="240" width="14" height="650" rx="7" fill="#8a6238"/>
+  <rect x="514" y="240" width="14" height="650" fill="#523619" opacity="0.7"/>
+  <!-- shaft wraps -->
+  <g fill="#3a2766" stroke="#180e30" stroke-width="3">
+    <rect x="490" y="430" width="44" height="22" rx="6"/>
+    <rect x="490" y="640" width="44" height="22" rx="6"/>
+  </g>
+  <!-- ferrule cap -->
+  <path d="M496 880 L528 880 L520 920 L504 920 Z" fill="#4a3186" stroke="#180e30" stroke-width="5"/>
+
+  <!-- crown holding crystal: claw prongs -->
+  <g fill="#4a3186" stroke="#180e30" stroke-width="5" stroke-linejoin="round">
+    <path d="M470 300 L460 220 L490 270 Z"/>
+    <path d="M554 300 L564 220 L534 270 Z"/>
+    <path d="M512 310 L512 250 L500 300 L524 300 Z"/>
+  </g>
+  <ellipse cx="512" cy="305" rx="40" ry="16" fill="#553a93" stroke="#180e30" stroke-width="5"/>
+
+  <!-- ward-crystal (faceted gem) -->
+  <path d="M512 110 L568 230 L512 320 L456 230 Z" fill="#7a52c8" stroke="#2a1547" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M512 110 L568 230 L512 320 Z" fill="#5e3fa6" stroke="#2a1547" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M512 110 L512 320 L456 230 Z" fill="#9a6fe0" stroke="#2a1547" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M512 110 L490 230 L512 320 L534 230 Z" fill="#b591f0" opacity="0.7"/>
+  <!-- inner glow core -->
+  <path d="M512 180 L536 230 L512 280 L488 230 Z" fill="#eadcff" opacity="0.9"/>
+
+  <!-- ward sparks -->
+  <g fill="#e8e2ff">
+    <path d="M600 200 l4 11 11 4 -11 4 -4 11 -4 -11 -11 -4 11 -4 z" opacity="0.85"/>
+    <path d="M420 260 l3 9 9 3 -9 3 -3 9 -3 -9 -9 -3 9 -3 z" opacity="0.75"/>
+  </g>
+</svg>

@@ -1,0 +1,33 @@
+<svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <rect x="0" y="0" width="1024" height="1024" fill="#1c2230"/>
+
+  <!-- Shield body (tall kite/tower) -->
+  <path d="M512 110 L740 180 L740 640 Q740 800 512 920 Q284 800 284 640 L284 180 Z" fill="#aab6c5" stroke="#16202c" stroke-width="8"/>
+
+  <!-- Left half highlight -->
+  <path d="M512 110 L284 180 L284 640 Q284 800 512 920 Z" fill="#c8d2df" stroke="#16202c" stroke-width="3"/>
+  <!-- Right half shadow -->
+  <path d="M512 110 L740 180 L740 640 Q740 800 512 920 Z" fill="#8d99aa" stroke="#16202c" stroke-width="3"/>
+
+  <!-- Steel rim trim -->
+  <path d="M512 110 L740 180 L740 640 Q740 800 512 920 Q284 800 284 640 L284 180 Z" fill="none" stroke="#cdd7e3" stroke-width="10"/>
+
+  <!-- Heart-blue inner border -->
+  <path d="M512 165 L690 220 L690 630 Q690 760 512 855 Q334 760 334 630 L334 220 Z" fill="none" stroke="#3b8fe0" stroke-width="9"/>
+
+  <!-- Heart-tree emblem: trunk -->
+  <rect x="498" y="560" width="28" height="120" rx="6" fill="#1b3a5c" stroke="#16202c" stroke-width="4"/>
+  <!-- Roots -->
+  <path d="M512 680 Q470 700 440 730 M512 680 Q554 700 584 730 M512 690 L512 740" stroke="#1b3a5c" stroke-width="10" fill="none" stroke-linecap="round"/>
+
+  <!-- Heart-shaped canopy -->
+  <path d="M512 360 C455 300 360 335 360 425 C360 510 470 565 512 600 C554 565 664 510 664 425 C664 335 569 300 512 360 Z" fill="#2f6fb0" stroke="#16202c" stroke-width="6"/>
+  <path d="M512 375 C470 332 405 356 405 422 C405 480 478 525 512 552 C512 510 512 430 512 375 Z" fill="#5fb6ff"/>
+  <path d="M512 390 C486 360 448 374 448 416 C448 452 494 482 512 500 Z" fill="#bfe4ff"/>
+
+  <!-- Boss / rivets -->
+  <circle cx="512" cy="200" r="16" fill="#5fb6ff" stroke="#16202c" stroke-width="4"/>
+  <circle cx="360" cy="250" r="11" fill="#3b8fe0" stroke="#16202c" stroke-width="3"/>
+  <circle cx="664" cy="250" r="11" fill="#3b8fe0" stroke="#16202c" stroke-width="3"/>
+  <circle cx="512" cy="800" r="13" fill="#3b8fe0" stroke="#16202c" stroke-width="3"/>
+</svg>

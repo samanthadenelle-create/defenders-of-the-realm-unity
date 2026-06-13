@@ -1,0 +1,37 @@
+<svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <rect x="0" y="0" width="1024" height="1024" fill="#1c2230"/>
+
+  <!-- Bow limb (recurve), vertical orientation -->
+  <!-- Wood body -->
+  <path d="M512 110
+           C700 230 700 410 560 480
+           C700 550 700 760 512 905
+           C324 760 324 550 464 480
+           C324 410 324 230 512 110 Z"
+        fill="none" stroke="#5a4632" stroke-width="34" stroke-linecap="round"/>
+  <!-- Wood highlight edge -->
+  <path d="M512 110
+           C700 230 700 410 560 480
+           C700 550 700 760 512 905"
+        fill="none" stroke="#82684c" stroke-width="14" stroke-linecap="round"/>
+  <!-- Wood shadow edge -->
+  <path d="M512 110
+           C324 230 324 410 464 480
+           C324 550 324 760 512 905"
+        fill="none" stroke="#3a2c1e" stroke-width="12" stroke-linecap="round"/>
+
+  <!-- Recurve tip nocks -->
+  <circle cx="512" cy="110" r="16" fill="#6e5740" stroke="#16202c" stroke-width="5"/>
+  <circle cx="512" cy="905" r="16" fill="#6e5740" stroke="#16202c" stroke-width="5"/>
+
+  <!-- Bowstring with frost-blue glow -->
+  <line x1="512" y1="118" x2="512" y2="897" stroke="#5fb6ff" stroke-width="9"/>
+  <line x1="512" y1="118" x2="512" y2="897" stroke="#bfe4ff" stroke-width="3"/>
+
+  <!-- Grip wrap (center) -->
+  <rect x="488" y="430" width="48" height="160" rx="12" fill="#1b3a5c" stroke="#16202c" stroke-width="5"/>
+  <path d="M490 450 L534 462 M490 480 L534 492 M490 510 L534 522 M490 540 L534 552 M490 570 L534 582" stroke="#7cc0ff" stroke-width="6" stroke-linecap="round"/>
+
+  <!-- Frost accents on limbs -->
+  <path d="M600 300 L640 290 M610 360 L652 360 M600 660 L640 670 M610 600 L652 600" stroke="#5fb6ff" stroke-width="7" stroke-linecap="round"/>
+</svg>

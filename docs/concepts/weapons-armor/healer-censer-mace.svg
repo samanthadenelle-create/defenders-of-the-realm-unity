@@ -1,0 +1,50 @@
+<svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <rect x="0" y="0" width="1024" height="1024" fill="#1c2230"/>
+  <!-- warm censer glow -->
+  <circle cx="512" cy="330" r="200" fill="#f0d890" opacity="0.16"/>
+  <circle cx="512" cy="360" r="120" fill="#ffcf7a" opacity="0.16"/>
+
+  <!-- short gold haft -->
+  <rect x="498" y="500" width="28" height="380" rx="9" fill="#caa23c" stroke="#7a5a14" stroke-width="6"/>
+  <rect x="498" y="500" width="12" height="380" rx="6" fill="#e7c45e"/>
+  <!-- haft grip wraps -->
+  <g fill="#7a5a14" stroke="#5a3f0e" stroke-width="2">
+    <rect x="492" y="640" width="40" height="14" rx="4"/>
+    <rect x="492" y="690" width="40" height="14" rx="4"/>
+    <rect x="492" y="740" width="40" height="14" rx="4"/>
+  </g>
+  <!-- pommel -->
+  <circle cx="512" cy="892" r="26" fill="#e7c45e" stroke="#7a5a14" stroke-width="5"/>
+  <circle cx="512" cy="888" r="11" fill="#fff0bf"/>
+
+  <!-- censer chains -->
+  <g stroke="#caa23c" stroke-width="5" fill="none">
+    <path d="M460 470 Q470 410 484 400"/>
+    <path d="M564 470 Q554 410 540 400"/>
+    <path d="M512 470 L512 400"/>
+  </g>
+
+  <!-- censer top cap / dome (pierced) -->
+  <path d="M430 400 Q512 320 594 400 Z" fill="#e7c45e" stroke="#7a5a14" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M430 400 Q512 320 594 400 Z" fill="none"/>
+  <g fill="#1c2230">
+    <circle cx="476" cy="382" r="7"/>
+    <circle cx="512" cy="368" r="7"/>
+    <circle cx="548" cy="382" r="7"/>
+  </g>
+  <circle cx="512" cy="330" r="12" fill="#caa23c" stroke="#7a5a14" stroke-width="4"/>
+
+  <!-- censer bowl (relic, mace-head) -->
+  <path d="M420 400 L604 400 L578 520 Q512 560 446 520 Z" fill="#caa23c" stroke="#7a5a14" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M420 400 L512 400 L494 520 Q470 530 446 520 Z" fill="#e7c45e"/>
+  <!-- bowl gem -->
+  <path d="M512 430 L544 470 L512 510 L480 470 Z" fill="#fff4d0" stroke="#7a5a14" stroke-width="5" stroke-linejoin="round"/>
+  <circle cx="512" cy="470" r="11" fill="#ffcf7a"/>
+
+  <!-- rising incense glow -->
+  <g fill="#fff4d0" opacity="0.8">
+    <path d="M512 300 Q524 270 512 240 Q500 220 512 200" stroke="#fff4d0" stroke-width="6" fill="none"/>
+    <path d="M512 230 l4 11 11 4 -11 4 -4 11 -4 -11 -11 -4 11 -4 z"/>
+    <path d="M600 350 l3 8 8 3 -8 3 -3 8 -3 -8 -8 -3 8 -3 z" opacity="0.6"/>
+  </g>
+</svg>

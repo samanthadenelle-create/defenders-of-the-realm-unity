@@ -1,0 +1,36 @@
+<svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <rect x="0" y="0" width="1024" height="1024" fill="#1c2230"/>
+
+  <!-- Shoulder cloak base -->
+  <path d="M250 470 Q512 380 774 470 L820 820 Q512 900 204 820 Z" fill="#5a4632" stroke="#16202c" stroke-width="7"/>
+  <!-- Cloak left highlight -->
+  <path d="M512 400 L250 470 L204 820 Q360 870 512 875 Z" fill="#6e5740" stroke="#16202c" stroke-width="3"/>
+  <!-- Cloak right shadow -->
+  <path d="M512 400 L774 470 L820 820 Q664 870 512 875 Z" fill="#473627" stroke="#16202c" stroke-width="3"/>
+  <!-- Cloak folds -->
+  <path d="M410 480 L380 840 M512 470 L512 870 M614 480 L644 840" stroke="#3a2c1e" stroke-width="6" fill="none" stroke-linecap="round"/>
+
+  <!-- Grey fur collar -->
+  <path d="M330 460 Q512 400 694 460 Q700 520 660 540 Q600 500 512 495 Q424 500 364 540 Q324 520 330 460 Z" fill="#9aa3ad" stroke="#16202c" stroke-width="6"/>
+  <!-- Fur tufts -->
+  <path d="M360 470 L345 510 M400 458 L392 505 M450 450 L448 500 M512 448 L512 498 M574 450 L576 500 M624 458 L632 505 M664 470 L679 510" stroke="#c4ccd4" stroke-width="9" stroke-linecap="round"/>
+  <path d="M380 475 L372 500 M460 455 L460 490 M540 452 L544 490 M620 460 L630 495" stroke="#7b848e" stroke-width="6" stroke-linecap="round"/>
+
+  <!-- Hood -->
+  <path d="M512 120 Q360 150 350 360 Q420 420 512 425 Q604 420 674 360 Q664 150 512 120 Z" fill="#6e5740" stroke="#16202c" stroke-width="7"/>
+  <!-- Hood inner shadow -->
+  <path d="M512 175 Q418 200 408 350 Q460 395 512 400 Q564 395 616 350 Q606 200 512 175 Z" fill="#2b2016" stroke="#16202c" stroke-width="4"/>
+  <!-- Hood face opening void -->
+  <path d="M512 215 Q448 235 442 345 Q478 380 512 384 Q546 380 582 345 Q576 235 512 215 Z" fill="#11161f"/>
+  <!-- Hood left highlight -->
+  <path d="M512 120 Q360 150 350 360 L408 350 Q418 200 512 175 Z" fill="#7e6549" stroke="#16202c" stroke-width="3"/>
+
+  <!-- Frost-blue trim on hood edge -->
+  <path d="M350 360 Q420 420 512 425 Q604 420 674 360" fill="none" stroke="#7cc0ff" stroke-width="8" stroke-linecap="round"/>
+  <!-- Frost trim cloak hem -->
+  <path d="M204 820 Q512 900 820 820" fill="none" stroke="#5fb6ff" stroke-width="8" stroke-linecap="round"/>
+
+  <!-- Clasp -->
+  <circle cx="512" cy="470" r="20" fill="#3b8fe0" stroke="#16202c" stroke-width="4"/>
+  <circle cx="505" cy="463" r="8" fill="#bfe4ff"/>
+</svg>

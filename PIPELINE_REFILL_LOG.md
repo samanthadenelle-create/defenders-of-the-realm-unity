@@ -176,3 +176,32 @@ Pipelines remain full and healthy across all 13 lanes. Recent work completions (
 **Next-free-WO: 412**
 
 **Summary:** All 13 lanes ≥9 open — pipelines full, nothing minted. Run absorbed the second out-of-band mint in two days (391–411, Notion-first this time): pointer advanced 391→412 in all five locations, block slotted into lanes, HUD 405-gate flagged. Note for process: two consecutive out-of-band blocks suggest sessions are minting from the board without updating the git authority docs — the nightly run will keep reconciling, but mid-session minting should update CLI_LANES_WO_NUMBERS.md at mint time. ✓
+
+---
+
+## 2026-06-12 ~ automated session
+
+**Status:** No thin lanes — third consecutive out-of-band-block reconciliation (**412–428** absorbed; **WO-414 collision resolved**; next-free → **430**)
+
+**Statuses synced to Done:** none — no new `*.RESULT.md` since 06-09 (368/380/382, already synced). 282 HOLD unchanged. Note: **WO-412 is ◐ in progress** — an autonomous cron session root-caused the empty BUY tab (ShopPanel content anchored to zero height) and pushed a partial fix (`ca89d9b`); build-test + gear-catalog runtime load still open, row stays Ready/open.
+
+**Lane audit (open WOs, no RESULT; THIN = <6):**
+- Lane 0: 10 · Lane 1: 17 · Lane 2: ~31 (+419, 423) · Lane 3: 9 · Lane 4: ~36 (+414/415/416/417/421/428) · Lane 5: 14 (+418, 426) · Lane 6: ~17 (+412, 413, 424, 425)
+- Lane 7: 10 (+429) · Lane 8: 9 · Lane 9: 12 · Lane 10: 14 (+410; 282 HELD) · Lane 11: 14 · Lane 12: 21 (+422)
+- **None thin → new WOs minted: 0.**
+
+**Numbering reconciliation (the main work this run):**
+- The 2026-06-11/12 owner sessions minted **412–428 on-board (Notion)** — playtest bug sweep + vendor chain (rows confirmed: 412–419, 421–426, 428; 420/427 used per the home-page screenshot map — titles not all mirrored; do NOT mint any of them). Repo docs still said next-free = 412.
+- ⚠ **Real collision found and RESOLVED:** the owner also filed `WORK_ORDER_414_store_stock_from_db.md` in the repo (06-11, "next free = 415" per its header), while the board's WO-414 = "Black circle under TALK button (AttentionGlowUi)" — cross-referenced by WO-416/428. Decision: the board block stands (heavily cross-linked); the repo store-stock spec was **renumbered → WO-429** (`WORK_ORDER_429_store_stock_from_db.md`, content unchanged + WO-412/406 coordination notes; old file marked SUPERSEDED, kept for history). Notion row WO-429 created (Lane 7, Ready).
+- **Next free WO = 430** now consistent across MASTER_PIPELINES_BACKLOG_2026-06-06.md, CLI_LANES_WO_NUMBERS.md, NOTION_SOURCE_OF_TRUTH.md, CLAUDE.md, and the Notion home page.
+- Block slotted into lanes (new §"Out-of-band block 412–429" in CLI_LANES_WO_NUMBERS.md + master-doc lane entries): 419/423→L2 · 414/415/416/417/421/428→L4 · 418/426→L5 · 412/413/424/425→L6 · 429→L7 · 422→L12. **WO-410** (P0: 0.1 fps MainCastle_Hall GC storm) title now mirrored → slotted L10.
+
+**Blockers / dependencies:**
+- ⚠ HUD 405-gate now also covers **415** (vendor storefront skin) per the Notion home page: 400/403/404/411/415 blocked on WO-405 Done.
+- **WO-417** is flagged DO-FIRST by the owner (Settings/Dev Tools panels unusable — owner is the sole tester).
+- **WO-429** needs a React-repo GET endpoint (cross-repo) — flag for the owner/CLI before claiming.
+- Collision cleanup (dup 329–334 repo files + divergent Notion 328–339 block) still queued in Lane 0 item 7.
+
+**Next-free-WO: 430**
+
+**Summary:** All 13 lanes ≥9 open — pipelines full, nothing minted. Third out-of-band block in three days absorbed (412–428); first true number collision (repo-414 vs board-414) resolved by renumbering the repo store-stock spec to WO-429 with a Notion row + repo spec file; pointer advanced 412→430 in all five locations. Process note (repeat, now stronger): owner sessions consistently mint on the board first — consider making the Notion home-page "Next free WO" line the de-facto mint-time pointer the sessions DO update, with the nightly run reconciling the git docs to it. ✓

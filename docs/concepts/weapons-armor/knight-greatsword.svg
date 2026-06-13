@@ -1,0 +1,28 @@
+<svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <rect x="0" y="0" width="1024" height="1024" fill="#1c2230"/>
+
+  <!-- Blade -->
+  <path d="M512 90 L470 175 L470 615 L554 615 L554 175 Z" fill="#c8d2df" stroke="#16202c" stroke-width="6"/>
+  <!-- Blade shadow half -->
+  <path d="M512 90 L512 615 L554 615 L554 175 Z" fill="#9aa6b4" stroke="#16202c" stroke-width="3"/>
+  <!-- Fuller / center highlight -->
+  <path d="M512 130 L502 600 L522 600 Z" fill="#eef3f9" stroke="#16202c" stroke-width="2"/>
+  <!-- Blade tip facet -->
+  <path d="M512 90 L470 175 L512 175 Z" fill="#e4ecf5"/>
+
+  <!-- Crossguard -->
+  <path d="M360 615 L664 615 L640 665 L384 665 Z" fill="#9aa6b4" stroke="#16202c" stroke-width="6"/>
+  <path d="M360 615 L664 615 L652 640 L372 640 Z" fill="#cdd7e3"/>
+  <!-- Guard blue gem -->
+  <circle cx="512" cy="640" r="20" fill="#2f6fb0" stroke="#16202c" stroke-width="4"/>
+  <circle cx="506" cy="634" r="8" fill="#bfe4ff"/>
+
+  <!-- Grip with blue wrap -->
+  <rect x="492" y="665" width="40" height="225" rx="8" fill="#1b3a5c" stroke="#16202c" stroke-width="5"/>
+  <path d="M494 690 L530 705 M494 720 L530 735 M494 750 L530 765 M494 780 L530 795 M494 810 L530 825 M494 840 L530 855" stroke="#5fb6ff" stroke-width="7" stroke-linecap="round"/>
+
+  <!-- Pommel -->
+  <circle cx="512" cy="915" r="38" fill="#9aa6b4" stroke="#16202c" stroke-width="6"/>
+  <circle cx="512" cy="915" r="20" fill="#3b8fe0" stroke="#16202c" stroke-width="3"/>
+  <circle cx="505" cy="908" r="7" fill="#bfe4ff"/>
+</svg>

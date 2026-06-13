@@ -1,0 +1,40 @@
+<svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <rect x="0" y="0" width="1024" height="1024" fill="#1c2230"/>
+
+  <!-- ===== Dagger A: leaning right (rotated about center) ===== -->
+  <g transform="rotate(20 512 512)">
+    <!-- Blade -->
+    <path d="M512 120 L478 220 L478 560 L546 560 L546 220 Z" fill="#7cc0ff" stroke="#16202c" stroke-width="6"/>
+    <path d="M512 120 L512 560 L546 560 L546 220 Z" fill="#3b8fe0" stroke="#16202c" stroke-width="3"/>
+    <path d="M512 150 L504 545 L520 545 Z" fill="#dff1ff" stroke="#16202c" stroke-width="2"/>
+    <path d="M512 120 L478 220 L512 220 Z" fill="#bfe4ff"/>
+    <!-- Crossguard -->
+    <path d="M430 560 L594 560 L578 605 L446 605 Z" fill="#5a4632" stroke="#16202c" stroke-width="5"/>
+    <!-- Grip -->
+    <rect x="494" y="605" width="36" height="200" rx="9" fill="#473627" stroke="#16202c" stroke-width="5"/>
+    <path d="M496 630 L528 642 M496 665 L528 677 M496 700 L528 712 M496 735 L528 747 M496 770 L528 782" stroke="#6e5740" stroke-width="6" stroke-linecap="round"/>
+    <!-- Pommel -->
+    <circle cx="512" cy="825" r="26" fill="#5a4632" stroke="#16202c" stroke-width="5"/>
+    <circle cx="512" cy="825" r="12" fill="#5fb6ff"/>
+  </g>
+
+  <!-- ===== Dagger B: leaning left (mirrored) ===== -->
+  <g transform="rotate(-20 512 512)">
+    <!-- Blade -->
+    <path d="M512 120 L478 220 L478 560 L546 560 L546 220 Z" fill="#7cc0ff" stroke="#16202c" stroke-width="6"/>
+    <path d="M512 120 L478 220 L478 560 L512 560 L512 120 Z" fill="#3b8fe0" stroke="#16202c" stroke-width="3"/>
+    <path d="M512 150 L504 545 L520 545 Z" fill="#dff1ff" stroke="#16202c" stroke-width="2"/>
+    <path d="M512 120 L546 220 L512 220 Z" fill="#bfe4ff"/>
+    <!-- Crossguard -->
+    <path d="M430 560 L594 560 L578 605 L446 605 Z" fill="#5a4632" stroke="#16202c" stroke-width="5"/>
+    <!-- Grip -->
+    <rect x="494" y="605" width="36" height="200" rx="9" fill="#473627" stroke="#16202c" stroke-width="5"/>
+    <path d="M496 630 L528 642 M496 665 L528 677 M496 700 L528 712 M496 735 L528 747 M496 770 L528 782" stroke="#6e5740" stroke-width="6" stroke-linecap="round"/>
+    <!-- Pommel -->
+    <circle cx="512" cy="825" r="26" fill="#5a4632" stroke="#16202c" stroke-width="5"/>
+    <circle cx="512" cy="825" r="12" fill="#5fb6ff"/>
+  </g>
+
+  <!-- Frost glint where blades cross -->
+  <circle cx="512" cy="430" r="14" fill="#dff1ff" opacity="0.85"/>
+</svg>

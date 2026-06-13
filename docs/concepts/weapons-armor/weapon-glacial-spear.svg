@@ -1,0 +1,54 @@
+<svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <rect x="0" y="0" width="1024" height="1024" fill="#1c2230"/>
+  <defs>
+    <radialGradient id="frostGlow" cx="50%" cy="22%" r="40%">
+      <stop offset="0%" stop-color="#80CCFF" stop-opacity="0.5"/>
+      <stop offset="60%" stop-color="#80CCFF" stop-opacity="0.16"/>
+      <stop offset="100%" stop-color="#80CCFF" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- ambient frost glow behind head -->
+  <ellipse cx="512" cy="240" rx="210" ry="240" fill="url(#frostGlow)"/>
+
+  <!-- shaft -->
+  <rect x="496" y="320" width="32" height="600" rx="8" fill="#4a6275" stroke="#26333d" stroke-width="3"/>
+  <rect x="496" y="320" width="14" height="600" fill="#6a8aa0" opacity="0.7"/>
+  <!-- shaft wraps -->
+  <path d="M490 470 L534 488 M490 510 L534 528 M490 720 L534 738 M490 760 L534 778"
+        stroke="#2e3e4a" stroke-width="7"/>
+
+  <!-- icy shards along shaft -->
+  <path d="M496 420 L450 396 L496 448 Z" fill="#80CCFF" opacity="0.9"/>
+  <path d="M528 600 L580 576 L528 628 Z" fill="#A8DCFF" opacity="0.9"/>
+  <path d="M496 660 L452 640 L496 686 Z" fill="#80CCFF" opacity="0.85"/>
+  <path d="M528 820 L572 800 L528 846 Z" fill="#A8DCFF" opacity="0.8"/>
+
+  <!-- frost-crystal spearhead: main blade -->
+  <path d="M512 64 L568 250 L512 360 L456 250 Z"
+        fill="#CFEFFF" stroke="#3a5e74" stroke-width="3"/>
+  <!-- left facet darker -->
+  <path d="M512 64 L456 250 L512 360 Z" fill="#80CCFF"/>
+  <!-- right facet -->
+  <path d="M512 64 L568 250 L512 360 Z" fill="#A8DCFF" opacity="0.85"/>
+  <!-- crisp white highlight ridge -->
+  <path d="M512 88 L512 340" stroke="#FFFFFF" stroke-width="6" opacity="0.85"/>
+
+  <!-- side crystal wings -->
+  <path d="M456 250 L408 300 L468 296 Z" fill="#80CCFF" stroke="#3a5e74" stroke-width="2"/>
+  <path d="M568 250 L616 300 L556 296 Z" fill="#A8DCFF" stroke="#3a5e74" stroke-width="2"/>
+
+  <!-- crystal collar / socket -->
+  <path d="M474 360 L550 360 L536 412 L488 412 Z"
+        fill="#5a7488" stroke="#26333d" stroke-width="3"/>
+  <path d="M482 372 L542 372 L536 396 L488 396 Z" fill="#80CCFF" opacity="0.7"/>
+
+  <!-- frost sparkles -->
+  <path d="M540 150 L546 162 L558 168 L546 174 L540 186 L534 174 L522 168 L534 162 Z" fill="#FFFFFF" opacity="0.9"/>
+  <path d="M470 200 L474 208 L482 212 L474 216 L470 224 L466 216 L458 212 L466 208 Z" fill="#FFFFFF" opacity="0.8"/>
+  <circle cx="588" cy="540" r="6" fill="#CFEFFF" opacity="0.8"/>
+  <circle cx="440" cy="700" r="5" fill="#CFEFFF" opacity="0.7"/>
+
+  <!-- butt cap -->
+  <path d="M496 920 L528 920 L518 956 L506 956 Z" fill="#4a6275" stroke="#26333d" stroke-width="3"/>
+</svg>

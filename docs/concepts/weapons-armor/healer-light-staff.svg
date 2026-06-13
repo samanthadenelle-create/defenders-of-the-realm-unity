@@ -1,0 +1,49 @@
+<svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <rect x="0" y="0" width="1024" height="1024" fill="#1c2230"/>
+  <!-- radiant glow -->
+  <circle cx="512" cy="250" r="220" fill="#f0d890" opacity="0.18"/>
+  <circle cx="512" cy="250" r="130" fill="#fff4d0" opacity="0.18"/>
+  <!-- radiating rays -->
+  <g stroke="#fff4d0" stroke-width="7" opacity="0.55" stroke-linecap="round">
+    <path d="M512 250 L512 70"/>
+    <path d="M512 250 L692 130"/>
+    <path d="M512 250 L332 130"/>
+    <path d="M512 250 L712 250"/>
+    <path d="M512 250 L312 250"/>
+    <path d="M512 250 L640 410"/>
+    <path d="M512 250 L384 410"/>
+  </g>
+
+  <!-- slender white-gold shaft -->
+  <rect x="500" y="280" width="24" height="610" rx="9" fill="#f4f7fb" stroke="#a9b8cc" stroke-width="5"/>
+  <rect x="500" y="280" width="11" height="610" rx="6" fill="#ffffff"/>
+  <!-- gold rings on shaft -->
+  <g fill="#e7c45e" stroke="#7a5a14" stroke-width="3">
+    <rect x="494" y="420" width="36" height="20" rx="6"/>
+    <rect x="494" y="600" width="36" height="20" rx="6"/>
+    <rect x="494" y="780" width="36" height="20" rx="6"/>
+  </g>
+  <!-- ferrule -->
+  <path d="M500 884 L524 884 L516 922 L508 922 Z" fill="#e7c45e" stroke="#7a5a14" stroke-width="4"/>
+
+  <!-- crowning light motif: open gold sunburst ring -->
+  <circle cx="512" cy="250" r="84" fill="none" stroke="#e7c45e" stroke-width="14"/>
+  <circle cx="512" cy="250" r="84" fill="none" stroke="#fff0bf" stroke-width="5"/>
+  <!-- ring crest petals -->
+  <g fill="#e7c45e" stroke="#7a5a14" stroke-width="4" stroke-linejoin="round">
+    <path d="M512 140 L532 176 L492 176 Z"/>
+    <path d="M610 200 L640 220 L606 240 Z"/>
+    <path d="M414 200 L384 220 L418 240 Z"/>
+  </g>
+
+  <!-- radiant core gem in ring -->
+  <path d="M512 200 L556 250 L512 300 L468 250 Z" fill="#fff4d0" stroke="#caa23c" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M512 220 L536 250 L512 280 L488 250 Z" fill="#ffcf7a"/>
+  <circle cx="512" cy="250" r="14" fill="#ffffff"/>
+
+  <!-- light sparks -->
+  <g fill="#fff4d0">
+    <path d="M620 360 l3 9 9 3 -9 3 -3 9 -3 -9 -9 -3 9 -3 z" opacity="0.8"/>
+    <path d="M404 360 l3 9 9 3 -9 3 -3 9 -3 -9 -9 -3 9 -3 z" opacity="0.8"/>
+  </g>
+</svg>
