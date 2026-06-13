@@ -60,12 +60,20 @@ namespace DeNelle.Editor
                         if (b.size.y > 0.0001f) s.y *= TargetSize.y / b.size.y;
                         if (b.size.z > 0.0001f) s.z *= TargetSize.z / b.size.z;
                         go.transform.localScale = s;
-                        // Ground-seat (re-measure after scaling).
+                        // Owner: rotate each segment 90deg on Y so the decorated face fronts the run
+                        // (footprint is symmetric 1.5x1.5, so this keeps the 1.5x3x1.5 box clean).
+                        go.transform.localRotation = Quaternion.Euler(0f, 90f, 0f);
+                        // Ground-seat (re-measure after scale + rotation).
                         var r2 = go.GetComponentsInChildren<Renderer>(true);
                         var b2 = r2[0].bounds;
                         for (int k = 1; k < r2.Length; k++) b2.Encapsulate(r2[k].bounds);
                         go.transform.position += new Vector3(0f, -b2.min.y, 0f);
                     }
+
+                    // Tripo color fixer — these are Tripo meshes; the fixer makes their baked
+                    // vertex/albedo colors render under URP (they import as flat Lit otherwise).
+                    var tripoFix = FindType("DeNelle.Core.TripoMaterialFixer");
+                    if (tripoFix != null && go.GetComponent(tripoFix) == null) go.AddComponent(tripoFix);
 
                     if (name == "Steel")
                     {
@@ -84,6 +92,16 @@ namespace DeNelle.Editor
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene);
             Debug.Log("[WallPreview] saved — demo row in MainCastle_Hall courtyard (~0,0,3).");
+        }
+
+        private static System.Type FindType(string fullName)
+        {
+            foreach (var asm in System.AppDomain.CurrentDomain.GetAssemblies())
+            {
+                var t = asm.GetType(fullName, false);
+                if (t != null) return t;
+            }
+            return null;
         }
     }
 }
