@@ -165,6 +165,7 @@ namespace DeNelle.HUD
             title.style.unityFontStyleAndWeight = FontStyle.Bold;
             title.style.color = ElarionUi.Danger;
             title.style.marginBottom = 6;
+            { var tf = AdminFont(); if (tf != null) title.style.unityFont = tf; }
             card.Add(title);
             card.Add(ElarionUi.MakeRule());
 
@@ -180,6 +181,7 @@ namespace DeNelle.HUD
             _status = new Label(string.Empty);
             _status.style.color = ElarionUi.ParchmentDim;
             _status.style.fontSize = ElarionUi.FontLabel;
+            { var sf = AdminFont(); if (sf != null) _status.style.unityFont = sf; }
             _status.style.marginTop = 8;
             _status.style.whiteSpace = WhiteSpace.Normal;
             card.Add(_status);
@@ -191,7 +193,17 @@ namespace DeNelle.HUD
             ElarionUi.StyleButton(b, ElarionUi.ButtonKind.Neutral);
             b.style.minHeight = 38;   // compact debug rows (override the 44 default)
             b.style.unityFontStyleAndWeight = FontStyle.Normal;
+            var f = AdminFont(); if (f != null) b.style.unityFont = f;
             return b;
+        }
+
+        // WO-417: explicit font so admin-overlay text renders even when the borrowed
+        // PanelSettings theme has no default font (blank rows = backgrounds draw, glyphs don't).
+        private static Font _adminFont;
+        private static Font AdminFont()
+        {
+            if (_adminFont == null) _adminFont = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            return _adminFont;
         }
 
         // ── Dev orient tool row ──────────────────────────────────────────────
@@ -206,6 +218,7 @@ namespace DeNelle.HUD
             var idLabel = new Label("catalog id");
             idLabel.style.color = ElarionUi.ParchmentDim;
             idLabel.style.fontSize = ElarionUi.FontLabel;
+            { var lf = AdminFont(); if (lf != null) idLabel.style.unityFont = lf; }
             idLabel.style.width = 70;
             row.Add(idLabel);
 
