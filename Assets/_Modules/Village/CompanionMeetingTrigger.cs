@@ -30,6 +30,7 @@
 
 using System;
 using DeNelle.Core;
+using DeNelle.Core.Diagnostics;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -152,6 +153,8 @@ namespace DeNelle.Village
             // Single launch path for ALL dialogue (host-or-reuse + command-bridge
             // install + node validation) — see DialogueService. "CompanionMeeting"
             // is the FTUE opener.
+            FlowTrace.Warn("Roster", $"CompanionMeetingTrigger HOSTING '{CompanionMeetingNode}' Yarn node " +
+                $"(introducerActive={CastleCompanionIntroducerInjector.Active}, always={always}) — a SECOND intro/recruit path may fire here");
             bool started = DialogueService.Play(CompanionMeetingNode);
             if (!started)
             {

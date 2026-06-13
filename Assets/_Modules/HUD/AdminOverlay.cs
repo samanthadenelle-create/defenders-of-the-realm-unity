@@ -15,6 +15,7 @@ using System;
 using System.Reflection;
 using DeNelle.Core.Catalog;
 using DeNelle.Core.UI;
+using DeNelle.Core.Diagnostics;
 using UnityEngine;
 using UnityEngine.UIElements;
 using PanelMgr = DeNelle.Core.UI.PanelManager;
@@ -177,6 +178,7 @@ namespace DeNelle.HUD
             card.Add(Button("Load resources (full base)",   OnLoadResources));
             card.Add(Button("Reset Yarn (replay tutorial)", OnReplayTutorial));
             card.Add(Button("Close",                        Toggle));
+            FlowTrace.Step("UI", "DevPanel (AdminOverlay) UI built — wired 3 buttons");
 
             _status = new Label(string.Empty);
             _status.style.color = ElarionUi.ParchmentDim;
@@ -318,7 +320,12 @@ namespace DeNelle.HUD
 
         private void SetOpen(bool open)
         {
-            if (_overlay == null) return;
+            FlowTrace.Step("UI", $"DevPanel toggle/click reached (AdminOverlay.SetOpen open={open}, built={_built})");
+            if (_overlay == null)
+            {
+                FlowTrace.Warn("UI", "DevPanel open FAILED — AdminOverlay._overlay is null (UI never built)");
+                return;
+            }
             // Resolve gate on demand.
             if (!IsAuthorised())
             {
@@ -333,6 +340,8 @@ namespace DeNelle.HUD
             if (open) PanelMgr.NotifyOpened(_panelHandle);
             else PanelMgr.NotifyClosed(_panelHandle);
             if (open) SetStatus("Ready.");
+            FlowTrace.Step("UI", $"DevPanel (AdminOverlay) {(open ? "shown" : "hidden")} — " +
+                $"display={_overlay.style.display.value} picking={_overlay.pickingMode} timeScale={Time.timeScale}");
         }
 
         private bool IsAuthorised()

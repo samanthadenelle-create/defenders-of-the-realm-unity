@@ -30,6 +30,7 @@ using System;
 using System.Collections;
 using Cysharp.Threading.Tasks;
 using DeNelle.Core;
+using DeNelle.Core.Diagnostics;
 using DeNelle.Core.Quests;
 using DeNelle.Core.State;
 using DeNelle.Pets;
@@ -672,6 +673,7 @@ namespace DeNelle.Village
         private void CmdRecruitCompanion(string companionClass)
         {
             if (string.IsNullOrEmpty(companionClass)) return;
+            FlowTrace.Step("Roster", $"RecruitCompanion command fired (Yarn) for '{companionClass}' caller=CmdRecruitCompanion -> AddToParty");
             GameStateService.Instance?.AddToParty(companionClass);
             Debug.Log($"[DialogueCommandBridge] RecruitCompanion '{companionClass}' → AddToParty.");
         }

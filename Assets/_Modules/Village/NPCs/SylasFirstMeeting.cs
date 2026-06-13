@@ -45,6 +45,7 @@
 using System;
 using Cysharp.Threading.Tasks;
 using DeNelle.Core;
+using DeNelle.Core.Diagnostics;
 using DeNelle.Core.State;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -118,10 +119,12 @@ namespace DeNelle.Village
         {
             if (!ShouldRun)
             {
+                FlowTrace.Step("Roster", $"SylasFirstMeeting.Start — ShouldRun=false (introducerActive={CastleCompanionIntroducerInjector.Active}, ranThisSession={s_ranThisSession}) -> stand down");
                 Destroy(gameObject);
                 return;
             }
 
+            FlowTrace.Warn("Roster", "SylasFirstMeeting.Start — ShouldRun=TRUE: this standalone beat is running (a SECOND recruit/override path alongside the introducer NPC)");
             Run().Forget();
         }
 
@@ -188,6 +191,7 @@ namespace DeNelle.Village
                 if (ResolveCompanionClass() == HeroClass.Ranger &&
                     DialogueService.NodeExists("SylasFirstMeeting"))
                 {
+                    FlowTrace.Step("Roster", "SylasFirstMeeting -> delegating to Yarn 'SylasFirstMeeting' (recruit via command bridge)");
                     DialogueService.Play("SylasFirstMeeting");
                     MarkSeen();
                     Debug.Log("[SylasFirstMeeting] Delegated to the authored Yarn node 'SylasFirstMeeting' (recruit fires via the command bridge).");
@@ -289,6 +293,8 @@ namespace DeNelle.Village
 
             // Re-spawn the one companion as the meeting class (Sylas, unless the player
             // is the Ranger). Idempotent: the injector replaces rather than duplicates.
+            FlowTrace.Warn("Roster", $"SylasFirstMeeting.ResolveAndConfigureCompanion -> SetHeroClassOverride({_companionClass}) " +
+                "(override-class spawn — distinct from any roster-based Ranger spawn)");
             injector.SetHeroClassOverride(_companionClass);
             return injector.Companion;
         }

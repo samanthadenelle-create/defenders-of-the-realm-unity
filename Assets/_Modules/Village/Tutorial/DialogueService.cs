@@ -21,6 +21,7 @@
 
 using UnityEngine;
 using Yarn.Unity;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
 {
@@ -106,6 +107,7 @@ namespace DeNelle.Village
                 return false;
             }
             Debug.Log($"[DialogueService] Playing '{node}'.");
+            FlowTrace.Step("UI", $"Yarn dialogue started via DialogueService.Play('{node}')");
             return true;
         }
 
@@ -118,7 +120,11 @@ namespace DeNelle.Village
         /// <summary>Stops the current dialogue immediately (used by walk-away auto-close).</summary>
         public static void Stop()
         {
-            if (Current != null && Current.IsDialogueRunning) Current.Stop();
+            if (Current != null && Current.IsDialogueRunning)
+            {
+                FlowTrace.Step("UI", "Yarn dialogue ended via DialogueService.Stop() (walk-away/auto-close)");
+                Current.Stop();
+            }
         }
 
         // ── New-Game dialogue reset (DeNelle.Core decoupling hook) ────────────
@@ -213,6 +219,7 @@ namespace DeNelle.Village
                 return false;
             }
             Debug.Log($"[DialogueService] Structure '{structureId}' → node '{node}' ('{displayName}').");
+            FlowTrace.Step("UI", $"Yarn dialogue started via DialogueService.PlayStructure('{structureId}' → node '{node}')");
             return true;
         }
 

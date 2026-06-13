@@ -16,6 +16,7 @@ using UnityEngine;
 using UnityEngine.AI;
 using DeNelle.Core.Combat;      // ActorAnimator (attached so Enemy drives work)
 using DeNelle.Core.Validation;  // WO-315/WO-363: opt-in OrientationGuard on the enemy root
+using DeNelle.Core.Diagnostics; // root-cause FlowTrace on the single enemy-creation path
 
 namespace DeNelle.Village
 {
@@ -68,6 +69,13 @@ namespace DeNelle.Village
             // only if the model is genuinely missing (so an enemy still spawns hittable).
             string model = modelOverride ?? ModelForEnemy(def);
 
+            // ROOT-CAUSE TRACE: this IS the single enemy-creation path. Print the
+            // def id → resolved model (and whether modelOverride forced it) so the log
+            // shows what family each body is being built as, on every spawner.
+            FlowTrace.Step("Enemy",
+                $"EnemyFactory.Build: id='{(def != null ? def.Id : "null")}' " +
+                $"-> model '{model}'{(modelOverride != null ? " (OVERRIDE)" : "")} loading 'Enemies/{model}'");
+
             // WO-315: rig-forward correction. The +X-forward Tripo/People families (the
             // Orc Warband — same export convention as the heroes, which use -90f) need a
             // -90 yaw on the visual child so the authored forward aligns to the root's +Z
@@ -82,10 +90,21 @@ namespace DeNelle.Village
             var vis = VisualFactory.Skin(go.transform, "Enemies/" + model, skinOpts);
             if (vis != null)
             {
+                // ROOT-CAUSE TRACE: the model mesh actually loaded + skinned. If this
+                // never fires for orc/troll while the capsule-fallback below does, the
+                // bug is a MISSING prefab silently degrading variety to one look.
+                FlowTrace.Once("Enemy", $"skinned-{model}",
+                    $"VisualFactory.Skin OK for model '{model}' (id '{(def != null ? def.Id : "?")}') — real mesh, not capsule");
                 EnemyAnimatorFactory.Apply(vis, model);   // walk/attack/die controller
             }
             else
             {
+                // ROOT-CAUSE TRACE (MOST IMPORTANT): the model failed to load/skin, so
+                // this body becomes a tinted capsule — silent variety loss. If many
+                // families hit this, every enemy looks the same despite varied ids.
+                FlowTrace.Warn("Enemy",
+                    $"model '{model}' (id '{(def != null ? def.Id : "?")}') had NO loadable mesh at " +
+                    $"'Enemies/{model}' — FALLBACK to tinted capsule (no family silhouette)");
                 var cap = GameObject.CreatePrimitive(PrimitiveType.Capsule);
                 if (cap.TryGetComponent(out Collider cc)) Object.Destroy(cc);
                 cap.transform.SetParent(go.transform, false);
@@ -162,8 +181,13 @@ namespace DeNelle.Village
                 case "troll":            return "Troll";             // brute / mini
             }
             // Unmapped roster (wave / tribe / ward) → pick by body size.
-            if (def != null && def.Height >= 2.3f) return "Skeleton_Golem";
-            return "Skeleton_Minion";
+            // ROOT-CAUSE TRACE: an id with no explicit case lands here and silently
+            // becomes a generic skeleton — a hidden way distinct ids collapse to one look.
+            string sizeDefault = (def != null && def.Height >= 2.3f) ? "Skeleton_Golem" : "Skeleton_Minion";
+            FlowTrace.Warn("Enemy",
+                $"ModelForEnemy: id '{(def != null ? def.Id : "null")}' has NO explicit model case " +
+                $"— DEFAULTED by size to '{sizeDefault}' (distinct id → generic skeleton)");
+            return sizeDefault;
         }
 
         private static void TintCapsule(Renderer mr)

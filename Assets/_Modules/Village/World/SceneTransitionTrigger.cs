@@ -40,14 +40,58 @@ namespace DeNelle.Village
         private bool _fired;
         private Transform _hero;
 
+        // --- SEAMTRACE diagnostics (temporary; strip once the exit bug is closed) ---
+        // Owner directive 2026-06-13: instrument the WHOLE exit path so one F8 run shows
+        // exactly which step fires and where it dies. The key signal is _minDist: the
+        // CLOSEST the hero ever gets to this gate. If _minDist never drops below
+        // ProximityRadius, the hero physically can't reach the seam (navmesh edge / gap)
+        // and Cross() can never fire — that's the all-4-borders-blocked root cause.
+        private float _traceTimer;
+        private float _minDist = float.MaxValue;
+        private bool _announced;
+        private bool _heroEverFound;
+
         private void Update()
         {
+            if (!_announced)
+            {
+                _announced = true;
+                Debug.Log($"[SeamTrace] '{name}' ONLINE  target={targetSceneName}@{targetPosition}  gatePos={transform.position}  radius={ProximityRadius}m");
+            }
+
             if (_fired) return;
             if (_hero == null) _hero = ResolveHero();
-            if (_hero == null) return;
+            if (_hero == null)
+            {
+                _traceTimer += Time.deltaTime;
+                if (_traceTimer >= 2f)
+                {
+                    _traceTimer = 0f;
+                    Debug.LogWarning($"[SeamTrace] '{name}' still has NO hero (Player/HeroTarget tag not found).");
+                }
+                return;
+            }
+            if (!_heroEverFound)
+            {
+                _heroEverFound = true;
+                Debug.Log($"[SeamTrace] '{name}' resolved hero '{_hero.name}' at {_hero.position}.");
+            }
+
+            float dist = Vector3.Distance(_hero.position, transform.position);
+            if (dist < _minDist) _minDist = dist;
+
+            _traceTimer += Time.deltaTime;
+            if (_traceTimer >= 1f)
+            {
+                _traceTimer = 0f;
+                Debug.Log($"[SeamTrace] '{name}' heroDist={dist:F1}m  closestEver={_minDist:F1}m  radius={ProximityRadius}m  {(dist <= ProximityRadius ? "IN-RANGE" : "out")}");
+            }
 
             if ((_hero.position - transform.position).sqrMagnitude <= ProximityRadius * ProximityRadius)
+            {
+                Debug.Log($"[SeamTrace] '{name}' IN RANGE ({dist:F1}m <= {ProximityRadius}m) -> firing Cross().");
                 Cross(_hero);
+            }
         }
 
         // Box-collider entry still works as a fallback (for movers that DO trip OnTriggerEnter).
@@ -62,19 +106,24 @@ namespace DeNelle.Village
         {
             if (_fired || player == null) return;
             _fired = true;
+            Debug.Log($"[SeamTrace] '{name}' Cross() ENTERED for '{player.name}'.");
 
             var targetScene = SceneManager.GetSceneByName(targetSceneName);
             if (!targetScene.isLoaded)
             {
                 if (!Application.CanStreamedLevelBeLoaded(targetSceneName))
                 {
-                    Debug.LogWarning($"[SceneTransitionTrigger] '{targetSceneName}' not in Build Settings — cannot transition.");
+                    Debug.LogWarning($"[SeamTrace] '{name}' Cross() ABORT: '{targetSceneName}' not in Build Settings — cannot transition.");
                     _fired = false;   // allow a retry once it's loadable
                     return;
                 }
 
-                Debug.Log($"[SceneTransitionTrigger] Loading '{targetSceneName}' {(loadAdditive ? "additive" : "single")}.");
+                Debug.Log($"[SeamTrace] '{name}' Cross() loading '{targetSceneName}' {(loadAdditive ? "additive" : "single")} (was not loaded).");
                 SceneManager.LoadScene(targetSceneName, loadAdditive ? LoadSceneMode.Additive : LoadSceneMode.Single);
+            }
+            else
+            {
+                Debug.Log($"[SeamTrace] '{name}' Cross() target '{targetSceneName}' already loaded — repositioning.");
             }
 
             StartCoroutine(RepositionPlayerAfterLoad(player));
@@ -185,7 +234,7 @@ namespace DeNelle.Village
                 var rb = playerTransform.GetComponent<Rigidbody>();
                 if (rb != null) rb.linearVelocity = Vector3.zero;
 
-                Debug.Log($"[SceneTransitionTrigger] Player repositioned to {targetPosition} in '{targetSceneName}'.");
+                Debug.Log($"[SeamTrace] '{name}' repositioned: requested {targetPosition}, hero now at {playerTransform.position} in '{targetSceneName}' (loco={(loco != null)}).");
             }
 
             // (3) Let the follow camera settle on the warped hero for one frame

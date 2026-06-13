@@ -21,6 +21,7 @@ using UnityEngine.Networking;
 using UnityEngine.SceneManagement;
 using UnityEngine.UIElements;
 using DeNelle.Core.UI;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.HUD
 {
@@ -199,7 +200,11 @@ namespace DeNelle.HUD
         }
 
         // ── Actions ────────────────────────────────────────────────────────────
-        public void ToggleOverlay() => SetOpen(!IsOpen);
+        public void ToggleOverlay()
+        {
+            FlowTrace.Step("UI", $"Settings open requested (gear → ToggleOverlay; currently open={IsOpen})");
+            SetOpen(!IsOpen);
+        }
 
         /// <summary>Explicitly hide the Help overlay (Close button + modal-arbiter close).</summary>
         public void Close() => SetOpen(false);
@@ -215,6 +220,11 @@ namespace DeNelle.HUD
             // the Close callback the handle invokes won't recurse.
             if (open) PanelManager.NotifyOpened(_panelHandle);
             else PanelManager.NotifyClosed(_panelHandle);
+            // Did the menu actually show? (overlay null/zero-size or non-pickable backdrop
+            // = "Settings dead" symptom — and report the live timeScale that can freeze it.)
+            FlowTrace.Step("UI", $"Settings {(open ? "shown" : "hidden")} — overlayExists={_overlay != null} " +
+                $"display={(_overlay != null ? _overlay.style.display.value.ToString() : "n/a")} " +
+                $"picking={(_overlay != null ? _overlay.pickingMode.ToString() : "n/a")} timeScale={Time.timeScale}");
         }
 
         private void OnReportBug()
@@ -364,6 +374,7 @@ namespace DeNelle.HUD
         /// </summary>
         private void OnOpenDevTools()
         {
+            FlowTrace.Step("UI", "DevPanel toggle/click reached (HelpMenu 'Dev tools' → AdminOverlay)");
             // Find the AdminOverlay (its bootstrap spawns one per scene). In MainCastle_Hall
             // the scene ships NO UIDocument/PanelSettings, so AdminOverlay.Awake couldn't
             // borrow one and never built its UI — Open() then silently no-op'd and "dev
@@ -378,9 +389,12 @@ namespace DeNelle.HUD
             }
             if (!admin.TryBuild(ActivePanelSettings))
             {
+                FlowTrace.Warn("UI", "DevPanel open FAILED — AdminOverlay.TryBuild returned false " +
+                    "(no PanelSettings in this scene; dev tools went nowhere)");
                 ShowToast("Dev tools unavailable — no UI panel settings in this scene.");
                 return;
             }
+            FlowTrace.Step("UI", "DevPanel built — opening AdminOverlay");
             // Close Help FIRST, then open Admin. Both route through PanelManager, so the
             // arbiter also enforces single-modal; doing it explicitly keeps order clear.
             Close();

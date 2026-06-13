@@ -19,6 +19,7 @@
 
 using System.Collections.Generic;
 using DeNelle.Core;
+using DeNelle.Core.Diagnostics;
 using DeNelle.Core.State;
 using UnityEngine;
 using UnityEngine.AI;
@@ -83,6 +84,7 @@ namespace DeNelle.Village
         /// </summary>
         public void SetHeroClassOverride(HeroClass? heroClass)
         {
+            FlowTrace.Step("Roster", $"SetHeroClassOverride({(heroClass.HasValue ? heroClass.Value.ToString() : "null")}) -> Spawn() (override path)");
             s_heroClassOverride = heroClass;
             if (HubScenes.IsHub(SceneManager.GetActiveScene().name)) Spawn();
         }
@@ -90,7 +92,8 @@ namespace DeNelle.Village
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
         {
-            if (Instance != null) return;
+            if (Instance != null) { FlowTrace.Step("Roster", "Bootstrap skipped — injector Instance already exists"); return; }
+            FlowTrace.Step("Roster", "Bootstrap — creating StoryCompanionInjector");
             new GameObject("StoryCompanionInjector").AddComponent<StoryCompanionInjector>();
         }
 
@@ -99,9 +102,10 @@ namespace DeNelle.Village
             // NOTE: Destroy(this) — NOT Destroy(gameObject). This injector lives on
             // its OWN object so that is moot here, but we keep the safe idiom in case
             // it is ever co-located (per the singleton-dedup-destroys-host landmine).
-            if (Instance != null && Instance != this) { Destroy(this); return; }
+            if (Instance != null && Instance != this) { FlowTrace.Warn("Roster", "Awake — duplicate injector instance -> Destroy(this)"); Destroy(this); return; }
             Instance = this;
             DontDestroyOnLoad(gameObject);
+            FlowTrace.Step("Roster", $"Awake — injector live; activeScene={SceneManager.GetActiveScene().name} isHub={HubScenes.IsHub(SceneManager.GetActiveScene().name)}");
 
             SceneManager.sceneLoaded -= OnSceneLoaded;
             SceneManager.sceneLoaded += OnSceneLoaded;
@@ -128,11 +132,13 @@ namespace DeNelle.Village
         // the roster + replaces any prior companion, so this is idempotent).
         private void OnRosterMaybeChanged()
         {
+            FlowTrace.Step("Roster", $"OnRosterMaybeChanged (PlayerChanged fired) -> Spawn() in scene={SceneManager.GetActiveScene().name}");
             if (HubScenes.IsHub(SceneManager.GetActiveScene().name)) Spawn();
         }
 
         private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
         {
+            FlowTrace.Step("Roster", $"OnSceneLoaded({scene.name}, {mode}) isHub={HubScenes.IsHub(scene.name)} -> Spawn() if hub");
             if (HubScenes.IsHub(scene.name)) Spawn();
         }
 
@@ -155,6 +161,8 @@ namespace DeNelle.Village
                 foreach (HeroClass cls in PartyRosterClasses())
                     desired.Add(cls);
             }
+            FlowTrace.Step("Roster", $"Spawn(): override={(s_heroClassOverride.HasValue ? s_heroClassOverride.Value.ToString() : "null")} " +
+                $"desired=[{string.Join(",", desired)}] currentlyLive=[{string.Join(",", _companions.Keys)}]");
 
             // Despawn any live companion no longer desired (roster shrank / override changed).
             var stale = new List<HeroClass>();
@@ -162,7 +170,11 @@ namespace DeNelle.Village
                 if (kv.Value == null || !desired.Contains(kv.Key)) stale.Add(kv.Key);
             foreach (var cls in stale)
             {
-                if (_companions.TryGetValue(cls, out var c) && c != null) Destroy(c.gameObject);
+                if (_companions.TryGetValue(cls, out var c) && c != null)
+                {
+                    FlowTrace.Warn("Roster", $"duplicate/stale {CompanionDialogue.NameFor(cls)} ({cls}) -> Destroy body (no longer desired)");
+                    Destroy(c.gameObject);
+                }
                 _companions.Remove(cls);
             }
 
@@ -175,7 +187,11 @@ namespace DeNelle.Village
             Transform heroT = ResolveHero();
             foreach (HeroClass cls in desired)
             {
-                if (_companions.TryGetValue(cls, out var existing) && existing != null) continue; // already live
+                bool alreadyLive = _companions.TryGetValue(cls, out var existing) && existing != null;
+                FlowTrace.Step("Roster", $"guard for {cls}: alreadyPresent={alreadyLive} " +
+                    $"(checked _companions dict: hasKey={_companions.ContainsKey(cls)}, value!=null={(existing != null)})");
+                if (alreadyLive) continue; // already live
+                FlowTrace.Step("Roster", $"spawn request: id={cls} name={CompanionDialogue.NameFor(cls)} caller=Spawn()");
                 SpawnOne(cls, heroT);
             }
         }
@@ -204,6 +220,9 @@ namespace DeNelle.Village
                 if (heroT != null) comp.SetHero(heroT);
                 _companions[cls] = comp;
             }
+
+            FlowTrace.Step("Roster", $"INSTANTIATED companion {CompanionDialogue.NameFor(cls)} ({cls}) " +
+                $"(instanceCount now {_companions.Count}) go={(go != null ? go.name : "null")}");
 
             Debug.Log($"[StoryCompanionInjector] spawned {CompanionDialogue.NameFor(cls)} " +
                       $"({cls}) into the party" + (heroT != null ? "." : " (no hero found yet — will resolve)."));

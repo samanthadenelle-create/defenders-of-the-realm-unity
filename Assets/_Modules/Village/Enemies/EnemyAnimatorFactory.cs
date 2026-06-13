@@ -16,6 +16,7 @@
 // =============================================================================
 
 using UnityEngine;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
 {
@@ -64,8 +65,21 @@ namespace DeNelle.Village
             if (anim == null) anim = visual.AddComponent<Animator>();
             anim.applyRootMotion = false;
 
-            var ctrl = Resources.Load<RuntimeAnimatorController>("Enemies/" + Controller(RigFor(modelName)));
-            if (ctrl != null) anim.runtimeAnimatorController = ctrl;
+            EnemyRig rig = RigFor(modelName);
+            string ctrlName = Controller(rig);
+            var ctrl = Resources.Load<RuntimeAnimatorController>("Enemies/" + ctrlName);
+            if (ctrl != null)
+            {
+                anim.runtimeAnimatorController = ctrl;
+                FlowTrace.Once("Enemy", $"anim-{modelName}",
+                    $"animator: model '{modelName}' -> rig {rig} -> controller '{ctrlName}' OK");
+            }
+            else
+            {
+                FlowTrace.Warn("Enemy",
+                    $"animator: model '{modelName}' -> rig {rig} -> controller 'Enemies/{ctrlName}' " +
+                    "MISSING — enemy has no walk/attack/die anim (run EnemyAnimatorSetup)");
+            }
         }
     }
 }

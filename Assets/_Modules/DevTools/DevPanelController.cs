@@ -42,6 +42,7 @@ using Cysharp.Threading.Tasks;
 using DeNelle.Core;
 using DeNelle.Core.State;
 using DeNelle.Core.UI;
+using DeNelle.Core.Diagnostics;
 using DeNelle.HUD;
 using DeNelle.Village;
 using DeNelle.Wallet;
@@ -319,11 +320,16 @@ namespace DeNelle.DevTools
             _bound = true;
         }
 
-        private void OnCornerTapped(ClickEvent _) => SetOpen(!_isOpen);
+        private void OnCornerTapped(ClickEvent _)
+        {
+            FlowTrace.Step("UI", "DevPanel toggle/click reached (corner DEV chip tapped)");
+            SetOpen(!_isOpen);
+        }
 
         /// <summary>Opens / closes the panel window.</summary>
         public void SetOpen(bool open)
         {
+            FlowTrace.Step("UI", $"DevPanel toggle/click reached (DevPanelController.SetOpen open={open}, bound={_bound})");
             _isOpen = open;
             if (_window != null)
             {
@@ -350,6 +356,13 @@ namespace DeNelle.DevTools
                 RefreshToggleButtons();
                 UpdateMetrics();
             }
+
+            FlowTrace.Step("UI", $"DevPanel (corner) {(open ? "shown" : "hidden")} — " +
+                $"windowExists={_window != null} " +
+                $"display={(_window != null ? _window.style.display.value.ToString() : "n/a")} " +
+                $"picking={(_window != null ? _window.pickingMode.ToString() : "n/a")} timeScale={Time.timeScale}");
+            if (open && _window == null)
+                FlowTrace.Warn("UI", "DevPanel open FAILED — _window is null (UIDocument root never bound)");
         }
 
         /// <summary>Closes the panel.</summary>
@@ -688,6 +701,10 @@ namespace DeNelle.DevTools
                 () => GodMode, ToggleGodMode);
 
             RefreshToggleButtons();
+
+            int wiredButtons = _groupList != null
+                ? _groupList.Query<Button>().ToList().Count : 0;
+            FlowTrace.Step("UI", $"DevPanel action groups built — wired {wiredButtons} buttons");
         }
 
         /// <summary>Adds a captioned action group and returns its button row.</summary>
@@ -731,6 +748,7 @@ namespace DeNelle.DevTools
             button.style.borderBottomLeftRadius = 4; button.style.borderBottomRightRadius = 4;
             button.clicked += () =>
             {
+                FlowTrace.Step("UI", $"DevPanel click reached — action '{label}'");
                 try { onClick?.Invoke(); }
                 catch (Exception ex)
                 {

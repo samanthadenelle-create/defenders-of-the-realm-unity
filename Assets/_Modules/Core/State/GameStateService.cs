@@ -26,6 +26,7 @@ using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using Cysharp.Threading.Tasks;
+using DeNelle.Core.Diagnostics;
 using DeNelle.Core.Web3;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -472,10 +473,18 @@ namespace DeNelle.Core.State
         /// </summary>
         public void AddToParty(string id)
         {
-            if (_state == null || string.IsNullOrEmpty(id)) return;
+            if (_state == null || string.IsNullOrEmpty(id))
+            {
+                FlowTrace.Warn("Roster", $"AddToParty('{id}') no-op (state null or empty id)");
+                return;
+            }
             if (_state.PartyMemberIds == null) _state.PartyMemberIds = new List<string>();
-            if (_state.PartyMemberIds.Contains(id)) return;   // already in the party
+            bool already = _state.PartyMemberIds.Contains(id);
+            FlowTrace.Step("Roster", $"guard for {id}: alreadyPresent={already} " +
+                $"(checked PartyMemberIds=[{string.Join(",", _state.PartyMemberIds)}])");
+            if (already) return;   // already in the party
             _state.PartyMemberIds.Add(id);
+            FlowTrace.Step("Roster", $"AddToParty: enrolled '{id}' -> roster now [{string.Join(",", _state.PartyMemberIds)}] (fires PlayerChanged -> spawn)");
             PlayerChanged.Invoke();
             Save();
         }

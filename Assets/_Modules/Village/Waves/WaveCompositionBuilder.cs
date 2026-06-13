@@ -33,6 +33,7 @@
 
 using System.Collections.Generic;
 using UnityEngine;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
 {
@@ -226,6 +227,22 @@ namespace DeNelle.Village
                 AddEntry(comp, catalog, IdElite, "hollow", "elite",
                          1, SpawnRole.Elite, EnemyRole.MiniBoss);
 
+            // ROOT-CAUSE TRACE: this is the ONE place a wave's variety is decided.
+            // Every tier above draws from the hardcoded "hollow" family ids only
+            // (IdWeakGrunt/IdWeakSkirm/IdMediumBrute/IdMediumCast/IdElite → all
+            // Skeleton_* models). Print the requested mix so an F8 run shows whether
+            // the wave EVER asks for orc/troll/ogre families, or always one family.
+            FlowTrace.Step("Enemy",
+                $"WaveComposition wave={waveId}: total={total} weak={weakN} medium={mediumN} strong={strongN} " +
+                $"elite={(waveId % EliteEveryNth == 0 ? 1 : 0)} — families requested: hollow ONLY (no orc/troll/ogre)");
+            var sb = new System.Text.StringBuilder();
+            for (int i = 0; i < comp.Entries.Count; i++)
+            {
+                var en = comp.Entries[i];
+                sb.Append($"[{en.EnemyId} x{en.Count} pos={en.SpawnRole} role={en.Role}] ");
+            }
+            FlowTrace.Step("Enemy", $"WaveComposition wave={waveId} slots: {sb}");
+
             UnityEngine.Random.state = prev;
             return comp;
         }
@@ -250,7 +267,18 @@ namespace DeNelle.Village
                 {
                     EnemyDef byRole = catalog.FindByRole(family, role);
                     if (byRole != null && !string.IsNullOrEmpty(byRole.Id))
+                    {
                         id = byRole.Id;
+                        FlowTrace.Warn("Enemy",
+                            $"compose AddEntry: preferred id '{preferredId}' (family '{family}', role '{role}') " +
+                            $"NOT in catalog — substituted by-role to '{id}'");
+                    }
+                    else
+                    {
+                        FlowTrace.Warn("Enemy",
+                            $"compose AddEntry: preferred id '{preferredId}' (family '{family}', role '{role}') " +
+                            $"NOT in catalog AND no by-role fallback — keeping literal '{preferredId}' (spawner will log unknown-enemy)");
+                    }
                 }
             }
 

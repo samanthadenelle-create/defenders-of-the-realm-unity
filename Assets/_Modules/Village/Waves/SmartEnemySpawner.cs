@@ -29,6 +29,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
 {
@@ -107,9 +108,18 @@ namespace DeNelle.Village
                 EnemyDef def = catalog.Find(entry.EnemyId);
                 if (def == null)
                 {
+                    FlowTrace.Fail("Enemy", $"SmartSpawner: unknown enemy id '{entry.EnemyId}' in wave {waveId} — slot SKIPPED (no body spawns)");
                     Debug.LogWarning($"[SmartEnemySpawner] Unknown enemy id '{entry.EnemyId}' in wave {waveId} — slot skipped.");
                     continue;
                 }
+
+                // ROOT-CAUSE TRACE: id → model resolution per composed slot. If every
+                // slot resolves to a Skeleton_* model, the wave reads as one family
+                // regardless of how many distinct ids the composition carries.
+                string slotModel = EnemyFactory.ModelForEnemy(def);
+                FlowTrace.Step("Enemy",
+                    $"SmartSpawner resolve: id='{entry.EnemyId}' family='{def.Family}' count={entry.Count} " +
+                    $"-> model '{slotModel}' (pos={entry.SpawnRole} brainRole={entry.Role})");
 
                 for (int i = 0; i < entry.Count; i++)
                 {
@@ -157,6 +167,10 @@ namespace DeNelle.Village
                     Enemy enemy = EnemyPool.Get("model:" + EnemyFactory.ModelForEnemy(def),
                                                 null, def, pos, rot, enemyRoot);
                     if (enemy == null) continue;
+
+                    // ROOT-CAUSE TRACE: the actual GameObject that landed, once per model.
+                    FlowTrace.Once("Enemy", $"first-spawn-{slotModel}",
+                        $"instantiated '{enemy.gameObject.name}' for id '{def.Id}' (family '{def.Family}', model '{slotModel}')");
 
                     if (enemy.GetComponent<EnemyDamageable>() == null)
                         enemy.gameObject.AddComponent<EnemyDamageable>();

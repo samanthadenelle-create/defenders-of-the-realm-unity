@@ -29,6 +29,7 @@
 using UnityEngine;
 using UnityEngine.UI;
 using DeNelle.Core.UI;
+using DeNelle.Core.Diagnostics;
 using Yarn.Unity;
 using Yarn.Unity.Addons.ClassicRPG;
 
@@ -177,6 +178,7 @@ namespace DeNelle.DialogueUI
         // Idempotent + fully null-guarded; a missing child just skips that step.
         public override YarnTask OnDialogueStartedAsync()
         {
+            FlowTrace.Step("UI", $"Yarn dialogue started (presenter={name}, timeScale={Time.timeScale})");
             RepairOptionsLayoutOnce();
             ReskinToLightParchmentOnce();
             BuildNameBannerOnce();
@@ -466,7 +468,43 @@ namespace DeNelle.DialogueUI
         public override YarnTask OnDialogueCompleteAsync()
         {
             DeNelle.Core.DialoguePortrait.Forced = null;
+            FlowTrace.Step("UI", $"Yarn dialogue ended (presenter={name})");
+            LogInputBlockerState();
             return base.OnDialogueCompleteAsync();
+        }
+
+        // ── F8 ROOT-CAUSE TRACE (does not change behaviour) ──────────────────
+        // After a Yarn dialogue tears down, the two recurring failures (Settings
+        // dead after Yarn / dev tools unclickable) smell like a leftover input
+        // blocker: a dialogue scrim/CanvasGroup with blocksRaycasts=true still
+        // alive, or a paused Time.timeScale. Dump those so one playtest shows it.
+        private void LogInputBlockerState()
+        {
+            // This presenter's own dialogue canvas groups (the box/scrim it controls).
+            var ownGroups = GetComponentsInChildren<CanvasGroup>(true);
+            foreach (var g in ownGroups)
+            {
+                if (g == null) continue;
+                FlowTrace.Warn("UI",
+                    $"after Yarn end: dialogueGroup '{g.name}' blocksRaycasts={g.blocksRaycasts} " +
+                    $"interactable={g.interactable} alpha={g.alpha:0.00}");
+            }
+
+            // Any other CanvasGroup in the scene still eating raycasts while invisible
+            // (an alpha=0 full-screen blocker is the classic "menu dead" culprit).
+            var allGroups = UnityEngine.Object.FindObjectsByType<CanvasGroup>(
+                FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+            foreach (var g in allGroups)
+            {
+                if (g == null) continue;
+                if (g.blocksRaycasts && g.alpha <= 0.01f)
+                    FlowTrace.Warn("UI",
+                        $"after Yarn end: INVISIBLE BLOCKER still active — CanvasGroup '{g.name}' " +
+                        $"blocksRaycasts=true alpha={g.alpha:0.00} (eats input but draws nothing)");
+            }
+
+            FlowTrace.Warn("UI", $"after Yarn end: Time.timeScale={Time.timeScale}" +
+                (Time.timeScale <= 0.001f ? "  (STUCK PAUSED — input/anim frozen)" : ""));
         }
     }
 }
