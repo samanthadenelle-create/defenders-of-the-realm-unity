@@ -303,78 +303,33 @@ namespace DeNelle.Editor
             heroStart.transform.localPosition = new Vector3(0, 0.1f, 0);
             heroStart.transform.localRotation = Quaternion.Euler(0, 0, 0);
 
-            // === UPPER BATTLEMENTS (wide platform, defensive towers, LOS to courtyard below) ===
-            var upper = new GameObject("UpperBattlements_SecondLevel_Defenses_LOS");
-            upper.transform.SetParent(keepRoot.transform, false);
-            upper.transform.localPosition = new Vector3(0, 11f, 0);
+            // === SINGLE-LEVEL PIVOT (owner 2026-06-12): NO UPPER BATTLEMENTS / SECOND TIER ===
+            // The wide elevated platform (y=11), its crenellation walls, the 4 upper defensive
+            // towers, and the home-accent balcony are REMOVED. Reasons (owner + playtest flags):
+            //   • "AI struggled to get to 2nd level" — the elevated platform fragmented the nav.
+            //   • "tree shows through floor of level 2" — the Heart tree poked through the platform.
+            // The castle is now a flat, single-layer CoC-style base: everything walkable at y≈0,
+            // one connected nav plane through the gates to the Heart. Defensive interest comes from
+            // the CONCENTRIC WALL RINGS (outer + inner), not verticality. The unused upper-only
+            // prefabs (towerBig for upper towers, qBalcony) are suppressed below.
+            _ = towerBig; _ = qBalcony;
 
-            // Wide flat platform for player base-building defenses (existing PlacementGrid + BuildModeController)
-            var platform = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            platform.transform.SetParent(upper.transform, false);
-            platform.transform.localPosition = Vector3.zero;
-            platform.transform.localScale = new Vector3(44, 0.8f, 44);
-            platform.name = "BattlementsPlatform_Wide42m_ForPlayerTowers_LOS_DownToCourtyard";
-            Object.DestroyImmediate(platform.GetComponent<Collider>());
-            // T-008 (texture the inside of the castle structure): the battlements platform is the
-            // large interior surface the player sees from the courtyard; as a raw primitive it
-            // rendered flat default-white. Skin it with the SAME stone material the exterior walls
-            // use (M_21_Grey_Light_LPUP) so the interior reads as finished stone matching outside.
-            ApplyInteriorStoneMaterial(platform);
-
-            // Crenellated feel + Quaternius modular walls around edge
-            if (qWallStraight != null)
-            {
-                for (int i = 0; i < 9; i++)
-                {
-                    var bw = (GameObject)PrefabUtility.InstantiatePrefab(qWallStraight);
-                    bw.transform.SetParent(upper.transform, false);
-                    bw.transform.localPosition = new Vector3(-22 + i * 5.5f, 1.2f, -23);
-                    bw.name = $"BattlementWall_South_{i}";
-                }
-                for (int i = 0; i < 9; i++)
-                {
-                    var bw = (GameObject)PrefabUtility.InstantiatePrefab(qWallStraight);
-                    bw.transform.SetParent(upper.transform, false);
-                    bw.transform.localPosition = new Vector3(-22 + i * 5.5f, 1.2f, 23);
-                    bw.name = $"BattlementWall_North_{i}";
-                }
-            }
-
-            // 4 upper defensive towers (space + pre-placed for LOS defense)
-            if (towerBig != null)
-            {
-                Vector3[] utPos = {
-                    new Vector3(-18, 1.5f, -18), new Vector3(18, 1.5f, -18),
-                    new Vector3(-18, 1.5f, 18),  new Vector3(18, 1.5f, 18)
-                };
-                for (int i = 0; i < utPos.Length; i++)
-                {
-                    var ut = (GameObject)PrefabUtility.InstantiatePrefab(towerBig);
-                    ut.transform.SetParent(upper.transform, false);
-                    ut.transform.localPosition = utPos[i];
-                    ut.name = $"UpperDefensiveTower_{i+1}_PlayerBuildLOS";
-                }
-            }
-
-            // === GRAND STAIR (WO-384) — the REAL climbable nav path, courtyard → upper battlements ===
-            // Replaces both the old single MainStairs_Poly prefab AND the invisible UpperRamp_Nav.
-            // Built via the shared, reusable DeNelle.Village.StairwayBuilder (composition, not a
-            // one-off): a WIDE curved sweep of real step pieces (MeshColliders ON) that the
-            // NavMeshSurface bakes directly as the walkable surface. Fit-to-bounds from the measured
-            // courtyard anchor (y≈0) to the upper-battlement EDGE so the top tread lands FLUSH and
-            // OVERLAPS UpperBattlements_Nav (the upper tier is one plane whose cube collider is
-            // destroyed — the stair top must overlap that nav plane or the bake won't fuse).
+            // === GRAND STAIR — REMOVED (no second level to climb to) ===
+            // BuildGrandStair is now an idempotent teardown (RemoveSecondLevel): it destroys any
+            // pre-existing upper-tier elements baked into the saved scene and builds NOTHING new.
+            // The old decorative QuaterniusStairs_UpperAccess + MainStairs_Poly are also stripped
+            // by RemoveSecondLevel. Suppress unused-local warnings for the now-unused upper props.
             BuildGrandStair(root.transform);
-
-            // T-009 (steps should be removed): the old decorative "QuaterniusStairs_UpperAccess"
-            // prop sat on the upper battlements (localPos -2,0,-20, y~11) leading NOWHERE — the
-            // REAL 2-level climb is the GrandStair built above. It read as a redundant/floating
-            // staircase, which is the stray "steps" the owner flagged. REMOVED from the build path.
-            // (The functional GrandStair_CourtyardToBattlements + the already-removed stray
-            // MainStairs_Poly_ToUpperBattlements are unaffected.) Suppress unused-local warning.
             _ = qStairsExt;
 
-            // === BEAUTY + DEFENSIVE DRESSING (vines, crates, balconies from Quaternius) ===
+            // === CoC-STYLE SECOND INNER WALL RING (owner: "second inner wall like coc") ===
+            // A concentric ground-level wall ring INSIDE the outer perimeter, around the Heart/
+            // core, with 4 gate gaps aligned to the outer gates so enemies path outer-gate ->
+            // inner-gate gap -> Heart. NOT a second level — a ground obstacle. Built after the
+            // outer walls so it shares the same Wall_Medieval_Stone prefab/material.
+            BuildInnerWallRing(wallsRoot.transform, wallStone);
+
+            // === BEAUTY + DEFENSIVE DRESSING (vines from Quaternius) ===
             if (qVine1 != null)
             {
                 for (int i = 0; i < 8; i++)
@@ -385,14 +340,7 @@ namespace DeNelle.Editor
                     v.name = $"VineDecor_{i}";
                 }
             }
-            if (qBalcony != null)
-            {
-                // A few balcony accents on keep/upper for "home" verticality
-                var b = (GameObject)PrefabUtility.InstantiatePrefab(qBalcony);
-                b.transform.SetParent(keepRoot.transform, false);
-                b.transform.localPosition = new Vector3(8, 6, -8);
-                b.name = "KeepBalcony_HomeAccent";
-            }
+            _ = qBalcony; // balcony accent removed with the second level
 
             // === CONNECTION TO OUTERWORLD (NavMesh seam + player transition) ===
             // South gate seam between Castle Hub (home) and OuterWorld regions.
@@ -429,9 +377,124 @@ namespace DeNelle.Editor
             // "no enemy engagement"). Clean scale-1 anchor at the north-centre plaza.
             WireCastleHeart(root.transform);
 
-            Debug.Log("[CastleHubBuilder] CastleHubRoot complete. 8 structures + keep + upper battlements + gate marker placed.\n" +
-                      "Next: Save under Assets/Scenes/ (e.g. MainCastle_Hall.unity), Bake NavMesh (NavMeshSurface recommended), wire NPC points + connection via existing systems (WorldSceneLoader, Economy, Yarn, base-build on battlements).");
+            Debug.Log("[CastleHubBuilder] CastleHubRoot complete (SINGLE-LEVEL). 8 structures + keep + outer walls + inner CoC wall ring + gate marker placed; NO second level.\n" +
+                      "Next: Save under Assets/Scenes/ (e.g. MainCastle_Hall.unity), Bake NavMesh (NavMeshSurface recommended), wire NPC points + connection via existing systems (WorldSceneLoader, Economy, Yarn).");
             Selection.activeGameObject = root;
+        }
+
+        // =====================================================================
+        //  CoC-STYLE SECOND INNER WALL RING (owner 2026-06-12: "second inner wall like coc")
+        // -----------------------------------------------------------------------------
+        //  A concentric, GROUND-LEVEL wall ring INSIDE the outer perimeter, around the keep +
+        //  Heart core. This is the Clash-of-Clans layered-defense read: an attacker breaches the
+        //  outer gate, crosses the courtyard, then must funnel through the INNER gate gap to reach
+        //  the Heart. It is an OBSTACLE on the flat nav floor — NOT a second level. Enemies path
+        //  AROUND the wall segments and THROUGH the 4 gate gaps (one per cardinal side, aligned to
+        //  the outer S/W/N/E gates), so the single connected nav plane still reaches the Heart.
+        //
+        //  GEOMETRY:
+        //   • Square ring, half-extent R = 18m from world origin (the keep sits at origin, the
+        //     Heart at (0,0,12) — both inside; the 8 storefronts at radius 22-32 stay OUTSIDE the
+        //     ring, in the courtyard band between the two walls, exactly like CoC's outer rings).
+        //     ~18m is roughly half the ~44m outer perimeter (owner's "~half the outer" guidance).
+        //   • Each of the 4 sides is a line of Wall_Medieval_Stone segments perpendicular to its
+        //     outward cardinal, with a centered ~14m GAP for the gate opening. Segments are scaled
+        //     to tile the side cleanly so the run reads as one connected wall (no seams), same
+        //     prefab + material as the outer walls.
+        //   • The gate-gap is achieved simply by NOT placing a segment over the center span, so the
+        //     opening is open geometry (nothing to exclude-from-bake there). The wall segments are
+        //     real colliders the NavMesh voxelizes as un-walkable, carving the obstacle; the gap
+        //     stays walkable because no collider sits in it. (Matches the outer-wall approach where
+        //     the gate is a geometric opening, not a bake-excluded solid.)
+        //
+        //  Idempotent: destroys any prior ring first, so a re-run rebuilds exactly one ring.
+        // =====================================================================
+        private const string InnerRingName = "InnerWallRing_CoC";
+        private const float  InnerRingHalfExtent = 18f;   // square half-side from origin
+        private const float  InnerRingGateGapHalf = 7f;   // 14m clear gate opening, centered per side
+
+        private static void BuildInnerWallRing(Transform parent, GameObject wallStone)
+        {
+            // Idempotent: remove any prior ring so we never stack duplicates.
+            var prior = GameObject.Find(InnerRingName);
+            if (prior != null) Object.DestroyImmediate(prior);
+
+            if (wallStone == null)
+            {
+                Debug.LogWarning("[CastleHubBuilder] Wall_Medieval_Stone prefab missing — inner CoC wall ring skipped (LogWarning, not fatal).");
+                return;
+            }
+
+            var ring = new GameObject(InnerRingName);
+            ring.transform.SetParent(parent, false);
+
+            // Measure the base wall footprint (un-scaled X span) from a temp instance so we tile
+            // the side with right-sized scaled segments (MEASURE-not-guess, like CastleWallsFromRecipe).
+            float baseLen = MeasureWallBaseLength(wallStone);
+            if (baseLen < 0.5f) baseLen = 13f; // safety fallback
+
+            float R = InnerRingHalfExtent;
+            // 4 sides: outward cardinal + yaw so the wall faces along the side. South faces -Z.
+            var sides = new (string label, float yaw)[] { ("South", 0f), ("West", 90f), ("North", 180f), ("East", 270f) };
+
+            int placed = 0;
+            foreach (var (label, yaw) in sides)
+            {
+                Quaternion rot = Quaternion.Euler(0f, yaw, 0f);
+                Vector3 outward = rot * Vector3.back;            // -Z rotated to this side
+                Vector3 along   = rot * Vector3.right;           // +X rotated — runs along the side
+                Vector3 sideCenter = outward * R;                // midpoint of this side, on the ring
+
+                // The side spans [-R, +R] along 'along'. Two wall runs flank a centered gate gap:
+                //   left  run: from -R to -gap
+                //   right run: from +gap to +R
+                // The wall prefab tiles on its local X; 'along' = rot * +X, so the segment rotation
+                // is simply the side yaw (identity for South, where the wall faces ±Z as authored).
+                BuildRingSideRun(ring.transform, wallStone, sideCenter, along, rot, -R, -InnerRingGateGapHalf, baseLen, label + "_L", ref placed);
+                BuildRingSideRun(ring.transform, wallStone, sideCenter, along, rot,  InnerRingGateGapHalf,  R, baseLen, label + "_R", ref placed);
+            }
+
+            Log($"BuildInnerWallRing: CoC inner ring built — half-extent {R}m, 4 sides, " +
+                $"{InnerRingGateGapHalf * 2f}m gate gap per side, {placed} wall segment(s). Enemies path outer gate -> inner gap -> Heart.");
+        }
+
+        // One straight wall run along a ring side, from 'a' to 'b' (offsets along 'along' from the
+        // side center), filled with a single right-sized scaled Wall_Medieval_Stone (a low-poly
+        // wall scales cleanly to span any width as one connected segment). y=0 (ground obstacle).
+        private static void BuildRingSideRun(Transform parent, GameObject wallStone, Vector3 sideCenter,
+                                             Vector3 along, Quaternion rot, float a, float b, float baseLen, string suffix, ref int placed)
+        {
+            float span = b - a;
+            if (span < 1f) return;
+            float mid = (a + b) * 0.5f;
+            Vector3 pos = sideCenter + along * mid;
+            pos.y = 0f;
+
+            var w = (GameObject)PrefabUtility.InstantiatePrefab(wallStone);
+            w.name = "InnerWall_" + suffix;
+            w.transform.SetParent(parent, false);
+            w.transform.position = pos;
+            w.transform.rotation = rot;                          // wall length axis (local X) aligns with 'along'
+            w.transform.localScale = new Vector3(span / baseLen, 1f, 1f);
+            placed++;
+        }
+
+        // Measure a wall prefab's un-scaled X footprint from a throwaway instance (renderer bounds /
+        // scale). Used so ring side-runs tile cleanly. Cleans up the temp instance.
+        private static float MeasureWallBaseLength(GameObject wallStone)
+        {
+            var temp = (GameObject)PrefabUtility.InstantiatePrefab(wallStone);
+            float len = 0f;
+            var rends = temp.GetComponentsInChildren<MeshRenderer>(true);
+            if (rends.Length > 0)
+            {
+                Bounds b = rends[0].bounds;
+                for (int i = 1; i < rends.Length; i++) b.Encapsulate(rends[i].bounds);
+                float sx = Mathf.Abs(temp.transform.localScale.x);
+                len = sx > 0.001f ? b.size.x / sx : b.size.x;
+            }
+            Object.DestroyImmediate(temp);
+            return len;
         }
 
         // --- Helpers (graceful loading like VillageSceneBuilder pattern) ---
@@ -545,14 +608,12 @@ namespace DeNelle.Editor
             // ~26x26m covers the keep + overlaps the courtyard floor on every side.
             CreateInvisibleFloor(floorRoot.transform, "KeepInterior_Nav", new Vector3(0f, 0.12f, 0f), new Vector3(2.6f, 1f, 2.6f));
 
-            // LEVEL 2 — upper battlements (y~11.4). The platform cube's collider is destroyed,
-            // so without this there is NO navmesh up there. ~44x44 plane over the platform.
-            CreateInvisibleFloor(floorRoot.transform, "UpperBattlements_Nav", new Vector3(0f, 11.5f, 0f), new Vector3(4.4f, 1f, 4.4f));
-
-            // NOTE (WO-384): the old invisible UpperRamp_Nav (a hidden 36° ramp) was REMOVED.
-            // The two levels are now connected by the REAL, visible grand stair built via
-            // StairwayBuilder (BuildGrandStair) — its step MeshColliders bake as the climb, with
-            // a chord NavMeshLink as the backup. No hidden-ramp-under-cosmetic-stairs mismatch.
+            // SINGLE-LEVEL PIVOT (owner 2026-06-12): NO upper-battlements nav plane. The second
+            // level was removed (enemy AI could not reach it), so there is no y~11.5 walkable
+            // surface to bake. The castle is one flat nav sheet at y≈0. Also strip any prior
+            // UpperBattlements_Nav plane baked into the saved scene so the navmesh is clean.
+            var priorUpperNav = GameObject.Find("UpperBattlements_Nav");
+            if (priorUpperNav != null) { Object.DestroyImmediate(priorUpperNav); Log("BuildNavMeshFloor: removed stale UpperBattlements_Nav plane (single-layer pivot)."); }
         }
 
         // =====================================================================
@@ -692,49 +753,41 @@ namespace DeNelle.Editor
         //  NavMeshLink (start→end) as the reliability backup. NO runtime bake — the castle
         //  re-bakes its persisted NavMeshSurface via BatchAddFloorAndBakeCastle.
         // =====================================================================
+        // SINGLE-LEVEL PIVOT (owner 2026-06-12): the second level is REMOVED — enemy AI
+        // could not navigate up to it ("AI struggled to get to 2nd level") and the tree
+        // showed through the level-2 floor. The grand stair existed ONLY to connect the
+        // courtyard to the (now-deleted) upper battlements, so it is no longer built. This
+        // method is retained as an IDEMPOTENT CLEANUP that destroys any pre-existing stair
+        // baked into the saved scene (same pattern as the stray-stair removal). The castle is
+        // now a flat, single-layer CoC-style base — everything walkable at y≈0.
+        private const string GrandStairName = "GrandStair_CourtyardToBattlements";
+
         private static void BuildGrandStair(Transform parent)
         {
-            Vector3 start = new Vector3(16f, 0f, 0f);    // courtyard, east of the keep
-            Vector3 end   = new Vector3(21f, 11.5f, 0f); // upper-battlement east edge — overlaps UpperBattlements_Nav
+            // No second level -> no stair. Remove any prior instance instead of building one.
+            RemoveSecondLevel();
+        }
 
-            var builderType = FindType("DeNelle.Village.StairwayBuilder");
-            if (builderType == null)
+        // Idempotent teardown of EVERY second-tier / elevated element so the saved scene
+        // becomes a single flat ground plane. Safe to call repeatedly (Find returns null when
+        // already gone). Covers: the grand stair, the upper battlements group (platform +
+        // crenellation walls + upper defensive towers), the home-accent balcony, the old
+        // floating decorative stair, and any stray legacy poly stair.
+        private static void RemoveSecondLevel()
+        {
+            foreach (var n in new[]
             {
-                Debug.LogWarning("[CastleHubBuilder] DeNelle.Village.StairwayBuilder not found (is it compiled?). " +
-                                 "Grand stair NOT built — the two levels will have no walkable connection until it compiles. " +
-                                 "Re-run Build CastleHub after the script compiles.");
-                return;
-            }
-
-            // Params is a nested struct: DeNelle.Village.StairwayBuilder+Params. Build it via the
-            // CastleGrandStair(start, end) static factory so all WO-384 defaults (wide curved sweep,
-            // fit-to-bounds, colliders on, railings, chord link) are applied in one place.
-            var paramsType = builderType.GetNestedType("Params");
-            object prms = null;
-            if (paramsType != null)
+                GrandStairName,
+                "UpperBattlements_SecondLevel_Defenses_LOS",
+                "BattlementsPlatform_Wide42m_ForPlayerTowers_LOS_DownToCourtyard",
+                "KeepBalcony_HomeAccent",
+                "QuaterniusStairs_UpperAccess",
+                "MainStairs_Poly_ToUpperBattlements",
+            })
             {
-                var factory = paramsType.GetMethod("CastleGrandStair",
-                    System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
-                if (factory != null)
-                    prms = factory.Invoke(null, new object[] { start, end });
+                var go = GameObject.Find(n);
+                if (go != null) { Object.DestroyImmediate(go); Log("RemoveSecondLevel: destroyed '" + n + "' (single-layer pivot)."); }
             }
-            if (prms == null)
-            {
-                Debug.LogWarning("[CastleHubBuilder] Could not construct StairwayBuilder.Params.CastleGrandStair via reflection. Grand stair NOT built.");
-                return;
-            }
-
-            var build = builderType.GetMethod("Build",
-                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
-            if (build == null)
-            {
-                Debug.LogWarning("[CastleHubBuilder] StairwayBuilder.Build(Transform,string,Params) not found via reflection. Grand stair NOT built.");
-                return;
-            }
-
-            build.Invoke(null, new object[] { parent, "GrandStair_CourtyardToBattlements", prms });
-            Debug.Log("[CastleHubBuilder] Grand stair built via StairwayBuilder (courtyard → upper-battlement edge, " +
-                      "top tread flush at (21,11.5,0) overlapping UpperBattlements_Nav). Re-bake to walk it.");
         }
 
         private static void CreateInvisibleFloor(Transform parent, string name, Vector3 localPos, Vector3 localScale)
@@ -1148,24 +1201,16 @@ namespace DeNelle.Editor
             BuildNavMeshFloor(parent);
             Log("BATCH-BAKE: floor ensured (courtyard + gate + keep interior).");
 
-            // WO-384: ensure the grand spiral stair exists so the bake fuses courtyard → stairs →
-            // upper plane into ONE walkable sheet. Always drop the OLD ramp/prefab stair. Treat
-            // the GrandStair like a PREFAB INSTANCE: build it ONCE if missing, but if it already
-            // exists DON'T regenerate — bake it AS-IS so any manual rotation/placement the owner
-            // applied in-editor is PRESERVED (steps + railings + link are one rotatable object,
-            // pivoted at the base). Use BatchRebuildGrandStairAndBake to force a fresh rebuild
-            // after a code change.
-            var strayStair = GameObject.Find("MainStairs_Poly_ToUpperBattlements");
-            if (strayStair != null) { Object.DestroyImmediate(strayStair); Log("BATCH-BAKE: removed old MainStairs_Poly prefab."); }
-            if (GameObject.Find("GrandStair_CourtyardToBattlements") == null)
-            {
-                BuildGrandStair(parent);
-                Log("BATCH-BAKE: grand spiral stair built (was missing).");
-            }
-            else
-            {
-                Log("BATCH-BAKE: existing GrandStair found — baking AS-IS (manual rotation/placement preserved).");
-            }
+            // SINGLE-LEVEL PIVOT (owner 2026-06-12): strip EVERY second-tier element + the grand
+            // stair from the saved scene so the bake produces ONE flat walkable sheet at y≈0 (the
+            // second level was removed because enemy AI could not reach it). Idempotent.
+            RemoveSecondLevel();
+            Log("BATCH-BAKE: second level removed — single-layer bake.");
+
+            // CoC inner wall ring (concentric ground obstacle, 4 gate gaps aligned to the outer
+            // gates). Idempotent. Same Wall_Medieval_Stone prefab/material as the outer walls.
+            BuildInnerWallRing(parent, AssetDatabase.LoadAssetAtPath<GameObject>(
+                "Assets/polyperfect/Low Poly Ultimate Pack/_M/Prefabs_M/Medieval_M/Wall_Medieval_Stone.prefab"));
 
             // Configure + bake every NavMeshSurface via reflection so renderer-off planes are
             // collected (Use Geometry = Physics Colliders). RenderMeshes=0, PhysicsColliders=1.
@@ -1238,7 +1283,7 @@ namespace DeNelle.Editor
             // 2. Exit seam ONTO the recipe gate so the hero can actually reach + trip it.
             EnsureExitSeamAtRecipeGate();
 
-            // 3. Recipe-driven walkable floor + gate exit strips + keep interior + grand stair.
+            // 3. Recipe-driven walkable floor + gate exit strips + keep interior.
             foreach (var n in new[] { "Plane", "Plane (1)" })
             {
                 var stray = GameObject.Find(n);
@@ -1248,19 +1293,19 @@ namespace DeNelle.Editor
             Transform parent = floorRoot != null ? floorRoot.transform
                 : (GameObject.Find(RootName + "_FloorHost") ?? new GameObject(RootName + "_FloorHost")).transform;
             BuildNavMeshFloor(parent);
-            var strayStair = GameObject.Find("MainStairs_Poly_ToUpperBattlements");
-            if (strayStair != null) Object.DestroyImmediate(strayStair);
-            // T-009: also strip the redundant floating decorative stair from any prior build that
-            // is baked into the saved scene (the real climb is GrandStair_CourtyardToBattlements).
-            var floatingStair = GameObject.Find("QuaterniusStairs_UpperAccess");
-            if (floatingStair != null) { Object.DestroyImmediate(floatingStair); Log("BATCH-RECIPE: removed redundant floating QuaterniusStairs_UpperAccess (T-009)."); }
-            if (GameObject.Find("GrandStair_CourtyardToBattlements") == null) BuildGrandStair(parent);
-            Log("BATCH-RECIPE: floor + recipe gate strips + stair ensured.");
 
-            // 3c. T-008: texture the interior shell on the saved scene (the battlements platform
-            //     primitive was default-white). Reuse the exterior wall stone material so a
-            //     rebake leaves the interior reading as finished stone. Idempotent.
-            ApplyInteriorStoneToScene();
+            // SINGLE-LEVEL PIVOT (owner 2026-06-12): strip EVERY second-tier element baked into
+            // the saved scene (grand stair, upper battlements platform + walls + towers, balcony,
+            // floating decorative stair, stray poly stair). RemoveSecondLevel is idempotent.
+            RemoveSecondLevel();
+            Log("BATCH-RECIPE: second level removed — castle is now single-layer (flat y≈0).");
+
+            // 3b. CoC-STYLE SECOND INNER WALL RING — concentric ground wall around the Heart core,
+            //     4 gate gaps aligned to the outer gates, excluded-from-bake at the gaps so enemies
+            //     path outer gate -> inner gap -> Heart. Idempotent (rebuilds clean each run).
+            BuildInnerWallRing(parent, AssetDatabase.LoadAssetAtPath<GameObject>(
+                "Assets/polyperfect/Low Poly Ultimate Pack/_M/Prefabs_M/Medieval_M/Wall_Medieval_Stone.prefab"));
+            Log("BATCH-RECIPE: floor + recipe gate strips + inner CoC wall ring ensured.");
 
             // 3b. T-002/T-005: place the Heart of Elarion (lose-condition + enemy target) so
             //     WaveManager._heart is non-null and Enemy.DriveNav() advances (enemies were
