@@ -21,6 +21,7 @@ indexed separately in `../PROJECT_INDEX.md`.
 
 ## Architecture
 
+- `ARCHITECTURE.md` — **START HERE: the one authoritative architecture hub** (HP B2B lens, assembly map, world/scene model, data/catalog, save, build mode, instrumentation) — indexes all the deep-dives below
 - `CORE_ARCHITECTURE_PLAN.md` — **root canonical plan** (professional structure, recommended folders, TD + dungeon + native Solana wallets + mobile + URP + cosmetic/seasonal monetization)
 - `ARCHITECTURE_NORTH_STAR.md`, `ENGINE_MASTER_PLAN.md`, `WORLD_ENGINE_ARCHITECTURE.md`
 - `ZONE_STREAMING_ARCHITECTURE.md`, `BUILD_MODE_ARCHITECTURE.md` (+ lowercase dup

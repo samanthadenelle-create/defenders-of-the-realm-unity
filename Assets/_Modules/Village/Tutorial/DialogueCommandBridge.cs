@@ -568,26 +568,58 @@ namespace DeNelle.Village
         // (cf. PetIntroduction) would write GameState.PetName before DeployChosen.
         private void CmdSpawnNamedPet(string species)
         {
-            var deployer = EnsurePetDeployer();
-            if (deployer == null)
+            // PET-GRANT HARDENING (owner 2026-06-13): a Yarn command bridge must NEVER
+            // throw — an exception here propagates into the YarnSpinner runner and can
+            // halt the whole dialogue (the player is then stuck at the pet-house with a
+            // dead conversation). So: (1) reject an empty/whitespace arg with a log+skip
+            // (a bad <<spawn_named_pet>> call must not silently deploy nothing), and
+            // (2) wrap the grant+deploy in a try/catch so any downstream surprise
+            // (catalog miss, null GameState, deployer build failure) degrades to a
+            // warning instead of breaking the dialogue.
+            if (string.IsNullOrWhiteSpace(species))
             {
-                Debug.LogWarning("[DialogueCommandBridge] spawn_named_pet — could not create a PetDeployer.");
+                Debug.LogWarning("[DialogueCommandBridge] spawn_named_pet — empty/blank species arg; " +
+                                 "skipping (nothing deployed). Pass a species id, e.g. <<spawn_named_pet \"ice-wolf\">>.");
                 return;
             }
 
-            // Record ownership exactly once (idempotent). Acquire is the canonical
-            // grant primitive; PetAcquisitionService bootstraps itself on load, but
-            // null-guard in case it isn't present yet.
-            var acq = DeNelle.Pets.PetAcquisitionService.Instance;
-            if (acq != null)
+            try
             {
-                bool firstTime = acq.Acquire(species, DeNelle.Pets.PetAcquisitionSource.Gift);
-                if (!firstTime)
-                    Debug.Log($"[DialogueCommandBridge] spawn_named_pet '{species}' — already owned; not re-granting.");
-            }
+                var deployer = EnsurePetDeployer();
+                if (deployer == null)
+                {
+                    Debug.LogWarning("[DialogueCommandBridge] spawn_named_pet — could not create a PetDeployer.");
+                    return;
+                }
 
-            deployer.DeployChosen(species);
-            Debug.Log($"[DialogueCommandBridge] spawn_named_pet '{species}' → deployed via PetDeployer.");
+                // Record ownership exactly once (idempotent). Acquire is the canonical
+                // grant primitive; PetAcquisitionService bootstraps itself on load, but
+                // null-guard in case it isn't present yet.
+                var acq = DeNelle.Pets.PetAcquisitionService.Instance;
+                if (acq != null)
+                {
+                    bool firstTime = acq.Acquire(species, DeNelle.Pets.PetAcquisitionSource.Gift);
+                    if (!firstTime)
+                        Debug.Log($"[DialogueCommandBridge] spawn_named_pet '{species}' — already owned; not re-granting.");
+                }
+                else
+                {
+                    // No acquisition service yet (not bootstrapped). DeployChosen still
+                    // records StarterPetId so the chosen pet persists + deploys — but the
+                    // canonical roster (Pets/OwnedPets) won't be written until the service
+                    // exists. Surface the gap rather than hiding it.
+                    Debug.LogWarning("[DialogueCommandBridge] spawn_named_pet — PetAcquisitionService " +
+                                     "not present; deploying via StarterPetId only (roster not recorded).");
+                }
+
+                deployer.DeployChosen(species);
+                Debug.Log($"[DialogueCommandBridge] spawn_named_pet '{species}' → deployed via PetDeployer.");
+            }
+            catch (System.Exception e)
+            {
+                // Never let the exception escape into the Yarn runner.
+                Debug.LogWarning($"[DialogueCommandBridge] spawn_named_pet '{species}' failed: {e.Message}");
+            }
         }
 
         // Self-heal (GAP 1): Village2 ships no PetDeployer + no runtime bootstrap, so

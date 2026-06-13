@@ -338,6 +338,7 @@ namespace DeNelle.Core.State
                 PartyMemberIds = s.PartyMemberIds != null ? new List<string>(s.PartyMemberIds) : null,
                 Zones = s.Zones != null ? new List<DeNelle.Core.World.ZoneState>(s.Zones) : null,   // WO-164 — zone graph (v17)
                 ArenaDefense = s.ArenaDefense != null ? new List<PlacedDefenderData>(s.ArenaDefense) : null,   // WO-389 — pre-placed Arena defenders (v19)
+                Settlements = s.Settlements != null ? new List<DeNelle.Core.World.SettlementState>(s.Settlements) : null,   // WO-159 — node-settlement claim/HP/lockout (v21)
             };
         }
 
@@ -401,6 +402,7 @@ namespace DeNelle.Core.State
             if (p.PartyMemberIds != null) s.PartyMemberIds = p.PartyMemberIds;   // WO-301 — party roster
             if (p.Zones != null) s.Zones = p.Zones;   // WO-164 — zone graph (v17)
             if (p.ArenaDefense != null) s.ArenaDefense = p.ArenaDefense;   // WO-389 — pre-placed Arena defenders (v19)
+            if (p.Settlements != null) s.Settlements = p.Settlements;   // WO-159 — node-settlement claim/HP/3-day razed lockout (v21)
             EnsureZoneGraph(s);                       // backfill a pre-v17 / empty save's zone graph
         }
 

@@ -187,6 +187,14 @@ namespace DeNelle.Village
                 case "orc-berserker":    return "Orc_Berserker";     // brute / charger
                 case "orc-shaman":       return "Orc_Shaman";        // caster
                 case "orc-necromancer":  return "Orc_Necromancer";   // camp elite
+                // ENEMY-VARIETY EXT (2026-06-13): the EnemyOutpost RAID BOSS ("orc-warlord",
+                // EnemyOutpost.BuildBossDef) set NO Family/Role, so it fell to the size
+                // default (height 2.6 → Skeleton_Golem) and the warband's capstone boss
+                // read as an undead golem — same silhouette as a hollow brute, wrong
+                // faction. Keyed by ID (the one signal BuildBossDef sets) to the heaviest
+                // VERIFIED orc model so the warlord is visibly a bigger orc than its
+                // raiders (orc-raider → Orc_Berserker), keeping the orc faction read.
+                case "orc-warlord":      return "Orc_Necromancer";   // outpost raid boss — heaviest orc silhouette
 
                 // ── BRUTES / OGRES / BOSSES ──────────────────────────────────────
                 case "troll":            return "Troll";             // Cave Troll brute

@@ -202,21 +202,39 @@ namespace DeNelle.Village
         public void EquipWeaponById(string id)
         {
             var w = GearCatalog.FindWeapon(id);
-            if (w == null) return;
+            if (w == null)
+            {
+                // Equip is a no-op when the id isn't in the catalog — surface it so a
+                // playtest doesn't silently think gear took when the def is missing.
+                FlowTrace.Warn("Gear", $"EquipWeaponById('{id}') — no WeaponDef in catalog; equip skipped.");
+                return;
+            }
             EquippedWeapon = w;
-            ApplyStats(CurrentJob());
+            ApplyStats(CurrentJob());          // recomputes WeaponMult from EquippedWeapon.damageMult
             OnGearChanged?.Invoke();
             TryReapplyVisuals();
+            // VERIFY equip-applies-stats: WeaponMult is now live in the damage chain
+            // (HeroAbilities.cs:365 + PlayerAttackController.cs:408 both read it). This
+            // Step lets a playtest confirm a MANUAL equip took (Refresh's auto-equip Step
+            // at line ~120 only covers the level-up auto path, not shop/EquipmentPanel).
+            FlowTrace.Step("Gear", $"EquipWeaponById('{id}') applied — WeaponMult={WeaponMult:0.00}");
         }
 
         public void EquipArmorById(string id)
         {
             var a = GearCatalog.FindArmor(id);
-            if (a == null) return;
+            if (a == null)
+            {
+                FlowTrace.Warn("Gear", $"EquipArmorById('{id}') — no ArmorDef in catalog; equip skipped.");
+                return;
+            }
             EquippedArmor = a;
-            ApplyStats(CurrentJob());
+            ApplyStats(CurrentJob());          // recomputes ArmorDefense from EquippedArmor.defense
             OnGearChanged?.Invoke();
             TryReapplyVisuals();
+            // VERIFY equip-applies-stats: ArmorDefense is now live in HeroHealth's
+            // mitigation (HeroHealth.cs reads GearLoadout). Step confirms a manual equip took.
+            FlowTrace.Step("Gear", $"EquipArmorById('{id}') applied — ArmorDefense={ArmorDefense:0.00}");
         }
 
         /// <summary>The hero's current class id (for the Aegis per-class weapon perk).</summary>

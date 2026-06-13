@@ -7,7 +7,8 @@
    "displayName": "Archer Tower",
    "type": "Tower",
    "kind": "Cell",
-   "visualPrefabPath": "Structures/Tower_Medieval_Wood",
+   "_bug22": "BUG#22 — was 'Structures/Tower_Medieval_Wood', which renders as a tall lumber pile (wrong art). Owner-correct art = polyperfect _T/Prefabs_T/Tribal_T/Tower_Tribal_Tier1..Tier4. polyperfect is gitignored AND not under Resources, so Resources.Load(string) cannot reach it (VisualFactory.Skin loads by Resources-relative path). To honor the owner's Tribal ladder, mirror Tower_Tribal_Tier1..Tier3 into Assets/Resources/Structures/ and set visualPrefabPath='Structures/Tower_Tribal_Tier1', upgradeVisualPath=['Structures/Tower_Tribal_Tier2','Structures/Tower_Tribal_Tier3'] (Tier4 exceeds this system's maxLevel=3 cap). Until then, base + ladder point at the round-keep tower prefabs ALREADY present in Resources so it is a real tower, never a lumber pile.",
+   "visualPrefabPath": "Structures/Tower_Castle_Round",
    "repo": {
     "behaviorId": "DefenseTower",
     "buildCost": 100,
@@ -19,7 +20,8 @@
     },
     "maxLevel": 3,
     "upgradeVisualPath": [
-     "Structures/Tower_Castle_Round"
+     "Structures/Tower_Castle_Round",
+     "Structures/Tower_Medieval_Big"
     ],
     "navSurface": "Blocker",
     "visualHeight": 5.0,

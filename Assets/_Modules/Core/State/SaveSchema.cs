@@ -27,7 +27,7 @@ namespace DeNelle.Core.State
     {
         // ── Versioning ───────────────────────────────────────────────────────
         /// <summary>CURRENT_SCHEMA_VERSION — bumped whenever the persisted shape changes.</summary>
-        public const int CurrentVersion = 20;  // v20 — gear inventory persistence (shop purchases survive reload + Neon sync); v19 — arenaDefense placed-defender layout (WO-389); v18 — fold AetherCrystals into Resources.Crystals (single-source-of-truth); v17 — zone graph persistence (WO-164); v16 — party roster (WO-301); v15 — magic tech-axis currency (DEF-121/WO-230); v14 — baseLayout (WO-108); v13 — buildJobs + adSkip (WO-172)
+        public const int CurrentVersion = 21;  // v21 — node-settlement persistence (WO-159: claim/HP/phase + 3-day razed lockout survive save/load); v20 — gear inventory persistence (shop purchases survive reload + Neon sync); v19 — arenaDefense placed-defender layout (WO-389); v18 — fold AetherCrystals into Resources.Crystals (single-source-of-truth); v17 — zone graph persistence (WO-164); v16 — party roster (WO-301); v15 — magic tech-axis currency (DEF-121/WO-230); v14 — baseLayout (WO-108); v13 — buildJobs + adSkip (WO-172)
         /// <summary>SaveExport.format — bumped only if the envelope shape changes.</summary>
         public const int FileFormat = 1;
 
@@ -226,6 +226,20 @@ namespace DeNelle.Core.State
             /// older saves stay loadable.
             /// </summary>
             [JsonProperty("arenaDefense")] public List<PlacedDefenderData> ArenaDefense;
+
+            // ── v21 — Node-settlement persistence (WO-159) ───────────────────────
+            /// <summary>
+            /// Per-site node-settlement records (WO-159) — the claim/harvest/defend/
+            /// deplete loop's persisted state: claim phase, defence HP, and the
+            /// razed-site game-day lockout. Nullable per the <c>.partial()</c>
+            /// convention; absent on an older save → the v20→v21 migration step seeds
+            /// it to an empty list (no claimed settlements until the player builds one),
+            /// so claims/HP/3-day lockout survive a save/load round-trip instead of
+            /// evaporating. Append-only field at the END so older saves stay loadable.
+            /// <see cref="DeNelle.Core.World.SettlementState"/> stores its region as the
+            /// enum NAME (string) so it survives enum renumbering.
+            /// </summary>
+            [JsonProperty("settlements")] public List<DeNelle.Core.World.SettlementState> Settlements;
         }
 
         // =====================================================================
@@ -392,6 +406,10 @@ namespace DeNelle.Core.State
                 // ── Zones (WO-164) → default empty list (never null on disk) ─
                 if (raw.Zones == null)
                     raw.Zones = new List<DeNelle.Core.World.ZoneState>();
+
+                // ── Settlements (WO-159) → default empty list (never null on disk) ─
+                if (raw.Settlements == null)
+                    raw.Settlements = new List<DeNelle.Core.World.SettlementState>();
 
                 // ── Volumes / joystick → finite-only (NOT clamped on load) ───
                 if (raw.JoystickSensitivity.HasValue)

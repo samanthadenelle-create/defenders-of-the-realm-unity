@@ -104,7 +104,12 @@ namespace DeNelle.Village
             // Pose: a few metres in front of the hero (fallback: in front of the
             // main camera, then world origin) so the spawn is always harmless.
             Vector3 origin; Quaternion facing;
-            var heroGo = GameObject.FindWithTag("HeroTarget");
+            // WO-450 cleanup: "HeroTarget" is NOT a declared tag, so the old raw
+            // GameObject.FindWithTag("HeroTarget") threw a UnityException. Resolve the
+            // hero by component (same fix as the enemy AI), then fall back to the
+            // built-in "Player" tag, which is always safe.
+            var loco = FindFirstObjectByType<HeroLocomotion>();
+            var heroGo = loco != null ? loco.gameObject : null;
             if (heroGo == null) heroGo = GameObject.FindWithTag("Player");
             if (heroGo != null)
             {

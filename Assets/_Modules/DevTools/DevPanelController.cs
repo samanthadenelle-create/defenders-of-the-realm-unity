@@ -940,6 +940,29 @@ namespace DeNelle.DevTools
             state.Magic += 100;     // Magic tech axis (DEF-121) — building-upgrade gate
             SaveAndNotifyResources();
             PingHud();              // force the on-screen resource bar to populate immediately
+
+            // dev-grant-both-wallets fix: trace the granted amounts + resulting BOTH-store
+            // totals — the in-session pool (EconomyService.Snapshot, shop/HUD wallet) and
+            // GameState.Wood/Iron (the structure-upgrade flow's wallet) — so a dev grant is
+            // traceable end-to-end and proves both wallets filled from one action.
+            {
+                var ecoSnap = EconomyService.Instance;
+                if (ecoSnap != null)
+                {
+                    var s = ecoSnap.Snapshot;
+                    FlowTrace.Step("Eco",
+                        $"DevGrant (DevPanel) +W50000 F25000 I50000 C25000 -> " +
+                        $"pool W{s.Wood} I{s.Iron} F{s.Food} C{s.Crystals} | " +
+                        $"GameState W{state.Wood} I{state.Iron} F{state.Resources.Food} C{state.Resources.Crystals}");
+                }
+                else
+                {
+                    FlowTrace.Step("Eco",
+                        $"DevGrant (DevPanel, GameState-fallback) -> " +
+                        $"GameState W{state.Wood} I{state.Iron} F{state.Resources.Food} C{state.Resources.Crystals}");
+                }
+            }
+
             SetStatus($"Topped up — Wood {state.Wood}, Food {state.Resources.Food}, " +
                       $"Iron {state.Iron}, Crystals {state.Resources.Crystals}, Magic {state.Magic}.");
         }

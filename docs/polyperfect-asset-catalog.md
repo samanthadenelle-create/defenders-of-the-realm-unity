@@ -2,24 +2,40 @@
 # Defenders of the Realm
 
 **Pack location:** `Assets/polyperfect/Low Poly Ultimate Pack/`
-**Pack size:** 246 MB (entire pack — gitignored, re-import on clone)
-**FBX prefix:** all models are `SM_<Name>.fbx`
-**Unity version verified:** 6000.0.53f1 · URP compatible ✓
-**Last cataloged:** 2026-05-29
+**Pack size:** ~246 MB (entire pack — gitignored, re-import on clone)
+**Loadable unit:** the **`.prefab`** in `_M/Prefabs_M/<Category>_M/<Name>.prefab`
+(reference these, not the raw mesh; names are bare `<Name>`, NOT `SM_<Name>`).
+**Unity version verified:** 6000.4.8f1 · URP compatible ✓
+**Last cataloged / verified from disk:** 2026-06-13
 
 > **Why this pack:** Replaces the heavy Tripo village meshes (Cathedral 84 MB,
 > PetHome 54 MB, LumberMill 52 MB, etc.) with low-poly equivalents. The entire
 > pack weighs less than the Cathedral alone. Mesh-only swap — no code changes.
 
+> **⚠ Loadability:** polyperfect is **gitignored AND outside `Assets/Resources`**,
+> so `Resources.Load` / `VisualFactory.Skin(path)` **cannot reach these prefabs**.
+> To use one at runtime it must be **mirrored into `Assets/Resources/Structures/`**
+> first (that is exactly what the Resources/Structures set in `docs/MODEL_CATALOG.md`
+> §2 is). In-editor builders (VillageSceneBuilder etc.) reference them by GUID directly.
+
 ---
 
-## Path conventions
+## Path conventions & verified inventory (2026-06-13)
 
-| Quality tier | Folder |
+| Quality tier | Prefab folder |
 |---|---|
-| Standard (use this) | `_M/Meshes_M/<Category>_M/SM_<Name>.fbx` |
-| Standard prefabs | `_M/Prefabs_M/<Category>_M/` |
-| Terrain tiles | `Terrains/` or `_M/Meshes_M/Terrains_M/` + `Tiles_M/` |
+| `_M` Standard (use this — CLAUDE.md §4) | `_M/Prefabs_M/<Category>_M/<Name>.prefab` |
+| `_T` Tribal (owner's tower/outpost art) | `_T/Prefabs_T/Tribal_T/<Name>.prefab` |
+| `_H` / `_L` quality tiers | parallel `Prefabs_H` / `Prefabs_L` (rarely used here) |
+
+**`_M/Prefabs_M` total: 3,080 prefabs** across 41 category folders. Per-category
+counts (verified from disk): Empire 291, Scifi 287, People 243, Buildings 237,
+Apocalypse 202, Furniture 195, Nature 177, Props 115, Tiles 108, Vehicles 91,
+Tiles_NB 85, **Fantasy 82**, Terrains 68, Electronics 66, Construction 58, Food 56,
+Weapons 55, Tools 46, Music 42, **Medieval 41**, Egypt 38, Drinks 38, **Tribal 36**,
+Landmarks 36, Japan 32, Dishes 32, Amusement_Park 29, Pirates 28, Beach 28,
+**Animals 28**, Resources 25, Survival 24, Sport 23, Western 21, India 20, Farm 19,
+WW2 18, Military 16, Zulu 14, Space 14, Racing 14, Roman 2.
 
 All models share a single atlas texture — excellent for draw-call batching on Seeker.
 
@@ -51,14 +67,37 @@ All in `_M/Meshes_M/` (no category subfolder for these):
 | `Fence_Stone_Tower` | Small fence tower (corner watchtower) |
 | `Fence_Stone_Metal` | Stone + metal railing fence |
 
-### Towers (corner + watchtower)
+### Towers — Medieval_M (corner + watchtower)
 
-| FBX name | Use |
+These 4 are the ones **mirrored into `Resources/Structures`** (see MODEL_CATALOG §2).
+
+| Prefab name (Medieval_M) | Use |
 |---|---|
-| `Tower_Castle_Round` | Main corner tower — round, crenellated |
-| `Tower_Castle_Square` | Main corner tower — square keep |
-| `Tower_Medieval_Big` | Large standalone tower (ArcaneTower building) |
-| `Tower_Medieval_Wood` | Smaller wooden watchtower |
+| `Tower_Castle_Round` | Round crenellated tower — **archer tower base+L2** (BUG#22 fix) |
+| `Tower_Castle_Square` | Square keep — ArcherTower/FrostTower `.asset` L2 art |
+| `Tower_Medieval_Big` | Large standalone tower — wizard / arcane tower, archer L3 |
+| `Tower_Medieval_Wood` | Small wooden watchtower — **the old BUG#22 lumber-pile look; do NOT re-use for archer** |
+
+### Tribal towers — `_T/Prefabs_T/Tribal_T/` (owner's preferred tower/outpost ladder)
+
+The owner authors towers/outposts from the **Tribal_T** set. Full Tribal_T prefab
+list (37, verified 2026-06-13): tower ladder `Tower_Tribal_Tier1..Tier4`; huts
+`Hut_Tribal_Tier1..Tier4`; bridges `Bridge_Tribal_Tier1..Tier4`; `Gate_Tribal`,
+`Ramp_Tribal`, `Furnace_Tribal`, `Flag_Stand_Tribal`, `Torch_Standing_Tribal`,
+`Table_Stone_Tribal`, `Cookingpot_Tribal`, `Vase_Tribal_Big/Small`,
+`Totem_Dinosaur_Tribal`, `Trex`, `Spine_Trex`, `Skull_Triceratops`,
+`Sm_Bone_Pile_Prehistoric`, `Meat_Haunch_A/B`, `Egg_Fried`; weapons
+`Axe_Tribal`, `Club_Tribal`, `Spear_Tribal`, `Hammer_Tribal`, `Pickaxe_Tribal`,
+`Flint_Tribal`, `Shaman_Staff_Tribal`.
+
+> **Tower_Tribal ladder** (`Tier1→Tier4`) is the intended Archer-Tower upgrade art
+> per the `_bug22` note in `structures-catalog.json`. **Not yet mirrored into
+> Resources** → not runtime-loadable. To adopt: copy `Tower_Tribal_Tier1..Tier3`
+> into `Assets/Resources/Structures/` (Tier4 exceeds the maxLevel=3 cap) and
+> repoint `tower_ground_archer.visualPrefabPath` / `upgradeVisualPath`.
+
+> NOTE: a near-identical Tribal set also exists in `_M/Prefabs_M/Tribal_M/` (36
+> prefabs, same tower-tier names) — use the `_T` set the owner standardized on.
 
 ### Gates (main entrance + secondary)
 
@@ -243,16 +282,22 @@ Relevant medieval/fantasy characters already in the pack:
 
 ---
 
-## 8. Animals (Animals_M)
+## 8. Animals (Animals_M) — 28 prefabs (verified names 2026-06-13)
 
-| FBX name | Use |
+Full list: `Bear_Brown`, `Bear_Polar`, `Butterfly`, `Chick`, `Cow`, `Crab`,
+`Deer`, `Dog`, `Elephant`, `Fish`, `Fish_Swarm`, `Frog`, `Hen`, `Horse`,
+`Penguin`, `Pig`, `Pigeon`, `Rat`, `Scorpion`, `Seagull`, `Shark`, `Sheep_White`,
+`Snake`, `Spider`, `Starfish`, `Stegosaurus`, `T_Rex`, `Wolf`.
+
+| Prefab name | Use |
 |---|---|
-| `Wolf` | Feral Wolf enemy visual candidate |
+| `Wolf` | Feral Wolf enemy visual candidate (NOTE: no beast rig wired yet — `feral-wolf` currently reuses `Skeleton_Rogue`) |
 | `Horse` | Village stable dressing |
-| `Cow` / `Hen` / `Pig` | Farm life dressing |
+| `Cow` / `Hen` / `Pig` / `Sheep_White` | Farm life dressing |
 | `Dog` | Village companion |
 | `Deer` | Forest/exterior ambient |
-| `Bear` | Forest hazard / enemy candidate |
+| `Bear_Brown` / `Bear_Polar` | Forest hazard / enemy candidate (was listed as `Bear` — wrong name) |
+| `T_Rex` / `Stegosaurus` | Tribal/prehistoric outpost dressing (pairs with Tribal_T set) |
 
 ---
 

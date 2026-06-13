@@ -49,6 +49,7 @@ using DeNelle.Core.Diagnostics;
 using DeNelle.Core.UI;
 using DeNelle.Village;
 using DeNelle.Village.Hero;
+using DeNelle.Village.Crafting;
 
 namespace DeNelle.DevTools
 {
@@ -67,6 +68,8 @@ namespace DeNelle.DevTools
         private const float WalkToGateTimeout   = 25f;   // per-gate approach
         private const float VendorTimeout       = 20f;   // per-vendor open+actuate+close
         private const float ContractTimeout     = 12f;   // per-vendor-context contract assertion
+        private const float EconomyDeductTimeout = 15f;  // open shop + read-before + buy + read-after assert
+        private const float EquipTimeout         = 15f;   // add gear + equip + assert loadout changed
         private const float HudPanelTimeout     = 15f;   // per-panel open+actuate+close
         private const float WaveTimeout         = 20f;   // wait for the wave phase to advance
         private const float ExitTimeout         = 30f;   // walk into the south exit
@@ -163,6 +166,12 @@ namespace DeNelle.DevTools
                 // DialogueService, NOT BuildingInteractable), so the contract assertion is
                 // not gated on building discovery.
                 yield return RunPhase("AssertVendorContracts", AssertVendorContracts());
+                // ASSERTION-DEPTH EXPANSION: the bot used to mostly verify "didn't crash" +
+                // the vendor STOCK contract. These two phases assert real CORRECTNESS of the
+                // economy + equip wiring — that a buy actually deducts the cost AND grows the
+                // inventory, and that equipping actually changes the hero's loadout/stat.
+                yield return RunPhase("AssertEconomyDeduct", AssertEconomyDeduct());
+                yield return RunPhase("AssertEquip", AssertEquip());
                 yield return RunPhase("OpenEachHUDPanel", OpenEachHUDPanel());
                 yield return RunPhase("TriggerWave", TriggerWave());
                 yield return RunPhase("AttemptExitCastle", AttemptExitCastle());
@@ -283,6 +292,8 @@ namespace DeNelle.DevTools
                 case "WalkToEachGate":    return WalkToGateTimeout * 6f; // covers multiple gates
                 case "OpenEachVendor":    return VendorTimeout * 12f;
                 case "AssertVendorContracts": return ContractTimeout * 8f; // covers the known-context set
+                case "AssertEconomyDeduct": return EconomyDeductTimeout;
+                case "AssertEquip":       return EquipTimeout;
                 case "OpenEachHUDPanel":  return HudPanelTimeout * 8f;
                 case "TriggerWave":       return WaveTimeout;
                 case "AttemptExitCastle": return ExitTimeout;
@@ -685,6 +696,244 @@ namespace DeNelle.DevTools
             if (seq == null) return false;
             foreach (var _ in seq) return true;
             return false;
+        }
+
+        // =====================================================================
+        //  PHASE: AssertEconomyDeduct  (ASSERTION-DEPTH EXPANSION)
+        //  Correctness, not just "didn't crash": a buy must DEDUCT exactly the item
+        //  cost from EconomyService AND grow VillageInventory by one. Open a vendor's
+        //  shop (the same ShopPanel.Open(ctx) seam AssertVendorContracts uses), read the
+        //  resource snapshot BEFORE, pick the first AFFORDABLE item in CurrentStock,
+        //  perform the buy, read AFTER, and assert the delta is EXACTLY the cost and the
+        //  inventory gained the item. A mismatch is FlowTrace.Fail -> break-log -> ticket.
+        //
+        //  FALLBACK (documented): ShopPanel's real buy handlers (TryBuyWeapon/Armor/Potion)
+        //  are PRIVATE — the bot cannot cleanly trigger the panel's own buy. So per the
+        //  spec it asserts the LOWER-LEVEL invariant the handlers are built on: for an
+        //  affordable item, EconomyService.TrySpend(cost) deducts exactly that cost and
+        //  VillageInventory.Add(id,1) grows the count — exactly the two lines each Try*
+        //  handler runs on success. Potions are SKIPPED for cost-resolution (their cost is
+        //  private to ShopPanel); we resolve weapon/armor cost via GearCatalog.GetBuyCost,
+        //  which is the authoritative cost the handlers spend.
+        // =====================================================================
+        private IEnumerator AssertEconomyDeduct()
+        {
+            var eco = EconomyService.Instance;
+            var inv = VillageInventory.Instance;
+            if (eco == null || inv == null)
+            {
+                FlowTrace.Warn("Auto", $"AssertEconomyDeduct: missing service (eco={(eco != null)}, inv={(inv != null)}) — skipping.");
+                _lastDetail = "no economy/inventory service — skipped";
+                yield break;
+            }
+
+            // One reusable ShopPanel host (mirror of AssertVendorContracts' teardown).
+            ShopPanel panel = UnityEngine.Object.FindObjectOfType<ShopPanel>();
+            bool createdHost = false;
+            GameObject host = null;
+            if (panel == null)
+            {
+                host = new GameObject("AutoPilotEconomyPanelHost");
+                panel = host.AddComponent<ShopPanel>();
+                createdHost = true;
+            }
+
+            // Open a general vendor (empty context -> "all" contract, the widest stock) so
+            // we maximize the chance of finding an affordable, cost-resolvable gear item.
+            try { panel.Open(""); }
+            catch (Exception ex)
+            {
+                FlowTrace.Fail("Auto", $"AssertEconomyDeduct: ShopPanel.Open('') threw — {ex.Message}");
+                if (createdHost && host != null) UnityEngine.Object.Destroy(host);
+                _lastDetail = "Open threw";
+                yield break;
+            }
+            yield return null; // let ShowBuy populate CurrentStock
+
+            // Pick the first AFFORDABLE weapon/armor in the actual built stock whose cost is
+            // resolvable + non-zero (a free item can't prove a deduction). Potions skipped.
+            string buyId = null; GearKind buyKind = GearKind.None; ResourceCost cost = default; bool found = false;
+            var stock = panel.CurrentStock;
+            if (stock != null)
+            {
+                foreach (var item in stock)
+                {
+                    if (item.kind == GearKind.Weapon)
+                    {
+                        var w = GearCatalog.FindWeapon(item.id);
+                        if (w == null) continue;
+                        cost = GearCatalog.GetBuyCost(w);
+                    }
+                    else if (item.kind == GearKind.Armor)
+                    {
+                        var a = GearCatalog.FindArmor(item.id);
+                        if (a == null) continue;
+                        cost = GearCatalog.GetBuyCost(a);
+                    }
+                    else continue; // potion cost is private to ShopPanel — not assertable here
+
+                    if (cost.IsZero) continue;        // need a real cost to prove a deduction
+                    if (!eco.CanAfford(cost)) continue;
+                    buyId = item.id; buyKind = item.kind; found = true;
+                    break;
+                }
+            }
+
+            // Teardown the panel surface now — we assert against the services directly.
+            try { PanelManager.CloseOpen(); } catch { }
+            if (createdHost && host != null) UnityEngine.Object.Destroy(host);
+
+            if (!found)
+            {
+                // Not a ticket-worthy failure: the vendor simply had no affordable, cost-bearing
+                // gear (empty catalog / can't afford anything). Grant a known item + cost so the
+                // INVARIANT is still exercised — this is the documented lower-level fallback.
+                FlowTrace.Step("Auto", "AssertEconomyDeduct: no affordable cost-bearing gear in stock; " +
+                    "exercising the TrySpend/Add invariant with a synthetic cost the wallet can afford.");
+                cost = new ResourceCost(wood: 1);
+                if (!eco.CanAfford(cost))
+                {
+                    FlowTrace.Warn("Auto", "AssertEconomyDeduct: wallet cannot afford even 1 wood — cannot assert deduction. Skipping.");
+                    _lastDetail = "no affordable item + empty wallet — skipped";
+                    yield break;
+                }
+                buyId = "autopilot-deduct-probe"; buyKind = GearKind.None;
+            }
+
+            // Snapshot BEFORE.
+            int wBefore = eco.Wood, iBefore = eco.Iron, fBefore = eco.Food, cBefore = eco.Crystals;
+            int invBefore = inv.Get(buyId);
+            FlowTrace.Step("Auto", $"AssertEconomyDeduct: buying '{buyId}' ({buyKind}) cost W{cost.Wood} F{cost.Food} I{cost.Iron} C{cost.Crystals} " +
+                $"(wallet before W{wBefore} F{fBefore} I{iBefore} C{cBefore}, inv {invBefore}).");
+
+            // Perform the buy via the lower-level invariant the private handlers run.
+            bool spent = eco.TrySpend(cost);
+            if (spent && inv != null) inv.Add(buyId, 1);
+
+            int wAfter = eco.Wood, iAfter = eco.Iron, fAfter = eco.Food, cAfter = eco.Crystals;
+            int invAfter = inv.Get(buyId);
+
+            // ASSERT: spend succeeded, resources dropped by EXACTLY the cost, inventory +1.
+            bool ok = spent;
+            if (!spent)
+                FlowTrace.Fail("Auto", $"AssertEconomyDeduct: TrySpend returned FALSE for an affordable cost (CanAfford was true) — economy did not deduct for '{buyId}'.");
+
+            if (spent)
+            {
+                bool deductExact = (wBefore - wAfter) == cost.Wood
+                                && (iBefore - iAfter) == cost.Iron
+                                && (fBefore - fAfter) == cost.Food
+                                && (cBefore - cAfter) == cost.Crystals;
+                if (!deductExact)
+                {
+                    ok = false;
+                    FlowTrace.Fail("Auto", $"AssertEconomyDeduct: economy did not deduct by the exact cost — " +
+                        $"deltas W{wBefore - wAfter}/F{fBefore - fAfter}/I{iBefore - iAfter}/C{cBefore - cAfter} " +
+                        $"vs cost W{cost.Wood}/F{cost.Food}/I{cost.Iron}/C{cost.Crystals}.");
+                }
+                if (invAfter != invBefore + 1)
+                {
+                    ok = false;
+                    FlowTrace.Fail("Auto", $"AssertEconomyDeduct: inventory not updated — '{buyId}' was {invBefore}, now {invAfter} (expected {invBefore + 1}).");
+                }
+            }
+
+            if (ok)
+                FlowTrace.Step("Auto", $"AssertEconomyDeduct: PASS — '{buyId}' deducted exactly + inventory {invBefore}->{invAfter}.");
+            _lastDetail = ok
+                ? $"deduct OK for '{buyId}' (inv {invBefore}->{invAfter})"
+                : $"deduct/inventory MISMATCH for '{buyId}'";
+            yield return Wait(SettleSeconds);
+        }
+
+        // =====================================================================
+        //  PHASE: AssertEquip  (ASSERTION-DEPTH EXPANSION)
+        //  Correctness: equipping a weapon must CHANGE the hero's loadout/stat. Resolve
+        //  (or attach) the hero's GearLoadout, pick a catalog weapon, add it to the
+        //  inventory, equip it via GearLoadout.EquipWeaponById (the same public seam the
+        //  ShopPanel EQUIP tab uses), and assert EquippedWeapon is non-null afterward AND
+        //  the loadout actually reflects what we equipped (or WeaponMult moved). A no-op
+        //  equip (loadout unchanged) is FlowTrace.Fail -> break-log -> ticket.
+        // =====================================================================
+        private IEnumerator AssertEquip()
+        {
+            // Resolve the hero's GearLoadout (lazily attach if absent — the ShopPanel EQUIP
+            // path does the same: AddComponent<GearLoadout>() on the hero when none exists).
+            GameObject heroGo = _hero != null ? _hero.gameObject : null;
+            if (heroGo == null)
+            {
+                var tagged = GameObject.FindWithTag("Player");
+                if (tagged != null) heroGo = tagged;
+            }
+            if (heroGo == null)
+            {
+                FlowTrace.Warn("Auto", "AssertEquip: no hero GameObject to equip on — skipping.");
+                _lastDetail = "no hero — skipped";
+                yield break;
+            }
+
+            GearLoadout loadout = heroGo.GetComponent<GearLoadout>();
+            if (loadout == null) loadout = heroGo.AddComponent<GearLoadout>();
+            yield return null; // let Awake/OnEnable run (Refresh may auto-equip a best item)
+
+            // Pick a catalog weapon to force-equip. Prefer one DIFFERENT from whatever is
+            // auto-equipped so the change is observable even if a best-weapon was auto-set.
+            WeaponDef target = null;
+            var beforeWeapon = loadout.EquippedWeapon;
+            string beforeId = beforeWeapon != null ? beforeWeapon.id : null;
+            float multBefore = loadout.WeaponMult;
+            foreach (var w in GearCatalog.AllWeapons())
+            {
+                if (w == null) continue;
+                if (target == null) target = w;                 // first valid as a fallback
+                if (beforeId == null || w.id != beforeId) { target = w; break; } // prefer a different one
+            }
+
+            if (target == null)
+            {
+                FlowTrace.Warn("Auto", "AssertEquip: gear catalog has no weapons to equip — skipping (cannot assert equip wiring).");
+                _lastDetail = "no catalog weapons — skipped";
+                yield break;
+            }
+
+            // Own it first (mirrors the player flow: buy/own -> equip), then equip via the
+            // public seam. EquipWeaponById no-ops if the id isn't in the catalog — we chose
+            // target FROM the catalog, so it must resolve.
+            if (VillageInventory.Instance != null) VillageInventory.Instance.Add(target.id, 1);
+
+            FlowTrace.Step("Auto", $"AssertEquip: equipping '{target.id}' (before weapon='{beforeId ?? "<null>"}', mult={multBefore:0.00}).");
+            loadout.EquipWeaponById(target.id);
+            yield return null; // let ApplyStats run
+
+            var afterWeapon = loadout.EquippedWeapon;
+            float multAfter = loadout.WeaponMult;
+
+            // ASSERT: a weapon is now equipped AND the loadout reflects the equip — either it
+            // is the exact piece we forced, or (defensive) the damage multiplier moved. A
+            // loadout that did NOT change at all means the equip path is a no-op.
+            bool nowEquipped = afterWeapon != null;
+            bool isTarget    = afterWeapon != null && afterWeapon.id == target.id;
+            bool multMoved   = !Mathf.Approximately(multAfter, multBefore);
+            bool changed     = isTarget || multMoved;
+
+            if (!nowEquipped)
+            {
+                FlowTrace.Fail("Auto", $"AssertEquip: EquippedWeapon is NULL after EquipWeaponById('{target.id}') — equip path did not set the loadout.");
+                _lastDetail = "equip left EquippedWeapon null";
+            }
+            else if (!changed)
+            {
+                FlowTrace.Fail("Auto", $"AssertEquip: loadout did NOT change — equipped '{(afterWeapon != null ? afterWeapon.id : "<null>")}' " +
+                    $"but expected '{target.id}' and WeaponMult stayed {multAfter:0.00}. Equip is a no-op.");
+                _lastDetail = "equip did not change loadout";
+            }
+            else
+            {
+                FlowTrace.Step("Auto", $"AssertEquip: PASS — EquippedWeapon='{afterWeapon.id}' (target '{target.id}', " +
+                    $"mult {multBefore:0.00}->{multAfter:0.00}).");
+                _lastDetail = $"equipped '{afterWeapon.id}' (mult {multBefore:0.00}->{multAfter:0.00})";
+            }
+            yield return Wait(SettleSeconds);
         }
 
         // =====================================================================

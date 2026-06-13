@@ -53,6 +53,10 @@ namespace DeNelle.Core.State
                 // nullable list defaulted to empty on load), so NO Steps entry is needed.
                 { 17, MigrateToV17 },
                 { 18, MigrateToV18 },
+                // v19 (arenaDefense, WO-389) + v20 (gearInventory) were additive-
+                // default-on-read (a nullable list/dict defaulted to empty on load),
+                // so NO Steps entry was needed for them.
+                { 21, MigrateToV21 },
             };
 
         /// <summary>
@@ -302,6 +306,19 @@ namespace DeNelle.Core.State
                 s.Resources = r;
             }
             s.AetherCrystals = 0;
+            return s;
+        }
+
+        /// <summary>
+        /// v20→v21 (WO-159 node-settlement persistence): seed settlements ?? [] — an
+        /// empty settlement list. Additive: a pre-v21 save had no persisted node
+        /// settlements, so it loads with none claimed (the claim/HP/3-day-razed-lockout
+        /// state now round-trips going forward). Idempotent (only seeds when null).
+        /// </summary>
+        private static PersistedState MigrateToV21(PersistedState s)
+        {
+            if (s.Settlements == null)
+                s.Settlements = new List<DeNelle.Core.World.SettlementState>();
             return s;
         }
 

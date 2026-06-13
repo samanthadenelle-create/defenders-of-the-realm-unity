@@ -33,6 +33,15 @@ namespace DeNelle.Editor
             "Assets/polyperfect/Low Poly Ultimate Pack/_M/Prefabs_M/";
         private const string ResStructRoot = "Assets/Resources/Structures/";
 
+        // OUTPOST-DRESSING PASS (2026-06-13): the owner's Tribal_T set lives in the
+        // _T quality tier (NOT _M), so it has its own root. polyperfect is GITIGNORED
+        // (CLAUDE.md §4) — an editor builder CAN still load it by ASSET PATH via
+        // AssetDatabase.LoadAssetAtPath (Resources.Load could NOT, the pack is not under
+        // a Resources folder). Every miss is a single LogWarning, never an error, so a
+        // fresh clone without the pack degrades the scene rather than breaking the bake.
+        private const string TribalPrefabRoot =
+            "Assets/polyperfect/Low Poly Ultimate Pack/_T/Prefabs_T/Tribal_T/";
+
         // Where the hero lands back in OuterWorld after a raid (shared with the castle seam).
         // SOUTH-GATE SEAM FIX (2026-06-13): was (0,0.5,-80) — the OuterWorld MIDPOINT/south-region
         // depth (Mirewood @ (0,0,-90)), which "yanked the hero to the middle of OuterWorld" (owner).
@@ -84,6 +93,14 @@ namespace DeNelle.Editor
             // The PROPS — the heart of the catalog-first system. Each role string in
             // recipe.Props is resolved to a real prefab + placed by a layout rule.
             PlaceRecipeProps(environment.transform, props.transform, recipe, half, dungeon);
+
+            // OUTPOST-DRESSING PASS (2026-06-13): the three open-air garrison outposts
+            // (troll_outpost / ruined_keep / frost_keep) read as empty boxes. Dress each
+            // with a handful of the owner's Tribal_T props (watchtowers at the palisade
+            // corners, a gate-flank torch pair, an interior camp cluster) so the fort
+            // reads as an INHABITED CAMP. Dungeons keep their stone-cave dressing.
+            if (!dungeon)
+                DressWithTribalCamp(props.transform, half);
 
             // Spawn points (6-10), scaled by footprint, biased to the front approach.
             var spawnPoints = BuildSpawnPoints(spawnGroup.transform, half, dungeon);
@@ -559,6 +576,84 @@ namespace DeNelle.Editor
             SetField(transType, comp, "loadAdditive", false);
             SetField(transType, comp, "ProximityRadius", 16f);
             Log("Return seam wired: SceneTransitionTrigger -> OuterWorld (single load), proximity 16m.");
+        }
+
+        // ===================================================================
+        //  OUTPOST-DRESSING PASS (2026-06-13) — Tribal_T camp dressing.
+        //  Places a TASTEFUL handful (not clutter) of the owner's Tribal_T props so an
+        //  open-air garrison outpost reads as an inhabited camp:
+        //    - 4 Tribal watchtowers at the palisade corners (tier varies a touch)
+        //    - a torch pair flanking the front gate
+        //    - an interior camp cluster (furnace/cooking pot/totem/bone pile/vases)
+        //  Loaded by ASSET PATH (AssetDatabase) because polyperfect is gitignored and
+        //  lives outside any Resources folder. Each prefab is null-guarded; a missing
+        //  one is a single LogWarning (pack not imported) and is simply skipped.
+        // ===================================================================
+        private static void DressWithTribalCamp(Transform props, float half)
+        {
+            var camp = new GameObject("TribalCampDressing");
+            camp.transform.SetParent(props, false);
+            Transform c = camp.transform;
+
+            int placed = 0;
+
+            // --- 4 corner watchtowers (just inside the palisade corners) ---
+            float r = half * 0.86f;
+            var corners = new (Vector3 pos, string tower)[]
+            {
+                (new Vector3(-r, 0f, -r), "Tower_Tribal_Tier1"),
+                (new Vector3( r, 0f, -r), "Tower_Tribal_Tier2"),
+                (new Vector3(-r, 0f,  r), "Tower_Tribal_Tier3"),
+                (new Vector3( r, 0f,  r), "Tower_Tribal_Tier2"),
+            };
+            foreach (var corner in corners)
+            {
+                // face the tower roughly toward the camp centre
+                float yaw = Quaternion.LookRotation((Vector3.zero - corner.pos).normalized, Vector3.up).eulerAngles.y;
+                if (PlaceTribal(c, corner.tower, corner.pos, yaw, $"Watchtower_{corner.tower}")) placed++;
+            }
+
+            // --- torch pair flanking the front gate (front edge = -Z) ---
+            if (PlaceTribal(c, "Torch_Standing_Tribal", new Vector3(-2.5f, 0f, -half + 0.5f), 0f, "GateTorch_L")) placed++;
+            if (PlaceTribal(c, "Torch_Standing_Tribal", new Vector3( 2.5f, 0f, -half + 0.5f), 0f, "GateTorch_R")) placed++;
+
+            // --- interior camp cluster (a small inhabited hearth) ---
+            if (PlaceTribal(c, "Furnace_Tribal",       new Vector3(-3f, 0f,  2f),   25f, "Camp_Furnace")) placed++;
+            if (PlaceTribal(c, "Cookingpot_Tribal",    new Vector3(-0.5f, 0f, 3.5f), 0f, "Camp_CookingPot")) placed++;
+            if (PlaceTribal(c, "Totem_Dinosaur_Tribal",new Vector3( 3f, 0f,  4f),  -15f, "Camp_Totem")) placed++;
+            if (PlaceTribal(c, "Sm_Bone_Pile_Prehistoric", new Vector3(4f, 0f, -1f), 60f, "Camp_BonePile")) placed++;
+            if (PlaceTribal(c, "Vase_Tribal_Big",      new Vector3(-4f, 0f, -1.5f),120f, "Camp_VaseBig")) placed++;
+            if (PlaceTribal(c, "Flag_Stand_Tribal",    new Vector3( 0f, 0f, -3f),    0f, "Camp_Flag")) placed++;
+
+            Log($"Tribal outpost dressing: {placed} Tribal prop(s) placed (towers/torches/camp). " +
+                "0 = polyperfect not imported (LogWarnings above).");
+        }
+
+        // Load a Tribal_T prefab by asset path (gitignored pack -> editor path load,
+        // never Resources.Load). Null + a single LogWarning if absent.
+        private static GameObject LoadTribal(string prefabName)
+        {
+            string path = $"{TribalPrefabRoot}{prefabName}.prefab";
+            var go = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+            if (go == null)
+                Warn($"Tribal prop '{prefabName}' not found at '{path}' — skipped " +
+                     "(polyperfect pack may not be imported on this clone).");
+            return go;
+        }
+
+        // Place one Tribal prop; returns true only if the prefab actually loaded (no
+        // primitive stand-in for the dressing pass — a missing prop is simply skipped).
+        private static bool PlaceTribal(Transform parent, string prefabName, Vector3 localPos, float yaw, string name)
+        {
+            var prefab = LoadTribal(prefabName);
+            if (prefab == null) return false;
+            var inst = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
+            inst.transform.SetParent(parent, false);
+            inst.transform.localPosition = localPos;
+            inst.transform.localRotation = Quaternion.Euler(0f, yaw, 0f);
+            inst.name = name;
+            MarkStatic(inst);
+            return true;
         }
 
         // ===================================================================

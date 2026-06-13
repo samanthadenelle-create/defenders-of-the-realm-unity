@@ -486,6 +486,11 @@ namespace DeNelle.HUD
 
             grant.Invoke(eco, new object[] { 50000, 25000, 50000, 25000 }); // wood, food, iron, crystals
 
+            // dev-grant-both-wallets fix: log the granted amounts + the resulting BOTH-store
+            // totals (in-session pool via Snapshot + persisted GameState.Wood/Iron) so a dev
+            // grant is traceable end-to-end — proves Wood/Iron landed in shop/HUD AND upgrade flow.
+            LogGrantTrace(eco, ecoType, 50000, 25000, 50000, 25000);
+
             // GrantSpendable fires EconomyService.OnChanged, which HeartHudBridge uses to
             // refresh the on-screen resource bar. Belt-and-braces: push the wallet straight
             // to the VillageHudController too so the bar populates immediately even if the
@@ -533,6 +538,40 @@ namespace DeNelle.HUD
             var p = t.GetProperty(name, BindingFlags.Public | BindingFlags.Instance);
             if (p != null && p.GetValue(obj) is int pi) return pi;
             return 0;
+        }
+
+        /// <summary>
+        /// dev-grant-both-wallets fix: emits a FlowTrace("Eco") line with the granted
+        /// amounts AND the resulting totals from BOTH stores — the in-session pool
+        /// (EconomyService.Snapshot, read by reflection) plus GameState.Wood/Iron (the
+        /// upgrade flow's wallet). Confirms a single dev grant filled both wallets.
+        /// </summary>
+        private void LogGrantTrace(object eco, Type ecoType, int wood, int food, int iron, int crystals)
+        {
+            int poolWood = 0, poolIron = 0, poolFood = 0, poolCrys = 0;
+            var snapProp = ecoType?.GetProperty("Snapshot", BindingFlags.Public | BindingFlags.Instance);
+            var snap = snapProp?.GetValue(eco);
+            if (snap != null)
+            {
+                var st = snap.GetType();
+                poolWood = GetIntField(st, snap, "Wood");
+                poolIron = GetIntField(st, snap, "Iron");
+                poolFood = GetIntField(st, snap, "Food");
+                poolCrys = GetIntField(st, snap, "Crystals");
+            }
+
+            int gsWood = 0, gsIron = 0;
+            ResolveGameState();
+            if (_gameStateState != null)
+            {
+                gsWood = GetMember<object>(_gameStateState, "Wood") is int gw ? gw : 0;
+                gsIron = GetMember<object>(_gameStateState, "Iron") is int gi ? gi : 0;
+            }
+
+            FlowTrace.Step("Eco",
+                $"DevGrant (AdminOverlay) +W{wood} F{food} I{iron} C{crystals} -> " +
+                $"pool W{poolWood} I{poolIron} F{poolFood} C{poolCrys} | " +
+                $"GameState W{gsWood} I{gsIron}");
         }
 
         private void OnReplayTutorial()

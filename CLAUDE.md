@@ -26,6 +26,9 @@ accountable to the real goal: deliver QUALITY, not fast.**
 `PROJECT_INDEX.md` (root files), `Assets/README.md` (asset folders),
 `Assets/_Modules/README.md` (code module map; each module has its own README),
 `docs/README.md` (docs index). Keep these updated when you add/move files.
+For architecture orientation, **`docs/ARCHITECTURE.md` is the single authoritative hub**
+(HP B2B lens + assembly map + world/scene + data/catalog + save + build mode + instrumentation;
+it indexes the per-area deep-dives). Read it before the individual `*_ARCHITECTURE.md` docs.
 
 ---
 

@@ -694,9 +694,36 @@ namespace DeNelle.Audio
         public void PlaySfxAtPosition(SfxId id, Vector3 worldPosition, float volume = 1f)
         {
             if (id == SfxId.None) return;
-            AudioClip clip = _sfxLibrary?.GetClip(id);
-            // Guarded: a null clip is a silent no-op — missing SFX never throws.
-            PlayOneShotOn(_sfxGroup, clip, volume);
+
+            // WO-243: if no library was wired in the Inspector, try a Resources-loaded
+            // one ONCE (the path the SfxClipLibraryBuilder writes to). There is no
+            // DeNelleAudioService prefab to carry an inspector ref, so this is how an
+            // authored asset actually reaches the service. Null stays null (the synth
+            // fallback below covers it), and _sfxLibraryResolved stops us re-loading.
+            if (_sfxLibrary == null && !_sfxLibraryResolved)
+            {
+                _sfxLibrary = Resources.Load<SfxClipLibrary>(SfxLibraryResourcePath);
+                _sfxLibraryResolved = true;
+            }
+
+            // 1) Authored asset, if a SfxClipLibrary is wired (Inspector or Resources).
+            AudioClip clip = _sfxLibrary != null ? _sfxLibrary.GetClip(id) : null;
+            float vol = volume;
+            if (clip != null && _sfxLibrary != null)
+                vol = volume * _sfxLibrary.GetVolume(id);
+
+            // 2) WO-243 fallback: no library / no authored clip for this id -> use a
+            //    procedurally-generated clip so PlaySfxAtPosition is NEVER a silent
+            //    no-op. This is the SAME no-asset-needed approach GameSfx already uses
+            //    for tower/wave SFX; it makes the whole SfxId->clip subsystem audible
+            //    fresh-clone with zero asset wiring. An authored SfxClipLibrary still
+            //    WINS when present (drop-in upgrade path), so real recorded clips can
+            //    replace the synth later with no code change.
+            if (clip == null)
+                clip = ProceduralSfx.For(id);
+
+            // Guarded: a null clip is still a silent no-op — missing SFX never throws.
+            PlayOneShotOn(_sfxGroup, clip, vol);
         }
 
         private void PlayOneShotOn(AudioMixerGroup group, AudioClip clip, float volume)
@@ -1051,8 +1078,14 @@ namespace DeNelle.Audio
 
         [Header("SFX Clip Library (WO-62)")]
         [Tooltip("Assign a SfxClipLibrary ScriptableObject here to enable PlaySfxAtPosition. " +
-                 "When null, SFX triggered via SfxId are silent no-ops (no errors thrown).")]
+                 "When null, the service Resources-loads one (SfxLibraryResourcePath) and, " +
+                 "failing that, falls back to ProceduralSfx so SFX are never silent (WO-243).")]
         [SerializeField] private SfxClipLibrary _sfxLibrary;
+
+        // WO-243: Resources path the SfxClipLibraryBuilder writes the asset to, and a
+        // one-shot guard so we attempt the Resources.Load at most once.
+        private const string SfxLibraryResourcePath = "Audio/SfxClipLibrary";
+        private bool _sfxLibraryResolved;
 
         // =====================================================================
         //  Mobile platform rules (WO-62)
