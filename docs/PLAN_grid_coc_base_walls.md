@@ -55,9 +55,15 @@ tiered wall upgrades. Phase 1 = builder-generated + data-driven; Phase 2 (post-g
   base-builder). Deferred per scope discipline (`scope-discipline-not-an-mmo`).
 
 ## Open items for owner
-1. **Cell size** — 4m (proposed) vs 2m.
-2. **Wall meshes** — need 3 segment meshes (wood/iron/steel). Use existing `Wall_Medieval_Stone` for one tier +
-   source/retexture 2 more? Or 3 new low-poly segments. (Art call.)
+1. **Cell size — DECIDED: 1.0m** (= the wall segment's native width, per the owner's tier art dims
+   1.0 W × 1.5 H × 0.2 thick). Grid snaps to 1m so segments tile seam-to-seam with zero scaling.
+2. **Wall meshes — RESOLVED (owner-provided, 2026-06-13):** three distinct tier meshes (true silhouette ladder):
+   - **Tier 1 Wood** = wood palisade (pointed logs + stone footing).
+   - **Tier 2 Iron** = plank wall with riveted iron bands (the dimensioned 1.0×1.5×0.2 segment).
+   - **Tier 3 Reinforced Steel** = steel plates with glowing blue RUNES + gold trim — the runic glow IS the
+     Iron+Crystals magic-temper tier (narrative lands: smelt iron → rune-temper with crystals).
+   PENDING: get the FBX/prefab files into the project (path TBD) + URP/Tripo material pass on import, then wire
+   each as `WallTierData.straightPrefab[tier]`.
 3. **Upgrade granularity — DECIDED (owner 2026-06-13): exactly TWO modes.**
    - **Single cell** — tap one wall segment, upgrade it a tier (cost = that cell's next-tier cost).
    - **Entire wall** — one action upgrades ALL wall cells a tier (cost = sum of each cell's next-tier cost; cells
