@@ -176,13 +176,18 @@ namespace DeNelle.DialogueUI
         //     its own VerticalLayoutGroup content (the option buttons).
         // Resolved by hierarchy (base fields are private): Options -> Text / Items.
         // Idempotent + fully null-guarded; a missing child just skips that step.
-        public override YarnTask OnDialogueStartedAsync()
+        public override async YarnTask OnDialogueStartedAsync()
         {
             FlowTrace.Step("UI", $"Yarn dialogue started (presenter={name}, timeScale={Time.timeScale})");
             RepairOptionsLayoutOnce();
             ReskinToLightParchmentOnce();
             BuildNameBannerOnce();
-            return base.OnDialogueStartedAsync();
+            await base.OnDialogueStartedAsync();
+            // Re-arm input capture for THIS conversation (paired with the release on
+            // complete below). During a dialogue the box SHOULD block world/HUD input;
+            // after it ends it must NOT (that leftover blocker is the 'dev tools/Settings
+            // dead after Yarn' bug — see OnDialogueCompleteAsync).
+            SetOwnGroupsInteractive(true);
         }
 
         private void RepairOptionsLayoutOnce()
@@ -465,12 +470,35 @@ namespace DeNelle.DialogueUI
         }
 
         // Clear any forced portrait when the conversation ends so it never leaks to the next.
-        public override YarnTask OnDialogueCompleteAsync()
+        public override async YarnTask OnDialogueCompleteAsync()
         {
             DeNelle.Core.DialoguePortrait.Forced = null;
             FlowTrace.Step("UI", $"Yarn dialogue ended (presenter={name})");
-            LogInputBlockerState();
-            return base.OnDialogueCompleteAsync();
+            await base.OnDialogueCompleteAsync();   // let base hide its views first
+
+            // ROOT-CAUSE FIX (caught by the trace below on a real F8 run): after a Yarn
+            // dialogue the box's own CanvasGroup 'Container' was left blocksRaycasts=true,
+            // a full-screen invisible input eater -> every click died => "dev tools work
+            // until I go to Yarn" + "Settings dead after Yarn". The base teardown hides the
+            // views visually but does not release raycast blocking, so we do it explicitly:
+            // no dialogue active => this presenter must capture NO input.
+            SetOwnGroupsInteractive(false);
+
+            LogInputBlockerState(); // verify: should now read blocksRaycasts=false on every own group
+        }
+
+        // Arm (true) / release (false) raycast capture on every CanvasGroup this presenter
+        // owns. Paired across OnDialogueStartedAsync / OnDialogueCompleteAsync so the dialogue
+        // box blocks input ONLY while a conversation is on screen, never after it ends.
+        private void SetOwnGroupsInteractive(bool on)
+        {
+            var groups = GetComponentsInChildren<CanvasGroup>(true);
+            foreach (var g in groups)
+            {
+                if (g == null) continue;
+                g.blocksRaycasts = on;
+                g.interactable = on;
+            }
         }
 
         // ── F8 ROOT-CAUSE TRACE (does not change behaviour) ──────────────────

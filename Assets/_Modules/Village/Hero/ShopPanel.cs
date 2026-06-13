@@ -382,16 +382,22 @@ namespace DeNelle.Village.Hero
             var wImg = well.GetComponent<Image>();
             if (wImg != null) wImg.raycastTarget = false;
 
-            // Viewport (masked) fills the content area.
-            var viewport = new GameObject("Viewport", typeof(Image), typeof(Mask), typeof(ScrollRect));
+            // Viewport (clipped) fills the content area. Uses RectMask2D, NOT Mask:
+            // the trace proved 23/23 rows are built + visible (alpha 0.84) at correct
+            // posY, contentH=1406 over a 596 viewport — yet the list rendered into a
+            // "separate area below" the panel. That is a CLIP failure: a stencil Mask
+            // with a near-invisible (alpha 0.001) Image can fail to clip, so the
+            // 1406px top-anchored content spills 810px BELOW the viewport onto the
+            // screen instead of being cut to the viewport rect. RectMask2D does a
+            // straight rectangular clip to this rect with no masking-graphic dependency,
+            // so the overflow is contained and the ScrollRect pans within the window.
+            var viewport = new GameObject("Viewport", typeof(Image), typeof(RectMask2D), typeof(ScrollRect));
             viewport.transform.SetParent(_contentRoot.transform, false);
             var vr = viewport.GetComponent<RectTransform>();
             vr.anchorMin = Vector2.zero; vr.anchorMax = Vector2.one;
             vr.offsetMin = Vector2.zero; vr.offsetMax = Vector2.zero;
             var vImg = viewport.GetComponent<Image>();
-            vImg.color = new Color(0f, 0f, 0f, 0.001f); // near-invisible but a valid mask graphic
-            var mask = viewport.GetComponent<Mask>();
-            mask.showMaskGraphic = false;
+            vImg.color = new Color(0f, 0f, 0f, 0.001f); // near-invisible; ScrollRect needs a raycast graphic
 
             // Content — TOP-anchored, full width, height AUTO-COMPUTED by a
             // ContentSizeFitter from the stacked rows. A VerticalLayoutGroup lays the
