@@ -59,6 +59,20 @@ namespace DeNelle.Onboarding
         // guard must work even for a runtime-borrowed instance carrying this name).
         private const string OnboardingPanelName = "OnboardingPanelSettings";
 
+        // The guard may ONLY un-do its own actions. When it neutralises a document in
+        // a gameplay scene it records that document's instance id + its ORIGINAL
+        // pickingMode here; on return to an onboarding scene it restores exactly those
+        // docs to exactly that pickingMode. Docs the guard never disabled (e.g. the
+        // intro FADE overlay, which IntroCommandBridge deliberately sets to
+        // PickingMode.Ignore and which borrows OnboardingPanelSettings) are left
+        // COMPLETELY ALONE. Regression fix 2026-06-13: the old restore branch forced
+        // pickingMode=Position on EVERY OnboardingPanelSettings doc — including that
+        // click-through fade overlay — so on the very first Title boot the fade flipped
+        // to click-BLOCKING and ate the Start button. Keyed by GetInstanceID() so a
+        // stale entry for a destroyed doc never dereferences a fake-null.
+        private static readonly System.Collections.Generic.Dictionary<int, PickingMode>
+            _disabledByGuard = new System.Collections.Generic.Dictionary<int, PickingMode>();
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         public static void Init()
         {
@@ -110,15 +124,24 @@ namespace DeNelle.Onboarding
                     if (settings == null) continue;
                     if (settings.name != OnboardingPanelName) continue;
 
+                    // ONLY restore docs the guard itself disabled — and ONLY to their
+                    // original pickingMode. A doc we never touched (the click-through
+                    // fade overlay on a fresh Title boot) is left exactly as its owner
+                    // configured it, so it keeps PickingMode.Ignore and never eats the
+                    // Start button. This is the boot-into-Title fix.
+                    if (!_disabledByGuard.TryGetValue(doc.GetInstanceID(), out var priorPicking))
+                        continue;
+
                     if (!doc.enabled) doc.enabled = true;
 
                     var root = doc.rootVisualElement;
                     if (root != null)
                     {
                         root.style.display = DisplayStyle.Flex;   // renders again
-                        root.pickingMode = PickingMode.Position;  // accepts pointer events
+                        root.pickingMode = priorPicking;          // restore ORIGINAL picking, not a forced Position
                     }
 
+                    _disabledByGuard.Remove(doc.GetInstanceID());
                     restored++;
                 }
 
@@ -145,8 +168,21 @@ namespace DeNelle.Onboarding
                 var root = doc.rootVisualElement;
                 if (root != null)
                 {
+                    // Record the ORIGINAL pickingMode before we clobber it, so the
+                    // onboarding-scene restore can put it back exactly (and so a
+                    // click-through overlay is restored to Ignore, not Position).
+                    if (!_disabledByGuard.ContainsKey(doc.GetInstanceID()))
+                        _disabledByGuard[doc.GetInstanceID()] = root.pickingMode;
+
                     root.style.display = DisplayStyle.None;   // renders nothing
                     root.pickingMode = PickingMode.Ignore;    // intercepts no pointer events
+                }
+                else
+                {
+                    // No root yet but still disable the doc; record a sane default so
+                    // restore re-enables it (Position is the UIElements default).
+                    if (!_disabledByGuard.ContainsKey(doc.GetInstanceID()))
+                        _disabledByGuard[doc.GetInstanceID()] = PickingMode.Position;
                 }
 
                 // Then fully disable the document so its panel no longer registers
