@@ -772,7 +772,7 @@ namespace DeNelle.HUD
             bool showParty = (InVillage || show) && _combatHudVisible;
             if (show == _lastCombatGate
                 && _vitalsCluster != null && _vitalsCluster.gameObject.activeSelf == show
-                && _partyStack != null && _partyStack.activeSelf == showParty) return;
+                && _partyStack != null && _partyStack.gameObject.activeSelf == showParty) return;
             _lastCombatGate = show;
             SetActiveSafe(_partyStack, showParty);
             SetActiveSafe(_vitalsCluster, show);
