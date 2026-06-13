@@ -38,9 +38,11 @@ the filesystem max. Migrated off Linear; see `NOTION_SOURCE_OF_TRUTH.md`.
 
 ## 2. THE NON-NEGOTIABLE RULES (binding — condensed)
 
-1. **§0 Never edit `.cs` via the Linux mount.** The mount does NOT sync reliably to Windows; bash
-   redirects truncate/duplicate/interleave. UI writes `.cs` with **Write/Edit on the Windows path
-   only** — never `cat >`/`echo >>`. If a file is broken on Windows, only CLI fixes it. The
+1. **UI never touches code; CLI writes ALL code.** (Owner 2026-06-13, binding.) The UI session does
+   RCA / specs / narrative / screenshots / board grooming — it does NOT write or edit `.cs`. Only CLI
+   writes code, on the **Windows path with Write/Edit only** — never `cat >`/`echo >>` via the §0 Linux
+   mount (it does NOT sync reliably; redirects truncate/duplicate/interleave). If a file is broken on
+   Windows, only CLI fixes it. The
    **NUL-byte gate now enforces this**: `CompileGate.Run` scans every `Assets/**/*.cs` for embedded
    NUL bytes and withholds `COMPILE_GATE_OK` if any are found (catches mount-garble that looks clean).
 2. **§1 Quality gate on every `.cs` you touch** — brace balance + leak-scan (no stray

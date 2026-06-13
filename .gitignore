@@ -233,3 +233,30 @@ yarn.lock
 /Assets/_Recovery/
 /Assets/_Recovery.meta
 /.claude/
+
+# Large third-party / re-importable asset packs — re-import on fresh clone
+# (same policy as polyperfect; keeps the repo lean). Cleanup 2026-06-09.
+/Assets/Quaternius/
+/Assets/Quaternius.meta
+/Assets/Medieval Village/
+/Assets/Medieval Village.meta
+/Assets/TextMesh Pro/
+/Assets/TextMesh Pro.meta
+/Assets/Action/textures/
+/Assets/Action/textures.meta
+/Assets/Models/People/Human/
+/Assets/Models/People/Human.meta
+/Assets/Models/People/Orc/
+/Assets/Models/People/Orc.meta
+/Assets/Models/People/Troll/
+/Assets/Models/People/Troll.meta
+/Assets/Models/People/textures/
+/Assets/Models/People/textures.meta
+/Assets/Lana Studio/Casual RPG VFX/Upgrade for URP/
+/Assets/Lana Studio/Casual RPG VFX/Upgrade for URP.meta
+
+# Tech hud elements RPG UI pack (~169MB incl. a ~100MB Psd/) — local import, same
+# policy: gitignored, only the SPECIFIC sprites we use are copied into a tracked
+# Resources path (RpgUiImporter -> Resources/RpgUi). Owner+CLI decision 2026-06-13.
+/Assets/Tech hud elements/
+/Assets/Tech hud elements.meta

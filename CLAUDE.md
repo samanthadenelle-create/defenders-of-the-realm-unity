@@ -22,7 +22,9 @@ refactors into player-facing work. **Decision lens: what is right, not what is e
 when they diverge, name it explicitly. We stay true-north by **holding each other
 accountable to the real goal: deliver QUALITY, not fast.**
 
-**Navigation:** before grepping or exploring, check the README system —
+**Navigation:** new session? read `docs/HANDOVER.md` first — the single operator's manual
+(how we work + the binding rules + this-session's new canon + the build/gate/bake cycle + resume points).
+Then, before grepping or exploring, check the README system —
 `PROJECT_INDEX.md` (root files), `Assets/README.md` (asset folders),
 `Assets/_Modules/README.md` (code module map; each module has its own README),
 `docs/README.md` (docs index). Keep these updated when you add/move files.
@@ -84,8 +86,11 @@ NULs that poison a commit and break compilation.
 
 ## 2. Work Order Protocol
 
-- **UI (Claude):** writes work orders, specs, routes tasks, makes creative calls.
-- **CLI:** writes + build-verifies all code. Owns batchmode execution.
+- **UI (Claude) — NEVER touches code (BINDING, owner 2026-06-13).** UI does RCA, work
+  orders/specs, narrative, screenshots/images/mockups, board grooming. It does **not** write
+  or edit `.cs` (no exceptions — supersedes any prior "UI writes code with a gate" reversal).
+  Code it wants written goes to CLI as a spec/work order.
+- **CLI (me):** writes + build-verifies **ALL** code. Sole git committer. Owns batchmode execution.
 - **Owner (Samantha):** PM, catalogs, routes, makes all final creative decisions.
 
 ### Creating work orders
