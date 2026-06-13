@@ -371,6 +371,12 @@ namespace DeNelle.Editor
             // Also exposed via the one-off menu for already-saved scenes (e.g. your MainCastle_Hall).
             WireOuterWorldConnection(gateMarker);
 
+            // === INBOUND CONNECTORS TO THE GARRISON OUTPOSTS (West / North / East gates) ===
+            // The south gate is the OuterWorld seam (above). The W/N/E gates each become a
+            // single-load destination seam into an already-baked garrison outpost scene.
+            // Modeled exactly on WireOuterWorldConnection (reflection SceneTransitionTrigger).
+            WireOutpostConnectors(root.transform);
+
             // === ROAMING / AMBIENCE (Bella + NPCs) ===
             var ambience = new GameObject("RoamingNPCs_Animals_Bella_Ambience");
             ambience.transform.SetParent(root.transform, false);
@@ -1034,6 +1040,107 @@ namespace DeNelle.Editor
             Debug.Log("[CastleHubBuilder] Wired gate marker with NavMeshLink + SceneTransitionTrigger (target OuterWorld at ~ (0, 0.5, -80)).");
         }
 
+        // =====================================================================
+        //  OUTPOST CONNECTORS — castle -> garrison-outpost seams (West / North / East).
+        // -----------------------------------------------------------------------------
+        //  The south gate is the OuterWorld seam (WireOuterWorldConnection). The other three
+        //  cardinal gates each get an inbound connector into an ALREADY-BAKED garrison outpost
+        //  scene (built by GarrisonSceneBuilder, in Build Settings, with its own navmesh +
+        //  return seam). The ONLY missing piece is these castle->outpost seams, so we build
+        //  them here, modeled EXACTLY on WireOuterWorldConnection + BuildGateExitStrips:
+        //   • a child GameObject "OutpostConnector_<scene>" placed at a recipe-driven gate pose
+        //     (MakeGatePose(southGate, yaw)) so it sits centered on the W/N/E gate, then pulled
+        //     INWARD toward the courtyard (same reason the OuterWorld trigger sits +Z toward the
+        //     reachable interior) so the hero reaches it BEFORE the navmesh edge fires.
+        //   • a trigger BoxCollider (isTrigger) sized like the OuterWorld exit seam,
+        //   • a DeNelle.Village.SceneTransitionTrigger added VIA REFLECTION (FindType — the
+        //     Editor asmdef cannot reference DeNelle.Village), with: targetSceneName = garrison
+        //     scene, targetPosition = the scene's hero entry point, loadAdditive = false (an
+        //     outpost is a destination LEVEL, like the garrison's own single-load return seam),
+        //     ProximityRadius = 20f (the South seam needed 20; the hero stops ~16.7m out so the
+        //     default 6 never fires).
+        //
+        //  GARRISON ENTRY CONVENTION (verified against GarrisonSceneBuilder.Scenes.cs ~line 72
+        //  `entryPos = (0, 0.1, -(half+6))` + HalfExtentFor ~line 100 + garrison-recipes.json):
+        //    troll_outpost  size=medium -> half=16 -> entry z = -(16+6) = -22
+        //    ruined_keep    size=large  -> half=20 -> entry z = -(20+6) = -26
+        //    frost_keep     size=medium -> half=16 -> entry z = -22
+        //  Scene name = "Garrison_<id>". Swapping an outpost is ONE line in the array below.
+        //
+        //  Idempotent: destroys any prior "OutpostConnector_*" child first (mirrors the prior-
+        //  trigger cleanup in WireOuterWorldConnection) so a re-run leaves EXACTLY three.
+        // =====================================================================
+        private static readonly (string sceneName, float yaw, Vector3 targetPosition)[] OutpostConnectors =
+        {
+            ("Garrison_troll_outpost", 90f,  new Vector3(0f, 0.1f, -22f)), // medium: half=16 -> -(16+6)=-22
+            ("Garrison_ruined_keep",   180f, new Vector3(0f, 0.1f, -26f)), // large:  half=20 -> -(20+6)=-26
+            ("Garrison_frost_keep",    270f, new Vector3(0f, 0.1f, -22f)), // medium: half=16 -> -22
+        };
+
+        private static void WireOutpostConnectors(Transform root)
+        {
+            if (root == null) return;
+
+            // Idempotent: strip any prior outpost connectors so a re-run leaves exactly three.
+            foreach (var t in root.GetComponentsInChildren<Transform>(true))
+            {
+                if (t != null && t != root && t.name.StartsWith("OutpostConnector_"))
+                    Object.DestroyImmediate(t.gameObject);
+            }
+
+            // The SceneTransitionTrigger lives in DeNelle.Village — the Editor asmdef cannot
+            // reference it, so resolve via reflection (same as WireOuterWorldConnection).
+            var transType = FindType("DeNelle.Village.SceneTransitionTrigger");
+            if (transType == null)
+            {
+                Err("WireOutpostConnectors: DeNelle.Village.SceneTransitionTrigger not found (is it compiled?) — outpost connectors skipped.");
+                return;
+            }
+
+            // The W/N/E gate world poses are the recipe south gate rotated around world origin
+            // (identical math to BuildGateExitStrips). Pull the connector INWARD toward the
+            // courtyard so the hero reaches it before the navmesh edge (mirrors the OuterWorld
+            // trigger sitting +Z toward the reachable interior).
+            Vector3 southGate = ReadSouthGatePos();
+            const float inwardPull = 6f; // toward courtyard interior (away from the gate opening)
+
+            var fScene    = transType.GetField("targetSceneName");
+            var fPos      = transType.GetField("targetPosition");
+            var fAdditive = transType.GetField("loadAdditive");
+            var fRadius   = transType.GetField("ProximityRadius");
+
+            foreach (var (sceneName, yaw, targetPosition) in OutpostConnectors)
+            {
+                GatePose pose = MakeGatePose(southGate, yaw, sceneName);
+
+                // Outward direction for this side (south faces -Z at yaw 0). Pull INWARD = -outward.
+                Quaternion yawRot = Quaternion.Euler(0f, yaw, 0f);
+                Vector3 outward   = yawRot * Vector3.back;
+                Vector3 worldPos  = pose.worldPos - outward * inwardPull;
+                worldPos.y = 1.5f; // collider center height, matching the OuterWorld trigger
+
+                var connector = new GameObject("OutpostConnector_" + sceneName);
+                connector.transform.SetParent(root, false);
+                connector.transform.position = worldPos;
+                connector.transform.rotation = yawRot; // box aligned with the gate opening
+
+                var col = connector.AddComponent<BoxCollider>();
+                col.isTrigger = true;
+                col.size = new Vector3(20f, 6f, 16f); // like the OuterWorld exit seam
+
+                var comp = connector.AddComponent(transType);
+                if (fScene    != null) fScene.SetValue(comp, sceneName);
+                if (fPos      != null) fPos.SetValue(comp, targetPosition);
+                if (fAdditive != null) fAdditive.SetValue(comp, false); // destination level = single-load
+                if (fRadius   != null) fRadius.SetValue(comp, 20f);      // hero stops ~16.7m out; default 6 never fires
+
+                Log($"WireOutpostConnectors: placed OutpostConnector_{sceneName} at world {worldPos} " +
+                    $"(gate yaw {yaw}, entry {targetPosition}, single-load, radius 20).");
+            }
+
+            Log($"WireOutpostConnectors: {OutpostConnectors.Length} inbound outpost seam(s) wired (W/N/E gates).");
+        }
+
         /// <summary>
         /// Cross-assembly type lookup (same pattern used by OuterWorldBuilder / VillageSceneBuilder).
         /// </summary>
@@ -1190,6 +1297,56 @@ namespace DeNelle.Editor
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene);
             Log("BATCH: wired + saved MainCastle_Hall. Ready to Play.");
+        }
+
+        // =====================================================================
+        //  Apply the THREE inbound outpost connectors (W/N/E gates) to the
+        //  already-saved MainCastle_Hall WITHOUT a full rebuild. Opens the scene,
+        //  finds the castle root the other batch methods use (CastleHubRoot, or its
+        //  floor host), wires the connectors, marks dirty + saves. Mirrors
+        //  BatchWireCastleAndSave. Also defensively re-registers each target garrison
+        //  scene in Build Settings (idempotent; the scenes are already registered).
+        //  Run headless via run-unity-method.ps1, or from the menu below.
+        // =====================================================================
+        [MenuItem("Defenders/Scenes/Wire Castle to Outposts")]
+        public static void WireCastleToOutpostsMenu()
+        {
+            BatchWireOutpostsAndSave();
+        }
+
+        public static void BatchWireOutpostsAndSave()
+        {
+            const string scenePath = "Assets/Scenes/MainCastle_Hall.unity";
+            var scene = EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Single);
+            Log("BATCH-OUTPOSTS: opened " + scenePath);
+
+            // Same root-find the floor/bake batch methods use: CastleHubRoot, else its floor host.
+            var rootGo = GameObject.Find(RootName);
+            Transform root = rootGo != null ? rootGo.transform
+                : (GameObject.Find(RootName + "_FloorHost") ?? new GameObject(RootName + "_FloorHost")).transform;
+
+            WireOutpostConnectors(root);
+
+            // Defensive: ensure each target garrison scene is in Build Settings (no-op if already
+            // present — they were registered by GarrisonSceneBuilder.AddSceneToBuildSettings, which
+            // is private to another class; this local idempotent equivalent is in-reach here).
+            foreach (var (sceneName, _, _) in OutpostConnectors)
+                EnsureSceneInBuildSettings("Assets/Scenes/" + sceneName + ".unity");
+
+            EditorSceneManager.MarkSceneDirty(scene);
+            EditorSceneManager.SaveScene(scene);
+            Log("BATCH-OUTPOSTS: wired " + OutpostConnectors.Length + " outpost connector(s) + saved MainCastle_Hall.");
+        }
+
+        // Idempotent local equivalent of GarrisonSceneBuilder's (private) AddSceneToBuildSettings:
+        // adds the scene to Build Settings (enabled) only if it is not already listed.
+        private static void EnsureSceneInBuildSettings(string scenePath)
+        {
+            var scenes = EditorBuildSettings.scenes.ToList();
+            if (scenes.Any(s => s.path == scenePath)) return;
+            scenes.Add(new EditorBuildSettingsScene(scenePath, true));
+            EditorBuildSettings.scenes = scenes.ToArray();
+            Log("EnsureSceneInBuildSettings: registered " + scenePath + " in Build Settings.");
         }
 
         // =====================================================================
