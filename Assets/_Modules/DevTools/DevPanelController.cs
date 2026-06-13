@@ -700,6 +700,11 @@ namespace DeNelle.DevTools
             AddToggleButton(cheats, "God-mode: ON", "God-mode: OFF",
                 () => GodMode, ToggleGodMode);
 
+            // AutoPilot (QA bot) — runs the autonomous playtest driver in-editor
+            // with quitOnDone:false so a manual run never closes the editor.
+            var autopilot = AddGroup("AutoPilot (QA bot)");
+            AddButton(autopilot, "Run AutoPilot", RunAutoPilot);
+
             RefreshToggleButtons();
 
             int wiredButtons = _groupList != null
@@ -1194,6 +1199,29 @@ namespace DeNelle.DevTools
             GodMode = !GodMode;
             GodModeChanged?.Invoke(GodMode);
             SetStatus($"God-mode {(GodMode ? "ENABLED" : "disabled")}.");
+        }
+
+        // =====================================================================
+        //  Actions — AUTOPILOT (QA bot)
+        // =====================================================================
+
+        /// <summary>
+        /// Spawns the autonomous playtest bot (<see cref="AutoPilotDriver"/>) for a
+        /// MANUAL in-editor run: quitOnDone:false so it never closes the editor.
+        /// The headless --autopilot launch uses AutoPilotInstaller (quitOnDone:true).
+        /// </summary>
+        private void RunAutoPilot()
+        {
+            if (UnityEngine.Object.FindAnyObjectByType<AutoPilotDriver>() != null)
+            {
+                SetStatus("AutoPilot already running.");
+                return;
+            }
+            var go = new GameObject("~AutoPilotDriver (manual)");
+            UnityEngine.Object.DontDestroyOnLoad(go);
+            var driver = go.AddComponent<AutoPilotDriver>();
+            driver.Begin(quitOnDone: false);
+            SetStatus("AutoPilot started (manual run — editor stays open).");
         }
 
         // =====================================================================
