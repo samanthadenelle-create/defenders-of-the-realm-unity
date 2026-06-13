@@ -47,6 +47,7 @@ namespace DeNelle.Village.Hero
         private GearLoadout _activeLoadout;
         private GameObject _contentRoot;
         private GameObject _tabBar; // tab row host (for active-tab highlight)
+        private RectTransform _scrollContent; // the active scroll list content (for the post-populate rebuild)
         private TMPro.TextMeshProUGUI _statusText; // use TMPro for consistency with EquipmentPanel + to avoid any legacy UI asm quirks
         private TMPro.TextMeshProUGUI _ecoText;
         private System.Action<ResourceSnapshot> _ecoHandler; // stored so Close() can unsubscribe (no leak)
@@ -61,7 +62,18 @@ namespace DeNelle.Village.Hero
             ResolveActiveHero();
 
             // Modal canvas + tap-outside-to-close scrim, both from the shared kit.
-            _ui = ElarionUiKit.BuildModalCanvas("ShopPanelUI", 1000);
+            // BUG 2 FIX: the kit canvas rode sortingOrder 1000 — FAR below the always-on
+            // world-HUD band (VirtualJoystick/CampPrompt 30000, MobileInteractButton 30050,
+            // and crucially the town-HUD wave "PLAY"/Start-Wave banner from
+            // VillageHudController). At 1000 the store rendered UNDER the HUD, so the HUD's
+            // PLAY banner bled through across the top of the store. Mirror the inventory
+            // modal: pin sortingOrder 31000 + overrideSorting so the store (and its
+            // full-screen scrim) render ABOVE the HUD band but below the true top overlays
+            // (GameOver / load fade = 32760). The kit Scrim already blocks raycasts; at
+            // 31000 it now also visually covers the HUD so nothing bleeds through.
+            _ui = ElarionUiKit.BuildModalCanvas("ShopPanelUI", 31000);
+            var shopCanvas = _ui.GetComponent<Canvas>();
+            if (shopCanvas != null) shopCanvas.overrideSorting = true;
             ElarionUiKit.Scrim(_ui.transform, onTapClose: Close);
 
             // Framed dark-glass panel (deep) — the canonical store backboard, dressed
@@ -295,6 +307,8 @@ namespace DeNelle.Village.Hero
                     pid.Contains("mana") ? RpgUiCatalog.PotionMana : RpgUiCatalog.PotionHealth);
                 CreateBuyRow(listRoot, pidCopy, costCopy, () => TryBuyPotion(pidCopy, costCopy), potionIcon);
             }
+
+            FinalizeScroll(); // force the content to size to the rows NOW (anti-collapse)
         }
 
         // Fixed PIXEL height per row (reference-resolution px). Rows are laid out by a
@@ -373,7 +387,27 @@ namespace DeNelle.Village.Hero
             scroll.movementType = ScrollRect.MovementType.Clamped;
             scroll.scrollSensitivity = 25f;
 
+            // BUG 1 FIX: remember the content so FinalizeScroll() can FORCE the layout
+            // pass once the rows exist. The content is TOP-anchored (anchorMin.y==anchorMax.y
+            // ==1) with sizeDelta.y starting at 0 — that is ZERO height until the
+            // ContentSizeFitter computes the preferred height from the stacked rows. If that
+            // layout pass is starved/deferred (it does not always run on the frame a freshly
+            // built, inactive-then-active modal populates), the content stays collapsed and
+            // EVERY row — gear AND the always-present potions — renders at zero height: the
+            // reported "framed store, empty list". Forcing the rebuild after the rows are
+            // added guarantees a non-zero content height on the same frame.
+            _scrollContent = cr;
             return content.transform;
+        }
+
+        // Force the scroll content's layout to compute NOW (after the caller has added all
+        // rows), so the ContentSizeFitter drives the content height immediately instead of
+        // waiting on a possibly-starved layout pass — the guard against the zero-height
+        // collapse that blanked the BUY list. Null-safe + no-op when there is no content.
+        private void FinalizeScroll()
+        {
+            if (_scrollContent == null) return;
+            LayoutRebuilder.ForceRebuildLayoutImmediate(_scrollContent);
         }
 
         // A buy row built from kit pieces: a dark-glass Cell panel (LayoutElement-sized
@@ -546,6 +580,8 @@ namespace DeNelle.Village.Hero
                 string idCopy = id; var refundCopy = refund;
                 CreateSellRow(listRoot, display, refundCopy, () => TrySell(idCopy, refundCopy));
             }
+
+            FinalizeScroll(); // force the content to size to the rows NOW (anti-collapse)
         }
 
         private ResourceCost ScaleCost(ResourceCost c, float f)
@@ -636,6 +672,8 @@ namespace DeNelle.Village.Hero
                 string idCopy = id; bool isWeapon = w != null;
                 CreateEquipRow(listRoot, label, idCopy, isWeapon);
             }
+
+            FinalizeScroll(); // force the content to size to the rows NOW (anti-collapse)
         }
 
         // Absolute-positioned label on a NON-layout parent (e.g. _contentRoot directly,
@@ -724,6 +762,7 @@ namespace DeNelle.Village.Hero
 
         private void ClearContent()
         {
+            _scrollContent = null; // the old content is about to be destroyed; drop the stale ref
             if (_contentRoot == null) return;
             for (int i = _contentRoot.transform.childCount - 1; i >= 0; i--)
             {
@@ -742,6 +781,7 @@ namespace DeNelle.Village.Hero
             _ui = null;
             _contentRoot = null;
             _tabBar = null;
+            _scrollContent = null;
         }
 
         private void OnDestroy()
