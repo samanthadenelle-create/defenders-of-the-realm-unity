@@ -121,6 +121,40 @@ namespace DeNelle.Village
             if (Current != null && Current.IsDialogueRunning) Current.Stop();
         }
 
+        // ── New-Game dialogue reset (DeNelle.Core decoupling hook) ────────────
+        // Onboarding's "Start New" must begin with clean Yarn state. Onboarding
+        // can't reference this Village assembly (or Yarn), so it calls
+        // DeNelle.Core.DialogueResetService.ResetForNewGame(), which invokes the
+        // YarnVariableClear hook we register below. Mirrors IntroLauncher.
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        private static void RegisterResetHook()
+        {
+            DeNelle.Core.DialogueResetService.YarnVariableClear = ClearVariableStorage;
+        }
+
+        /// <summary>
+        /// Wipes the live runner's Yarn VARIABLE STORAGE (every $-toggle and the
+        /// visited-node flags Yarn tracks there) so a New Game starts with clean
+        /// dialogue state. No-op when no runner is hosted yet (title time, before
+        /// any village scene) — there is simply no in-process Yarn state to clear,
+        /// and a fresh runner starts empty anyway. We do NOT instantiate a runner
+        /// just to clear it (Current, not Host()).
+        /// </summary>
+        public static void ClearVariableStorage()
+        {
+            var runner = Current;
+            if (runner == null) return;   // no live runner → nothing carried over
+            if (runner.IsDialogueRunning) runner.Stop();   // don't clear mid-line
+            var vs = runner.VariableStorage;
+            if (vs != null)
+            {
+                vs.Clear();   // Yarn.Unity VariableStorageBehaviour.Clear() — wipes all variables
+                Debug.Log("[DialogueService] Yarn variable storage cleared for New Game.");
+            }
+            CurrentStructureId = null;
+        }
+
         /// <summary>The structureId of the most recent <see cref="PlayStructure"/> call.
         /// CmdStructureStatus reads THIS rather than the Yarn command arg: a bare command-arg
         /// (&lt;&lt;structure_status $structureId&gt;&gt;) arrives as the literal "$structureId" — it does

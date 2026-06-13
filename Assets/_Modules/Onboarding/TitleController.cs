@@ -293,6 +293,17 @@ namespace DeNelle.Onboarding
         {
             if (!_splashActive) return;
             _splashActive = false;
+
+            // Start New = a genuinely FRESH game. Wipe the save progression (this also
+            // clears SeenTutorials, so once-only recruit/intro beats replay) AND all
+            // Yarn dialogue state — the $-toggle variable storage and the gameplay→
+            // dialogue event latches — so no stale toggle from a prior run carries over
+            // (the cause of dialogue restart / option corruption + stale vendor state).
+            // Continue does NOT do this (OnContinue just loads the save). Both resets
+            // run BEFORE we build the hero-select and load any gameplay scene.
+            GameStateService.Instance?.ResetToNewGame();
+            DeNelle.Core.DialogueResetService.ResetForNewGame();
+
             // DEF onboarding fast-path (owner: fast into battle). "Start New" takes the
             // FAST PATH — a brief companion hook in the village then straight to Wave 1.
             // The full 7-scene FTUE / cinematic is reserved for "Play Intro" below.
