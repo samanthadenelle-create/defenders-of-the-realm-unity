@@ -97,15 +97,22 @@ namespace DeNelle.Village
                 // Orc Warband: upright already, just a -90 yaw so +X-forward faces +Z.
                 skinOpts.LocalRotation = Quaternion.Euler(0f, -90f, 0f);
             }
-            else if (model == "Demon" || model == "OgreMage" || model == "Troll")
+            else if (model == "Demon")
             {
-                // TRIPO HumanoidLarge creatures (owner playtest 2026-06-13): Demon/OgreMage/Troll
-                // are the same Tripo export class (externalObjects:{} → raw, lying FACE-DOWN). A pure
-                // yaw left them flat; pitch up with X=-90 to stand, plus the -90 yaw to face like the
-                // orcs/heroes. Troll added 2026-06-13 for the orc/brute wave variety. If any end up
-                // standing-but-facing-wrong, tune the Y; if still face-down, flip X to +90.
+                // WIGHT — now AccuRIG'd (CC_Base Humanoid, isHuman=True 2026-06-13): it imports
+                // UPRIGHT like the orcs, so it needs the SAME orc-style -90 yaw, NOT the old
+                // face-down X=-90 pitch (which would tip the standing rig over). Texture links
+                // via Demon.fbm so FixTripoMaterials is unnecessary.
+                skinOpts.LocalRotation = Quaternion.Euler(0f, -90f, 0f);
+            }
+            else if (model == "OgreMage" || model == "Troll")
+            {
+                // STILL raw-Tripo HumanoidLarge (face-down export class): pitch up with X=-90 to
+                // stand + the -90 yaw to face. OgreMage awaits AccuRIG (Generic); Troll mapped to
+                // Humanoid from the raw skeleton. If either ends up facing-wrong, tune the Y; if
+                // still face-down, flip X. (Move them to the Demon branch once AccuRIG'd upright.)
                 skinOpts.LocalRotation = Quaternion.Euler(-90f, -90f, 0f);
-                skinOpts.FixTripoMaterials = true;   // belt-and-braces; the import extract already URP-ifies it
+                skinOpts.FixTripoMaterials = true;
             }
             var vis = VisualFactory.Skin(go.transform, "Enemies/" + model, skinOpts);
             if (vis != null)

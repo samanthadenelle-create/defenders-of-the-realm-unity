@@ -109,6 +109,69 @@ namespace DeNelle.Editor
             Debug.Log("[Humanoid] REVERT DONE — REVERT_GENERIC_OK");
         }
 
+        /// <summary>
+        /// Ground-truth test: import Assets/Resources/Enemies/_WightCheck.fbx as Humanoid and
+        /// report whether Unity can build a HUMAN avatar (isHuman). True = the rig is
+        /// humanoid-mappable (AccuRIG worked) → it will animate on the shared controller.
+        /// False = still a non-humanoid (raw Tripo) skeleton → needs a real AccuRIG pass.
+        /// </summary>
+        [MenuItem("Defenders/Art/Check _WightCheck.fbx is Humanoid (AccuRIG verify)")]
+        public static void CheckWightHumanoid()
+        {
+            const string p = "Assets/Resources/Enemies/_WightCheck.fbx";
+            var imp = AssetImporter.GetAtPath(p) as ModelImporter;
+            if (imp == null) { Debug.LogWarning($"[WightCheck] no ModelImporter at '{p}'."); return; }
+            imp.animationType = ModelImporterAnimationType.Human;
+            imp.avatarSetup   = ModelImporterAvatarSetup.CreateFromThisModel;
+            imp.SaveAndReimport();
+            bool found = false;
+            foreach (var o in AssetDatabase.LoadAllAssetsAtPath(p))
+                if (o is Avatar av)
+                {
+                    found = true;
+                    Debug.Log($"[WightCheck] avatar isValid={av.isValid} isHuman={av.isHuman} " +
+                              $"{(av.isValid && av.isHuman ? "-> ACCURIG OK, WILL ANIMATE" : "-> NOT humanoid-mappable, needs real AccuRIG")}");
+                }
+            if (!found) Debug.LogWarning("[WightCheck] no avatar built — definitely not humanoid.");
+            Debug.Log("[WightCheck] DONE — WIGHT_CHECK_OK");
+        }
+
+        /// <summary>
+        /// Finalize the AccuRIG'd wight at Demon.fbx: import Humanoid (so it animates on the
+        /// shared LargeEnemy controller), verify the avatar, and cap its basecolor to 1024 for
+        /// the mobile/Seeker target. Run after copying the AccuRIG FBX + .fbm over Demon.
+        /// </summary>
+        [MenuItem("Defenders/Art/Finalize Wight (Demon) — Humanoid + 1024 cap")]
+        public static void FinalizeDemonWight()
+        {
+            const string p = "Assets/Resources/Enemies/Demon.fbx";
+            var imp = AssetImporter.GetAtPath(p) as ModelImporter;
+            if (imp == null) { Debug.LogWarning("[Finalize] no ModelImporter for Demon.fbx"); return; }
+            imp.animationType = ModelImporterAnimationType.Human;
+            imp.avatarSetup   = ModelImporterAvatarSetup.CreateFromThisModel;
+            imp.SaveAndReimport();
+
+            foreach (var o in AssetDatabase.LoadAllAssetsAtPath(p))
+                if (o is Avatar av)
+                    Debug.Log($"[Finalize] Demon avatar isValid={av.isValid} isHuman={av.isHuman} " +
+                              $"{(av.isValid && av.isHuman ? "-> ANIMATES" : "-> still not humanoid")}");
+
+            // Cap the wight's textures to 1024 (mobile/Seeker memory).
+            foreach (var guid in AssetDatabase.FindAssets("t:Texture2D",
+                         new[] { "Assets/Resources/Enemies/Demon.fbm" }))
+            {
+                var tp = AssetDatabase.GUIDToAssetPath(guid);
+                if (AssetImporter.GetAtPath(tp) is TextureImporter ti && ti.maxTextureSize > 1024)
+                {
+                    ti.maxTextureSize = 1024;
+                    ti.SaveAndReimport();
+                    Debug.Log($"[Finalize] capped {tp} -> 1024");
+                }
+            }
+            AssetDatabase.SaveAssets();
+            Debug.Log("[Finalize] DONE — FINALIZE_DEMON_OK");
+        }
+
         /// <summary>Extract embedded textures for one FBX into its sibling .fbm folder and
         /// reimport so the material links _BaseMap. Returns true if extraction ran.</summary>
         public static bool ExtractFor(string fbxPath)
