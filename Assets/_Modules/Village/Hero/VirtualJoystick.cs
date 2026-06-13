@@ -199,6 +199,12 @@ namespace DeNelle.Village
             go.AddComponent<CanvasScaler>().uiScaleMode = CanvasScaler.ScaleMode.ConstantPixelSize;
 
             _baseRect = MakeDisc("JoyBase", go.transform, new Color(1f, 1f, 1f, 0.16f));
+            // MOCKUP ALIGN: a faint gilt rim on the base disc ties the move stick to the
+            // HUD's gold language (purely cosmetic — a non-raycast child that fills the
+            // base, so it never affects the engage-zone geometry or input handling).
+            var rim = MakeDisc("JoyBaseRim", _baseRect, new Color(0.93f, 0.78f, 0.28f, 0.22f));
+            rim.anchorMin = Vector2.zero; rim.anchorMax = Vector2.one;
+            rim.offsetMin = Vector2.zero; rim.offsetMax = Vector2.zero;
             _knobRect = MakeDisc("JoyKnob", go.transform, new Color(1f, 0.95f, 0.75f, 0.42f));
             Layout();
         }

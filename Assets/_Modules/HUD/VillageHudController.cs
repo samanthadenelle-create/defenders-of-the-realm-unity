@@ -1055,6 +1055,15 @@ namespace DeNelle.HUD
             // Far top-right = enemy scout report / lookout (periscope icon — self-evident).
             BuildIconButton(cluster, new Vector2(0.52f, 0f), new Vector2(1f, 1f),
                 IconIntel, "o", () => IntelRequested?.Invoke());
+
+            // MOCKUP ALIGN: a small "INTEL" caption under the periscope so the top-right
+            // corner reads as the labeled INTEL button from hud_mobile_combat. Decorative
+            // (non-raycast) — the icon button above owns the tap.
+            var intelCap = NewRect("IntelLabel", cluster, new Vector2(0.52f, -0.30f), new Vector2(1f, 0.04f));
+            var ic = AddText(intelCap, "INTEL", 12, HudTheme.Gilt, TextAlignmentOptions.Center);
+            ic.fontStyle = FontStyles.Bold; ic.characterSpacing = 2f;
+            ic.outlineColor = new Color32(0, 0, 0, 200); ic.outlineWidth = 0.08f;
+            ic.raycastTarget = false;
         }
 
         // A round rune-framed icon BUTTON: gilt ring seat + sprite-first widget icon
@@ -1201,64 +1210,35 @@ namespace DeNelle.HUD
         // _castleText are the same objects SetHeartHp drives.
         private void BuildCastleBanner(Transform parent)
         {
-            _castleBanner = NewRect("CastleBanner", parent, new Vector2(0.30f, 0.94f), new Vector2(0.70f, 1f));
-            // LIGHT: warm parchment plate + thin glowing gilt rune rim + soft glow.
-            FramePanelLight(_castleBanner.gameObject, LParchDeep);
+            // MOCKUP ALIGN (hud_mobile_combat): the Heart-of-Elarion objective bar sits
+            // TOP-LEFT, directly under the resource strip, in the SHARED dark-glass +
+            // ornate-gold-rune-frame + GREEN-fill language (NOT the light parchment skin).
+            // Final anchors are (re)set in ApplyResponsiveLayout; these are placeholders.
+            _castleBanner = NewRect("CastleBanner", parent, new Vector2(0.0f, 0.90f), new Vector2(0.40f, 0.955f));
 
-            // Tree-of-Life crest tucked top-left of the banner — sprite-FIRST (the
-            // hud_tree widget art), with the world-tree glyph kept as the fallback.
-            AddWidgetIcon("Crest", _castleBanner, new Vector2(0.015f, 0.42f), new Vector2(0.11f, 0.96f),
-                IconHeart, "*", HudTheme.FontHead, LGilt);
+            // Tree-of-Life crest, tucked top-left of the bar — sprite-FIRST (hud_heart /
+            // hud_tree widget art), world-tree glyph fallback. Gilt on the dark glass.
+            AddWidgetIcon("Crest", _castleBanner, new Vector2(0.0f, 0.40f), new Vector2(0.11f, 1.0f),
+                IconHeart, "*", HudTheme.FontHead, HudTheme.Gilt);
 
-            // Caption row — small spaced gilt label so the bar reads as the Heart.
-            var caption = NewRect("Caption", _castleBanner, new Vector2(0.11f, 0.56f), new Vector2(0.99f, 0.97f));
-            // Dark-ink caption (gilt-on-light cream washed out); keep the regal spacing.
-            var cap = AddText(caption, "HEART OF ELARION", HudTheme.FontLabel, LInk, TextAlignmentOptions.MidlineLeft);
+            // "Heart of Elarion" caption above the bar — spaced gilt label (cream/gilt is
+            // legible on the dark glass, matching the town HUD's header treatment).
+            var caption = NewRect("Caption", _castleBanner, new Vector2(0.11f, 0.62f), new Vector2(0.99f, 1.05f));
+            var cap = AddText(caption, "HEART OF ELARION", HudTheme.FontLabel, HudTheme.Gilt, TextAlignmentOptions.MidlineLeft);
             cap.fontStyle = FontStyles.Bold;
             cap.characterSpacing = 3f;
-            cap.outlineColor = LGlow;
-            cap.outlineWidth = 0.06f;
+            cap.outlineColor = new Color32(8, 6, 4, 200);
+            cap.outlineWidth = 0.08f;
 
-            // Recessed well track for the fill — soft warm shadow + a thin gilt rim
-            // so it reads inset/depthful on the light plate instead of a flat bar.
-            var track = NewRect("Track", _castleBanner, new Vector2(0.11f, 0.10f), new Vector2(0.99f, 0.52f));
-            StyleWellLight(track.gameObject);
-            ElarionUiKit.AddInnerRim(track.gameObject, LGiltSoft);
-
-            var fill = NewRect("Fill", track, Vector2.zero, Vector2.one);
-            fill.offsetMin = new Vector2(2f, 2f); fill.offsetMax = new Vector2(-2f, -2f);
-            _castleFill = fill.gameObject.AddComponent<Image>();
-            _castleFill.color = HudTheme.CastleGold;
-            _castleFill.sprite = HudTheme.RoundedFrame;
-            _castleFill.type = HudTheme.RoundedFrame != null ? Image.Type.Filled : Image.Type.Filled;
-            _castleFill.fillMethod = Image.FillMethod.Horizontal;
-            _castleFill.fillOrigin = 0;
-            _castleFill.fillAmount = 1f;
-            _castleFill.raycastTarget = false;
-
-            // Soft gilt highlight strip along the TOP of the fill — a glassy sheen so
-            // the bar has dimension (decorative child of the fill, non-raycast). It
-            // shares the fill's clip so it tracks the HP width automatically.
-            var sheen = NewRect("Sheen", fill, new Vector2(0f, 0.62f), new Vector2(1f, 1f));
-            var sheenImg = sheen.gameObject.AddComponent<Image>();
-            sheenImg.color = new Color(1f, 1f, 1f, 0.16f);
-            sheenImg.sprite = HudTheme.RoundedFrame;
-            sheenImg.type = HudTheme.RoundedFrame != null ? Image.Type.Sliced : Image.Type.Simple;
-            sheenImg.raycastTarget = false;
-
-            // Sprite-FIRST ornate dressing — drop the pack's gilded green gem-socket
-            // frame over the Heart bar (FRAME ONLY: the fill keeps its dynamic red↔gold
-            // lerp from SetHeartHp, so we don't swap the fill sprite/colour here). No-op
-            // when the pack isn't imported (procedural look preserved). Text is added
-            // AFTER so it stays on top of the frame.
-            TryDressBar(track, null, RpgUiCatalog.BarFrameGreen, null, Color.white, false);
-
-            // Percentage value centred over the track (kept as _castleText for SetHeartHp).
-            // Dark ink + faint parchment halo so it stays legible over the HP fill.
-            _castleText = AddText(track, "Heart of Elarion — 100%", HudTheme.FontLabel, LInk, TextAlignmentOptions.Center);
-            _castleText.fontStyle = FontStyles.Bold;
-            _castleText.outlineColor = LGlow;
-            _castleText.outlineWidth = 0.12f;
+            // The objective HP bar — built through the SHARED kit (BarKind.Castle = ornate
+            // gold gem-socket frame + GREEN-tinted fill, dark recessed track) so it reads
+            // as the same designed game as the town HUD. _castleFill keeps its dynamic
+            // red↔gold lerp from SetHeartHp (we don't pin the fill colour here).
+            var bar = ElarionUiKit.Bar(_castleBanner.transform, ElarionUiKit.BarKind.Castle,
+                new Vector2(0.11f, 0.06f), new Vector2(0.99f, 0.58f), withValue: true);
+            _castleFill = bar.fill;
+            _castleText = (TextMeshProUGUI)bar.valueLabel;
+            if (_castleText != null) _castleText.text = "Heart of Elarion — 100%";
         }
 
         // ── Wave readout — floating minimal text, no panel. ───────────────────
@@ -1266,11 +1246,13 @@ namespace DeNelle.HUD
         {
             _waveReadout = NewRect("WaveReadout", parent, new Vector2(0.30f, 0.895f), new Vector2(0.70f, 0.95f));
 
-            _waveText = AddText(_waveReadout, "WAVE 1", HudTheme.FontHead + 2, HudTheme.Text, TextAlignmentOptions.Center);
+            // MOCKUP ALIGN: big bold gilt "WAVE 3/5" centered at the top (the wave-progress
+            // headline). Gilt-on-dark with a dark halo, matching the town HUD type voice.
+            _waveText = AddText(_waveReadout, "WAVE 1", HudTheme.FontTitle + 4, HudTheme.Gilt, TextAlignmentOptions.Center);
             _waveText.fontStyle = FontStyles.Bold;
-            _waveText.characterSpacing = 4f;
-            _waveText.outlineColor = new Color32(0, 0, 0, 200);
-            _waveText.outlineWidth = 0.18f;
+            _waveText.characterSpacing = 6f;
+            _waveText.outlineColor = new Color32(0, 0, 0, 210);
+            _waveText.outlineWidth = 0.2f;
 
             var stateRect = NewRect("State", _waveReadout, new Vector2(0f, 0.30f), new Vector2(1f, 0.58f));
             _waveStateText = AddText(stateRect, _lastWaveState, HudTheme.FontBody, HudTheme.Gold, TextAlignmentOptions.Center);
@@ -1336,15 +1318,35 @@ namespace DeNelle.HUD
                 // Dark-stone frame art (P1) as the backing — dark panel fallback if absent.
                 var frImg = frame.gameObject.AddComponent<Image>();
                 if (frameSprite != null) { frImg.sprite = frameSprite; frImg.color = Color.white; }
-                else frImg.color = new Color(0.10f, 0.09f, 0.11f, 0.96f);
+                else
+                {
+                    // MOCKUP ALIGN: no frame art → dark glass + ornate gilt rune rim so the
+                    // row reads as an ornate gold-framed party frame (the shared language),
+                    // not a flat dark panel.
+                    frImg.color = ElarionUiKit.GlassDeep;
+                    frImg.sprite = HudTheme.RoundedFrame;
+                    frImg.type = HudTheme.RoundedFrame != null ? Image.Type.Sliced : Image.Type.Simple;
+                    ElarionUiKit.AddInnerRim(frame.gameObject, ElarionUiKit.Accent);
+                }
                 frImg.raycastTarget = false;
                 _partyFrame[i] = frame.gameObject;
 
-                // Portrait (class image) in the circle on the left.
-                var port = NewRect("Portrait", frame, new Vector2(0.035f, 0.12f), new Vector2(0.26f, 0.94f));
+                // Portrait (class image) in the circle on the left, ringed by an ornate
+                // gilt frame so it matches the mockup's circular gold-framed portraits.
+                var portWrap = NewRect("PortraitWrap", frame, new Vector2(0.035f, 0.12f), new Vector2(0.26f, 0.94f));
+                var port = NewRect("Portrait", portWrap, Vector2.zero, Vector2.one);
                 var pimg = port.gameObject.AddComponent<Image>();
                 pimg.raycastTarget = false; pimg.preserveAspect = true; pimg.color = Color.white;
                 _partyPortrait[i] = pimg;
+                // Gilt ring frame over the portrait (sprite-first ring from the kit; inert
+                // when the ring sprite build fails under WebGL).
+                var ring = NewRect("PortraitRing", portWrap, Vector2.zero, Vector2.one);
+                var ringImg = ring.gameObject.AddComponent<Image>();
+                ringImg.sprite = ElarionUiKit.RingSprite;
+                ringImg.color = new Color(ElarionUi.Gilt.r, ElarionUi.Gilt.g, ElarionUi.Gilt.b,
+                    ElarionUiKit.RingSprite != null ? 1f : 0f);
+                ringImg.raycastTarget = false;
+                ring.SetAsLastSibling();
 
                 // Name (banner, upper-right) — gold ink.
                 var nameRect = NewRect("Name", frame, new Vector2(0.31f, 0.52f), new Vector2(0.97f, 0.95f));
@@ -1357,7 +1359,9 @@ namespace DeNelle.HUD
                 var hpTrack = NewRect("HPTrack", frame, new Vector2(0.31f, 0.30f), new Vector2(0.985f, 0.50f));
                 var hpFill  = NewRect("HPFill", hpTrack, Vector2.zero, Vector2.one);
                 var hfimg = hpFill.gameObject.AddComponent<Image>();
-                hfimg.sprite = hpSprite; hfimg.color = hpSprite != null ? Color.white : HudTheme.HpRed;
+                // MOCKUP ALIGN: party HP fills read GREEN (the defender vitals colour in
+                // hud_mobile_combat) when there's no HP-fill art; the art wins when present.
+                hfimg.sprite = hpSprite; hfimg.color = hpSprite != null ? Color.white : ElarionUi.Affordable;
                 hfimg.type = Image.Type.Filled; hfimg.fillMethod = Image.FillMethod.Horizontal; hfimg.fillOrigin = 0; hfimg.fillAmount = 1f;
                 hfimg.raycastTarget = false;
                 _partyHpFill[i] = hfimg;
@@ -1424,7 +1428,9 @@ namespace DeNelle.HUD
         private void BuildVitalsCluster(Transform parent)
         {
             _vitalsCluster = NewRect("VitalsCluster", parent, new Vector2(0.02f, 0.165f), new Vector2(0.40f, 0.235f));
-            FramePanelLight(_vitalsCluster.gameObject, LParch);
+            // MOCKUP ALIGN: dark-glass framed panel (the combat HUD is dark glass + gold,
+            // not light parchment) so the hero mana/XP cluster matches the rest.
+            FramePanel(_vitalsCluster.gameObject, ElarionUiKit.Glass);
 
             // HP bar (top half) — REMOVED (WO-382): the hero's HP was shown twice —
             // here (bottom-left red bar) AND in the top-left party panel (slot 0).
@@ -1486,7 +1492,22 @@ namespace DeNelle.HUD
         private void BuildSkillBar(Transform parent)
         {
             _skillBar = NewRect("SkillBar", parent, new Vector2(0.62f, 0.0f), new Vector2(1.0f, 0.22f));
-            FramePanelLight(_skillBar.gameObject, LParchDeep);
+            // MOCKUP ALIGN: dark-glass framed panel (NOT light parchment) so the bottom-
+            // right ability cluster reads in the shared dark-glass + gold language.
+            FramePanel(_skillBar.gameObject, ElarionUiKit.GlassDeep);
+
+            // MOCKUP ALIGN: two labeled rows — "SPELLS" (top row, slots 0/1) and
+            // "WEAPON SKILLS" (bottom row, slots 2/3), matching hud_mobile_combat's
+            // right-thumb skill panel. Section labels sit above each row.
+            var spellsLbl = NewRect("SpellsLabel", _skillBar, new Vector2(0.04f, 0.905f), new Vector2(0.96f, 0.99f));
+            var sl = AddText(spellsLbl, "SPELLS", 13, HudTheme.Gilt, TextAlignmentOptions.Center);
+            sl.fontStyle = FontStyles.Bold; sl.characterSpacing = 3f;
+            sl.outlineColor = new Color32(0, 0, 0, 200); sl.outlineWidth = 0.08f;
+
+            var skillsLbl = NewRect("WeaponSkillsLabel", _skillBar, new Vector2(0.04f, 0.435f), new Vector2(0.96f, 0.52f));
+            var wl = AddText(skillsLbl, "WEAPON SKILLS", 13, HudTheme.Gilt, TextAlignmentOptions.Center);
+            wl.fontStyle = FontStyles.Bold; wl.characterSpacing = 2f;
+            wl.outlineColor = new Color32(0, 0, 0, 200); wl.outlineWidth = 0.08f;
 
             _slotKey      = new TextMeshProUGUI[AbilitySlotCount];
             _slotGlyph    = new TextMeshProUGUI[AbilitySlotCount];
@@ -1496,30 +1517,37 @@ namespace DeNelle.HUD
             _slotCooldown = new Image[AbilitySlotCount];
             _slotCdFill   = new float[AbilitySlotCount];
 
-            string[] defaultKeys = { "Q", "W", "E", "R" };
+            // MOCKUP ALIGN: SPELLS row defaults to 1/2, WEAPON SKILLS to letter keys.
+            // The bridge (SetAbilitySlot) overwrites these with the real per-class keys.
+            string[] defaultKeys = { "1", "2", "E", "R" };
 
-            // 2×2 grid inside the cluster. Slot 0 bottom-right (closest to thumb),
-            // 1 bottom-left, 2 top-right, 3 top-left — a natural right-thumb arc.
-            const int cols = 2, rows = 2;
-            float gapX = 0.04f, gapY = 0.05f;
-            float marginX = 0.05f, marginY = 0.05f;
-            float cellW = (1f - 2f * marginX - (cols - 1) * gapX) / cols;
-            float cellH = (1f - 2f * marginY - (rows - 1) * gapY) / rows;
+            // MOCKUP ALIGN: 2 rows × 2 columns of CIRCULAR rune buttons, each row sitting
+            // UNDER its section label — SPELLS row (slots 0/1, top band ~0.52..0.90) and
+            // WEAPON SKILLS row (slots 2/3, bottom band ~0.05..0.43). Column 0 hugs the
+            // RIGHT edge (right-thumb arc). Row band tops are gapped below the labels.
+            const int cols = 2;
+            float gapX = 0.04f;
+            float marginX = 0.05f;
+            // Per-row vertical bands (y0..y1 fraction of the panel), label sits just above.
+            float[] rowY0 = { 0.52f, 0.05f };  // index 0 = SPELLS row, 1 = WEAPON SKILLS row
+            float[] rowY1 = { 0.88f, 0.41f };
 
             for (int i = 0; i < AbilitySlotCount; i++)
             {
                 int col = i % cols;            // 0 = right column, 1 = left column
-                int row = i / cols;            // 0 = bottom row,   1 = top row
+                int row = i / cols;            // 0 = SPELLS (top), 1 = WEAPON SKILLS (bottom)
+                float cellW = (1f - 2f * marginX - (cols - 1) * gapX) / cols;
                 // place column 0 on the RIGHT (nearest the screen edge / thumb).
                 float x = marginX + (cols - 1 - col) * (cellW + gapX);
-                float y = marginY + row * (cellH + gapY);
-                var cell = NewRect("Slot" + i, _skillBar, new Vector2(x, y), new Vector2(x + cellW, y + cellH));
+                float y0 = rowY0[row], y1 = rowY1[row];
+                var cell = NewRect("Slot" + i, _skillBar, new Vector2(x, y0), new Vector2(x + cellW, y1));
                 var cellImg = cell.gameObject.AddComponent<Image>();
-                cellImg.color = LParchSoft;   // light parchment cell seat
+                // MOCKUP ALIGN: dark-glass cell seat + gilt rune rim (the ornate framed
+                // circular button look), replacing the light-parchment seat.
+                cellImg.color = ElarionUiKit.Cell;
                 cellImg.sprite = HudTheme.RoundedFrame;
                 cellImg.type = HudTheme.RoundedFrame != null ? Image.Type.Sliced : Image.Type.Simple;
-                // thin gilt rune rim per cell (the airy framed look).
-                ElarionUiKit.AddInnerRim(cell.gameObject, LGiltSoft);
+                ElarionUiKit.AddInnerRim(cell.gameObject, ElarionUiKit.AccentSoft);
 
                 // Circular RUNIC ability frame ringing the ability disc (sprite-first;
                 // the hud_ability_frame widget art). A decorative ring behind the
@@ -1532,11 +1560,11 @@ namespace DeNelle.HUD
                     runeImg.color = new Color(0f, 0f, 0f, 0f); // no art → inert
 
                 // Accent disc (tinted per ability) — fills most of the cell as a CIRCLE
-                // now (circular rune button). Light seat so an unset slot reads
-                // parchment; SetAbilitySlot still recolours this per-ability (kept).
+                // (circular rune button). MOCKUP ALIGN: dark seat so an unset slot reads
+                // dark glass; SetAbilitySlot still recolours this per-ability (kept).
                 var disc = NewRect("Accent", cell, new Vector2(0.14f, 0.40f), new Vector2(0.86f, 0.94f));
                 _slotAccent[i] = disc.gameObject.AddComponent<Image>();
-                _slotAccent[i].color = LSlotFill;
+                _slotAccent[i].color = ElarionUiKit.Track;
                 _slotAccent[i].sprite = HudTheme.Disc;   // circular ability seat
                 _slotAccent[i].type = HudTheme.Disc != null ? Image.Type.Simple : Image.Type.Simple;
                 _slotAccent[i].raycastTarget = false;
@@ -1549,11 +1577,11 @@ namespace DeNelle.HUD
                 _slotIcon[i].preserveAspect = true;
                 _slotIcon[i].color = new Color(1f, 1f, 1f, 0f);
 
-                // Glyph: dark ink (legible on the light seat AND on tinted ability
-                // accents, which SetAbilitySlot sets at 0.85 alpha over the light cell).
-                _slotGlyph[i] = AddText(disc, "", 30, LInk, TextAlignmentOptions.Center);
-                _slotGlyph[i].outlineColor = LGlow;
-                _slotGlyph[i].outlineWidth = 0.06f;
+                // Glyph: cream parchment (legible on the dark seat AND on tinted ability
+                // accents, which SetAbilitySlot sets at 0.85 alpha over the dark cell).
+                _slotGlyph[i] = AddText(disc, "", 30, ElarionUi.Parchment, TextAlignmentOptions.Center);
+                _slotGlyph[i].outlineColor = new Color32(0, 0, 0, 200);
+                _slotGlyph[i].outlineWidth = 0.1f;
 
                 // Cooldown radial overlay
                 var cd = NewRect("CD", disc, Vector2.zero, Vector2.one);
@@ -1567,30 +1595,30 @@ namespace DeNelle.HUD
                 _slotCooldown[i].fillAmount = 0f;
                 _slotCooldown[i].raycastTarget = false;
 
-                // Ability NAME label
+                // Ability NAME label — cream parchment on the dark glass.
                 var nameRect = NewRect("Name", cell, new Vector2(0.02f, 0.0f), new Vector2(0.98f, 0.32f));
-                _slotName[i] = AddText(nameRect, "", 14, LInk, TextAlignmentOptions.Center);
+                _slotName[i] = AddText(nameRect, "", 14, ElarionUi.Parchment, TextAlignmentOptions.Center);
                 _slotName[i].fontStyle = FontStyles.Bold;
                 _slotName[i].enableAutoSizing = true;
                 _slotName[i].fontSizeMin = 8f;
                 _slotName[i].fontSizeMax = 14f;
                 _slotName[i].raycastTarget = false;
-                _slotName[i].outlineColor = LGlow;
-                _slotName[i].outlineWidth = 0.06f;
+                _slotName[i].outlineColor = new Color32(0, 0, 0, 190);
+                _slotName[i].outlineWidth = 0.08f;
 
-                // Hotkey badge (top-right) — small gilt chip with dark ink letter.
+                // Hotkey badge (top-right) — small gilt chip with dark-ink letter.
                 var keyBadge = NewRect("KeyBadge", cell, new Vector2(0.70f, 0.70f), new Vector2(1.0f, 1.0f));
                 var keyImg = keyBadge.gameObject.AddComponent<Image>();
                 keyImg.sprite = HudTheme.RoundedFrame;
                 keyImg.type = HudTheme.RoundedFrame != null ? Image.Type.Sliced : Image.Type.Simple;
-                keyImg.color = new Color(LGilt.r, LGilt.g, LGilt.b, 0.85f);
+                keyImg.color = new Color(ElarionUi.Gilt.r, ElarionUi.Gilt.g, ElarionUi.Gilt.b, 0.92f);
                 keyImg.raycastTarget = false;
-                _slotKey[i] = AddText(keyBadge, defaultKeys[i], 14, LInk, TextAlignmentOptions.Center);
+                _slotKey[i] = AddText(keyBadge, defaultKeys[i], 14, ElarionUi.Ink, TextAlignmentOptions.Center);
                 _slotKey[i].fontStyle = FontStyles.Bold;
 
                 var btn = cell.gameObject.AddComponent<Button>();
                 btn.targetGraphic = cellImg;
-                HudTheme.StyleButtonColors(btn, LParchSoft);
+                ElarionUiKit.StyleButtonColors(btn);
                 int slot = i;
                 btn.onClick.AddListener(() => AbilityRequested?.Invoke(slot));
             }
@@ -1917,11 +1945,14 @@ namespace DeNelle.HUD
             {
                 AnchorTopLeft(_partyStack, x: 10f, y: 160f, width: 595f,   // BELOW the wave-status cluster; −15%
                     height: PartyRowHeight * PartySlotCount + PartyRowGap * (PartySlotCount - 1));
-                SetAnchors(_castleBanner,   new Vector2(0.20f, 0.955f), new Vector2(0.72f, 1f));
-                SetAnchors(_waveReadout,    new Vector2(0.20f, 0.89f),  new Vector2(0.80f, 0.95f));
+                // MOCKUP ALIGN: Heart-of-Elarion objective bar TOP-LEFT under resources;
+                // WAVE x/y readout CENTERED-top; resource strip across the top-right.
+                SetAnchors(_castleBanner,   new Vector2(0.005f, 0.875f), new Vector2(0.46f, 0.94f));
+                SetAnchors(_waveReadout,    new Vector2(0.30f, 0.86f),  new Vector2(0.70f, 0.925f));
                 SetAnchors(_resourceStrip,  new Vector2(0.48f, 0.955f), new Vector2(1f, 1f));
-                // Ability cluster hugs the bottom-RIGHT corner (right-thumb arc).
-                SetAnchors(_skillBar,       new Vector2(0.58f, 0.0f),   new Vector2(1.0f, 0.225f));
+                // Ability cluster hugs the bottom-RIGHT corner (right-thumb arc). Taller
+                // to fit the two labeled rows (SPELLS + WEAPON SKILLS) per the mockup.
+                SetAnchors(_skillBar,       new Vector2(0.58f, 0.0f),   new Vector2(1.0f, 0.28f));
                 // Hero vitals float on the bottom-LEFT, lifted ABOVE the joystick.
                 SetAnchors(_vitalsCluster,  new Vector2(0.02f, 0.235f), new Vector2(0.46f, 0.30f));
                 // Build entry lifts to the upper-right, clear of the skill cluster.
@@ -1942,7 +1973,9 @@ namespace DeNelle.HUD
             {
                 AnchorTopLeft(_partyStack, x: 10f, y: 160f, width: 510f,   // BELOW the wave-status cluster; −15%
                     height: PartyRowHeight * PartySlotCount + PartyRowGap * (PartySlotCount - 1));
-                SetAnchors(_castleBanner,   new Vector2(0.36f, 0.94f), new Vector2(0.64f, 0.99f));
+                // MOCKUP ALIGN: Heart objective bar top-LEFT; WAVE readout centered-top;
+                // resources top-right.
+                SetAnchors(_castleBanner,   new Vector2(0.005f, 0.93f), new Vector2(0.30f, 0.99f));
                 SetAnchors(_waveReadout,    new Vector2(0.36f, 0.86f), new Vector2(0.64f, 0.925f));
                 SetAnchors(_resourceStrip,  new Vector2(0.76f, 0.94f), new Vector2(0.995f, 0.99f));
                 // Landscape: more width — ability cluster sits tight in the corner.
@@ -2065,10 +2098,23 @@ namespace DeNelle.HUD
         public void SetWave(int waveNumber)
         {
             _lastWaveNumber = waveNumber;
-            if (_waveText != null) _waveText.text = "WAVE " + waveNumber;
             // WO-339: feed the TOWN wave-progress readout too.
             _townWaveCur = waveNumber;
+            RefreshCombatWaveHeadline();
             RefreshTownWaveProgress();
+        }
+
+        /// <summary>
+        /// MOCKUP ALIGN: compose the centered combat headline "WAVE N/M" (or "WAVE N"
+        /// until a total is known) from the same wave-number/total the town readout uses,
+        /// so the big top-centre label matches hud_mobile_combat's "WAVE 3/5".
+        /// </summary>
+        private void RefreshCombatWaveHeadline()
+        {
+            if (_waveText == null) return;
+            _waveText.text = _townWaveMax > 0
+                ? "WAVE " + _lastWaveNumber + "/" + _townWaveMax
+                : "WAVE " + _lastWaveNumber;
         }
 
         public void SetCountdown(float secondsRemaining)
@@ -2099,7 +2145,9 @@ namespace DeNelle.HUD
             float pct = Mathf.Clamp01(current / maxHp);
             if (_castleFill != null) _castleFill.fillAmount = pct;
             if (_castleText != null) _castleText.text = "Heart of Elarion — " + Mathf.RoundToInt(pct * 100f) + "%";
-            if (_castleFill != null) _castleFill.color = Color.Lerp(HudTheme.HpRed, HudTheme.CastleGold, Mathf.Clamp01(pct / 0.5f));
+            // MOCKUP ALIGN: a healthy Heart reads GREEN (the objective-bar fill colour in
+            // hud_mobile_combat), reddening as it takes damage. Lerp red→green.
+            if (_castleFill != null) _castleFill.color = Color.Lerp(HudTheme.HpRed, ElarionUi.Affordable, Mathf.Clamp01(pct / 0.5f));
             // WO-339: town metric (Heart HP %).
             _townHeartPct = pct;
             if (_townHeartText != null)
@@ -2163,7 +2211,7 @@ namespace DeNelle.HUD
 
         public void SetWaveImminent(bool imminent)
         {
-            if (_waveText != null) _waveText.color = imminent ? HudTheme.HpRed : HudTheme.Text;
+            if (_waveText != null) _waveText.color = imminent ? HudTheme.HpRed : HudTheme.Gilt;   // MOCKUP ALIGN: gilt headline at rest
             if (_waveStateText != null)
             {
                 _lastWaveState = imminent ? "Horde Approaching" : "Defend";
@@ -2189,7 +2237,7 @@ namespace DeNelle.HUD
 
         public void HideWaveClearBanner()
         {
-            if (_waveText != null) _waveText.text = "WAVE " + _lastWaveNumber;
+            RefreshCombatWaveHeadline();   // MOCKUP ALIGN: restore the "WAVE N/M" headline
             if (_waveStateText != null) { _waveStateText.text = _lastWaveState; _waveStateText.color = HudTheme.Gold; }
             // WO-339: wave done → lookout returns to SAFE, timer awaits next countdown.
             _townWaveActive = false;
@@ -2290,6 +2338,8 @@ namespace DeNelle.HUD
         {
             _townWaveCur = current;
             _townWaveMax = total;
+            _lastWaveNumber = current;
+            RefreshCombatWaveHeadline();   // MOCKUP ALIGN: keep the "WAVE N/M" headline in sync
             RefreshTownWaveProgress();
         }
 
@@ -2472,11 +2522,13 @@ namespace DeNelle.HUD
             _slotCooldown[slot].fillAmount = fill;
             if (_slotCdFill != null) _slotCdFill[slot] = fill;
             bool ready = fill <= 0.001f;
-            // LIGHT: dark ink when ready, muted ink while on cooldown (was cream/dim).
+            // MOCKUP ALIGN (dark glass): cream parchment when ready, dim parchment while
+            // on cooldown — legible on the dark ability cell (the light-skin ink was
+            // invisible on the re-darkened combat panel). Key chip stays gilt-on-ink.
             if (_slotName != null && _slotName[slot] != null)
-                _slotName[slot].color = ready ? LInk : LInkDim;
+                _slotName[slot].color = ready ? ElarionUi.Parchment : ElarionUi.ParchmentDim;
             if (_slotKey != null && _slotKey[slot] != null)
-                _slotKey[slot].color = ready ? LInk : LInkDim;
+                _slotKey[slot].color = ready ? ElarionUi.Ink : new Color(ElarionUi.Ink.r, ElarionUi.Ink.g, ElarionUi.Ink.b, 0.6f);
         }
 
         /// <summary>Per-class ability cell content (key/glyph/name) — 5-arg path.</summary>
