@@ -45,6 +45,70 @@ namespace DeNelle.Editor
             Debug.Log($"[TripoExtract] DONE — extracted {ok}/{WightFbx.Length} (saved). TRIPO_EXTRACT_OK");
         }
 
+        /// <summary>
+        /// ANIMATION FIX (owner priority 2026-06-13): the new Tripo enemies imported as
+        /// animationType=Generic (2), so the SHARED humanoid controllers (LargeEnemy etc.)
+        /// can't retarget onto them → they T-pose / slide. They DO have a skeleton
+        /// (skeletonHasParents:1), so convert to Humanoid + build an avatar; if Unity can
+        /// map the rig the walk/attack/death cycles retarget on. If an avatar does NOT build
+        /// (isHuman=false), the skeleton isn't humanoid-mappable → owner runs it through AccuRIG.
+        /// </summary>
+        [MenuItem("Defenders/Art/Set Wight Enemies to Humanoid (animate via shared controller)")]
+        public static void ConvertWightsToHumanoid()
+        {
+            foreach (var p in WightFbx)
+            {
+                var imp = AssetImporter.GetAtPath(p) as ModelImporter;
+                if (imp == null) { Debug.LogWarning($"[Humanoid] no ModelImporter at '{p}'."); continue; }
+
+                imp.animationType = ModelImporterAnimationType.Human;
+                imp.avatarSetup   = ModelImporterAvatarSetup.CreateFromThisModel;
+                imp.SaveAndReimport();
+
+                string name = Path.GetFileNameWithoutExtension(p);
+                bool foundAvatar = false;
+                foreach (var o in AssetDatabase.LoadAllAssetsAtPath(p))
+                {
+                    if (o is Avatar av)
+                    {
+                        foundAvatar = true;
+                        Debug.Log($"[Humanoid] {name}: avatar built isValid={av.isValid} isHuman={av.isHuman} " +
+                                  $"{(av.isValid && av.isHuman ? "-> WILL ANIMATE via the shared humanoid controller" : "-> avatar invalid, needs AccuRIG")}");
+                    }
+                }
+                if (!foundAvatar)
+                    Debug.LogWarning($"[Humanoid] {name}: NO avatar built — skeleton not humanoid-mappable; run it through AccuRIG.");
+            }
+            AssetDatabase.SaveAssets();
+            Debug.Log("[Humanoid] DONE — HUMANOID_CONVERT_OK");
+        }
+
+        /// <summary>
+        /// Revert the enemies whose skeleton is NOT humanoid-mappable (avatar isHuman=False)
+        /// back to Generic, so they sit in a clean state (plain T-pose, no broken-humanoid
+        /// retarget warnings) until the owner re-exports an AccuRIG'd (CC_Base) version that
+        /// Unity CAN map to Humanoid. Troll mapped fine and is left Humanoid.
+        /// </summary>
+        [MenuItem("Defenders/Art/Revert Unmappable Wights (Demon+OgreMage) to Generic (await AccuRIG)")]
+        public static void RevertUnmappableToGeneric()
+        {
+            string[] unmappable =
+            {
+                "Assets/Resources/Enemies/Demon.fbx",
+                "Assets/Resources/Enemies/OgreMage.fbx",
+            };
+            foreach (var p in unmappable)
+            {
+                var imp = AssetImporter.GetAtPath(p) as ModelImporter;
+                if (imp == null) continue;
+                imp.animationType = ModelImporterAnimationType.Generic;
+                imp.SaveAndReimport();
+                Debug.Log($"[Humanoid] reverted {Path.GetFileNameWithoutExtension(p)} -> Generic (await AccuRIG).");
+            }
+            AssetDatabase.SaveAssets();
+            Debug.Log("[Humanoid] REVERT DONE — REVERT_GENERIC_OK");
+        }
+
         /// <summary>Extract embedded textures for one FBX into its sibling .fbm folder and
         /// reimport so the material links _BaseMap. Returns true if extraction ran.</summary>
         public static bool ExtractFor(string fbxPath)
