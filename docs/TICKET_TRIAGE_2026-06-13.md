@@ -20,6 +20,19 @@ Owner model: agents provide suggested guidance; the orchestrator (CLI) has final
 
 **Still OPEN after this pass (next waves):** T-008 (interior texture), T-009 (steps), T-010 (cone — needs repro), T-012 (enemy anim/art — deferred), T-015 (combat-HUD style — folded into gating, re-verify), T-017 (portrait/ghost modal — needs repro), T-018 (Talk — should be fixed via T-031, re-verify), T-020 (NPC-after-reload — verified correct by design), T-028 (Title bg art — needs assets), T-030 (DevTools button wire), T-033 (NPC float), T-034 (interactable signs). VERIFY set (already-fixed): T-021, T-023, T-036, T-037, T-038.
 
+## WAVE 2 + ACTIVE-TESTING FIXES (applied this pass, in the 2026-06-13 rebuild)
+| Ticket(s) | Commit | Note |
+|---|---|---|
+| **P0 NRE storm** ("NRE on load", "froze", "lots of errors") | `(static-init fix)` | ResourceBuildingProgression type-init read a null HarvestIntervalByLevel (declared after _byId) → poisoned the type → exception cascade. Moved the ladder before _byId. **Regression from f77334a, now fixed.** |
+| T-002 "no tree of life" (still, post-build) | `(castle rebake2)` | Heart anchor was invisible (no mesh) — added a visible bounds-scaled, ground-seated TreeOfLife child. |
+| T-007/T-008/T-009 castle dress | `6831f4e` (+rebake2) | Wall seams closed, interior stone textured, floating stair removed. |
+| T-030 "dev tools goes nowhere" | `e46b3a0` | AdminOverlay self-disabled (no PanelSettings in hub) → lazy-build with HelpMenu's borrowed PanelSettings. |
+| T-033 NPCs floating | `73b4069` | NpcGroundSeat raycasts to the real floor (navmesh-Y snap left them hovering). |
+| T-034 interactable signs | `73b4069` | World-space billboarded type-sign (shop/upgrade/talk/pet/spell) over each interactable. |
+| T-010/T-016 "black shape under Talk" | `(talk-disc fix)` | Talk is the only disabled icon button → ColorTint painted its seat (HudTheme.Disc sprite) with the dark disabledColor. Set Talk transition=None. |
+
+**Notion sync (2026-06-13):** WO-410 (P0 0.1fps GC storm) triaged → linked to the pooling pass; WO-166/WO-178 backfilled as Done; WO-331 (WebGL SignalContentComplete crash) linked to the T-031 dialogue-defer fix. Owner closes WOs as playtest confirms.
+
 ## Counts
 - **Raw entries:** 210 — session_start 23, scene_loaded 114, possible_softlock 8 (noise), flagged 57, exception 4, error 4. **Signal = 65** (flagged + exception + error).
 - **Unique canonical tickets:** 38 (T-001 … T-038).
