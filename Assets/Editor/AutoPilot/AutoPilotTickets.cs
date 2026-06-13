@@ -109,10 +109,32 @@ namespace DeNelle.Editor
             return t;
         }
 
+        // Minimum DISTINCT runs a break must reproduce in to be "confirmed". Below
+        // this, the ticket is DEMOTED (not dropped) into a labeled trailing section —
+        // a one-off may be a fluke, but a deterministic 1/N bug can be real. Override
+        // with the AUTOPILOT_MIN_RUNS env var; defaults to 2 when unset/invalid.
+        private const int DefaultMinRuns = 2;
+
+        private static int ResolveMinRuns()
+        {
+            string raw = Environment.GetEnvironmentVariable("AUTOPILOT_MIN_RUNS");
+            if (!string.IsNullOrEmpty(raw)
+                && int.TryParse(raw.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out int v)
+                && v >= 1)
+            {
+                return v;
+            }
+            return DefaultMinRuns;
+        }
+
         public static void Emit()
         {
             var log = new StringBuilder();
             log.AppendLine("=== AutoPilotTickets: break-log + summary -> triaged tickets ===");
+
+            int minRuns = ResolveMinRuns();
+            log.AppendLine($"reproduction threshold: >={minRuns} distinct run(s) to be CONFIRMED " +
+                           "(set AUTOPILOT_MIN_RUNS to change)");
 
             string dir = Application.persistentDataPath;
 
@@ -148,10 +170,10 @@ namespace DeNelle.Editor
                 log.AppendLine("no fleet runs found — " +
                     $"'{Path.Combine(dir, "autopilot-runs")}' has zero run folders. " +
                     "Nothing to triage (root break-log.jsonl is intentionally NOT scanned).");
-                try { WriteMarkdown(new List<Ticket>(), default, false, 0, 0, 0, 0); WriteJson(new List<Ticket>(), 0); }
+                try { WriteMarkdown(new List<Ticket>(), default, false, 0, 0, 0, 0, minRuns); WriteJson(new List<Ticket>(), 0); }
                 catch (Exception ex) { log.AppendLine("write error: " + ex.Message); }
                 log.AppendLine("=== verdict ===");
-                log.AppendLine("AUTOPILOT_TICKETS_OK: 0");
+                log.AppendLine("AUTOPILOT_TICKETS_OK: 0 (0 confirmed, 0 below-threshold)");
                 Debug.Log(log.ToString());
                 return;
             }
@@ -248,10 +270,11 @@ namespace DeNelle.Editor
                 return b.Count.CompareTo(a.Count);
             });
 
-            try { WriteMarkdown(sorted, summary, haveSummary, totalRuns, runsWithSummary, runs.Count, filteredArtifacts); WriteJson(sorted, totalRuns); }
+            try { WriteMarkdown(sorted, summary, haveSummary, totalRuns, runsWithSummary, runs.Count, filteredArtifacts, minRuns); WriteJson(sorted, totalRuns); }
             catch (Exception ex) { log.AppendLine("write error: " + ex.Message); }
 
             int bugs = 0, hangs = 0, warns = 0, notes = 0;
+            int confirmed = 0, belowThreshold = 0;
             foreach (var t in sorted)
             {
                 switch (t.Category)
@@ -261,15 +284,20 @@ namespace DeNelle.Editor
                     case "warning": warns++; break;
                     case "owner-note": notes++; break;
                 }
+                if (t.Runs.Count >= minRuns) confirmed++; else belowThreshold++;
             }
             log.AppendLine($"tickets: {bugs} bug(s), {hangs} hang(s), {warns} warning(s), {notes} note(s)");
+            log.AppendLine($"reproduction: {confirmed} confirmed (>={minRuns} runs), " +
+                           $"{belowThreshold} below-threshold (single/low-repro — may be flukes)");
 
             // ── verdict ──────────────────────────────────────────────────────
             int total = sorted.Count;
             log.AppendLine("=== verdict ===");
             // OK is "the emitter ran and produced the report" — bugs found are still a
             // successful EMIT (the run did its job). FAIL is reserved for the emitter
-            // being unable to produce tickets at all (no inputs).
+            // being unable to produce tickets at all (no inputs). Only CONFIRMED tickets
+            // (>=AUTOPILOT_MIN_RUNS distinct runs) count toward the headline number; the
+            // below-threshold count is stated explicitly so nothing is silently hidden.
             if (runsWithBreakLog == 0 && !haveSummary)
             {
                 log.AppendLine("AUTOPILOT_TICKETS_FAIL");
@@ -277,7 +305,7 @@ namespace DeNelle.Editor
             }
             else
             {
-                log.AppendLine($"AUTOPILOT_TICKETS_OK: {total}");
+                log.AppendLine($"AUTOPILOT_TICKETS_OK: {confirmed} ({confirmed} confirmed, {belowThreshold} below-threshold, {total} total)");
                 Debug.Log(log.ToString());
             }
         }
@@ -357,7 +385,8 @@ namespace DeNelle.Editor
         }
 
         private static void WriteMarkdown(List<Ticket> tickets, RunSummary summary, bool haveSummary,
-                                          int totalRuns, int runsWithSummary, int sourceCount, int filteredArtifacts)
+                                          int totalRuns, int runsWithSummary, int sourceCount, int filteredArtifacts,
+                                          int minRuns)
         {
             Directory.CreateDirectory("Builds");
             var sb = new StringBuilder();
@@ -368,6 +397,9 @@ namespace DeNelle.Editor
             sb.AppendLine($"**Fleet coverage:** {sourceCount} run source(s) scanned, " +
                           $"{totalRuns} with a break-log, {runsWithSummary} produced a summary. " +
                           "Each ticket is ranked by how many DISTINCT runs reproduced it.");
+            sb.AppendLine();
+            sb.AppendLine($"_Reproduction threshold: >={minRuns} runs to be 'confirmed' (set AUTOPILOT_MIN_RUNS to change). " +
+                          "Tickets below the threshold are DEMOTED into a trailing section, not dropped._");
             sb.AppendLine();
             sb.AppendLine($"_{filteredArtifacts} render-artifact records filtered (-nographics)_");
             sb.AppendLine();
@@ -384,16 +416,31 @@ namespace DeNelle.Editor
                 sb.AppendLine();
             }
 
+            // Partition into CONFIRMED (>=minRuns distinct runs) vs BELOW-THRESHOLD,
+            // preserving the incoming severity-then-run-count order in each bucket.
+            var confirmed = new List<Ticket>();
+            var below = new List<Ticket>();
+            foreach (var t in tickets)
+            {
+                if (t.Runs.Count >= minRuns) confirmed.Add(t);
+                else below.Add(t);
+            }
+
             sb.AppendLine("## Tickets");
             sb.AppendLine();
             if (tickets.Count == 0)
             {
                 sb.AppendLine("_No breaks recorded — clean run._");
             }
+            else if (confirmed.Count == 0)
+            {
+                sb.AppendLine($"_No confirmed tickets (none reproduced in >={minRuns} runs). " +
+                              "See the below-threshold section._");
+            }
             else
             {
                 string lastCat = null;
-                foreach (var t in tickets)
+                foreach (var t in confirmed)
                 {
                     if (t.Category != lastCat)
                     {
@@ -402,18 +449,36 @@ namespace DeNelle.Editor
                         sb.AppendLine($"### {t.Category.ToUpperInvariant()}");
                         sb.AppendLine();
                     }
-                    int k = t.Runs.Count;
-                    sb.AppendLine($"- **[{t.Kind}] x{t.Count}** — reproduced in {k}/{totalRuns} runs (scene: {t.Scene})");
-                    sb.AppendLine($"  - {t.Sample}");
-                    if (!string.IsNullOrEmpty(t.Stack))
-                    {
-                        string firstLine = t.Stack.Split('\n')[0];
-                        sb.AppendLine($"  - _stack:_ `{firstLine}`");
-                    }
+                    AppendTicket(sb, t, totalRuns);
                 }
             }
 
+            if (below.Count > 0)
+            {
+                sb.AppendLine();
+                sb.AppendLine("## Below threshold (single/low-repro — verify, may be flukes)");
+                sb.AppendLine();
+                sb.AppendLine($"_Reproduced in fewer than {minRuns} distinct run(s). Demoted, not dropped — " +
+                              "a deterministic 1/N bug can still be real._");
+                sb.AppendLine();
+                foreach (var t in below)
+                    AppendTicket(sb, t, totalRuns);
+            }
+
             File.WriteAllText(Path.Combine("Builds", "autopilot-tickets.md"), sb.ToString());
+        }
+
+        // Renders one ticket bullet (shared by the confirmed + below-threshold sections).
+        private static void AppendTicket(StringBuilder sb, Ticket t, int totalRuns)
+        {
+            int k = t.Runs.Count;
+            sb.AppendLine($"- **[{t.Kind}] x{t.Count}** — reproduced in {k}/{totalRuns} runs (scene: {t.Scene})");
+            sb.AppendLine($"  - {t.Sample}");
+            if (!string.IsNullOrEmpty(t.Stack))
+            {
+                string firstLine = t.Stack.Split('\n')[0];
+                sb.AppendLine($"  - _stack:_ `{firstLine}`");
+            }
         }
 
         private static void WriteJson(List<Ticket> tickets, int totalRuns)

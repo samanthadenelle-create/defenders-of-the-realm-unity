@@ -737,14 +737,22 @@ namespace DeNelle.DevTools
         //  PHASE: TriggerWave
         //  WaveManager.ForceBeginNextWave(), then poll until the phase advances
         //  off its current value (or timeout -> Fail).
+        //
+        //  CALIBRATION (false-positive fix): the hub (MainCastle_Hall) has NO wave
+        //  system, so when there's no WaveManager there is nothing to advance — the
+        //  old code warned but the phase still burned its full timeout and the
+        //  emitter logged a timeout/hang ticket (false positive, 8/8). We now treat
+        //  "no WaveManager in scene" as N/A and return SUCCESS (skipped) immediately.
+        //  It is ONLY a real Fail when a WaveManager EXISTS and its Phase refuses to
+        //  advance after ForceBeginNextWave within the timeout.
         // =====================================================================
         private IEnumerator TriggerWave()
         {
             var wm = UnityEngine.Object.FindAnyObjectByType<WaveManager>();
             if (wm == null)
             {
-                FlowTrace.Warn("Auto", "TriggerWave: no WaveManager in scene.");
-                _lastDetail = "no WaveManager";
+                FlowTrace.Step("Auto", "TriggerWave: no WaveManager in scene — N/A (hub has no wave loop), skipping.");
+                _lastDetail = "no WaveManager — N/A (skipped)";
                 yield break;
             }
 
@@ -769,10 +777,21 @@ namespace DeNelle.DevTools
 
         // =====================================================================
         //  PHASE: AttemptExitCastle (LAST)
-        //  Walk into the south exit trigger and record whether the active scene
-        //  changed. The south gate is the SceneTransitionTrigger whose target is
-        //  OuterWorld and that sits at the most -Z position; we just walk into
-        //  every gate that hasn't fired and let the proximity logic cross.
+        //  Walk into the south exit trigger and detect the REAL crossing.
+        //
+        //  CALIBRATION (false-positive fix): the castle->OuterWorld seam loads
+        //  OuterWorld ADDITIVELY (SceneTransitionTrigger.loadAdditive=true), so on a
+        //  SUCCESSFUL crossing the ACTIVE scene STAYS MainCastle_Hall — the old
+        //  "did the active scene change?" test therefore ALWAYS timed out (false
+        //  positive). The reliable signal is that the seam WARPS the hero to
+        //  trigger.targetPosition on Cross(). We poll the hero's distance to that
+        //  warp landing instead. (OuterWorld may also already be loaded additively
+        //  at startup, so "OuterWorld isLoaded" is NOT a usable crossing signal.)
+        //
+        //  SUCCESS = hero actually warped to within 8m of the seam's targetPosition.
+        //  FAILURE (real, ticket-worthy) = within the timeout the hero never reached
+        //  the gate's ProximityRadius (couldn't path), OR reached it but never warped
+        //  (seam didn't fire). The Fail names WHICH, with the closest distance reached.
         // =====================================================================
         private IEnumerator AttemptExitCastle()
         {
@@ -785,7 +804,8 @@ namespace DeNelle.DevTools
                 yield break;
             }
 
-            // Pick the south-most gate (smallest world Z) as the "exit".
+            // Pick the south-most gate (smallest world Z) as the "exit" — same
+            // selection the gate sweep uses; it's the wired castle->OuterWorld seam.
             SceneTransitionTrigger exit = null;
             float minZ = float.MaxValue;
             foreach (var g in gates)
@@ -795,26 +815,69 @@ namespace DeNelle.DevTools
             }
             if (exit == null) { _lastDetail = "no exit gate"; yield break; }
 
-            string sceneBefore = ActiveScene();
-            FlowTrace.Step("Auto", $"AttemptExitCastle: walking into '{exit.name}' (target='{exit.targetSceneName}', scene='{sceneBefore}').");
+            if (_hero == null)
+            {
+                FlowTrace.Fail("Auto", "AttemptExitCastle: hero is null — cannot attempt the crossing.");
+                _lastDetail = "hero null";
+                yield break;
+            }
 
-            // Walk a bit PAST the gate so the proximity radius certainly fires.
+            string targetScene = exit.targetSceneName;
+            Vector3 warpTarget = exit.targetPosition;
+            float radius = Mathf.Max(1f, exit.ProximityRadius);
+            Vector3 heroStart = _hero.transform.position;
+
+            FlowTrace.Step("Auto", $"AttemptExitCastle: walking into '{exit.name}' " +
+                $"(target='{targetScene}'@{warpTarget}, radius={radius:0.0}m, heroStart={heroStart}).");
+
+            // Drive toward the seam. The crossing fires from PROXIMITY (the trigger's
+            // own Update distance-check), so we just need to get within radius; the
+            // seam then WarpTo's the hero to targetPosition.
             _hero.SetAutoWalk(exit.transform);
+
             float t0 = Time.realtimeSinceStartup;
-            bool changed = false;
+            bool warped = false;
+            bool reachedProximity = false;
+            float closestToGate = float.MaxValue;   // closest the hero ever got to the gate
             while (Time.realtimeSinceStartup - t0 < ExitTimeout)
             {
-                if (ActiveScene() != sceneBefore) { changed = true; break; }
+                if (_hero == null) break;
+
+                Vector3 pos = _hero.transform.position;
+
+                // Did the seam warp us to the landing? (full 3D distance — the warp
+                // sets Y too). This is the authoritative crossing signal.
+                if (Vector3.Distance(pos, warpTarget) < 8f) { warped = true; break; }
+
+                // Track how close we get to the gate (horizontal — navmesh is planar).
+                float dGate = HorizontalDistance(pos, exit.transform.position);
+                if (dGate < closestToGate) closestToGate = dGate;
+                if (dGate <= radius + 0.5f) reachedProximity = true;
+
                 yield return null;
             }
             if (_hero != null) _hero.ClearAutoWalk();
 
-            string sceneAfter = ActiveScene();
-            if (changed || sceneAfter != sceneBefore)
-                FlowTrace.Step("Auto", $"AttemptExitCastle: active scene changed '{sceneBefore}'->'{sceneAfter}'.");
+            if (warped)
+            {
+                float finalDist = _hero != null ? Vector3.Distance(_hero.transform.position, warpTarget) : 0f;
+                FlowTrace.Step("Auto", $"AttemptExitCastle: CROSSED — hero warped to '{targetScene}' target {warpTarget} (now {finalDist:0.0}m from landing).");
+                _lastDetail = $"crossed to {targetScene} (warped to target)";
+            }
+            else if (!reachedProximity)
+            {
+                // Real, ticket-worthy: the hero could not path to the seam at all.
+                FlowTrace.Fail("Auto", $"AttemptExitCastle: hero could not path to the gate '{exit.name}' — " +
+                    $"closest {closestToGate:0.0}m of radius {radius:0.0}m within {ExitTimeout:0}s (navmesh edge / blocked).");
+                _lastDetail = $"could not reach gate (closest {closestToGate:0.0}m / radius {radius:0.0}m)";
+            }
             else
-                FlowTrace.Warn("Auto", $"AttemptExitCastle: active scene UNCHANGED ('{sceneBefore}') after {ExitTimeout:0}s — exit never fired (additive load or blocked navmesh).");
-            _lastDetail = $"scene {sceneBefore}->{sceneAfter}";
+            {
+                // Real, ticket-worthy: reached proximity but the seam never warped us.
+                FlowTrace.Fail("Auto", $"AttemptExitCastle: seam did NOT fire — hero reached closest {closestToGate:0.0}m of gate '{exit.name}' " +
+                    $"(radius {radius:0.0}m) but no warp to target {warpTarget} within {ExitTimeout:0}s.");
+                _lastDetail = $"seam did not fire (reached {closestToGate:0.0}m / radius {radius:0.0}m, no warp)";
+            }
         }
 
         // =====================================================================
