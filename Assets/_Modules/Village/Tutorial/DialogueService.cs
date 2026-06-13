@@ -153,6 +153,7 @@ namespace DeNelle.Village
                 Debug.Log("[DialogueService] Yarn variable storage cleared for New Game.");
             }
             CurrentStructureId = null;
+            CurrentStructureName = null;
         }
 
         /// <summary>The structureId of the most recent <see cref="PlayStructure"/> call.
@@ -161,10 +162,17 @@ namespace DeNelle.Village
         /// not interpolate — so the arg can't be trusted. One dialogue runs at a time.</summary>
         public static string CurrentStructureId { get; private set; }
 
+        /// <summary>The player-facing sign LABEL of the most recent <see cref="PlayStructure"/>
+        /// call (e.g. "Jeweler", "Marketplace"). Callers that open a vendor panel use THIS for
+        /// the panel header so a storefront always shows its own name even when several signs
+        /// share one structureId. Null when no label was supplied.</summary>
+        public static string CurrentStructureName { get; private set; }
+
         public static bool PlayStructure(string structureId, string displayName = null)
         {
             if (string.IsNullOrEmpty(structureId)) return false;
             CurrentStructureId = structureId;
+            CurrentStructureName = displayName;
 
             DialogueRunner runner = Current ?? Host();
             if (runner == null) return false;

@@ -137,6 +137,19 @@
       "footprint": "medium",
       "buildMenuOrder": 8,
       "isShoppable": true
+    },
+    {
+      "id": "jeweler",
+      "type": "Workshop",
+      "displayName": "jeweler",
+      "descriptionKey": "buildingDesc.jeweler",
+      "hp": 170,
+      "maxHp": 170,
+      "crystalCost": 130,
+      "model": "market",
+      "footprint": "medium",
+      "buildMenuOrder": 9,
+      "isShoppable": true
     }
   ]
 }

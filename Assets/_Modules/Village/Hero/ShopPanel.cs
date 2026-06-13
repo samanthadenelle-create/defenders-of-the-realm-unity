@@ -53,7 +53,7 @@ namespace DeNelle.Village.Hero
 
         private readonly List<string> _potionIds = new List<string> { "minor-heal-potion", "minor-mana-potion" };
 
-        public void Open(string vendorContext = null)
+        public void Open(string vendorContext = null, string displayName = null)
         {
             Close();
 
@@ -87,6 +87,12 @@ namespace DeNelle.Village.Hero
             else if (vc.Contains("stable")) title = "Stable Supplies";
             else if (string.IsNullOrEmpty(_vendorContext)) title = "Vendor Wares";
             else title = TitleizeVendor(_vendorContext) + " Wares";
+
+            // FIX B: an explicit vendor LABEL (the storefront's own sign/display name) wins
+            // over the id-derived title — so a storefront can never read the wrong header just
+            // because its id collapsed onto another vendor's id. Falls through to the id-derived
+            // title above when no label is supplied (the param is optional; old callers unchanged).
+            if (!string.IsNullOrEmpty(displayName)) title = displayName;
             ElarionUiKit.Header(panel, title, x0: 0.04f, x1: 0.96f, y0: 0.9f, y1: 0.97f);
 
             // Economy readout (live)

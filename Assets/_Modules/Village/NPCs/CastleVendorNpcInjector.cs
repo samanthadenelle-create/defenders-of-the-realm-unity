@@ -84,7 +84,7 @@ namespace DeNelle.Village
         //   - Forge      -> "forge"
         //   - ArcaneTower-> "arcane-tower" (no progression def yet; StructureMenu still
         //                                   opens gracefully — no yield/portrait, talk works)
-        //   - Jeweler    -> "market"    (commerce; gems are a market good for now)
+        //   - Jeweler    -> "jeweler"   (own shoppable storefront — Jeweler's Bench, gem/jewelry goods)
         //   - Marketplace-> "market"
         // The "no def" ids (arcane-tower) are SAFE: CmdStructureStatus tolerates a null
         // Find() and a missing Portraits/<id> image, so the menu still shows + the Talk
@@ -106,7 +106,7 @@ namespace DeNelle.Village
                 case "arcanetower":
                     return new Vendor { BodyRes = BodyPeasantB, StructureId = "arcane-tower", Label = "Arcane Tower", Arch = TownsfolkDialogue.Archetype.Elder };
                 case "jeweler":
-                    return new Vendor { BodyRes = BodyMerchant, StructureId = "market",       Label = "Jeweler",    Arch = TownsfolkDialogue.Archetype.Quartermaster };
+                    return new Vendor { BodyRes = BodyMerchant, StructureId = "jeweler",      Label = "Jeweler",    Arch = TownsfolkDialogue.Archetype.Quartermaster };
                 case "marketplace":
                     return new Vendor { BodyRes = BodyMerchant, StructureId = "market",       Label = "Marketplace", Arch = TownsfolkDialogue.Archetype.Quartermaster };
             }

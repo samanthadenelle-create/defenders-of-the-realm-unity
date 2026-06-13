@@ -767,7 +767,10 @@ namespace DeNelle.Village
             var panel = FindObjectOfType<DeNelle.Village.Hero.ShopPanel>();
             if (panel == null)
                 panel = new GameObject("ShopPanelHost").AddComponent<DeNelle.Village.Hero.ShopPanel>();
-            panel.Open(vendor);
+            // FIX B: pass the storefront's own sign LABEL (seeded by PlayStructure) so the panel
+            // header reads the vendor's display name, not just the id-derived title — prevents the
+            // "wrong storefront title" class of bug. Null/empty label safely falls back to the id.
+            panel.Open(vendor, DialogueService.CurrentStructureName);
         }
 
         private void CmdOpenUpgrade(string stationType)
