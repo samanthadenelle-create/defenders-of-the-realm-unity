@@ -407,7 +407,21 @@ namespace DeNelle.Village.Hero
         private void FinalizeScroll()
         {
             if (_scrollContent == null) return;
+            // The whole modal is built AND populated in one synchronous frame (Open -> ShowBuy),
+            // before the ScreenSpaceOverlay canvas resolves its screen->canvas rects — so the
+            // content's ancestors (panel/content-area/viewport) can still be ZERO-size when the
+            // ContentSizeFitter runs, collapsing every row to nothing. Force the canvas rects to
+            // resolve FIRST, then rebuild the content layout, so the rows get real height now.
+            Canvas.ForceUpdateCanvases();
+            var contentArea = _contentRoot != null ? _contentRoot.transform as RectTransform : null;
+            if (contentArea != null) LayoutRebuilder.ForceRebuildLayoutImmediate(contentArea);
             LayoutRebuilder.ForceRebuildLayoutImmediate(_scrollContent);
+            // DIAGNOSTIC (so a still-empty store is pinpointed, not re-guessed): rows created +
+            // the computed heights. rows=0 -> ShowBuy didn't build them; height 0 -> layout/rect;
+            // rows>0 & height>0 but invisible -> row visibility (Cell colour / mask clip).
+            Debug.Log($"[ShopPanel] FinalizeScroll: rows={_scrollContent.childCount}, " +
+                      $"contentH={_scrollContent.rect.height:F0}, " +
+                      $"contentAreaH={(contentArea != null ? contentArea.rect.height : -1f):F0}");
         }
 
         // A buy row built from kit pieces: a dark-glass Cell panel (LayoutElement-sized
