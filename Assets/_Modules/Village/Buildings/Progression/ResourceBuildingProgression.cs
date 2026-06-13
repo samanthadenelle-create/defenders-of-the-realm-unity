@@ -173,6 +173,14 @@ namespace DeNelle.Village.Buildings.Progression
         public const string LumbermillId = "lumbermill";
         public const string ForgeId = "forge";
 
+        // Curated harvest-SPEED ladder (T-025). MUST be declared BEFORE _byId: static
+        // field initializers run in textual order, and _byId = Build() reads this array
+        // via IntervalForLevel during construction. If it sits after _byId it is still
+        // null when Build() runs -> the type initializer throws NRE and poisons the whole
+        // type (TypeInitializationException cascade across upgrade/dialogue/harvester).
+        // Level 1 ticks every 8s dropping ~1.2s/level to 3.2s at level 5 (2.5x throughput).
+        private static readonly float[] HarvestIntervalByLevel = { 8f, 6.8f, 5.6f, 4.4f, 3.2f };
+
         private static readonly Dictionary<string, ResourceBuildingDef> _byId = Build();
 
         /// <summary>All three resource-building curves, in display order.</summary>
@@ -265,10 +273,8 @@ namespace DeNelle.Village.Buildings.Progression
         // arcane tier adds a size multiplier. Balanced off the existing yield ladder
         // so an upgrade is felt as "faster AND bigger", not just a bigger number.
         //
-        // Speed: level 1 ticks every 8s, dropping ~1.2s/level to a brisk 3.2s at
-        // level 5 (a 2.5x throughput gain across the harvestable curve, on top of
-        // the yield growth). Indexed by 1-based level; clamped past the array.
-        private static readonly float[] HarvestIntervalByLevel = { 8f, 6.8f, 5.6f, 4.4f, 3.2f };
+        // Speed ladder HarvestIntervalByLevel is declared near the top (before _byId)
+        // so it is initialized before Build() reads it — see the comment there.
         // The arcane (Magic-gated) tier is the fastest tick in the game.
         private const float ArcaneHarvestInterval = 2.4f;
         // Size: harvestable tiers leave size at 1.0 (size = YieldPerTick); the
