@@ -306,6 +306,19 @@ namespace DeNelle.Village
         /// <summary>Seconds remaining in the Prepare-Phase countdown (0 when not counting down).</summary>
         public float CountdownRemaining => _countdownRemaining;
 
+        /// <summary>True while the loop is in the Prepare-Phase countdown (the wave timer is live).</summary>
+        public bool IsCountingDown => _phase == WavePhase.Countdown;
+
+        /// <summary>
+        /// T-022 (HUD wave-timer bind): seconds until the next wave begins. Returns the
+        /// live countdown value ONLY while actually counting down, and 0 otherwise (Idle /
+        /// Active / Complete), so a HUD timer label binding this reads a clean, unambiguous
+        /// value — no need to also test <see cref="Phase"/>. Additive read-only accessor;
+        /// existing <see cref="CountdownRemaining"/> / <see cref="OnCountdownTick"/> are
+        /// unchanged, so existing bindings keep working.
+        /// </summary>
+        public float SecondsUntilNextWave => _phase == WavePhase.Countdown ? _countdownRemaining : 0f;
+
         /// <summary>Live enemies currently on the field.</summary>
         public IReadOnlyList<Enemy> LiveEnemies => _liveEnemies;
 
@@ -367,18 +380,21 @@ namespace DeNelle.Village
             Quaternion rot = Quaternion.LookRotation(
                 toHeart.sqrMagnitude > 0.0001f ? toHeart : Vector3.forward);
 
-            if (_enemyPrefab == null)
-            {
-                Debug.LogError($"[WaveManager] Prefab is null for enemy data: {def.Id}. Assign an enemy prefab to WaveManager._enemyPrefab in the inspector. Using primitive placeholder.");
-            }
-
             // POOLED (same path as SpawnOne): reuse a dead body instead of churning a
             // fresh GameObject. The external caller owns this enemy's lifecycle; on its
             // death Enemy.Die returns it to the pool like any other.
-            string poolKey = _enemyPrefab != null
-                ? "prefab:" + _enemyPrefab.name
-                : "model:" + EnemyFactory.ModelForEnemy(def);
-            Enemy enemy = EnemyPool.Get(poolKey, _enemyPrefab, def, pos, rot, _enemyRoot);
+            //
+            // T-011: prefer the model-keyed FACTORY body (varied per def) over the single
+            // serialized _enemyPrefab so this external-mode spawn matches the variety of
+            // the wave loop. _enemyPrefab is only a fallback when no model resolves.
+            string model = EnemyFactory.ModelForEnemy(def);
+            bool useFactory = !string.IsNullOrEmpty(model);
+            if (!useFactory && _enemyPrefab == null)
+            {
+                Debug.LogError($"[WaveManager] No model resolves for enemy data '{def.Id}' and no _enemyPrefab fallback — using primitive placeholder.");
+            }
+            string poolKey = useFactory ? "model:" + model : "prefab:" + _enemyPrefab.name;
+            Enemy enemy = EnemyPool.Get(poolKey, useFactory ? null : _enemyPrefab, def, pos, rot, _enemyRoot);
             if (enemy == null) return null;
 
             // The hero/pet target sweeps find enemies via GetComponentInParent
@@ -1050,10 +1066,20 @@ namespace DeNelle.Village
             // prefab name (prefab path) or the EnemyDef model id (factory path) so a
             // reused body matches the kind asked for; it builds fresh on a drain. The
             // CALLER still Configures + scales + hooks events below, exactly as before.
-            string poolKey = _enemyPrefab != null
-                ? "prefab:" + _enemyPrefab.name
-                : "model:" + EnemyFactory.ModelForEnemy(def);
-            Enemy enemy = EnemyPool.Get(poolKey, _enemyPrefab, def, pos, rot, _enemyRoot);
+            //
+            // T-011 ("all enemies one type / friendly enemies"): the single serialized
+            // _enemyPrefab used to OVERRIDE every def here — keying the pool on the one
+            // prefab name and handing the SAME body out for hollow-walker / -warrior /
+            // -rogue / necromancer alike, so a mixed wave read as clones. The varied
+            // family bodies come from EnemyFactory.Build (model-keyed per ModelForEnemy);
+            // route any def that resolves to a real model through the FACTORY path so the
+            // flat batch stream is as varied as the smart/family paths already are. The
+            // _enemyPrefab is kept ONLY as a genuine fallback for a def with no usable
+            // model (it never overrides a valid def again).
+            string model = EnemyFactory.ModelForEnemy(def);
+            bool useFactory = !string.IsNullOrEmpty(model);
+            string poolKey = useFactory ? "model:" + model : "prefab:" + _enemyPrefab.name;
+            Enemy enemy = EnemyPool.Get(poolKey, useFactory ? null : _enemyPrefab, def, pos, rot, _enemyRoot);
             if (enemy == null) return;
 
             // The hero/pet target sweeps find enemies via GetComponentInParent<IDamageable>,
