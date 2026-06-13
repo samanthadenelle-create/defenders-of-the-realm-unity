@@ -64,11 +64,15 @@ namespace DeNelle.Village.Hero
             _ui = ElarionUiKit.BuildModalCanvas("ShopPanelUI", 1000);
             ElarionUiKit.Scrim(_ui.transform, onTapClose: Close);
 
-            // Framed dark-glass panel (deep) — the canonical store backboard. T-024:
-            // a THIN, minimized footprint suited to web UI — a slim centred column
-            // (not a full-screen sheet) so the store reads as a compact dark-glass
-            // drawer rather than taking over the screen.
-            var panelGo = ElarionUiKit.Panel(_ui.transform, new Vector2(0.22f, 0.08f), new Vector2(0.78f, 0.92f), deep: true);
+            // Framed dark-glass panel (deep) — the canonical store backboard, dressed
+            // sprite-FIRST with the RPG tech-pack's ornate inventory/dialogue frame
+            // (gold-rune border over dark glass) so the store reads as the SAME designed
+            // game as the town HUD. Falls back to the procedural glass+gilt-rim panel
+            // when the pack art is absent. T-024: a THIN, minimized footprint suited to
+            // web UI — a slim centred column (not a full-screen sheet) so the store reads
+            // as a compact dark-glass drawer rather than taking over the screen.
+            var panelGo = ElarionUiKit.PanelFramed(_ui.transform, new Vector2(0.22f, 0.08f), new Vector2(0.78f, 0.92f),
+                                                   deep: true, packSpriteName: RpgUiCatalog.PanelInventory);
             var panel = panelGo.transform;
 
             // Header — read as a named storefront, not a generic "Vendor Wares" wall. The
@@ -121,10 +125,10 @@ namespace DeNelle.Village.Hero
             cr.offsetMin = Vector2.zero;
             cr.offsetMax = Vector2.zero;
 
-            // Close (X) — top-right corner, kit danger button. Added last so it draws on
-            // top of the header/content and always receives the tap.
-            ElarionUiKit.Button(panel, "X", ElarionUiKit.ButtonKind.Danger,
-                                new Vector2(0.9f, 0.9f), new Vector2(0.985f, 0.985f), Close);
+            // Close (X) — top-right corner, ornate pack-frame danger button. Added last
+            // so it draws on top of the header/content and always receives the tap.
+            ElarionUiKit.ButtonPack(panel, "X", ElarionUiKit.ButtonKind.Danger,
+                                    new Vector2(0.9f, 0.9f), new Vector2(0.985f, 0.985f), Close);
 
             // Status line
             var statusGo = new GameObject("Status", typeof(TMPro.TextMeshProUGUI));
@@ -190,12 +194,16 @@ namespace DeNelle.Village.Hero
             t.text = $"Wood: {e.Wood}   Iron: {e.Iron}   Food: {e.Food}   Crystals: {e.Crystals}";
         }
 
-        // A mode tab built from the shared kit Button (Gold kind). anchorX = (min,max)
-        // fractions across the tab bar. The active tab is brightened by HighlightTab.
+        // A mode tab built from the shared kit ButtonPack (Gold kind) dressed sprite-FIRST
+        // with the RPG tech-pack's ornate gold button frame (button/button_gold, the kit's
+        // RoleButton default) so the tabs carry the same gilded plate as the town HUD;
+        // falls back to the procedural gold glass when the pack is absent. anchorX =
+        // (min,max) fractions across the tab bar. The active tab is brightened by
+        // HighlightTab (tint over the pack frame image).
         private void CreateTabButton(Transform parent, string label, Vector2 anchorX, System.Action onClick)
         {
-            ElarionUiKit.Button(parent, label, ElarionUiKit.ButtonKind.Gold,
-                                new Vector2(anchorX.x, 0.05f), new Vector2(anchorX.y, 0.95f), onClick);
+            ElarionUiKit.ButtonPack(parent, label, ElarionUiKit.ButtonKind.Gold,
+                                    new Vector2(anchorX.x, 0.05f), new Vector2(anchorX.y, 0.95f), onClick);
         }
 
         // Light the active tab brighter; dim the rest. The kit names its buttons
@@ -416,9 +424,10 @@ namespace DeNelle.Village.Hero
             ElarionUiKit.Label(row.transform, CostString(cost), 0.15f, 0.85f, priceColor,
                 ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Left, 0.5f, 0.72f, bold: true);
 
-            // BUY is the primary CTA -> the gold kit button (dark-ink label). Dimmed +
-            // non-interactable when unaffordable so the affordance reads disabled.
-            var buyBtn = ElarionUiKit.Button(row.transform, "BUY", ElarionUiKit.ButtonKind.Gold,
+            // BUY is the primary CTA -> the ornate gold pack button (gilded frame +
+            // dark-ink label, same gold CTA as the town HUD). Dimmed + non-interactable
+            // when unaffordable so the affordance reads disabled.
+            var buyBtn = ElarionUiKit.ButtonPack(row.transform, "BUY", ElarionUiKit.ButtonKind.Gold,
                 new Vector2(0.74f, 0.15f), new Vector2(0.98f, 0.85f), buyAction);
             if (buyBtn != null) buyBtn.interactable = affordable;
         }
@@ -669,7 +678,7 @@ namespace DeNelle.Village.Hero
             ElarionUiKit.Label(row.transform, label, 0.15f, 0.85f, ElarionUi.Parchment,
                 ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Left, 0.04f, 0.62f);
 
-            ElarionUiKit.Button(row.transform, "EQUIP", ElarionUiKit.ButtonKind.Gold,
+            ElarionUiKit.ButtonPack(row.transform, "EQUIP", ElarionUiKit.ButtonKind.Gold,
                 new Vector2(0.65f, 0.15f), new Vector2(0.98f, 0.85f), () => TryEquip(id, isWeapon));
         }
 

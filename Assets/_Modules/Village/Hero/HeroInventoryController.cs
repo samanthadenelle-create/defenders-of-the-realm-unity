@@ -315,9 +315,12 @@ namespace DeNelle.Village
                      new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.35f));
 
             // The main panel fills most of the screen (mobile-first) — the shared
-            // dark-glass framed panel (gold rim) from the presentation layer.
-            var panel = ElarionUiKit.Panel(_ui.transform, new Vector2(0.04f, 0.03f), new Vector2(0.96f, 0.97f),
-                                           deep: true, innerRim: true);
+            // dark-glass framed panel dressed SPRITE-FIRST with the tech-pack's ornate
+            // inventory frame (RolePanel/panel_inventory) over the gold-rimmed glass, so
+            // the modal shell reads in the SAME designed-game look as the town HUD. When
+            // the pack is absent it stays the procedural glass+gold-rim panel (no regress).
+            var panel = ElarionUiKit.PanelFramed(_ui.transform, new Vector2(0.04f, 0.03f), new Vector2(0.96f, 0.97f),
+                                                 deep: true, packSpriteName: RpgUiCatalog.PanelInventory);
 
             // ── MOCKUP #41 LAYOUT (WO-400) ──────────────────────────────────────
             //   [ rune strip ............................................... ]  top
@@ -337,15 +340,23 @@ namespace DeNelle.Village
             // A faint rune strip across the very top edge — a HINT of Elarion magic.
             AddRuneStrip(panel.transform, 0.965f, 0.992f);
 
-            // Header: bronze crest + title (dark ink on light parchment; the prior soft
-            // dark drop-shadow now reads as a gentle emboss on the light ground).
+            // Header: a gold-rune tech-pack banner (panel_tab) carries the bronze crest +
+            // title, so the heading reads as the SAME ornate gilt header as the town HUD.
+            // The banner is a sprite-first, NON-RAYCAST plate behind the gilt title (no-op
+            // procedural-clean when the pack is absent).
+            var headerBanner = AddImage(panel.transform, "HeaderBanner",
+                                        new Vector2(0.04f, 0.910f), new Vector2(0.84f, 0.965f),
+                                        new Color(0, 0, 0, 0));
+            NoRaycast(headerBanner);
+            DressPanel(headerBanner, RpgUiCatalog.PanelTab, keepWhite: true);
             AddLabelShadow(panel.transform, ElarionUi.CrestGlyph + "  INVENTORY", 0.918f, 0.958f,
                            GiltInk, ElarionUi.FontTitle, 0.05f, 0.80f, spacing: 6f);
             AddRule(panel.transform, 0.908f, 0.04f, 0.96f);
 
-            // Close X — top-right, in a deeper-tan parchment chip (so it reads on light).
-            AddButton(panel.transform, "X", new Vector2(0.92f, 0.035f), new Vector2(0.916f, 0.962f),
+            // Close X — top-right, dressed sprite-first with the tech-pack gold button frame.
+            var closeBtn = AddButton(panel.transform, "X", new Vector2(0.92f, 0.035f), new Vector2(0.916f, 0.962f),
                       new Color(0.847f, 0.804f, 0.710f, 1f), Close, ButtonKind.Neutral);
+            DressButtonPack(closeBtn);
 
             // Tabs row (top, under the header) — host so the active pill can be rebuilt.
             _tabsRoot = AddImage(panel.transform, "TabsRow",
@@ -366,9 +377,13 @@ namespace DeNelle.Village
             // selected-item icon + stats + the EQUIP CTA laid out left-to-right. ──
             _gridRoot = ElarionUiKit.Well(panel.transform,
                                           new Vector2(0.355f, 0.305f), new Vector2(0.96f, 0.822f));
+            // Dress the grid tray with the tech-pack's ornate inventory panel frame.
+            DressPanel(_gridRoot, RpgUiCatalog.PanelInventory, keepWhite: true);
             _sidebarRoot = ElarionUiKit.Panel(panel.transform,
                                               new Vector2(0.355f, 0.115f), new Vector2(0.96f, 0.293f),
                                               deep: true, innerRim: true);
+            // The detail/equip strip reads as the tech-pack's ornate quest/detail banner.
+            DressPanel(_sidebarRoot, RpgUiCatalog.PanelQuest, keepWhite: true);
 
             // ── Footer bar: Sort / Filter on the left, resource wells on the right. ──
             BuildFooterBar(panel.transform);
@@ -391,10 +406,10 @@ namespace DeNelle.Village
 
             // LEFT: Sort + Filter chips (parchment chips with dark-ink labels).
             Color chip = new Color(0.847f, 0.804f, 0.710f, 1f);
-            AddButton(tray.transform, "Sort", new Vector2(0.115f, 0.085f), new Vector2(0.18f, 0.82f),
-                      chip, () => { /* TODO owned-list re-sort */ }, ButtonKind.Neutral);
-            AddButton(tray.transform, "Filter", new Vector2(0.305f, 0.085f), new Vector2(0.18f, 0.82f),
-                      chip, () => { /* TODO owned-list filter */ }, ButtonKind.Neutral);
+            DressButtonPack(AddButton(tray.transform, "Sort", new Vector2(0.115f, 0.085f), new Vector2(0.18f, 0.82f),
+                      chip, () => { /* TODO owned-list re-sort */ }, ButtonKind.Neutral));
+            DressButtonPack(AddButton(tray.transform, "Filter", new Vector2(0.305f, 0.085f), new Vector2(0.18f, 0.82f),
+                      chip, () => { /* TODO owned-list filter */ }, ButtonKind.Neutral));
 
             // RIGHT: resource wells.
             int coins = 0, crystals = 0;
@@ -521,10 +536,12 @@ namespace DeNelle.Village
             NoRaycast(row);
             AddInnerRim(row, new Color(rc.r, rc.g, rc.b, filled ? 0.55f : 0.30f));
 
-            // LEFT: square icon socket.
+            // LEFT: square icon socket, dressed SPRITE-FIRST with the tech-pack's ornate
+            // socket plate (rarity-tinted); procedural tint + inner rim remain the fallback.
             var sock = AddImage(row.transform, "Socket", new Vector2(0.06f, 0.14f), new Vector2(0.34f, 0.86f),
                                 new Color(rc.r, rc.g, rc.b, filled ? 0.18f : 0.10f));
             NoRaycast(sock);
+            DressSocket(sock, new Color(rc.r, rc.g, rc.b, filled ? 0.55f : 0.30f));
             AddInnerRim(sock, new Color(rc.r, rc.g, rc.b, filled ? 0.60f : 0.35f));
             Color glyphCol = filled ? rcInk : new Color(InkDim.r, InkDim.g, InkDim.b, 0.7f);
             string glyph = string.IsNullOrEmpty(icon) ? (filled ? "?" : "+") : icon;
@@ -565,6 +582,11 @@ namespace DeNelle.Village
                 Color bg = sel ? ElarionUi.GoldButton : inactive;
                 var btn = AddButton(host, names[i], new Vector2(cx, w * 0.5f), new Vector2(y0, y1),
                                     bg, () => SelectTab(t), sel ? ButtonKind.Gold : ButtonKind.Neutral);
+                // Sprite-first tech-pack dressing: the ACTIVE pill takes the gilded gold
+                // button frame; INACTIVE pills take the ornate banner-tab plate. So the tab
+                // row reads as the tech-pack's gold-rune tabs (procedural when pack absent).
+                if (sel) DressButtonPack(btn);
+                else { var pi = btn.targetGraphic as Image; if (pi != null) { var ts = RpgUiCatalog.Get(RpgUiCatalog.RolePanel, RpgUiCatalog.PanelTab); if (ts != null) { pi.sprite = ts; pi.type = Image.Type.Sliced; pi.color = Color.white; } } }
                 // Sprite-FIRST pack icon tucked in the tab's top-left (decorative, non-
                 // raycast). Only shows when the RPG pack is imported AND the tab has a
                 // matching bronze icon; otherwise the pill stays text-only (unchanged).
@@ -799,6 +821,7 @@ namespace DeNelle.Village
             var well = AddImage(cell.transform, "IconWell", new Vector2(0.28f, 0.40f), new Vector2(0.72f, 0.93f),
                                 new Color(rc.r, rc.g, rc.b, 0.12f));
             NoRaycast(well);
+            DressSocket(well, new Color(rc.r, rc.g, rc.b, locked ? 0.30f : 0.55f));
             AddInnerRim(well, new Color(rc.r, rc.g, rc.b, 0.40f));
             // Sprite-first: real item art when we have it, else the type glyph.
             AddIcon(well.transform, iconSprite, icon, ElarionUi.FontTitle + 2,
@@ -894,6 +917,8 @@ namespace DeNelle.Village
             var med = AddImage(_sidebarRoot.transform, "DetailIcon",
                                new Vector2(0.060f, 0.40f), new Vector2(0.190f, 0.92f),
                                new Color(rc.r, rc.g, rc.b, 0.14f));
+            NoRaycast(med);
+            DressSocket(med, new Color(rc.r, rc.g, rc.b, 0.55f));
             AddInnerRim(med, new Color(rc.r, rc.g, rc.b, 0.55f));
             AddIcon(med.transform, iconSprite, string.IsNullOrEmpty(icon) ? "?" : icon,
                     ElarionUi.FontHead, rcInk, 1f);
@@ -1050,6 +1075,8 @@ namespace DeNelle.Village
 
             var btn = AddButton(_sidebarRoot.transform, label, new Vector2(0.845f, 0.140f),
                                 new Vector2(0.24f, 0.76f), color, action, kind);
+            // The EQUIP CTA wears the tech-pack's gilded gold button frame (sprite-first).
+            DressButtonPack(btn);
             btn.interactable = action != null;
         }
 
@@ -1255,6 +1282,58 @@ namespace DeNelle.Village
         private static void ApplyRounded(Image img)
         {
             ElarionUiKit.ApplyRounded(img);
+        }
+
+        // ── Tech-pack sprite dressing (sprite-FIRST, with the procedural fallback) ──
+        // Drop the named ornate pack PANEL frame (RolePanel) onto an Image as a 9-sliced
+        // sprite so a plate/socket/well reads as the gilt-framed tech-pack art. No-op when
+        // the pack isn't imported (the Image keeps its tinted rounded fill) so nothing
+        // regresses. The tint is kept (Color.white loses rarity colour) UNLESS keepWhite.
+        private static void DressPanel(GameObject host, string packSpriteName, bool keepWhite = false)
+        {
+            if (host == null) return;
+            var sp = RpgUiCatalog.Get(RpgUiCatalog.RolePanel, packSpriteName);
+            if (sp == null) return;
+            var img = host.GetComponent<Image>();
+            if (img == null) return;
+            img.sprite = sp;
+            img.type = Image.Type.Sliced;
+            if (keepWhite) img.color = Color.white;
+        }
+
+        // Dress an AddButton-produced Button sprite-FIRST with the tech-pack's ornate gold
+        // button frame (RoleButton/button_gold) so every CTA reads as the gilded pack
+        // button. The fill tint is preserved when the pack is absent. No-op (procedural
+        // rounded glass) when the pack isn't imported.
+        private static void DressButtonPack(Button btn)
+        {
+            if (btn == null) return;
+            var sp = RpgUiCatalog.Get(RpgUiCatalog.RoleButton, RpgUiCatalog.ButtonGold);
+            if (sp == null) return;
+            var img = btn.targetGraphic as Image;
+            if (img == null) return;
+            img.sprite = sp;
+            img.type = Image.Type.Sliced;
+            img.color = Color.white;
+        }
+
+        // The tech-pack's slot-socket art behind an equip/grid slot. The pack ships NO
+        // dedicated square socket sprite (only bar-shaped frames + the larger inventory/
+        // bar/tab panels — see RpgUiImporter); the ornate "panel_bar" plate is the closest
+        // cohesive socket frame, so we drop it BEHIND the rarity tint as a NON-RAYCAST,
+        // rarity-coloured overlay. Sprite-first: no-op (procedural tint) when absent.
+        private static void DressSocket(GameObject host, Color rarityTint)
+        {
+            if (host == null) return;
+            var sp = RpgUiCatalog.Get(RpgUiCatalog.RolePanel, RpgUiCatalog.PanelBar);
+            if (sp == null) return;
+            var img = host.GetComponent<Image>();
+            if (img == null) return;
+            img.sprite = sp;
+            img.type = Image.Type.Sliced;
+            // Keep the rarity hue but let the gilded plate read — a soft rarity wash.
+            img.color = new Color(rarityTint.r, rarityTint.g, rarityTint.b,
+                                  Mathf.Max(rarityTint.a, 0.65f));
         }
 
         // A circular Image positioned by CENTER + RADIUS in the parent's normalised
