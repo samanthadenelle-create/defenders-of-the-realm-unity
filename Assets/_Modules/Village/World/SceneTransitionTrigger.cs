@@ -59,6 +59,27 @@ namespace DeNelle.Village
         private bool _announced;
         private bool _heroEverFound;
 
+        // --- NEAREST-IN-RANGE-SEAM-WINS + reach-the-edge radius (RCA 2026-06-13) ---
+        // The castle bakes 4 radial gate lanes but only ONE (west) connects to the hero's
+        // navmesh island; N/E/S stall the NavMeshAgent ~35m short of their seam markers, so
+        // the 12m trigger never reaches and the Press-F prompt never appears. Confirm-to-cross
+        // removed the only reason the radius was kept small (auto-fade), so we widen confirm
+        // seams to reach the hero at the mesh edge (he WARPS across — he need not touch the
+        // marker). BUT a wide radius means the ~35m spawn can sit inside MULTIPLE gate spheres:
+        // two overlapping seams would each show a prompt (flicker) and each poll F (double Cross).
+        // Guard: each frame, only the seam NEAREST the hero among all in-range confirm seams
+        // shows its prompt + accepts the cross. (Proper fix = repair the bake so all 4 lanes
+        // connect and the radius can return to 12 — queued as a follow-up.)
+        private const float ConfirmMinRadius = 40f;   // clears the ~36m navmesh-edge stall + margin
+        private static readonly System.Collections.Generic.List<SceneTransitionTrigger> s_inRangeConfirm =
+            new System.Collections.Generic.List<SceneTransitionTrigger>();
+        private static int s_collectFrame = -1;
+        private float _curDist = float.MaxValue;
+
+        // Effective radius: confirm seams reach to ConfirmMinRadius so the prompt appears at
+        // the navmesh edge; legacy auto-cross keeps the authored (tight) ProximityRadius.
+        private float EffRadius => requireConfirm ? Mathf.Max(ProximityRadius, ConfirmMinRadius) : ProximityRadius;
+
         private void Update()
         {
             if (!_announced)
@@ -92,38 +113,31 @@ namespace DeNelle.Village
             if (_traceTimer >= 1f)
             {
                 _traceTimer = 0f;
-                Debug.Log($"[SeamTrace] '{name}' heroDist={dist:F1}m  closestEver={_minDist:F1}m  radius={ProximityRadius}m  {(dist <= ProximityRadius ? "IN-RANGE" : "out")}");
+                Debug.Log($"[SeamTrace] '{name}' heroDist={dist:F1}m  closestEver={_minDist:F1}m  radius={EffRadius}m  {(dist <= EffRadius ? "IN-RANGE" : "out")}");
             }
 
-            bool inRange = (_hero.position - transform.position).sqrMagnitude <= ProximityRadius * ProximityRadius;
+            bool inRange = (_hero.position - transform.position).sqrMagnitude <= EffRadius * EffRadius;
 
             if (requireConfirm)
             {
-                // CONFIRM-TO-CROSS: never auto-teleport. Show a prompt while in range and
-                // only cross on an explicit interact press THIS frame (F on desktop, the
-                // shared on-screen Interact button on mobile — same input the buildings/
-                // vendors use, MobileInteractButton fires its onTap = Cross).
+                // CONFIRM-TO-CROSS: never auto-teleport. We only REGISTER in-range interest
+                // here; the actual prompt + F-cross are resolved in LateUpdate for the single
+                // NEAREST in-range confirm seam (so overlapping wide gate spheres never flicker
+                // two prompts or double-fire Cross). The shared frame list is reset on the first
+                // confirm seam to touch it each frame.
+                if (Time.frameCount != s_collectFrame)
+                {
+                    s_collectFrame = Time.frameCount;
+                    s_inRangeConfirm.Clear();
+                }
                 if (inRange)
                 {
-                    string dest = FriendlyDestinationName();
-                    if (!_promptShown)
-                    {
-                        Debug.Log($"[SeamTrace] '{name}' IN RANGE ({dist:F1}m) -> showing CONFIRM prompt for '{dest}'.");
-                        _promptShown = true;
-                    }
-                    // Re-request every frame so the shared button stays up while in range
-                    // and routes its tap to this gate's crossing.
-                    MobileInteractButton.Request(this, $"Press F: Travel to {dest}", () => Cross(_hero));
-
-                    if (Input.GetKeyDown(KeyCode.F))
-                    {
-                        Debug.Log($"[SeamTrace] '{name}' CONFIRM key (F) pressed in range -> firing Cross().");
-                        Cross(_hero);
-                    }
+                    _curDist = dist;
+                    if (!s_inRangeConfirm.Contains(this)) s_inRangeConfirm.Add(this);
                 }
                 else if (_promptShown)
                 {
-                    // Left range — drop the prompt.
+                    // Left range — drop the prompt immediately (don't wait for LateUpdate).
                     MobileInteractButton.Release(this);
                     _promptShown = false;
                 }
@@ -133,7 +147,54 @@ namespace DeNelle.Village
             // Legacy AUTO-CROSS (requireConfirm == false): proximity fires the crossing.
             if (inRange)
             {
-                Debug.Log($"[SeamTrace] '{name}' IN RANGE ({dist:F1}m <= {ProximityRadius}m) -> firing Cross().");
+                Debug.Log($"[SeamTrace] '{name}' IN RANGE ({dist:F1}m <= {EffRadius}m) -> firing Cross().");
+                Cross(_hero);
+            }
+        }
+
+        // CONFIRM-mode prompt + cross, resolved to the single NEAREST in-range confirm seam.
+        // Runs after every Update() has populated s_inRangeConfirm this frame, so the "who is
+        // nearest" decision sees all seams and is order-independent. This is the guard that
+        // stops the wide confirm radius from flickering two prompts / double-firing Cross when
+        // the hero stands inside more than one gate sphere.
+        private void LateUpdate()
+        {
+            if (!requireConfirm || _fired) return;
+
+            // Not in range this frame → ensure our prompt is down.
+            if (!s_inRangeConfirm.Contains(this))
+            {
+                if (_promptShown) { MobileInteractButton.Release(this); _promptShown = false; }
+                return;
+            }
+
+            // Find the nearest in-range confirm seam this frame.
+            SceneTransitionTrigger nearest = null;
+            float best = float.MaxValue;
+            for (int i = 0; i < s_inRangeConfirm.Count; i++)
+            {
+                var t = s_inRangeConfirm[i];
+                if (t != null && t._curDist < best) { best = t._curDist; nearest = t; }
+            }
+
+            // Not the winner → yield the shared prompt to the nearer seam.
+            if (nearest != this)
+            {
+                if (_promptShown) { MobileInteractButton.Release(this); _promptShown = false; }
+                return;
+            }
+
+            // We are the nearest in-range seam: own the prompt + the confirmed cross.
+            string dest = FriendlyDestinationName();
+            if (!_promptShown)
+            {
+                Debug.Log($"[SeamTrace] '{name}' NEAREST in-range ({_curDist:F1}m, radius {EffRadius}m) -> showing CONFIRM prompt for '{dest}'.");
+                _promptShown = true;
+            }
+            MobileInteractButton.Request(this, $"Press F: Travel to {dest}", () => Cross(_hero));
+            if (Input.GetKeyDown(KeyCode.F))
+            {
+                Debug.Log($"[SeamTrace] '{name}' CONFIRM key (F) pressed (nearest seam) -> firing Cross().");
                 Cross(_hero);
             }
         }

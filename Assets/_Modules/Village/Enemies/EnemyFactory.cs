@@ -85,8 +85,19 @@ namespace DeNelle.Village
             // blanket-rotate. ⚠ "Troll" is mapped but RigFor falls it to KayKit
             // (HumanoidMedium) → 0 rotation here; playtest if a Tripo Troll lands.
             var skinOpts = SkinOptions.Enemy(height);
-            if (EnemyAnimatorFactory.RigFor(model) == EnemyRig.OrcWarband)
+            // WIGHT FIX (RCA 2026-06-13): Demon / OgreMage are newer +X-forward Tripo creature
+            // exports (same convention as the Orc Warband + the heroes, all -90f) but they resolve
+            // to the HumanoidLarge rig — NOT OrcWarband — so the old condition rotated neither, and
+            // SkinOptions.Enemy() does NOT set FixTripoMaterials (the orcs render only because their
+            // materials were extracted to external URP .mats at import; Demon/OgreMage ship raw
+            // FbxSurfacePhong → magenta/unlit). Treat them like the orcs: same -90 yaw + attach the
+            // runtime Tripo→URP material fixer. By name so we never blanket-rotate the rig class.
+            bool tripoForwardX = EnemyAnimatorFactory.RigFor(model) == EnemyRig.OrcWarband
+                || model == "Demon" || model == "OgreMage";
+            if (tripoForwardX)
                 skinOpts.LocalRotation = Quaternion.Euler(0f, -90f, 0f);
+            if (model == "Demon" || model == "OgreMage")
+                skinOpts.FixTripoMaterials = true;   // raw Phong → needs the runtime URP fixer
             var vis = VisualFactory.Skin(go.transform, "Enemies/" + model, skinOpts);
             if (vis != null)
             {

@@ -351,7 +351,10 @@ namespace DeNelle.Village
                     default:   // Strike / Snare — single-target reach gate (unchanged)
                     {
                         float maxR = def.Range + _enemyHitRadius;
-                        var foe = InReach(LockedTarget, atk, maxR) ? LockedTarget : NearestHostile(atk, maxR);
+                        // KNIGHT-SNIPE FIX (RCA 2026-06-13): reach gate is hero-relative (origin),
+                        // not `atk` (the auto-target's own pos) — mirrors the cast-path fix so the
+                        // hero FACES the same in-reach foe it will actually hit.
+                        var foe = InReach(LockedTarget, origin, maxR) ? LockedTarget : NearestHostile(origin, maxR);
                         if (foe == null) foe = LiveBoss();
                         if (foe != null) facePoint = foe.WorldPosition;
                         break;
@@ -425,9 +428,17 @@ namespace DeNelle.Village
                     // COMPANION knight; this closes the player-hero path. Ranged abilities are
                     // unchanged: their def.Range already covers the locked target's distance.
                     float maxR = def.Range + _enemyHitRadius;
-                    var foe = InReach(LockedTarget, atk, maxR)
+                    // KNIGHT-SNIPE FIX (RCA 2026-06-13): gate reach from the HERO (origin),
+                    // NOT from `atk`. `atk = AimPointOverride ?? origin`, and HeroTargetIndicator
+                    // writes AimPointOverride = the auto-target's OWN world pos every scan (out to
+                    // 45m), so InReach(target, atk) was measuring the target's distance from
+                    // itself (~0) → always passed → the 3.4m Shield Bash connected at 45m. Reach
+                    // must be hero-relative. Ranged classes are unaffected (their large def.Range
+                    // still covers the reticle target); AoE/Cleave/Meteor keep using `atk` for
+                    // blast PLACEMENT below (that path was already correct).
+                    var foe = InReach(LockedTarget, origin, maxR)
                         ? LockedTarget
-                        : NearestHostile(atk, maxR);
+                        : NearestHostile(origin, maxR);
                     // WO-125 Bug 1: the apex dragon orbits at altitude ~22-34u — far
                     // outside a short-slot sweep (Q ~13u) — so an OverlapSphere from the
                     // hero's feet can never reach it. In village mode (no aim override),
