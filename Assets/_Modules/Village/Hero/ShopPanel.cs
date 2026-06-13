@@ -458,6 +458,18 @@ namespace DeNelle.Village.Hero
                 icImg.raycastTarget = false;
                 nameX0 = 0.17f;
             }
+            else
+            {
+                // Weapons / Armor: use the same TechGearSocket flow as the inventory weapons armor UI
+                // for consistent ornate frames from the Tech hud elements pack.
+                // Differentiate weapon vs armor using the pack's best frames (Healing Tabs for weapons, Profile for armor)
+                bool isWeaponRow = label.Contains("Sword") || label.Contains("Staff") || label.Contains("Bow") || label.Contains("Mace") || label.Contains("Dagger") || label.Contains("Axe");
+                var techSock = ElarionUiKit.TechGearSocket(row.transform, "TechGearIcon",
+                    new Vector2(0.02f, 0.12f), new Vector2(0.14f, 0.88f),
+                    new Color(0.85f, 0.7f, 0.2f, 0.9f), isWeapon: isWeaponRow);
+                techSock.GetComponent<Image>().raycastTarget = false;
+                nameX0 = 0.17f;
+            }
 
             ElarionUiKit.Label(row.transform, label, 0.15f, 0.85f, ElarionUi.Parchment,
                 ElarionUi.FontBody, TMPro.TextAlignmentOptions.Left, nameX0, 0.5f);
@@ -472,11 +484,11 @@ namespace DeNelle.Village.Hero
             ElarionUiKit.Label(row.transform, CostString(cost), 0.15f, 0.85f, priceColor,
                 ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Left, 0.5f, 0.72f, bold: true);
 
-            // BUY is the primary CTA -> the ornate gold pack button (gilded frame +
-            // dark-ink label, same gold CTA as the town HUD). Dimmed + non-interactable
-            // when unaffordable so the affordance reads disabled.
-            var buyBtn = ElarionUiKit.ButtonPack(row.transform, "BUY", ElarionUiKit.ButtonKind.Gold,
-                new Vector2(0.74f, 0.15f), new Vector2(0.98f, 0.85f), buyAction);
+            // BUY is the primary CTA -> use the same TechPrimaryButton flow as the inventory
+            // weapons armor UI (ornate Play-button frame from Tech hud elements pack, large
+            // thumb target, dark ink on gold). Dimmed when unaffordable.
+            var buyBtn = ElarionUiKit.TechPrimaryButton(row.transform, "BUY",
+                new Vector2(0.74f, 0.12f), new Vector2(0.98f, 0.88f), buyAction);
             if (buyBtn != null) buyBtn.interactable = affordable;
         }
 
