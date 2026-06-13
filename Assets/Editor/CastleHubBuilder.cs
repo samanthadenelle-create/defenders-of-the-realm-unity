@@ -1427,6 +1427,41 @@ namespace DeNelle.Editor
             }
             else Log("WireCastleHeart: HeartController already on the anchor — idempotent skip.");
 
+            // T-002 "no tree of life": the anchor itself is an invisible scale-1 node, so the
+            // owner saw NO centerpiece even though the Heart is functional. Add the visible Tree
+            // of Life as a COLLIDER-STRIPPED child (the gameplay blocker stays on the clean
+            // anchor — no collider-scale trap), bounds-scaled to a ~9m visible height (raw Tripo
+            // fbx native size is unknown/large) and ground-seated at Play so it can't float or
+            // displace (tripo-mesh-displacement-trap). Idempotent by child name.
+            const string TreeChildName = "TreeOfLife_Visual";
+            if (anchor.transform.Find(TreeChildName) == null)
+            {
+                var treePrefab = Resources.Load<GameObject>("Structures/tree_of_life");
+                if (treePrefab == null)
+                    Log("WireCastleHeart: Resources/Structures/tree_of_life not found — Heart is functional but has no visible mesh (LogWarning).");
+                else
+                {
+                    var tree = Object.Instantiate(treePrefab);
+                    tree.name = TreeChildName;
+                    tree.transform.SetParent(anchor.transform, false);
+                    tree.transform.localPosition = Vector3.zero;
+                    tree.transform.localRotation = Quaternion.identity;
+                    foreach (var c in tree.GetComponentsInChildren<Collider>()) Object.DestroyImmediate(c);
+                    var rends = tree.GetComponentsInChildren<Renderer>();
+                    if (rends.Length > 0)
+                    {
+                        var b = rends[0].bounds;
+                        for (int i = 1; i < rends.Length; i++) b.Encapsulate(rends[i].bounds);
+                        if (b.size.y > 0.001f) tree.transform.localScale *= (9f / b.size.y);
+                    }
+                    var matFix = FindType("DeNelle.Core.TreeOfLifeMaterialFixer");
+                    if (matFix != null && tree.GetComponent(matFix) == null) tree.AddComponent(matFix);
+                    var seat = FindType("DeNelle.Village.SeatOnGroundOnStart");
+                    if (seat != null && tree.GetComponent(seat) == null) tree.AddComponent(seat);
+                    Log("WireCastleHeart: visible TreeOfLife added (bounds-scaled to ~9m, colliders stripped, ground-seated).");
+                }
+            }
+
             // Defensive: ensure EXACTLY one HeartController in the scene.
             var hearts = Object.FindObjectsByType(heartType, FindObjectsInactive.Include, FindObjectsSortMode.None);
             if (hearts.Length != 1)
