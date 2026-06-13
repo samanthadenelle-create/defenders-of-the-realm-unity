@@ -138,20 +138,11 @@ namespace DeNelle.Village
                 }
                 go.transform.localScale *= npcScale;
 
-                // A8 (telemetry "NPCs floating"): scaling about a non-feet pivot lifts the
-                // model's feet off the ground; re-seat so the renderer-bounds bottom rests
-                // on the navmesh ground Y (recompute bounds AFTER the rescale).
-                {
-                    var r2 = go.GetComponentsInChildren<Renderer>();
-                    if (r2.Length > 0)
-                    {
-                        Bounds bb = r2[0].bounds;
-                        for (int i = 1; i < r2.Length; i++) bb.Encapsulate(r2[i].bounds);
-                        float delta = pos.y - bb.min.y;
-                        if (Mathf.Abs(delta) > 0.01f)
-                            go.transform.position += new Vector3(0f, delta, 0f);
-                    }
-                }
+                // T-033 ("NPCs floating"): scaling about a non-feet pivot lifts the model's
+                // feet off the ground AND the navmesh Y sits a touch above the visual floor.
+                // Raycast DOWN to the real floor collider and seat the (post-rescale)
+                // renderer-bounds bottom onto it; falls back to the navmesh Y if none is hit.
+                NpcGroundSeat.Seat(go, pos.y);
 
                 // Counter-scale TownsfolkBubble's "BubbleRoot" so the speech bubble keeps its
                 // real world size on the resized body (it still rides above the head via its

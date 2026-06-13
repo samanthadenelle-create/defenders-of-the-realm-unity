@@ -203,10 +203,12 @@ namespace DeNelle.Village
             go.name = $"CastleVendor_{role}";
 
             NormalizeToHeroHeight(go);
-            // A8 (telemetry "NPCs floating"): scaling about a non-feet pivot lifts the
-            // model's feet off the floor; re-seat so the renderer-bounds bottom sits on
-            // the navmesh ground Y, not the (now-scaled) pivot.
-            SeatFeetOnGround(go, pos.y);
+            // T-033 ("NPCs floating"): scaling about a non-feet pivot lifts the model's
+            // feet off the floor AND the NavMesh-sampled Y sits a touch ABOVE the visual
+            // floor (voxel cell height). Raycast DOWN to the real floor collider and seat
+            // the renderer-bounds bottom onto it; falls back to the navmesh Y if no floor
+            // is hit. (Replaces the old seat-to-navmesh-Y that left them hovering.)
+            NpcGroundSeat.Seat(go, pos.y);
 
             // STATIC: Configure with wander=FALSE. AmbientNPC.Start then disables its
             // NavMeshAgent and the NPC stands its ground (idle sway only — no roam/follow).
@@ -254,6 +256,26 @@ namespace DeNelle.Village
             var interact = body.AddComponent<CastleNpcInteractable>();
             interact.Configure(v.StructureId, v.Label, hero);
             BuildingInteractable.MarkNpcCovered(v.StructureId);   // the matching building defers its prompt — NPC owns the talk
+
+            // T-034: an always-visible type sign floats above the vendor so the player
+            // can tell a shop from an upgrade from a talk NPC from a distance. The body
+            // is rescaled to hero height, so place the sign in the body's LOCAL space at
+            // a height that clears the head regardless of the (already-applied) scale.
+            float localHeadClear = SignHeightAboveHead(body);
+            InteractableSign.ForStructureId(body, v.StructureId, localHeadClear);
+        }
+
+        /// <summary>
+        /// Local-space Y (in the body's already-scaled frame) that floats the sign just
+        /// above the NPC's head. Converts a fixed world clearance through the body's
+        /// lossy scale so the sign sits the same world distance above every NPC, no
+        /// matter the pack body's native scale.
+        /// </summary>
+        private static float SignHeightAboveHead(GameObject body)
+        {
+            const float WorldClearAboveOrigin = 2.6f; // ~head height (1.95) + a touch of air
+            float scaleY = body.transform.lossyScale.y;
+            return scaleY > 0.01f ? WorldClearAboveOrigin / scaleY : WorldClearAboveOrigin;
         }
 
         // Reuse VillageNpcInjector's height normalization so the People-pack bodies sit at
@@ -277,20 +299,8 @@ namespace DeNelle.Village
             }
         }
 
-        // A8: drop the body so the bottom of its combined renderer bounds rests on the
-        // given ground Y. Counters pivot-at-center prefabs floating after rescale.
-        private static void SeatFeetOnGround(GameObject go, float groundY)
-        {
-            var rends = go.GetComponentsInChildren<Renderer>();
-            if (rends.Length == 0) return;
-            Bounds b = rends[0].bounds;
-            for (int i = 1; i < rends.Length; i++) b.Encapsulate(rends[i].bounds);
-            float bottomY = b.min.y;
-            float delta = groundY - bottomY;
-            // Only correct a meaningful hover/sink; ignore sub-cm jitter.
-            if (Mathf.Abs(delta) > 0.01f)
-                go.transform.position += new Vector3(0f, delta, 0f);
-        }
+        // (Ground-seating now lives in the shared NpcGroundSeat helper — it raycasts to
+        // the real floor instead of the navmesh Y, fixing the residual hover. See T-033.)
 
         // Name-based hero lookup (matches AmbientNPC / VillageNpcInjector): the hero rig is
         // named "Hero (...)"; the project also tags it "Player".

@@ -187,10 +187,11 @@ namespace DeNelle.Village
             go.name = "CompanionIntroducer";
 
             NormalizeToHeroHeight(go);
-            // A8 (telemetry "NPCs floating"): scaling about a non-feet pivot lifts the
-            // model's feet off the floor; re-seat so the renderer-bounds bottom rests on
-            // the navmesh ground Y.
-            SeatFeetOnGround(go, pos.y);
+            // T-033 ("NPCs floating"): raycast DOWN to the real floor collider and seat the
+            // renderer-bounds bottom onto it (pivot- and scale-agnostic), falling back to the
+            // navmesh Y if no floor is hit. Replaces seating to the navmesh Y, which sits a
+            // touch ABOVE the visual floor and left the introducer hovering.
+            NpcGroundSeat.Seat(go, pos.y);
 
             // STATIC: configure the ambient driver to stand still (no wander/follow), the
             // same as the vendors. Belt-and-braces disable any NavMeshAgent so nothing moves it.
@@ -270,18 +271,8 @@ namespace DeNelle.Village
             }
         }
 
-        // A8: drop the body so the bottom of its combined renderer bounds rests on the
-        // given ground Y. Counters pivot-at-center prefabs floating after rescale.
-        private static void SeatFeetOnGround(GameObject go, float groundY)
-        {
-            var rends = go.GetComponentsInChildren<Renderer>();
-            if (rends.Length == 0) return;
-            Bounds b = rends[0].bounds;
-            for (int i = 1; i < rends.Length; i++) b.Encapsulate(rends[i].bounds);
-            float delta = groundY - b.min.y;
-            if (Mathf.Abs(delta) > 0.01f)
-                go.transform.position += new Vector3(0f, delta, 0f);
-        }
+        // (Ground-seating now lives in the shared NpcGroundSeat helper — it raycasts to
+        // the real floor instead of the navmesh Y, fixing the residual hover. See T-033.)
 
         private static Transform ResolveHero()
         {

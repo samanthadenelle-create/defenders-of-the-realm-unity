@@ -75,6 +75,14 @@ namespace DeNelle.Village
         {
             ResolveHero();
             _myHookId = StructureHookIdFor(_building);
+
+            // T-034: always-visible world sign so the player can read this building's
+            // TYPE (shop / upgrade / pet / spell) from a distance, separate from the
+            // proximity "Interact" prompt. Skipped for buildings whose FRONT NPC owns
+            // the talk — the NPC carries its own sign (CastleVendorNpcInjector), so the
+            // building deferring its prompt must not double up a sign over the same spot.
+            if (_myHookId == null || !_npcCovered.Contains(_myHookId))
+                InteractableSign.ForBuilding(_building, _myHookId);
         }
 
         private void ResolveHero()
