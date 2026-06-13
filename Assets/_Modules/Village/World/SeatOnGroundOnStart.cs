@@ -100,8 +100,14 @@ namespace DeNelle.Village
             bool found = false;
             foreach (var h in hits)
             {
-                // Skip this object's own colliders so we don't seat onto ourselves.
-                if (h.collider != null && h.collider.transform.IsChildOf(transform)) continue;
+                // Skip every collider in OUR hierarchy so we don't seat onto ourselves.
+                // WO-430: must use transform.ROOT, not transform — the Heart blocker capsule
+                // (HeartController.EnsureBlocker, height 8 with feet at y=0) lives on the tree's
+                // PARENT anchor, NOT a child of this transform. With IsChildOf(transform) the
+                // capsule wasn't skipped, the downward ray hit its top (y~=8), groundY resolved
+                // to ~8, and the tree floated 8m. IsChildOf(transform.root) skips the capsule +
+                // anchor + visual together, so the ray only seats on the real ground.
+                if (h.collider != null && h.collider.transform.IsChildOf(transform.root)) continue;
                 if (h.point.y > best) { best = h.point.y; found = true; }
             }
             return found ? best : _groundY;
