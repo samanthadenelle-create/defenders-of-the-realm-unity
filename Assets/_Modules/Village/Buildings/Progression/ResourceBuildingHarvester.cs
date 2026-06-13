@@ -79,9 +79,27 @@ namespace DeNelle.Village.Buildings.Progression
                 int amount = ResourceBuildingState.CurrentEffectiveYield(id);
                 if (amount <= 0) continue;
 
-                // Credit the building's harvestable through the single ledger surface
-                // (persists + raises ResourcesChanged → HUD resource bar refreshes).
-                ResourceLedger.Credit(def.Yields, amount);
+                // WO-424: bank through EconomyService (the in-session pool the HUD bar
+                // READS) so Lumbermill→Wood / Forge→Iron actually move the counter. Routing
+                // through ResourceLedger.Credit wrote GameState.Wood/.Iron, which Snapshot
+                // never reads back — so Wood/Iron ticks were invisible on the HUD (Food/
+                // Crystals happened to work because Snapshot proxies those from GameState).
+                var econ = EconomyService.Instance;
+                if (econ != null)
+                {
+                    switch (def.Yields)
+                    {
+                        case HarvestResource.Wood:     econ.Grant(wood: amount);     break;
+                        case HarvestResource.Iron:     econ.Grant(iron: amount);     break;
+                        case HarvestResource.Food:     econ.Grant(food: amount);     break;
+                        case HarvestResource.Crystals: econ.Grant(crystals: amount); break;
+                    }
+                }
+                else
+                {
+                    // Pre-bootstrap fallback: still persist so the tick isn't lost.
+                    ResourceLedger.Credit(def.Yields, amount);
+                }
             }
         }
     }
