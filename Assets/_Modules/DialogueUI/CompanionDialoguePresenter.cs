@@ -483,8 +483,45 @@ namespace DeNelle.DialogueUI
             // views visually but does not release raycast blocking, so we do it explicitly:
             // no dialogue active => this presenter must capture NO input.
             SetOwnGroupsInteractive(false);
+            ReleaseYarnInputCapture();   // THE actual root cause (see method) — orphaned <Pointer>/press action
 
             LogInputBlockerState(); // verify: should now read blocksRaycasts=false on every own group
+        }
+
+        // THE root cause of "dev tools / UI Toolkit dead after companion Yarn" (found by reading
+        // the Yarn package + comparing to its correct pattern). Yarn's LineAdvancer ENABLES an
+        // InputAction bound to <Pointer>/press (tap-to-advance) on dialogue start, but its
+        // complete-handler only unhooks callbacks — it never .Disable()s the action (unlike
+        // RPGDialoguePresenter.skipAction, which DOES). The DialogueRunner persists across
+        // conversations, so that orphaned ENABLED pointer action lives on and contends with
+        // InputSystemUIInputModule for the pointer device under the new Input System -> UI Toolkit
+        // clicks (the dev menu) never resolve for the rest of the session. We close the leak the
+        // package leaves open: disable any still-enabled action from the DialogueAdvance asset on
+        // completion, and clear any stale EventSystem selection (a destroyed option button left
+        // selected when a conversation is Stop()-ed mid-options also disrupts UITK pointer/nav).
+        private void ReleaseYarnInputCapture()
+        {
+            int disabled = 0;
+            try
+            {
+                var enabled = UnityEngine.InputSystem.InputSystem.ListEnabledActions();
+                foreach (var a in enabled)
+                {
+                    if (a == null) continue;
+                    string assetName = (a.actionMap != null && a.actionMap.asset != null) ? a.actionMap.asset.name : null;
+                    if (assetName == "DialogueAdvance" || a.name == "Advance")
+                    {
+                        a.Disable();
+                        disabled++;
+                    }
+                }
+            }
+            catch (System.Exception ex) { FlowTrace.Warn("UI", "ReleaseYarnInputCapture failed: " + ex.Message); }
+
+            var es = UnityEngine.EventSystems.EventSystem.current;
+            if (es != null) es.SetSelectedGameObject(null);
+
+            FlowTrace.Step("UI", $"ReleaseYarnInputCapture: disabled {disabled} dialogue-advance action(s), cleared EventSystem selection");
         }
 
         // Arm (true) / release (false) raycast capture on every CanvasGroup this presenter

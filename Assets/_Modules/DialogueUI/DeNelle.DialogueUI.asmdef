@@ -6,7 +6,8 @@
         "YarnSpinner.Addons.ClassicRPG",
         "UniTask",
         "DeNelle.Core",
-        "DeNelle.Village"
+        "DeNelle.Village",
+        "Unity.InputSystem"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
