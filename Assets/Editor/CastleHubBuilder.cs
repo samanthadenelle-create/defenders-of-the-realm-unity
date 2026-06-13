@@ -1145,16 +1145,16 @@ namespace DeNelle.Editor
 
                 var col = connector.AddComponent<BoxCollider>();
                 col.isTrigger = true;
-                col.size = new Vector3(20f, 6f, 16f); // like the OuterWorld exit seam
+                col.size = new Vector3(28f, 6f, 20f); // matches the OuterWorld exit seam (radius 28)
 
                 var comp = connector.AddComponent(transType);
                 if (fScene    != null) fScene.SetValue(comp, sceneName);
                 if (fPos      != null) fPos.SetValue(comp, targetPosition);
                 if (fAdditive != null) fAdditive.SetValue(comp, false); // destination level = single-load
-                if (fRadius   != null) fRadius.SetValue(comp, 20f);      // hero stops ~16.7m out; default 6 never fires
+                if (fRadius   != null) fRadius.SetValue(comp, 28f);      // hero stops ~21.7m out (SeamTrace); 28 covers it + margin
 
                 Log($"WireOutpostConnectors: placed OutpostConnector_{sceneName} at world {worldPos} " +
-                    $"(gate yaw {yaw}, entry {targetPosition}, single-load, radius 20).");
+                    $"(gate yaw {yaw}, entry {targetPosition}, single-load, radius 28).");
             }
 
             Log($"WireOutpostConnectors: {OutpostConnectors.Length} inbound outpost seam(s) wired (W/N/E gates).");
@@ -1746,14 +1746,17 @@ namespace DeNelle.Editor
             // reason this seam is proximity-based). 14m never fired. A continuous-navmesh rebake
             // reported GATE_NAV_OK but that was a SamplePosition false-green (the agent still can't
             // traverse). 20m fires reliably right at the edge the hero actually reaches.
-            transType.GetField("ProximityRadius")?.SetValue(comp, 20f);
+            // Radius 20 -> 28: owner-playtest SeamTrace showed the hero's closestEver = 21.7m
+            // (the WO-449 wall-layer rebake shifted the navmesh edge ~5m further out than the
+            // 16.7m we sized 20 for), so 20 missed by 1.7m and never fired. 28 covers 21.7 + margin.
+            transType.GetField("ProximityRadius")?.SetValue(comp, 28f);
 
             var col = marker.AddComponent<BoxCollider>();
             col.isTrigger = true;
-            col.size = new Vector3(20f, 6f, 16f);
+            col.size = new Vector3(28f, 6f, 20f);
 
             Log("BATCH-RECIPE: exit seam placed INTERIOR of recipe gate " + marker.transform.position +
-                " (gate.z+3, radius 20, target OuterWorld (0,0.5,-80)).");
+                " (gate.z+3, radius 28, target OuterWorld (0,0.5,-80)).");
         }
 
         // =====================================================================
