@@ -47,6 +47,17 @@ namespace DeNelle.HUD
         /// <summary>How far inside the screen edge an off-screen arrow sits (px).</summary>
         private const float EdgeInset = 36f;
 
+        // ── Enemy bearing ticks on the strip ──────────────────────────────────
+        // The strip plots a red tick per LIVE enemy at its bearing relative to the
+        // hero's facing, so an enemy is ALWAYS visible on the compass — whether it
+        // is on-screen, off-screen, or directly behind. This is the cue the off-
+        // screen edge arrows alone could not give (an on-screen enemy drew no pip).
+        // The strip shows a ±FovDegrees fan centred on the hero's heading; an enemy
+        // outside that fan is clamped to the nearest edge so it never disappears.
+        private const float FovDegrees   = 120f;   // angular width the strip represents
+        private const float TickWidthPx  = 4f;
+        private const float TickHeightPx = CompassHeight - 8f;
+
         // Reference resolution shared with VillageHudController so the compass
         // scales identically across mobile portrait + web landscape.
         private static readonly Vector2 RefResolution = new Vector2(1080, 1920);
@@ -61,6 +72,8 @@ namespace DeNelle.HUD
         private Canvas _canvas;
         private RectTransform _canvasRect;   // the scaled overlay rect (reference space)
         private TextMeshProUGUI _compassLabel;
+        private RectTransform _stripTicks;   // clipped layer inside the strip holding enemy bearing ticks
+        private readonly List<RectTransform> _tickPool = new List<RectTransform>();
         private RectTransform _arrowLayer;
         private readonly List<RectTransform> _arrowPool = new List<RectTransform>();
         private readonly List<RectTransform> _arrowGlyph = new List<RectTransform>();
@@ -85,6 +98,7 @@ namespace DeNelle.HUD
             if (!_built) return;
             if (_camera == null) _camera = Camera.main;
             UpdateCompass();
+            UpdateStripTicks();
             UpdateArrows();
         }
 
@@ -139,6 +153,16 @@ namespace DeNelle.HUD
             ElarionUiKit.ApplyRounded(rimImg);
             rimImg.raycastTarget = false;
 
+            // Enemy bearing-tick layer: clipped to the strip so ticks slide along it
+            // and never spill past the dark-glass chip. Sits above the glass/rim but
+            // BELOW the cardinal label so the heading text stays legible.
+            var ticksGo = new GameObject("StripTicks", typeof(RectTransform), typeof(RectMask2D));
+            ticksGo.transform.SetParent(strip, false);
+            _stripTicks = ticksGo.GetComponent<RectTransform>();
+            _stripTicks.anchorMin = Vector2.zero; _stripTicks.anchorMax = Vector2.one;
+            _stripTicks.offsetMin = new Vector2(2f, 2f);
+            _stripTicks.offsetMax = new Vector2(-2f, -2f);
+
             _compassLabel = AddText(strip, "N", 18f, ElarionUi.Parchment, TextAlignmentOptions.Center);
             _compassLabel.fontStyle = FontStyles.Bold;
             _compassLabel.characterSpacing = 12f;
@@ -170,6 +194,72 @@ namespace DeNelle.HUD
 #else
             _compassLabel.text = heading;
 #endif
+        }
+
+        // ── Enemy bearing ticks on the strip ──────────────────────────────────
+        // Plot one red tick per live enemy at its bearing relative to the hero's
+        // facing. Bearing is computed in the XZ (ground) plane: 0 = dead ahead,
+        // positive = to the right. The strip maps [-FovDegrees/2 .. +FovDegrees/2]
+        // across its width; enemies outside the fan clamp to the nearest edge so
+        // they remain visible (you still see "an enemy is hard left/right"). No
+        // allocations here — ticks come from a reused pool. Targets is refreshed by
+        // EnemyTargetTicker (~2 Hz) so this loop just reads cached transforms.
+        private void UpdateStripTicks()
+        {
+            if (_stripTicks == null || Hero == null) return;
+
+            EnsureTickPool(Targets.Count);
+
+            float halfFov = FovDegrees * 0.5f;
+            float stripW  = _stripTicks.rect.width;
+            Vector3 heroPos = Hero.position;
+            // Hero forward flattened to the ground plane.
+            Vector3 fwd = Hero.forward; fwd.y = 0f;
+            if (fwd.sqrMagnitude < 1e-4f) fwd = Vector3.forward;
+            fwd.Normalize();
+
+            for (int i = 0; i < _tickPool.Count; i++)
+            {
+                var tick = _tickPool[i];
+                if (i >= Targets.Count || Targets[i] == null)
+                {
+                    if (tick.gameObject.activeSelf) tick.gameObject.SetActive(false);
+                    continue;
+                }
+
+                Vector3 to = Targets[i].position - heroPos; to.y = 0f;
+                if (to.sqrMagnitude < 1e-4f) { if (tick.gameObject.activeSelf) tick.gameObject.SetActive(false); continue; }
+                to.Normalize();
+
+                // Signed bearing in degrees: + to the right of the hero's facing.
+                float bearing = Vector3.SignedAngle(fwd, to, Vector3.up);
+                // Clamp to the fan so off-fan enemies pin to the nearest edge.
+                float clamped = Mathf.Clamp(bearing, -halfFov, halfFov);
+                float t = (clamped + halfFov) / FovDegrees; // 0..1 across the strip
+                float x = (t - 0.5f) * stripW;
+
+                if (!tick.gameObject.activeSelf) tick.gameObject.SetActive(true);
+                tick.anchoredPosition = new Vector2(x, 0f);
+            }
+        }
+
+        private void EnsureTickPool(int count)
+        {
+            while (_tickPool.Count < count)
+            {
+                var go = new GameObject("Tick", typeof(RectTransform), typeof(Image));
+                go.transform.SetParent(_stripTicks, false);
+                var rt = go.GetComponent<RectTransform>();
+                rt.anchorMin = new Vector2(0.5f, 0.5f);
+                rt.anchorMax = new Vector2(0.5f, 0.5f);
+                rt.pivot     = new Vector2(0.5f, 0.5f);
+                rt.sizeDelta = new Vector2(TickWidthPx, TickHeightPx);
+                var img = go.GetComponent<Image>();
+                img.color = ElarionUi.Danger;   // red enemy marker, matches the edge arrows
+                img.raycastTarget = false;
+                go.SetActive(false);
+                _tickPool.Add(rt);
+            }
         }
 
         // ── Off-screen target arrows ──────────────────────────────────────────

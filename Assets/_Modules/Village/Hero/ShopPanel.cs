@@ -64,8 +64,11 @@ namespace DeNelle.Village.Hero
             _ui = ElarionUiKit.BuildModalCanvas("ShopPanelUI", 1000);
             ElarionUiKit.Scrim(_ui.transform, onTapClose: Close);
 
-            // Framed dark-glass panel (deep) — the canonical store backboard.
-            var panelGo = ElarionUiKit.Panel(_ui.transform, new Vector2(0.1f, 0.1f), new Vector2(0.9f, 0.9f), deep: true);
+            // Framed dark-glass panel (deep) — the canonical store backboard. T-024:
+            // a THIN, minimized footprint suited to web UI — a slim centred column
+            // (not a full-screen sheet) so the store reads as a compact dark-glass
+            // drawer rather than taking over the screen.
+            var panelGo = ElarionUiKit.Panel(_ui.transform, new Vector2(0.22f, 0.08f), new Vector2(0.78f, 0.92f), deep: true);
             var panel = panelGo.transform;
 
             // Header
@@ -265,8 +268,11 @@ namespace DeNelle.Village.Hero
         // *viewport* — so any list longer than one viewport pushed later rows into
         // NEGATIVE anchor space, off the content, unreachable even by scrolling (the
         // reported "items loaded from the catalog but the panel showed nothing").
-        private const float RowHeightPx = 86f;   // ~RowSlice * panel-content height, fixed px
-        private const float RowGapPx    = 6f;    // spacing between rows
+        // T-024 thin-panel pass: slimmer rows + tighter gap for a denser, legible,
+        // web-suited list (was 86/6 — a chunky mobile-touch height). 58px still
+        // comfortably fits the name + cost + BUY/SELL button at the kit's font sizes.
+        private const float RowHeightPx = 58f;   // slim row height, fixed px
+        private const float RowGapPx    = 3f;    // tight spacing between rows
 
         // Builds a scrollable list area inside _contentRoot and returns the content
         // transform that rows should be parented to. The content RectTransform is sized
@@ -312,7 +318,7 @@ namespace DeNelle.Village.Hero
             var vlg = content.AddComponent<VerticalLayoutGroup>();
             vlg.childAlignment = TextAnchor.UpperCenter;
             vlg.spacing = RowGapPx;
-            vlg.padding = new RectOffset(6, 6, 6, 6);
+            vlg.padding = new RectOffset(3, 3, 3, 3); // T-024: slimmer tray inset
             vlg.childControlWidth = true;
             vlg.childControlHeight = true;     // honor each row's LayoutElement height
             vlg.childForceExpandWidth = true;
