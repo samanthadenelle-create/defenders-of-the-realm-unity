@@ -145,6 +145,12 @@ namespace DeNelle.Village.Buildings.Progression
             // Arbiter closes any other open panel first (DEF-212).
             PanelManager.NotifyOpened(_panelHandle);
             Repaint();
+            // T-026: grab keyboard focus so Escape (OnRootKey) reliably fires — without
+            // a focused element UI Toolkit drops key events and the panel could only be
+            // closed by the X chip (softlock if it's ever unhittable). Deferred one frame
+            // so the element is laid out / attached before Focus().
+            if (_shell != null)
+                _shell.schedule.Execute(() => { if (_shell != null) _shell.Focus(); }).StartingIn(0);
         }
 
         public void Close()
@@ -181,8 +187,19 @@ namespace DeNelle.Village.Buildings.Progression
             _root.style.backgroundColor = new StyleColor(new Color(0f, 0f, 0f, 0f));
             _root.pickingMode = PickingMode.Ignore;
             _root.RegisterCallback<KeyDownEvent>(OnRootKey, TrickleDown.TrickleDown);
+            // T-026: backdrop (scrim) click closes the modal — a reliable dismiss path
+            // even if the X chip is ever obscured/off-screen (anti-softlock). Only the
+            // bare scrim (clicks that miss the shell) reaches here; shell clicks are
+            // stopped below so an in-panel tap never closes it.
+            _root.RegisterCallback<PointerDownEvent>(OnScrimPointerDown);
 
             _shell = new VisualElement { name = "UpgradeShell" };
+            // T-026: the shell is focusable so the panel hierarchy holds keyboard focus
+            // while open — that's what lets the Escape KeyDownEvent actually fire (UI
+            // Toolkit only dispatches key events to the focused element / its ancestors).
+            _shell.focusable = true;
+            // Clicks INSIDE the shell must not bubble to the scrim's close handler.
+            _shell.RegisterCallback<PointerDownEvent>(evt => evt.StopPropagation());
             _shell.style.width = 560;
             _shell.style.maxWidth = new Length(95, LengthUnit.Percent);
             _shell.style.maxHeight = new Length(92, LengthUnit.Percent);
@@ -372,6 +389,51 @@ namespace DeNelle.Village.Buildings.Progression
             yieldLine.style.fontSize = ElarionUi.FontLabel;
             yieldLine.style.marginTop = 4;
             card.Add(yieldLine);
+
+            // T-025: the forge-tree dimensions BEYOND raw yield — harvest SPEED and
+            // (at the arcane tier) yield SIZE. Each shows the current → next-level
+            // value so the upgrade reads as a real multi-axis enhancement, not an
+            // empty panel. Speed is phrased as a tick cadence (lower = faster).
+            float interval = lvlDef != null ? lvlDef.HarvestInterval : 0f;
+            string speedText;
+            if (maxed)
+            {
+                speedText = $"Speed  every {interval:0.#}s / harvest";
+            }
+            else
+            {
+                var nextDef = def.LevelDef(level + 1);
+                float nextInterval = nextDef != null ? nextDef.HarvestInterval : interval;
+                speedText = nextInterval < interval
+                    ? $"Speed  every {interval:0.#}s → {nextInterval:0.#}s  (faster)"
+                    : $"Speed  every {interval:0.#}s / harvest";
+            }
+            var speedLine = new Label(speedText);
+            speedLine.style.color = new StyleColor(Dim);
+            speedLine.style.fontSize = ElarionUi.FontLabel;
+            speedLine.style.marginTop = 2;
+            card.Add(speedLine);
+
+            // SIZE — only surfaced when a size bonus is in play (arcane tier) or the
+            // NEXT level introduces one, so ordinary tiers stay uncluttered.
+            float sizeMul = lvlDef != null ? lvlDef.YieldSizeMultiplier : 1f;
+            float nextSizeMul = sizeMul;
+            if (!maxed)
+            {
+                var nextDef = def.LevelDef(level + 1);
+                nextSizeMul = nextDef != null ? nextDef.YieldSizeMultiplier : sizeMul;
+            }
+            if (sizeMul > 1.001f || nextSizeMul > 1.001f)
+            {
+                string sizeText = (!maxed && nextSizeMul > sizeMul + 0.001f)
+                    ? $"Haul size  ×{sizeMul:0.0} → ×{nextSizeMul:0.0}  (bigger)"
+                    : $"Haul size  ×{sizeMul:0.0}";
+                var sizeLine = new Label(sizeText);
+                sizeLine.style.color = new StyleColor(ElarionUi.Aether);
+                sizeLine.style.fontSize = ElarionUi.FontLabel;
+                sizeLine.style.marginTop = 2;
+                card.Add(sizeLine);
+            }
 
             // Cost + upgrade row.
             var costRow = new VisualElement();
@@ -620,11 +682,23 @@ namespace DeNelle.Village.Buildings.Progression
 
         private void OnRootKey(KeyDownEvent evt)
         {
-            if (evt.keyCode == KeyCode.Escape && IsOpen)
+            // T-026: Escape OR the mobile Back/Menu key dismisses — both common "get me
+            // out" inputs, so the modal can never trap the player.
+            if (IsOpen && (evt.keyCode == KeyCode.Escape || evt.keyCode == KeyCode.Menu))
             {
                 Close();
                 evt.StopPropagation();
             }
+        }
+
+        /// <summary>
+        /// T-026: a pointer-down on the scrim (a click that MISSED the shell — shell
+        /// clicks are stopped at the shell) closes the panel. Reliable backdrop dismiss
+        /// so a stuck/obscured X chip can never softlock the player on this screen.
+        /// </summary>
+        private void OnScrimPointerDown(PointerDownEvent evt)
+        {
+            if (IsOpen) Close();
         }
 
         // ── Style helpers ────────────────────────────────────────────────────

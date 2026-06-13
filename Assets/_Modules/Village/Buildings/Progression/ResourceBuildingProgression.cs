@@ -82,6 +82,22 @@ namespace DeNelle.Village.Buildings.Progression
         public int YieldPerTick;
 
         /// <summary>
+        /// HARVEST SPEED (T-025): seconds between auto-harvest ticks at this level.
+        /// SMALLER = faster. The forge-tree "increase harvest speed" axis — each level
+        /// shortens the cooldown, so an upgrade visibly speeds income. Consumed by
+        /// <see cref="ResourceBuildingHarvester"/> as the per-building tick interval.
+        /// </summary>
+        public float HarvestInterval = 6f;
+
+        /// <summary>
+        /// YIELD SIZE multiplier (T-025): a curated bonus multiplier applied to
+        /// <see cref="YieldPerTick"/> at harvest time. The "increase size" forge-tree
+        /// axis — most levels leave this at 1.0 (size comes from YieldPerTick), but the
+        /// top/arcane tiers bump it so a maxed building reads as a bigger haul. 1.0 = none.
+        /// </summary>
+        public float YieldSizeMultiplier = 1f;
+
+        /// <summary>
         /// Resources spent to upgrade FROM this level to the next. Empty list
         /// means this is the max level (no further upgrade).
         /// </summary>
@@ -243,6 +259,30 @@ namespace DeNelle.Village.Buildings.Progression
 
         private const int HarvestLevels = 5;
 
+        // ── Curated harvest-SPEED + yield-SIZE ladders (T-025) ────────────────
+        // The forge-tree dimensions beyond raw yield. Both are CURATED constants
+        // (NOT free-form): each harvest level shortens the tick interval and the
+        // arcane tier adds a size multiplier. Balanced off the existing yield ladder
+        // so an upgrade is felt as "faster AND bigger", not just a bigger number.
+        //
+        // Speed: level 1 ticks every 8s, dropping ~1.2s/level to a brisk 3.2s at
+        // level 5 (a 2.5x throughput gain across the harvestable curve, on top of
+        // the yield growth). Indexed by 1-based level; clamped past the array.
+        private static readonly float[] HarvestIntervalByLevel = { 8f, 6.8f, 5.6f, 4.4f, 3.2f };
+        // The arcane (Magic-gated) tier is the fastest tick in the game.
+        private const float ArcaneHarvestInterval = 2.4f;
+        // Size: harvestable tiers leave size at 1.0 (size = YieldPerTick); the
+        // arcane tier multiplies the haul so a maxed forge reads as a big payout.
+        private const float ArcaneYieldSizeMultiplier = 1.5f;
+
+        /// <summary>The curated tick interval (seconds) for a 1-based <paramref name="level"/>.</summary>
+        private static float IntervalForLevel(int level)
+        {
+            if (HarvestIntervalByLevel.Length == 0) return 6f;
+            int i = Mathf.Clamp(level - 1, 0, HarvestIntervalByLevel.Length - 1);
+            return HarvestIntervalByLevel[i];
+        }
+
         /// <summary>
         /// Builds a 5-level harvestable curve from simple parameters: yield grows
         /// linearly (<paramref name="baseYield"/> + (level-1)*<paramref name="yieldStep"/>),
@@ -272,6 +312,9 @@ namespace DeNelle.Village.Buildings.Progression
                     Level = level,
                     Yields = yields,
                     YieldPerTick = baseYield + (level - 1) * yieldStep,
+                    // T-025: each harvestable level also ticks FASTER (curated ladder).
+                    HarvestInterval = IntervalForLevel(level),
+                    YieldSizeMultiplier = 1f,
                 };
 
                 bool isTopHarvest = level == HarvestLevels;
@@ -312,6 +355,9 @@ namespace DeNelle.Village.Buildings.Progression
                     Yields = yields,
                     // A meaningful arcane yield bump over the previous top tier.
                     YieldPerTick = baseYield + (level - 1) * yieldStep + yieldStep,
+                    // T-025: the arcane tier is the FASTEST tick AND multiplies the haul.
+                    HarvestInterval = ArcaneHarvestInterval,
+                    YieldSizeMultiplier = ArcaneYieldSizeMultiplier,
                     UpgradeCost = System.Array.Empty<ResourceCost>(),
                     MagicCost = 0,
                 };

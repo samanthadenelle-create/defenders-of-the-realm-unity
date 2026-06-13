@@ -73,11 +73,35 @@ namespace DeNelle.Village.Buildings.Progression
             return def?.LevelDef(GetLevel(buildingId));
         }
 
-        /// <summary>The yield this building produces at its current level (0 when unknown).</summary>
+        /// <summary>The base yield this building produces at its current level (0 when unknown).</summary>
         public static int CurrentYield(string buildingId)
         {
             var lvl = CurrentDef(buildingId);
             return lvl != null ? lvl.YieldPerTick : 0;
+        }
+
+        /// <summary>
+        /// T-025: the EFFECTIVE yield at the current level — base YieldPerTick scaled
+        /// by the level's size multiplier (rounded). This is the amount actually
+        /// credited per harvest tick. Equals <see cref="CurrentYield"/> while the
+        /// size multiplier is 1.0 (all harvestable tiers); larger at the arcane tier.
+        /// </summary>
+        public static int CurrentEffectiveYield(string buildingId)
+        {
+            var lvl = CurrentDef(buildingId);
+            if (lvl == null) return 0;
+            return Mathf.Max(0, Mathf.RoundToInt(lvl.YieldPerTick * Mathf.Max(0f, lvl.YieldSizeMultiplier)));
+        }
+
+        /// <summary>
+        /// T-025: the harvest-SPEED (seconds between ticks) at the current level.
+        /// Smaller = faster. Consumed by <see cref="ResourceBuildingHarvester"/>.
+        /// Falls back to 6s for an unknown id.
+        /// </summary>
+        public static float CurrentHarvestInterval(string buildingId)
+        {
+            var lvl = CurrentDef(buildingId);
+            return lvl != null ? Mathf.Max(0.5f, lvl.HarvestInterval) : 6f;
         }
 
         /// <summary>True when the building is at its top level.</summary>

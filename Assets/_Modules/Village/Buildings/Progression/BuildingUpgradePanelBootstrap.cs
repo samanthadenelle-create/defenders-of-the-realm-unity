@@ -57,6 +57,10 @@ namespace DeNelle.Village.Buildings.Progression
             ui.sortingOrder = 121; // just above the crafting panel (120)
             go.AddComponent<BuildingUpgradePanel>();
             go.AddComponent<BuildingUpgradePanelInput>();
+            // T-025: the harvest-tick driver that makes the upgrade ladder's
+            // speed/size fields actually pay out (consumes HarvestInterval +
+            // effective yield → ResourceLedger.Credit). Shares the panel's lifetime.
+            go.AddComponent<ResourceBuildingHarvester>();
         }
 
         private static Transform FindHero()
