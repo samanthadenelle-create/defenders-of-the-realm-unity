@@ -548,11 +548,12 @@ namespace DeNelle.DevTools
             w.style.right = 8;
             w.style.width = 360;
             w.style.maxHeight = Length.Percent(94);
-            w.style.backgroundColor = new Color(0.07f, 0.08f, 0.11f, 0.97f);
+            w.style.backgroundColor = new Color(0.05f, 0.05f, 0.07f, 0.97f);   // dark glass (ElarionUiKit.GlassDeep tone)
             SetPadding(w, 10);
             SetRadius(w, 8);
             w.style.display = DisplayStyle.None;
-            var bc = new Color(0.30f, 0.40f, 0.62f, 0.85f);
+            // T-003: gilt rune rim instead of the off-theme navy border.
+            var bc = new Color(0.831f, 0.686f, 0.216f, 0.70f);
             w.style.borderLeftWidth = 1; w.style.borderRightWidth = 1;
             w.style.borderTopWidth = 1; w.style.borderBottomWidth = 1;
             w.style.borderLeftColor = bc; w.style.borderRightColor = bc;
@@ -561,16 +562,29 @@ namespace DeNelle.DevTools
 
         private static void StyleCornerChip(VisualElement chip)
         {
+            // T-003: the old chip read as an off-theme NAVY-BLUE blob (reported 30+ times).
+            // Retheme to the ElarionUi dark-glass + gold language and make it small/subtle
+            // so it stops drawing the eye on the hub / Title while staying the dev entry.
+            // (UITK overlay — hard-code the ElarionUi tokens; this asmdef can't reference
+            //  the UGUI ElarionUi palette type, but the values match it 1:1.)
             chip.style.position = Position.Absolute;
-            chip.style.top = 8;
-            chip.style.right = 8;
-            chip.style.paddingLeft = 9; chip.style.paddingRight = 9;
-            chip.style.paddingTop = 3; chip.style.paddingBottom = 3;
-            chip.style.backgroundColor = new Color(0.15f, 0.20f, 0.35f, 0.92f);
-            chip.style.color = new Color(0.82f, 0.90f, 1f);
+            chip.style.top = 6;
+            chip.style.right = 6;
+            chip.style.paddingLeft = 6; chip.style.paddingRight = 6;
+            chip.style.paddingTop = 1; chip.style.paddingBottom = 1;
+            // ElarionUiKit.GlassDeep (0.04,0.05,0.07) — dark glass, low alpha = subtle.
+            chip.style.backgroundColor = new Color(0.04f, 0.05f, 0.07f, 0.55f);
+            // ElarionUi.Gold (0.831,0.686,0.216) ink, slightly muted so it doesn't shout.
+            chip.style.color = new Color(0.831f, 0.686f, 0.216f, 0.80f);
             chip.style.unityFontStyleAndWeight = FontStyle.Bold;
-            chip.style.fontSize = 11;
-            SetRadius(chip, 4);
+            chip.style.fontSize = 9;
+            // Thin gilt hairline rim — the dark-glass + gold treatment, not a flat blob.
+            var gilt = new Color(0.831f, 0.686f, 0.216f, 0.55f);
+            chip.style.borderLeftWidth = 1; chip.style.borderRightWidth = 1;
+            chip.style.borderTopWidth = 1; chip.style.borderBottomWidth = 1;
+            chip.style.borderLeftColor = gilt; chip.style.borderRightColor = gilt;
+            chip.style.borderTopColor = gilt; chip.style.borderBottomColor = gilt;
+            SetRadius(chip, 3);
         }
 
         private static void StyleChromeButton(Button b)

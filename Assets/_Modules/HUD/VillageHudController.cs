@@ -147,6 +147,17 @@ namespace DeNelle.HUD
         private float _wavePollTimer;
         private const float WavePollInterval = 0.2f;
 
+        // ── T-004/T-015: combat-vs-hub gate for the party/vitals/mana cluster ──────
+        // The combat party-frame stack + hero vitals (mana "10/10", green party-HP fill)
+        // must NOT show in the non-combat castle hub (they read as a context-free green
+        // bar). We gate them ON only while a wave is actively counting down or fighting
+        // (WaveManager.Phase == Countdown(1) or Active(2)), read by reflection in
+        // PollWaveTimer (HUD→Core; WaveManager is in DeNelle.Village — never edited here).
+        // Default OFF so a hub with no armed wave loop shows no combat cluster.
+        private int _wavePhaseCached;        // last reflected WaveManager phase (0 Idle,1 Countdown,2 Active,…)
+        private bool _waveCombatActive;      // derived: phase is Countdown or Active
+        private bool _lastCombatGate;        // last applied gate (avoid redundant SetActive churn)
+
         // Skill bar cells
         private TextMeshProUGUI[] _slotKey;
         private TextMeshProUGUI[] _slotGlyph;
@@ -665,13 +676,26 @@ namespace DeNelle.HUD
             _wavePollTimer = WavePollInterval;
 
             ResolveWaveMgrIfNeeded();
-            if (_waveMgr == null || _wavePhaseProp == null || _waveCountdownProp == null) return;
+            if (_waveMgr == null || _wavePhaseProp == null || _waveCountdownProp == null)
+            {
+                // No wave loop present (e.g. a bare hub) → not in combat, gate the
+                // party/vitals cluster OFF and leave the idle clock blank.
+                _wavePhaseCached = 0;
+                _waveCombatActive = false;
+                _townWaveActive = false;
+                return;
+            }
 
             try
             {
-                // WavePhase.Countdown == 1 (see DeNelle.Village.WavePhase). Compare by int
-                // so we don't need the Village enum type at HUD compile time.
+                // WavePhase: Idle=0, Countdown=1, Active=2 (see DeNelle.Village.WavePhase).
+                // Compare by int so we don't need the Village enum type at HUD compile time.
                 int phase = System.Convert.ToInt32(_wavePhaseProp.GetValue(_waveMgr));
+                _wavePhaseCached = phase;
+                // T-004/T-015: combat cluster is gated ON only during an ACTIVE wave loop
+                // (Countdown or Active). Idle/Complete/Breached/Defeated → hub, gate OFF.
+                _waveCombatActive = phase == 1 || phase == 2;
+
                 if (phase == 1) // Countdown
                 {
                     float remaining = (float)_waveCountdownProp.GetValue(_waveMgr);
@@ -682,6 +706,20 @@ namespace DeNelle.HUD
                         int cur = (int)_waveCurIdProp.GetValue(_waveMgr);
                         if (cur > 0 && cur != _townWaveCur) { _townWaveCur = cur; RefreshTownWaveProgress(); }
                     }
+                }
+                else if (phase == 2) // Active — wave in combat
+                {
+                    _townWaveActive = true;
+                }
+                else
+                {
+                    // T-022: no live countdown (Idle/Complete/…). CountdownRemaining can still
+                    // read >0 right after EnterCountdown; surface it so the timer shows a value
+                    // the instant the loop arms instead of staying blank. Otherwise clear it so
+                    // the idle clock face reads empty (owner: no center word when idle).
+                    float remaining = (float)_waveCountdownProp.GetValue(_waveMgr);
+                    _townTimerSeconds = remaining > 0.05f ? remaining : -1f;
+                    _townWaveActive = false;
                 }
             }
             catch { _waveMgr = null; /* manager torn down across a reload — re-resolve next tick */ }
@@ -701,6 +739,23 @@ namespace DeNelle.HUD
             _waveCurIdProp     = _waveMgrType.GetProperty("CurrentWaveId");
         }
 
+        // ── T-004/T-015: show the combat party-frame + hero vitals/mana ONLY in combat. ─
+        // The party stack (slot 0 hero + companions) and the bottom-left vitals cluster
+        // (mana "10/10" + XP line) are COMBAT chrome — in the idle castle hub they read
+        // as a context-free green bar. We gate them on `_waveCombatActive` (Countdown or
+        // Active wave) AND the existing `_combatHudVisible` build-mode flag. Visibility
+        // only — every data binding keeps writing while hidden, so the HUD is correct on
+        // restore (same contract as SetCombatHudVisible).
+        private void ApplyCombatGate()
+        {
+            bool show = _waveCombatActive && _combatHudVisible;
+            if (show == _lastCombatGate && _vitalsCluster != null
+                && _vitalsCluster.gameObject.activeSelf == show) return;
+            _lastCombatGate = show;
+            SetActiveSafe(_partyStack, show);
+            SetActiveSafe(_vitalsCluster, show);
+        }
+
         // ── WO-339: per-frame TOWN-HUD animation (timer urgency, res flash, map). ─
         private void UpdateTownHud()
         {
@@ -709,6 +764,11 @@ namespace DeNelle.HUD
             // Keep the countdown sourced live from WaveManager (fallback to the
             // SetCountdown push path when no manager is present).
             PollWaveTimer();
+
+            // T-004/T-015: gate the combat party-frame + hero vitals/mana cluster to
+            // an active wave only (Countdown/Active). In the non-combat castle hub they
+            // would otherwise show a context-free green party-HP bar + "10/10" mana.
+            ApplyCombatGate();
 
             // Countdown timer text + urgency colour (only when a wave is pending).
             if (_townTimerText != null)
@@ -1136,6 +1196,10 @@ namespace DeNelle.HUD
             // Reusable chasing-comet attention cue around the Talk button (also for tutorial focusing).
             _talkGlow = AttentionGlowUi.Attach((RectTransform)_talkButton.transform,
                 new Color(1f, 0.85f, 0.35f, 1f), HudTheme.Disc);
+            // T-016: render the comet ABOVE the Talk icon art so it isn't hidden under it
+            // (the owner reported the spinning comet "missing"). Non-raycast, so it never
+            // eats the Talk tap.
+            if (_talkGlow != null) _talkGlow.transform.SetAsLastSibling();
 
             SetTalkAvailable(false);   // gated until a talkable NPC is in range
         }
@@ -1196,6 +1260,12 @@ namespace DeNelle.HUD
                 var amt = NewRect("Amt", cell, new Vector2(0.36f, 0f), new Vector2(0.98f, 1f));
                 _resourceTexts[i] = Ink(AddText(amt, "0", 26, LInk, TextAlignmentOptions.Left));
                 _resourceTexts[i].fontStyle = FontStyles.Bold;
+                // T-013/T-014: shrink-to-fit so large totals don't overflow / overlap the
+                // neighbouring cell. One line, auto-size down.
+                _resourceTexts[i].enableAutoSizing = true;
+                _resourceTexts[i].fontSizeMin = 13f; _resourceTexts[i].fontSizeMax = 26f;
+                _resourceTexts[i].enableWordWrapping = false;
+                _resourceTexts[i].overflowMode = TextOverflowModes.Ellipsis;
             }
         }
 
@@ -1367,6 +1437,13 @@ namespace DeNelle.HUD
                 _partyHpFill[i] = hfimg;
                 _partyHpText[i] = AddText(hpTrack, "", 11, HudTheme.Text, TextAlignmentOptions.Center);
                 _partyHpText[i].outlineColor = new Color32(40, 16, 16, 200); _partyHpText[i].outlineWidth = 0.14f;
+                // T-004: tiny "HP" caption so the green party fill is never context-free.
+                var hpCap = AddText(hpTrack, "HP", 9, HudTheme.Gilt, TextAlignmentOptions.MidlineLeft);
+                ((RectTransform)hpCap.transform).anchorMin = new Vector2(0.02f, 0f);
+                ((RectTransform)hpCap.transform).anchorMax = new Vector2(0.22f, 1f);
+                ((RectTransform)hpCap.transform).offsetMin = Vector2.zero; ((RectTransform)hpCap.transform).offsetMax = Vector2.zero;
+                hpCap.fontStyle = FontStyles.Bold; hpCap.outlineColor = new Color32(40, 16, 16, 200);
+                hpCap.outlineWidth = 0.14f; hpCap.raycastTarget = false;
 
                 // MP bar (blue, lower-right).
                 var mpTrack = NewRect("MPTrack", frame, new Vector2(0.31f, 0.07f), new Vector2(0.985f, 0.27f));
@@ -1376,6 +1453,13 @@ namespace DeNelle.HUD
                 mfimg.type = Image.Type.Filled; mfimg.fillMethod = Image.FillMethod.Horizontal; mfimg.fillOrigin = 0; mfimg.fillAmount = 1f;
                 mfimg.raycastTarget = false;
                 _partyMpFill[i] = mfimg;
+                // T-004: tiny "MP" caption on the blue bar.
+                var mpCapP = AddText(mpTrack, "MP", 9, HudTheme.Gilt, TextAlignmentOptions.MidlineLeft);
+                ((RectTransform)mpCapP.transform).anchorMin = new Vector2(0.02f, 0f);
+                ((RectTransform)mpCapP.transform).anchorMax = new Vector2(0.22f, 1f);
+                ((RectTransform)mpCapP.transform).offsetMin = Vector2.zero; ((RectTransform)mpCapP.transform).offsetMax = Vector2.zero;
+                mpCapP.fontStyle = FontStyles.Bold; mpCapP.outlineColor = new Color32(10, 18, 44, 200);
+                mpCapP.outlineWidth = 0.14f; mpCapP.raycastTarget = false;
 
                 _partyFrame[i].SetActive(i == 0);
             }
@@ -1417,6 +1501,25 @@ namespace DeNelle.HUD
                 case DeNelle.Core.State.HeroClassOpt.Mage:   return "Wizard/wiard";
                 case DeNelle.Core.State.HeroClassOpt.Cleric: return "Healer/healer";
                 default: return null;
+            }
+        }
+
+        // T-035: companion portrait by roster NAME. PartyHudBridge pushes the canonical
+        // companion display names (Thrain/Grom/Sylas/Elara — CompanionDialogue.NameFor),
+        // so the HUD maps name→class→portrait without referencing DeNelle.Village (the
+        // companion-class enum lives in Village). Falls back through PortraitNameForClass
+        // so the same per-class art is reused. Returns null for an unknown name (caller
+        // keeps the existing portrait sprite).
+        private static string PortraitNameForRosterName(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return null;
+            switch (name.Trim())
+            {
+                case "Grom":   return PortraitNameForClass(DeNelle.Core.State.HeroClassOpt.Knight);
+                case "Sylas":  return PortraitNameForClass(DeNelle.Core.State.HeroClassOpt.Ranger);
+                case "Thrain": return PortraitNameForClass(DeNelle.Core.State.HeroClassOpt.Mage);
+                case "Elara":  return PortraitNameForClass(DeNelle.Core.State.HeroClassOpt.Cleric);
+                default:       return null;
             }
         }
 
@@ -1481,6 +1584,14 @@ namespace DeNelle.HUD
             _manaText = AddText(mTrack, "", 13, HudTheme.Text, TextAlignmentOptions.Center);
             _manaText.fontStyle = FontStyles.Bold;
             _manaText.outlineColor = new Color32(10, 18, 44, 200); _manaText.outlineWidth = 0.14f;
+
+            // T-004: small "MP" caption so the mana bar is never context-free (the owner
+            // saw a bare "10/10" with no label). Gilt mini-label pinned to the bar's left.
+            var mpCap = NewRect("MPCaption", mTrack, new Vector2(0.02f, 0f), new Vector2(0.22f, 1f));
+            var mpc = AddText(mpCap, "MP", 11, HudTheme.Gilt, TextAlignmentOptions.MidlineLeft);
+            mpc.fontStyle = FontStyles.Bold; mpc.characterSpacing = 1f;
+            mpc.outlineColor = new Color32(10, 18, 44, 200); mpc.outlineWidth = 0.14f;
+            mpc.raycastTarget = false;
         }
 
         // ── Bottom-RIGHT ability cluster — 2×2 grid of skill cells (RIGHT thumb). ─
@@ -1821,6 +1932,13 @@ namespace DeNelle.HUD
                 _townResText[i].fontStyle = FontStyles.Bold;
                 _townResText[i].outlineColor = new Color32(28, 16, 6, 235);
                 _townResText[i].outlineWidth = 0.2f;
+                // T-014: responsive to text growth — a 6-digit resource total must shrink to
+                // fit its cell instead of overflowing into the next badge. Auto-size down,
+                // no wrap (one line), so big numbers stay readable + on their own badge.
+                _townResText[i].enableAutoSizing = true;
+                _townResText[i].fontSizeMin = 12f; _townResText[i].fontSizeMax = 22f;
+                _townResText[i].enableWordWrapping = false;
+                _townResText[i].overflowMode = TextOverflowModes.Ellipsis;
             }
         }
 
@@ -2595,6 +2713,14 @@ namespace DeNelle.HUD
             if (_partyFrame == null || slot < 0 || slot >= _partyFrame.Length) return;
             if (_partyFrame[slot] != null) _partyFrame[slot].SetActive(true);
             if (_partyName != null && _partyName[slot] != null && !string.IsNullOrEmpty(name)) _partyName[slot].text = name;
+            // T-035: bind the companion portrait from the roster name (slot 0 = hero is
+            // owned by RefreshHeroPortrait). Missing art → keep the current sprite.
+            if (slot >= 1 && _partyPortrait != null && _partyPortrait[slot] != null)
+            {
+                var portKey = PortraitNameForRosterName(name);
+                var portSp = portKey != null ? WidgetSprite(portKey) : null;
+                if (portSp != null) _partyPortrait[slot].sprite = portSp;
+            }
             float pct = max > 0f ? Mathf.Clamp01(current / max) : 0f;
             if (_partyHpFill != null && _partyHpFill[slot] != null) _partyHpFill[slot].fillAmount = pct;
             if (_partyHpText != null && _partyHpText[slot] != null) _partyHpText[slot].text = Mathf.RoundToInt(current) + "/" + Mathf.RoundToInt(max);
