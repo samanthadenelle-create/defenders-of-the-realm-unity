@@ -58,8 +58,11 @@ tiered wall upgrades. Phase 1 = builder-generated + data-driven; Phase 2 (post-g
 1. **Cell size** — 4m (proposed) vs 2m.
 2. **Wall meshes** — need 3 segment meshes (wood/iron/steel). Use existing `Wall_Medieval_Stone` for one tier +
    source/retexture 2 more? Or 3 new low-poly segments. (Art call.)
-3. **Upgrade granularity** — per-segment (CoC late-game) vs "upgrade all walls" one button (CoC early). Recommend
-   start with **upgrade-all** (simpler UX + table).
+3. **Upgrade granularity — DECIDED (owner 2026-06-13): exactly TWO modes.**
+   - **Single cell** — tap one wall segment, upgrade it a tier (cost = that cell's next-tier cost).
+   - **Entire wall** — one action upgrades ALL wall cells a tier (cost = sum of each cell's next-tier cost; cells
+     already at the target tier are skipped). Mixed-tier walls level up toward uniform.
+   No side/ring or drag-select grouping. Data model is trivial: single = the tapped cell; entire = every Wall cell.
 4. HP/cost numbers above — first-pass, tune later.
 
 ## Build order (Phase 1)
