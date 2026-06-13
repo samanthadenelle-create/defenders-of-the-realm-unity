@@ -500,6 +500,15 @@ namespace DeNelle.Editor
                 BuildRingSideRun(ring.transform, wallStone, sideCenter, along, rot,  gapMax, R,      baseLen, label + "_R", ref placed);
             }
 
+            // WO-449: put the inner CoC wall ring (+ its MeshCollider children) on the "Structure"
+            // layer so HeroTargetIndicator's line-of-sight linecast occludes targeting through it,
+            // same as the perimeter walls. Gate GAPS are absent geometry (no segment spans them),
+            // so they stay passable. Layer != navmesh — the gate-gap bake exclusion is unaffected.
+            int structureLayer = LayerMask.NameToLayer("Structure");
+            if (structureLayer >= 0) SetLayerRecursively(ring, structureLayer);
+            else Debug.LogWarning("[CastleHubBuilder] WO-449: 'Structure' layer missing — inner ring " +
+                                  "left on Default (LoS gate will degrade off for the inner ring).");
+
             Log($"BuildInnerWallRing: CoC inner ring built — half-extent {R}m, 4 sides, " +
                 $"{InnerRingGateGapHalf * 2f}m gate gap per side centered on recipe gate lateral {gateLateral:F2}m " +
                 $"(aligned to outer gates), {placed} wall segment(s). Path: courtyard -> inner gap -> outer gate strip -> seam.");
@@ -524,6 +533,16 @@ namespace DeNelle.Editor
             w.transform.rotation = rot;                          // wall length axis (local X) aligns with 'along'
             w.transform.localScale = new Vector3(span / baseLen, 1f, 1f);
             placed++;
+        }
+
+        // WO-449: set this GameObject and ALL descendants (which carry the MeshColliders the LoS
+        // linecast hits) onto the given layer. Recursive so child renderer/collider GOs are covered.
+        private static void SetLayerRecursively(GameObject go, int layer)
+        {
+            if (go == null) return;
+            go.layer = layer;
+            foreach (Transform child in go.transform)
+                SetLayerRecursively(child.gameObject, layer);
         }
 
         // Measure a wall prefab's un-scaled X footprint from a throwaway instance (renderer bounds /

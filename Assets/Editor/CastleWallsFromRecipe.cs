@@ -24,6 +24,12 @@ namespace DeNelle.Editor
     {
         private const string PolyRoot  = "Assets/polyperfect/Low Poly Ultimate Pack/_M/Prefabs_M/Medieval_M/";
         private const string SouthName = "CastleSide_South";
+
+        // WO-449: dedicated physics layer for castle WALL geometry so HeroTargetIndicator's
+        // line-of-sight linecast can be masked to walls only — NOT the hero/ground (Default)
+        // or enemies (Enemy). Walls share Default by default, which would self-block the hero;
+        // putting them on "Structure" lets the LoS mask occlude targeting through walls cleanly.
+        private const string StructureLayerName = "Structure";
         private static readonly (float angle, string label)[] Sides =
             { (90f, "West"), (180f, "North"), (270f, "East") };
 
@@ -77,6 +83,16 @@ namespace DeNelle.Editor
             // fillers mirror x4 and every side closes identically. Does NOT move any authored piece.
             CloseSouthWallSeams(parent.transform, recipe);
 
+            // WO-449: put the whole SOUTH wall side (authored pieces + seam fillers, incl. their
+            // MeshCollider children) on the "Structure" layer BEFORE the mirror, so the LoS gate's
+            // linecast occludes targeting through walls. Done pre-mirror so the x4 clones inherit it.
+            // Gate OPENINGS are not wall geometry (they're the gaps + exit strips, untouched here),
+            // so they stay passable. Layer != navmesh — the bake is unaffected.
+            int structureLayer = LayerMask.NameToLayer(StructureLayerName);
+            if (structureLayer >= 0) SetLayerRecursively(parent, structureLayer);
+            else Debug.LogWarning("[CastleWallsFromRecipe] WO-449: '" + StructureLayerName +
+                                  "' layer missing — wall geometry left on Default (LoS gate will degrade off).");
+
             // Mirror south -> West/North/East around world origin (the Heart at 0,0,0).
             foreach (var (angle, label) in Sides)
             {
@@ -94,6 +110,16 @@ namespace DeNelle.Editor
 
         private static Vector3 V(float[] a, Vector3 fallback = default)
             => (a != null && a.Length == 3) ? new Vector3(a[0], a[1], a[2]) : fallback;
+
+        // WO-449: set this GameObject and ALL descendants (which carry the MeshColliders the LoS
+        // linecast hits) onto the given layer. Recursive so child renderer/collider GOs are covered.
+        private static void SetLayerRecursively(GameObject go, int layer)
+        {
+            if (go == null) return;
+            go.layer = layer;
+            foreach (Transform child in go.transform)
+                SetLayerRecursively(child.gameObject, layer);
+        }
 
         // =====================================================================
         //  T-007 — fill gaps along the SOUTH wall line so the perimeter reads as ONE connected

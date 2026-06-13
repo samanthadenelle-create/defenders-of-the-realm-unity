@@ -115,6 +115,14 @@ namespace DeNelle.Village
             _abilities = GetComponent<HeroAbilities>();
             _enemyMask = LayerMask.GetMask("Enemy");
             if (_enemyMask == 0) _enemyMask = ~0;   // layer undefined → fall back to all
+
+            // WO-449: ACTIVATE the LoS gate out-of-the-box. The castle wall geometry is built onto
+            // the dedicated "Structure" layer (CastleWallsFromRecipe + CastleHubBuilder.BuildInnerWallRing),
+            // so a linecast masked to it is blocked by walls but NOT by the hero/ground (Default) or
+            // enemies (Enemy) — those stay off the mask so the hero/target never self-block. We only
+            // seed the default when unset in the inspector; if "Structure" doesn't exist GetMask
+            // returns 0 and HasLoS's degrade rule (value == 0 → LoS clear) keeps targeting safe.
+            if (_losMask.value == 0) _losMask = LayerMask.GetMask("Structure");
         }
 
         private void OnDestroy()
