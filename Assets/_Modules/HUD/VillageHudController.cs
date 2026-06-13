@@ -1574,7 +1574,7 @@ namespace DeNelle.HUD
             {
                 case DeNelle.Core.State.HeroClassOpt.Knight: return "Knight/knight";
                 case DeNelle.Core.State.HeroClassOpt.Ranger: return "Ranger/ranger";
-                case DeNelle.Core.State.HeroClassOpt.Mage:   return "Wizard/wiard";
+                case DeNelle.Core.State.HeroClassOpt.Mage:   return "Wizard/wizard";
                 case DeNelle.Core.State.HeroClassOpt.Cleric: return "Healer/healer";
                 default: return null;
             }
@@ -2816,6 +2816,12 @@ namespace DeNelle.HUD
                 var portKey = PortraitNameForRosterName(name);
                 var portSp = portKey != null ? WidgetSprite(portKey) : null;
                 if (portSp != null) _partyPortrait[slot].sprite = portSp;
+                // WO-446: a missing companion portrait used to fail silently (slot kept its
+                // old/blank sprite). Surface it so a future typo'd key / un-imported icon is
+                // visible in the flow trace instead of just a blank gilt ring.
+                else if (portKey != null)
+                    DeNelle.Core.Diagnostics.FlowTrace.Warn("UI",
+                        $"party portrait null for '{portKey}' (roster '{name}')");
             }
             float pct = max > 0f ? Mathf.Clamp01(current / max) : 0f;
             if (_partyHpFill != null && _partyHpFill[slot] != null) _partyHpFill[slot].fillAmount = pct;
