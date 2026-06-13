@@ -71,7 +71,22 @@ tiered wall upgrades. Phase 1 = builder-generated + data-driven; Phase 2 (post-g
    No side/ring or drag-select grouping. Data model is trivial: single = the tapped cell; entire = every Wall cell.
 4. HP/cost numbers above — first-pass, tune later.
 
+## Reconciliation with the EXISTING wall system (verified 2026-06-13 — do NOT duplicate)
+The wall-tier system is **more built than greenfield**:
+- `GameState.WallLevel` (int 0..3) — persisted GLOBAL wall level (`GameState.cs:81`, save round-trip done).
+- `WallSegment` (`Village/Walls/WallSegment.cs`) — per-segment `IDamageableStructure` with `_tier` (1..3),
+  `s_tierToughness {_,1,1.6,2.56}` (divides incoming damage = effective-HP ladder), `SetTier`, `Configure(data,height)`.
+- `StructureTierVisual` — tier accent tint. `WO-114` — the (never-wired) tier spec. `WO-110` (siege) also edits WallSegment.
+- **Done this session:** `WallTierData` (Village/Walls) — the missing cosmetic+cost data (naming Wood/Iron/Steel,
+  mesh path per tier, upgrade cost), tier 1..3, durability deferred to WallSegment's toughness. Mesh-independent.
+
+**Open design fork (needs owner before wiring upgrades):** WO-114 was **GLOBAL** (one `WallLevel` for all walls),
+but the owner's **single-cell-OR-entire-wall** upgrade needs **PER-SEGMENT** tiers (a wall can be mixed-tier).
+Recommendation: the live tier moves onto each `WallSegment` (per cell); persist per-segment tiers as part of the
+grid-map save (Phase 2); keep `GameState.WallLevel` as a back-compat "lowest tier" read. Durability stays toughness.
+
 ## Build order (Phase 1)
+0. **DONE** — `WallTierData` ladder (naming + mesh slots + cost), reconciled with WallSegment.
 1. `GridMap` data + `BlueprintToGridMap` converter (castle → grid-map, confidence-gated).
 2. `WallProgression` table (tier → HP/mesh/cost) + 3 segment meshes wired.
 3. `CastleHubBuilder` grid path: instantiate walls/buildings/core from the grid-map; nav bake from cell state.
