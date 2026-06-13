@@ -31,6 +31,14 @@ namespace DeNelle.Village
             switch (modelName)
             {
                 case "Skeleton_Golem": return EnemyRig.HumanoidLarge;
+                // 2026-06-13: the big Generic-rig brutes wired into the Wildlands map
+                // (Cave Troll, Demon, OgreMage). They have no bespoke controller, so
+                // they share the LargeEnemy controller — the heavy idle/move/attack set
+                // that best fits their bulk (better than the lean HumanoidEnemy minion
+                // set). Swap to a bespoke controller here (one line) if art lands.
+                case "Troll":
+                case "Demon":
+                case "OgreMage":       return EnemyRig.HumanoidLarge;
                 case "Necromancer":    return EnemyRig.Boss;
                 case "Dragon":         return EnemyRig.Dragon;
                 // DEF-221: the orc family is HUMANOID (Tripo), so it CANNOT use the

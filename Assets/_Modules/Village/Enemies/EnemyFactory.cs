@@ -154,39 +154,73 @@ namespace DeNelle.Village
             string id = def != null ? def.Id : null;
             switch (id)
             {
-                // DEF-250: the three HOLLOW wave archetypes get DISTINCT silhouettes so a
-                // mixed wave reads as a varied fight, not clones. Previously all three fell
-                // through to the height-based default (every one → Skeleton_Minion), so the
-                // grunt/brute/skirmisher were visually identical despite different stats.
+                // ── HOLLOW ONES (the skeleton wave faction) ──────────────────────
+                // DEF-250: the HOLLOW wave archetypes get DISTINCT silhouettes so a
+                // mixed wave reads as a varied fight, not clones.
                 //   grunt      → Skeleton_Minion  (lean, basic — the numerous rusher)
                 //   brute/tank → Skeleton_Golem   (big, LargeEnemy rig — slow heavy wall)
                 //   skirmisher → Skeleton_Rogue   (low, quick — the flanker)
+                //   caster     → Skeleton_Mage    (robed support / healer)
                 case "hollow-walker":    return "Skeleton_Minion";   // grunt
                 case "hollow-warrior":   return "Skeleton_Golem";    // brute / tank
                 case "hollow-rogue":     return "Skeleton_Rogue";    // fast skirmisher
                 case "hollow-acolyte":   return "Skeleton_Mage";     // caster / healer (WO-316 family healer)
+                case "necromancer":      return "Necromancer";       // dedicated elite (Boss rig)
 
-                case "orc-raider":       return "Skeleton_Warrior";  // heavy melee
-                case "caveman":          return "Skeleton_Golem";    // big brute
-                case "feral-wolf":       return "Skeleton_Rogue";    // fast skirmisher
-                case "tiefling-cultist": return "Skeleton_Mage";     // caster
-                case "necromancer":      return "Necromancer";       // dedicated elite
-                // DEF-221 Orc Warband family — Humanoid Tripo orcs (Resources/Enemies),
-                // animated by OrcWarband.controller via EnemyAnimatorFactory.
+                // ── WILDLANDS ROSTER (MainCastle_Hall overworld roamers) ─────────
+                // 2026-06-13 owner fix: these ids USED to all resolve to skeletons
+                // (orc-raider→Skeleton_Warrior, caveman→Skeleton_Golem, …), so the
+                // whole open world read as one undead family despite varied ids
+                // ("no families, no trolls, no orcs, no ogre"). They now map to the
+                // DISTINCT non-skeleton creature models that ALREADY exist in
+                // Resources/Enemies so each Wildlands id has its own silhouette.
+                // Keyed by ID — the one signal RegionMobSpawner.BuildRoamerDef sets
+                // (it leaves Family/Role at defaults), and the same id the garrison /
+                // tribe / outpost spawners all carry. Every target below is a VERIFIED
+                // file in Assets/Resources/Enemies.
+                case "orc-raider":       return "Orc_Berserker";     // greenskin raider → real orc (OrcWarband rig)
+                case "caveman":          return "Troll";             // big brute → Cave Troll silhouette
+                case "feral-wolf":       return "Skeleton_Rogue";    // no beast model exists — keep the fast, low skirmisher
+                case "tiefling-cultist": return "Demon";             // demonic cultist → Demon (distinct horned silhouette)
+
+                // ── ORC WARBAND (DEF-221) — Humanoid Tripo orcs, OrcWarband rig ──
                 case "orc-berserker":    return "Orc_Berserker";     // brute / charger
                 case "orc-shaman":       return "Orc_Shaman";        // caster
                 case "orc-necromancer":  return "Orc_Necromancer";   // camp elite
-                // 'troll' family — Tripo Cave Troll (Resources/Enemies/Troll). Falls back
-                // to the tinted capsule if the model isn't imported yet (LogWarning, not error).
-                case "troll":            return "Troll";             // brute / mini
+
+                // ── BRUTES / OGRES / BOSSES ──────────────────────────────────────
+                case "troll":            return "Troll";             // Cave Troll brute
+                case "ogre":             return "OgreMage";          // ogre brute → OgreMage
+                case "ogre-mage":        return "OgreMage";          // ogre caster
+                case "demon":            return "Demon";             // demon
+                case "boss-dragon":      return "Dragon";            // wing boss → the Dragon
+                case "dragon":           return "Dragon";
             }
-            // Unmapped roster (wave / tribe / ward) → pick by body size.
-            // ROOT-CAUSE TRACE: an id with no explicit case lands here and silently
-            // becomes a generic skeleton — a hidden way distinct ids collapse to one look.
+
+            // ── FAMILY FALLBACK ──────────────────────────────────────────────────
+            // Any spawner that DID set a Family (garrison/tribe set orc/tribe/beast/
+            // cult) but used an id not cased above still reads as its faction rather
+            // than collapsing to a skeleton. All targets are verified Resources files.
+            string family = def != null ? (def.Family ?? "").Trim().ToLowerInvariant() : "";
+            switch (family)
+            {
+                case "orc":   return def != null && def.Role == "caster" ? "Orc_Shaman" : "Orc_Berserker";
+                case "troll": return "Troll";
+                case "ogre":  return "OgreMage";
+                case "demon":
+                case "cult":  return "Demon";
+                case "dragon": return "Dragon";
+            }
+
+            // ── DEFAULT (unknown family/id) → pick a skeleton by body size ───────
+            // ROOT-CAUSE TRACE: an id with no explicit case AND no known family lands
+            // here and becomes a generic skeleton. The Warn below names the family so
+            // the next run shows which families still need a bespoke model/import.
             string sizeDefault = (def != null && def.Height >= 2.3f) ? "Skeleton_Golem" : "Skeleton_Minion";
             FlowTrace.Warn("Enemy",
-                $"ModelForEnemy: id '{(def != null ? def.Id : "null")}' has NO explicit model case " +
-                $"— DEFAULTED by size to '{sizeDefault}' (distinct id → generic skeleton)");
+                $"ModelForEnemy: id '{(def != null ? def.Id : "null")}' (family " +
+                $"'{(string.IsNullOrEmpty(family) ? "?" : family)}') has NO explicit model case " +
+                $"— DEFAULTED by size to '{sizeDefault}'. Add a case or import art for this family.");
             return sizeDefault;
         }
 
