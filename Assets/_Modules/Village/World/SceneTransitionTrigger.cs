@@ -2,6 +2,7 @@ using System.Collections;
 using UnityEngine;
 using UnityEngine.AI;
 using UnityEngine.SceneManagement;
+using UnityEngine.UI;
 
 namespace DeNelle.Village
 {
@@ -91,9 +92,72 @@ namespace DeNelle.Village
             catch (UnityEngine.UnityException) { return null; }
         }
 
+        // ---------------------------------------------------------------------
+        // WO-410/seam-pop: code-built fade-to-black mask around the warp.
+        // The old crossing was a one-frame teleport + camera hard-cut (a harsh
+        // visual POP). We now fade to black, snap the hero under the black,
+        // let the camera settle, then fade back in. UXML is deliberately NOT
+        // used (it doesn't render in player builds) — this is a pure-code
+        // ScreenSpaceOverlay Canvas + Image + CanvasGroup, created lazily and
+        // cached + DontDestroyOnLoad so it survives the additive load.
+        // ---------------------------------------------------------------------
+        private static CanvasGroup s_fadeGroup;
+
+        private static CanvasGroup EnsureFadeOverlay()
+        {
+            if (s_fadeGroup != null) return s_fadeGroup;
+
+            var go = new GameObject("__SceneTransitionFade");
+            Object.DontDestroyOnLoad(go);
+
+            var canvas = go.AddComponent<Canvas>();
+            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            canvas.sortingOrder = short.MaxValue; // draw above everything (HUD included)
+
+            var group = go.AddComponent<CanvasGroup>();
+            group.alpha = 0f;
+            group.interactable = false;
+            group.blocksRaycasts = false;
+
+            var imgGo = new GameObject("Black");
+            imgGo.transform.SetParent(go.transform, false);
+            var img = imgGo.AddComponent<Image>();
+            img.color = Color.black;
+            img.raycastTarget = false;
+            var rt = img.rectTransform;
+            rt.anchorMin = Vector2.zero;
+            rt.anchorMax = Vector2.one;
+            rt.offsetMin = Vector2.zero;
+            rt.offsetMax = Vector2.zero;
+
+            s_fadeGroup = group;
+            return group;
+        }
+
+        private static IEnumerator FadeTo(CanvasGroup group, float target, float duration)
+        {
+            if (group == null) yield break;
+            float start = group.alpha;
+            if (duration <= 0f) { group.alpha = target; yield break; }
+
+            float t = 0f;
+            while (t < duration)
+            {
+                t += Time.unscaledDeltaTime; // unscaled: survives any timeScale pause
+                group.alpha = Mathf.Lerp(start, target, Mathf.Clamp01(t / duration));
+                yield return null;
+            }
+            group.alpha = target;
+        }
+
         private IEnumerator RepositionPlayerAfterLoad(Transform playerTransform)
         {
-            // Give the additive scene a moment to activate objects / nav.
+            // (1) Fade to black BEFORE the snap so the teleport + camera cut
+            //     happen unseen.
+            var fade = EnsureFadeOverlay();
+            yield return FadeTo(fade, 1f, 0.25f);
+
+            // Give the additive scene a moment to activate objects / nav (under black).
             yield return new WaitForSeconds(0.15f);
             yield return null; // extra safety frame
 
@@ -123,6 +187,23 @@ namespace DeNelle.Village
 
                 Debug.Log($"[SceneTransitionTrigger] Player repositioned to {targetPosition} in '{targetSceneName}'.");
             }
+
+            // (3) Let the follow camera settle on the warped hero for one frame
+            //     under the black, THEN (4) fade back in.
+            yield return null;
+
+            // FIX B (FLAGGED, NOT APPLIED): the castle (MainCastle_Hall) stays
+            // fully loaded + rendering behind OuterWorld here, which feeds the
+            // WO-410 framerate collapse. Deactivating its roots is NOT safe yet:
+            //   • RegionMobSpawner.ResolveHeart() (OuterWorld) calls
+            //     FindAnyObjectByType<HeartController>() — HeartController is
+            //     castle-owned and FindAnyObjectByType ignores INACTIVE objects,
+            //     so deactivation would null the heart the mob spawner tethers to.
+            //   • The crossing is ONE-WAY: there is no OuterWorld->castle return
+            //     seam wired, so we can't guarantee a clean re-load on return.
+            // Deactivation needs the return-seam WO + a heart-reference fix first.
+
+            yield return FadeTo(fade, 0f, 0.35f);
         }
     }
 }
