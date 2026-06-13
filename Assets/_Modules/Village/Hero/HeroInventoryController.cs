@@ -180,6 +180,14 @@ namespace DeNelle.Village
             SafeRun(RebuildPaperDoll, "RebuildPaperDoll");
             SafeRun(RebuildGrid,      "RebuildGrid");
             SafeRun(RebuildSidebar,   "RebuildSidebar");
+
+            // A loud, single success line so the next playtest console PROVES the modal
+            // built + activated at the top-most sort order (vs. the old silent "nothing").
+            var c = _ui != null ? _ui.GetComponent<Canvas>() : null;
+            Debug.Log("[HeroInventoryController] Open() complete — modal active="
+                      + (_ui != null && _ui.activeInHierarchy)
+                      + " sort=" + (c != null ? c.sortingOrder : -1)
+                      + " " + DescribeState());
         }
 
         // A one-line snapshot of the live hero/data state, appended to failure logs so the
@@ -277,7 +285,18 @@ namespace DeNelle.Village
 
             var canvas = _ui.AddComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvas.sortingOrder = 2600;                 // above HUD + Arena (1100)
+            // ROOT-CAUSE (T-022 "no inventory" / opens-nothing): the modal used to ride
+            // sortingOrder 2600 — the stale comment ("above HUD + Arena 1100") predates a
+            // whole BAND of always-on world-HUD canvases that were added LATER and sit far
+            // ABOVE 2600: VirtualJoystick + CampPromptUI (30000), MobileInteractButton
+            // (30050), NodeDiscovery / GateIntelHud (29000). In MainCastle_Hall those are
+            // live the moment the hub loads, so the inventory built fine but rendered
+            // UNDERNEATH the full-screen joystick/interact canvases — the player tapped BAG
+            // and "saw nothing" because the modal was buried under the world HUD. We now
+            // sit ABOVE that world-HUD band but BELOW the true top overlays (GameOver /
+            // VillageLoadOverlay = 32760) so a load fade or game-over still wins.
+            canvas.sortingOrder = 31000;
+            canvas.overrideSorting = true;              // defensively pin our order vs parent canvases
 
             var scaler = _ui.AddComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
@@ -411,24 +430,24 @@ namespace DeNelle.Village
                      ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, spacing: 2f);
         }
 
-        // ── Paper-doll: the mockup-#41 SIGNATURE — a large ornate CIRCULAR RUNE FRAME
-        // with the class-crest hero medallion at its centre and the EQUIPPED-SLOT tiles
-        // arranged in a RING around it (not the old left/right columns). The hero name +
-        // class + level banner sits above. This is the composed fallback for the
-        // aspirational live render.
+        // ── Paper-doll: a CLEAN, READABLE equipment column (T-022 "this layout is awful").
+        // The previous look was a gimmicky six-socket RING with four loud red "Locked"
+        // cosmetic placeholders that read as broken. This is the standard RPG paperdoll:
+        //   [ hero name + class • LV ]            banner
+        //   [   ◯ class-crest medallion   ]       portrait niche (RawImage-ready)
+        //   ── EQUIPMENT ──                        section caption
+        //   [ ⬚ WEAPON  | item name ]             live slot row (GearLoadout)
+        //   [ ⬚ ARMOR   | item name ]             live slot row (GearLoadout)
+        //   [ ⬚ HELM    | Empty     ]             quiet empty slots (cosmetics later)
+        //   [ ⬚ TRINKET | Empty     ]
+        // Two slots are LIVE (WEAPON + ARMOR, driven by GearLoadout / ResolveDisplayArmor);
+        // the rest are tidy EMPTY slots (no alarming red), so the column always reads full
+        // without pretending to be broken. When cosmetics/accessories land they fill the
+        // empty rows in place.
         //
-        // RING LAYOUT — six sockets evenly spaced on a circle (60° apart), placed by
-        // trig around the medallion centre so the look is the radial "rune-frame" of the
-        // mockup. Two are LIVE gear (WEAPON + ARMOR, driven by GearLoadout); the other
-        // four are cosmetic placeholders (HELM / AMULET / TRINKET / BOOTS) shown as dim
-        // empty sockets so the ring always reads full. When those slots get real data
-        // (cosmetics / accessories catalog) they fill in place — the ring is the frame.
-        //
-        // TODO live 3D preview — a RenderTexture camera on the hero (isolated layer +
-        // key light) would drop a rotating model into the central medallion. Deferred
-        // here to avoid touching the live scene camera / hero in-world rendering (this
-        // is a visual polish pass that must not change gameplay). The medallion + crest
-        // is sized and centred so a RawImage can later replace it 1:1.
+        // TODO live 3D preview — a RenderTexture camera on the hero would drop a rotating
+        // model into the central medallion (sized + centred so a RawImage replaces it 1:1).
+        // Deferred: it must not touch the live scene camera / in-world hero rendering.
         private void RebuildPaperDoll()
         {
             if (_paperDoll == null) return;
@@ -439,120 +458,84 @@ namespace DeNelle.Village
             int level = HeroLevel();
 
             // Hero name banner (top of the left column).
-            AddLabelShadow(_paperDoll.transform, HeroDisplayName(job), 0.935f, 0.99f,
+            AddLabelShadow(_paperDoll.transform, HeroDisplayName(job), 0.945f, 0.995f,
                            Ink, ElarionUi.FontHead, 0.02f, 0.98f, spacing: 1f);
-            AddLabel(_paperDoll.transform, Cap(job).ToUpperInvariant() + "   •   LV " + level, 0.895f, 0.93f,
+            AddLabel(_paperDoll.transform, Cap(job).ToUpperInvariant() + "   •   LV " + level, 0.910f, 0.945f,
                      InkMicro, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.02f, 0.98f, spacing: 3f);
 
-            // ── The circular rune frame. Concentric rings = an ornate gilt halo:
-            //   outer gilt ring -> aether-tinted mid ring -> inner parchment disc.
-            // All built with the rounded sprite (max corner radius => reads circular at
-            // these sizes); WebGL-safe (RoundedSprite falls back to a soft quad). The
-            // ring lives in a SQUARE band of the left column so the circle isn't ovalled
-            // by the column's portrait aspect. ──
-            // Square band: centred horizontally, vertical span 0.085..0.575 (~0.49 tall).
-            var ringHost = AddImage(_paperDoll.transform, "RuneRing",
-                                    new Vector2(0.04f, 0.085f), new Vector2(0.96f, 0.575f), new Color(0, 0, 0, 0));
-            NoRaycast(ringHost);
-
-            // Outer gilt halo ring.
-            var haloOuter = AddCircle(ringHost.transform, "HaloOuter", 0.5f, 0.5f, 0.50f,
-                                      new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.55f));
-            NoRaycast(haloOuter);
-            // Aether-tinted mid ring (the runic glow).
-            var haloMid = AddCircle(ringHost.transform, "HaloMid", 0.5f, 0.5f, 0.455f,
-                                    new Color(ElarionUi.Aether.r, ElarionUi.Aether.g, ElarionUi.Aether.b, 0.20f));
-            NoRaycast(haloMid);
-            // Inner parchment disc the hero medallion sits on.
-            var disc = AddCircle(ringHost.transform, "RingDisc", 0.5f, 0.5f, 0.43f, StoneNiche);
+            // ── Hero portrait medallion — a single tidy circular niche (no busy ring).
+            // Lives in a square band so the circle stays round in the portrait column.
+            var portraitHost = AddImage(_paperDoll.transform, "PortraitHost",
+                                        new Vector2(0.14f, 0.605f), new Vector2(0.86f, 0.895f), new Color(0, 0, 0, 0));
+            NoRaycast(portraitHost);
+            var disc = AddCircle(portraitHost.transform, "PortraitDisc", 0.5f, 0.5f, 0.50f, StoneNiche);
             NoRaycast(disc);
-
-            // A faint rune ring around the disc edge — Elarion magic on the frame.
-            var runeRing = AddLabel(ringHost.transform, ElarionUi.RuneGlyphs, 0.86f, 0.99f,
-                                    new Color(GiltInk.r, GiltInk.g, GiltInk.b, 0.45f),
-                                    ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f, spacing: 4f);
-            runeRing.raycastTarget = false;
-
-            // ── Center: the class-crest hero medallion (stand-in for the live render). ──
-            var medallion = AddCircle(ringHost.transform, "Medallion", 0.5f, 0.5f, 0.30f, StoneBack);
+            AddCircleRim(disc, new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.55f));
+            var medallion = AddCircle(disc.transform, "Medallion", 0.5f, 0.5f, 0.78f, StoneBack);
+            NoRaycast(medallion);
             AddCircleRim(medallion, Accent);
-            AddCircle(medallion.transform, "Bloom", 0.5f, 0.5f, 0.40f, AetherSoft);   // centred bloom
-            AddLabel(medallion.transform, ClassCrest(job), 0.30f, 0.82f, GiltInk,
-                     ElarionUi.FontTitle + 22, TMPro.TextAlignmentOptions.Center, 0.06f, 0.94f, bold: true);
-            AddLabel(medallion.transform, Cap(job).ToUpperInvariant(), 0.12f, 0.28f, InkMicro,
+            AddLabel(medallion.transform, ClassCrest(job), 0.20f, 0.86f, GiltInk,
+                     ElarionUi.FontTitle + 18, TMPro.TextAlignmentOptions.Center, 0.06f, 0.94f, bold: true);
+            AddLabel(medallion.transform, Cap(job).ToUpperInvariant(), 0.06f, 0.20f, InkMicro,
                      ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, spacing: 2f);
 
-            // ── The six ring sockets, placed by angle around the medallion. ──
+            // ── EQUIPMENT section caption + rule. ──
+            AddLabel(_paperDoll.transform, "EQUIPMENT", 0.555f, 0.595f, GiltInk,
+                     ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.06f, 0.94f, spacing: 4f);
+            AddRule(_paperDoll.transform, 0.550f, 0.06f, 0.94f);
+
+            // ── The equipment slot column — four rows, top to bottom. ──
             WeaponDef w = _loadout != null ? _loadout.EquippedWeapon : null;
             ArmorDef  a = ResolveDisplayArmor();
 
-            // Socket radius (distance from centre, in ringHost-normalised units) + tile
-            // half-size. Sockets ride the gap between the medallion (r=0.30) and the disc
-            // edge (r=0.43), so ~0.385 keeps them framed inside the ring.
-            const float orbit = 0.385f, half = 0.085f;
-            // angle 90° = top, going clockwise. Slot mapping around the ring:
-            //   top(90)=HELM, upper-right(30)=AMULET, lower-right(-30)=WEAPON,
-            //   bottom(-90)=BOOTS, lower-left(-150)=TRINKET, upper-left(150)=ARMOR.
-            RingSocket(ringHost.transform, "HELM",   90f,  orbit, half, "", null, "Locked", null, false);
-            RingSocket(ringHost.transform, "AMULET", 30f,  orbit, half, "", null, "Locked", null, false);
-            RingSocket(ringHost.transform, "WEAPON", -30f, orbit, half,
-                       w != null ? WeaponTypeGlyph(w) : "", w != null ? ItemIconCatalog.ForWeapon(w) : null,
-                       w != null ? w.name : "Empty", w != null ? w.rarity : null, w != null);
-            RingSocket(ringHost.transform, "BOOTS",  -90f, orbit, half, "", null, "Locked", null, false);
-            RingSocket(ringHost.transform, "TRINKET", -150f, orbit, half, "", null, "Locked", null, false);
-            RingSocket(ringHost.transform, "ARMOR",  150f, orbit, half,
-                       a != null ? ArmorTypeGlyph(a) : "", a != null ? ItemIconCatalog.ForArmor(a) : null,
-                       a != null ? a.name : "Empty", a != null ? a.rarity : null, a != null);
+            // Rows stack from y 0.530 downward, each ~0.115 tall with a small gap.
+            const float rowH = 0.115f, gap = 0.018f;
+            float top = 0.530f;
+            PaperDollRow(0, top, rowH, gap, "WEAPON",
+                         w != null ? WeaponTypeGlyph(w) : "", w != null ? ItemIconCatalog.ForWeapon(w) : null,
+                         w != null ? w.name : "Empty", w != null ? w.rarity : null, w != null);
+            PaperDollRow(1, top, rowH, gap, "ARMOR",
+                         a != null ? ArmorTypeGlyph(a) : "", a != null ? ItemIconCatalog.ForArmor(a) : null,
+                         a != null ? a.name : "Empty", a != null ? a.rarity : null, a != null);
+            PaperDollRow(2, top, rowH, gap, "HELM",    "", null, "Empty", null, false);
+            PaperDollRow(3, top, rowH, gap, "TRINKET", "", null, "Empty", null, false);
         }
 
-        // Places one equipped-slot socket on the rune ring at `angleDeg` (90°=top, CW),
-        // `orbit` units from centre. Parent is the square ringHost (anchors 0..1), so the
-        // polar->cartesian maths is in that square's normalised space (circle stays round).
-        private void RingSocket(Transform ringHost, string label, float angleDeg, float orbit, float half,
-                                string icon, Sprite iconSprite, string value, string rarity, bool filled)
+        // One horizontal equipment-slot row in the paper-doll column: a rarity-tinted
+        // square icon socket on the LEFT, the slot label + equipped item name stacked on
+        // the RIGHT. filled=false renders a quiet EMPTY slot (soft, not alarming) so the
+        // column always reads tidy. `slot` (0..3) stacks the row vertically.
+        private void PaperDollRow(int slot, float top, float rowH, float gap, string label,
+                                  string icon, Sprite iconSprite, string value, string rarity, bool filled)
         {
-            float rad = angleDeg * Mathf.Deg2Rad;
-            float cx = 0.5f + orbit * Mathf.Cos(rad);
-            float cy = 0.5f + orbit * Mathf.Sin(rad);
-            EquipSlotTile(ringHost, label, icon, iconSprite, value, rarity, filled,
-                          new Vector2(cx - half, cy - half), new Vector2(cx + half, cy + half));
-        }
+            float y1 = top - slot * (rowH + gap);
+            float y0 = y1 - rowH;
 
-        // A framed equipped-slot tile: rarity-tinted CIRCULAR socket, icon glyph, and a
-        // label/value caption beneath it. filled=false renders a dim empty/locked socket
-        // so the ring always reads full. Sized small (it's a ring node, not a card).
-        private void EquipSlotTile(Transform parent, string label, string icon, Sprite iconSprite, string value,
-                                   string rarity, bool filled, Vector2 min, Vector2 max)
-        {
-            // On light parchment, DARKEN the rarity hue for text/glyph so it stays
-            // readable; the frame still uses the bright rarity tint as a thin rim.
-            Color rc    = filled ? RarityColor(rarity) : new Color(0.55f, 0.50f, 0.42f, 1f);
-            Color rcInk = filled ? RarityInk(rarity)   : InkMicro;
+            Color rc    = filled ? RarityColor(rarity) : AccentSoft;
+            Color rcInk = filled ? RarityInk(rarity)   : InkDim;
 
-            // Host (transparent) so the circular frame + caption can stack within it.
-            var host = AddImage(parent, "SlotHost_" + label, min, max, new Color(0, 0, 0, 0));
-            NoRaycast(host);
+            // Row plate (recessed glass tray) so each slot reads as a distinct chip.
+            var row = AddImage(_paperDoll.transform, "EquipRow_" + label,
+                               new Vector2(0.04f, y0), new Vector2(0.96f, y1),
+                               filled ? Cell : new Color(Cell.r, Cell.g, Cell.b, 0.55f));
+            NoRaycast(row);
+            AddInnerRim(row, new Color(rc.r, rc.g, rc.b, filled ? 0.55f : 0.30f));
 
-            // Rarity-tinted circular frame (the "rune socket").
-            var frame = AddCircle(host.transform, "SlotFrame_" + label, 0.5f, 0.62f, 0.40f,
-                                  new Color(rc.r, rc.g, rc.b, filled ? 0.85f : 0.45f));
-            NoRaycast(frame);
-            var tile = AddCircle(frame.transform, "Slot_" + label, 0.5f, 0.5f, 0.86f,
-                                 filled ? Cell : new Color(Cell.r, Cell.g, Cell.b, 0.65f));
-            NoRaycast(tile);
-
-            // Icon (center of the socket) — real item art when present, else a TYPE glyph
-            // (empty/locked = a "+" hint).
-            Color glyphCol = filled ? Ink : new Color(0.55f, 0.50f, 0.42f, 0.8f);
+            // LEFT: square icon socket.
+            var sock = AddImage(row.transform, "Socket", new Vector2(0.06f, 0.14f), new Vector2(0.34f, 0.86f),
+                                new Color(rc.r, rc.g, rc.b, filled ? 0.18f : 0.10f));
+            NoRaycast(sock);
+            AddInnerRim(sock, new Color(rc.r, rc.g, rc.b, filled ? 0.60f : 0.35f));
+            Color glyphCol = filled ? rcInk : new Color(InkDim.r, InkDim.g, InkDim.b, 0.7f);
             string glyph = string.IsNullOrEmpty(icon) ? (filled ? "?" : "+") : icon;
-            var iconHost = AddImage(tile.transform, "SlotIcon", new Vector2(0.12f, 0.12f), new Vector2(0.88f, 0.88f),
-                                    new Color(0, 0, 0, 0));
-            NoRaycast(iconHost);
-            AddIcon(iconHost.transform, iconSprite, glyph, ElarionUi.FontBody + 2, glyphCol, 1f);
+            AddIcon(sock.transform, iconSprite, glyph, ElarionUi.FontHead, glyphCol, filled ? 1f : 0.7f);
 
-            // Slot label (spaced micro caps, beneath the socket).
-            AddLabel(host.transform, label, 0.10f, 0.24f, InkMicro,
-                     ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0f, 1f, spacing: 1f);
+            // RIGHT: slot label (micro caps) over the item name.
+            AddLabel(row.transform, label, 0.50f, 0.92f, InkMicro,
+                     ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Left, 0.40f, 0.97f, spacing: 2f);
+            AddLabel(row.transform, value, 0.10f, 0.55f,
+                     filled ? rcInk : new Color(InkDim.r, InkDim.g, InkDim.b, 0.7f),
+                     ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Left, 0.40f, 0.97f, bold: filled);
         }
 
         // ====================================================================
