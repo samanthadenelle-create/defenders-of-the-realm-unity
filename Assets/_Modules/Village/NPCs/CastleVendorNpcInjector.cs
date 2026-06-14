@@ -94,7 +94,11 @@ namespace DeNelle.Village
             switch (role.ToLowerInvariant())
             {
                 case "blacksmith":
-                    return new Vendor { BodyRes = BodySmith,    StructureId = "forge",        Label = "Blacksmith", Arch = TownsfolkDialogue.Archetype.Blacksmith };
+                    // WO-444 (owner 2026-06-13): the BLACKSMITH sells ARMOR, the FORGE sells weapons.
+                    // StructureId drives VendorStockContract.AllowedFor — "armorer" => Armor (was "forge"
+                    // => Weapon, which made the blacksmith wrongly sell weapons). "armorer" is a recognized
+                    // vendor context (AutoPilotDriver storefront set); missing portrait/def degrades gracefully.
+                    return new Vendor { BodyRes = BodySmith,    StructureId = "armorer",      Label = "Blacksmith", Arch = TownsfolkDialogue.Archetype.Blacksmith };
                 case "lumbermill":
                     return new Vendor { BodyRes = BodyPeasantB, StructureId = "lumbermill",   Label = "Lumbermill", Arch = TownsfolkDialogue.Archetype.Villager };
                 case "windmill":

@@ -25,10 +25,11 @@ tags: structure interaction
     <<structure_upgrade $structureId>>
     {$structureName}: {$upgradeResult}
 -> Buy <<if $structureCanShop>>
-    {$structureName}: Take a look at what I have.
+    // Command FIRST (mirrors NPC_*.yarn vendor nodes). A dialogue line BEFORE the
+    // command makes the VM pause on the line and <<OpenShop>> never fires -> blank
+    // "shop never opens" (forge RCA 2026-06-14, Player.log: no OpenShop ever logged).
     <<OpenShop $structureId>>
 -> Sell <<if $structureCanShop>>
-    {$structureName}: Show me what you'd part with.
     <<OpenShop $structureId>>
 -> Talk
     <<structure_talk $structureId>>
