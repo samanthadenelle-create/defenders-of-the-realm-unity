@@ -74,16 +74,21 @@ namespace DeNelle.Editor
                 .Any(a => a.Equals("-devBuild", System.StringComparison.OrdinalIgnoreCase));
 
             PlayerSettings.SetScriptingBackend(NamedBuildTarget.WebGL, ScriptingImplementation.IL2CPP);
-            // WO-126: itch.io is a static host and does NOT send `Content-Encoding: br`,
-            // so Brotli payloads fail to load there. Pass `-noBrotli` to ship UNCOMPRESSED
-            // (itch-safe). NOTE: Unity's decompressionFallback emits uncompressed output
-            // anyway in this version, so the real lever for itch's per-file size limit is
-            // shrinking the source content (texture compression) — NOT compression flags.
-            PlayerSettings.WebGL.compressionFormat = noBrotli
-                ? WebGLCompressionFormat.Disabled
-                : WebGLCompressionFormat.Brotli;
-            Debug.Log($"[WebGLBuild] compressionFormat = {PlayerSettings.WebGL.compressionFormat}" +
-                      (noBrotli ? " (-noBrotli: uncompressed for itch.io)" : " (Brotli for Vercel)"));
+            // itch.io + any static host: ALWAYS Brotli compression + decompressionFallback=true.
+            // WO-126 / commit 73796b7 (tested on itch): itch is a static host and does NOT send
+            // `Content-Encoding: br`, so a plain Brotli payload won't load — BUT shipping the
+            // payload UNCOMPRESSED (-noBrotli) makes WebGL.data ~223MB, which EXCEEDS itch's
+            // per-file limit and itch REJECTS it (-> empty/blank itch page). The fix is
+            // decompressionFallback=true: Unity's loader decompresses the .br IN-JS, so Brotli
+            // payloads load everywhere with NO server header AND stay ~half size. A later WO-408
+            // refactor inadvertently dropped the fallback + flipped back to -noBrotli (with an
+            // untested "emits uncompressed anyway" note) — that regressed the itch build; restored
+            // here. -noBrotli is deprecated/ignored.
+            if (noBrotli)
+                Debug.LogWarning("[WebGLBuild] -noBrotli is deprecated/ignored: uncompressed WebGL.data exceeds itch's per-file limit (itch rejects it). Using Brotli + decompressionFallback instead.");
+            PlayerSettings.WebGL.compressionFormat = WebGLCompressionFormat.Brotli;
+            PlayerSettings.WebGL.decompressionFallback = true;
+            Debug.Log("[WebGLBuild] compressionFormat = Brotli + decompressionFallback = true (itch-safe, no Content-Encoding header needed, ~half size)");
             PlayerSettings.WebGL.memorySize = 512;
             // RELEASE was WebGLExceptionSupport.None — but with None, WebGL try/catch
             // does NOT catch, so ANY thrown exception (e.g. a catalog's File.ReadAllText

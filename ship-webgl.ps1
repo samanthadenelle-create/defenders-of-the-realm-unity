@@ -60,8 +60,10 @@ if ($SkipBuild) {
     $buildScript = Join-Path $proj 'build-webgl.ps1'
     if (-not (Test-Path $buildScript)) { Write-Error "[ship] build-webgl.ps1 not found at $buildScript."; exit 1 }
 
-    Write-Host "[ship] Building WebGL (-NoBrotli, uncompressed for itch). First IL2CPP compile can take 30-60 min..."
-    $buildArgs = @('-NoBrotli')   # itch-safe uncompressed; size kept under itch's limit by shrinking source textures (not compression)
+    Write-Host "[ship] Building WebGL (Brotli + decompressionFallback, itch-safe). First IL2CPP compile can take 30-60 min..."
+    # commit 73796b7: itch REJECTS the -NoBrotli uncompressed build (WebGL.data ~223MB > itch per-file limit -> blank page).
+    # WebGLBuild.cs now always ships Brotli + decompressionFallback=true (Unity decompresses .br in-JS: itch-serveable, ~half size).
+    $buildArgs = @()              # was -NoBrotli (uncompressed -> too large for itch); now Brotli+fallback (small + itch-serveable)
     if ($DebugExceptions) { $buildArgs += '-DebugExceptions' }
     & powershell -ExecutionPolicy Bypass -File $buildScript @buildArgs
     $buildExit = $LASTEXITCODE
