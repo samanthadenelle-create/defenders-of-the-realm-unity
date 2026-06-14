@@ -52,7 +52,8 @@
     ],
     "scale": 1.0,
     "note": "zeroed — polyperfect _M prefabs are upright (no -90X needed)"
-   }
+   },
+   "canHitAir": true
   },
   {
    "id": "tower_wall_wizard",
@@ -103,7 +104,8 @@
     ],
     "scale": 1.0,
     "note": "zeroed — polyperfect _M prefabs are upright (no -90X needed)"
-   }
+   },
+   "canHitAir": true
   },
   {
    "id": "tower_siege_tower",
@@ -753,7 +755,8 @@
     ],
     "scale": 1.0,
     "note": "zeroed — polyperfect _M prefabs are upright (no -90X needed)"
-   }
+   },
+   "canHitAir": true
   },
   {
    "id": "tower_arcane_spire",
@@ -803,7 +806,8 @@
     ],
     "scale": 1.0,
     "note": "zeroed — polyperfect _M prefabs are upright (no -90X needed)"
-   }
+   },
+   "canHitAir": true
   }
  ]
 }
