@@ -48,16 +48,20 @@ namespace DeNelle.Core.UI
         // ── Sleek surface tints (the dark-glass language, consolidated) ───────
         // These were duplicated verbatim across ArenaPanel / HeroInventory* / HUD.
         // Centralised here so the whole game's glass depth reads identically.
-        /// <summary>Primary panel fill — dark translucent glass (play area shows through).</summary>
-        public static readonly Color Glass      = new Color(0.06f, 0.07f, 0.09f, 0.66f);
-        /// <summary>Deeper glass for heavier panels / modal backboards.</summary>
-        public static readonly Color GlassDeep  = new Color(0.04f, 0.05f, 0.07f, 0.82f);
+        // WOOD CANON (single-source unification): the kit's surfaces now derive their HUE from the
+        // ONE ElarionUi source (warm stone/wood) at the kit's own translucency alphas — so the HUD
+        // keeps its see-through depth but reads dark-WOOD, not cool-glass. Tune the wood in ONE
+        // place (ElarionUi.PanelStone / PanelStoneDark) and it propagates through every kit screen.
+        /// <summary>Primary panel fill — dark translucent WOOD (play area shows through).</summary>
+        public static readonly Color Glass      = new Color(ElarionUi.PanelStoneDark.r, ElarionUi.PanelStoneDark.g, ElarionUi.PanelStoneDark.b, 0.66f);
+        /// <summary>Deeper wood for heavier panels / modal backboards.</summary>
+        public static readonly Color GlassDeep  = new Color(ElarionUi.PanelStoneDark.r, ElarionUi.PanelStoneDark.g, ElarionUi.PanelStoneDark.b, 0.86f);
         /// <summary>Recessed near-black well / track behind a value or bar.</summary>
         public static readonly Color Track      = new Color(0.0f,  0.0f,  0.0f,  0.45f);
-        /// <summary>Cell rest fill — dark glass a touch lighter than the tray.</summary>
-        public static readonly Color Cell       = new Color(0.10f, 0.11f, 0.14f, 0.84f);
-        /// <summary>Selected cell fill — brighter than the rest cell.</summary>
-        public static readonly Color CellSelected = new Color(0.16f, 0.18f, 0.24f, 0.95f);
+        /// <summary>Cell rest fill — warm wood a touch lighter than the tray.</summary>
+        public static readonly Color Cell       = new Color(ElarionUi.PanelStone.r, ElarionUi.PanelStone.g, ElarionUi.PanelStone.b, 0.84f);
+        /// <summary>Selected cell fill — brighter warm wood than the rest cell.</summary>
+        public static readonly Color CellSelected = new Color(0.26f, 0.20f, 0.13f, 0.95f);
         /// <summary>Warm stone backboard behind a hero / display niche.</summary>
         public static readonly Color StoneNiche = new Color(0.075f, 0.060f, 0.048f, 0.96f);
 

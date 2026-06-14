@@ -31,50 +31,54 @@ namespace DeNelle.Core.UI
         // ── Palette ──────────────────────────────────────────────────────────
         // Warm-wood + violet/aether merchant boutique. Names describe role.
 
+        // WOOD CANON (single-source unification): the merchant skin's hues now derive from the ONE
+        // ElarionUi source (warm stone/wood + runic gold + parchment). The soft-violet "aether" FRAME/
+        // PANEL tints are retired so shops read the same dark-wood + gold as the town HUD; the violet
+        // is kept ONLY as the canon arcane ACCENT (ElarionUi.Aether) for selected tabs.
         /// <summary>Full-screen dim behind the shop window.</summary>
-        public static readonly Color Scrim = new Color(0.03f, 0.02f, 0.06f, 0.86f);
+        public static readonly Color Scrim = new Color(ElarionUi.Scrim.r, ElarionUi.Scrim.g, ElarionUi.Scrim.b, 0.86f);
 
-        /// <summary>Carved-wood frame outer border (deep walnut).</summary>
-        public static readonly Color FrameWood = new Color(0.24f, 0.16f, 0.11f, 1f);
+        /// <summary>Carved-wood frame outer border (warm-wood trim).</summary>
+        public static readonly Color FrameWood = ElarionUi.StoneTrim;
 
-        /// <summary>Inner aether rim that lines the frame (soft violet glow).</summary>
-        public static readonly Color FrameRim = new Color(0.62f, 0.45f, 0.86f, 0.85f);
+        /// <summary>Inner gold rim that lines the frame (runic gold).</summary>
+        public static readonly Color FrameRim = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.85f);
 
         /// <summary>Gilt edge highlight on the frame + title rule.</summary>
-        public static readonly Color Gilt = new Color(0.84f, 0.68f, 0.32f, 1f);
+        public static readonly Color Gilt = ElarionUi.Gilt;
 
-        /// <summary>Shop window background (dark stained wood / stone).</summary>
-        public static readonly Color PanelBg = new Color(0.11f, 0.08f, 0.13f, 0.99f);
+        /// <summary>Shop window background (dark stained wood).</summary>
+        public static readonly Color PanelBg = new Color(ElarionUi.PanelStoneDark.r, ElarionUi.PanelStoneDark.g, ElarionUi.PanelStoneDark.b, 0.99f);
 
         /// <summary>Item / card slot background (a touch lighter than the panel).</summary>
-        public static readonly Color SlotBg = new Color(0.16f, 0.12f, 0.19f, 1f);
+        public static readonly Color SlotBg = new Color(ElarionUi.PanelStone.r, ElarionUi.PanelStone.g, ElarionUi.PanelStone.b, 1f);
 
         /// <summary>Recessed list well behind the scrolling cards.</summary>
-        public static readonly Color WellBg = new Color(0.07f, 0.05f, 0.10f, 0.92f);
+        public static readonly Color WellBg = new Color(ElarionUi.PanelStoneDark.r, ElarionUi.PanelStoneDark.g, ElarionUi.PanelStoneDark.b, 0.92f);
 
         /// <summary>Primary display text (warm parchment cream).</summary>
-        public static readonly Color Parchment = new Color(0.96f, 0.92f, 0.82f, 1f);
+        public static readonly Color Parchment = ElarionUi.Parchment;
 
         /// <summary>Secondary / flavour text (muted parchment).</summary>
-        public static readonly Color ParchmentDim = new Color(0.78f, 0.74f, 0.66f, 1f);
+        public static readonly Color ParchmentDim = ElarionUi.ParchmentDim;
 
         /// <summary>Glimmer / coin gold.</summary>
-        public static readonly Color Glimmer = new Color(0.98f, 0.82f, 0.36f, 1f);
+        public static readonly Color Glimmer = ElarionUi.Gilt;
 
-        /// <summary>Aether-violet — selected tabs, accents.</summary>
-        public static readonly Color Aether = new Color(0.55f, 0.38f, 0.82f, 1f);
+        /// <summary>Aether-violet — selected tabs / arcane accent (canon magic accent).</summary>
+        public static readonly Color Aether = ElarionUi.Aether;
 
         /// <summary>Aether-violet, dim — unselected tab / chip rest state.</summary>
-        public static readonly Color AetherDim = new Color(0.22f, 0.16f, 0.32f, 1f);
+        public static readonly Color AetherDim = ElarionUi.AetherDim;
 
-        /// <summary>Buy / confirm wood-green.</summary>
-        public static readonly Color Confirm = new Color(0.30f, 0.46f, 0.28f, 1f);
+        /// <summary>Buy / confirm green.</summary>
+        public static readonly Color Confirm = ElarionUi.Affordable;
 
         /// <summary>Owned / equipped success green.</summary>
-        public static readonly Color Owned = new Color(0.40f, 0.66f, 0.42f, 1f);
+        public static readonly Color Owned = ElarionUi.Affordable;
 
         /// <summary>Disabled / locked stone grey.</summary>
-        public static readonly Color Disabled = new Color(0.26f, 0.22f, 0.26f, 1f);
+        public static readonly Color Disabled = ElarionUi.Disabled;
 
         // Small decorative glyphs (no font dependency — plain unicode the default
         // UI font renders). A crest before the title, a coin before Glimmer.
