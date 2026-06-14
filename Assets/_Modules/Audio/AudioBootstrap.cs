@@ -123,6 +123,8 @@ namespace DeNelle.Audio
             // Assets/Audio/Resources/Music/echo_theme.mp3, so the Resources short
             // name is "Music/echo_theme". Soft + looping (MusicTrackRegistry.Arena).
             TryAssignClip(service, MusicTrack.Arena, "Music/echo_theme");
+            // WO-453 offensive-raid BGM — Assets/Audio/Resources/Music/Raid/brass-rampart.mp3.
+            TryAssignClip(service, MusicTrack.Raid,  "Music/Raid/brass-rampart");
 
             // One-time mute-migration. Pre-2026-05-20 the schema default for
             // GameState.Muted was true, so saves persisted as muted even when

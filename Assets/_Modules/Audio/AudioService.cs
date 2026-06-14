@@ -1135,6 +1135,7 @@ namespace DeNelle.Audio
                 case DeNelle.Core.Audio.MusicTrack.Defeat:  PlayMusic(MusicTrack.Defeat);  break;
                 // Arena raid BGM — "Echo's theme". Soft, looping background for a raid.
                 case DeNelle.Core.Audio.MusicTrack.Arena:   PlayMusic(MusicTrack.Arena);   break;
+                case DeNelle.Core.Audio.MusicTrack.Raid:    PlayMusic(MusicTrack.Raid);    break;
                 // DEF-228: the cold-open intro primes the title theme (title.mp3) so it
                 // is the opening music and the WebGL audio-unlock resumes THIS, not Overworld.
                 case DeNelle.Core.Audio.MusicTrack.Title:   PlayMusic(MusicTrack.Title);   break;

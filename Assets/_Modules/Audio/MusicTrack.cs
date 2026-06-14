@@ -45,6 +45,8 @@ namespace DeNelle.Audio
         Overworld,
         /// <summary>Arena raid BGM — "Echo's theme" (echo_theme.mp3). Default volume 0.4 (soft background). Loops.</summary>
         Arena,
+        /// <summary>Offensive-raid BGM — "brass-rampart" (Music/Raid/brass-rampart.mp3, WO-453). Driving brass for marching an army on a fortress. Loops.</summary>
+        Raid,
     }
 
     /// <summary>
