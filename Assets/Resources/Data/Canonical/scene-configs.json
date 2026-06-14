@@ -13,7 +13,7 @@
     "centralBuilding": "structures-catalog id placed at centre (command hut / mage base / heart)",
     "towers": "[{ type: structures-catalog id, count }]",
     "props": "{ set: [structures-catalog ids], count }",
-    "garrison": "ENEMY only — { composition: [{ enemyId, count }], baseEnemyLevel, difficultyMultiplier, boss: enemyId }",
+    "garrison": "ENEMY only — { composition:[{enemyId,count}], baseEnemyLevel (absolute FLOOR), levelOffset (relative to PLAYER level), difficultyMultiplier, boss }. Generator computes enemyLevel = max(baseEnemyLevel, playerLevel + levelOffset) so outposts scale with the player but never below the floor (always a meaningful fight).",
     "themeColor": "faction banner/accent hex"
   },
   "configs": [
@@ -27,8 +27,16 @@
       "baseRadius": 30,
       "wallSegmentsPerSide": 10,
       "centralBuilding": "tower_ground_archer",
-      "towers": [ { "type": "tower_ground_archer", "count": 4 } ],
-      "props": { "set": [], "count": 8 },
+      "towers": [
+        {
+          "type": "tower_ground_archer",
+          "count": 4
+        }
+      ],
+      "props": {
+        "set": [],
+        "count": 8
+      },
       "garrison": null,
       "themeColor": "#6fb7ff"
     },
@@ -42,16 +50,31 @@
       "baseRadius": 28,
       "wallSegmentsPerSide": 8,
       "centralBuilding": "tower_siege_tower",
-      "towers": [ { "type": "tower_catapult", "count": 2 } ],
-      "props": { "set": [], "count": 12 },
+      "towers": [
+        {
+          "type": "tower_catapult",
+          "count": 2
+        }
+      ],
+      "props": {
+        "set": [],
+        "count": 12
+      },
       "garrison": {
         "composition": [
-          { "enemyId": "orc-berserker", "count": 4 },
-          { "enemyId": "orc-shaman", "count": 1 }
+          {
+            "enemyId": "orc-berserker",
+            "count": 4
+          },
+          {
+            "enemyId": "orc-shaman",
+            "count": 1
+          }
         ],
         "baseEnemyLevel": 3,
         "difficultyMultiplier": 1.0,
-        "boss": "orc-necromancer"
+        "boss": "orc-necromancer",
+        "levelOffset": 0
       },
       "themeColor": "#5a8f3a"
     },
@@ -65,18 +88,43 @@
       "baseRadius": 35,
       "wallSegmentsPerSide": 12,
       "centralBuilding": "tower_arcane_spire",
-      "towers": [ { "type": "tower_catapult", "count": 3 }, { "type": "tower_arcane_spire", "count": 1 } ],
-      "props": { "set": [], "count": 15 },
+      "towers": [
+        {
+          "type": "tower_catapult",
+          "count": 3
+        },
+        {
+          "type": "tower_arcane_spire",
+          "count": 1
+        }
+      ],
+      "props": {
+        "set": [],
+        "count": 15
+      },
       "garrison": {
         "composition": [
-          { "enemyId": "troll", "count": 2 },
-          { "enemyId": "ogre", "count": 1 },
-          { "enemyId": "orc-berserker", "count": 3 },
-          { "enemyId": "orc-shaman", "count": 2 }
+          {
+            "enemyId": "troll",
+            "count": 2
+          },
+          {
+            "enemyId": "ogre",
+            "count": 1
+          },
+          {
+            "enemyId": "orc-berserker",
+            "count": 3
+          },
+          {
+            "enemyId": "orc-shaman",
+            "count": 2
+          }
         ],
         "baseEnemyLevel": 5,
         "difficultyMultiplier": 1.25,
-        "boss": "orc-necromancer"
+        "boss": "orc-necromancer",
+        "levelOffset": 2
       },
       "themeColor": "#8a6b3a"
     },
@@ -90,17 +138,35 @@
       "baseRadius": 32,
       "wallSegmentsPerSide": 10,
       "centralBuilding": "tower_arcane_spire",
-      "towers": [ { "type": "tower_arcane_spire", "count": 2 } ],
-      "props": { "set": [], "count": 10 },
+      "towers": [
+        {
+          "type": "tower_arcane_spire",
+          "count": 2
+        }
+      ],
+      "props": {
+        "set": [],
+        "count": 10
+      },
       "garrison": {
         "composition": [
-          { "enemyId": "hollow-acolyte", "count": 3 },
-          { "enemyId": "orc-shaman", "count": 2 },
-          { "enemyId": "hollow-warrior", "count": 2 }
+          {
+            "enemyId": "hollow-acolyte",
+            "count": 3
+          },
+          {
+            "enemyId": "orc-shaman",
+            "count": 2
+          },
+          {
+            "enemyId": "hollow-warrior",
+            "count": 2
+          }
         ],
         "baseEnemyLevel": 6,
         "difficultyMultiplier": 1.3,
-        "boss": "necromancer"
+        "boss": "necromancer",
+        "levelOffset": 3
       },
       "themeColor": "#7a5fb0"
     }
