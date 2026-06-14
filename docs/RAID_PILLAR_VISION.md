@@ -39,6 +39,28 @@ in memory. The generator bakes/streams a raid scene on entry; exit unloads it. (
   forfeit. Mirrors the Arena SKR-wager stub (client-stub, WebGL-safe). **Additive layer on top of the
   simple raid loop — not a rework.** The simpler the core stays, the cleaner this drops in.
 
+## ✅ Raid data contract — ONE system (architect decision 2026-06-14)
+`NPCBaseConfig` = `RaidTemplate` = **the existing `scene-configs.json`** — the same blueprint named three
+ways across the brainstorm. Do NOT fork parallel systems. **Extend the one contract** (already consumed by
+`RaidBaseGenerator` + the player-level scaler). Fields to ADD to `scene-configs.json`: `recommendedClearTime`
+(→ 1★/2★/3★ thresholds, fed by the reused countdown timer), `rewardMultiplier` (resources + Echo-shard rate),
+`entranceCount` (1–3: main gate + side breaches), `interiorWallLayers` (0–2: kill-zones), `towerPlacementStyle`
+(Circular / Cardinal / OverlappingFire), `eliteCount`, `roleDistribution` (archer/warrior/mage/healer %),
+`specialModifiers` (e.g. fog, reinforcements-after-N-min). Note: owner calls the builder "NPCBaseBuilder
+(WO-452)" — that's `RaidBaseGenerator` (shipped); WO-452 on the board is the build-palette bug (number
+collision — troops/raids use their own WO numbers).
+
+## The 3 flagship raid levels (map 1:1 onto existing configs — enrich, don't create)
+| Level | Existing config | Theme | 3★ time | Walls / gates | Towers | AI troops |
+|---|---|---|---|---|---|---|
+| **1 · Raider Outpost** (Regular/tutorial) | `raider_camp_small` | bandit camp | < 4:30 (270s) | Wood, 8–10/side, **2 gaps** | 4 archer (corners) + 1 weak mage | 12–16 (Footmen+Archers, 1–2 Mage) |
+| **2 · Fortified Garrison** (Hard) | `fortified_garrison` | military outpost | < 5:30 (330s) | Wood+Stone, **1 gate** | 6 archer (T2–3) + 2 mage **crossfire** | 22–28 (balanced; archers on walls, warriors at gate, mages center) |
+| **3 · Mage Enclave** (Extreme) | `mage_enclave` | arcane fortress | < 7:00 (420s) | Stone/Obsidian, tight, **interior kill-zones** | 8 archer + 3 mage (elevated, overlapping) | 35–45 (heavy mage + elite warriors, synergy) — top shard rate |
+Later variants (cheap, same contract): Dragon Cult Ruins · Undead Necropolis · Troll Bridge choke. **Mind the
+mobile perf ceiling** (Extreme 45 AI + your cap-30 army + towers — cap live combatants, see WO-453).
+Sequencing: these are the **deploy targets** for the troop slice — build after the troop deploy verbs (or in
+parallel, it's data + generator work, disjoint from the felt verbs).
+
 ## Foundations already shipped (this builds on them)
 - Functional EnemyOwned turrets that shoot the player (`DefenseTower.TowerAllegiance` + `GarrisonController.ArmGarrisonTurrets`).
 - Enemy family variety (`WaveCompositionBuilder` orc/troll/ogre by wave band).
