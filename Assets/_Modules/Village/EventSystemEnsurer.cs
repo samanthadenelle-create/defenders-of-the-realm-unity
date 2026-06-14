@@ -45,6 +45,35 @@ namespace DeNelle.Village
         {
             EnsureEventSystem();
             SceneManager.sceneLoaded += (_, __) => EnsureEventSystem();
+
+            // Scene-load-only recovery CANNOT heal a MID-SCENE EventSystem loss — which is
+            // exactly what strands the UI after a Yarn dialogue ENDS (its teardown leaves
+            // EventSystem.current == null, so EVERY click + hover dies until the next scene
+            // load: the "dev tools / settings dead after dialogue" wedge, S1 2026-06-14,
+            // proven by the presenter's own "EventSystem.current is NULL" trace). A tiny
+            // persistent watchdog re-heals every frame (near-free: it early-returns the
+            // instant a live EventSystem exists).
+            var watchdog = new GameObject("EventSystemWatchdog (auto)") { hideFlags = HideFlags.HideAndDontSave };
+            Object.DontDestroyOnLoad(watchdog);
+            watchdog.AddComponent<EventSystemWatchdog>();
+        }
+
+        /// <summary>Re-establish a working EventSystem if the active one was lost mid-scene.
+        /// Re-enables a disabled/inactive one (preserving its configured input module +
+        /// actions) when possible; otherwise creates a fresh one. No-op when one is live.</summary>
+        public static void Heal()
+        {
+            if (EventSystem.current != null) return;
+            var existing = Object.FindAnyObjectByType<EventSystem>(FindObjectsInactive.Include);
+            if (existing != null)
+            {
+                // Present but inactive/disabled (the post-dialogue case): revive in place so
+                // its already-configured InputSystemUIInputModule + actions are preserved.
+                if (!existing.gameObject.activeSelf) existing.gameObject.SetActive(true);
+                if (!existing.enabled) existing.enabled = true;
+                return;
+            }
+            EnsureEventSystem();   // truly none present — create one
         }
 
         public static void EnsureEventSystem()
@@ -65,5 +94,13 @@ namespace DeNelle.Village
                       "(+ InputSystemUIInputModule) so UI clicks route and the " +
                       "RaycastGui error stops.");
         }
+    }
+
+    /// <summary>Persistent per-frame heartbeat that self-heals a lost EventSystem (e.g. a
+    /// Yarn dialogue teardown stranding it mid-scene) within one frame, so UI clicks + hover
+    /// never stay dead. Created DontDestroyOnLoad + hidden by EventSystemEnsurer.Init.</summary>
+    internal sealed class EventSystemWatchdog : MonoBehaviour
+    {
+        private void Update() => EventSystemEnsurer.Heal();
     }
 }
