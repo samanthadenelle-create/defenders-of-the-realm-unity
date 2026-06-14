@@ -37,6 +37,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UIElements;
 using DeNelle.Core.State;
+using DeNelle.Core.UI;
 
 namespace DeNelle.Village
 {
@@ -350,16 +351,17 @@ namespace DeNelle.Village
                 // right ability diamond + Build button cluster.
                 s.left = 16f; s.top = 158f; s.minWidth = 220f;
                 s.paddingTop = 14f; s.paddingBottom = 14f; s.paddingLeft = 16f; s.paddingRight = 16f;
-                s.backgroundColor = new Color(0.08f, 0.10f, 0.16f, 0.96f);
-                s.borderTopLeftRadius = 10f; s.borderTopRightRadius = 10f;
-                s.borderBottomLeftRadius = 10f; s.borderBottomRightRadius = 10f;
+                // Dark stone glass + runic-gold rim + rounding, from the shared town-HUD
+                // palette (ElarionUi) so the fallback reads as one designed UI.
+                ElarionUi.StylePanel(_codePanel, dark: true);
 
                 var title = new Label("Build");
-                title.style.color = Color.white; title.style.fontSize = 18f;
-                title.style.unityFontStyleAndWeight = FontStyle.Bold; title.style.marginBottom = 10f;
+                title.style.color = ElarionUi.Gilt; title.style.fontSize = ElarionUi.FontHead;
+                title.style.unityFontStyleAndWeight = FontStyle.Bold;
+                title.style.letterSpacing = 1.5f; title.style.marginBottom = 10f;
                 _codePanel.Add(title);
 
-                _codePanel.Add(CodeMenuButton("Build Tower", new Color(0.16f, 0.40f, 0.62f, 0.95f), () =>
+                _codePanel.Add(CodeMenuButton("Build Tower", ElarionUi.ButtonKind.Gold, () =>
                 {
                     var t = Resources.Load<DeNelle.Core.Data.TowerData>("Towers/DevTower");
                     if (t != null)
@@ -372,7 +374,7 @@ namespace DeNelle.Village
                     HideCodeFallbackMenu();
                 }));
 
-                _codePanel.Add(CodeMenuButton("Upgrade Last Tower", new Color(0.30f, 0.52f, 0.34f, 0.95f), () =>
+                _codePanel.Add(CodeMenuButton("Upgrade Last Tower", ElarionUi.ButtonKind.Confirm, () =>
                 {
                     var towers = UnityEngine.Object.FindObjectsByType<Tower>(FindObjectsSortMode.None);
                     if (towers.Length > 0)
@@ -385,7 +387,7 @@ namespace DeNelle.Village
                     HideCodeFallbackMenu();
                 }));
 
-                _codePanel.Add(CodeMenuButton("Raze Last Tower", new Color(0.62f, 0.20f, 0.20f, 0.95f), () =>
+                _codePanel.Add(CodeMenuButton("Raze Last Tower", ElarionUi.ButtonKind.Danger, () =>
                 {
                     var towers = UnityEngine.Object.FindObjectsByType<Tower>(FindObjectsSortMode.None);
                     if (towers.Length > 0) { Destroy(towers[towers.Length - 1].gameObject); SetStatus("Razed the last tower."); }
@@ -393,7 +395,7 @@ namespace DeNelle.Village
                     HideCodeFallbackMenu();
                 }));
 
-                _codePanel.Add(CodeMenuButton("Manage Towers", new Color(0.20f, 0.30f, 0.50f, 0.95f), () =>
+                _codePanel.Add(CodeMenuButton("Manage Towers", ElarionUi.ButtonKind.Neutral, () =>
                 {
                     HideCodeFallbackMenu();
                     DeNelle.Village.UI.TowerManagerPanel.Instance?.Show();   // or press M
@@ -402,13 +404,13 @@ namespace DeNelle.Village
                 // WO-108 — the CREATE verb: enter the player Build Mode (catalog
                 // palette + grid placement + persisted BaseLayout). EnsureExists()
                 // self-installs the controller; Enter() freezes waves + shows the palette.
-                _codePanel.Add(CodeMenuButton("Build Mode", new Color(0.42f, 0.30f, 0.58f, 0.95f), () =>
+                _codePanel.Add(CodeMenuButton("Build Mode", ElarionUi.ButtonKind.Neutral, () =>
                 {
                     HideCodeFallbackMenu();
                     BuildModeController.EnsureExists().Enter();
                 }));
 
-                _codePanel.Add(CodeMenuButton("Close", new Color(0.30f, 0.30f, 0.36f, 0.95f), HideCodeFallbackMenu));
+                _codePanel.Add(CodeMenuButton("Close", ElarionUi.ButtonKind.Neutral, HideCodeFallbackMenu));
 
                 _root.Add(_codePanel);
             }
@@ -422,16 +424,14 @@ namespace DeNelle.Village
             _isOpen = false;
         }
 
-        private static Button CodeMenuButton(string label, Color bg, System.Action onClick)
+        private static Button CodeMenuButton(string label, ElarionUi.ButtonKind kind, System.Action onClick)
         {
             var b = new Button(onClick) { text = label };
-            var s = b.style;
-            s.height = 40f; s.marginTop = 4f; s.marginBottom = 4f;
-            s.fontSize = 15f; s.unityFontStyleAndWeight = FontStyle.Bold;
-            s.unityTextAlign = TextAnchor.MiddleCenter; s.color = Color.white;
-            s.backgroundColor = bg;
-            s.borderTopLeftRadius = 8f; s.borderTopRightRadius = 8f;
-            s.borderBottomLeftRadius = 8f; s.borderBottomRightRadius = 8f;
+            // Shared themed button (stone/gold/green/red fill + rim + rounding + hover/press
+            // feedback) from the town-HUD palette, so the fallback matches the canon look.
+            ElarionUi.StyleButton(b, kind);
+            b.style.unityTextAlign = TextAnchor.MiddleCenter;
+            b.style.marginTop = 4f; b.style.marginBottom = 4f;
             return b;
         }
 

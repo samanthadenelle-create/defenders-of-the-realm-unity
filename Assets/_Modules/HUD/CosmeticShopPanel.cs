@@ -275,21 +275,23 @@ namespace DeNelle.HUD
             _root.style.top = 0;  _root.style.bottom = 0;
 
             _overlay = new VisualElement { name = "cosmetic-shop-overlay" };
-            ShopTheme.StyleScrim(_overlay);
+            ElarionUi.StyleScrim(_overlay);
             // DEF-212 item 5: bump the scrim to near-opaque so world-space labels
             // ("Arcane Tower") behind the modal don't bleed through the edges of the
-            // shop card. Local override only — the shared ShopTheme.Scrim is untouched.
+            // shop card. Local override only — the shared ElarionUi.Scrim is untouched.
             _overlay.style.backgroundColor = new StyleColor(new Color(0.03f, 0.02f, 0.06f, 0.98f));
             _overlay.style.display = DisplayStyle.None;
             _root.Add(_overlay);
 
-            // Themed shop-window frame (carved wood + aether rim).
+            // Town-HUD canon shop-window frame (dark-glass 9-slice rounded panel + gold rim).
             var card = new VisualElement();
             card.style.width = 720;
             card.style.maxWidth = 880;
             card.style.height = 520;
             card.style.flexDirection = FlexDirection.Column;
-            ShopTheme.StylePanelFrame(card);
+            card.style.paddingTop = 18; card.style.paddingBottom = 18;
+            card.style.paddingLeft = 22; card.style.paddingRight = 22;
+            ElarionUi.StylePanel(card, dark: true);
             _overlay.Add(card);
 
             // Header: crest title + Glimmer chip + close.
@@ -299,7 +301,7 @@ namespace DeNelle.HUD
             header.style.alignItems = Align.Center;
             card.Add(header);
 
-            header.Add(ShopTheme.MakeTitle("Cosmetic Shop"));
+            header.Add(ElarionUi.MakeTitle("Cosmetic Shop"));
 
             var headerRight = new VisualElement();
             headerRight.style.flexDirection = FlexDirection.Row;
@@ -314,7 +316,7 @@ namespace DeNelle.HUD
             ShopTheme.StyleCloseButton(closeBtn);
             headerRight.Add(closeBtn);
 
-            card.Add(ShopTheme.MakeRule());
+            card.Add(ElarionUi.MakeRule());
 
             // Body: two columns.
             var body = new VisualElement();
@@ -342,11 +344,11 @@ namespace DeNelle.HUD
             _cardList = scroller.contentContainer;
 
             // Anti-FOMO footer (spec Section 9).
-            card.Add(ShopTheme.MakeRule());
+            card.Add(ElarionUi.MakeRule());
             var footer = new Label("Beauty is earned, never required.");
-            footer.style.fontSize = 12;
+            footer.style.fontSize = ElarionUi.FontMicro;
             footer.style.unityFontStyleAndWeight = FontStyle.Italic;
-            footer.style.color = ShopTheme.ParchmentDim;
+            footer.style.color = ElarionUi.ParchmentDim;
             footer.style.unityTextAlign = TextAnchor.MiddleCenter;
             footer.style.marginTop = 2;
             card.Add(footer);
@@ -356,8 +358,8 @@ namespace DeNelle.HUD
             _toast.style.position = Position.Absolute;
             _toast.style.bottom = 40; _toast.style.left = 0; _toast.style.right = 0;
             _toast.style.unityTextAlign = TextAnchor.MiddleCenter;
-            _toast.style.color = ShopTheme.Parchment;
-            _toast.style.fontSize = 13;
+            _toast.style.color = ElarionUi.Parchment;
+            _toast.style.fontSize = ElarionUi.FontLabel;
             _toast.style.display = DisplayStyle.None;
             _root.Add(_toast);
         }
@@ -404,9 +406,9 @@ namespace DeNelle.HUD
             if (!anyCard)
             {
                 var empty = new Label("Nothing here yet - check back next season.");
-                empty.style.color = ShopTheme.ParchmentDim;
+                empty.style.color = ElarionUi.ParchmentDim;
                 empty.style.unityFontStyleAndWeight = FontStyle.Italic;
-                empty.style.fontSize = 13;
+                empty.style.fontSize = ElarionUi.FontLabel;
                 empty.style.marginTop = 12;
                 empty.style.unityTextAlign = TextAnchor.MiddleCenter;
                 _cardList.Add(empty);
@@ -440,7 +442,14 @@ namespace DeNelle.HUD
             var card = new VisualElement();
             card.style.flexDirection = FlexDirection.Row;
             card.style.alignItems = Align.Center;
-            ShopTheme.StyleCard(card);
+            // Town-HUD canon card slot: dark-glass fill + thin gold rim + rounding.
+            card.style.backgroundColor = ElarionUi.PanelStoneDark;
+            card.style.marginBottom = 8;
+            card.style.paddingTop = 10; card.style.paddingBottom = 10;
+            card.style.paddingLeft = 12; card.style.paddingRight = 12;
+            ElarionUi.SetRadius(card, ElarionUi.RadiusMd);
+            ElarionUi.SetBorderWidth(card, 1);
+            ElarionUi.SetBorderColor(card, new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.22f));
 
             // Framed item-portrait slot — prefers a real preview render; falls back
             // to a framed gem tile (never a bare swatch). Preview textures land in a
@@ -454,14 +463,14 @@ namespace DeNelle.HUD
             card.Add(text);
 
             var name = new Label(displayName);
-            name.style.fontSize = 15;
+            name.style.fontSize = ElarionUi.FontBody;
             name.style.unityFontStyleAndWeight = FontStyle.Bold;
-            name.style.color = ShopTheme.Parchment;
+            name.style.color = ElarionUi.Parchment;
             text.Add(name);
 
             var desc = new Label(description);
-            desc.style.fontSize = 11;
-            desc.style.color = ShopTheme.ParchmentDim;
+            desc.style.fontSize = ElarionUi.FontMicro;
+            desc.style.color = ElarionUi.ParchmentDim;
             desc.style.unityFontStyleAndWeight = FontStyle.Italic;
             desc.style.whiteSpace = WhiteSpace.Normal;
             desc.style.marginTop = 2;
@@ -470,15 +479,15 @@ namespace DeNelle.HUD
             // Price line — coin glyph + amount in gold (matches the header chip).
             // DEF-197: when a buyable item is out of reach the coin + price dim to a
             // muted gold so the gold "reads" as unavailable at a glance.
-            Color priceTint = (isBuyable && !affordable) ? ShopTheme.ParchmentDim : ShopTheme.Glimmer;
+            Color priceTint = (isBuyable && !affordable) ? ElarionUi.ParchmentDim : ElarionUi.Gold;
             var priceRow = new VisualElement();
             priceRow.style.flexDirection = FlexDirection.Row;
             priceRow.style.alignItems = Align.Center;
             priceRow.style.marginTop = 4;
             if (!isAchievement && glimmerCost > 0)
             {
-                var coin = new Label(ShopTheme.CoinGlyph);
-                coin.style.fontSize = 12;
+                var coin = new Label(ElarionUi.CrestGlyph);
+                coin.style.fontSize = ElarionUi.FontLabel;
                 coin.style.color = priceTint;
                 coin.style.marginRight = 4;
                 priceRow.Add(coin);
@@ -491,16 +500,16 @@ namespace DeNelle.HUD
             else
                 priceText = "Free";
             var price = new Label(priceText);
-            price.style.fontSize = 12;
+            price.style.fontSize = ElarionUi.FontLabel;
             price.style.color = priceTint;
             priceRow.Add(price);
             // DEF-197: affordability hint — how much more Glimmer is needed.
             if (shortfall > 0)
             {
                 var need = new Label($"  (short {shortfall:N0})");
-                need.style.fontSize = 11;
+                need.style.fontSize = ElarionUi.FontMicro;
                 need.style.unityFontStyleAndWeight = FontStyle.Italic;
-                need.style.color = ShopTheme.ParchmentDim;
+                need.style.color = ElarionUi.ParchmentDim;
                 priceRow.Add(need);
             }
             text.Add(priceRow);
@@ -512,19 +521,19 @@ namespace DeNelle.HUD
             if (equipped)
             {
                 actionBtn.text = "Equipped";
-                ShopTheme.StyleButton(actionBtn, ShopTheme.ButtonKind.Confirm);
+                ElarionUi.StyleButton(actionBtn, ElarionUi.ButtonKind.Confirm);
                 actionBtn.SetEnabled(false);
             }
             else if (owned)
             {
                 actionBtn.text = "Equip";
-                ShopTheme.StyleButton(actionBtn, ShopTheme.ButtonKind.Aether);
+                ElarionUi.StyleButton(actionBtn, ElarionUi.ButtonKind.Gold);
                 actionBtn.clicked += () => { EquipId(id); ShowToast($"Equipped {displayName}"); };
             }
             else if (isAchievement)
             {
                 actionBtn.text = "Locked";
-                ShopTheme.StyleButton(actionBtn, ShopTheme.ButtonKind.Disabled);
+                ElarionUi.StyleButton(actionBtn, ElarionUi.ButtonKind.Disabled);
                 actionBtn.SetEnabled(false);
             }
             else
@@ -532,8 +541,8 @@ namespace DeNelle.HUD
                 // DEF-197: 'affordable' is hoisted above so the price line + button
                 // agree on one live-balance check.
                 actionBtn.text = "Buy";
-                ShopTheme.StyleButton(actionBtn,
-                    affordable ? ShopTheme.ButtonKind.Aether : ShopTheme.ButtonKind.Disabled);
+                ElarionUi.StyleButton(actionBtn,
+                    affordable ? ElarionUi.ButtonKind.Gold : ElarionUi.ButtonKind.Disabled);
                 actionBtn.SetEnabled(affordable);
                 actionBtn.clicked += () =>
                 {

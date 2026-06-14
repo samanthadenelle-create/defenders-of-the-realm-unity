@@ -45,23 +45,24 @@ namespace DeNelle.Village
     [DisallowMultipleComponent]
     public sealed class TowerPlacementRotateMenu : MonoBehaviour
     {
-        // ── Palette — re-based on the canonical ElarionUi theme (warm stone /
-        //     parchment / runic gold) so the orient editor matches the HUD + build
-        //     palette + shop. Axis tints + rune decoration stay local (below). ─────
-        private static readonly Color PanelBg     = ElarionUi.PanelStoneDark;
-        private static readonly Color RuneBorder  = ElarionUi.StoneTrim;
+        // ── Palette — re-based on the canonical town-HUD dark-glass theme
+        //     (ElarionUiKit Glass / GlassDeep / Track / Accent + ElarionUi palette) so
+        //     the orient editor reads as ONE designed UI with the HUD + build panels +
+        //     shop. Axis tints + rune decoration stay local (below). No hand-rolled hex. ─
+        private static readonly Color PanelBg     = ElarionUiKit.Glass;     // dark-glass panel fill
+        private static readonly Color RuneBorder  = ElarionUiKit.Accent;    // thin runic-gold rim
         private static readonly Color TitleGold   = ElarionUi.Gilt;
-        private static readonly Color ViewportBg  = Hex(0x0a, 0x07, 0x04);   // near-black warm viewport well
-        private static readonly Color ReadoutBg   = Hex(0x0a, 0x07, 0x04);
-        private static readonly Color ReadoutBdr  = Hex(0x38, 0x28, 0x0e);
-        private static readonly Color ConfirmBg   = Hex(0x9a, 0x6e, 0x0c);
-        private static readonly Color ConfirmBdr  = Hex(0xd4, 0xa0, 0x28);
+        private static readonly Color ViewportBg  = ElarionUiKit.Track;     // recessed near-black well
+        private static readonly Color ReadoutBg   = ElarionUiKit.Track;
+        private static readonly Color ReadoutBdr  = ElarionUiKit.AccentSoft; // faint gold inner rim
+        private static readonly Color ConfirmBg   = ElarionUi.GoldButton;   // gold CTA fill
+        private static readonly Color ConfirmBdr  = ElarionUi.Gilt;         // bright gilt rim on CTA
         private static readonly Color ConfirmTxt  = ElarionUi.Ink;          // dark ink on gold CTA
-        private static readonly Color CancelBg    = Hex(0x1a, 0x0c, 0x06);
+        private static readonly Color CancelBg    = ElarionUiKit.GlassDeep; // deep-glass secondary
         private static readonly Color CancelTxt   = ElarionUi.ParchmentDim;
-        private static readonly Color ResetBg     = Hex(0x12, 0x0d, 0x07);
-        private static readonly Color ResetTxt    = ElarionUi.StoneTrim;
-        private static readonly Color RuneStripTxt = Hex(0x6a, 0x4e, 0x14);
+        private static readonly Color ResetBg     = ElarionUiKit.GlassDeep; // deep-glass tertiary
+        private static readonly Color ResetTxt    = ElarionUi.ParchmentDim;
+        private static readonly Color RuneStripTxt = ElarionUiKit.AccentSoft; // faint gold rune strip
 
         private static readonly Color AxisX = Hex(0xd0, 0x40, 0x40); // Pitch
         private static readonly Color AxisY = Hex(0x38, 0xb8, 0x38); // Yaw

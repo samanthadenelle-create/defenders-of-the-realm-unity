@@ -38,6 +38,7 @@ using System;
 using UnityEngine;
 using UnityEngine.UI;
 using DeNelle.Core.Catalog;
+using DeNelle.Core.UI;
 
 namespace DeNelle.Village
 {
@@ -49,13 +50,16 @@ namespace DeNelle.Village
     /// </summary>
     public sealed class RotateModelMenu : MonoBehaviour
     {
-        // Palette from the mockup (dark navy panel + gold buttons).
-        private static readonly Color PanelNavy  = new Color(0.055f, 0.086f, 0.165f, 0.98f); // #0e162a
-        private static readonly Color ViewportBg = new Color(0.02f, 0.047f, 0.094f, 1f);     // #050c18
-        private static readonly Color Gold       = new Color(0.83f, 0.66f, 0.30f, 1f);       // gold button
-        private static readonly Color GoldDim    = new Color(0.55f, 0.44f, 0.22f, 1f);       // secondary/cancel
-        private static readonly Color InkOnGold   = new Color(0.06f, 0.05f, 0.02f, 1f);
-        private static readonly Color CreamText   = new Color(1f, 0.92f, 0.74f, 1f);
+        // Palette re-based on the canonical town-HUD theme (DeNelle.Core.UI) so this
+        // placement panel reads as ONE designed UI. Dark-glass panel + runic-gold
+        // accent + parchment text — sourced from ElarionUiKit (the sleek dark-glass
+        // language) + ElarionUi (the shared palette), never hand-rolled hex.
+        private static readonly Color PanelNavy  = ElarionUiKit.Glass;      // dark-glass panel fill
+        private static readonly Color ViewportBg = ElarionUiKit.Track;      // recessed near-black well
+        private static readonly Color Gold       = ElarionUi.GoldButton;    // gold CTA button
+        private static readonly Color GoldDim    = ElarionUiKit.GlassDeep;  // secondary / cancel (deep glass)
+        private static readonly Color InkOnGold   = ElarionUi.Ink;          // dark ink on gold
+        private static readonly Color CreamText   = ElarionUi.Parchment;    // parchment cream text
 
         private GameObject _root;
         private RawImage   _previewImage;
@@ -223,16 +227,20 @@ namespace DeNelle.Village
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             scaler.referenceResolution = new Vector2(1280f, 720f);
 
-            // Dim full-screen scrim (also catches stray taps outside the panel).
-            var scrim = NewImage(_root.transform, "Scrim", new Color(0f, 0f, 0f, 0.45f));
+            // Dim full-screen scrim (also catches stray taps outside the panel) —
+            // sourced from the shared palette so the modal dim matches every other panel.
+            var scrim = NewImage(_root.transform, "Scrim", ElarionUi.Scrim);
             Stretch(scrim.rectTransform, Vector2.zero, Vector2.one);
 
-            // Centered navy panel.
+            // Centered dark-glass panel (town-HUD presentation language).
             var panel = NewImage(_root.transform, "Panel", PanelNavy);
             var pr = panel.rectTransform;
             pr.anchorMin = new Vector2(0.32f, 0.16f);
             pr.anchorMax = new Vector2(0.68f, 0.92f);
             pr.offsetMin = Vector2.zero; pr.offsetMax = Vector2.zero;
+
+            // ONE thin gold underline rim hugging the panel's bottom edge (minimal accent).
+            ElarionUiKit.AddRimUnderline(panel.gameObject);
 
             // Title.
             var title = NewText(panel.transform, "Title", "Rotate Model", 34, FontStyle.Bold, CreamText);

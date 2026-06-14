@@ -11,6 +11,7 @@
 using UnityEngine;
 using UnityEngine.UIElements;
 using UnityEngine.SceneManagement;
+using DeNelle.Core.UI;
 
 namespace DeNelle.Village.UI
 {
@@ -93,28 +94,29 @@ namespace DeNelle.Village.UI
             var s = _panel.style;
             s.position = Position.Absolute; s.left = 20f; s.top = 80f; s.width = 300f;
             s.paddingTop = 14f; s.paddingBottom = 14f; s.paddingLeft = 16f; s.paddingRight = 16f;
-            s.backgroundColor = new Color(0.08f, 0.10f, 0.16f, 0.96f);
-            s.borderTopLeftRadius = 10f; s.borderTopRightRadius = 10f;
-            s.borderBottomLeftRadius = 10f; s.borderBottomRightRadius = 10f;
+            // Dark-stone fill + runic-gold rim + rounding from the shared TOWN-HUD palette.
+            ElarionUi.StylePanel(_panel, dark: true);
 
             var title = new Label("Towers   (press M)");
-            title.style.color = Color.white; title.style.fontSize = 18f;
+            title.style.color = ElarionUi.Gilt; title.style.fontSize = ElarionUi.FontHead;
             title.style.unityFontStyleAndWeight = FontStyle.Bold; title.style.marginBottom = 8f;
             _panel.Add(title);
+            _panel.Add(ElarionUi.MakeRule());
 
             _list = new ScrollView(ScrollViewMode.Vertical);
             _list.style.maxHeight = 260f; _list.style.marginBottom = 8f;
+            ElarionUi.StyleWell(_list);
             _panel.Add(_list);
 
             _detail = new Label("Select a tower to manage.");
-            _detail.style.color = new Color(0.85f, 0.85f, 0.9f); _detail.style.fontSize = 12f;
+            _detail.style.color = ElarionUi.ParchmentDim; _detail.style.fontSize = ElarionUi.FontLabel;
             _detail.style.whiteSpace = WhiteSpace.Normal; _detail.style.marginBottom = 6f;
             _panel.Add(_detail);
 
             _actions = new VisualElement();
             _panel.Add(_actions);
 
-            _panel.Add(Btn("Close", new Color(0.30f, 0.30f, 0.36f, 0.95f), Hide));
+            _panel.Add(Btn("Close", ElarionUi.ButtonKind.Gold, Hide));
 
             _root.Add(_panel);
         }
@@ -128,7 +130,7 @@ namespace DeNelle.Village.UI
             if (towers.Length == 0)
             {
                 var none = new Label("No towers placed yet.");
-                none.style.color = new Color(0.8f, 0.8f, 0.85f); none.style.fontSize = 12f;
+                none.style.color = ElarionUi.ParchmentDim; none.style.fontSize = ElarionUi.FontLabel;
                 _list.Add(none);
                 _selected = null; ClearMarker();
             }
@@ -142,9 +144,14 @@ namespace DeNelle.Village.UI
                     var t = towers[i];
                     bool sel = ReferenceEquals(t, _selected);
                     var row = Btn($"Tower {i + 1}  —  Lv {t.CurrentLevel}   (rng {t.CurrentRange:0}, dmg {t.CurrentDamage:0})",
-                        sel ? new Color(0.20f, 0.42f, 0.30f, 0.98f) : new Color(0.18f, 0.22f, 0.30f, 0.95f),
-                        () => Select(t));
-                    row.style.height = 32f; row.style.fontSize = 12f;
+                        ElarionUi.ButtonKind.Neutral, () => Select(t));
+                    row.style.height = 32f; row.style.fontSize = ElarionUi.FontLabel;
+                    if (sel)
+                    {
+                        // Selected row reads with the aether-violet accent (selection canon).
+                        row.style.backgroundColor = ElarionUi.AetherDim;
+                        ElarionUi.SetBorderColor(row, ElarionUi.Aether);
+                    }
                     _list.Add(row);
                 }
             }
@@ -166,14 +173,14 @@ namespace DeNelle.Village.UI
             var row = new VisualElement();
             row.style.flexDirection = FlexDirection.Row;
 
-            var up = Btn("Upgrade", new Color(0.30f, 0.52f, 0.34f, 0.95f), () =>
+            var up = Btn("Upgrade", ElarionUi.ButtonKind.Confirm, () =>
             {
                 if (_selected != null) { _selected.Upgrade(); Refresh(); }
             });
             up.style.flexGrow = 1f; up.style.marginRight = 4f;
             row.Add(up);
 
-            var raze = Btn("Raze", new Color(0.62f, 0.20f, 0.20f, 0.95f), () =>
+            var raze = Btn("Raze", ElarionUi.ButtonKind.Danger, () =>
             {
                 if (_selected != null) { Destroy(_selected.gameObject); _selected = null; ClearMarker(); Refresh(); }
             });
@@ -213,16 +220,14 @@ namespace DeNelle.Village.UI
 
         private void ClearMarker() { if (_marker != null) Destroy(_marker); _marker = null; }
 
-        private static Button Btn(string label, Color bg, System.Action onClick)
+        private static Button Btn(string label, ElarionUi.ButtonKind kind, System.Action onClick)
         {
             var b = new Button(onClick) { text = label };
-            var s = b.style;
-            s.height = 38f; s.marginTop = 3f; s.marginBottom = 3f;
-            s.fontSize = 14f; s.unityFontStyleAndWeight = FontStyle.Bold;
-            s.unityTextAlign = TextAnchor.MiddleCenter; s.color = Color.white;
-            s.backgroundColor = bg;
-            s.borderTopLeftRadius = 7f; s.borderTopRightRadius = 7f;
-            s.borderBottomLeftRadius = 7f; s.borderBottomRightRadius = 7f;
+            // Shared themed button: stone/gold/green/red fill + gold rim + rounding +
+            // hover/press feedback, sourced from the TOWN-HUD palette.
+            ElarionUi.StyleButton(b, kind);
+            b.style.marginTop = 3f; b.style.marginBottom = 3f;
+            b.style.unityTextAlign = TextAnchor.MiddleCenter;
             return b;
         }
     }
