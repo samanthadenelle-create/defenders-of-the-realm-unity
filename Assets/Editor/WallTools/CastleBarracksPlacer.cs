@@ -25,6 +25,11 @@ namespace DeNelle.Editor
             "Assets/polyperfect/Low Poly Ultimate Pack/_M/Prefabs_M/Military_M/Military_Barracks.prefab";
         private const string SpawnAnchorName = "HeroStartPoint_PlayerSpawn";
         private const string RootName = "CastleBarracks";
+        // Shrink factor (owner 2026-06-14: "shrink the size of the barracks"). The polyperfect
+        // Military_Barracks ships large; 0.6 brings it to building scale near the spawn. The
+        // owner can hand-nudge scale/position after — the runtime NPC injector keys off the
+        // root NAME, so the Drillmaster follows wherever the barracks ends up.
+        private const float BarracksScale = 0.6f;
         // Offset from the spawn: to the side (+X) and toward castle centre (+Z),
         // so it's adjacent to the spawn but not on the hero / the path out.
         private static readonly Vector3 SpawnOffset = new Vector3(6f, 0f, 4f);
@@ -53,6 +58,7 @@ namespace DeNelle.Editor
             var go = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
             if (go == null) go = Object.Instantiate(prefab);
             go.name = RootName;
+            go.transform.localScale *= BarracksScale; // shrink to building scale (before bounds-seat)
             // Face roughly toward castle centre (so the door reads toward the plaza).
             var toCentre = new Vector3(-pos.x, 0f, -pos.z);
             if (toCentre.sqrMagnitude > 0.01f)
@@ -66,6 +72,8 @@ namespace DeNelle.Editor
                 var b = rends[0].bounds;
                 for (int k = 1; k < rends.Length; k++) b.Encapsulate(rends[k].bounds);
                 go.transform.position += new Vector3(0f, spawnPos.y - b.min.y, 0f);
+                Debug.Log($"[CastleBarracksPlacer] barracks world size after {BarracksScale}x scale = " +
+                          $"{b.size.x:F1} x {b.size.y:F1} x {b.size.z:F1} m (W x H x D).");
             }
 
             EditorSceneManager.MarkSceneDirty(scene);
