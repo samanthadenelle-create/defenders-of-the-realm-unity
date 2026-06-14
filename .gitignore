@@ -115,6 +115,15 @@ Thumbs.db
 /Assets/polyperfect/
 /Assets/polyperfect.meta
 
+# Supercyan "Character Pack: Fantasy" — Asset-Store char/anim pack kept LOCAL
+# (same policy as polyperfect, 2026-06-14). Provides troop/hero test bodies +
+# ~310 Humanoid anims. Only the SC_Footman/SC_Archer variants we use live in a
+# tracked Resources/ path. On a fresh clone: re-import the pack from the Asset
+# Store, then run Defenders/Art/Fix Supercyan URP Materials (converts Built-in
+# shaders -> URP so it isn't magenta). See docs/SUPERCYAN_REIMPORT.md.
+/Assets/Supercyan/
+/Assets/Supercyan.meta
+
 # === Session-noise / dev workflow (added 2026-05-20) ===
 # Stale build logs left behind by batch Unity invocations.
 build-*.log
