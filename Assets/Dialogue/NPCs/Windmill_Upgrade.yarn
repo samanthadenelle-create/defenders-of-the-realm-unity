@@ -1,0 +1,55 @@
+// =============================================================================
+// Windmill — 4-tier building-upgrade tree (WO-430). Building id: "windmill"
+// Level var: $windmill_Level (default 0). Entry: Windmill_Upgrade. Back -> Windmill_UpgradeMenu.
+// =============================================================================
+title: Windmill_Upgrade
+tags: structure interaction windmill upgrade
+---
+<<jump Windmill_UpgradeMenu>>
+===
+
+title: Windmill_UpgradeMenu
+tags: structure windmill upgrade
+---
+<<if $windmill_Level == 0>>
+    Mother Wren: Sails torn, stones cracked — she hasn't ground a grain in years. Rebuild her and we'll fill the larders before the next long winter.
+    -> Rebuild the Windmill — 500 Wood / 700 Food / 100 Crystal. (+10% Food yield.)
+        <<TryUpgradeBuilding "windmill" 1>>
+        <<jump Windmill_UpgradeResult>>
+    -> Not yet.
+        Mother Wren: Then we tighten our belts a while longer. Hungry soldiers don't hold walls, dear.
+<<elseif $windmill_Level == 1>>
+    Mother Wren: Listen to her turn — slow and patient. Hang new sailcloth to catch the high winds and she'll spin twice as eager.
+    -> Wind Harnessing — 1100 Wood / 1400 Food / 300 Crystal. (+18% Food yield.)
+        <<TryUpgradeBuilding "windmill" 2>>
+        <<jump Windmill_UpgradeResult>>
+    -> Back.
+        <<jump Windmill_UpgradeMenu>>
+<<elseif $windmill_Level == 2>>
+    Mother Wren: She whirls grand now, flour drifting like first snow. Raise the great stones and she'll grind a feast where once she ground a meal.
+    -> Grand Mill — 2400 Wood / 2800 Food / 800 Crystal. (+32% Food yield, +12% offline gathering.)
+        <<TryUpgradeBuilding "windmill" 3>>
+        <<jump Windmill_UpgradeResult>>
+    -> Back.
+        <<jump Windmill_UpgradeMenu>>
+<<elseif $windmill_Level == 3>>
+    Mother Wren: <i>The sails sing in a wind that smells of harvest.</i> The very air favours her now. Bless her once more and Elarion will never know an empty plate again.
+    -> Winds of Plenty — 5200 Wood / 4200 Food / 1600 Crystal. (+45% Food yield + periodic food windfall.)
+        <<TryUpgradeBuilding "windmill" 4>>
+        <<jump Windmill_UpgradeResult>>
+    -> Back.
+        <<jump Windmill_UpgradeMenu>>
+<<else>>
+    Mother Wren: The Winds of Plenty blow through her sails — granaries full to bursting, every table in Elarion laid heavy. No siege will starve us now. She is finished, and finer than I ever dreamed.
+    -> Bless you, Mother Wren.
+        Mother Wren: Bless the wind, child — I only built the sails. Now go, and eat your fill.
+<<endif>>
+===
+
+title: Windmill_UpgradeResult
+tags: structure windmill upgrade
+---
+Mother Wren: <i>The sails catch and quicken.</i> There — feel that breeze turn? It's done, and gladly.
+-> Back.
+    <<jump Windmill_UpgradeMenu>>
+===

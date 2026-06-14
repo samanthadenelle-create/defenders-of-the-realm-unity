@@ -1,0 +1,58 @@
+// =============================================================================
+// Arcane Tower — 4-tier building-upgrade tree (WO-430). Building id: "arcane-tower"
+// Level var: $arcane_tower_Level (hyphen -> underscore + "_Level"), default 0.
+//   Seeded by CmdStructureStatus on open + set by TryUpgradeBuilding on a buy.
+//   Persists via GameState.BuildingTiers. Entry: ArcaneTower_Upgrade.
+//   Back routes to ArcaneTower_UpgradeMenu so options re-gate against the new level.
+// =============================================================================
+title: ArcaneTower_Upgrade
+tags: structure interaction arcane-tower upgrade
+---
+<<jump ArcaneTower_UpgradeMenu>>
+===
+
+title: ArcaneTower_UpgradeMenu
+tags: structure arcane-tower upgrade
+---
+<<if $arcane_tower_Level == 0>>
+    Tower-Warden: The spire stands cold and silent — old stone, no spark. The aether sleeps within it, waiting to be called.
+    -> Awaken the Tower — 800 Wood / 500 Food. (Unlock basic magic attacks.)
+        <<TryUpgradeBuilding "arcane-tower" 1>>
+        <<jump ArcaneTower_UpgradeResult>>
+    -> Not yet.
+        Tower-Warden: Then it sleeps a while longer. The dark will not wait so kindly.
+<<elseif $arcane_tower_Level == 1>>
+    Tower-Warden: A low hum runs through the stone now — the first breath of magic. Channel the aether and the spire will strike true.
+    -> Mana Flow — 1400 Wood / 900 Food / 200 Crystal. (+8% Tower Damage.)
+        <<TryUpgradeBuilding "arcane-tower" 2>>
+        <<jump ArcaneTower_UpgradeResult>>
+    -> Back.
+        <<jump ArcaneTower_UpgradeMenu>>
+<<elseif $arcane_tower_Level == 2>>
+    Tower-Warden: The spire crackles, blue light chasing the runes. Tune it to the Heart's own song and its reach will stretch across the field.
+    -> Arcane Resonance — 2800 Wood / 1800 Food / 600 Crystal. (+18% Damage, +12% Range.)
+        <<TryUpgradeBuilding "arcane-tower" 3>>
+        <<jump ArcaneTower_UpgradeResult>>
+    -> Back.
+        <<jump ArcaneTower_UpgradeMenu>>
+<<elseif $arcane_tower_Level == 3>>
+    Tower-Warden: It blazes like a second sun, every stone singing with power. One last sigil and the spire could pour its fury into every tower on the wall.
+    -> Arcane Overload — 5500 Wood / 3500 Food / 1500 Crystal. (Once per wave: empower all towers for 15s.)
+        <<TryUpgradeBuilding "arcane-tower" 4>>
+        <<jump ArcaneTower_UpgradeResult>>
+    -> Back.
+        <<jump ArcaneTower_UpgradeMenu>>
+<<else>>
+    Tower-Warden: The Arcane Tower is whole — a beacon of pure aether over Elarion. The enemy fears its light before they ever see its spear. There is nothing left to raise.
+    -> Stand in its light.
+        Tower-Warden: As we all do, hero. As we all do.
+<<endif>>
+===
+
+title: ArcaneTower_UpgradeResult
+tags: structure arcane-tower upgrade
+---
+Tower-Warden: The runes drink it in — feel that? The spire is changed.
+-> Back.
+    <<jump ArcaneTower_UpgradeMenu>>
+===

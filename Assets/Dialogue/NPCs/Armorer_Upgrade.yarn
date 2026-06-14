@@ -1,0 +1,55 @@
+// =============================================================================
+// Armorer — 4-tier building-upgrade tree (WO-430). Building id: "armorer"
+// Level var: $armorer_Level (default 0). Entry: Armorer_Upgrade. Back -> Armorer_UpgradeMenu.
+// =============================================================================
+title: Armorer_Upgrade
+tags: structure interaction armorer upgrade
+---
+<<jump Armorer_UpgradeMenu>>
+===
+
+title: Armorer_UpgradeMenu
+tags: structure armorer upgrade
+---
+<<if $armorer_Level == 0>>
+    Dame Halvard: The forge here is dead ash and the anvils ring for no one. Light it, and we'll plate every soldier the Realm can muster.
+    -> Open the Forge — 600 Wood / 400 Food / 100 Crystal. (Unlock troop upgrades.)
+        <<TryUpgradeBuilding "armorer" 1>>
+        <<jump Armorer_UpgradeResult>>
+    -> Not yet.
+        Dame Halvard: Then our soldiers go to the wall in rags. Don't keep them waiting long.
+<<elseif $armorer_Level == 1>>
+    Dame Halvard: The hammers fall steady now, sparks on cold mornings. Thicker plate would turn the blows that have been killing good men.
+    -> Reinforced Armor — 1200 Wood / 800 Food / 300 Crystal. (+7% Troop Health.)
+        <<TryUpgradeBuilding "armorer" 2>>
+        <<jump Armorer_UpgradeResult>>
+    -> Back.
+        <<jump Armorer_UpgradeMenu>>
+<<elseif $armorer_Level == 2>>
+    Dame Halvard: The whole shop rings like a war-bell — fine steel, finer edges. Teach the smiths the old master-marks and our blades will bite as hard as our shields hold.
+    -> Master Smithing — 2500 Wood / 1600 Food / 700 Crystal. (+15% Troop Damage, +10% Health.)
+        <<TryUpgradeBuilding "armorer" 3>>
+        <<jump Armorer_UpgradeResult>>
+    -> Back.
+        <<jump Armorer_UpgradeMenu>>
+<<elseif $armorer_Level == 3>>
+    Dame Halvard: The forge roars white-hot, the air thick with the song of true steel. Quench the next batch in oath-fire and our troops will march out already legends.
+    -> Battle Forged — 4800 Wood / 3200 Food / 1400 Crystal. (Deployed troops gain +25% stats for their first 60s.)
+        <<TryUpgradeBuilding "armorer" 4>>
+        <<jump Armorer_UpgradeResult>>
+    -> Back.
+        <<jump Armorer_UpgradeMenu>>
+<<else>>
+    Dame Halvard: The Armorer wants for nothing — every soldier of Elarion walks out wrapped in the finest plate these hands can forge. No raid will undo what we've built here.
+    -> My thanks, Dame.
+        Dame Halvard: Thank me by bringing them all home. That's the only payment I keep.
+<<endif>>
+===
+
+title: Armorer_UpgradeResult
+tags: structure armorer upgrade
+---
+Dame Halvard: <i>She sets down the hammer and nods.</i> It's done. The wall just got harder to break.
+-> Back.
+    <<jump Armorer_UpgradeMenu>>
+===
