@@ -281,6 +281,10 @@ namespace DeNelle.HUD
         private float[] _townResFlash = { 0f, 0f, 0f, 0f, 0f };
         private bool[] _townResFlashUp = { false, false, false, false, false };
         private const int TownResLowThreshold = 50;
+        // Gold is the LAST town resource cell (Food/Wood/Crystal/Iron/Gold). It is a
+        // currency, not a gatherable stock — it must never raise the red low-warn box
+        // (it legitimately starts < 50 and otherwise paints a solid red box over the coin).
+        private const int TownResGoldIndex = 4;
 
         // Top-right LIGHTWEIGHT 2D mini-map (icon markers, no RenderTexture).
         private RectTransform _townMiniMap;
@@ -2463,8 +2467,9 @@ namespace DeNelle.HUD
             }
             _townResLast[idx] = value;
 
-            // red outline when this resource runs low (< 50).
-            if (_townResOutline != null && _townResOutline[idx] != null)
+            // red outline when a GATHERED resource runs low (< 50). Gold (currency) is
+            // exempt — never paint the red low-warn box over the coin cell.
+            if (_townResOutline != null && idx != TownResGoldIndex && _townResOutline[idx] != null)
             {
                 var c = HudTheme.HpRed;
                 c.a = value < TownResLowThreshold ? 0.9f : 0f;
