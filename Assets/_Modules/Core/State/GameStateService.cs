@@ -342,6 +342,7 @@ namespace DeNelle.Core.State
                 ArenaDefense = s.ArenaDefense != null ? new List<PlacedDefenderData>(s.ArenaDefense) : null,   // WO-389 — pre-placed Arena defenders (v19)
                 Settlements = s.Settlements != null ? new List<DeNelle.Core.World.SettlementState>(s.Settlements) : null,   // WO-159 — node-settlement claim/HP/lockout (v21)
                 Army = s.Army,   // WO-453 — persisted army roster (v22); serialized straight to JSON by the save layer
+                BuildingTiers = s.BuildingTiers,   // WO-430 — per-building upgrade tiers (v23); serialized straight to JSON
             };
         }
 
@@ -408,6 +409,7 @@ namespace DeNelle.Core.State
             if (p.ArenaDefense != null) s.ArenaDefense = p.ArenaDefense;   // WO-389 — pre-placed Arena defenders (v19)
             if (p.Settlements != null) s.Settlements = p.Settlements;   // WO-159 — node-settlement claim/HP/3-day razed lockout (v21)
             s.Army = p.Army ?? new ArmyStorage();      // WO-453 — army roster (v22); never null (older saves load an empty cap-10 army)
+            s.BuildingTiers = p.BuildingTiers ?? new System.Collections.Generic.Dictionary<string, int>();   // WO-430 — building tiers (v23); never null
             EnsureZoneGraph(s);                       // backfill a pre-v17 / empty save's zone graph
         }
 
@@ -705,6 +707,7 @@ namespace DeNelle.Core.State
             s.BaseLayout = new List<PlacedStructureData>();   // WO-108 — New Game starts on the default village seed.
             s.ArenaDefense = new List<PlacedDefenderData>();  // WO-389 — New Game starts with no pre-placed Arena defense.
             s.Army = new ArmyStorage();                       // WO-453 — New Game starts with an empty cap-10 army.
+            s.BuildingTiers = new System.Collections.Generic.Dictionary<string, int>();   // WO-430 — New Game: all buildings at tier 0 (locked).
             s.Magic = 0;                                      // DEF-121 — tech-axis currency resets on New Game.
             s.PartyMemberIds = new List<string>();            // WO-301 — start alone; the first companion joins on tutorial complete.
             EnsureZoneGraph(s);                               // WO-164 — seed the default zone graph (5 zones) on New Game.

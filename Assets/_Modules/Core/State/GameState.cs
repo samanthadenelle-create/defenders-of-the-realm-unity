@@ -308,6 +308,18 @@ namespace DeNelle.Core.State
         /// </summary>
         public ArmyStorage Army = new ArmyStorage();
 
+        // ── Building upgrade tiers (WO-430) ───────────────────────────────────
+        /// <summary>
+        /// Per-building upgrade TIER (0-4), keyed by building id (e.g. {"armorer":2}).
+        /// The single source of truth the city-upgrade system reads: ModifierService
+        /// compiles it into <see cref="GameModifiers"/>, the dialogue title shows the
+        /// level, and the Yarn <c>$&lt;id&gt;_Level</c> vars mirror it. Owned by GameState
+        /// like <see cref="Army"/>; never null (empty on fresh save / backfilled by the
+        /// v23 migration). Round-trips through SaveSchema v23 (additive at the END).
+        /// </summary>
+        public System.Collections.Generic.Dictionary<string, int> BuildingTiers
+            = new System.Collections.Generic.Dictionary<string, int>();
+
         /// <summary>A fresh List&lt;int&gt; of <paramref name="count"/> zeros.</summary>
         public static List<int> NewZeroed(int count)
         {

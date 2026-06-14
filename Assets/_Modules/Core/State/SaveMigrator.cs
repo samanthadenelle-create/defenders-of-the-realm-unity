@@ -58,6 +58,7 @@ namespace DeNelle.Core.State
                 // so NO Steps entry was needed for them.
                 { 21, MigrateToV21 },
                 { 22, MigrateToV22 },
+                { 23, MigrateToV23 },
             };
 
         /// <summary>
@@ -333,6 +334,15 @@ namespace DeNelle.Core.State
         {
             if (s.Army == null)
                 s.Army = new ArmyStorage();
+            return s;
+        }
+
+        // v23 — building upgrade tiers (WO-430). Seed an empty dict on older saves so the
+        // city-upgrade system reads tier 0 (locked) for every building until the player buys one.
+        private static PersistedState MigrateToV23(PersistedState s)
+        {
+            if (s.BuildingTiers == null)
+                s.BuildingTiers = new System.Collections.Generic.Dictionary<string, int>();
             return s;
         }
 

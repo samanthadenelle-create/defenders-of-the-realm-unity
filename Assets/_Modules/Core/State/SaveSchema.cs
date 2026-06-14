@@ -27,7 +27,7 @@ namespace DeNelle.Core.State
     {
         // ── Versioning ───────────────────────────────────────────────────────
         /// <summary>CURRENT_SCHEMA_VERSION — bumped whenever the persisted shape changes.</summary>
-        public const int CurrentVersion = 22;  // v22 — army roster persistence (WO-453: owned troops + cap + wounded/recovery/veterancy survive save/load); v21 — node-settlement persistence (WO-159: claim/HP/phase + 3-day razed lockout survive save/load); v20 — gear inventory persistence (shop purchases survive reload + Neon sync); v19 — arenaDefense placed-defender layout (WO-389); v18 — fold AetherCrystals into Resources.Crystals (single-source-of-truth); v17 — zone graph persistence (WO-164); v16 — party roster (WO-301); v15 — magic tech-axis currency (DEF-121/WO-230); v14 — baseLayout (WO-108); v13 — buildJobs + adSkip (WO-172)
+        public const int CurrentVersion = 23;  // v23 — building upgrade tiers (WO-430: per-building tier 0-4 survives save/load → compiled into GameModifiers + dialogue level title); v22 — army roster persistence (WO-453: owned troops + cap + wounded/recovery/veterancy survive save/load); v21 — node-settlement persistence (WO-159: claim/HP/phase + 3-day razed lockout survive save/load); v20 — gear inventory persistence (shop purchases survive reload + Neon sync); v19 — arenaDefense placed-defender layout (WO-389); v18 — fold AetherCrystals into Resources.Crystals (single-source-of-truth); v17 — zone graph persistence (WO-164); v16 — party roster (WO-301); v15 — magic tech-axis currency (DEF-121/WO-230); v14 — baseLayout (WO-108); v13 — buildJobs + adSkip (WO-172)
         /// <summary>SaveExport.format — bumped only if the envelope shape changes.</summary>
         public const int FileFormat = 1;
 
@@ -256,6 +256,19 @@ namespace DeNelle.Core.State
             /// recovers, never deleted.
             /// </summary>
             [JsonProperty("army")] public ArmyStorage Army;
+
+            // ── v23 — Building upgrade tiers (WO-430) ────────────────────────────
+            /// <summary>
+            /// Per-building upgrade TIER (WO-430 city upgrades), keyed by building id →
+            /// tier 0-4 (e.g. {"armorer":2,"lumbermill":3}). 0/absent = not yet unlocked.
+            /// The single source of truth that <see cref="DeNelle.Core.State.GameModifiers"/>
+            /// is compiled from (ModifierService) and that the dialogue title + Yarn
+            /// <c>$&lt;id&gt;_Level</c> vars read. Nullable per the <c>.partial()</c> convention;
+            /// absent on an older save → the v22→v23 migration seeds an empty dict. Append-only
+            /// field at the END so older saves stay loadable. (Folds in the resource-building
+            /// levels previously kept loose in PlayerPrefs → one persisted source of truth.)
+            /// </summary>
+            [JsonProperty("buildingTiers")] public System.Collections.Generic.Dictionary<string, int> BuildingTiers;
         }
 
         // =====================================================================
