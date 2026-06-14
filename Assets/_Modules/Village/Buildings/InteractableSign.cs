@@ -74,6 +74,7 @@ namespace DeNelle.Village
         {
             Shop,     // a Buy/Sell vendor (market / jeweler)            → chest/bag icon
             Upgrade,  // a resource / forge upgrade building             → shield icon (FLAG: no anvil)
+            Smith,    // the FORGE (weapon smith)                        → sword icon (owner)
             Talk,     // a pure talk / quest-giver NPC                   → speech/person icon
             Pet,      // the pet / companion house                      → heart icon
             Spell,    // the arcane tower (spell upgrades)              → quest/scroll icon (FLAG: no rune)
@@ -88,6 +89,7 @@ namespace DeNelle.Village
             {
                 case SignKind.Shop:    return RpgUiCatalog.IconInventory; // chest/bag = "buy/sell goods"
                 case SignKind.Upgrade: return RpgUiCatalog.IconShield;    // FLAG: shield stands in for anvil/up-arrow
+                case SignKind.Smith:   return RpgUiCatalog.IconSword;     // forge = weapon smith → sword (owner)
                 case SignKind.Talk:    return RpgUiCatalog.IconTalk;      // person/speech = "talk"
                 case SignKind.Pet:     return RpgUiCatalog.IconHeart;     // heart = companion
                 case SignKind.Spell:   return RpgUiCatalog.IconQuest;     // FLAG: scroll stands in for a spell/rune
@@ -108,8 +110,9 @@ namespace DeNelle.Village
             if (id.Contains("pet"))                              return SignKind.Pet;        // pet-house / echo hollow
             if (id.Contains("arcane"))                           return SignKind.Spell;      // arcane-tower
             if (id.Contains("market") || id.Contains("jewel"))   return SignKind.Shop;       // market / jeweler
-            // Forge sells AND upgrades; lead with Upgrade (its forge/smithing identity).
-            if (id.Contains("forge")  || id.Contains("armorer")) return SignKind.Upgrade;
+            // Forge = weapon smith → sword sign (owner). Armorer stays Upgrade (shield = armor).
+            if (id.Contains("forge"))                            return SignKind.Smith;
+            if (id.Contains("armorer"))                          return SignKind.Upgrade;
             if (id.Contains("lumbermill") || id.Contains("farm") ||
                 id.Contains("mine")   || id.Contains("windmill")) return SignKind.Upgrade;   // resource upgrade
             if (id.Contains("workshop"))                         return SignKind.Upgrade;    // crafting bench
@@ -124,10 +127,10 @@ namespace DeNelle.Village
                 case BuildingType.PetHouse:    return SignKind.Pet;
                 case BuildingType.ArcaneTower: return SignKind.Spell;
                 case BuildingType.Workshop:    return SignKind.Upgrade;
-                case BuildingType.CrystalMine:
-                case BuildingType.Farm:
-                case BuildingType.Lumbermill:
-                case BuildingType.Forge:       return SignKind.Upgrade;
+                case BuildingType.CrystalMine: return SignKind.Upgrade;   // resource → shield
+                case BuildingType.Farm:        return SignKind.Upgrade;   // resource → shield
+                case BuildingType.Lumbermill:  return SignKind.Upgrade;   // resource → shield
+                case BuildingType.Forge:       return SignKind.Smith;     // forge only → sword
                 default:                        return SignKind.Generic;
             }
         }

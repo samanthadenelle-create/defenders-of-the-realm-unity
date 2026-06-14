@@ -51,6 +51,8 @@ namespace DeNelle.Village.Hero
         private RectTransform _scrollContent; // the active scroll list content (for the post-populate rebuild)
         private TMPro.TextMeshProUGUI _statusText; // use TMPro for consistency with EquipmentPanel + to avoid any legacy UI asm quirks
         private TMPro.TextMeshProUGUI _ecoText;
+        private System.Action _selectedAction;          // buy/sell action of the selected row (fired by the bottom button)
+        private TMPro.TextMeshProUGUI _actionLabel;      // bottom primary button label ("Purchase" / "Sell")
         private System.Action<ResourceSnapshot> _ecoHandler; // stored so Close() can unsubscribe (no leak)
 
         // Unified Shop WO #3: RIGHT details pane. Built once per Open(); populated when a
@@ -104,6 +106,14 @@ namespace DeNelle.Village.Hero
             if (shopCanvas != null) shopCanvas.overrideSorting = true;
             ElarionUiKit.Scrim(_ui.transform, onTapClose: Close);
 
+            // Owner: drive the FURTHEST backdrop fully dark so the world behind vanishes and the
+            // shop reads as its own special space (the scrim dim alone was too light). Visual-only
+            // (raycastTarget off) so the scrim below still handles tap-to-close.
+            var backdrop = ElarionUiKit.AddImage(_ui.transform, "ShopBackdrop",
+                Vector2.zero, Vector2.one, new Color(0.02f, 0.015f, 0.012f, 0.94f), rounded: false);
+            var bdImg = backdrop.GetComponent<Image>();
+            if (bdImg != null) bdImg.raycastTarget = false;
+
             // Framed dark-glass panel (deep) — the canonical store backboard, dressed
             // sprite-FIRST with the RPG tech-pack's ornate inventory/dialogue frame
             // (gold-rune border over dark glass) so the store reads as the SAME designed
@@ -121,6 +131,43 @@ namespace DeNelle.Village.Hero
             var panelGo = ElarionUiKit.PanelFramed(_ui.transform, new Vector2(0.14f, 0.07f), new Vector2(0.86f, 0.93f),
                                                    deep: true, packSpriteName: RpgUiCatalog.PanelVendor);
             var panel = panelGo.transform;
+
+            // Owner: the panel read "too light/transparent" — the D3 frame's interior let the dim
+            // scrim show through. Drop a SOLID dark stone fill inside the frame (inset so the carved
+            // wood border still shows around it) so the store reads heavy + premium, not see-through.
+            // Every STORE gets its own loving accent (owner) so each vendor feels special +
+            // cared-for, all on the SAME polished ShopPanel: a themed interior tint + a matching
+            // glow wash at the base. Forge = embers, Armorer = steel-blue, Jeweler = amethyst,
+            // Arcane = violet, Market/Granary = warm hearth, Lumber = forest, default = warm stone.
+            string vcLow = (_vendorContext ?? "").ToLowerInvariant();
+            Color fillColor, glowColor;
+            if (vcLow.Contains("forge") || vcLow.Contains("blacksmith"))
+            { fillColor = new Color(0.11f, 0.055f, 0.032f, 0.985f); glowColor = new Color(0.55f, 0.22f, 0.05f, 0.22f); }
+            else if (vcLow.Contains("armor"))
+            { fillColor = new Color(0.055f, 0.065f, 0.085f, 0.985f); glowColor = new Color(0.30f, 0.45f, 0.65f, 0.18f); }
+            else if (vcLow.Contains("jewel"))
+            { fillColor = new Color(0.085f, 0.055f, 0.10f, 0.985f); glowColor = new Color(0.55f, 0.30f, 0.65f, 0.18f); }
+            else if (vcLow.Contains("arcane") || vcLow.Contains("magic") || vcLow.Contains("tower"))
+            { fillColor = new Color(0.06f, 0.05f, 0.11f, 0.985f); glowColor = new Color(0.35f, 0.30f, 0.75f, 0.20f); }
+            else if (vcLow.Contains("market") || vcLow.Contains("granary") || vcLow.Contains("farm"))
+            { fillColor = new Color(0.08f, 0.07f, 0.04f, 0.985f); glowColor = new Color(0.45f, 0.40f, 0.12f, 0.18f); }
+            else if (vcLow.Contains("lumber"))
+            { fillColor = new Color(0.055f, 0.07f, 0.045f, 0.985f); glowColor = new Color(0.25f, 0.42f, 0.18f, 0.18f); }
+            else
+            { fillColor = new Color(0.07f, 0.055f, 0.042f, 0.985f); glowColor = new Color(0.45f, 0.35f, 0.18f, 0.16f); }
+
+            var solidFill = ElarionUiKit.AddImage(panel, "ShopSolidFill",
+                new Vector2(0.025f, 0.02f), new Vector2(0.975f, 0.98f), fillColor);
+            var sfImg = solidFill.GetComponent<Image>();
+            if (sfImg != null) sfImg.raycastTarget = false;
+            solidFill.transform.SetAsFirstSibling();   // behind header/tabs/content, above the frame art
+
+            // Matching accent glow wash at the base — the cared-for touch on every store.
+            var glow = ElarionUiKit.AddImage(panel, "VendorGlow",
+                new Vector2(0.05f, 0.015f), new Vector2(0.95f, 0.17f), glowColor, rounded: false);
+            var glowImg = glow.GetComponent<Image>();
+            if (glowImg != null) glowImg.raycastTarget = false;
+            glow.transform.SetSiblingIndex(1);   // just above the solid fill, below the content
 
             // Header — read as a named storefront, not a generic "Vendor Wares" wall. The
             // structure flow passes the building's own id ("forge"/"market"/"jeweler"/…) so
@@ -162,7 +209,8 @@ namespace DeNelle.Village.Hero
             // opened via the Yarn "OpenEquip" command). BUY/SELL re-spaced to split the bar evenly.
             // ShowEquip()/equip rows are left in the file (harmless, no longer reachable from a tab).
             CreateTabButton(tabBar.transform, "BUY", new Vector2(0.02f, 0.49f), () => ShowBuy());
-            CreateTabButton(tabBar.transform, "SELL", new Vector2(0.51f, 0.98f), () => ShowSell());
+            CreateTabButton(tabBar.transform, "SELL", new Vector2(0.51f, 0.98f),
+                () => { _buyFilter = GearKind.Weapon | GearKind.Armor | GearKind.Potion; ShowSell(); });   // default filter = All
             _tabBar = tabBar; // kept so ShowBuy/Sell can light the active tab
 
             // Content area (replaced per mode) — Unified Shop WO #3: now the LEFT list column
@@ -172,7 +220,7 @@ namespace DeNelle.Village.Hero
             _contentRoot = new GameObject("Content", typeof(RectTransform));
             _contentRoot.transform.SetParent(panel, false);
             var cr = _contentRoot.GetComponent<RectTransform>();
-            cr.anchorMin = new Vector2(0.02f, 0.08f);
+            cr.anchorMin = new Vector2(0.02f, 0.13f);   // stop the scroll list ABOVE the bottom buttons
             cr.anchorMax = new Vector2(0.62f, 0.71f);
             cr.offsetMin = Vector2.zero;
             cr.offsetMax = Vector2.zero;
@@ -184,17 +232,37 @@ namespace DeNelle.Village.Hero
             // RIGHT details pane (selected item: icon, name, description, stats, cost).
             BuildDetailsPane(panel);
 
-            // Close (X) — top-right corner, ornate pack-frame danger button. Added last
-            // so it draws on top of the header/content and always receives the tap.
-            ElarionUiKit.ButtonPack(panel, "X", ElarionUiKit.ButtonKind.Danger,
-                                    new Vector2(0.9f, 0.9f), new Vector2(0.985f, 0.985f), Close);
+            // Bottom action bar (owner: NO per-row buy/sell buttons + remove the red X) — TWO
+            // buttons: PURCHASE buys the selected row's item (label flips to "Sell" on the Sell
+            // tab); CLOSE dismisses. Cream labels on the pack frame, drawn last so they take taps.
+            var purchaseBtn = ElarionUiKit.ButtonPack(panel, "Purchase", ElarionUiKit.ButtonKind.Gold,
+                new Vector2(0.34f, 0.03f), new Vector2(0.60f, 0.105f),   // under the item list (right of Close)
+                () => { if (_selectedAction != null) _selectedAction(); else SetStatus("Select an item first."); },
+                packSpriteName: RpgUiCatalog.ButtonFrame);
+            _actionLabel = purchaseBtn != null ? purchaseBtn.GetComponentInChildren<TMPro.TextMeshProUGUI>() : null;
+            if (_actionLabel != null)
+            {
+                _actionLabel.color = ElarionUi.Parchment; _actionLabel.fontStyle = TMPro.FontStyles.Bold;
+                _actionLabel.outlineColor = new Color32(20, 12, 4, 235); _actionLabel.outlineWidth = 0.22f;
+                _actionLabel.transform.SetAsLastSibling();
+            }
+            var closeBtn = ElarionUiKit.ButtonPack(panel, "Close", ElarionUiKit.ButtonKind.Quiet,
+                new Vector2(0.06f, 0.03f), new Vector2(0.32f, 0.105f), Close,   // bottom-left under the list
+                packSpriteName: RpgUiCatalog.ButtonFrame);
+            var closeLbl = closeBtn != null ? closeBtn.GetComponentInChildren<TMPro.TextMeshProUGUI>() : null;
+            if (closeLbl != null)
+            {
+                closeLbl.color = ElarionUi.Parchment; closeLbl.fontStyle = TMPro.FontStyles.Bold;
+                closeLbl.outlineColor = new Color32(20, 12, 4, 235); closeLbl.outlineWidth = 0.22f;
+                closeLbl.transform.SetAsLastSibling();
+            }
 
             // Status line
             var statusGo = new GameObject("Status", typeof(TMPro.TextMeshProUGUI));
             statusGo.transform.SetParent(panel, false);
             var sRect = statusGo.GetComponent<RectTransform>();
-            sRect.anchorMin = new Vector2(0.02f, 0.01f);
-            sRect.anchorMax = new Vector2(0.98f, 0.07f);
+            sRect.anchorMin = new Vector2(0.64f, 0.035f);   // under the display column
+            sRect.anchorMax = new Vector2(0.98f, 0.095f);
             sRect.offsetMin = Vector2.zero;
             sRect.offsetMax = Vector2.zero;
             _statusText = statusGo.GetComponent<TMPro.TextMeshProUGUI>();
@@ -249,7 +317,7 @@ namespace DeNelle.Village.Hero
         {
             ElarionUiKit.ButtonPack(parent, label, ElarionUiKit.ButtonKind.Quiet,
                 new Vector2(anchorX.x, 0.05f), new Vector2(anchorX.y, 0.95f),
-                () => { _buyFilter = kind; ShowBuy(); },
+                () => { _buyFilter = kind; ShowSell(); },   // filters drive the SELL list (BUY is vendor-locked)
                 packSpriteName: RpgUiCatalog.ButtonFrame);   // pack button art (D2 frame)
         }
 
@@ -279,39 +347,64 @@ namespace DeNelle.Village.Hero
             var pane = new GameObject("DetailsPane", typeof(RectTransform));
             pane.transform.SetParent(panel, false);
             var pr = pane.GetComponent<RectTransform>();
-            pr.anchorMin = new Vector2(0.64f, 0.08f);
-            pr.anchorMax = new Vector2(0.98f, 0.76f);
+            pr.anchorMin = new Vector2(0.63f, 0.12f);    // sits in the right column, BELOW the tab row
+            pr.anchorMax = new Vector2(0.985f, 0.76f);
             pr.offsetMin = Vector2.zero;
             pr.offsetMax = Vector2.zero;
 
-            // Recessed well backing so the details column reads as a defined inset.
-            var well = ElarionUiKit.Well(pane.transform, Vector2.zero, Vector2.one);
-            var wImg = well.GetComponent<Image>();
-            if (wImg != null) wImg.raycastTarget = false;
+            // ── Ornate "Model selection" wood PORTRAIT FRAME (owner's chosen design) — occupies
+            // the TOP of the pane. Item image fills the centre window, NAME sits on the lower wood
+            // plaque, the (+/-) stat goes in the BLACK bar at the bottom of the frame. A LORE block
+            // sits BELOW the frame for high-tier / set backstory. ──
+            var frameC = new GameObject("PortraitFrame", typeof(RectTransform));
+            frameC.transform.SetParent(pane.transform, false);
+            var fc = frameC.GetComponent<RectTransform>();
+            fc.anchorMin = new Vector2(0f, 0.18f); fc.anchorMax = new Vector2(1f, 1f);   // frame + lore band (the look the owner approved)
+            fc.offsetMin = Vector2.zero; fc.offsetMax = Vector2.zero;
 
-            // Item icon (top), centred in a square-ish slot.
-            var iconGo = ElarionUiKit.AddImage(pane.transform, "DetailIcon",
-                new Vector2(0.30f, 0.68f), new Vector2(0.70f, 0.97f), Color.white, rounded: false);
+            var frameSprite = RpgUiCatalog.Get(RpgUiCatalog.RolePanel, RpgUiCatalog.PanelPortrait);
+            if (frameSprite != null)
+            {
+                var fImg = frameC.AddComponent<Image>();
+                fImg.sprite = frameSprite; fImg.color = Color.white; fImg.type = Image.Type.Simple;
+                fImg.preserveAspect = false;   // fill the container so the regions below line up
+                fImg.raycastTarget = false;
+            }
+            else
+            {
+                var well = ElarionUiKit.Well(frameC.transform, Vector2.zero, Vector2.one);
+                var wImg = well.GetComponent<Image>(); if (wImg != null) wImg.raycastTarget = false;
+            }
+
+            // Item image — centred in the frame's WINDOW opening.
+            var iconGo = ElarionUiKit.AddImage(frameC.transform, "DetailIcon",
+                new Vector2(0.21f, 0.45f), new Vector2(0.79f, 0.80f), Color.white, rounded: false);
             _detailsIcon = iconGo.GetComponent<Image>();
             _detailsIcon.preserveAspect = true;
             _detailsIcon.raycastTarget = false;
             _detailsIcon.enabled = false; // hidden until a row populates it
 
-            _detailsName = ElarionUiKit.Label(pane.transform, "Select an item", 0.60f, 0.67f,
-                ElarionUi.Gilt, ElarionUi.FontBody, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, bold: true);
+            // NAME — on the lower wood plaque.
+            _detailsName = ElarionUiKit.Label(frameC.transform, "Select an item", 0.285f, 0.375f,
+                ElarionUi.Gilt, ElarionUi.FontBody, TMPro.TextAlignmentOptions.Center, 0.20f, 0.80f, bold: true);
             _detailsName.raycastTarget = false;
 
-            _detailsDesc = ElarionUiKit.Label(pane.transform, "Tap a row to see its details.", 0.36f, 0.59f,
-                ElarionUi.ParchmentDim, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.TopLeft, 0.06f, 0.94f);
-            _detailsDesc.raycastTarget = false;
+            // COST — thin gilt line just under the name plaque.
+            _detailsCost = ElarionUiKit.Label(frameC.transform, "", 0.245f, 0.29f,
+                ElarionUi.Gilt, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.20f, 0.80f, bold: true);
+            _detailsCost.raycastTarget = false;
 
-            _detailsStats = ElarionUiKit.Label(pane.transform, "", 0.16f, 0.35f,
-                ElarionUi.Affordable, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.TopLeft, 0.06f, 0.94f);
+            // STATS (+/-) — in the BLACK bar at the bottom of the frame.
+            _detailsStats = ElarionUiKit.Label(frameC.transform, "", 0.115f, 0.235f,
+                ElarionUi.Affordable, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.20f, 0.80f, bold: true);
             _detailsStats.raycastTarget = false;
 
-            _detailsCost = ElarionUiKit.Label(pane.transform, "", 0.04f, 0.15f,
-                ElarionUi.Gilt, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.06f, 0.94f, bold: true);
-            _detailsCost.raycastTarget = false;
+            // ── LORE / detailed specs BELOW the frame (owner) — fuller backstory for high-tier or
+            // set pieces; ordinary gear shows its short descriptor. Word-wrapped on the dark panel.
+            _detailsDesc = ElarionUiKit.Label(pane.transform, "Tap an item to inspect it.", 0.02f, 0.31f,
+                ElarionUi.ParchmentDim, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Top, 0.06f, 0.94f);
+            _detailsDesc.enableWordWrapping = true;
+            _detailsDesc.raycastTarget = false;
         }
 
         // Populate the right details pane for a selected item. Called by a buy/sell row's tap
@@ -379,9 +472,21 @@ namespace DeNelle.Village.Hero
         // HighlightTab (tint over the pack frame image).
         private void CreateTabButton(Transform parent, string label, Vector2 anchorX, System.Action onClick)
         {
-            ElarionUiKit.ButtonPack(parent, label, ElarionUiKit.ButtonKind.Gold,
+            var btn = ElarionUiKit.ButtonPack(parent, label, ElarionUiKit.ButtonKind.Gold,
                                     new Vector2(anchorX.x, 0.05f), new Vector2(anchorX.y, 0.95f), onClick,
                                     packSpriteName: RpgUiCatalog.ButtonFrame);   // pack button art (D2 frame)
+            // Owner: BUY/SELL labels read CREAM (not the Gold kind's dark ink). The D2 pack
+            // frame has a dark interior, so render the label ABOVE it with a dark outline so the
+            // cream stays crisp instead of sinking into the frame/panel behind it.
+            var tab = btn != null ? btn.GetComponentInChildren<TMPro.TextMeshProUGUI>() : null;
+            if (tab != null)
+            {
+                tab.color = ElarionUi.Parchment;
+                tab.fontStyle = TMPro.FontStyles.Bold;
+                tab.outlineColor = new Color32(20, 12, 4, 235);
+                tab.outlineWidth = 0.22f;
+                tab.transform.SetAsLastSibling();
+            }
         }
 
         // Light the active tab brighter; dim the rest. The kit names its buttons
@@ -409,8 +514,13 @@ namespace DeNelle.Village.Hero
         {
             ClearContent();
             HighlightTab("BUY");
-            HighlightFilter();
-            SetStatus("Buy gear or potions. Tap a row or BUY to purchase.");
+            // Filters are SELL-only (owner): on BUY the vendor already locks the stock type, so
+            // hide the filter row. Bottom button reads "Purchase"; clear any prior selection.
+            if (_filterBar != null) _filterBar.SetActive(false);
+            _buyFilter = GearKind.Weapon | GearKind.Armor | GearKind.Potion;   // buy is vendor-locked — never narrowed by a stale SELL filter
+            _selectedAction = null;
+            if (_actionLabel != null) _actionLabel.text = "Purchase";
+            SetStatus("Buy gear: tap a row to view it, then Purchase.");
 
             GearCatalog.Reload(); // pick up any live data change
 
@@ -506,8 +616,9 @@ namespace DeNelle.Village.Hero
                 {
                     var wDetailCost = GearCatalog.GetBuyCost(w);
                     int wDmgPct = Mathf.RoundToInt((Mathf.Max(0.1f, w.damageMult) - 1f) * 100f);
-                    string wStats = $"+{wDmgPct}% dmg" + (w.reach > 0f ? $"   reach {w.reach:0.#}m" : "");
+                    string wStats = $"+{wDmgPct}% dmg" + (w.reach > 0f ? $"   reach {w.reach:0.#}m" : "") + DeltaVsEquipped(w);
                     var wIcon = ItemIconCatalog.ForWeapon(w);
+                    if (wIcon == null) wIcon = RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, RpgUiCatalog.IconSword);  // render-box fallback
                     CreateBuyRow(listRoot, BuyLabel(w.name, GearAppraisal.Appraise(w)), GearCatalog.GetBuyCost(w), () => TryBuyWeapon(wCopy), null,
                         () => SelectForDetails(string.IsNullOrEmpty(w.name) ? w.id : w.name, DescribeGear(w.job, w.rarity), wStats, wDetailCost, wIcon, isRefund: false));
                     _currentStock.Add((w.id, GearKind.Weapon)); // record ACTUAL built stock for the bot's assertion
@@ -522,8 +633,9 @@ namespace DeNelle.Village.Hero
                 {
                     var aDetailCost = GearCatalog.GetBuyCost(a);
                     int aDefPct = Mathf.RoundToInt(Mathf.Clamp(a.defense, 0f, 0.9f) * 100f);
-                    string aStats = $"+{aDefPct}% def" + (a.hpBonus > 0f ? $"   +{a.hpBonus:0.#} hp" : "");
+                    string aStats = $"+{aDefPct}% def" + (a.hpBonus > 0f ? $"   +{a.hpBonus:0.#} hp" : "") + DeltaVsEquipped(a);
                     var aIcon = ItemIconCatalog.ForArmor(a);
+                    if (aIcon == null) aIcon = RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, RpgUiCatalog.IconShield);  // render-box fallback
                     CreateBuyRow(listRoot, BuyLabel(a.name, GearAppraisal.Appraise(a)), GearCatalog.GetBuyCost(a), () => TryBuyArmor(aCopy), null,
                         () => SelectForDetails(string.IsNullOrEmpty(a.name) ? a.id : a.name, DescribeGear(a.job, a.rarity), aStats, aDetailCost, aIcon, isRefund: false));
                     _currentStock.Add((a.id, GearKind.Armor)); // record ACTUAL built stock for the bot's assertion
@@ -717,37 +829,22 @@ namespace DeNelle.Village.Hero
             var rowBtn = row.GetComponent<Button>();
             rowBtn.targetGraphic = rowImg;
             ElarionUiKit.StyleButtonColors(rowBtn);
-            // Unified Shop WO #3: the row's existing tap now ALSO populates the details pane
-            // (select), in addition to its purchase action. Tapping a row selects + buys; the
-            // dedicated BUY button below stays the explicit purchase CTA.
-            rowBtn.onClick.AddListener(() => { if (selectAction != null) selectAction(); buyAction(); });
+            // Owner: rows SELECT only (no per-row buy) — tapping shows the item in the details
+            // pane and ARMS the bottom PURCHASE button with this row's buy action.
+            rowBtn.onClick.AddListener(() => { if (selectAction != null) selectAction(); _selectedAction = buyAction; });
 
-            float nameX0 = 0.04f;
-            if (iconSprite != null)
+            // Left "View" button (owner test) — DARK WOOD fill + CREAM label. Tapping it inspects
+            // the item in the display (same select as the row body) and arms the bottom Purchase.
+            float nameX0 = 0.20f;
+            var viewBtn = ElarionUiKit.Button(row.transform, "View", ElarionUiKit.ButtonKind.Quiet,
+                new Vector2(0.02f, 0.14f), new Vector2(0.18f, 0.86f),
+                () => { if (selectAction != null) selectAction(); _selectedAction = buyAction; });
+            if (viewBtn != null)
             {
-                // Recessed icon well with the pack art (potion bottle), left side.
-                var iconWell = ElarionUiKit.AddImage(row.transform, "IconWell",
-                    new Vector2(0.03f, 0.15f), new Vector2(0.15f, 0.85f), new Color(0f, 0f, 0f, 0.30f));
-                iconWell.GetComponent<Image>().raycastTarget = false;
-                var ic = ElarionUiKit.AddImage(iconWell.transform, "Icon",
-                    new Vector2(0.1f, 0.1f), new Vector2(0.9f, 0.9f), Color.white, rounded: false);
-                var icImg = ic.GetComponent<Image>();
-                icImg.sprite = iconSprite;
-                icImg.preserveAspect = true;
-                icImg.raycastTarget = false;
-                nameX0 = 0.17f;
-            }
-            else
-            {
-                // Weapons / Armor: use the same TechGearSocket flow as the inventory weapons armor UI
-                // for consistent ornate frames from the Tech hud elements pack.
-                // Differentiate weapon vs armor using the pack's best frames (Healing Tabs for weapons, Profile for armor)
-                bool isWeaponRow = label.Contains("Sword") || label.Contains("Staff") || label.Contains("Bow") || label.Contains("Mace") || label.Contains("Dagger") || label.Contains("Axe");
-                var techSock = ElarionUiKit.TechGearSocket(row.transform, "TechGearIcon",
-                    new Vector2(0.02f, 0.12f), new Vector2(0.14f, 0.88f),
-                    new Color(0.85f, 0.7f, 0.2f, 0.9f), isWeapon: isWeaponRow);
-                techSock.GetComponent<Image>().raycastTarget = false;
-                nameX0 = 0.17f;
+                var vImg = viewBtn.GetComponent<Image>();
+                if (vImg != null) vImg.color = new Color(0.26f, 0.17f, 0.09f, 1f);   // dark wood
+                var vLbl = viewBtn.GetComponentInChildren<TMPro.TextMeshProUGUI>();
+                if (vLbl != null) { vLbl.color = ElarionUi.Parchment; vLbl.fontStyle = TMPro.FontStyles.Bold; }
             }
 
             ElarionUiKit.Label(row.transform, label, 0.15f, 0.85f, ElarionUi.Parchment,
@@ -763,12 +860,8 @@ namespace DeNelle.Village.Hero
             ElarionUiKit.Label(row.transform, CostString(cost), 0.15f, 0.85f, priceColor,
                 ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Left, 0.5f, 0.72f, bold: true);
 
-            // BUY is the primary CTA -> use the same TechPrimaryButton flow as the inventory
-            // weapons armor UI (ornate Play-button frame from Tech hud elements pack, large
-            // thumb target, dark ink on gold). Dimmed when unaffordable.
-            var buyBtn = ElarionUiKit.TechPrimaryButton(row.transform, "BUY",
-                new Vector2(0.74f, 0.12f), new Vector2(0.98f, 0.88f), buyAction);
-            if (buyBtn != null) buyBtn.interactable = affordable;
+            // No per-row BUY button (owner) — purchase happens via the bottom PURCHASE bar on
+            // the selected item. The price tag above still shows the affordability colour.
         }
 
         // WO-300: enrich a buy-row name with its Elarion maker's mark, so a vendor
@@ -867,19 +960,31 @@ namespace DeNelle.Village.Hero
         {
             ClearContent();
             HighlightTab("SELL");
-            SetStatus($"Sell owned gear/potions for gold.  Vendor gold: {VendorGold()}.");
+            // Filters live on the SELL tab (owner) — owned items are mixed, so the Type filter
+            // helps here. Show the bar + highlight the active kind; bottom button reads "Sell".
+            if (_filterBar != null) _filterBar.SetActive(true);
+            HighlightFilter();
+            _selectedAction = null;
+            if (_actionLabel != null) _actionLabel.text = "Sell";
+            SetStatus($"Sell for gold: tap a row, then Sell.  Vendor gold: {VendorGold()}.");
 
             var inv = VillageInventory.Instance;
             if (inv == null) { SetStatus("No inventory."); return; }
 
-            // Build the sellable list first so the scroll content can be sized to it.
+            // Build the sellable list (filtered by the active Type filter) so the scroll content
+            // can be sized to it.
             var sellable = new List<string>();
             foreach (var kv in inv.Counts)
             {
                 if (kv.Value <= 0) continue;
                 string id = kv.Key;
                 bool isPotion = _potionIds.Contains(id);
-                if (GearCatalog.FindWeapon(id) == null && GearCatalog.FindArmor(id) == null && !isPotion) continue;
+                bool isWeapon = GearCatalog.FindWeapon(id) != null;
+                bool isArmor  = GearCatalog.FindArmor(id) != null;
+                if (!isWeapon && !isArmor && !isPotion) continue;
+                // Respect the Type filter (All = the Weapon|Armor|Potion mask passes everything).
+                GearKind k = isWeapon ? GearKind.Weapon : isArmor ? GearKind.Armor : GearKind.Potion;
+                if ((_buyFilter & k) == 0) continue;
                 sellable.Add(id);
             }
             var listRoot = BuildScrollContent(sellable.Count);
@@ -915,6 +1020,28 @@ namespace DeNelle.Village.Hero
             FinalizeScroll(); // force the content to size to the rows NOW (anti-collapse)
         }
 
+        // (+/-) stat comparison vs the player's CURRENTLY EQUIPPED piece, shown in the
+        // details pane (owner: "show (+/-) compared to current stats"). Empty when nothing
+        // is equipped yet. New line so it reads under the item's own stat.
+        private string DeltaVsEquipped(WeaponDef w)
+        {
+            var eq = _activeLoadout != null ? _activeLoadout.EquippedWeapon : null;
+            if (w == null || eq == null) return "";
+            int cur = Mathf.RoundToInt((Mathf.Max(0.1f, eq.damageMult) - 1f) * 100f);
+            int nw  = Mathf.RoundToInt((Mathf.Max(0.1f, w.damageMult)  - 1f) * 100f);
+            int d = nw - cur;
+            return d == 0 ? "\n(= equipped)" : (d > 0 ? $"\n(+{d}% dmg vs equipped)" : $"\n({d}% dmg vs equipped)");
+        }
+        private string DeltaVsEquipped(ArmorDef a)
+        {
+            var eq = _activeLoadout != null ? _activeLoadout.EquippedArmor : null;
+            if (a == null || eq == null) return "";
+            int cur = Mathf.RoundToInt(Mathf.Clamp(eq.defense, 0f, 0.9f) * 100f);
+            int nw  = Mathf.RoundToInt(Mathf.Clamp(a.defense,  0f, 0.9f) * 100f);
+            int d = nw - cur;
+            return d == 0 ? "\n(= equipped)" : (d > 0 ? $"\n(+{d}% def vs equipped)" : $"\n({d}% def vs equipped)");
+        }
+
         private ResourceCost ScaleCost(ResourceCost c, float f)
         {
             return new ResourceCost(
@@ -940,12 +1067,12 @@ namespace DeNelle.Village.Hero
             // Unified Shop WO #3: tapping the row body selects it for the details pane (the
             // dedicated SELL button below stays the explicit sell action). No purchase fires
             // from the row body on the sell side, so this is select-only here.
-            if (selectAction != null)
             {
                 var rowBtn = row.GetComponent<Button>();
                 rowBtn.targetGraphic = rowImg;
                 ElarionUiKit.StyleButtonColors(rowBtn);
-                rowBtn.onClick.AddListener(() => selectAction());
+                // Owner: rows SELECT only — tap shows the item + arms the bottom SELL button.
+                rowBtn.onClick.AddListener(() => { selectAction?.Invoke(); _selectedAction = sellAction; });
             }
 
             ElarionUiKit.Label(row.transform, label, 0.15f, 0.85f, ElarionUi.Parchment,
@@ -956,10 +1083,8 @@ namespace DeNelle.Village.Hero
             ElarionUiKit.Label(row.transform, "+" + CostString(refund), 0.15f, 0.85f, ElarionUi.Affordable,
                 ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Left, 0.55f, 0.72f, bold: true);
 
-            // SELL is the secondary action -> the kit's neutral Quiet glass button (not
-            // the gold CTA, so BUY stays the visually dominant primary action).
-            ElarionUiKit.Button(row.transform, "SELL", ElarionUiKit.ButtonKind.Quiet,
-                new Vector2(0.74f, 0.15f), new Vector2(0.98f, 0.85f), sellAction);
+            // No per-row SELL button (owner) — selling happens via the bottom SELL bar on the
+            // currently selected row.
         }
 
         private void TrySell(string id, ResourceCost refund)
