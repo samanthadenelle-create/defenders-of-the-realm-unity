@@ -103,6 +103,7 @@ namespace DeNelle.Village
             Reg("portrait",          (Action<string>)CmdPortrait);
             Reg("structure_status",  (Action<string>)CmdStructureStatus);
             Reg("structure_upgrade", (Action<string>)CmdStructureUpgrade);
+            Reg("TryUpgradeBuilding", (Action<string, int>)CmdTryUpgradeBuilding);   // WO-430 city upgrades
             Reg("structure_talk",    (Action<string>)CmdStructureTalk);
 
             // Movement / control
@@ -415,6 +416,9 @@ namespace DeNelle.Village
             vs.SetValue("$structureCanShop",    caps != null && caps.IsShoppable);
             vs.SetValue("$structureCanUpgrade", caps != null && caps.IsUpgradable);
             vs.SetValue("$upgradeType",         caps != null && caps.UpgradeType != null ? caps.UpgradeType : "");
+            // WO-430 — seed the city-upgrade gate var ($<id>_Level) from the saved tier so the
+            // *_UpgradeMenu node gates correctly on open (CmdTryUpgradeBuilding updates it after a buy).
+            vs.SetValue(LevelVarName(structureId), (float)ModifierService.TierOf(structureId));
 
             // NOTE: $structureName is seeded by DialogueService.PlayStructure from the building's sign
             // label and intentionally NOT overwritten here. Resource-upgrade buildings (farm/lumbermill/
@@ -461,6 +465,48 @@ namespace DeNelle.Village
             }
             vs.SetValue("$upgradeResult", msg);
         }
+
+        // WO-430 — tier-targeted CITY upgrade. Yarn: <<TryUpgradeBuilding "arcane-tower" 2>>.
+        // Buys the NEXT tier (targetTier must equal current+1) when affordable: spends the
+        // catalog cost via EconomyService, writes GameState.BuildingTiers, saves, recomputes
+        // the active GameModifiers, and updates the Yarn $<id>_Level gate var + $lastUpgradeOk.
+        // No-op (ok=false) if it's not the next tier or the player can't afford it.
+        private void CmdTryUpgradeBuilding(string buildingId, int targetTier)
+        {
+            var vs = _runner != null ? _runner.VariableStorage : null;
+
+            bool ok = false;
+            int current = ModifierService.TierOf(buildingId);
+            var def = BuildingTierCatalog.TierOf(buildingId, targetTier);
+            if (def != null && targetTier == current + 1)
+            {
+                var cost = new ResourceCost { Wood = def.CostWood, Food = def.CostFood, Crystals = def.CostCrystal };
+                var econ = EconomyService.Instance;
+                var state = GameStateService.Instance != null ? GameStateService.Instance.State : null;
+                if (econ != null && state != null && econ.TrySpend(cost))
+                {
+                    if (state.BuildingTiers == null)
+                        state.BuildingTiers = new System.Collections.Generic.Dictionary<string, int>();
+                    state.BuildingTiers[buildingId] = targetTier;
+                    GameStateService.Instance.Save();
+                    ModifierService.Recompute();
+                    ok = true;
+                }
+            }
+
+            int level = ModifierService.TierOf(buildingId);
+            if (vs != null)
+            {
+                vs.SetValue(LevelVarName(buildingId), (float)level);
+                vs.SetValue("$lastUpgradeOk", ok);
+            }
+            FlowTrace.Step("UI", $"TryUpgradeBuilding('{buildingId}', {targetTier}) -> {(ok ? "OK level " + level : "no-op")}");
+        }
+
+        // The Yarn level-gate var for a building: "$<id>_Level" with hyphens -> underscores
+        // (creative convention — $arcane_tower_Level / $armorer_Level / …).
+        private static string LevelVarName(string buildingId)
+            => "$" + (buildingId ?? string.Empty).Replace("-", "_") + "_Level";
 
         // <<structure_talk $structureId>> — narrative/questline seed (stub for now).
         private void CmdStructureTalk(string structureId)

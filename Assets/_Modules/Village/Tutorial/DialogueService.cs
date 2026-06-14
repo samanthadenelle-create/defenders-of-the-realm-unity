@@ -212,7 +212,18 @@ namespace DeNelle.Village
                 // titleized id "Workshop"). CmdStructureStatus keeps it and only fills in
                 // yield/cost from the progression data.
                 if (!string.IsNullOrEmpty(displayName))
-                    runner.VariableStorage.SetValue("$structureName", displayName);
+                {
+                    // WO-430 — show the current upgrade level in the dialogue TITLE so players
+                    // read their progress (e.g. "Lumbermill — Level 2"). Tier 0 / non-upgradable
+                    // structures keep the plain sign label. Village->Core read is allowed.
+                    string titled = displayName;
+                    if (DeNelle.Core.State.BuildingTierCatalog.IsUpgradable(structureId))
+                    {
+                        int tier = DeNelle.Core.State.ModifierService.TierOf(structureId);
+                        if (tier >= 1) titled = $"{displayName} — Level {tier}";
+                    }
+                    runner.VariableStorage.SetValue("$structureName", titled);
+                }
             }
             // WEBGL CRASH-GUARD (WO-331): see Play() — the synchronous StartDialogue
             // prologue must never escape into the frame and halt the WebGL player.

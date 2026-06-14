@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "_comment": "WO-430 city upgrades. Per-building tiers 1-4: cost (Wood/Food/Crystal) + the CUMULATIVE GameModifiers contribution at that tier (only non-default fields listed; unset = no-op 1.0/false). ModifierService multiplies each building's CURRENT-tier modifiers into the active GameModifiers. Tier 1 is the unlock (mostly no stat). Costs roughly double per tier with rising Crystal. Mirror copy in Resources/Data/Canonical/.",
+  "buildings": [
+    {
+      "id": "arcane-tower",
+      "displayName": "Arcane Tower",
+      "tiers": [
+        { "tier": 1, "name": "Awaken the Tower", "costWood": 800, "costFood": 500, "costCrystal": 0, "modifiers": {} },
+        { "tier": 2, "name": "Mana Flow", "costWood": 1400, "costFood": 900, "costCrystal": 200, "modifiers": { "towerDamageMult": 1.08 } },
+        { "tier": 3, "name": "Arcane Resonance", "costWood": 2800, "costFood": 1800, "costCrystal": 600, "modifiers": { "towerDamageMult": 1.18, "towerRangeMult": 1.12 } },
+        { "tier": 4, "name": "Arcane Overload", "costWood": 5500, "costFood": 3500, "costCrystal": 1500, "modifiers": { "towerDamageMult": 1.18, "towerRangeMult": 1.12, "arcaneOverload": true } }
+      ]
+    },
+    {
+      "id": "armorer",
+      "displayName": "Armorer",
+      "tiers": [
+        { "tier": 1, "name": "Open the Forge", "costWood": 600, "costFood": 400, "costCrystal": 100, "modifiers": {} },
+        { "tier": 2, "name": "Reinforced Armor", "costWood": 1200, "costFood": 800, "costCrystal": 300, "modifiers": { "troopHealthMult": 1.07 } },
+        { "tier": 3, "name": "Master Smithing", "costWood": 2500, "costFood": 1600, "costCrystal": 700, "modifiers": { "troopDamageMult": 1.15, "troopHealthMult": 1.10 } },
+        { "tier": 4, "name": "Battle Forged", "costWood": 4800, "costFood": 3200, "costCrystal": 1400, "modifiers": { "troopDamageMult": 1.15, "troopHealthMult": 1.10, "battleForged": true } }
+      ]
+    },
+    {
+      "id": "forge",
+      "displayName": "Forge",
+      "tiers": [
+        { "tier": 1, "name": "Ignite the Forge", "costWood": 700, "costFood": 450, "costCrystal": 0, "modifiers": {} },
+        { "tier": 2, "name": "Improved Smelting", "costWood": 1300, "costFood": 850, "costCrystal": 250, "modifiers": { "resourceEfficiencyMult": 1.10 } },
+        { "tier": 3, "name": "Master Metallurgy", "costWood": 2600, "costFood": 1700, "costCrystal": 650, "modifiers": { "resourceEfficiencyMult": 1.22 } },
+        { "tier": 4, "name": "Forgefire", "costWood": 5000, "costFood": 3300, "costCrystal": 1300, "modifiers": { "resourceEfficiencyMult": 1.22, "forgefire": true } }
+      ]
+    },
+    {
+      "id": "lumbermill",
+      "displayName": "Lumber Mill",
+      "tiers": [
+        { "tier": 1, "name": "Restore the Mill", "costWood": 900, "costFood": 300, "costCrystal": 0, "modifiers": { "woodProductionMult": 1.12 } },
+        { "tier": 2, "name": "Reinforced Blades", "costWood": 1600, "costFood": 600, "costCrystal": 150, "modifiers": { "woodProductionMult": 1.20 } },
+        { "tier": 3, "name": "Automated Saws", "costWood": 3200, "costFood": 1200, "costCrystal": 400, "modifiers": { "woodProductionMult": 1.35, "offlineBonusMult": 1.15 } },
+        { "tier": 4, "name": "Eternal Grove", "costWood": 6000, "costFood": 2500, "costCrystal": 1000, "modifiers": { "woodProductionMult": 1.50, "offlineBonusMult": 1.15, "eternalGrove": true } }
+      ]
+    },
+    {
+      "id": "windmill",
+      "displayName": "Windmill",
+      "tiers": [
+        { "tier": 1, "name": "Rebuild the Windmill", "costWood": 500, "costFood": 700, "costCrystal": 100, "modifiers": { "foodProductionMult": 1.10 } },
+        { "tier": 2, "name": "Wind Harnessing", "costWood": 1100, "costFood": 1400, "costCrystal": 300, "modifiers": { "foodProductionMult": 1.18 } },
+        { "tier": 3, "name": "Grand Mill", "costWood": 2400, "costFood": 2800, "costCrystal": 800, "modifiers": { "foodProductionMult": 1.32, "offlineBonusMult": 1.12 } },
+        { "tier": 4, "name": "Winds of Plenty", "costWood": 5200, "costFood": 4200, "costCrystal": 1600, "modifiers": { "foodProductionMult": 1.45, "offlineBonusMult": 1.12, "windsOfPlenty": true } }
+      ]
+    }
+  ]
+}
