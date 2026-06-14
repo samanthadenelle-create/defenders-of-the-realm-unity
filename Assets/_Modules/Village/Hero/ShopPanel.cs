@@ -590,7 +590,19 @@ namespace DeNelle.Village.Hero
             FlowTrace.Step("Store", $"ShowBuy vendor='{_vendorContext}' allowed={allowed} -> stocking {rowCount} rows " +
                 $"({weapons.Count} weapons, {armors.Count} armors, {potionCount} potions)");
             if (rowCount == 0)
-                FlowTrace.Warn("Store", "STOCK EMPTY: catalog returned no weapons/armors and no potions allowed/configured.");
+            {
+                // §12 self-diagnosing: a SILENT empty shop is forbidden — say WHY in one line so
+                // "vendor sells nothing" never needs a multi-step chase again. Distinguish a truly
+                // empty CATALOG (gear failed to load) from the contract/filter emptying real stock
+                // (the stale-_buyFilter / wrong-vendor-context class that hid the Blacksmith armor).
+                bool catalogHasGear = (allWeapons.Count + allArmors.Count) > 0;
+                FlowTrace.Warn("Store",
+                    $"STOCK EMPTY for vendor='{_vendorContext}': allowed={allowed}, buyFilter={_buyFilter}, " +
+                    $"catalog={allWeapons.Count} weapons/{allArmors.Count} armors. " +
+                    (catalogHasGear
+                        ? "Catalog HAS gear -> the vendor contract or buyFilter emptied it (check the vendor's structureId -> VendorStockContract, and that _buyFilter isn't a stale SELL filter)."
+                        : "Catalog itself is EMPTY -> gear failed to load (weapons.json/armor.json)."));
+            }
             else
             {
                 var sb = new System.Text.StringBuilder();

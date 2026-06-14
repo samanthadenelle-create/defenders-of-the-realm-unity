@@ -113,6 +113,7 @@
     },
     {
       "id": "armorer",
+      "isShoppable": true,
       "type": "Forge",
       "displayName": "forge",
       "descriptionKey": "buildingDesc.forge",
