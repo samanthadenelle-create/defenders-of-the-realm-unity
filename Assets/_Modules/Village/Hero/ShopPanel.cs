@@ -865,7 +865,7 @@ namespace DeNelle.Village.Hero
         {
             ClearContent();
             HighlightTab("SELL");
-            SetStatus("Sell owned gear/potions for partial refund (Economy).");
+            SetStatus($"Sell owned gear/potions for gold.  Vendor gold: {VendorGold()}.");
 
             var inv = VillageInventory.Instance;
             if (inv == null) { SetStatus("No inventory."); return; }
@@ -889,9 +889,10 @@ namespace DeNelle.Village.Hero
                 ArmorDef a = GearCatalog.FindArmor(id);
 
                 string display = (w != null ? w.name : (a != null ? a.name : id)) + " x" + owned;
-                ResourceCost refund = w != null ? ScaleCost(GearCatalog.GetBuyCost(w), 0.6f) :
-                                    a != null ? ScaleCost(GearCatalog.GetBuyCost(a), 0.6f) :
-                                    new ResourceCost(coins: 5); // potion sell-back — small gold
+                // Sell-rate WO #2: Weapons 50% · Armor 50% · Consumables 30% (× base buy price).
+                ResourceCost refund = w != null ? ScaleCost(GearCatalog.GetBuyCost(w), 0.50f) :
+                                    a != null ? ScaleCost(GearCatalog.GetBuyCost(a), 0.50f) :
+                                    ScaleCost(PotionBuyCost(id), 0.30f);
 
                 string idCopy = id; var refundCopy = refund;
                 bool isPotionSell = _potionIds.Contains(id);
@@ -963,12 +964,59 @@ namespace DeNelle.Village.Hero
         {
             var inv = VillageInventory.Instance;
             if (inv == null || inv.Get(id) <= 0) return;
+            // Vendor gold limit (WO #3): the vendor pays from a finite pool. If it can't
+            // cover this sale, refuse with the canon message and bank nothing.
+            int price = refund.Coins;
+            if (VendorGold() < price)
+            {
+                SetStatus("I don't have enough coin for that right now.");
+                return;
+            }
             // Consume one via the standard API (added for crafting/equip flows).
             inv.TryConsume(id, 1);
+            SpendVendorGold(price);
             if (EconomyService.Instance != null) EconomyService.Instance.Grant(refund);
-            SetStatus($"Sold for +{CostString(refund)}.");
+            SetStatus($"Sold for +{CostString(refund)}.  (Vendor gold: {VendorGold()})");
             RefreshEco();
             ShowSell();
+        }
+
+        // ── Vendor gold pools (WO #3) — each vendor pays sells from a finite purse that
+        // resets on game restart (static, in-memory, MVP). Keyed by vendor TYPE so the
+        // same storefront shares one purse across opens.
+        private static readonly Dictionary<string, int> _vendorGold = new Dictionary<string, int>();
+        private string VendorKey()
+        {
+            string vc = (_vendorContext ?? "").ToLowerInvariant();
+            if (vc.Contains("forge")) return "forge";
+            if (vc.Contains("blacksmith") || vc.Contains("armor")) return "blacksmith";
+            if (vc.Contains("arcane") || vc.Contains("tower") || vc.Contains("magic")) return "arcane";
+            return "general";
+        }
+        private static int StartGoldFor(string key)
+        {
+            switch (key)
+            {
+                case "forge":      return 8000;
+                case "blacksmith": return 9000;
+                case "arcane":     return 7000;
+                default:           return 5000;   // General Store
+            }
+        }
+        private int VendorGold()
+        {
+            string k = VendorKey();
+            if (!_vendorGold.ContainsKey(k)) _vendorGold[k] = StartGoldFor(k);
+            return _vendorGold[k];
+        }
+        private void SpendVendorGold(int amt)
+        {
+            _vendorGold[VendorKey()] = Mathf.Max(0, VendorGold() - amt);
+        }
+        // Consumable base buy price (matches the ShowBuy potion costs) — for the 30% sell rate.
+        private ResourceCost PotionBuyCost(string id)
+        {
+            return new ResourceCost(coins: (id != null && id.Contains("mana")) ? 12 : 8);
         }
 
         // --- EQUIP ---
