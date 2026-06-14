@@ -151,6 +151,7 @@ namespace DeNelle.DevTools
         private int _waveInput;
         private double _mockBalanceInput;
         private int _levelInput = 10;
+        private string _modifierJson = "";   // WO-430 — dev modifier-override JSON paste
 
         // ── God-mode / instant-win toggles ───────────────────────────────────
         // DevTools owns these flags; the integrator reads them from gameplay
@@ -653,6 +654,21 @@ namespace DeNelle.DevTools
             AddButton(resources, "Set hero to level N", SetHeroLevel);
             AddButton(resources, "Trigger wave (skip countdown)", TriggerWave);
 
+            // ── CITY UPGRADES (WO-430) ───────────────────────────────────────
+            var upgrades = AddGroup("City upgrades (free, dev)");
+            AddButton(upgrades, "Arcane Tower: cycle tier", () => CycleBuildingTier("arcane-tower"));
+            AddButton(upgrades, "Armorer: cycle tier",      () => CycleBuildingTier("armorer"));
+            AddButton(upgrades, "Forge: cycle tier",        () => CycleBuildingTier("forge"));
+            AddButton(upgrades, "Lumber Mill: cycle tier",  () => CycleBuildingTier("lumbermill"));
+            AddButton(upgrades, "Windmill: cycle tier",     () => CycleBuildingTier("windmill"));
+            AddButton(upgrades, "MAX all buildings (tier 4)", () => SetAllBuildingTiers(4));
+            AddButton(upgrades, "RESET all buildings (tier 0)", () => SetAllBuildingTiers(0));
+            AddTextField(upgrades, _modifierJson, v => _modifierJson = v);
+            AddButton(upgrades, "Apply modifier override (JSON)",
+                () => DeNelle.Core.State.ModifierService.SetOverrideJson(_modifierJson));
+            AddButton(upgrades, "Clear modifier override",
+                () => DeNelle.Core.State.ModifierService.ClearOverride());
+
             // ── ENTITLEMENTS ─────────────────────────────────────────────────
             var entitlements = AddGroup("Grant pack / entitlement");
             AddTextField(entitlements, _packIdInput, v => _packIdInput = v);
@@ -835,6 +851,42 @@ namespace DeNelle.DevTools
         /// EconomyService→GameState bridge happens to be attached; the GrantSpendable
         /// path is the single correct, bootstrap-robust grant. Falls back to a direct
         /// GameState write only if the economy service hasn't bootstrapped yet.</summary>
+        // WO-430 — dev: cycle a building's tier 0->max->0 (free, ignores cost), persist + recompute.
+        private void CycleBuildingTier(string buildingId)
+        {
+            var svc = GameStateService.Instance;
+            if (svc == null || svc.State == null) { SetStatus("No game state."); return; }
+            if (svc.State.BuildingTiers == null)
+                svc.State.BuildingTiers = new System.Collections.Generic.Dictionary<string, int>();
+
+            int cur = DeNelle.Core.State.ModifierService.TierOf(buildingId);
+            int max = DeNelle.Core.State.BuildingTierCatalog.MaxTier(buildingId);
+            int next = (max <= 0 || cur >= max) ? 0 : cur + 1;
+            svc.State.BuildingTiers[buildingId] = next;
+            svc.Save();
+            DeNelle.Core.State.ModifierService.Recompute();
+            SetStatus($"{buildingId} -> tier {next}/{max}.");
+        }
+
+        // WO-430 — dev: set ALL upgradable buildings to a tier (clamped to each one's max).
+        private void SetAllBuildingTiers(int tier)
+        {
+            var svc = GameStateService.Instance;
+            if (svc == null || svc.State == null) { SetStatus("No game state."); return; }
+            if (svc.State.BuildingTiers == null)
+                svc.State.BuildingTiers = new System.Collections.Generic.Dictionary<string, int>();
+
+            foreach (var b in DeNelle.Core.State.BuildingTierCatalog.All)
+            {
+                if (b == null || b.Id == null) continue;
+                int max = DeNelle.Core.State.BuildingTierCatalog.MaxTier(b.Id);
+                svc.State.BuildingTiers[b.Id] = Mathf.Clamp(tier, 0, max);
+            }
+            svc.Save();
+            DeNelle.Core.State.ModifierService.Recompute();
+            SetStatus($"All buildings -> tier {tier}.");
+        }
+
         private void GiveCrystals(int amount)
         {
             var eco = EconomyService.Instance;

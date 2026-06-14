@@ -47,6 +47,23 @@ namespace DeNelle.Core.State
             return 0;
         }
 
+        /// <summary>
+        /// The production multiplier for a specific resource building (WO-430): maps the building
+        /// to the relevant active mult (lumbermill→wood, windmill→food, forge→efficiency). Returns
+        /// 1.0 (no-op) for any building not in the city-upgrade set, so non-WO-430 yield is untouched.
+        /// </summary>
+        public static float ProductionMultFor(string buildingId)
+        {
+            var m = Active;
+            switch (buildingId)
+            {
+                case "lumbermill": return m.WoodProductionMult;
+                case "windmill":   return m.FoodProductionMult;
+                case "forge":      return m.ResourceEfficiencyMult;
+                default:           return 1f;
+            }
+        }
+
         /// <summary>Force the active modifiers to a fixed contract (dev menu / scene override). Pass null to clear.</summary>
         public static void SetOverride(GameModifiers modifiers)
         {

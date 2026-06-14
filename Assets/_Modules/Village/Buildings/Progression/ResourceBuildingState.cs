@@ -90,7 +90,12 @@ namespace DeNelle.Village.Buildings.Progression
         {
             var lvl = CurrentDef(buildingId);
             if (lvl == null) return 0;
-            return Mathf.Max(0, Mathf.RoundToInt(lvl.YieldPerTick * Mathf.Max(0f, lvl.YieldSizeMultiplier)));
+            // WO-430 — fold in the city-upgrade production perk (lumbermill→wood, windmill→food,
+            // forge→efficiency). 1.0 for any building outside the upgrade set, so other yields are
+            // unchanged. (These WO-430 buildings upgrade via BuildingTiers, not the legacy level, so
+            // no double-dip once the StructureMenu routes them to the tier tree.)
+            float wo430 = DeNelle.Core.State.ModifierService.ProductionMultFor(buildingId);
+            return Mathf.Max(0, Mathf.RoundToInt(lvl.YieldPerTick * Mathf.Max(0f, lvl.YieldSizeMultiplier) * wo430));
         }
 
         /// <summary>
