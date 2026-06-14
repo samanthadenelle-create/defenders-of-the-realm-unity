@@ -232,6 +232,17 @@ namespace DeNelle.Village
             // HitStop above restores Time.timeScale within ~0.1s, so this elapses.
             yield return new WaitForSeconds(Mathf.Max(0.1f, _downSeconds));
 
+            // RAID-DEATH EVAC: dying in an enemy-owned base ends the raid — retreat
+            // to the home hub (MainCastle_Hall) instead of respawning in place. The
+            // hub load resets the hero fresh on the far side. Player-owned scenes
+            // keep the normal in-place respawn below.
+            if (DeNelle.Village.SceneOwnership.IsEnemyOwned)
+            {
+                Debug.Log("[HeroHealth] Hero down in enemy territory — raid ends, retreating to home hub.");
+                DeNelle.Core.SceneRouter.GoCastle();
+                yield break;
+            }
+
             // Respawn at the recorded spawn point, falling back to the Heart's
             // position if that point is no longer meaningful (e.g. it was captured
             // at origin before the hero had been placed in the scene).

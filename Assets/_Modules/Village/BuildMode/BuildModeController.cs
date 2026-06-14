@@ -178,6 +178,14 @@ namespace DeNelle.Village
         /// </summary>
         public void Enter()
         {
+            // Build/upgrade/sell/move all funnel through here — one gate covers them.
+            // No building in enemy territory (raid bases are hostile, not buildable).
+            if (DeNelle.Village.SceneOwnership.IsEnemyOwned)
+            {
+                Debug.Log("[BuildMode] blocked — enemy-owned scene (You can't build in enemy territory).");
+                return;
+            }
+
             if (IsActive) return;
             IsActive = true;
 

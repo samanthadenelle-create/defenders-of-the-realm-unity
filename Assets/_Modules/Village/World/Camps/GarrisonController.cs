@@ -129,6 +129,67 @@ namespace DeNelle.Village.World.Camps
             }
             _activated = true;
             SpawnInitialGuards();
+            ArmGarrisonTurrets();
+        }
+
+        // =====================================================================
+        // ARM TURRETS — make the authored watchtower props FUNCTIONAL turrets that
+        // shoot the PLAYER PARTY (owner decision). The garrison scene authors
+        // watchtowers as inert decoration (GarrisonSceneBuilder.PlaceRing labels
+        // them "Watchtower_*"); here we attach an EnemyOwned DefenseTower so they
+        // open fire on the hero + companions. Runtime-only (no scene re-bake) and
+        // guarded by SceneOwnership.IsEnemyOwned so this can NEVER arm a friendly
+        // village tower against the player. Idempotent: a tower that already
+        // carries a DefenseTower is skipped.
+        // =====================================================================
+
+        [Header("Garrison turrets")]
+        [Tooltip("Range (world units) for an armed garrison watchtower turret.")]
+        public float turretRange = 16f;
+        [Tooltip("Damage per shot for an armed garrison watchtower turret.")]
+        public float turretDamage = 8f;
+        [Tooltip("Shots per second for an armed garrison watchtower turret.")]
+        public float turretFireRate = 0.8f;
+
+        private void ArmGarrisonTurrets()
+        {
+            // HARD GUARD: only ever arm turrets in an enemy-owned context. If the
+            // ownership flag is not set (false / not yet wired) we do nothing —
+            // friendly village towers are never touched (safe default).
+            if (!SceneOwnership.IsEnemyOwned) return;
+
+            int armed = 0;
+            // Scan this controller's own scene roots only (not other additive scenes).
+            Scene myScene = gameObject.scene;
+            if (!myScene.IsValid()) return;
+            var roots = myScene.GetRootGameObjects();
+            for (int i = 0; i < roots.Length; i++)
+            {
+                if (roots[i] == null) continue;
+                var towers = roots[i].GetComponentsInChildren<Transform>(true);
+                for (int j = 0; j < towers.Length; j++)
+                {
+                    var t = towers[j];
+                    if (t == null || t.name == null) continue;
+                    // Author label is "Watchtower_*"; "Keep_Core" (stone tower) is the
+                    // fortress core, not a firing turret, so it is deliberately excluded.
+                    if (t.name.IndexOf("Watchtower", System.StringComparison.OrdinalIgnoreCase) < 0)
+                        continue;
+                    if (t.GetComponent<DefenseTower>() != null) continue;   // idempotent
+
+                    var dt = t.gameObject.AddComponent<DefenseTower>();
+                    dt.Allegiance = TowerAllegiance.EnemyOwned;
+                    dt.Range      = turretRange;
+                    dt.Damage     = turretDamage;
+                    dt.FireRate   = turretFireRate;
+                    dt.CanHitAir  = true;   // elevated turret; hero/companions are ground anyway
+                    dt.BoltColor  = new Color(0.95f, 0.3f, 0.2f);   // hostile red bolt
+                    armed++;
+                }
+            }
+
+            if (armed > 0)
+                Debug.Log($"[GarrisonController] {name} armed {armed} watchtower turret(s) (EnemyOwned) on the player party.");
         }
 
         /// <summary>

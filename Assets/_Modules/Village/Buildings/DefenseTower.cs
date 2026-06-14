@@ -15,6 +15,22 @@ using DeNelle.Core.Combat;
 
 namespace DeNelle.Village
 {
+    /// <summary>
+    /// Who a tower fights. <see cref="PlayerOwned"/> is the default and the legacy
+    /// behaviour — every player-built / arena defender tower shoots Hostile enemies
+    /// exactly as before. <see cref="EnemyOwned"/> flips the allegiance: a garrison
+    /// turret targets the PLAYER PARTY (hero + companions) instead, damaging them
+    /// through the same <see cref="IDamageableStructure"/> seam the enemy
+    /// contact/ranged attacks already use on the hero.
+    /// </summary>
+    public enum TowerAllegiance
+    {
+        /// <summary>Default — shoots <see cref="CombatFaction.Hostile"/> enemies (legacy).</summary>
+        PlayerOwned = 0,
+        /// <summary>Garrison turret — shoots the player party (hero + companions).</summary>
+        EnemyOwned = 1,
+    }
+
     public sealed class DefenseTower : MonoBehaviour
     {
         public float Range       = 14f;
@@ -25,9 +41,19 @@ namespace DeNelle.Village
         public Color BoltColor   = Color.white;
         public DamageElement Element = DamageElement.None;
 
+        // Allegiance — PlayerOwned (default) preserves every existing tower's
+        // behaviour byte-for-byte; EnemyOwned garrison turrets target the player
+        // party. Set by the spawner (GarrisonController) for garrison towers.
+        public TowerAllegiance Allegiance = TowerAllegiance.PlayerOwned;
+
         private float _cd;
         private float _scan;
         private readonly List<IDamageable> _hostiles = new List<IDamageable>();
+
+        // EnemyOwned target list — the player party (hero HeroHealth + companions
+        // StoryCompanion), both IDamageableStructure (the seam enemies already hit
+        // the hero through). Only populated/used in EnemyOwned mode.
+        private readonly List<IDamageableStructure> _partyTargets = new List<IDamageableStructure>();
 
         // ── Targeting indicator (cheap persistent LineRenderer aim-beam) ──────
         // A single, reused LineRenderer drawn from the muzzle to the locked
@@ -39,6 +65,14 @@ namespace DeNelle.Village
 
         private void Update()
         {
+            // EnemyOwned garrison turret — target the player party instead of
+            // Hostile enemies. Fully separate path so PlayerOwned stays identical.
+            if (Allegiance == TowerAllegiance.EnemyOwned)
+            {
+                UpdateEnemyOwned();
+                return;
+            }
+
             _scan -= Time.deltaTime;
             if (_scan <= 0f) { Rescan(); _scan = 0.4f; }   // refresh target list a few times/sec
 
@@ -52,6 +86,91 @@ namespace DeNelle.Village
             if (target == null) return;
             _cd = 1f / Mathf.Max(0.1f, FireRate);
             Fire(target);
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // EnemyOwned (garrison turret) — mirror of the PlayerOwned tick but the
+        // target set is the PLAYER PARTY (hero + companions) and damage routes
+        // through IDamageableStructure.ApplyContactDamage — the SAME seam the
+        // enemy melee/ranged attacks use on the hero (Enemy.RangedAttack →
+        // structure.ApplyContactDamage). No new damage API.
+        // ─────────────────────────────────────────────────────────────────────
+        private void UpdateEnemyOwned()
+        {
+            _scan -= Time.deltaTime;
+            if (_scan <= 0f) { RescanParty(); _scan = 0.4f; }
+
+            IDamageableStructure target = AcquireParty(out Vector3 targetPos);
+            UpdateAimBeamAt(targetPos, target != null);
+
+            _cd -= Time.deltaTime;
+            if (_cd > 0f) return;
+            if (target == null) return;
+            _cd = 1f / Mathf.Max(0.1f, FireRate);
+            FireAtParty(target, targetPos);
+        }
+
+        /// <summary>Rebuilds the player-party target list (hero + companions).</summary>
+        private void RescanParty()
+        {
+            _partyTargets.Clear();
+            var hero = HeroHealth.Instance;
+            if (hero != null) _partyTargets.Add(hero);
+            foreach (var c in FindObjectsByType<StoryCompanion>(FindObjectsSortMode.None))
+                if (c != null) _partyTargets.Add(c);
+        }
+
+        /// <summary>
+        /// Nearest in-range, alive party member. Reuses the same range + air gate
+        /// as the player path; party members are ground units so the air gate is
+        /// effectively a no-op for them (a downed hero is skipped via IsAlive).
+        /// </summary>
+        private IDamageableStructure AcquireParty(out Vector3 bestPos)
+        {
+            IDamageableStructure best = null;
+            bestPos = default;
+            float bestSqr = float.MaxValue;
+            for (int i = 0; i < _partyTargets.Count; i++)
+            {
+                var d = _partyTargets[i];
+                var mb = d as MonoBehaviour;
+                if (mb == null || d == null || !d.IsAlive) continue;
+                Vector3 p = mb.transform.position;
+                float sqr = (p - transform.position).sqrMagnitude;
+                if (sqr > Range * Range) continue;
+                if (p.y > AirThreshold && !CanHitAir) continue;
+                if (sqr < bestSqr) { bestSqr = sqr; best = d; bestPos = p; }
+            }
+            return best;
+        }
+
+        /// <summary>
+        /// Fire on a party member: identical bolt visual + muzzle flash as the
+        /// player path, but damage lands via ApplyContactDamage (the hero/companion
+        /// IDamageableStructure seam).
+        /// </summary>
+        private void FireAtParty(IDamageableStructure target, Vector3 targetPos)
+        {
+            Vector3 muzzle = transform.position + Vector3.up * 2f;
+
+            var bolt = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            bolt.name = "Bolt";
+            bolt.transform.localScale = Vector3.one * 0.4f;
+            var col = bolt.GetComponent<Collider>(); if (col != null) Destroy(col);
+            var sh = Shader.Find("Universal Render Pipeline/Lit");
+            if (sh != null)
+            {
+                var m = new Material(sh);
+                if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", BoltColor);
+                if (m.HasProperty("_EmissionColor")) { m.EnableKeyword("_EMISSION"); m.SetColor("_EmissionColor", BoltColor * 2f); }
+                var r = bolt.GetComponent<Renderer>(); if (r != null) r.sharedMaterial = m;
+            }
+            bolt.transform.position = muzzle;
+            bolt.AddComponent<ProjectileMover>().Launch(targetPos + Vector3.up * 1f, 40f, CanHitAir ? 0.1f : 0.35f);
+
+            VFXManager.Play(MuzzleVfxFor(Element), muzzle);
+
+            target?.ApplyContactDamage(Damage);   // same seam the enemy attacks use on the hero
         }
 
         private void OnDisable()
@@ -176,6 +295,29 @@ namespace DeNelle.Village
 
             Vector3 muzzle = transform.position + Vector3.up * 2f;
             Vector3 hit    = target.WorldPosition + Vector3.up * 1f;
+            _aimBeam.enabled = true;
+            _aimBeam.SetPosition(0, muzzle);
+            _aimBeam.SetPosition(1, hit);
+        }
+
+        /// <summary>
+        /// Position-based aim-beam update for the EnemyOwned party-target path
+        /// (the party uses IDamageableStructure, which has no WorldPosition).
+        /// Mirrors <see cref="UpdateAimBeam"/> exactly but takes an explicit point.
+        /// </summary>
+        private void UpdateAimBeamAt(Vector3 targetWorldPos, bool hasTarget)
+        {
+            if (!hasTarget)
+            {
+                if (_aimBeam != null) _aimBeam.enabled = false;
+                return;
+            }
+
+            EnsureAimBeam();
+            if (_aimBeam == null) return;
+
+            Vector3 muzzle = transform.position + Vector3.up * 2f;
+            Vector3 hit    = targetWorldPos + Vector3.up * 1f;
             _aimBeam.enabled = true;
             _aimBeam.SetPosition(0, muzzle);
             _aimBeam.SetPosition(1, hit);
