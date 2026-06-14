@@ -29,15 +29,30 @@
 // OPEN scene under its own idempotent root (re-run rebuilds; delete the root to
 // remove). Null-guards missing prefabs with Debug.LogWarning (never crashes).
 //
+// -----------------------------------------------------------------------------
+// CONFIG-DRIVEN (WO raid generator): BuildFromConfig(configId, parentRoot) reads a
+// SceneConfigDef from SceneConfigCatalog (scene-configs.json — the ONE contract)
+// and builds ANY raid level from data: 1+interiorWallLayers concentric rings
+// (outer tier=wallTier, gates per entranceCount, inner keep = ReinforcedSteel with
+// a single OPPOSITE-side gate = the Iron-Bastion funnel), archerTowerCount +
+// mageTowerCount Watchtower props per towerPlacementStyle (Cardinal = mid-side,
+// OverlappingFire = corners + mid-side crossfire), and a BossSpawn at centre.
+// BuildIronBastion is preserved for the existing menu items. BuildSceneFor(id) /
+// BuildAllRaidScenes() bake each level into Assets/Scenes/RaidBase_<id>.unity.
+//
 // Batchmode: DeNelle.Editor.RaidBaseGenerator.BuildInOpenScene
 //            DeNelle.Editor.RaidBaseGenerator.BuildIntoScene  (pass a scene path)
+//            DeNelle.Editor.RaidBaseGenerator.BuildAllRaidScenes
 // Menu:      Defenders/Walls/Build Raid Base — Iron Bastion
+//            Defenders/Walls/Build All Raid Scenes (config-driven)
 // =============================================================================
+using System;                   // Enum.TryParse, StringComparison
 using UnityEngine;
 using UnityEditor;
 using UnityEditor.SceneManagement;
-using DeNelle.Village;          // WallSegment
+using DeNelle.Village;          // WallSegment, SceneConfigCatalog, SceneConfigDef
 using DeNelle.Village.Walls;    // WallTier, WallTierData
+using Object = UnityEngine.Object;   // disambiguate Object (System.Object vs UnityEngine.Object) — System is in scope
 
 namespace DeNelle.Editor
 {
@@ -98,6 +113,192 @@ namespace DeNelle.Editor
             EditorSceneManager.SaveScene(scene, path);
             Debug.Log($"[RaidBaseGenerator] built + saved '{RootName}' into NEW scene {path} " +
                       $"(outer {OuterTier} / keep {InnerTier}).");
+        }
+
+        // ── Config-driven entry points (WO raid generator) ───────────────────
+
+        // The three flagship raid levels, in difficulty order.
+        private static readonly string[] RaidConfigIds =
+            { "raider_camp_small", "fortified_garrison", "mage_enclave" };
+
+        [MenuItem("Defenders/Walls/Build All Raid Scenes (config-driven)")]
+        public static void BuildAllRaidScenes()
+        {
+            SceneConfigCatalog.Invalidate();   // pick up any fresh JSON edit
+            foreach (var id in RaidConfigIds) BuildSceneFor(id);
+            Debug.Log($"[RaidBaseGenerator] baked {RaidConfigIds.Length} raid scene(s) from scene-configs.json.");
+        }
+
+        // Batch: build ONE config into its own fresh scene (camera + light) so the
+        // raid base stands ALONE for a clean eyeball, saved to RaidBase_<id>.unity.
+        // Mirrors BuildToNewScene but driven by the config id.
+        public static void BuildSceneFor(string configId)
+        {
+            var scene = EditorSceneManager.NewScene(NewSceneSetup.DefaultGameObjects, NewSceneMode.Single);
+            var root = new GameObject($"RaidBase_{configId}");
+            root.transform.position = Vector3.zero;
+            BuildFromConfig(configId, root.transform);
+
+            string path = $"Assets/Scenes/RaidBase_{configId}.unity";
+            EditorSceneManager.SaveScene(scene, path);
+            Debug.Log($"[RaidBaseGenerator] built + saved raid '{configId}' into NEW scene {path}.");
+        }
+
+        // Build a complete raid level from its scene-config under parentRoot. Idempotent
+        // per-config: an existing 'RaidBase_<id>' child of parentRoot is rebuilt. Reads
+        // ALL geometry from the SceneConfigDef; garrison/scoring fields are ignored here
+        // (spawner/scoring layers). Null-guards a missing config (LogWarning, no crash).
+        public static void BuildFromConfig(string configId, Transform parentRoot)
+        {
+            var def = SceneConfigCatalog.Find(configId);
+            if (def == null)
+            {
+                Debug.LogWarning($"[RaidBaseGenerator] no scene-config '{configId}' — nothing built.");
+                return;
+            }
+
+            string rootName = $"RaidBase_{configId}";
+            // Idempotent: remove a prior build under the same parent (or globally if parentRoot is null).
+            var prior = parentRoot != null ? parentRoot.Find(rootName) : null;
+            if (prior != null) Object.DestroyImmediate(prior.gameObject);
+            var priorGlobal = GameObject.Find(rootName);
+            if (priorGlobal != null && (parentRoot == null || priorGlobal.transform.parent != parentRoot))
+                Object.DestroyImmediate(priorGlobal);
+
+            var root = new GameObject(rootName);
+            if (parentRoot != null) root.transform.SetParent(parentRoot, false);
+            root.transform.localPosition = Vector3.zero;
+
+            BuildConfigLayout(def, root.transform);
+        }
+
+        // The data-driven layout: outer perimeter (+ optional inner keep) + towers +
+        // boss marker, all from the config. The Iron-Bastion funnel falls out naturally
+        // when interiorWallLayers>0 (inner keep gate OPPOSITE the outer gate).
+        private static void BuildConfigLayout(SceneConfigDef def, Transform root)
+        {
+            WallTier outerTier = ParseTier(def.wallTier, WallTier.Wood);
+            int slots = Mathf.Max(3, def.wallSegmentsPerSide);
+
+            // ── OUTER perimeter gates from entranceCount ─────────────────────────
+            //   1 = south only (the single approach); 2 = south + north (main + breach).
+            bool twoGates = def.entranceCount >= 2;
+            var outerGates = new bool[4] { true, false, twoGates, false }; // S [+N]
+            float outerExtent = BuildRing(root, slots, outerTier,
+                                          outerGates, CornerTowerPath, "Outer");
+
+            // ── INNER keep ring(s) — the kill-zone (interiorWallLayers) ──────────
+            //   ReinforcedSteel, smaller, single gate OPPOSITE the outer south gate
+            //   (→ NORTH) so the player crosses the courtyard under fire (the funnel).
+            float innermostExtent = outerExtent;
+            int innerLayers = Mathf.Max(0, def.interiorWallLayers);
+            for (int layer = 0; layer < innerLayers; layer++)
+            {
+                int innerSlots = Mathf.Max(3, slots - (layer + 1) * 4);   // each ring tighter
+                var innerGates = new bool[4] { false, false, true, false }; // N only (opposite S)
+                innermostExtent = BuildRing(root, innerSlots, WallTier.ReinforcedSteel,
+                                            innerGates, CornerTowerPath, $"Keep{layer + 1}");
+            }
+
+            // ── TOWERS — archer + mage Watchtower props per placement style ──────
+            // Named "Watchtower_*" → GarrisonController.ArmGarrisonTurrets arms them.
+            // Placed in the courtyard band between the innermost ring and the outer ring.
+            float towerBand = innerLayers > 0
+                ? (innermostExtent + outerExtent) * 0.5f   // crossfire over the courtyard
+                : outerExtent + SegSize.x * 0.6f;          // single-ring: just inside the wall line
+            PlaceTowers(root, def, towerBand);
+
+            // ── BOSS marker at centre ────────────────────────────────────────────
+            var boss = new GameObject("BossSpawn");
+            boss.transform.SetParent(root, false);
+            boss.transform.localPosition = Vector3.zero;
+
+            Debug.Log($"[RaidBaseGenerator] '{root.name}' ({def.displayName}, {def.difficulty}): " +
+                      $"outer {outerTier} {slots}/side gates={(twoGates ? "S,N" : "S")} ±{outerExtent:F1}m, " +
+                      $"{innerLayers} inner keep layer(s), style={def.towerPlacementStyle} " +
+                      $"{def.archerTowerCount} archer + {def.mageTowerCount} mage towers, BossSpawn@centre.");
+        }
+
+        // Place archerTowerCount + mageTowerCount Watchtower props around the band radius.
+        // Cardinal       → the 4 side-midpoints (N/E/S/W), round-robin filled.
+        // OverlappingFire→ corners FIRST (diagonals) then side-midpoints → crossfire.
+        // Archer towers carry "Watchtower_Archer_*", mage towers "Watchtower_Mage_*"
+        // (both contain "Watchtower" → armed by GarrisonController).
+        private static void PlaceTowers(Transform root, SceneConfigDef def, float band)
+        {
+            int archers = Mathf.Max(0, def.archerTowerCount);
+            int mages = Mathf.Max(0, def.mageTowerCount);
+            int total = archers + mages;
+            if (total <= 0) return;
+
+            bool overlapping = !string.Equals(def.towerPlacementStyle, "Cardinal",
+                                               System.StringComparison.OrdinalIgnoreCase);
+            var dirs = BuildTowerDirections(total, overlapping);
+            var prefab = Resources.Load<GameObject>(CornerTowerPath);
+
+            int placed = 0;
+            for (int i = 0; i < total; i++)
+            {
+                bool isMage = i >= archers;          // archers first, then mages
+                string kind = isMage ? "Mage" : "Archer";
+                int idx = isMage ? (i - archers) : i;
+                var pos = dirs[i] * band;
+                if (PlaceCornerTower(root, prefab, pos, $"Watchtower_{kind}_{idx}")) placed++;
+            }
+            Debug.Log($"[RaidBaseGenerator] placed {placed}/{total} watchtowers " +
+                      $"({archers} archer + {mages} mage, style={(overlapping ? "OverlappingFire" : "Cardinal")}).");
+        }
+
+        // Evenly spread `count` outward XZ directions. Cardinal uses the 4 side mids
+        // (S/E/N/W) round-robin; OverlappingFire interleaves the 4 diagonals (corners)
+        // FIRST then the 4 side mids, so the first towers cover the corners (crossfire),
+        // with any remainder spread evenly on a circle to avoid stacking.
+        private static Vector3[] BuildTowerDirections(int count, bool overlapping)
+        {
+            // Cardinal side-midpoint directions (match BuildRing's 90° index 0=S..3=W).
+            Vector3[] cardinals =
+            {
+                new Vector3(0f, 0f, -1f),  // S
+                new Vector3(1f, 0f,  0f),  // E
+                new Vector3(0f, 0f,  1f),  // N
+                new Vector3(-1f, 0f, 0f),  // W
+            };
+            Vector3[] diagonals =
+            {
+                new Vector3( 1f, 0f, -1f).normalized,  // SE
+                new Vector3( 1f, 0f,  1f).normalized,  // NE
+                new Vector3(-1f, 0f,  1f).normalized,  // NW
+                new Vector3(-1f, 0f, -1f).normalized,  // SW
+            };
+
+            var anchors = overlapping
+                ? new[] { diagonals[0], cardinals[1], diagonals[1], cardinals[2],
+                          diagonals[2], cardinals[3], diagonals[3], cardinals[0] } // corner+mid weave
+                : cardinals;
+
+            var dirs = new Vector3[count];
+            for (int i = 0; i < count; i++)
+            {
+                if (i < anchors.Length)
+                {
+                    dirs[i] = anchors[i];
+                }
+                else
+                {
+                    // Remainder: spread evenly on the circle, offset to dodge the anchors.
+                    float t = (i - anchors.Length + 0.5f) / Mathf.Max(1, count - anchors.Length);
+                    float ang = t * Mathf.PI * 2f + Mathf.PI * 0.25f;
+                    dirs[i] = new Vector3(Mathf.Sin(ang), 0f, Mathf.Cos(ang));
+                }
+            }
+            return dirs;
+        }
+
+        // Parse a wallTier string ("Wood"/"Iron"/"ReinforcedSteel") → WallTier enum.
+        private static WallTier ParseTier(string s, WallTier fallback)
+        {
+            if (!string.IsNullOrEmpty(s) && Enum.TryParse(s, true, out WallTier t)) return t;
+            return fallback;
         }
 
         // ── Composition: the Iron Bastion flagship layout ────────────────────

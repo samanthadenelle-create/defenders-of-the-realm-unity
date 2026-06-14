@@ -9,12 +9,23 @@
     "faction": "orc | hollow | troll | mixed | none",
     "wallTier": "Wood | Iron | ReinforcedSteel",
     "baseRadius": "perimeter radius (m)",
-    "wallSegmentsPerSide": "tiled wall segments per side",
+    "wallSegmentsPerSide": "tiled wall segments per side (force ODD so the gate centres)",
     "centralBuilding": "structures-catalog id placed at centre (command hut / mage base / heart)",
     "towers": "[{ type: structures-catalog id, count }]",
     "props": "{ set: [structures-catalog ids], count }",
     "garrison": "ENEMY only — { composition:[{enemyId,count}], baseEnemyLevel (absolute FLOOR), levelOffset (relative to PLAYER level), difficultyMultiplier, boss }. Generator computes enemyLevel = max(baseEnemyLevel, playerLevel + levelOffset) so outposts scale with the player but never below the floor (always a meaningful fight).",
-    "themeColor": "faction banner/accent hex"
+    "themeColor": "faction banner/accent hex",
+    "recommendedClearTime": "seconds — 3-star clear threshold (fast = mastery)",
+    "twoStarTime": "seconds — 2-star threshold (~1.3x the 3-star). Above this but a clear = 1 star",
+    "oneStarTime": "any clear earns at least 1 star (no upper bound)",
+    "rewardMultiplier": "loot/reward scalar for this raid tier",
+    "entranceCount": "perimeter gates: 2 = main + side breach (Regular), 1 = single gate (Hard/Extreme)",
+    "interiorWallLayers": "concentric inner keep rings beyond the outer perimeter (0 = single ring, 1 = inner kill-zone keep)",
+    "towerPlacementStyle": "Cardinal (mid-side, 4) | OverlappingFire (corners + mid-side crossfire)",
+    "archerTowerCount": "Watchtower_Archer_* props placed (runtime-armed turrets)",
+    "mageTowerCount": "Watchtower_Mage_* props placed (runtime-armed turrets)",
+    "eliteCount": "elite garrison units (spawner/scoring data — not geometry)",
+    "shardDropChance": "0..1 chance of a shard drop (3-star-only gating applied later by scoring — not geometry)"
   },
   "configs": [
     {
@@ -46,9 +57,10 @@
       "sceneName": "Garrison_troll_outpost",
       "ownership": "Enemy",
       "faction": "orc",
+      "difficulty": "Regular",
       "wallTier": "Wood",
       "baseRadius": 28,
-      "wallSegmentsPerSide": 8,
+      "wallSegmentsPerSide": 9,
       "centralBuilding": "tower_siege_tower",
       "towers": [
         {
@@ -76,7 +88,18 @@
         "boss": "orc-necromancer",
         "levelOffset": 0
       },
-      "themeColor": "#5a8f3a"
+      "themeColor": "#5a8f3a",
+      "recommendedClearTime": 270,
+      "twoStarTime": 350,
+      "oneStarTime": 0,
+      "rewardMultiplier": 1.0,
+      "entranceCount": 2,
+      "interiorWallLayers": 0,
+      "towerPlacementStyle": "Cardinal",
+      "archerTowerCount": 4,
+      "mageTowerCount": 1,
+      "eliteCount": 0,
+      "shardDropChance": 0.0
     },
     {
       "id": "fortified_garrison",
@@ -84,9 +107,10 @@
       "sceneName": "Garrison_ruined_keep",
       "ownership": "Enemy",
       "faction": "mixed",
+      "difficulty": "Hard",
       "wallTier": "Iron",
       "baseRadius": 35,
-      "wallSegmentsPerSide": 12,
+      "wallSegmentsPerSide": 11,
       "centralBuilding": "tower_arcane_spire",
       "towers": [
         {
@@ -126,7 +150,18 @@
         "boss": "orc-necromancer",
         "levelOffset": 2
       },
-      "themeColor": "#8a6b3a"
+      "themeColor": "#8a6b3a",
+      "recommendedClearTime": 330,
+      "twoStarTime": 430,
+      "oneStarTime": 0,
+      "rewardMultiplier": 1.5,
+      "entranceCount": 1,
+      "interiorWallLayers": 0,
+      "towerPlacementStyle": "OverlappingFire",
+      "archerTowerCount": 6,
+      "mageTowerCount": 2,
+      "eliteCount": 1,
+      "shardDropChance": 0.0
     },
     {
       "id": "mage_enclave",
@@ -134,9 +169,10 @@
       "sceneName": "Garrison_frost_keep",
       "ownership": "Enemy",
       "faction": "hollow",
-      "wallTier": "Iron",
+      "difficulty": "Extreme",
+      "wallTier": "ReinforcedSteel",
       "baseRadius": 32,
-      "wallSegmentsPerSide": 10,
+      "wallSegmentsPerSide": 13,
       "centralBuilding": "tower_arcane_spire",
       "towers": [
         {
@@ -168,7 +204,18 @@
         "boss": "necromancer",
         "levelOffset": 3
       },
-      "themeColor": "#7a5fb0"
+      "themeColor": "#7a5fb0",
+      "recommendedClearTime": 420,
+      "twoStarTime": 545,
+      "oneStarTime": 0,
+      "rewardMultiplier": 2.2,
+      "entranceCount": 1,
+      "interiorWallLayers": 1,
+      "towerPlacementStyle": "OverlappingFire",
+      "archerTowerCount": 8,
+      "mageTowerCount": 3,
+      "eliteCount": 3,
+      "shardDropChance": 0.20
     }
   ]
 }
