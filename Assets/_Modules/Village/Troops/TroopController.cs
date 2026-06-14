@@ -44,6 +44,11 @@ namespace DeNelle.Village
         [Tooltip("Stable troop id — e.g. troop-footman. Set by Configure().")]
         [SerializeField] private string _troopId;
 
+        [Tooltip("The persisted PlayerTroop.Id this body was deployed from (WO-453 Step 4). " +
+                 "Used by the retreat reconcile to tell survivors from the wounded. Empty for a " +
+                 "dev/loose spawn that wasn't drawn from the army.")]
+        [SerializeField] private string _ownedTroopId;
+
         [Header("Combat")]
         [Tooltip("Layers swept for IDamageable hostile targets. Set to the village Enemy layer.")]
         [SerializeField] private LayerMask _enemyMask = ~0;
@@ -88,6 +93,10 @@ namespace DeNelle.Village
         private const float Acceleration = 9f;
         private const float ArrivalDamp  = 1.6f;
 
+        // Rally arrival epsilon (WO-453 Step 4): a troop within this flat distance of the
+        // global rally point is "arrived" and idles instead of jittering on the spot.
+        private const float RallyArrivalEpsilon = 1.25f;
+
         // ── Animation (guarded — a troop with no rig still fights) ────────────
         private Animator _animator;
         private Vector3 _lastPosition;
@@ -104,6 +113,17 @@ namespace DeNelle.Village
 
         /// <summary>Stable troop id — e.g. <c>troop-footman</c>.</summary>
         public string TroopId => _troopId;
+
+        /// <summary>
+        /// The persisted <c>PlayerTroop.Id</c> this body was deployed from (WO-453 Step 4),
+        /// or empty for a loose/dev spawn. Stamped by the deployer so the retreat reconcile
+        /// can map a living troop back to its army record (survivor vs wounded).
+        /// </summary>
+        public string OwnedTroopId
+        {
+            get => _ownedTroopId;
+            set => _ownedTroopId = value;
+        }
 
         /// <summary>Current HP.</summary>
         public float Hp => _hp;
@@ -122,6 +142,20 @@ namespace DeNelle.Village
         /// factory calls this so the mask need not be authored per-instance.
         /// </summary>
         public void SetEnemyMask(LayerMask enemyMask) => _enemyMask = enemyMask;
+
+        /// <summary>
+        /// Applies a veterancy DAMAGE multiplier to this troop's per-hit damage (WO-453
+        /// Step 4). Multiplies the def's base AttackDamage (resolved in Configure) so a
+        /// veteran troop (PlayerTroop.DamageMultiplier = 1 + 0.05*rank) hits harder. Call
+        /// AFTER Configure (the deployer does). Values &lt; 1 are clamped to 1 (a multiplier
+        /// only ever buffs — it never weakens a fresh troop). Idempotent re-base: re-reads
+        /// the def's base each call so repeated calls don't compound.
+        /// </summary>
+        public void ApplyDamageMultiplier(float multiplier)
+        {
+            float baseDamage = _def != null ? _def.AttackDamage : _attackDamage;
+            _attackDamage = baseDamage * Mathf.Max(1f, multiplier);
+        }
 
         // ── IDamageableStructure (lets the enemy contact-attack lane hurt us) ──
         // Enemy.ProbeForStructure / EnemyBrain.TryAttack resolve their target via
@@ -231,7 +265,20 @@ namespace DeNelle.Village
             var foe = foeValid ? _cachedFoe : null;
             if (foe == null)
             {
-                // No foe — idle in place (no rally / return-to-post yet; that's Step 4).
+                // No foe — RALLY (WO-453 Step 4): if a global rally point is set and we are
+                // farther than the arrival epsilon, walk toward it; otherwise idle in place.
+                // Foe-in-range always wins (this branch only runs when there's no foe), so
+                // rally only fills the idle gap (owner-decided default).
+                Vector3? rally = TroopRally.Point;
+                if (rally.HasValue)
+                {
+                    Vector3 r = rally.Value;
+                    float flatDist = Vector2.Distance(
+                        new Vector2(transform.position.x, transform.position.z),
+                        new Vector2(r.x, r.z));
+                    if (flatDist > RallyArrivalEpsilon)
+                        MoveToward(r, dt);
+                }
                 return;
             }
 

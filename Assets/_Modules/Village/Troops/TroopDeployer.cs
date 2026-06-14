@@ -12,6 +12,7 @@
 // =============================================================================
 
 using UnityEngine;
+using DeNelle.Core.State;
 
 namespace DeNelle.Village
 {
@@ -39,6 +40,48 @@ namespace DeNelle.Village
             var troop = TroopFactory.Build(def, pos, Quaternion.identity, null);
             troop?.SetEnemyMask(VillageEnemyMask());
             return troop;
+        }
+
+        /// <summary>
+        /// Deploys a PERSISTED army troop (WO-453 Step 4): resolves its TroopDef from
+        /// <see cref="PlayerTroop.TroopDefId"/>, spawns the body at <paramref name="pos"/>
+        /// (offset by a small ring step for a stack so multiple drops don't overlap), stamps
+        /// the owning <see cref="PlayerTroop.Id"/> onto the controller, applies the troop's
+        /// veterancy <see cref="PlayerTroop.DamageMultiplier"/>, wires the enemy mask, and
+        /// returns the live <see cref="TroopController"/> (or null if the def is unknown).
+        /// <paramref name="stackIndex"/> spreads several troops dropped from one tap.
+        /// </summary>
+        public static TroopController SpawnFromArmy(PlayerTroop t, Vector3 pos, int stackIndex = 0, float spread = 1.1f)
+        {
+            if (t == null)
+            {
+                Debug.LogWarning("[TroopDeployer] SpawnFromArmy got a null PlayerTroop — not spawned.");
+                return null;
+            }
+
+            Vector3 spawnPos = pos + RingOffset(stackIndex, spread);
+
+            var troop = SpawnTroop(t.TroopDefId, spawnPos);
+            if (troop == null) return null;
+
+            troop.OwnedTroopId = t.Id;
+            troop.ApplyDamageMultiplier(t.DamageMultiplier);   // veterancy buff (>= 1)
+            return troop;
+        }
+
+        /// <summary>
+        /// A small spiral-ring offset so several troops dropped from one tap fan out
+        /// instead of stacking on a single cell. Index 0 = no offset; later indices step
+        /// around a widening ring. Pure (deterministic) so a stack lays out the same way.
+        /// </summary>
+        private static Vector3 RingOffset(int index, float spread)
+        {
+            if (index <= 0) return Vector3.zero;
+            // ~6 troops per ring, ring radius grows every full turn.
+            int ring = 1 + (index - 1) / 6;
+            float ang = (index % 6) / 6f * Mathf.PI * 2f;
+            float r = spread * ring;
+            return new Vector3(Mathf.Cos(ang) * r, 0f, Mathf.Sin(ang) * r);
         }
 
         /// <summary>

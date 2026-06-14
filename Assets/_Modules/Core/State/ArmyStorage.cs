@@ -150,6 +150,38 @@ namespace DeNelle.Core.State
         }
 
         /// <summary>
+        /// The raid-EXIT reconcile (WO-453 Step 4): given the ids of every troop that was
+        /// DEPLOYED into the raid and the ids of the SURVIVORS (still alive at retreat), marks
+        /// every deployed-but-not-survivor troop wounded (recovery countdown) and leaves the
+        /// survivors untouched. The wounded-recovery loss model — NEVER deletes a troop. Both
+        /// id sets are null-safe (a null set reads as empty); a non-positive
+        /// <paramref name="recoverySeconds"/> recovers a downed troop immediately (per
+        /// <see cref="MarkWounded"/>). Lookup is by <see cref="PlayerTroop.Id"/>.
+        /// </summary>
+        public void ReconcileAfterRaid(IEnumerable<string> deployedIds, IEnumerable<string> survivorIds, float recoverySeconds)
+        {
+            if (Owned == null || deployedIds == null) return;
+
+            var survivors = new HashSet<string>(StringComparer.Ordinal);
+            if (survivorIds != null)
+                foreach (var s in survivorIds)
+                    if (!string.IsNullOrEmpty(s)) survivors.Add(s);
+
+            var deployed = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var d in deployedIds)
+                if (!string.IsNullOrEmpty(d)) deployed.Add(d);
+
+            // Index the roster by id once so a big army doesn't go O(n*m).
+            foreach (var t in Owned)
+            {
+                if (t == null || string.IsNullOrEmpty(t.Id)) continue;
+                if (!deployed.Contains(t.Id)) continue;        // not sent on this raid
+                if (survivors.Contains(t.Id)) continue;        // came home — untouched
+                MarkWounded(t, recoverySeconds);               // deployed + fell → wounded
+            }
+        }
+
+        /// <summary>
         /// Advances recovery on every wounded troop by <paramref name="dt"/> seconds;
         /// a troop whose countdown reaches 0 recovers (Wounded cleared). Call once per
         /// tick (real-time or simulated). No-op when nothing is wounded.

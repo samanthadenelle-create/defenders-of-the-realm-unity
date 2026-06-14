@@ -686,6 +686,17 @@ namespace DeNelle.DevTools
             AddButton(scene, "Dungeon", () => JumpScene(SceneRouter.DungeonHealersCottage));
             AddButton(scene, "ATBBattle", () => JumpScene(SceneRouter.ATBBattle));
 
+            // ── RAIDS (dev) ──────────────────────────────────────────────────
+            // First-playable troop raid entry (WO-453 Step 4): jump straight into a
+            // raid base. Auto-trains a few troops first so the deploy tray isn't empty.
+            var raids = AddGroup("Raids (dev)");
+            AddButton(raids, "Raid: raider camp (small)",
+                () => DevEnterRaid(SceneRouter.RaidBaseRaiderCampSmall));
+            AddButton(raids, "Raid: fortified garrison",
+                () => DevEnterRaid(SceneRouter.RaidBaseFortifiedGarrison));
+            AddButton(raids, "Raid: mage enclave",
+                () => DevEnterRaid(SceneRouter.RaidBaseMageEnclave));
+
             // ── WALLET ───────────────────────────────────────────────────────
             var wallet = AddGroup("Mock wallet balance");
             AddTextField(wallet, _mockBalanceInput.ToString("0.###"),
@@ -1185,6 +1196,39 @@ namespace DeNelle.DevTools
         {
             SetStatus($"Loading scene '{sceneName}'…");
             SceneRouter.LoadScene(sceneName);
+        }
+
+        /// <summary>
+        /// DEV raid entry (WO-453 Step 4, first-playable): if the army has no deployable
+        /// troops, auto-trains a small starter force (footman x4, archer x3 via the same
+        /// ArmyStorage/EconomyService seam the Barracks uses) so the deploy tray isn't
+        /// empty, then routes into the raid via the shared SceneRouter.GoRaid contract.
+        /// Throwaway QA hook — never ships (whole file is dev-only).
+        /// </summary>
+        private void DevEnterRaid(string sceneName)
+        {
+            var svc = GameStateService.Instance;
+            var army = svc != null && svc.State != null ? svc.State.Army : null;
+            if (army != null)
+            {
+                int deployable = 0;
+                if (army.Owned != null)
+                    foreach (var t in army.Owned)
+                        if (t != null && t.IsDeployable) deployable++;
+
+                if (deployable == 0)
+                {
+                    // Make sure a dev raid always has bodies: top up resources, then train.
+                    var eco = EconomyService.Instance;
+                    if (eco != null) eco.GrantSpendable(wood: 5000, food: 5000, iron: 5000);
+                    int f = DeNelle.Village.TroopDialogueCommands.Train("troop-footman", 4);
+                    int a = DeNelle.Village.TroopDialogueCommands.Train("troop-archer", 3);
+                    SetStatus($"Auto-trained {f} footman + {a} archer for the raid.");
+                }
+            }
+
+            SetStatus($"Entering raid '{sceneName}'…");
+            SceneRouter.GoRaid(sceneName);
         }
 
         // =====================================================================

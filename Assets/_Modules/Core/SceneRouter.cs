@@ -132,6 +132,19 @@ namespace DeNelle.Core
         /// </summary>
         public const string PatriciaLight = "PatriciaLightMode";
 
+        // ── Raid bases (WO-453 Step 4 — the troop DEPLOY/RALLY/RETREAT target) ──
+        // Config-generated enemy garrisons baked to RaidBase_<id>.unity. The player
+        // sails out from the castle hub to ASSAULT one with their trained army; the
+        // raid HUD (RaidDeployController) deploys troops, and a loss/retreat evacs
+        // home via GoCastle. These three first-playable raid scenes are registered
+        // in EditorBuildSettings so IsSceneRegistered passes for GoRaid.
+        /// <summary>Small raider camp — the easiest first-playable raid target.</summary>
+        public const string RaidBaseRaiderCampSmall  = "RaidBase_raider_camp_small";
+        /// <summary>A fortified garrison — mid-tier raid target.</summary>
+        public const string RaidBaseFortifiedGarrison = "RaidBase_fortified_garrison";
+        /// <summary>A mage enclave — the toughest of the three first-playable raids.</summary>
+        public const string RaidBaseMageEnclave       = "RaidBase_mage_enclave";
+
         /// <summary>The Week-1 starter dungeon scene name.</summary>
         public const string DungeonHealersCottage   = "Dungeon_HealersCottage";
         public const string DungeonFolksGranary     = "Dungeon_FolksGranary";
@@ -359,6 +372,20 @@ namespace DeNelle.Core
         /// From the castle the player travels out to the village TD loop.
         /// </summary>
         public static void GoCastle() => LoadSceneWithFade(Castle).Forget();
+
+        /// <summary>
+        /// Go to a RAID BASE scene (WO-453 Step 4) — the troop DEPLOY/RALLY/RETREAT
+        /// target the player assaults from the castle hub. Fire-and-forget with a fade,
+        /// mirroring <see cref="GoCastle"/>; the raid scene's RaidGarrisonSpawner marks
+        /// it enemy-owned on the far side and the RaidDeployController self-installs.
+        /// <para>
+        /// SHARED CONTRACT: this exact signature — <c>GoRaid(string sceneName)</c> — is
+        /// what the raid-entry UI calls; pass one of the <c>RaidBase*</c> consts. An
+        /// unregistered scene name is rejected by <see cref="LoadSceneWithFade"/> (logs,
+        /// no load), so a bad name never silently strands the player.
+        /// </para>
+        /// </summary>
+        public static void GoRaid(string sceneName) => LoadSceneWithFade(sceneName).Forget();
 
         /// <summary>
         /// Loads the Village scene ASYNCHRONOUSLY behind a full-screen, code-built
