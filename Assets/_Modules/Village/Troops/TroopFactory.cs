@@ -80,7 +80,9 @@ namespace DeNelle.Village
             if (!string.IsNullOrEmpty(model))
             {
                 var skinOpts = SkinOptions.Enemy(height);
-                skinOpts.LocalRotation = Quaternion.Euler(0f, -90f, 0f);
+                // Body facing is per-pack and authored on the def (Tripo bodies face +X → -90;
+                // Supercyan humanoids face +Z → 0). Default -90 keeps legacy bodies correct.
+                skinOpts.LocalRotation = Quaternion.Euler(0f, def.ModelYaw, 0f);
                 vis = VisualFactory.Skin(go.transform, "Heroes/" + model, skinOpts);
             }
 

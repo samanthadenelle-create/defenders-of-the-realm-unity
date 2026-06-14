@@ -38,6 +38,11 @@ namespace DeNelle.Village
         [JsonProperty("slots")] public int Slots = 1;
         /// <summary>Resources/Heroes model id the factory skins — e.g. <c>Knight</c> / <c>Ranger</c>.</summary>
         [JsonProperty("model")] public string Model;
+        /// <summary>Yaw (deg) the factory applies so the body faces +Z (the move direction).
+        /// Tripo/AccuRIG bodies import facing +X → <c>-90</c> (historic default). Supercyan
+        /// humanoids already face +Z → set <c>0</c>. Data-driven so each art pack's facing is
+        /// authored per-troop, not hard-coded.</summary>
+        [JsonProperty("modelYaw")] public float ModelYaw = -90f;
         /// <summary>Element — None for the Step-1 starter troops.</summary>
         [JsonProperty("element")] public string Element;
         /// <summary>Max HP — drives the damageable health pool.</summary>
