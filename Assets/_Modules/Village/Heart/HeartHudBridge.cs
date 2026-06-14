@@ -42,10 +42,12 @@ namespace DeNelle.Village
         private Object _hud;                 // VillageHudController (held as Object — no DeNelle.HUD ref)
         private MethodInfo _setHeartHp;      // SetHeartHp(float current, float max)
         private MethodInfo _setCrystals;     // SetCrystals(int amount)
+        private MethodInfo _setGold;         // SetGold(int amount) — town Gold/Coins badge (optional)
         private MethodInfo _setResources;    // SetResources(int wood, int iron, int food, int gems)
         private HeartController _heart;
         private readonly object[] _hpArgs = new object[2];
         private readonly object[] _crystalArgs = new object[1];
+        private readonly object[] _goldArgs = new object[1];
         private readonly object[] _resourceArgs = new object[4];
 
         // DEF (resource bar): live wallet feed. EconomyService is in THIS assembly,
@@ -77,6 +79,7 @@ namespace DeNelle.Village
             // correct on enable without waiting for the first event or poll interval.
             PushHp(_heart != null ? _heart.Hp : 0f);
             PushCrystals();
+            PushGold();
             PushResources();
         }
 
@@ -120,6 +123,10 @@ namespace DeNelle.Village
                 _setHeartHp = t.GetMethod("SetHeartHp", BindingFlags.Public | BindingFlags.Instance, null,
                     new[] { typeof(float), typeof(float) }, null);
                 _setCrystals = t.GetMethod("SetCrystals", BindingFlags.Public | BindingFlags.Instance, null,
+                    new[] { typeof(int) }, null);
+                // Gold/Coins badge — OPTIONAL: resolved alongside the others but NOT
+                // part of the re-resolve guard, so a null _setGold never blocks them.
+                _setGold = t.GetMethod("SetGold", BindingFlags.Public | BindingFlags.Instance, null,
                     new[] { typeof(int) }, null);
                 _setResources = t.GetMethod("SetResources", BindingFlags.Public | BindingFlags.Instance, null,
                     new[] { typeof(int), typeof(int), typeof(int), typeof(int) }, null);
@@ -171,6 +178,14 @@ namespace DeNelle.Village
             if (_setCrystals == null || _hud == null) return;
             _crystalArgs[0] = CurrentCrystals();
             _setCrystals.Invoke(_hud, _crystalArgs);
+        }
+
+        /// <summary>Pushes the current Gold/Coins wallet to the HUD's town Gold badge. Null-safe / optional.</summary>
+        private void PushGold()
+        {
+            if (_setGold == null || _hud == null) return;
+            _goldArgs[0] = CurrentCoins();
+            _setGold.Invoke(_hud, _goldArgs);
         }
 
         /// <summary>Pushes the current EconomyService wallet to the HUD resource bar.</summary>
@@ -233,6 +248,7 @@ namespace DeNelle.Village
                 _crystalPollTimer = CrystalPollInterval;
                 if (_heart != null) PushHp(_heart.Hp);
                 PushCrystals();
+                PushGold();
                 PushResources();
             }
         }
@@ -242,6 +258,13 @@ namespace DeNelle.Village
             var svc = GameStateService.Instance;
             var state = svc != null ? svc.State : null;
             return state != null ? state.Resources.Crystals : 0;
+        }
+
+        private static int CurrentCoins()
+        {
+            var svc = GameStateService.Instance;
+            var state = svc != null ? svc.State : null;
+            return state != null ? state.Resources.Coins : 0;
         }
     }
 }

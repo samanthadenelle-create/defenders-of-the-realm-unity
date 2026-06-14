@@ -254,6 +254,7 @@ namespace DeNelle.HUD
         // ── WO-339: TOWN-HUD widgets ──────────────────────────────────────────
         // Top-left WAVE MANAGEMENT cluster.
         private RectTransform _townWaveCluster;
+        private RectTransform _townWavePlate;        // dark pointed name-plate (Start-Wave button parents here)
         private TextMeshProUGUI _townTimerText;      // MM:SS to next wave (colour by urgency)
         private TextMeshProUGUI _townWaveProgText;   // "Wave N / M"
         private Image _townWaveProgFill;             // progress bar
@@ -273,12 +274,12 @@ namespace DeNelle.HUD
 
         // Top-centre RESOURCE badges (icon + number) with +/- flash + low-warn outline.
         private RectTransform _townResStrip;
-        private TextMeshProUGUI[] _townResText;      // 0 Gold,1 Wood,2 Crystal,3 Iron
+        private TextMeshProUGUI[] _townResText;      // 0 Food,1 Wood,2 Crystal,3 Iron,4 Gold
         private Image[] _townResBadge;               // badge bg (for low-warn red outline / flash)
         private Image[] _townResOutline;             // red low-warning outline overlay
-        private int[] _townResLast = { -1, -1, -1, -1 };
-        private float[] _townResFlash = { 0f, 0f, 0f, 0f };
-        private bool[] _townResFlashUp = { false, false, false, false };
+        private int[] _townResLast = { -1, -1, -1, -1, -1 };
+        private float[] _townResFlash = { 0f, 0f, 0f, 0f, 0f };
+        private bool[] _townResFlashUp = { false, false, false, false, false };
         private const int TownResLowThreshold = 50;
 
         // Top-right LIGHTWEIGHT 2D mini-map (icon markers, no RenderTexture).
@@ -1884,14 +1885,17 @@ namespace DeNelle.HUD
         private void BuildStartWaveButton(Transform parent)
         {
             // Built through the shared kit so the CTA reads in ONE visual language.
-            // Final anchors are (re)set in ApplyResponsiveLayout; these are placeholders.
-            // Seated OVER the right-pointing arrow name-plate beside the wave timer
-            // (the hud_wave_plate region of the town wave cluster, top-left). Final
-            // anchors are (re)set per-orientation in ApplyResponsiveLayout to track
-            // the plate; these match the landscape plate region.
-            var swBtn = ElarionUiKit.Button(parent, "> Start Wave",
+            // OWNER ASK: the yellow CTA must sit INSIDE the dark pointed arrow plate
+            // (top-left wave cluster) at ALL screen sizes. We therefore parent it to
+            // the plate rect and fill it — no root anchors to be yanked back by the
+            // responsive pass. BuildTownWaveCluster runs first, so _townWavePlate is
+            // set; fall back to the supplied parent if it's somehow absent.
+            Transform host = _townWavePlate != null ? (Transform)_townWavePlate : parent;
+            Vector2 aMin = _townWavePlate != null ? new Vector2(0.06f, 0.12f) : new Vector2(0.085f, 0.865f);
+            Vector2 aMax = _townWavePlate != null ? new Vector2(0.94f, 0.88f) : new Vector2(0.205f, 0.915f);
+            var swBtn = ElarionUiKit.Button(host, "> Start Wave",
                 ElarionUiKit.ButtonKind.Gold,
-                new Vector2(0.085f, 0.865f), new Vector2(0.205f, 0.915f),
+                aMin, aMax,
                 onClick: () => StartWaveRequested?.Invoke());
             _startWaveBtn = swBtn.GetComponent<RectTransform>();
             // Render ABOVE the wave-plate art so the label/CTA reads and stays tappable.
@@ -1969,14 +1973,20 @@ namespace DeNelle.HUD
             _townBell = NewRect("LookoutBell", clock, new Vector2(0.40f, 0.16f), new Vector2(0.60f, 0.34f));
             _townBellGlyph = AddText(_townBell, "‹", HudTheme.FontHead, new Color(0.42f, 0.31f, 0.16f, 0.9f), TextAlignmentOptions.Center);
 
-            // ── Pointed name plate (right) — state label; reddens on INCOMING. ──
+            // ── Pointed name plate (right) — reddens on INCOMING. The Start-Wave
+            // button reparents INSIDE this plate (see BuildStartWaveButton), so the
+            // state label is lifted to a thin strip ABOVE the plate to avoid overlap.
             var plate = NewRect("Plate", _townWaveCluster, new Vector2(0.40f, 0.40f), new Vector2(1f, 0.78f));
+            _townWavePlate = plate;   // stash so the Start-Wave button can parent here (built after this cluster)
             _townLookoutBadge = plate.gameObject.AddComponent<Image>();
             _townLookoutBadge.raycastTarget = false;
             if (plateSprite != null) { _townLookoutBadge.sprite = plateSprite; _townLookoutBadge.color = Color.white; _townLookoutBadge.type = Image.Type.Simple; }
             else _townLookoutBadge.color = new Color(0.12f, 0.09f, 0.06f, 0.95f);
-            _townLookoutText = AddText(plate, "", 15, new Color(0.95f, 0.82f, 0.45f), TextAlignmentOptions.Center);
+            // State label moved OUT of the plate (the button fills it) — thin strip just above.
+            var stateRect = NewRect("State", _townWaveCluster, new Vector2(0.42f, 0.78f), new Vector2(1f, 0.95f));
+            _townLookoutText = AddText(stateRect, "", 13, new Color(0.95f, 0.82f, 0.45f), TextAlignmentOptions.Center);
             _townLookoutText.fontStyle = FontStyles.Bold;
+            _townLookoutText.raycastTarget = false;
 
             // Wave progress (small label + thin bar, below the plate).
             var progLabel = NewRect("ProgLabel", _townWaveCluster, new Vector2(0.42f, 0.18f), new Vector2(1f, 0.40f));
@@ -2025,15 +2035,15 @@ namespace DeNelle.HUD
             _townResStrip = NewRect("TownResources", parent, new Vector2(0.30f, 0.75f), new Vector2(0.70f, 1f));   // 2.5× taller for the resource icons
             ApplyStripBar(_townResStrip.gameObject);   // same Tech-pack wood bar as the bottom strip (cohesive)
 
-            string[] names  = { "Food", "Wood", "Crystal", "Iron" };   // icon = hud_food/hud_wood/hud_crystal/hud_iron
-            string[] glyphs = { "o", "^", "*", "+" };
-            Color[] tints   = { HudTheme.GoldRes, HudTheme.Wood, HudTheme.Crystal, HudTheme.Iron };
-            _townResText    = new TextMeshProUGUI[4];
-            _townResBadge   = new Image[4];
-            _townResOutline = new Image[4];
+            string[] names  = { "Food", "Wood", "Crystal", "Iron", "Gold" };   // icon = hud_food/hud_wood/hud_crystal/hud_iron/hud_gold
+            string[] glyphs = { "o", "^", "*", "+", "$" };   // "$" = coin fallback glyph for Gold (until hud_gold.png lands)
+            Color[] tints   = { HudTheme.GoldRes, HudTheme.Wood, HudTheme.Crystal, HudTheme.Iron, HudTheme.Gold };
+            _townResText    = new TextMeshProUGUI[5];
+            _townResBadge   = new Image[5];
+            _townResOutline = new Image[5];
 
-            float w = 0.205f;   // 4 cells inset into 0.09–0.91 of the strip (clear of the wood bar's rolled ends)
-            for (int i = 0; i < 4; i++)
+            float w = 0.164f;   // 5 cells inset into 0.09–0.91 of the strip (0.09 + 5*0.164 = 0.91; clear of the wood bar's rolled ends)
+            for (int i = 0; i < 5; i++)
             {
                 var cell = NewRect("Res_" + names[i], _townResStrip, new Vector2(0.09f + i * w, 0.14f), new Vector2(0.09f + (i + 1) * w - 0.012f, 0.86f));
                 // LIGHT parchment badge; the +/- flash logic lerps from this base
@@ -2204,9 +2214,9 @@ namespace DeNelle.HUD
                 SetAnchors(_vitalsCluster,  new Vector2(0.02f, 0.235f), new Vector2(0.46f, 0.30f));
                 // Build entry lifts to the upper-right, clear of the skill cluster.
                 SetAnchors(_buildBtn,       new Vector2(0.84f, 0.255f), new Vector2(0.99f, 0.33f));
-                // "Start Wave" CTA seated OVER the right-pointing arrow plate beside the
-                // wave timer (portrait: the 380px-wide cluster spans more of the screen).
-                SetAnchors(_startWaveBtn,   new Vector2(0.16f, 0.865f), new Vector2(0.40f, 0.915f));
+                // "Start Wave" CTA is now a CHILD of the wave plate (filling it) — no
+                // root re-anchor here, or it would be yanked off the plate. It tracks
+                // the plate automatically as the cluster reflows.
 
                 // WO-339 TOWN HUD portrait reflow: wave/timer cluster top-LEFT
                 // narrows; resources STACK on the left under it; mini-map shrinks
@@ -2230,9 +2240,9 @@ namespace DeNelle.HUD
                 // Vitals bottom-left above the (smaller) landscape joystick.
                 SetAnchors(_vitalsCluster,  new Vector2(0.02f, 0.30f),  new Vector2(0.30f, 0.37f));
                 SetAnchors(_buildBtn,       new Vector2(0.88f, 0.36f),  new Vector2(0.995f, 0.45f));
-                // "Start Wave" CTA seated OVER the right-pointing arrow plate beside the
-                // wave timer (landscape: the 380px cluster spans a smaller width fraction).
-                SetAnchors(_startWaveBtn,   new Vector2(0.085f, 0.865f), new Vector2(0.205f, 0.915f));
+                // "Start Wave" CTA is now a CHILD of the wave plate (filling it) — no
+                // root re-anchor here, or it would be yanked off the plate. It tracks
+                // the plate automatically as the cluster reflows.
 
                 // WO-339 TOWN HUD landscape: wide top spread — wave cluster top-left,
                 // resource badges top-centre, full-size 140 mini-map top-right.
@@ -2412,6 +2422,9 @@ namespace DeNelle.HUD
             // WO-339 town crystal badge (index 2).
             SetTownResource(2, amount);
         }
+
+        /// <summary>Town GOLD/Coins badge (index 4) — mirrors SetCrystals; fed by HeartHudBridge.</summary>
+        public void SetGold(int amount) { SetTownResource(4, amount); }
 
         public void SetResources(int wood, int iron, int food, int gems)
         {
