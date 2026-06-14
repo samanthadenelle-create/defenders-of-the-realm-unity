@@ -174,6 +174,20 @@ offline speed 4–8h. Client-timestamp for MVP (clock-scum is a minor mobile ris
 backend lands). **Verify `BuildTimerService` exposes the start-timestamp + an offline-elapsed hook** when the
 training queue is built (it's the offline spine).
 
+**Backend training-queue (POST-MVP graduation target — owner Firestore design):** when offline training
+graduates to server-validated (value-at-stake = SKR economy / backend-sync live), the design is a
+single per-player doc `players/{id}/trainingQueues/active` with `queueSlots[]` (slotId, troopId,
+startTime [SERVER time], baseDurationSeconds [= troops.json buildSeconds], speedMultiplier, remainingCount)
++ `completedThisSession[]` + `lastSyncTime`. On resume: `effectiveOffline = min(now − lastSync, MaxOffline)
+× speedMultiplier`; `completed = floor(progress / baseDuration)`; reset slot startTime for the remainder.
+Anti-abuse: server `FieldValue.serverTimestamp()` (never trust client `DateTime`), 8–12h cap, >24h jump =
+partial-grant, max 3–4 concurrent slots (barracks-upgradeable), per-player auth rules. C# models
+`TrainingQueueData`/`TrainingSlot`/`CompletedTroopBatch` (serializable, WebGL-safe). **⚠ BACKEND CHOICE
+FLAG:** this proposes **Firestore** — but the project already has a backend direction (React-repo
+DB-per-player save-sync, see memory `backend-persistence-pivot`). Prefer hosting the queue in the
+EXISTING backend (one player doc) rather than standing up a SECOND backend, unless Firestore's Unity SDK
+is a deliberate choice. Either way it's post-MVP; the client version (above) ships the slice.
+
 **Train times (MATCH the committed `troops.json` `buildSeconds`):** Footman 30s · Archer 45s · (post-grant:
 Mage 90s · Healer 75s); Barracks upgrades cut these (~half at max).
 
