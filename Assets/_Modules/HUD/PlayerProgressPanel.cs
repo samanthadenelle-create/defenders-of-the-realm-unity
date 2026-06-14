@@ -15,6 +15,7 @@
 
 using UnityEngine;
 using UnityEngine.UIElements;
+using DeNelle.Core.UI;
 
 namespace DeNelle.HUD
 {
@@ -182,7 +183,7 @@ namespace DeNelle.HUD
             float py = (sh - ph) * 0.5f;
 
             // Panel background
-            GUI.color = new Color(0.08f, 0.06f, 0.14f, 0.94f);
+            GUI.color = ElarionUi.PanelStoneDark;
             GUI.DrawTexture(new Rect(px, py, pw, ph), Texture2D.whiteTexture);
             GUI.color = Color.white;
 
@@ -196,26 +197,27 @@ namespace DeNelle.HUD
             {
                 fontSize  = 22,
                 fontStyle = FontStyle.Bold,
-                normal    = { textColor = new Color(0.78f, 0.68f, 1f) }
+                normal    = { textColor = ElarionUi.Gilt }
             };
             GUI.Label(new Rect(cx, cy, cw, 30f), $"Level {_imguiLevel}", headStyle);
             cy += 34f;
 
             // Progress bar background
             float barH = 14f;
-            GUI.color = new Color(0f, 0f, 0f, 0.6f);
+            GUI.color = ElarionUi.ManaTrack;
             GUI.DrawTexture(new Rect(cx, cy, cw, barH), Texture2D.whiteTexture);
 
             // Progress bar fill
             float fill = _imguiXpNeeded > 0f
                 ? Mathf.Clamp01(_imguiXp / _imguiXpNeeded)
                 : 0f;
-            GUI.color = new Color(0.48f, 0.37f, 0.66f, 1f);
+            GUI.color = ElarionUi.Gold;
             GUI.DrawTexture(new Rect(cx, cy, cw * fill, barH), Texture2D.whiteTexture);
             GUI.color = Color.white;
             cy += barH + 6f;
 
             // XP detail
+            GUI.contentColor = ElarionUi.Parchment;
             GUI.Label(new Rect(cx, cy, cw, 20f),
                 $"{_imguiXp:N0} / {_imguiXpNeeded:N0} XP to next level");
             cy += 24f;
@@ -223,6 +225,7 @@ namespace DeNelle.HUD
             // Lifetime XP
             GUI.Label(new Rect(cx, cy, cw, 20f),
                 $"Total XP earned: {_imguiLifetime:N0}");
+            GUI.contentColor = Color.white;
             cy += 34f;
 
             // Close button

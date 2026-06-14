@@ -124,14 +124,9 @@ namespace DeNelle.HUD
             _root.pickingMode = PickingMode.Ignore;
 
             _overlay = new VisualElement { name = "PetSkillTreeOverlay" };
-            _overlay.style.position = Position.Absolute;
-            _overlay.style.left = 0; _overlay.style.right = 0;
-            _overlay.style.top = 0;  _overlay.style.bottom = 0;
-            // DEF-212 item 5: near-opaque scrim so world-space labels don't bleed
-            // through behind the modal.
-            _overlay.style.backgroundColor = new StyleColor(new Color(0.02f, 0.02f, 0.03f, 0.97f));
+            ElarionUi.StyleScrim(_overlay);
+            // Anchor the card near the top (tabbed sheet) rather than centred.
             _overlay.style.flexDirection = FlexDirection.Column;
-            _overlay.style.alignItems = Align.Center;
             _overlay.style.justifyContent = Justify.FlexStart;
             _overlay.style.paddingTop = 48;
             _overlay.RegisterCallback<MouseDownEvent>(evt =>
@@ -143,17 +138,10 @@ namespace DeNelle.HUD
             var card = new VisualElement { name = "PetSkillTreeCard" };
             card.style.width = 560;
             card.style.maxHeight = new Length(86f, LengthUnit.Percent);
-            card.style.backgroundColor = new StyleColor(new Color(0.07f, 0.08f, 0.11f, 0.97f));
-            card.style.borderTopLeftRadius = 12; card.style.borderTopRightRadius = 12;
-            card.style.borderBottomLeftRadius = 12; card.style.borderBottomRightRadius = 12;
-            card.style.borderLeftWidth = 1;  card.style.borderRightWidth = 1;
-            card.style.borderTopWidth = 1;   card.style.borderBottomWidth = 1;
-            card.style.borderLeftColor = new StyleColor(new Color(0.42f, 0.36f, 0.62f, 0.7f));
-            card.style.borderRightColor = new StyleColor(new Color(0.42f, 0.36f, 0.62f, 0.7f));
-            card.style.borderTopColor = new StyleColor(new Color(0.42f, 0.36f, 0.62f, 0.7f));
-            card.style.borderBottomColor = new StyleColor(new Color(0.42f, 0.36f, 0.62f, 0.7f));
             card.style.paddingLeft = 16; card.style.paddingRight = 16;
             card.style.paddingTop = 14;  card.style.paddingBottom = 14;
+            // Elarion stone panel + gold rim (canon).
+            ElarionUi.StylePanel(card, dark: true);
             _overlay.Add(card);
 
             // Header row: title + close button.
@@ -165,14 +153,18 @@ namespace DeNelle.HUD
             card.Add(headerRow);
 
             _headerLabel = new Label("Echo Skill Trees");
-            _headerLabel.style.color = new StyleColor(new Color(0.97f, 0.92f, 0.74f, 1f));
-            _headerLabel.style.fontSize = 16;
+            _headerLabel.style.color = new StyleColor(ElarionUi.Gilt);
+            _headerLabel.style.fontSize = ElarionUi.FontHead;
+            _headerLabel.style.letterSpacing = 1.5f;
             _headerLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
             headerRow.Add(_headerLabel);
 
             var closeBtn = new Button(() => Close()) { text = "Close (P)" };
             StyleSecondaryButton(closeBtn);
             headerRow.Add(closeBtn);
+
+            // Thin gilt underline beneath the header (canon).
+            card.Add(ElarionUi.MakeRule());
 
             _tabsRow = new VisualElement { name = "PetSkillTreeTabs" };
             _tabsRow.style.flexDirection = FlexDirection.Row;
@@ -191,8 +183,8 @@ namespace DeNelle.HUD
 
             _statusLabel = new Label("");
             _statusLabel.style.marginTop = 8;
-            _statusLabel.style.color = new StyleColor(new Color(0.85f, 0.78f, 0.55f, 1f));
-            _statusLabel.style.fontSize = 11;
+            _statusLabel.style.color = new StyleColor(ElarionUi.Gold);
+            _statusLabel.style.fontSize = ElarionUi.FontMicro;
             _statusLabel.style.unityTextAlign = TextAnchor.MiddleLeft;
             card.Add(_statusLabel);
         }
@@ -209,8 +201,8 @@ namespace DeNelle.HUD
             if (!ResolveBridge())
             {
                 var note = new Label("Echo catalog is not available. Try restarting the scene.");
-                note.style.color = new StyleColor(new Color(0.95f, 0.65f, 0.55f, 1f));
-                note.style.fontSize = 12;
+                note.style.color = new StyleColor(ElarionUi.Danger);
+                note.style.fontSize = ElarionUi.FontLabel;
                 _treeColumn.Add(note);
                 return;
             }
@@ -219,8 +211,8 @@ namespace DeNelle.HUD
             if (trees == null || trees.Count == 0)
             {
                 var note = new Label("No pet trees defined.");
-                note.style.color = new StyleColor(new Color(0.8f, 0.8f, 0.85f, 1f));
-                note.style.fontSize = 12;
+                note.style.color = new StyleColor(ElarionUi.ParchmentDim);
+                note.style.fontSize = ElarionUi.FontLabel;
                 _treeColumn.Add(note);
                 return;
             }
@@ -243,8 +235,8 @@ namespace DeNelle.HUD
             if (active == null)
             {
                 var note = new Label("Selected tree could not be loaded.");
-                note.style.color = new StyleColor(new Color(0.95f, 0.65f, 0.55f, 1f));
-                note.style.fontSize = 12;
+                note.style.color = new StyleColor(ElarionUi.Danger);
+                note.style.fontSize = ElarionUi.FontLabel;
                 _treeColumn.Add(note);
                 return;
             }
@@ -258,8 +250,8 @@ namespace DeNelle.HUD
                 : 0;
             int need = PetUnlockTracker.XpForLevel(petLevel);
             var levelLine = new Label($"Level {petLevel}  ·  XP {xp}/{need}");
-            levelLine.style.color = new StyleColor(new Color(0.8f, 0.84f, 0.96f, 1f));
-            levelLine.style.fontSize = 12;
+            levelLine.style.color = new StyleColor(ElarionUi.Aether);
+            levelLine.style.fontSize = ElarionUi.FontLabel;
             levelLine.style.marginBottom = 8;
             levelLine.style.unityTextAlign = TextAnchor.MiddleCenter;
             _treeColumn.Add(levelLine);
@@ -318,17 +310,15 @@ namespace DeNelle.HUD
             btn.style.flexGrow = 1;
             btn.style.marginLeft = 2; btn.style.marginRight = 2;
             btn.style.paddingTop = 6; btn.style.paddingBottom = 6;
-            btn.style.color = new StyleColor(active
-                ? new Color(0.99f, 0.96f, 0.82f, 1f)
-                : new Color(0.78f, 0.82f, 0.88f, 1f));
+            btn.style.color = new StyleColor(active ? ElarionUi.Gilt : ElarionUi.ParchmentDim);
             btn.style.backgroundColor = new StyleColor(active
-                ? new Color(0.20f, 0.16f, 0.32f, 1f)
-                : new Color(0.12f, 0.12f, 0.16f, 1f));
+                ? ElarionUi.PanelStone
+                : ElarionUi.PanelStoneDark);
             btn.style.borderLeftWidth = 0; btn.style.borderRightWidth = 0;
             btn.style.borderTopWidth = 0;  btn.style.borderBottomWidth = active ? 2 : 1;
             btn.style.borderBottomColor = new StyleColor(active
-                ? new Color(0.82f, 0.68f, 1f, 1f)
-                : new Color(0.35f, 0.35f, 0.40f, 1f));
+                ? ElarionUi.Gold
+                : new Color(ElarionUi.StoneTrim.r, ElarionUi.StoneTrim.g, ElarionUi.StoneTrim.b, 0.5f));
             btn.style.borderTopLeftRadius = 6; btn.style.borderTopRightRadius = 6;
             btn.style.borderBottomLeftRadius = 0; btn.style.borderBottomRightRadius = 0;
             btn.style.unityFontStyleAndWeight = active ? FontStyle.Bold : FontStyle.Normal;
@@ -370,11 +360,12 @@ namespace DeNelle.HUD
             card.style.borderBottomLeftRadius = 8; card.style.borderBottomRightRadius = 8;
             card.style.borderLeftWidth = 1; card.style.borderRightWidth = 1;
             card.style.borderTopWidth = 1;  card.style.borderBottomWidth = 1;
-            Color rim = unlocked ? new Color(0.50f, 0.85f, 0.55f, 1f)
-                       : canUnlock ? new Color(0.82f, 0.68f, 1f, 1f)
-                                   : new Color(0.30f, 0.30f, 0.36f, 1f);
-            Color bg  = unlocked ? new Color(0.10f, 0.18f, 0.12f, 0.95f)
-                                 : new Color(0.10f, 0.10f, 0.13f, 0.95f);
+            Color rim = unlocked ? ElarionUi.Affordable
+                       : canUnlock ? ElarionUi.Gold
+                                   : ElarionUi.StoneTrim;
+            Color bg  = unlocked
+                ? new Color(ElarionUi.Affordable.r, ElarionUi.Affordable.g, ElarionUi.Affordable.b, 0.16f)
+                : ElarionUi.PanelStoneDark;
             card.style.backgroundColor = new StyleColor(bg);
             card.style.borderLeftColor = new StyleColor(rim);
             card.style.borderRightColor = new StyleColor(rim);
@@ -385,8 +376,8 @@ namespace DeNelle.HUD
 
             // Name (12pt bold).
             var nameLabel = new Label(name);
-            nameLabel.style.color = new StyleColor(new Color(0.98f, 0.94f, 0.84f, 1f));
-            nameLabel.style.fontSize = 12;
+            nameLabel.style.color = new StyleColor(ElarionUi.Parchment);
+            nameLabel.style.fontSize = ElarionUi.FontLabel;
             nameLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
             card.Add(nameLabel);
 
@@ -400,16 +391,16 @@ namespace DeNelle.HUD
 
             // Description.
             var descLabel = new Label(desc);
-            descLabel.style.color = new StyleColor(new Color(0.84f, 0.88f, 0.92f, 1f));
-            descLabel.style.fontSize = 11;
+            descLabel.style.color = new StyleColor(ElarionUi.ParchmentDim);
+            descLabel.style.fontSize = ElarionUi.FontMicro;
             descLabel.style.whiteSpace = WhiteSpace.Normal;
             descLabel.style.marginBottom = 4;
             card.Add(descLabel);
 
             // Meta row: cooldown (if active) + unlock-level requirement.
             var meta = new Label(BuildMetaLine(type, cd, unlockLevel));
-            meta.style.color = new StyleColor(new Color(0.70f, 0.74f, 0.82f, 1f));
-            meta.style.fontSize = 10;
+            meta.style.color = new StyleColor(ElarionUi.ParchmentDim);
+            meta.style.fontSize = ElarionUi.FontMicro;
             meta.style.marginBottom = 6;
             card.Add(meta);
 
@@ -417,8 +408,8 @@ namespace DeNelle.HUD
             if (unlocked)
             {
                 var owned = new Label("Unlocked");
-                owned.style.color = new StyleColor(new Color(0.55f, 0.90f, 0.62f, 1f));
-                owned.style.fontSize = 11;
+                owned.style.color = new StyleColor(ElarionUi.Affordable);
+                owned.style.fontSize = ElarionUi.FontMicro;
                 owned.style.unityFontStyleAndWeight = FontStyle.Bold;
                 owned.style.unityTextAlign = TextAnchor.MiddleCenter;
                 card.Add(owned);
@@ -433,8 +424,8 @@ namespace DeNelle.HUD
             {
                 string lockReason = LockReason(skill, petLevel, unlockedSet);
                 var locked = new Label(lockReason);
-                locked.style.color = new StyleColor(new Color(0.85f, 0.78f, 0.55f, 1f));
-                locked.style.fontSize = 10;
+                locked.style.color = new StyleColor(ElarionUi.Gold);
+                locked.style.fontSize = ElarionUi.FontMicro;
                 locked.style.whiteSpace = WhiteSpace.Normal;
                 locked.style.unityTextAlign = TextAnchor.MiddleCenter;
                 card.Add(locked);
@@ -460,19 +451,21 @@ namespace DeNelle.HUD
             return b;
         }
 
+        // Tier badge tints — graded across the Elarion accent palette (canon)
+        // so they read as ONE designed set, not ad-hoc rainbow.
         private static Color TierBadgeColor(string tier) => tier?.ToLowerInvariant() switch
         {
-            "starter"  => new Color(0.60f, 0.82f, 1f, 1f),
-            "tier1"    => new Color(0.80f, 0.85f, 0.95f, 1f),
-            "tier2"    => new Color(0.95f, 0.78f, 0.55f, 1f),
-            "ultimate" => new Color(0.99f, 0.80f, 0.95f, 1f),
-            _          => new Color(0.80f, 0.80f, 0.85f, 1f),
+            "starter"  => ElarionUi.ParchmentDim,
+            "tier1"    => ElarionUi.StoneTrim,
+            "tier2"    => ElarionUi.Gold,
+            "ultimate" => ElarionUi.Aether,
+            _          => ElarionUi.ParchmentDim,
         };
 
         private static Color TypeBadgeColor(string type) =>
             string.Equals(type, "active", StringComparison.OrdinalIgnoreCase)
-                ? new Color(1f, 0.70f, 0.55f, 1f)
-                : new Color(0.65f, 0.95f, 0.80f, 1f);
+                ? ElarionUi.Danger
+                : ElarionUi.Affordable;
 
         private static string BuildMetaLine(string type, float? cd, int unlockLevel)
         {
@@ -531,27 +524,20 @@ namespace DeNelle.HUD
 
         private static void StylePrimaryButton(Button b)
         {
+            // Gold CTA (canon).
+            ElarionUi.StyleButton(b, ElarionUi.ButtonKind.Gold);
+            b.style.minHeight = StyleKeyword.Auto;
             b.style.marginTop = 2;
             b.style.paddingTop = 4; b.style.paddingBottom = 4;
-            b.style.color = new StyleColor(new Color(0.06f, 0.06f, 0.08f, 1f));
-            b.style.backgroundColor = new StyleColor(new Color(0.82f, 0.68f, 1f, 1f));
-            b.style.borderLeftWidth = 0; b.style.borderRightWidth = 0;
-            b.style.borderTopWidth = 0;  b.style.borderBottomWidth = 0;
-            b.style.borderTopLeftRadius = 6; b.style.borderTopRightRadius = 6;
-            b.style.borderBottomLeftRadius = 6; b.style.borderBottomRightRadius = 6;
-            b.style.unityFontStyleAndWeight = FontStyle.Bold;
         }
 
         private static void StyleSecondaryButton(Button b)
         {
+            // Neutral stone (canon).
+            ElarionUi.StyleButton(b, ElarionUi.ButtonKind.Neutral);
+            b.style.minHeight = StyleKeyword.Auto;
             b.style.paddingLeft = 10; b.style.paddingRight = 10;
             b.style.paddingTop = 4;   b.style.paddingBottom = 4;
-            b.style.color = new StyleColor(new Color(0.92f, 0.92f, 0.95f, 1f));
-            b.style.backgroundColor = new StyleColor(new Color(0.18f, 0.18f, 0.22f, 1f));
-            b.style.borderLeftWidth = 0; b.style.borderRightWidth = 0;
-            b.style.borderTopWidth = 0;  b.style.borderBottomWidth = 0;
-            b.style.borderTopLeftRadius = 6; b.style.borderTopRightRadius = 6;
-            b.style.borderBottomLeftRadius = 6; b.style.borderBottomRightRadius = 6;
         }
 
         // ── Catalog reflection bridge ───────────────────────────────────────

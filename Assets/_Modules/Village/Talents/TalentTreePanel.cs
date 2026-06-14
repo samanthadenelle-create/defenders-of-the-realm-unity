@@ -34,6 +34,7 @@
 
 using UnityEngine;
 using UnityEngine.UIElements;
+using DeNelle.Core.UI;
 using DeNelle.Village.Talents;
 
 namespace DeNelle.Village.UI
@@ -51,14 +52,12 @@ namespace DeNelle.Village.UI
         private static readonly string[] Columns = { "a", "b" };
         private static readonly string[] Tiers   = { "tier1", "tier2", "tier3" };
 
-        // ── Colors for node states ─────────────────────────────────────────────
-        private static readonly StyleColor ColLocked    = new StyleColor(new Color(0.32f, 0.32f, 0.32f));
-        private static readonly StyleColor ColAvailable = new StyleColor(new Color(0.25f, 0.75f, 0.30f));
-        private static readonly StyleColor ColUnlocked  = new StyleColor(new Color(0.95f, 0.75f, 0.10f));
-        private static readonly StyleColor ColText      = new StyleColor(Color.white);
-        private static readonly StyleColor ColSubText   = new StyleColor(new Color(0.8f, 0.8f, 0.8f));
-        private static readonly StyleColor ColBg        = new StyleColor(new Color(0.07f, 0.07f, 0.09f, 0.96f));
-        private static readonly StyleColor ColPanelBg   = new StyleColor(new Color(0.10f, 0.12f, 0.15f, 0.98f));
+        // ── Colors for node states (Elarion canon) ─────────────────────────────
+        private static readonly StyleColor ColLocked    = new StyleColor(ElarionUi.Disabled);
+        private static readonly StyleColor ColAvailable = new StyleColor(ElarionUi.Affordable);
+        private static readonly StyleColor ColUnlocked  = new StyleColor(ElarionUi.Gold);
+        private static readonly StyleColor ColText      = new StyleColor(ElarionUi.Parchment);
+        private static readonly StyleColor ColSubText   = new StyleColor(ElarionUi.ParchmentDim);
 
         // ── Runtime ────────────────────────────────────────────────────────────
 
@@ -118,60 +117,46 @@ namespace DeNelle.Village.UI
             var doc = GetComponent<UIDocument>();
             if (doc == null) return;
 
-            // Full-screen centering overlay
-            _overlay = new VisualElement
-            {
-                name = "TalentTreeOverlay",
-                style =
-                {
-                    position        = Position.Absolute,
-                    top             = 0, bottom = 0, left = 0, right = 0,
-                    alignItems      = Align.Center,
-                    justifyContent  = Justify.Center,
-                    backgroundColor = ColBg,
-                }
-            };
+            // Full-screen centering overlay (Elarion scrim)
+            _overlay = new VisualElement { name = "TalentTreeOverlay" };
+            ElarionUi.StyleScrim(_overlay);
             _overlay.RegisterCallback<ClickEvent>(evt =>
             {
                 // Tap outside the card → close
                 if (evt.target == _overlay) Close();
             });
 
-            // Card
+            // Card (Elarion stone panel + gold rim)
             var card = new VisualElement
             {
                 name = "TalentTreeCard",
                 style =
                 {
-                    backgroundColor = ColPanelBg,
-                    borderTopLeftRadius     = 12, borderTopRightRadius    = 12,
-                    borderBottomLeftRadius  = 12, borderBottomRightRadius = 12,
                     paddingTop    = 20, paddingBottom = 20,
                     paddingLeft   = 24, paddingRight  = 24,
                     minWidth      = 420, maxWidth = 520,
                 }
             };
+            ElarionUi.StylePanel(card, dark: true);
 
             // ── Header row ────────────────────────────────────────────────────
-            var header = new VisualElement { style = { flexDirection = FlexDirection.Row, marginBottom = 14 } };
+            var header = new VisualElement { style = { flexDirection = FlexDirection.Row, alignItems = Align.Center, marginBottom = 6 } };
 
             var title = new Label("Talent Tree")
             {
-                style = { color = ColText, fontSize = 20, unityFontStyleAndWeight = FontStyle.Bold, flexGrow = 1 }
+                style = { color = ElarionUi.Gilt, fontSize = ElarionUi.FontTitle, unityFontStyleAndWeight = FontStyle.Bold, letterSpacing = 1.5f, flexGrow = 1 }
             };
 
             _wisdomLabel = new Label("Wisdom: 0")
             {
-                style = { color = ColUnlocked, fontSize = 15, unityTextAlign = TextAnchor.MiddleRight }
+                style = { color = ColUnlocked, fontSize = ElarionUi.FontBody, unityTextAlign = TextAnchor.MiddleRight }
             };
 
             var closeBtn = new Button(Close) { text = "✕" };
-            closeBtn.style.color           = ColText;
-            closeBtn.style.backgroundColor = new StyleColor(new Color(0.25f, 0.12f, 0.12f));
-            closeBtn.style.borderTopLeftRadius     = 4;
-            closeBtn.style.borderTopRightRadius    = 4;
-            closeBtn.style.borderBottomLeftRadius  = 4;
-            closeBtn.style.borderBottomRightRadius = 4;
+            ElarionUi.StyleButton(closeBtn, ElarionUi.ButtonKind.Danger);
+            closeBtn.style.minHeight = StyleKeyword.Auto;
+            closeBtn.style.paddingTop = 4; closeBtn.style.paddingBottom = 4;
+            closeBtn.style.paddingLeft = 10; closeBtn.style.paddingRight = 10;
             closeBtn.style.marginLeft = 8;
 
             header.Add(title);
@@ -187,19 +172,13 @@ namespace DeNelle.Village.UI
             var respecBtn  = new Button(() => OnRespecClicked())
             {
                 text = $"Respec — {respecCost} 💎",
-                style =
-                {
-                    alignSelf       = Align.Center,
-                    backgroundColor = new StyleColor(new Color(0.3f, 0.15f, 0.35f)),
-                    color           = ColText,
-                    paddingTop      = 8, paddingBottom = 8,
-                    paddingLeft     = 20, paddingRight = 20,
-                    borderTopLeftRadius     = 6, borderTopRightRadius    = 6,
-                    borderBottomLeftRadius  = 6, borderBottomRightRadius = 6,
-                }
             };
+            ElarionUi.StyleButton(respecBtn, ElarionUi.ButtonKind.Neutral);
+            respecBtn.style.alignSelf = Align.Center;
+            respecBtn.style.paddingLeft = 20; respecBtn.style.paddingRight = 20;
 
             card.Add(header);
+            card.Add(ElarionUi.MakeRule());
             card.Add(_gridContainer);
             card.Add(respecBtn);
             _overlay.Add(card);
@@ -307,15 +286,11 @@ namespace DeNelle.Village.UI
             {
                 text = state == NodeState.Unlocked ? "✓ Learned" : "Unlock",
             };
+            ElarionUi.StyleButton(unlockBtn,
+                state == NodeState.Available ? ElarionUi.ButtonKind.Confirm : ElarionUi.ButtonKind.Disabled);
+            unlockBtn.style.minHeight = StyleKeyword.Auto;
             unlockBtn.style.marginTop = 6;
-            unlockBtn.style.color     = ColText;
-            unlockBtn.style.backgroundColor = state == NodeState.Available
-                ? new StyleColor(new Color(0.20f, 0.55f, 0.25f))
-                : new StyleColor(new Color(0.2f, 0.2f, 0.2f));
-            unlockBtn.style.borderTopLeftRadius     = 4;
-            unlockBtn.style.borderTopRightRadius    = 4;
-            unlockBtn.style.borderBottomLeftRadius  = 4;
-            unlockBtn.style.borderBottomRightRadius = 4;
+            unlockBtn.style.paddingTop = 4; unlockBtn.style.paddingBottom = 4;
             unlockBtn.SetEnabled(state == NodeState.Available);
 
             card.Add(unlockBtn);
@@ -401,13 +376,13 @@ namespace DeNelle.Village.UI
             {
                 NodeState.Unlocked  => ColUnlocked,
                 NodeState.Available => ColAvailable,
-                _                   => new StyleColor(new Color(0.28f, 0.28f, 0.28f)),
+                _                   => new StyleColor(ElarionUi.StoneTrim),
             };
             StyleColor bgCol = state switch
             {
-                NodeState.Unlocked  => new StyleColor(new Color(0.22f, 0.18f, 0.04f)),
-                NodeState.Available => new StyleColor(new Color(0.08f, 0.18f, 0.09f)),
-                _                   => new StyleColor(new Color(0.14f, 0.14f, 0.16f)),
+                NodeState.Unlocked  => new StyleColor(new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.16f)),
+                NodeState.Available => new StyleColor(new Color(ElarionUi.Affordable.r, ElarionUi.Affordable.g, ElarionUi.Affordable.b, 0.16f)),
+                _                   => new StyleColor(ElarionUi.PanelStoneDark),
             };
             card.style.backgroundColor = bgCol;
             card.style.borderTopColor    = borderCol;

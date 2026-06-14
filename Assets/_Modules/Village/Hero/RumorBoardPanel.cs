@@ -34,6 +34,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using DeNelle.Core.Quests;
+using DeNelle.Core.UI;
 
 namespace DeNelle.Village.Hero
 {
@@ -72,7 +73,7 @@ namespace DeNelle.Village.Hero
             bdRect.anchorMax = Vector2.one;
             bdRect.offsetMin = Vector2.zero;
             bdRect.offsetMax = Vector2.zero;
-            backdrop.GetComponent<Image>().color = new Color(0.03f, 0.03f, 0.04f, 0.7f);
+            backdrop.GetComponent<Image>().color = ElarionUi.Scrim;
             backdrop.GetComponent<Button>().onClick.AddListener(Close);
 
             // Panel frame
@@ -83,13 +84,13 @@ namespace DeNelle.Village.Hero
             pr.anchorMax = new Vector2(0.92f, 0.9f);
             pr.offsetMin = Vector2.zero;
             pr.offsetMax = Vector2.zero;
-            panel.GetComponent<Image>().color = new Color(0.10f, 0.09f, 0.13f, 0.98f);
+            panel.GetComponent<Image>().color = ElarionUi.PanelStoneDark;
 
             CreateHeader(panel.transform, "Brom's Rumor Board");
 
             // Close button
             CreateBigButton(panel.transform, "Close", new Vector2(0.5f, 0.94f), Close,
-                new Color(0.30f, 0.16f, 0.12f));
+                new Color(ElarionUi.Danger.r, ElarionUi.Danger.g, ElarionUi.Danger.b, 0.55f));
 
             // Scroll-free content area (rows laid out top-down by anchor math).
             _contentRoot = new GameObject("Content");
@@ -108,7 +109,7 @@ namespace DeNelle.Village.Hero
             sRect.anchorMax = new Vector2(0.98f, 0.07f);
             _statusText = statusGo.GetComponent<TMPro.TextMeshProUGUI>();
             _statusText.fontSize = 14;
-            _statusText.color = new Color(0.82f, 0.78f, 0.68f);
+            _statusText.color = ElarionUi.ParchmentDim;
             _statusText.alignment = TMPro.TextAlignmentOptions.Center;
             SetStatus("The talk of Elarion. Accept what calls to you.");
 
@@ -198,7 +199,7 @@ namespace DeNelle.Village.Hero
             t.text = txt;
             t.fontSize = 16;
             t.fontStyle = TMPro.FontStyles.Bold;
-            t.color = new Color(0.95f, 0.85f, 0.55f);
+            t.color = ElarionUi.Gilt;
             t.alignment = TMPro.TextAlignmentOptions.Left;
             y -= 0.06f;
         }
@@ -216,7 +217,7 @@ namespace DeNelle.Village.Hero
             t.text = txt;
             t.fontSize = 13;
             t.fontStyle = TMPro.FontStyles.Italic;
-            t.color = new Color(0.65f, 0.62f, 0.58f);
+            t.color = ElarionUi.ParchmentDim;
             t.alignment = TMPro.TextAlignmentOptions.Left;
             y -= 0.055f;
         }
@@ -224,7 +225,7 @@ namespace DeNelle.Village.Hero
         private void CreateActiveRow(Transform parent, QuestDef def, QuestService svc, ref float y)
         {
             var row = MakeRowFrame(parent, "Active_" + def.Id, ref y,
-                new Color(0.10f, 0.13f, 0.18f, 0.85f), 0.11f);
+                new Color(ElarionUi.PanelStone.r, ElarionUi.PanelStone.g, ElarionUi.PanelStone.b, 0.85f), 0.11f);
 
             CreateTitle(row.transform, def.Title ?? def.Id);
 
@@ -232,13 +233,13 @@ namespace DeNelle.Village.Hero
             string objective = stage != null && !string.IsNullOrEmpty(stage.ObjectiveText)
                 ? stage.ObjectiveText
                 : "…";
-            CreateHook(row.transform, objective, new Color(0.78f, 0.84f, 0.92f));
+            CreateHook(row.transform, objective, ElarionUi.ParchmentDim);
         }
 
         private void CreateAvailableRow(Transform parent, QuestDef def, ref float y)
         {
             var row = MakeRowFrame(parent, "Avail_" + def.Id, ref y,
-                new Color(0.13f, 0.11f, 0.08f, 0.85f), 0.13f);
+                new Color(ElarionUi.PanelStoneDark.r, ElarionUi.PanelStoneDark.g, ElarionUi.PanelStoneDark.b, 0.85f), 0.13f);
 
             CreateTitle(row.transform, def.Title ?? def.Id);
 
@@ -247,7 +248,7 @@ namespace DeNelle.Village.Hero
             if (def.Stages != null && def.Stages.Count > 0 && def.Stages[0] != null
                 && !string.IsNullOrEmpty(def.Stages[0].ObjectiveText))
                 hook = def.Stages[0].ObjectiveText;
-            CreateHook(row.transform, hook, new Color(0.86f, 0.80f, 0.66f));
+            CreateHook(row.transform, hook, ElarionUi.Parchment);
 
             // ACCEPT button → StartQuest.
             var btnGo = new GameObject("Accept", typeof(Button), typeof(Image));
@@ -257,7 +258,7 @@ namespace DeNelle.Village.Hero
             br.anchorMax = new Vector2(0.99f, 0.82f);
             br.offsetMin = Vector2.zero;
             br.offsetMax = Vector2.zero;
-            btnGo.GetComponent<Image>().color = new Color(0.20f, 0.34f, 0.20f);
+            btnGo.GetComponent<Image>().color = new Color(ElarionUi.Affordable.r, ElarionUi.Affordable.g, ElarionUi.Affordable.b, 0.92f);
             string id = def.Id;
             btnGo.GetComponent<Button>().onClick.AddListener(() => OnAccept(id));
 
@@ -269,7 +270,7 @@ namespace DeNelle.Village.Hero
             var blt = bl.GetComponent<TMPro.TextMeshProUGUI>();
             blt.text = "ACCEPT";
             blt.fontSize = 13;
-            blt.color = Color.white;
+            blt.color = ElarionUi.Ink;
             blt.alignment = TMPro.TextAlignmentOptions.Center;
         }
 
@@ -302,7 +303,7 @@ namespace DeNelle.Village.Hero
             t.text = txt;
             t.fontSize = 15;
             t.fontStyle = TMPro.FontStyles.Bold;
-            t.color = new Color(0.97f, 0.94f, 0.86f);
+            t.color = ElarionUi.Parchment;
             t.alignment = TMPro.TextAlignmentOptions.Left;
         }
 
@@ -352,7 +353,7 @@ namespace DeNelle.Village.Hero
             r.offsetMax = Vector2.zero;
             var t = go.GetComponent<TMPro.TextMeshProUGUI>();
             t.fontSize = 24;
-            t.color = new Color(0.96f, 0.89f, 0.7f);
+            t.color = ElarionUi.Gilt;
             t.alignment = TMPro.TextAlignmentOptions.Center;
             t.text = txt;
         }
@@ -367,7 +368,7 @@ namespace DeNelle.Village.Hero
             r.anchorMax = new Vector2(anchor.x + 0.08f, anchor.y + 0.03f);
             r.offsetMin = Vector2.zero;
             r.offsetMax = Vector2.zero;
-            go.GetComponent<Image>().color = bg ?? new Color(0.18f, 0.14f, 0.10f);
+            go.GetComponent<Image>().color = bg ?? ElarionUi.PanelStone;
             go.GetComponent<Button>().onClick.AddListener(() => onClick());
 
             var txt = new GameObject("L", typeof(TMPro.TextMeshProUGUI));
@@ -378,7 +379,7 @@ namespace DeNelle.Village.Hero
             var tt = txt.GetComponent<TMPro.TextMeshProUGUI>();
             tt.text = label;
             tt.fontSize = 15;
-            tt.color = new Color(0.95f, 0.9f, 0.8f);
+            tt.color = ElarionUi.Parchment;
             tt.alignment = TMPro.TextAlignmentOptions.Center;
         }
 

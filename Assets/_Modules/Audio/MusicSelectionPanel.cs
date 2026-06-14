@@ -26,6 +26,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UIElements;
+using DeNelle.Core.UI;   // shared Elarion theme — jukebox matches the one game UI
 
 namespace DeNelle.Audio
 {
@@ -95,34 +96,31 @@ namespace DeNelle.Audio
             root.Clear();
             root.style.flexGrow = 1;
 
-            // Full-screen dim overlay that centres the panel card.
+            // Full-screen dim scrim that centres the panel card (shared palette).
             _overlay = new VisualElement();
             _overlay.style.flexGrow = 1;
             _overlay.style.justifyContent = Justify.Center;
             _overlay.style.alignItems = Align.Center;
-            _overlay.style.backgroundColor = new Color(0f, 0f, 0f, 0.55f);
+            _overlay.style.backgroundColor = ElarionUi.Scrim;
             root.Add(_overlay);
 
+            // Warm-stone card with a runic-gold rim (the one game UI language).
             var card = new VisualElement();
             card.style.width = 360;
             card.style.paddingTop = 16;
             card.style.paddingBottom = 16;
             card.style.paddingLeft = 18;
             card.style.paddingRight = 18;
-            card.style.backgroundColor = new Color(0.10f, 0.09f, 0.16f, 0.96f);
-            SetBorderRadius(card, 12);
+            ElarionUi.StylePanel(card, dark: true);
             _overlay.Add(card);
 
-            var title = new Label("Jukebox");
-            title.style.fontSize = 20;
-            title.style.color = new Color(0.85f, 0.80f, 1f, 1f);
-            title.style.unityFontStyleAndWeight = FontStyle.Bold;
-            title.style.marginBottom = 4;
-            card.Add(title);
+            // Gilt crest title + a single gold underline rule.
+            card.Add(ElarionUi.MakeTitle("Jukebox"));
+            card.Add(ElarionUi.MakeRule());
 
             var sub = new Label("Pick the music for where you are. Battle music still takes over during fights.");
-            sub.style.fontSize = 11;
-            sub.style.color = new Color(0.7f, 0.7f, 0.78f, 1f);
+            sub.style.fontSize = ElarionUi.FontLabel;
+            sub.style.color = ElarionUi.ParchmentDim;
             sub.style.whiteSpace = WhiteSpace.Normal;
             sub.style.marginBottom = 10;
             card.Add(sub);
@@ -131,7 +129,7 @@ namespace DeNelle.Audio
             card.Add(_rowList);
 
             var close = new Button(() => SetOpen(false)) { text = "Close" };
-            StyleButton(close);
+            ElarionUi.StyleButton(close, ElarionUi.ButtonKind.Gold);
             close.style.marginTop = 12;
             card.Add(close);
         }
@@ -148,7 +146,7 @@ namespace DeNelle.Audio
             if (svc == null)
             {
                 var warn = new Label("Audio not ready.");
-                warn.style.color = new Color(0.8f, 0.6f, 0.6f, 1f);
+                warn.style.color = ElarionUi.Danger;
                 _rowList.Add(warn);
                 return;
             }
@@ -168,15 +166,15 @@ namespace DeNelle.Audio
 
                 var name = new Label(choice.DisplayName);
                 name.style.flexGrow = 1;
-                name.style.fontSize = 14;
-                name.style.color = Color.white;
+                name.style.fontSize = ElarionUi.FontBody;
+                name.style.color = ElarionUi.Parchment;
                 row.Add(name);
 
                 if (track == chosen)
                 {
                     var check = new Label("✓"); // ✓
                     check.style.fontSize = 16;
-                    check.style.color = new Color(0.55f, 0.9f, 0.55f, 1f);
+                    check.style.color = ElarionUi.Affordable;
                     row.Add(check);
                 }
 
@@ -214,36 +212,13 @@ namespace DeNelle.Audio
             row.style.marginBottom = 0;
             row.style.paddingLeft = 12;
             row.style.paddingRight = 12;
-            row.style.backgroundColor = isSelected
-                ? new Color(0.28f, 0.24f, 0.46f, 1f)
-                : new Color(0.16f, 0.15f, 0.24f, 1f);
-            SetBorderRadius(row, 8);
-            SetBorderWidth(row, 0);
-        }
-
-        private static void StyleButton(Button b)
-        {
-            b.style.height = 34;
-            b.style.color = Color.white;
-            b.style.backgroundColor = new Color(0.22f, 0.20f, 0.34f, 1f);
-            SetBorderRadius(b, 8);
-            SetBorderWidth(b, 0);
-        }
-
-        private static void SetBorderRadius(VisualElement e, float r)
-        {
-            e.style.borderTopLeftRadius = r;
-            e.style.borderTopRightRadius = r;
-            e.style.borderBottomLeftRadius = r;
-            e.style.borderBottomRightRadius = r;
-        }
-
-        private static void SetBorderWidth(VisualElement e, float w)
-        {
-            e.style.borderTopWidth = w;
-            e.style.borderBottomWidth = w;
-            e.style.borderLeftWidth = w;
-            e.style.borderRightWidth = w;
+            // Selected row glows aether-violet (the runic accent); rest is warm stone.
+            row.style.backgroundColor = isSelected ? ElarionUi.AetherDim : ElarionUi.PanelStone;
+            ElarionUi.SetRadius(row, ElarionUi.RadiusSm);
+            ElarionUi.SetBorderWidth(row, 1);
+            ElarionUi.SetBorderColor(row, isSelected
+                ? new Color(ElarionUi.Aether.r, ElarionUi.Aether.g, ElarionUi.Aether.b, 0.7f)
+                : new Color(ElarionUi.StoneTrim.r, ElarionUi.StoneTrim.g, ElarionUi.StoneTrim.b, 0.4f));
         }
     }
 }

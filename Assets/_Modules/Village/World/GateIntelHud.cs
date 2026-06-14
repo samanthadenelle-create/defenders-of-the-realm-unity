@@ -23,6 +23,7 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 using DeNelle.Core.World;
+using DeNelle.Core.UI;   // shared Elarion palette — gate readout matches the one game UI
 
 namespace DeNelle.Village.World
 {
@@ -234,7 +235,9 @@ namespace DeNelle.Village.World
             var panelGo = new GameObject("GateIntelPanel");
             panelGo.transform.SetParent(_canvas.transform, false);
             var img = panelGo.AddComponent<Image>();
-            img.color = new Color(0.05f, 0.06f, 0.10f, 0.82f);
+            // Dark-wood glass chip with the shared rounded corners (lightweight readout).
+            img.color = ElarionUiKit.GlassDeep;
+            ElarionUiKit.ApplyRounded(img);
             _panelRect = img.rectTransform;
             // Bottom-centre strip.
             _panelRect.anchorMin = new Vector2(0.5f, 0f);
@@ -248,7 +251,7 @@ namespace DeNelle.Village.World
             _label = lblGo.AddComponent<Text>();
             _label.font = BuiltinFont();
             _label.alignment = TextAnchor.MiddleCenter;
-            _label.color = new Color(1f, 0.90f, 0.66f);
+            _label.color = ElarionUi.Gilt;   // runic-gold intel text
             _label.fontSize = 24;
             _label.fontStyle = FontStyle.Bold;
             _label.horizontalOverflow = HorizontalWrapMode.Overflow;

@@ -24,6 +24,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
+using DeNelle.Core.UI;   // shared Elarion palette — item HUD matches the one game UI
 
 namespace DeNelle.Village.Items
 {
@@ -187,7 +188,7 @@ namespace DeNelle.Village.Items
                 var (rect, label) = MakeButton(
                     _canvas.transform, "Use_" + def.Id,
                     new Vector2(0.02f, y), new Vector2(0.24f, y + h),
-                    new Color(0.12f, 0.18f, 0.28f, 0.92f));
+                    ElarionUiKit.Glass);
 
                 _useButtons.Add((rect, def.Id, label));
                 y += h + gap;
@@ -199,29 +200,26 @@ namespace DeNelle.Village.Items
             var (rect, label) = MakeButton(
                 _canvas.transform, "CraftToggle",
                 new Vector2(0.02f, 0.90f), new Vector2(0.18f, 0.97f),
-                new Color(0.30f, 0.22f, 0.10f, 0.92f));
+                ElarionUi.GoldButton);
             label.text = "Craft";
+            label.color = ElarionUi.Ink;   // dark ink on the gold CTA
             _craftToggleRect = rect;
         }
 
         private void BuildCraftPanel()
         {
-            _craftPanel = new GameObject("CraftPanel");
-            _craftPanel.transform.SetParent(_canvas.transform, false);
-            var bg = _craftPanel.AddComponent<Image>();
-            bg.color = new Color(0.04f, 0.05f, 0.08f, 0.94f);
-            var bgRt = bg.rectTransform;
-            bgRt.anchorMin = new Vector2(0.20f, 0.30f);
-            bgRt.anchorMax = new Vector2(0.62f, 0.88f);
-            bgRt.offsetMin = Vector2.zero; bgRt.offsetMax = Vector2.zero;
+            // Warm-stone craft panel framed with the shared kit (dark glass + gold rim).
+            _craftPanel = ElarionUiKit.Panel(_canvas.transform,
+                                             new Vector2(0.20f, 0.30f), new Vector2(0.62f, 0.88f),
+                                             deep: true, innerRim: true);
 
-            // Title.
+            // Title — gilt parchment header, sourced from the palette.
             var titleGo = new GameObject("Title");
             titleGo.transform.SetParent(_craftPanel.transform, false);
             var title = titleGo.AddComponent<Text>();
             title.font = BuiltinFont();
             title.alignment = TextAnchor.MiddleCenter;
-            title.color = new Color(1f, 0.86f, 0.55f);
+            title.color = ElarionUi.Gilt;
             title.fontSize = 24;
             title.fontStyle = FontStyle.Bold;
             title.text = "Craft Consumables";
@@ -242,7 +240,7 @@ namespace DeNelle.Village.Items
                     var (rect, label) = MakeButton(
                         _craftPanel.transform, "Craft_" + r.Id,
                         new Vector2(0.06f, yMin), new Vector2(0.94f, yMax),
-                        new Color(0.22f, 0.28f, 0.18f, 1f));
+                        ElarionUiKit.Cell);
                     _craftButtons.Add((rect, r.Id, label));
                     yMax = yMin - gap;
                 }
@@ -265,7 +263,7 @@ namespace DeNelle.Village.Items
                 string name = (def != null && !string.IsNullOrEmpty(def.DisplayName)) ? def.DisplayName : id;
                 string glyph = (def != null && !string.IsNullOrEmpty(def.Glyph)) ? def.Glyph + " " : "";
                 label.text = glyph + name + "  x" + have;
-                label.color = have > 0 ? Color.white : new Color(0.6f, 0.6f, 0.6f, 1f);
+                label.color = have > 0 ? ElarionUi.Parchment : ElarionUi.ParchmentDim;
             }
         }
 
@@ -279,7 +277,7 @@ namespace DeNelle.Village.Items
                 string name = (recipe != null && !string.IsNullOrEmpty(recipe.DisplayName)) ? recipe.DisplayName : recipeId;
                 bool can = ItemCraftingService.CanCraft(recipeId);
                 label.text = name + (can ? "" : "  (need materials)");
-                label.color = can ? Color.white : new Color(0.65f, 0.55f, 0.45f, 1f);
+                label.color = can ? ElarionUi.Affordable : ElarionUi.ParchmentDim;
             }
         }
 
@@ -293,6 +291,7 @@ namespace DeNelle.Village.Items
             go.transform.SetParent(parent, false);
             var img = go.AddComponent<Image>();
             img.color = color;
+            ElarionUiKit.ApplyRounded(img);   // shared rounded corners (the one UI language)
             var rt = img.rectTransform;
             rt.anchorMin = anchorMin; rt.anchorMax = anchorMax;
             rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
@@ -302,7 +301,7 @@ namespace DeNelle.Village.Items
             var lbl = lblGo.AddComponent<Text>();
             lbl.font = BuiltinFont();
             lbl.alignment = TextAnchor.MiddleCenter;
-            lbl.color = Color.white;
+            lbl.color = ElarionUi.Parchment;
             lbl.fontSize = 20;
             lbl.fontStyle = FontStyle.Bold;
             lbl.text = name;

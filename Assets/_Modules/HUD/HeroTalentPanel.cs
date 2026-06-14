@@ -113,15 +113,7 @@ namespace DeNelle.HUD
             _root.pickingMode = PickingMode.Ignore;
 
             _overlay = new VisualElement { name = "HeroTalentOverlay" };
-            _overlay.style.position = Position.Absolute;
-            _overlay.style.left = 0; _overlay.style.right = 0;
-            _overlay.style.top = 0;  _overlay.style.bottom = 0;
-            // DEF-212 item 5: world-space labels ("Arcane Tower") bled through the
-            // old 0.72 scrim. Use a near-opaque scrim so no 3D text shows behind the
-            // modal (the panel card on top is already opaque).
-            _overlay.style.backgroundColor = new StyleColor(new Color(0.02f, 0.02f, 0.03f, 0.97f));
-            _overlay.style.alignItems = Align.Center;
-            _overlay.style.justifyContent = Justify.Center;
+            ElarionUi.StyleScrim(_overlay);
             _overlay.pickingMode = PickingMode.Position;
             _overlay.RegisterCallback<ClickEvent>(evt =>
             {
@@ -131,7 +123,6 @@ namespace DeNelle.HUD
 
             var panel = new VisualElement { name = "HeroTalentPanel" };
             panel.style.flexDirection = FlexDirection.Column;
-            panel.style.backgroundColor = new StyleColor(new Color(0.08f, 0.08f, 0.10f, 0.97f));
             panel.style.paddingTop = 18;
             panel.style.paddingBottom = 18;
             panel.style.paddingLeft = 22;
@@ -142,17 +133,8 @@ namespace DeNelle.HUD
             // it instead of spilling past the screen edges (owner: "talent window
             // extends outside box, needs a scrolling box to stay inside structure").
             panel.style.maxHeight = Length.Percent(90);
-            panel.style.borderTopLeftRadius = 12;
-            panel.style.borderTopRightRadius = 12;
-            panel.style.borderBottomLeftRadius = 12;
-            panel.style.borderBottomRightRadius = 12;
-            panel.style.borderLeftWidth = 1; panel.style.borderRightWidth = 1;
-            panel.style.borderTopWidth = 1;  panel.style.borderBottomWidth = 1;
-            var rim = new Color(0.92f, 0.78f, 0.40f, 0.55f);
-            panel.style.borderLeftColor = new StyleColor(rim);
-            panel.style.borderRightColor = new StyleColor(rim);
-            panel.style.borderTopColor = new StyleColor(rim);
-            panel.style.borderBottomColor = new StyleColor(rim);
+            // Elarion stone panel + gold rim (canon).
+            ElarionUi.StylePanel(panel, dark: true);
             _overlay.Add(panel);
 
             // Header
@@ -164,14 +146,15 @@ namespace DeNelle.HUD
             panel.Add(headerRow);
 
             var title = new Label("Hero Talents");
-            title.style.color = new StyleColor(new Color(0.97f, 0.92f, 0.74f, 1f));
-            title.style.fontSize = 22;
+            title.style.color = new StyleColor(ElarionUi.Gilt);
+            title.style.fontSize = ElarionUi.FontTitle;
+            title.style.letterSpacing = 1.5f;
             title.style.unityFontStyleAndWeight = FontStyle.Bold;
             headerRow.Add(title);
 
             _wisdomLabel = new Label("Wisdom: 0");
-            _wisdomLabel.style.color = new StyleColor(new Color(0.95f, 0.85f, 0.45f, 1f));
-            _wisdomLabel.style.fontSize = 16;
+            _wisdomLabel.style.color = new StyleColor(ElarionUi.Gold);
+            _wisdomLabel.style.fontSize = ElarionUi.FontHead;
             _wisdomLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
             // DEF-212 item 6: Wisdom has no earn path in the current loop, so a
             // permanent "Wisdom: 0" reads as broken. Hide the counter until heroes
@@ -181,13 +164,14 @@ namespace DeNelle.HUD
             headerRow.Add(_wisdomLabel);
 
             var closeBtn = new Button(Hide) { text = "Close (T)" };
-            closeBtn.style.color = new StyleColor(new Color(0.95f, 0.95f, 0.95f, 1f));
-            closeBtn.style.backgroundColor = new StyleColor(new Color(0.18f, 0.18f, 0.20f, 1f));
+            ElarionUi.StyleButton(closeBtn, ElarionUi.ButtonKind.Neutral);
+            closeBtn.style.minHeight = StyleKeyword.Auto;
             closeBtn.style.paddingTop = 4; closeBtn.style.paddingBottom = 4;
             closeBtn.style.paddingLeft = 12; closeBtn.style.paddingRight = 12;
-            closeBtn.style.borderTopLeftRadius = 6; closeBtn.style.borderTopRightRadius = 6;
-            closeBtn.style.borderBottomLeftRadius = 6; closeBtn.style.borderBottomRightRadius = 6;
             headerRow.Add(closeBtn);
+
+            // Thin gilt underline beneath the header (canon).
+            panel.Add(ElarionUi.MakeRule());
 
             // The columns live inside a vertical ScrollView so a tall tree (or a
             // short window) scrolls within the capped panel rather than overflowing
@@ -237,14 +221,12 @@ namespace DeNelle.HUD
             col.style.marginLeft = 6; col.style.marginRight = 6;
             col.style.paddingTop = 10; col.style.paddingBottom = 10;
             col.style.paddingLeft = 10; col.style.paddingRight = 10;
-            col.style.backgroundColor = new StyleColor(new Color(0.05f, 0.05f, 0.07f, 0.85f));
-            col.style.borderTopLeftRadius = 8; col.style.borderTopRightRadius = 8;
-            col.style.borderBottomLeftRadius = 8; col.style.borderBottomRightRadius = 8;
+            ElarionUi.StyleWell(col);
 
             string displayName = ReadString(treeObj, "DisplayName") ?? heroSlug;
             var header = new Label(displayName);
-            header.style.color = new StyleColor(new Color(0.96f, 0.94f, 0.88f, 1f));
-            header.style.fontSize = 15;
+            header.style.color = new StyleColor(ElarionUi.Parchment);
+            header.style.fontSize = ElarionUi.FontBody;
             header.style.unityFontStyleAndWeight = FontStyle.Bold;
             header.style.unityTextAlign = TextAnchor.MiddleCenter;
             header.style.marginBottom = 8;
@@ -253,8 +235,8 @@ namespace DeNelle.HUD
             if (treeObj == null)
             {
                 var missing = new Label("(catalog unavailable)");
-                missing.style.color = new StyleColor(new Color(0.7f, 0.4f, 0.4f, 1f));
-                missing.style.fontSize = 11;
+                missing.style.color = new StyleColor(ElarionUi.Danger);
+                missing.style.fontSize = ElarionUi.FontMicro;
                 col.Add(missing);
                 return col;
             }
@@ -279,8 +261,8 @@ namespace DeNelle.HUD
             foreach (var tierKey in TierOrderTopDown)
             {
                 var tierLabel = new Label(TierDisplay(tierKey));
-                tierLabel.style.color = new StyleColor(new Color(0.78f, 0.74f, 0.60f, 1f));
-                tierLabel.style.fontSize = 11;
+                tierLabel.style.color = new StyleColor(ElarionUi.ParchmentDim);
+                tierLabel.style.fontSize = ElarionUi.FontMicro;
                 tierLabel.style.marginTop = 8; tierLabel.style.marginBottom = 4;
                 tierLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
                 col.Add(tierLabel);
@@ -332,18 +314,18 @@ namespace DeNelle.HUD
             float opacity = 1f;
             if (learned)
             {
-                bg = new Color(0.10f, 0.22f, 0.13f, 0.95f);
-                rim = new Color(0.45f, 0.85f, 0.55f, 1f);
+                bg = new Color(ElarionUi.Affordable.r, ElarionUi.Affordable.g, ElarionUi.Affordable.b, 0.16f);
+                rim = ElarionUi.Affordable;
             }
             else if (canBuy)
             {
-                bg = new Color(0.12f, 0.12f, 0.16f, 0.95f);
-                rim = new Color(0.92f, 0.78f, 0.40f, 1f);
+                bg = ElarionUi.PanelStoneDark;
+                rim = ElarionUi.Gold;
             }
             else
             {
-                bg = new Color(0.07f, 0.07f, 0.08f, 0.85f);
-                rim = new Color(0.30f, 0.30f, 0.32f, 1f);
+                bg = ElarionUi.PanelStoneDark;
+                rim = ElarionUi.StoneTrim;
                 opacity = 0.55f;
             }
             card.style.backgroundColor = new StyleColor(bg);
@@ -354,15 +336,15 @@ namespace DeNelle.HUD
             card.style.opacity = opacity;
 
             var title = new Label(name);
-            title.style.color = new StyleColor(new Color(0.97f, 0.94f, 0.84f, 1f));
-            title.style.fontSize = 12;
+            title.style.color = new StyleColor(ElarionUi.Parchment);
+            title.style.fontSize = ElarionUi.FontLabel;
             title.style.unityFontStyleAndWeight = FontStyle.Bold;
             title.style.whiteSpace = WhiteSpace.Normal;
             card.Add(title);
 
             var body = new Label(desc);
-            body.style.color = new StyleColor(new Color(0.82f, 0.82f, 0.86f, 1f));
-            body.style.fontSize = 10;
+            body.style.color = new StyleColor(ElarionUi.ParchmentDim);
+            body.style.fontSize = ElarionUi.FontMicro;
             body.style.whiteSpace = WhiteSpace.Normal;
             body.style.marginTop = 4;
             body.style.marginBottom = 6;
@@ -377,8 +359,8 @@ namespace DeNelle.HUD
             if (!string.IsNullOrEmpty(impact))
             {
                 var impactLabel = new Label(impact);
-                impactLabel.style.color = new StyleColor(new Color(0.55f, 0.90f, 0.98f, 1f));
-                impactLabel.style.fontSize = 11;
+                impactLabel.style.color = new StyleColor(ElarionUi.Aether);
+                impactLabel.style.fontSize = ElarionUi.FontMicro;
                 impactLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
                 impactLabel.style.whiteSpace = WhiteSpace.Normal;
                 impactLabel.style.marginBottom = 6;
@@ -392,26 +374,20 @@ namespace DeNelle.HUD
             card.Add(footer);
 
             var costLabel = new Label(learned ? "Learned" : $"{cost}W");
-            costLabel.style.color = new StyleColor(learned
-                ? new Color(0.55f, 0.90f, 0.62f, 1f)
-                : new Color(0.95f, 0.85f, 0.45f, 1f));
-            costLabel.style.fontSize = 11;
+            costLabel.style.color = new StyleColor(learned ? ElarionUi.Affordable : ElarionUi.Gold);
+            costLabel.style.fontSize = ElarionUi.FontMicro;
             costLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
             footer.Add(costLabel);
 
             if (!learned)
             {
                 var spend = new Button(() => OnSpend(id)) { text = "Spend" };
-                spend.style.fontSize = 10;
+                ElarionUi.StyleButton(spend, canBuy ? ElarionUi.ButtonKind.Gold : ElarionUi.ButtonKind.Disabled);
+                spend.style.minHeight = StyleKeyword.Auto;
+                spend.style.fontSize = ElarionUi.FontMicro;
                 spend.style.paddingTop = 2; spend.style.paddingBottom = 2;
                 spend.style.paddingLeft = 8; spend.style.paddingRight = 8;
-                spend.style.borderTopLeftRadius = 4; spend.style.borderTopRightRadius = 4;
-                spend.style.borderBottomLeftRadius = 4; spend.style.borderBottomRightRadius = 4;
                 if (!canBuy) spend.SetEnabled(false);
-                spend.style.color = new StyleColor(new Color(0.96f, 0.94f, 0.88f, 1f));
-                spend.style.backgroundColor = new StyleColor(canBuy
-                    ? new Color(0.32f, 0.22f, 0.10f, 1f)
-                    : new Color(0.20f, 0.20f, 0.22f, 1f));
                 footer.Add(spend);
             }
             return card;

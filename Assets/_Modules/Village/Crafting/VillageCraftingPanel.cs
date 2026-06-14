@@ -155,12 +155,9 @@ namespace DeNelle.Village.Crafting
             _shell.style.height = 520;
             _shell.style.maxHeight = new Length(95, LengthUnit.Percent);
             _shell.style.flexDirection = FlexDirection.Column;
-            _shell.style.backgroundColor = new StyleColor(new Color(0.09f, 0.07f, 0.06f, 0.98f));
-            _shell.style.borderTopLeftRadius = 12;
-            _shell.style.borderTopRightRadius = 12;
-            _shell.style.borderBottomLeftRadius = 12;
-            _shell.style.borderBottomRightRadius = 12;
-            ApplyBorder(_shell, new Color(0.85f, 0.66f, 0.30f, 1f), 2);
+            // Dark-stone sheet + runic-gold rim — the shared Elarion theme panel.
+            ElarionUi.StylePanel(_shell, dark: true);
+            ElarionUi.SetRadius(_shell, ElarionUi.RadiusLg);
             _root.Add(_shell);
 
             BuildHeader(_shell);
@@ -178,11 +175,8 @@ namespace DeNelle.Village.Crafting
             _recipeList.style.marginRight = 10;
             _recipeList.style.paddingTop = 6; _recipeList.style.paddingBottom = 6;
             _recipeList.style.paddingLeft = 6; _recipeList.style.paddingRight = 6;
-            _recipeList.style.backgroundColor = new StyleColor(new Color(0.05f, 0.04f, 0.03f, 0.85f));
-            _recipeList.style.borderTopLeftRadius = 8;
-            _recipeList.style.borderTopRightRadius = 8;
-            _recipeList.style.borderBottomLeftRadius = 8;
-            _recipeList.style.borderBottomRightRadius = 8;
+            // Recessed well — darker stone, lightly framed (shared theme).
+            ElarionUi.StyleWell(_recipeList);
             body.Add(_recipeList);
 
             _detailPane = new VisualElement { name = "DetailPane" };
@@ -190,11 +184,8 @@ namespace DeNelle.Village.Crafting
             _detailPane.style.flexDirection = FlexDirection.Column;
             _detailPane.style.paddingTop = 8; _detailPane.style.paddingBottom = 8;
             _detailPane.style.paddingLeft = 14; _detailPane.style.paddingRight = 14;
-            _detailPane.style.backgroundColor = new StyleColor(new Color(0.05f, 0.04f, 0.03f, 0.85f));
-            _detailPane.style.borderTopLeftRadius = 8;
-            _detailPane.style.borderTopRightRadius = 8;
-            _detailPane.style.borderBottomLeftRadius = 8;
-            _detailPane.style.borderBottomRightRadius = 8;
+            // Recessed well — darker stone, lightly framed (shared theme).
+            ElarionUi.StyleWell(_detailPane);
             body.Add(_detailPane);
 
             _footerStrip = new VisualElement { name = "FooterStrip" };
@@ -204,7 +195,7 @@ namespace DeNelle.Village.Crafting
             _footerStrip.style.paddingLeft = 14; _footerStrip.style.paddingRight = 14;
             _footerStrip.style.paddingTop = 8; _footerStrip.style.paddingBottom = 10;
             _footerStrip.style.borderTopWidth = 1;
-            _footerStrip.style.borderTopColor = new StyleColor(new Color(0.85f, 0.66f, 0.30f, 0.45f));
+            _footerStrip.style.borderTopColor = new StyleColor(new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.45f));
             _shell.Add(_footerStrip);
 
             // Start hidden; opened by bootstrap.
@@ -222,28 +213,25 @@ namespace DeNelle.Village.Crafting
             header.style.paddingLeft = 16; header.style.paddingRight = 10;
             header.style.paddingTop = 10; header.style.paddingBottom = 10;
             header.style.borderBottomWidth = 1;
-            header.style.borderBottomColor = new StyleColor(new Color(0.85f, 0.66f, 0.30f, 0.45f));
+            header.style.borderBottomColor = new StyleColor(new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.45f));
             parent.Add(header);
 
-            var title = new Label("Workshop");
-            title.style.color = new StyleColor(new Color(0.99f, 0.86f, 0.50f, 1f));
-            title.style.fontSize = 20;
+            // Gilt crest glyph + title — the shared header voice (matches MakeTitle).
+            var title = new Label(ElarionUi.CrestGlyph + "  Workshop");
+            title.style.color = new StyleColor(ElarionUi.Gilt);
+            title.style.fontSize = ElarionUi.FontTitle;
             title.style.unityFontStyleAndWeight = FontStyle.Bold;
+            title.style.letterSpacing = 1.5f;
             header.Add(title);
 
             // 44x44 min touch target (DEF-218) so the close button is reachable
-            // with a finger on mobile, not just a mouse.
+            // with a finger on mobile, not just a mouse. Themed Danger chip.
             var closeBtn = new Button(Close) { text = "X" };
-            closeBtn.style.width = 44; closeBtn.style.height = 44;
+            ElarionUi.StyleButton(closeBtn, ElarionUi.ButtonKind.Danger);
+            closeBtn.style.width = 44; closeBtn.style.minHeight = 44; closeBtn.style.height = 44;
             closeBtn.style.fontSize = 18;
-            closeBtn.style.unityFontStyleAndWeight = FontStyle.Bold;
-            closeBtn.style.color = new StyleColor(new Color(0.97f, 0.94f, 0.84f, 1f));
-            closeBtn.style.backgroundColor = new StyleColor(new Color(0.18f, 0.10f, 0.06f, 1f));
-            closeBtn.style.borderTopLeftRadius = 6;
-            closeBtn.style.borderTopRightRadius = 6;
-            closeBtn.style.borderBottomLeftRadius = 6;
-            closeBtn.style.borderBottomRightRadius = 6;
-            ApplyBorder(closeBtn, new Color(0.85f, 0.66f, 0.30f, 0.65f), 1);
+            closeBtn.style.paddingLeft = 0; closeBtn.style.paddingRight = 0;
+            closeBtn.style.marginTop = 0; closeBtn.style.marginBottom = 0;
             header.Add(closeBtn);
         }
 
@@ -258,8 +246,8 @@ namespace DeNelle.Village.Crafting
             if (recipes == null || recipes.Count == 0)
             {
                 var empty = new Label("No recipes loaded.");
-                empty.style.color = new StyleColor(new Color(0.75f, 0.72f, 0.65f, 1f));
-                empty.style.fontSize = 12;
+                empty.style.color = new StyleColor(ElarionUi.ParchmentDim);
+                empty.style.fontSize = ElarionUi.FontLabel;
                 _recipeList.Add(empty);
             }
             else
@@ -277,7 +265,7 @@ namespace DeNelle.Village.Crafting
             else
             {
                 var hint = new Label("Select a recipe.");
-                hint.style.color = new StyleColor(new Color(0.75f, 0.72f, 0.65f, 1f));
+                hint.style.color = new StyleColor(ElarionUi.ParchmentDim);
                 _detailPane.Add(hint);
             }
 
@@ -299,11 +287,11 @@ namespace DeNelle.Village.Crafting
             row.style.borderBottomLeftRadius = 6;
             row.style.borderBottomRightRadius = 6;
             row.style.backgroundColor = new StyleColor(selected
-                ? new Color(0.25f, 0.17f, 0.06f, 1f)
-                : new Color(0.12f, 0.09f, 0.05f, 1f));
+                ? ElarionUi.StoneTrim
+                : ElarionUi.PanelStoneDark);
             ApplyBorder(row,
-                selected ? new Color(0.99f, 0.86f, 0.50f, 1f)
-                         : new Color(0.85f, 0.66f, 0.30f, 0.35f),
+                selected ? ElarionUi.Gilt
+                         : new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.35f),
                 selected ? 2 : 1);
 
             row.text = string.Empty;
@@ -312,15 +300,15 @@ namespace DeNelle.Village.Crafting
             row.style.justifyContent = Justify.SpaceBetween;
 
             var name = new Label(string.IsNullOrEmpty(recipe.DisplayName) ? recipe.Id : recipe.DisplayName);
-            name.style.color = new StyleColor(new Color(0.97f, 0.94f, 0.84f, 1f));
-            name.style.fontSize = 13;
+            name.style.color = new StyleColor(ElarionUi.Parchment);
+            name.style.fontSize = ElarionUi.FontLabel;
             name.style.flexGrow = 1;
             row.Add(name);
 
             var badge = new Label(canCraft ? "✓" : "✗"); // ✓ / ✗
             badge.style.color = new StyleColor(canCraft
-                ? new Color(0.55f, 0.85f, 0.45f, 1f)
-                : new Color(0.85f, 0.45f, 0.40f, 1f));
+                ? ElarionUi.Affordable
+                : ElarionUi.Danger);
             badge.style.fontSize = 14;
             badge.style.marginLeft = 6;
             row.Add(badge);
@@ -333,25 +321,26 @@ namespace DeNelle.Village.Crafting
             var inv = VillageInventory.Instance;
 
             var title = new Label(string.IsNullOrEmpty(recipe.DisplayName) ? recipe.Id : recipe.DisplayName);
-            title.style.color = new StyleColor(new Color(0.99f, 0.86f, 0.50f, 1f));
-            title.style.fontSize = 18;
+            title.style.color = new StyleColor(ElarionUi.Gilt);
+            title.style.fontSize = ElarionUi.FontHead;
             title.style.unityFontStyleAndWeight = FontStyle.Bold;
             title.style.marginBottom = 4;
             parent.Add(title);
+            parent.Add(ElarionUi.MakeRule());
 
             if (!string.IsNullOrEmpty(recipe.Description))
             {
                 var desc = new Label(recipe.Description);
-                desc.style.color = new StyleColor(new Color(0.86f, 0.82f, 0.74f, 1f));
-                desc.style.fontSize = 12;
+                desc.style.color = new StyleColor(ElarionUi.ParchmentDim);
+                desc.style.fontSize = ElarionUi.FontLabel;
                 desc.style.whiteSpace = WhiteSpace.Normal;
                 desc.style.marginBottom = 10;
                 parent.Add(desc);
             }
 
             var ingHeader = new Label("Ingredients");
-            ingHeader.style.color = new StyleColor(new Color(0.97f, 0.92f, 0.74f, 1f));
-            ingHeader.style.fontSize = 13;
+            ingHeader.style.color = new StyleColor(ElarionUi.Gold);
+            ingHeader.style.fontSize = ElarionUi.FontLabel;
             ingHeader.style.unityFontStyleAndWeight = FontStyle.Bold;
             ingHeader.style.marginTop = 4;
             ingHeader.style.marginBottom = 4;
@@ -372,23 +361,23 @@ namespace DeNelle.Village.Crafting
 
                     var check = new Label(ok ? "✓" : "✗"); // ✓ / ✗
                     check.style.color = new StyleColor(ok
-                        ? new Color(0.55f, 0.85f, 0.45f, 1f)
-                        : new Color(0.85f, 0.45f, 0.40f, 1f));
+                        ? ElarionUi.Affordable
+                        : ElarionUi.Danger);
                     check.style.fontSize = 14;
                     check.style.width = 18;
                     row.Add(check);
 
                     var label = new Label(CraftingRecipeCatalog.DisplayNameFor(line.IngredientId));
                     label.style.color = new StyleColor(ok
-                        ? new Color(0.97f, 0.94f, 0.84f, 1f)
-                        : new Color(0.80f, 0.70f, 0.65f, 1f));
-                    label.style.fontSize = 12;
+                        ? ElarionUi.Parchment
+                        : ElarionUi.ParchmentDim);
+                    label.style.fontSize = ElarionUi.FontLabel;
                     label.style.flexGrow = 1;
                     row.Add(label);
 
                     var counts = new Label($"{have}/{line.Count}");
-                    counts.style.color = new StyleColor(new Color(0.78f, 0.78f, 0.78f, 1f));
-                    counts.style.fontSize = 12;
+                    counts.style.color = new StyleColor(ElarionUi.ParchmentDim);
+                    counts.style.fontSize = ElarionUi.FontLabel;
                     counts.style.marginLeft = 8;
                     row.Add(counts);
 
@@ -398,8 +387,8 @@ namespace DeNelle.Village.Crafting
 
             // Output preview.
             var outHeader = new Label("Output");
-            outHeader.style.color = new StyleColor(new Color(0.97f, 0.92f, 0.74f, 1f));
-            outHeader.style.fontSize = 13;
+            outHeader.style.color = new StyleColor(ElarionUi.Gold);
+            outHeader.style.fontSize = ElarionUi.FontLabel;
             outHeader.style.unityFontStyleAndWeight = FontStyle.Bold;
             outHeader.style.marginTop = 12;
             outHeader.style.marginBottom = 4;
@@ -413,7 +402,7 @@ namespace DeNelle.Village.Crafting
             if (!string.IsNullOrEmpty(recipe.ResultGlyph))
             {
                 var glyph = new Label(recipe.ResultGlyph);
-                glyph.style.color = new StyleColor(new Color(0.99f, 0.86f, 0.50f, 1f));
+                glyph.style.color = new StyleColor(ElarionUi.Gilt);
                 glyph.style.fontSize = 20;
                 glyph.style.width = 28;
                 glyph.style.unityTextAlign = TextAnchor.MiddleCenter;
@@ -423,32 +412,19 @@ namespace DeNelle.Village.Crafting
 
             int held = inv != null ? inv.Get(recipe.OutputId) : 0;
             var outLabel = new Label($"{(string.IsNullOrEmpty(recipe.DisplayName) ? recipe.Id : recipe.DisplayName)}  x1  (have {held})");
-            outLabel.style.color = new StyleColor(new Color(0.97f, 0.94f, 0.84f, 1f));
-            outLabel.style.fontSize = 13;
+            outLabel.style.color = new StyleColor(ElarionUi.Parchment);
+            outLabel.style.fontSize = ElarionUi.FontLabel;
             outRow.Add(outLabel);
             parent.Add(outRow);
 
             // Craft button.
             bool canCraft = inv != null && inv.CanCraft(recipe.Id);
             var craftBtn = new Button(() => OnCraftClicked(recipe)) { text = "Craft" };
-            craftBtn.style.height = 44;
-            craftBtn.style.fontSize = 16;
-            craftBtn.style.unityFontStyleAndWeight = FontStyle.Bold;
+            // Shared CTA: gilt-rimmed gold glass when affordable, stone-grey Disabled
+            // when short — same as the build / store / upgrade buttons.
+            ElarionUi.StyleButton(craftBtn, canCraft ? ElarionUi.ButtonKind.Gold : ElarionUi.ButtonKind.Disabled);
             craftBtn.style.marginTop = 8;
-            craftBtn.style.borderTopLeftRadius = 8;
-            craftBtn.style.borderTopRightRadius = 8;
-            craftBtn.style.borderBottomLeftRadius = 8;
-            craftBtn.style.borderBottomRightRadius = 8;
             craftBtn.SetEnabled(canCraft);
-            craftBtn.style.color = new StyleColor(canCraft
-                ? new Color(0.10f, 0.08f, 0.04f, 1f)
-                : new Color(0.55f, 0.50f, 0.42f, 1f));
-            craftBtn.style.backgroundColor = new StyleColor(canCraft
-                ? new Color(0.99f, 0.86f, 0.50f, 1f)
-                : new Color(0.30f, 0.24f, 0.18f, 1f));
-            ApplyBorder(craftBtn,
-                canCraft ? new Color(1f, 0.78f, 0.32f, 1f) : new Color(0.50f, 0.40f, 0.22f, 1f),
-                2);
             parent.Add(craftBtn);
         }
 
@@ -475,8 +451,8 @@ namespace DeNelle.Village.Crafting
             _footerStrip.Clear();
 
             var label = new Label("Larder:");
-            label.style.color = new StyleColor(new Color(0.97f, 0.92f, 0.74f, 1f));
-            label.style.fontSize = 12;
+            label.style.color = new StyleColor(ElarionUi.Gold);
+            label.style.fontSize = ElarionUi.FontLabel;
             label.style.unityFontStyleAndWeight = FontStyle.Bold;
             label.style.marginRight = 10;
             _footerStrip.Add(label);
@@ -485,8 +461,8 @@ namespace DeNelle.Village.Crafting
             if (inv == null || inv.Counts.Count == 0)
             {
                 var empty = new Label("(empty)");
-                empty.style.color = new StyleColor(new Color(0.75f, 0.72f, 0.65f, 1f));
-                empty.style.fontSize = 12;
+                empty.style.color = new StyleColor(ElarionUi.ParchmentDim);
+                empty.style.fontSize = ElarionUi.FontLabel;
                 _footerStrip.Add(empty);
                 return;
             }
@@ -533,22 +509,22 @@ namespace DeNelle.Village.Crafting
             chip.style.borderTopRightRadius = 5;
             chip.style.borderBottomLeftRadius = 5;
             chip.style.borderBottomRightRadius = 5;
-            chip.style.backgroundColor = new StyleColor(new Color(0.13f, 0.10f, 0.06f, 0.9f));
-            ApplyBorder(chip, new Color(0.85f, 0.66f, 0.30f, 0.35f), 1);
+            chip.style.backgroundColor = new StyleColor(ElarionUi.PanelStoneDark);
+            ApplyBorder(chip, new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.35f), 1);
 
             var glyph = ResolveGlyph(id);
             if (!string.IsNullOrEmpty(glyph))
             {
                 var g = new Label(glyph);
-                g.style.color = new StyleColor(new Color(0.99f, 0.86f, 0.50f, 1f));
-                g.style.fontSize = 13;
+                g.style.color = new StyleColor(ElarionUi.Gilt);
+                g.style.fontSize = ElarionUi.FontLabel;
                 g.style.marginRight = 4;
                 chip.Add(g);
             }
 
             var label = new Label($"{CraftingRecipeCatalog.DisplayNameFor(id)} x{count}");
-            label.style.color = new StyleColor(new Color(0.97f, 0.94f, 0.84f, 1f));
-            label.style.fontSize = 12;
+            label.style.color = new StyleColor(ElarionUi.Parchment);
+            label.style.fontSize = ElarionUi.FontLabel;
             chip.Add(label);
             return chip;
         }

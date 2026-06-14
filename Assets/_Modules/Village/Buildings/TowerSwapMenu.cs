@@ -32,6 +32,7 @@ using System;
 using System.Collections;
 using Cysharp.Threading.Tasks;
 using DeNelle.Core.Data;
+using DeNelle.Core.UI;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -50,20 +51,24 @@ namespace DeNelle.Village
         [Tooltip("UIDocument that will host the swap panel.")]
         [SerializeField] private UIDocument _document;
 
-        // ── Colours (inline) ──────────────────────────────────────────────────
-
-        private static readonly Color BgColor          = new Color(0.08f, 0.07f, 0.12f, 0.97f);
-        private static readonly Color BorderColor       = new Color(0.55f, 0.25f, 1.00f, 0.90f);
-        private static readonly Color HeaderColor       = new Color(0.75f, 0.55f, 1.00f, 1.00f);
-        private static readonly Color SubtleColor       = new Color(0.60f, 0.60f, 0.70f, 1.00f);
-        private static readonly Color ChipColor         = new Color(0.18f, 0.14f, 0.26f, 1.00f);
-        private static readonly Color ChipSelectedColor = new Color(0.45f, 0.20f, 0.85f, 1.00f);
-        private static readonly Color ChipDisabledColor = new Color(0.12f, 0.12f, 0.18f, 0.60f);
-        private static readonly Color WarnColor         = new Color(1.00f, 0.75f, 0.25f, 1.00f);
-        private static readonly Color ErrorColor        = new Color(1.00f, 0.38f, 0.38f, 1.00f);
-        private static readonly Color SuccessColor      = new Color(0.38f, 1.00f, 0.60f, 1.00f);
-        private static readonly Color CancelBgColor     = new Color(0.22f, 0.20f, 0.28f, 1.00f);
-        private static readonly Color ConfirmBgColor    = new Color(0.45f, 0.20f, 0.85f, 1.00f);
+        // ── Colours ───────────────────────────────────────────────────────────
+        // Every role SOURCES from ElarionUi (the ONE in-game theme) so the swap
+        // panel reads as the SAME designed game as the town HUD / store / build-info
+        // preview (warm dark stone + runic gold, aether-violet for the runic/selected
+        // accent, theme green/red for state). The earlier violet-on-near-black local
+        // palette is retired here.
+        private static readonly Color BgColor          = ElarionUi.PanelStone;     // modal sheet
+        private static readonly Color BorderColor       = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.55f); // runic-gold rim
+        private static readonly Color HeaderColor       = ElarionUi.Gilt;          // title
+        private static readonly Color SubtleColor       = ElarionUi.ParchmentDim;  // sub / flavour text
+        private static readonly Color ChipColor         = ElarionUi.PanelStoneDark; // unselected chip
+        private static readonly Color ChipSelectedColor = ElarionUi.Aether;        // selected chip (runic accent)
+        private static readonly Color ChipDisabledColor = ElarionUi.Disabled;      // current/disabled chip
+        private static readonly Color WarnColor         = ElarionUi.Gilt;          // cooldown / wave-limit warning
+        private static readonly Color ErrorColor        = ElarionUi.Danger;        // error
+        private static readonly Color SuccessColor      = ElarionUi.Affordable;    // success
+        private static readonly Color CancelBgColor     = ElarionUi.PanelStone;    // neutral button
+        private static readonly Color ConfirmBgColor    = ElarionUi.GoldButton;    // primary CTA
 
         // ── Runtime state ─────────────────────────────────────────────────────
 
@@ -181,7 +186,7 @@ namespace DeNelle.Village
             _root.style.position         = Position.Absolute;
             _root.style.left             = 0; _root.style.top    = 0;
             _root.style.right            = 0; _root.style.bottom = 0;
-            _root.style.backgroundColor  = new Color(0f, 0f, 0f, 0.55f);
+            _root.style.backgroundColor  = ElarionUi.Scrim;
             _root.style.alignItems       = Align.Center;
             _root.style.justifyContent   = Justify.Center;
 
@@ -193,10 +198,7 @@ namespace DeNelle.Village
             card.style.borderLeftColor   = BorderColor;
             card.style.borderTopWidth    = 2; card.style.borderRightWidth  = 2;
             card.style.borderBottomWidth = 2; card.style.borderLeftWidth   = 2;
-            card.style.borderTopLeftRadius     = 10;
-            card.style.borderTopRightRadius    = 10;
-            card.style.borderBottomLeftRadius  = 10;
-            card.style.borderBottomRightRadius = 10;
+            ElarionUi.SetRadius(card, ElarionUi.RadiusLg);
             card.style.paddingTop    = 20; card.style.paddingBottom = 20;
             card.style.paddingLeft   = 24; card.style.paddingRight  = 24;
             card.style.minWidth      = 380;
@@ -209,10 +211,11 @@ namespace DeNelle.Village
             headerRow.style.alignItems     = Align.Center;
             headerRow.style.marginBottom   = 12;
 
-            var title = new Label("⚡  Instant Tower Swap");
-            title.style.fontSize   = 17;
+            var title = new Label(ElarionUi.CrestGlyph + "  Instant Tower Swap");
+            title.style.fontSize   = ElarionUi.FontHead;
             title.style.color      = HeaderColor;
             title.style.unityFontStyleAndWeight = FontStyle.Bold;
+            title.style.letterSpacing = 1.5f;
             headerRow.Add(title);
 
             var closeBtn = new Button(Close) { text = "✕" };
@@ -244,7 +247,7 @@ namespace DeNelle.Village
 
             // ── Tower type grid ─────────────────────────────────────────────
             var typeHeader = new Label("Choose new type");
-            typeHeader.style.fontSize     = 12;
+            typeHeader.style.fontSize     = ElarionUi.FontLabel;
             typeHeader.style.color        = SubtleColor;
             typeHeader.style.marginTop    = 10;
             typeHeader.style.marginBottom = 6;
@@ -262,7 +265,7 @@ namespace DeNelle.Village
 
             // ── Currency selector ────────────────────────────────────────────
             var currencyHeader = new Label("Pay with");
-            currencyHeader.style.fontSize     = 12;
+            currencyHeader.style.fontSize     = ElarionUi.FontLabel;
             currencyHeader.style.color        = SubtleColor;
             currencyHeader.style.marginTop    = 10;
             currencyHeader.style.marginBottom = 6;
@@ -316,7 +319,7 @@ namespace DeNelle.Village
             _loadingOverlay.style.position        = Position.Absolute;
             _loadingOverlay.style.left            = 0; _loadingOverlay.style.top    = 0;
             _loadingOverlay.style.right           = 0; _loadingOverlay.style.bottom = 0;
-            _loadingOverlay.style.backgroundColor = new Color(0.05f, 0.04f, 0.08f, 0.80f);
+            _loadingOverlay.style.backgroundColor = new Color(ElarionUi.PanelStoneDark.r, ElarionUi.PanelStoneDark.g, ElarionUi.PanelStoneDark.b, 0.85f);
             _loadingOverlay.style.alignItems      = Align.Center;
             _loadingOverlay.style.justifyContent  = Justify.Center;
             _loadingOverlay.style.display         = DisplayStyle.None;
@@ -380,16 +383,16 @@ namespace DeNelle.Village
                 else if (isSelected)
                 {
                     chip.style.backgroundColor = ChipSelectedColor;
-                    chip.style.color           = Color.white;
-                    chip.style.borderTopColor    = BorderColor;
-                    chip.style.borderRightColor  = BorderColor;
-                    chip.style.borderBottomColor = BorderColor;
-                    chip.style.borderLeftColor   = BorderColor;
+                    chip.style.color           = ElarionUi.Parchment;
+                    chip.style.borderTopColor    = ElarionUi.Gilt;
+                    chip.style.borderRightColor  = ElarionUi.Gilt;
+                    chip.style.borderBottomColor = ElarionUi.Gilt;
+                    chip.style.borderLeftColor   = ElarionUi.Gilt;
                 }
                 else
                 {
                     chip.style.backgroundColor = ChipColor;
-                    chip.style.color           = Color.white;
+                    chip.style.color           = ElarionUi.Parchment;
                     chip.style.borderTopColor    = BorderColor;
                     chip.style.borderRightColor  = BorderColor;
                     chip.style.borderBottomColor = BorderColor;
@@ -441,20 +444,20 @@ namespace DeNelle.Village
                 if (isSelected)
                 {
                     btn.style.backgroundColor = ChipSelectedColor;
-                    btn.style.color           = Color.white;
-                    btn.style.borderTopColor    = BorderColor;
-                    btn.style.borderRightColor  = BorderColor;
-                    btn.style.borderBottomColor = BorderColor;
-                    btn.style.borderLeftColor   = BorderColor;
+                    btn.style.color           = ElarionUi.Parchment;
+                    btn.style.borderTopColor    = ElarionUi.Gilt;
+                    btn.style.borderRightColor  = ElarionUi.Gilt;
+                    btn.style.borderBottomColor = ElarionUi.Gilt;
+                    btn.style.borderLeftColor   = ElarionUi.Gilt;
                 }
                 else
                 {
                     btn.style.backgroundColor = ChipColor;
                     btn.style.color           = SubtleColor;
-                    btn.style.borderTopColor    = new Color(0.35f, 0.35f, 0.45f);
-                    btn.style.borderRightColor  = new Color(0.35f, 0.35f, 0.45f);
-                    btn.style.borderBottomColor = new Color(0.35f, 0.35f, 0.45f);
-                    btn.style.borderLeftColor   = new Color(0.35f, 0.35f, 0.45f);
+                    btn.style.borderTopColor    = new Color(ElarionUi.StoneTrim.r, ElarionUi.StoneTrim.g, ElarionUi.StoneTrim.b, 0.5f);
+                    btn.style.borderRightColor  = new Color(ElarionUi.StoneTrim.r, ElarionUi.StoneTrim.g, ElarionUi.StoneTrim.b, 0.5f);
+                    btn.style.borderBottomColor = new Color(ElarionUi.StoneTrim.r, ElarionUi.StoneTrim.g, ElarionUi.StoneTrim.b, 0.5f);
+                    btn.style.borderLeftColor   = new Color(ElarionUi.StoneTrim.r, ElarionUi.StoneTrim.g, ElarionUi.StoneTrim.b, 0.5f);
                 }
 
                 var capturedKind = kind;
@@ -578,7 +581,7 @@ namespace DeNelle.Village
         {
             var div = new VisualElement();
             div.style.height          = 1;
-            div.style.backgroundColor = new Color(0.30f, 0.25f, 0.45f, 0.60f);
+            div.style.backgroundColor = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.40f);
             div.style.marginTop       = 2;
             div.style.marginBottom    = 2;
             return div;
@@ -597,16 +600,14 @@ namespace DeNelle.Village
         private static void StyleActionButton(Button btn, Color bg)
         {
             btn.style.backgroundColor = bg;
-            btn.style.color           = Color.white;
+            // Dark ink on the gold CTA fill (high contrast), parchment cream on stone.
+            btn.style.color           = bg == ConfirmBgColor ? ElarionUi.Ink : ElarionUi.Parchment;
             btn.style.paddingTop      = 10; btn.style.paddingBottom = 10;
             btn.style.paddingLeft     = 20; btn.style.paddingRight  = 20;
-            btn.style.borderTopLeftRadius     = 6;
-            btn.style.borderTopRightRadius    = 6;
-            btn.style.borderBottomLeftRadius  = 6;
-            btn.style.borderBottomRightRadius = 6;
+            ElarionUi.SetRadius(btn, ElarionUi.RadiusMd);
             btn.style.borderTopWidth    = 0; btn.style.borderRightWidth  = 0;
             btn.style.borderBottomWidth = 0; btn.style.borderLeftWidth   = 0;
-            btn.style.fontSize          = 14;
+            btn.style.fontSize          = ElarionUi.FontBody;
             btn.style.unityFontStyleAndWeight = FontStyle.Bold;
         }
     }
