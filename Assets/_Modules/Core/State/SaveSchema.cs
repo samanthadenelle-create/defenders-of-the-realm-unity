@@ -27,7 +27,7 @@ namespace DeNelle.Core.State
     {
         // ── Versioning ───────────────────────────────────────────────────────
         /// <summary>CURRENT_SCHEMA_VERSION — bumped whenever the persisted shape changes.</summary>
-        public const int CurrentVersion = 21;  // v21 — node-settlement persistence (WO-159: claim/HP/phase + 3-day razed lockout survive save/load); v20 — gear inventory persistence (shop purchases survive reload + Neon sync); v19 — arenaDefense placed-defender layout (WO-389); v18 — fold AetherCrystals into Resources.Crystals (single-source-of-truth); v17 — zone graph persistence (WO-164); v16 — party roster (WO-301); v15 — magic tech-axis currency (DEF-121/WO-230); v14 — baseLayout (WO-108); v13 — buildJobs + adSkip (WO-172)
+        public const int CurrentVersion = 22;  // v22 — army roster persistence (WO-453: owned troops + cap + wounded/recovery/veterancy survive save/load); v21 — node-settlement persistence (WO-159: claim/HP/phase + 3-day razed lockout survive save/load); v20 — gear inventory persistence (shop purchases survive reload + Neon sync); v19 — arenaDefense placed-defender layout (WO-389); v18 — fold AetherCrystals into Resources.Crystals (single-source-of-truth); v17 — zone graph persistence (WO-164); v16 — party roster (WO-301); v15 — magic tech-axis currency (DEF-121/WO-230); v14 — baseLayout (WO-108); v13 — buildJobs + adSkip (WO-172)
         /// <summary>SaveExport.format — bumped only if the envelope shape changes.</summary>
         public const int FileFormat = 1;
 
@@ -243,6 +243,19 @@ namespace DeNelle.Core.State
             /// enum NAME (string) so it survives enum renumbering.
             /// </summary>
             [JsonProperty("settlements")] public List<DeNelle.Core.World.SettlementState> Settlements;
+
+            // ── v22 — Army roster persistence (WO-453) ───────────────────────────
+            /// <summary>
+            /// The player's persisted ARMY (WO-453) — the owned-troop roster + cap +
+            /// wounded/recovery/veterancy state. Nullable per the <c>.partial()</c>
+            /// convention; absent on an older save → the v21→v22 migration step seeds it
+            /// to a fresh empty cap-10 <see cref="ArmyStorage"/> (no owned troops until
+            /// the player trains one), so the roster survives a save/load round-trip.
+            /// Append-only field at the END so older saves stay loadable. Loss model is
+            /// wounded-recovery (no permadeath) — a downed troop is marked wounded and
+            /// recovers, never deleted.
+            /// </summary>
+            [JsonProperty("army")] public ArmyStorage Army;
         }
 
         // =====================================================================

@@ -294,6 +294,20 @@ namespace DeNelle.Core.State
         /// </summary>
         public List<PlacedDefenderData> ArenaDefense = new List<PlacedDefenderData>();
 
+        // ── Army — persisted troop roster (WO-453) ────────────────────────────
+        /// <summary>
+        /// The player's persisted ARMY (WO-453) — the owned-troop roster, the army cap
+        /// (10, expandable later via a barracks), and the train/wound-recover/veterancy
+        /// state over them. Owned by GameState the SAME way <see cref="BaseLayout"/> /
+        /// <see cref="ArenaDefense"/> are (a plain saveable class on the state object,
+        /// NOT a singleton/PlayerPrefs). Loss model = wounded-recovery, NO permadeath:
+        /// a downed troop is marked wounded + recovers, never deleted. Never null
+        /// (constructed empty on a fresh save / backfilled on load by the v22 migration
+        /// so older saves load with an empty cap-10 army). Round-trips through SaveSchema
+        /// (v22) — additive at the END so older saves stay loadable.
+        /// </summary>
+        public ArmyStorage Army = new ArmyStorage();
+
         /// <summary>A fresh List&lt;int&gt; of <paramref name="count"/> zeros.</summary>
         public static List<int> NewZeroed(int count)
         {

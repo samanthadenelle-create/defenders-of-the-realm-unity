@@ -57,6 +57,7 @@ namespace DeNelle.Core.State
                 // default-on-read (a nullable list/dict defaulted to empty on load),
                 // so NO Steps entry was needed for them.
                 { 21, MigrateToV21 },
+                { 22, MigrateToV22 },
             };
 
         /// <summary>
@@ -319,6 +320,19 @@ namespace DeNelle.Core.State
         {
             if (s.Settlements == null)
                 s.Settlements = new List<DeNelle.Core.World.SettlementState>();
+            return s;
+        }
+
+        /// <summary>
+        /// v21→v22 (WO-453 army persistence): seed army ?? a fresh empty cap-10
+        /// <see cref="ArmyStorage"/> — a pre-v22 save had no persisted army, so it loads
+        /// with no owned troops (the owned roster + cap + wounded/recovery/veterancy now
+        /// round-trip going forward). Additive + idempotent (only seeds when null).
+        /// </summary>
+        private static PersistedState MigrateToV22(PersistedState s)
+        {
+            if (s.Army == null)
+                s.Army = new ArmyStorage();
             return s;
         }
 
