@@ -302,6 +302,7 @@ namespace DeNelle.Village
                 case BuildingType.Farm: return "farm";
                 case BuildingType.Lumbermill: return "lumbermill";
                 case BuildingType.Forge: return "forge";
+                case BuildingType.Armorer: return "armorer";
                 case BuildingType.Workshop: return "workshop";
                 case BuildingType.ArcaneTower: return "arcane-tower";
                 case BuildingType.PetHouse: return "pet-house";
@@ -330,6 +331,7 @@ namespace DeNelle.Village
                 case BuildingType.Farm:
                 case BuildingType.Lumbermill:
                 case BuildingType.Forge:
+                case BuildingType.Armorer:
                     panelId = PanelId.BuildingUpgrade;
                     return true;
             }
@@ -523,6 +525,9 @@ namespace DeNelle.Village
             BuildingType.ArcaneTower => "Tower",
             BuildingType.Workshop    => "Workshop",
             BuildingType.Farm        => "Farm",
+            BuildingType.Lumbermill  => "Lumbermill",
+            BuildingType.Forge       => "Forge",
+            BuildingType.Armorer     => "Armorer",
             _ => "Building",
         };
     }

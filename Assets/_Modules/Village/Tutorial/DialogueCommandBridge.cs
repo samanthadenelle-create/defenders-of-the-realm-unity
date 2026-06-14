@@ -862,6 +862,17 @@ namespace DeNelle.Village
             // header reads the vendor's display name, not just the id-derived title — prevents the
             // "wrong storefront title" class of bug. Null/empty label safely falls back to the id.
             panel.Open(vendor, DialogueService.CurrentStructureName);
+            // Canon teardown (dialogue.md): DISMISS the dialogue so the shop REPLACES it instead of
+            // loading OVER a lingering dialogue/portrait canvas (the "portrait shows up after Leave"
+            // bug — the dialogue canvas was outside the shop's close scope). Deferred ONE frame so we
+            // don't Stop the Yarn VM mid-command (RPGDialoguePresenter option re-entrancy guard).
+            StartCoroutine(StopDialogueAfterPanelOpen());
+        }
+
+        private System.Collections.IEnumerator StopDialogueAfterPanelOpen()
+        {
+            yield return null;                 // let the Yarn command return before stopping the VM
+            DialogueService.Stop();            // documented walk-away auto-close → clears the portrait
         }
 
         private void CmdOpenUpgrade(string stationType)

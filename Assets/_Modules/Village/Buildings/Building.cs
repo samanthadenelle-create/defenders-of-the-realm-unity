@@ -40,8 +40,10 @@ namespace DeNelle.Village
         Farm = 4,
         /// <summary>Sawmill -- yields lumber for upgrades (upgrade district).</summary>
         Lumbermill = 5,
-        /// <summary>Armorer -- forges armor/weapon upgrades (upgrade district).</summary>
+        /// <summary>Forge -- sells + upgrades WEAPONS (vendor context "forge").</summary>
         Forge = 6,
+        /// <summary>Armorer / Blacksmith -- sells + upgrades ARMOR (vendor context "armorer").</summary>
+        Armorer = 7,
     }
 
     /// <summary>

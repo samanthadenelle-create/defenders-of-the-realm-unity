@@ -130,7 +130,8 @@ namespace DeNelle.Village
                 case BuildingType.CrystalMine: return SignKind.Upgrade;   // resource → shield
                 case BuildingType.Farm:        return SignKind.Upgrade;   // resource → shield
                 case BuildingType.Lumbermill:  return SignKind.Upgrade;   // resource → shield
-                case BuildingType.Forge:       return SignKind.Smith;     // forge only → sword
+                case BuildingType.Forge:       return SignKind.Smith;     // forge → sword
+                case BuildingType.Armorer:     return SignKind.Upgrade;   // armorer → shield (armor)
                 default:                        return SignKind.Generic;
             }
         }
