@@ -1007,7 +1007,7 @@ namespace DeNelle.DevTools
 
             WavePhase before = wm.Phase;
             FlowTrace.Step("Auto", $"TriggerWave: forcing next wave (phase before='{before}').");
-            wm.ForceBeginNextWave();
+            wm.ForceSpawnNextWaveNow();   // immediate spawn (skip countdown) — fixes the TriggerWave timeout from Idle
 
             float t0 = Time.realtimeSinceStartup;
             bool advanced = false;

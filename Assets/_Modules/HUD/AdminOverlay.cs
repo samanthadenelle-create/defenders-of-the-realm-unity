@@ -417,8 +417,8 @@ namespace DeNelle.HUD
         private void OnTriggerWave()
         {
             ResolveWaveManager();
-            InvokeMethod(_waveManagerInstance, "ForceBeginNextWave");
-            SetStatus("Triggered ForceBeginNextWave() — if missing, will need to add the public method.");
+            InvokeMethod(_waveManagerInstance, "ForceSpawnNextWaveNow");
+            SetStatus("Jumped to next wave (ForceSpawnNextWaveNow — spawns immediately, skips countdown).");
         }
 
         private void OnGiveCrystals(int delta)

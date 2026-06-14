@@ -293,6 +293,7 @@ namespace DeNelle.Village
         private WavePhase _phase = WavePhase.Idle;
         private int _currentWaveId;
         private float _countdownRemaining;
+        private bool  _forceSpawnNow;   // dev/bot "jump to wave": zero the countdown on the next BeginLoop
         private float _breachArmTimer;
         private bool _breachArmed;
         private int _spawnInstanceCounter;
@@ -584,6 +585,10 @@ namespace DeNelle.Village
             // between waves. The multiplier is derived from the base seconds,
             // never hard-coded (see DifficultyTuning).
             _countdownRemaining = Mathf.Max(0f, ScaledCountdown(wave.CountdownSeconds));
+            // DEV/bot immediate-spawn: ForceSpawnNextWaveNow set this from Idle — zero the
+            // countdown so TickCountdown() spawns the wave on the next tick (no race with the
+            // async BeginLoop setting the countdown above).
+            if (_forceSpawnNow) { _forceSpawnNow = false; _countdownRemaining = 0f; }
             _phase = WavePhase.Countdown;
             OnCountdownTick.Invoke(_countdownRemaining);
             WaveCountdownUI.Instance?.StartCountdown(_countdownRemaining);
@@ -641,6 +646,32 @@ namespace DeNelle.Village
                 case WavePhase.Complete:
                 default:
                     Debug.Log("[WaveManager] ForceBeginNextWave kicking the wave loop from " + _phase);
+                    BeginLoop().Forget();
+                    break;
+            }
+        }
+
+        /// <summary>
+        /// DEV / bot / "Jump to wave" button: spawn the next wave IMMEDIATELY — skip the
+        /// prepare-phase countdown. Distinct from <see cref="ForceBeginNextWave"/> (the normal
+        /// kickoff, which keeps the calm countdown). Fixes the AutoPilot 'TriggerWave timeout'
+        /// (the bot triggered from Idle → got a 45s countdown → timed out at 20s) and makes the
+        /// owner's "Trigger next wave" button actually jump to the wave instead of starting a timer.
+        /// </summary>
+        public void ForceSpawnNextWaveNow()
+        {
+            switch (_phase)
+            {
+                case WavePhase.Countdown:
+                    _countdownRemaining = 0f;
+                    OnCountdownTick.Invoke(0f);
+                    StartWave(_currentWaveId);
+                    break;
+                case WavePhase.Active:
+                    Debug.Log("[WaveManager] ForceSpawnNextWaveNow during active wave — ignored.");
+                    break;
+                default: // Idle / Complete — kick the loop but zero the countdown so it spawns now.
+                    _forceSpawnNow = true;
                     BeginLoop().Forget();
                     break;
             }
