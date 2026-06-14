@@ -93,7 +93,9 @@ namespace DeNelle.HUD
         public static void RaiseInventoryRequested() => InventoryRequestedStatic?.Invoke();
         public UnityEvent QuestsRequested = new UnityEvent();      // QUESTS → quest modal (follow-up; dimmed for now)
         public UnityEvent IntelRequested = new UnityEvent();       // far top-right (periscope) → enemy scout report / lookout
-        public UnityEvent RaidRequested = new UnityEvent();        // top-right (crossed swords) → enter raids (lead wires the entry)
+        public UnityEvent RaidRequested = new UnityEvent();        // top-right (crossed swords) → enter raids (RaidEntryBridge wires the entry, WO-457)
+        public UnityEvent RallyRequested = new UnityEvent();       // WO-457: raid combat HUD → arm a rally-point tap (a Village bridge sets TroopRally.Point + flag)
+        public UnityEvent RetreatRequested = new UnityEvent();     // WO-457: raid combat HUD → pull the warband out (a Village bridge calls RaidDeployController retreat)
         public AbilitySlotEvent AbilityRequested = new AbilitySlotEvent();
         public UnityEvent RepairConfirmRequested = new UnityEvent();
         public UnityEvent RepairCancelRequested = new UnityEvent();
@@ -319,6 +321,7 @@ namespace DeNelle.HUD
         // ── Context (village vs open world) ──────────────────────────────────
         private bool _inVillage = true;             // last evaluated context
         private bool _villageOnlyForced;            // a bridge can force village UI on
+        private bool _raidSceneActive;              // WO-457: active scene is a RaidBase_* raid
         private Transform _hero;
         private System.Type _heroType;
         private float _contextPollTimer;
@@ -804,10 +807,13 @@ namespace DeNelle.HUD
             // HP bar is hidden exactly when it changes (hero damaged in the idle hub = bar
             // never appears to move). Still hidden at full HP in a quiet hub (the T-004 intent).
             bool heroHurt = _hpMax > 0f && _hpCurrent < _hpMax - 0.01f;
-            bool show = (_waveCombatActive || heroHurt) && _combatHudVisible;
+            // WO-457: a RaidBase_* scene IS combat — the village wave loop's phase flag
+            // (_waveCombatActive) is never set there, so OR the raid-scene flag in so the
+            // vitals cluster (mana/XP) + party frames show during a raid the same as a wave.
+            bool show = (_waveCombatActive || _raidSceneActive || heroHurt) && _combatHudVisible;
             // Owner: hero + companion HEALTH BARS should be visible in TOWN, not only in combat.
-            // Show the party stack (HP bars/portraits) in the hub OR combat; keep the bottom-left
-            // vitals cluster (mana/XP — the context-free bit T-004 hid) combat-only.
+            // Show the party stack (HP bars/portraits) in the hub OR combat (incl. raids); keep the
+            // bottom-left vitals cluster (mana/XP — the context-free bit T-004 hid) combat-only.
             bool showParty = (InVillage || show) && _combatHudVisible;
             if (show == _lastCombatGate
                 && _vitalsCluster != null && _vitalsCluster.gameObject.activeSelf == show
@@ -2269,6 +2275,18 @@ namespace DeNelle.HUD
         // Build button → gated here too. Data bindings are untouched throughout.
         private void ApplyContext(bool force)
         {
+            // WO-457: track the active RAID scene so the combat cluster (party frames +
+            // vitals) ungates in RaidBase_* the same way it does in the village. Cheap
+            // string test; refreshed on the same context poll as InVillage.
+            var activeForRaid = SceneManager.GetActiveScene();
+            bool raidNow = activeForRaid.IsValid() && DeNelle.Core.HubScenes.IsRaid(activeForRaid.name);
+            if (raidNow != _raidSceneActive)
+            {
+                _raidSceneActive = raidNow;
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Raid",
+                    $"HUD combat-cluster gate: raidScene={raidNow} (scene '{activeForRaid.name}').");
+            }
+
             bool inVillage = EvaluateInVillage();
             if (!force && inVillage == _inVillage) return;
             _inVillage = inVillage;

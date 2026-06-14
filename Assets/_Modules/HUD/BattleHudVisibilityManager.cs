@@ -280,9 +280,21 @@ namespace DeNelle.HUD
         // Village context is SHARED from VillageHudController.InVillage (one test).
         private HudMode EvaluateMode()
         {
-            if (IsWaveActive() || IsInBattle()) return HudMode.Battle;
+            // WO-457: a RaidBase_* scene is a live combat scene (hero-led warband raid),
+            // but it has no WaveManager and no ATB BattleController — so neither
+            // IsWaveActive nor IsInBattle fires there and the battle HUD (ability bar +
+            // wave/vitals chrome) would stay faded out. Treat the raid scene as BATTLE so
+            // the combat HUD comes up. Cheap active-scene string test (Core-only).
+            if (IsWaveActive() || IsInBattle() || IsRaidScene()) return HudMode.Battle;
             bool inVillage = _hud != null && _hud.InVillage;
             return inVillage ? HudMode.Town : HudMode.Hidden;
+        }
+
+        /// <summary>True while a <c>RaidBase_*</c> raid scene is active (WO-457).</summary>
+        private bool IsRaidScene()
+        {
+            var s = SceneManager.GetActiveScene();
+            return s.IsValid() && DeNelle.Core.HubScenes.IsRaid(s.name);
         }
 
         /// <summary>Village wave defense in progress (prepare countdown or fighting).</summary>

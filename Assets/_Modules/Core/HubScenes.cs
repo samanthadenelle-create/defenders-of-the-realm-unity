@@ -28,5 +28,15 @@ namespace DeNelle.Core
                 if (sceneName == Names[i] || sceneName.Contains(Names[i])) return true;
             return false;
         }
+
+        /// <summary>True if <paramref name="sceneName"/> is an enemy RAID scene
+        /// (<c>RaidBase_*</c>) — the single source both the HUD (combat-cluster gate,
+        /// WO-457) and the Village (RaidDeployController self-install) read so the raid
+        /// naming convention lives in ONE place.</summary>
+        public static bool IsRaid(string sceneName)
+        {
+            return !string.IsNullOrEmpty(sceneName)
+                && sceneName.StartsWith("RaidBase", System.StringComparison.OrdinalIgnoreCase);
+        }
     }
 }

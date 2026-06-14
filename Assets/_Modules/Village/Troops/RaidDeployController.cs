@@ -152,6 +152,7 @@ namespace DeNelle.Village
         {
             // Don't let a rally leak across scenes.
             TroopRally.Clear();
+            if (_rallyFlag != null) Destroy(_rallyFlag);
             if (_ui != null) Destroy(_ui);
         }
 
@@ -322,7 +323,73 @@ namespace DeNelle.Village
                 return;
             }
             TroopRally.Point = hit.point;
+            ShowRallyFlag(hit.point);
+            DeNelle.Core.Diagnostics.FlowTrace.Step("Raid",
+                $"rally point moved to {hit.point} — warband musters there.");
             SetStatus("Rally set — idle troops will muster there.");
+        }
+
+        // =====================================================================
+        //  RALLY FLAG — a visible muster marker dropped/moved at the rally point
+        // =====================================================================
+        // WO-457: TroopRally.Point is data only; the player needs to SEE where the
+        // warband is rallying. No flag prefab exists, so we build a cheap primitive
+        // marker (a thin pole + a gold banner quad) and just MOVE it on each rally
+        // tap. Non-colliding (the troops path THROUGH the point), null-safe.
+        private GameObject _rallyFlag;
+
+        private void ShowRallyFlag(Vector3 groundPoint)
+        {
+            if (_rallyFlag == null) _rallyFlag = BuildRallyFlag();
+            if (_rallyFlag == null) return;
+            _rallyFlag.transform.position = groundPoint;
+            _rallyFlag.SetActive(true);
+        }
+
+        private GameObject BuildRallyFlag()
+        {
+            try
+            {
+                var root = new GameObject("RallyFlag");
+
+                // Thin pole (cylinder, ~2.4m tall). Strip the collider so it never
+                // blocks deploy/rally raycasts or troop pathing.
+                var pole = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                pole.name = "Pole";
+                pole.transform.SetParent(root.transform, false);
+                pole.transform.localScale = new Vector3(0.08f, 1.2f, 0.08f);
+                pole.transform.localPosition = new Vector3(0f, 1.2f, 0f);
+                StripCollider(pole);
+                TintRenderer(pole, new Color(0.32f, 0.22f, 0.12f)); // dark wood
+
+                // Gold banner quad near the top of the pole.
+                var banner = GameObject.CreatePrimitive(PrimitiveType.Quad);
+                banner.name = "Banner";
+                banner.transform.SetParent(root.transform, false);
+                banner.transform.localScale = new Vector3(0.9f, 0.6f, 1f);
+                banner.transform.localPosition = new Vector3(0.45f, 2.0f, 0f);
+                StripCollider(banner);
+                TintRenderer(banner, new Color(0.85f, 0.68f, 0.22f)); // gilt
+
+                return root;
+            }
+            catch (System.Exception e)
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("Raid", "rally flag build failed: " + e.Message);
+                return null;
+            }
+        }
+
+        private static void StripCollider(GameObject go)
+        {
+            var col = go != null ? go.GetComponent<Collider>() : null;
+            if (col != null) Destroy(col);
+        }
+
+        private static void TintRenderer(GameObject go, Color c)
+        {
+            var r = go != null ? go.GetComponent<Renderer>() : null;
+            if (r != null && r.material != null) r.material.color = c;
         }
 
         private void ToggleRally()
