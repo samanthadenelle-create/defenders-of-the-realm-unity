@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "_comment": "Buildable troops (WO-453 Step 1, combat-only). A troop is a lightweight friendly fighter that hunts the nearest hostile and is itself damageable. Footman = melee bruiser (close + strike, tanky). Archer = ranged by REACH (attackRange 14 — no projectile visual yet). cost*/buildSeconds are authored for the later build-queue + army-storage steps (Step 2+) and are inert in Step 1. model maps to Resources/Heroes/<model> (Knight / Ranger), with a tinted-capsule fallback when the model is missing.",
+  "troops": [
+    {
+      "id": "troop-footman",
+      "displayName": "Footman",
+      "role": "melee",
+      "slots": 1,
+      "model": "Knight",
+      "element": "None",
+      "maxHp": 100,
+      "attackDamage": 12,
+      "attackCooldown": 1.0,
+      "attackRange": 2.5,
+      "moveSpeed": 4.0,
+      "huntScanRadius": 14,
+      "costWood": 40,
+      "costIron": 10,
+      "costFood": 0,
+      "buildSeconds": 30
+    },
+    {
+      "id": "troop-archer",
+      "displayName": "Archer",
+      "role": "ranged",
+      "slots": 1,
+      "model": "Ranger",
+      "element": "None",
+      "maxHp": 60,
+      "attackDamage": 29,
+      "attackCooldown": 1.2,
+      "attackRange": 14,
+      "moveSpeed": 4.0,
+      "huntScanRadius": 18,
+      "costWood": 30,
+      "costIron": 20,
+      "costFood": 0,
+      "buildSeconds": 45
+    }
+  ]
+}

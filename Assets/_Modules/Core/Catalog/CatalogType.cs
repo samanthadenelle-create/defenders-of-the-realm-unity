@@ -5,7 +5,7 @@
 namespace DeNelle.Core.Catalog
 {
     /// <summary>Palette tabs — the kinds of thing the catalog can place.</summary>
-    public enum CatalogType { Wall, Stairs, Floor, Room, Tower, Gate, Resource, Decoration }
+    public enum CatalogType { Wall, Stairs, Floor, Room, Tower, Gate, Resource, Decoration, Troop }
 
     /// <summary>Build grain: one cell, or a pre-arranged bundle of cells.</summary>
     public enum EntryKind { Cell, Composite }
