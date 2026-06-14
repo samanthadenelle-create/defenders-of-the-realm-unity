@@ -85,7 +85,7 @@ namespace DeNelle.Village.Hero
             ElarionUiKit.Scrim(_ui.transform, onTapClose: Close);
 
             var panelGo = ElarionUiKit.PanelFramed(_ui.transform, new Vector2(0.10f, 0.05f), new Vector2(0.90f, 0.95f),
-                                                   deep: true, packSpriteName: null);
+                                                   deep: true, packSpriteName: RpgUiCatalog.PanelWindowDark);
             var panel = panelGo.transform;
 
             BuildHeader(panel);

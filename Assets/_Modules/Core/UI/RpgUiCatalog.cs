@@ -88,6 +88,17 @@ namespace DeNelle.Core.UI
         public const string PanelTab      = "panel_tab";        // Score tabs/Tab 1 (ornate banner)
         public const string PanelInventory= "panel_inventory";  // Ui Elements/Dialogue (grid panel)
         public const string PanelQuest    = "panel_quest";      // Ui Elements/Quest log
+        // panel/ — clean ORNATE window frames (WO-438 screen map), 9-sliced:
+        public const string PanelWindow     = "panel_window";      // D8 ornate scrollwork window (dialogue/hero)
+        public const string PanelWindowDark = "panel_window_dark"; // D5 clean dark carved frame (neutral default)
+        public const string PanelVendor     = "panel_vendor";      // D3 dark-wood vendor board (shop)
+        public const string PanelGrid       = "panel_grid";        // D4 grid plate (inventory)
+        // The canonical DEFAULT window frame: a clean, neutral ornate frame every framed
+        // window inherits via ElarionUiKit.PanelFramed when no explicit frame is named.
+        public const string PanelDefault    = PanelWindowDark;
+        // button/ — clean (text-free) framed button + exit, 9-sliced:
+        public const string ButtonFrame   = "button_frame";    // D2/Button 1 (neutral framed button)
+        public const string ButtonExit    = "button_exit";     // D2/Exit (close/exit button)
 
         /// <summary>
         /// Representative sprite for a role (the first one loaded, by name order), or

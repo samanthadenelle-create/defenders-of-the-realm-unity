@@ -47,9 +47,12 @@ namespace DeNelle.Editor
         // One element to copy: source path, destination role folder, canonical name.
         private struct Entry
         {
-            public string Src;   // full project path under PackRoot
-            public string Role;  // role subfolder under Resources/RpgUi
-            public string Name;  // canonical file name (no extension) used by the catalog
+            public string Src;    // full project path under PackRoot
+            public string Role;   // role subfolder under Resources/RpgUi
+            public string Name;   // canonical file name (no extension) used by the catalog
+            public int    Border; // uniform 9-slice border in px (0 = Simple, no slicing). Ornate
+                                   // window/button frames need this so corners stay crisp when the
+                                   // panel is stretched to any size (Image.Type.Sliced).
         }
 
         [MenuItem("Defenders/Art/Import RPG UI Pack")]
@@ -83,7 +86,7 @@ namespace DeNelle.Editor
                     Debug.LogWarning("[RpgUiImporter] copy failed: " + src + " -> " + dst);
                     continue;
                 }
-                ForceSpriteImport(dst);
+                ForceSpriteImport(dst, e.Border);
                 copied++;
             }
 
@@ -138,11 +141,31 @@ namespace DeNelle.Editor
                 new Entry { Src = "Score tabs/Tab 1.png",         Role = "panel", Name = "panel_tab" },
                 new Entry { Src = "Ui Elements/Dialogue.png",     Role = "panel", Name = "panel_inventory" },
                 new Entry { Src = "Ui Elements/Quest log.png",    Role = "panel", Name = "panel_quest" },
+
+                // ── panel/ — clean ORNATE window frames (WO-438 screen map). These are
+                // empty framed plates meant to BE a window background, 9-sliced (Border)
+                // so they stretch to any panel size without distorting the carved corners.
+                //   D8 = ornate scrollwork window  (dialogue / hero windows: D1/D5/D6 family)
+                //   D5 = clean dark carved frame    (neutral default window)
+                //   D3 = dark-wood vendor board     (vendor / shop)
+                //   D4 = grid plate                 (inventory)
+                // Borders sized to each frame's actual corner art (px): D8 1446x945 ornate
+                // scrollwork corners ~120; D5 1392x945 carved cusps ~90; D3/D4 720-wide plates.
+                new Entry { Src = "D8/Dialogue.png",   Role = "panel", Name = "panel_window",      Border = 120 },
+                new Entry { Src = "D5/Dialogue_.png",  Role = "panel", Name = "panel_window_dark", Border = 90  },
+                new Entry { Src = "D3/Dialogue.png",   Role = "panel", Name = "panel_vendor",      Border = 56  },
+                new Entry { Src = "D4/Dialogue_.png",  Role = "panel", Name = "panel_grid",        Border = 44  },
+
+                // ── button/ — clean framed (text-free) button + exit, 9-sliced ──
+                new Entry { Src = "D2/Button 1.png",   Role = "button", Name = "button_frame", Border = 28 },
+                new Entry { Src = "D2/Exit.png",       Role = "button", Name = "button_exit",  Border = 20 },
             };
         }
 
         // Force the copied texture to import as a single Sprite (UI-ready, crisp edges).
-        private static void ForceSpriteImport(string assetPath)
+        // border>0 sets a uniform 9-slice border so ornate window/button frames stretch
+        // to any panel size without distorting the carved corners (Image.Type.Sliced).
+        private static void ForceSpriteImport(string assetPath, int border = 0)
         {
             var importer = AssetImporter.GetAtPath(assetPath) as TextureImporter;
             if (importer == null)
@@ -158,6 +181,15 @@ namespace DeNelle.Editor
             importer.filterMode          = FilterMode.Bilinear;
             importer.textureCompression  = TextureImporterCompression.Uncompressed; // keep gilt edges clean
             importer.npotScale           = TextureImporterNPOTScale.None;
+            if (border > 0)
+            {
+                // 9-slice border (L,B,R,T) lives on the importer's sprite settings.
+                var settings = new TextureImporterSettings();
+                importer.ReadTextureSettings(settings);
+                settings.spriteBorder = new Vector4(border, border, border, border);
+                settings.spriteMeshType = SpriteMeshType.FullRect; // sliced frames need FullRect
+                importer.SetTextureSettings(settings);
+            }
             EditorUtility.SetDirty(importer);
             importer.SaveAndReimport();
         }

@@ -915,10 +915,11 @@ namespace DeNelle.Core.UI
                                              bool deep = false, string packSpriteName = null)
         {
             var p = Panel(parent, anchorMin, anchorMax, deep: deep, innerRim: true);
-            // Only dress with a pack panel sprite when the caller EXPLICITLY names one. A null/empty
-            // name must mean "plain dark-glass" — NOT a silent default: RpgUiCatalog.Get(role, null)
-            // falls through to the FIRST sprite in the role (a gold grid panel), which is what made the
-            // store read as an empty gold grid even after asking for no sprite.
+            // Only dress with a pack panel sprite when the caller EXPLICITLY names one (WO-438 maps a
+            // specific frame per screen). A null/empty name must stay "plain dark-glass" — some screens
+            // (e.g. the store) deliberately keep dark glass so their rows read clearly. Never default via
+            // RpgUiCatalog.Get(role, null): that returns the FIRST sprite in the role (a gold grid), which
+            // is what made the store read as an empty gold grid. Sprite-first with the procedural fallback.
             if (!string.IsNullOrEmpty(packSpriteName))
             {
                 var packSprite = RpgUiCatalog.Get(RpgUiCatalog.RolePanel, packSpriteName);

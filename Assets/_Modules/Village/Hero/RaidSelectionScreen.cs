@@ -85,7 +85,7 @@ namespace DeNelle.Village.Hero
             ElarionUiKit.Scrim(_ui.transform, onTapClose: Close);
 
             var panelGo = ElarionUiKit.PanelFramed(_ui.transform, new Vector2(0.16f, 0.06f), new Vector2(0.84f, 0.94f),
-                                                   deep: true, packSpriteName: null);
+                                                   deep: true, packSpriteName: RpgUiCatalog.PanelWindowDark);
             var panel = panelGo.transform;
 
             // The RAIDS banner image heads the panel (decorative, null-safe).

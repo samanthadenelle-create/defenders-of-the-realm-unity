@@ -56,7 +56,7 @@ namespace DeNelle.Village.Hero
             ElarionUiKit.Scrim(_ui.transform, onTapClose: Close);
 
             var panelGo = ElarionUiKit.PanelFramed(_ui.transform, new Vector2(0.22f, 0.08f), new Vector2(0.78f, 0.92f),
-                                                   deep: true, packSpriteName: null);
+                                                   deep: true, packSpriteName: RpgUiCatalog.PanelWindowDark);
             var panel = panelGo.transform;
 
             ElarionUiKit.Header(panel, "Barracks — Train", x0: 0.04f, x1: 0.96f, y0: 0.9f, y1: 0.97f);
