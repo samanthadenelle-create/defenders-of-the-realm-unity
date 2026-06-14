@@ -40,6 +40,7 @@
 // Pure UnityEngine.UI + TMPro. No UXML. Passive IVillageHud. HUD→Core asmdef.
 // =============================================================================
 
+using System.Collections;
 using DeNelle.Core;
 using DeNelle.Core.HUD;
 using DeNelle.Core.UI;   // shared ElarionUiKit — ONE visual language with the inventory
@@ -92,6 +93,7 @@ namespace DeNelle.HUD
         public static void RaiseInventoryRequested() => InventoryRequestedStatic?.Invoke();
         public UnityEvent QuestsRequested = new UnityEvent();      // QUESTS → quest modal (follow-up; dimmed for now)
         public UnityEvent IntelRequested = new UnityEvent();       // far top-right (periscope) → enemy scout report / lookout
+        public UnityEvent RaidRequested = new UnityEvent();        // top-right (crossed swords) → enter raids (lead wires the entry)
         public AbilitySlotEvent AbilityRequested = new AbilitySlotEvent();
         public UnityEvent RepairConfirmRequested = new UnityEvent();
         public UnityEvent RepairCancelRequested = new UnityEvent();
@@ -421,6 +423,7 @@ namespace DeNelle.HUD
         private const string IconQuest        = "hud_quest";
         private const string IconBuild        = "hud_build";    // standalone Resources/HudIcons/hud_build (tower)
         private const string IconIntel        = "hud_intel";    // standalone Resources/HudIcons/hud_intel (periscope/lookout)
+        private const string IconRaid         = "hud_raid";     // standalone Resources/HudIcons/hud_raid (crossed swords → enter raids)
         private const string IconHeart        = "hud_heart";    // standalone Resources/HudIcons/hud_heart (Heart-of-Elarion crest)
         private const string IconAbilityFrame = "hud_ability_frame";
 
@@ -857,9 +860,13 @@ namespace DeNelle.HUD
                 {
                     if (_townResFlash[i] <= 0f || _townResBadge[i] == null) continue;
                     _townResFlash[i] = Mathf.Max(0f, _townResFlash[i] - dt * 2.2f);
+                    // The badge's rest colour is TRANSPARENT (the wood strip bar frames the
+                    // row now, line ~1994). Lerp from that transparent base — NOT from LParch
+                    // — so a value update flashes a tinted glow that FADES BACK TO CLEAR and
+                    // never leaves a permanent near-white parchment box behind the number.
                     Color flash = _townResFlashUp[i] ? HudTheme.LookoutSafe : HudTheme.HpRed;
-                    // LIGHT: rest baseline is the light parchment badge, not dark glass.
-                    _townResBadge[i].color = Color.Lerp(LParch, flash, _townResFlash[i] * 0.6f);
+                    Color rest = new Color(flash.r, flash.g, flash.b, 0f);
+                    _townResBadge[i].color = Color.Lerp(rest, flash, _townResFlash[i] * 0.6f);
                 }
             }
 
@@ -1070,6 +1077,37 @@ namespace DeNelle.HUD
             BuildMomentumBadge(battleRoot);
             BuildVitalsCluster(battleRoot);
             BuildSkillBar(battleRoot);
+
+            // Self-reveal: the freshly-built HUD fades in from alpha 0 → 1 over ~0.3s
+            // so it animates onto the screen on load instead of popping in hard.
+            AnimateIn();
+        }
+
+        /// <summary>
+        /// Reveal the HUD with a short fade-in. Starts the root CanvasGroup at alpha 0
+        /// and eases to 1 over ~0.3s. Coroutine-driven on unscaled time (no DOTween
+        /// dependency, WebGL-safe, no reflection). Idempotent + null-safe.
+        /// </summary>
+        public void AnimateIn()
+        {
+            if (_rootGroup == null) return;
+            if (!isActiveAndEnabled) { _rootGroup.alpha = 1f; return; }   // can't run a coroutine while disabled — just show
+            _rootGroup.alpha = 0f;
+            StopCoroutine(nameof(FadeInHud));
+            StartCoroutine(FadeInHud());
+        }
+
+        private IEnumerator FadeInHud()
+        {
+            const float dur = 0.3f;
+            float t = 0f;
+            while (t < dur && _rootGroup != null)
+            {
+                t += Time.unscaledDeltaTime;
+                _rootGroup.alpha = Mathf.Clamp01(t / dur);
+                yield return null;
+            }
+            if (_rootGroup != null) _rootGroup.alpha = 1f;
         }
 
         // ── WO-403/404 · Full-screen RUNIC BORDER frame ───────────────────────
@@ -1172,18 +1210,22 @@ namespace DeNelle.HUD
             // Drop below the top resource strip band so the gear/backpack never
             // overlap the resources (battle) or the compass row (town).
             cluster.anchoredPosition = new Vector2(-55f, -55f);   // inset ≈ resource-bar height from top + right
-            cluster.sizeDelta = new Vector2(280f, 135f);   // ~250% up — same ≈140px size as the TOWN ACTIONS row
+            cluster.sizeDelta = new Vector2(410f, 135f);   // widened from 280 → fits THREE evenly-spaced icons (gear · intel · raid)
 
-            BuildIconButton(cluster, new Vector2(0f, 0f), new Vector2(0.48f, 1f),
+            // Three evenly-spaced slots: 0–0.31 · 0.345–0.655 · 0.69–1.
+            BuildIconButton(cluster, new Vector2(0f, 0f), new Vector2(0.31f, 1f),
                 IconSettings, "*", () => HelpMenu.Instance?.ToggleOverlay());   // gear → Help/Settings menu (Report bug, Controls, Dev tools[dev], Credits)
-            // Far top-right = enemy scout report / lookout (periscope icon — self-evident).
-            BuildIconButton(cluster, new Vector2(0.52f, 0f), new Vector2(1f, 1f),
+            // Middle = enemy scout report / lookout (periscope icon — self-evident).
+            BuildIconButton(cluster, new Vector2(0.345f, 0f), new Vector2(0.655f, 1f),
                 IconIntel, "o", () => IntelRequested?.Invoke());
+            // Far top-right = enter RAIDS (crossed-swords icon; glyph fallback until art lands).
+            BuildIconButton(cluster, new Vector2(0.69f, 0f), new Vector2(1f, 1f),
+                IconRaid, "x", () => RaidRequested?.Invoke());
 
             // MOCKUP ALIGN: a small "INTEL" caption under the periscope so the top-right
             // corner reads as the labeled INTEL button from hud_mobile_combat. Decorative
             // (non-raycast) — the icon button above owns the tap.
-            var intelCap = NewRect("IntelLabel", cluster, new Vector2(0.52f, -0.30f), new Vector2(1f, 0.04f));
+            var intelCap = NewRect("IntelLabel", cluster, new Vector2(0.345f, -0.30f), new Vector2(0.655f, 0.04f));
             var ic = AddText(intelCap, "INTEL", 12, HudTheme.Gilt, TextAlignmentOptions.Center);
             ic.fontStyle = FontStyles.Bold; ic.characterSpacing = 2f;
             ic.outlineColor = new Color32(0, 0, 0, 200); ic.outlineWidth = 0.08f;
@@ -1843,11 +1885,17 @@ namespace DeNelle.HUD
         {
             // Built through the shared kit so the CTA reads in ONE visual language.
             // Final anchors are (re)set in ApplyResponsiveLayout; these are placeholders.
-            var swBtn = ElarionUiKit.Button(parent, "> Start Next Wave",
+            // Seated OVER the right-pointing arrow name-plate beside the wave timer
+            // (the hud_wave_plate region of the town wave cluster, top-left). Final
+            // anchors are (re)set per-orientation in ApplyResponsiveLayout to track
+            // the plate; these match the landscape plate region.
+            var swBtn = ElarionUiKit.Button(parent, "> Start Wave",
                 ElarionUiKit.ButtonKind.Gold,
-                new Vector2(0.02f, 0.80f), new Vector2(0.24f, 0.85f),
+                new Vector2(0.085f, 0.865f), new Vector2(0.205f, 0.915f),
                 onClick: () => StartWaveRequested?.Invoke());
             _startWaveBtn = swBtn.GetComponent<RectTransform>();
+            // Render ABOVE the wave-plate art so the label/CTA reads and stays tappable.
+            _startWaveBtn.SetAsLastSibling();
             _startWaveBtn.gameObject.SetActive(false);
         }
 
@@ -2156,9 +2204,9 @@ namespace DeNelle.HUD
                 SetAnchors(_vitalsCluster,  new Vector2(0.02f, 0.235f), new Vector2(0.46f, 0.30f));
                 // Build entry lifts to the upper-right, clear of the skill cluster.
                 SetAnchors(_buildBtn,       new Vector2(0.84f, 0.255f), new Vector2(0.99f, 0.33f));
-                // Small "Start Next Wave" pill TOP-LEFT, sitting just BELOW the party
-                // stack (top-left, ~0..0.25 wide) so it reads with the wave/timer cluster.
-                SetAnchors(_startWaveBtn,   new Vector2(0.02f, 0.80f),  new Vector2(0.24f, 0.85f));
+                // "Start Wave" CTA seated OVER the right-pointing arrow plate beside the
+                // wave timer (portrait: the 380px-wide cluster spans more of the screen).
+                SetAnchors(_startWaveBtn,   new Vector2(0.16f, 0.865f), new Vector2(0.40f, 0.915f));
 
                 // WO-339 TOWN HUD portrait reflow: wave/timer cluster top-LEFT
                 // narrows; resources STACK on the left under it; mini-map shrinks
@@ -2182,9 +2230,9 @@ namespace DeNelle.HUD
                 // Vitals bottom-left above the (smaller) landscape joystick.
                 SetAnchors(_vitalsCluster,  new Vector2(0.02f, 0.30f),  new Vector2(0.30f, 0.37f));
                 SetAnchors(_buildBtn,       new Vector2(0.88f, 0.36f),  new Vector2(0.995f, 0.45f));
-                // Small "Start Next Wave" pill TOP-LEFT, sitting just BELOW the party
-                // stack (top-left) so it reads with the wave/timer cluster.
-                SetAnchors(_startWaveBtn,   new Vector2(0.02f, 0.83f),  new Vector2(0.22f, 0.88f));
+                // "Start Wave" CTA seated OVER the right-pointing arrow plate beside the
+                // wave timer (landscape: the 380px cluster spans a smaller width fraction).
+                SetAnchors(_startWaveBtn,   new Vector2(0.085f, 0.865f), new Vector2(0.205f, 0.915f));
 
                 // WO-339 TOWN HUD landscape: wide top spread — wave cluster top-left,
                 // resource badges top-centre, full-size 140 mini-map top-right.
