@@ -148,12 +148,18 @@ namespace DeNelle.Village
             var holder = new GameObject(HolderName);
             Transform hero = ResolveHero();
 
-            // Owner placement (2026-06-12): OUT in the courtyard, PAST the keep/bastion exit,
-            // toward the south gate (gate ~z=-44; the keep is central). The player must LEAVE
-            // the bastion before the Talk prompt lights — "stepped out of the keep -> meet your
-            // companion." Fixed + navmesh-snapped so it's robust no matter where in the keep the
-            // hero spawned. (hero is still resolved below, for facing.)
-            Vector3 basePos = new Vector3(0f, 0f, 20f); // owner 2026-06-12: 20m NORTH of spawn
+            // QUICK FIX (owner 2026-06-13, RCA): the introducer used to spawn at a FIXED far
+            // point (0,0,+20) while the hero spawns ~(0,y,-11) by the Tree of Life — ~31m away —
+            // so players testing combat near the tree never reached it and the recruit
+            // (SylasFirstMeeting -> RecruitCompanion Ranger -> AddToParty) never fired. Place the
+            // introducer a SHORT walk in FRONT of the hero instead, so they meet it immediately.
+            // 5m is just inside ActivateRadius (6m, prompt lights) and just OUTSIDE AutoFireRadius
+            // (4m, auto-start) — the player sees it before it fires. Fall back to the old fixed
+            // point if the hero can't be resolved at inject time. (The bigger "NPC becomes the
+            // companion" unify is WO-432, not here.)
+            Vector3 basePos = hero != null
+                ? hero.position + FlatDir(hero.forward) * 5f
+                : new Vector3(0f, 0f, 20f);
             if (NavMesh.SamplePosition(basePos, out var hit, 6f, NavMesh.AllAreas))
                 basePos = hit.position;
 
