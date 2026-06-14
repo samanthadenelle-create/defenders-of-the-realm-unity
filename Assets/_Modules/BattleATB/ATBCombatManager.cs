@@ -21,6 +21,7 @@
 
 using UnityEngine;
 using UnityEngine.Events;
+using UnityEngine.SceneManagement;
 
 namespace DeNelle.BattleATB
 {
@@ -36,6 +37,30 @@ namespace DeNelle.BattleATB
 
         /// <summary>The live scene instance, or null when the ATB scene is not loaded.</summary>
         public static ATBCombatManager Instance { get; private set; }
+
+        // ── Self-bootstrap ────────────────────────────────────────────────────
+        // ATBBattle.unity has NO authored ATBCombatManager, so Instance was always
+        // null → the idle-turn-timeout safety net (HandleIdleTimeout, built to stop
+        // stalls) never ran → battles could hang forever ("ATB endless loop",
+        // break-log 2026-06-14). Bootstrap on EVERY ATB scene load (not once at
+        // startup — the battle is entered later from the village), so the timeout
+        // always advances the fight.
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        private static void InstallBootstrap()
+        {
+            SceneManager.sceneLoaded -= OnAnySceneLoaded;
+            SceneManager.sceneLoaded += OnAnySceneLoaded;
+            OnAnySceneLoaded(SceneManager.GetActiveScene(), default);
+        }
+
+        private static void OnAnySceneLoaded(Scene scene, LoadSceneMode mode)
+        {
+            if (scene.name == null ||
+                scene.name.IndexOf("ATBBattle", System.StringComparison.OrdinalIgnoreCase) < 0)
+                return;
+            if (Instance == null)
+                new GameObject("ATBCombatManager (auto)").AddComponent<ATBCombatManager>();
+        }
 
         // ── Inspector ─────────────────────────────────────────────────────────
 
