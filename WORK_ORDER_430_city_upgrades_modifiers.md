@@ -55,7 +55,19 @@ in the same pass so there's ONE source of truth.)
 on fail set `$upgradeOk=false`. Also set the per-building `$<id>_Level` Yarn var from BuildingTiers on
 dialogue start (so the creative-authored `<<if>>` gates read correctly). Reuse `DialogueService.CurrentStructureId`.
 
-### 5. Application hooks (reuse existing — Explore map)
+### 5. Application hooks — STRATEGY (owner-approved 2026-06-14)
+**Never mutate base stats** (TroopDef is shared catalog → would corrupt all troops + persist wrong).
+- **Troops = BAKE AT SPAWN** into the instance: read `ModifierService.Active` ONCE at deploy, set
+  `maxHp = base × troopHealthMult`, `damage = base × troopDamageMult`. (maxHp can't be live-scaled safely —
+  current-HP exploit/death; raid perks are fixed for the raid; perf.) Extends the existing
+  `PlayerTroop.DamageMultiplier` bake. **The modifier MUST be set BEFORE the raid scene spawns troops** ("before
+  landing") so every troop + the garrison is born correct — no retrofitting live objects.
+- **Towers = LIVE-READ** `TowerDamageMult`/`TowerRangeMult` per shot (cheap, no HP problem; enables the Arcane
+  Overload 15s temp-empower to work dynamically).
+- **Temp abilities (Battle Forged +25%/60s) = a decaying buff layer** on the instance:
+  `effective = base × bakedPermanent × tempBuff(→1.0)`. The only dynamic-carry case.
+
+### 5b. Application hooks (reuse existing — Explore map)
 - **Tower:** `DefenseTower.Damage` / `ArcaneTower.Damage` → multiply by `ModifierService.Active.towerDamageMult`
   at fire (add `GetEffectiveDamage()`); range similarly.
 - **Troops:** `TroopDeployer.SpawnFromArmy` already applies `PlayerTroop.DamageMultiplier` → fold in

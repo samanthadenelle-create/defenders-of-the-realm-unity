@@ -63,6 +63,14 @@ namespace DeNelle.Village
         private LineRenderer _aimBeam;
         private Material      _aimBeamMat;
 
+        // WO-430 — PLAYER-owned towers get the Arcane Tower tier perks (towerDamageMult /
+        // towerRangeMult). LIVE-READ (cheap, no current-HP problem) so the tier-4 Arcane
+        // Overload temp-empower can buff dynamically. Enemy garrison turrets use base stats.
+        private float EffectiveDamage => Allegiance == TowerAllegiance.PlayerOwned
+            ? Damage * DeNelle.Core.State.ModifierService.Active.TowerDamageMult : Damage;
+        private float EffectiveRange => Allegiance == TowerAllegiance.PlayerOwned
+            ? Range * DeNelle.Core.State.ModifierService.Active.TowerRangeMult : Range;
+
         private void Update()
         {
             // EnemyOwned garrison turret — target the player party instead of
@@ -203,12 +211,13 @@ namespace DeNelle.Village
             IDamageable best = null;
             int   bestPri = int.MaxValue;
             float bestSqr = float.MaxValue;
+            float range = EffectiveRange;   // WO-430 — Arcane Tower range perk (player towers)
             foreach (var d in _hostiles)
             {
                 if (d == null || !d.IsAlive) continue;
                 Vector3 p = d.WorldPosition;
                 float sqr = (p - transform.position).sqrMagnitude;
-                if (sqr > Range * Range) continue;
+                if (sqr > range * range) continue;
                 if (p.y > AirThreshold && !CanHitAir) continue;   // ground tower can't reach a flier
                 int pri = Priority(d);
                 if (pri < bestPri || (pri == bestPri && sqr < bestSqr))
@@ -262,7 +271,7 @@ namespace DeNelle.Village
             // Null-safe via the static API: a no-op if VFXManager isn't booted.
             VFXManager.Play(MuzzleVfxFor(Element), muzzle);
 
-            target.TakeDamage(Damage, Element);   // hitscan damage on fire (bolt is the feel)
+            target.TakeDamage(EffectiveDamage, Element);   // hitscan damage on fire (WO-430: + Arcane Tower damage perk)
         }
 
         /// <summary>Maps the tower's damage element to its tower-bolt muzzle VFXType.</summary>

@@ -157,6 +157,21 @@ namespace DeNelle.Village
             _attackDamage = baseDamage * Mathf.Max(1f, multiplier);
         }
 
+        /// <summary>
+        /// Applies a HEALTH multiplier to this troop's max HP (WO-430 city upgrades — the
+        /// Armorer's troopHealthMult). BAKED AT SPAWN: re-reads the def's base MaxHp (so
+        /// repeated calls don't compound) and sets HP to the new (buffed) max — a troop is
+        /// born at full strength. Call AFTER Configure (the deployer does). Values &lt; 1 are
+        /// clamped to 1 (a tier perk only buffs). Max HP is set ONCE at spawn, never
+        /// live-scaled mid-fight (that would create current-HP exploit/death — owner-approved).
+        /// </summary>
+        public void ApplyHealthMultiplier(float multiplier)
+        {
+            float baseHp = _def != null ? _def.MaxHp : _maxHp;
+            _maxHp = baseHp * Mathf.Max(1f, multiplier);
+            _hp = _maxHp;
+        }
+
         // ── IDamageableStructure (lets the enemy contact-attack lane hurt us) ──
         // Enemy.ProbeForStructure / EnemyBrain.TryAttack resolve their target via
         // GetComponentInParent<IDamageableStructure>(); implementing it here is the

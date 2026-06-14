@@ -60,6 +60,11 @@ namespace DeNelle.Village
         private float _scan;
         private readonly List<IDamageable> _hostiles = new List<IDamageable>();
 
+        // WO-430 — the Arcane Tower upgrade buffs ITS OWN damage/range (towerDamageMult /
+        // towerRangeMult). Always player-owned, so the perk always applies. LIVE-READ.
+        private float EffectiveDamage => Damage * DeNelle.Core.State.ModifierService.Active.TowerDamageMult;
+        private float EffectiveRange  => Range  * DeNelle.Core.State.ModifierService.Active.TowerRangeMult;
+
         private void Update()
         {
             _scan -= Time.deltaTime;
@@ -98,12 +103,13 @@ namespace DeNelle.Village
             IDamageable best = null;
             int   bestPri = int.MaxValue;
             float bestSqr = float.MaxValue;
+            float range = EffectiveRange;   // WO-430 — Arcane Tower range perk
             foreach (var d in _hostiles)
             {
                 if (d == null || !d.IsAlive) continue;
                 Vector3 p = d.WorldPosition;
                 float sqr = (p - transform.position).sqrMagnitude;
-                if (sqr > Range * Range) continue;
+                if (sqr > range * range) continue;
                 if (p.y > AirThreshold && !CanHitAir) continue;
                 int pri = Priority(d);
                 if (pri < bestPri || (pri == bestPri && sqr < bestSqr))
@@ -158,7 +164,8 @@ namespace DeNelle.Village
                 bool isPrimary = ReferenceEquals(d, primary);
                 if (!isPrimary && (d.WorldPosition - impact).sqrMagnitude > aoeSq) continue;
 
-                float dmg = isPrimary ? Damage : Damage * splash;
+                float ed  = EffectiveDamage;   // WO-430 — Arcane Tower damage perk
+                float dmg = isPrimary ? ed : ed * splash;
                 d.TakeDamage(dmg, Element);
 
                 if (SlowSeconds > 0f)

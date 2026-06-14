@@ -65,7 +65,14 @@ namespace DeNelle.Village
             if (troop == null) return null;
 
             troop.OwnedTroopId = t.Id;
-            troop.ApplyDamageMultiplier(t.DamageMultiplier);   // veterancy buff (>= 1)
+            // BAKE AT SPAWN (WO-430): combine veterancy × the Armorer tier damage perk into ONE
+            // damage call (ApplyDamageMultiplier re-bases from the def, so two calls would not
+            // compound — multiply them here), then bake the health perk. This runs in the RAID
+            // scene at deploy, so the city upgrades carry INTO the raid automatically. Reads the
+            // active modifiers ONCE at spawn (perks are fixed for the raid).
+            var mods = DeNelle.Core.State.ModifierService.Active;
+            troop.ApplyDamageMultiplier(t.DamageMultiplier * mods.TroopDamageMult);
+            troop.ApplyHealthMultiplier(mods.TroopHealthMult);
             return troop;
         }
 
