@@ -284,9 +284,19 @@ namespace DeNelle.Village.Buildings.Progression
         /// <summary>The curated tick interval (seconds) for a 1-based <paramref name="level"/>.</summary>
         private static float IntervalForLevel(int level)
         {
-            if (HarvestIntervalByLevel.Length == 0) return 6f;
-            int i = Mathf.Clamp(level - 1, 0, HarvestIntervalByLevel.Length - 1);
-            return HarvestIntervalByLevel[i];
+            // HARDENING (dialogue-cluster RCA): this is called from MakeBuilding during the
+            // static .cctor (Build() -> MakeBuilding -> IntervalForLevel). Although the speed
+            // ladder is declared textually BEFORE _byId, the field has been observed NULL here
+            // at runtime (TypeInitializationException -> NRE poisoning the WHOLE type, which then
+            // cascaded into CmdStructureStatus/CmdStructureUpgrade and every other consumer —
+            // "no stock / talk doesn't work"). The fallback ladder is an INLINE LOCAL literal —
+            // not another static field — so it has ZERO dependence on static-field init order and
+            // can never itself be null during cctor. Keeps the curve identical, never a flat 6f.
+            float[] ladder = (HarvestIntervalByLevel != null && HarvestIntervalByLevel.Length > 0)
+                ? HarvestIntervalByLevel
+                : new[] { 8f, 6.8f, 5.6f, 4.4f, 3.2f };
+            int i = Mathf.Clamp(level - 1, 0, ladder.Length - 1);
+            return ladder[i];
         }
 
         /// <summary>

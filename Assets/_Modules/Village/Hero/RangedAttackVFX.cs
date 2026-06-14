@@ -200,7 +200,14 @@ namespace DeNelle.Village
             go.transform.position = pos;
 
             var ps = go.AddComponent<ParticleSystem>();
+            // ParticleSystem.playOnAwake defaults to true, so it begins playing the instant
+            // AddComponent runs — and Unity forbids setting main.duration while a system is
+            // playing ("Setting the duration while system is still playing is not supported").
+            // Stop it (and disable auto-play) BEFORE configuring, then drive it via the
+            // explicit ps.Play() below. Identical visual; kills the 44x log spam.
+            ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
             var main = ps.main;
+            main.playOnAwake     = false;
             main.duration        = duration;
             main.loop            = false;
             main.startLifetime   = duration;

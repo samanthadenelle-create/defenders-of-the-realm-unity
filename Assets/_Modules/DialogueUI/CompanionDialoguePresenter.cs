@@ -618,6 +618,22 @@ namespace DeNelle.DialogueUI
             LogInputBlockerState(); // verify: should now read blocksRaycasts=false on every own group
         }
 
+        // SAFETY NET (dialogue-cluster RCA): OnDialogueCompleteAsync is the PRIMARY
+        // release path, but it is NOT guaranteed to run on every conversation end —
+        // a Yarn command that throws (e.g. the structure-status TypeInitialization
+        // crash that poisoned this cluster) or a hard DialogueRunner abort / scene
+        // swap can tear the dialogue down WITHOUT the per-presenter completion handler
+        // firing, leaving Yarn's <Pointer>/press advance action ENABLED → every later
+        // click dies ("dev tools / Settings unclickable AFTER yarnspinner"). OnDisable
+        // fires on deactivate/teardown regardless of the completion path, so we release
+        // the input capture here too. Both calls are idempotent + null-guarded, so the
+        // double-release (complete + disable) is harmless.
+        private void OnDisable()
+        {
+            SetOwnGroupsInteractive(false);
+            ReleaseYarnInputCapture();
+        }
+
         // THE root cause of "dev tools / UI Toolkit dead after companion Yarn" (found by reading
         // the Yarn package + comparing to its correct pattern). Yarn's LineAdvancer ENABLES an
         // InputAction bound to <Pointer>/press (tap-to-advance) on dialogue start, but its
