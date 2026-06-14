@@ -1,0 +1,108 @@
+{
+  "version": 1,
+  "_note": "Scene-generation config — the data contract that determines WHAT scene the base-scene factory generates (WO-454; canon: docs/WORK_ORDER_454_faction_base_scene_generator.md). A base IS a scene: player stronghold, enemy outpost, garrison — all generated from one of these configs. ownership=Player => buildable/owned, no garrison; ownership=Enemy => faction garrison + boss. The generator (StructureFactory/CastleHubBuilder + GridWall + WaveManager-composition + EnemyFactory) consumes these; the config is the ONLY delta between scene types. Dual-copy (Resources copy wins at load via CanonicalJson; keep StreamingAssets in sync).",
+  "_schema": {
+    "id": "stable config id",
+    "displayName": "player-facing name",
+    "sceneName": "the additive scene this generates into / loads as (e.g. Garrison_troll_outpost)",
+    "ownership": "Player | Enemy",
+    "faction": "orc | hollow | troll | mixed | none",
+    "wallTier": "Wood | Iron | ReinforcedSteel",
+    "baseRadius": "perimeter radius (m)",
+    "wallSegmentsPerSide": "tiled wall segments per side",
+    "centralBuilding": "structures-catalog id placed at centre (command hut / mage base / heart)",
+    "towers": "[{ type: structures-catalog id, count }]",
+    "props": "{ set: [structures-catalog ids], count }",
+    "garrison": "ENEMY only — { composition: [{ enemyId, count }], baseEnemyLevel, difficultyMultiplier, boss: enemyId }",
+    "themeColor": "faction banner/accent hex"
+  },
+  "configs": [
+    {
+      "id": "player_outpost",
+      "displayName": "Player Outpost",
+      "sceneName": "PlayerOutpost",
+      "ownership": "Player",
+      "faction": "none",
+      "wallTier": "Wood",
+      "baseRadius": 30,
+      "wallSegmentsPerSide": 10,
+      "centralBuilding": "tower_ground_archer",
+      "towers": [ { "type": "tower_ground_archer", "count": 4 } ],
+      "props": { "set": [], "count": 8 },
+      "garrison": null,
+      "themeColor": "#6fb7ff"
+    },
+    {
+      "id": "raider_camp_small",
+      "displayName": "Small Raider Camp",
+      "sceneName": "Garrison_troll_outpost",
+      "ownership": "Enemy",
+      "faction": "orc",
+      "wallTier": "Wood",
+      "baseRadius": 28,
+      "wallSegmentsPerSide": 8,
+      "centralBuilding": "tower_siege_tower",
+      "towers": [ { "type": "tower_catapult", "count": 2 } ],
+      "props": { "set": [], "count": 12 },
+      "garrison": {
+        "composition": [
+          { "enemyId": "orc-berserker", "count": 4 },
+          { "enemyId": "orc-shaman", "count": 1 }
+        ],
+        "baseEnemyLevel": 3,
+        "difficultyMultiplier": 1.0,
+        "boss": "orc-necromancer"
+      },
+      "themeColor": "#5a8f3a"
+    },
+    {
+      "id": "fortified_garrison",
+      "displayName": "Fortified Garrison",
+      "sceneName": "Garrison_ruined_keep",
+      "ownership": "Enemy",
+      "faction": "mixed",
+      "wallTier": "Iron",
+      "baseRadius": 35,
+      "wallSegmentsPerSide": 12,
+      "centralBuilding": "tower_arcane_spire",
+      "towers": [ { "type": "tower_catapult", "count": 3 }, { "type": "tower_arcane_spire", "count": 1 } ],
+      "props": { "set": [], "count": 15 },
+      "garrison": {
+        "composition": [
+          { "enemyId": "troll", "count": 2 },
+          { "enemyId": "ogre", "count": 1 },
+          { "enemyId": "orc-berserker", "count": 3 },
+          { "enemyId": "orc-shaman", "count": 2 }
+        ],
+        "baseEnemyLevel": 5,
+        "difficultyMultiplier": 1.25,
+        "boss": "orc-necromancer"
+      },
+      "themeColor": "#8a6b3a"
+    },
+    {
+      "id": "mage_enclave",
+      "displayName": "Mage Enclave",
+      "sceneName": "Garrison_frost_keep",
+      "ownership": "Enemy",
+      "faction": "hollow",
+      "wallTier": "Iron",
+      "baseRadius": 32,
+      "wallSegmentsPerSide": 10,
+      "centralBuilding": "tower_arcane_spire",
+      "towers": [ { "type": "tower_arcane_spire", "count": 2 } ],
+      "props": { "set": [], "count": 10 },
+      "garrison": {
+        "composition": [
+          { "enemyId": "hollow-acolyte", "count": 3 },
+          { "enemyId": "orc-shaman", "count": 2 },
+          { "enemyId": "hollow-warrior", "count": 2 }
+        ],
+        "baseEnemyLevel": 6,
+        "difficultyMultiplier": 1.3,
+        "boss": "necromancer"
+      },
+      "themeColor": "#7a5fb0"
+    }
+  ]
+}
