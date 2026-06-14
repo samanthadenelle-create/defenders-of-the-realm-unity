@@ -157,6 +157,43 @@ identity line crisp: **finite = troops, persistent = Echoes.**
   NOT in the pre-listing thin slice (which is Footman+Archer+deploy/rally/retreat). May graduate to its own
   WO when the Echo pillar is built; lives here now as the raid 3★-reward contract.
 
+## Troop Training, Barracks & Loss Model (owner troops.txt 2026-06-14)
+**Training = Barracks queue + resource + time** (reuse `BuildTimerService` offline clock + `EconomyService`):
+select type + quantity (1–10, ≤ army cap) → pay resources **upfront** → enter the queue (Barracks has 1–3
+**concurrent slots**, upgradeable) → trains in real time **even offline** ("Your troops are ready" on login).
+**Batch bonus:** 5+ of the same type = 10–20% faster (rewards real squads).
+
+**Offline training ("Accelerated Idle" — owner offline-training.txt):** the queue keeps progressing while
+away — **reuse `BuildTimerService`'s timestamp/offline-elapsed mechanism** (it already does offline build
+clocks), and add the troop-training tuning ON TOP: **8-hour cap** + **~60–70% offline rate** (NOT 100% — so
+logging in regularly is rewarded), **diminishing returns** (after ~4h drop toward 40%). On login: advance
+`effectiveTime = min(Now − startTime, 8h) × offlineRate`, spawn finished troops, "Your Barracks trained X
+troops while you were away!" notification. Later deepeners: Barracks tier raises offline efficiency (→90–100%);
+crystals/SKR instant-finish or +offline-cap; veterancy trains slightly faster; 3★ "War Economy" buff boosts
+offline speed 4–8h. Client-timestamp for MVP (clock-scum is a minor mobile risk, server-validate if/when
+backend lands). **Verify `BuildTimerService` exposes the start-timestamp + an offline-elapsed hook** when the
+training queue is built (it's the offline spine).
+
+**Train times (MATCH the committed `troops.json` `buildSeconds`):** Footman 30s · Archer 45s · (post-grant:
+Mage 90s · Healer 75s); Barracks upgrades cut these (~half at max).
+
+**Unlock ladder (Step 2+):** Footman = Barracks L1 (immediate) · Archer = Barracks L2 **or** Player L4 ·
+Mage = L5 / PL8 · Healer = L7 / PL12. **Alt hook:** unlock via raid stars (e.g. 50 total 3★ → Mage) — ties
+roster growth to raid skill. (Slice ships Footman + Archer; the rest is the post-MVP roster.)
+
+**Raid-only crafting (hybrid, post-slice):** normal Barracks training (reliable, slow, common Wood/Food) +
+**War Spoils** buff after a 3★ clear (30–60 min: **50% faster training · 30% cheaper · chance to craft a
+veteran troop**). Special "Raid-forged" recipes (e.g. Battle-Hardened Archer) cost raid loot + resources.
+Loop: raid well → better/faster troop production → stronger raids.
+
+### ✅ Loss model — DECIDED (owner 2026-06-14): WOUNDED-RECOVERY (no permadeath)
+A downed troop **returns to `ArmyStorage` wounded** (reduced HP/XP), **full recovery takes time/resources**
+— *no permadeath*. Light veterancy: **+5% dmg per survived 3★, capped.** Intentional softer-than-CoC,
+mobile-friendly stakes: you never truly lose an army, you pay **downtime** — and the **Retreat** verb lets
+you avoid even that by pulling survivors out. (Reviewer's harder "expendable-loss" (B) was considered + set
+aside in favor of feel.) Implementation: `ArmyStorage` MARKS the `PlayerTroop` wounded (never deletes) on a
+raid loss; the slice's combat `Die()` just despawns the battlefield instance.
+
 ## Data structures (owner template — refined)
 `TroopDef` (ScriptableObject: id, prefab, role, base stats, train cost/time, level/veterancy data) —
 SOs are WebGL-safe (Resources-loaded); match the existing catalog convention, not a parallel path.
