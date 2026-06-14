@@ -76,6 +76,19 @@ namespace DeNelle.Village
                 $"EnemyFactory.Build: id='{(def != null ? def.Id : "null")}' " +
                 $"-> model '{model}'{(modelOverride != null ? " (OVERRIDE)" : "")} loading 'Enemies/{model}'");
 
+            // WIGHT 4x (owner 2026-06-13): the AccuRIG'd wight fits noticeably small for a
+            // looming demon. Scale its FIT HEIGHT (visual, via SkinOptions.Enemy(height) below)
+            // AND its trigger capsule up ~4x so the hitbox matches the bigger body. The
+            // NavMeshAgent footprint stays standard (root unit-scale) so it still paths normally.
+            if (model == "Demon")
+            {
+                const float wightScale = 4f;
+                height     *= wightScale;
+                col.radius *= wightScale;
+                col.height *= wightScale;
+                col.center *= wightScale;
+            }
+
             // WO-315: rig-forward correction. The +X-forward Tripo/People families (the
             // Orc Warband — same export convention as the heroes, which use -90f) need a
             // -90 yaw on the visual child so the authored forward aligns to the root's +Z
