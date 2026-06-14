@@ -170,6 +170,17 @@ namespace DeNelle.Editor
             root.transform.localPosition = Vector3.zero;
 
             BuildConfigLayout(def, root.transform);
+
+            // ── GARRISON WIRING ──────────────────────────────────────────────────
+            // Attach the runtime spawner that fills this baked base with its config's
+            // garrison (boss + composition, player-level-scaled). It carries the STORED
+            // config id (NOT the scene name — the baked scene is RaidBase_<id>, which
+            // won't match the config's sceneName, so SceneOwnership can't resolve it by
+            // name; the spawner sets ownership itself off this id). At runtime it reads
+            // SceneConfigCatalog.Find(configId).garrison, spawns on a ring at
+            // baseRadius*0.5, and arms the Watchtower_* props.
+            var spawner = root.AddComponent<DeNelle.Village.World.Camps.RaidGarrisonSpawner>();
+            spawner.SetConfigId(configId);
         }
 
         // The data-driven layout: outer perimeter (+ optional inner keep) + towers +

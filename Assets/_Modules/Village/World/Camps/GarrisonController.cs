@@ -153,40 +153,11 @@ namespace DeNelle.Village.World.Camps
 
         private void ArmGarrisonTurrets()
         {
-            // HARD GUARD: only ever arm turrets in an enemy-owned context. If the
-            // ownership flag is not set (false / not yet wired) we do nothing —
-            // friendly village towers are never touched (safe default).
-            if (!SceneOwnership.IsEnemyOwned) return;
-
-            int armed = 0;
-            // Scan this controller's own scene roots only (not other additive scenes).
-            Scene myScene = gameObject.scene;
-            if (!myScene.IsValid()) return;
-            var roots = myScene.GetRootGameObjects();
-            for (int i = 0; i < roots.Length; i++)
-            {
-                if (roots[i] == null) continue;
-                var towers = roots[i].GetComponentsInChildren<Transform>(true);
-                for (int j = 0; j < towers.Length; j++)
-                {
-                    var t = towers[j];
-                    if (t == null || t.name == null) continue;
-                    // Author label is "Watchtower_*"; "Keep_Core" (stone tower) is the
-                    // fortress core, not a firing turret, so it is deliberately excluded.
-                    if (t.name.IndexOf("Watchtower", System.StringComparison.OrdinalIgnoreCase) < 0)
-                        continue;
-                    if (t.GetComponent<DefenseTower>() != null) continue;   // idempotent
-
-                    var dt = t.gameObject.AddComponent<DefenseTower>();
-                    dt.Allegiance = TowerAllegiance.EnemyOwned;
-                    dt.Range      = turretRange;
-                    dt.Damage     = turretDamage;
-                    dt.FireRate   = turretFireRate;
-                    dt.CanHitAir  = true;   // elevated turret; hero/companions are ground anyway
-                    dt.BoltColor  = new Color(0.95f, 0.3f, 0.2f);   // hostile red bolt
-                    armed++;
-                }
-            }
+            // Scan + arm via the SHARED armer (the ownership hard-guard + Watchtower_*
+            // scan live there now, identical logic). Scope to THIS controller's own
+            // scene only (not other additive scenes).
+            int armed = GarrisonTurretArmer.ArmWatchtowers(
+                gameObject.scene, turretRange, turretDamage, turretFireRate);
 
             if (armed > 0)
                 Debug.Log($"[GarrisonController] {name} armed {armed} watchtower turret(s) (EnemyOwned) on the player party.");
@@ -297,9 +268,10 @@ namespace DeNelle.Village.World.Camps
             // maxLevel] and folded into the stat scale (level 1 + threat == legacy).
             int level = RollLevel();
             EnemyDef def = (enemyTypeIds != null && enemyTypeIds.Length > 0)
-                ? BuildTypedDef(NextTypeId(), level)
-                : (stonebelly ? BuildStonebellyDef(threatLevel) : BuildTrollDef(threatLevel));
-            ApplyLevelScale(def, level);
+                ? GarrisonStatBlocks.BuildTypedDef(NextTypeId(), level)
+                : (stonebelly ? GarrisonStatBlocks.BuildStonebellyDef(threatLevel)
+                              : GarrisonStatBlocks.BuildTrollDef(threatLevel));
+            GarrisonStatBlocks.ApplyLevelScale(def, level);
 
             var enemy = EnemyFactory.Build(def, pos, rot, _garrisonRoot);
             if (enemy == null)
@@ -395,59 +367,6 @@ namespace DeNelle.Village.World.Camps
         }
 
         // =====================================================================
-        // Stat blocks (code-built EnemyDef, threat-scaled) — the Troll family.
-        // Mirrors EnemyOutpost.BuildGuardDef / CampGuards so garrison defenders
-        // read like every other open-world enemy. EnemyFactory maps id=="troll"
-        // to the "Troll" model (capsule fallback if the mesh is not imported).
-        // =====================================================================
-
-        private static EnemyDef BuildTrollDef(int threat)
-        {
-            float scale = 1f + 0.10f * Mathf.Max(0, threat);
-            return new EnemyDef
-            {
-                Id = "troll",
-                Name = "Garrison Troll",
-                DisplayName = "Garrison Troll",
-                Family = "troll",
-                Role = "brute",
-                Ai = "charger",
-                Hp = 320f * scale,
-                MoveSpeed = 1.8f,
-                ContactDamage = 14f * scale,
-                AttackInterval = 1.8f,
-                Height = 2.6f,
-                AggroRadius = 15f,
-                XpReward = 34 + threat * 2,
-                GlimmerReward = 5,
-            };
-        }
-
-        // "Stonebelly" — a leaner, faster troll-family raider (still the Troll model,
-        // smaller silhouette) so a garrison reads as a varied fight, not clones.
-        private static EnemyDef BuildStonebellyDef(int threat)
-        {
-            float scale = 1f + 0.10f * Mathf.Max(0, threat);
-            return new EnemyDef
-            {
-                Id = "troll",                 // EnemyFactory model map: troll -> "Troll"
-                Name = "Stonebelly Raider",
-                DisplayName = "Stonebelly Raider",
-                Family = "troll",
-                Role = "skirmisher",
-                Ai = "skirmisher",
-                Hp = 180f * scale,
-                MoveSpeed = 2.6f,
-                ContactDamage = 10f * scale,
-                AttackInterval = 1.3f,
-                Height = 2.1f,
-                AggroRadius = 16f,
-                XpReward = 22 + threat * 2,
-                GlimmerReward = 4,
-            };
-        }
-
-        // =====================================================================
         // RECIPE-DRIVEN level + type helpers.
         // -----------------------------------------------------------------------------
         //  * RollLevel    — pick an inclusive level in [minLevel, maxLevel]. When the band
@@ -479,71 +398,10 @@ namespace DeNelle.Village.World.Camps
             return string.IsNullOrEmpty(id) ? "troll" : id;
         }
 
-        // Apply the rolled level on top of whatever base def we already built. Level 0/1 is
-        // a no-op (keeps legacy garrisons identical). Each level above 1 adds ~8% HP and
-        // ~5% contact damage + a touch of size so higher-level forts read as tougher.
-        private static void ApplyLevelScale(EnemyDef def, int level)
-        {
-            if (def == null || level <= 1) return;
-            int over = level - 1;
-            float hpScale  = 1f + 0.08f * over;
-            float dmgScale = 1f + 0.05f * over;
-            def.Hp            *= hpScale;
-            def.ContactDamage *= dmgScale;
-            def.Height         = def.Height * (1f + 0.012f * over);
-            def.XpReward      += over * 3;       // higher level => more XP
-            def.DisplayName    = (string.IsNullOrEmpty(def.DisplayName) ? def.Name : def.DisplayName)
-                                 + " (Lv " + level + ")";
-        }
-
-        // A stat block for an arbitrary recipe enemy id. Known family ids reuse a matching
-        // template; everything else gets a generic mid-tier brute (still a real, hittable
-        // Enemy — EnemyFactory.ModelForEnemy maps the id to a model or a capsule fallback).
-        private static EnemyDef BuildTypedDef(string id, int level)
-        {
-            string key = (id ?? "troll").ToLowerInvariant();
-            switch (key)
-            {
-                case "troll":           return BuildTrollDef(2);
-                case "orc-berserker":   return BuildGenericDef(id, "Orc Berserker", "orc", "brute",      "charger",    260f, 2.2f, 13f, 1.7f, 2.4f, 30);
-                case "orc-shaman":      return BuildGenericDef(id, "Orc Shaman",    "orc", "caster",     "skirmisher", 150f, 2.4f,  9f, 1.4f, 1.9f, 28);
-                case "orc-necromancer": return BuildGenericDef(id, "Orc Necromancer","orc","elite",      "skirmisher", 220f, 2.0f, 11f, 1.6f, 2.1f, 40);
-                case "orc-raider":      return BuildGenericDef(id, "Orc Raider",    "orc", "skirmisher", "skirmisher", 170f, 2.8f, 10f, 1.3f, 1.9f, 24);
-                case "hollow-walker":   return BuildGenericDef(id, "Hollow Walker", "hollow","grunt",    "walker",     120f, 2.4f,  8f, 1.4f, 1.8f, 18);
-                case "hollow-warrior":  return BuildGenericDef(id, "Hollow Warrior","hollow","brute",    "charger",    240f, 1.9f, 12f, 1.7f, 2.4f, 28);
-                case "hollow-rogue":    return BuildGenericDef(id, "Hollow Rogue",  "hollow","skirmisher","skirmisher",110f, 3.0f,  9f, 1.1f, 1.7f, 22);
-                case "hollow-acolyte":  return BuildGenericDef(id, "Hollow Acolyte","hollow","caster",   "skirmisher", 140f, 2.3f,  8f, 1.4f, 1.8f, 26);
-                case "necromancer":     return BuildGenericDef(id, "Necromancer",   "hollow","elite",    "skirmisher", 300f, 2.0f, 12f, 1.6f, 2.1f, 50);
-                case "caveman":         return BuildGenericDef(id, "Caveman",       "tribe","brute",     "charger",    220f, 2.2f, 11f, 1.6f, 2.3f, 24);
-                case "feral-wolf":      return BuildGenericDef(id, "Feral Wolf",    "beast","skirmisher","skirmisher", 90f,  3.4f,  8f, 1.0f, 1.4f, 16);
-                case "tiefling-cultist":return BuildGenericDef(id, "Tiefling Cultist","cult","caster",   "skirmisher", 130f, 2.4f,  9f, 1.4f, 1.8f, 24);
-                default:
-                    Debug.LogWarning($"[GarrisonController] Unknown recipe enemy id '{id}' — using a generic brute (EnemyFactory will model-map or capsule-fallback it).");
-                    return BuildGenericDef(id, id, "troll", "brute", "charger", 220f, 2.0f, 11f, 1.6f, 2.2f, 26);
-            }
-        }
-
-        private static EnemyDef BuildGenericDef(string id, string display, string family, string role,
-            string ai, float hp, float moveSpeed, float dmg, float interval, float height, int xp)
-        {
-            return new EnemyDef
-            {
-                Id = id,
-                Name = display,
-                DisplayName = display,
-                Family = family,
-                Role = role,
-                Ai = ai,
-                Hp = hp,
-                MoveSpeed = moveSpeed,
-                ContactDamage = dmg,
-                AttackInterval = interval,
-                Height = height,
-                AggroRadius = 15f,
-                XpReward = xp,
-                GlimmerReward = 5,
-            };
-        }
+        // Stat blocks (BuildTrollDef / BuildStonebellyDef / BuildTypedDef) and the
+        // level-scale fold (ApplyLevelScale) now live in the SHARED, stateless
+        // GarrisonStatBlocks so the config-driven RaidGarrisonSpawner builds defenders
+        // from the EXACT same numbers — see GarrisonStatBlocks.cs.
 
 #if UNITY_EDITOR
         private void OnDrawGizmosSelected()

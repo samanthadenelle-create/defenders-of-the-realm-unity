@@ -38,6 +38,20 @@ namespace DeNelle.Village
         /// <summary>True when the active scene is an enemy garrison/outpost; default false (safe).</summary>
         public static bool IsEnemyOwned { get; private set; }
 
+        /// <summary>
+        /// Force the enemy-owned flag ON/OFF for a scene the config map can't resolve
+        /// by NAME. The config-generated raid scenes bake as <c>RaidBase_&lt;id&gt;</c>,
+        /// which does NOT match the configs' <c>sceneName</c>, so the JSON-driven
+        /// <see cref="Resolve"/> always reads them Player-owned. The RaidGarrisonSpawner
+        /// (which carries the STORED config id, not a scene name) calls this so the
+        /// turret-armer + the home-hub death-retreat treat the raid as enemy-owned.
+        /// Internal: only sibling DeNelle.Village runtime sets this; never the JSON path.
+        /// </summary>
+        internal static void SetEnemyOwned(bool v)
+        {
+            IsEnemyOwned = v;
+        }
+
         // Cached scene-name -> ownership map, built once from the JSON on first need.
         private static Dictionary<string, bool> _enemyByScene;
 
