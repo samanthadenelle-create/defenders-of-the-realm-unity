@@ -132,6 +132,17 @@ namespace DeNelle.Village
         private const string IdMediumCast  = "hollow-acolyte";  // role caster     → Healer/back
         private const string IdElite       = "necromancer";     // role elite      → MiniBoss
 
+        // ── Cross-family ids (orc / troll / ogre) ────────────────────────────
+        // Verified present in enemies.json + mapped to distinct models by
+        // EnemyFactory. The brute/caster/elite SLOTS draw from these by wave band
+        // so waves stop being all-skeleton (owner break-log 2026-06-14: "no trolls
+        // no orcs ogre"). Weak fodder (grunt/skirmisher) stays hollow by design.
+        private const string IdOrcBrute   = "orc-berserker";
+        private const string IdOrcCaster  = "orc-shaman";
+        private const string IdOrcElite   = "orc-necromancer";
+        private const string IdTrollBrute = "troll";
+        private const string IdOgreBrute  = "ogre";
+
         // ── Difficulty pacing ────────────────────────────────────────────────
         private const int   BaseCount       = 4;     // total at wave 1
         private const float CountPerWave    = 0.9f;  // +~1 enemy per wave
@@ -201,7 +212,9 @@ namespace DeNelle.Village
                              skirms, SpawnRole.Melee, EnemyRole.Ranged);
             }
 
-            // ── MEDIUM tier: brutes (front tanks) + casters (backline) ────────
+            // ── MEDIUM tier: brutes (front tanks) + casters (backline), drawn
+            //    from the wave's available FAMILIES so one wave MIXES skeletons /
+            //    orcs / trolls / ogres instead of all-skeleton.
             if (mediumN > 0)
             {
                 // ~60% brute, ~40% caster, jittered so it varies.
@@ -209,32 +222,33 @@ namespace DeNelle.Village
                 int brutes  = Mathf.Clamp(Mathf.RoundToInt(mediumN * bruteShare), 0, mediumN);
                 int casters = mediumN - brutes;
 
-                if (brutes > 0)
-                    AddEntry(comp, catalog, IdMediumBrute, "hollow", "brute",
-                             brutes, SpawnRole.FrontTank, EnemyRole.Tank);
-                if (casters > 0)
-                    AddEntry(comp, catalog, IdMediumCast, "hollow", "caster",
-                             casters, SpawnRole.Archer, EnemyRole.Healer);
+                AddVaried(comp, catalog, BrutePool(waveId), brutes, "brute",
+                          SpawnRole.FrontTank, EnemyRole.Tank);
+                AddVaried(comp, catalog, CasterPool(waveId), casters, "caster",
+                          SpawnRole.Archer, EnemyRole.Healer);
             }
 
-            // ── STRONG tier (6+): more brutes leading the front ───────────────
+            // ── STRONG tier (6+): more brutes leading the front (family-varied) ─
             if (strongN > 0)
-                AddEntry(comp, catalog, IdMediumBrute, "hollow", "brute",
-                         strongN, SpawnRole.FrontTank, EnemyRole.Tank);
+                AddVaried(comp, catalog, BrutePool(waveId), strongN, "brute",
+                          SpawnRole.FrontTank, EnemyRole.Tank);
 
-            // ── ELITE: one, centred, every Nth wave (added on TOP of total) ───
+            // ── ELITE: one, centred, every Nth wave (family-varied; on TOP) ───
             if (waveId % EliteEveryNth == 0)
-                AddEntry(comp, catalog, IdElite, "hollow", "elite",
+            {
+                var elites = ElitePool(waveId);
+                string eliteId = elites[UnityEngine.Random.Range(0, elites.Length)];
+                AddEntry(comp, catalog, eliteId, FamilyOf(eliteId), "elite",
                          1, SpawnRole.Elite, EnemyRole.MiniBoss);
+            }
 
-            // ROOT-CAUSE TRACE: this is the ONE place a wave's variety is decided.
-            // Every tier above draws from the hardcoded "hollow" family ids only
-            // (IdWeakGrunt/IdWeakSkirm/IdMediumBrute/IdMediumCast/IdElite → all
-            // Skeleton_* models). Print the requested mix so an F8 run shows whether
-            // the wave EVER asks for orc/troll/ogre families, or always one family.
+            // TRACE: the ONE place a wave's variety is decided. Weak fodder stays
+            // hollow; brute/caster/elite slots now draw from the wave-band family
+            // pools (hollow → +orc → +troll/ogre), so a wave mixes families. The
+            // slots dump below shows the actual ids requested for an F8 run.
             FlowTrace.Step("Enemy",
                 $"WaveComposition wave={waveId}: total={total} weak={weakN} medium={mediumN} strong={strongN} " +
-                $"elite={(waveId % EliteEveryNth == 0 ? 1 : 0)} — families requested: hollow ONLY (no orc/troll/ogre)");
+                $"elite={(waveId % EliteEveryNth == 0 ? 1 : 0)} — brute families: {string.Join("/", BrutePool(waveId))}");
             var sb = new System.Text.StringBuilder();
             for (int i = 0; i < comp.Entries.Count; i++)
             {
@@ -283,6 +297,52 @@ namespace DeNelle.Village
             }
 
             comp.Entries.Add(new WaveCompositionEntry(id, count, spawnRole, brainRole));
+        }
+
+        // ── Family pools by wave band (owner-tunable schedule) ───────────────
+        // The roster the brute/caster/elite SLOTS may draw from at a given wave:
+        // 1-2 hollow only · 3-5 + orc · 6+ + troll/ogre. Weak fodder stays hollow.
+        private static string[] BrutePool(int waveId)
+        {
+            if (waveId <= 2) return new[] { IdMediumBrute };
+            if (waveId <= 5) return new[] { IdMediumBrute, IdOrcBrute };
+            return new[] { IdMediumBrute, IdOrcBrute, IdTrollBrute, IdOgreBrute };
+        }
+
+        private static string[] CasterPool(int waveId)
+        {
+            if (waveId <= 2) return new[] { IdMediumCast };
+            return new[] { IdMediumCast, IdOrcCaster };
+        }
+
+        private static string[] ElitePool(int waveId)
+            => waveId <= 5 ? new[] { IdElite } : new[] { IdElite, IdOrcElite };
+
+        /// <summary>Best-effort family from an id prefix (for AddEntry's missing-id
+        /// substitution; all pool ids resolve, so this is just a safety net).</summary>
+        private static string FamilyOf(string id)
+            => string.IsNullOrEmpty(id) ? "hollow"
+             : id.StartsWith("orc")   ? "orc"
+             : id.StartsWith("troll") ? "troll"
+             : id.StartsWith("ogre")  ? "ogre"
+             : "hollow";
+
+        /// <summary>Spread <paramref name="count"/> across the family <paramref name="pool"/>
+        /// (round-robin, remainder to the earlier families) so one tier shows a MIX of
+        /// families in a single wave instead of all-one-model.</summary>
+        private static void AddVaried(
+            EnemyWaveComposition comp, EnemyCatalog catalog, string[] pool,
+            int count, string role, SpawnRole spawnRole, EnemyRole brainRole)
+        {
+            if (count <= 0 || pool == null || pool.Length == 0) return;
+            int n = pool.Length;
+            for (int i = 0; i < n; i++)
+            {
+                int c = count / n + (i < count % n ? 1 : 0);
+                if (c > 0)
+                    AddEntry(comp, catalog, pool[i], FamilyOf(pool[i]), role,
+                             c, spawnRole, brainRole);
+            }
         }
     }
 }
