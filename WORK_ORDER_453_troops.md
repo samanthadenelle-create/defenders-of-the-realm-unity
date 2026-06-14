@@ -182,11 +182,13 @@ startTime [SERVER time], baseDurationSeconds [= troops.json buildSeconds], speed
 × speedMultiplier`; `completed = floor(progress / baseDuration)`; reset slot startTime for the remainder.
 Anti-abuse: server `FieldValue.serverTimestamp()` (never trust client `DateTime`), 8–12h cap, >24h jump =
 partial-grant, max 3–4 concurrent slots (barracks-upgradeable), per-player auth rules. C# models
-`TrainingQueueData`/`TrainingSlot`/`CompletedTroopBatch` (serializable, WebGL-safe). **⚠ BACKEND CHOICE
-FLAG:** this proposes **Firestore** — but the project already has a backend direction (React-repo
-DB-per-player save-sync, see memory `backend-persistence-pivot`). Prefer hosting the queue in the
-EXISTING backend (one player doc) rather than standing up a SECOND backend, unless Firestore's Unity SDK
-is a deliberate choice. Either way it's post-MVP; the client version (above) ships the slice.
+`TrainingQueueData`/`TrainingSlot`/`CompletedTroopBatch` (serializable, WebGL-safe). **✅ BACKEND CHOICE
+DECIDED (architect call): host the training queue in the EXISTING backend (React-repo DB-per-player
+save-sync, memory `backend-persistence-pivot`) — NOT Firestore.** One backend, not two: the player record
++ Unity↔backend pipe already exist, so the queue is another field + a server-time endpoint; Firestore adds
+a second system to secure/pay/maintain for zero capability gain (any backend stamps server time + enforces
+the cap). The Firestore doc is kept as the data-SHAPE reference only. Post-MVP; the client version above
+ships the slice.
 
 **Train times (MATCH the committed `troops.json` `buildSeconds`):** Footman 30s · Archer 45s · (post-grant:
 Mage 90s · Healer 75s); Barracks upgrades cut these (~half at max).
