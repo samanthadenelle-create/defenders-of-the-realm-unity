@@ -209,6 +209,19 @@ namespace DeNelle.Village.Buildings.Progression
             // gold border; we override the radius to the shell's larger corner.
             ElarionUi.StylePanel(_shell);
             ElarionUi.SetRadius(_shell, ElarionUi.RadiusLg);
+            // HUD-Polish-2: dress the shell in the SAME dark-wood vendor frame the shops use
+            // (RpgUiCatalog PanelVendor / D3 board) so upgrade panels read as the same premium
+            // pack styling. Sprite-first; if the pack isn't imported the StylePanel stone fill
+            // above remains the fallback. Scoped to this shell only (no global StylePanel change).
+            var woodFrame = DeNelle.Core.UI.RpgUiCatalog.Get(
+                DeNelle.Core.UI.RpgUiCatalog.RolePanel, DeNelle.Core.UI.RpgUiCatalog.PanelVendor);
+            if (woodFrame != null)
+            {
+                _shell.style.backgroundImage = new StyleBackground(woodFrame);
+                _shell.style.unityBackgroundImageTintColor = new StyleColor(Color.white);
+                _shell.style.unitySliceLeft = 56; _shell.style.unitySliceRight = 56;
+                _shell.style.unitySliceTop = 56; _shell.style.unitySliceBottom = 56;
+            }
             _root.Add(_shell);
 
             BuildHeader(_shell);

@@ -249,7 +249,8 @@ namespace DeNelle.Village.Hero
         {
             ElarionUiKit.ButtonPack(parent, label, ElarionUiKit.ButtonKind.Quiet,
                 new Vector2(anchorX.x, 0.05f), new Vector2(anchorX.y, 0.95f),
-                () => { _buyFilter = kind; ShowBuy(); });
+                () => { _buyFilter = kind; ShowBuy(); },
+                packSpriteName: RpgUiCatalog.ButtonFrame);   // pack button art (D2 frame)
         }
 
         // Brighten the active Type filter, dim the rest (same tint scheme as the mode tabs).
@@ -379,7 +380,8 @@ namespace DeNelle.Village.Hero
         private void CreateTabButton(Transform parent, string label, Vector2 anchorX, System.Action onClick)
         {
             ElarionUiKit.ButtonPack(parent, label, ElarionUiKit.ButtonKind.Gold,
-                                    new Vector2(anchorX.x, 0.05f), new Vector2(anchorX.y, 0.95f), onClick);
+                                    new Vector2(anchorX.x, 0.05f), new Vector2(anchorX.y, 0.95f), onClick,
+                                    packSpriteName: RpgUiCatalog.ButtonFrame);   // pack button art (D2 frame)
         }
 
         // Light the active tab brighter; dim the rest. The kit names its buttons
