@@ -94,6 +94,7 @@ namespace DeNelle.Core.UI
         public const string PanelVendor     = "panel_vendor";      // D3 dark-wood vendor board (shop)
         public const string PanelGrid       = "panel_grid";        // D4 grid plate (inventory)
         public const string PanelPortrait   = "panel_portrait";    // Model selection ornate wood portrait frame
+        public const string PanelProfile    = "profile_frame";     // Profile tab P1 — gold sunburst portrait medallion + name + 2 bar slots
         // The canonical DEFAULT window frame: a clean, neutral ornate frame every framed
         // window inherits via ElarionUiKit.PanelFramed when no explicit frame is named.
         public const string PanelDefault    = PanelWindowDark;

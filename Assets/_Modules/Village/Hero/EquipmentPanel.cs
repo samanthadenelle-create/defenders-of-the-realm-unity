@@ -87,33 +87,55 @@ namespace DeNelle.Village.Hero
             if (canvas != null) canvas.overrideSorting = true;
             ElarionUiKit.Scrim(_ui.transform, Close);
 
-            // Centred ornate dark-glass plate with the pack's panel frame + gold rim.
+            // Near-black backdrop so the world behind vanishes and the screen reads as its
+            // own premium space (mirrors ShopPanel). Visual-only (raycast off) so the scrim
+            // below still owns tap-to-close.
+            var backdrop = ElarionUiKit.AddImage(_ui.transform, "EquipBackdrop",
+                Vector2.zero, Vector2.one, new Color(0.02f, 0.015f, 0.012f, 0.94f), rounded: false);
+            var bdImg = backdrop.GetComponent<Image>();
+            if (bdImg != null) bdImg.raycastTarget = false;
+
+            // Centred ornate dark-WOOD plate (D3 vendor board) — cohesive with the shop.
             var panel = ElarionUiKit.PanelFramed(_ui.transform,
                                                  new Vector2(0.14f, 0.10f), new Vector2(0.86f, 0.92f),
-                                                 deep: true, packSpriteName: RpgUiCatalog.PanelInventory);
+                                                 deep: true, packSpriteName: RpgUiCatalog.PanelVendor);
 
-            // Gilt crest header + gold rule, matching the town HUD / inventory.
+            // Solid heavy dark fill inside the frame so it reads premium, not see-through
+            // (inset so the carved wood border still shows). Same recipe as ShopPanel.
+            var solidFill = ElarionUiKit.AddImage(panel.transform, "EquipSolidFill",
+                new Vector2(0.025f, 0.02f), new Vector2(0.975f, 0.98f),
+                new Color(0.08f, 0.06f, 0.045f, 0.985f));
+            var sfImg = solidFill.GetComponent<Image>();
+            if (sfImg != null) sfImg.raycastTarget = false;
+            solidFill.transform.SetAsFirstSibling();
+
+            // Gilt crest header + gold rule, matching the town HUD / inventory / shop.
             ElarionUiKit.Header(panel.transform, "EQUIPMENT", x0: 0.04f, x1: 0.96f, y0: 0.91f, y1: 0.98f);
 
-            // ── Equipped summary + total bonuses (top, on a recessed well) ───────
-            ElarionUiKit.Well(panel.transform, new Vector2(0.04f, 0.80f), new Vector2(0.96f, 0.90f));
-            _summaryLabel = ElarionUiKit.Label(panel.transform, "", 0.80f, 0.90f, ElarionUi.Parchment,
+            // ── Character medallion: the gold sunburst PORTRAIT MEDALLION (profile_frame) ─
+            // Left circle = hero crest/portrait, right slots = name + HP/MP bars. Sprite-
+            // first, falls back to a Niche backing when the pack art is absent.
+            BuildCharacterMedallion(panel.transform, new Vector2(0.04f, 0.79f), new Vector2(0.96f, 0.905f));
+
+            // ── Equipped summary + total bonuses (under the medallion, on a recessed well) ──
+            ElarionUiKit.Well(panel.transform, new Vector2(0.04f, 0.70f), new Vector2(0.96f, 0.785f));
+            _summaryLabel = ElarionUiKit.Label(panel.transform, "", 0.705f, 0.785f, ElarionUi.Parchment,
                                                ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center,
                                                0.06f, 0.94f);
 
-            // ── Weapon / Armor filter tabs ───────────────────────────────────────
+            // ── Weapon / Armor filter tabs (cream pack labels) ────────────────────
             var tabBar = new GameObject("FilterBar", typeof(RectTransform));
             tabBar.transform.SetParent(panel.transform, false);
             var tb = tabBar.GetComponent<RectTransform>();
-            tb.anchorMin = new Vector2(0.04f, 0.70f);
-            tb.anchorMax = new Vector2(0.96f, 0.78f);
+            tb.anchorMin = new Vector2(0.04f, 0.615f);
+            tb.anchorMax = new Vector2(0.96f, 0.695f);
             tb.offsetMin = Vector2.zero; tb.offsetMax = Vector2.zero;
-            ElarionUiKit.ButtonPack(tabBar.transform, "WEAPONS", ElarionUiKit.ButtonKind.Gold,
+            CreamTab(ElarionUiKit.ButtonPack(tabBar.transform, "WEAPONS", ElarionUiKit.ButtonKind.Gold,
                                     new Vector2(0.02f, 0.05f), new Vector2(0.49f, 0.95f),
-                                    () => SetFilter(Filter.Weapon));
-            ElarionUiKit.ButtonPack(tabBar.transform, "ARMOR", ElarionUiKit.ButtonKind.Gold,
+                                    () => SetFilter(Filter.Weapon), RpgUiCatalog.ButtonFrame));
+            CreamTab(ElarionUiKit.ButtonPack(tabBar.transform, "ARMOR", ElarionUiKit.ButtonKind.Gold,
                                     new Vector2(0.51f, 0.05f), new Vector2(0.98f, 0.95f),
-                                    () => SetFilter(Filter.Armor));
+                                    () => SetFilter(Filter.Armor), RpgUiCatalog.ButtonFrame));
             _tabBar = tabBar;
 
             // ── Scrollable list content host (rebuilt per filter) ────────────────
@@ -121,13 +143,15 @@ namespace DeNelle.Village.Hero
             _listContentArea.transform.SetParent(panel.transform, false);
             var la = _listContentArea.GetComponent<RectTransform>();
             la.anchorMin = new Vector2(0.04f, 0.10f);
-            la.anchorMax = new Vector2(0.96f, 0.68f);
+            la.anchorMax = new Vector2(0.96f, 0.595f);
             la.offsetMin = Vector2.zero; la.offsetMax = Vector2.zero;
 
-            // Close — bottom centre, quiet glass button.
-            ElarionUiKit.Button(panel.transform, "Close", ElarionUiKit.ButtonKind.Quiet,
+            // Close — bottom centre, cream pack button drawn last so it takes taps.
+            var closeBtn = ElarionUiKit.ButtonPack(panel.transform, "Close", ElarionUiKit.ButtonKind.Quiet,
                                 new Vector2(0.34f, 0.015f), new Vector2(0.66f, 0.085f),
-                                Close);
+                                Close, RpgUiCatalog.ButtonFrame);
+            CreamTab(closeBtn);
+            if (closeBtn != null) closeBtn.transform.SetAsLastSibling();
 
             SetFilter(_filter);
             Debug.Log("[EquipmentPanel] Opened — browse-and-equip list. Equip to see visual/stat change on hero.");
@@ -480,6 +504,133 @@ namespace DeNelle.Village.Hero
             Debug.Log($"[EquipmentPanel] Equipped {row.id} — hero visual/stat updated; list + summary refreshed.");
             RebuildList();
             RefreshSummary();
+        }
+
+        // ── Character medallion (the gold sunburst PORTRAIT MEDALLION, profile_frame) ──
+        // 758x396 frame: circular gold sunburst portrait socket on the LEFT (~0.0-0.42),
+        // a name area + TWO horizontal bar slots on the RIGHT. We seat the hero crest in
+        // the left circle, the hero name on the right-top, and drive the two bar slots as
+        // HP / MP fills. Sprite-FIRST: when profile_frame is absent it falls back to a
+        // plain Niche backing so a null sprite never blanks the screen.
+        private void BuildCharacterMedallion(Transform parent, Vector2 anchorMin, Vector2 anchorMax)
+        {
+            var host = ElarionUiKit.AddImage(parent, "CharacterMedallion", anchorMin, anchorMax,
+                new Color(0, 0, 0, 0), rounded: false);
+            var hostImg = host.GetComponent<Image>();
+            if (hostImg != null) hostImg.raycastTarget = false;
+
+            var frame = RpgUiCatalog.Get(RpgUiCatalog.RolePanel, RpgUiCatalog.PanelProfile);
+            if (frame != null)
+            {
+                var fImg = host.GetComponent<Image>();
+                fImg.sprite = frame; fImg.color = Color.white; fImg.type = Image.Type.Simple;
+                fImg.preserveAspect = false; fImg.raycastTarget = false;
+            }
+            else
+            {
+                var niche = ElarionUiKit.Niche(host.transform, Vector2.zero, Vector2.one);
+                var nImg = niche.GetComponent<Image>(); if (nImg != null) nImg.raycastTarget = false;
+            }
+
+            // Hero crest in the LEFT sunburst circle (no portrait art exists yet — the class
+            // crest glyph reads as the hero token, same as the inventory paper-doll).
+            string job = HeroClassName();
+            ElarionUiKit.Label(host.transform, ClassCrest(job), 0.10f, 0.90f, ElarionUi.Gilt,
+                ElarionUi.FontTitle + 14, TMPro.TextAlignmentOptions.Center, 0.02f, 0.40f, bold: true);
+
+            // Hero name on the RIGHT-top.
+            ElarionUiKit.Label(host.transform, HeroName(job), 0.56f, 0.92f, ElarionUi.Parchment,
+                ElarionUi.FontHead, TMPro.TextAlignmentOptions.Left, 0.45f, 0.98f, bold: true);
+
+            // TWO bar slots on the RIGHT — HP (red) over MP (blue). Driven full for now (no
+            // live HP/MP feed in this assembly); the fills sit in the frame's bar windows.
+            BarSlot(host.transform, "HP", 0.34f, 0.52f, RpgUiCatalog.BarFrameRed, RpgUiCatalog.BarFillRed,
+                new Color(0.62f, 0.16f, 0.14f, 1f));
+            BarSlot(host.transform, "MP", 0.12f, 0.30f, RpgUiCatalog.BarFrameBlue, RpgUiCatalog.BarFillBlue,
+                new Color(0.18f, 0.33f, 0.62f, 1f));
+        }
+
+        // One horizontal bar slot in the medallion's right column (sprite-first frame+fill,
+        // procedural tinted fallback). fillFrac in [0..1]; here we show full.
+        private void BarSlot(Transform host, string caps, float y0, float y1,
+                             string frameSprite, string fillSprite, Color fallbackFill)
+        {
+            const float x0 = 0.45f, x1 = 0.97f;
+            var frameGo = ElarionUiKit.AddImage(host, "Bar_" + caps + "_frame",
+                new Vector2(x0, y0), new Vector2(x1, y1), Color.white, rounded: false);
+            var fImg = frameGo.GetComponent<Image>();
+            if (fImg != null) fImg.raycastTarget = false;
+            var fSprite = RpgUiCatalog.Get(RpgUiCatalog.RoleBars, frameSprite);
+            if (fSprite != null) { fImg.sprite = fSprite; fImg.type = Image.Type.Sliced; fImg.color = Color.white; }
+            else { fImg.color = new Color(0f, 0f, 0f, 0.35f); ElarionUiKit.ApplyRounded(fImg); }
+
+            var fillGo = ElarionUiKit.AddImage(frameGo.transform, "Bar_" + caps + "_fill",
+                new Vector2(0.04f, 0.20f), new Vector2(0.97f, 0.80f), fallbackFill, rounded: false);
+            var fillImg = fillGo.GetComponent<Image>();
+            if (fillImg != null)
+            {
+                fillImg.raycastTarget = false;
+                var fillS = RpgUiCatalog.Get(RpgUiCatalog.RoleBars, fillSprite);
+                if (fillS != null) { fillImg.sprite = fillS; fillImg.type = Image.Type.Sliced; fillImg.color = Color.white; }
+                else ElarionUiKit.ApplyRounded(fillImg);
+            }
+            ElarionUiKit.Label(frameGo.transform, caps, 0f, 1f, ElarionUi.Parchment,
+                ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Left, 0.03f, 0.30f, bold: true);
+        }
+
+        // Apply the cohesive CREAM bold + dark-outline label treatment to a pack button,
+        // drawn last so the label sits crisp above the dark frame interior (matches ShopPanel).
+        private static void CreamTab(Button btn)
+        {
+            if (btn == null) return;
+            var lbl = btn.GetComponentInChildren<TMPro.TextMeshProUGUI>();
+            if (lbl == null) return;
+            lbl.color = ElarionUi.Parchment;
+            lbl.fontStyle = TMPro.FontStyles.Bold;
+            lbl.outlineColor = new Color32(20, 12, 4, 235);
+            lbl.outlineWidth = 0.22f;
+            lbl.transform.SetAsLastSibling();
+        }
+
+        private string HeroClassName()
+        {
+            try
+            {
+                var ha = _loadout != null ? _loadout.GetComponent<HeroAbilities>() : null;
+                if (ha != null && !string.IsNullOrEmpty(ha.HeroClass)) return ha.HeroClass;
+            }
+            catch { /* abilities not ready */ }
+            return AbilityCatalog.DefaultClass;
+        }
+
+        private static string HeroName(string job)
+        {
+            switch ((job ?? "").ToLowerInvariant())
+            {
+                case "knight": return "Grom";
+                case "mage":   return "Thrain";
+                case "ranger": return "Sylas";
+                case "cleric": return "Elara";
+                default:        return Cap(job);
+            }
+        }
+
+        private static string ClassCrest(string job)
+        {
+            switch ((job ?? "").ToLowerInvariant())
+            {
+                case "knight": return "/";   // sword
+                case "mage":   return "S";   // staff
+                case "ranger": return "B";   // bow
+                case "cleric": return "C";   // censer
+                default:        return "*";
+            }
+        }
+
+        private static string Cap(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return s;
+            return char.ToUpperInvariant(s[0]) + s.Substring(1);
         }
 
         private void Close()

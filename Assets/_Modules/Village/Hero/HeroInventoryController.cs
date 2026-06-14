@@ -53,6 +53,7 @@ namespace DeNelle.Village
         private GameObject _sidebarRoot;  // re-built per selection
         private GameObject _paperDoll;    // rebuilt on equip-change
         private GameObject _tabsRoot;     // tab row host (rebuilt on tab change)
+        private Sprite _profileFrameSprite; // the gold sunburst PORTRAIT MEDALLION (profile_frame); null = procedural fallback
         private Tab _tab = Tab.Weapons;  // Default to weapons + armor focus for this inventory view.
 
         // The current selection (one of these is non-null while a cell is selected).
@@ -309,18 +310,33 @@ namespace DeNelle.Village
             // the shared kit so the backdrop matches every other modal in the game.
             ElarionUiKit.Scrim(_ui.transform, Close);
 
+            // Near-black backdrop (mirrors ShopPanel) so the world behind vanishes and the
+            // inventory reads as its own premium space, NOT light parchment. Visual-only
+            // (raycast off) so the scrim below still owns tap-to-close.
+            var backdrop = AddImage(_ui.transform, "InvBackdrop", Vector2.zero, Vector2.one,
+                                    new Color(0.02f, 0.015f, 0.012f, 0.94f));
+            NoRaycast(backdrop);
+
             // ── DEPTH: a thin gilt backboard halo just behind the panel, so the modal
             // reads as a framed, lifted sheet rather than a flat fill. ──
             AddImage(_ui.transform, "Backboard", new Vector2(0.025f, 0.018f), new Vector2(0.975f, 0.982f),
                      new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.35f));
 
-            // The main panel fills most of the screen (mobile-first) — the shared
-            // dark-glass framed panel dressed SPRITE-FIRST with the tech-pack's ornate
-            // inventory frame (RolePanel/panel_inventory) over the gold-rimmed glass, so
-            // the modal shell reads in the SAME designed-game look as the town HUD. When
-            // the pack is absent it stays the procedural glass+gold-rim panel (no regress).
+            // The main panel fills most of the screen (mobile-first) — dressed SPRITE-FIRST
+            // with the D3 dark-WOOD vendor board (RolePanel/panel_vendor) so the inventory
+            // reads as the SAME designed game as the shop we just shipped. When the pack is
+            // absent it stays the procedural glass+gold-rim panel (no regress).
             var panel = ElarionUiKit.PanelFramed(_ui.transform, new Vector2(0.04f, 0.03f), new Vector2(0.96f, 0.97f),
-                                                 deep: true, packSpriteName: RpgUiCatalog.PanelInventory);
+                                                 deep: true, packSpriteName: RpgUiCatalog.PanelVendor);
+
+            // Solid heavy dark fill inside the frame so it reads premium, not see-through
+            // (inset so the carved wood border still shows). Same recipe as ShopPanel; drawn
+            // first so the header/tabs/grid/paper-doll all sit on top of it.
+            var solidFill = AddImage(panel.transform, "InvSolidFill",
+                                     new Vector2(0.025f, 0.02f), new Vector2(0.975f, 0.98f),
+                                     new Color(0.08f, 0.06f, 0.045f, 0.985f));
+            NoRaycast(solidFill);
+            solidFill.transform.SetAsFirstSibling();
 
             // ── MOCKUP #41 LAYOUT (WO-400) ──────────────────────────────────────
             //   [ rune strip ............................................... ]  top
@@ -364,12 +380,20 @@ namespace DeNelle.Village
             NoRaycast(_tabsRoot);
             BuildTabs(_tabsRoot.transform);
 
-            // ── LEFT column (~28%): the paper-doll RING. A recessed aged-parchment
-            // alcove the hero "stands" in, with a soft gold rim = a display niche. ──
+            // ── LEFT column (~28%): the character paper-doll. A recessed alcove the hero
+            // "stands" in (the procedural Niche rim is the always-present backing). The TOP
+            // band is dressed sprite-FIRST with the gold sunburst PORTRAIT MEDALLION
+            // (profile_frame): the hero crest in the left sunburst circle + name & HP/MP
+            // bars in the right slots (see RebuildPaperDoll). When the pack art is absent the
+            // column degrades cleanly to the procedural niche + portrait disc (no regress). ──
             var niche = ElarionUiKit.Niche(panel.transform,
                                            new Vector2(0.04f, 0.115f), new Vector2(0.335f, 0.822f));
             _paperDoll = AddImage(niche.transform, "PaperDollArea",
                                   new Vector2(0.03f, 0.02f), new Vector2(0.97f, 0.98f), new Color(0, 0, 0, 0));
+            NoRaycast(_paperDoll);
+            // The medallion sprite for the top band — cached so RebuildPaperDoll seats the
+            // portrait/name/bars into the frame's regions when present.
+            _profileFrameSprite = RpgUiCatalog.Get(RpgUiCatalog.RolePanel, RpgUiCatalog.PanelProfile);
 
             // ── RIGHT region (~70%, mockup): the scrollable item grid DOMINATES (top),
             // with a compact horizontal DETAIL / EQUIP strip beneath it. The grid is the
@@ -382,8 +406,10 @@ namespace DeNelle.Village
             _sidebarRoot = ElarionUiKit.Panel(panel.transform,
                                               new Vector2(0.355f, 0.115f), new Vector2(0.96f, 0.293f),
                                               deep: true, innerRim: true);
-            // The detail/equip strip reads as the tech-pack's ornate quest/detail banner.
-            DressPanel(_sidebarRoot, RpgUiCatalog.PanelQuest, keepWhite: true);
+            // The selected-item detail/equip strip reads as the ornate "Model selection"
+            // wood PORTRAIT frame (panel_portrait) — the same detail surface the shop uses,
+            // so the inspected item sits in a matching carved frame.
+            DressPanel(_sidebarRoot, RpgUiCatalog.PanelPortrait, keepWhite: true);
 
             // ── Footer bar: Sort / Filter on the left, resource wells on the right. ──
             BuildFooterBar(panel.transform);
@@ -472,27 +498,62 @@ namespace DeNelle.Village
             string job = HeroJob;
             int level = HeroLevel();
 
-            // Hero name banner (top of the left column).
-            AddLabelShadow(_paperDoll.transform, HeroDisplayName(job), 0.945f, 0.995f,
-                           Ink, ElarionUi.FontHead, 0.02f, 0.98f, spacing: 1f);
-            AddLabel(_paperDoll.transform, Cap(job).ToUpperInvariant() + "   •   LV " + level, 0.910f, 0.945f,
-                     InkMicro, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.02f, 0.98f, spacing: 3f);
+            if (_profileFrameSprite != null)
+            {
+                // ── GOLD SUNBURST PORTRAIT MEDALLION (profile_frame) across the TOP band ──
+                // The 758x396 frame: circular gold sunburst portrait socket on the LEFT,
+                // name + two horizontal bar slots on the RIGHT. We seat the hero crest in the
+                // left circle, the name on the right-top, and drive the two bar slots as HP/MP.
+                var medBand = AddImage(_paperDoll.transform, "ProfileMedallion",
+                                       new Vector2(0.0f, 0.610f), new Vector2(1.0f, 0.995f), Color.white);
+                var mbImg = medBand.GetComponent<Image>();
+                if (mbImg != null)
+                {
+                    mbImg.sprite = _profileFrameSprite; mbImg.type = Image.Type.Simple;
+                    mbImg.color = Color.white; mbImg.preserveAspect = true; mbImg.raycastTarget = false;
+                }
 
-            // ── Hero portrait medallion — a single tidy circular niche (no busy ring).
-            // Lives in a square band so the circle stays round in the portrait column.
-            var portraitHost = AddImage(_paperDoll.transform, "PortraitHost",
-                                        new Vector2(0.14f, 0.605f), new Vector2(0.86f, 0.895f), new Color(0, 0, 0, 0));
-            NoRaycast(portraitHost);
-            var disc = AddCircle(portraitHost.transform, "PortraitDisc", 0.5f, 0.5f, 0.50f, StoneNiche);
-            NoRaycast(disc);
-            AddCircleRim(disc, new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.55f));
-            var medallion = AddCircle(disc.transform, "Medallion", 0.5f, 0.5f, 0.78f, StoneBack);
-            NoRaycast(medallion);
-            AddCircleRim(medallion, Accent);
-            AddLabel(medallion.transform, ClassCrest(job), 0.20f, 0.86f, GiltInk,
-                     ElarionUi.FontTitle + 18, TMPro.TextAlignmentOptions.Center, 0.06f, 0.94f, bold: true);
-            AddLabel(medallion.transform, Cap(job).ToUpperInvariant(), 0.06f, 0.20f, InkMicro,
-                     ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, spacing: 2f);
+                // Hero crest in the LEFT sunburst circle (no portrait art yet — the class
+                // crest reads as the hero token, same as the procedural disc below).
+                AddLabel(medBand.transform, ClassCrest(job), 0.18f, 0.82f, GiltInk,
+                         ElarionUi.FontTitle + 16, TMPro.TextAlignmentOptions.Center, 0.02f, 0.42f, bold: true);
+
+                // Hero name + class/level on the RIGHT-top.
+                AddLabel(medBand.transform, HeroDisplayName(job), 0.62f, 0.92f, Ink,
+                         ElarionUi.FontHead, TMPro.TextAlignmentOptions.Left, 0.46f, 0.98f, spacing: 1f);
+                AddLabel(medBand.transform, Cap(job).ToUpperInvariant() + "  LV " + level, 0.50f, 0.62f,
+                         InkMicro, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Left, 0.46f, 0.98f, spacing: 2f);
+
+                // TWO bar slots on the RIGHT — HP (red) over MP (blue). Shown full (no live
+                // HP/MP feed in this assembly); the fills sit in the frame's bar windows.
+                PaperDollBar("HP", 0.30f, 0.46f, RpgUiCatalog.BarFrameRed, RpgUiCatalog.BarFillRed,
+                             new Color(0.62f, 0.16f, 0.14f, 1f), medBand.transform);
+                PaperDollBar("MP", 0.10f, 0.26f, RpgUiCatalog.BarFrameBlue, RpgUiCatalog.BarFillBlue,
+                             new Color(0.18f, 0.33f, 0.62f, 1f), medBand.transform);
+            }
+            else
+            {
+                // ── Procedural fallback (pack art absent): name banner + circular portrait
+                // disc — the original tidy look, untouched, so a null sprite never blanks it.
+                AddLabelShadow(_paperDoll.transform, HeroDisplayName(job), 0.945f, 0.995f,
+                               Ink, ElarionUi.FontHead, 0.02f, 0.98f, spacing: 1f);
+                AddLabel(_paperDoll.transform, Cap(job).ToUpperInvariant() + "   •   LV " + level, 0.910f, 0.945f,
+                         InkMicro, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.02f, 0.98f, spacing: 3f);
+
+                var portraitHost = AddImage(_paperDoll.transform, "PortraitHost",
+                                            new Vector2(0.14f, 0.605f), new Vector2(0.86f, 0.895f), new Color(0, 0, 0, 0));
+                NoRaycast(portraitHost);
+                var disc = AddCircle(portraitHost.transform, "PortraitDisc", 0.5f, 0.5f, 0.50f, StoneNiche);
+                NoRaycast(disc);
+                AddCircleRim(disc, new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.55f));
+                var medallion = AddCircle(disc.transform, "Medallion", 0.5f, 0.5f, 0.78f, StoneBack);
+                NoRaycast(medallion);
+                AddCircleRim(medallion, Accent);
+                AddLabel(medallion.transform, ClassCrest(job), 0.20f, 0.86f, GiltInk,
+                         ElarionUi.FontTitle + 18, TMPro.TextAlignmentOptions.Center, 0.06f, 0.94f, bold: true);
+                AddLabel(medallion.transform, Cap(job).ToUpperInvariant(), 0.06f, 0.20f, InkMicro,
+                         ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, spacing: 2f);
+            }
 
             // ── EQUIPMENT section caption + rule. ──
             AddLabel(_paperDoll.transform, "EQUIPMENT", 0.555f, 0.595f, GiltInk,
@@ -514,6 +575,37 @@ namespace DeNelle.Village
                          a != null ? a.name : "Empty", a != null ? a.rarity : null, a != null);
             PaperDollRow(2, top, rowH, gap, "HELM",    "", null, "Empty", null, false);
             PaperDollRow(3, top, rowH, gap, "TRINKET", "", null, "Empty", null, false);
+        }
+
+        // One horizontal HP/MP bar slot in the profile medallion's right column. Sprite-
+        // first frame + fill from the RPG pack's bars role; procedural tinted fallback when
+        // absent. Shown full (no live HP/MP feed in this assembly). Non-raycast (decorative).
+        private void PaperDollBar(string caps, float y0, float y1, string frameSprite, string fillSprite,
+                                  Color fallbackFill, Transform host)
+        {
+            const float x0 = 0.50f, x1 = 0.97f;
+            var frameGo = AddImage(host, "Bar_" + caps + "_frame",
+                                   new Vector2(x0, y0), new Vector2(x1, y1), Color.white, rounded: false);
+            var fImg = frameGo.GetComponent<Image>();
+            if (fImg != null)
+            {
+                fImg.raycastTarget = false;
+                var fs = RpgUiCatalog.Get(RpgUiCatalog.RoleBars, frameSprite);
+                if (fs != null) { fImg.sprite = fs; fImg.type = Image.Type.Sliced; fImg.color = Color.white; }
+                else { fImg.color = new Color(0f, 0f, 0f, 0.35f); ApplyRounded(fImg); }
+            }
+            var fillGo = AddImage(frameGo.transform, "Bar_" + caps + "_fill",
+                                  new Vector2(0.04f, 0.20f), new Vector2(0.97f, 0.80f), fallbackFill, rounded: false);
+            var fillImg = fillGo.GetComponent<Image>();
+            if (fillImg != null)
+            {
+                fillImg.raycastTarget = false;
+                var fl = RpgUiCatalog.Get(RpgUiCatalog.RoleBars, fillSprite);
+                if (fl != null) { fillImg.sprite = fl; fillImg.type = Image.Type.Sliced; fillImg.color = Color.white; }
+                else ApplyRounded(fillImg);
+            }
+            AddLabel(frameGo.transform, caps, 0f, 1f, Ink, ElarionUi.FontMicro,
+                     TMPro.TextAlignmentOptions.Left, 0.03f, 0.30f, bold: true);
         }
 
         // One horizontal equipment-slot row in the paper-doll column: a rarity-tinted
