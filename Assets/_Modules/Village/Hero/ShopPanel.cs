@@ -202,7 +202,7 @@ namespace DeNelle.Village.Hero
             _statusText.color = ElarionUi.ParchmentDim; // soft cream on dark glass
             _statusText.alignment = TMPro.TextAlignmentOptions.Center;
             _statusText.raycastTarget = false;
-            SetStatus("Browse wares. Transactions use Wood / Iron / Crystals.");
+            SetStatus("Browse wares. Transactions use Gold.");
 
             // Default to Buy
             ShowBuy();
@@ -367,7 +367,7 @@ namespace DeNelle.Village.Hero
         {
             if (t == null || EconomyService.Instance == null) return;
             var e = EconomyService.Instance;
-            t.text = $"Wood: {e.Wood}   Iron: {e.Iron}   Food: {e.Food}   Crystals: {e.Crystals}";
+            t.text = $"Gold: {e.Coins}   Wood: {e.Wood}   Iron: {e.Iron}   Food: {e.Food}   Crystals: {e.Crystals}";
         }
 
         // A mode tab built from the shared kit ButtonPack (Gold kind) dressed sprite-FIRST
@@ -532,8 +532,8 @@ namespace DeNelle.Village.Hero
             if (potionsAllowed)
             foreach (var pid in _potionIds)
             {
-                var cost = new ResourceCost(wood: 4, iron: 0, crystals: 0); // cheap early potions
-                if (pid.Contains("mana")) cost = new ResourceCost(wood: 3, crystals: 1);
+                var cost = new ResourceCost(coins: 8); // cheap early potions — GOLD
+                if (pid.Contains("mana")) cost = new ResourceCost(coins: 12);
                 string pidCopy = pid; var costCopy = cost; // capture for the closure
                 try
                 {
@@ -781,6 +781,9 @@ namespace DeNelle.Village.Hero
         private string CostString(ResourceCost c)
         {
             var parts = new List<string>();
+            // GOLD is the shop currency — show it first/full. Wood/Iron/Food/Crystals are
+            // still rendered (compact suffixes) if a cost ever carries them, for safety.
+            if (c.Coins > 0) parts.Add(c.Coins + " Gold");
             if (c.Wood > 0) parts.Add(c.Wood + "W");
             if (c.Iron > 0) parts.Add(c.Iron + "I");
             if (c.Food > 0) parts.Add(c.Food + "F");
@@ -888,7 +891,7 @@ namespace DeNelle.Village.Hero
                 string display = (w != null ? w.name : (a != null ? a.name : id)) + " x" + owned;
                 ResourceCost refund = w != null ? ScaleCost(GearCatalog.GetBuyCost(w), 0.6f) :
                                     a != null ? ScaleCost(GearCatalog.GetBuyCost(a), 0.6f) :
-                                    new ResourceCost(wood: 2);
+                                    new ResourceCost(coins: 5); // potion sell-back — small gold
 
                 string idCopy = id; var refundCopy = refund;
                 bool isPotionSell = _potionIds.Contains(id);
@@ -915,7 +918,8 @@ namespace DeNelle.Village.Hero
                 Mathf.RoundToInt(c.Wood * f),
                 Mathf.RoundToInt(c.Food * f),
                 Mathf.RoundToInt(c.Iron * f),
-                Mathf.RoundToInt(c.Crystals * f));
+                Mathf.RoundToInt(c.Crystals * f),
+                Mathf.RoundToInt(c.Coins * f));   // GOLD — ~60% sell refund carries gold
         }
 
         // A sell row from kit pieces: dark-glass Cell tile + name + bronze refund + a

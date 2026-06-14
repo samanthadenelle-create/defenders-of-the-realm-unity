@@ -69,6 +69,12 @@ namespace DeNelle.Village.Buildings.Progression
                 var def = ResourceBuildingProgression.Find(id);
                 if (def == null) continue;
 
+                // Owner 2026-06-14: a FRESH game must not auto-grow resources. These global
+                // CoC-style nodes pay out ONLY after the player invests an upgrade (level > 1).
+                // Level 1 (the un-built default) produces nothing — manual node farming funds
+                // the first upgrade, then the node ticks. Keeps the loop earned, not free.
+                if (ResourceBuildingState.GetLevel(id) <= 1) continue;
+
                 float interval = ResourceBuildingState.CurrentHarvestInterval(id);
                 _elapsed[i] += dt;
                 if (_elapsed[i] < interval) continue;

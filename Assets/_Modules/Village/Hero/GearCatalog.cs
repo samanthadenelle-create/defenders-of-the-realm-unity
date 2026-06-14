@@ -210,18 +210,31 @@ namespace DeNelle.Village
             return _armor ?? (IReadOnlyList<ArmorDef>)System.Array.Empty<ArmorDef>();
         }
 
-        /// <summary>Build ResourceCost from a weapon def's buy* fields (for Economy.TrySpend).</summary>
+        /// <summary>
+        /// GOLD buy price for a weapon (for Economy.TrySpend). Vendor SHOPS now charge GOLD
+        /// (Coins), not Wood/Iron/Crystals — the price is GearAppraisal's estimated value
+        /// (tier + stats + Elarion-mark premium), the same number the buy label appraises.
+        /// Floored at 1 so nothing is ever free. The legacy buy* JSON fields are retained on
+        /// the def but no longer drive the shop cost. (Building UPGRADES stay on resources.)
+        /// </summary>
         public static DeNelle.Village.ResourceCost GetBuyCost(WeaponDef w)
         {
             if (w == null) return default;
-            return new DeNelle.Village.ResourceCost(w.buyWood, w.buyFood, w.buyIron, w.buyCrystals);
+            return new DeNelle.Village.ResourceCost(coins: GoldPrice(GearAppraisal.Appraise(w)));
         }
 
-        /// <summary>Build ResourceCost from an armor def's buy* fields (for Economy.TrySpend).</summary>
+        /// <summary>GOLD buy price for a piece of armor (for Economy.TrySpend). See the weapon overload.</summary>
         public static DeNelle.Village.ResourceCost GetBuyCost(ArmorDef a)
         {
             if (a == null) return default;
-            return new DeNelle.Village.ResourceCost(a.buyWood, a.buyFood, a.buyIron, a.buyCrystals);
+            return new DeNelle.Village.ResourceCost(coins: GoldPrice(GearAppraisal.Appraise(a)));
+        }
+
+        /// <summary>The gold price = the appraised estimated value, floored at 1. Null-safe.</summary>
+        private static int GoldPrice(GearAppraisalResult appraisal)
+        {
+            int v = appraisal != null ? appraisal.estimatedValue : 0;
+            return Mathf.Max(1, v);
         }
 
         private static bool JobMatches(string itemJob, string heroJob)

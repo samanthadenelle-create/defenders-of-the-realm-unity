@@ -74,17 +74,24 @@ namespace DeNelle.Village
         [Min(0)] public int Food;
         [Min(0)] public int Iron;
         [Min(0)] public int Crystals;
+        // GOLD (Coins) — the player-facing currency the vendor SHOPS charge (gear + potions).
+        // Backed by GameState.Resources.Coins (the canonical coin store the town HUD reads),
+        // NOT an in-session pool. Added last with a default of 0 so every existing caller of
+        // the (wood,food,iron,crystals) constructor compiles unchanged (split-economy: building
+        // UPGRADES stay on Wood/Iron/Crystals; shops move to Gold).
+        [Min(0)] public int Coins;
 
-        public ResourceCost(int wood = 0, int food = 0, int iron = 0, int crystals = 0)
+        public ResourceCost(int wood = 0, int food = 0, int iron = 0, int crystals = 0, int coins = 0)
         {
             Wood     = wood;
             Food     = food;
             Iron     = iron;
             Crystals = crystals;
+            Coins    = coins;
         }
 
-        /// <summary>True when all four values are zero — a free action.</summary>
-        public bool IsZero => Wood == 0 && Food == 0 && Iron == 0 && Crystals == 0;
+        /// <summary>True when all values are zero — a free action.</summary>
+        public bool IsZero => Wood == 0 && Food == 0 && Iron == 0 && Crystals == 0 && Coins == 0;
 
         public static ResourceCost WoodOnly(int amount)     => new ResourceCost(wood:     amount);
         public static ResourceCost FoodOnly(int amount)     => new ResourceCost(food:     amount);
@@ -139,6 +146,20 @@ namespace DeNelle.Village
             {
                 var state = GameStateService.Instance?.State;
                 return state != null ? state.Resources.Crystals : 0;
+            }
+        }
+
+        /// <summary>
+        /// GOLD (Coins) — the player-facing currency the vendor shops charge. Reads the
+        /// canonical store on GameState.Resources.Coins (the same field the town HUD's
+        /// SetGold displays), NOT a local pool. Returns 0 when state is absent.
+        /// </summary>
+        public int Coins
+        {
+            get
+            {
+                var state = GameStateService.Instance?.State;
+                return state != null ? state.Resources.Coins : 0;
             }
         }
 
@@ -244,7 +265,8 @@ namespace DeNelle.Village
             return _wood  >= cost.Wood
                 && Food   >= cost.Food            // DEF-121 — GameState-backed
                 && _iron  >= cost.Iron
-                && Crystals >= cost.Crystals;   // WO-131 — GameState-backed
+                && Crystals >= cost.Crystals    // WO-131 — GameState-backed
+                && Coins  >= cost.Coins;        // GOLD — GameState.Resources.Coins (shops)
         }
 
         /// <summary>
@@ -262,6 +284,8 @@ namespace DeNelle.Village
                 GameStateService.Instance?.AddFood(-cost.Food);           // DEF-121 — GameState-backed spend
             if (cost.Crystals > 0)
                 GameStateService.Instance?.AddCrystals(-cost.Crystals);   // GameState-backed spend
+            if (cost.Coins > 0)
+                AddCoins(-cost.Coins);                                    // GOLD — GameState.Resources.Coins (shops)
             NotifyChanged();
             return true;
         }
@@ -277,6 +301,9 @@ namespace DeNelle.Village
             int crystals = Mathf.Max(0, amount.Crystals);
             if (crystals > 0)
                 GameStateService.Instance?.AddCrystals(crystals);   // WO-131 — GameState-backed grant
+            int coins = Mathf.Max(0, amount.Coins);
+            if (coins > 0)
+                AddCoins(coins);                                    // GOLD — GameState.Resources.Coins (sell refunds)
             NotifyChanged();
         }
 
@@ -399,6 +426,26 @@ namespace DeNelle.Village
         }
 
         // ── Internal ──────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// GOLD mover — applies a signed delta to GameState.Resources.Coins (the single
+        /// coin store the town HUD's SetGold reads), persists it, and raises
+        /// GameStateService.ResourcesChanged so the HUD's gold readout updates. Mirrors the
+        /// PromoCodeService coin-credit pattern: ResourceBalance is a struct, so read →
+        /// modify → assign back. Clamped to >= 0. Null-safe (no-op when state is absent).
+        /// </summary>
+        private void AddCoins(int delta)
+        {
+            if (delta == 0) return;
+            var gs = GameStateService.Instance;
+            var state = gs?.State;
+            if (gs == null || state == null) return;
+            var r = state.Resources;
+            r.Coins = Mathf.Max(0, r.Coins + delta);
+            state.Resources = r;
+            gs.Save();
+            gs.ResourcesChanged?.Invoke();   // bridge re-emits OnChanged -> HUD gold refresh
+        }
 
         private void NotifyChanged()
         {
