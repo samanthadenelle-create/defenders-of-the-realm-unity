@@ -76,11 +76,16 @@ namespace DeNelle.Village
 
             // Armor specialists. Note: "armor" must be tested before any generic
             // catch so an "armorer" never falls through to the general default.
-            if (ctx.Contains("armor") || ctx.Contains("armory") || ctx.Contains("armorer"))
+            // BLACKSMITH = ARMOR (owner ticket 2026-06-13: the FORGE sells weapons, the
+            // BLACKSMITH sells armor). Tested HERE (before the weapon block) so "blacksmith"
+            // resolves to Armor and never matches the weapon block's "smith" substring.
+            if (ctx.Contains("armor") || ctx.Contains("armory") || ctx.Contains("armorer") ||
+                ctx.Contains("blacksmith"))
                 return GearKind.Armor;
 
-            // Weapon specialists.
-            if (ctx.Contains("forge") || ctx.Contains("blacksmith") || ctx.Contains("smith"))
+            // Weapon specialists — the FORGE (and a plain "smith"). "blacksmith" is already
+            // resolved to Armor above, so it never reaches here despite the "smith" substring.
+            if (ctx.Contains("forge") || ctx.Contains("smith"))
                 return GearKind.Weapon;
 
             // Jeweler — adornment arc, modeled as Armor for now (see XML-doc above).

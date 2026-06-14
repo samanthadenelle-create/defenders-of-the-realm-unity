@@ -186,9 +186,10 @@ namespace DeNelle.HUD
             // onboarded toggles, save, reset-save, orient tool) are dropped from the panel; their
             // handlers stay in the file in case they're wanted back.
             card.Add(Button("Load resources (full base)",   OnLoadResources));
+            card.Add(Button("Trigger next wave",            OnTriggerWave));
             card.Add(Button("Reset Yarn (replay tutorial)", OnReplayTutorial));
             card.Add(Button("Close",                        Toggle));
-            FlowTrace.Step("UI", "DevPanel (AdminOverlay) UI built — wired 3 buttons");
+            FlowTrace.Step("UI", "DevPanel (AdminOverlay) UI built — wired 4 buttons");
 
             _status = new Label(string.Empty);
             _status.style.color = ElarionUi.ParchmentDim;
