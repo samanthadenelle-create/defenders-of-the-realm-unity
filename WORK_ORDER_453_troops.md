@@ -45,19 +45,21 @@ cap) → **Level** (raid/arena XP) → **Deploy** in raids + arena (offensive-on
   air-light→Sky Raider, open→ranged, choke→melee+banner. Each flagship raid already implies its counter.
   The interesting decision happens at army-select, before deploy. Ties defend↔raid↔arena via one comp literacy.
 
-## ⚠ THE ONE OPEN FORK FOR THE OWNER — troop leveling depth
-Your WO-453 template + the relayed XP design give **troops individual XP bars + deep leveling** (a
-persistent RPG army). The review argues troops should be **expendable fodder with only light veterancy**,
-with the *deep* persistent leveling living in Echoes (so "finite vs persistent" stays a crisp one-sentence
-line). These genuinely conflict — it's the make-or-break identity call:
-- **(A) Persistent leveling army (your template):** troops level individually over many raids; losing a
-  level-10 troop is a heavy, XCOM-like permadeath. Deep investment, high stakes, more UI/save complexity.
-- **(B) Expendable + veterancy (review):** troops are ammunition with a light +30% veteran ceiling; deep
-  growth is the hero/companions/Echoes. Cleaner finite line, less sprawl, leans CoC.
-- **Recommended hybrid:** **(B) for the launch slice** (keeps finite crisp + cheap to build), with a
-  *shallow* 3-rank veterancy that reads like "leveling" — then, if the persistent-army fantasy proves the
-  fun, deepen toward (A) post-grant. This honors your template's leveling intent without the permadeath
-  rage-risk on day one. **Your call.**
+## ✅ DECIDED (owner 2026-06-14) — leveling depth = (B) Expendable + light veterancy
+**Locked: (B).** Troops are expendable ammunition you invest + risk, NOT XCOM soldiers you mourn. Clean
+emotional contract ("lost the squad, train more" = motivating, not punishing), lowest day-one
+complexity/balance risk, and it keeps the persistent power fantasy where it belongs (hero + companions +
+Echoes). **Light veterancy** (+dmg/survivability per raids-survived or star rating, ~+30% ceiling) gives
+progression feel without permadeath sting. NOT a hybrid (hybrid = downsides of both). Deepen toward
+persistent (A) ONLY post-grant if data shows players want per-unit attachment. *Ship clean, then expand on
+what resonates.*
+
+## ✅ DECIDED — pull the thin slice forward (pre-listing). GREENLIT.
+Highest-ROI move: turns the weakest demo moment (solo-hero raiding) into the strongest pillar, gives real
+playtest data on the core verbs immediately, very high reuse, and is a tangible "we have raids" milestone
+before the grant push. **Slice = Footman + Archer · deploy + rally-flag + Retreat · cap 10 · 1–2 raid
+targets (RaidBaseGenerator).** Everything else (Mage/Healer, air/AA, full cap, SKR rewards, defend mode,
+deep veterancy) stays post-grant.
 
 ## Star scoring (reuse the existing countdown timer)
 **Stars = clear-time thresholds, tracked by REUSING the existing wave/raid countdown timer**
@@ -103,6 +105,57 @@ multiplier (e.g. +25–50%) and **improved Echo-shard odds**, scaled by stake si
 the top payout). So the wager is a *high-stakes mode* you opt into for richer loot, not a side bet —
 rewards the skill read (scout + comp + clean clear) with the best rewards in the game. Stake-gated behind
 a dry clear (rule 3) keeps it skill-not-gamble. Reuses the `ArenaWalletService` Debit/Credit seam.
+
+## AI Fortress & Troop Scaling (relayed design — validated + connected to shipped systems)
+Philosophy: raids feel like a *thoughtful enemy base*, difficulty from **smart layout + appropriate counts**,
+predictable progression **Regular → Hard → Extreme**. Most of this is ALREADY scaffolded:
+
+**Difficulty tiers = the EXISTING scene-config garrisons** (just label + enrich):
+| Tier | Existing config | Base style | Walls | Towers (archer/mage) | Layout (RaidBaseGenerator) |
+|---|---|---|---|---|---|
+| **Regular** | `raider_camp_small` | Raider camp | Wood | 4 / 0–1 | single ring (PerimeterWallGenerator) |
+| **Hard** | `fortified_garrison` | Fortified outpost | Wood+Iron | 6 / 1–2 | concentric (Iron Bastion) |
+| **Extreme** | `mage_enclave` | Mage/Dragon enclave | Iron/Steel | 8 / 2–3 + traps | enclave: AA ring + shielded core |
+
+**AI troop scaling (controlled + readable):**
+- **Level** = `max(baseEnemyLevel, playerAvg + offset)` — **already shipped** in the scene-config consumer.
+- **Count** = base (driven by player power: avg troop lvl + hero lvl + army size) × **difficulty multiplier**:
+  Regular 0.7–1.0× · Hard 1.2–1.6× · Extreme 1.8–2.5×.
+- **Role balance** = smart, not all-archers — **reuse `WaveCompositionBuilder` family pools** (shipped tonight):
+  Regular = basic archers+warriors; Hard = balanced + 1–2 elites; Extreme = role synergy (warriors tank, mages AoE) + more casters.
+- **⚠ Perf ceiling (mobile/WebGL/Seeker):** Extreme's 30–45 enemies + the player's cap-30 army + towers =
+  75+ combat units. That WILL hurt on Seeker/WebGL. **Cap total live combatants** (LOD/pooling, or scale
+  Extreme counts down on mobile) — this is why the player army caps at 30. Tune Extreme to the perf budget, not the fantasy.
+
+**RaidTemplate (the data form):** the relayed `RaidTemplate` SO = our **enriched scene-config** (layout +
+troop-composition template + **1★/2★/3★ timer targets** + **reward table**). Decision: keep them as the
+existing **CanonicalJson scene-configs** (WebGL-safe, already wired + player-level-scaled) OR mirror to SOs
+per the owner's preference — recommend **extend scene-configs** (don't fork a parallel template system; it
+already does ownership + scaling). Pool of 8–12 that unlock as the player progresses.
+
+## Echo Bond Shards — the 3★ prestige chase (POST-GRANT; spec now, NOT in the slice)
+The 3★ reward that makes mastery mean a *permanent* companion, not just resources. **Extends the shipped
+`Pet.cs` bond system (ranks 0–4)** — shards feed bonding; do NOT fork a parallel pet system. Keeps the
+identity line crisp: **finite = troops, persistent = Echoes.**
+
+- **Acquisition (skill-only — NO pay-to-win):** shards drop **only on 3★** clears (~15–25% base, tunable),
+  scaled by raid difficulty (Extreme = better rate + rarer shards), with a **pity timer** (guaranteed shard
+  every ~8–12 same-raid 3★ clears). Premium currency may speed *training time*, **never buy shards.**
+- **Shard rarity:** Common / Rare / Epic / **Signature** (legendary-Echo-specific). Shards are **Echo-specific
+  or Wild** (apply to any Echo).
+- **Bonding curve:** ~40–80 shards to fully bond one Echo. Progressive: **25% → passive bonus · 50% → active
+  ability · 100% → full power + cosmetic/personality.** Weeks/months to fully bond the rarest — generous
+  per-session progress, chase-worthy total.
+- **Troop ↔ Echo synergy:** troops that SURVIVE a raid grant a small bonus shard — a light, lovely thread
+  tying the finite force to the persistent one (and it rewards the Retreat verb).
+- **The loop:** get good at raids → earn shards → stronger Echoes → better raid performance. Self-reinforcing
+  prestige.
+- **Example Echoes (incl. the family thread — keep these):** **Train Echo** (from a child's drawings —
+  tanky, taunt), **Big Boy 4014** (train-themed legendary — the family win), Storm Mage (AoE support),
+  Ancient Dragon Hatchling (rare, breath attack). A collection UI with per-Echo bond progress bars.
+- **Scope:** the prestige/retention layer — **post-grant**, after the troop slice + the Echo pillar build.
+  NOT in the pre-listing thin slice (which is Footman+Archer+deploy/rally/retreat). May graduate to its own
+  WO when the Echo pillar is built; lives here now as the raid 3★-reward contract.
 
 ## Data structures (owner template — refined)
 `TroopDef` (ScriptableObject: id, prefab, role, base stats, train cost/time, level/veterancy data) —
