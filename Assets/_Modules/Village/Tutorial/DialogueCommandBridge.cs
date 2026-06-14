@@ -172,6 +172,14 @@ namespace DeNelle.Village
             Reg("OpenRumorBoard", (Action)CmdOpenRumorBoard);
             Reg("LearnRecipe",    (Action<string>)CmdLearnRecipe);
 
+            // Barracks troop-training (WO-453) — the Barracks_MainMenu Yarn node fires
+            // <<ShowTrainingUI>> to open the code-built training panel and (optionally)
+            // <<StartTraining troopId qty>> to train directly. Both delegate to the
+            // single TroopDialogueCommands home (which wires the ArmyStorage seams to
+            // TroopCatalog + EconomyService). Registered ONCE here on the shared runner.
+            Reg("ShowTrainingUI", (Action)CmdShowTrainingUI);
+            Reg("StartTraining",  (Action<string, int>)CmdStartTraining);
+
             // Misc / meta
             Reg("save_game",            (Action)CmdSaveGame);
 
@@ -855,6 +863,11 @@ namespace DeNelle.Village
 
         private void CmdLearnRecipe(string recipeId)
             => Debug.Log($"[DialogueCommandBridge] Learned recipe: {recipeId}");
+
+        // Barracks troop-training (WO-453). Both delegate to the single
+        // TroopDialogueCommands home so the army-seam wiring lives in one place.
+        private void CmdShowTrainingUI() => TroopDialogueCommands.ShowTrainingUI();
+        private void CmdStartTraining(string troopId, int qty) => TroopDialogueCommands.StartTraining(troopId, qty);
 
         private void CmdSpawnNpc(string who, string atWord, string where) =>
             Debug.Log($"[DialogueCommandBridge] spawn_npc '{who}' at '{where}' (companion auto-spawns; ambient NPCs are a follow-up).");

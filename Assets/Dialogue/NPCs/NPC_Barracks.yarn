@@ -1,0 +1,34 @@
+// =============================================================================
+// Barracks — the drillmaster's troop-training menu (WO-453 troop-training flow).
+// Opened by DialogueService.PlayStructure("barracks", "Barracks"), which routes the
+// "barracks" structureId to THIS node (Barracks_MainMenu) — mirroring the pet-house
+// PetHouse branch — instead of the generic StructureMenu.
+//
+// MINIMAL but working: a greeting + three options. Both panel-opening options use the
+// COMMAND-FIRST pattern (the <<command>> is the FIRST content under the option, before
+// any dialogue line) — a line BEFORE the command makes the Yarn VM pause on the line
+// and the command never fires (the StructureMenu "Buy never opens" bug). "View Army"
+// also opens the training panel (it shows the live owned counts + the army cap), so no
+// new Yarn variable has to be declared/seeded just to print a count.
+//
+// Flavor is intentionally light — a richer drillmaster narrative is authored
+// separately; this just needs to COMPILE in the Yarn project and FUNCTION.
+//
+// Custom commands used: <<ShowTrainingUI>> (no args) — registered ONCE on the shared
+// DialogueRunner by DialogueCommandBridge. No new Yarn variables are introduced.
+// =============================================================================
+title: Barracks_MainMenu
+tags: structure interaction barracks
+---
+Drillmaster: Looking to raise some soldiers? The Realm won't defend itself.
+
+-> Train troops.
+    // Command FIRST (mirrors the vendor nodes): a line before the command would make
+    // the VM pause and <<ShowTrainingUI>> would never fire -> the panel never opens.
+    <<ShowTrainingUI>>
+-> Review my army.
+    // Same panel — it lists every troop's owned count and the army cap at the top.
+    <<ShowTrainingUI>>
+-> Not today.
+    Drillmaster: Then keep your blade close. The enemy doesn't rest.
+===

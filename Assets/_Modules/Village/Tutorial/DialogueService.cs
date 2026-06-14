@@ -188,8 +188,16 @@ namespace DeNelle.Village
             // instead of the generic buy/sell/upgrade StructureMenu. Every other
             // building shares the parameterized StructureMenu. Fall back to StructureMenu
             // if the PetHouse node isn't compiled in this build.
-            string node = (structureId == "pet-house" && NodeExists(runner, "PetHouse"))
-                ? "PetHouse" : "StructureMenu";
+            // The pet house and the barracks each get their OWN flow node; every other
+            // building shares the parameterized StructureMenu. Fall back to StructureMenu
+            // if the dedicated node isn't compiled in this build.
+            string node;
+            if (structureId == "pet-house" && NodeExists(runner, "PetHouse"))
+                node = "PetHouse";
+            else if (structureId == "barracks" && NodeExists(runner, "Barracks_MainMenu"))
+                node = "Barracks_MainMenu";
+            else
+                node = "StructureMenu";
             if (!NodeExists(runner, node))
             {
                 Debug.LogError($"[DialogueService] '{node}' node missing — building hook can't open.");
