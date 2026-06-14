@@ -53,6 +53,19 @@ namespace DeNelle.Village.Hero
         private TMPro.TextMeshProUGUI _ecoText;
         private System.Action<ResourceSnapshot> _ecoHandler; // stored so Close() can unsubscribe (no leak)
 
+        // Unified Shop WO #3: RIGHT details pane. Built once per Open(); populated when a
+        // buy/sell row is tapped (SelectForDetails) IN ADDITION to the row's own buy/sell action.
+        private Image _detailsIcon;
+        private TMPro.TextMeshProUGUI _detailsName;
+        private TMPro.TextMeshProUGUI _detailsDesc;
+        private TMPro.TextMeshProUGUI _detailsStats;
+        private TMPro.TextMeshProUGUI _detailsCost;
+
+        // Unified Shop WO #4: current Type filter for the BUY list. Intersected with the
+        // vendor contract's allowed kinds; default = the contract's full allowance ("All").
+        private GearKind _buyFilter = GearKind.Weapon | GearKind.Armor | GearKind.Potion;
+        private GameObject _filterBar; // the Type-filter button row (for active-filter highlight)
+
         private readonly List<string> _potionIds = new List<string> { "minor-heal-potion", "minor-mana-potion" };
 
         // WO-444: the ACTUAL built stock, recorded as ShowBuy creates each row. This is
@@ -101,8 +114,12 @@ namespace DeNelle.Village.Hero
             // Backboard: plain DEEP dark-glass (NOT the panel_inventory grid-of-slots sprite —
             // that decorative gold grid made the store read as "empty slots / no stock" even with
             // 18 real rows on top). Dark glass = the rows show clearly, same as the town HUD.
-            var panelGo = ElarionUiKit.PanelFramed(_ui.transform, new Vector2(0.22f, 0.08f), new Vector2(0.78f, 0.92f),
-                                                   deep: true, packSpriteName: null);
+            // WIDENED (Unified Shop WO #3) from 0.22–0.78 to 0.14–0.86 so a RIGHT details
+            // column fits beside the LEFT scroll list. Dressed in the canonical D3 dark-wood
+            // vendor board (WO #2: "dark wood frames, gold accents") via the single kit seam —
+            // packSpriteName: RpgUiCatalog.PanelVendor — instead of the old plain dark glass.
+            var panelGo = ElarionUiKit.PanelFramed(_ui.transform, new Vector2(0.14f, 0.07f), new Vector2(0.86f, 0.93f),
+                                                   deep: true, packSpriteName: RpgUiCatalog.PanelVendor);
             var panel = panelGo.transform;
 
             // Header — read as a named storefront, not a generic "Vendor Wares" wall. The
@@ -141,19 +158,31 @@ namespace DeNelle.Village.Hero
             tbRect.offsetMin = Vector2.zero;
             tbRect.offsetMax = Vector2.zero;
 
-            CreateTabButton(tabBar.transform, "BUY", new Vector2(0.02f, 0.32f), () => ShowBuy());
-            CreateTabButton(tabBar.transform, "SELL", new Vector2(0.355f, 0.655f), () => ShowSell());
-            CreateTabButton(tabBar.transform, "EQUIP", new Vector2(0.69f, 0.98f), () => ShowEquip());
-            _tabBar = tabBar; // kept so ShowBuy/Sell/Equip can light the active tab
+            // Unified Shop WO #1: EQUIP tab REMOVED — "Equip belongs elsewhere" (EquipmentPanel,
+            // opened via the Yarn "OpenEquip" command). BUY/SELL re-spaced to split the bar evenly.
+            // ShowEquip()/equip rows are left in the file (harmless, no longer reachable from a tab).
+            CreateTabButton(tabBar.transform, "BUY", new Vector2(0.02f, 0.49f), () => ShowBuy());
+            CreateTabButton(tabBar.transform, "SELL", new Vector2(0.51f, 0.98f), () => ShowSell());
+            _tabBar = tabBar; // kept so ShowBuy/Sell can light the active tab
 
-            // Content area (replaced per mode)
+            // Content area (replaced per mode) — Unified Shop WO #3: now the LEFT list column
+            // only (was full width 0.02–0.98). The RIGHT details pane sits beside it at 0.64–0.98.
+            // The scroll-list mechanism inside (Well + masked viewport + VerticalLayoutGroup +
+            // ContentSizeFitter + per-row LayoutElement) is UNCHANGED — only its host's width moved.
             _contentRoot = new GameObject("Content", typeof(RectTransform));
             _contentRoot.transform.SetParent(panel, false);
             var cr = _contentRoot.GetComponent<RectTransform>();
             cr.anchorMin = new Vector2(0.02f, 0.08f);
-            cr.anchorMax = new Vector2(0.98f, 0.76f);
+            cr.anchorMax = new Vector2(0.62f, 0.71f);
             cr.offsetMin = Vector2.zero;
             cr.offsetMax = Vector2.zero;
+
+            // Unified Shop WO #4: compact Type filter row above the LEFT list (All / Weapons /
+            // Armor / Potions). Built once; each button re-runs ShowBuy with a GearKind filter.
+            BuildFilterBar(panel);
+
+            // RIGHT details pane (selected item: icon, name, description, stats, cost).
+            BuildDetailsPane(panel);
 
             // Close (X) — top-right corner, ornate pack-frame danger button. Added last
             // so it draws on top of the header/content and always receives the tap.
@@ -190,6 +219,123 @@ namespace DeNelle.Village.Hero
             id = id.Replace('-', ' ').Replace('_', ' ').Trim();
             if (id.Length == 0) return "Vendor";
             return char.ToUpper(id[0]) + (id.Length > 1 ? id.Substring(1) : "");
+        }
+
+        // Unified Shop WO #4: a compact Type-filter row over the LEFT list. Four small kit
+        // buttons (All / Weapons / Armor / Potions) set _buyFilter and re-run ShowBuy. The
+        // filter is INTERSECTED with the vendor contract in ShowBuy, so e.g. an armorer's
+        // "Weapons" filter simply yields nothing (the contract still wins) — additive + safe.
+        // NOTE: Class / Level filters were SKIPPED — the catalog defs carry job + rarity but no
+        // player-level gate, and a Class control needs a hero-class picker we don't surface here.
+        private void BuildFilterBar(Transform panel)
+        {
+            var bar = new GameObject("FilterBar", typeof(RectTransform));
+            bar.transform.SetParent(panel, false);
+            var br = bar.GetComponent<RectTransform>();
+            br.anchorMin = new Vector2(0.02f, 0.715f);
+            br.anchorMax = new Vector2(0.62f, 0.76f);
+            br.offsetMin = Vector2.zero;
+            br.offsetMax = Vector2.zero;
+            _filterBar = bar;
+
+            GearKind all = GearKind.Weapon | GearKind.Armor | GearKind.Potion;
+            CreateFilterButton(bar.transform, "All",     new Vector2(0.01f, 0.245f), all);
+            CreateFilterButton(bar.transform, "Weapons", new Vector2(0.255f, 0.49f), GearKind.Weapon);
+            CreateFilterButton(bar.transform, "Armor",   new Vector2(0.505f, 0.745f), GearKind.Armor);
+            CreateFilterButton(bar.transform, "Potions", new Vector2(0.755f, 0.99f), GearKind.Potion);
+        }
+
+        private void CreateFilterButton(Transform parent, string label, Vector2 anchorX, GearKind kind)
+        {
+            ElarionUiKit.ButtonPack(parent, label, ElarionUiKit.ButtonKind.Quiet,
+                new Vector2(anchorX.x, 0.05f), new Vector2(anchorX.y, 0.95f),
+                () => { _buyFilter = kind; ShowBuy(); });
+        }
+
+        // Brighten the active Type filter, dim the rest (same tint scheme as the mode tabs).
+        private void HighlightFilter()
+        {
+            if (_filterBar == null) return;
+            GearKind all = GearKind.Weapon | GearKind.Armor | GearKind.Potion;
+            string active = _buyFilter == GearKind.Weapon ? "Btn_Weapons"
+                          : _buyFilter == GearKind.Armor  ? "Btn_Armor"
+                          : _buyFilter == GearKind.Potion ? "Btn_Potions"
+                          : "Btn_All";
+            if (_buyFilter == all) active = "Btn_All";
+            foreach (Transform child in _filterBar.transform)
+            {
+                if (child == null) continue;
+                var img = child.GetComponent<Image>();
+                if (img != null) img.color = child.name == active ? TabSelectedTint : TabRestTint;
+            }
+        }
+
+        // Unified Shop WO #3: the RIGHT details pane — a kit Well + an icon image and the
+        // name / description / stats / cost labels. Built ONCE per Open(); a row tap fills it
+        // in via SelectForDetails. Starts with a neutral "tap an item" prompt.
+        private void BuildDetailsPane(Transform panel)
+        {
+            var pane = new GameObject("DetailsPane", typeof(RectTransform));
+            pane.transform.SetParent(panel, false);
+            var pr = pane.GetComponent<RectTransform>();
+            pr.anchorMin = new Vector2(0.64f, 0.08f);
+            pr.anchorMax = new Vector2(0.98f, 0.76f);
+            pr.offsetMin = Vector2.zero;
+            pr.offsetMax = Vector2.zero;
+
+            // Recessed well backing so the details column reads as a defined inset.
+            var well = ElarionUiKit.Well(pane.transform, Vector2.zero, Vector2.one);
+            var wImg = well.GetComponent<Image>();
+            if (wImg != null) wImg.raycastTarget = false;
+
+            // Item icon (top), centred in a square-ish slot.
+            var iconGo = ElarionUiKit.AddImage(pane.transform, "DetailIcon",
+                new Vector2(0.30f, 0.68f), new Vector2(0.70f, 0.97f), Color.white, rounded: false);
+            _detailsIcon = iconGo.GetComponent<Image>();
+            _detailsIcon.preserveAspect = true;
+            _detailsIcon.raycastTarget = false;
+            _detailsIcon.enabled = false; // hidden until a row populates it
+
+            _detailsName = ElarionUiKit.Label(pane.transform, "Select an item", 0.60f, 0.67f,
+                ElarionUi.Gilt, ElarionUi.FontBody, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, bold: true);
+            _detailsName.raycastTarget = false;
+
+            _detailsDesc = ElarionUiKit.Label(pane.transform, "Tap a row to see its details.", 0.36f, 0.59f,
+                ElarionUi.ParchmentDim, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.TopLeft, 0.06f, 0.94f);
+            _detailsDesc.raycastTarget = false;
+
+            _detailsStats = ElarionUiKit.Label(pane.transform, "", 0.16f, 0.35f,
+                ElarionUi.Affordable, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.TopLeft, 0.06f, 0.94f);
+            _detailsStats.raycastTarget = false;
+
+            _detailsCost = ElarionUiKit.Label(pane.transform, "", 0.04f, 0.15f,
+                ElarionUi.Gilt, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.06f, 0.94f, bold: true);
+            _detailsCost.raycastTarget = false;
+        }
+
+        // Populate the right details pane for a selected item. Called by a buy/sell row's tap
+        // IN ADDITION to (not instead of) the row's own buy/sell action. icon may be null
+        // (no art -> the icon slot is hidden, name+stats still show).
+        private void SelectForDetails(string name, string description, string stats, ResourceCost cost, Sprite icon, bool isRefund)
+        {
+            if (_detailsName != null) _detailsName.text = name;
+            if (_detailsDesc != null) _detailsDesc.text = description;
+            if (_detailsStats != null) _detailsStats.text = stats;
+            if (_detailsCost != null) _detailsCost.text = (isRefund ? "Refund: +" : "Cost: ") + CostString(cost);
+            if (_detailsIcon != null)
+            {
+                _detailsIcon.sprite = icon;
+                _detailsIcon.enabled = icon != null;
+            }
+        }
+
+        // Build a short flavor/description line from the def's job + rarity (the catalog has no
+        // dedicated description field) so the details pane reads as more than just a name.
+        private static string DescribeGear(string job, string rarity)
+        {
+            string r = string.IsNullOrEmpty(rarity) ? "" : char.ToUpper(rarity[0]) + (rarity.Length > 1 ? rarity.Substring(1) : "");
+            string j = string.IsNullOrEmpty(job) || job == "any" ? "any class" : "the " + job;
+            return (string.IsNullOrEmpty(r) ? "" : r + " gear. ") + "Suited to " + j + ".";
         }
 
         private void CreateEconomyReadout(Transform parent)
@@ -261,6 +407,7 @@ namespace DeNelle.Village.Hero
         {
             ClearContent();
             HighlightTab("BUY");
+            HighlightFilter();
             SetStatus("Buy gear or potions. Tap a row or BUY to purchase.");
 
             GearCatalog.Reload(); // pick up any live data change
@@ -275,6 +422,13 @@ namespace DeNelle.Village.Hero
             // everything" for market/jeweler — the bug that put swords in the marketplace.
             string ctx = _vendorContext.ToLowerInvariant();
             GearKind allowed = VendorStockContract.AllowedFor(ctx);
+
+            // Unified Shop WO #4: intersect the contract with the player's chosen Type filter.
+            // The contract STILL wins (an armorer filtered to "Weapons" yields nothing); "All"
+            // (_buyFilter = Weapon|Armor|Potion) is a no-op pass-through. The never-empty
+            // safeguard below uses 'allowed' (post-intersection) so an empty filter just shows
+            // an empty list rather than force-falling-back to the full general stock.
+            allowed &= _buyFilter;
 
             // Full catalog (null-safe — AllWeapons/AllArmors never return null).
             var allWeapons = new List<WeaponDef>();
@@ -298,7 +452,11 @@ namespace DeNelle.Village.Hero
             // genuinely empty and only that is logged.)
             bool wouldBeEmpty = weapons.Count == 0 && armors.Count == 0 &&
                                 (!potionsAllowed || _potionIds.Count == 0);
-            if (wouldBeEmpty && (allWeapons.Count + allArmors.Count) > 0)
+            // WO #4: only force the general-stock fallback when the player has NOT narrowed the
+            // Type filter ("All"). A deliberate Weapons-at-an-armorer filter should show an empty
+            // list, not get overridden back to full stock.
+            bool filterIsAll = _buyFilter == (GearKind.Weapon | GearKind.Armor | GearKind.Potion);
+            if (wouldBeEmpty && filterIsAll && (allWeapons.Count + allArmors.Count) > 0)
             {
                 weapons.Clear(); weapons.AddRange(allWeapons);
                 armors.Clear();  armors.AddRange(allArmors);
@@ -344,7 +502,12 @@ namespace DeNelle.Village.Hero
                 var wCopy = w; // capture for the closure
                 try
                 {
-                    CreateBuyRow(listRoot, BuyLabel(w.name, GearAppraisal.Appraise(w)), GearCatalog.GetBuyCost(w), () => TryBuyWeapon(wCopy), null);
+                    var wDetailCost = GearCatalog.GetBuyCost(w);
+                    int wDmgPct = Mathf.RoundToInt((Mathf.Max(0.1f, w.damageMult) - 1f) * 100f);
+                    string wStats = $"+{wDmgPct}% dmg" + (w.reach > 0f ? $"   reach {w.reach:0.#}m" : "");
+                    var wIcon = ItemIconCatalog.ForWeapon(w);
+                    CreateBuyRow(listRoot, BuyLabel(w.name, GearAppraisal.Appraise(w)), GearCatalog.GetBuyCost(w), () => TryBuyWeapon(wCopy), null,
+                        () => SelectForDetails(string.IsNullOrEmpty(w.name) ? w.id : w.name, DescribeGear(w.job, w.rarity), wStats, wDetailCost, wIcon, isRefund: false));
                     _currentStock.Add((w.id, GearKind.Weapon)); // record ACTUAL built stock for the bot's assertion
                     built++;
                 }
@@ -355,7 +518,12 @@ namespace DeNelle.Village.Hero
                 var aCopy = a; // capture for the closure
                 try
                 {
-                    CreateBuyRow(listRoot, BuyLabel(a.name, GearAppraisal.Appraise(a)), GearCatalog.GetBuyCost(a), () => TryBuyArmor(aCopy), null);
+                    var aDetailCost = GearCatalog.GetBuyCost(a);
+                    int aDefPct = Mathf.RoundToInt(Mathf.Clamp(a.defense, 0f, 0.9f) * 100f);
+                    string aStats = $"+{aDefPct}% def" + (a.hpBonus > 0f ? $"   +{a.hpBonus:0.#} hp" : "");
+                    var aIcon = ItemIconCatalog.ForArmor(a);
+                    CreateBuyRow(listRoot, BuyLabel(a.name, GearAppraisal.Appraise(a)), GearCatalog.GetBuyCost(a), () => TryBuyArmor(aCopy), null,
+                        () => SelectForDetails(string.IsNullOrEmpty(a.name) ? a.id : a.name, DescribeGear(a.job, a.rarity), aStats, aDetailCost, aIcon, isRefund: false));
                     _currentStock.Add((a.id, GearKind.Armor)); // record ACTUAL built stock for the bot's assertion
                     built++;
                 }
@@ -372,7 +540,9 @@ namespace DeNelle.Village.Hero
                     // Pack potion art on the row when present (red heal / blue mana bottle).
                     var potionIcon = RpgUiCatalog.Get(RpgUiCatalog.RolePotion,
                         pid.Contains("mana") ? RpgUiCatalog.PotionMana : RpgUiCatalog.PotionHealth);
-                    CreateBuyRow(listRoot, pidCopy, costCopy, () => TryBuyPotion(pidCopy, costCopy), potionIcon);
+                    string potionDesc = pidCopy.Contains("mana") ? "Restores mana in a pinch." : "Restores health in a pinch.";
+                    CreateBuyRow(listRoot, pidCopy, costCopy, () => TryBuyPotion(pidCopy, costCopy), potionIcon,
+                        () => SelectForDetails(pidCopy, potionDesc, "Consumable", costCopy, potionIcon, isRefund: false));
                     _currentStock.Add((pidCopy, GearKind.Potion)); // record ACTUAL built stock for the bot's assertion
                     built++;
                 }
@@ -532,7 +702,7 @@ namespace DeNelle.Village.Hero
         // for the scroll layout), an optional pack-art icon well on the left, the item
         // name + cost labels, and a green Confirm BUY button. The whole row is also a
         // tap-to-buy Button. iconSprite may be null (no art / gear).
-        private void CreateBuyRow(Transform parent, string label, ResourceCost cost, System.Action buyAction, Sprite iconSprite)
+        private void CreateBuyRow(Transform parent, string label, ResourceCost cost, System.Action buyAction, Sprite iconSprite, System.Action selectAction = null)
         {
             var row = new GameObject("BuyRow_" + label, typeof(Image), typeof(Button), typeof(LayoutElement));
             row.transform.SetParent(parent, false);
@@ -545,7 +715,10 @@ namespace DeNelle.Village.Hero
             var rowBtn = row.GetComponent<Button>();
             rowBtn.targetGraphic = rowImg;
             ElarionUiKit.StyleButtonColors(rowBtn);
-            rowBtn.onClick.AddListener(() => buyAction());
+            // Unified Shop WO #3: the row's existing tap now ALSO populates the details pane
+            // (select), in addition to its purchase action. Tapping a row selects + buys; the
+            // dedicated BUY button below stays the explicit purchase CTA.
+            rowBtn.onClick.AddListener(() => { if (selectAction != null) selectAction(); buyAction(); });
 
             float nameX0 = 0.04f;
             if (iconSprite != null)
@@ -718,7 +891,19 @@ namespace DeNelle.Village.Hero
                                     new ResourceCost(wood: 2);
 
                 string idCopy = id; var refundCopy = refund;
-                CreateSellRow(listRoot, display, refundCopy, () => TrySell(idCopy, refundCopy));
+                bool isPotionSell = _potionIds.Contains(id);
+                string sellDesc = w != null ? DescribeGear(w.job, w.rarity)
+                                : a != null ? DescribeGear(a.job, a.rarity)
+                                : (isPotionSell ? "Consumable you own." : "Owned item.");
+                string sellStats = w != null ? $"+{Mathf.RoundToInt((Mathf.Max(0.1f, w.damageMult) - 1f) * 100f)}% dmg"
+                                 : a != null ? $"+{Mathf.RoundToInt(Mathf.Clamp(a.defense, 0f, 0.9f) * 100f)}% def"
+                                 : "Consumable";
+                var sellIcon = w != null ? ItemIconCatalog.ForWeapon(w)
+                             : a != null ? ItemIconCatalog.ForArmor(a)
+                             : ItemIconCatalog.ForConsumable(id, id);
+                string sellName = w != null ? w.name : (a != null ? a.name : id);
+                CreateSellRow(listRoot, display, refundCopy, () => TrySell(idCopy, refundCopy),
+                    () => SelectForDetails(sellName, sellDesc, sellStats, refundCopy, sellIcon, isRefund: true));
             }
 
             FinalizeScroll(); // force the content to size to the rows NOW (anti-collapse)
@@ -735,9 +920,9 @@ namespace DeNelle.Village.Hero
 
         // A sell row from kit pieces: dark-glass Cell tile + name + bronze refund + a
         // gold SELL button. LayoutElement-sized so the scroll layout stacks it.
-        private void CreateSellRow(Transform parent, string label, ResourceCost refund, System.Action sellAction)
+        private void CreateSellRow(Transform parent, string label, ResourceCost refund, System.Action sellAction, System.Action selectAction = null)
         {
-            var row = new GameObject("SellRow_" + label, typeof(Image), typeof(LayoutElement));
+            var row = new GameObject("SellRow_" + label, typeof(Image), typeof(Button), typeof(LayoutElement));
             row.transform.SetParent(parent, false);
             var le = row.GetComponent<LayoutElement>();
             le.preferredHeight = RowHeightPx;
@@ -745,6 +930,16 @@ namespace DeNelle.Village.Hero
             var rowImg = row.GetComponent<Image>();
             rowImg.color = ElarionUiKit.Cell;
             ElarionUiKit.ApplyRounded(rowImg);
+            // Unified Shop WO #3: tapping the row body selects it for the details pane (the
+            // dedicated SELL button below stays the explicit sell action). No purchase fires
+            // from the row body on the sell side, so this is select-only here.
+            if (selectAction != null)
+            {
+                var rowBtn = row.GetComponent<Button>();
+                rowBtn.targetGraphic = rowImg;
+                ElarionUiKit.StyleButtonColors(rowBtn);
+                rowBtn.onClick.AddListener(() => selectAction());
+            }
 
             ElarionUiKit.Label(row.transform, label, 0.15f, 0.85f, ElarionUi.Parchment,
                 ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Left, 0.04f, 0.55f);
