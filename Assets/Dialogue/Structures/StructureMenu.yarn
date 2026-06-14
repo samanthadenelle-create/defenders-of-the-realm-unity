@@ -21,7 +21,10 @@ tags: structure interaction
 
 {$structureName}: Need something?
 
--> Upgrade — {$upgradeCostText} <<if $structureCanUpgrade>>
+-> Upgrade the building. <<if $isCityUpgrade>>
+    // WO-430 — city-upgrade buildings route to their 4-tier dialogue tree (by $structureId).
+    <<jump BuildingUpgradeRouter>>
+-> Upgrade — {$upgradeCostText} <<if $structureCanUpgrade and not $isCityUpgrade>>
     <<structure_upgrade $structureId>>
     {$structureName}: {$upgradeResult}
 -> Buy <<if $structureCanShop>>

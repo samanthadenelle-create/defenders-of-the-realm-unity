@@ -419,6 +419,9 @@ namespace DeNelle.Village
             // WO-430 — seed the city-upgrade gate var ($<id>_Level) from the saved tier so the
             // *_UpgradeMenu node gates correctly on open (CmdTryUpgradeBuilding updates it after a buy).
             vs.SetValue(LevelVarName(structureId), (float)ModifierService.TierOf(structureId));
+            // WO-430 — is this a city-upgrade building? StructureMenu routes its Upgrade option to
+            // BuildingUpgradeRouter (the tier tree) when true, and hides the legacy upgrade option.
+            vs.SetValue("$isCityUpgrade", BuildingTierCatalog.IsUpgradable(structureId));
 
             // NOTE: $structureName is seeded by DialogueService.PlayStructure from the building's sign
             // label and intentionally NOT overwritten here. Resource-upgrade buildings (farm/lumbermill/

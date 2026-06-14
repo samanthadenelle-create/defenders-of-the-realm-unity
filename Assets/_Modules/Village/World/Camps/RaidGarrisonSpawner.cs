@@ -123,6 +123,15 @@ namespace DeNelle.Village.World.Camps
                 Debug.LogWarning($"[RaidGarrisonSpawner] no scene-config '{configId}' — no garrison spawned.");
                 yield break;
             }
+
+            // WO-430 — apply this raid's modifier override (if authored) BEFORE anything spawns,
+            // so troops + the garrison are born with the right perks ("before landing"). Empty →
+            // clear the override, so the player's REAL upgrade tiers apply (the normal raid path).
+            if (!string.IsNullOrEmpty(def.modifierOverride))
+                DeNelle.Core.State.ModifierService.SetOverrideJson(def.modifierOverride);
+            else
+                DeNelle.Core.State.ModifierService.ClearOverride();
+
             if (!def.IsEnemy)
             {
                 Debug.LogWarning($"[RaidGarrisonSpawner] config '{configId}' is not Enemy-owned — no garrison spawned.");

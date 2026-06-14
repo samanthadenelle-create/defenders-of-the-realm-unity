@@ -106,6 +106,15 @@ namespace DeNelle.Village
         public int eliteCount;
         public float shardDropChance;
 
+        // ── Modifier override (WO-430) — "all scene creations accept an override JSON" ──
+        /// <summary>
+        /// Optional GameModifiers JSON applied as the active perk override BEFORE this scene
+        /// spawns its content (RaidGarrisonSpawner sets it, so troops/garrison are born with
+        /// these stats — deterministic + testable). Empty/absent → no override, so the player's
+        /// REAL upgrade tiers apply (the normal raid path). Authoring/test affordance.
+        /// </summary>
+        public string modifierOverride;
+
         /// <summary>True when this config is an enemy garrison/outpost.</summary>
         public bool IsEnemy =>
             string.Equals(ownership, "Enemy", StringComparison.OrdinalIgnoreCase);
