@@ -350,13 +350,8 @@ button → opens the inventory modal. `static EnsureExists()`, `void` build. Aut
 CastleHub). WO-411: now wires to the HUD TOWN-ACTIONS row's BAG via reflection (`InventoryRequested`) → `HeroInventoryController.Open`;
 self-heals the wire each frame until bound (the "BAG dead in castle" fix). Code-built uGUI, WebGL-safe rounded sprite.
 
-### HeroInventoryController `HeroInventoryController.cs` — `DeNelle.Village` (1573 lines)
-**MonoBehaviour** singleton. Full-screen code-built (uGUI, NO UXML) inventory + gear modal. `static EnsureExists()`,
-`void Open()/Close()/Toggle()`, `bool IsOpen`. Tabs Weapons/Armor/Accessories(Outfits)/Consumables; mockup-#41 ring
-paper-doll; drives `GearLoadout.EquipWeaponById/EquipArmorById` on the live hero; sprites via ItemIconCatalog (glyph
-fallback); consumables via `ItemInventory.OwnedConsumables`. Joins the single-modal arbiter (PanelManager). Light-parchment
-palette. **DATA GAP (documented):** no per-player owned-weapon/armor list → "owned" == class-eligible-from-catalog (level-locked
-greyed); Outfits/Accessories + consumable-use are placeholders (`// TODO owned-list` / `// TODO use-consumable`).
+### HeroInventoryController (split) — `HeroInventoryController.cs` + `InventoryUIBuilder.cs` / `InventoryPaperDoll.cs` / `InventoryGrid.cs` / `InventorySidebar.cs` (DeNelle.Village.Hero ns, partial class)
+**MonoBehaviour** singleton (partial across 5 files for maintainability; no behaviour change). Full-screen code-built uGUI inventory + gear modal (same Open/Close/Toggle/Ensure, same GearLoadout drive, same W/A Tech dark-wood+gold styling via ElarionUiKit + Tech hud pack sprites for sockets/tabs/cells). Tabs Weapons/Armor/Outfits/Consumables, paper-doll, 4-col grid, detail sidebar with TechPrimary EQUIP. PanelManager registered. **DATA GAP unchanged.** (Split executed to resolve prior monolithic 1573-line state while preserving 100% prior layout/Tech W/A polish and calls from HeroEquipHud/VillageHud.)
 
 ### ShopPanel `ShopPanel.cs` — `DeNelle.Village.Hero` (994 lines)
 **MonoBehaviour**. Code-built vendor shop (BUY/SELL/EQUIP). `void Open(string vendorContext)`. Opened via Yarn "OpenShop"

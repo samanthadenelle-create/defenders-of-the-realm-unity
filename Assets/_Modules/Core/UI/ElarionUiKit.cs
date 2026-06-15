@@ -335,20 +335,23 @@ namespace DeNelle.Core.UI
             {
                 if (isWeapon)
                 {
-                    // Weapons: more "sword/play" energy - try Healing Tabs first (ornate borders), then Profiletab 2
+                    // Heavy Tech pack: Healing Tabs (H1-H15.png) for dynamic weapon frames (ornate RPG tabs).
+                    // Fallback to Play buttons (button N.png) for action-oriented weapon sockets.
                     frame = Resources.Load<Sprite>("Tech hud elements/Sprites/Healing Tabs/H1");
-                    if (frame == null) frame = Resources.Load<Sprite>("Tech hud elements/Sprites/Profile tabs/Profiletab 2/Profiletab 2");
+                    if (frame == null) frame = Resources.Load<Sprite>("Tech hud elements/Sprites/Play buttons/button 3");
                     if (frame == null) frame = Resources.Load<Sprite>("Tech hud elements/Sprites/GreenUielements/Buttons/Button 1");
                 }
                 else
                 {
-                    // Armor: solid protective frames - Profiletab 1/3, Shield elements
-                    frame = Resources.Load<Sprite>("Tech hud elements/Sprites/Profile tabs/Profiletab 1/Profiletab 1");
-                    if (frame == null) frame = Resources.Load<Sprite>("Tech hud elements/Sprites/Profile tabs/Profiletab 3/Profiletab 3");
+                    // Heavy Tech pack for armor: Profile tabs P1-P6 (use fill.png or bg.png as sliced frame for solid protective sockets).
+                    // P1/fill.png etc provide layered bg/fill for depth; pick fill as main frame.
+                    frame = Resources.Load<Sprite>("Tech hud elements/Sprites/Profile tabs/P1/fill.png");
+                    if (frame == null) frame = Resources.Load<Sprite>("Tech hud elements/Sprites/Profile tabs/P1/bg.png");
+                    if (frame == null) frame = Resources.Load<Sprite>("Tech hud elements/Sprites/Profile tabs/P3/fill.png");
                     if (frame == null) frame = Resources.Load<Sprite>("Tech hud elements/Sprites/GreenUielements/Shield/Shield 1");
                 }
             }
-            catch { /* safe - pack may be partial */ }
+            catch { /* safe - pack may be partial on fresh clone */ }
 
             var host = AddImage(parent, name, anchorMin, anchorMax, new Color(tint.r, tint.g, tint.b, 0.18f));
             var img = host.GetComponent<Image>();
