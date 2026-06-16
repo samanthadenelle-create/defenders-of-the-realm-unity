@@ -986,6 +986,7 @@ namespace DeNelle.DevTools
             if (eco != null)
             {
                 eco.GrantSpendable(wood: 50000, food: 25000, iron: 50000, crystals: 25000);
+                eco.AddCoins(50000);   // Gold — the shop/sell wallet (GameState.Resources.Coins); raises ResourcesChanged so the HUD gold readout updates.
             }
             else
             {
@@ -996,6 +997,7 @@ namespace DeNelle.DevTools
                 var bal0 = state.Resources;
                 bal0.Food += 25000;
                 bal0.Crystals += 25000;
+                bal0.Coins += 50000;   // Gold
                 state.Resources = bal0;
             }
 
@@ -1026,7 +1028,7 @@ namespace DeNelle.DevTools
                 }
             }
 
-            SetStatus($"Topped up — Wood {state.Wood}, Food {state.Resources.Food}, " +
+            SetStatus($"Topped up — Gold {state.Resources.Coins}, Wood {state.Wood}, Food {state.Resources.Food}, " +
                       $"Iron {state.Iron}, Crystals {state.Resources.Crystals}, Magic {state.Magic}.");
         }
 
