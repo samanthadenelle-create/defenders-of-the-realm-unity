@@ -46,12 +46,32 @@ re-importable. Enforced: Blink, Quaternius gitignored; Black Dragon un-tracked.
   - **Black Dragon**: orphaned (boss uses Tripo Dragon). Un-tracked.
   - ⚠️ **Tech hud elements**: 4 UI files `Resources.Load` a gitignored/absent pack → may return null on clean build. NEEDS verify/fallback fix. (QUEUED)
 
-## IN FLIGHT
-- **Hero-animation BEAST** — background agent (`a0bd8b58683ce712f`) in an isolated worktree is
-  expanding `Assets/Editor/HeroAnimatorFactory.cs` to wire the rich Action clip set: tighter
-  locomotion, combat combos, and the **full caster (Mage/Cleric) spell-clip variety** (different
-  spells → different cast animations). On completion: review diff → brace-gate → COMMIT → owner
-  runs **Defenders → Animation → Build Hero Animators (Mixamo)** + playtests to tune feel.
+## Parallel lanes — LANDED (later 2026-06-16, merged by explicit path, brace-gated)
+- ✅ **Hero-animation BEAST** `923e390` — HeroAnimatorFactory richly wired: per-spell casts
+  (CastVariant q/w/e/r + upper-body overlays), Knight combos, directional death; Core seam
+  +PlayCast(int)/CastVariant (additive); HeroAbilities.TryCast→PlayCast(slot+1). **Owner action:
+  Unity recompile + run `Defenders → Animation → Build Hero Animators (Mixamo)`, then playtest
+  Q/W/E/R per class. Spans Editor+Core+Village → needs a full compile gate; revert if it errors.**
+- ✅ **Tech-hud fallback** `e8cea2a` — 8 `Resources.Load("Tech hud elements/…")` sites in
+  InventoryGrid/PaperDoll/UIBuilder + ElarionUiKit now fall back to the committed RpgUi slice →
+  no null sprites on a clean build.
+- ✅ **Raid P1 (hero into raid)** `c7eceef` — HeroControlEnsurer activates in RaidBase_* (via
+  HubScenes.IsRaid) → controllable hero in the raid (emergency-spawn fallback).
+
+## STILL NEEDED on the raid (P1's agent died on a transient API error before P2)
+- **RaidScorer (P2 / WO-431):** subscribe `RaidGarrisonSpawner.OnCleared` → ★-by-time → reward →
+  `SceneRouter.GoCastle()`. (NOT built — re-run a focused agent or implement directly.)
+- **RaidHeroSpawner:** spawn the REAL class/gear hero body in raids (P1 currently relies on the
+  generic emergency-spawn fallback). Referenced in HeroControlEnsurer's comment but not yet built.
+
+## Known bug to investigate (queued)
+- **DialogueException: "Cannot continue running dialogue. No node has been selected."** — recurring
+  at `DialogueRunner.OnCommandReceivedAsync` (a Yarn command calls Continue() when no node is
+  selected). Seen in the break-log + a live paste. Separate from the dialogue full-close fix.
+
+## Asset doc note
+- The Blink/Tech-hud art is from the **Spark Framework** ecosystem (docs: `docs.sparkframework.dev`).
+  We use its ART only (Tech hud UI, gear, icons) — NOT the no-code framework itself (scope call, WO-466).
 
 ## QUEUED / NEXT (not started)
 1. **WO-466 implementation** (after the beast + imports): pack art → GearCatalog + real icons →
