@@ -84,6 +84,9 @@ namespace DeNelle.Village
                 var def = w;
                 Sprite techWeaponIcon = null;
                 try { techWeaponIcon = Resources.Load<Sprite>("Tech hud elements/Sprites/Sword icons/Sword icons"); } catch { }
+                // Clean-build fallback: the "Tech hud elements" pack is gitignored — only the
+                // committed RpgUi slice ships. Degrade to the bronze sword icon before the glyph.
+                if (techWeaponIcon == null) techWeaponIcon = RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, RpgUiCatalog.IconSword);
                 Sprite iconSp = techWeaponIcon ?? ItemIconCatalog.ForWeapon(w);
                 BuildGearCell(content, WeaponTypeGlyph(w), iconSp, w.name, w.rarity, equipped, locked, selected,
                               locked ? "Lv " + w.req.level : "",
@@ -115,6 +118,8 @@ namespace DeNelle.Village
                 try { techArmorIcon = Resources.Load<Sprite>("Tech hud elements/Sprites/Profile tabs/Profiletab 1/Profiletab 1"); } catch { }
                 if (techArmorIcon == null)
                     try { techArmorIcon = Resources.Load<Sprite>("Tech hud elements/Sprites/Healing Tabs/H1"); } catch { }
+                // Clean-build fallback (pack gitignored): committed RpgUi shield icon before the glyph.
+                if (techArmorIcon == null) techArmorIcon = RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, RpgUiCatalog.IconShield);
                 Sprite iconSp = techArmorIcon ?? ItemIconCatalog.ForArmor(a);
                 BuildGearCell(content, ArmorTypeGlyph(a), iconSp, a.name, a.rarity, equipped, locked, selected,
                               locked ? "Lv " + a.req.level : "",
@@ -174,6 +179,8 @@ namespace DeNelle.Village
                     techCellFrame = Resources.Load<Sprite>("Tech hud elements/Sprites/Profile tabs/P1/fill.png");
                 if (techCellFrame == null) techCellFrame = Resources.Load<Sprite>("Tech hud elements/Sprites/Menu Bars/Menu Bar 1");
             } catch { }
+            // Clean-build fallback (Tech pack gitignored): committed RpgUi grid plate frame.
+            if (techCellFrame == null) techCellFrame = RpgUiCatalog.Get(RpgUiCatalog.RolePanel, RpgUiCatalog.PanelGrid);
             if (techCellFrame != null) { fimg.sprite = techCellFrame; fimg.type = Image.Type.Sliced; fimg.color = frameCol; }
             else { fimg.color = frameCol; ApplyRounded(fimg); }
             // Extra professional composition: subtle inner rim on every cell frame for depth (dark wood + gilt Forge look)

@@ -37,6 +37,8 @@ namespace DeNelle.Village
                 var techFrame = Resources.Load<Sprite>("Tech hud elements/Sprites/Profile tabs/P1/fill.png");
                 if (techFrame == null) techFrame = Resources.Load<Sprite>("Tech hud elements/Sprites/Profile tabs/P1/bg.png");
                 if (techFrame == null) techFrame = Resources.Load<Sprite>("Tech hud elements/Sprites/Profile tabs/P2/fill.png");
+                // Clean-build fallback (Tech pack gitignored): committed RpgUi profile medallion frame.
+                if (techFrame == null) techFrame = RpgUiCatalog.Get(RpgUiCatalog.RolePanel, RpgUiCatalog.PanelProfile);
                 if (techFrame != null)
                 {
                     mbImg.sprite = techFrame; mbImg.type = Image.Type.Sliced;
@@ -139,6 +141,8 @@ namespace DeNelle.Village
                 try { fs = Resources.Load<Sprite>("Tech hud elements/Sprites/GreenUielements/Loading bar/Loading bar"); } catch { }
                 if (fs == null) try { fs = Resources.Load<Sprite>("Tech hud elements/Sprites/Loading 1/Loading 1"); } catch { }
                 if (fs == null) try { fs = Resources.Load<Sprite>("Tech hud elements/Sprites/Healing Tabs/H4"); } catch { }
+                // Clean-build fallback (Tech pack gitignored): committed RpgUi bar frame.
+                if (fs == null) fs = RpgUiCatalog.Get(RpgUiCatalog.RoleBars, RpgUiCatalog.BarFrameGreen);
                 if (fs != null) { fImg.sprite = fs; fImg.type = Image.Type.Sliced; fImg.color = Color.white; }
                 else { fImg.color = new Color(0f, 0f, 0f, 0.35f); ApplyRounded(fImg); }
             }
@@ -150,7 +154,9 @@ namespace DeNelle.Village
                 fillImg.raycastTarget = false;
                 Sprite fl = null;
                 try { fl = Resources.Load<Sprite>("Tech hud elements/Sprites/GreenUielements/Loading bar/Loading bar"); } catch { }
-                if (fl != null) { fillImg.sprite = fl; fillImg.type = Image.Type.Sliced; fillImg.color = Color.white; }
+                // Clean-build fallback (Tech pack gitignored): committed RpgUi tinted bar fill.
+                if (fl == null) { fl = RpgUiCatalog.Get(RpgUiCatalog.RoleBars, RpgUiCatalog.BarFillGreen); }
+                if (fl != null) { fillImg.sprite = fl; fillImg.type = Image.Type.Sliced; fillImg.color = fl.name != null && fl.name.StartsWith("bar_fill") ? fallbackFill : Color.white; }
                 else ApplyRounded(fillImg);
             }
             AddLabel(frameGo.transform, caps, 0f, 1f, Ink, ElarionUi.FontMicro,

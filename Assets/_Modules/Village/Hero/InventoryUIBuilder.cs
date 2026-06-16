@@ -194,6 +194,8 @@ namespace DeNelle.Village
                         tabBg = Resources.Load<Sprite>("Tech hud elements/Sprites/Profile tabs/P2/fill.png");
                         if (tabBg == null) tabBg = Resources.Load<Sprite>("Tech hud elements/Sprites/Profile tabs/P1/fill.png");
                     }
+                    // Clean-build fallback (Tech pack gitignored): committed RpgUi ornate tab banner.
+                    if (tabBg == null) tabBg = RpgUiCatalog.Get(RpgUiCatalog.RolePanel, RpgUiCatalog.PanelTab);
                     if (tabBg != null) {
                         pi.sprite = tabBg;
                         pi.type = Image.Type.Sliced;
@@ -242,12 +244,17 @@ namespace DeNelle.Village
         {
             try
             {
+                Sprite sp;
                 switch (t)
                 {
-                    case Tab.Weapons:     return Resources.Load<Sprite>("Tech hud elements/Sprites/Sword icons/Sword icons");
-                    case Tab.Armor:       return Resources.Load<Sprite>("Tech hud elements/Sprites/Profile tabs/P1/fill.png");
-                    case Tab.Outfits:     return Resources.Load<Sprite>("Tech hud elements/Sprites/Healing Tabs/H5");
-                    case Tab.Consumables: return Resources.Load<Sprite>("Tech hud elements/Sprites/GreenUielements/Icons/Icon 5");
+                    case Tab.Weapons:     sp = Resources.Load<Sprite>("Tech hud elements/Sprites/Sword icons/Sword icons");
+                                          return sp != null ? sp : RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, RpgUiCatalog.IconSword);
+                    case Tab.Armor:       sp = Resources.Load<Sprite>("Tech hud elements/Sprites/Profile tabs/P1/fill.png");
+                                          return sp != null ? sp : RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, RpgUiCatalog.IconShield);
+                    case Tab.Outfits:     sp = Resources.Load<Sprite>("Tech hud elements/Sprites/Healing Tabs/H5");
+                                          return sp != null ? sp : RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, RpgUiCatalog.IconHeart);
+                    case Tab.Consumables: sp = Resources.Load<Sprite>("Tech hud elements/Sprites/GreenUielements/Icons/Icon 5");
+                                          return sp != null ? sp : RpgUiCatalog.Get(RpgUiCatalog.RolePotion, RpgUiCatalog.PotionHealth);
                     default:              return null;
                 }
             }

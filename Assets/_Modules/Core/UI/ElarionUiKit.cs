@@ -353,6 +353,11 @@ namespace DeNelle.Core.UI
             }
             catch { /* safe - pack may be partial on fresh clone */ }
 
+            // Clean-build fallback: the "Tech hud elements" pack is gitignored — only the committed
+            // RpgUi slice ships. Degrade to the committed grid-plate frame so the socket keeps a
+            // themed frame (instead of dropping to the bare procedural rim) on a fresh checkout.
+            if (frame == null) frame = RpgUiCatalog.Get(RpgUiCatalog.RolePanel, RpgUiCatalog.PanelGrid);
+
             var host = AddImage(parent, name, anchorMin, anchorMax, new Color(tint.r, tint.g, tint.b, 0.18f));
             var img = host.GetComponent<Image>();
             if (frame != null)
