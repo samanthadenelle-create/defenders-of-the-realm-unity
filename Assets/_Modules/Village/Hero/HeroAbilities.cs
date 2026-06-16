@@ -257,8 +257,14 @@ namespace DeNelle.Village
             // Class-specific attack/cast per factory controllers: Knight uses melee Attack
             // clip/stance, Ranger (aim), Mage/Cleric (cast). Call both; per-class controller
             // maps the right one (or no-op if param missing).
+            // PER-SPELL ANIMATION: pass the slot as the cast variant (q/w/e/r → 1..4) so each
+            // ability can play its own cast clip via the HeroAnimatorFactory's per-variant Cast
+            // states. Variant 0 stays the generic cast for any caller using the no-arg overload.
+            // A controller without CastVariant / per-variant states falls back to the default
+            // Cast state, so this is fully backward-compatible.
+            int castVariant = (int)slot + 1;
             actor?.PlayAttack(0);
-            actor?.PlayCast();
+            actor?.PlayCast(castVariant);
 
             Vector3 origin = transform.position;
 

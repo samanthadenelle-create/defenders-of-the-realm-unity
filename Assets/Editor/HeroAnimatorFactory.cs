@@ -65,14 +65,28 @@ namespace DeNelle.Editor
         private const string DeathClip     = "Shared_Death";
         private const string BlockClip     = "Shared_Block";
 
+        // Directional death clips (DeathDir int: 0=Fall/centre, 1=Left, 2=Right). When
+        // present, a "Death1"/"Death2" state is gated on Dead==true AND DeathDir==N so a
+        // hit from the side topples the right way; the plain Death covers DeathDir 0.
+        private const string DeathLeftClip  = "Shared_Standing_Death_Left";
+        private const string DeathRightClip = "Shared_Standing_Death_Right";
+
         private struct HeroSpec
         {
             public string slug;            // Knight | Ranger | Mage | Cleric
             public string controllerPath;  // Resources/Heroes/<slug>.controller
-            public string castClip;        // per-class spell/cast clip basename
+            public string castClip;        // per-class spell/cast clip basename (the generic / variant-0 cast)
             public string castClipFallback;// used + warned if the primary is absent
             public string[] attackClips;   // WO-285: melee combo (Knight = 3, else 1)
             public string[] searchRoots;   // WO-283: type folder first, then Shared/
+
+            // PER-SPELL CASTS: one clip per ability slot, indexed by CastVariant 1..4
+            // (q/w/e/r). HeroAbilities.TryCast(slot) fires Cast with CastVariant = slot+1,
+            // so the matching CastN state plays that spell's own animation. Index 0 is
+            // unused/ignored (variant 0 = the generic `castClip` state). A null/missing
+            // entry is skipped (that slot falls back to the generic Cast). Length may be
+            // < 5; only the present indices build states.
+            public string[] spellCastClips;
         }
 
         // WO-283 §1 type->folder mapping. Casters (Mage + Cleric) share the Wizard set.
@@ -90,14 +104,38 @@ namespace DeNelle.Editor
                 attackClips = new[] { "standing melee attack horizontal",
                                       "standing melee combo attack ver. 1",
                                       "standing melee combo attack ver. 2" },
+                // Per-slot "cast"/special swings (q=Shield Bash strike, w=Bulwark Slam
+                // cleave, e=Oath Ward buff pose, r=Lantern Charge cleave ult). The Knight
+                // mostly routes through the melee Attack at runtime, but firing Cast with a
+                // variant gives each ability slot a distinct swing/pose when the cast path runs.
+                spellCastClips = new[] {
+                    null,                                   // [0] unused (generic = castClip)
+                    "standing melee attack horizontal",     // [1] q  Shield Bash
+                    "standing melee attack 360 high",       // [2] w  Bulwark Slam (sweeping)
+                    "sword and shield power up",            // [3] e  Oath Ward (buff/ward pose)
+                    "standing melee attack downward",       // [4] r  Lantern Charge (heavy)
+                },
                 searchRoots = KnightRoots },
             new HeroSpec { slug = "Mage",
                 controllerPath = "Assets/Resources/Heroes/Mage.controller",
                 castClip = "Wizard_Spell_Cast", castClipFallback = "Standing 1H Magic Attack 01",
                 attackClips = new[] { "Wizard_Spell_Cast" },   // caster: basic attack = cast
+                // Per-spell casts: q Arcane Bolt (1H snap), w Frost Nova (2H area), e Healing
+                // Beacon (heal), r Meteor Strike (2H heavy). Each abilities.json slot now plays
+                // its own Wizard cast clip.
+                spellCastClips = new[] {
+                    null,                                   // [0] unused
+                    "Standing 1H Magic Attack 01",          // [1] q  Arcane Bolt
+                    "Standing 2H Magic Area Attack 01",     // [2] w  Frost Nova
+                    "Wizard_Heal",                          // [3] e  Healing Beacon
+                    "Standing 2H Magic Attack 03",          // [4] r  Meteor Strike (ult)
+                },
                 searchRoots = WizardRoots },
             // Ranger now HAS a real aim pose (WO-283); arrows fly via the projectile
             // system, so the aim/idle is the visible "cast" (bow gap is cosmetic-only).
+            // Ranger has no distinct per-spell clips in Action/Ranger, so all four slots
+            // share the aim pose (spellCastClips omitted → every variant falls back to the
+            // generic Cast). Distinct bow draw/loose clips can be dropped in later.
             new HeroSpec { slug = "Ranger",
                 controllerPath = "Assets/Resources/Heroes/Ranger.controller",
                 castClip = "Ranger_Aim_Idle", castClipFallback = "Shared_Combat_Idle",
@@ -108,6 +146,15 @@ namespace DeNelle.Editor
                 controllerPath = "Assets/Resources/Heroes/Cleric.controller",
                 castClip = "Wizard_Heal", castClipFallback = "Wizard_Spell_Cast",
                 attackClips = new[] { "Wizard_Heal" },
+                // Cleric per-spell casts (caster kit shares the Wizard clips): q smite,
+                // w consecrate area, e Heal (its signature), r big channel.
+                spellCastClips = new[] {
+                    null,                                   // [0] unused
+                    "Standing 1H Magic Attack 02",          // [1] q  smite
+                    "Standing 2H Magic Area Attack 02",     // [2] w  consecrate (area)
+                    "Wizard_Heal",                          // [3] e  Heal (signature)
+                    "Standing 2H Cast Spell 01",            // [4] r  channel ult
+                },
                 searchRoots = WizardRoots },
         };
 
@@ -128,6 +175,8 @@ namespace DeNelle.Editor
             AnimationClip victory = LoadClip(VictoryClip, spec.searchRoots);
             AnimationClip hit     = LoadClip(HitClip,   spec.searchRoots);
             AnimationClip death   = LoadClip(DeathClip, spec.searchRoots);
+            AnimationClip deathL  = LoadClip(DeathLeftClip,  spec.searchRoots);
+            AnimationClip deathR  = LoadClip(DeathRightClip, spec.searchRoots);
             AnimationClip block   = LoadClip(BlockClip, spec.searchRoots);
             AnimationClip cast    = LoadClip(spec.castClip, spec.searchRoots);
             if (cast == null && !string.IsNullOrEmpty(spec.castClipFallback))
@@ -150,6 +199,7 @@ namespace DeNelle.Editor
             ctrl.AddParameter("Attack",   AnimatorControllerParameterType.Trigger);
             ctrl.AddParameter("Combo",    AnimatorControllerParameterType.Int);
             ctrl.AddParameter("Cast",     AnimatorControllerParameterType.Trigger);
+            ctrl.AddParameter("CastVariant", AnimatorControllerParameterType.Int); // which spell (0=generic, q/w/e/r=1..4)
             ctrl.AddParameter("WindUp",   AnimatorControllerParameterType.Trigger);
             ctrl.AddParameter("Block",    AnimatorControllerParameterType.Bool);
             ctrl.AddParameter("Hit",      AnimatorControllerParameterType.Trigger);
@@ -199,6 +249,11 @@ namespace DeNelle.Editor
             // fires when standing. While MOVING, the base layer stays in Locomotion
             // (legs keep running) and the upper-body layer alone carries the swing —
             // attacks no longer freeze movement.
+            // The GENERIC (variant-0) Cast state — fired when Cast is triggered without a
+            // matching per-spell variant (e.g. the no-arg PlayCast() from BattleController /
+            // PlayerAttackController). Its Any→Cast transition is UNCONDITIONED on CastVariant
+            // so it always wins as the default; the per-variant states below add their own
+            // CastVariant==N gate so a specific spell overrides this when set.
             if (cast != null)
             {
                 var castState = sm.AddState("Cast");
@@ -218,6 +273,13 @@ namespace DeNelle.Editor
                 Debug.LogWarning($"[HeroAnimatorFactory] {spec.slug}: no cast clip — " +
                                  "Cast trigger will no-op (param still declared).");
             }
+
+            // ── PER-SPELL casts — Any → CastN on Cast + CastVariant==N (q/w/e/r → 1..4) ──
+            // Each ability slot plays its OWN cast clip. The transition adds the CastVariant
+            // gate ON TOP of the same Cast/standing conditions, so when HeroAbilities fires
+            // Cast with CastVariant = slot+1 the matching state wins; absent slots (null clip
+            // or no spellCastClips) simply leave the generic Cast to cover them.
+            int spellStates = BuildSpellCastStates(sm, locoState, spec);
 
             // ── Victory — Any → Victory on the trigger, returns to Locomotion ──
             if (victory != null)
@@ -257,6 +319,10 @@ namespace DeNelle.Editor
             // Death → Locomotion so a respawned hero animates normally again.
             if (death != null)
             {
+                // Centre/fall death (DeathDir 0). When directional clips are present the
+                // generic transition stays UNCONDITIONED on DeathDir so it covers dir 0
+                // (and any value with no dedicated state); the Left/Right states below add
+                // their own DeathDir gate. Revive (Dead=false) returns every death state.
                 var deathState = sm.AddState("Death");
                 deathState.motion = death;
                 var toDeath = sm.AddAnyStateTransition(deathState);
@@ -266,6 +332,10 @@ namespace DeNelle.Editor
                 var deathBack = deathState.AddTransition(locoState);
                 deathBack.hasExitTime = false; deathBack.duration = 0.12f;
                 deathBack.AddCondition(AnimatorConditionMode.IfNot, 0f, "Dead");
+
+                // Directional deaths (DeathDirection.Left=1 / Right=2) — topple the right way.
+                BuildDirectionalDeath(sm, locoState, "DeathLeft",  deathL, 1);
+                BuildDirectionalDeath(sm, locoState, "DeathRight", deathR, 2);
             }
 
             // ── WO-285: Block — Locomotion ⇄ Block on the Block bool ───────────────
@@ -288,11 +358,12 @@ namespace DeNelle.Editor
             // so the hero can swing while running. Empty default state = no override
             // when not attacking (legs+arms both come from the base layer).
             if (cast != null)
-                AddUpperBodyLayer(ctrl, cast);
+                AddUpperBodyLayer(ctrl, cast, spec);
 
             EditorUtility.SetDirty(ctrl);
             Debug.Log($"[HeroAnimatorFactory] {spec.slug} built — Locomotion({added.Count} clips)" +
-                      $"{(cast != null ? " + Cast(+UpperBody)" : "")}{(attackStates > 0 ? $" + Attack({attackStates})" : "")}" +
+                      $"{(cast != null ? " + Cast(+UpperBody)" : "")}{(spellStates > 0 ? $" + Spells({spellStates})" : "")}" +
+                      $"{(attackStates > 0 ? $" + Attack({attackStates})" : "")}" +
                       $"{(hit != null ? " + Hit" : "")}{(death != null ? " + Death" : "")}{(block != null ? " + Block" : "")}" +
                       $"{(victory != null ? " + Victory" : "")} → {spec.controllerPath}");
         }
@@ -339,13 +410,77 @@ namespace DeNelle.Editor
         }
 
         /// <summary>
+        /// PER-SPELL casts: one Cast state per ability slot. For each non-null entry in
+        /// spec.spellCastClips[1..4] builds a "Cast_q/w/e/r" state whose Any→state transition
+        /// fires on the Cast trigger AND CastVariant == that index. The generic Cast state
+        /// (built by the caller, unconditioned on CastVariant) covers variant 0 and any slot
+        /// without its own clip. Each state returns to Locomotion with the snappy timing.
+        /// Standing-gated like the generic cast (legs keep moving via the upper-body layer).
+        /// Returns the number of per-spell states built.
+        /// </summary>
+        private static int BuildSpellCastStates(AnimatorStateMachine sm, AnimatorState locoState, HeroSpec spec)
+        {
+            if (spec.spellCastClips == null) return 0;
+            string[] slotName = { "0", "q", "w", "e", "r" };
+            int built = 0;
+            for (int v = 1; v < spec.spellCastClips.Length && v <= 4; v++)
+            {
+                string basename = spec.spellCastClips[v];
+                if (string.IsNullOrEmpty(basename)) continue;
+                var clip = LoadClip(basename, spec.searchRoots);
+                if (clip == null) continue;
+
+                var state = sm.AddState($"Cast_{slotName[v]}");
+                state.motion = clip;
+                state.speed  = AttackSpeed;
+
+                var toState = sm.AddAnyStateTransition(state);
+                toState.hasExitTime = false; toState.duration = 0.05f;
+                toState.canTransitionToSelf = false;
+                toState.AddCondition(AnimatorConditionMode.If, 0f, "Cast");
+                toState.AddCondition(AnimatorConditionMode.Equals, v, "CastVariant");
+                toState.AddCondition(AnimatorConditionMode.Less, StandingSpeedMax, "Speed");
+
+                var back = state.AddTransition(locoState);
+                back.hasExitTime = true; back.exitTime = CastExitTime; back.duration = CastExitDur;
+                built++;
+            }
+            return built;
+        }
+
+        /// <summary>
+        /// Builds one directional Death state ("DeathLeft"/"DeathRight") gated on
+        /// Dead==true AND DeathDir==dirValue, returning to Locomotion when Dead clears
+        /// (Revive). Null-guarded — a missing clip skips the state and the generic Death
+        /// (DeathDir 0, unconditioned) still covers every direction.
+        /// </summary>
+        private static void BuildDirectionalDeath(AnimatorStateMachine sm, AnimatorState locoState,
+                                                  string name, AnimationClip clip, int dirValue)
+        {
+            if (clip == null) return;
+            var state = sm.AddState(name);
+            state.motion = clip;
+            var to = sm.AddAnyStateTransition(state);
+            to.hasExitTime = false; to.duration = 0.06f;
+            to.canTransitionToSelf = false;
+            to.AddCondition(AnimatorConditionMode.If, 0f, "Dead");
+            to.AddCondition(AnimatorConditionMode.Equals, dirValue, "DeathDir");
+            var back = state.AddTransition(locoState);
+            back.hasExitTime = false; back.duration = 0.12f;
+            back.AddCondition(AnimatorConditionMode.IfNot, 0f, "Dead");
+        }
+
+        /// <summary>
         /// WO-218: adds an "Upper Body" Override layer (weight 1) masked to arms +
         /// torso so the hero can attack while moving. Layer holds an empty default
         /// state (Empty) and a Cast state with the attack clip; Any→Cast on the same
         /// "Cast" trigger, then back to Empty. While not casting the upper layer sits
         /// on the empty state and contributes nothing (legs+arms = base layer).
+        /// Per-spell: also builds an upper-body state per spellCastClips entry, gated
+        /// the same way (Cast + CastVariant==N), so a moving caster's arms play the
+        /// SPECIFIC spell while the legs keep running.
         /// </summary>
-        private static void AddUpperBodyLayer(AnimatorController ctrl, AnimationClip cast)
+        private static void AddUpperBodyLayer(AnimatorController ctrl, AnimationClip cast, HeroSpec spec)
         {
             var mask = EnsureUpperBodyMask();
 
@@ -377,6 +512,33 @@ namespace DeNelle.Editor
             back.hasExitTime = true;
             back.exitTime = CastExitTime;
             back.duration = CastExitDur;
+
+            // Per-spell upper-body overlays (Cast + CastVariant==N) so a moving caster's
+            // arms play the specific spell. Mirrors the base-layer per-spell states.
+            if (spec.spellCastClips != null)
+            {
+                string[] slotName = { "0", "q", "w", "e", "r" };
+                for (int v = 1; v < spec.spellCastClips.Length && v <= 4; v++)
+                {
+                    string basename = spec.spellCastClips[v];
+                    if (string.IsNullOrEmpty(basename)) continue;
+                    var clip = LoadClip(basename, spec.searchRoots);
+                    if (clip == null) continue;
+
+                    var st = sm.AddState($"CastUpper_{slotName[v]}");
+                    st.motion = clip;
+                    st.speed  = AttackSpeed;
+
+                    var toV = sm.AddAnyStateTransition(st);
+                    toV.hasExitTime = false; toV.duration = 0.05f;
+                    toV.canTransitionToSelf = false;
+                    toV.AddCondition(AnimatorConditionMode.If, 0f, "Cast");
+                    toV.AddCondition(AnimatorConditionMode.Equals, v, "CastVariant");
+
+                    var vBack = st.AddTransition(empty);
+                    vBack.hasExitTime = true; vBack.exitTime = CastExitTime; vBack.duration = CastExitDur;
+                }
+            }
 
             var layer = new AnimatorControllerLayer
             {

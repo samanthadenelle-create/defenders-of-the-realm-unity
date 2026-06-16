@@ -44,6 +44,7 @@ namespace DeNelle.Core.Combat
         public const string Attack   = "Attack";    // Trigger— primary melee
         public const string Combo    = "Combo";     // Int    — combo index (Knight)
         public const string Cast     = "Cast";      // Trigger— spell cast (casters)
+        public const string CastVariant = "CastVariant"; // Int — which spell/cast clip (0 = generic; q/w/e/r = 1..4)
         public const string WindUp   = "WindUp";    // Trigger— telegraph before attack
         public const string Block    = "Block";     // Bool   — hold block
         public const string Hit      = "Hit";       // Trigger— hit reaction
@@ -60,6 +61,7 @@ namespace DeNelle.Core.Combat
         public static readonly int AttackHash    = Animator.StringToHash(Attack);
         public static readonly int ComboHash     = Animator.StringToHash(Combo);
         public static readonly int CastHash      = Animator.StringToHash(Cast);
+        public static readonly int CastVariantHash = Animator.StringToHash(CastVariant);
         public static readonly int WindUpHash    = Animator.StringToHash(WindUp);
         public static readonly int BlockHash     = Animator.StringToHash(Block);
         public static readonly int HitHash       = Animator.StringToHash(Hit);

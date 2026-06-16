@@ -114,11 +114,17 @@ namespace DeNelle.Core.Combat
             if (Has(AnimParams.AttackHash)) _animator.SetTrigger(AnimParams.AttackHash);
         }
 
-        public void PlayCast()
+        public void PlayCast() => PlayCast(0);
+
+        public void PlayCast(int variant)
         {
             EnsureAnimator();
             if (_animator == null || !Has(AnimParams.CastHash)) return;
             EnsureUpperBodyActive();   // WO-218: cast plays on the arms while moving
+            // Per-spell cast clip selection: set the variant (if the controller declares it)
+            // BEFORE the trigger so the Any→CastN transition reads the right value this frame.
+            // Controllers without CastVariant / per-variant states fall back to the default Cast.
+            if (Has(AnimParams.CastVariantHash)) _animator.SetInteger(AnimParams.CastVariantHash, variant);
             _animator.SetTrigger(AnimParams.CastHash);
         }
 

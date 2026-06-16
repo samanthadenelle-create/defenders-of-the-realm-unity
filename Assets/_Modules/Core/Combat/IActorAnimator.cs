@@ -24,8 +24,16 @@ namespace DeNelle.Core.Combat
         /// <summary>Primary melee. <paramref name="combo"/> selects the swing in a combo (0-based).</summary>
         void PlayAttack(int combo = 0);
 
-        /// <summary>Spell cast (casters).</summary>
+        /// <summary>Spell cast (casters). Plays the generic cast (variant 0).</summary>
         void PlayCast();
+
+        /// <summary>
+        /// Spell cast with a specific clip <paramref name="variant"/> — lets each spell
+        /// (q/w/e/r → 1..4) play its own cast animation. Sets the <c>CastVariant</c> int
+        /// then fires the <c>Cast</c> trigger; variant 0 = the generic cast. A controller
+        /// with no per-variant state simply falls back to its default Cast state (no-op safe).
+        /// </summary>
+        void PlayCast(int variant);
 
         /// <summary>Telegraph wind-up before an attack lands.</summary>
         void PlayWindUp();
