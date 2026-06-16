@@ -39,7 +39,9 @@ it indexes the per-area deep-dives). Read it before the individual `*_ARCHITECTU
 **UI (Claude) must NEVER edit `.cs` files via bash or the Linux mount path.**
 
 The Linux mount (`/sessions/.../mnt/defenders-unity/`) does NOT sync reliably
-to the Windows project path (`C:\Users\Kayden-Laptop\Documents\defenders-unity\`).
+to the Windows project path (`C:\EoA\` — the project's home as of 2026-06-16; cloned
+fresh from GitHub `feat/tower-core-loop`, with the gitignored `Assets/polyperfect` and
+`Assets/Quaternius` packs copied in from the old `Documents\defenders-unity` location).
 Writes via bash can truncate, duplicate, or interleave — producing garbled Windows
 files that fail to compile even though the mount shows them as correct.
 
