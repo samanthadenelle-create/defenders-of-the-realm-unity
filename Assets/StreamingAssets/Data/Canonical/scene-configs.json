@@ -54,7 +54,7 @@
     {
       "id": "raider_camp_small",
       "displayName": "Small Raider Camp",
-      "sceneName": "Garrison_troll_outpost",
+      "sceneName": "RaidBase_raider_camp_small",
       "ownership": "Enemy",
       "faction": "orc",
       "difficulty": "Regular",
@@ -104,7 +104,7 @@
     {
       "id": "fortified_garrison",
       "displayName": "Fortified Garrison",
-      "sceneName": "Garrison_ruined_keep",
+      "sceneName": "RaidBase_fortified_garrison",
       "ownership": "Enemy",
       "faction": "mixed",
       "difficulty": "Hard",
@@ -166,7 +166,7 @@
     {
       "id": "mage_enclave",
       "displayName": "Mage Enclave",
-      "sceneName": "Garrison_frost_keep",
+      "sceneName": "RaidBase_mage_enclave",
       "ownership": "Enemy",
       "faction": "hollow",
       "difficulty": "Extreme",
