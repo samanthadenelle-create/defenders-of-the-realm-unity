@@ -32,10 +32,18 @@ namespace DeNelle.Village
         // PatriciaLight (DTT) is descoped. Activate for Village* scenes AND the new Castle Hub
         // (MainCastle_Hall, CastleHub*, etc.) so the ensurer + SmartMobileCamera target wiring
         // and emergency recovery works when the Castle is the project start / primary world scene.
+        //
+        // RAID (WO-431/453): also activate for RaidBase_* scenes — the raid is HERO-LED, but no
+        // hero is baked into the generated raid base, so the ensurer must wire the camera + control
+        // there too. RaidHeroSpawner builds the REAL class body on a hero root one frame after load;
+        // this ensurer then finds it (FindLoco) and wires SmartMobileCamera + the attack/ability
+        // components. If RaidHeroSpawner hasn't run yet, Ensure()'s emergency-spawn fallback keeps
+        // the player controllable so a raid is never un-playable.
         private static bool IsVillageScene(string name) =>
             !string.IsNullOrEmpty(name) && (
                 name == "Village" || name.StartsWith("Village") || name.Contains("Village") ||
-                name.Contains("Castle") || name.Contains("MainCastle") || name.Contains("CastleHub")
+                name.Contains("Castle") || name.Contains("MainCastle") || name.Contains("CastleHub") ||
+                DeNelle.Core.HubScenes.IsRaid(name)
             );
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
