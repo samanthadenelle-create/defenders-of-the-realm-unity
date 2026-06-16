@@ -29,8 +29,22 @@ clip libraries now on disk. "Real items, displayed and equipped; cleaner animati
 4. **Store detail pane:** show the selected item's real icon/preview.
 5. **Animation:** wire the Humanoid clip library (`Assets/Action` 198 Mixamo clips, already Humanoid+tracked; optionally Blink `Art/Animations`) into the hero animator (retarget) to tighten motion. Supercyan-310 only if owner re-imports it (`docs/SUPERCYAN_REIMPORT.md`).
 
+## Equip LOGIC — copy Spark's proven pattern (docs.sparkframework.dev, read 2026-06-16)
+Spark's Equipment plugin (NOT imported) shows us the right mechanism; mirror it in our `GearLoadout`:
+- **Slots:** Main Hand · Off Hand · Ranged · Generic(armor). Add this slot model to GearCatalog/GearLoadout.
+- **Weapons = prefab → BONE SOCKET.** A "BodyEntity"-style attach-point map on the hero (Right Hand /
+  Left Hip / etc. → skeleton bones). EquipWeaponById instantiates the Blink weapon prefab at the slot
+  bone with position/rotation OFFSETS (reuse `WeaponOrientHelper`). Sheathed-vs-drawn states.
+- **Armor = toggle child GameObjects.** If the Blink `StylizedArmorBundle2` character carries armor as
+  togglable child meshes on a shared skeleton, EquipArmorById ACTIVATES the equipped piece + HIDES the
+  underlying body mesh; unequip reverses. **VERIFY this structure on the Blink char prefabs first.**
+- **Animation:** sheath/draw on combat state (~0.3s) via the `InCombat` param (already wired by the beast).
+- **UI:** the slot "character sheet" layout → our shop/inventory equip panel.
+
 ## Scope — OUT (do NOT do)
-- **Do NOT import the Spark Framework** (the no-code framework behind Blink) — it clashes with our `GearCatalog`/`GearLoadout`/save architecture and is over-scope. Use our own attach.
+- **Do NOT import the Spark Framework** (the no-code framework behind Blink) — its database/save/UI
+  ownership clashes with our `GameState`/`GearCatalog`/`GearLoadout`/save. Copy its equip LOGIC (above)
+  into our architecture instead. (Spark's Equipment works standalone of its Customization plugin — good.)
 - **Do NOT build the full troop/warband pillar** (follow-hero AI, finite army) — that's the post-grant pillar per `TROOPS_PILLAR_SPEC`.
 - **Do NOT commit whole packs.** Only the used slice, after the audit.
 - **Do NOT hand-edit scenes** or change render pipeline/global settings.
