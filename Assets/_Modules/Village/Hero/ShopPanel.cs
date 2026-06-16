@@ -13,6 +13,16 @@ namespace DeNelle.Village.Hero
     {
         private GameObject _ui;
         private string _vendorContext;
+
+        // AutoPilot/test surface — the dev AutoPilotDriver asserts the built BUY stock respects
+        // VendorStockContract. Re-exposed for the polished ShopPanel rewrite (additive only).
+        public struct StockEntry { public string id; public GearKind kind; }
+        private readonly List<StockEntry> _currentStock = new List<StockEntry>();
+        /// <summary>Vendor context this panel last opened for (lowercased).</summary>
+        public string VendorContext => _vendorContext;
+        /// <summary>id + kind of each BUY row built in the last PopulateBuyItems pass.</summary>
+        public IReadOnlyList<StockEntry> CurrentStock => _currentStock;
+
         private GearLoadout _activeLoadout;
         private GameObject _contentRoot;
         private TMPro.TextMeshProUGUI _statusText;
@@ -281,6 +291,7 @@ namespace DeNelle.Village.Hero
         private void PopulateBuyItems(Transform contentParent)
         {
             FlowTrace.Step("Shop", "PopulateBuyItems start");
+            _currentStock.Clear();
 
             // Real data - filtered by vendor contract (best practice, single source of truth)
             var allowed = VendorStockContract.AllowedFor(_vendorContext);
@@ -300,6 +311,7 @@ namespace DeNelle.Village.Hero
                     string displayName = w.name ?? w.id;
                     FlowTrace.Once("Shop", $"buy-weapon:{displayName}", $"Adding buy row '{displayName}'");
                     AddShopRow(contentParent, displayName, stat, price, icon, true, w.id);
+                    _currentStock.Add(new StockEntry { id = w.id, kind = GearKind.Weapon });
                     added++;
                 }
             }
@@ -315,6 +327,7 @@ namespace DeNelle.Village.Hero
                     string displayName = a.name ?? a.id;
                     FlowTrace.Once("Shop", $"buy-armor:{displayName}", $"Adding buy row '{displayName}'");
                     AddShopRow(contentParent, displayName, stat, price, icon, false, a.id);
+                    _currentStock.Add(new StockEntry { id = a.id, kind = GearKind.Armor });
                     added++;
                 }
             }
