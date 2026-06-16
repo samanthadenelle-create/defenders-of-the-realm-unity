@@ -251,6 +251,10 @@ yarn.lock
 # kept gitignored (owner policy: packs stay out of git until an explicit used-closure commit).
 /Assets/Blink/
 /Assets/Blink.meta
+# Black Dragon boss pack — orphaned per usage audit (live boss uses the Tripo Dragon.fbx; dragon
+# rebrand-cut). Un-tracked 2026-06-16; kept on disk, out of git.
+/Assets/Black Dragon/
+/Assets/Black Dragon.meta
 /Assets/Medieval Village/
 /Assets/Medieval Village.meta
 /Assets/TextMesh Pro/
