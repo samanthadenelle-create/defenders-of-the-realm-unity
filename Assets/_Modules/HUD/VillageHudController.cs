@@ -431,7 +431,7 @@ namespace DeNelle.HUD
         private const string IconQuest        = "hud_quest";
         private const string IconBuild        = "hud_build";    // standalone Resources/HudIcons/hud_build (tower)
         private const string IconIntel        = "hud_intel";    // standalone Resources/HudIcons/hud_intel (periscope/lookout)
-        private const string IconRaid         = "hud_raid";     // standalone Resources/HudIcons/hud_raid (crossed swords → enter raids)
+        private const string IconRaid         = "hud_raid_2";   // standalone Resources/HudIcons/hud_raid_2 (crossed swords → enter raids)
         private const string IconHeart        = "hud_heart";    // standalone Resources/HudIcons/hud_heart (Heart-of-Elarion crest)
         private const string IconAbilityFrame = "hud_ability_frame";
 
