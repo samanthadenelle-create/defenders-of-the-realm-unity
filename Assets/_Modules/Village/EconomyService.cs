@@ -434,7 +434,7 @@ namespace DeNelle.Village
         /// PromoCodeService coin-credit pattern: ResourceBalance is a struct, so read →
         /// modify → assign back. Clamped to >= 0. Null-safe (no-op when state is absent).
         /// </summary>
-        private void AddCoins(int delta)
+        public void AddCoins(int delta)
         {
             if (delta == 0) return;
             var gs = GameStateService.Instance;
