@@ -497,6 +497,14 @@ namespace DeNelle.HUD
 
             grant.Invoke(eco, new object[] { 50000, 25000, 50000, 25000 }); // wood, food, iron, crystals
 
+            // Gold/Coins: GrantSpendable has NO coins param, so this dev grant never gave gold.
+            // AddCoins (public) tops up the shop/sell wallet (GameState.Resources.Coins) and fires
+            // ResourcesChanged so the HUD gold readout updates. Reflected (HUD can't ref Village).
+            var addCoins = ecoType.GetMethod("AddCoins",
+                BindingFlags.Public | BindingFlags.Instance, null,
+                new[] { typeof(int) }, null);
+            if (addCoins != null) addCoins.Invoke(eco, new object[] { 50000 });
+
             // dev-grant-both-wallets fix: log the granted amounts + the resulting BOTH-store
             // totals (in-session pool via Snapshot + persisted GameState.Wood/Iron) so a dev
             // grant is traceable end-to-end — proves Wood/Iron landed in shop/HUD AND upgrade flow.
@@ -508,7 +516,7 @@ namespace DeNelle.HUD
             // bridge isn't subscribed yet in this scene (e.g. the castle hub bootstrap race).
             PingResourceBar(eco, ecoType);
 
-            SetStatus("Loaded: +50k Wood, +50k Iron, +25k Food, +25k Crystals (shop + upgrades) — now buy something.");
+            SetStatus("Loaded: +50k Gold, +50k Wood, +50k Iron, +25k Food, +25k Crystals (shop + upgrades) — now buy something.");
         }
 
         /// <summary>
