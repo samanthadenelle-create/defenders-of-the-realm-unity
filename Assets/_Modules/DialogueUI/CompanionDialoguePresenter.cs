@@ -234,6 +234,7 @@ namespace DeNelle.DialogueUI
         public override async YarnTask OnDialogueStartedAsync()
         {
             FlowTrace.Step("UI", $"Yarn dialogue started (presenter={name}, timeScale={Time.timeScale})");
+            SetDialogueCanvasEnabled(true);   // the whole dialogue Canvas is turned OFF between conversations; turn it back on for this one
             RepairOptionsLayoutOnce();
             ReskinToLightParchmentOnce();
             BuildNameBannerOnce();
@@ -614,6 +615,7 @@ namespace DeNelle.DialogueUI
             // no dialogue active => this presenter must capture NO input.
             SetOwnGroupsInteractive(false);
             ReleaseYarnInputCapture();   // THE actual root cause (see method) — orphaned <Pointer>/press action
+            SetDialogueCanvasEnabled(false);  // CLOSE THE WHOLE WINDOW — disable the dialogue Canvas so the character-image panel + banner + options stop rendering AND raycasting over the dev tools (re-enabled on next OnDialogueStartedAsync).
 
             LogInputBlockerState(); // verify: should now read blocksRaycasts=false on every own group
         }
@@ -632,6 +634,7 @@ namespace DeNelle.DialogueUI
         {
             SetOwnGroupsInteractive(false);
             ReleaseYarnInputCapture();
+            SetDialogueCanvasEnabled(false);
         }
 
         // THE root cause of "dev tools / UI Toolkit dead after companion Yarn" (found by reading
@@ -685,6 +688,19 @@ namespace DeNelle.DialogueUI
                 g.blocksRaycasts = on;
                 g.interactable = on;
             }
+        }
+
+        // FULL CLOSE: the dialogue lives on ONE Canvas (DialogueSystem -> Canvas -> Dialogue
+        // Presenter -> Container -> ...). Hiding only the presenter's CanvasGroups left the Canvas
+        // itself RENDERING + RAYCASTING, so the character-image panel stayed on screen OVER the dev
+        // tools after a conversation. Toggling Canvas.enabled turns the WHOLE window off (nothing
+        // renders, nothing to hit) between conversations and back on for each new one. Cached on
+        // first use; resolved up the parent chain from this presenter.
+        private Canvas _dialogueCanvas;
+        private void SetDialogueCanvasEnabled(bool on)
+        {
+            if (_dialogueCanvas == null) _dialogueCanvas = GetComponentInParent<Canvas>();
+            if (_dialogueCanvas != null) _dialogueCanvas.enabled = on;
         }
 
         // ── F8 ROOT-CAUSE TRACE (does not change behaviour) ──────────────────
