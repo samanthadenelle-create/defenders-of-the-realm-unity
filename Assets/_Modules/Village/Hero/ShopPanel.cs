@@ -177,7 +177,7 @@ namespace DeNelle.Village.Hero
             string vc = _vendorContext.ToLowerInvariant();
             string title;
             if (vc.Contains("armor")) title = "Armorer's Shop";
-            else if (vc.Contains("forge") || vc.Contains("blacksmith")) title = "Blacksmith's Forge";
+            else if (vc.Contains("forge") || vc.Contains("blacksmith")) title = "The Forge";
             else if (vc.Contains("market")) title = "Market Stalls";
             else if (vc.Contains("jewel")) title = "Jeweler's Bench";
             else if (vc.Contains("lumber")) title = "Lumbermill Stores";
