@@ -31,6 +31,15 @@ namespace DeNelle.Core
         /// "ff.blinkchrome". Gated in ElarionUiKit + per-panel (memory ui-chrome-composition-and-blink-flag).</summary>
         public static bool BlinkChrome => Get("blinkchrome", defaultOn: false);
 
+        /// <summary>WO-443 — when ON, the WebGL build streams its diagnostic logs (FlowTrace +
+        /// Unity errors/exceptions) to the backend remote-trace sink (<see cref="DeNelle.Core.Diagnostics.WebTrace"/>)
+        /// so a real web player's issue can be triaged from the DB. Default OFF (don't spam the DB).
+        /// PlayerPrefs "ff.webtrace". Can also be flipped ON for ONE session via the WebGL URL
+        /// query-param <c>?trace=1</c> (see <see cref="ApplyUrlActivationOnce"/>) so support can turn it
+        /// on without a rebuild. The sink itself is a clean no-op on standalone/editor and stays dormant
+        /// until a backend endpoint is configured.</summary>
+        public static bool WebTrace => Get("webtrace", defaultOn: false);
+
         /// <summary>Per-feature resolve: PlayerPrefs override ("ff.&lt;name&gt;" = 0/1) wins, else the default.</summary>
         private static bool Get(string name, bool defaultOn)
         {
@@ -38,6 +47,50 @@ namespace DeNelle.Core
             if (pref == 0) return false;
             if (pref == 1) return true;
             return defaultOn;
+        }
+
+        // ── WO-443 — WebGL one-session URL activation (?trace=1) ──────────────────
+        private static bool s_urlActivationChecked;
+
+        /// <summary>
+        /// WO-443 — reads <see cref="Application.absoluteURL"/> on WebGL and, if it carries
+        /// <c>?trace=1</c> (or <c>&amp;trace=1</c>), turns the <see cref="WebTrace"/> flag ON for THIS
+        /// session only (writes PlayerPrefs "ff.webtrace"=1) so support can activate web tracing for a
+        /// single player without a rebuild. Idempotent (runs its parse once) and safe to call on every
+        /// platform — on editor/standalone <c>absoluteURL</c> is empty so it is a no-op. Never throws.
+        /// </summary>
+        public static void ApplyUrlActivationOnce()
+        {
+            if (s_urlActivationChecked) return;
+            s_urlActivationChecked = true;
+            try
+            {
+                string url = Application.absoluteURL;
+                if (string.IsNullOrEmpty(url)) return;
+
+                int q = url.IndexOf('?');
+                if (q < 0) return;
+                string query = url.Substring(q + 1);
+
+                foreach (var pair in query.Split('&'))
+                {
+                    int eq = pair.IndexOf('=');
+                    string key = (eq < 0 ? pair : pair.Substring(0, eq)).Trim();
+                    string val = (eq < 0 ? "" : pair.Substring(eq + 1)).Trim();
+                    if (key.Equals("trace", System.StringComparison.OrdinalIgnoreCase)
+                        && (val == "1" || val.Equals("true", System.StringComparison.OrdinalIgnoreCase)))
+                    {
+                        PlayerPrefs.SetInt("ff.webtrace", 1);
+                        PlayerPrefs.Save();
+                        Debug.Log("[FeatureFlags] ?trace=1 detected — web tracing activated for this session (ff.webtrace=1).");
+                        return;
+                    }
+                }
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogWarning("[FeatureFlags] URL trace-activation parse skipped: " + ex.Message);
+            }
         }
 
 #if UNITY_EDITOR

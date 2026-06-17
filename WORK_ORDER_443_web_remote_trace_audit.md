@@ -24,9 +24,16 @@ a SECOND sink — a remote one for the web build — reusing the existing backen
    (every ~5s or N entries) via a single `UnityWebRequest` POST — WebGL-safe, non-blocking, never throws
    into gameplay (wrap in `Guard.Try`). Each entry: { sessionId, utcMs, kind (log/warn/error/exception/flow),
    tag, message, stack?, buildId, scene }. Include a short anonymous `sessionId` (no PII).
-2. **Activation toggle** — `FeatureFlags.WebTrace` (PlayerPrefs `ff.webtrace`, default OFF) AND a URL
-   query-param activation for WebGL (e.g. `?trace=1`) so support can turn it on for ONE session without a
-   rebuild. Only when active does `WebTrace` POST. (Optional: a remote "trace this session" flag.)
+2. **Activation — 3 tiers (owner 2026-06-17):**
+   - `FeatureFlags.WebTrace` (PlayerPrefs `ff.webtrace`, default OFF) — local/dev.
+   - WebGL URL `?trace=1` — per-session ad-hoc (support gives a player a link).
+   - **ACCOUNT-LEVEL flag (the robust one)** — a server-set boolean on the player's account/record
+     (e.g. `GameState.Account.TraceEnabled` synced from the backend on load). When the backend flags an
+     account for tracing, the client reads it on login and activates WebTrace for THAT player across
+     sessions — so support can target a specific real player who's hitting an issue, without a link or a
+     rebuild. The account flag is authoritative; any of the three turns it on. Add the field to the
+     account/save sync (additive; backend sets it, client reads it).
+   Only when active does `WebTrace` POST.
 3. **Gate to WebGL** — `#if UNITY_WEBGL && !UNITY_EDITOR` (or a platform check) so it's a no-op on
    standalone/editor (which already have break-log.jsonl). Batch + cap so a log storm can't flood.
 
