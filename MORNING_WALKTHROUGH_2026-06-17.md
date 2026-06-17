@@ -33,6 +33,21 @@ Full detail in `docs/SESSION_SUMMARY_2026-06-16_overnight.md`. Walk these in-Pla
 - Harvest models committed to LFS so a clone/CI has them. (`Resources/Structures` stays gitignored
   like the polyperfect/Quaternius packs — PetHouse2 lives there, local like the art packs.)
 
+## 🔎 From your F8 fast-play (2026-06-17 ~02:50–04:26) — triage in the morning
+- **Echo Hollow still shows the STABLES** — confirmed a **bake** issue (you called it). `CityManifest.json:113`
+  hard-places PetHouse as `polyperfect/.../Stables_Medieval.prefab`. The catalog repoint to PetHouse2
+  only affects runtime/build-mode placement, not the baked town instance. **Fix:** repoint that manifest
+  line to PetHouse2 (needs a `prefabKind` that loads `Resources/Structures/PetHouse2`, not the polyperfect
+  kind) + **rebuild the scene with the editor CLOSED**. PREP PENDING.
+- **Yarn "no node" STILL throwing** — 3× this session (02:52, 02:53, 04:24), *after* the sibling fix
+  (`8ed0bce9`). So either the editor hadn't recompiled the fix, or it's a **different** Yarn command than
+  the 5 converted (OpenShop/Upgrade/Craft/Equip/Arena/RumorBoard). break-log doesn't name the command —
+  check Player.log around those UTC stamps for the `[DialogueCommandBridge] <command>` line just before it.
+- **"doesnt follow"** flag (04:26) — companion/pet not following. May relate to tonight's companion changes.
+- **"weapon placement feels off"** flag — matches the bow-90°/sword-grip note. Hero bow = HeroBowAttachment
+  (loaded weapon pack, fine); **companion** bows use `EquipmentController.Bow()` (one-line gripEuler fix if off).
+- **"fight much better"** (positive) — companion gear scaling (`_gearWeaponMult`) is landing.
+
 ## Notes
 - Nothing here is pushed-and-forgotten — if a playtest flags something, it's a quick fix.
 - The "pets makeover and wiring" + "arcane tower replaced" art-lane changes are yours/another
