@@ -26,9 +26,11 @@ Drillmaster: Looking to raise some soldiers? The Realm won't defend itself.
     // Command FIRST (mirrors the vendor nodes): a line before the command would make
     // the VM pause and <<ShowTrainingUI>> would never fire -> the panel never opens.
     <<ShowTrainingUI>>
+    <<stop>>
 -> Review my army.
     // Same panel — it lists every troop's owned count and the army cap at the top.
     <<ShowTrainingUI>>
+    <<stop>>
 -> Not today.
     Drillmaster: Then keep your blade close. The enemy doesn't rest.
 ===
