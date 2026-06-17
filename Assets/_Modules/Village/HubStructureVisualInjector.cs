@@ -44,6 +44,10 @@ namespace DeNelle.Village
             public float  pitchDeg;    // X rotation — when a model imports lying down (default 0)
             public float  rollDeg;     // Z rotation — rarely needed (default 0)
             public float  posY;        // vertical nudge after seat-on-ground (default 0; e.g. -0.6 to sink it)
+            public float  posX;        // used only with setLocalPos
+            public float  posZ;        // used only with setLocalPos
+            public bool   setLocalPos; // true -> SET localPosition to (posX,posY,posZ), overriding the
+                                       // seat (for a model that belongs at a specific spot); false -> posY is a nudge.
             public string texPath;     // OPTIONAL Resources texture to force onto the model when its
                                        // embedded material didn't bind one (renders colorless). Default null.
         }
@@ -59,12 +63,12 @@ namespace DeNelle.Village
             new Swap { bakedName = "ArcaneTower_MagicUpgrades",     modelPath = "Structures/arcane tower", sizeM = 12f, yawDeg = 0f,   pitchDeg = -90f, posY = -0.6f, texPath = "Structures/arcane tower/arcane tower" },
             new Swap { bakedName = "Blacksmith_Weapons_Storefront", modelPath = "Structures/Forge",        sizeM = 7f,  yawDeg = 90f,  pitchDeg = -90f },
             new Swap { bakedName = "Forge_Armor_Storefront",        modelPath = "Structures/armorer",      sizeM = 7f,  yawDeg = 90f,  pitchDeg = -90f },
-            new Swap { bakedName = "Marketplace_Monetization",      modelPath = "Structures/store",        sizeM = 8f,  yawDeg = 90f },
+            new Swap { bakedName = "Marketplace_Monetization",      modelPath = "Structures/store",        sizeM = 8f,  yawDeg = 90f,  pitchDeg = -90f },
             new Swap { bakedName = "Lumbermill_Wood_Storefront",    modelPath = "Structures/lumbermill",   sizeM = 7f,  yawDeg = 0f,   pitchDeg = 90f },
             new Swap { bakedName = "Windmill_Food_Storefront",      modelPath = "Structures/farm",         sizeM = 8f,  yawDeg = 90f },
             // Castle barracks = the troop-TRAINING building (existing scene prefab "CastleBarracks");
             // visual swap only — its training function is already wired. Size/yaw owner-dialed.
-            new Swap { bakedName = "CastleBarracks",                modelPath = "Structures/barracks",     sizeM = 8f,  yawDeg = 90f,  pitchDeg = -90f, posY = 0.2f },
+            new Swap { bakedName = "CastleBarracks",                modelPath = "Structures/barracks",     sizeM = 8f,  yawDeg = 90f,  pitchDeg = -90f, setLocalPos = true, posX = 38.3f, posY = 0f, posZ = 36f },
             // ArenaMonument: not in the saved scene (added in-editor / runtime) — found at runtime by
             // name; hides all renderers under it (parent + child). First-guess size/yaw; owner dials.
             new Swap { bakedName = "ArenaMonument",                 modelPath = "Structures/arena",        sizeM = 10f, yawDeg = 90f },
@@ -118,7 +122,11 @@ namespace DeNelle.Village
             }
 
             vis.name = marker;
-            if (s.posY != 0f)
+            if (s.setLocalPos)
+            {
+                vis.transform.localPosition = new Vector3(s.posX, s.posY, s.posZ);
+            }
+            else if (s.posY != 0f)
             {
                 var lp = vis.transform.localPosition;
                 lp.y += s.posY;
