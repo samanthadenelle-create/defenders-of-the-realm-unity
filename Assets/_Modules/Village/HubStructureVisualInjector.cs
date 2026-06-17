@@ -55,7 +55,7 @@ namespace DeNelle.Village
             // ALL need yawDeg=90 to face the plaza, and their embedded materials are URP-fixed
             // automatically by SkinOptions.Structure (FixTripoMaterials). Keep new Tripo rows at yaw 90.
             // Trade convention: forge = WEAPONS (Blacksmith), armorer = ARMOR (Forge_Armor), store = Market.
-            new Swap { bakedName = "EchoHollow_Pets_RoamingArea",   modelPath = "Structures/PetHouse2",    sizeM = 7f,  yawDeg = 90f },
+            new Swap { bakedName = "EchoHollow_Pets_RoamingArea",   modelPath = "Structures/PetHouse2",    sizeM = 7f,  yawDeg = 90f,  pitchDeg = -90f },
             new Swap { bakedName = "ArcaneTower_MagicUpgrades",     modelPath = "Structures/arcane tower", sizeM = 12f, yawDeg = 0f,   pitchDeg = -90f, posY = -0.6f, texPath = "Structures/arcane tower/arcane tower" },
             new Swap { bakedName = "Blacksmith_Weapons_Storefront", modelPath = "Structures/Forge",        sizeM = 7f,  yawDeg = 180f, pitchDeg = 90f },
             new Swap { bakedName = "Forge_Armor_Storefront",        modelPath = "Structures/armorer",      sizeM = 7f,  yawDeg = 180f, pitchDeg = 90f },
@@ -64,7 +64,10 @@ namespace DeNelle.Village
             new Swap { bakedName = "Windmill_Food_Storefront",      modelPath = "Structures/farm",         sizeM = 8f,  yawDeg = 90f },
             // Castle barracks = the troop-TRAINING building (existing scene prefab "CastleBarracks");
             // visual swap only — its training function is already wired. Size/yaw owner-dialed.
-            new Swap { bakedName = "CastleBarracks",                modelPath = "Structures/barracks",     sizeM = 8f,  yawDeg = 90f },
+            new Swap { bakedName = "CastleBarracks",                modelPath = "Structures/barracks",     sizeM = 8f,  yawDeg = 90f,  pitchDeg = -90f, posY = 0.2f },
+            // ArenaMonument: not in the saved scene (added in-editor / runtime) — found at runtime by
+            // name; hides all renderers under it (parent + child). First-guess size/yaw; owner dials.
+            new Swap { bakedName = "ArenaMonument",                 modelPath = "Structures/arena",        sizeM = 10f, yawDeg = 90f },
         };
 
         private const string MarkerPrefix = "LightSkin_";   // child added on swap (idempotency guard)
