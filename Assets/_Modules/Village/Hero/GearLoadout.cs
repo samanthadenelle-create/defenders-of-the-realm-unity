@@ -83,6 +83,28 @@ namespace DeNelle.Village
         private HeroAbilities   _abilities;
         private HeroProgression _progression;
 
+        // Per-class PERSISTED equip (owner 2026-06-16): a manual equip from the equip UI
+        // is saved under the wearer's class so it sticks across loads — for the hero AND
+        // each companion. Keyed by class name so every party member keeps its own loadout.
+        private const string PrefWeaponKey = "dotr-equip-weapon-";   // + <class>
+        private const string PrefArmorKey  = "dotr-equip-armor-";    // + <class>
+
+        // Set on a COMPANION loadout (which has no HeroAbilities). When non-null it is the
+        // authoritative class for this loadout (BindOwnerClass). Null on the player hero,
+        // which reads its class from HeroAbilities as before.
+        private string _ownerClassOverride;
+
+        /// <summary>
+        /// Bind this loadout to a specific class (used for companion bodies, which carry no
+        /// HeroAbilities). Sets the authoritative class, then re-resolves gear so the wearer
+        /// auto-equips its best — or its persisted manual choice — for that class immediately.
+        /// </summary>
+        public void BindOwnerClass(string job)
+        {
+            _ownerClassOverride = string.IsNullOrEmpty(job) ? null : job;
+            Refresh();
+        }
+
         private void Awake()
         {
             _abilities   = GetComponent<HeroAbilities>();
@@ -108,11 +130,16 @@ namespace DeNelle.Village
             if (_abilities == null)   _abilities   = GetComponent<HeroAbilities>();
             if (_progression == null) _progression = GetComponent<HeroProgression>();
 
-            string job = _abilities != null ? _abilities.HeroClass : AbilityCatalog.DefaultClass;
+            string job = CurrentJob();
             int level  = _progression != null ? _progression.Level : 1;
 
             EquippedWeapon = GearCatalog.BestWeapon(job, level);
             EquippedArmor  = GearCatalog.BestArmor(job, level);
+
+            // A PERSISTED manual choice (from the equip UI) wins over auto-best, so gear
+            // assigned to this member sticks across loads. Only applied when it still fits
+            // the class (a light-armor wearer never restores a heavy piece).
+            ApplyPersistedEquip(job);
 
             // WO-425 one-shot diagnostic: definitively shows null-weapon (#1 data) vs has-weapon
             // (#2 missing mesh art) on the next playtest. Refresh is NOT hot (OnEnable + OnLevelUp
@@ -123,6 +150,31 @@ namespace DeNelle.Village
             ApplyStats(job);
             OnGearChanged?.Invoke();
         }
+
+        // Restore a per-class persisted manual equip over the auto-best pick. Validated:
+        // the id must still exist in the catalog AND still be legal for the class (weapon
+        // job-match / armor weight-class), or the auto-best stands.
+        private void ApplyPersistedEquip(string job)
+        {
+            string key = (job ?? string.Empty).ToLowerInvariant();   // case-safe key (hero vs companion)
+            string wId = PlayerPrefs.GetString(PrefWeaponKey + key, null);
+            if (!string.IsNullOrEmpty(wId))
+            {
+                var w = GearCatalog.FindWeapon(wId);
+                if (w != null && GearCatalog.WeaponFitsClass(w, job)) EquippedWeapon = w;
+            }
+            string aId = PlayerPrefs.GetString(PrefArmorKey + key, null);
+            if (!string.IsNullOrEmpty(aId))
+            {
+                var a = GearCatalog.FindArmor(aId);
+                if (a != null && GearCatalog.ArmorFitsClass(a, job)) EquippedArmor = a;
+            }
+        }
+
+        // Lower-cased persistence key for the wearer's class — the hero (HeroAbilities) and a
+        // companion (BindOwnerClass) can report different casing for the same class, so both
+        // read/write the SAME PlayerPrefs slot.
+        private string PrefJobKey() => CurrentJob().ToLowerInvariant();
 
         /// <summary>
         /// Recomputes WeaponMult + ArmorDefense from the equipped pieces, folding in the
@@ -154,6 +206,12 @@ namespace DeNelle.Village
 
             // Activate / refresh the Oathweld ward driver (lazily attached, self-guards).
             EnsureSetEffect().Refresh();
+
+            // COMPANION gear: a companion body has no HeroAbilities damage chain, so push the
+            // equipped weapon multiplier straight onto its StoryCompanion driver (no-op on the
+            // player hero, which has no StoryCompanion). Its attacks then scale with gear.
+            var companion = GetComponent<StoryCompanion>();
+            if (companion != null) companion.SetGearWeaponMult(WeaponMult);
         }
 
         private EquipmentController _equipment;
@@ -210,6 +268,8 @@ namespace DeNelle.Village
                 return;
             }
             EquippedWeapon = w;
+            PlayerPrefs.SetString(PrefWeaponKey + PrefJobKey(), id);   // persist per class
+            PlayerPrefs.Save();
             ApplyStats(CurrentJob());          // recomputes WeaponMult from EquippedWeapon.damageMult
             OnGearChanged?.Invoke();
             TryReapplyVisuals();
@@ -229,6 +289,8 @@ namespace DeNelle.Village
                 return;
             }
             EquippedArmor = a;
+            PlayerPrefs.SetString(PrefArmorKey + PrefJobKey(), id);   // persist per class
+            PlayerPrefs.Save();
             ApplyStats(CurrentJob());          // recomputes ArmorDefense from EquippedArmor.defense
             OnGearChanged?.Invoke();
             TryReapplyVisuals();
@@ -237,9 +299,12 @@ namespace DeNelle.Village
             FlowTrace.Step("Gear", $"EquipArmorById('{id}') applied — ArmorDefense={ArmorDefense:0.00}");
         }
 
-        /// <summary>The hero's current class id (for the Aegis per-class weapon perk).</summary>
+        /// <summary>The wearer's current class id (for catalog queries, persistence keys, and
+        /// the Aegis per-class weapon perk). A companion loadout's BindOwnerClass override wins;
+        /// otherwise the hero's HeroAbilities class.</summary>
         private string CurrentJob()
         {
+            if (!string.IsNullOrEmpty(_ownerClassOverride)) return _ownerClassOverride;
             if (_abilities == null) _abilities = GetComponent<HeroAbilities>();
             return _abilities != null ? _abilities.HeroClass : AbilityCatalog.DefaultClass;
         }

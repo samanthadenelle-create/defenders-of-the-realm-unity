@@ -453,6 +453,20 @@ namespace DeNelle.Village
             // The driver last, so Configure(...) (called by the injector after this
             // returns) lands before its Start() runs next frame.
             go.AddComponent<StoryCompanion>();
+
+            // COMPANION GEAR (owner 2026-06-16 "select which character gets gear"): only the
+            // real humanoid mesh has hand bones to attach a weapon to. Give the body its own
+            // EquipmentController (weapon mesh on the hand) + GearLoadout, then bind its class
+            // so it auto-equips its best — or the player's PERSISTED assignment — for that
+            // class on every (re)spawn. GearLoadout pushes the weapon multiplier onto the
+            // StoryCompanion driver, so assigned gear both SHOWS and scales the companion's
+            // attacks. The class word is lower-cased to match the catalog/persistence keys.
+            if (vis != null)
+            {
+                go.AddComponent<EquipmentController>();
+                var loadout = go.AddComponent<GearLoadout>();
+                loadout.BindOwnerClass(hero.ToString().ToLowerInvariant());
+            }
             return go;
         }
 

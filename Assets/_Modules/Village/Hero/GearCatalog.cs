@@ -87,6 +87,12 @@ namespace DeNelle.Village
         public string name;
         public string icon;
         public string job;
+        // ARMOR WEIGHT CLASS (owner 2026-06-16 "armor lightweight heavy distinction"):
+        // "light" = Ranger + Mage may wear it; "heavy" = Knight + Cleric. Empty / "any" =
+        // no weight restriction (a universal starter / endgame set anyone can wear).
+        // Weapons stay 1:1 by `job`; armor groups by this weight instead. See
+        // GearCatalog.ClassWeight / ArmorFitsClass.
+        public string weight;
         public string rarity;
         public float defense;     // 0..0.9 fractional damage reduction
         public float hpBonus;     // carried for a later pass; v1 applies defense only
@@ -154,7 +160,8 @@ namespace DeNelle.Village
             return best;
         }
 
-        /// <summary>Highest-defense armor the given class+level can equip, or null.</summary>
+        /// <summary>Highest-defense armor the given class+level can equip, or null.
+        /// Respects BOTH the legacy `job` gate and the new weight-class gate (light/heavy).</summary>
         public static ArmorDef BestArmor(string job, int level)
         {
             EnsureLoaded();
@@ -163,11 +170,46 @@ namespace DeNelle.Village
             {
                 foreach (var a in _armor)
                 {
-                    if (a == null || !JobMatches(a.job, job) || !MeetsReq(a.req, level)) continue;
+                    if (a == null || !JobMatches(a.job, job) || !ArmorFitsClass(a, job) || !MeetsReq(a.req, level)) continue;
                     if (best == null || a.defense > best.defense) best = a;
                 }
             }
             return best;
+        }
+
+        // ── Class restriction surface (equip UI + auto-equip) ────────────────────
+
+        /// <summary>The armor WEIGHT a class wears: Ranger/Mage = "light", Knight/Cleric =
+        /// "heavy" (owner 2026-06-16). Unknown classes default to "heavy" (front-line safe).</summary>
+        public static string ClassWeight(string job)
+        {
+            switch ((job ?? string.Empty).ToLowerInvariant())
+            {
+                case "ranger":
+                case "mage":   return "light";
+                case "knight":
+                case "cleric": return "heavy";
+                default:       return "heavy";
+            }
+        }
+
+        /// <summary>True when <paramref name="job"/> may wear armor <paramref name="a"/>: a
+        /// piece with no weight (empty / "any") fits everyone; otherwise its weight must
+        /// match the class's weight (light↔Ranger/Mage, heavy↔Knight/Cleric).</summary>
+        public static bool ArmorFitsClass(ArmorDef a, string job)
+        {
+            if (a == null) return false;
+            string w = (a.weight ?? string.Empty).Trim().ToLowerInvariant();
+            if (w.Length == 0 || w == "any") return true;
+            return w == ClassWeight(job);
+        }
+
+        /// <summary>True when <paramref name="job"/> may wield weapon <paramref name="w"/>
+        /// (its `job` is "any" or matches the class). Public wrapper over the job-match rule
+        /// so the equip UI can filter the weapon list per selected party member.</summary>
+        public static bool WeaponFitsClass(WeaponDef w, string job)
+        {
+            return w != null && JobMatches(w.job, job);
         }
 
         /// <summary>Find exact weapon by id (case-insensitive), or null. Used by shop/equip flows.</summary>

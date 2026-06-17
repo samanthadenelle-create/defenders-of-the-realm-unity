@@ -214,6 +214,15 @@ namespace DeNelle.Village
         [Tooltip("Damage dealt to every enemy in the burst radius.")]
         [SerializeField] private float _mageBurstDamage = 26f;
 
+        // Gear weapon multiplier (owner 2026-06-16): the companion's GearLoadout pushes its
+        // equipped-weapon damageMult here so the companion's attacks scale with assigned gear
+        // (the companion has no HeroAbilities damage chain). 1 = no weapon bonus.
+        private float _gearWeaponMult = 1f;
+
+        /// <summary>Set the equipped-weapon damage multiplier (driven by this companion's
+        /// GearLoadout on every gear change). Floored so it can never zero out damage.</summary>
+        public void SetGearWeaponMult(float mult) => _gearWeaponMult = Mathf.Max(0.1f, mult);
+
         // Ability runtime.
         private float _abilityTimer;            // counts down to the next cast
         private float _bulwarkUntil;            // Time.time while the Knight soak is active
@@ -561,7 +570,7 @@ namespace DeNelle.Village
             {
                 // Slight horizontal spread so the volley reads as several arrows.
                 Vector3 spread = new Vector3((i - (_multishotArrows - 1) * 0.5f) * 0.5f, 0f, 0f);
-                float perArrow = _multishotDamagePerArrow;
+                float perArrow = _multishotDamagePerArrow * _gearWeaponMult;
                 System.Action onArrive = () =>
                 {
                     if (dmg != null && dmg.IsAlive) dmg.TakeDamage(perArrow, DamageElement.None);
@@ -595,7 +604,7 @@ namespace DeNelle.Village
                 var e = s_aoeBuf[i];
                 if (e == null || !e.IsAlive) continue;
                 var dmg = e.GetComponent<EnemyDamageable>() as IDamageable;
-                if (dmg != null && dmg.IsAlive) dmg.TakeDamage(_mageBurstDamage, DamageElement.Aether);
+                if (dmg != null && dmg.IsAlive) dmg.TakeDamage(_mageBurstDamage * _gearWeaponMult, DamageElement.Aether);
                 VFXManager.Play(VFXType.Impact_Aether, e.transform.position + Vector3.up);
             }
             // Centre detonation so the AoE reads even when it whiffs the edges.
@@ -701,7 +710,7 @@ namespace DeNelle.Village
             var dmg = foe.GetComponent<EnemyDamageable>() as IDamageable;
             System.Action onArrive = () =>
             {
-                if (dmg != null && dmg.IsAlive) dmg.TakeDamage(AttackDamage, DamageElement.None);
+                if (dmg != null && dmg.IsAlive) dmg.TakeDamage(AttackDamage * _gearWeaponMult, DamageElement.None);
             };
 
             // WO-398: Knight melee — no projectile; the foe is already in weapon reach

@@ -64,11 +64,25 @@ Two flavors (pick by demo budget):
       causes resolved: CanvasGroup blocker release + Yarn orphaned pointer-action disable + dialogue
       Canvas close + EventSystem watchdog & OnDisable safety net (commits 2861c9b→4605902d). STALE triage.
 - [x] Yarn "no node" on `OpenShop` — FIXED (async IEnumerator command, gated 2026-06-16).
-- [ ] Yarn "no node" SIBLINGS: OpenUpgrade/OpenCraft/OpenEquip/OpenArena/OpenRumorBoard — same pattern,
-      verify + apply the same fix where they defer a Stop.
+- [x] Yarn "no node" SIBLINGS: OpenUpgrade/OpenCraft/OpenEquip/OpenArena/OpenRumorBoard — FIXED
+      2026-06-16 (commit 8ed0bce9). All 5 converted to async IEnumerator (open → yield → Stop),
+      registrations recast to Func<...,IEnumerator>. COMPILE_GATE_OK.
 
 ### 4. Store / Economy  (shop buy/equip/sell, gear)
 - [x] EQUIP tab re-enabled in store. FIXED 2026-06-16.
+- [~] **Per-member equip + class/weight restrictions (owner 2026-06-16)** — IN PROGRESS. "Select which
+      character gets gear" + "play as Grom, assign Ranger's bow to him" + "armor lightweight/heavy
+      distinction." Owner decisions: armor LIGHT=Ranger+Mage / HEAVY=Knight+Cleric; FULL scope (selector
+      + restriction + persisted per-member stats + weapon shown on companion body, re-applied each respawn).
+      - DONE (backend, gated): `ArmorDef.weight` + `GearCatalog.ClassWeight/ArmorFitsClass/WeaponFitsClass`;
+        armor.json weight tags (cloth/aegis=any, leather=light, chain/plate=heavy, ×3 copies);
+        `GearLoadout` per-class PlayerPrefs persistence (`dotr-equip-weapon/armor-<class>`) + `BindOwnerClass`
+        + push WeaponMult onto a sibling `StoryCompanion`; `StoryCompanion._gearWeaponMult` at 3 damage sites;
+        companion bodies get a `GearLoadout`+`EquipmentController` bound to their class on spawn.
+      - TODO: `EquipmentPanel` target selector (hero + companions) + filter list by the target's class/weight
+        + route equip to the target's loadout.
+      - NOTE (data balance, owner to tune): light classes currently have cloth→leather→aegis only (thin mid);
+        add light mid-tiers in armor.json (content, no recompile) if the gap matters.
 - [ ] Detail-pane blank preview (icon not resolving) — minor.
 - [ ] Aegis `setId` missing on aegis WEAPONS in weapons.json → Oathweld full-set bonus unreachable. (data fix)
 
@@ -79,8 +93,12 @@ Two flavors (pick by demo budget):
 - [x] ~~**S4: companion won't follow / stays at Tree**~~ — **FIXED (audit 2026-06-16, WO-301).**
       `StoryCompanion.cs:757-838` has a per-frame mesh-aware leash that switches NavMeshAgent↔lerp and
       warp-catches-up across the village→OuterWorld seam. STALE triage.
-- [ ] Duplicate "Grom" companion — diagnosed-partial (`WORK_ORDER_second_grom_companion.md`); injector is
-      correct, second body is a separate source — one probe to name it.
+- [x] "Second companion ends up being ME" (owner 2026-06-16) — FIXED (commit b1fd1730). Root cause:
+      the canon companion roster is FIXED (Sylas=Ranger, Elara=Cleric, Grom=Knight), so a player who
+      picks Ranger/Cleric/Knight has one roster entry that COLLIDES with their own class → the injector
+      spawned a body that cloned the player. Fix: Spawn() drops the player's own hero class from the
+      desired spawn set (roster/party-frame untouched; only the duplicate BODY is suppressed).
+      NOTE: distinct from the older "duplicate Grom" theory in WORK_ORDER_second_grom_companion.md.
 
 ### 7. World / OuterWorld
 - **"Secure a node" CONFIRMED BROKEN (audit 2026-06-16):** it's the **ClaimableCamp** flow
@@ -103,6 +121,16 @@ Two flavors (pick by demo budget):
      build is the easier, working hook.
   → REUSES the existing ClaimableCamp Clear+Claim+Build, minus the broken Defend → **simplification, not
     new-build.** This becomes the base-building teaching beat (CoC×Warcraft north star), replacing FTUE 7b.
+- [x] **IMPLEMENTED 2026-06-16 (commit 50b7b743).** `OutpostFoundationGenerator.GenerateSquareWalledBaseRecipe`
+      — CoC square base with N concentric wood-wall rings (default 2 = "two rows"), outer ring = corner
+      towers + one front gate, inner rings = plain walls with the gate column left open → straight entry
+      corridor into an interior courtyard. `ClaimableCamp` now uses a 7×7 footprint + double ring (3×3
+      buildable courtyard) and, on BUILD, flips to a PLAYER-OWNED base immediately via `MarkOwned()` (sets
+      Secured, grants the territory/economy benefit, raises OnDefended for existing UI) — the broken
+      counterattack is retired (StartDefense/HandleDefended kept dead for a later re-enable). Single-ring
+      `GenerateFootprintRecipe` preserved for EnemyOutpost/Arena. COMPILE_GATE_OK.
+      - ASSET NOTE (owner 2026-06-16): `Resources/Structures/arcane tower.fbx` is ~52KB (very lightweight,
+        WebGL-friendly) — candidate to swap in as the camp corner-tower vs the current `tower_ground_archer`.
 - **SEQUENCING (owner):** land the **core loop + this invade→own→build hook FIRST**; the bigger world +
   "areas to explore for better nodes" comes **AFTER the loop lands** (today the OuterWorld is too small
   to travel — world expansion is a later pillar, not a demo blocker).
