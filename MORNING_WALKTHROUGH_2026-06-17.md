@@ -33,6 +33,32 @@ Full detail in `docs/SESSION_SUMMARY_2026-06-16_overnight.md`. Walk these in-Pla
 - Harvest models committed to LFS so a clone/CI has them. (`Resources/Structures` stays gitignored
   like the polyperfect/Quaternius packs — PetHouse2 lives there, local like the art packs.)
 
+## 🌙 Did overnight (safe, gated, committed — `86bfa73a`)
+- **Yarn "no node" — INSTRUMENTED, not blind-patched.** `DialogueCommandBridge.RunDeferred` (the single
+  choke-point for every sync command) now `FlowTrace.Step`s the command name on each dispatch. **Next
+  play:** reproduce the "no node" then check `Player.log` — the `[Flow:Yarn] dispatch command '<name>'`
+  line right before the exception names the culprit. Strong suspects: `transition_to` /
+  `enable_full_controls` (sync commands that END the dialogue → VM then Continues → throws). Most
+  likely, though, the 04:24 capture was the **editor running pre-fix code** (Unity doesn't recompile
+  during Play) — so first just confirm on a FRESH play whether it even still happens.
+
+## 🛠️ PetHouse2 bake — ready for you to run + verify (I did NOT bake it; here's why + how)
+**Why not overnight:** the town Echo Hollow is built by **`CastleHubBuilder`** (not a runtime catalog),
+so fixing it means swapping a polyperfect **prefab** for a raw Tripo **FBX** (different scale / no
+collider / NPC-point assumptions) and rebuilding the **primary start scene** — a result I can't verify
+headless. Risking the demo's first scene unverified fails the "quality not fast" bar. It's a 5-min
+verified job for you:
+1. `Assets/Editor/CastleHubBuilder.cs:102` — replace
+   `GameObject stables = LoadPoly("Stables_Medieval.prefab");`
+   with a Resources load of PetHouse2, e.g. `GameObject stables = Resources.Load<GameObject>("Structures/PetHouse2");`
+   (the `stables` var is placed as "EchoHollow_Pets_RoamingArea" at line ~238 — leave that as-is).
+   - If PetHouse2 comes in wrong-sized/rotated, fit it (bounds-normalize) or set scale/`rotY` on that
+     structures-list entry. (Catalog path already auto-fits via `SkinOptions.Structure`; the builder
+     does not, hence the manual fit.)
+2. Rebuild the hub: **`Defenders` menu → Build Castle Hub** (`CastleHubBuilder.BuildCastleHub`) with the
+   editor open so you can eyeball it immediately. Save the scene.
+3. If it looks wrong: `git checkout Assets/Scenes/MainCastle_Hall.unity` to revert the bake.
+
 ## 🔎 From your F8 fast-play (2026-06-17 ~02:50–04:26) — triage in the morning
 - **Echo Hollow still shows the STABLES** — confirmed a **bake** issue (you called it). `CityManifest.json:113`
   hard-places PetHouse as `polyperfect/.../Stables_Medieval.prefab`. The catalog repoint to PetHouse2
