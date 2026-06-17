@@ -680,7 +680,7 @@
    "displayName": "Jeweler",
    "type": "Resource",
    "kind": "Cell",
-   "visualPrefabPath": "Structures/House_Medieval_Small",
+   "visualPrefabPath": "Structures/jeweler",
    "repo": {
     "behaviorId": "GameplayBuilding",
     "singleton": true,
