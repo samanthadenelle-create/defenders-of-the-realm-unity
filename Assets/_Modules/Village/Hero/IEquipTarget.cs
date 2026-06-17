@@ -50,6 +50,14 @@ namespace DeNelle.Village.Hero
         /// <summary>Fractional incoming-damage reduction from the equipped armor (0f when none).</summary>
         float ArmorDefense { get; }
 
+        // ── Change notification ──────────────────────────────────────────────────────
+        /// <summary>
+        /// Raised when this target's equipped loadout changes (mirrors GearLoadout.OnGearChanged).
+        /// WO-434 Phase B: lets InventoryVM / EquipVM re-render equipped marks + stats without
+        /// re-pulling the model. Additive; a fake may leave it unraised.
+        /// </summary>
+        event Action EquipChanged;
+
         // ── Commands ────────────────────────────────────────────────────────────────
         void EquipWeaponById(string id);
         void EquipArmorById(string id);
@@ -63,7 +71,7 @@ namespace DeNelle.Village.Hero
     /// 1.0 mult / 0 defense) rather than throwing. Optionally carries an explicit name/class label
     /// (companions); falls back to the loadout's GameObject name when none is supplied.
     /// </summary>
-    public sealed class GearLoadoutEquipTarget : IEquipTarget
+    public sealed class GearLoadoutEquipTarget : IEquipTarget, IDisposable
     {
         private readonly GearLoadout _loadout;
         private readonly string _name;
@@ -74,7 +82,11 @@ namespace DeNelle.Village.Hero
             _loadout = loadout;
             _name = targetName;
             _class = targetClass;
+            if (_loadout != null) _loadout.OnGearChanged += RaiseEquipChanged;
         }
+
+        public event Action EquipChanged;
+        private void RaiseEquipChanged() => EquipChanged?.Invoke();
 
         public string TargetName =>
             !string.IsNullOrEmpty(_name) ? _name
@@ -95,5 +107,14 @@ namespace DeNelle.Village.Hero
         public void EquipArmorById(string id)  { if (_loadout != null) _loadout.EquipArmorById(id); }
         public void UnequipWeapon()            { if (_loadout != null) _loadout.UnequipWeapon(); }
         public void UnequipArmor()             { if (_loadout != null) _loadout.UnequipArmor(); }
+
+        private bool _disposed;
+        public void Dispose()
+        {
+            if (_disposed) return;
+            _disposed = true;
+            if (_loadout != null) _loadout.OnGearChanged -= RaiseEquipChanged;
+            EquipChanged = null;
+        }
     }
 }

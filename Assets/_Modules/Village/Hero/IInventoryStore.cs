@@ -56,6 +56,14 @@ namespace DeNelle.Village.Hero
 
         /// <summary>True when the given class may WEAR the armor (weight class / "any").</summary>
         bool ArmorFitsClass(ArmorDef a, string job);
+
+        // ── Mutations (WO-434 Phase B: the inventory viewer's Use / Drop need to remove owned
+        // units through the seam so InventoryVM never names VillageInventory). Both decrement
+        // the owned count (and fire Changed via the underlying inventory). Use == consume-for-
+        // effect, Drop == discard; the model treats both as "remove n", so they share TryRemove. ──
+
+        /// <summary>Remove <paramref name="n"/> units of an owned id (consume / drop). True when removed.</summary>
+        bool TryRemove(string id, int n);
     }
 
     /// <summary>
@@ -129,6 +137,9 @@ namespace DeNelle.Village.Hero
 
         public bool WeaponFitsClass(WeaponDef w, string job) => GearCatalog.WeaponFitsClass(w, job);
         public bool ArmorFitsClass(ArmorDef a, string job) => GearCatalog.ArmorFitsClass(a, job);
+
+        public bool TryRemove(string id, int n) =>
+            _inventory != null && _inventory.TryConsume(id, n);
 
         public void Dispose()
         {

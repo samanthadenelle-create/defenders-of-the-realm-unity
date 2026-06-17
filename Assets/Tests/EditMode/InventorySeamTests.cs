@@ -61,6 +61,15 @@ namespace DeNelle.Tests.EditMode
             }
             public bool WeaponFitsClass(WeaponDef w, string job) => GearCatalog.WeaponFitsClass(w, job);
             public bool ArmorFitsClass(ArmorDef a, string job) => GearCatalog.ArmorFitsClass(a, job);
+
+            public bool TryRemove(string id, int n)
+            {
+                if (!Counts.TryGetValue(id, out var have) || have < n) return false;
+                int left = have - n;
+                if (left <= 0) Counts.Remove(id); else Counts[id] = left;
+                RaiseChanged();
+                return true;
+            }
         }
 
         // ── Fake IEquipTarget: a pure equip surface with no GearLoadout ──
@@ -74,10 +83,11 @@ namespace DeNelle.Tests.EditMode
             public string EquippedArmorName => EquippedArmor?.name;
             public float WeaponMult => EquippedWeapon != null ? EquippedWeapon.damageMult : 1f;
             public float ArmorDefense => EquippedArmor != null ? EquippedArmor.defense : 0f;
-            public void EquipWeaponById(string id) => EquippedWeapon = new WeaponDef { id = id, name = id, damageMult = 2f };
-            public void EquipArmorById(string id) => EquippedArmor = new ArmorDef { id = id, name = id, defense = 0.3f };
-            public void UnequipWeapon() => EquippedWeapon = null;
-            public void UnequipArmor() => EquippedArmor = null;
+            public event Action EquipChanged;
+            public void EquipWeaponById(string id) { EquippedWeapon = new WeaponDef { id = id, name = id, damageMult = 2f }; EquipChanged?.Invoke(); }
+            public void EquipArmorById(string id) { EquippedArmor = new ArmorDef { id = id, name = id, defense = 0.3f }; EquipChanged?.Invoke(); }
+            public void UnequipWeapon() { EquippedWeapon = null; EquipChanged?.Invoke(); }
+            public void UnequipArmor() { EquippedArmor = null; EquipChanged?.Invoke(); }
         }
 
         // ── Fake (mock) seam ─────────────────────────────────────────────────────
