@@ -95,9 +95,14 @@ namespace DeNelle.Village.World.Camps
         // The generated catalog-piece fortification recipe (perimeter walls + corner
         // towers + one gate) in LOCAL cell coords. Pure data; persisted to PlayerPrefs
         // so the same fortification re-Realizes on reload (no village-grid involvement).
+        // DESIGN PIVOT (owner 2026-06-16): a 7x7 footprint with a DOUBLE wood-wall ring
+        // (CoC "two rows of wooden walls in a square") leaves a 3x3 interior COURTYARD to
+        // build in — this is the player's claimed base + the base-building teaching beat.
         [Tooltip("Fortification footprint in grid cells (W x D). cellSize = 3 m.")]
-        private const int FortGridWidth = 5;
-        private const int FortGridDepth = 5;
+        private const int FortGridWidth = 7;
+        private const int FortGridDepth = 7;
+        // Concentric wood-wall rings (the "two rows" of the square base).
+        private const int FortWallRings = 2;
         private List<PlacedStructureData> _recipe;
 
         /// <summary>Called by CampSystem immediately after AddComponent.</summary>
@@ -339,9 +344,14 @@ namespace DeNelle.Village.World.Camps
 
             Debug.Log($"[ClaimableCamp] {CampId} built a {type} outpost - auto-harvest online.");
 
-            // STAGE 4 DEFEND: the displaced faction counterattacks the new outpost.
-            // (A camp already SECURED in a prior session resolves instantly inside Begin.)
-            StartDefense();
+            // DESIGN PIVOT (owner 2026-06-16): the STAGE-4 DEFEND counterattack is RETIRED.
+            // It silently auto-resolved when no attackers spawned (NavMesh missing at camp
+            // anchors) with zero player feedback -> "secure a node" felt broken. Clear ->
+            // claim -> BUILD is the loop now: building flips the camp to the player's own
+            // base immediately (no counterattack), so the territory/economy benefit + UI
+            // feedback still fire. StartDefense()/HandleDefended() are kept (dead) so the
+            // stage can be re-enabled later once attacker spawning is fixed.
+            MarkOwned();
             return _outpost;
         }
 
@@ -359,7 +369,8 @@ namespace DeNelle.Village.World.Camps
             if (outpostRoot == null) return;
 
             if (_recipe == null || _recipe.Count == 0)
-                _recipe = OutpostFoundationGenerator.GenerateFootprintRecipe(FortGridWidth, FortGridDepth, tier);
+                _recipe = OutpostFoundationGenerator.GenerateSquareWalledBaseRecipe(
+                    FortGridWidth, FortGridDepth, tier, FortWallRings);
 
             OutpostFoundationGenerator.Realize(_recipe, outpostRoot, ~0);
 
@@ -418,6 +429,27 @@ namespace DeNelle.Village.World.Camps
         // -> defense lost, camp stays claimed and is rebuildable.
         // =====================================================================
 
+        // DESIGN PIVOT (owner 2026-06-16): flip a freshly-built camp to a PLAYER-OWNED base —
+        // the replacement for the retired DEFEND stage. Idempotent. Sets Secured (the persisted
+        // "this camp is held" flag the rest of the loop + UI read), grants the one-time
+        // territory/economy benefit, and raises OnDefended so existing listeners (CampPromptUI,
+        // difficulty scaling) fire EXACTLY as they did when a counterattack was repelled — just
+        // without the broken wave in between.
+        private void MarkOwned()
+        {
+            if (Secured) return;
+            Secured = true;
+            PlayerPrefs.SetString(PrefSecuredKey + CampId, "1");
+            PlayerPrefs.Save();
+            Debug.Log($"[ClaimableCamp] {CampId} is now a PLAYER-OWNED base (Defend stage retired).");
+
+            // WO-106: territory multiplier + secured-count for difficulty scaling + passive power.
+            EconomyService.Instance?.OnOutpostSecured();
+            OnDefended?.Invoke(this);
+        }
+
+        // RETIRED (design pivot 2026-06-16) — no longer called. Kept so the counterattack
+        // stage can be restored once attacker spawning at camp anchors is fixed.
         private void StartDefense()
         {
             if (_outpost == null) return;
@@ -486,9 +518,10 @@ namespace DeNelle.Village.World.Camps
                     _recipe = DeserializeRecipe(PlayerPrefs.GetString(PrefRecipeKey + CampId, null));
                     BuildFortification(go.transform, OutpostTier.Wood, persist: _recipe.Count == 0);
 
-                    // Restored with an outpost but NOT yet secured -> the counterattack
-                    // is still pending; re-arm it so the loop can complete after reload.
-                    if (!Secured) StartDefense();
+                    // A restored outpost with no "owned" flag is a pre-pivot save that was
+                    // mid-counterattack. The DEFEND stage is retired -> just flip it owned
+                    // (no re-raid), so it loads as the player's base.
+                    if (!Secured) MarkOwned();
                 }
                 return;
             }

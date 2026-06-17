@@ -122,6 +122,76 @@ namespace DeNelle.Village.World.Camps
             return recipe;
         }
 
+        /// <summary>
+        /// DESIGN PIVOT (owner 2026-06-16): a CoC-style simple SQUARE base with
+        /// <paramref name="wallRings"/> CONCENTRIC perimeter rings of wood walls (default 2 —
+        /// "two rows of wooden walls in a square"). Each ring is inset one cell from the last;
+        /// the OUTER ring carries the four corner towers + a single front-middle GATE, inner
+        /// rings are plain walls with the SAME front-middle column left OPEN so the gate opens
+        /// a straight entry corridor through every ring into the interior courtyard. Ring
+        /// generation stops once an inset rectangle is too small to form a perimeter, so the
+        /// interior never fully closes (always leaves a buildable courtyard). Pure data, LOCAL
+        /// cell coords, allocation-only — same contract as <see cref="GenerateFootprintRecipe"/>.
+        /// Used for the player's claimed base (and the invade-target enemy camp): same square
+        /// generator, just a flipped owner.
+        /// </summary>
+        public static List<PlacedStructureData> GenerateSquareWalledBaseRecipe(
+            int gridWidth, int gridDepth, OutpostTier tier, int wallRings = 2)
+        {
+            var recipe = new List<PlacedStructureData>();
+
+            int w = Mathf.Max(3, gridWidth);
+            int d = Mathf.Max(3, gridDepth);
+            int rings = Mathf.Max(1, wallRings);
+
+            string wallId = tier == OutpostTier.Stone ? IdWallStone : IdWallWood;
+            int doorX = w / 2;   // shared gate column for every ring -> a straight entry corridor
+
+            for (int r = 0; r < rings; r++)
+            {
+                int xLo = r, xHi = w - 1 - r;
+                int zLo = r, zHi = d - 1 - r;
+                // Stop once the inset rectangle is too small to form a perimeter ring —
+                // keeps an open interior courtyard to build in (never a solid block).
+                if (xHi - xLo < 2 || zHi - zLo < 2) break;
+
+                for (int x = xLo; x <= xHi; x++)
+                {
+                    for (int z = zLo; z <= zHi; z++)
+                    {
+                        bool onEdge = x == xLo || x == xHi || z == zLo || z == zHi;
+                        if (!onEdge) continue;   // ring interior stays open
+
+                        bool isCorner = (x == xLo || x == xHi) && (z == zLo || z == zHi);
+
+                        // Entry corridor: leave the front-middle column OPEN on EVERY ring so
+                        // the player walks straight in. OUTER ring gets the gate; inner rings
+                        // leave a plain gap aligned behind it (no stacked gates).
+                        bool isDoorColumn = z == zLo && x == doorX && !isCorner;
+                        if (isDoorColumn)
+                        {
+                            if (r == 0) recipe.Add(new PlacedStructureData(IdGate, x, z, 0, 1));
+                            continue;
+                        }
+
+                        // Corner towers anchor the OUTER ring only (CoC-style); inner-ring
+                        // corners are plain wood walls.
+                        if (isCorner && r == 0)
+                        {
+                            recipe.Add(new PlacedStructureData(IdCornerTower, x, z, 0, 1));
+                            continue;
+                        }
+
+                        // Side (left/right) columns face inward — quarter-turn the wall.
+                        int yawSteps = (x == xLo || x == xHi) ? 1 : 0;
+                        recipe.Add(new PlacedStructureData(wallId, x, z, yawSteps, 1));
+                    }
+                }
+            }
+
+            return recipe;
+        }
+
         // =====================================================================
         // HALF 2 — REALIZE. LOCAL cell math -> WORLD Pose -> StructureFactory.Create.
         // =====================================================================
