@@ -71,7 +71,7 @@ namespace DeNelle.DevTools
         private const float EconomyDeductTimeout = 15f;  // open shop + read-before + buy + read-after assert
         private const float EquipTimeout         = 15f;   // add gear + equip + assert loadout changed
         private const float HudPanelTimeout     = 15f;   // per-panel open+actuate+close
-        private const float WaveTimeout         = 20f;   // wait for the wave phase to advance
+        private const float WaveTimeout         = 30f;   // wait for the wave phase to advance (bumped 20→30: covers the bounded start-retry window; player keeps a ~45s countdown)
         private const float ExitTimeout         = 30f;   // walk into the south exit
         private const float SettleSeconds        = 0.4f;  // brief pause after an open/close
         private const float BootTimeout          = 30f;   // load MainCastle_Hall + settle
@@ -997,7 +997,11 @@ namespace DeNelle.DevTools
         // =====================================================================
         private IEnumerator TriggerWave()
         {
-            var wm = UnityEngine.Object.FindAnyObjectByType<WaveManager>();
+            // Trigger + poll the CANONICAL singleton (active-scene WaveManager) so we
+            // drive and watch the SAME instance — with two WaveManagers live (hub +
+            // Village2), a bare Find could trigger one and poll the other (the
+            // intermittent "TriggerWave timeout"). Fall back to Find pre-Awake.
+            var wm = WaveManager.Instance ?? UnityEngine.Object.FindAnyObjectByType<WaveManager>();
             if (wm == null)
             {
                 FlowTrace.Step("Auto", "TriggerWave: no WaveManager in scene — N/A (hub has no wave loop), skipping.");

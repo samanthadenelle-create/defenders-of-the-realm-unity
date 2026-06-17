@@ -381,7 +381,8 @@ namespace DeNelle.Village
         private bool IsWaveActive()
         {
             // Cache the live WaveManager; re-resolve if it was destroyed (scene change).
-            if (_waveManager == null) _waveManager = FindObjectOfType<WaveManager>();
+            // Prefer the canonical singleton (active-scene WaveManager); fall back to Find.
+            if (_waveManager == null) _waveManager = WaveManager.Instance ?? FindObjectOfType<WaveManager>();
             if (_waveManager == null) return false;
             var phase = _waveManager.Phase;
             return phase == WavePhase.Countdown || phase == WavePhase.Active;

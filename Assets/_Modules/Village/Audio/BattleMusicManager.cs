@@ -230,7 +230,9 @@ namespace DeNelle.Village
         private void TryResolveAndSubscribeWave()
         {
             if (_wave != null) return;
-            var wave = FindFirstObjectByType<WaveManager>();
+            // Prefer the canonical singleton (active-scene WaveManager) so we subscribe
+            // to the SAME instance the trigger drives; fall back to Find pre-Awake.
+            var wave = WaveManager.Instance ?? FindFirstObjectByType<WaveManager>();
             if (wave == null) return;
 
             _wave = wave;

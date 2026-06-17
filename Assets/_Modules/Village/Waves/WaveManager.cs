@@ -33,6 +33,8 @@
 // at which point a fresh WaveManager.Start() resumes the loop.
 // =============================================================================
 
+using System;
+using System.Collections;
 using System.Collections.Generic;
 using Cysharp.Threading.Tasks;
 using DeNelle.Core;
@@ -40,6 +42,7 @@ using DeNelle.Core.Diagnostics;   // FlowTrace — wave-start flow instrumentati
 using DeNelle.Core.State;
 using UnityEngine;
 using UnityEngine.Events;
+using UnityEngine.SceneManagement;   // singleton "active-scene wins" rule (TriggerWave RCA)
 using DeNelle.Data;       // WaveData SO — WO-86
 
 namespace DeNelle.Village
@@ -410,6 +413,54 @@ namespace DeNelle.Village
             return enemy;
         }
 
+        // ── Singleton (TriggerWave-timeout RCA) ───────────────────────────────
+        //
+        // WaveManager is NOT a DontDestroyOnLoad global — there is a WaveManager
+        // baked into BOTH MainCastle_Hall (the home hub / start scene) and
+        // Village2 (the raid target). With those scenes loaded additively,
+        // FindObjectOfType<WaveManager>() enumerates in a NON-deterministic order,
+        // so a consumer (BattleMusic / TowerSwap / CameraMode / the AutoPilot
+        // TriggerWave probe) could resolve a DIFFERENT instance than the one being
+        // triggered/watched — the "works ~5/12, fails ~9/12" race that surfaced as
+        // the intermittent "TriggerWave timeout".
+        //
+        // CANONICAL RULE — the WaveManager in the ACTIVE scene wins. On Awake/OnEnable:
+        //   • if Instance is null → claim it (first one home).
+        //   • else if THIS object lives in the active scene → claim it (active wins,
+        //     even if a hub instance claimed first while it was the active scene).
+        // We never destroy the loser (both managers still run their own scene's loop);
+        // we only steer Find-based consumers at the canonically-correct one. Cleared
+        // in OnDestroy ONLY if we are still the current Instance (never clobber a
+        // newer claimant). Consumers prefer WaveManager.Instance, falling back to a
+        // Find when Instance is null (pre-Awake / between scene loads) for safety.
+        public static WaveManager Instance { get; private set; }
+
+        /// <summary>
+        /// Claims <see cref="Instance"/> per the "active-scene wins" rule above.
+        /// Idempotent + safe to call from both Awake and OnEnable (a scene becoming
+        /// active after load re-asserts the claim on the next enable).
+        /// </summary>
+        private void ClaimInstanceIfCanonical()
+        {
+            bool inActiveScene = gameObject.scene.IsValid()
+                                 && gameObject.scene == SceneManager.GetActiveScene();
+            if (Instance == null || inActiveScene)
+            {
+                if (Instance != this)
+                    FlowTrace.Step("Wave", $"WaveManager.Instance claimed by '{name}' in scene '{gameObject.scene.name}' (active={inActiveScene}).");
+                Instance = this;
+            }
+        }
+
+        private void Awake()  => ClaimInstanceIfCanonical();
+        private void OnEnable() => ClaimInstanceIfCanonical();
+
+        private void OnDestroy()
+        {
+            // Only relinquish if we still hold it — never clobber a newer claimant.
+            if (Instance == this) Instance = null;
+        }
+
         // =====================================================================
         //  Lifecycle
         // =====================================================================
@@ -505,17 +556,42 @@ namespace DeNelle.Village
 
             using (FlowTrace.Measure("Wave", "wave data load", warnAboveMs: 2000f))
             {
+                // LOAD-GUARD (layer 3): a faulted/null load must NOT escape this async
+                // (it would never reach EnterCountdown and the loop would silently stay
+                // at Idle). We catch, FlowTrace.Fail, and LEAVE the cache field null so
+                // the null-check below forces _phase=Idle — which RetryTillActive then
+                // re-attempts (re-running these loads), so a transient fault self-heals
+                // instead of permanently stalling. A successful load caches and is never
+                // re-fetched.
                 if (_schedule == null)
                 {
                     FlowTrace.Step("Wave", "BeginLoop awaiting LoadWavesAsync…");
-                    _schedule = await WaveDataLoader.LoadWavesAsync();
-                    FlowTrace.Step("Wave", $"BeginLoop LoadWavesAsync returned — waves loaded: {_schedule?.Waves?.Count ?? -1}");
+                    try
+                    {
+                        _schedule = await WaveDataLoader.LoadWavesAsync();
+                        FlowTrace.Step("Wave", $"BeginLoop LoadWavesAsync returned — waves loaded: {_schedule?.Waves?.Count ?? -1}");
+                    }
+                    catch (Exception e)
+                    {
+                        _schedule = null;
+                        FlowTrace.Fail("Wave", $"LoadWavesAsync threw: {e.Message} — leaving schedule null for retry");
+                        Debug.LogError($"[WaveManager] LoadWavesAsync threw: {e}");
+                    }
                 }
                 if (_enemyCatalog == null)
                 {
                     FlowTrace.Step("Wave", "BeginLoop awaiting LoadEnemiesAsync…");
-                    _enemyCatalog = await WaveDataLoader.LoadEnemiesAsync();
-                    FlowTrace.Step("Wave", $"BeginLoop LoadEnemiesAsync returned — enemies loaded: {_enemyCatalog?.Enemies?.Count ?? -1}");
+                    try
+                    {
+                        _enemyCatalog = await WaveDataLoader.LoadEnemiesAsync();
+                        FlowTrace.Step("Wave", $"BeginLoop LoadEnemiesAsync returned — enemies loaded: {_enemyCatalog?.Enemies?.Count ?? -1}");
+                    }
+                    catch (Exception e)
+                    {
+                        _enemyCatalog = null;
+                        FlowTrace.Fail("Wave", $"LoadEnemiesAsync threw: {e.Message} — leaving catalog null for retry");
+                        Debug.LogError($"[WaveManager] LoadEnemiesAsync threw: {e}");
+                    }
                 }
             }
 
@@ -531,6 +607,91 @@ namespace DeNelle.Village
             EnterCountdown(_startWave);
             FlowTrace.Step("Wave", $"BeginLoop EXIT — phase={_phase} countdownRemaining={_countdownRemaining:F2}s");
             Debug.Log($"[WaveManager] Loop armed — wave {_startWave}, countdown {_countdownRemaining:F1}s.");
+        }
+
+        // ── Robust start (TriggerWave-timeout RCA, layers 2 + 3) ──────────────
+        //
+        // A wave kickoff goes through the async BeginLoop(): it awaits the
+        // WaveDataLoader loads, then EnterCountdown moves the phase off Idle. Two
+        // things could leave the loop stranded at Idle and surface as a "wave never
+        // started" timeout: (a) BeginLoop throws mid-flight (a load faults), or
+        // (b) a transient null load forces _phase back to Idle. Both are now caught
+        // and RETRIED a bounded number of times.
+        //
+        // GuardedKickoff wraps the start in try/catch (no silent failure — §12) and
+        // arms RetryTillActive, a capped coroutine that re-fires the start only if
+        // the phase has NOT left Idle within a short window. The NO-DOUBLE-START
+        // guard: it re-fires ONLY from Idle (Countdown/Active/Breached/Complete/
+        // Defeated all mean a wave already took, so it stops) — a real player's wave
+        // that started normally is never re-kicked or stacked.
+
+        private const int   StartRetryCap      = 3;     // bounded — never infinite
+        private const float StartRetryWindow   = 1.5f;  // seconds to wait for Idle→off before a retry
+        private Coroutine   _retryRoutine;
+
+        /// <summary>
+        /// Fires BeginLoop() guarded by try/catch and arms the retry watchdog.
+        /// Used by the player "Defend!" path and the bot/jump path so a faulted or
+        /// stalled start self-heals instead of stranding the loop at Idle.
+        /// </summary>
+        private void GuardedKickoff(string source)
+        {
+            try
+            {
+                FlowTrace.Step("Wave", $"GuardedKickoff ({source}) — BeginLoop().Forget() phase={_phase}");
+                BeginLoop().Forget();
+            }
+            catch (Exception e)
+            {
+                FlowTrace.Fail("Wave", $"wave start threw ({source}): {e.Message}");
+                Debug.LogError($"[WaveManager] Wave start threw ({source}): {e}");
+            }
+
+            // Arm the watchdog (only one at a time). isActiveAndEnabled guards a
+            // StartCoroutine on a disabled manager (e.g. mid scene-teardown).
+            if (isActiveAndEnabled)
+            {
+                if (_retryRoutine != null) StopCoroutine(_retryRoutine);
+                _retryRoutine = StartCoroutine(RetryTillActive(source));
+            }
+        }
+
+        /// <summary>
+        /// Watchdog: if the phase is still Idle after <see cref="StartRetryWindow"/>,
+        /// re-fire BeginLoop — up to <see cref="StartRetryCap"/> times, yielding
+        /// between attempts (NEVER a busy/infinite loop). Re-fires ONLY from Idle so a
+        /// wave that already started (any non-Idle phase) is never double-started; a
+        /// transient null load that bounced the phase back to Idle gets another go,
+        /// which also re-attempts the WaveDataLoader loads (load-guard, layer 3).
+        /// </summary>
+        private IEnumerator RetryTillActive(string source)
+        {
+            for (int attempt = 1; attempt <= StartRetryCap; attempt++)
+            {
+                float t0 = Time.realtimeSinceStartup;
+                while (Time.realtimeSinceStartup - t0 < StartRetryWindow)
+                {
+                    // Left Idle → a wave took. Done — do NOT re-fire (no double-start).
+                    if (_phase != WavePhase.Idle) { _retryRoutine = null; yield break; }
+                    yield return null;
+                }
+
+                // Still Idle after the window — only Idle is re-firable.
+                if (_phase != WavePhase.Idle) { _retryRoutine = null; yield break; }
+
+                FlowTrace.Warn("Wave", $"RetryTillActive ({source}) — phase still Idle after {StartRetryWindow:F1}s, retry {attempt}/{StartRetryCap}");
+                Debug.LogWarning($"[WaveManager] Wave start did not leave Idle — retry {attempt}/{StartRetryCap} ({source}).");
+                try { BeginLoop().Forget(); }
+                catch (Exception e)
+                {
+                    FlowTrace.Fail("Wave", $"wave start retry {attempt} threw ({source}): {e.Message}");
+                    Debug.LogError($"[WaveManager] Wave start retry {attempt} threw ({source}): {e}");
+                }
+            }
+
+            if (_phase == WavePhase.Idle)
+                FlowTrace.Fail("Wave", $"RetryTillActive ({source}) — phase STILL Idle after {StartRetryCap} retries; giving up.");
+            _retryRoutine = null;
         }
 
         /// <summary>
@@ -673,7 +834,7 @@ namespace DeNelle.Village
                 case WavePhase.Complete:
                 default:
                     Debug.Log("[WaveManager] ForceBeginNextWave kicking the wave loop from " + _phase);
-                    BeginLoop().Forget();
+                    GuardedKickoff("ForceBeginNextWave");
                     break;
             }
         }
@@ -701,9 +862,9 @@ namespace DeNelle.Village
                     Debug.Log("[WaveManager] ForceSpawnNextWaveNow during active wave — ignored.");
                     break;
                 default: // Idle / Complete — kick the loop but zero the countdown so it spawns now.
-                    FlowTrace.Step("Wave", $"ForceSpawnNextWaveNow: from {_phase} — setting _forceSpawnNow=true + BeginLoop().Forget() (fire-and-forget async)");
+                    FlowTrace.Step("Wave", $"ForceSpawnNextWaveNow: from {_phase} — setting _forceSpawnNow=true + GuardedKickoff (try/catch + retry-till-active)");
                     _forceSpawnNow = true;
-                    BeginLoop().Forget();
+                    GuardedKickoff("ForceSpawnNextWaveNow");
                     break;
             }
         }

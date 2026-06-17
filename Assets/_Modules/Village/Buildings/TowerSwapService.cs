@@ -83,7 +83,8 @@ namespace DeNelle.Village
         private void OnEnable()
         {
             Tower.AnyLongPressed += OnTowerLongPressed;
-            _waveManager = FindObjectOfType<WaveManager>();
+            // Prefer the canonical singleton (active-scene WaveManager); fall back to Find.
+            _waveManager = WaveManager.Instance ?? FindObjectOfType<WaveManager>();
             if (_waveManager != null)
                 _waveManager.OnWaveCleared.AddListener(OnWaveCleared);
 
