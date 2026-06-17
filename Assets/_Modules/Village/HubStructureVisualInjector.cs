@@ -43,6 +43,9 @@ namespace DeNelle.Village
             public float  yawDeg;      // Y rotation to correct a wrong-facing Tripo FBX (convention: 90)
             public float  pitchDeg;    // X rotation — when a model imports lying down (default 0)
             public float  rollDeg;     // Z rotation — rarely needed (default 0)
+            public float  posY;        // vertical nudge after seat-on-ground (default 0; e.g. -0.6 to sink it)
+            public string texPath;     // OPTIONAL Resources texture to force onto the model when its
+                                       // embedded material didn't bind one (renders colorless). Default null.
         }
 
         // ── THE SWAP TABLE — add a row per lightweight structure ──────────────────
@@ -53,7 +56,7 @@ namespace DeNelle.Village
             // automatically by SkinOptions.Structure (FixTripoMaterials). Keep new Tripo rows at yaw 90.
             // Trade convention: forge = WEAPONS (Blacksmith), armorer = ARMOR (Forge_Armor), store = Market.
             new Swap { bakedName = "EchoHollow_Pets_RoamingArea",   modelPath = "Structures/PetHouse2",    sizeM = 7f,  yawDeg = 90f },
-            new Swap { bakedName = "ArcaneTower_MagicUpgrades",     modelPath = "Structures/arcane tower", sizeM = 12f, yawDeg = 90f },
+            new Swap { bakedName = "ArcaneTower_MagicUpgrades",     modelPath = "Structures/arcane tower", sizeM = 12f, yawDeg = 0f,   pitchDeg = -90f, posY = -0.6f, texPath = "Structures/arcane tower/arcane tower" },
             new Swap { bakedName = "Blacksmith_Weapons_Storefront", modelPath = "Structures/Forge",        sizeM = 7f,  yawDeg = 180f, pitchDeg = 90f },
             new Swap { bakedName = "Forge_Armor_Storefront",        modelPath = "Structures/armorer",      sizeM = 7f,  yawDeg = 180f, pitchDeg = 90f },
             new Swap { bakedName = "Marketplace_Monetization",      modelPath = "Structures/store",        sizeM = 8f,  yawDeg = 90f },
@@ -112,6 +115,35 @@ namespace DeNelle.Village
             }
 
             vis.name = marker;
+            if (s.posY != 0f)
+            {
+                var lp = vis.transform.localPosition;
+                lp.y += s.posY;
+                vis.transform.localPosition = lp;
+            }
+            // Escape hatch: force a texture when the model's embedded material didn't bind one
+            // (renders colorless). The Tripo fixer reads the source material's _MainTex/_BaseMap;
+            // a model whose FBX material lost that link (e.g. the arcane tower) needs it forced.
+            if (!string.IsNullOrEmpty(s.texPath))
+            {
+                var tex = Resources.Load<Texture2D>(s.texPath);
+                if (tex != null)
+                {
+                    foreach (var r in vis.GetComponentsInChildren<Renderer>(true))
+                    {
+                        if (r == null) continue;
+                        var mats = r.materials;   // instance mats — safe to retint a one-off building
+                        foreach (var m in mats)
+                        {
+                            if (m == null) continue;
+                            if (m.HasProperty("_BaseMap"))   m.SetTexture("_BaseMap", tex);
+                            if (m.HasProperty("_MainTex"))   m.SetTexture("_MainTex", tex);
+                            if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", Color.white);
+                        }
+                    }
+                }
+                else Debug.LogWarning("[HubStructureVisualInjector] texPath '" + s.texPath + "' not found for " + s.bakedName + ".");
+            }
             Debug.Log("[HubStructureVisualInjector] " + s.bakedName + " re-skinned to " + s.modelPath + ".");
         }
 
