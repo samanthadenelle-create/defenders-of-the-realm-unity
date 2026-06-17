@@ -37,6 +37,7 @@ using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.UIElements;
 using DeNelle.Core;
+using DeNelle.Core.UI;
 
 namespace DeNelle.Settings
 {
@@ -131,8 +132,18 @@ namespace DeNelle.Settings
             // Legacy Input Manager (the project's active input handler). On
             // keyboard-less hardware (a phone) the Escape key never fires, so
             // touch hardware uses the HUD pause button instead.
-            if (Input.GetKeyDown(KeyCode.Escape))
-                TogglePause();
+            if (!Input.GetKeyDown(KeyCode.Escape)) return;
+
+            // WO-437: ONE owner for ESC. If a registered modal panel is open, ESC
+            // closes it (and does NOT also toggle pause — no double-fire). Otherwise
+            // ESC toggles pause. This replaces the per-panel ESC polling that raced.
+            if (!_paused && PanelManager.AnyOpen)
+            {
+                PanelManager.CloseOpen();
+                return;
+            }
+
+            TogglePause();
         }
 
         /// <summary>

@@ -45,11 +45,19 @@ namespace DeNelle.Village.Hero
         private TMPro.TextMeshProUGUI _statusText;
         private bool _subscribed;
 
+        // WO-437: this panel used to bypass the modal arbiter (open via backdrop only),
+        // so it could stack on top of another panel AND open mid-battle. Register a
+        // PanelHandle so it routes through PanelManager: one-panel-at-a-time + battle-lock.
+        private PanelHandle _handle;
+
         // ── Public API ──────────────────────────────────────────────────────────
 
         public void Open()
         {
             Close();
+
+            if (_handle == null)
+                _handle = PanelManager.Register("Rumor Board", Close, () => _ui != null);
 
             _ui = new GameObject("RumorBoardPanelUI");
             _ui.transform.SetParent(null, false);
@@ -121,6 +129,12 @@ namespace DeNelle.Village.Hero
             }
 
             Repaint();
+
+            // Route through the modal arbiter: closes any other open panel, and the
+            // WO-437 battle-lock rejects this open (and tears the UI back down) if a
+            // battle is active. If rejected, _ui is already null here.
+            if (!PanelManager.NotifyOpened(_handle)) return;
+
             Debug.Log("[RumorBoardPanel] Opened.");
         }
 
@@ -134,6 +148,7 @@ namespace DeNelle.Village.Hero
             _ui = null;
             _contentRoot = null;
             _statusText = null;
+            PanelManager.NotifyClosed(_handle);
         }
 
         private void OnDestroy()

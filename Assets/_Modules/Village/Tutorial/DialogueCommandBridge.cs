@@ -30,6 +30,7 @@ using System;
 using System.Collections;
 using Cysharp.Threading.Tasks;
 using DeNelle.Core;
+using DeNelle.Core.Combat;
 using DeNelle.Core.Diagnostics;
 using DeNelle.Core.Quests;
 using DeNelle.Core.State;
@@ -860,8 +861,21 @@ namespace DeNelle.Village
         // ── Vendor / station UI verbs (consolidated from the dead NPCCommandBridge) ──
         // Each opens the relevant code-built panel, self-healing a host if none exists
         // (the panels build their own Canvas). Behaviour identical to the old bridge.
+        // WO-437: an NPC/Yarn verb must NOT pop a gameplay panel mid-battle. Each
+        // panel-open verb checks this first and no-ops (skips the find-or-spawn-and-open)
+        // while an ATB/Arena battle is active. The dialogue's own <<stop>> still ends the
+        // conversation cleanly; we just don't surface the panel.
+        private static bool PanelOpenBlockedByBattle(string verb)
+        {
+            if (!BattleLock.IsInBattle()) return false;
+            FlowTrace.Warn("Input", "battle-lock: Yarn verb '" + verb + "' skipped (in battle)");
+            return true;
+        }
+
         private IEnumerator CmdOpenShop(string vendor)
         {
+            if (PanelOpenBlockedByBattle("OpenShop")) yield break;
+
             // Yarn bare command-arg trap: the StructureMenu node fires <<OpenShop $structureId>>,
             // but a bare command-arg does NOT interpolate in this Yarn build — `vendor` arrives as
             // the LITERAL "$structureId" (the shop then read that as the vendor and showed generic
@@ -893,6 +907,7 @@ namespace DeNelle.Village
         // .yarn node's <<stop>> after the verb ends the dialogue; the command must NOT call Stop().
         private IEnumerator CmdOpenUpgrade(string stationType)
         {
+            if (PanelOpenBlockedByBattle("OpenUpgrade")) yield break;
             Debug.Log($"[DialogueCommandBridge] OpenUpgrade: {stationType}");
             var panel = FindObjectOfType<DeNelle.Village.Buildings.Progression.BuildingUpgradePanel>();
             if (panel == null)
@@ -904,6 +919,7 @@ namespace DeNelle.Village
 
         private IEnumerator CmdOpenCraft(string context)
         {
+            if (PanelOpenBlockedByBattle("OpenCraft")) yield break;
             Debug.Log($"[DialogueCommandBridge] OpenCraft: {context}");
             var panel = FindObjectOfType<DeNelle.Village.Crafting.VillageCraftingPanel>();
             if (panel == null)
@@ -914,6 +930,7 @@ namespace DeNelle.Village
 
         private IEnumerator CmdOpenEquip()
         {
+            if (PanelOpenBlockedByBattle("OpenEquip")) yield break;
             Debug.Log("[DialogueCommandBridge] OpenEquip");
             var panel = FindObjectOfType<DeNelle.Village.Hero.EquipmentPanel>();
             if (panel == null)
@@ -924,6 +941,7 @@ namespace DeNelle.Village
 
         private IEnumerator CmdOpenArena()
         {
+            if (PanelOpenBlockedByBattle("OpenArena")) yield break;
             Debug.Log("[DialogueCommandBridge] OpenArena");
             var panel = FindObjectOfType<DeNelle.Village.Arena.ArenaPanel>();
             if (panel == null)
@@ -942,6 +960,7 @@ namespace DeNelle.Village
         /// command and the WO-438 node-start hook so both drive the same surface.</summary>
         private void OpenRumorBoard()
         {
+            if (PanelOpenBlockedByBattle("OpenRumorBoard")) return;
             Debug.Log("[DialogueCommandBridge] OpenRumorBoard");
             var panel = FindObjectOfType<DeNelle.Village.Hero.RumorBoardPanel>();
             if (panel == null)
@@ -964,7 +983,11 @@ namespace DeNelle.Village
 
         // Barracks troop-training (WO-453). Both delegate to the single
         // TroopDialogueCommands home so the army-seam wiring lives in one place.
-        private void CmdShowTrainingUI() => TroopDialogueCommands.ShowTrainingUI();
+        private void CmdShowTrainingUI()
+        {
+            if (PanelOpenBlockedByBattle("ShowTrainingUI")) return;
+            TroopDialogueCommands.ShowTrainingUI();
+        }
         private void CmdStartTraining(string troopId, int qty) => TroopDialogueCommands.StartTraining(troopId, qty);
 
         private void CmdSpawnNpc(string who, string atWord, string where) =>

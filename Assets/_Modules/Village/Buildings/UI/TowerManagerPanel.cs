@@ -71,7 +71,12 @@ namespace DeNelle.Village.UI
 
         private void Update()
         {
-            if (Input.GetKeyDown(KeyCode.M)) Toggle();
+            // WO-437: the global 'M' open is gated to the editor only (and blocked during
+            // battle). In a build, Tower management opens via the BuildMenu "Manage Towers"
+            // button (a build-mode activity) — not a stray global hotkey.
+#if UNITY_EDITOR
+            if (Input.GetKeyDown(KeyCode.M) && !DeNelle.Core.Combat.BattleLock.IsInBattle()) Toggle();
+#endif
             if (_visible && Time.unscaledTime >= _nextRefresh) { _nextRefresh = Time.unscaledTime + 0.5f; Refresh(); }
         }
 

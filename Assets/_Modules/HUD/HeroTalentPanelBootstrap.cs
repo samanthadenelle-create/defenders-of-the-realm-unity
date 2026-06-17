@@ -91,14 +91,9 @@ namespace DeNelle.HUD
             _panel = GetComponent<HeroTalentPanel>();
         }
 
-        private void Update()
-        {
-            // Legacy input manager so DeNelle.HUD does not need a reference
-            // to Unity.InputSystem (AdminOverlay uses the same approach).
-            if (_panel != null && Input.GetKeyDown(KeyCode.T))
-            {
-                _panel.Toggle();
-            }
-        }
+        // WO-437: the global 'T' hotkey is REMOVED. Hero Talents opens only via its
+        // world interactable (Arcane Tower -> PanelRouter.Open(PanelId.HeroTalents)).
+        // The stray global panel hotkeys were the "13 windows" root; the panel itself
+        // is unchanged and still gated by PanelManager's battle-lock.
     }
 }

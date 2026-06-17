@@ -52,6 +52,12 @@ namespace DeNelle.Village.Arena
         private TMPro.TextMeshProUGUI _headerRecord;
         private bool _subscribed;
 
+        // WO-437: the Arena entry panel used to bypass the modal arbiter (open via
+        // backdrop only). Register a PanelHandle so it routes through PanelManager:
+        // one-panel-at-a-time + battle-lock (can't queue a new raid mid-fight). The
+        // raid RESULT screen is driven by HandleRaidEnded (not Open), so it is unaffected.
+        private PanelHandle _handle;
+
         // ── Sleek palette (sourced from ElarionUi — mirrors HudTheme's recipe) ──
         // Village can reference Core.UI but NOT DeNelle.HUD, so we rebuild the same
         // dark-glass look from the canonical colours rather than calling HudTheme.
@@ -75,9 +81,17 @@ namespace DeNelle.Village.Arena
         {
             try
             {
+                if (_handle == null)
+                    _handle = PanelManager.Register("Arena", Close, () => _ui != null);
+
                 if (_ui == null) BuildRoot();
                 Subscribe();
                 ShowEntry();
+
+                // Route through the modal arbiter: closes any other open panel, and the
+                // WO-437 battle-lock rejects this open (tearing the UI back down) if a
+                // battle is active. If rejected, _ui is already null here.
+                if (!PanelManager.NotifyOpened(_handle)) return;
             }
             catch (System.Exception e)
             {
@@ -93,6 +107,7 @@ namespace DeNelle.Village.Arena
             _ui = null;
             _entryRoot = _resultRoot = null;
             _headerSkr = _headerRecord = null;
+            PanelManager.NotifyClosed(_handle);
         }
 
         private void OnDestroy() { Unsubscribe(); if (_ui != null) Destroy(_ui); }
@@ -339,9 +354,14 @@ namespace DeNelle.Village.Arena
         // ====================================================================
         private void HandleRaidEnded(ArenaOpponentDef opp, ArenaResult result, long skrDelta)
         {
+            if (_handle == null)
+                _handle = PanelManager.Register("Arena", Close, () => _ui != null);
             if (_ui == null) BuildRoot();
             _ui.SetActive(true);
             ShowResult(opp, result, skrDelta);
+            // The raid just ended (RaidInProgress is already false), so the battle-lock
+            // permits this result screen; register it as the modal owner.
+            PanelManager.NotifyOpened(_handle);
         }
 
         private void ShowResult(ArenaOpponentDef opp, ArenaResult result, long skrDelta)

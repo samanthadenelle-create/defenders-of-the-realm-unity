@@ -118,8 +118,9 @@ namespace DeNelle.HUD
 
         private void Update()
         {
-            if (Input.GetKeyDown(ToggleKey))
-                ToggleOverlay();
+            // WO-437: the global 'C' hotkey is REMOVED. The Cosmetic Shop opens only via
+            // its world interactable (Marketplace -> PanelRouter.Open(PanelId.CosmeticShop)).
+            // The panel is unchanged + still battle-locked by PanelManager.
 
             if (_toast != null && _toastUntil > 0f && Time.unscaledTime > _toastUntil)
             {

@@ -32,6 +32,7 @@ using UnityEngine;
 using UnityEngine.AI;
 using DeNelle.Core;
 using DeNelle.Core.Audio;
+using DeNelle.Core.Combat;
 using DeNelle.Core.State;
 using DeNelle.Village.World.Camps;
 
@@ -114,13 +115,24 @@ namespace DeNelle.Village.Arena
         private long _stakedWager;
         private bool _resolved;
 
+        // WO-437: feed the single battle-active source of truth so the input gate
+        // (PanelManager / hotkeys / Yarn verbs) locks panels during an Arena raid.
+        private Func<bool> _battleProbe;
+
         private void Awake()
         {
             if (_instance != null && _instance != this) { Destroy(this); return; }
             _instance = this;
+
+            _battleProbe = () => RaidInProgress;
+            BattleLock.RegisterProbe(_battleProbe);
         }
 
-        private void OnDestroy() { if (_instance == this) _instance = null; }
+        private void OnDestroy()
+        {
+            BattleLock.UnregisterProbe(_battleProbe);
+            if (_instance == this) _instance = null;
+        }
 
         /// <summary>
         /// Stake the wager and start the raid against <paramref name="opponent"/>.

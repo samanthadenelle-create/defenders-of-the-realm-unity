@@ -105,14 +105,15 @@ namespace DeNelle.Village.Buildings.Progression
 
         private void Update()
         {
-            // DEV-ONLY shortcut now. The proximity-F open + shared-button request were
-            // REMOVED: BuildingInteractable is the single interaction authority and routes
-            // resource buildings to the parameterized Yarn hook (DialogueService.PlayStructure).
-            // This legacy watcher used to hijack F near farm/lumbermill/forge (mobile priority
-            // 10) and open the old multi-building panel, so only Pet House (not a resource
-            // building) reached the new hook. U still opens the dev panel for quick balance checks.
-            if (Input.GetKeyDown(KeyCode.U) && _panel != null)
+            // WO-437: the global 'U' open is gated to the editor only (and blocked during
+            // battle). In a build, Building Upgrade opens ONLY via its world interactable
+            // (resource buildings -> PanelRouter.Open(PanelId.BuildingUpgrade)); the stray
+            // global hotkey was the "13 windows" root. Panel battle-locked by PanelManager.
+#if UNITY_EDITOR
+            if (Input.GetKeyDown(KeyCode.U) && _panel != null &&
+                !DeNelle.Core.Combat.BattleLock.IsInBattle())
                 _panel.Toggle();
+#endif
 
             MobileInteractButton.Release(this);   // never request the shared button
         }

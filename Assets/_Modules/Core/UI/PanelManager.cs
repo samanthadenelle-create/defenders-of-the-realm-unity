@@ -25,6 +25,8 @@
 // =============================================================================
 
 using System;
+using DeNelle.Core.Combat;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Core.UI
 {
@@ -40,11 +42,16 @@ namespace DeNelle.Core.UI
         internal readonly Func<bool> IsOpen;
         public readonly string Name;
 
-        internal PanelHandle(string name, Action close, Func<bool> isOpen)
+        /// <summary>WO-437: panels that may open DURING an active battle (Battle HUD,
+        /// Pause). All other (gameplay) panels are rejected by the battle-lock gate.</summary>
+        internal readonly bool BattleAllowed;
+
+        internal PanelHandle(string name, Action close, Func<bool> isOpen, bool battleAllowed)
         {
             Name = name ?? "Panel";
             Close = close;
             IsOpen = isOpen;
+            BattleAllowed = battleAllowed;
         }
     }
 
@@ -74,7 +81,18 @@ namespace DeNelle.Core.UI
         /// </summary>
         public static PanelHandle Register(string name, Action close, Func<bool> isOpen)
         {
-            return new PanelHandle(name, close, isOpen);
+            return new PanelHandle(name, close, isOpen, battleAllowed: false);
+        }
+
+        /// <summary>
+        /// WO-437: register a panel that is ALLOWED to open during an active battle
+        /// (Battle HUD, Pause). Every other panel uses the plain
+        /// <see cref="Register(string, Action, Func{bool})"/> and is rejected by the
+        /// battle-lock gate in <see cref="NotifyOpened"/> while a battle is in progress.
+        /// </summary>
+        public static PanelHandle RegisterBattleAllowed(string name, Action close, Func<bool> isOpen)
+        {
+            return new PanelHandle(name, close, isOpen, battleAllowed: true);
         }
 
         /// <summary>
@@ -82,10 +100,27 @@ namespace DeNelle.Core.UI
         /// open panel (if any and different) so only one panel is ever visible. No-op
         /// if the same handle is already the open one.
         /// </summary>
-        public static void NotifyOpened(PanelHandle handle)
+        public static bool NotifyOpened(PanelHandle handle)
         {
-            if (handle == null) return;
-            if (ReferenceEquals(_open, handle)) return;
+            if (handle == null) return false;
+            if (ReferenceEquals(_open, handle)) return true;
+
+            // WO-437 battle-lock: during an active battle (ATB combat / Arena raid)
+            // only battle-allowed panels (Battle HUD, Pause) may open. Every gameplay
+            // panel is REJECTED here — the one choke point covers all arbiter panels.
+            // The caller should close itself when this returns false.
+            if (!handle.BattleAllowed && BattleLock.IsInBattle())
+            {
+                FlowTrace.Warn("Input", "battle-lock: rejected open of '" + handle.Name + "' (in battle)");
+                var blocked = handle;
+                try { blocked.Close?.Invoke(); }
+                catch (Exception ex)
+                {
+                    UnityEngine.Debug.LogWarning(
+                        "[PanelManager] battle-lock close of '" + blocked.Name + "' threw: " + ex.Message);
+                }
+                return false;
+            }
 
             var previous = _open;
             _open = handle; // set first so a re-entrant probe sees the new owner
@@ -101,6 +136,7 @@ namespace DeNelle.Core.UI
             }
 
             OpenStateChanged?.Invoke();
+            return true;
         }
 
         /// <summary>

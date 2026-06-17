@@ -75,8 +75,14 @@ namespace DeNelle.HUD
 
         private void Update()
         {
-            if (Input.GetKeyDown(KeyCode.L) && !IsTextFieldFocused())
+            // WO-437: the global 'L' open is gated to the editor only (and blocked during
+            // battle) so it no longer spams the "13 windows" in a build. The text-field
+            // guard stays so typing 'l' in a field never toggles the panel.
+#if UNITY_EDITOR
+            if (Input.GetKeyDown(KeyCode.L) && !IsTextFieldFocused() &&
+                !DeNelle.Core.Combat.BattleLock.IsInBattle())
                 Toggle();
+#endif
         }
 
         public void Toggle() => SetVisible(!_visible);

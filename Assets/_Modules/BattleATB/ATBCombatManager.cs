@@ -19,6 +19,7 @@
 // "idle pressure" visual (WO-93 requirement).
 // =============================================================================
 
+using DeNelle.Core.Combat;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.SceneManagement;
@@ -92,6 +93,11 @@ namespace DeNelle.BattleATB
 
         // ── Lifecycle ─────────────────────────────────────────────────────────
 
+        // WO-437: probe the battle-active predicate so the single source of truth
+        // (DeNelle.Core.Combat.BattleLock) is TRUE while an ATB combat session runs.
+        // The gate (PanelManager, hotkeys, Yarn verbs) reads BattleLock.IsInBattle().
+        private System.Func<bool> _battleProbe;
+
         private void Awake()
         {
             if (Instance != null && Instance != this)
@@ -100,10 +106,14 @@ namespace DeNelle.BattleATB
                 return;
             }
             Instance = this;
+
+            _battleProbe = () => _combatActive;
+            BattleLock.RegisterProbe(_battleProbe);
         }
 
         private void OnDestroy()
         {
+            BattleLock.UnregisterProbe(_battleProbe);
             if (Instance == this) Instance = null;
         }
 

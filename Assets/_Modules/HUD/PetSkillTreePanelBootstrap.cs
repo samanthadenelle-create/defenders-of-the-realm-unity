@@ -92,27 +92,10 @@ namespace DeNelle.HUD
             _panel = GetComponent<PetSkillTreePanel>();
         }
 
-        private void Update()
-        {
-            if (_panel == null) return;
-            // Plain P toggles. Guard against typing in a text field — if any
-            // focused TextField exists in our document, swallow the keystroke.
-            if (Input.GetKeyDown(KeyCode.P) && !IsTypingInUiText())
-            {
-                _panel.Toggle();
-            }
-            else if (Input.GetKeyDown(KeyCode.Escape) && _panel.IsOpen)
-            {
-                _panel.Close();
-            }
-        }
-
-        private bool IsTypingInUiText()
-        {
-            var doc = GetComponent<UIDocument>();
-            if (doc == null || doc.rootVisualElement == null) return false;
-            var focused = doc.rootVisualElement.focusController?.focusedElement;
-            return focused is TextField;
-        }
+        // WO-437: the global 'P' hotkey (and the per-panel ESC polling that raced the
+        // central handler) are REMOVED. Pet Skills opens only via its world interactable
+        // (Pet House -> PanelRouter.Open(PanelId.PetSkillTree)); ESC is owned centrally
+        // by PauseController (closes the top modal, else pauses). The panel itself is
+        // unchanged and still gated by PanelManager's battle-lock.
     }
 }

@@ -67,11 +67,16 @@ namespace DeNelle.HUD
 
         private void Update()
         {
-            // Don't intercept Y while the user is typing into a TextField.
-            if (Input.GetKeyDown(KeyCode.Y) && !IsTextFieldFocused())
+            // WO-437: the global 'Y' open is gated to the editor only (and blocked during
+            // battle) so it no longer spams the "13 windows" in a build. The text-field
+            // guard stays so typing 'y' in a field never toggles the panel.
+#if UNITY_EDITOR
+            if (Input.GetKeyDown(KeyCode.Y) && !IsTextFieldFocused() &&
+                !DeNelle.Core.Combat.BattleLock.IsInBattle())
             {
                 Toggle();
             }
+#endif
         }
 
         public void Toggle() => SetVisible(!_visible);

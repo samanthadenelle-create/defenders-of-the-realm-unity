@@ -100,13 +100,15 @@ namespace DeNelle.Village.Crafting
 
         private void Update()
         {
-            // DEV-ONLY now. The Workshop proximity-F open + shared-button request were
-            // REMOVED — BuildingInteractable is the single interaction authority and routes
-            // the Workshop to the parameterized Yarn hook. This watcher used to hijack F at
-            // the Workshop (priority 10) and open the Crafting panel (which has no content
-            // yet → "can't exit"). K still toggles the dev panel.
-            if (Input.GetKeyDown(KeyCode.K) && _panel != null)
+            // WO-437: the global 'K' open is gated to the editor only (and blocked during
+            // battle). In a build, Crafting opens ONLY via its world interactable (Workshop
+            // -> PanelRouter.Open(PanelId.Crafting)); the stray global hotkey was the
+            // "13 windows" root. The panel is unchanged + battle-locked by PanelManager.
+#if UNITY_EDITOR
+            if (Input.GetKeyDown(KeyCode.K) && _panel != null &&
+                !DeNelle.Core.Combat.BattleLock.IsInBattle())
                 _panel.Toggle();
+#endif
 
             MobileInteractButton.Release(this);   // never request the shared button
         }
