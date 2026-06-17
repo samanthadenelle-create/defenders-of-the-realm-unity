@@ -50,6 +50,9 @@ namespace DeNelle.Village
                                        // seat (for a model that belongs at a specific spot); false -> posY is a nudge.
             public string texPath;     // OPTIONAL Resources texture to force onto the model when its
                                        // embedded material didn't bind one (renders colorless). Default null.
+            public float  scaleX;      // OPTIONAL explicit (non-uniform) local scale. When scaleX>0 it
+            public float  scaleY;      // OVERRIDES the uniform sizeM fit with (scaleX,scaleY,scaleZ) —
+            public float  scaleZ;      // for a model the owner sized by hand. Default 0 -> use sizeM fit.
         }
 
         // ── THE SWAP TABLE — add a row per lightweight structure ──────────────────
@@ -59,12 +62,12 @@ namespace DeNelle.Village
             // ALL need yawDeg=90 to face the plaza, and their embedded materials are URP-fixed
             // automatically by SkinOptions.Structure (FixTripoMaterials). Keep new Tripo rows at yaw 90.
             // Trade convention: forge = WEAPONS (Blacksmith), armorer = ARMOR (Forge_Armor), store = Market.
-            new Swap { bakedName = "EchoHollow_Pets_RoamingArea",   modelPath = "Structures/PetHouse2",    sizeM = 7f,  yawDeg = 90f,  pitchDeg = -90f },
+            new Swap { bakedName = "EchoHollow_Pets_RoamingArea",   modelPath = "Structures/PetHouse2",    sizeM = 7f,  yawDeg = 180f, pitchDeg = -90f },
             new Swap { bakedName = "ArcaneTower_MagicUpgrades",     modelPath = "Structures/arcane tower", sizeM = 12f, yawDeg = 0f,   pitchDeg = -90f, posY = -0.6f, texPath = "Structures/arcane tower/arcane tower" },
             new Swap { bakedName = "Blacksmith_Weapons_Storefront", modelPath = "Structures/Forge",        sizeM = 7f,  yawDeg = 90f,  pitchDeg = -90f },
             new Swap { bakedName = "Forge_Armor_Storefront",        modelPath = "Structures/armorer",      sizeM = 7f,  yawDeg = 90f,  pitchDeg = -90f },
             new Swap { bakedName = "Marketplace_Monetization",      modelPath = "Structures/store",        sizeM = 8f,  yawDeg = 90f,  pitchDeg = -90f },
-            new Swap { bakedName = "Jeweler_Gems_Storefront",       modelPath = "Structures/jeweler",      sizeM = 7f,  yawDeg = 90f,  pitchDeg = -90f },
+            new Swap { bakedName = "Jeweler_Gems_Storefront",       modelPath = "Structures/jeweler",      sizeM = 7f,  yawDeg = 0f,   pitchDeg = -90f, rollDeg = 110.4f, scaleX = 5.4f, scaleY = 3.77f, scaleZ = 3.6f },
             new Swap { bakedName = "Lumbermill_Wood_Storefront",    modelPath = "Structures/lumbermill",   sizeM = 7f,  yawDeg = 0f,   pitchDeg = -90f, posY = 1.5f },
             new Swap { bakedName = "Windmill_Food_Storefront",      modelPath = "Structures/farm",         sizeM = 8f,  yawDeg = 90f,  pitchDeg = -90f },
             // Castle barracks = the troop-TRAINING building (existing scene prefab "CastleBarracks");
@@ -173,6 +176,8 @@ namespace DeNelle.Village
                 lp.y += s.posY;
                 vis.transform.localPosition = lp;
             }
+            if (s.scaleX > 0f)   // explicit (non-uniform) scale overrides the uniform sizeM fit
+                vis.transform.localScale = new Vector3(s.scaleX, s.scaleY, s.scaleZ);
             // Escape hatch: force a texture when the model's embedded material didn't bind one
             // (renders colorless). The Tripo fixer reads the source material's _MainTex/_BaseMap;
             // a model whose FBX material lost that link (e.g. the arcane tower) needs it forced.
