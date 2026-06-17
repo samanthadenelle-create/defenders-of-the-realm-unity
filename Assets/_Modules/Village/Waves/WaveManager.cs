@@ -36,6 +36,7 @@
 using System.Collections.Generic;
 using Cysharp.Threading.Tasks;
 using DeNelle.Core;
+using DeNelle.Core.Diagnostics;   // FlowTrace — wave-start flow instrumentation (§12)
 using DeNelle.Core.State;
 using UnityEngine;
 using UnityEngine.Events;
@@ -495,21 +496,40 @@ namespace DeNelle.Village
         /// </summary>
         public async UniTask BeginLoop()
         {
+            // §12 wave-start instrumentation (TriggerWave TIMEOUT RCA). ADDITIVE only —
+            // no logic/timing/async change. Traces every step + each await result so a
+            // headless fleet run shows EXACTLY where the start flow stalls.
+            FlowTrace.Step("Wave", $"BeginLoop ENTRY phase={_phase} forceSpawn={_forceSpawnNow} startWave={_startWave} scheduleCached={_schedule != null} catalogCached={_enemyCatalog != null}");
+
             ResolveSceneRefs();
 
-            if (_schedule == null)
-                _schedule = await WaveDataLoader.LoadWavesAsync();
-            if (_enemyCatalog == null)
-                _enemyCatalog = await WaveDataLoader.LoadEnemiesAsync();
+            using (FlowTrace.Measure("Wave", "wave data load", warnAboveMs: 2000f))
+            {
+                if (_schedule == null)
+                {
+                    FlowTrace.Step("Wave", "BeginLoop awaiting LoadWavesAsync…");
+                    _schedule = await WaveDataLoader.LoadWavesAsync();
+                    FlowTrace.Step("Wave", $"BeginLoop LoadWavesAsync returned — waves loaded: {_schedule?.Waves?.Count ?? -1}");
+                }
+                if (_enemyCatalog == null)
+                {
+                    FlowTrace.Step("Wave", "BeginLoop awaiting LoadEnemiesAsync…");
+                    _enemyCatalog = await WaveDataLoader.LoadEnemiesAsync();
+                    FlowTrace.Step("Wave", $"BeginLoop LoadEnemiesAsync returned — enemies loaded: {_enemyCatalog?.Enemies?.Count ?? -1}");
+                }
+            }
 
             if (_schedule == null || _enemyCatalog == null)
             {
+                FlowTrace.Fail("Wave", $"wave data null — loop cannot run (schedule={_schedule != null}, catalog={_enemyCatalog != null}) — phase forced to Idle");
                 Debug.LogError("[WaveManager] Wave data failed to load — the wave loop cannot run.");
                 _phase = WavePhase.Idle;
                 return;
             }
 
+            FlowTrace.Step("Wave", $"BeginLoop data OK — calling EnterCountdown(startWave={_startWave}), forceSpawn={_forceSpawnNow}");
             EnterCountdown(_startWave);
+            FlowTrace.Step("Wave", $"BeginLoop EXIT — phase={_phase} countdownRemaining={_countdownRemaining:F2}s");
             Debug.Log($"[WaveManager] Loop armed — wave {_startWave}, countdown {_countdownRemaining:F1}s.");
         }
 
@@ -561,11 +581,14 @@ namespace DeNelle.Village
         /// <summary>Enters the Prepare-Phase countdown for wave <paramref name="waveId"/>.</summary>
         private void EnterCountdown(int waveId)
         {
+            FlowTrace.Step("Wave", $"EnterCountdown(waveId={waveId}) phaseBefore={_phase} forceSpawn={_forceSpawnNow}");
+
             WaveDef wave = _schedule.Find(waveId);
             if (wave == null)
             {
                 // No such wave — the schedule is exhausted.
                 _phase = WavePhase.Complete;
+                FlowTrace.Step("Wave", $"EnterCountdown: no WaveDef for waveId={waveId} — schedule exhausted, phase->Complete");
                 Debug.Log($"[WaveManager] All {_schedule.Waves.Count} waves cleared — schedule complete.");
                 return;
             }
@@ -588,8 +611,10 @@ namespace DeNelle.Village
             // DEV/bot immediate-spawn: ForceSpawnNextWaveNow set this from Idle — zero the
             // countdown so TickCountdown() spawns the wave on the next tick (no race with the
             // async BeginLoop setting the countdown above).
+            bool zeroedByForce = _forceSpawnNow;
             if (_forceSpawnNow) { _forceSpawnNow = false; _countdownRemaining = 0f; }
             _phase = WavePhase.Countdown;
+            FlowTrace.Step("Wave", $"EnterCountdown -> phase=Countdown wave={_currentWaveId} countdown={_countdownRemaining:F2}s zeroedByForceSpawn={zeroedByForce}");
             OnCountdownTick.Invoke(_countdownRemaining);
             WaveCountdownUI.Instance?.StartCountdown(_countdownRemaining);
         }
@@ -616,6 +641,7 @@ namespace DeNelle.Village
             {
                 _countdownRemaining = 0f;
                 OnCountdownTick.Invoke(0f);
+                FlowTrace.Step("Wave", $"TickCountdown: countdown hit 0 for wave={_currentWaveId} — calling StartWave (phase Countdown->Active)");
                 StartWave(_currentWaveId);
             }
             else
@@ -632,6 +658,7 @@ namespace DeNelle.Village
         /// </summary>
         public void ForceBeginNextWave()
         {
+            FlowTrace.Step("Wave", $"ForceBeginNextWave (PLAYER 'Defend!' path) phase={_phase}");
             switch (_phase)
             {
                 case WavePhase.Countdown:
@@ -660,17 +687,21 @@ namespace DeNelle.Village
         /// </summary>
         public void ForceSpawnNextWaveNow()
         {
+            FlowTrace.Step("Wave", $"ForceSpawnNextWaveNow (BOT/jump path) phase={_phase} forceSpawn-set");
             switch (_phase)
             {
                 case WavePhase.Countdown:
+                    FlowTrace.Step("Wave", $"ForceSpawnNextWaveNow: from Countdown — zero countdown + StartWave({_currentWaveId})");
                     _countdownRemaining = 0f;
                     OnCountdownTick.Invoke(0f);
                     StartWave(_currentWaveId);
                     break;
                 case WavePhase.Active:
+                    FlowTrace.Step("Wave", "ForceSpawnNextWaveNow during active wave — ignored.");
                     Debug.Log("[WaveManager] ForceSpawnNextWaveNow during active wave — ignored.");
                     break;
                 default: // Idle / Complete — kick the loop but zero the countdown so it spawns now.
+                    FlowTrace.Step("Wave", $"ForceSpawnNextWaveNow: from {_phase} — setting _forceSpawnNow=true + BeginLoop().Forget() (fire-and-forget async)");
                     _forceSpawnNow = true;
                     BeginLoop().Forget();
                     break;
@@ -685,9 +716,10 @@ namespace DeNelle.Village
         private void StartWave(int waveId)
         {
             WaveDef wave = _schedule.Find(waveId);
-            if (wave == null) { EnterCountdown(waveId + 1); return; }
+            if (wave == null) { FlowTrace.Step("Wave", $"StartWave: no WaveDef for {waveId} — rolling to next countdown"); EnterCountdown(waveId + 1); return; }
 
             _phase = WavePhase.Active;
+            FlowTrace.Step("Wave", $"StartWave({waveId}) -> phase=Active (spawning begins)");
             _breachArmed = false;
             _breachArmTimer = 0f;
             _breachRoster.Clear();
