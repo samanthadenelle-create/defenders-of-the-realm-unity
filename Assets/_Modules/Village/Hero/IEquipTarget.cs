@@ -50,6 +50,21 @@ namespace DeNelle.Village.Hero
         /// <summary>Fractional incoming-damage reduction from the equipped armor (0f when none).</summary>
         float ArmorDefense { get; }
 
+        // ── Live vitals (WO-436) ───────────────────────────────────────────────────
+        // The wearer's CURRENT/MAX HP + mana, read live off the hero's components so the
+        // equip panel's HP/MP bars show real data (not placeholders). Pure numbers — the
+        // VM never names HeroHealth / HeroAbilities. 0/0 when the live source is missing
+        // (e.g. a companion with no health/mana component, or a fake in EditMode) so the
+        // VM degrades to an empty bar rather than throwing.
+        /// <summary>Current hit points of the wearer (0 when no live source).</summary>
+        float CurrentHealth { get; }
+        /// <summary>Maximum hit points of the wearer (0 when no live source).</summary>
+        float MaxHealth { get; }
+        /// <summary>Current mana of the wearer (0 when no live source).</summary>
+        float CurrentMana { get; }
+        /// <summary>Maximum mana of the wearer (0 when no live source).</summary>
+        float MaxMana { get; }
+
         // ── Change notification ──────────────────────────────────────────────────────
         /// <summary>
         /// Raised when this target's equipped loadout changes (mirrors GearLoadout.OnGearChanged).
@@ -77,6 +92,31 @@ namespace DeNelle.Village.Hero
         private readonly string _name;
         private readonly string _class;
 
+        // WO-436: live vitals come off the SAME hero GameObject the GearLoadout is on
+        // (HeroAbilities lazily adds GearLoadout to its own GO, and HeroHealth attaches
+        // there too — see HeroHealthBootstrap). Resolved lazily + cached; every read is
+        // null-guarded so a wearer missing either component reports 0 rather than NRE.
+        private HeroHealth _health;
+        private HeroAbilities _abilities;
+
+        private HeroHealth Health
+        {
+            get
+            {
+                if (_health == null && _loadout != null) _health = _loadout.GetComponent<HeroHealth>();
+                return _health;
+            }
+        }
+
+        private HeroAbilities Abilities
+        {
+            get
+            {
+                if (_abilities == null && _loadout != null) _abilities = _loadout.GetComponent<HeroAbilities>();
+                return _abilities;
+            }
+        }
+
         public GearLoadoutEquipTarget(GearLoadout loadout, string targetName = null, string targetClass = null)
         {
             _loadout = loadout;
@@ -102,6 +142,12 @@ namespace DeNelle.Village.Hero
 
         public float WeaponMult   => _loadout != null ? _loadout.WeaponMult : 1f;
         public float ArmorDefense => _loadout != null ? _loadout.ArmorDefense : 0f;
+
+        // WO-436: live HP/MP readouts — null-safe (0 when the component is absent).
+        public float CurrentHealth => Health != null ? Health.Hp      : 0f;
+        public float MaxHealth     => Health != null ? Health.MaxHp   : 0f;
+        public float CurrentMana   => Abilities != null ? Abilities.Mana    : 0f;
+        public float MaxMana       => Abilities != null ? Abilities.MaxMana : 0f;
 
         public void EquipWeaponById(string id) { if (_loadout != null) _loadout.EquipWeaponById(id); }
         public void EquipArmorById(string id)  { if (_loadout != null) _loadout.EquipArmorById(id); }

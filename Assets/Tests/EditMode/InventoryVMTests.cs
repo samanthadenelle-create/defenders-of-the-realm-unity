@@ -88,6 +88,10 @@ namespace DeNelle.Tests.EditMode
             public string EquippedArmorName => EquippedArmor?.name;
             public float WeaponMult => EquippedWeapon != null ? EquippedWeapon.damageMult : 1f;
             public float ArmorDefense => EquippedArmor != null ? EquippedArmor.defense : 0f;
+            public float CurrentHealth { get; set; }
+            public float MaxHealth { get; set; }
+            public float CurrentMana { get; set; }
+            public float MaxMana { get; set; }
             public int EquipWeaponCalls;
             public event Action EquipChanged;
             public void EquipWeaponById(string id) { EquipWeaponCalls++; EquippedWeapon = new WeaponDef { id = id, name = id, damageMult = 2f }; EquipChanged?.Invoke(); }

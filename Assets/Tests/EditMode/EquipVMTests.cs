@@ -67,6 +67,11 @@ namespace DeNelle.Tests.EditMode
             public string EquippedArmorName => EquippedArmor?.name;
             public float WeaponMult => EquippedWeapon != null ? EquippedWeapon.damageMult : 1f;
             public float ArmorDefense => EquippedArmor != null ? EquippedArmor.defense : 0f;
+            // WO-436: live vitals the fake can drive directly to assert the HP/MP bars.
+            public float CurrentHealth { get; set; }
+            public float MaxHealth { get; set; }
+            public float CurrentMana { get; set; }
+            public float MaxMana { get; set; }
             public int EquipWeaponCalls, EquipArmorCalls, UnequipWeaponCalls;
             public event Action EquipChanged;
             public void EquipWeaponById(string id) { EquipWeaponCalls++; EquippedWeapon = new WeaponDef { id = id, name = id, damageMult = 2f }; EquipChanged?.Invoke(); }
@@ -99,6 +104,44 @@ namespace DeNelle.Tests.EditMode
             Assert.That(vm.EquipSlots[1].SlotKey, Is.EqualTo(EquipVM.SlotChest));
             Assert.That(vm.Stats.Count, Is.EqualTo(4), "HP / MP / Damage / Defense");
             Assert.That(vm.CharacterLabel, Does.Contain("Grom"));
+        }
+
+        [Test]
+        public void hp_mp_bars_reflect_live_target_vitals()
+        {
+            var store = SeedStore();
+            var hero = new FakeEquip
+            {
+                TargetName = "Grom", TargetClass = "knight",
+                CurrentHealth = 120f, MaxHealth = 200f,
+                CurrentMana = 3f, MaxMana = 10f,
+            };
+            using var vm = new EquipVM(store, new IEquipTarget[] { hero });
+
+            // Stats order is HP / MP / Damage / Defense (BuildStats).
+            var hp = vm.Stats[0].Bar;
+            Assert.That(vm.Stats[0].Label, Is.EqualTo("HP"));
+            Assert.That(hp.Fill01, Is.EqualTo(0.6f).Within(0.0001f), "120/200");
+            Assert.That(hp.Label, Is.EqualTo("120 / 200"));
+
+            var mp = vm.Stats[1].Bar;
+            Assert.That(vm.Stats[1].Label, Is.EqualTo("MP"));
+            Assert.That(mp.Fill01, Is.EqualTo(0.3f).Within(0.0001f), "3/10");
+            Assert.That(mp.Label, Is.EqualTo("3 / 10"));
+        }
+
+        [Test]
+        public void hp_mp_bars_are_empty_when_max_is_zero()
+        {
+            var store = SeedStore();
+            // No live source (companion / unresolved hero): all vitals 0/0.
+            var hero = new FakeEquip { TargetName = "Grom", TargetClass = "knight" };
+            using var vm = new EquipVM(store, new IEquipTarget[] { hero });
+
+            Assert.That(vm.Stats[0].Bar.Fill01, Is.EqualTo(0f), "HP fill guards divide-by-zero");
+            Assert.That(vm.Stats[0].Bar.Label, Is.EqualTo("0 / 0"));
+            Assert.That(vm.Stats[1].Bar.Fill01, Is.EqualTo(0f), "MP fill guards divide-by-zero");
+            Assert.That(vm.Stats[1].Bar.Label, Is.EqualTo("0 / 0"));
         }
 
         [Test]

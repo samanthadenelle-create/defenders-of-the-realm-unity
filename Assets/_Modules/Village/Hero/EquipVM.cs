@@ -265,15 +265,22 @@ namespace DeNelle.Village.Hero
         }
 
         // Damage / Defense come straight from the loadout's applied stats (the EquipmentPanel
-        // summary line). HP / MP have no live feed in this assembly (EquipmentPanel drove them
-        // full), so they read full — the View can repoint these to a real HP/MP source later.
+        // summary line). HP / MP are now LIVE (WO-436): the equip target exposes the wearer's
+        // current/max HP + mana off its hero components, so the bars read real data and refresh
+        // on equip / target-switch (the same Changed cadence — no per-frame poll). 0/0 from a
+        // wearer with no live source degrades to an empty bar labelled "0 / 0".
         private void BuildStats()
         {
             _stats.Clear();
             var t = Active;
 
-            _stats.Add(new EquipStat("HP", new BarVM(1f, "Full", "hp")));
-            _stats.Add(new EquipStat("MP", new BarVM(1f, "Full", "mp")));
+            float hp = t != null ? t.CurrentHealth : 0f;
+            float hpMax = t != null ? t.MaxHealth : 0f;
+            _stats.Add(new EquipStat("HP", new BarVM(SafeFill(hp, hpMax), Vital(hp, hpMax), "hp")));
+
+            float mp = t != null ? t.CurrentMana : 0f;
+            float mpMax = t != null ? t.MaxMana : 0f;
+            _stats.Add(new EquipStat("MP", new BarVM(SafeFill(mp, mpMax), Vital(mp, mpMax), "mp")));
 
             float mult = t != null ? t.WeaponMult : 1f;
             int dmgPct = RoundToInt((mult - 1f) * 100f);
@@ -334,6 +341,15 @@ namespace DeNelle.Village.Hero
 
         // ── Pure math (System.Math) ────────────────────────────────────────────────
         private static int RoundToInt(float f) => (int)Math.Floor(f + 0.5f);
+
+        /// <summary>0..1 bar fill for a current/max pair, guarding divide-by-zero (max ≤ 0 → 0).</summary>
+        private static float SafeFill(float cur, float max) =>
+            max > 0f ? Clamp(cur / max, 0f, 1f) : 0f;
+
+        /// <summary>Bar label like "120 / 200" for a vital pair (whole numbers).</summary>
+        private static string Vital(float cur, float max) =>
+            RoundToInt(cur) + " / " + RoundToInt(max);
+
         private static float Clamp(float v, float lo, float hi) => v < lo ? lo : (v > hi ? hi : v);
     }
 }
