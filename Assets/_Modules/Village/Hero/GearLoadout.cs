@@ -89,6 +89,12 @@ namespace DeNelle.Village
         private const string PrefWeaponKey = "dotr-equip-weapon-";   // + <class>
         private const string PrefArmorKey  = "dotr-equip-armor-";    // + <class>
 
+        // WO-434: explicit "player removed this slot" sentinel. Written to the SAME per-class
+        // PlayerPrefs key the Equip methods use, so a later Refresh/level-up honours the empty
+        // choice and does NOT silently auto-re-equip the best piece the player just took off.
+        // Distinct from "key absent" (= never chosen → auto-best is fine, legacy behaviour).
+        private const string PrefNoneSentinel = "__none__";
+
         // Set on a COMPANION loadout (which has no HeroAbilities). When non-null it is the
         // authoritative class for this loadout (BindOwnerClass). Null on the player hero,
         // which reads its class from HeroAbilities as before.
@@ -158,13 +164,22 @@ namespace DeNelle.Village
         {
             string key = (job ?? string.Empty).ToLowerInvariant();   // case-safe key (hero vs companion)
             string wId = PlayerPrefs.GetString(PrefWeaponKey + key, null);
-            if (!string.IsNullOrEmpty(wId))
+            if (wId == PrefNoneSentinel)
+            {
+                // WO-434: player explicitly unequipped — respect the empty choice (no auto-best).
+                EquippedWeapon = null;
+            }
+            else if (!string.IsNullOrEmpty(wId))
             {
                 var w = GearCatalog.FindWeapon(wId);
                 if (w != null && GearCatalog.WeaponFitsClass(w, job)) EquippedWeapon = w;
             }
             string aId = PlayerPrefs.GetString(PrefArmorKey + key, null);
-            if (!string.IsNullOrEmpty(aId))
+            if (aId == PrefNoneSentinel)
+            {
+                EquippedArmor = null;
+            }
+            else if (!string.IsNullOrEmpty(aId))
             {
                 var a = GearCatalog.FindArmor(aId);
                 if (a != null && GearCatalog.ArmorFitsClass(a, job)) EquippedArmor = a;
@@ -297,6 +312,39 @@ namespace DeNelle.Village
             // VERIFY equip-applies-stats: ArmorDefense is now live in HeroHealth's
             // mitigation (HeroHealth.cs reads GearLoadout). Step confirms a manual equip took.
             FlowTrace.Step("Gear", $"EquipArmorById('{id}') applied — ArmorDefense={ArmorDefense:0.00}");
+        }
+
+        /// <summary>
+        /// WO-434: manually remove the equipped weapon. Clears the slot, recomputes stats,
+        /// fires OnGearChanged, and persists a "none" sentinel under the wearer's class so a
+        /// later Refresh()/level-up does NOT silently auto-re-equip the best piece the player
+        /// just took off. Additive — existing equip callers are unaffected.
+        /// </summary>
+        public void UnequipWeapon()
+        {
+            EquippedWeapon = null;
+            PlayerPrefs.SetString(PrefWeaponKey + PrefJobKey(), PrefNoneSentinel);   // persist the empty choice
+            PlayerPrefs.Save();
+            ApplyStats(CurrentJob());          // WeaponMult falls back to 1.0
+            OnGearChanged?.Invoke();
+            TryReapplyVisuals();
+            FlowTrace.Step("Gear", $"UnequipWeapon applied — WeaponMult={WeaponMult:0.00}");
+        }
+
+        /// <summary>
+        /// WO-434: manually remove the equipped armor. Mirrors <see cref="UnequipWeapon"/> —
+        /// clears the slot, recomputes stats (ArmorDefense → 0), fires OnGearChanged, and
+        /// persists the "none" sentinel so Refresh honours the empty choice.
+        /// </summary>
+        public void UnequipArmor()
+        {
+            EquippedArmor = null;
+            PlayerPrefs.SetString(PrefArmorKey + PrefJobKey(), PrefNoneSentinel);   // persist the empty choice
+            PlayerPrefs.Save();
+            ApplyStats(CurrentJob());          // ArmorDefense falls back to 0
+            OnGearChanged?.Invoke();
+            TryReapplyVisuals();
+            FlowTrace.Step("Gear", $"UnequipArmor applied — ArmorDefense={ArmorDefense:0.00}");
         }
 
         /// <summary>The wearer's current class id (for catalog queries, persistence keys, and
