@@ -69,7 +69,11 @@ verified job for you:
   (`8ed0bce9`). So either the editor hadn't recompiled the fix, or it's a **different** Yarn command than
   the 5 converted (OpenShop/Upgrade/Craft/Equip/Arena/RumorBoard). break-log doesn't name the command —
   check Player.log around those UTC stamps for the `[DialogueCommandBridge] <command>` line just before it.
-- **"doesnt follow"** flag (04:26) — companion/pet not following. May relate to tonight's companion changes.
+- **"doesnt follow"** flag (04:26) — companion/pet not following. **Instrumented overnight:**
+  `PetHeroLeash` now warns ONCE if it can't resolve the hero within 5s (was a silent failure) — so the
+  next capture says whether the PET even found the hero. (My companion changes don't touch movement, so
+  a non-following *companion* would be a separate, pre-existing case — `StoryCompanion` already
+  FlowTraces its leash; check `[Flow:Roster]` / its leash logs if it's a companion not the pet.)
 - **"weapon placement feels off"** flag — matches the bow-90°/sword-grip note. Hero bow = HeroBowAttachment
   (loaded weapon pack, fine); **companion** bows use `EquipmentController.Bow()` (one-line gripEuler fix if off).
 - **"fight much better"** (positive) — companion gear scaling (`_gearWeaponMult`) is landing.

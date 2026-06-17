@@ -71,6 +71,8 @@ namespace DeNelle.Pets
         private Pet _pet;
         private Transform _heroT;
         private float _resolveTimer;
+        private float _noHeroTime;       // seconds the hero has been unresolved (for the not-following warn)
+        private bool  _warnedNoHero;     // one-shot guard so the warn fires once per outage
         private System.Random _rng;
 
         private float _headingDeg;       // current wander heading (0 = +Z)
@@ -98,14 +100,30 @@ namespace DeNelle.Pets
         {
             if (_heroT == null)
             {
+                _noHeroTime += Time.deltaTime;
                 _resolveTimer -= Time.deltaTime;
                 if (_resolveTimer <= 0f)
                 {
                     _resolveTimer = ResolveRetrySeconds;
                     _heroT = ResolveHeroTransform();
                 }
-                if (_heroT == null) return;
+                if (_heroT == null)
+                {
+                    // NO SILENT FAILURE (§12): a pet that can't resolve the hero just sits there
+                    // ("doesnt follow", owner F8 2026-06-17) with no clue why. Surface it ONCE after
+                    // a grace period so the next capture says whether the pet even found the hero.
+                    if (!_warnedNoHero && _noHeroTime > 5f)
+                    {
+                        _warnedNoHero = true;
+                        Debug.LogWarning("[PetHeroLeash] hero (HeroLocomotion) not resolved after 5s — " +
+                                         "pet cannot follow until it appears. (No HeroLocomotion in scene / wrong scene?)");
+                    }
+                    return;
+                }
             }
+            // Hero is present this frame — clear the not-following watch.
+            _noHeroTime = 0f;
+            _warnedNoHero = false;
 
             float dt = Time.deltaTime;
             Vector3 petPos = transform.position;
