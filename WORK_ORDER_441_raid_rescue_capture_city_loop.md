@@ -20,6 +20,16 @@ ONLINE and OFFLINE.
 A Yarn tutorial **teaches build-a-city**, and Grom's rescue beat **teaches offline mining** — narrative
 wrappers so both the build loop and the offline-earnings mechanic feel earned, not bolted on.
 
+## Companion recruitment mapped to the pillars (owner 2026-06-17)
+Each companion is met through a different activity pillar, so recruiting them teaches that pillar:
+| Member | Where met | Teaches |
+|---|---|---|
+| 1st | Castle hub — walk-up introducer NPC (exists) | town/dialogue |
+| 2nd | *(open — TBD)* | — |
+| 3rd (Grom, Knight) | **Rescued from an outpost** (this WO) | the raid → capture → build loop |
+| 4th | **At the Arena** | the arena combat pillar |
+This WO scopes the **3rd (outpost rescue)**; the 4th-at-arena + 2nd are noted for a companion-recruitment WO.
+
 ## Why this fills real gaps (from RCA, 2026-06-17)
 - **3rd companion has no scripted meet** — join order is Sylas→Elara→Grom; only the 1st is recruited
   (walk-up introducer). The 2nd/3rd just fill the roster. The rescue gives Grom a real entrance.
