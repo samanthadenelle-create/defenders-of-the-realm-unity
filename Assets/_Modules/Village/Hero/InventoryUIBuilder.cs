@@ -48,17 +48,18 @@ namespace DeNelle.Village
             var panel = ElarionUiKit.PanelFramed(_ui.transform, new Vector2(0.04f, 0.03f), new Vector2(0.96f, 0.97f),
                                                  deep: true, packSpriteName: RpgUiCatalog.PanelWindowDark);
 
+            bool chrome = !DeNelle.Core.FeatureFlags.BlinkChrome;   // flag OFF = our dressing; flag ON = let the Blink Obsidian panel show clean
             var solidFill = AddImage(panel.transform, "InvSolidFill", new Vector2(0.025f, 0.02f), new Vector2(0.975f, 0.98f),
-                                     new Color(0.065f, 0.048f, 0.035f, 0f));   // invisible (kept for layout) so the Blink Obsidian panel shows clean
+                                     new Color(0.065f, 0.048f, 0.035f, chrome ? 0.99f : 0f));   // kept for layout; invisible when flag ON
             NoRaycast(solidFill);
             solidFill.transform.SetAsFirstSibling();
 
             // Warm glow accents
             var baseGlow = AddImage(panel.transform, "BaseEmberGlow", new Vector2(0.06f, 0.025f), new Vector2(0.94f, 0.20f),
-                                    new Color(0.55f, 0.32f, 0.12f, 0.22f));
+                                    new Color(0.55f, 0.32f, 0.12f, chrome ? 0.22f : 0f));
             NoRaycast(baseGlow);
 
-            AddRuneStrip(panel.transform, 0.965f, 0.992f);
+            if (chrome) AddRuneStrip(panel.transform, 0.965f, 0.992f);
 
             // Header
             AddLabelShadow(panel.transform, ElarionUi.CrestGlyph + "  INVENTORY", 0.918f, 0.958f,

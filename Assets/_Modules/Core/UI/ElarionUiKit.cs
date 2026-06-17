@@ -150,8 +150,11 @@ namespace DeNelle.Core.UI
         /// <summary>A warm stone display niche (hero portrait / showcase alcove) with a gold inner rim.</summary>
         public static GameObject Niche(Transform parent, Vector2 anchorMin, Vector2 anchorMax)
         {
-            var n = AddImage(parent, "Niche", anchorMin, anchorMax, StoneNiche);
-            AddInnerRim(n, AccentSoft);
+            // BlinkChrome: keep the GameObject (callers parent content onto it) but make the stone
+            // backing transparent + skip the rim, so the Blink panel shows through the alcove.
+            bool chrome = !DeNelle.Core.FeatureFlags.BlinkChrome;
+            var n = AddImage(parent, "Niche", anchorMin, anchorMax, chrome ? StoneNiche : new Color(0f, 0f, 0f, 0f));
+            if (chrome) AddInnerRim(n, AccentSoft);
             return n;
         }
 
@@ -169,18 +172,23 @@ namespace DeNelle.Core.UI
                                              float x0 = 0.06f, float x1 = 0.94f,
                                              float y0 = 0.92f, float y1 = 0.98f)
         {
-            // Soft shadow under the title for legibility on busy scenes.
-            var shadow = Label(parent, ElarionUi.CrestGlyph + "  " + text, y0, y1,
-                               new Color(0f, 0f, 0f, 0.55f), ElarionUi.FontTitle,
-                               TextAlignmentOptions.Center, x0, x1, spacing: 6f, bold: true);
-            shadow.GetComponent<RectTransform>().anchoredPosition += new Vector2(1.5f, -1.5f);
+            // BlinkChrome: skip the drop-shadow + the gilt underline rule (chrome); keep the TITLE (content).
+            bool chrome = !DeNelle.Core.FeatureFlags.BlinkChrome;
+            if (chrome)
+            {
+                // Soft shadow under the title for legibility on busy scenes.
+                var shadow = Label(parent, ElarionUi.CrestGlyph + "  " + text, y0, y1,
+                                   new Color(0f, 0f, 0f, 0.55f), ElarionUi.FontTitle,
+                                   TextAlignmentOptions.Center, x0, x1, spacing: 6f, bold: true);
+                shadow.GetComponent<RectTransform>().anchoredPosition += new Vector2(1.5f, -1.5f);
+            }
 
             var title = Label(parent, ElarionUi.CrestGlyph + "  " + text, y0, y1,
                               ElarionUi.Gilt, ElarionUi.FontTitle,
                               TextAlignmentOptions.Center, x0, x1, spacing: 6f, bold: true);
 
             // Gilt rule hugging the header's bottom edge.
-            Rule(parent, y0 - 0.008f, x0, x1);
+            if (chrome) Rule(parent, y0 - 0.008f, x0, x1);
             return title;
         }
 
@@ -193,7 +201,7 @@ namespace DeNelle.Core.UI
             r.anchorMin = new Vector2(x0, y); r.anchorMax = new Vector2(x1, y);
             r.offsetMin = new Vector2(0f, -1f); r.offsetMax = new Vector2(0f, 1f);
             var img = go.GetComponent<Image>();
-            img.color = Accent;
+            img.color = DeNelle.Core.FeatureFlags.BlinkChrome ? new Color(0f, 0f, 0f, 0f) : Accent;   // chrome: invisible
             img.raycastTarget = false;
             return go;
         }
@@ -1006,7 +1014,7 @@ namespace DeNelle.Core.UI
         /// <summary>A single faint gold rule hugging a panel's bottom edge (sleek accent).</summary>
         public static void AddRimUnderline(GameObject panel)
         {
-            if (panel == null) return;
+            if (panel == null || DeNelle.Core.FeatureFlags.BlinkChrome) return;   // chrome: skip the bottom gold rule
             var go = new GameObject("Accent", typeof(Image));
             go.transform.SetParent(panel.transform, false);
             var rt = go.GetComponent<RectTransform>();
@@ -1024,7 +1032,7 @@ namespace DeNelle.Core.UI
         /// <summary>A 1px inner rim hugging an element's edges — crisp framed depth.</summary>
         public static void AddInnerRim(GameObject host, Color color)
         {
-            if (host == null) return;
+            if (host == null || DeNelle.Core.FeatureFlags.BlinkChrome) return;   // chrome: skip the gilt inner rim
             var go = new GameObject("Rim", typeof(Image));
             go.transform.SetParent(host.transform, false);
             var rt = go.GetComponent<RectTransform>();

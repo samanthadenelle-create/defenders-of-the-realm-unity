@@ -24,6 +24,13 @@ namespace DeNelle.Core
         public static bool Raid  => Get("raid",  defaultOn: false);
         public static bool Arena => Get("arena", defaultOn: true);
 
+        /// <summary>When ON, our decorative CHROME (gilt inner-rim / bottom rule / header shadow+rule /
+        /// niche backings + per-panel solid fills + glows) does NOT render, so the Blink "Obsidian" panel
+        /// sprite + functional content (text/rows/grid/buttons) show clean. Content/structure and the
+        /// world-occluding backdrops are never hidden. Default OFF (current look). PlayerPrefs
+        /// "ff.blinkchrome". Gated in ElarionUiKit + per-panel (memory ui-chrome-composition-and-blink-flag).</summary>
+        public static bool BlinkChrome => Get("blinkchrome", defaultOn: false);
+
         /// <summary>Per-feature resolve: PlayerPrefs override ("ff.&lt;name&gt;" = 0/1) wins, else the default.</summary>
         private static bool Get(string name, bool defaultOn)
         {

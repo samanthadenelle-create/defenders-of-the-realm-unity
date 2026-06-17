@@ -126,7 +126,8 @@ namespace DeNelle.Village.Hero
             // (inset so the carved wood border still shows). Same recipe as ShopPanel.
             var solidFill = ElarionUiKit.AddImage(panel.transform, "EquipSolidFill",
                 new Vector2(0.025f, 0.02f), new Vector2(0.975f, 0.98f),
-                new Color(0.08f, 0.06f, 0.045f, 0f));   // invisible (kept for layout) so the Blink Obsidian panel shows clean
+                // Flag OFF = our premium dark plate; flag ON = invisible (kept for layout) so the Blink Obsidian panel shows clean.
+                new Color(0.08f, 0.06f, 0.045f, DeNelle.Core.FeatureFlags.BlinkChrome ? 0f : 0.985f));
             var sfImg = solidFill.GetComponent<Image>();
             if (sfImg != null) sfImg.raycastTarget = false;
             solidFill.transform.SetAsFirstSibling();

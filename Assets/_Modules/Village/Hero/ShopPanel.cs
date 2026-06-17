@@ -160,6 +160,12 @@ namespace DeNelle.Village.Hero
             else
             { fillColor = new Color(0.07f, 0.055f, 0.042f, 0f); glowColor = new Color(0.45f, 0.35f, 0.18f, 0.16f); }
 
+            // Blink re-skin: when the flag is ON, every vendor's tinted fill + base glow goes fully
+            // transparent so the Obsidian Merchant sprite reads clean. One gate covers all branches
+            // (incl. the 5 vendor fills the per-fill band-aid missed). Objects kept; alpha→0 only.
+            if (DeNelle.Core.FeatureFlags.BlinkChrome)
+            { fillColor.a = 0f; glowColor.a = 0f; }
+
             var solidFill = ElarionUiKit.AddImage(panel, "ShopSolidFill",
                 new Vector2(0.025f, 0.02f), new Vector2(0.975f, 0.98f), fillColor);
             var sfImg = solidFill.GetComponent<Image>();
