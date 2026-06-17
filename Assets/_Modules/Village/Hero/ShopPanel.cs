@@ -463,7 +463,17 @@ namespace DeNelle.Village.Hero
         {
             var well = ElarionUiKit.Well(_contentRoot.transform, Vector2.zero, Vector2.one);
             var wImg = well.GetComponent<Image>();
-            if (wImg != null) wImg.raycastTarget = false;
+            if (wImg != null)
+            {
+                wImg.raycastTarget = false;
+                // BlinkChrome ON: neutralize the shared well so the Blink panel shows through
+                // behind the per-item slot plates (Blink uses no shared well). Object kept for
+                // layout (alpha-0), same technique as the *SolidFill neutralize. Flag OFF → unchanged.
+                if (DeNelle.Core.FeatureFlags.BlinkChrome)
+                {
+                    var c = wImg.color; c.a = 0f; wImg.color = c;
+                }
+            }
 
             var viewport = new GameObject("Viewport", typeof(Image), typeof(RectMask2D), typeof(ScrollRect));
             viewport.transform.SetParent(_contentRoot.transform, false);
@@ -516,6 +526,30 @@ namespace DeNelle.Village.Hero
             LayoutRebuilder.ForceRebuildLayoutImmediate(_scrollContent);
         }
 
+        // ── Row plate dressing (flag-gated, sprite-first) ─────────────────────────
+        // BlinkChrome ON + slot plate present → dress the row Image with the Blink
+        // per-item slot plate (9-sliced, white). Flag OFF (or plate missing) → the
+        // exact current Cell tint + procedural rounded look. Single gated choice point
+        // shared by CreateRow + CreateEquipRow (binding-map §3: one slot recipe, reused).
+        private static void DressRowPlate(Image rowImg)
+        {
+            if (rowImg == null) return;
+            if (DeNelle.Core.FeatureFlags.BlinkChrome)
+            {
+                var plate = RpgUiCatalog.Get(RpgUiCatalog.RoleSlot, RpgUiCatalog.SlotItem);
+                if (plate != null)
+                {
+                    rowImg.sprite = plate;
+                    rowImg.type   = Image.Type.Sliced;
+                    rowImg.color  = Color.white;
+                    return;
+                }
+            }
+            // Fallback (flag OFF, or plate not imported): the original look, verbatim.
+            rowImg.color = ElarionUiKit.Cell;
+            ElarionUiKit.ApplyRounded(rowImg);
+        }
+
         // ── Row factory (presentation; data comes from the bound ItemVM) ──────────
 
         private void CreateRow(Transform parent, ItemVM item)
@@ -530,8 +564,7 @@ namespace DeNelle.Village.Hero
             le.preferredHeight = RowHeightPx;
             le.minHeight = RowHeightPx;
             var rowImg = row.GetComponent<Image>();
-            rowImg.color = ElarionUiKit.Cell;
-            ElarionUiKit.ApplyRounded(rowImg);
+            DressRowPlate(rowImg);
             var rowBtn = row.GetComponent<Button>();
             rowBtn.targetGraphic = rowImg;
             ElarionUiKit.StyleButtonColors(rowBtn);
@@ -601,8 +634,7 @@ namespace DeNelle.Village.Hero
             le.preferredHeight = RowHeightPx;
             le.minHeight = RowHeightPx;
             var rowImg = row.GetComponent<Image>();
-            rowImg.color = ElarionUiKit.Cell;
-            ElarionUiKit.ApplyRounded(rowImg);
+            DressRowPlate(rowImg);
 
             ElarionUiKit.Label(row.transform, item.Name, 0.15f, 0.85f, ElarionUi.Parchment,
                 ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Left, 0.04f, 0.62f);

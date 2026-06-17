@@ -55,6 +55,7 @@ namespace DeNelle.Core.UI
         public const string RoleBadge  = "badge";
         public const string RoleButton = "button";
         public const string RolePanel  = "panel";
+        public const string RoleSlot   = "slot";
 
         // ── Well-known sprite names within a role (lockstep with the importer map) ──
         // bars/ (ornate gold-frame bar family — frame bg + matching colored fill):
@@ -101,6 +102,8 @@ namespace DeNelle.Core.UI
         // button/ — clean (text-free) framed button + exit, 9-sliced:
         public const string ButtonFrame   = "button_frame";    // D2/Button 1 (neutral framed button)
         public const string ButtonExit    = "button_exit";     // D2/Exit (close/exit button)
+        // slot/ — per-item article plate (Blink ArticleSlot/ItemBackground), 9-sliced:
+        public const string SlotItem      = "slot_item";       // Slots_Obsidian/Inventory_Slot (per-item plate)
 
         /// <summary>
         /// Representative sprite for a role (the first one loaded, by name order), or

@@ -77,6 +77,9 @@ namespace DeNelle.Editor
             new Entry { Src = "Buttons_Obsidian/Button1_Yellow.png",     Role = "button", Name = "button_gold",  Border = 24 }, // primary/gold
             new Entry { Src = "Buttons_Obsidian/Close_Button_Normal.png",Role = "button", Name = "button_exit",  Border = 12 }, // close/exit
 
+            // ── SLOTS (RoleSlot) — per-item article plate for shop/inventory rows ──
+            new Entry { Src = "Slots_Obsidian/Inventory_Slot.png", Role = "slot", Name = "slot_item", Border = 24 },
+
             // ── ICONS (RoleIcons) — whole glyphs, no 9-slice (border 0) ─────────
             new Entry { Src = "Icons_Obsidian/Sword.png",          Role = "icons", Name = "icon_sword",     Border = 0 },
             new Entry { Src = "Icons_Obsidian/settings-icon.png",  Role = "icons", Name = "icon_settings",  Border = 0 },
