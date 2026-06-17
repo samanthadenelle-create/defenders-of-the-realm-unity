@@ -148,6 +148,11 @@ namespace DeNelle.Village.Arena
             if (hero == null) return;
 
             _heraldRoot = BuildHerald(HeraldOffset);
+            // The colosseum (HubStructureVisualInjector, placed at the same 15,0,6 spot) is the arena
+            // visual now — hide this procedural "ArenaMonument" (dais/banner/runes/aura) so the two
+            // don't overlap. The root + its proximity Interact prompt stay live, so the colosseum IS
+            // the Enter-Arena entrance.
+            HideHeraldVisual(_heraldRoot);
             _placed = true;
             Debug.Log($"[ArenaHeraldSpawner] Arena herald placed at {_heraldRoot.position}. " +
                       "Walk up + Interact (Tap / F) to open the Arena.");
@@ -212,6 +217,20 @@ namespace DeNelle.Village.Arena
         // Fully procedural + WebGL-safe (URP/Lit + primitives), so it always renders
         // regardless of pack import state, mirroring the herald's no-art philosophy.
         // =====================================================================
+        // Hide the procedural monument visual (renderers / aura particles / glow lights) while
+        // keeping the root + its proximity Interact prompt. Used when the colosseum model is the
+        // arena visual at the same spot, so the two don't overlap.
+        private static void HideHeraldVisual(Transform root)
+        {
+            if (root == null) return;
+            foreach (var r in root.GetComponentsInChildren<Renderer>(true))
+                if (r != null) r.enabled = false;
+            foreach (var ps in root.GetComponentsInChildren<ParticleSystem>(true))
+                if (ps != null) { var e = ps.emission; e.enabled = false; ps.Clear(); ps.Stop(); }
+            foreach (var l in root.GetComponentsInChildren<Light>(true))
+                if (l != null) l.enabled = false;
+        }
+
         private Transform BuildHerald(Vector3 offset)
         {
             var root = new GameObject("ArenaMonument");
