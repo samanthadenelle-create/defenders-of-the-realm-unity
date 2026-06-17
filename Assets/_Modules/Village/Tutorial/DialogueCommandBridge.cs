@@ -282,6 +282,15 @@ namespace DeNelle.Village
         // string) exactly as the direct registration would have.
         private IEnumerator RunDeferred(Delegate inner, params object[] rawArgs)
         {
+            // INSTRUMENT (§12): name every deferred (sync) command as it dispatches. A captured
+            // "DialogueException: No node has been selected" fires AFTER a command that ENDS/stops
+            // the dialogue, when the VM then tries to Continue() — so the command logged immediately
+            // before that exception in Player.log is the culprit. The 6 Open* + wait_for_event
+            // commands bypass this path (registered async), so any remaining offender is a sync one
+            // that stops the dialogue (suspects: transition_to, enable_full_controls). Cheap: fires
+            // only on dialogue beats, never per-frame.
+            FlowTrace.Step("Yarn", $"dispatch command '{inner.Method.Name}'");
+
             object[] args = CoerceArgs(inner, rawArgs);
             try { inner.DynamicInvoke(args); }
             catch (Exception ex)
