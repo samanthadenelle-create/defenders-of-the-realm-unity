@@ -166,11 +166,11 @@ namespace DeNelle.Village
             // action name is registered exactly ONCE project-wide (the YarnSpinner source
             // generator throws on a duplicate name across IActionRegistration methods).
             Reg("OpenShop",       (Func<string, IEnumerator>)CmdOpenShop);
-            Reg("OpenUpgrade",    (Action<string>)CmdOpenUpgrade);
-            Reg("OpenCraft",      (Action<string>)CmdOpenCraft);
-            Reg("OpenEquip",      (Action)CmdOpenEquip);
-            Reg("OpenArena",      (Action)CmdOpenArena);
-            Reg("OpenRumorBoard", (Action)CmdOpenRumorBoard);
+            Reg("OpenUpgrade",    (Func<string, IEnumerator>)CmdOpenUpgrade);
+            Reg("OpenCraft",      (Func<string, IEnumerator>)CmdOpenCraft);
+            Reg("OpenEquip",      (Func<IEnumerator>)CmdOpenEquip);
+            Reg("OpenArena",      (Func<IEnumerator>)CmdOpenArena);
+            Reg("OpenRumorBoard", (Func<IEnumerator>)CmdOpenRumorBoard);
             Reg("LearnRecipe",    (Action<string>)CmdLearnRecipe);
 
             // Barracks troop-training (WO-453) — the Barracks_MainMenu Yarn node fires
@@ -873,7 +873,12 @@ namespace DeNelle.Village
             DialogueService.Stop();            // documented walk-away auto-close → clears the portrait
         }
 
-        private void CmdOpenUpgrade(string stationType)
+        // These 5 mirror CmdOpenShop's fix: registered as async IEnumerator commands that open the
+        // panel, yield one frame, then DialogueService.Stop() — so cancellation is requested INSIDE
+        // the runner's awaited command task, BEFORE its post-command Dialogue.Continue() check. That
+        // kills the recurring "DialogueException: No node has been selected" these threw (they were
+        // synchronous Actions that never stopped the dialogue → the runner auto-continued into a dead node).
+        private IEnumerator CmdOpenUpgrade(string stationType)
         {
             Debug.Log($"[DialogueCommandBridge] OpenUpgrade: {stationType}");
             var panel = FindObjectOfType<DeNelle.Village.Buildings.Progression.BuildingUpgradePanel>();
@@ -881,42 +886,47 @@ namespace DeNelle.Village
                 panel = new GameObject("BuildingUpgradePanelHost").AddComponent<DeNelle.Village.Buildings.Progression.BuildingUpgradePanel>();
             if (!string.IsNullOrEmpty(stationType)) panel.OpenFocused(stationType);
             else panel.Open();
+            yield return null; DialogueService.Stop();
         }
 
-        private void CmdOpenCraft(string context)
+        private IEnumerator CmdOpenCraft(string context)
         {
             Debug.Log($"[DialogueCommandBridge] OpenCraft: {context}");
             var panel = FindObjectOfType<DeNelle.Village.Crafting.VillageCraftingPanel>();
             if (panel == null)
                 panel = new GameObject("VillageCraftingPanelHost").AddComponent<DeNelle.Village.Crafting.VillageCraftingPanel>();
             panel.Open();
+            yield return null; DialogueService.Stop();
         }
 
-        private void CmdOpenEquip()
+        private IEnumerator CmdOpenEquip()
         {
             Debug.Log("[DialogueCommandBridge] OpenEquip");
             var panel = FindObjectOfType<DeNelle.Village.Hero.EquipmentPanel>();
             if (panel == null)
                 panel = new GameObject("EquipmentPanelHost").AddComponent<DeNelle.Village.Hero.EquipmentPanel>();
             panel.Open();
+            yield return null; DialogueService.Stop();
         }
 
-        private void CmdOpenArena()
+        private IEnumerator CmdOpenArena()
         {
             Debug.Log("[DialogueCommandBridge] OpenArena");
             var panel = FindObjectOfType<DeNelle.Village.Arena.ArenaPanel>();
             if (panel == null)
                 panel = new GameObject("ArenaPanelHost").AddComponent<DeNelle.Village.Arena.ArenaPanel>();
             panel.Open();
+            yield return null; DialogueService.Stop();
         }
 
-        private void CmdOpenRumorBoard()
+        private IEnumerator CmdOpenRumorBoard()
         {
             Debug.Log("[DialogueCommandBridge] OpenRumorBoard");
             var panel = FindObjectOfType<DeNelle.Village.Hero.RumorBoardPanel>();
             if (panel == null)
                 panel = new GameObject("RumorBoardPanelHost").AddComponent<DeNelle.Village.Hero.RumorBoardPanel>();
             panel.Open();
+            yield return null; DialogueService.Stop();
         }
 
         private void CmdLearnRecipe(string recipeId)
