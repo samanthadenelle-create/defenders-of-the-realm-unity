@@ -56,8 +56,7 @@ namespace DeNelle.Village
             new Swap { bakedName = "Forge_Armor_Storefront",        modelPath = "Structures/armorer",      sizeM = 7f,  yawDeg = 90f },
             new Swap { bakedName = "Marketplace_Monetization",      modelPath = "Structures/store",        sizeM = 8f,  yawDeg = 90f },
             new Swap { bakedName = "Lumbermill_Wood_Storefront",    modelPath = "Structures/lumbermill",   sizeM = 7f,  yawDeg = 90f },
-            // Template — uncomment + tune as the last model lands:
-            // new Swap { bakedName = "Windmill_Food_Storefront",      modelPath = "Structures/<model>",    sizeM = 8f,  yawDeg = 90f },
+            new Swap { bakedName = "Windmill_Food_Storefront",      modelPath = "Structures/farm",         sizeM = 8f,  yawDeg = 90f },
         };
 
         private const string MarkerPrefix = "LightSkin_";   // child added on swap (idempotency guard)

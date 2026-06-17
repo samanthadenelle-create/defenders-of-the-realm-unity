@@ -445,17 +445,15 @@ namespace DeNelle.Core
         {
             if (treeRoot == null) return;
 
-            // Optional authored override (does not exist on this branch — null is fine).
-            Material overrideMat = Resources.Load<Material>(MaterialResourcePath);
-            if (overrideMat == null)
-            {
-                Texture2D diffuse = Resources.Load<Texture2D>(DiffuseResourcePath);
-                if (diffuse != null) overrideMat = BuildLit(diffuse, Color.white);
-            }
-
-            // Best in-scene match: a good (non-grey, textured) material another tree
-            // is already using — makes the centrepiece blend with the rest of the wood.
-            Material siblingMat = overrideMat == null ? FindSiblingTreeMaterial(treeRoot) : null;
+            // The lightweight Tripo tree (owner 2026-06-17) ships its OWN texture in its FBX
+            // folder, so the model's embedded material is authoritative. Do NOT force the old
+            // external TreeofLife_basecolor, and do NOT borrow a sibling tree's material — both
+            // would override the correct in-folder texture (the owner's "shipped texture in folder,
+            // for that reason"). Null both so the loop URP-converts the tree's OWN embedded material
+            // (preserving its texture) — the same approach VisualFactory uses for the hub structures.
+            // (Re-enable the override only if a future tree ships no usable embedded texture.)
+            Material overrideMat = null;
+            Material siblingMat = null;
 
             int fixedSlots = 0;
             string source = "none";
