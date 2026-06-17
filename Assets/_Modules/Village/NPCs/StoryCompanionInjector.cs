@@ -160,6 +160,18 @@ namespace DeNelle.Village
             {
                 foreach (HeroClass cls in PartyRosterClasses())
                     desired.Add(cls);
+
+                // BUGFIX (owner 2026-06-16 "second one ends up being me"): never spawn a
+                // companion BODY of the PLAYER'S OWN hero class. The canon companion roster
+                // (Sylas=Ranger, Elara=Cleric, Grom=Knight) is fixed, so a player who picks
+                // Ranger/Cleric/Knight has one roster entry that COLLIDES with their own class
+                // — and that body rendered as a clone of the player ("me"), appearing as the
+                // party grew across loads. The player already embodies that class on the field,
+                // so drop it from the spawn set. The PartyMemberIds roster entry is untouched
+                // (party-frame count unchanged); only the duplicate BODY is suppressed.
+                HeroClass self = ResolvePlayerHero();
+                if (desired.Remove(self))
+                    FlowTrace.Step("Roster", $"suppressed player-class companion body ({self}) — would clone the hero");
             }
             FlowTrace.Step("Roster", $"Spawn(): override={(s_heroClassOverride.HasValue ? s_heroClassOverride.Value.ToString() : "null")} " +
                 $"desired=[{string.Join(",", desired)}] currentlyLive=[{string.Join(",", _companions.Keys)}]");
