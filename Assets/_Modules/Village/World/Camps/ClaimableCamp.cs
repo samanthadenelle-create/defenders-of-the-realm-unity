@@ -446,6 +446,62 @@ namespace DeNelle.Village.World.Camps
             // WO-106: territory multiplier + secured-count for difficulty scaling + passive power.
             EconomyService.Instance?.OnOutpostSecured();
             OnDefended?.Invoke(this);
+
+            // The claimed base IS a harvest base — plant the direct-harvest nodes.
+            SpawnHarvestNodes();
+        }
+
+        // =====================================================================
+        // CLAIMED-BASE HARVEST NODES (owner 2026-06-16: "add a base with harvest
+        // nodes after they clear the camp … static locations … seam it all").
+        // One direct-harvest MineNode per resource, planted at STATIC local offsets
+        // in the courtyard. Parented to the static camp anchor (CampSystem.CampAnchors)
+        // so positions are deterministic; re-spawned on every owned (re)load of
+        // OuterWorld, so they are effectively persistent / seamed into the world.
+        // =====================================================================
+        private static readonly MineResource[] CampNodeResources =
+            { MineResource.Wood, MineResource.Iron, MineResource.Food, MineResource.AetherCrystal };
+        private bool _nodesSpawned;
+
+        private void SpawnHarvestNodes()
+        {
+            if (_nodesSpawned) return;
+            _nodesSpawned = true;
+
+            // Courtyard centre in LOCAL fort coords: the recipe lays cells 0..n-1 out
+            // from the root origin, so the centre cell is at ((w-1)/2,(d-1)/2)*cellSize.
+            float cx = (FortGridWidth - 1) * 0.5f * OutpostFoundationGenerator.CellSize;
+            float cz = (FortGridDepth - 1) * 0.5f * OutpostFoundationGenerator.CellSize;
+            Vector3 centre = new Vector3(cx, 0f, cz);
+            Vector3[] spots =
+            {
+                centre + new Vector3( 1.6f, 0f,  1.6f),
+                centre + new Vector3(-1.6f, 0f,  1.6f),
+                centre + new Vector3( 1.6f, 0f, -1.6f),
+                centre + new Vector3(-1.6f, 0f, -1.6f),
+            };
+
+            for (int i = 0; i < CampNodeResources.Length; i++)
+            {
+                var go = new GameObject($"HarvestNode_{CampNodeResources[i]}_{Region}");
+                // Inactive BEFORE AddComponent so MineNode.Awake/Start read the configured
+                // fields (Resource etc.) instead of the defaults — then activate to run them.
+                go.SetActive(false);
+                go.transform.SetParent(transform, false);
+                go.transform.localPosition = spots[i];
+
+                var node = go.AddComponent<MineNode>();
+                node.Resource         = CampNodeResources[i];
+                node.UseFiniteReserve = false;   // renewable base income
+                node.AutoBuildVisual  = true;    // shows the lightweight Harvest/<type> model
+                node.YieldPerExtract  = 5;
+                node.ExtractCooldown  = 8f;
+                node.TotalExtracts    = 0;        // 0 = infinite — a permanent base resource
+                node.RespawnSeconds   = 0f;
+
+                go.SetActive(true);
+            }
+            Debug.Log($"[ClaimableCamp] {CampId} planted {CampNodeResources.Length} direct-harvest nodes in the courtyard.");
         }
 
         // RETIRED (design pivot 2026-06-16) — no longer called. Kept so the counterattack
@@ -522,6 +578,9 @@ namespace DeNelle.Village.World.Camps
                     // mid-counterattack. The DEFEND stage is retired -> just flip it owned
                     // (no re-raid), so it loads as the player's base.
                     if (!Secured) MarkOwned();
+                    // Re-plant the courtyard harvest nodes (idempotent) so an already-owned
+                    // camp restores its harvest base — the seam that makes them persistent.
+                    SpawnHarvestNodes();
                 }
                 return;
             }
