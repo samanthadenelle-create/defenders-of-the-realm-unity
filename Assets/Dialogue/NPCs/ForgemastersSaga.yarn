@@ -115,6 +115,7 @@ title: SagaBorin
     Borin: <i>The snapped hilt is gone from the anvil — reborn, and on your back.</i> The Aegis stands the wall again, and four old fools stand behind it. Go end this, Aegis-bearer. We'll keep the fire lit.
     -> Craft a weapon.
         <<OpenCraft "forge">>
+        <<stop>>
     -> Nothing today.
         Borin: Strike true.
 <<endif>>

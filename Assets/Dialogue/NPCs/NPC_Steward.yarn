@@ -15,6 +15,7 @@ title: TalkToSteward
         Alric: Mother Wren and Old Pell first. Come back with their Keystones.
     -> Open the Upgrade Hall.
         <<OpenUpgrade "steward">>
+        <<stop>>
 <<elseif $q_steward_stage == 1>>
     <<if HasKeystone("FullGranary") and HasKeystone("HeartwoodSapling")>>
         Alric: The Granary brims and the forest greens. The village can rise to Tier 2.
@@ -26,6 +27,7 @@ title: TalkToSteward
         Alric: Not yet. I need the Full Granary from Mother Wren and the Heartwood Sapling from Old Pell before the village can grow. Restore the food and the forests first.
         -> Open the Upgrade Hall.
             <<OpenUpgrade "steward">>
+            <<stop>>
     <<endif>>
 <<elseif $q_steward_stage == 2>>
     <<if HasKeystone("Emberbrand") and HasKeystone("Oathshield")>>
@@ -38,6 +40,7 @@ title: TalkToSteward
         Alric: The walls are still bare. I need the Emberbrand from Borin and the Oathshield from Halvard. Light the forge, plate the line.
         -> Open the Upgrade Hall.
             <<OpenUpgrade "steward">>
+            <<stop>>
     <<endif>>
 <<elseif $q_steward_stage == 3>>
     <<if HasKeystone("FirstHeartgem") and HasKeystone("BondedBeast")>>
@@ -50,11 +53,13 @@ title: TalkToSteward
         Alric: The wards lie cold. I need the First Heartgem from Sable and the Bonded Beast from Fenn before they'll catch.
         -> Open the Upgrade Hall.
             <<OpenUpgrade "steward">>
+            <<stop>>
     <<endif>>
 <<else>>
     Alric: The Spire stands and the Heart burns bright, thanks to you. Elarion is whole. But keep your edge — the realm always needs its Warden's hand.
     -> Open the Upgrade Hall.
         <<OpenUpgrade "steward">>
+        <<stop>>
     -> Nothing today.
         Alric: The light holds. Go in strength.
 <<endif>>

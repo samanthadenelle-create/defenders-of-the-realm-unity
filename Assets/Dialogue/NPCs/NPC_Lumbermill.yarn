@@ -13,6 +13,7 @@ title: TalkToLumbermill
         Old Pell: "Roots Run Deep," my grandmother called it. Go on, then.
     -> Just trade wood.
         <<OpenShop "lumbermill">>
+        <<stop>>
 <<elseif $q_lumber_stage == 1>>
     Old Pell: Is the grove cleared of the grey rot?
     -> The grove's clean.
@@ -53,8 +54,10 @@ title: TalkToLumbermill
     <<endif>>
     -> Trade wood.
         <<OpenShop "lumbermill">>
+        <<stop>>
     -> Upgrade the lumbermill.
         <<OpenUpgrade "lumbermill">>
+        <<stop>>
     -> The Forgemasters' saga.
         <<jump SagaPell>>
     -> Nothing today.

@@ -14,6 +14,7 @@ title: TalkToArmorer
         Halvard: "Shields of the Fallen." Clear a camp and recover what's left of them.
     -> Just show me your wares.
         <<OpenShop "armorer">>
+        <<stop>>
 <<elseif $q_armorer_stage == 1>>
     Halvard: Did you recover the garrison salvage?
     -> Got it.
@@ -58,12 +59,16 @@ title: TalkToArmorer
     <<endif>>
     -> Browse armor (buy / sell).
         <<OpenShop "armorer">>
+        <<stop>>
     -> Upgrade my armor.
         <<OpenUpgrade "armorer">>
+        <<stop>>
     -> Craft some gear.
         <<OpenCraft "armorer">>
+        <<stop>>
     -> Manage my equipment.
         <<OpenEquip>>
+        <<stop>>
     -> The Forgemasters' saga.
         <<jump SagaHalvard>>
     -> That's all.

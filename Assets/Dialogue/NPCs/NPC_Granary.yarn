@@ -13,6 +13,7 @@ title: TalkToGranary
         Mother Wren: That's the way. Build me up and we'll all eat.
     -> Just trade food.
         <<OpenShop "granary">>
+        <<stop>>
 <<elseif $q_granary_stage == 1>>
     Mother Wren: Is the mill turning again?
     -> The mill's restored.
@@ -53,8 +54,10 @@ title: TalkToGranary
     <<endif>>
     -> Trade food.
         <<OpenShop "granary">>
+        <<stop>>
     -> Upgrade the mill.
         <<OpenUpgrade "granary">>
+        <<stop>>
     -> The Forgemasters' saga.
         <<jump SagaWren>>
     -> Nothing today.

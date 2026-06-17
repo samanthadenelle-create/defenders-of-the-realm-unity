@@ -14,6 +14,7 @@ title: TalkToMarket
         Coppin: "The Glimmer Road." Keep the wagons breathing and we both get rich.
     -> Just trade.
         <<OpenShop "market">>
+        <<stop>>
 <<elseif $q_market_stage == 1>>
     Coppin: Is the road to the outpost clear?
     -> The road's open.
@@ -46,8 +47,10 @@ title: TalkToMarket
     Coppin: The Charter-holder! Best prices in Elarion for you. What're we trading?
     -> Browse the market.
         <<OpenShop "market">>
+        <<stop>>
     -> Upgrade the market.
         <<OpenUpgrade "market">>
+        <<stop>>
     -> Nothing today.
         Coppin: Roads are open. Spend freely.
 <<endif>>

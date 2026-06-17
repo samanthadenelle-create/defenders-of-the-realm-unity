@@ -871,22 +871,17 @@ namespace DeNelle.Village
             // header reads the vendor's display name, not just the id-derived title — prevents the
             // "wrong storefront title" class of bug. Null/empty label safely falls back to the id.
             panel.Open(vendor, DialogueService.CurrentStructureName);
-            // Canon teardown (dialogue.md): DISMISS the dialogue so the shop REPLACES it instead of
-            // loading OVER a lingering dialogue/portrait canvas. This method is now an IEnumerator
-            // registered ASYNC (Reg routes IEnumerator-returning handlers straight through), so the
-            // runner AWAITS it: yield one frame (re-entrancy-safe), THEN Stop — cancellation is
-            // requested BEFORE the runner's post-command Dialogue.Continue() check, fixing the recurring
-            // "DialogueException: No node has been selected" (the old separate StartCoroutine raced the
-            // runner's Continue and lost — see DialogueRunner.OnCommandReceivedAsync).
-            yield return null;
-            DialogueService.Stop();            // documented walk-away auto-close → clears the portrait
+            // PERMANENT FIX (YarnSpinner-documented; memory yarn-no-node-stop-after-panel-command):
+            // open the panel and RETURN. Do NOT call DialogueService.Stop() here — calling the runner's
+            // Stop() from INSIDE an awaited command races its post-command Dialogue.Continue() and throws
+            // "No node has been selected" (this exact bug, 42x/9 sessions). The conversation is now ended
+            // cleanly by the built-in <<stop>> that follows <<OpenShop>> in every .yarn vendor node, which
+            // completes via the normal onDialogueComplete path (presenter/portrait teardown included).
+            yield return null;   // yield only so Reg registers this as an async command
         }
 
-        // These 5 mirror CmdOpenShop's fix: registered as async IEnumerator commands that open the
-        // panel, yield one frame, then DialogueService.Stop() — so cancellation is requested INSIDE
-        // the runner's awaited command task, BEFORE its post-command Dialogue.Continue() check. That
-        // kills the recurring "DialogueException: No node has been selected" these threw (they were
-        // synchronous Actions that never stopped the dialogue → the runner auto-continued into a dead node).
+        // The 5 panel-open siblings: open the panel + return. Same permanent fix as CmdOpenShop — the
+        // .yarn node's <<stop>> after the verb ends the dialogue; the command must NOT call Stop().
         private IEnumerator CmdOpenUpgrade(string stationType)
         {
             Debug.Log($"[DialogueCommandBridge] OpenUpgrade: {stationType}");
@@ -895,7 +890,7 @@ namespace DeNelle.Village
                 panel = new GameObject("BuildingUpgradePanelHost").AddComponent<DeNelle.Village.Buildings.Progression.BuildingUpgradePanel>();
             if (!string.IsNullOrEmpty(stationType)) panel.OpenFocused(stationType);
             else panel.Open();
-            yield return null; DialogueService.Stop();
+            yield return null;   // panel opens; the node's <<stop>> ends the dialogue (no Stop() here)
         }
 
         private IEnumerator CmdOpenCraft(string context)
@@ -905,7 +900,7 @@ namespace DeNelle.Village
             if (panel == null)
                 panel = new GameObject("VillageCraftingPanelHost").AddComponent<DeNelle.Village.Crafting.VillageCraftingPanel>();
             panel.Open();
-            yield return null; DialogueService.Stop();
+            yield return null;   // panel opens; the node's <<stop>> ends the dialogue (no Stop() here)
         }
 
         private IEnumerator CmdOpenEquip()
@@ -915,7 +910,7 @@ namespace DeNelle.Village
             if (panel == null)
                 panel = new GameObject("EquipmentPanelHost").AddComponent<DeNelle.Village.Hero.EquipmentPanel>();
             panel.Open();
-            yield return null; DialogueService.Stop();
+            yield return null;   // panel opens; the node's <<stop>> ends the dialogue (no Stop() here)
         }
 
         private IEnumerator CmdOpenArena()
@@ -925,7 +920,7 @@ namespace DeNelle.Village
             if (panel == null)
                 panel = new GameObject("ArenaPanelHost").AddComponent<DeNelle.Village.Arena.ArenaPanel>();
             panel.Open();
-            yield return null; DialogueService.Stop();
+            yield return null;   // panel opens; the node's <<stop>> ends the dialogue (no Stop() here)
         }
 
         private IEnumerator CmdOpenRumorBoard()
@@ -935,7 +930,7 @@ namespace DeNelle.Village
             if (panel == null)
                 panel = new GameObject("RumorBoardPanelHost").AddComponent<DeNelle.Village.Hero.RumorBoardPanel>();
             panel.Open();
-            yield return null; DialogueService.Stop();
+            yield return null;   // panel opens; the node's <<stop>> ends the dialogue (no Stop() here)
         }
 
         private void CmdLearnRecipe(string recipeId)

@@ -14,6 +14,7 @@ title: TalkToJeweler
         Sable: "Aether's Facet." Chase the rare spawn — and be quick, it fades.
     -> Just browse the gems.
         <<OpenShop "jeweler">>
+        <<stop>>
 <<elseif $q_jeweler_stage == 1>>
     Sable: Did you catch a flawless one before it faded?
     -> Here it is.
@@ -47,8 +48,10 @@ title: TalkToJeweler
     Sable: The Heartgem-bearer. My finest work walks on your gear. What do you need cut?
     -> Browse gems.
         <<OpenShop "jeweler">>
+        <<stop>>
     -> Upgrade the lapidary.
         <<OpenUpgrade "jeweler">>
+        <<stop>>
     -> Nothing today.
         Sable: Mind who's buying, hm?
 <<endif>>

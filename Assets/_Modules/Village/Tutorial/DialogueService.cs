@@ -117,28 +117,10 @@ namespace DeNelle.Village
         /// plays. The node + commands scope everything to that building's own data, so
         /// the same flow serves every structure ("rinse and repeat, just the parameter").
         /// </summary>
-        /// <summary>Stops the current dialogue immediately (used by walk-away auto-close).</summary>
-        // The Yarn v3 runner fires a spurious Dialogue.Continue() AFTER a node-ending command (e.g. a
-        // panel-open verb like OpenShop that stops the dialogue): OnCommandReceivedAsync -> Continue ->
-        // "No node has been selected", thrown from inside StartDialogue().Forget() and surfaced as an
-        // unobserved-task exception. The dialogue already did its job (panel open, dialogue stopped), so
-        // this is KNOWN-HARMLESS noise — the exact stack is understood, not a guess. Swallow JUST that
-        // one message; re-log everything else exactly as the default handler would, so real errors still
-        // surface. Idempotent (-= before +=) so editor domain-reloads don't stack handlers.
-        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
-        private static void InstallSpuriousNoNodeFilter()
-        {
-            Cysharp.Threading.Tasks.UniTaskScheduler.UnobservedTaskException -= OnUnobservedTaskException;
-            Cysharp.Threading.Tasks.UniTaskScheduler.UnobservedTaskException += OnUnobservedTaskException;
-        }
-
-        private static void OnUnobservedTaskException(System.Exception ex)
-        {
-            if (ex != null && ex.Message != null && ex.Message.Contains("No node has been selected"))
-                return;   // harmless spurious post-command Continue — drop the noise
-            UnityEngine.Debug.LogException(ex);   // every other unobserved exception surfaces as before
-        }
-
+        /// <summary>Stops the current dialogue immediately. WALK-AWAY / auto-close from GAME code ONLY —
+        /// never call this from inside a Yarn command (that races the runner's post-command Continue and
+        /// throws "No node has been selected"); a command-opened panel ends its dialogue via the .yarn
+        /// node's built-in <<stop>>. (memory yarn-no-node-stop-after-panel-command.)</summary>
         public static void Stop()
         {
             if (Current != null && Current.IsDialogueRunning)

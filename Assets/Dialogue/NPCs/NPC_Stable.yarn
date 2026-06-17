@@ -13,6 +13,7 @@ title: TalkToStable
         Fenn: "Wild Hearts." Go gentle — a frightened beast bites the hand that grabs.
     -> Just visit the stables.
         <<OpenShop "stable">>
+        <<stop>>
 <<elseif $q_stable_stage == 1>>
     Fenn: Did you tame one of the wild ones?
     -> It follows me now.
@@ -45,8 +46,10 @@ title: TalkToStable
         <<detour WildHearts>>
     -> Manage my pets.
         <<OpenShop "stable">>
+        <<stop>>
     -> Upgrade the stables.
         <<OpenUpgrade "stable">>
+        <<stop>>
     -> Nothing today.
         Fenn: Go on, they'll follow.
 <<endif>>

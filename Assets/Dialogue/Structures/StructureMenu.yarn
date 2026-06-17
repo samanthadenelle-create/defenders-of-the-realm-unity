@@ -32,8 +32,10 @@ tags: structure interaction
     // command makes the VM pause on the line and <<OpenShop>> never fires -> blank
     // "shop never opens" (forge RCA 2026-06-14, Player.log: no OpenShop ever logged).
     <<OpenShop $structureId>>
+    <<stop>>
 -> Sell <<if $structureCanShop>>
     <<OpenShop $structureId>>
+    <<stop>>
 -> Talk
     <<structure_talk $structureId>>
     {$structureName}: Always work to be done around here. Stick around and I might have a task for you.

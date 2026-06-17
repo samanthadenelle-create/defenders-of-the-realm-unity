@@ -18,6 +18,7 @@ title: TalkToForge
         Borin: "The Last Ember," I'm calling it. Get me that fuel.
     -> Just browse your wares.
         <<OpenShop "forge">>
+        <<stop>>
 <<elseif $q_forge_stage == 1>>
     Borin: Back already? Did you bring the wood and iron to relight the forge?
     -> Here's your fuel.
@@ -60,12 +61,16 @@ title: TalkToForge
     <<endif>>
     -> Craft a weapon.
         <<OpenCraft "forge">>
+        <<stop>>
     -> Browse the forge wares.
         <<OpenShop "forge">>
+        <<stop>>
     -> Upgrade my gear.
         <<OpenUpgrade "forge">>
+        <<stop>>
     -> Equip what I have.
         <<OpenEquip>>
+        <<stop>>
     -> The Forgemasters' saga.
         <<jump SagaBorin>>
     -> Nothing today.
