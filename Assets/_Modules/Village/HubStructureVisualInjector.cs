@@ -69,13 +69,33 @@ namespace DeNelle.Village
             new Swap { bakedName = "Windmill_Food_Storefront",      modelPath = "Structures/farm",         sizeM = 8f,  yawDeg = 90f,  pitchDeg = -90f },
             // Castle barracks = the troop-TRAINING building (existing scene prefab "CastleBarracks");
             // visual swap only — its training function is already wired. Size/yaw owner-dialed.
-            new Swap { bakedName = "CastleBarracks",                modelPath = "Structures/barracks",     sizeM = 8f,  yawDeg = 90f,  pitchDeg = -90f, setLocalPos = true, posX = 38.3f, posY = 0f, posZ = 36f },
-            // ArenaMonument: not in the saved scene (added in-editor / runtime) — found at runtime by
-            // name; hides all renderers under it (parent + child). First-guess size/yaw; owner dials.
-            new Swap { bakedName = "ArenaMonument",                 modelPath = "Structures/arena",        sizeM = 10f, yawDeg = 90f },
+            new Swap { bakedName = "CastleBarracks",                modelPath = "Structures/barracks",     sizeM = 8f,  yawDeg = 180f, pitchDeg = -90f, setLocalPos = true, posX = 38.3f, posY = 0f, posZ = 36f },
+            // (ArenaMonument was deleted; the colosseum is a NEW placement at the arena herald
+            //  spot (15,0,6) — see the Places table below, not a swap.)
         };
 
         private const string MarkerPrefix = "LightSkin_";   // child added on swap (idempotency guard)
+
+        /// <summary>A NEW model dropped at a world position (no baked structure to swap).</summary>
+        private struct Place
+        {
+            public string  name;       // unique object name (idempotency guard)
+            public string  modelPath;
+            public Vector3 worldPos;
+            public float   sizeM;
+            public float   yawDeg;
+            public float   pitchDeg;
+        }
+
+        // The old ArenaMonument was deleted; place the colosseum (arena.fbx) at the arena herald spot
+        // (ArenaHeraldSpawner.HeraldOffset = 15,0,6). The herald already provides the "Enter Arena"
+        // interaction within range, so co-locating the colosseum there makes it the arena ENTRANCE —
+        // visual here, interaction from the herald. No new entry code needed.
+        private static readonly Place[] Places =
+        {
+            new Place { name = "Colosseum_ArenaEntrance", modelPath = "Structures/arena",
+                        worldPos = new Vector3(15f, 0f, 6f), sizeM = 16f, yawDeg = 90f, pitchDeg = -90f },
+        };
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
@@ -93,6 +113,26 @@ namespace DeNelle.Village
         private static void ApplyAll()
         {
             for (int i = 0; i < Swaps.Length; i++) TrySwap(Swaps[i]);
+            for (int i = 0; i < Places.Length; i++) TryPlace(Places[i]);
+        }
+
+        // Place a NEW model at a world position (no baked structure to swap). Idempotent by name;
+        // fit + seat + URP-fix Tripo materials via SkinOptions.Structure, with the orientation correction.
+        private static void TryPlace(Place p)
+        {
+            if (FindByName(p.name) != null) return;   // already placed this scene
+            var host = new GameObject(p.name);
+            host.transform.position = p.worldPos;
+            var opts = SkinOptions.Structure(p.sizeM);
+            opts.LocalRotation = Quaternion.Euler(p.pitchDeg, p.yawDeg, 0f);
+            var vis = VisualFactory.Skin(host.transform, p.modelPath, opts);
+            if (vis == null)
+            {
+                Debug.LogWarning("[HubStructureVisualInjector] place model '" + p.modelPath + "' not found for " + p.name + ".");
+                Object.Destroy(host);
+                return;
+            }
+            Debug.Log("[HubStructureVisualInjector] placed " + p.name + " (" + p.modelPath + ") at " + p.worldPos + ".");
         }
 
         private static void TrySwap(Swap s)
