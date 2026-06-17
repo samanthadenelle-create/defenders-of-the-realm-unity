@@ -165,7 +165,7 @@ namespace DeNelle.Village
             // NPCCommandBridge. Consolidated here onto the SINGLE live runner so each Yarn
             // action name is registered exactly ONCE project-wide (the YarnSpinner source
             // generator throws on a duplicate name across IActionRegistration methods).
-            Reg("OpenShop",       (Action<string>)CmdOpenShop);
+            Reg("OpenShop",       (Func<string, IEnumerator>)CmdOpenShop);
             Reg("OpenUpgrade",    (Action<string>)CmdOpenUpgrade);
             Reg("OpenCraft",      (Action<string>)CmdOpenCraft);
             Reg("OpenEquip",      (Action)CmdOpenEquip);
@@ -842,7 +842,7 @@ namespace DeNelle.Village
         // ── Vendor / station UI verbs (consolidated from the dead NPCCommandBridge) ──
         // Each opens the relevant code-built panel, self-healing a host if none exists
         // (the panels build their own Canvas). Behaviour identical to the old bridge.
-        private void CmdOpenShop(string vendor)
+        private IEnumerator CmdOpenShop(string vendor)
         {
             // Yarn bare command-arg trap: the StructureMenu node fires <<OpenShop $structureId>>,
             // but a bare command-arg does NOT interpolate in this Yarn build — `vendor` arrives as
@@ -863,15 +863,13 @@ namespace DeNelle.Village
             // "wrong storefront title" class of bug. Null/empty label safely falls back to the id.
             panel.Open(vendor, DialogueService.CurrentStructureName);
             // Canon teardown (dialogue.md): DISMISS the dialogue so the shop REPLACES it instead of
-            // loading OVER a lingering dialogue/portrait canvas (the "portrait shows up after Leave"
-            // bug — the dialogue canvas was outside the shop's close scope). Deferred ONE frame so we
-            // don't Stop the Yarn VM mid-command (RPGDialoguePresenter option re-entrancy guard).
-            StartCoroutine(StopDialogueAfterPanelOpen());
-        }
-
-        private System.Collections.IEnumerator StopDialogueAfterPanelOpen()
-        {
-            yield return null;                 // let the Yarn command return before stopping the VM
+            // loading OVER a lingering dialogue/portrait canvas. This method is now an IEnumerator
+            // registered ASYNC (Reg routes IEnumerator-returning handlers straight through), so the
+            // runner AWAITS it: yield one frame (re-entrancy-safe), THEN Stop — cancellation is
+            // requested BEFORE the runner's post-command Dialogue.Continue() check, fixing the recurring
+            // "DialogueException: No node has been selected" (the old separate StartCoroutine raced the
+            // runner's Continue and lost — see DialogueRunner.OnCommandReceivedAsync).
+            yield return null;
             DialogueService.Stop();            // documented walk-away auto-close → clears the portrait
         }
 

@@ -55,6 +55,18 @@ namespace DeNelle.Pets
         private const float WanderTurnDegPerSec = 70f;
         // How sharply it may curve home at the very edge of the leash (deg/sec).
         private const float HomeSteerMaxDegPerSec = 200f;
+        // Perlin-noise drift rate for the wander heading — how fast the coherent
+        // turn-intent evolves. Lower = lazier meander, higher = more restless. TUNABLE.
+        private const float NoiseDriftRate = 0.35f;
+        // Idle-behavior FSM tuning (TUNABLE — set at playtest). Behaviors: 0 wander,
+        // 1 sniff, 2 sit, 3 look, 4 circle, 5 dash. The controller maps each to a clip.
+        private const float DashLead       = 7f;     // longer carrot → a brief dart ahead
+        private const float OrbitRadius    = 5.5f;   // ring radius when circling the hero
+        private const float OrbitDegPerSec = 45f;
+        // Context-weighted behavior selection (research: weighted-random idle states +
+        // cooldown). Index = behavior id. Hero MOVING → keep up; hero STILL → potter.
+        private static readonly int[] WeightsHeroMoving = { 45, 5, 3, 5, 17, 25 };
+        private static readonly int[] WeightsHeroStill  = { 30, 22, 14, 16, 12, 6 };
 
         private Pet _pet;
         private Transform _heroT;
@@ -62,9 +74,13 @@ namespace DeNelle.Pets
         private System.Random _rng;
 
         private float _headingDeg;       // current wander heading (0 = +Z)
-        private float _turnIntentDeg;    // signed bend currently being applied
-        private float _turnIntentTimer;  // time until a new turn intent is rolled
-        private float _pauseTimer;       // >0 = a "stop and sniff" beat
+        private float _turnIntentDeg;    // signed bend currently being applied (Perlin-driven)
+        private float _pauseTimer;       // >0 = the pet is stopped (sniff/sit/look idle beat)
+        private float _noiseSeed;        // per-pet offset into the Perlin field (own personality)
+        private int   _behavior;         // current idle-FSM behavior (0 wander … 5 dash)
+        private float _behaviorTimer;    // dwell remaining in the current behavior
+        private float _orbitDeg;         // angle for the "circle the hero" behavior
+        private Vector3 _lastHeroPos;    // to detect whether the hero is moving (context weighting)
 
         private static Type s_heroType;
 
@@ -75,6 +91,7 @@ namespace DeNelle.Pets
             // restart of the scene replays the same trail.
             _rng = new System.Random(gameObject.GetInstanceID());
             _headingDeg = (float)(_rng.NextDouble() * 360.0);
+            _noiseSeed = (float)(_rng.NextDouble() * 1000.0);   // unique slice of the noise field per pet
         }
 
         private void Update()
@@ -95,15 +112,23 @@ namespace DeNelle.Pets
             Vector3 toHero = _heroT.position - petPos; toHero.y = 0f;
             float distHero = toHero.magnitude;
 
-            // ── meander: re-roll a gentle turn intent periodically, and now and
-            //    then start a "stop and sniff" pause ───────────────────────────
-            _turnIntentTimer -= dt;
-            if (_turnIntentTimer <= 0f)
+            // ── heading drift: a CONTINUOUS Perlin-noise turn intent (coherent noise →
+            //    smooth, animal-like curving), signed so there's no directional bias. ──
+            _turnIntentDeg = (Mathf.PerlinNoise(_noiseSeed, Time.time * NoiseDriftRate) - 0.5f) * 2f * WanderTurnDegPerSec;
+
+            // ── idle-behavior FSM: on a cooldown, weighted-randomly pick what the pet
+            //    DOES (wander/sniff/sit/look/circle/dash), shifted by whether the hero is
+            //    moving; the controller maps the int to a clip. Sniff/sit/look stop the
+            //    pet (short carrot) so the idle anim reads; circle/dash drive movement. ──
+            float heroSpeed = dt > 0f ? (_heroT.position - _lastHeroPos).magnitude / dt : 0f;
+            _lastHeroPos = _heroT.position;
+            _behaviorTimer -= dt;
+            if (_behaviorTimer <= 0f)
             {
-                _turnIntentDeg = (float)(_rng.NextDouble() * 2.0 - 1.0) * WanderTurnDegPerSec;
-                _turnIntentTimer = 0.6f + (float)_rng.NextDouble() * 1.6f;
-                if (_pauseTimer <= 0f && _rng.NextDouble() < 0.22)
-                    _pauseTimer = 0.8f + (float)_rng.NextDouble() * 1.4f;
+                _behavior = PickBehavior(heroSpeed > 0.6f);
+                _behaviorTimer = 1.2f + (float)_rng.NextDouble() * 2.8f;   // 1.2–4 s dwell
+                _pet.SetBehavior(_behavior);
+                _pauseTimer = (_behavior >= 1 && _behavior <= 3) ? _behaviorTimer : 0f; // sniff/sit/look = stop
             }
             if (_pauseTimer > 0f) _pauseTimer -= dt;
 
@@ -128,11 +153,21 @@ namespace DeNelle.Pets
                 }
             }
 
-            // Project the carrot ahead along the heading. Shorten it during a
-            // pause so the pet eases down (Pet.cs arrival brake) and looks around.
-            float lead = _pauseTimer > 0f ? 0.25f : LeadDistance;
+            // Project the carrot ahead along the heading. Shorten it during a pause
+            // (sniff/sit/look) so the pet eases down and the idle anim reads; lengthen
+            // it for a dash so the pet briefly darts ahead.
+            float lead = _pauseTimer > 0f ? 0.25f : (_behavior == 5 ? DashLead : LeadDistance);
             float rad = _headingDeg * Mathf.Deg2Rad;
             Vector3 carrot = petPos + new Vector3(Mathf.Sin(rad), 0f, Mathf.Cos(rad)) * lead;
+
+            // "Circle the hero": override the carrot to an orbit point so the pet rings
+            // the hero (curious/loyal) — still clamped inside the leash just below.
+            if (_behavior == 4)
+            {
+                _orbitDeg += OrbitDegPerSec * dt;
+                float o = _orbitDeg * Mathf.Deg2Rad;
+                carrot = _heroT.position + new Vector3(Mathf.Sin(o), 0f, Mathf.Cos(o)) * OrbitRadius;
+            }
 
             // Hard clamp inside the leash so the pet is never sent past the limit.
             Vector3 fromHero = carrot - _heroT.position; fromHero.y = 0f;
@@ -141,6 +176,19 @@ namespace DeNelle.Pets
             carrot.y = Mathf.Max(0f, carrot.y);
 
             _pet.SetHomePost(carrot);
+        }
+
+        // Weighted-random idle behavior (0 wander,1 sniff,2 sit,3 look,4 circle,5 dash).
+        // Hero MOVING → keep up (wander/dash/circle); hero STILL → potter (sniff/sit/look).
+        // No per-frame alloc — called only on the behavior cooldown, using static weights.
+        private int PickBehavior(bool heroMoving)
+        {
+            int[] w = heroMoving ? WeightsHeroMoving : WeightsHeroStill;
+            int total = 0;
+            for (int i = 0; i < w.Length; i++) total += w[i];
+            int r = _rng.Next(total);
+            for (int i = 0; i < w.Length; i++) { if (r < w[i]) return i; r -= w[i]; }
+            return 0;
         }
 
         private static Transform ResolveHeroTransform()

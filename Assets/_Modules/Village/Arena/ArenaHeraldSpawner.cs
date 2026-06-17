@@ -78,6 +78,7 @@ namespace DeNelle.Village.Arena
         private static void Bootstrap()
         {
             if (Instance != null) return;
+            if (!DeNelle.Core.FeatureFlags.Arena) return;   // demo gate — Arena is demo-ready (ON); flag kept for parity/control via "ff.arena"
             var go = new GameObject("ArenaHeraldSpawner");
             go.AddComponent<ArenaHeraldSpawner>();
             Object.DontDestroyOnLoad(go);

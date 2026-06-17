@@ -185,11 +185,16 @@ namespace DeNelle.Pets
         private static readonly int AnimAttack = Animator.StringToHash("Attack");
         private static readonly int AnimHit    = Animator.StringToHash("Hit");
         private static readonly int AnimDead   = Animator.StringToHash("Dead");
+        // Idle-behavior selector (set by PetHeroLeash's FSM): the controller maps each int
+        // to a clip — 0 walk/idle, 1 sniff, 2 sit, 3 look, 4 circle, 5 dash. Guarded by
+        // _hasBehavior so pets whose controller lacks it (until the motion library lands)
+        // simply ignore it — no spam, no-op.
+        private static readonly int AnimBehavior = Animator.StringToHash("Behavior");
         // WO-163: cached once — whether the resolved controller actually declares
         // each param. The ice-wolf (Tripo/CC5 FBX, not a KayKit Rig_Medium) has no
         // controller with these params, so driving them spammed per-frame errors
         // (same bug as AmbientNPC). Guard every drive with the matching flag.
-        private bool _hasSpeed, _hasAttack, _hasHit, _hasDead;
+        private bool _hasSpeed, _hasAttack, _hasHit, _hasDead, _hasBehavior;
 
         /// <summary>Stable pet id — e.g. <c>pet-aether-sprite</c>.</summary>
         public string PetId => _petId;
@@ -311,7 +316,8 @@ namespace DeNelle.Pets
                     if (p.nameHash == AnimSpeed)  _hasSpeed  = true;
                     if (p.nameHash == AnimAttack) _hasAttack = true;
                     if (p.nameHash == AnimHit)    _hasHit    = true;
-                    if (p.nameHash == AnimDead)   _hasDead   = true;
+                    if (p.nameHash == AnimDead)     _hasDead     = true;
+                    if (p.nameHash == AnimBehavior) _hasBehavior = true;
                 }
             }
             _lastPosition = transform.position;
@@ -339,6 +345,13 @@ namespace DeNelle.Pets
             // per-pet rng PetHeroLeash uses) so a scene restart is deterministic.
             var rng = new System.Random(gameObject.GetInstanceID());
             _speedJitter = 0.88f + (float)rng.NextDouble() * 0.24f;
+        }
+
+        /// <summary>Set the idle-behavior selector the controller maps to a clip (driven by
+        /// PetHeroLeash's FSM). Guarded — a no-op when the pet's controller has no "Behavior" param.</summary>
+        public void SetBehavior(int behavior)
+        {
+            if (_animator != null && _hasBehavior) _animator.SetInteger(AnimBehavior, behavior);
         }
 
         private void Update()

@@ -62,7 +62,11 @@ namespace DeNelle.Pets
         // billboard from Resources/PetPortraits/<id>.png. Pet gameplay
         // (deploy/fight/leash) is unchanged — only the visual swaps. Flip to
         // false to restore the full 3D meshes once they're back in the build.
-        private const bool UseLitePetVisuals = true;
+        // 2026-06-16: light decimated AccuRIG echos (ice-wolf ~1.3MB, aether-sprite ~4.6MB) replace the
+        // old ~208MB pet-FBX bloat → 3D pets WebGL-safe again. Species lacking a Resources/Pets/<species>
+        // model fall back to the billboard. (static readonly, not const, so the guard checks below stay
+        // reachable — no CS0162.)
+        private static readonly bool UseLitePetVisuals = false;
 
         private readonly List<Pet> _deployed = new List<Pet>();
 

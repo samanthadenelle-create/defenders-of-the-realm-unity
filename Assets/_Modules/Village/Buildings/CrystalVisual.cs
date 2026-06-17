@@ -80,6 +80,10 @@ namespace DeNelle.Village
             }
 
             if (_renderer == null) return;
+            // Reload-safe: a mid-Play assembly reload restores _renderer (a UnityEngine.Object)
+            // but nulls _mpb (a plain managed MaterialPropertyBlock) without re-running Awake →
+            // GetPropertyBlock(null) would NRE every frame. Lazily re-create it.
+            if (_mpb == null) _mpb = new MaterialPropertyBlock();
 
             // Colour: lerp smoothly through the palette; brightness breathes on a
             // separate, slower sine so the glow never looks mechanical.

@@ -129,6 +129,11 @@ namespace DeNelle.Village.Hero
 
         private void OnRaidRequested()
         {
+            if (!DeNelle.Core.FeatureFlags.Raid)
+            {
+                FlowTrace.Step("Raid", "raid icon fired but RAID is feature-flagged OFF (victory/return not built) — ignored.");
+                return;
+            }
             FlowTrace.Step("Raid", "raid icon fired — opening RaidSelectionScreen.");
             RaidSelectionScreen.Open();
         }

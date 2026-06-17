@@ -205,11 +205,12 @@ namespace DeNelle.Village.Hero
             tbRect.offsetMin = Vector2.zero;
             tbRect.offsetMax = Vector2.zero;
 
-            // Unified Shop WO #1: EQUIP tab REMOVED — "Equip belongs elsewhere" (EquipmentPanel,
-            // opened via the Yarn "OpenEquip" command). BUY/SELL re-spaced to split the bar evenly.
-            // ShowEquip()/equip rows are left in the file (harmless, no longer reachable from a tab).
-            CreateTabButton(tabBar.transform, "BUY", new Vector2(0.02f, 0.49f), () => ShowBuy());
-            CreateTabButton(tabBar.transform, "SELL", new Vector2(0.51f, 0.98f),
+            // EQUIP tab RE-ENABLED (owner 2026-06-16: "equipping should be an easy option") —
+            // equip is back in the store next to BUY/SELL (still also reachable via the
+            // EquipmentPanel / inventory). Three tabs re-spaced to even thirds.
+            CreateTabButton(tabBar.transform, "BUY", new Vector2(0.02f, 0.33f), () => ShowBuy());
+            CreateTabButton(tabBar.transform, "EQUIP", new Vector2(0.35f, 0.65f), () => ShowEquip());
+            CreateTabButton(tabBar.transform, "SELL", new Vector2(0.67f, 0.98f),
                 () => { _buyFilter = GearKind.Weapon | GearKind.Armor | GearKind.Potion; ShowSell(); });   // default filter = All
             _tabBar = tabBar; // kept so ShowBuy/Sell can light the active tab
 

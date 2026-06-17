@@ -45,9 +45,10 @@ namespace DeNelle.Village.World.Camps
             false;
 #endif
 
-        // ENABLED for the testing pass (owner walks to it + fights). Re-flippable;
-        // zero risk (sole user). To ship DARK again, set back to `DefaultEnabled`.
-        private static bool _enabled = true;
+        // Routed through the central FeatureFlags gate: raid is OFF until victory/return is built
+        // (2026-06-16 demo audit — a cleared raid currently soft-locks). Flip via FeatureFlags /
+        // PlayerPrefs "ff.raid", not here, so every raid entry point gates from one switch.
+        private static bool _enabled = DeNelle.Core.FeatureFlags.Raid;
 
         /// <summary>Master switch. When false the whole raid loop is inert: no
         /// outpost, no garrison, no fortification. Set BEFORE the world scene loads
