@@ -2210,7 +2210,10 @@ namespace DeNelle.HUD
             //  • Build button = upper-RIGHT, lifted off the ability cluster.
             if (portrait)
             {
-                AnchorTopLeft(_partyStack, x: 10f, y: 160f, width: 595f,   // BELOW the wave-status cluster; −15%
+                // Owner 2026-06-16: "minimize the team to the left side in town — takes up too
+                // much room." Compact LEFT strip (248px) instead of the wide 595px town frame;
+                // rows are fraction-laid so everything scales down proportionally.
+                AnchorTopLeft(_partyStack, x: 10f, y: 160f, width: 248f,
                     height: PartyRowHeight * PartySlotCount + PartyRowGap * (PartySlotCount - 1));
                 // MOCKUP ALIGN: Heart-of-Elarion objective bar TOP-LEFT under resources;
                 // WAVE x/y readout CENTERED-top; resource strip across the top-right.
@@ -2238,7 +2241,9 @@ namespace DeNelle.HUD
             }
             else
             {
-                AnchorTopLeft(_partyStack, x: 10f, y: 160f, width: 510f,   // BELOW the wave-status cluster; −15%
+                // Owner 2026-06-16: "minimize the team to the left side in town." Compact LEFT
+                // strip (248px) instead of the wide 510px landscape town frame.
+                AnchorTopLeft(_partyStack, x: 10f, y: 160f, width: 248f,
                     height: PartyRowHeight * PartySlotCount + PartyRowGap * (PartySlotCount - 1));
                 // MOCKUP ALIGN: Heart objective bar top-LEFT; WAVE readout centered-top;
                 // resources top-right.

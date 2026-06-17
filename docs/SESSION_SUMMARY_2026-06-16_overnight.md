@@ -54,10 +54,31 @@ the companion body, re-applied each respawn).
   (weapons by job, armor by weight), and routes equip to that member's loadout. Summary line
   names the active member. Legacy `HeroEquipment` demo-def path guarded to the hero only.
 
+## Lightweight art drops wired (owner made them via the new low-poly workflow)
+
+- **Harvest models** — `782a7856`. `Resources/Harvest/{wood,iron,food,crystals}.fbx` (~33–156 KB)
+  now render on BOTH node paths: `HarvestSite.BuildVisual` (real model on the claimed platform,
+  primitive post/top kept as fallback) and `MineNodeVisual.PropPath` (repointed from the
+  never-shipped `Props/Nodes/*` to `Harvest/*`). Both via `VisualFactory` (FitLargest +
+  FixTripoMaterials) so they size right + render in URP; procedural silhouette stays as fallback.
+- **PetHouse2** — `782a7856`. Echo Hollow (pet-house) catalog visual repointed
+  `Stables_Medieval → Structures/PetHouse2` (~80 KB vs the **7.5 MB unused** `PetHouse.fbx`).
+  `StructureFactory` skins via `SkinOptions.Structure`, so it auto-fits the footprint + URP-fixes
+  materials. ⚠️ **Two caveats:** (1) orientation may need an eyeball on playtest (Tripo FBXs can
+  import facing +X); (2) the town's Echo Hollow may be a **scene-baked** Stables instance
+  (`CityManifest.json`) — the catalog repoint covers build-mode / runtime-catalog placement, a
+  baked instance would need a scene rebuild to change.
+- **Team UI minimized** — (commit pending gate). Town party-frame stack narrowed from the wide
+  595px (portrait) / 510px (landscape) to a compact **248px** LEFT strip (`VillageHudController`
+  ApplyOrientation), per "minimize the team to the left side in town — takes up too much room."
+
 ### Follow-ups / notes
+- **DEAD WEIGHT (recommend delete):** `Resources/Structures/PetHouse.fbx` is **7.5 MB** and now
+  fully unused (nothing loads `Structures/PetHouse`; Echo Hollow uses PetHouse2). Removing it is a
+  ~7.5 MB WebGL win — held for owner OK (it's in git history, recoverable). `PetHome_basecolor.JPEG`
+  (~187 KB) is likely its orphaned texture — check before deleting.
 - **Armor data balance (owner to tune):** light classes currently have cloth→leather→aegis only
   (thin mid-tier). Add light mid-tiers in `armor.json` (content, no recompile) if the gap matters.
 - **Weapon meshes:** companion weapons use the same `Resources/Heroes/Props/Weapons/` path as the
   hero; where a KayKit mesh isn't copied yet, a tinted primitive stands in (same as the hero).
-- **Still open from the overnight list:** minimize the town "team" party-frame UI to the left side
-  (flagged; `VillageHudController.BuildPartyFrames`).
+- **Overnight list: all items now addressed** (Yarn siblings, camp pivot, companion clone, team UI).
