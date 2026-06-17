@@ -66,7 +66,7 @@ namespace DeNelle.Village
             new Swap { bakedName = "Marketplace_Monetization",      modelPath = "Structures/store",        sizeM = 8f,  yawDeg = 90f,  pitchDeg = -90f },
             new Swap { bakedName = "Jeweler_Gems_Storefront",       modelPath = "Structures/jeweler",      sizeM = 7f,  yawDeg = 90f,  pitchDeg = -90f },
             new Swap { bakedName = "Lumbermill_Wood_Storefront",    modelPath = "Structures/lumbermill",   sizeM = 7f,  yawDeg = 0f,   pitchDeg = -90f, posY = 1.5f },
-            new Swap { bakedName = "Windmill_Food_Storefront",      modelPath = "Structures/farm",         sizeM = 8f,  yawDeg = 90f },
+            new Swap { bakedName = "Windmill_Food_Storefront",      modelPath = "Structures/farm",         sizeM = 8f,  yawDeg = 90f,  pitchDeg = -90f },
             // Castle barracks = the troop-TRAINING building (existing scene prefab "CastleBarracks");
             // visual swap only — its training function is already wired. Size/yaw owner-dialed.
             new Swap { bakedName = "CastleBarracks",                modelPath = "Structures/barracks",     sizeM = 8f,  yawDeg = 90f,  pitchDeg = -90f, setLocalPos = true, posX = 38.3f, posY = 0f, posZ = 36f },
