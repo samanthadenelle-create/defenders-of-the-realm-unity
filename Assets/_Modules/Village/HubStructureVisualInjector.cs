@@ -46,9 +46,9 @@ namespace DeNelle.Village
         // ── THE SWAP TABLE — add a row per lightweight structure ──────────────────
         private static readonly Swap[] Swaps =
         {
-            new Swap { bakedName = "EchoHollow_Pets_RoamingArea", modelPath = "Structures/PetHouse2", sizeM = 7f, yawDeg = 90f },
+            new Swap { bakedName = "EchoHollow_Pets_RoamingArea", modelPath = "Structures/PetHouse2",    sizeM = 7f,  yawDeg = 90f },
+            new Swap { bakedName = "ArcaneTower_MagicUpgrades",   modelPath = "Structures/arcane tower", sizeM = 12f, yawDeg = 0f },
             // Templates — uncomment + tune as each lightweight model lands:
-            // new Swap { bakedName = "ArcaneTower_MagicUpgrades",   modelPath = "Structures/arcane tower", sizeM = 12f, yawDeg = 0f },
             // new Swap { bakedName = "Blacksmith_Weapons_Storefront", modelPath = "Structures/<model>",    sizeM = 7f,  yawDeg = 0f },
             // new Swap { bakedName = "Lumbermill_Wood_Storefront",    modelPath = "Structures/<model>",    sizeM = 7f,  yawDeg = 0f },
             // new Swap { bakedName = "Windmill_Food_Storefront",      modelPath = "Structures/<model>",    sizeM = 8f,  yawDeg = 0f },
