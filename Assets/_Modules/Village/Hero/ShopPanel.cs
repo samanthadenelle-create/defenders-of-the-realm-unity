@@ -249,7 +249,7 @@ namespace DeNelle.Village.Hero
             var purchaseBtn = ElarionUiKit.ButtonPack(panel, "Purchase", ElarionUiKit.ButtonKind.Gold,
                 new Vector2(0.34f, 0.03f), new Vector2(0.60f, 0.105f),   // under the item list (right of Close)
                 () => { if (_selectedAction != null) _selectedAction(); else SetStatus("Select an item first."); },
-                packSpriteName: RpgUiCatalog.ButtonFrame);
+                packSpriteName: RpgUiCatalog.ButtonGold);   // GOLD slab for the primary CTA — pops vs the dark Obsidian panel (Close stays neutral)
             _actionLabel = purchaseBtn != null ? purchaseBtn.GetComponentInChildren<TMPro.TextMeshProUGUI>() : null;
             if (_actionLabel != null)
             {
@@ -859,13 +859,12 @@ namespace DeNelle.Village.Hero
             // Left "View" button (owner test) — DARK WOOD fill + CREAM label. Tapping it inspects
             // the item in the display (same select as the row body) and arms the bottom Purchase.
             float nameX0 = 0.20f;
-            var viewBtn = ElarionUiKit.Button(row.transform, "View", ElarionUiKit.ButtonKind.Quiet,
+            var viewBtn = ElarionUiKit.ButtonPack(row.transform, "View", ElarionUiKit.ButtonKind.Quiet,
                 new Vector2(0.02f, 0.14f), new Vector2(0.18f, 0.86f),
-                () => { if (selectAction != null) selectAction(); _selectedAction = buyAction; });
+                () => { if (selectAction != null) selectAction(); _selectedAction = buyAction; },
+                packSpriteName: RpgUiCatalog.ButtonFrame);   // framed pack art so the row CTA matches the footer/tabs
             if (viewBtn != null)
             {
-                var vImg = viewBtn.GetComponent<Image>();
-                if (vImg != null) vImg.color = new Color(0.26f, 0.17f, 0.09f, 1f);   // dark wood
                 var vLbl = viewBtn.GetComponentInChildren<TMPro.TextMeshProUGUI>();
                 if (vLbl != null) { vLbl.color = ElarionUi.Parchment; vLbl.fontStyle = TMPro.FontStyles.Bold; }
             }
