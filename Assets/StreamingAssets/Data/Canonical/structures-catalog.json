@@ -437,7 +437,7 @@
    "displayName": "Echo Hollow",
    "type": "Resource",
    "kind": "Cell",
-   "visualPrefabPath": "Structures/Stables_Medieval",
+   "visualPrefabPath": "Structures/PetHouse2",
    "repo": {
     "behaviorId": "GameplayBuilding",
     "singleton": true,

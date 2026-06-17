@@ -215,7 +215,7 @@ namespace DeNelle.Village.World
 
             Color tint = GetResourceColor();
 
-            // Platform
+            // Platform (always — reads as a claimed harvest station the model sits on).
             var platform = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
             platform.name = "HarvestVisual_Platform";
             platform.transform.SetParent(transform, false);
@@ -224,6 +224,22 @@ namespace DeNelle.Village.World
             StripCollider(platform);
             Paint(platform, new Color(0.35f, 0.32f, 0.28f));
 
+            // Real lightweight resource model on the platform (owner 2026-06-16 art drop:
+            // Resources/Harvest/<type>, ~33-156KB each — WebGL-friendly). Fit + seated by
+            // VisualFactory; Tripo materials URP-fixed. When the model is absent we fall
+            // through to the primitive post + per-resource top below (never breaks the demo).
+            string modelPath = ResourceModelPath(ResourceType);
+            var model = string.IsNullOrEmpty(modelPath) ? null : VisualFactory.Skin(transform, modelPath,
+                new SkinOptions { FitLargest = 2.4f, SeatOnGround = true, FixTripoMaterials = true });
+            if (model != null)
+            {
+                model.name = "HarvestVisual_Model";
+                var mp = model.transform.localPosition; mp.y += 0.18f;   // clear the platform top
+                model.transform.localPosition = mp;
+                return;   // the real model IS the visual — skip the primitive post/top
+            }
+
+            // ── Fallback (model missing on disk): primitive post + per-resource top ──
             // Post
             var post = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
             post.name = "HarvestVisual_Post";
@@ -270,6 +286,17 @@ namespace DeNelle.Village.World
                 Paint(top, tint);
             }
         }
+
+        // Resources path of the lightweight per-type harvest model (owner art drop). Null for
+        // an unmapped resource → the primitive fallback in BuildVisual is used.
+        private static string ResourceModelPath(MineResource r) => r switch
+        {
+            MineResource.Wood          => "Harvest/wood",
+            MineResource.Iron          => "Harvest/iron",
+            MineResource.Food          => "Harvest/food",
+            MineResource.AetherCrystal => "Harvest/crystals",
+            _ => null,
+        };
 
         private Color GetResourceColor()
         {

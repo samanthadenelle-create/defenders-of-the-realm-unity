@@ -50,15 +50,15 @@ namespace DeNelle.Village
 
         private GameObject _visual;
 
-        // Per-resource Resources prop path tried FIRST (drop a prefab here to upgrade the
-        // look). These are intentionally optional — none ship today, so the procedural
-        // fallback is what renders until matching art lands. Keep in sync with the catalog.
+        // Per-resource Resources prop path tried FIRST (drop a model here to upgrade the look).
+        // Owner 2026-06-16 art drop: lightweight per-type models at Resources/Harvest/<type>
+        // (~33-156KB each, WebGL-friendly). When absent the procedural fallback renders.
         private static string PropPath(MineResource res) => res switch
         {
-            MineResource.Wood          => "Props/Nodes/LumberNode",
-            MineResource.Iron          => "Props/Nodes/IronOreNode",
-            MineResource.Food          => "Props/Nodes/GrainNode",
-            MineResource.AetherCrystal => "Props/Nodes/CrystalNode",
+            MineResource.Wood          => "Harvest/wood",
+            MineResource.Iron          => "Harvest/iron",
+            MineResource.Food          => "Harvest/food",
+            MineResource.AetherCrystal => "Harvest/crystals",
             _                          => null,
         };
 
@@ -106,8 +106,10 @@ namespace DeNelle.Village
                 string path = PropPath(Resource);
                 if (!string.IsNullOrEmpty(path) && Resources.Load<GameObject>(path) != null)
                 {
-                    var skinned = VisualFactory.Skin(
-                        _visual.transform, path, SkinOptions.Prop(2.0f));
+                    // FixTripoMaterials so a Tripo/AccuRIG export renders in URP (no magenta),
+                    // matching the HarvestSite path. Prop fit + seated on the node.
+                    var skinned = VisualFactory.Skin(_visual.transform, path,
+                        new SkinOptions { FitLargest = 2.0f, SeatOnGround = true, FixTripoMaterials = true });
                     if (skinned != null) return;
                 }
             }
