@@ -81,6 +81,7 @@ namespace DeNelle.Village
             public float heldLength;     // longest-axis target length (m) after bounds-normalize
             public Color tint;           // fallback-primitive tint when the mesh isn't present
             public WeaponClass kind;     // family — drives the grip-point inference path
+            public bool native;          // prop is authored grip-at-origin + oriented (e.g. Blink) — trust it: skip normalize/hilt-seat
         }
 
         // Per-archetype grip presets (one place to tune each weapon family's seat).
@@ -142,6 +143,13 @@ namespace DeNelle.Village
             heldLength = 0.55f, tint = new Color(0.58f, 0.60f, 0.64f)
         };
 
+        // Mark a preset as a NATIVE prop — a grip-at-origin, correctly-oriented authored prefab
+        // (e.g. a Blink weapon: Sword1h_01 sits at the origin, identity rotation). Equip() then
+        // routes it through SeatNative (trust its pivot) instead of the bounds-normalize +
+        // hilt-inference legacy path that reverse-engineers a grip for raw Tripo/KayKit FBX.
+        // Use for any Blink/authored .prefab dropped into Resources/Heroes/Props/Weapons.
+        private static WeaponVisual Native(WeaponVisual v) { v.native = true; return v; }
+
         // Exact-id overrides keyed by the ids actually present in weapons.json.
         // (Falls through to the keyword classifier below for anything not listed.)
         // TODO data-driven: delete this once weapons.json carries visualMesh/grip.
@@ -156,7 +164,7 @@ namespace DeNelle.Village
             { "aegis_aetherstaff",   Staff("staff_D") },
 
             // Knight — sword tiers -> sword_A / sword_D / sword_G by tier.
-            { "knight_starter",      Sword("sword_A") },
+            { "knight_starter",      Native(Sword("sword_A")) },   // Blink Sword1h_01 prefab (grip-at-origin)
             { "knight_iron",         Sword("sword_D") },
             { "knight_oath",         Sword("sword_F") },
             { "knight_dawn",         Sword("sword_G") },
@@ -334,19 +342,23 @@ namespace DeNelle.Village
             foreach (var c in prop.GetComponentsInChildren<Collider>(true)) if (c != null) Destroy(c);
             foreach (var rb in prop.GetComponentsInChildren<Rigidbody>(true)) if (rb != null) Destroy(rb);
 
-            // Seat via a grip root, bounds-normalized like HeroBowAttachment so any FBX
-            // (regardless of its own pivot/scale/orientation) lands with the long axis up.
+            // Seat via a grip root. NATIVE props (e.g. Blink) are authored grip-at-origin with a
+            // correct orientation — trust them: SeatNative scales to length but does NOT re-centre,
+            // so the grip stays at the hand (the handle, not mid-blade). NON-native props (legacy
+            // Tripo/KayKit) go through bounds-normalize + hilt-inference that reverse-engineers a grip.
             var gripRoot = new GameObject(PropName);
-            NormalizeInto(prop, gripRoot.transform, vis.heldLength);
-
-            // GRIP-POINT INFERENCE (owner's geometric rule). NormalizeInto leaves `prop`
-            // with its LONGEST axis on local +Y and bounds-centre at the gripRoot origin —
-            // but the bounds-centre is mid-blade, NOT where a hand grips. For a SWORD we
-            // re-seat `prop` so the HANDLE (below the crossguard, toward the pommel) sits at
-            // the origin with the BLADE pointing +Y (outward from the hand). Other classes
-            // keep the proven centre/root seat (hook left to extend: staff=mid, bow=riser).
-            if (vis.kind == WeaponClass.Sword || vis.kind == WeaponClass.Dagger)
-                SeatByHandle(prop, gripRoot.transform);
+            if (vis.native)
+            {
+                SeatNative(prop, gripRoot.transform, vis.heldLength);
+            }
+            else
+            {
+                NormalizeInto(prop, gripRoot.transform, vis.heldLength);
+                // GRIP-POINT INFERENCE: NormalizeInto centres by BOUNDS (mid-blade), not the grip;
+                // for a sword/dagger re-seat so the HANDLE sits at the origin, blade pointing +Y.
+                if (vis.kind == WeaponClass.Sword || vis.kind == WeaponClass.Dagger)
+                    SeatByHandle(prop, gripRoot.transform);
+            }
 
             gripRoot.transform.SetParent(hand, false);
             gripRoot.transform.localPosition = vis.gripPos;
@@ -366,7 +378,10 @@ namespace DeNelle.Village
             //    serialized _swordGripEuler calibration nudge.
             //  • Other classes: keep the proven per-weapon gripEuler (bow/staff/shield are
             //    already seated correctly by NormalizeInto + their preset euler).
-            if (vis.kind == WeaponClass.Sword || vis.kind == WeaponClass.Dagger)
+            // NATIVE props trust their authored orientation → use the per-archetype gripEuler preset
+            // directly (tune that one value on playtest). Only the legacy normalize path needs the
+            // hand-axis-derived sword rotation.
+            if (!vis.native && (vis.kind == WeaponClass.Sword || vis.kind == WeaponClass.Dagger))
                 _baseGripRot = ComputeSwordGripRotation();
             else
                 _baseGripRot = Quaternion.Euler(_baseGripEuler);
@@ -780,6 +795,23 @@ namespace DeNelle.Village
 
             if (TryLocalBounds(prop, parent, out Bounds b2))
                 prop.transform.localPosition -= b2.center;
+        }
+
+        // Seat a NATIVE prop (authored grip-at-origin + correct orientation, e.g. Blink): trust the
+        // prefab — parent at identity, scale to the target held length by the LONGEST bound, and do
+        // NOT re-centre (re-centring is what moved the grip to mid-blade on the normalize path). The
+        // prefab origin (the grip) stays at the gripRoot origin → the hand holds the handle, not the blade.
+        private static void SeatNative(GameObject prop, Transform parent, float targetLength)
+        {
+            prop.transform.SetParent(parent, false);
+            prop.transform.localPosition = Vector3.zero;
+            prop.transform.localRotation = Quaternion.identity;
+            prop.transform.localScale = Vector3.one;
+            if (TryLocalBounds(prop, parent, out Bounds b))
+            {
+                float longest = Mathf.Max(b.size.x, Mathf.Max(b.size.y, b.size.z));
+                if (longest > 1e-4f) prop.transform.localScale = Vector3.one * (targetLength / longest);
+            }
         }
 
         private static Vector3 Axis(int i) =>
