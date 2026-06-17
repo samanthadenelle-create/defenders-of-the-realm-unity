@@ -46,6 +46,60 @@ namespace DeNelle.Editor
             Debug.Log("[CastleGateNavVerify] " + (ok ? "GATE_NAV_OK" : "GATE_NAV_FAIL") + " :: " + detail);
         }
 
+        // PER-GATE reachability (read-only): paths the spawn -> EVERY SceneTransitionTrigger in
+        // the scene and reports, for each, PathComplete + closest approach vs ProximityRadius. This
+        // answers "can the hero reach ALL 4 gates" (the single-trigger Verify only checks the first
+        // seam). Does NOT modify or save the scene. Batchmode: DiagnoseAllGates.
+        public static void DiagnoseAllGates()
+        {
+            EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
+            int surfaces = ReloadCommittedNavMesh();
+            Debug.Log("[AllGates] NavMeshSurfaces with persisted data = " + surfaces);
+
+            var spawnGo = GameObject.Find("HeroStartPoint_PlayerSpawn")
+                       ?? GameObject.Find("HeroStartPoint_InsidePersonalQuarters")
+                       ?? GameObject.Find("Capsule");
+            if (spawnGo == null) { Debug.Log("[AllGates] GATE_NAV_FAIL :: no hero spawn marker"); return; }
+            Vector3 spawn = spawnGo.transform.position;
+            bool sSpawn = NavMesh.SamplePosition(spawn, out NavMeshHit hSpawn, 5f, NavMesh.AllAreas);
+            Debug.Log($"[AllGates] spawn={spawn} onMesh={sSpawn}");
+            if (!sSpawn) { Debug.Log("[AllGates] GATE_NAV_FAIL :: spawn not on navmesh"); return; }
+
+            var transType = FindType("DeNelle.Village.SceneTransitionTrigger");
+            if (transType == null) { Debug.Log("[AllGates] GATE_NAV_FAIL :: SceneTransitionTrigger type not found"); return; }
+            var comps = UnityEngine.Object.FindObjectsByType(transType, FindObjectsSortMode.None);
+            Debug.Log("[AllGates] trigger count = " + comps.Length);
+
+            var fR = transType.GetField("ProximityRadius");
+            var fTgt = transType.GetField("targetSceneName");
+            var fConf = transType.GetField("requireConfirm");
+            int reachable = 0;
+            foreach (var c in comps)
+            {
+                var mb = c as MonoBehaviour;
+                if (mb == null) continue;
+                Vector3 tp = mb.transform.position;
+                float radius = (fR != null && fR.GetValue(mb) is float f) ? f : 6f;
+                string tgt = fTgt?.GetValue(mb) as string ?? "?";
+                bool conf = fConf != null && fConf.GetValue(mb) is bool b && b;
+
+                bool sTrig = NavMesh.SamplePosition(tp, out NavMeshHit hTrig, 1.0f, NavMesh.AllAreas);
+                var path = new NavMeshPath();
+                Vector3 target = sTrig ? hTrig.position : tp;
+                NavMesh.CalculatePath(hSpawn.position, target, NavMesh.AllAreas, path);
+                int corners = path.corners != null ? path.corners.Length : 0;
+                Vector3 last = corners > 0 ? path.corners[corners - 1] : hSpawn.position;
+                float approach = Vector3.Distance(last, tp);
+                bool complete = path.status == NavMeshPathStatus.PathComplete;
+                bool within = approach <= radius + 0.5f;
+                bool ok = complete && within;
+                if (ok) reachable++;
+                Debug.Log($"[AllGates] '{mb.name}' target={tgt} requireConfirm={conf} pos={tp} radius={radius} " +
+                          $"pathStatus={path.status} approach={approach:F1}m within={within} -> {(ok ? "REACHABLE" : "UNREACHABLE")}");
+            }
+            Debug.Log($"[AllGates] {(reachable == comps.Length ? "GATE_NAV_OK" : "GATE_NAV_FAIL")} :: {reachable}/{comps.Length} gates reachable from spawn.");
+        }
+
         // RUNTIME diagnostic for "reach gate, nothing happens": dumps the actual state of
         // the SceneTransitionTrigger seam (active? enabled? position? radius? target?),
         // whether OuterWorld is loadable, and which objects carry the Player/HeroTarget tag

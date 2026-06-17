@@ -1065,6 +1065,10 @@ namespace DeNelle.Editor
                 // stops at the navmesh edge ~10-18m short of the marker, so the default 6m never fired.
                 var fRadius = transType.GetField("ProximityRadius");
                 if (fRadius != null) fRadius.SetValue(comp, 18f);
+
+                // OWNER 2026-06-17: AUTO-CROSS, no F-prompt — the hub exit seam crosses on
+                // proximity (the F-key confirm felt unnatural). Null-safe.
+                transType.GetField("requireConfirm")?.SetValue(comp, false);
             }
             else
             {
@@ -1176,6 +1180,9 @@ namespace DeNelle.Editor
                 // fade-to-black/yanked out. 12 only fires AT the gate; the widened nav lane (gate strip 7.5 / inner
                 // gap 8) lets the hero reach close enough to cross deliberately.
                 if (fRadius   != null) fRadius.SetValue(comp, 12f);
+
+                // OWNER 2026-06-17: AUTO-CROSS, no F-prompt — outpost seams cross on proximity. Null-safe.
+                transType.GetField("requireConfirm")?.SetValue(comp, false);
 
                 Log($"WireOutpostConnectors: placed OutpostConnector_{sceneName} at world {worldPos} " +
                     $"(gate yaw {yaw}, entry {targetPosition}, additive, radius 12).");
@@ -1607,6 +1614,93 @@ namespace DeNelle.Editor
         }
 
         // =====================================================================
+        //  REWIRE + REBAKE (owner 2026-06-17) — LEAST-INVASIVE base-loop exit fix.
+        // -----------------------------------------------------------------------------
+        //  Does NOT regenerate the castle (the owner has tuned walls/structures). It only:
+        //   1. Re-runs the EXIT seam wiring (EnsureExitSeamAtRecipeGate) and the OUTPOST
+        //      seam wiring (WireOutpostConnectors) — both now stamp requireConfirm=false, so
+        //      the saved SceneTransitionTrigger components AUTO-CROSS (no F-prompt, owner directive).
+        //   2. Rebuilds the invisible NavMesh floor + re-bakes every NavMeshSurface (3/4 gates
+        //      were unreachable from a stale/fragmented bake) and persists the navmesh asset.
+        //   3. Saves MainCastle_Hall + verifies spawn->gate reachability (CastleGateNavVerify).
+        //  Reuses the existing wiring + floor + bake helpers (no duplicated logic; the bake is
+        //  factored into BakeAllCastleSurfacesAndPersist, shared with this method).
+        // =====================================================================
+        public static void RewireAndRebakeCurrentCastle()
+        {
+            const string scenePath = "Assets/Scenes/MainCastle_Hall.unity";
+            var scene = EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Single);
+            Log("REWIRE-REBAKE: opened " + scenePath);
+
+            // 1. Re-apply the exit + outpost seam wiring so requireConfirm=false lands on the
+            //    saved components (auto-cross, no F-prompt — owner 2026-06-17). Idempotent.
+            EnsureExitSeamAtRecipeGate();
+            var root = GameObject.Find(RootName);
+            if (root != null) WireOutpostConnectors(root.transform);
+            else Err("REWIRE-REBAKE: " + RootName + " not found — outpost connectors skipped.");
+
+            // 2. Rebuild the walkable floor (courtyard + gate strips + keep interior) so the
+            //    bake collects a connected sheet, then re-bake + persist. Mirrors the proven
+            //    BatchAddFloorAndBakeCastle flow WITHOUT rebuilding walls/structures.
+            Transform parent = root != null ? root.transform
+                : (GameObject.Find(RootName + "_FloorHost") ?? new GameObject(RootName + "_FloorHost")).transform;
+            BuildNavMeshFloor(parent);
+            Log("REWIRE-REBAKE: floor ensured (courtyard + gate + keep interior).");
+
+            BakeAllCastleSurfacesAndPersist("REWIRE-REBAKE");
+
+            // 3. Save scene + assets.
+            EditorSceneManager.MarkSceneDirty(scene);
+            EditorSceneManager.SaveScene(scene);
+            AssetDatabase.SaveAssets();
+            Log("REWIRE-REBAKE: saved scene + assets.");
+
+            // 4. PROVE spawn->gate reachability (behavioral, post-bake).
+            bool ok = CastleGateNavVerify.VerifyOpenScene(out string detail);
+            Log("REWIRE-REBAKE: gate-nav verify -> " + (ok ? "GATE_NAV_OK" : "GATE_NAV_FAIL") + " :: " + detail);
+        }
+
+        // Shared bake: configure every NavMeshSurface to Physics Colliders / All, BuildNavMesh,
+        // and persist the data asset. Factored out of the inline copies so RewireAndRebakeCurrentCastle
+        // reuses the exact proven block (BatchAddFloorAndBakeCastle / BATCH-RECIPE keep their copies).
+        private static void BakeAllCastleSurfacesAndPersist(string tag)
+        {
+            var surfType = FindType("Unity.AI.Navigation.NavMeshSurface");
+            if (surfType == null) { Err(tag + ": NavMeshSurface type not resolved — bake skipped."); return; }
+
+            var surfaces = Object.FindObjectsByType(surfType, FindObjectsSortMode.None);
+            Log(tag + ": NavMeshSurface count = " + surfaces.Length);
+            foreach (var s in surfaces)
+            {
+                var ug = surfType.GetProperty("useGeometry");
+                if (ug != null) ug.SetValue(s, System.Enum.ToObject(ug.PropertyType, 1)); // PhysicsColliders
+                var co = surfType.GetProperty("collectObjects");
+                if (co != null) co.SetValue(s, System.Enum.ToObject(co.PropertyType, 0)); // All
+
+                var build = surfType.GetMethod("BuildNavMesh", System.Type.EmptyTypes);
+                if (build != null) { build.Invoke(s, null); Log(tag + ": BuildNavMesh() invoked."); }
+
+                var dataProp = surfType.GetProperty("navMeshData");
+                var data = dataProp != null ? dataProp.GetValue(s) as Object : null;
+                if (data != null)
+                {
+                    if (!System.IO.Directory.Exists("Assets/Scenes/MainCastle_Hall"))
+                        AssetDatabase.CreateFolder("Assets/Scenes", "MainCastle_Hall");
+                    string assetPath = "Assets/Scenes/MainCastle_Hall/NavMesh-NavMeshSurface.asset";
+                    if (!AssetDatabase.Contains(data))
+                    {
+                        var existing = AssetDatabase.LoadAssetAtPath<Object>(assetPath);
+                        if (existing != null) AssetDatabase.DeleteAsset(assetPath);
+                        AssetDatabase.CreateAsset(data, assetPath);
+                        Log(tag + ": navmesh asset written -> " + assetPath);
+                    }
+                    else Log(tag + ": navmesh data already an asset (updated in place).");
+                }
+                else Err(tag + ": surface.navMeshData was null after bake — bake produced nothing.");
+            }
+        }
+
+        // =====================================================================
         //  ENSURE CASTLE TOWN PROPS (owner 2026-06-12) — idempotent cleanup applied to the
         //  ALREADY-SAVED scene. BatchRebuildCastleFromRecipeAndBake does NOT rebuild the 8
         //  structures, so the owner's manual edits must be captured here so a re-bake reproduces
@@ -1787,6 +1881,9 @@ namespace DeNelle.Editor
             // few steps tripped one and yanked the player out (fade-to-black). 12 only fires when the hero is AT
             // the gate; the widened nav lane (gate exit strip 7.5 / inner-ring gap 8) lets the hero reach it.
             transType.GetField("ProximityRadius")?.SetValue(comp, 12f);
+            // OWNER 2026-06-17: AUTO-CROSS, no F-prompt — the exit seam crosses on proximity
+            // (the F-key confirm felt unnatural). Null-safe.
+            transType.GetField("requireConfirm")?.SetValue(comp, false);
 
             var col = marker.AddComponent<BoxCollider>();
             col.isTrigger = true;
