@@ -135,6 +135,15 @@ namespace DeNelle.Village
                 FlowTrace.Once("Enemy", $"skinned-{model}",
                     $"VisualFactory.Skin OK for model '{model}' (id '{(def != null ? def.Id : "?")}') — real mesh, not capsule");
                 EnemyAnimatorFactory.Apply(vis, model);   // walk/attack/die controller
+
+                // WIGHT HALF-UNDERGROUND FIX (RCA 2026-06-17): the Tripo/AccuRIG FBXs pivot at
+                // the mesh CENTRE, so when the visual is scaled up (the Demon/wight at 4x) the
+                // feet sink well below the root's spawn Y=0 and the body renders half-buried.
+                // Re-ground the visual exactly like PetDeployer.NormalizePetHeight (L718-727):
+                // recompute the skinned bounds and lift the visual child so its feet (bounds.min.y)
+                // rest at the root's Y. Null-safe — no renderers → skip. Applies to every model
+                // (the offset is ~0 for already-grounded rigs) so no spawner can ship a buried body.
+                ReGroundVisual(go.transform, vis);
             }
             else
             {
@@ -269,6 +278,24 @@ namespace DeNelle.Village
                 $"'{(string.IsNullOrEmpty(family) ? "?" : family)}') has NO explicit model case " +
                 $"— DEFAULTED by size to '{sizeDefault}'. Add a case or import art for this family.");
             return sizeDefault;
+        }
+
+        // Lift a freshly-skinned visual child so its FEET rest at the root's Y. The Tripo/
+        // AccuRIG FBXs pivot at the mesh centre, so a scaled-up body (the 4x wight) sinks
+        // below the spawn surface. Mirrors PetDeployer.NormalizePetHeight's re-ground tail:
+        // recompute world bounds post-scale, and if the bounds bottom is below the root,
+        // shift the visual up by that gap. Null-safe — no renderers → no-op.
+        private static void ReGroundVisual(Transform root, GameObject vis)
+        {
+            if (root == null || vis == null) return;
+            var renderers = vis.GetComponentsInChildren<Renderer>();
+            if (renderers == null || renderers.Length == 0) return;
+            Bounds b = renderers[0].bounds;
+            for (int i = 1; i < renderers.Length; i++) b.Encapsulate(renderers[i].bounds);
+            if (b.size.y <= 0.01f) return;
+            float feetOffset = b.min.y - root.position.y;   // negative when feet are below the root
+            if (feetOffset < 0f)
+                vis.transform.localPosition -= new Vector3(0f, feetOffset, 0f);
         }
 
         private static void TintCapsule(Renderer mr)

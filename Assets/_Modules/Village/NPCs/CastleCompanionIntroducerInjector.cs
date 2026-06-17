@@ -320,7 +320,12 @@ namespace DeNelle.Village
 
         private void Update()
         {
-            if (_fired) return;
+            // WO-438 FIX 1: once fired, stay deregistered every frame until the holder is
+            // destroyed (~0.5s later). Without this, a stale entry could linger in
+            // TalkPromptRegistry — NearestTalk() returns this retired NPC's dead Interact()
+            // (which no-ops on `_fired`), lighting the Talk button but doing nothing
+            // ("greyed out after yarn") and poisoning proximity-talk for other NPCs.
+            if (_fired) { TalkPromptRegistry.Deregister(transform); return; }
             if (_hero == null) { ResolveHero(); return; }
 
             // Build mode: release + bail (player is authoring, not interacting).

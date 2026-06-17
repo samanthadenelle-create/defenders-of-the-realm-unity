@@ -86,7 +86,11 @@ namespace DeNelle.Village
                 int hudSlot = slot + 1; // 0 is the hero
                 var c = _scratch[slot];
                 // Roster gate (WO-301): only show a frame for a slot the roster covers.
-                if (c != null && slot < rosterCount)
+                // WO-438 (FIX C): a companion destroyed between the registry read above
+                // and this access passes the C# null-guard but is a Unity FAKE-null —
+                // touching .DisplayName then threw an NRE. Revalidate the Unity object +
+                // its GameObject is still live + active before reading any member.
+                if (c != null && c.gameObject != null && c.gameObject.activeInHierarchy && slot < rosterCount)
                 {
                     // Real HP now that StoryCompanion is mortal (was a placeholder full
                     // bar). MaxHp guards against a 0 (pre-Start) read so the bar never

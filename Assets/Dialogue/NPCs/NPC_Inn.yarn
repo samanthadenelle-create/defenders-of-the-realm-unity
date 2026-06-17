@@ -52,7 +52,10 @@ title: TalkToInn
 // and works through ANY launch path (NPC station OR DialogueService). ──
 title: RumorBoard
 ---
-<<OpenRumorBoard>>
+// WO-438: the rumor board now opens from C# (DialogueCommandBridge.OnNodeStartedOpenPanels,
+// fired on this node's start) instead of an in-node <<OpenRumorBoard>> command — the command
+// ran as the node's first statement and raced the VM into Brom's narration, causing the
+// "No node has been selected" no-node fault. Brom's lines below now run clean.
 Brom: Here's the talk, then —
 <<if $q_forge_stage > 0 and $q_forge_stage < 9>>
     Brom: Borin's forge is lit but his work's not done — he's still waiting on you.

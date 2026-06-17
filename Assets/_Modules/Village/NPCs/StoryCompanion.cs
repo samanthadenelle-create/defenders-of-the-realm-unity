@@ -741,18 +741,32 @@ namespace DeNelle.Village
         }
 
         /// <summary>
-        /// Resolves the Keeper. WO-410 (perf): this previously swept EVERY Transform in
-        /// the scene via FindObjectsByType&lt;Transform&gt; — run ~1Hz per companion (4×),
-        /// it was a per-second GC/CPU spike on MainCastle_Hall. The hero rig owns the
-        /// single HeroLocomotion component, so a TYPED lookup finds it directly without
-        /// touching every Transform. (We can't use FindWithTag("Player") — that tag is
-        /// not declared in TagManager.asset and would throw.) The caller caches the
-        /// result in _heroT and only re-resolves when it goes null.
+        /// Resolves the Keeper. WO-438 (FIX 1): robust hero resolution mirroring
+        /// ShopPanel.FindActiveHeroGO's priority — tag "Player" (the hero IS tagged
+        /// Player, set in HeroControlEnsurer.Ensure, CLAUDE.md §7 / WO-450) → the
+        /// typed HeroLocomotion lookup → a name-prefix sweep ("Hero ("). The earlier
+        /// comment that "Player" was undeclared is stale; FindWithTag returns null
+        /// (not a throw) when nothing carries it, so trying it first is safe and
+        /// catches the case where HeroLocomotion hasn't spun up yet on first scan.
+        /// The name sweep is only reached when the cheap lookups both miss, so the
+        /// per-frame GC concern (WO-410) stays bounded. The caller caches the result
+        /// in _heroT and only re-resolves (~1Hz) while it is null, so this keeps
+        /// retrying until the hero exists — the companion then engages instead of
+        /// stranding at its spawn.
         /// </summary>
         private static Transform ResolveHeroFallback()
         {
+            var byTag = GameObject.FindWithTag("Player");
+            if (byTag != null) return byTag.transform;
+
             var hero = UnityEngine.Object.FindFirstObjectByType<HeroLocomotion>();
-            return hero != null ? hero.transform : null;
+            if (hero != null) return hero.transform;
+
+            foreach (var t in UnityEngine.Object.FindObjectsByType<Transform>(FindObjectsSortMode.None))
+            {
+                if (t != null && t.name.StartsWith("Hero (")) return t;
+            }
+            return null;
         }
 
         // ── Follow (trail-the-hero, never block) ─────────────────────────────

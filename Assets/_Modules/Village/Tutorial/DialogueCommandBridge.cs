@@ -83,6 +83,15 @@ namespace DeNelle.Village
             SeedCompanionName();
             _runner.onDialogueStart?.AddListener(SeedCompanionName);
 
+            // WO-438 (owner 2026-06-17): open the Inn rumor board from C# on node-start
+            // instead of a yarn `<<OpenRumorBoard>>` command. The yarn command opened the
+            // board as the FIRST statement of the `RumorBoard` node, racing the VM's
+            // Continue() into Brom's narration → the "No node has been selected" no-node
+            // fault on the clean fleet. Driving it from the node-start hook keeps Brom's
+            // rumor narration intact (the node runs clean, no orphaned Continue) while the
+            // board still surfaces the moment the rumor node begins.
+            _runner.onNodeStart?.AddListener(OnNodeStartedOpenPanels);
+
             Debug.Log("[DialogueCommandBridge] Installed — FTUE commands wired to live systems.");
         }
 
@@ -925,12 +934,29 @@ namespace DeNelle.Village
 
         private IEnumerator CmdOpenRumorBoard()
         {
+            OpenRumorBoard();
+            yield return null;   // panel opens; the node's <<stop>> ends the dialogue (no Stop() here)
+        }
+
+        /// <summary>Find-or-spawn + open the rumor board. Shared by the (legacy) yarn
+        /// command and the WO-438 node-start hook so both drive the same surface.</summary>
+        private void OpenRumorBoard()
+        {
             Debug.Log("[DialogueCommandBridge] OpenRumorBoard");
             var panel = FindObjectOfType<DeNelle.Village.Hero.RumorBoardPanel>();
             if (panel == null)
                 panel = new GameObject("RumorBoardPanelHost").AddComponent<DeNelle.Village.Hero.RumorBoardPanel>();
             panel.Open();
-            yield return null;   // panel opens; the node's <<stop>> ends the dialogue (no Stop() here)
+        }
+
+        // WO-438: node-start hook (registered on _runner.onNodeStart). Opens the rumor
+        // board the moment the `RumorBoard` node begins — replacing the in-node yarn
+        // `<<OpenRumorBoard>>` command that raced the VM into Brom's narration. Brom's
+        // rumor lines now run clean (no orphaned Continue / no-node fault).
+        private void OnNodeStartedOpenPanels(string nodeName)
+        {
+            if (string.Equals(nodeName, "RumorBoard", StringComparison.Ordinal))
+                OpenRumorBoard();
         }
 
         private void CmdLearnRecipe(string recipeId)
