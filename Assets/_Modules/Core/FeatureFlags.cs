@@ -39,5 +39,27 @@ namespace DeNelle.Core
             if (pref == 1) return true;
             return defaultOn;
         }
+
+#if UNITY_EDITOR
+        // ── Editor flag toggles (Defenders > Debug) — no registry editing, no Play Mode needed.
+        // Flip, then re-open the panel to see it. Checkmark shows the current resolved state.
+        private const string BlinkChromeMenu = "Defenders/Debug/Blink Chrome (hide our UI dressing)";
+
+        [UnityEditor.MenuItem(BlinkChromeMenu, priority = 200)]
+        private static void ToggleBlinkChrome()
+        {
+            bool on = !BlinkChrome;                       // resolved value, then invert
+            PlayerPrefs.SetInt("ff.blinkchrome", on ? 1 : 0);
+            PlayerPrefs.Save();
+            Debug.Log("[FeatureFlags] ff.blinkchrome = " + (on ? "ON (Blink panels show clean)" : "OFF (our chrome)"));
+        }
+
+        [UnityEditor.MenuItem(BlinkChromeMenu, validate = true)]
+        private static bool ToggleBlinkChromeValidate()
+        {
+            UnityEditor.Menu.SetChecked(BlinkChromeMenu, BlinkChrome);
+            return true;
+        }
+#endif
     }
 }
