@@ -42,22 +42,18 @@ Full detail in `docs/SESSION_SUMMARY_2026-06-16_overnight.md`. Walk these in-Pla
   likely, though, the 04:24 capture was the **editor running pre-fix code** (Unity doesn't recompile
   during Play) — so first just confirm on a FRESH play whether it even still happens.
 
-## 🛠️ PetHouse2 bake — ready for you to run + verify (I did NOT bake it; here's why + how)
-**Why not overnight:** the town Echo Hollow is built by **`CastleHubBuilder`** (not a runtime catalog),
-so fixing it means swapping a polyperfect **prefab** for a raw Tripo **FBX** (different scale / no
-collider / NPC-point assumptions) and rebuilding the **primary start scene** — a result I can't verify
-headless. Risking the demo's first scene unverified fails the "quality not fast" bar. It's a 5-min
-verified job for you:
-1. `Assets/Editor/CastleHubBuilder.cs:102` — replace
-   `GameObject stables = LoadPoly("Stables_Medieval.prefab");`
-   with a Resources load of PetHouse2, e.g. `GameObject stables = Resources.Load<GameObject>("Structures/PetHouse2");`
-   (the `stables` var is placed as "EchoHollow_Pets_RoamingArea" at line ~238 — leave that as-is).
-   - If PetHouse2 comes in wrong-sized/rotated, fit it (bounds-normalize) or set scale/`rotY` on that
-     structures-list entry. (Catalog path already auto-fits via `SkinOptions.Structure`; the builder
-     does not, hence the manual fit.)
-2. Rebuild the hub: **`Defenders` menu → Build Castle Hub** (`CastleHubBuilder.BuildCastleHub`) with the
-   editor open so you can eyeball it immediately. Save the scene.
-3. If it looks wrong: `git checkout Assets/Scenes/MainCastle_Hall.unity` to revert the bake.
+## 🛠️ PetHouse2 — SOLVED via a runtime injector (no bake needed)
+**Update (2026-06-17 AM):** rather than rebuild the primary scene blind, the Echo Hollow stables is now
+swapped to PetHouse2 at **runtime** by `EchoHollowVisualInjector` — the project's established no-scene-edit
+pattern (CampSystem / StoryCompanionInjector). On every hub load it finds `EchoHollow_Pets_RoamingArea`,
+hides the baked stables renderers (keeps the NPC point + roaming logic), and skins PetHouse2 in via
+`VisualFactory.Skin(SkinOptions.Structure(7f))` — which **bounds-fits** the raw FBX to ~7 m AND **URP-fixes
+the embedded Tripo materials** (so it won't render magenta, which a builder bake WOULD have, since
+PetHouse2 imports with embedded materials). Idempotent + graceful (PetHouse2 missing → stables restored).
+- **Just play on this PC** — Echo Hollow shows PetHouse2, no bake step. Eyeball: size (change `TargetSizeM`)
+  and facing (Tripo FBXs often import +X; I can add a yaw to the skin if it faces wrong).
+- If you ever want it truly baked into the scene instead, the builder swap is still an option — but the
+  injector is cleaner (zero primary-scene risk, correct materials) and matches the rest of the hub injectors.
 
 ## 🔎 From your F8 fast-play (2026-06-17 ~02:50–04:26) — triage in the morning
 - **Echo Hollow still shows the STABLES** — confirmed a **bake** issue (you called it). `CityManifest.json:113`
