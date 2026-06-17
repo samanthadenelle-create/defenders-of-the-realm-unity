@@ -72,6 +72,15 @@ namespace DeNelle.Village
         // (Staff -> mid-shaft, Bow -> riser/centre, etc.).
         private enum WeaponClass { Sword, Dagger, Axe, Hammer, Staff, Wand, Bow, Shield }
 
+        // WO-435: "melee" = every hand-held shafted/bladed weapon that grips from its own
+        // geometry (handle below the head/crossguard, primary axis pointing out of the fist).
+        // ALL of these now share ONE seating path: bounds-normalize -> SeatByHandle (grip from
+        // mesh) -> rig-hand-axis rotation + per-archetype nudge. Bow (own NormalizeInto + LeftHand
+        // centre-grip) and Shield (centre-grip, LeftHand) are NOT melee and keep their own paths.
+        private static bool IsMelee(WeaponClass k) =>
+            k == WeaponClass.Sword || k == WeaponClass.Dagger || k == WeaponClass.Axe ||
+            k == WeaponClass.Hammer || k == WeaponClass.Staff || k == WeaponClass.Wand;
+
         private sealed class WeaponVisual
         {
             public string mesh;          // KayKit mesh name under Resources/Heroes/Props/Weapons/
@@ -85,40 +94,45 @@ namespace DeNelle.Village
         }
 
         // Per-archetype grip presets (one place to tune each weapon family's seat).
+        // GRIP-POINT (WO-435): gripPos for melee is now ZERO — the grip point is DERIVED from
+        // the mesh by SeatByHandle (handle-from-geometry), not hand-typed. The old per-archetype
+        // Y-offsets ("0.02/0.05 everywhere") were the §4 smell: a constant applied asset-agnostic
+        // to every FBX regardless of its own handle pivot. Only Shield keeps a deliberate non-zero
+        // gripPos (its centre-grip seat) and the bow stays zero (its own NormalizeInto path).
         private static WeaponVisual Sword(string mesh) => new WeaponVisual
         {
             mesh = mesh, leftHand = false, kind = WeaponClass.Sword,
-            gripPos = new Vector3(0f, 0.02f, 0f), gripEuler = new Vector3(0f, 0f, 0f),
+            gripPos = Vector3.zero, gripEuler = new Vector3(0f, 0f, 0f),
             heldLength = 0.95f, tint = new Color(0.74f, 0.75f, 0.78f)
         };
         private static WeaponVisual Dagger(string mesh) => new WeaponVisual
         {
             mesh = mesh, leftHand = false, kind = WeaponClass.Dagger,
-            gripPos = new Vector3(0f, 0.01f, 0f), gripEuler = new Vector3(0f, 0f, 0f),
+            gripPos = Vector3.zero, gripEuler = new Vector3(0f, 0f, 0f),
             heldLength = 0.40f, tint = new Color(0.70f, 0.72f, 0.76f)
         };
         private static WeaponVisual Axe(string mesh) => new WeaponVisual
         {
             mesh = mesh, leftHand = false, kind = WeaponClass.Axe,
-            gripPos = new Vector3(0f, 0.02f, 0f), gripEuler = new Vector3(0f, 0f, 0f),
+            gripPos = Vector3.zero, gripEuler = new Vector3(0f, 0f, 0f),
             heldLength = 0.80f, tint = new Color(0.68f, 0.66f, 0.62f)
         };
         private static WeaponVisual Hammer(string mesh) => new WeaponVisual
         {
             mesh = mesh, leftHand = false, kind = WeaponClass.Hammer,
-            gripPos = new Vector3(0f, 0.02f, 0f), gripEuler = new Vector3(0f, 0f, 0f),
+            gripPos = Vector3.zero, gripEuler = new Vector3(0f, 0f, 0f),
             heldLength = 0.85f, tint = new Color(0.66f, 0.66f, 0.68f)
         };
         private static WeaponVisual Staff(string mesh) => new WeaponVisual
         {
             mesh = mesh, leftHand = false, kind = WeaponClass.Staff,
-            gripPos = new Vector3(0f, 0.05f, 0f), gripEuler = new Vector3(0f, 0f, 0f),
+            gripPos = Vector3.zero, gripEuler = new Vector3(0f, 0f, 0f),
             heldLength = 1.30f, tint = new Color(0.60f, 0.50f, 0.40f)
         };
         private static WeaponVisual Wand(string mesh) => new WeaponVisual
         {
             mesh = mesh, leftHand = false, kind = WeaponClass.Wand,
-            gripPos = new Vector3(0f, 0.01f, 0f), gripEuler = new Vector3(0f, 0f, 0f),
+            gripPos = Vector3.zero, gripEuler = new Vector3(0f, 0f, 0f),
             heldLength = 0.45f, tint = new Color(0.55f, 0.45f, 0.62f)
         };
         private static WeaponVisual Bow(string mesh) => new WeaponVisual
@@ -251,6 +265,19 @@ namespace DeNelle.Village
         // relative to the corrected ready orientation (no double-apply).
         [SerializeField] private Vector3 _swordGripEuler = new Vector3(-25f, 0f, 0f);
 
+        // WO-435: per-archetype calibration nudges, the staff/mace/etc. equivalents of
+        // _swordGripEuler. ALL melee now run the same rig-aware grip path (bounds-derived
+        // SeatByHandle + ComputeMeleeGripRotation); these are the additive manual-correction
+        // nudges applied ON TOP in the corrected local frame, treated as CANON (never auto-
+        // overwritten, per WEAPON_ARMOR_ORIENT_LOGIC §4). Defaulted to ZERO so generalizing
+        // the path does NOT regress the existing look — only the sword keeps its proven -25°
+        // nudge above. Inspector-exposed for tuning each family against the real rig with no
+        // recompile. (Dagger reuses _swordGripEuler — same bladed archetype.)
+        [SerializeField] private Vector3 _staffGripEuler = new Vector3(0f, 0f, 0f);
+        [SerializeField] private Vector3 _wandGripEuler  = new Vector3(0f, 0f, 0f);
+        [SerializeField] private Vector3 _axeGripEuler   = new Vector3(0f, 0f, 0f);
+        [SerializeField] private Vector3 _maceGripEuler  = new Vector3(0f, 0f, 0f);
+
         // Cached base rotation for the current grip root (rig-derived + _swordGripEuler),
         // expressed in the hand bone's local space. ApplyHoldPose offsets from this.
         private Quaternion _baseGripRot = Quaternion.identity;
@@ -354,9 +381,14 @@ namespace DeNelle.Village
             else
             {
                 NormalizeInto(prop, gripRoot.transform, vis.heldLength);
-                // GRIP-POINT INFERENCE: NormalizeInto centres by BOUNDS (mid-blade), not the grip;
-                // for a sword/dagger re-seat so the HANDLE sits at the origin, blade pointing +Y.
-                if (vis.kind == WeaponClass.Sword || vis.kind == WeaponClass.Dagger)
+                // GRIP-POINT INFERENCE (WO-435 — generalized to ALL melee): NormalizeInto centres
+                // by BOUNDS (mid-shaft / mid-blade), not the grip. SeatByHandle re-seats so the
+                // HANDLE (the narrow end below the head/crossguard) sits at the origin and the
+                // head/blade points +Y. This was sword/dagger-only before; staff/axe/hammer/wand
+                // now run the SAME handle-from-geometry pass instead of relying on the bounds
+                // centre + a hand-typed Y nudge. The width-spike profile finds a staff's grip
+                // (or falls back to the narrower-tipped pommel end) exactly as it does for a sword.
+                if (IsMelee(vis.kind))
                     SeatByHandle(prop, gripRoot.transform);
             }
 
@@ -370,19 +402,22 @@ namespace DeNelle.Village
             _currentWeaponProp = gripRoot;
 
             // Base orientation:
-            //  • Swords/daggers: build the grip-root rotation FROM the hand bone's own axes
-            //    so the blade extends forward from the fist (not across the torso). The
-            //    prop's blade/grip line is local +Y (NormalizeInto/SeatByHandle put the
-            //    longest axis there); we point that down the hand's blade axis and keep the
-            //    flat of the blade aligned to the hand's grip-up axis, then add the
-            //    serialized _swordGripEuler calibration nudge.
-            //  • Other classes: keep the proven per-weapon gripEuler (bow/staff/shield are
-            //    already seated correctly by NormalizeInto + their preset euler).
+            //  • ALL melee (sword/dagger/axe/hammer/staff/wand — WO-435): build the grip-root
+            //    rotation FROM the hand bone's own axes so the primary axis extends forward from
+            //    the fist (not across the torso). The prop's primary/grip line is local +Y
+            //    (NormalizeInto + SeatByHandle put the longest axis there); we point that down the
+            //    hand's blade axis and keep the flat aligned to the hand's grip-up axis, then add
+            //    the per-archetype calibration nudge (sword/dagger -> _swordGripEuler, default -25;
+            //    others default 0 so the path generalizes WITHOUT regressing the existing look).
+            //    Previously staff/wand/axe/hammer used identity gripEuler + NO rig rotation, so they
+            //    inherited the bone's local axes and read sideways across the body — this is the fix.
+            //  • Bow/shield: keep the proven per-weapon gripEuler (already seated correctly by
+            //    their own NormalizeInto + preset euler).
             // NATIVE props trust their authored orientation → use the per-archetype gripEuler preset
             // directly (tune that one value on playtest). Only the legacy normalize path needs the
-            // hand-axis-derived sword rotation.
-            if (!vis.native && (vis.kind == WeaponClass.Sword || vis.kind == WeaponClass.Dagger))
-                _baseGripRot = ComputeSwordGripRotation();
+            // hand-axis-derived rotation.
+            if (!vis.native && IsMelee(vis.kind))
+                _baseGripRot = ComputeMeleeGripRotation(vis.kind);
             else
                 _baseGripRot = Quaternion.Euler(_baseGripEuler);
 
@@ -630,7 +665,12 @@ namespace DeNelle.Village
         // serialized _swordGripEuler is then applied in that corrected local frame as a final
         // calibration nudge (e.g. tip the blade forward-and-slightly-up). Rig-specific: the
         // axis choices are exposed so they can be re-picked in the Inspector without a recompile.
-        private Quaternion ComputeSwordGripRotation()
+        // WO-435: generalized to ALL melee. <paramref name="kind"/> selects the per-archetype
+        // calibration nudge (sword/dagger -> _swordGripEuler; staff/wand/axe/mace -> their own
+        // field, defaulted 0). The rig-hand-axis basis is identical across families — every melee
+        // weapon's primary axis is prop-local +Y (placed there by NormalizeInto + SeatByHandle),
+        // so the same blade/grip-up axes seat it forward-from-the-fist; only the residual nudge differs.
+        private Quaternion ComputeMeleeGripRotation(WeaponClass kind)
         {
             Vector3 blade = _handBladeAxis.sqrMagnitude > 1e-6f ? _handBladeAxis.normalized : Vector3.up;
             Vector3 up    = _handGripUpAxis.sqrMagnitude > 1e-6f ? _handGripUpAxis.normalized : Vector3.forward;
@@ -648,10 +688,26 @@ namespace DeNelle.Village
 
             // Rotation mapping prop-local (+Y up, +Z forward) onto (blade, up): Quaternion
             // .LookRotation builds a frame whose +Z = forward, +Y = up. We want the prop's
-            // +Y (its blade line) to land on `blade` and its +Z (its flat-plane normal) on
+            // +Y (its primary line) to land on `blade` and its +Z (its flat-plane normal) on
             // `up`, so feed forward=up, upwards=blade.
             Quaternion rigAligned = Quaternion.LookRotation(up, blade);
-            return rigAligned * Quaternion.Euler(_swordGripEuler);
+            return rigAligned * Quaternion.Euler(MeleeGripNudge(kind));
+        }
+
+        // The per-archetype additive calibration nudge (CANON; never auto-overwritten). Sword and
+        // dagger share the bladed _swordGripEuler; the rest map to their own inspector field.
+        private Vector3 MeleeGripNudge(WeaponClass kind)
+        {
+            switch (kind)
+            {
+                case WeaponClass.Sword:
+                case WeaponClass.Dagger: return _swordGripEuler;
+                case WeaponClass.Staff:  return _staffGripEuler;
+                case WeaponClass.Wand:   return _wandGripEuler;
+                case WeaponClass.Axe:    return _axeGripEuler;
+                case WeaponClass.Hammer: return _maceGripEuler;
+                default:                 return Vector3.zero;
+            }
         }
 
         // ── ARMOR STUB ───────────────────────────────────────────────────────────
