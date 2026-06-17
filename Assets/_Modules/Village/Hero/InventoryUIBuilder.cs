@@ -47,7 +47,7 @@ namespace DeNelle.Village
                                                  deep: true, packSpriteName: RpgUiCatalog.PanelVendor);
 
             var solidFill = AddImage(panel.transform, "InvSolidFill", new Vector2(0.025f, 0.02f), new Vector2(0.975f, 0.98f),
-                                     new Color(0.065f, 0.048f, 0.035f, 0.99f));
+                                     new Color(0.065f, 0.048f, 0.035f, 0f));   // invisible (kept for layout) so the Blink Obsidian panel shows clean
             NoRaycast(solidFill);
             solidFill.transform.SetAsFirstSibling();
 

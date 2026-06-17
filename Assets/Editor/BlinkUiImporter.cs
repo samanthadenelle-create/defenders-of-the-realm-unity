@@ -76,6 +76,14 @@ namespace DeNelle.Editor
             new Entry { Src = "Buttons_Obsidian/Button1_Gray.png",       Role = "button", Name = "button_frame", Border = 24 }, // neutral
             new Entry { Src = "Buttons_Obsidian/Button1_Yellow.png",     Role = "button", Name = "button_gold",  Border = 24 }, // primary/gold
             new Entry { Src = "Buttons_Obsidian/Close_Button_Normal.png",Role = "button", Name = "button_exit",  Border = 12 }, // close/exit
+
+            // ── ICONS (RoleIcons) — whole glyphs, no 9-slice (border 0) ─────────
+            new Entry { Src = "Icons_Obsidian/Sword.png",          Role = "icons", Name = "icon_sword",     Border = 0 },
+            new Entry { Src = "Icons_Obsidian/settings-icon.png",  Role = "icons", Name = "icon_settings",  Border = 0 },
+            new Entry { Src = "Icons_Obsidian/inventory-icon.png", Role = "icons", Name = "icon_inventory", Border = 0 },
+            new Entry { Src = "Icons_Obsidian/quest-icon.png",     Role = "icons", Name = "icon_quest",     Border = 0 },
+            // (icon_shield / icon_talk / icon_heart kept on the Tech-hud fallback — no clean Obsidian
+            //  match in the sampled set. BARS (HUD_Obsidian) need a frame/fill-split eyeball before mapping.)
         };
 
         private static void ForceSprite(string assetPath, int border)
