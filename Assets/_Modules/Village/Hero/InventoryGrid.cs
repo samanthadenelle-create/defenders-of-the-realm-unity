@@ -10,6 +10,8 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using DeNelle.Core.UI;
+using DeNelle.Core.UI.Mvvm;
+using DeNelle.Village.Hero;
 using DeNelle.Village.Items;
 
 namespace DeNelle.Village
@@ -58,103 +60,103 @@ namespace DeNelle.Village
             var fitter = content.AddComponent<ContentSizeFitter>();
             fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
-            switch (_tab)
-            {
-                case Tab.Weapons:     BuildWeaponCells(content.transform); break;
-                case Tab.Armor:       BuildArmorCells(content.transform); break;
-                case Tab.Outfits:     BuildOutfitCells(content.transform); break;
-                case Tab.Consumables: BuildConsumableCells(content.transform); break;
-            }
+            BuildCellsFromVM(content.transform);
         }
 
-        private void BuildWeaponCells(Transform content)
+        // WO-434 Phase C — the grid is now a pure projection of vm.Slots (OWNED items in the
+        // active tab). Every cell's id/name/icon-keys/rarity/equipped come from the ItemVM; a
+        // tap routes to vm.SelectById(id) THEN the existing equip-on-tap (vm.Equip for gear,
+        // vm.Use for a consumable). No GearCatalog / GearLoadout / VillageInventory pulls remain
+        // here — they live behind the VM. Selection highlight is driven by vm.SelectedId.
+        private void BuildCellsFromVM(Transform content)
         {
-            string job = HeroJob;
-            int level = HeroLevel();
-            bool any = false;
-            foreach (var w in GearCatalog.AllWeapons())
-            {
-                if (w == null || !JobEligible(w.job, job)) continue;
-                any = true;
-                bool equipped = _loadout != null && _loadout.EquippedWeapon != null &&
-                                string.Equals(_loadout.EquippedWeapon.id, w.id, System.StringComparison.OrdinalIgnoreCase);
-                bool locked = w.req != null && level < w.req.level;
-                bool selected = _selWeapon != null &&
-                                string.Equals(_selWeapon.id, w.id, System.StringComparison.OrdinalIgnoreCase);
-                var def = w;
-                Sprite techWeaponIcon = null;
-                try { techWeaponIcon = Resources.Load<Sprite>("Tech hud elements/Sprites/Sword icons/Sword icons"); } catch { }
-                // Clean-build fallback: the "Tech hud elements" pack is gitignored — only the
-                // committed RpgUi slice ships. Degrade to the bronze sword icon before the glyph.
-                if (techWeaponIcon == null) techWeaponIcon = RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, RpgUiCatalog.IconSword);
-                Sprite iconSp = techWeaponIcon ?? ItemIconCatalog.ForWeapon(w);
-                BuildGearCell(content, WeaponTypeGlyph(w), iconSp, w.name, w.rarity, equipped, locked, selected,
-                              locked ? "Lv " + w.req.level : "",
-                              () => { 
-                                  if (_loadout != null && !locked) _loadout.EquipWeaponById(w.id);
-                                  _selWeapon = def; _selArmor = null; _selConsumable = null; 
-                                  RebuildGrid(); RebuildPaperDoll(); 
-                              });
-            }
-            if (!any) BuildEmptyNote(content, "No weapons for this class.");
-        }
+            if (_vm == null) { BuildEmptyNote(content, "No inventory."); return; }
 
-        private void BuildArmorCells(Transform content)
-        {
-            string job = HeroJob;
-            int level = HeroLevel();
-            bool any = false;
-            foreach (var a in GearCatalog.AllArmors())
+            var slots = _vm.Slots;
+            if (slots == null || slots.Count == 0)
             {
-                if (a == null || !JobEligible(a.job, job)) continue;
-                any = true;
-                bool equipped = _loadout != null && _loadout.EquippedArmor != null &&
-                                string.Equals(_loadout.EquippedArmor.id, a.id, System.StringComparison.OrdinalIgnoreCase);
-                bool locked = a.req != null && level < a.req.level;
-                bool selected = _selArmor != null &&
-                                string.Equals(_selArmor.id, a.id, System.StringComparison.OrdinalIgnoreCase);
-                var def = a;
-                Sprite techArmorIcon = null;
-                try { techArmorIcon = Resources.Load<Sprite>("Tech hud elements/Sprites/Profile tabs/Profiletab 1/Profiletab 1"); } catch { }
-                if (techArmorIcon == null)
-                    try { techArmorIcon = Resources.Load<Sprite>("Tech hud elements/Sprites/Healing Tabs/H1"); } catch { }
-                // Clean-build fallback (pack gitignored): committed RpgUi shield icon before the glyph.
-                if (techArmorIcon == null) techArmorIcon = RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, RpgUiCatalog.IconShield);
-                Sprite iconSp = techArmorIcon ?? ItemIconCatalog.ForArmor(a);
-                BuildGearCell(content, ArmorTypeGlyph(a), iconSp, a.name, a.rarity, equipped, locked, selected,
-                              locked ? "Lv " + a.req.level : "",
-                              () => { 
-                                  if (_loadout != null && !locked) _loadout.EquipArmorById(a.id);
-                                  _selArmor = def; _selWeapon = null; _selConsumable = null; 
-                                  RebuildGrid(); RebuildPaperDoll(); 
-                              });
-            }
-            if (!any) BuildEmptyNote(content, "No armor for this class yet.\n(armor.json may be empty)");
-        }
-
-        private void BuildOutfitCells(Transform content)
-        {
-            BuildEmptyNote(content, "Outfits arrive with the cosmetics pass.\n(no owned skins yet)");
-        }
-
-        private void BuildConsumableCells(Transform content)
-        {
-            var owned = ItemInventory.OwnedConsumables();
-            if (owned == null || owned.Count == 0)
-            {
-                BuildEmptyNote(content, "No consumables.\nCraft potions at the Workshop.");
+                BuildEmptyNote(content, EmptyTabNote(_vm.ActiveTab));
                 return;
             }
-            foreach (var kv in owned)
+
+            string selId = _vm.SelectedId;
+            bool isConsumables = _vm.ActiveTab == InventoryTabKind.Consumables;
+
+            foreach (var item in slots)
             {
-                var def = ConsumableCatalog.Find(kv.Key);
-                string name = def != null && !string.IsNullOrEmpty(def.DisplayName) ? def.DisplayName : kv.Key;
-                string glyph = ConsumableTypeGlyph(kv.Key, name);
-                var sel = new ConsumableSel { id = kv.Key, def = def, count = kv.Value };
-                bool selected = _selConsumable != null &&
-                                string.Equals(_selConsumable.id, kv.Key, System.StringComparison.OrdinalIgnoreCase);
-                BuildGearCell(content, glyph, ConsumableIcon(kv.Key, name), name + "  x" + kv.Value, "common", false, false, selected, "",
-                              () => { _selConsumable = sel; _selWeapon = null; _selArmor = null; RebuildGrid(); RebuildPaperDoll(); });
+                var it = item;   // capture for the closure
+                Sprite iconSp = ResolveItemIcon(it.IconRole, it.IconName);
+                string glyph = GlyphForRole(it.IconRole, it.IconName);
+                bool selected = selId != null &&
+                                string.Equals(selId, it.Id, System.StringComparison.OrdinalIgnoreCase);
+                BuildGearCell(content, glyph, iconSp, it.Name, it.Rarity, it.Equipped, locked: false,
+                              selected: selected, lockText: "",
+                              onTap: () =>
+                              {
+                                  if (_vm == null) return;
+                                  _vm.SelectById(it.Id);
+                                  // Equip-on-tap (preserved): gear equips, a consumable is used.
+                                  if (isConsumables) _vm.Use();
+                                  else _vm.Equip();
+                              });
+            }
+        }
+
+        // Pick the cell icon from the VM's role/name KEYS — presentation mapping (a key -> art),
+        // not a state pull. Mirrors ShopPanel.ResolveIcon: real item art first, pack icon fallback.
+        private static Sprite ResolveItemIcon(string role, string id)
+        {
+            switch (role)
+            {
+                case InventoryVM.IconRoleWeapon:
+                {
+                    var w = GearCatalog.FindWeapon(id);
+                    var s = ItemIconCatalog.ForWeapon(w);
+                    return s != null ? s : RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, RpgUiCatalog.IconSword);
+                }
+                case InventoryVM.IconRoleArmor:
+                {
+                    var a = GearCatalog.FindArmor(id);
+                    var s = ItemIconCatalog.ForArmor(a);
+                    return s != null ? s : RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, RpgUiCatalog.IconShield);
+                }
+                case InventoryVM.IconRolePotion:
+                {
+                    var name = ConsumableNameFor(id);
+                    return ConsumableIcon(id, name);
+                }
+            }
+            return null;
+        }
+
+        // The at-a-glance type glyph fallback (when no icon art) keyed off the VM role.
+        private string GlyphForRole(string role, string id)
+        {
+            switch (role)
+            {
+                case InventoryVM.IconRoleWeapon: return WeaponTypeGlyph(GearCatalog.FindWeapon(id));
+                case InventoryVM.IconRoleArmor:  return ArmorTypeGlyph(GearCatalog.FindArmor(id));
+                case InventoryVM.IconRolePotion: return ConsumableTypeGlyph(id, ConsumableNameFor(id));
+            }
+            return "?";
+        }
+
+        private static string ConsumableNameFor(string id)
+        {
+            var def = ConsumableCatalog.Find(id);
+            return def != null && !string.IsNullOrEmpty(def.DisplayName) ? def.DisplayName : id;
+        }
+
+        // The empty-tab copy preserved per category (mirrors the old Build*Cells empty notes).
+        private static string EmptyTabNote(InventoryTabKind tab)
+        {
+            switch (tab)
+            {
+                case InventoryTabKind.Weapons:     return "No weapons owned.";
+                case InventoryTabKind.Armor:       return "No armor owned yet.";
+                case InventoryTabKind.Outfits:     return "Outfits arrive with the cosmetics pass.\n(no owned skins yet)";
+                case InventoryTabKind.Consumables: return "No consumables.\nCraft potions at the Workshop.";
+                default:                           return "Nothing here.";
             }
         }
 
@@ -213,13 +215,19 @@ namespace DeNelle.Village
                        : selected ? CellSel
                        : equipped ? CellSel : Cell;
 
-            // Use RPG UI kit assets (PanelInventory etc.) for the main cell tile to make the inventory grid look clean and professional.
-            // Outer frame keeps Tech rarity tint + sockets for W/A gear feel; inner tile uses kit for consistent clean RPG inventory aesthetic.
-            var rpgTile = RpgUiCatalog.Get(RpgUiCatalog.RolePanel, RpgUiCatalog.PanelInventory);
-            if (rpgTile != null) {
-                img.sprite = rpgTile;
+            // WO-434 Phase C — Blink dressing (flag-gated). BlinkChrome ON + the Blink per-item
+            // slot plate present → dress the inner cell tile with the Obsidian slot plate (the same
+            // slot_item the shop rows use) so the grid reads as one Obsidian surface. Flag OFF (or
+            // plate missing) → the EXACT current look: the RPG kit PanelInventory tile, else rounded.
+            Sprite cellTile = null;
+            if (DeNelle.Core.FeatureFlags.BlinkChrome)
+                cellTile = RpgUiCatalog.Get(RpgUiCatalog.RoleSlot, RpgUiCatalog.SlotItem);
+            if (cellTile == null)
+                cellTile = RpgUiCatalog.Get(RpgUiCatalog.RolePanel, RpgUiCatalog.PanelInventory);
+            if (cellTile != null) {
+                img.sprite = cellTile;
                 img.type = Image.Type.Sliced;
-                img.color = Color.white;  // kit sprite provides the base; rarity applied via outer frame
+                img.color = Color.white;  // kit/Blink sprite provides the base; rarity applied via outer frame
             } else {
                 ApplyRounded(img);
             }

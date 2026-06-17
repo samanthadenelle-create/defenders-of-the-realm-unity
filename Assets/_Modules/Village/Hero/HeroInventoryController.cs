@@ -37,12 +37,16 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using DeNelle.Core.UI;
+using DeNelle.Core.UI.Mvvm;
+using DeNelle.Village.Hero;
 using DeNelle.Village.Items;
 
 namespace DeNelle.Village
 {
-    /// <summary>Full-screen inventory + gear modal. Singleton; Open()/Close() driven.</summary>
-    public sealed partial class HeroInventoryController : MonoBehaviour
+    /// <summary>Full-screen inventory + gear modal. Singleton; Open()/Close() driven.
+    /// WO-434 Phase C: now an <see cref="IPanelView"/> bound to <see cref="InventoryVM"/> —
+    /// the View renders ONLY from vm.* and routes taps to VM commands (no direct state pulls).</summary>
+    public sealed partial class HeroInventoryController : MonoBehaviour, IPanelView
     {
         public static HeroInventoryController Instance { get; private set; }
 
@@ -54,14 +58,17 @@ namespace DeNelle.Village
         private GameObject _paperDoll;    // rebuilt on equip-change
         private GameObject _tabsRoot;     // tab row host (rebuilt on tab change)
         // _profileFrameSprite removed in heavy Tech cleanup — W/A medallion now uses direct pack Profile tabs P1/fill.png (no Rpg legacy).
-        private Tab _tab = Tab.Weapons;  // Default to weapons + armor focus for this inventory view.
 
-        // The current selection (one of these is non-null while a cell is selected).
-        private WeaponDef _selWeapon;
-        private ArmorDef _selArmor;
-        private ConsumableSel _selConsumable;
+        // WO-434 Phase C — the bound ViewModel + the model seams injected at the open-site.
+        // ALL inventory state/logic now lives in InventoryVM; this View only renders vm.* and
+        // routes taps to vm commands. _tab MIRRORS vm.ActiveTab so the existing tab-row chrome
+        // (BuildTabs / SelectTab) is unchanged; the VM is the source of truth.
+        private InventoryVM _vm;
+        private InventoryStore _store;
+        private GearLoadoutEquipTarget _equipTarget;
+        private Tab _tab = Tab.Weapons;  // mirrors vm.ActiveTab — kept so the tab-row chrome is untouched.
 
-        private GearLoadout _loadout;     // the live hero's gear model (drives the hero)
+        private GearLoadout _loadout;     // the live hero's gear model (drives the hero; resolved for the equip target)
 
         // DEF-212 single-modal arbiter. The inventory is a full-screen, click-eating
         // modal exactly like HelpMenu / AdminOverlay / CosmeticShop; without this it
@@ -119,7 +126,7 @@ namespace DeNelle.Village
 
         private void OnDestroy()
         {
-            Unsubscribe();
+            DisposeViewModel();
             if (_ui != null) Destroy(_ui);
             if (Instance == this) Instance = null;
         }
@@ -138,6 +145,11 @@ namespace DeNelle.Village
             //    still opens (paper-doll falls back to the default starter armor display),
             //    so a missing/just-spawned hero never produces "opens nothing".
             SafeRun(ResolveLoadout, "ResolveLoadout");
+
+            // 1b) WO-434 Phase C — construct the model seams + the pure ViewModel at the open-site
+            //     (mirrors ShopPanel.Open injecting EconomyService). The View binds the VM; all
+            //     state/logic (owned-list projection, tabs, select->detail, equip routing) lives in it.
+            SafeRun(ConstructViewModel, "ConstructViewModel");
 
             // 2) Build the chrome. If this throws, tear down any partial root so it can't
             //    be re-activated broken on the next Open(), and bail with a loud, specific
@@ -172,15 +184,11 @@ namespace DeNelle.Village
                 DeNelle.Core.UI.PanelManager.NotifyOpened(_panelHandle);
             }, "PanelManager.Register/NotifyOpened");
 
-            SafeRun(Subscribe, "Subscribe");
-            _tab = Tab.Weapons;
-            ClearSelection();
-
-            // 4) Each content section is isolated so a failure in one (e.g. a single bad
-            //    catalog row) leaves the rest of the modal rendered, not blank.
-            SafeRun(RebuildPaperDoll, "RebuildPaperDoll");
-            SafeRun(RebuildGrid,      "RebuildGrid");
-            // No RebuildSidebar (removed to match mockup full-grid layout; selection highlight in grid cells).
+            // 4) Bind the ViewModel: subscribe to vm.Changed -> Render and paint the initial
+            //    state. Render() isolates each section (paperdoll / tabs / grid) so a failure in
+            //    one leaves the rest of the modal rendered, not blank.
+            _tab = _vm != null ? (Tab)_vm.ActiveTabIndex : Tab.Weapons;
+            SafeRun(() => Bind(_vm), "Bind");
 
             // A loud, single success line so the next playtest console PROVES the modal
             // built + activated at the top-most sort order (vs. the old silent "nothing").
@@ -228,11 +236,10 @@ namespace DeNelle.Village
         /// <summary>Tear the overlay down (keeps the controller alive for re-open).</summary>
         public void Close()
         {
-            Unsubscribe();
+            DisposeViewModel();
             if (_ui != null) Destroy(_ui);
             _ui = null;
             _gridRoot = _sidebarRoot = _paperDoll = _tabsRoot = null;
-            ClearSelection();
             // Release the modal slot so no invisible backdrop lingers / traps input.
             if (_panelHandle != null) DeNelle.Core.UI.PanelManager.NotifyClosed(_panelHandle);
         }
@@ -259,21 +266,54 @@ namespace DeNelle.Village
                 ? _loadout.GetComponent<HeroAbilities>().HeroClass
                 : AbilityCatalog.DefaultClass;
 
-        private void Subscribe()
+        // WO-434 Phase C — construct the model seams + the pure ViewModel at the open-site.
+        // The View resolves the live VillageInventory + the active hero's GearLoadout (already in
+        // _loadout via ResolveLoadout) and injects them as IInventoryStore / IEquipTarget — the VM
+        // never names the concretes. Close is supplied as the dismiss command.
+        private void ConstructViewModel()
         {
-            if (_loadout != null) _loadout.OnGearChanged += HandleGearChanged;
+            DisposeViewModel();   // defensive: never leak a prior VM on a re-Open without Close
+            _store = new InventoryStore(DeNelle.Village.Crafting.VillageInventory.Instance);
+            _equipTarget = _loadout != null
+                ? new GearLoadoutEquipTarget(_loadout, HeroDisplayName(HeroJob), HeroJob)
+                : null;
+            _vm = new InventoryVM(_store, _equipTarget, onClose: Close);
         }
 
-        private void Unsubscribe()
+        private void DisposeViewModel()
         {
-            if (_loadout != null) _loadout.OnGearChanged -= HandleGearChanged;
+            Unbind();
+            _vm?.Dispose();
+            _vm = null;
+            _store?.Dispose();
+            _store = null;
+            _equipTarget?.Dispose();
+            _equipTarget = null;
         }
 
-        private void HandleGearChanged()
+        // ── IPanelView ─────────────────────────────────────────────────────────────
+        public void Bind(IPanelViewModel vm)
         {
-            // The hero's equipped pieces changed (here or via auto-equip on level-up).
+            Unbind();
+            _vm = vm as InventoryVM;
+            if (_vm == null) return;
+            _vm.Changed += Render;
+            Render();
+        }
+
+        public void Unbind()
+        {
+            if (_vm != null) _vm.Changed -= Render;
+        }
+
+        // Repaint every section from vm.* ONLY. Isolated so one bad section can't blank the modal.
+        private void Render()
+        {
+            if (_vm == null) return;
+            _tab = (Tab)_vm.ActiveTabIndex;        // mirror the VM's active tab for the chrome
             SafeRun(RebuildPaperDoll, "RebuildPaperDoll");
-            SafeRun(RebuildGrid,      "RebuildGrid");      // refresh equipped indicators
+            SafeRun(RebuildTabsRow,   "RebuildTabsRow");   // reflect active-tab highlight from the VM
+            SafeRun(RebuildGrid,      "RebuildGrid");
             // No RebuildSidebar (layout matches mockup; equipped shown in grid/paper doll).
         }
 
@@ -294,14 +334,12 @@ namespace DeNelle.Village
         //
         // (RebuildPaperDoll / PaperDoll* provided by InventoryPaperDoll partial)
         // (BuildTabs / TabPackIcon provided by InventoryUIBuilder partial)
+        // Tab taps route to the VM; vm.SelectTab rebuilds Slots + resets selection and raises
+        // Changed -> Render repaints the tab row + grid. No local state mutation here.
         private void SelectTab(Tab t)
         {
-            if (_tab == t) return;
-            _tab = t;
-            ClearSelection();
-            SafeRun(RebuildTabsRow, "RebuildTabsRow");
-            SafeRun(RebuildGrid,    "RebuildGrid");
-            // No RebuildSidebar.
+            if (_vm == null) { _tab = t; return; }
+            _vm.SelectTab((int)t);
         }
 
         private void RebuildTabsRow()
@@ -325,26 +363,9 @@ namespace DeNelle.Village
             return prog != null ? prog.Level : 1;
         }
 
-        // The armor to SHOW in the paper-doll's ARMOR socket. Prefers the live loadout's
-        // equipped piece; but if the loadout is null OR somehow has no armor (e.g. the modal
-        // opened a frame before GearLoadout.Refresh ran on a just-spawned hero), fall back to
-        // the SAME default the loadout itself resolves — GearCatalog.BestArmor(job, level),
-        // which for a fresh level-1 hero is the existing starter "Wanderer's Cloth"
-        // (armor_cloth). This guarantees a fresh player always SEES their basic armor on the
-        // paper-doll, sourced entirely from the existing armor.json catalog (no new item/art).
-        private ArmorDef ResolveDisplayArmor()
-        {
-            if (_loadout != null && _loadout.EquippedArmor != null) return _loadout.EquippedArmor;
-            try { return GearCatalog.BestArmor(HeroJob, HeroLevel()); }
-            catch { return null; }
-        }
-
-        private static bool JobEligible(string itemJob, string heroJob)
-        {
-            if (string.IsNullOrEmpty(itemJob)) return true;
-            if (itemJob.Equals("any", System.StringComparison.OrdinalIgnoreCase)) return true;
-            return itemJob.Equals(heroJob ?? string.Empty, System.StringComparison.OrdinalIgnoreCase);
-        }
+        // (ResolveDisplayArmor + JobEligible retired in WO-434 Phase C: the grid is now a pure
+        //  projection of InventoryVM.Slots — owned-vs-class filtering + equipped marks live in the
+        //  VM, so the View no longer resolves catalog armor or eligibility itself.)
 
         // ====================================================================
         // HELPERS — rarity
