@@ -43,8 +43,10 @@ namespace DeNelle.Village
             NoRaycast(backdrop);
 
             // Main dark wood panel
+            // Use the neutral window frame, NOT PanelVendor — the inventory was showing the SAME
+            // Merchant board as the shop ("the image of store"). Its grid already uses PanelInventory.
             var panel = ElarionUiKit.PanelFramed(_ui.transform, new Vector2(0.04f, 0.03f), new Vector2(0.96f, 0.97f),
-                                                 deep: true, packSpriteName: RpgUiCatalog.PanelVendor);
+                                                 deep: true, packSpriteName: RpgUiCatalog.PanelWindowDark);
 
             var solidFill = AddImage(panel.transform, "InvSolidFill", new Vector2(0.025f, 0.02f), new Vector2(0.975f, 0.98f),
                                      new Color(0.065f, 0.048f, 0.035f, 0f));   // invisible (kept for layout) so the Blink Obsidian panel shows clean
