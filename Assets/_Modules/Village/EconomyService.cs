@@ -104,7 +104,7 @@ namespace DeNelle.Village
     /// affordability checks, atomic spending, and a change event for the HUD.
     /// </summary>
     [DisallowMultipleComponent]
-    public sealed class EconomyService : MonoBehaviour
+    public sealed class EconomyService : MonoBehaviour, IEconomy
     {
         public static EconomyService Instance { get; private set; }
 

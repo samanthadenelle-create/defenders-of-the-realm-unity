@@ -1,0 +1,44 @@
+// =============================================================================
+// IEconomy — minimal economy seam (WO-431, MVVM shop slice).
+// -----------------------------------------------------------------------------
+// Assembly: DeNelle.Village   Namespace: DeNelle.Village
+//
+// A thin, testable contract over the resource economy so a pure ViewModel (ShopVM)
+// can read balances, check affordability, spend, grant, and observe change WITHOUT
+// newing up the concrete EconomyService singleton or touching a scene. EconomyService
+// implements it ADDITIVELY (no member is removed/rewritten); tests inject a fake.
+//
+// Lives in DeNelle.Village (NOT Core) because it speaks in ResourceCost, which is a
+// DeNelle.Village type — Core cannot see it (CLAUDE.md §5 / WO-431 design decision 2).
+// =============================================================================
+
+using System;
+
+namespace DeNelle.Village
+{
+    /// <summary>
+    /// The slice of the economy a shop ViewModel needs: read balances, check + perform
+    /// transactions, and observe change. Implemented by <see cref="EconomyService"/> (additive)
+    /// and by unit-test fakes so <c>ShopVM</c> is testable without a scene.
+    /// </summary>
+    public interface IEconomy
+    {
+        int Coins { get; }
+        int Wood { get; }
+        int Iron { get; }
+        int Food { get; }
+        int Crystals { get; }
+
+        /// <summary>True when every resource pool covers <paramref name="cost"/>.</summary>
+        bool CanAfford(ResourceCost cost);
+
+        /// <summary>Atomically spends <paramref name="cost"/> if affordable; false (no-op) when short.</summary>
+        bool TrySpend(ResourceCost cost);
+
+        /// <summary>Adds resources (sell refunds, rewards). Negatives clamped to 0.</summary>
+        void Grant(ResourceCost amount);
+
+        /// <summary>Fires after any resource change with the new totals.</summary>
+        event Action<ResourceSnapshot> OnChanged;
+    }
+}
