@@ -46,6 +46,16 @@ namespace DeNelle.Village.Hero
         private InventoryStore _store;
         private readonly List<GearLoadoutEquipTarget> _targetAdapters = new List<GearLoadoutEquipTarget>();
 
+        // WO-434 Phase D — the live hero preview viewer + the per-target live body it previews.
+        // The body GameObjects are resolved at the open-site (same place we resolve the equip
+        // targets) so the preview can switch with the target picker. The viewer is a NEW widget
+        // bound to a RawImage in the medallion; it degrades gracefully (no body / no RT = no
+        // preview, never an NRE).
+        private HeroPreviewViewer _preview;
+        private RawImage _previewImage;
+        private readonly List<GameObject> _targetBodies = new List<GameObject>();
+        private int _previewTargetIndex = -1;   // which target the preview currently shows (-1 = none yet)
+
         // Legacy demo-def equip system (preserved): still equips basic_sword / leather_armor on
         // the HERO so its visual/stat path still fires. Mirrors the old DoEquip side-effect.
         private HeroEquipment _equip;
@@ -112,6 +122,14 @@ namespace DeNelle.Village.Hero
             _panelTransform = panel.transform;
             BuildCharacterMedallion(panel.transform, MedAnchorMin, MedAnchorMax);
 
+            // ── WO-434 Phase D: live hero preview (a NEW widget) ──────────────────────────
+            // A square 3D portrait on the LEFT, just under the medallion band — it shows the
+            // ACTUAL hero body and the equipped weapon, refreshing on every vm.Changed. Sits in
+            // the gap between the medallion (≥0.80) and the target picker (≤0.79), on the left
+            // third, so it never overlaps the picker / summary / tabs / scroll list. Built ONCE
+            // here (persists across renders, unlike the rebuilt medallion) and Begun in Bind().
+            BuildPreviewWidget(panel.transform);
+
             // ── Equip-target picker (hero + companions) — vm.TargetNames / vm.SelectTarget ──
             BuildTargetBar(panel.transform, new Vector2(0.04f, 0.715f), new Vector2(0.96f, 0.79f));
 
@@ -169,6 +187,7 @@ namespace DeNelle.Village.Hero
 
             var targets = new List<IEquipTarget>();
             _targetAdapters.Clear();
+            _targetBodies.Clear();
 
             // Legacy demo-def equip system (preserved) — still resolved on the player.
             _equip = FindObjectOfType<HeroEquipment>();
@@ -187,6 +206,9 @@ namespace DeNelle.Village.Hero
                 var adapter = new GearLoadoutEquipTarget(hl, HeroName(hjob), hjob);
                 _targetAdapters.Add(adapter);
                 targets.Add(adapter);
+                // WO-434 Phase D — the live body the preview clones (the "HeroBody" child the
+                // swapper builds; the hero root itself as a fallback). Parallel to `targets`.
+                _targetBodies.Add(ResolveBody(hero));
             }
 
             // Companions: each StoryCompanion body has a GearLoadout bound to its class.
@@ -199,9 +221,38 @@ namespace DeNelle.Village.Hero
                 var adapter = new GearLoadoutEquipTarget(cl, comp.DisplayName, cjob);
                 _targetAdapters.Add(adapter);
                 targets.Add(adapter);
+                _targetBodies.Add(ResolveBody(comp.gameObject));
             }
 
             _vm = new EquipVM(_store, targets, onClose: Close);
+        }
+
+        // WO-434 Phase D — the live visible body to clone for the preview: the "HeroBody" child
+        // HeroBodySwapper / the companion injector build (the skinned class FBX), falling back to
+        // the root itself when no such child exists (e.g. a fallback capsule). Null-safe.
+        private static GameObject ResolveBody(GameObject root)
+        {
+            if (root == null) return null;
+            var body = root.transform.Find("HeroBody");
+            return body != null ? body.gameObject : root;
+        }
+
+        // The active target's currently-equipped weapon id (for seating the preview's mesh). "" when none.
+        private string ActiveWeaponId()
+        {
+            if (_vm == null) return null;
+            int idx = _vm.ActiveTargetIndex;
+            if (idx < 0 || idx >= _targetAdapters.Count) return null;
+            var w = _targetAdapters[idx].EquippedWeapon;
+            return w != null ? w.id : null;
+        }
+
+        // The active target's live body (parallel to the VM's target list). Null when out of range.
+        private GameObject ActiveBody()
+        {
+            if (_vm == null) return null;
+            int idx = _vm.ActiveTargetIndex;
+            return (idx >= 0 && idx < _targetBodies.Count) ? _targetBodies[idx] : null;
         }
 
         // The hero's class id from HeroAbilities (the same source GearLoadout uses), defaulting
@@ -237,6 +288,25 @@ namespace DeNelle.Village.Hero
             RebuildMedallion();
             RefreshSummary();
             RebuildList();
+            RenderPreview();
+        }
+
+        // WO-434 Phase D — drive the live preview from vm state. A TARGET switch rebuilds the
+        // clone (new body); any other change (equip/unequip/swap) just re-seats the weapon mesh.
+        // Begun lazily on the first render after Bind so the body + weapon are resolvable.
+        private void RenderPreview()
+        {
+            if (_previewImage == null || _vm == null) return;
+            int idx = _vm.ActiveTargetIndex;
+            if (_preview == null || idx != _previewTargetIndex)
+            {
+                BeginOrRetargetPreview();
+                _previewTargetIndex = idx;
+            }
+            else
+            {
+                RefreshPreviewWeapon();
+            }
         }
 
         // ── Slot select (the old Weapon/Armor filter) ───────────────────────────────
@@ -520,6 +590,88 @@ namespace DeNelle.Village.Hero
             Debug.Log($"[EquipmentPanel] Equipped {id} via EquipVM — hero visual/stat updated.");
         }
 
+        // ── WO-434 Phase D: the live hero preview widget + viewer lifecycle ──────────────
+        // The RawImage is built ONCE (persists across vm.Changed renders, unlike the medallion
+        // which is destroyed+rebuilt each render). It sits in the medallion band's LEFT crest
+        // slot — a real 3D portrait of the hero replacing the static crest glyph — so it adds
+        // nothing to the vertical stack and never touches the picker / summary / tabs / scroll.
+        private void BuildPreviewWidget(Transform parent)
+        {
+            // Anchored over the medallion band's left crest circle (matches ClassCrest's slot).
+            var host = ElarionUiKit.AddImage(parent, "HeroPreviewPortrait",
+                new Vector2(0.05f, 0.795f), new Vector2(0.20f, 0.915f),
+                new Color(0.02f, 0.047f, 0.094f, 1f), rounded: false);
+            var hostImg = host.GetComponent<Image>();
+            if (hostImg != null) hostImg.raycastTarget = false;
+
+            var imgGo = new GameObject("PreviewRawImage", typeof(RectTransform), typeof(RawImage));
+            imgGo.transform.SetParent(host.transform, false);
+            var rt = imgGo.GetComponent<RectTransform>();
+            rt.anchorMin = new Vector2(0.06f, 0.06f);
+            rt.anchorMax = new Vector2(0.94f, 0.94f);
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+            _previewImage = imgGo.GetComponent<RawImage>();
+            _previewImage.raycastTarget = false;
+            _previewImage.color = Color.white;
+            _previewImage.enabled = false;   // hidden until a valid RenderTexture exists
+        }
+
+        // Begin (or retarget) the preview against the ACTIVE target's live body + equipped
+        // weapon, and bind its RenderTexture to the RawImage. Graceful: any missing piece (no
+        // RawImage, no body, RT failure) simply leaves the preview hidden — never an NRE/blank.
+        private void BeginOrRetargetPreview()
+        {
+            if (_previewImage == null) return;
+
+            var body = ActiveBody();
+            string weaponId = ActiveWeaponId();
+            if (body == null) { HidePreview(); return; }
+
+            bool ok;
+            if (_preview == null)
+            {
+                _preview = new HeroPreviewViewer();
+                ok = _preview.Begin(body, textureSize: 384, weaponId: weaponId);
+            }
+            else
+            {
+                ok = _preview.Retarget(body, weaponId);
+                if (!ok) ok = _preview.IsValid;   // retarget no-op'd but the rig is still valid
+            }
+
+            if (ok && _preview.IsValid && _preview.Texture != null)
+            {
+                _previewImage.texture = _preview.Texture;
+                _previewImage.enabled = true;
+                // A slight yaw reads as a 3/4 portrait (FrameCamera already angles the camera;
+                // this just biases the body so the equipped weapon hand faces the viewer).
+                _preview.SetRotation(18f);
+            }
+            else
+            {
+                HidePreview();
+            }
+        }
+
+        // Refresh the equipped-weapon mesh on the preview (cheap — drives the existing rig).
+        private void RefreshPreviewWeapon()
+        {
+            if (_preview == null || !_preview.IsValid) return;
+            _preview.RefreshWeapon(ActiveWeaponId());
+        }
+
+        private void HidePreview()
+        {
+            if (_previewImage != null) { _previewImage.enabled = false; _previewImage.texture = null; }
+        }
+
+        private void DisposePreview()
+        {
+            _preview?.Dispose();
+            _preview = null;
+            HidePreview();
+        }
+
         // ── Character medallion (the gold sunburst PORTRAIT MEDALLION, profile_frame) ──
         // Driven by vm.Portrait (class crest) + vm.CharacterLabel (name — class). Sprite-FIRST:
         // when profile_frame is absent it falls back to a plain Niche backing so a null sprite
@@ -667,6 +819,7 @@ namespace DeNelle.Village.Hero
         private void Close()
         {
             DisposeViewModel();
+            DisposePreview();            // WO-434 Phase D — free the clone + RenderTexture + camera (no leak)
             if (_ui != null) Destroy(_ui);
             _ui = null;
             _listContentArea = null;
@@ -676,11 +829,15 @@ namespace DeNelle.Village.Hero
             _targetBar = null;
             _medallionHost = null;
             _panelTransform = null;
+            _previewImage = null;
+            _previewTargetIndex = -1;
+            _targetBodies.Clear();
         }
 
         private void OnDestroy()
         {
             DisposeViewModel();
+            DisposePreview();
             if (_ui != null) Destroy(_ui);
         }
     }
