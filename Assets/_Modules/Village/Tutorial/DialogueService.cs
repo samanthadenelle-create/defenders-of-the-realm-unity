@@ -125,6 +125,32 @@ namespace DeNelle.Village
                 FlowTrace.Step("UI", "Yarn dialogue ended via DialogueService.Stop() (walk-away/auto-close)");
                 Current.Stop();
             }
+            // A command-triggered Stop (OpenShop etc.) bypasses the presenter's normal complete-
+            // handler, so the orphaned LineAdvancer pointer-advance action is never .Disable()d —
+            // a later click (e.g. the store Buy button) then advances the now-node-less dialogue and
+            // the runner's post-command Continue throws "No node has been selected". Close that leak
+            // here too. (Same mechanic as CompanionDialoguePresenter.ReleaseYarnInputCapture —
+            // confirmed from the Yarn package source, not guessed.)
+            ReleaseOrphanedAdvanceInput();
+        }
+
+        // Disable any still-enabled action from the Yarn "DialogueAdvance" input asset (the
+        // tap-to-advance the LineAdvancer leaves armed) and clear any stale EventSystem selection.
+        private static void ReleaseOrphanedAdvanceInput()
+        {
+            try
+            {
+                foreach (var a in UnityEngine.InputSystem.InputSystem.ListEnabledActions())
+                {
+                    if (a == null) continue;
+                    var asset = a.actionMap != null ? a.actionMap.asset : null;
+                    if (asset != null && asset.name == "DialogueAdvance") a.Disable();
+                }
+            }
+            catch (System.Exception ex) { FlowTrace.Warn("UI", "ReleaseOrphanedAdvanceInput failed: " + ex.Message); }
+
+            var es = UnityEngine.EventSystems.EventSystem.current;
+            if (es != null) es.SetSelectedGameObject(null);
         }
 
         // ── New-Game dialogue reset (DeNelle.Core decoupling hook) ────────────
