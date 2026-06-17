@@ -56,8 +56,30 @@ namespace DeNelle.Village.Hero
 
         // Legacy demo-def equip system (preserved). Still equips basic_sword / leather_armor.
         private HeroEquipment _equip;
-        // Real catalog-driven equip + the equipped-state read surface (damageMult / defense + visuals).
+        // Real catalog-driven equip + the equipped-state read surface for the ACTIVE target
+        // (damageMult / defense + visuals). Repointed to the selected party member by SelectTarget.
         private GearLoadout _loadout;
+
+        // EQUIP TARGET (owner 2026-06-16): one entry per party member you can assign gear to —
+        // the hero plus each live companion. Selecting one repoints _loadout/_activeClass so the
+        // list filters to what that member's class can use and equips route to its loadout.
+        private sealed class Target
+        {
+            public string name;     // display label (Grom / Sylas / …)
+            public string job;      // class id (knight / ranger / …) — drives the restriction filter
+            public GearLoadout loadout;
+        }
+        private readonly List<Target> _targets = new List<Target>();
+        private int _activeIndex;
+        private GameObject _targetBar;
+        // The active target's class id; drives weapon job-match + armor weight filtering + medallion.
+        private string _activeClass = "knight";
+
+        // Medallion is rebuilt on target-switch so its portrait/name reflect the active member.
+        private Transform _panelTransform;
+        private GameObject _medallionHost;
+        private static readonly Vector2 MedAnchorMin = new Vector2(0.04f, 0.80f);
+        private static readonly Vector2 MedAnchorMax = new Vector2(0.96f, 0.905f);
 
         private Filter _filter = Filter.Weapon;
 
@@ -77,7 +99,7 @@ namespace DeNelle.Village.Hero
         {
             if (_ui != null) return;
 
-            ResolveHero();
+            ResolveTargets();
 
             // Kit modal: ScreenSpaceOverlay canvas + scrim + ornate framed panel
             // (same boilerplate the inventory / shop modals use → identical depth).
@@ -115,11 +137,15 @@ namespace DeNelle.Village.Hero
             // ── Character medallion: the gold sunburst PORTRAIT MEDALLION (profile_frame) ─
             // Left circle = hero crest/portrait, right slots = name + HP/MP bars. Sprite-
             // first, falls back to a Niche backing when the pack art is absent.
-            BuildCharacterMedallion(panel.transform, new Vector2(0.04f, 0.79f), new Vector2(0.96f, 0.905f));
+            _panelTransform = panel.transform;
+            BuildCharacterMedallion(panel.transform, MedAnchorMin, MedAnchorMax);
 
-            // ── Equipped summary + total bonuses (under the medallion, on a recessed well) ──
-            ElarionUiKit.Well(panel.transform, new Vector2(0.04f, 0.70f), new Vector2(0.96f, 0.785f));
-            _summaryLabel = ElarionUiKit.Label(panel.transform, "", 0.705f, 0.785f, ElarionUi.Parchment,
+            // ── Equip-target picker (hero + companions) — assign gear to a chosen member ──
+            BuildTargetBar(panel.transform, new Vector2(0.04f, 0.715f), new Vector2(0.96f, 0.79f));
+
+            // ── Equipped summary + total bonuses (under the picker, on a recessed well) ──
+            ElarionUiKit.Well(panel.transform, new Vector2(0.04f, 0.655f), new Vector2(0.96f, 0.71f));
+            _summaryLabel = ElarionUiKit.Label(panel.transform, "", 0.66f, 0.71f, ElarionUi.Parchment,
                                                ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center,
                                                0.06f, 0.94f);
 
@@ -127,8 +153,8 @@ namespace DeNelle.Village.Hero
             var tabBar = new GameObject("FilterBar", typeof(RectTransform));
             tabBar.transform.SetParent(panel.transform, false);
             var tb = tabBar.GetComponent<RectTransform>();
-            tb.anchorMin = new Vector2(0.04f, 0.615f);
-            tb.anchorMax = new Vector2(0.96f, 0.695f);
+            tb.anchorMin = new Vector2(0.04f, 0.575f);
+            tb.anchorMax = new Vector2(0.96f, 0.645f);
             tb.offsetMin = Vector2.zero; tb.offsetMax = Vector2.zero;
             CreamTab(ElarionUiKit.ButtonPack(tabBar.transform, "WEAPONS", ElarionUiKit.ButtonKind.Gold,
                                     new Vector2(0.02f, 0.05f), new Vector2(0.49f, 0.95f),
@@ -143,7 +169,7 @@ namespace DeNelle.Village.Hero
             _listContentArea.transform.SetParent(panel.transform, false);
             var la = _listContentArea.GetComponent<RectTransform>();
             la.anchorMin = new Vector2(0.04f, 0.10f);
-            la.anchorMax = new Vector2(0.96f, 0.595f);
+            la.anchorMax = new Vector2(0.96f, 0.565f);
             la.offsetMin = Vector2.zero; la.offsetMax = Vector2.zero;
 
             // Close — bottom centre, cream pack button drawn last so it takes taps.
@@ -157,15 +183,16 @@ namespace DeNelle.Village.Hero
             Debug.Log("[EquipmentPanel] Opened — browse-and-equip list. Equip to see visual/stat change on hero.");
         }
 
-        // Resolve both equip systems against the active hero. Preserves the legacy
-        // HeroEquipment resolution (find or attach on the Player) and adds the
-        // catalog-driven GearLoadout (the real bonus/visual path the shop uses).
-        private void ResolveHero()
+        // Build the assignable-target list: the player hero first, then every live companion
+        // body (each carries its own GearLoadout + class). Preserves the legacy HeroEquipment
+        // resolution on the Player. Active target starts on the hero.
+        private void ResolveTargets()
         {
+            _targets.Clear();
+
             _equip = FindObjectOfType<HeroEquipment>();
             var hero = GameObject.FindWithTag("Player");
             if (_equip == null && hero != null) _equip = hero.AddComponent<HeroEquipment>();
-
             if (hero == null)
             {
                 var loco = FindObjectOfType<HeroLocomotion>();
@@ -173,8 +200,96 @@ namespace DeNelle.Village.Hero
             }
             if (hero != null)
             {
-                _loadout = hero.GetComponent<GearLoadout>();
-                if (_loadout == null) _loadout = hero.AddComponent<GearLoadout>();
+                var hl = hero.GetComponent<GearLoadout>();
+                if (hl == null) hl = hero.AddComponent<GearLoadout>();
+                string hjob = ResolveHeroJob(hl);
+                _targets.Add(new Target { name = HeroName(hjob), job = hjob, loadout = hl });
+            }
+
+            // Companions: each StoryCompanion body has a GearLoadout bound to its class.
+            foreach (var comp in FindObjectsByType<StoryCompanion>(FindObjectsSortMode.None))
+            {
+                if (comp == null) continue;
+                var cl = comp.GetComponent<GearLoadout>();
+                if (cl == null) continue;   // non-geared body (e.g. a fallback capsule) — skip
+                string cjob = comp.Hero.ToString().ToLowerInvariant();
+                _targets.Add(new Target { name = comp.DisplayName, job = cjob, loadout = cl });
+            }
+
+            // Never leave the panel target-less (hero not yet in the scene).
+            if (_targets.Count == 0)
+                _targets.Add(new Target { name = "Hero", job = "knight", loadout = null });
+
+            _activeIndex = 0;
+            ApplyActiveTarget();
+        }
+
+        // The hero's class id from HeroAbilities (the same source GearLoadout uses), defaulting
+        // to the catalog default when abilities aren't ready yet.
+        private static string ResolveHeroJob(GearLoadout loadout)
+        {
+            var ha = loadout != null ? loadout.GetComponent<HeroAbilities>() : null;
+            string j = ha != null ? ha.HeroClass : null;
+            return string.IsNullOrEmpty(j) ? AbilityCatalog.DefaultClass : j;
+        }
+
+        // Point _loadout / _activeClass at the currently-selected target.
+        private void ApplyActiveTarget()
+        {
+            if (_targets.Count == 0) return;
+            _activeIndex = Mathf.Clamp(_activeIndex, 0, _targets.Count - 1);
+            var t = _targets[_activeIndex];
+            _loadout = t.loadout;
+            _activeClass = string.IsNullOrEmpty(t.job) ? "knight" : t.job;
+        }
+
+        // A horizontal row of member chips (hero + companions); tapping one re-targets equip.
+        private void BuildTargetBar(Transform parent, Vector2 anchorMin, Vector2 anchorMax)
+        {
+            var bar = new GameObject("TargetBar", typeof(RectTransform));
+            bar.transform.SetParent(parent, false);
+            var br = bar.GetComponent<RectTransform>();
+            br.anchorMin = anchorMin; br.anchorMax = anchorMax;
+            br.offsetMin = Vector2.zero; br.offsetMax = Vector2.zero;
+            _targetBar = bar;
+
+            int n = Mathf.Max(1, _targets.Count);
+            const float gap = 0.012f;
+            float w = (1f - gap * (n + 1)) / n;
+            for (int i = 0; i < _targets.Count; i++)
+            {
+                int idx = i;
+                float x0 = gap + i * (w + gap);
+                var btn = ElarionUiKit.ButtonPack(bar.transform, _targets[i].name, ElarionUiKit.ButtonKind.Gold,
+                    new Vector2(x0, 0.06f), new Vector2(x0 + w, 0.94f),
+                    () => SelectTarget(idx), RpgUiCatalog.ButtonFrame);
+                CreamTab(btn);
+                if (btn != null) btn.name = "Tgt_" + idx;
+            }
+            HighlightTargets();
+        }
+
+        // Re-target equip to member <paramref name="index"/>: repoint the loadout/class, then
+        // repaint the medallion + filtered list + summary for the newly-selected member.
+        private void SelectTarget(int index)
+        {
+            _activeIndex = index;
+            ApplyActiveTarget();
+            HighlightTargets();
+            RebuildMedallion();
+            RebuildList();
+            RefreshSummary();
+        }
+
+        private void HighlightTargets()
+        {
+            if (_targetBar == null) return;
+            string active = "Tgt_" + _activeIndex;
+            foreach (Transform child in _targetBar.transform)
+            {
+                if (child == null) continue;
+                var img = child.GetComponent<Image>();
+                if (img != null) img.color = child.name == active ? TabSelectedTint : TabRestTint;
             }
         }
 
@@ -220,7 +335,8 @@ namespace DeNelle.Village.Hero
             // percent over the 1.0 baseline, armor as its fractional reduction.
             int dmgPct = Mathf.RoundToInt((_loadout.WeaponMult - 1f) * 100f);
             int defPct = Mathf.RoundToInt(_loadout.ArmorDefense * 100f);
-            _summaryLabel.text = $"Equipped:  {weapon}  /  {armor}      Bonuses:  +{dmgPct}% dmg   +{defPct}% def";
+            string who = (_activeIndex >= 0 && _activeIndex < _targets.Count) ? _targets[_activeIndex].name : "Hero";
+            _summaryLabel.text = $"{who}:   {weapon}  /  {armor}      Bonuses:  +{dmgPct}% dmg   +{defPct}% def";
         }
 
         // ── List build ───────────────────────────────────────────────────────────
@@ -273,18 +389,20 @@ namespace DeNelle.Village.Hero
                     if (kv.Value <= 0) continue;
                     var w = GearCatalog.FindWeapon(kv.Key);
                     if (w == null) continue;
+                    if (!GearCatalog.WeaponFitsClass(w, _activeClass)) continue;   // class restriction
                     seen.Add(w.id);
                     rows.Add(MakeWeaponRow(w, equippedId, fromCatalog: false));
                 }
             }
 
-            // Fallback: own nothing of this slot → show the full catalog so the list
-            // is never empty (a demo player can still browse + equip).
+            // Fallback: own nothing this member can use → show the catalog for its class so the
+            // list is never empty (a demo player can still browse + equip).
             if (rows.Count == 0)
             {
                 foreach (var w in GearCatalog.AllWeapons())
                 {
                     if (w == null || seen.Contains(w.id)) continue;
+                    if (!GearCatalog.WeaponFitsClass(w, _activeClass)) continue;   // class restriction
                     rows.Add(MakeWeaponRow(w, equippedId, fromCatalog: true));
                 }
             }
@@ -305,6 +423,7 @@ namespace DeNelle.Village.Hero
                     if (kv.Value <= 0) continue;
                     var a = GearCatalog.FindArmor(kv.Key);
                     if (a == null) continue;
+                    if (!GearCatalog.ArmorFitsClass(a, _activeClass)) continue;   // weight-class restriction
                     seen.Add(a.id);
                     rows.Add(MakeArmorRow(a, equippedId, fromCatalog: false));
                 }
@@ -315,6 +434,7 @@ namespace DeNelle.Village.Hero
                 foreach (var a in GearCatalog.AllArmors())
                 {
                     if (a == null || seen.Contains(a.id)) continue;
+                    if (!GearCatalog.ArmorFitsClass(a, _activeClass)) continue;   // weight-class restriction
                     rows.Add(MakeArmorRow(a, equippedId, fromCatalog: true));
                 }
             }
@@ -497,8 +617,10 @@ namespace DeNelle.Village.Hero
                 else              _loadout.EquipArmorById(row.id);
             }
 
-            // Preserve the legacy demo-def path for the ids HeroEquipment recognises.
-            if (_equip != null && (row.id == "basic_sword" || row.id == "leather_armor"))
+            // Preserve the legacy demo-def path for the ids HeroEquipment recognises — but ONLY
+            // when the HERO is the active target (index 0). HeroEquipment lives on the player, so
+            // running it while a companion is selected would wrongly re-equip the hero.
+            if (_activeIndex == 0 && _equip != null && (row.id == "basic_sword" || row.id == "leather_armor"))
                 _equip.Equip(row.id);
 
             Debug.Log($"[EquipmentPanel] Equipped {row.id} — hero visual/stat updated; list + summary refreshed.");
@@ -516,6 +638,7 @@ namespace DeNelle.Village.Hero
         {
             var host = ElarionUiKit.AddImage(parent, "CharacterMedallion", anchorMin, anchorMax,
                 new Color(0, 0, 0, 0), rounded: false);
+            _medallionHost = host;
             var hostImg = host.GetComponent<Image>();
             if (hostImg != null) hostImg.raycastTarget = false;
 
@@ -548,6 +671,14 @@ namespace DeNelle.Village.Hero
                 new Color(0.62f, 0.16f, 0.14f, 1f));
             BarSlot(host.transform, "MP", 0.12f, 0.30f, RpgUiCatalog.BarFrameBlue, RpgUiCatalog.BarFillBlue,
                 new Color(0.18f, 0.33f, 0.62f, 1f));
+        }
+
+        // Destroy + rebuild the medallion so its crest/name match the active target (on switch).
+        private void RebuildMedallion()
+        {
+            if (_panelTransform == null) return;
+            if (_medallionHost != null) Destroy(_medallionHost);
+            BuildCharacterMedallion(_panelTransform, MedAnchorMin, MedAnchorMax);
         }
 
         // One horizontal bar slot in the medallion's right column (sprite-first frame+fill,
@@ -592,15 +723,11 @@ namespace DeNelle.Village.Hero
             lbl.transform.SetAsLastSibling();
         }
 
+        // The medallion now reflects the ACTIVE target (hero or selected companion), not always
+        // the player hero — so its crest + name change as you switch members.
         private string HeroClassName()
         {
-            try
-            {
-                var ha = _loadout != null ? _loadout.GetComponent<HeroAbilities>() : null;
-                if (ha != null && !string.IsNullOrEmpty(ha.HeroClass)) return ha.HeroClass;
-            }
-            catch { /* abilities not ready */ }
-            return AbilityCatalog.DefaultClass;
+            return string.IsNullOrEmpty(_activeClass) ? AbilityCatalog.DefaultClass : _activeClass;
         }
 
         private static string HeroName(string job)
@@ -641,6 +768,10 @@ namespace DeNelle.Village.Hero
             _scrollContent = null;
             _summaryLabel = null;
             _tabBar = null;
+            _targetBar = null;
+            _medallionHost = null;
+            _panelTransform = null;
+            _targets.Clear();
         }
 
         private void OnDestroy()
