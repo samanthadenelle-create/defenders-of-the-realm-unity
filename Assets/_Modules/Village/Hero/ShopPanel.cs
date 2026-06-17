@@ -52,6 +52,12 @@ namespace DeNelle.Village.Hero
 
         private GameObject _filterBar;
 
+        // Part B (WO-433): rows recorded per list rebuild as (id, plate Image) so Render can
+        // visibly HOLD the row whose id == vm.SelectedId. Cleared each RebuildList.
+        private readonly List<(string id, Image plate)> _rowPlates = new List<(string id, Image plate)>();
+        // Active-row "hold" tint — reuses the same selected/accent feel as the tab tint.
+        private static readonly Color RowSelectedTint = new Color(1.15f, 1.10f, 0.92f, 1f);
+
         /// <summary>The store's ACTUAL built stock (id + category), delegated to the VM — for the
         /// AutoPilot bot to assert against <see cref="VendorStockContract"/>.</summary>
         public IReadOnlyList<(string id, GearKind kind)> CurrentStock =>
@@ -120,12 +126,14 @@ namespace DeNelle.Village.Hero
             if (_vm.FilterBarVisible) HighlightFilter();
 
             RebuildList();
+            HighlightSelectedRow();
             RenderDetails();
         }
 
         private void RebuildList()
         {
             ClearContent();
+            _rowPlates.Clear();
 
             // EQUIP shows the "Current:" header line as row 0 (mirrors the old ShowEquip layout).
             int extra = _vm.Mode == ShopMode.Equip ? 1 : 0;
@@ -275,7 +283,7 @@ namespace DeNelle.Village.Hero
             var purchaseBtn = ElarionUiKit.ButtonPack(panel, "Purchase", ElarionUiKit.ButtonKind.Gold,
                 new Vector2(0.34f, 0.03f), new Vector2(0.60f, 0.105f),
                 () => { if (_vm != null) { if (_vm.Mode == ShopMode.Sell) _vm.Sell(); else _vm.Buy(); } },
-                packSpriteName: RpgUiCatalog.ButtonGold);
+                packSpriteName: DeNelle.Core.FeatureFlags.BlinkChrome ? RpgUiCatalog.ButtonConfirm : RpgUiCatalog.ButtonGold);
             _actionLabel = purchaseBtn != null ? purchaseBtn.GetComponentInChildren<TMPro.TextMeshProUGUI>() : null;
             if (_actionLabel != null)
             {
@@ -454,6 +462,29 @@ namespace DeNelle.Village.Hero
             }
         }
 
+        // ── Active-row hold (WO-433): reflect vm.SelectedId visually ──────────────
+        // Reset every recorded row to its normal plate look (DressRowPlate — Blink slot
+        // white when flag ON, else ElarionUiKit.Cell), then multiply-tint the row whose
+        // id == vm.SelectedId so it visibly "holds". Selection AFFORDANCE — kept in BOTH
+        // flag states. Reflects state only; selection LOGIC is untouched (vm.Select).
+        private void HighlightSelectedRow()
+        {
+            if (_vm == null) return;
+            string sel = _vm.SelectedId;
+            for (int i = 0; i < _rowPlates.Count; i++)
+            {
+                var plate = _rowPlates[i].plate;
+                if (plate == null) continue;
+                DressRowPlate(plate); // normal look (respects WO-432 flag state)
+                if (sel != null && _rowPlates[i].id == sel)
+                {
+                    var c = plate.color;
+                    plate.color = new Color(c.r * RowSelectedTint.r, c.g * RowSelectedTint.g,
+                                            c.b * RowSelectedTint.b, c.a);
+                }
+            }
+        }
+
         // ── Scroll list (rendering mechanism — UNCHANGED, guarded by ShopPanelRowRenderTests) ──
 
         private const float RowHeightPx = 58f;
@@ -565,6 +596,7 @@ namespace DeNelle.Village.Hero
             le.minHeight = RowHeightPx;
             var rowImg = row.GetComponent<Image>();
             DressRowPlate(rowImg);
+            _rowPlates.Add((item.Id, rowImg));
             var rowBtn = row.GetComponent<Button>();
             rowBtn.targetGraphic = rowImg;
             ElarionUiKit.StyleButtonColors(rowBtn);
@@ -635,6 +667,7 @@ namespace DeNelle.Village.Hero
             le.minHeight = RowHeightPx;
             var rowImg = row.GetComponent<Image>();
             DressRowPlate(rowImg);
+            _rowPlates.Add((item.Id, rowImg));
 
             ElarionUiKit.Label(row.transform, item.Name, 0.15f, 0.85f, ElarionUi.Parchment,
                 ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Left, 0.04f, 0.62f);

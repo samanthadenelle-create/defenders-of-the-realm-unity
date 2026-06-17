@@ -84,6 +84,7 @@ namespace DeNelle.Core.UI
         public const string BadgeLevel    = "badge_level";      // Level badage 1
         // button/:
         public const string ButtonGold    = "button_gold";      // Play buttons/button 3 (gold scroll)
+        public const string ButtonConfirm = "button_confirm";   // Obsidian green confirm/buy (Buttons_Obsidian/Button2_Green)
         // panel/:
         public const string PanelBar      = "panel_bar";        // Menu bar 1 (warm gold/red plate)
         public const string PanelTab      = "panel_tab";        // Score tabs/Tab 1 (ornate banner)

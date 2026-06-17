@@ -75,6 +75,7 @@ namespace DeNelle.Editor
             // ── BUTTONS (RoleButton) ────────────────────────────────────────────
             new Entry { Src = "Buttons_Obsidian/Button1_Gray.png",       Role = "button", Name = "button_frame", Border = 24 }, // neutral
             new Entry { Src = "Buttons_Obsidian/Button1_Yellow.png",     Role = "button", Name = "button_gold",  Border = 24 }, // primary/gold
+            new Entry { Src = "Buttons_Obsidian/Button2_Green.png",      Role = "button", Name = "button_confirm", Border = 24 }, // confirm/buy (obsidian green)
             new Entry { Src = "Buttons_Obsidian/Close_Button_Normal.png",Role = "button", Name = "button_exit",  Border = 12 }, // close/exit
 
             // ── SLOTS (RoleSlot) — per-item article plate for shop/inventory rows ──
