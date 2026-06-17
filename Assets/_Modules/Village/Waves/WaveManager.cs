@@ -520,6 +520,10 @@ namespace DeNelle.Village
             if (_heart != null && _heartDeathHooked)
                 _heart.OnHeartDestroyed -= HandleHeartDestroyed;
             _heartDeathHooked = false;
+
+            // Drop the stall watchdog handle — Unity stops coroutines on disable, but
+            // clearing the field keeps a stale handle from being StopCoroutine'd later.
+            _stallWatchdogRoutine = null;
         }
 
         private void Update()
@@ -597,7 +601,7 @@ namespace DeNelle.Village
 
             if (_schedule == null || _enemyCatalog == null)
             {
-                FlowTrace.Fail("Wave", $"wave data null — loop cannot run (schedule={_schedule != null}, catalog={_enemyCatalog != null}) — phase forced to Idle");
+                FlowTrace.Fail("Wave", $"wave data null — loop cannot run (schedule={_schedule != null}, catalog={_enemyCatalog != null}) — phase forced to Idle — {StallStateDump(-1)}");
                 Debug.LogError("[WaveManager] Wave data failed to load — the wave loop cannot run.");
                 _phase = WavePhase.Idle;
                 return;
@@ -629,6 +633,83 @@ namespace DeNelle.Village
         private const float StartRetryWindow   = 1.5f;  // seconds to wait for Idle→off before a retry
         private Coroutine   _retryRoutine;
 
+        // ── Stall watchdog (§12 "instrument + guard critical logic") ──────────
+        //
+        // The retry path above re-FIRES a stuck start, but a *silent stall* — the
+        // phase never leaving Idle even after the retries, OR an async BeginLoop that
+        // never resolves — is NOT a thrown exception, so Guard.Try / the GuardedKickoff
+        // catch can never see it. The break-log only captures errors/exceptions, and the
+        // headless Player.log is clobbered/shared, so a lost FlowTrace.Step at Idle leaves
+        // us BLIND to where the start died.
+        //
+        // This watchdog DETECTS "didn't advance": armed alongside every kickoff, it waits
+        // a generous window (well under any real countdown, generous for the async loads)
+        // and, if the phase is STILL Idle (never reached Countdown/Active), emits ONE
+        // captured FlowTrace.Fail (→ LogError → break-log.jsonl + WebTrace-able) with the
+        // full state dump — which pinpoints the dead step: Idle+schedule==-1 ⇒ load never
+        // completed; Idle+schedule>0 ⇒ loaded but countdown never entered; OTHER instance
+        // ⇒ we armed the wrong (un-triggered) manager; etc. It fires AT MOST once per
+        // kickoff and cancels the instant the phase advances (no false Fail on a slow-OK
+        // start). Additive-only: it never touches wave balance/timing/spawn/retry logic.
+        private const float StallWatchdogWindow = 9f;   // s before a still-Idle kickoff is declared STALLED
+        private Coroutine   _stallWatchdogRoutine;
+
+        /// <summary>
+        /// Full wave-start state dump shared by every captured Fail (stall, throw,
+        /// null-load, retry-exhaustion) so each surfaces the EXACT same diagnostic
+        /// snapshot. Null-safe on every field. <paramref name="retries"/> = -1 when
+        /// the caller has no retry count to report.
+        /// </summary>
+        private string StallStateDump(int retries)
+        {
+            string scene = "?";
+            try { scene = gameObject.scene.name; } catch { /* torn-down */ }
+            string which = (Instance == this) ? "self"
+                         : (Instance == null ? "NULL" : "OTHER");
+            return $"phase={_phase} "
+                 + $"schedule={(_schedule?.Waves?.Count ?? -1)} "
+                 + $"enemyCat={(_enemyCatalog?.Enemies?.Count ?? -1)} "
+                 + $"retries={retries} forceSpawn={_forceSpawnNow} "
+                 + $"instance={which} scene={scene}";
+        }
+
+        /// <summary>
+        /// Watchdog coroutine: if the phase is STILL <see cref="WavePhase.Idle"/> after
+        /// <see cref="StallWatchdogWindow"/>, emit ONE captured <see cref="FlowTrace.Fail"/>
+        /// with the full <see cref="StallStateDump"/> — the silent stall announces itself
+        /// instead of being a lost Step. Cancelled the instant the phase advances (yields
+        /// each frame, checks Idle), so a normal slow-but-OK start never false-Fails.
+        /// Fires at most once per armed kickoff.
+        /// </summary>
+        private IEnumerator StallWatchdog(string source)
+        {
+            float t0 = Time.realtimeSinceStartup;
+            while (Time.realtimeSinceStartup - t0 < StallWatchdogWindow)
+            {
+                // Phase advanced past Idle → a wave took. No stall — clear + done.
+                if (_phase != WavePhase.Idle) { _stallWatchdogRoutine = null; yield break; }
+                yield return null;
+            }
+
+            // Window elapsed and STILL Idle → a silent stall. Announce it LOUDLY, once.
+            if (_phase == WavePhase.Idle)
+            {
+                string dump = StallStateDump(-1);
+                FlowTrace.Fail("Wave",
+                    $"STALLED: kickoff '{source}' never left Idle after {StallWatchdogWindow:F0}s — {dump}");
+                Debug.LogError($"[WaveManager] STALL WATCHDOG ({source}): {dump}");
+            }
+            _stallWatchdogRoutine = null;
+        }
+
+        /// <summary>Arms (re-arms) the stall watchdog for a kickoff. Null-safe; one at a time.</summary>
+        private void ArmStallWatchdog(string source)
+        {
+            if (!isActiveAndEnabled) return;   // can't StartCoroutine on a disabled manager
+            if (_stallWatchdogRoutine != null) StopCoroutine(_stallWatchdogRoutine);
+            _stallWatchdogRoutine = StartCoroutine(StallWatchdog(source));
+        }
+
         /// <summary>
         /// Fires BeginLoop() guarded by try/catch and arms the retry watchdog.
         /// Used by the player "Defend!" path and the bot/jump path so a faulted or
@@ -643,7 +724,7 @@ namespace DeNelle.Village
             }
             catch (Exception e)
             {
-                FlowTrace.Fail("Wave", $"wave start threw ({source}): {e.Message}");
+                FlowTrace.Fail("Wave", $"wave start threw ({source}): {e.Message} — {StallStateDump(-1)}");
                 Debug.LogError($"[WaveManager] Wave start threw ({source}): {e}");
             }
 
@@ -654,6 +735,10 @@ namespace DeNelle.Village
                 if (_retryRoutine != null) StopCoroutine(_retryRoutine);
                 _retryRoutine = StartCoroutine(RetryTillActive(source));
             }
+
+            // Arm the STALL watchdog: detect "phase never left Idle" (a silent stall
+            // that no try/catch can see) and announce it as ONE captured Fail with state.
+            ArmStallWatchdog(source);
         }
 
         /// <summary>
@@ -684,13 +769,13 @@ namespace DeNelle.Village
                 try { BeginLoop().Forget(); }
                 catch (Exception e)
                 {
-                    FlowTrace.Fail("Wave", $"wave start retry {attempt} threw ({source}): {e.Message}");
+                    FlowTrace.Fail("Wave", $"wave start retry {attempt} threw ({source}): {e.Message} — {StallStateDump(attempt)}");
                     Debug.LogError($"[WaveManager] Wave start retry {attempt} threw ({source}): {e}");
                 }
             }
 
             if (_phase == WavePhase.Idle)
-                FlowTrace.Fail("Wave", $"RetryTillActive ({source}) — phase STILL Idle after {StartRetryCap} retries; giving up.");
+                FlowTrace.Fail("Wave", $"RetryTillActive ({source}) — phase STILL Idle after {StartRetryCap} retries; giving up — {StallStateDump(StartRetryCap)}");
             _retryRoutine = null;
         }
 
