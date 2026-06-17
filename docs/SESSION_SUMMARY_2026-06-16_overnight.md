@@ -72,6 +72,32 @@ the companion body, re-applied each respawn).
   595px (portrait) / 510px (landscape) to a compact **248px** LEFT strip (`VillageHudController`
   ApplyOrientation), per "minimize the team to the left side in town — takes up too much room."
 
+## Blink → UI (owner: "huge win", "might clear 1/3 of blockers")
+- **`ac8dacc4`** — native-prop equip pipeline. `EquipmentController` gains a NATIVE path:
+  `SeatNative` trusts a grip-at-origin authored prefab (scale-to-length only — no re-centre / no
+  hilt-inference / no hand-axis rotation) vs the bounds-normalize path for raw Tripo/KayKit FBX.
+  `knight_starter → Blink Sword1h_01` (`sword_A.prefab`), marked `Native(...)`. Old KayKit
+  `sword_A.fbx` removed (backed up locally). **To add more Blink weapons: drop the `.prefab` +
+  wrap the IdMap entry in `Native(...)`.** Grip/orientation wants an in-Play eyeball (editor-gated
+  per WO-466); the mechanism + first sword are landed + gated.
+
+## Overnight batch 2 (owner: "few housekeeping overnight")
+1. **Load JSON → DB for weapons/armor + pull from DB** — **SPECCED as `WORK_ORDER_430`** (not
+   blind-built). Reality: backend is a **Vercel REST API in a separate repo**, not a direct DB; the
+   table/endpoint/seed live there. WebGL-feasible via REST + local-JSON fallback. Reverses the demo's
+   local-JSON call → needs an owner decision (recommend: seed the DB now, keep local JSON
+   authoritative for the demo until the endpoint is proven fast/cached).
+2. **Mapping to nodes for direct harvesting** — already present: `MineNode` = walk-up + [F] extract →
+   banks to the `MineResource` wallet; tonight's `MineNodeVisual` repoint gave them the lightweight
+   `Harvest/<type>` models. The resource→node→model→wallet mapping is complete.
+3. **Base with harvest nodes after camp clear** + 4. **static locations / OuterWorld / seam** —
+   **`e2a6ac5e`**. `ClaimableCamp.SpawnHarvestNodes()` plants one direct-harvest `MineNode` per
+   resource at static courtyard offsets on `MarkOwned()`. Camps already spawn at static
+   `CampSystem.CampAnchors` in OuterWorld; nodes parent to that anchor (deterministic) and re-plant
+   on every owned (re)load (idempotent + restore-path) → effectively persistent / seamed. Nodes are
+   infinite + renewable (permanent base resource). ⚠️ Courtyard node placement wants an in-Play
+   eyeball (offsets are math-derived; may overlap the OutpostHub).
+
 ### Follow-ups / notes
 - **DEAD WEIGHT (recommend delete):** `Resources/Structures/PetHouse.fbx` is **7.5 MB** and now
   fully unused (nothing loads `Structures/PetHouse`; Echo Hollow uses PetHouse2). Removing it is a
