@@ -152,12 +152,13 @@ namespace DeNelle.Village.Hero
             else if (vcLow.Contains("market") || vcLow.Contains("granary") || vcLow.Contains("farm"))
             { fillColor = new Color(0.08f, 0.07f, 0.04f, 0.985f); glowColor = new Color(0.45f, 0.40f, 0.12f, 0.18f); }
             else if (vcLow.Contains("lumber"))
-            // Fill alpha lowered 0.985 -> 0.45 so the Blink "Obsidian" Merchant panel art shows
-            // through (it's detailed + opaque on its own); the light fill keeps text contrast.
-            // TUNABLE — raise toward 0.7 if rows read low-contrast, lower toward 0.25 to show more art.
-            { fillColor = new Color(0.055f, 0.07f, 0.045f, 0.45f); glowColor = new Color(0.25f, 0.42f, 0.18f, 0.18f); }
+            // Fill made fully INVISIBLE (alpha 0) so the Blink "Obsidian" Merchant panel shows
+            // clean — its own art is the backdrop now. The fill object is kept (wiring/layout intact,
+            // owner: "leave all our stuff but set to invisible"); raise alpha if rows ever read
+            // low-contrast on a busy panel.
+            { fillColor = new Color(0.055f, 0.07f, 0.045f, 0f); glowColor = new Color(0.25f, 0.42f, 0.18f, 0.18f); }
             else
-            { fillColor = new Color(0.07f, 0.055f, 0.042f, 0.45f); glowColor = new Color(0.45f, 0.35f, 0.18f, 0.16f); }
+            { fillColor = new Color(0.07f, 0.055f, 0.042f, 0f); glowColor = new Color(0.45f, 0.35f, 0.18f, 0.16f); }
 
             var solidFill = ElarionUiKit.AddImage(panel, "ShopSolidFill",
                 new Vector2(0.025f, 0.02f), new Vector2(0.975f, 0.98f), fillColor);
