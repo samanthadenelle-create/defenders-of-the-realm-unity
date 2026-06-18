@@ -103,6 +103,12 @@ namespace DeNelle.Village
 
         private bool _confirmAnnounced;   // FlowTrace proof line emitted once per trigger
 
+        // Set TRUE only by the LateUpdate tap callback, immediately before it calls Cross().
+        // Cross() asserts this is set — if it is ever reached with the flag still false, a
+        // non-tap (proximity / auto / trigger-enter) caller has leaked back in, which is the
+        // exact impossible state that cost 3 passes. The assertion fires loud (Fail rolls up).
+        private bool _tapInitiated;
+
         private void Update()
         {
             if (!_announced)
@@ -160,6 +166,10 @@ namespace DeNelle.Village
             }
             if (inRange)
             {
+                // Trace the ABSENCE the old silent Awake guard hid: prove, ONCE per seam, that
+                // the new confirm-to-cross path is actually live the moment the hero is in range.
+                FlowTrace.Once("Seam", $"{name}-armed",
+                    $"'{name}' confirm-to-cross armed — in range ({dist:F1}m <= {EffRadius}m), tap required to cross");
                 _curDist = dist;
                 if (!s_inRangeConfirm.Contains(this)) s_inRangeConfirm.Add(this);
             }
@@ -207,12 +217,23 @@ namespace DeNelle.Village
             string dest = FriendlyDestinationName();
             if (!_promptShown)
             {
+                FlowTrace.Step("Seam", $"prompt shown for '{name}' -> 'Travel to {dest}' ({_curDist:F1}m, radius {EffRadius}m)");
                 Debug.Log($"[SeamTrace] '{name}' NEAREST in-range ({_curDist:F1}m, radius {EffRadius}m) -> showing CONFIRM prompt for '{dest}'.");
+                // STATE MUTATION: mark the prompt up so we don't re-log / re-request every frame.
                 _promptShown = true;
             }
             // Mobile-first: the confirmed crossing fires through the shared on-screen
             // Interact button (requested above). The desktop F-key trigger was removed.
-            MobileInteractButton.Request(this, $"Travel to {dest}", () => Cross(_hero));
+            // The tap callback is wrapped so the log PROVES the cross came from a TAP — never
+            // from proximity. Cross() is reached through NO other path; if it ever fires without
+            // this "TAP ->" line preceding it, an auto-cross has leaked back in (impossible state).
+            MobileInteractButton.Request(this, $"Travel to {dest}", () =>
+            {
+                FlowTrace.Step("Seam", $"TAP -> Cross '{name}' (confirmed by player, dest '{dest}')");
+                // STATE MUTATION: mark this cross as tap-initiated so Cross()'s assertion passes.
+                _tapInitiated = true;
+                Cross(_hero);
+            });
         }
 
         // OnTriggerEnter is intentionally a NO-OP for crossing: confirm-to-cross is now
@@ -265,28 +286,58 @@ namespace DeNelle.Village
 
         private void Cross(Transform player)
         {
-            if (_fired || player == null) return;
+            // Ride the whole cross thread down — one Enter scope nests every sub-step + the
+            // RepositionPlayerAfterLoad coroutine's Step lines under it, so a single run renders
+            // the full nested seam thread top-to-bottom and shows exactly where it stopped.
+            using var _ = FlowTrace.Enter("Seam", $"Cross '{name}' -> {targetSceneName}");
+
+            // ASSERT THE IMPOSSIBLE STATE: confirm-to-cross is the ONLY path. Cross() must be
+            // reached exclusively from the LateUpdate tap callback (which sets _tapInitiated just
+            // before calling). If it is ever reached without that flag, an AUTO-CROSS has leaked
+            // back in — fail LOUD (rolls up to BreakCaptureHarness) instead of silently teleporting.
+            if (!_tapInitiated)
+                FlowTrace.Fail("Seam",
+                    $"AUTO-CROSS reached on '{name}' — should be impossible (confirm-to-cross only; Cross() entered without a tap)");
+            // Consume the latch so a re-entry (or a retry after a non-loadable abort) must be
+            // re-armed by a fresh tap.
+            _tapInitiated = false;
+
+            if (_fired || player == null)
+            {
+                FlowTrace.Step("Seam", $"Cross no-op (fired={_fired}, player={(player != null ? player.name : "null")})");
+                return;
+            }
+            // STATE MUTATION: latch _fired so a second tap/proximity can never re-enter.
             _fired = true;
+            FlowTrace.Step("Seam", $"_fired=true latched; resolved hero '{player.name}' @ {player.position}");
             Debug.Log($"[SeamTrace] '{name}' Cross() ENTERED for '{player.name}'.");
 
-            var targetScene = SceneManager.GetSceneByName(targetSceneName);
+            var targetScene = FlowTrace.Try("Seam", "GetSceneByName",
+                () => SceneManager.GetSceneByName(targetSceneName), default);
             if (!targetScene.isLoaded)
             {
                 if (!Application.CanStreamedLevelBeLoaded(targetSceneName))
                 {
+                    FlowTrace.Fail("Seam", $"ABORT: '{targetSceneName}' not in Build Settings — cannot transition");
                     Debug.LogWarning($"[SeamTrace] '{name}' Cross() ABORT: '{targetSceneName}' not in Build Settings — cannot transition.");
-                    _fired = false;   // allow a retry once it's loadable
+                    // STATE MUTATION (rollback): un-latch _fired so a retry is possible once loadable.
+                    _fired = false;
+                    FlowTrace.Step("Seam", "_fired=false rolled back (target not loadable)");
                     return;
                 }
 
+                FlowTrace.Step("Seam", $"load-additive: '{targetSceneName}' {(loadAdditive ? "Additive" : "Single")} (was NOT loaded)");
                 Debug.Log($"[SeamTrace] '{name}' Cross() loading '{targetSceneName}' {(loadAdditive ? "additive" : "single")} (was not loaded).");
-                SceneManager.LoadScene(targetSceneName, loadAdditive ? LoadSceneMode.Additive : LoadSceneMode.Single);
+                FlowTrace.Try("Seam", "LoadScene",
+                    () => SceneManager.LoadScene(targetSceneName, loadAdditive ? LoadSceneMode.Additive : LoadSceneMode.Single));
             }
             else
             {
+                FlowTrace.Step("Seam", $"already-loaded: '{targetSceneName}' — repositioning only");
                 Debug.Log($"[SeamTrace] '{name}' Cross() target '{targetSceneName}' already loaded — repositioning.");
             }
 
+            FlowTrace.Step("Seam", "starting RepositionPlayerAfterLoad coroutine (fade -> warp -> fade)");
             StartCoroutine(RepositionPlayerAfterLoad(player));
         }
 
@@ -364,10 +415,12 @@ namespace DeNelle.Village
         {
             // (1) Fade to black BEFORE the snap so the teleport + camera cut
             //     happen unseen.
+            FlowTrace.Step("Seam", "reposition: fade-to-black (0.25s)");
             var fade = EnsureFadeOverlay();
             yield return FadeTo(fade, 1f, 0.25f);
 
             // Give the additive scene a moment to activate objects / nav (under black).
+            FlowTrace.Step("Seam", "reposition: waiting for additive scene activation (under black)");
             yield return new WaitForSeconds(0.15f);
             yield return null; // extra safety frame
 
@@ -381,20 +434,27 @@ namespace DeNelle.Village
                 var loco = playerTransform.GetComponent<HeroLocomotion>();
                 if (loco != null)
                 {
-                    loco.WarpTo(targetPosition);
+                    // STATE MUTATION: warp the hero (disables agent, moves, re-warps onto
+                    // destination NavMesh, re-enables agent, raises OnTeleported). Try-wrapped
+                    // so a warp throw rolls up instead of leaving the hero stranded under black.
+                    FlowTrace.Step("Seam", $"warp via HeroLocomotion.WarpTo({targetPosition}) (disable->move->re-enable agent)");
+                    FlowTrace.Try("Seam", "HeroLocomotion.WarpTo", () => loco.WarpTo(targetPosition));
                 }
                 else
                 {
                     // Fallback (no HeroLocomotion): land on the nearest valid NavMesh point.
-                    Vector3 dest = targetPosition;
-                    if (NavMesh.SamplePosition(targetPosition, out NavMeshHit hit, 5f, NavMesh.AllAreas))
-                        dest = hit.position;
+                    FlowTrace.Warn("Seam", "no HeroLocomotion — fallback NavMesh.SamplePosition warp");
+                    Vector3 dest = FlowTrace.Try("Seam", "NavMesh.SamplePosition",
+                        () => NavMesh.SamplePosition(targetPosition, out NavMeshHit hit, 5f, NavMesh.AllAreas) ? hit.position : targetPosition,
+                        targetPosition);
+                    // STATE MUTATION: hard-set position (no agent to warp).
                     playerTransform.position = dest;
                 }
 
                 var rb = playerTransform.GetComponent<Rigidbody>();
                 if (rb != null) rb.linearVelocity = Vector3.zero;
 
+                FlowTrace.Step("Seam", $"repositioned: requested {targetPosition}, hero now @ {playerTransform.position} in '{targetSceneName}' (loco={(loco != null)})");
                 Debug.Log($"[SeamTrace] '{name}' repositioned: requested {targetPosition}, hero now at {playerTransform.position} in '{targetSceneName}' (loco={(loco != null)}).");
             }
 
@@ -413,6 +473,7 @@ namespace DeNelle.Village
             //     seam wired, so we can't guarantee a clean re-load on return.
             // Deactivation needs the return-seam WO + a heart-reference fix first.
 
+            FlowTrace.Step("Seam", "reposition: fade-back-in (0.35s) — cross thread complete");
             yield return FadeTo(fade, 0f, 0.35f);
         }
     }
