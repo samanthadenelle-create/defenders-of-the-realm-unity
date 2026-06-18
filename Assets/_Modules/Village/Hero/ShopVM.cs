@@ -279,7 +279,10 @@ namespace DeNelle.Village.Hero
             ActionLabel = "Purchase";
             Status = "Buy gear: tap a row to view it, then Purchase.";
 
-            GearCatalog.Reload();
+            // §12: guard the catalog read so a parse/IO failure logs + is skipped (and the
+            // never-empty fallback below still runs from whatever loaded) instead of throwing
+            // out of BuildBuy and silently blanking the BUY tab (the WO-412 surface).
+            DeNelle.Core.Diagnostics.Guard.Try("Shop", "reload gear catalog", () => GearCatalog.Reload());
 
             string ctx = _vendorContext.ToLowerInvariant();
             GearKind allowed = VendorStockContract.AllowedFor(ctx);
@@ -350,6 +353,23 @@ namespace DeNelle.Village.Hero
                 _rowActions[pid] = () => TryBuyPotion(pidCopy, costCopy);
                 _items.Add(new ItemVM(pid, pid, IconRolePotion, pid, cost.Coins, "gold", affordable));
                 _currentStock.Add((pid, GearKind.Potion));
+            }
+
+            // §12: no silent blank. If the BUY list built nothing, log WHICH case it is so the
+            // trace pinpoints the dead step — data-empty (catalog has no wares) vs filtered-out
+            // (the vendor contract allowed nothing the catalog could satisfy). The View renders
+            // whatever _items holds; this records why it is empty instead of a blank tab.
+            if (_items.Count == 0)
+            {
+                bool catalogEmpty = allWeapons.Count == 0 && allArmors.Count == 0;
+                if (catalogEmpty)
+                    DeNelle.Core.Diagnostics.FlowTrace.Fail("Shop",
+                        $"BUY tab EMPTY for vendor '{_vendorContext}': gear catalog loaded NO weapons/armor " +
+                        "(weapons.json/armor.json missing or failed to parse).");
+                else
+                    DeNelle.Core.Diagnostics.FlowTrace.Warn("Shop",
+                        $"BUY tab EMPTY for vendor '{_vendorContext}' (allowed {allowed}) though the catalog " +
+                        $"has {allWeapons.Count} weapon(s) + {allArmors.Count} armor(s) — filter excluded all stock.");
             }
         }
 
