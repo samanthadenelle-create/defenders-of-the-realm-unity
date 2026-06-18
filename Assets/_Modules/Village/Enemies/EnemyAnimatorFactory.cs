@@ -21,7 +21,7 @@ using DeNelle.Core.Diagnostics;
 namespace DeNelle.Village
 {
     /// <summary>Rig family of an enemy mesh — selects which shared controller to apply.</summary>
-    public enum EnemyRig { HumanoidMedium, HumanoidLarge, Boss, Dragon, OrcWarband }
+    public enum EnemyRig { HumanoidMedium, HumanoidLarge, Boss, Dragon, OrcWarband, LargeHumanoid }
 
     public static class EnemyAnimatorFactory
     {
@@ -31,14 +31,18 @@ namespace DeNelle.Village
             switch (modelName)
             {
                 case "Skeleton_Golem": return EnemyRig.HumanoidLarge;
-                // 2026-06-13: the big Generic-rig brutes wired into the Wildlands map
-                // (Cave Troll, Demon, OgreMage). They have no bespoke controller, so
-                // they share the LargeEnemy controller — the heavy idle/move/attack set
-                // that best fits their bulk (better than the lean HumanoidEnemy minion
-                // set). Swap to a bespoke controller here (one line) if art lands.
+                // WO-445: the big brutes (Cave Troll, Demon, OgreMage) are AccuRIG /
+                // Character-Creator HUMANOID rigs (FBX animationType: Humanoid, CC_Base_*
+                // bones). They were previously routed to the LargeEnemy controller, but
+                // LargeEnemy's clips come from KayKit's GENERIC Rig_Large skeleton — a
+                // Generic clip cannot retarget onto a Humanoid avatar, so the brutes
+                // T-posed / slid (the WO-445 symptom). They now share the LargeHumanoid
+                // controller, built from the Mixamo Assets/Action Humanoid clip library
+                // (same retargetable source the OrcWarband family uses) so the brute's
+                // Humanoid avatar drives idle/walk/attack/death correctly.
                 case "Troll":
                 case "Demon":
-                case "OgreMage":       return EnemyRig.HumanoidLarge;
+                case "OgreMage":       return EnemyRig.LargeHumanoid;
                 case "Necromancer":    return EnemyRig.Boss;
                 case "Dragon":         return EnemyRig.Dragon;
                 // DEF-221: the orc family is HUMANOID (Tripo), so it CANNOT use the
@@ -54,11 +58,12 @@ namespace DeNelle.Village
         {
             switch (rig)
             {
-                case EnemyRig.HumanoidLarge: return "LargeEnemy";
-                case EnemyRig.Boss:          return "Boss";
-                case EnemyRig.Dragon:        return "Dragon";
-                case EnemyRig.OrcWarband:    return "OrcWarband";   // DEF-221 Humanoid orc controller
-                default:                     return "HumanoidEnemy";
+                case EnemyRig.HumanoidLarge:  return "LargeEnemy";
+                case EnemyRig.Boss:           return "Boss";
+                case EnemyRig.Dragon:         return "Dragon";
+                case EnemyRig.OrcWarband:     return "OrcWarband";    // DEF-221 Humanoid orc controller
+                case EnemyRig.LargeHumanoid:  return "LargeHumanoid"; // WO-445 Humanoid brute controller (Troll/Demon/OgreMage)
+                default:                      return "HumanoidEnemy";
             }
         }
 

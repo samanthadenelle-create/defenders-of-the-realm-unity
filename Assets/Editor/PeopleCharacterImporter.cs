@@ -56,6 +56,19 @@ namespace DeNelle.Editor
             new ModelMap { Src = "Assets/Models/People/Orc/orc necromancer.fbx", Dst = EnemyDir + "Orc_Necromancer.fbx", Label = "Orc_Necromancer" },
         };
 
+        // WO-445 — the big brutes (Cave Troll / Demon / OgreMage). These FBX already
+        // ship in Resources/Enemies as AccuRIG / Character-Creator HUMANOID rigs
+        // (CC_Base_* bones). We re-assert Humanoid + a model-generated avatar IN PLACE
+        // (Src == Dst, so no copy) so a fresh clone reliably has a valid Humanoid avatar,
+        // then build the LargeHumanoid controller they retarget through. EnemyAnimatorFactory
+        // routes Troll/Demon/OgreMage → LargeHumanoid (see RigFor).
+        private static readonly ModelMap[] Brutes =
+        {
+            new ModelMap { Src = EnemyDir + "Troll.fbx",    Dst = EnemyDir + "Troll.fbx",    Label = "Troll (Cave Troll)" },
+            new ModelMap { Src = EnemyDir + "Demon.fbx",    Dst = EnemyDir + "Demon.fbx",    Label = "Demon" },
+            new ModelMap { Src = EnemyDir + "OgreMage.fbx", Dst = EnemyDir + "OgreMage.fbx", Label = "OgreMage" },
+        };
+
         [MenuItem("Defenders/Animation/Import People Character Set (DEF-221)")]
         public static void Run()
         {
@@ -68,9 +81,13 @@ namespace DeNelle.Editor
             report.Add("-- Orcs → Resources/Enemies --");
             foreach (var m in Orcs) ImportHumanoid(m, report);
 
+            report.Add("-- Brutes (WO-445) → Resources/Enemies (in-place Humanoid) --");
+            foreach (var m in Brutes) EnsureHumanoidInPlace(m, report);
+
             report.Add("-- Controllers --");
             BuildClericController(report);
             BuildOrcController(report);
+            BuildLargeHumanoidController(report);
 
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
@@ -112,6 +129,38 @@ namespace DeNelle.Editor
             else if (av != null && av.isValid)          verdict = "WARN avatar valid but GENERIC (not human) — Tripo walk-clip fallback applies";
             else                                        verdict = "FAIL no valid avatar — rig did NOT map (hand-map needed)";
             report.Add($"  {m.Label}: {verdict} -> {m.Dst}");
+        }
+
+        /// <summary>WO-445 — assert Humanoid + a model-generated avatar on an FBX that is
+        /// ALREADY at its Resources path (Src == Dst), WITHOUT copy/delete (the brute FBX
+        /// is the asset itself, not a People-source we slug-copy). Idempotent: if the rig is
+        /// already a valid Humanoid this is a no-op reimport. Reports the avatar verdict so
+        /// the LargeHumanoid retarget is proven before the controller is wired.</summary>
+        private static void EnsureHumanoidInPlace(ModelMap m, List<string> report)
+        {
+            var imp = AssetImporter.GetAtPath(m.Dst) as ModelImporter;
+            if (imp == null) { report.Add($"  MISSING FBX, skipped: {m.Dst}"); return; }
+
+            bool changed = imp.animationType != ModelImporterAnimationType.Human;
+            imp.animationType = ModelImporterAnimationType.Human;
+            // Only (re)generate the avatar from the model if it isn't already set to do so —
+            // re-running CreateFromThisModel on a hand-mapped rig would discard the mapping.
+            if (imp.avatarSetup != ModelImporterAvatarSetup.CreateFromThisModel &&
+                imp.sourceAvatar == null)
+            {
+                imp.avatarSetup = ModelImporterAvatarSetup.CreateFromThisModel;
+                changed = true;
+            }
+            if (changed) imp.SaveAndReimport();
+
+            var go   = AssetDatabase.LoadAssetAtPath<GameObject>(m.Dst);
+            var anim = go != null ? go.GetComponentInChildren<Animator>() : null;
+            var av   = anim != null ? anim.avatar : null;
+            string verdict;
+            if (av != null && av.isValid && av.isHuman) verdict = "OK Humanoid avatar (retarget ready)";
+            else if (av != null && av.isValid)          verdict = "WARN avatar valid but GENERIC (not human) — LargeHumanoid clips will NOT retarget";
+            else                                        verdict = "FAIL no valid avatar — rig did NOT map (hand-map needed)";
+            report.Add($"  {m.Label}: {verdict}{(changed ? " [reimported]" : " [already Humanoid]")} -> {m.Dst}");
         }
 
         /// <summary>Repair any hero that imported GENERIC (e.g. the binary-FBX Ranger
@@ -244,6 +293,76 @@ namespace DeNelle.Editor
 
             EditorUtility.SetDirty(ctrl);
             report.Add($"  OrcWarband.controller built: Locomotion({n} clips)" +
+                       $"{(attack != null ? " + Attack" : " + [no attack clip]")}" +
+                       $"{(death != null ? " + Death" : " + [no death clip]")} " +
+                       "[Speed/Attack/Hit/Dead] ✓");
+        }
+
+        /// <summary>WO-445 — build the Humanoid LargeHumanoid.controller for the big brutes
+        /// (Cave Troll / Demon / OgreMage). Same retargetable Mixamo Assets/Action library as
+        /// OrcWarband (Humanoid clips retarget through the brute's Humanoid avatar), wired with
+        /// the exact params Enemy.cs drives (Speed/Attack/Hit/Dead). Locomotion is a 1-D Speed
+        /// blend biased SLOW (brute moveSpeed ~1.8–2.0): idle@0, walk@1.8, run@3.5. Attack uses
+        /// a heavier 2H swing (with a sword-and-shield fallback); death is a back-fall.</summary>
+        private static void BuildLargeHumanoidController(List<string> report)
+        {
+            string path = EnemyDir + "LargeHumanoid.controller";
+
+            AnimationClip idle   = LoadClip("Orc Idle") ?? LoadClip("standing idle 01") ?? LoadClip("Sword And Shield Idle");
+            AnimationClip walk   = LoadClip("standing walk forward") ?? LoadClip("Dwarf Walk") ?? LoadClip("simple_walk");
+            AnimationClip run    = LoadClip("standing run forward") ?? LoadClip("Sword And Shield Run");
+            AnimationClip attack = LoadClip("Standing 2H Magic Area Attack 01") ?? LoadClip("Sword And Shield Attack");
+            AnimationClip death  = LoadClip("Falling Back Death") ?? LoadClip("Dying") ?? LoadClip("Defeated");
+
+            AssetDatabase.DeleteAsset(path);
+            var ctrl = AnimatorController.CreateAnimatorControllerAtPath(path);
+            ctrl.AddParameter("Speed",  AnimatorControllerParameterType.Float);
+            ctrl.AddParameter("Attack", AnimatorControllerParameterType.Trigger);
+            ctrl.AddParameter("Hit",    AnimatorControllerParameterType.Trigger);
+            ctrl.AddParameter("Dead",   AnimatorControllerParameterType.Bool);
+
+            var sm = ctrl.layers[0].stateMachine;
+
+            // Locomotion — 1-D blend on Speed, biased slow for the heavy brute gait.
+            var loco = sm.AddState("Locomotion");
+            sm.defaultState = loco;
+            var blend = new BlendTree
+            {
+                name = "Locomotion", blendType = BlendTreeType.Simple1D,
+                blendParameter = "Speed", useAutomaticThresholds = false
+            };
+            AssetDatabase.AddObjectToAsset(blend, ctrl);
+            loco.motion = blend;
+            int n = 0;
+            if (idle != null) { blend.AddChild(idle, 0f);   n++; }
+            if (walk != null) { blend.AddChild(walk, 1.8f); n++; }
+            if (run  != null) { blend.AddChild(run,  3.5f); n++; }
+
+            // Attack — Any → Attack on the trigger, back to Locomotion after the swing.
+            if (attack != null)
+            {
+                var st = sm.AddState("Attack");
+                st.motion = attack;
+                st.speed  = 1.0f;   // brutes swing slow + heavy — no snappiness boost
+                var t = sm.AddAnyStateTransition(st);
+                t.hasExitTime = false; t.duration = 0.05f; t.canTransitionToSelf = false;
+                t.AddCondition(AnimatorConditionMode.If, 0f, "Attack");
+                var back = st.AddTransition(loco);
+                back.hasExitTime = true; back.exitTime = 0.85f; back.duration = 0.1f;
+            }
+
+            // Death — Any → Death while Dead==true, no exit (stays down until destroyed).
+            if (death != null)
+            {
+                var st = sm.AddState("Death");
+                st.motion = death;
+                var t = sm.AddAnyStateTransition(st);
+                t.hasExitTime = false; t.duration = 0.05f; t.canTransitionToSelf = false;
+                t.AddCondition(AnimatorConditionMode.If, 0f, "Dead");
+            }
+
+            EditorUtility.SetDirty(ctrl);
+            report.Add($"  LargeHumanoid.controller built: Locomotion({n} clips)" +
                        $"{(attack != null ? " + Attack" : " + [no attack clip]")}" +
                        $"{(death != null ? " + Death" : " + [no death clip]")} " +
                        "[Speed/Attack/Hit/Dead] ✓");
