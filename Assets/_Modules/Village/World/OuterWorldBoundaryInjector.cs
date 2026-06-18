@@ -6,10 +6,12 @@
 // void. A boundary builder was specced in WORK_ORDER_33 but never implemented.
 //
 // WHAT THIS DOES (asset-independent, always lands):
-//   On every scene load (and once at app start) — when the active scene is
-//   "OuterWorld" — inject an invisible perimeter of 4 BoxColliders just inside
-//   the ±150 edge (at ±142) to wall the play area. The colliders are 20 m tall
-//   and 2 m thick, forming a closed ring the hero cannot cross.
+//   On every scene load (and once at app start) — when OuterWorld is LOADED
+//   (it loads ADDITIVELY over MainCastle_Hall and is NEVER the active scene, so
+//   we must gate on isLoaded, not GetActiveScene) — inject an invisible perimeter
+//   of 4 BoxColliders just inside the ±150 edge (at ±142) to wall the play area.
+//   The colliders are 20 m tall and 2 m thick, forming a closed ring the hero
+//   cannot cross, parented into the OuterWorld scene so they unload with it.
 //
 // Mirrors the runtime-fixer pattern of GroundZFightFixer:
 //   • [RuntimeInitializeOnLoadMethod(AfterSceneLoad)] + SceneManager.sceneLoaded
@@ -70,9 +72,12 @@ namespace DeNelle.Village.World
         /// </summary>
         public static void BuildBoundary()
         {
-            if (SceneManager.GetActiveScene().name != TargetScene) return;
+            // OuterWorld loads ADDITIVELY over MainCastle_Hall — it is NEVER the
+            // ACTIVE scene, so gate on whether it is LOADED, not GetActiveScene().
+            Scene ow = SceneManager.GetSceneByName(TargetScene);
+            if (!ow.IsValid() || !ow.isLoaded) return;
 
-            // IDEMPOTENT: a ring already in the scene → done.
+            // IDEMPOTENT: a ring already in any loaded scene → done.
             if (GameObject.Find(BoundaryName) != null) return;
 
             var parent = new GameObject(BoundaryName);
@@ -83,7 +88,11 @@ namespace DeNelle.Village.World
             AddWall(parent.transform, "East", new Vector3(142f, 10f, 0f), new Vector3(2f, 20f, 288f));
             AddWall(parent.transform, "West", new Vector3(-142f, 10f, 0f), new Vector3(2f, 20f, 288f));
 
-            Debug.Log("[OuterWorldBoundary] 4 edge colliders injected at ±142.");
+            // A new GameObject lands in the ACTIVE scene (MainCastle_Hall) by default;
+            // move the ring into OuterWorld so it unloads/reloads with that scene.
+            SceneManager.MoveGameObjectToScene(parent, ow);
+
+            Debug.Log("[OuterWorldBoundary] 4 edge colliders injected at ±142 (OuterWorld, additively loaded).");
         }
 
         // Create one invisible wall: a GameObject with ONLY a BoxCollider (no MeshRenderer).
