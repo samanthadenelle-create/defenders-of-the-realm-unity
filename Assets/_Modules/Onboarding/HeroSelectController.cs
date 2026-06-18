@@ -2,12 +2,16 @@
 // HeroSelectController — drives the hero-select screen (intro flow).
 // -----------------------------------------------------------------------------
 // THE SCREEN (owner acceptance, DEF — "stop the hero-select regressing"):
-//   TOP HALF   : the dragon banner art (heart-wing) fills the top half.
-//   BOTTOM     : FOUR hero panels, evenly distributed across the full width,
+//   TOP        : a light brand block (title + subtitle). The old heart-wing
+//                "dragon" banner was REMOVED in a polish pass (owner: the screen
+//                felt too heavy and the dragon read as disconnected) — the roster
+//                now fills the whole screen so the layout breathes.
+//   MIDDLE     : FOUR hero panels, evenly distributed across the full width,
 //                responsive in BOTH landscape and portrait (re-flows on
 //                orientation / screen-size change — never fixed pixel columns).
 //   BELOW THEM : the selected hero's PLAY-CARD details (name / role / blurb /
-//                CTAs) render BELOW the four panels.
+//                HP / Attack / Speed pips / signature ability / CTA) render
+//                BELOW the four panels.
 //
 // WHY THIS KEPT REGRESSING (root cause, fixed here):
 //   The old screen BOUND to named elements inside HeroSelectScreen.uxml
@@ -94,12 +98,19 @@ namespace DeNelle.Onboarding
 
         // -- Built UI elements (all created in code) -------------------------
         private VisualElement _root;
-        private VisualElement _dragonStage;   // top half — dragon art
         private VisualElement _cardRow;       // bottom — 4 hero panels
         private VisualElement _detailCard;    // below panels — selected-hero details
         private Label _detailName;
         private Label _detailRole;
         private Label _detailBlurb;
+        // WO polish: the detail-card stat block — HP / Attack / Speed pip rows +
+        // signature ability (name + one-line effect). Data lives in HeroCardInfo
+        // (WO-329); these labels just render it.
+        private Label _detailHp;
+        private Label _detailAttack;
+        private Label _detailSpeed;
+        private Label _detailAbilityName;
+        private Label _detailAbilityDesc;
         // WO-327: the "Jump into the Action" CTA (DTT/PatriciaLight quick-entry)
         // was REMOVED — it launched Defend the Tower in a state that crashed the
         // player build. Only the single "Dive into Village" confirm remains.
@@ -169,12 +180,12 @@ namespace DeNelle.Onboarding
         /// not read any UXML element by name, so a UXML that fails to render in
         /// the build (CLAUDE.md §8) cannot break this screen. Structure:
         ///   root (column)
-        ///     ├─ dragon stage  (top half, dragon art, ScaleAndCrop)
-        ///     └─ roster panel  (bottom half, opaque)
+        ///     └─ roster panel  (full screen, opaque)
+        ///          ├─ brand     (title + subtitle)
         ///          ├─ eyebrow
         ///          ├─ card row  (4 hero panels, flex-even, re-flows on resize)
-        ///          ├─ detail card (selected-hero name / role / blurb)
-        ///          └─ footer    (two CTAs)
+        ///          ├─ detail card (selected-hero name / role / blurb + stats)
+        ///          └─ footer    (confirm CTA)
         /// </summary>
         private void BuildScreen()
         {
@@ -193,8 +204,11 @@ namespace DeNelle.Onboarding
             _root.style.justifyContent = Justify.FlexStart;
             _root.style.backgroundColor = ColBackground;
 
-            BuildDragonStage();   // top half
-            BuildRosterPanel();   // bottom half (eyebrow + cards + detail + CTAs)
+            // Dragon banner REMOVED (owner polish: the screen felt too heavy and
+            // the dragon read as disconnected). The roster panel now fills the
+            // whole screen and carries the brand title/subtitle itself, so the
+            // layout breathes lighter.
+            BuildRosterPanel();   // full screen (brand + eyebrow + cards + detail + CTAs)
 
             // Initial selection state + a re-flow pass once we know the size.
             PreselectFromSave();
@@ -213,45 +227,34 @@ namespace DeNelle.Onboarding
             ReflowForSize(_root.resolvedStyle.width, _root.resolvedStyle.height);
         }
 
-        // ── Top half: dragon banner ─────────────────────────────────────────
+        // ── Full screen: roster panel ───────────────────────────────────────
 
-        private void BuildDragonStage()
+        private void BuildRosterPanel()
         {
-            _dragonStage = new VisualElement { name = "hero-dragon-stage" };
-            _dragonStage.style.height = Length.Percent(50f);   // top HALF (acceptance #4)
-            _dragonStage.style.flexGrow = 0f;
-            _dragonStage.style.flexShrink = 0f;
-            _dragonStage.style.flexDirection = FlexDirection.Column;
-            _dragonStage.style.justifyContent = Justify.FlexStart;
-            _dragonStage.style.alignItems = Align.Center;
+            var roster = new VisualElement { name = "hero-roster-panel" };
+            roster.style.flexGrow = 1f;          // takes the full screen now
+            roster.style.flexShrink = 1f;
+            roster.style.flexBasis = 0f;
+            roster.style.backgroundColor = ColPanelDark;
+            roster.style.flexDirection = FlexDirection.Column;
+            roster.style.alignItems = Align.Stretch;
+            roster.style.justifyContent = Justify.FlexStart;
+            roster.style.paddingTop = 18f;
+            roster.style.paddingBottom = 16f;
+            roster.style.paddingLeft = 10f;
+            roster.style.paddingRight = 10f;
 
-            // The dragon: the Heart-Wing banner art (Resources.Load — WebGL-safe).
-            var dragonTex = Resources.Load<Texture2D>("heart-wing");
-            if (dragonTex != null)
-            {
-                _dragonStage.style.backgroundImage = new StyleBackground(dragonTex);
-                _dragonStage.style.unityBackgroundScaleMode = ScaleMode.ScaleAndCrop; // fill the top half
-            }
-            else
-            {
-                // No art on disk — deep stone band rather than a raw black gap.
-                _dragonStage.style.backgroundColor = ElarionUi.PanelStoneDark;
-                Debug.LogWarning("[HeroSelectController] Resources/heart-wing not found — dragon stage is a flat band.");
-            }
-
-            // Title / subtitle wash over the top of the dragon for legibility.
+            // Brand block — relocated out of the (removed) dragon banner so the
+            // screen still announces itself, now lighter at the top of the roster.
             var brand = new VisualElement { name = "hero-brand-block" };
             brand.style.alignSelf = Align.Stretch;
             brand.style.alignItems = Align.Center;
-            brand.style.paddingTop = 18f;
-            brand.style.paddingBottom = 12f;
-            brand.style.paddingLeft = 24f;
-            brand.style.paddingRight = 24f;
-            brand.style.backgroundColor = new Color(ElarionUi.PanelStoneDark.r, ElarionUi.PanelStoneDark.g, ElarionUi.PanelStoneDark.b, 0.55f); // legibility scrim over the art
+            brand.style.marginBottom = 12f;
+            brand.style.flexShrink = 0f;
             brand.pickingMode = PickingMode.Ignore;
 
             var title = new Label(CanonStrings.Locale(TitleKey));
-            title.style.fontSize = 34f;
+            title.style.fontSize = 28f;
             title.style.unityFontStyleAndWeight = FontStyle.Bold;
             title.style.color = ColTextBright;
             title.style.unityTextAlign = TextAnchor.MiddleCenter;
@@ -267,28 +270,9 @@ namespace DeNelle.Onboarding
             subtitle.style.whiteSpace = WhiteSpace.Normal;
             brand.Add(subtitle);
 
-            _dragonStage.Add(brand);
-            _root.Add(_dragonStage);
-        }
+            roster.Add(brand);
 
-        // ── Bottom half: roster panel ───────────────────────────────────────
-
-        private void BuildRosterPanel()
-        {
-            var roster = new VisualElement { name = "hero-roster-panel" };
-            roster.style.flexGrow = 1f;          // takes the remaining bottom half
-            roster.style.flexShrink = 1f;
-            roster.style.flexBasis = 0f;
-            roster.style.backgroundColor = ColPanelDark;
-            roster.style.flexDirection = FlexDirection.Column;
-            roster.style.alignItems = Align.Stretch;
-            roster.style.justifyContent = Justify.FlexStart;
-            roster.style.paddingTop = 12f;
-            roster.style.paddingBottom = 16f;
-            roster.style.paddingLeft = 10f;
-            roster.style.paddingRight = 10f;
-
-            // Amber divider seam at the top of the panel.
+            // Amber divider seam below the brand.
             var divider = new VisualElement();
             divider.style.height = 2f;
             divider.style.flexShrink = 0f;
@@ -567,6 +551,79 @@ namespace DeNelle.Onboarding
             _detailBlurb.style.color = ColTextMuted;
             _detailBlurb.style.whiteSpace = WhiteSpace.Normal;
             _detailCard.Add(_detailBlurb);
+
+            // ── Stat block: HP / Attack / Speed as 1-5 pip rows, then the
+            //    signature ability (name + one-line effect). All data already
+            //    lives in HeroCardInfo (WO-329) — this is display only.
+            var statBlock = new VisualElement { name = "hero-detail-stats" };
+            statBlock.style.marginTop = 10f;
+            statBlock.style.flexShrink = 0f;
+            statBlock.style.flexDirection = FlexDirection.Column;
+            statBlock.style.alignItems = Align.Stretch;
+
+            _detailHp     = BuildStatRow(statBlock, "HP");
+            _detailAttack = BuildStatRow(statBlock, "ATTACK");
+            _detailSpeed  = BuildStatRow(statBlock, "SPEED");
+
+            _detailCard.Add(statBlock);
+
+            // Signature ability — name in runic gold, effect in muted cream.
+            _detailAbilityName = new Label(string.Empty);
+            _detailAbilityName.style.marginTop = 10f;
+            _detailAbilityName.style.fontSize = 14f;
+            _detailAbilityName.style.unityFontStyleAndWeight = FontStyle.Bold;
+            _detailAbilityName.style.color = ColAmber;
+            _detailAbilityName.style.whiteSpace = WhiteSpace.Normal;
+            _detailCard.Add(_detailAbilityName);
+
+            _detailAbilityDesc = new Label(string.Empty);
+            _detailAbilityDesc.style.marginTop = 2f;
+            _detailAbilityDesc.style.fontSize = 12f;
+            _detailAbilityDesc.style.color = ColTextMuted;
+            _detailAbilityDesc.style.whiteSpace = WhiteSpace.Normal;
+            _detailCard.Add(_detailAbilityDesc);
+        }
+
+        /// <summary>
+        /// Builds one stat row — a fixed-width gold label on the left and a value
+        /// label on the right that <see cref="RefreshDetailCard"/> fills with a
+        /// 1-5 pip string. Returns the value label so it can be updated per-hero.
+        /// </summary>
+        private Label BuildStatRow(VisualElement parent, string label)
+        {
+            var row = new VisualElement();
+            row.style.flexDirection = FlexDirection.Row;
+            row.style.alignItems = Align.Center;
+            row.style.marginTop = 2f;
+
+            var key = new Label(label);
+            key.style.width = 64f;
+            key.style.flexShrink = 0f;
+            key.style.fontSize = 11f;
+            key.style.unityFontStyleAndWeight = FontStyle.Bold;
+            key.style.color = ColAmber;
+            row.Add(key);
+
+            var value = new Label(string.Empty);
+            value.style.fontSize = 14f;
+            value.style.unityFontStyleAndWeight = FontStyle.Bold;
+            value.style.color = ColTextBright;
+            value.style.letterSpacing = 2f;
+            row.Add(value);
+
+            parent.Add(row);
+            return value;
+        }
+
+        /// <summary>
+        /// Renders a 1-5 rating as filled / empty pips (e.g. ●●●○○ for 3). A clear,
+        /// glanceable archetype read that needs no extra art dependency.
+        /// </summary>
+        private static string PipString(int value)
+        {
+            if (value < 0) value = 0;
+            if (value > 5) value = 5;
+            return new string('●', value) + new string('○', 5 - value);
         }
 
         // =====================================================================
@@ -579,12 +636,11 @@ namespace DeNelle.Onboarding
         }
 
         /// <summary>
-        /// Re-flows the layout for the current screen size / orientation. The
-        /// dragon stage is always the top half; the four panels always share the
-        /// row evenly (SpaceBetween + equal flex-grow). In a tall portrait the
-        /// panels get a little extra breathing room and the dragon caption font
-        /// eases down so nothing crowds. No fixed x positions — purely flex —
-        /// so it re-centres identically in landscape and portrait.
+        /// Re-flows the layout for the current screen size / orientation. The four
+        /// panels always share the row evenly (SpaceBetween + equal flex-grow). In
+        /// a tall portrait the panels get a little extra breathing room so nothing
+        /// crowds. No fixed x positions — purely flex — so it re-centres
+        /// identically in landscape and portrait.
         /// </summary>
         private void ReflowForSize(float width, float height)
         {
@@ -705,6 +761,11 @@ namespace DeNelle.Onboarding
                 if (_detailName  != null) _detailName.text  = "Tap a hero to see their story";
                 if (_detailRole  != null) _detailRole.text  = string.Empty;
                 if (_detailBlurb != null) _detailBlurb.text = string.Empty;
+                if (_detailHp     != null) _detailHp.text     = string.Empty;
+                if (_detailAttack != null) _detailAttack.text = string.Empty;
+                if (_detailSpeed  != null) _detailSpeed.text  = string.Empty;
+                if (_detailAbilityName != null) _detailAbilityName.text = string.Empty;
+                if (_detailAbilityDesc != null) _detailAbilityDesc.text = string.Empty;
                 return;
             }
 
@@ -713,6 +774,13 @@ namespace DeNelle.Onboarding
             if (_detailName  != null) _detailName.text  = CanonStrings.Locale(info.NameKey);
             if (_detailRole  != null) _detailRole.text  = CanonStrings.Locale(info.RoleKey);
             if (_detailBlurb != null) _detailBlurb.text = CanonStrings.Locale(info.BlurbKey);
+
+            // Stats (1-5 pips) + signature ability — straight from HeroCardInfo (WO-329).
+            if (_detailHp     != null) _detailHp.text     = PipString(info.Hp);
+            if (_detailAttack != null) _detailAttack.text = PipString(info.Attack);
+            if (_detailSpeed  != null) _detailSpeed.text  = PipString(info.Speed);
+            if (_detailAbilityName != null) _detailAbilityName.text = info.AbilityName;
+            if (_detailAbilityDesc != null) _detailAbilityDesc.text = info.AbilityDesc;
         }
 
         /// <summary>Enables the confirm CTA only once a hero is chosen.</summary>

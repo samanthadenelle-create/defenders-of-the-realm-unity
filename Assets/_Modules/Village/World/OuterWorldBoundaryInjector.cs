@@ -1,0 +1,100 @@
+// =============================================================================
+// OuterWorldBoundaryInjector — runtime world-boundary wall for OuterWorld.
+// -----------------------------------------------------------------------------
+// SYMPTOM: The OuterWorld terrain is 300x300 m centred at origin (edge at ±150).
+// There is NO world-boundary collider, so the hero walks off the edge into the
+// void. A boundary builder was specced in WORK_ORDER_33 but never implemented.
+//
+// WHAT THIS DOES (asset-independent, always lands):
+//   On every scene load (and once at app start) — when the active scene is
+//   "OuterWorld" — inject an invisible perimeter of 4 BoxColliders just inside
+//   the ±150 edge (at ±142) to wall the play area. The colliders are 20 m tall
+//   and 2 m thick, forming a closed ring the hero cannot cross.
+//
+// Mirrors the runtime-fixer pattern of GroundZFightFixer:
+//   • [RuntimeInitializeOnLoadMethod(AfterSceneLoad)] + SceneManager.sceneLoaded
+//     re-arm — the player boots elsewhere and reaches OuterWorld LATER, so a
+//     one-shot check would miss it; we re-run on every scene load.
+//   • OuterWorld-scene-gated — never touches Title / village / dungeons.
+//   • WEBGL-SAFE: an uncaught exception in a sceneLoaded handler HALTS the WebGL
+//     player, so every entry point is wrapped in try/catch.
+//   • IDEMPOTENT: if a GameObject named "OuterWorldBoundary" already exists in
+//     the scene, do nothing — repeated loads never stack duplicate walls.
+// =============================================================================
+
+using UnityEngine;
+using UnityEngine.SceneManagement;
+
+namespace DeNelle.Village.World
+{
+    public static class OuterWorldBoundaryInjector
+    {
+        // Name of the parent boundary object — used as the idempotency guard.
+        private const string BoundaryName = "OuterWorldBoundary";
+
+        // Active scene that gets the boundary ring.
+        private const string TargetScene = "OuterWorld";
+
+        /// <summary>
+        /// Registrar. Runs once at app start, then re-runs on EVERY scene load —
+        /// the player reaches OuterWorld LATER, so a one-shot check would miss it.
+        /// Idempotent per load (guarded by the existing-object check).
+        /// </summary>
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        private static void Register()
+        {
+            SceneManager.sceneLoaded -= OnSceneLoaded;
+            SceneManager.sceneLoaded += OnSceneLoaded;
+            // Also build for the scene already active at app start.
+            SafeBuild();
+        }
+
+        private static void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+        {
+            SafeBuild();
+        }
+
+        // Never let the boundary build throw out of a sceneLoaded handler (halts WebGL).
+        private static void SafeBuild()
+        {
+            try { BuildBoundary(); }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning("[OuterWorldBoundary] boundary build threw (non-fatal): " + e);
+            }
+        }
+
+        /// <summary>
+        /// Inject the 4-collider perimeter ring just inside the OuterWorld edge.
+        /// No-op outside the OuterWorld scene, or when the ring already exists.
+        /// </summary>
+        public static void BuildBoundary()
+        {
+            if (SceneManager.GetActiveScene().name != TargetScene) return;
+
+            // IDEMPOTENT: a ring already in the scene → done.
+            if (GameObject.Find(BoundaryName) != null) return;
+
+            var parent = new GameObject(BoundaryName);
+
+            // 4 perimeter walls just inside ±150 (at ±142). 20 m tall, 2 m thick.
+            AddWall(parent.transform, "North", new Vector3(0f, 10f, 142f), new Vector3(288f, 20f, 2f));
+            AddWall(parent.transform, "South", new Vector3(0f, 10f, -142f), new Vector3(288f, 20f, 2f));
+            AddWall(parent.transform, "East", new Vector3(142f, 10f, 0f), new Vector3(2f, 20f, 288f));
+            AddWall(parent.transform, "West", new Vector3(-142f, 10f, 0f), new Vector3(2f, 20f, 288f));
+
+            Debug.Log("[OuterWorldBoundary] 4 edge colliders injected at ±142.");
+        }
+
+        // Create one invisible wall: a GameObject with ONLY a BoxCollider (no MeshRenderer).
+        private static void AddWall(Transform parent, string name, Vector3 center, Vector3 size)
+        {
+            var wall = new GameObject(name);
+            wall.transform.SetParent(parent, false);
+            wall.transform.position = center;
+
+            var box = wall.AddComponent<BoxCollider>();
+            box.size = size;
+        }
+    }
+}

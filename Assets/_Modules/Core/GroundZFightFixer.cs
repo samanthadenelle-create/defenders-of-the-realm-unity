@@ -105,7 +105,18 @@ namespace DeNelle.Core
         /// </summary>
         public static void FixGroundPlane()
         {
-            if (!InVillageScene()) return;
+            if (!InFixableScene()) return;
+
+            // CASTLE HUB path: the plaza floor is a 5x5 GRID of small tiles named
+            // "CourtyardFloor_{x}_{z}" (~8 m each) at Y=0.01, coplanar with the
+            // additively-loaded OuterWorld terrain at Y=0 → flashing floor. The big
+            // single-plane logic below never matches these (no >60m footprint, and the
+            // hub has no "Ground" plane), so the hub gets its OWN pass.
+            if (InHubScene())
+            {
+                FixHubFloorTiles();
+                return;
+            }
 
             GameObject ground = FindBakedGroundPlane();
             if (ground == null) return;
@@ -126,13 +137,62 @@ namespace DeNelle.Core
             }
         }
 
-        // True when the active scene is one of the playable towns (Village2 canonical,
-        // Village3, Village). Keeps this off Title / HeroSelect / DTT / dungeons that
-        // this RuntimeInitialize hook also fires in.
-        private static bool InVillageScene()
+        // Castle-hub pass: find ALL plaza floor tiles (CourtyardFloor_* / qFloorWood*)
+        // and lower EACH still-high tile to TargetY so the OuterWorld terrain wins the
+        // depth test. Idempotent: a tile already at/below TargetY (re-load) is skipped,
+        // so repeated loads never drift it down. Small tiles → no >60m footprint guard.
+        private static void FixHubFloorTiles()
+        {
+            var all = Object.FindObjectsByType<MeshRenderer>(FindObjectsSortMode.None);
+            int lowered = 0;
+            foreach (var mr in all)
+            {
+                if (mr == null) continue;
+                if (!NameIsHubFloorTile(mr.name)) continue;
+
+                Transform t = mr.transform;
+                float y = t.position.y;
+                // IDEMPOTENT: only lower a tile still ABOVE the target.
+                if (y > TargetY + NearZeroEpsilon)
+                {
+                    Vector3 p = t.position;
+                    p.y = TargetY;
+                    t.position = p;
+                    lowered++;
+                }
+            }
+            if (lowered > 0)
+            {
+                Debug.Log("[GroundZFightFixer] hub — lowered " + lowered +
+                          " CourtyardFloor tiles to Y=" + TargetY +
+                          " so the OuterWorld terrain wins the depth test (no rebake).");
+            }
+        }
+
+        private static bool NameIsHubFloorTile(string n)
+        {
+            if (string.IsNullOrEmpty(n)) return false;
+            string lower = n.ToLowerInvariant();
+            return lower.StartsWith("courtyardfloor") || lower.StartsWith("qfloorwood");
+        }
+
+        // True when the active scene is fixable by this component: one of the playable
+        // towns (Village2 canonical, Village3, Village) OR the castle hub
+        // (MainCastle_Hall / any Castle* scene). Keeps this off Title / HeroSelect /
+        // DTT / dungeons that this RuntimeInitialize hook also fires in.
+        private static bool InFixableScene()
         {
             string n = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name;
-            return !string.IsNullOrEmpty(n) && n.StartsWith("Village");
+            if (string.IsNullOrEmpty(n)) return false;
+            return n.StartsWith("Village") || n.StartsWith("MainCastle") || n.StartsWith("Castle");
+        }
+
+        // True when the active scene is the castle hub (grid-tile plaza), which uses the
+        // separate FixHubFloorTiles pass rather than the single-big-plane Village logic.
+        private static bool InHubScene()
+        {
+            string n = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name;
+            return !string.IsNullOrEmpty(n) && (n.StartsWith("MainCastle") || n.StartsWith("Castle"));
         }
 
         // Find the large ground plane named "Ground" centred near the village origin at
