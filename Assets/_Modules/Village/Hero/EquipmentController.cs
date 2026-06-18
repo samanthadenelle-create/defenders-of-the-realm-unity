@@ -42,6 +42,9 @@
 
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.AddressableAssets;
+using UnityEngine.ResourceManagement.AsyncOperations;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
 {
@@ -157,6 +160,14 @@ namespace DeNelle.Village
             heldLength = 0.55f, tint = new Color(0.58f, 0.60f, 0.64f)
         };
 
+        // Shallow copy of a preset so the Addressable/fallback paths can flip `native` WITHOUT
+        // mutating the shared cached IdMap instance (Resolve may return a cached preset).
+        private static WeaponVisual CopyOf(WeaponVisual v) => new WeaponVisual
+        {
+            mesh = v.mesh, leftHand = v.leftHand, gripPos = v.gripPos, gripEuler = v.gripEuler,
+            heldLength = v.heldLength, tint = v.tint, kind = v.kind, native = v.native
+        };
+
         // Mark a preset as a NATIVE prop — a grip-at-origin, correctly-oriented authored prefab
         // (e.g. a Blink weapon: Sword1h_01 sits at the origin, identity rotation). Equip() then
         // routes it through SeatNative (trust its pivot) instead of the bounds-normalize +
@@ -203,6 +214,17 @@ namespace DeNelle.Village
         private GameObject _currentWeaponProp;
         private string _currentWeaponId;
         private int _armorTier;
+
+        // Addressables equip (WO-Item, Blink gear): when the equipped WeaponDef loads its
+        // prefab via Addressables (loadVia=="addressable" or a "gear/" address in prefabPath),
+        // we LoadAssetAsync the prefab and attach on completion. The handle is held here and
+        // Addressables.Release'd on the next swap / unequip / OnDisable so a Blink prefab never
+        // leaks (§2b.1 pooling discipline — ONE owner of the handle, the attach system). The
+        // generation counter rejects a stale async completion that resolves AFTER the player
+        // already swapped to a different weapon (no ghost prop from an out-of-date load).
+        private AsyncOperationHandle<GameObject> _weaponHandle;
+        private bool _weaponHandleOpen;
+        private int _equipGeneration;
 
         // If true, a bow equip is skipped here because HeroBowAttachment owns the
         // ranger's held bow (set when the hero already carries that component).
@@ -301,6 +323,9 @@ namespace DeNelle.Village
         private void OnDisable()
         {
             if (_loadout != null) _loadout.OnGearChanged -= HandleGearChanged;
+            // Release any open Addressables weapon handle so a Blink prefab never leaks
+            // when the hero is disabled/destroyed (the load may even still be in flight).
+            ReleaseWeaponHandle();
         }
 
         private void HandleGearChanged() => EquipBestForHero();
@@ -313,25 +338,50 @@ namespace DeNelle.Village
         public void EquipBestForHero()
         {
             if (_loadout == null) _loadout = GetComponent<GearLoadout>();
-            string id = _loadout != null && _loadout.EquippedWeapon != null
-                ? _loadout.EquippedWeapon.id
-                : null;
-            Equip(id);
+            // Pass the WeaponDef (not just the id) so the attach path can read prefabPath /
+            // loadVia and resolve a Blink Addressable weapon — the data-driven equip.
+            Equip(_loadout != null ? _loadout.EquippedWeapon : null);
         }
 
         /// <summary>
         /// Show the weapon mesh for <paramref name="weaponId"/> (an id from weapons.json),
         /// attaching it to the Humanoid hand bone with the mapped grip offset. Passing null
         /// or an empty id unequips. Destroys the previous prop first (no stacking).
+        /// Resolves the WeaponDef from the catalog so the data-driven (Addressable) path is
+        /// used when the def carries an Addressable prefabPath.
         /// </summary>
         public void Equip(string weaponId)
         {
+            if (string.IsNullOrEmpty(weaponId)) { Equip((WeaponDef)null, null); return; }
+            Equip(GearCatalog.FindWeapon(weaponId), weaponId);
+        }
+
+        /// <summary>
+        /// Data-driven equip: attaches the weapon described by <paramref name="def"/>. When the
+        /// def's prefab loads via Addressables (Blink gear) the prefab is loaded async and
+        /// attached a frame later; otherwise the existing hardcoded Resources map is used. A
+        /// null def unequips. Safe to call repeatedly (idempotent on an unchanged id).
+        /// </summary>
+        public void Equip(WeaponDef def)
+        {
+            Equip(def, def != null ? def.id : null);
+        }
+
+        // Core equip. <paramref name="def"/> may be null (e.g. an id with no catalog row, or a
+        // bare-id call) — then we fall back to the keyword/Resources Resolve path on the id.
+        private void Equip(WeaponDef def, string weaponId)
+        {
+            if (string.IsNullOrEmpty(weaponId) && def != null) weaponId = def.id;
+
             // Idempotent: same weapon already shown -> nothing to do.
             if (string.Equals(_currentWeaponId, weaponId, System.StringComparison.OrdinalIgnoreCase)
                 && _currentWeaponProp != null)
                 return;
 
+            // New equip request — invalidate any in-flight async load + drop the old prop/handle.
+            _equipGeneration++;
             DestroyCurrentWeapon();
+            ReleaseWeaponHandle();
             _currentWeaponId = weaponId;
 
             if (string.IsNullOrEmpty(weaponId)) return; // unequip
@@ -361,9 +411,116 @@ namespace DeNelle.Village
                 return;
             }
 
+            // ── DATA-DRIVEN PREFAB RESOLUTION (WO-Item, Blink Addressables) ───────────
+            // If the equipped def loads via Addressables (Blink gear: prefabPath is an
+            // address like "gear/weapon/Sword1h_01"), load it async and attach on completion.
+            // Otherwise the EXISTING hardcoded Tripo/Resources map runs unchanged (byte-
+            // identical for the current ids). A Blink prefab is authored grip-at-origin +
+            // oriented → treat it as NATIVE (trust its pivot; skip the bounds/hilt reverse-engineer).
+            if (LoadsViaAddressable(def))
+            {
+                BeginAddressableEquip(def, vis, hand, weaponId, _equipGeneration);
+                return;
+            }
+
             GameObject prop = LoadWeaponMesh(vis.mesh) ?? BuildFallbackPrimitive(vis);
             if (prop == null) return;
 
+            AttachLoadedProp(prop, vis, hand, weaponId);
+        }
+
+        // ── Addressable weapon load (Blink gear) ─────────────────────────────────────
+        // True when the def's prefab must be loaded via Addressables: an explicit
+        // loadVia=="addressable" OR a prefabPath that uses the shared "gear/" address scheme
+        // (BlinkAddressableMarker / BlinkGearSource). Legacy/Tripo rows (null/empty) return false
+        // → the existing Resources map runs (no behaviour change for current ids).
+        private static bool LoadsViaAddressable(WeaponDef def)
+        {
+            if (def == null) return false;
+            if (!string.IsNullOrEmpty(def.loadVia) &&
+                def.loadVia.Equals("addressable", System.StringComparison.OrdinalIgnoreCase))
+                return true;
+            return !string.IsNullOrEmpty(def.prefabPath) &&
+                   def.prefabPath.StartsWith("gear/", System.StringComparison.OrdinalIgnoreCase);
+        }
+
+        // Kick off the async Addressables load of the Blink weapon prefab. Attaches on
+        // completion (the weapon appears a frame later — fine). The handle is stored +
+        // released on the next swap/unequip/OnDisable. A failed/invalid handle is GUARDED:
+        // FlowTrace.Warn + fall back to the hardcoded Resources map (or its primitive) so the
+        // hero is NEVER left unarmed because a Blink prefab didn't resolve (WO-425 invariant).
+        private void BeginAddressableEquip(
+            WeaponDef def, WeaponVisual vis, Transform hand, string weaponId, int generation)
+        {
+            string address = def.prefabPath;
+            FlowTrace.Step("Gear", $"Addressable equip begin: id='{weaponId}' address='{address}'");
+
+            AsyncOperationHandle<GameObject> handle;
+            try
+            {
+                handle = Addressables.LoadAssetAsync<GameObject>(address);
+            }
+            catch (System.Exception ex)
+            {
+                FlowTrace.Warn("Gear", $"Addressable load threw for '{address}': {ex.Message} — " +
+                                       "falling back to Resources map (hero stays armed).");
+                FallbackResourcesAttach(vis, hand, weaponId);
+                return;
+            }
+
+            _weaponHandle = handle;
+            _weaponHandleOpen = true;
+
+            handle.Completed += op =>
+            {
+                // Stale: the player swapped weapons (or unequipped/disabled) while this load was
+                // in flight — a newer equip already owns the slot. Release THIS handle and bail so
+                // we never attach a ghost prop from an out-of-date request.
+                if (generation != _equipGeneration)
+                {
+                    if (op.IsValid()) Addressables.Release(op);
+                    return;
+                }
+
+                if (op.Status != AsyncOperationStatus.Succeeded || op.Result == null)
+                {
+                    FlowTrace.Warn("Gear", $"Addressable load FAILED for '{address}' " +
+                        $"(status={op.Status}) — falling back to Resources map (hero stays armed).");
+                    ReleaseWeaponHandle();
+                    FallbackResourcesAttach(vis, hand, weaponId);
+                    return;
+                }
+
+                // Blink prefab is authored grip-at-origin + oriented → seat as NATIVE. Copy the
+                // preset so we never flip `native` on the shared cached IdMap instance.
+                var nativeVis = CopyOf(vis);
+                nativeVis.native = true;
+                GameObject prop = Instantiate(op.Result);
+                AttachLoadedProp(prop, nativeVis, hand, weaponId);
+                FlowTrace.Step("Gear", $"Addressable equip attached: id='{weaponId}' address='{address}'");
+            };
+        }
+
+        // Armed-hero fallback: a Blink Addressable resolve failed — attach via the hardcoded
+        // Resources map (or the tinted primitive) so the hero is never unarmed. Re-checks the
+        // generation guard caller-side; here we just attach with the already-resolved vis.
+        private void FallbackResourcesAttach(WeaponVisual vis, Transform hand, string weaponId)
+        {
+            // The Resources map vis is NON-native (legacy normalize/hilt path). Copy + clear the
+            // native flag so we never mutate the shared cached IdMap preset.
+            var fb = CopyOf(vis);
+            fb.native = false;
+            GameObject prop = LoadWeaponMesh(fb.mesh) ?? BuildFallbackPrimitive(fb);
+            if (prop == null) return;
+            AttachLoadedProp(prop, fb, hand, weaponId);
+        }
+
+        // Shared attach + grip/orient (§4) for an ALREADY-LOADED prop — used by both the
+        // synchronous Resources path and the async Addressables completion. Strips physics,
+        // seats via the grip root (NATIVE = trust pivot; else bounds-normalize + hilt-infer),
+        // parents to the hand, and computes the rig-aware base grip rotation + hold pose.
+        private void AttachLoadedProp(GameObject prop, WeaponVisual vis, Transform hand, string weaponId)
+        {
             prop.name = PropName;
             // Cosmetic only — strip physics/colliders a prefab might carry.
             foreach (var c in prop.GetComponentsInChildren<Collider>(true)) if (c != null) Destroy(c);
@@ -422,6 +579,17 @@ namespace DeNelle.Village
                 _baseGripRot = Quaternion.Euler(_baseGripEuler);
 
             ApplyHoldPose();
+        }
+
+        // Release the held Addressables weapon handle (no-op if none open). ONE owner of the
+        // handle — called on every swap / unequip / OnDisable so a Blink prefab never leaks.
+        private void ReleaseWeaponHandle()
+        {
+            if (!_weaponHandleOpen) return;
+            _weaponHandleOpen = false;
+            if (_weaponHandle.IsValid())
+                Addressables.Release(_weaponHandle);
+            _weaponHandle = default;
         }
 
         // ── SWORD GRIP-POINT INFERENCE ───────────────────────────────────────────────
@@ -598,7 +766,9 @@ namespace DeNelle.Village
         /// <summary>Removes the currently-shown weapon prop (no-op if none).</summary>
         public void Unequip()
         {
+            _equipGeneration++;          // invalidate any in-flight async load
             DestroyCurrentWeapon();
+            ReleaseWeaponHandle();
             _currentWeaponId = null;
             _gripRoot = null;
         }
@@ -749,6 +919,29 @@ namespace DeNelle.Village
                 Destroy(_currentWeaponProp);
                 _currentWeaponProp = null;
             }
+        }
+
+        // ── ARMED-HERO INVARIANT (regression surface) ────────────────────────────────
+        /// <summary>
+        /// True when the def loads its prefab via Addressables (Blink "gear/" scheme or an
+        /// explicit loadVia=="addressable"). Public so the headless DataRegression can pick the
+        /// same load path this controller does when asserting the armed-hero invariant.
+        /// </summary>
+        public static bool IsAddressableWeapon(WeaponDef def) => LoadsViaAddressable(def);
+
+        /// <summary>
+        /// The build-safe Resources mesh path the controller would load for <paramref name="weaponId"/>
+        /// on the NON-Addressable path (e.g. "Heroes/Props/Weapons/sword_A"). Resolve() never
+        /// returns null for a non-empty id (it defaults to a sword family), so this always yields a
+        /// path — the armed-hero guarantee: the hero attaches at worst a tinted primitive, never nothing.
+        /// Public so DataRegression can assert the Resources prop exists for the auto-equipped starters.
+        /// </summary>
+        public static string ResolveWeaponMeshResourcePath(string weaponId)
+        {
+            var vis = Resolve(weaponId);
+            return vis != null && !string.IsNullOrEmpty(vis.mesh)
+                ? WeaponPropResourceDir + vis.mesh
+                : null;
         }
 
         /// <summary>

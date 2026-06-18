@@ -18,6 +18,9 @@ using System.Text;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 using UnityEngine;
+using UnityEngine.AddressableAssets;
+using UnityEngine.ResourceManagement.AsyncOperations;
+using UnityEngine.ResourceManagement.ResourceLocations;
 using DeNelle.Village;
 using DeNelle.Village.Items;
 using DeNelle.Core.State;
@@ -117,6 +120,15 @@ namespace DeNelle.Editor
             // asserts on the resolved capability flags + a SOFT prefabPath coverage count
             // (WO-Item-2's generator fills those — do NOT fail on them yet).
             CheckItemCapabilities(weapons, armors, failures, log);
+
+            // --- ARMED-HERO INVARIANT (WO-Item Addressables equip) -----------------
+            // At scale (433+ weapons, Blink Addressable-keyed) BestWeapon(job,1) may now
+            // return a weapon whose prefab is an Addressable key. If neither the Addressable
+            // key resolves NOR the EquipmentController's Resources map yields an attachable
+            // mesh, the hero spawns UNARMED (WO-425 regression). This is the permission gate
+            // that the armed-hero invariant holds at scale: for each class the level-1 auto-
+            // equip is non-null AND its prefab reference resolves.
+            CheckArmedHeroInvariant(failures, log);
 
             // --- verdict -----------------------------------------------------------
             log.AppendLine("=== verdict ===");
@@ -427,6 +439,96 @@ namespace DeNelle.Editor
                            $"{weapons.Count}W + {armors.Count}A + {consumables.Count}C entries");
             log.AppendLine($"[item-model] SOFT prefabPath coverage: {prefabResolved}/{carriableTotal} " +
                            $"Carriable entries resolve a non-null prefabPath (WO-Item-2 fills the rest)");
+        }
+
+        // =====================================================================
+        //  ARMED-HERO INVARIANT — BestWeapon(job,1) non-null + prefab resolves
+        // -----------------------------------------------------------------------
+        //  For each playable class: the level-1 auto-equip MUST return a WeaponDef
+        //  (never null → the hero would spawn unarmed), AND that def's prefab MUST
+        //  resolve to something attachable:
+        //    • Addressable def (loadVia=="addressable" / "gear/" prefabPath) → the key
+        //      must be present in the Gear group (Addressables.LoadResourceLocations).
+        //    • otherwise → the EquipmentController Resources map must yield a mesh
+        //      (Resources.Load of "Heroes/Props/Weapons/<mesh>"). Resolve never returns
+        //      null for a non-empty id, so this always yields a path; we assert the prop
+        //      actually exists in Resources so the hero shows the real mesh, not just the
+        //      tinted-primitive last-resort.
+        //  HARD-fails REGRESSION_FAIL on a null pick or an unresolvable Addressable key.
+        // =====================================================================
+        private static void CheckArmedHeroInvariant(List<string> failures, StringBuilder log)
+        {
+            GearCatalog.Reload();
+            string[] classes = { "knight", "mage", "ranger", "cleric" };
+            log.AppendLine("[armed-hero] BestWeapon(job,1) resolves an attachable prefab per class:");
+
+            foreach (var job in classes)
+            {
+                WeaponDef w = GearCatalog.BestWeapon(job, 1);
+                if (w == null)
+                {
+                    failures.Add($"armed-hero: BestWeapon('{job}', 1) returned NULL — hero would spawn UNARMED");
+                    log.AppendLine($"  AH [{job}] -> <null> | UNARMED");
+                    continue;
+                }
+
+                if (EquipmentController.IsAddressableWeapon(w))
+                {
+                    // Blink Addressable weapon: the prefabPath must be a present key in the catalog.
+                    bool keyPresent = AddressableKeyExists(w.prefabPath);
+                    if (!keyPresent)
+                    {
+                        failures.Add($"armed-hero: BestWeapon('{job}', 1) = '{w.id}' is Addressable " +
+                                     $"'{w.prefabPath}' but that key is NOT present in the Addressables " +
+                                     "catalog (Gear group) — Blink prefab would fail to load");
+                        log.AppendLine($"  AH [{job}] -> '{w.id}' | Addressable '{w.prefabPath}' | KEY MISSING");
+                    }
+                    else
+                    {
+                        log.AppendLine($"  AH [{job}] -> '{w.id}' | Addressable '{w.prefabPath}' | key OK");
+                    }
+                }
+                else
+                {
+                    // Legacy/Tripo weapon: resolve the Resources mesh path the controller would load.
+                    string path = EquipmentController.ResolveWeaponMeshResourcePath(w.id);
+                    var prefab = string.IsNullOrEmpty(path) ? null : Resources.Load<GameObject>(path);
+                    if (prefab == null)
+                    {
+                        failures.Add($"armed-hero: BestWeapon('{job}', 1) = '{w.id}' maps to Resources " +
+                                     $"prop '{path ?? "<null>"}' which loads NULL — hero would show only the " +
+                                     "tinted-primitive fallback (real weapon mesh missing from Resources)");
+                        log.AppendLine($"  AH [{job}] -> '{w.id}' | Resources '{path}' | PROP MISSING (primitive fallback)");
+                    }
+                    else
+                    {
+                        log.AppendLine($"  AH [{job}] -> '{w.id}' | Resources '{path}' | prop OK");
+                    }
+                }
+            }
+        }
+
+        // True when <paramref name="key"/> resolves to at least one Addressable resource
+        // location (i.e. the address is registered in the content catalog — the Gear group
+        // entries marked by BlinkAddressableMarker). Synchronous via WaitForCompletion; the
+        // handle is released after the check so the locations probe never leaks.
+        private static bool AddressableKeyExists(string key)
+        {
+            if (string.IsNullOrEmpty(key)) return false;
+            try
+            {
+                AsyncOperationHandle<IList<IResourceLocation>> h =
+                    Addressables.LoadResourceLocationsAsync(key);
+                IList<IResourceLocation> locs = h.WaitForCompletion();
+                bool exists = locs != null && locs.Count > 0;
+                if (h.IsValid()) Addressables.Release(h);
+                return exists;
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogWarning($"[DataRegression] Addressable key probe threw for '{key}': {ex.Message}");
+                return false;
+            }
         }
 
         private static string CostStr(DeNelle.Village.ResourceCost c)

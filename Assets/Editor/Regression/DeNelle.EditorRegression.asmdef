@@ -4,7 +4,9 @@
     "references": [
         "DeNelle.Core",
         "DeNelle.Village",
-        "DeNelle.Data"
+        "DeNelle.Data",
+        "Unity.Addressables",
+        "Unity.ResourceManager"
     ],
     "includePlatforms": [
         "Editor"

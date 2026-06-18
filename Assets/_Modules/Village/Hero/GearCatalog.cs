@@ -82,6 +82,14 @@ namespace DeNelle.Village
         public string prefabPath;
         public string iconPath;
 
+        // WO-Item (Addressables equip): HOW prefabPath is loaded. The Blink generator
+        // stamps "addressable" on every Blink row (its prefabPath is an Addressables
+        // address, e.g. "gear/weapon/Sword1h_01"); legacy/Tripo rows leave it null/empty
+        // and continue to resolve through the hardcoded Resources map in EquipmentController.
+        // EquipmentController.LoadsViaAddressable(WeaponDef) reads THIS (or the "gear/"
+        // address prefix) to pick the load path. Newtonsoft populates it when present.
+        public string loadVia;
+
         // WO-Item-1: OPTIONAL explicit capability override from JSON (null when absent).
         // When present it wins; when absent the kind default applies (see Capabilities).
         // Nullable so a row without the field is unchanged (Newtonsoft leaves it null).
