@@ -371,6 +371,7 @@ namespace DeNelle.Village
             _dialogueRunner = runner;
             if (runner.onDialogueStart != null)    runner.onDialogueStart.AddListener(OnDialogueStarted);
             if (runner.onDialogueComplete != null) runner.onDialogueComplete.AddListener(OnDialogueEnded);
+            SyncSuppressionToRunner(runner);
         }
 
         private System.Collections.IEnumerator RetryHookDialogueGate()
@@ -386,10 +387,38 @@ namespace DeNelle.Village
                     _dialogueRunner = runner;
                     if (runner.onDialogueStart != null)    runner.onDialogueStart.AddListener(OnDialogueStarted);
                     if (runner.onDialogueComplete != null) runner.onDialogueComplete.AddListener(OnDialogueEnded);
+                    SyncSuppressionToRunner(runner);
                     break;
                 }
             }
             _retryingHook = false;
+        }
+
+        // WO-375 ROOT-CAUSE FIX (subscribe-after-start race): onDialogueStart is a
+        // fire-once event — if this hero hooks the runner AFTER a dialogue already began
+        // (the FTUE/intro autostarts before the hero spawns, or a HeroBodySwapper spins up
+        // a fresh HeroLocomotion mid-conversation), the start event has ALREADY fired and
+        // InputSuppressed stays false → player movement/attacks BLEED THROUGH during the
+        // story beat (the WO-377 symptom, re-introduced by ordering). On hook we therefore
+        // reconcile the gate to the runner's LIVE state: if a dialogue is already running,
+        // raise suppression now (catch-up); otherwise leave it clear. §12: no silent gap —
+        // the catch-up is logged so a captured "input during dialogue" trace points here.
+        private void SyncSuppressionToRunner(Yarn.Unity.DialogueRunner runner)
+        {
+            bool running = runner != null && runner.IsDialogueRunning;
+            if (running && !InputSuppressed)
+            {
+                InputSuppressed = true;
+                Velocity = Vector3.zero;
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("UI",
+                    "HeroLocomotion hooked a dialogue ALREADY in progress — suppressing input (catch-up for the missed onDialogueStart).");
+            }
+            else if (!running && InputSuppressed)
+            {
+                // The previous owner was destroyed mid-suppression and no dialogue is live now
+                // — don't inherit a stale lock that would dead-freeze this fresh hero.
+                InputSuppressed = false;
+            }
         }
 
         // WO-377: dialogue opened — suppress player input and hold the hero in place. The
