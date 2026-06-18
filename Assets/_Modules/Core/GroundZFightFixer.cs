@@ -38,6 +38,7 @@
 // =============================================================================
 
 using UnityEngine;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Core
 {
@@ -105,6 +106,20 @@ namespace DeNelle.Core
         /// </summary>
         public static void FixGroundPlane()
         {
+            // GARRISON / OUTPOST path FIRST, and UNGATED by the active scene.
+            // The outpost (Garrison_troll_outpost / _frost_keep / _ruined_keep / hill_fort)
+            // loads ADDITIVELY over the hub/OuterWorld and is NEVER SetActive'd, so
+            // GetActiveScene() still reports "MainCastle_*" / "Village*" while the outpost
+            // floor is live. InFixableScene()/InHubScene() therefore can never route to it.
+            // Run the Garrison pass whenever ANY Garrison_* scene is loaded (cheap +
+            // idempotent), independent of which scene is active.
+            if (AnyGarrisonSceneLoaded())
+            {
+                FixGarrisonFloor();
+                // Do NOT return — the active hub/village may ALSO need its own floor fix
+                // while the outpost is additively layered on top.
+            }
+
             if (!InFixableScene()) return;
 
             // CASTLE HUB path: the plaza floor is a 5x5 GRID of small tiles named
@@ -176,6 +191,84 @@ namespace DeNelle.Core
             return lower.StartsWith("courtyardfloor") || lower.StartsWith("qfloorwood");
         }
 
+        // True when ANY Garrison_* scene is currently loaded (additively or single).
+        // The raid outpost is loaded additively over the hub/OuterWorld and is NEVER
+        // SetActive'd, so GetActiveScene() never reports it — we must walk the loaded
+        // scene list instead of asking for the active one (the "additive load never
+        // becomes active" trap).
+        private static bool AnyGarrisonSceneLoaded()
+        {
+            int count = UnityEngine.SceneManagement.SceneManager.sceneCount;
+            for (int i = 0; i < count; i++)
+            {
+                var s = UnityEngine.SceneManagement.SceneManager.GetSceneAt(i);
+                if (s.isLoaded && !string.IsNullOrEmpty(s.name) && s.name.StartsWith("Garrison"))
+                    return true;
+            }
+            return false;
+        }
+
+        // GARRISON / OUTPOST pass: the outpost floor is a SINGLE large Plane named
+        // "GarrisonGround" (open camps) or "DungeonFloor" (caves), built at Y=0 by
+        // GarrisonSceneBuilder.BuildGroundOrFloor — coplanar with the additively-loaded
+        // OuterWorld terrain at Y=0 → the SAME z-fighting flicker the hub had. The big
+        // single-plane finder below cannot catch it: (a) the active scene is the hub, not
+        // the outpost, so it never routes here, and (b) the outpost plane footprint is
+        // ~48-56 m (medium half=16 / large half=20), BELOW the 60 m MinFootprint guard.
+        // So this dedicated pass matches by NAME and lowers EACH still-high outpost floor
+        // to TargetY so the terrain wins the depth test. Idempotent: a floor already
+        // at/below TargetY (re-load) is skipped, so repeated loads never drift it down.
+        private static void FixGarrisonFloor()
+        {
+            var all = Object.FindObjectsByType<MeshRenderer>(FindObjectsSortMode.None);
+            int lowered = 0;
+            foreach (var mr in all)
+            {
+                if (mr == null) continue;
+                if (!NameIsGarrisonFloor(mr.name)) continue;
+
+                Transform t = mr.transform;
+                float y = t.position.y;
+                // IDEMPOTENT: only lower a floor still ABOVE the target.
+                if (y > TargetY + NearZeroEpsilon)
+                {
+                    Vector3 p = t.position;
+                    p.y = TargetY;
+                    t.position = p;
+                    lowered++;
+                }
+            }
+            if (lowered > 0)
+            {
+                string scene = ActiveGarrisonSceneName();
+                FlowTrace.Step("GroundZFightFixer",
+                    "Garrison " + scene + " — offset " + lowered + " floor tiles to Y=" +
+                    TargetY + " so the OuterWorld terrain wins the depth test (no rebake).");
+            }
+        }
+
+        // Match the GarrisonSceneBuilder floor objects: open camps build "GarrisonGround";
+        // dungeon/cave recipes build "DungeonFloor". Tolerate a "(Clone)" suffix + case.
+        private static bool NameIsGarrisonFloor(string n)
+        {
+            if (string.IsNullOrEmpty(n)) return false;
+            string lower = n.ToLowerInvariant();
+            return lower.StartsWith("garrisonground") || lower.StartsWith("dungeonfloor");
+        }
+
+        // The name of the first loaded Garrison_* scene (for the FlowTrace proof line).
+        private static string ActiveGarrisonSceneName()
+        {
+            int count = UnityEngine.SceneManagement.SceneManager.sceneCount;
+            for (int i = 0; i < count; i++)
+            {
+                var s = UnityEngine.SceneManagement.SceneManager.GetSceneAt(i);
+                if (s.isLoaded && !string.IsNullOrEmpty(s.name) && s.name.StartsWith("Garrison"))
+                    return s.name;
+            }
+            return "Garrison_?";
+        }
+
         // True when the active scene is fixable by this component: one of the playable
         // towns (Village2 canonical, Village3, Village), the castle hub
         // (MainCastle_Hall / any Castle* scene), OR the garrison troll outpost
@@ -228,13 +321,13 @@ namespace DeNelle.Core
         private static bool NameIsGround(string n)
         {
             if (string.IsNullOrEmpty(n)) return false;
-            // Village generator names the plane exactly "Ground"; the GARRISON outpost
-            // (GarrisonSceneBuilder) names its single big floor plane "GarrisonGround".
-            // Both are one large plane built at Y=0 → route both through the single-big-
-            // plane finder. Tolerate a "(Clone)" suffix and case just in case.
+            // Village generator names the plane exactly "Ground". (The GARRISON outpost
+            // floor "GarrisonGround"/"DungeonFloor" is handled by the dedicated
+            // FixGarrisonFloor pass instead — its ~48-56 m footprint is below this
+            // finder's 60 m MinFootprint guard and the outpost is never the active scene.)
+            // Tolerate a "(Clone)" suffix and case just in case.
             string lower = n.ToLowerInvariant();
-            return lower == "ground" || lower.StartsWith("ground") ||
-                   lower == "garrisonground" || lower.StartsWith("garrisonground");
+            return lower == "ground" || lower.StartsWith("ground");
         }
     }
 }
