@@ -37,6 +37,7 @@
 
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village.World
 {
@@ -94,6 +95,8 @@ namespace DeNelle.Village.World
 
                 t.requireConfirm = true;
                 fixedCount++;
+                FlowTrace.Step("Seam",
+                    $"OutpostConnector '{t.name}' -> requireConfirm=true (applied by injector, belt-and-suspenders)");
             }
 
             if (fixedCount > 0)

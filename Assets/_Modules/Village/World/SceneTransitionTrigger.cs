@@ -3,6 +3,7 @@ using UnityEngine;
 using UnityEngine.AI;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
 {
@@ -79,6 +80,46 @@ namespace DeNelle.Village
         // Effective radius: confirm seams reach to ConfirmMinRadius so the prompt appears at
         // the navmesh edge; legacy auto-cross keeps the authored (tight) ProximityRadius.
         private float EffRadius => requireConfirm ? Mathf.Max(ProximityRadius, ConfirmMinRadius) : ProximityRadius;
+
+        // =====================================================================
+        // SOURCE-OF-TRUTH confirm enforcement for raid-outpost connectors.
+        // ---------------------------------------------------------------------
+        // ROOT CAUSE (owner Player.log 2026-06-18): the OutpostConnector_* seams are
+        // baked into MainCastle_Hall.unity with requireConfirm:0 (CastleHubBuilder
+        // stamps false at WireOutpostConnectors, owner 2026-06-17 auto-cross intent for
+        // the EXIT seam — but that intent leaked onto the raid connectors too). The
+        // runtime OutpostConnectorConfirmInjector tried to flip them back on
+        // sceneLoaded, but that is an EXTERNAL static racing this component's per-frame
+        // Update(): on the boot/additive-load frame, this trigger's Update() can fire
+        // the proximity AUTO-CROSS (requireConfirm==false branch) BEFORE the injector's
+        // sceneLoaded handler runs — so the hero teleports before the fix lands. The
+        // injector also misses the very-first active scene (sceneLoaded never fires for
+        // the boot scene) on some load paths.
+        //
+        // DURABLE FIX: enforce confirm-to-cross HERE, in Awake(), on this same
+        // component. Awake() is guaranteed to run before this component's first
+        // Update(), so the auto-cross branch can NEVER fire on a raid connector — and
+        // every freshly (additively) loaded instance re-enforces it on its own Awake,
+        // so it survives outpost scene reloads with no external coordination.
+        //
+        // SCOPE GUARD: ONLY GameObjects named "OutpostConnector_*" are forced to
+        // confirm. The castle<->OuterWorld seams (WorldGate_ConnectToOuterWorld_Marker,
+        // ReturnToOuterWorld_Seam) are intentionally left at their authored value.
+        private void Awake()
+        {
+            if (!requireConfirm && NameMarksOutpostConnector(name))
+            {
+                requireConfirm = true;
+                FlowTrace.Step("Seam",
+                    $"OutpostConnector '{name}' -> requireConfirm=true (applied at Awake, source-enforced)");
+            }
+        }
+
+        private static bool NameMarksOutpostConnector(string n)
+        {
+            return !string.IsNullOrEmpty(n) &&
+                   n.StartsWith("OutpostConnector", System.StringComparison.OrdinalIgnoreCase);
+        }
 
         private void Update()
         {
