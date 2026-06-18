@@ -99,6 +99,12 @@ namespace DeNelle.DevTools
         private HeroLocomotion _hero;
         private float _runStartRealtime;
 
+        // Passive assertion probes that ride alongside the scripted phases and catch
+        // UX/structural defects the phase machine misses (unexpected auto-cross,
+        // coplanar z-fight floors, walk-through-wall clips, dual-navmesh / stranding).
+        // Spawned + armed only on an autopilot run (this driver is autopilot-only).
+        private AutoPilotProbes _probes;
+
         // Per-phase result rows for the summary file.
         private readonly List<PhaseResult> _phases = new List<PhaseResult>();
 
@@ -143,6 +149,15 @@ namespace DeNelle.DevTools
             _runStartRealtime = Time.realtimeSinceStartup;
             FlowTrace.Step("Auto", $"AutoPilot START (quitOnDone={_quitOnDone}, seed={_seed}, run='{_runId ?? "<none>"}', scene='{ActiveScene()}').");
 
+            // Arm the passive assertion probes (autopilot-only — this driver is the sole
+            // spawner). They watch world state across every phase via FlowTrace.Fail.
+            try
+            {
+                _probes = gameObject.AddComponent<AutoPilotProbes>();
+                _probes.Arm();
+            }
+            catch (Exception ex) { FlowTrace.Warn("Auto", "Failed to arm AutoPilotProbes: " + ex.Message); }
+
             // Skip Yarn: a background suppressor dismisses any dialogue that auto-starts
             // (e.g. the companion intro SylasFirstMeeting on entering MainCastle_Hall) so a
             // headless bot never stalls inside a conversation it can't read. This is the
@@ -174,7 +189,12 @@ namespace DeNelle.DevTools
                 yield return RunPhase("AssertEquip", AssertEquip());
                 yield return RunPhase("OpenEachHUDPanel", OpenEachHUDPanel());
                 yield return RunPhase("TriggerWave", TriggerWave());
+                // AttemptExitCastle deliberately crosses a scene seam, so tell the
+                // UNEXPECTED-CROSS probe this load is intentional (else it would flag
+                // the bot's own exit). Clear it again right after.
+                _probes?.SetIntentionalCrossPhase(true);
                 yield return RunPhase("AttemptExitCastle", AttemptExitCastle());
+                _probes?.SetIntentionalCrossPhase(false);
             }
 
             FlowTrace.Step("Auto", "AutoPilot complete");

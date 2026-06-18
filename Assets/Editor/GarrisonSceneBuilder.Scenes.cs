@@ -414,6 +414,65 @@ namespace DeNelle.Editor
                 if (!(breached && Hash(z, 4) > 0.72f))
                     PlaceOne(parent, wallPrefab, new Vector3( halfX, y, z), 90f, "Wall_Right");
             }
+
+            // NAVMESH CARVE FIX (walk-through-walls): the thin Wall_Medieval_Wood props
+            // above have MeshColliders that do NOT form a continuous barrier, so the
+            // hero (a NavMeshAgent) paths straight between them. Lay a SOLID invisible
+            // carving wall ring along the palisade line — same idea as the dungeon's
+            // BuildEnclosureRing — so the PhysicsColliders bake carves a hole under the
+            // whole perimeter. The front gate gap stays open so the hero can enter.
+            BuildPalisadeCarveRing(parent, half, y, leaveFrontGap: frontGap);
+        }
+
+        // A SOLID, invisible (renderer-disabled) carving wall ring hugging the palisade
+        // perimeter so the open-garrison navmesh STOPS at the wall line. Built from four
+        // long collider cubes (like BuildEnclosureRing) — except the front edge is split
+        // around a gate gap when frontGap is set, leaving an opening to walk through.
+        // Idempotent: a fresh scene is built each bake, and each cube is uniquely named.
+        private static void BuildPalisadeCarveRing(Transform parent, float half, float y,
+            bool leaveFrontGap)
+        {
+            const float t = 1.0f;     // wall thickness
+            const float h = 4.0f;     // wall height (well above the agent)
+            const float gate = 4.0f;  // half-width of the gate opening on the front (-Z) edge
+            float baseY = y + h * 0.5f;
+            float len = half * 2f + t;
+
+            // Back (+Z) and the two side (X) edges: continuous solid cubes.
+            AddCarveWall(parent, new Vector3(0f, baseY, half),      new Vector3(len, h, t), "PalisadeCarve_Back");
+            AddCarveWall(parent, new Vector3(-half, baseY, 0f),     new Vector3(t, h, len), "PalisadeCarve_Left");
+            AddCarveWall(parent, new Vector3( half, baseY, 0f),     new Vector3(t, h, len), "PalisadeCarve_Right");
+
+            // Front (-Z) edge: split around the gate gap, or solid if there is no gate.
+            if (leaveFrontGap)
+            {
+                float sideLen = half - gate;            // length of each front stub
+                if (sideLen > 0.1f)
+                {
+                    float cx = (half + gate) * 0.5f;    // centre of each stub
+                    AddCarveWall(parent, new Vector3(-cx, baseY, -half), new Vector3(sideLen, h, t), "PalisadeCarve_FrontL");
+                    AddCarveWall(parent, new Vector3( cx, baseY, -half), new Vector3(sideLen, h, t), "PalisadeCarve_FrontR");
+                }
+            }
+            else
+            {
+                AddCarveWall(parent, new Vector3(0f, baseY, -half), new Vector3(len, h, t), "PalisadeCarve_Front");
+            }
+        }
+
+        // One invisible solid carving wall: a Cube primitive (BoxCollider intact) with its
+        // renderer disabled and marked NavigationStatic, so it carves the navmesh without
+        // being seen (the detailed Wall_Medieval_Wood props remain the visible wall).
+        private static void AddCarveWall(Transform parent, Vector3 localPos, Vector3 scale, string name)
+        {
+            var w = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            w.name = name;
+            w.transform.SetParent(parent, false);
+            w.transform.localPosition = localPos;
+            w.transform.localScale = scale;
+            var mr = w.GetComponent<MeshRenderer>();
+            if (mr != null) mr.enabled = false;   // invisible — collider only
+            MarkStatic(w);
         }
 
         // Partial broken stone walls — short disconnected runs (chokepoints) for a ruined keep.

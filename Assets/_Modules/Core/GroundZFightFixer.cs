@@ -177,14 +177,16 @@ namespace DeNelle.Core
         }
 
         // True when the active scene is fixable by this component: one of the playable
-        // towns (Village2 canonical, Village3, Village) OR the castle hub
-        // (MainCastle_Hall / any Castle* scene). Keeps this off Title / HeroSelect /
-        // DTT / dungeons that this RuntimeInitialize hook also fires in.
+        // towns (Village2 canonical, Village3, Village), the castle hub
+        // (MainCastle_Hall / any Castle* scene), OR the garrison troll outpost
+        // (Garrison_troll_outpost / any Garrison* scene). Keeps this off Title /
+        // HeroSelect / DTT / dungeons that this RuntimeInitialize hook also fires in.
         private static bool InFixableScene()
         {
             string n = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name;
             if (string.IsNullOrEmpty(n)) return false;
-            return n.StartsWith("Village") || n.StartsWith("MainCastle") || n.StartsWith("Castle");
+            return n.StartsWith("Village") || n.StartsWith("MainCastle") ||
+                   n.StartsWith("Castle") || n.StartsWith("Garrison");
         }
 
         // True when the active scene is the castle hub (grid-tile plaza), which uses the
@@ -226,10 +228,13 @@ namespace DeNelle.Core
         private static bool NameIsGround(string n)
         {
             if (string.IsNullOrEmpty(n)) return false;
-            // Generator names the plane exactly "Ground"; tolerate a "(Clone)" suffix
-            // and case just in case.
+            // Village generator names the plane exactly "Ground"; the GARRISON outpost
+            // (GarrisonSceneBuilder) names its single big floor plane "GarrisonGround".
+            // Both are one large plane built at Y=0 → route both through the single-big-
+            // plane finder. Tolerate a "(Clone)" suffix and case just in case.
             string lower = n.ToLowerInvariant();
-            return lower == "ground" || lower.StartsWith("ground");
+            return lower == "ground" || lower.StartsWith("ground") ||
+                   lower == "garrisonground" || lower.StartsWith("garrisonground");
         }
     }
 }
