@@ -448,10 +448,8 @@ namespace DeNelle.Village
                 r.renderMode   = ParticleSystemRenderMode.Stretch;
                 r.velocityScale = 0.015f;
                 r.lengthScale   = superStar ? 5f : 3.5f;
-                // Use a simple bright material (URP Particles Unlit).
-                Shader s = Shader.Find("Universal Render Pipeline/Particles/Unlit")
-                        ?? Shader.Find("Sprites/Default");
-                if (s != null) r.material = new Material(s);
+                // WO-420: logged resolve, never the URP magenta default.
+                AbilityVfxKit.ApplyParticleMaterial(r);
             }
 
             // Glow: a short-lived bright flash at the star's head.
@@ -475,9 +473,7 @@ namespace DeNelle.Village
             if (gr != null)
             {
                 gr.renderMode = ParticleSystemRenderMode.Billboard;
-                Shader gs = Shader.Find("Universal Render Pipeline/Particles/Unlit")
-                         ?? Shader.Find("Sprites/Default");
-                if (gs != null) gr.material = new Material(gs);
+                AbilityVfxKit.ApplyParticleMaterial(gr);   // WO-420
             }
 
             // Optional URP point light at the glow position for extra sparkle.
@@ -601,9 +597,7 @@ namespace DeNelle.Village
                 r.renderMode    = ParticleSystemRenderMode.Stretch;
                 r.velocityScale = 0.025f;
                 r.lengthScale   = 2.5f;
-                Shader s = Shader.Find("Universal Render Pipeline/Particles/Unlit")
-                        ?? Shader.Find("Sprites/Default");
-                if (s != null) r.material = new Material(s);
+                AbilityVfxKit.ApplyParticleMaterial(r);   // WO-420
             }
             return ps;
         }
@@ -636,9 +630,7 @@ namespace DeNelle.Village
             if (r != null)
             {
                 r.renderMode = ParticleSystemRenderMode.Billboard;
-                Shader s = Shader.Find("Universal Render Pipeline/Particles/Unlit")
-                        ?? Shader.Find("Sprites/Default");
-                if (s != null) r.material = new Material(s);
+                AbilityVfxKit.ApplyParticleMaterial(r);   // WO-420
             }
             return ps;
         }

@@ -23,12 +23,71 @@
 // =============================================================================
 
 using UnityEngine;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
 {
     public static class AbilityVfxKit
     {
         private static Texture2D s_softDot;
+
+        // ── Particle-shader resolution (WO-420: kill the magenta default) ──────
+        // The URP particle shader is NOT in m_AlwaysIncludedShaders, so it can be
+        // stripped from a built player. Every VFX builder used to do:
+        //     Shader s = Shader.Find("…/Particles/Unlit") ?? Shader.Find("Sprites/Default");
+        //     if (s != null) r.material = new Material(s);
+        // — when BOTH resolved null the renderer was LEFT on Unity's default
+        // material, which renders MAGENTA in URP, and the failure was SILENT
+        // (§12 violation). This helper widens the fallback chain and, critically,
+        // NEVER returns null without logging — so a missing shader is loud, not pink.
+
+        private static Shader s_particleShader;
+        private static bool s_particleShaderResolved;
+
+        /// <summary>
+        /// Resolve a runtime particle shader, widest viable fallback first. Caches
+        /// the result. Logs (FlowTrace.Warn — no silent failure) the first time the
+        /// preferred URP particle shader is missing, and again if EVERY fallback is
+        /// gone (caller should then skip assignment rather than show magenta).
+        /// </summary>
+        public static Shader ResolveParticleShader()
+        {
+            if (s_particleShaderResolved) return s_particleShader;
+            s_particleShaderResolved = true;
+
+            s_particleShader = Shader.Find("Universal Render Pipeline/Particles/Unlit");
+            if (s_particleShader != null) return s_particleShader;
+
+            FlowTrace.Warn("VFX", "URP Particles/Unlit shader not found (stripped from build?) — " +
+                                  "falling back. Add it to GraphicsSettings m_AlwaysIncludedShaders to keep VFX colour-correct.");
+
+            s_particleShader = Shader.Find("Sprites/Default")
+                            ?? Shader.Find("Universal Render Pipeline/Unlit")
+                            ?? Shader.Find("Unlit/Transparent")
+                            ?? Shader.Find("Unlit/Color");
+
+            if (s_particleShader == null)
+                FlowTrace.Warn("VFX", "NO usable particle/unlit shader found at all — VFX renderers will be left " +
+                                      "unassigned (skipped) rather than rendered magenta.");
+            return s_particleShader;
+        }
+
+        /// <summary>
+        /// Assign a fresh particle material to <paramref name="r"/> using the
+        /// resolved shader. If no shader resolves we leave the renderer's material
+        /// untouched and return false — callers must NOT fall through to Unity's
+        /// magenta default. Optionally tints the material's main colour.
+        /// </summary>
+        public static bool ApplyParticleMaterial(ParticleSystemRenderer r, Texture mainTex = null)
+        {
+            if (r == null) return false;
+            var sh = ResolveParticleShader();
+            if (sh == null) return false;   // WO-420: skip — never the magenta default
+            var m = new Material(sh);
+            if (mainTex != null) m.mainTexture = mainTex;
+            r.material = m;
+            return true;
+        }
 
         // ── VFXManager bridge ─────────────────────────────────────────────────
         // When VFXManager is live and has a prefab wired for the requested type,
@@ -516,8 +575,7 @@ namespace DeNelle.Village
             var r = go.GetComponent<ParticleSystemRenderer>();
             if (r != null)
             {
-                Shader s = Shader.Find("Universal Render Pipeline/Particles/Unlit") ?? Shader.Find("Sprites/Default");
-                if (s != null) { var m = new Material(s); m.mainTexture = SoftDot(); r.material = m; }
+                ApplyParticleMaterial(r, SoftDot());   // WO-420: logged resolve, never magenta default
                 r.renderMode = ParticleSystemRenderMode.Billboard;
             }
             return ps;
