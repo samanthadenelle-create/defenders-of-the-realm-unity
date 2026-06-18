@@ -91,6 +91,21 @@ namespace DeNelle.Village
         [Tooltip("Distance from the Heart at which the enemy considers itself 'arrived'.")]
         [SerializeField] private float _heartArrivalRadius = 2.5f;
 
+        // WO-419: the agent's stoppingDistance is normally _heartArrivalRadius (2.5 m) so a
+        // siege enemy halts a body-length off the Heart/structure it batters. But the HERO
+        // has NO physical collider (HeroControlEnsurer destroys it so HeroLocomotion's
+        // CapsuleCast can't self-block) and is NOT struck by the enemy's forward contact
+        // probe — instead HeroHealth.Update scans for enemies within its own EngageRadius
+        // (1.5 m) and self-applies the contact tick. So a hero-CHASING enemy that stops at
+        // 2.5 m never enters the 1.5 m damage ring and deals ZERO damage. This is invisible
+        // in the castle (enemies batter the gate/Heart/walls — real colliders) but in
+        // OuterWorld the hero is the ONLY target, so the seam reads as "enemies don't attack
+        // after I cross into OuterWorld" (WO-419). When actively chasing the hero we tighten
+        // stoppingDistance to this melee value so the enemy closes INSIDE the hero's engage
+        // ring; it is restored to _heartArrivalRadius the moment the chase ends.
+        private const float HeroChaseStoppingDistance = 1.1f;
+        private bool _stopTightenedForHero;   // tracks which stoppingDistance is currently applied
+
         [Header("Hero aggro (DEF-224)")]
         [Tooltip("When the hero comes within this radius the enemy breaks off its Heart-siege " +
                  "march and closes on the hero to attack it, then returns to the Heart-siege " +
@@ -704,13 +719,25 @@ namespace DeNelle.Village
             //                                of aggro range.
             //   4. _heart                  — default Heart-march.
             Vector3 destPos;
+            bool chasingHero = false;
             if (_brainPositionOverride.HasValue)
             {
                 destPos = _brainPositionOverride.Value;
+                // A LIVE EnemyBrain steers here (provoke/taunt/role-on-hero). Detect a
+                // hero chase so we still close to melee range: the override sits on/near
+                // the hero's current position. ResolveHeroTransform is throttled (≈1/sec).
+                ResolveHeroTransform();
+                if (_heroTransform != null)
+                {
+                    float toHeroSqr = Vector3.ProjectOnPlane(
+                        _heroTransform.position - destPos, Vector3.up).sqrMagnitude;
+                    chasingHero = toHeroSqr <= 1.5f * 1.5f;
+                }
             }
             else if (TryGetHeroAggroDestination(out Vector3 heroDest))
             {
                 destPos = heroDest;
+                chasingHero = true;
             }
             else if (_brainTarget != null && _brainTarget.gameObject.activeInHierarchy)
             {
@@ -719,6 +746,35 @@ namespace DeNelle.Village
             else
             {
                 destPos = _heart.position;
+            }
+
+            // WO-419: tighten stoppingDistance to a melee value while chasing the hero so the
+            // agent closes INSIDE HeroHealth's 1.5 m engage ring (the hero has no collider /
+            // is not hit by the forward contact probe — see HeroChaseStoppingDistance). Restore
+            // the siege arrival radius the moment the chase ends. Only writes on a change.
+            if (chasingHero != _stopTightenedForHero)
+            {
+                _stopTightenedForHero = chasingHero;
+                _agent.stoppingDistance = chasingHero ? HeroChaseStoppingDistance : _heartArrivalRadius;
+                // Force the next frame to re-issue the path so the agent acts on the new
+                // stoppingDistance immediately (an enemy already halted at 2.5 m must resume
+                // closing to 1.1 m even though the destination hasn't moved).
+                _pathRefreshTimer = 0f;
+                DeNelle.Core.Diagnostics.FlowTrace.Throttle("EnemyAggro", $"stop-{_enemyId}", 2f,
+                    $"{_enemyId}: hero-chase={chasingHero} -> stoppingDistance={_agent.stoppingDistance:F2} " +
+                    $"(scene='{gameObject.scene.name}')");
+            }
+
+            // WO-419: per-enemy closest-approach trace while chasing — shows in a headless run
+            // whether a hero-aggro'd enemy actually reaches the hero's 1.5 m damage ring (where
+            // HeroHealth.Update applies the contact tick) or stalls short. Throttled ~1/sec.
+            if (chasingHero && _heroTransform != null)
+            {
+                float planar = Vector3.ProjectOnPlane(
+                    _heroTransform.position - transform.position, Vector3.up).magnitude;
+                DeNelle.Core.Diagnostics.FlowTrace.Throttle("EnemyAggro", $"reach-{_enemyId}", 1f,
+                    $"{_enemyId}: chasing hero, planarDist={planar:F2}m (engageRing=1.50m, " +
+                    $"inRange={(planar <= 1.5f)})");
             }
 
             // DEF-56: throttle SetDestination — only re-path when the timer expires
@@ -804,6 +860,16 @@ namespace DeNelle.Village
 
             var loco = FindFirstObjectByType<HeroLocomotion>();   // WO-450: component lookup
             _heroTransform = loco != null ? loco.transform : SafeFindByTag("Player");
+
+            // WO-419: trace the acquire across the seam — confirms a brain-less OuterWorld
+            // guard finds the (additively-loaded) hero by component, not an empty tag scan.
+            if (_heroTransform == null)
+                DeNelle.Core.Diagnostics.FlowTrace.Throttle("EnemyAggro", $"acq-miss-{_enemyId}", 2f,
+                    $"{_enemyId}: hero acquire MISS (no HeroLocomotion / 'Player' tag in any loaded scene).");
+            else
+                DeNelle.Core.Diagnostics.FlowTrace.Once("EnemyAggro", $"acq-{_enemyId}",
+                    $"{_enemyId}: acquired hero '{_heroTransform.name}' in scene " +
+                    $"'{_heroTransform.gameObject.scene.name}'.");
         }
 
         /// <summary>Null-safe tag lookup tolerating an undefined tag (Unity throws otherwise).</summary>

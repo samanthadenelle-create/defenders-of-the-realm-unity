@@ -149,6 +149,13 @@ namespace DeNelle.Village
             if (attackers > 0)
             {
                 _cooldown = DamageInterval;
+                // WO-419: the actual "enemy attacks hero" beat — an enemy entered the 1.5 m
+                // engage ring and the hero self-applies the contact tick. Tracing it here (the
+                // ground truth for the seam bug) shows in a headless run that OuterWorld enemies
+                // now reach + damage the hero, not just path toward it. Throttled ~1/sec.
+                DeNelle.Core.Diagnostics.FlowTrace.Throttle("EnemyAggro", "hero-hit", 1f,
+                    $"hero struck by {attackers} adjacent enemy(s) within {EngageRadius:F2}m " +
+                    $"(scene='{UnityEngine.SceneManagement.SceneManager.GetActiveScene().name}').");
                 TakeDamage(DamagePerEnemy * Mathf.Min(attackers, MaxEnemiesPerTick));
             }
         }
