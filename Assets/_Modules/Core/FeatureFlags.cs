@@ -47,7 +47,17 @@ namespace DeNelle.Core
         /// Default OFF. PlayerPrefs "ff.buildingupgradepanel". The MVVM bootstrap only spawns when
         /// ON, and the legacy UIDocument bootstrap suppresses itself when ON, so the two never
         /// double-register PanelId.BuildingUpgrade.</summary>
-        public static bool BuildingUpgradePanel => Get("buildingupgradepanel", defaultOn: false);
+        public static bool BuildingUpgradePanel => Get("buildingupgradepanel", defaultOn: true);
+
+        /// <summary>When ON, opening a weapon/armor shop opens the native code-built MVVM
+        /// <c>PartyShopPanelMvvm</c> (party-member selector + tap-to-filter + unified single-tap
+        /// buy/equip/sell + real item images + stat/buff deltas) instead of the legacy
+        /// <c>ShopPanel</c> (two sell bars, no party selection, blank icons). Presentation +
+        /// transaction routing through the proven IEconomy / IInventoryStore / IEquipTarget seams;
+        /// the catalog + equip math is unchanged. Default OFF. PlayerPrefs "ff.partyshop". The MVVM
+        /// bootstrap only spawns when ON, and CmdOpenShop routes to PanelRouter→PartyShop only when
+        /// ON (legacy ShopPanel path when OFF), so the two never double-open.</summary>
+        public static bool PartyShop => Get("partyshop", defaultOn: true);
 
         /// <summary>Per-feature resolve: PlayerPrefs override ("ff.&lt;name&gt;" = 0/1) wins, else the default.</summary>
         private static bool Get(string name, bool defaultOn)

@@ -215,6 +215,13 @@ namespace DeNelle.Village
         private string _currentWeaponId;
         private int _armorTier;
 
+        // OFF-HAND (shield) prop — attached to the OFF hand (LeftHand) alongside the main weapon.
+        // Mirrors the main-hand prop lifecycle (destroy-on-swap, no stacking). Driven off
+        // GearLoadout.EquippedOffHand on the SAME OnGearChanged event the main weapon uses.
+        private const string OffHandPropName = "EquipmentProp_OffHand";
+        private GameObject _currentOffHandProp;
+        private string _currentOffHandId;
+
         // Addressables equip (WO-Item, Blink gear): when the equipped WeaponDef loads its
         // prefab via Addressables (loadVia=="addressable" or a "gear/" address in prefabPath),
         // we LoadAssetAsync the prefab and attach on completion. The handle is held here and
@@ -326,6 +333,7 @@ namespace DeNelle.Village
             // Release any open Addressables weapon handle so a Blink prefab never leaks
             // when the hero is disabled/destroyed (the load may even still be in flight).
             ReleaseWeaponHandle();
+            DestroyCurrentOffHand();
         }
 
         private void HandleGearChanged() => EquipBestForHero();
@@ -341,6 +349,8 @@ namespace DeNelle.Village
             // Pass the WeaponDef (not just the id) so the attach path can read prefabPath /
             // loadVia and resolve a Blink Addressable weapon — the data-driven equip.
             Equip(_loadout != null ? _loadout.EquippedWeapon : null);
+            // OFF-HAND: attach (or detach) the shield/off-hand to the OFF hand on the SAME event.
+            EquipOffHand(_loadout != null ? _loadout.EquippedOffHand : null);
         }
 
         /// <summary>
@@ -771,6 +781,81 @@ namespace DeNelle.Village
             ReleaseWeaponHandle();
             _currentWeaponId = null;
             _gripRoot = null;
+        }
+
+        // ── OFF-HAND (shield) attach ─────────────────────────────────────────────────
+        /// <summary>
+        /// Attach the off-hand/shield described by <paramref name="def"/> to the hero's OFF hand
+        /// (LeftHand bone), mirroring the main-hand attach path. A null def DETACHES the off-hand.
+        /// Reuses the same Resources/primitive resolve + grip/seat the main path uses (the off-hand
+        /// goes through the Shield preset, which already seats centre-grip on the LeftHand). Safe to
+        /// call repeatedly (idempotent on an unchanged id). NOTE: the off-hand never uses the
+        /// Addressable async path — current shield rows are Resources/Tripo (build-safe + sync).
+        /// </summary>
+        public void EquipOffHand(WeaponDef def)
+        {
+            string id = def != null ? def.id : null;
+
+            // Idempotent: same off-hand already shown -> nothing to do.
+            if (string.Equals(_currentOffHandId, id, System.StringComparison.OrdinalIgnoreCase)
+                && _currentOffHandProp != null)
+                return;
+
+            DestroyCurrentOffHand();
+            _currentOffHandId = id;
+            if (string.IsNullOrEmpty(id)) return;   // detach
+
+            // Resolve the off-hand visual. An off-hand item is a shield; Resolve maps shield ids
+            // to the Shield preset (LeftHand, centre-grip). Force the Shield seat so a non-shield
+            // off-hand id (future 1h offhand) still seats sanely on the off hand.
+            WeaponVisual vis = Resolve(id);
+            if (vis == null || vis.kind != WeaponClass.Shield)
+                vis = Shield(vis != null && !string.IsNullOrEmpty(vis.mesh) ? vis.mesh : "shield_A");
+
+            CacheRig();
+            if (_animator == null || !_animator.isHuman) return;
+
+            Transform hand = _animator.GetBoneTransform(HumanBodyBones.LeftHand);
+            if (hand == null)
+            {
+                Debug.LogWarning("[EquipmentController] Humanoid rig missing LeftHand bone — " +
+                                 $"off-hand '{id}' not attached (cosmetic only).");
+                return;
+            }
+
+            GameObject prop = LoadWeaponMesh(vis.mesh) ?? BuildFallbackPrimitive(vis);
+            if (prop == null) return;
+
+            AttachOffHandProp(prop, vis, hand, id);
+        }
+
+        // Seat an off-hand prop on the off hand. Shields are centre-gripped (their own NormalizeInto
+        // + preset euler, like the bow) — they do NOT run the melee handle-inference / rig-axis
+        // rotation. Kept separate from the main-hand AttachLoadedProp so the off-hand prop has its
+        // own lifecycle reference (no clobbering the main weapon's grip-root / hold-pose state).
+        private void AttachOffHandProp(GameObject prop, WeaponVisual vis, Transform hand, string id)
+        {
+            prop.name = OffHandPropName;
+            foreach (var c in prop.GetComponentsInChildren<Collider>(true)) if (c != null) Destroy(c);
+            foreach (var rb in prop.GetComponentsInChildren<Rigidbody>(true)) if (rb != null) Destroy(rb);
+
+            var gripRoot = new GameObject(OffHandPropName);
+            NormalizeInto(prop, gripRoot.transform, vis.heldLength);
+
+            gripRoot.transform.SetParent(hand, false);
+            gripRoot.transform.localPosition = vis.gripPos;
+            gripRoot.transform.localRotation = Quaternion.Euler(vis.gripEuler);
+
+            _currentOffHandProp = gripRoot;
+        }
+
+        private void DestroyCurrentOffHand()
+        {
+            if (_currentOffHandProp != null)
+            {
+                Destroy(_currentOffHandProp);
+                _currentOffHandProp = null;
+            }
         }
 
         // ── Hold state: idle (lowered) ↔ combat (drawn/raised) ───────────────────────

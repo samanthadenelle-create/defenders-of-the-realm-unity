@@ -45,6 +45,20 @@ namespace DeNelle.Village
         public string icon;
         public string job;        // "mage" | "knight" | "ranger" | "any"
         public string rarity;
+
+        // HAND-SLOT model (owner 2026-06-18, docs/STORE_EQUIP_SPEC.md "Equip-slot rules").
+        // These three fields exist in the canonical weapons.json but were previously DROPPED on
+        // deserialize because WeaponDef didn't declare them. Now read so the equip layer can
+        // enforce main-hand/off-hand rules without inventing data.
+        //   hand       — "1h" (one-handed; may share with an off-hand) | "2h" (occupies BOTH hands).
+        //                Empty/absent => treated as "1h" (the permissive default; never blocks).
+        //   category   — weapon family: "sword"|"axe"|"bow"|"staff"|"shield"|... A "shield" is an
+        //                OFF-HAND item (seats in the off hand, never the main hand).
+        //   damageType — "melee"|"ranged"|"magic" (carried for shop deltas/buffs; not gameplay-gated yet).
+        public string hand;
+        public string category;
+        public string damageType;
+
         public float damageMult = 1f;
         // MELEE reach (m): extends the basic-attack hitbox radius for a melee weapon
         // (greatsword/polearm/axe outreach a dagger). 0 = "unset" -> the hero keeps
@@ -104,6 +118,18 @@ namespace DeNelle.Village
         /// <summary>WO-295: part of the legendary Aegis of Elarion set.</summary>
         public bool IsAegis =>
             !string.IsNullOrEmpty(setId) && setId.Equals("aegis", StringComparison.OrdinalIgnoreCase);
+
+        // ── HAND-SLOT predicates (docs/STORE_EQUIP_SPEC.md "Equip-slot rules") ──────
+        /// <summary>True when this weapon occupies BOTH hands (hand=="2h"). Absent/empty => 1h.</summary>
+        public bool IsTwoHanded =>
+            !string.IsNullOrEmpty(hand) && hand.Trim().Equals("2h", StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>True when this is an OFF-HAND item (a shield). Seats in the off hand, never the main hand.</summary>
+        public bool IsOffHandItem =>
+            !string.IsNullOrEmpty(category) && category.Trim().Equals("shield", StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>True when this is a one-handed MAIN-HAND weapon (1h and not a shield/off-hand item).</summary>
+        public bool IsOneHandedMain => !IsTwoHanded && !IsOffHandItem;
     }
 
     /// <summary>A piece of armor: defense = fractional incoming-damage reduction (0.04 = 4%).</summary>
@@ -213,6 +239,28 @@ namespace DeNelle.Village
                 {
                     if (a == null || !JobMatches(a.job, job) || !ArmorFitsClass(a, job) || !MeetsReq(a.req, level)) continue;
                     if (best == null || a.defense > best.defense) best = a;
+                }
+            }
+            return best;
+        }
+
+        /// <summary>
+        /// Highest-damageMult ONE-HANDED MAIN-HAND weapon (1h, not a shield) the class+level can
+        /// equip, or null. Used by the hand-slot enforcement as the main-hand fall-back when a 2H
+        /// weapon is removed (equipping a shield while a 2H is held) — keeps the armed-hero invariant:
+        /// a 1H can coexist with the off-hand, a 2H cannot.
+        /// </summary>
+        public static WeaponDef BestOneHandedWeapon(string job, int level)
+        {
+            EnsureLoaded();
+            WeaponDef best = null;
+            if (_weapons != null)
+            {
+                foreach (var w in _weapons)
+                {
+                    if (w == null || !w.IsOneHandedMain) continue;
+                    if (!JobMatches(w.job, job) || !MeetsReq(w.req, level)) continue;
+                    if (best == null || w.damageMult > best.damageMult) best = w;
                 }
             }
             return best;

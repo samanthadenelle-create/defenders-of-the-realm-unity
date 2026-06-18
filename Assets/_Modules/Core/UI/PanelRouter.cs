@@ -45,6 +45,8 @@ namespace DeNelle.Core.UI
         CosmeticShop = 3,
         /// <summary>Pet / companion skill tree — the Pet House.</summary>
         PetSkillTree = 4,
+        /// <summary>Party weapon/armor shop — the native code-built MVVM gear store (PartyShopPanelMvvm).</summary>
+        PartyShop = 5,
     }
 
     /// <summary>

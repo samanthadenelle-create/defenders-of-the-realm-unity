@@ -35,8 +35,19 @@ namespace DeNelle.Village
         public float ArmorDefense { get; private set; } = 0f;
 
         /// <summary>The currently-equipped pieces (null when nothing qualifies). For UI/debug.</summary>
-        public WeaponDef EquippedWeapon { get; private set; }
+        public WeaponDef EquippedWeapon { get; private set; }   // MAIN hand
         public ArmorDef  EquippedArmor  { get; private set; }
+
+        // ── OFF-HAND slot (owner 2026-06-18, docs/STORE_EQUIP_SPEC.md "Equip-slot rules") ──
+        // The hero has two hand slots: EquippedWeapon = MAIN hand, EquippedOffHand = OFF hand.
+        // EquippedOffHand holds a shield / off-hand item (WeaponDef with IsOffHandItem true, or a
+        // 1h off-hand). The two slots are mutually constrained:
+        //   • a 1H main-hand weapon + an off-hand may BOTH be equipped;
+        //   • a 2H weapon occupies BOTH hands → it clears the off-hand, and equipping an off-hand
+        //     while a 2H is held clears the 2H (falling the main hand back to a 1H or empty).
+        // Enforced in EnforceHandSlots, never set raw.
+        /// <summary>The currently-equipped OFF-HAND item (shield / off-hand), or null. For UI/debug/attach.</summary>
+        public WeaponDef EquippedOffHand { get; private set; }
 
         /// <summary>Fired after any manual or auto equip change (shop/equip UI can subscribe to refresh lists or HUD).</summary>
         public event System.Action OnGearChanged;
@@ -86,8 +97,9 @@ namespace DeNelle.Village
         // Per-class PERSISTED equip (owner 2026-06-16): a manual equip from the equip UI
         // is saved under the wearer's class so it sticks across loads — for the hero AND
         // each companion. Keyed by class name so every party member keeps its own loadout.
-        private const string PrefWeaponKey = "dotr-equip-weapon-";   // + <class>
-        private const string PrefArmorKey  = "dotr-equip-armor-";    // + <class>
+        private const string PrefWeaponKey  = "dotr-equip-weapon-";   // + <class>  (main hand)
+        private const string PrefArmorKey   = "dotr-equip-armor-";    // + <class>
+        private const string PrefOffHandKey = "dotr-equip-offhand-";  // + <class>  (off hand / shield)
 
         // WO-434: explicit "player removed this slot" sentinel. Written to the SAME per-class
         // PlayerPrefs key the Equip methods use, so a later Refresh/level-up honours the empty
@@ -147,11 +159,17 @@ namespace DeNelle.Village
             // the class (a light-armor wearer never restores a heavy piece).
             ApplyPersistedEquip(job);
 
+            // Resolve the main-hand / off-hand pair to a legal state after the picks above
+            // (auto-best may pick a 2H while a persisted off-hand restored, etc.). Mutually
+            // exclusive 2H↔off-hand enforced here, with the 1H fallback / armed-hero guard.
+            EnforceHandSlots(job, level);
+
             // WO-425 one-shot diagnostic: definitively shows null-weapon (#1 data) vs has-weapon
             // (#2 missing mesh art) on the next playtest. Refresh is NOT hot (OnEnable + OnLevelUp
             // only), so a single Step per call is correct — no Once/Throttle guard needed.
             FlowTrace.Step("Gear", $"Refresh: job='{job}' level={level} " +
-                $"bestWeapon='{EquippedWeapon?.id ?? "<null>"}' bestArmor='{EquippedArmor?.id ?? "<null>"}'");
+                $"bestWeapon='{EquippedWeapon?.id ?? "<null>"}' offHand='{EquippedOffHand?.id ?? "<null>"}' " +
+                $"bestArmor='{EquippedArmor?.id ?? "<null>"}'");
 
             ApplyStats(job);
             OnGearChanged?.Invoke();
@@ -174,6 +192,20 @@ namespace DeNelle.Village
                 var w = GearCatalog.FindWeapon(wId);
                 if (w != null && GearCatalog.WeaponFitsClass(w, job)) EquippedWeapon = w;
             }
+            // OFF-HAND restore (must run BEFORE EnforceHandSlots so a persisted shield + a 2H
+            // auto-best resolve to the shield-wins rule). Only restored when it's still a valid
+            // off-hand item the class may carry. Absent key => leave whatever was set (none).
+            string oId = PlayerPrefs.GetString(PrefOffHandKey + key, null);
+            if (oId == PrefNoneSentinel)
+            {
+                EquippedOffHand = null;
+            }
+            else if (!string.IsNullOrEmpty(oId))
+            {
+                var o = GearCatalog.FindWeapon(oId);
+                if (o != null && o.IsOffHandItem && GearCatalog.WeaponFitsClass(o, job)) EquippedOffHand = o;
+            }
+
             string aId = PlayerPrefs.GetString(PrefArmorKey + key, null);
             if (aId == PrefNoneSentinel)
             {
@@ -267,10 +299,89 @@ namespace DeNelle.Village
             return _setEffect;
         }
 
+        // ── HAND-SLOT ENFORCEMENT (docs/STORE_EQUIP_SPEC.md "Equip-slot rules") ──────
+        // The single point that keeps the main-hand / off-hand pair legal after ANY equip.
+        // Called by every path that sets EquippedWeapon or EquippedOffHand (manual equip,
+        // persisted-restore, auto-best Refresh). Each enforcement is FlowTrace.Step'd — no
+        // silent state change (§12). Returns nothing; mutates EquippedWeapon/EquippedOffHand.
+        //
+        // Rules:
+        //   • main-hand is 2H  -> off-hand MUST be empty (2H takes both hands).
+        //   • off-hand present + main-hand is 2H -> the off-hand WINS the off slot, the 2H is
+        //     removed, and the main hand falls back to the best 1H for the class (or empty —
+        //     but never left unarmed when a 1H starter exists; armed-hero guard).
+        //   • 1H main + off-hand -> both kept (the allowed combo).
+        // A shield can never sit in the MAIN slot (IsOffHandItem) — guarded here too.
+        private void EnforceHandSlots(string job, int level)
+        {
+            // A shield/off-hand item must never occupy the MAIN hand — move it to the off slot.
+            if (EquippedWeapon != null && EquippedWeapon.IsOffHandItem)
+            {
+                FlowTrace.Step("Gear", $"EnforceHandSlots: '{EquippedWeapon.id}' is an off-hand item in the main slot -> moved to off-hand.");
+                if (EquippedOffHand == null) EquippedOffHand = EquippedWeapon;
+                EquippedWeapon = null;
+            }
+
+            bool mainIs2H = EquippedWeapon != null && EquippedWeapon.IsTwoHanded;
+            bool haveOff  = EquippedOffHand != null;
+
+            if (mainIs2H && haveOff)
+            {
+                // Both can't hold: the most RECENT intent decides. We resolve by removing the 2H
+                // (the off-hand was the thing just added in the shield-while-2H path, and the 2H
+                // path itself clears the off-hand BEFORE calling this). Fall the main hand back to
+                // a 1H so the hero is never unarmed.
+                FlowTrace.Step("Gear", $"EnforceHandSlots: 2H main '{EquippedWeapon.id}' conflicts with off-hand '{EquippedOffHand.id}' -> 2H removed, main falls back to a 1H.");
+                var fallback = GearCatalog.BestOneHandedWeapon(job, level);
+                EquippedWeapon = fallback;   // may be null if no 1H exists for this class
+                if (fallback != null)
+                    FlowTrace.Step("Gear", $"EnforceHandSlots: main-hand fell back to 1H '{fallback.id}'.");
+                else
+                    FlowTrace.Warn("Gear", "EnforceHandSlots: no 1H fallback for class — main hand left empty (off-hand retained).");
+            }
+            else if (mainIs2H && !haveOff)
+            {
+                // Healthy 2H state — nothing to do, off-hand already empty.
+            }
+        }
+
+        // Apply a NEW main-hand weapon and enforce the slot rules. A 2H clears the off-hand
+        // FIRST (it takes both hands); a 1H keeps any existing off-hand. Centralised so manual
+        // equip, persisted-restore and Refresh share one rule set.
+        private void SetMainHand(WeaponDef w, string job, int level)
+        {
+            if (w != null && w.IsOffHandItem)
+            {
+                // A shield passed to the main slot routes to the off slot instead.
+                SetOffHand(w, job, level);
+                return;
+            }
+            EquippedWeapon = w;
+            if (w != null && w.IsTwoHanded && EquippedOffHand != null)
+            {
+                FlowTrace.Step("Gear", $"equip 2H '{w.id}' -> off-hand '{EquippedOffHand.id}' cleared (2H takes both hands).");
+                EquippedOffHand = null;
+            }
+            EnforceHandSlots(job, level);
+        }
+
+        // Apply a NEW off-hand/shield and enforce the slot rules. If the current main hand is 2H,
+        // the off-hand wins and the 2H is removed (main falls back to a 1H via EnforceHandSlots).
+        private void SetOffHand(WeaponDef offHand, string job, int level)
+        {
+            EquippedOffHand = offHand;
+            if (offHand != null && EquippedWeapon != null && EquippedWeapon.IsTwoHanded)
+            {
+                FlowTrace.Step("Gear", $"equip off-hand '{offHand.id}' while 2H '{EquippedWeapon.id}' held -> 2H removed (falls back to a 1H).");
+            }
+            EnforceHandSlots(job, level);
+        }
+
         /// <summary>
         /// Manual equip support for shop / EquipmentPanel flows. Forces a specific piece
         /// the player has purchased (or crafted). Updates stats immediately and triggers
         /// visuals re-apply (sword on hand, bow on back, armor accents, knight shield).
+        /// A shield/off-hand id routes to the off-hand slot automatically (and clears a 2H).
         /// </summary>
         public void EquipWeaponById(string id)
         {
@@ -282,8 +393,19 @@ namespace DeNelle.Village
                 FlowTrace.Warn("Gear", $"EquipWeaponById('{id}') — no WeaponDef in catalog; equip skipped.");
                 return;
             }
-            EquippedWeapon = w;
+
+            // A shield/off-hand goes to the off slot (and persists there).
+            if (w.IsOffHandItem)
+            {
+                EquipOffHandById(id);
+                return;
+            }
+
+            int level = _progression != null ? _progression.Level : 1;
+            SetMainHand(w, CurrentJob(), level);
             PlayerPrefs.SetString(PrefWeaponKey + PrefJobKey(), id);   // persist per class
+            // A 2H equip removed the off-hand — persist the empty off slot so it doesn't restore.
+            if (w.IsTwoHanded) PlayerPrefs.SetString(PrefOffHandKey + PrefJobKey(), PrefNoneSentinel);
             PlayerPrefs.Save();
             ApplyStats(CurrentJob());          // recomputes WeaponMult from EquippedWeapon.damageMult
             OnGearChanged?.Invoke();
@@ -293,6 +415,62 @@ namespace DeNelle.Village
             // Step lets a playtest confirm a MANUAL equip took (Refresh's auto-equip Step
             // at line ~120 only covers the level-up auto path, not shop/EquipmentPanel).
             FlowTrace.Step("Gear", $"EquipWeaponById('{id}') applied — WeaponMult={WeaponMult:0.00}");
+        }
+
+        /// <summary>
+        /// Manually equip a shield / off-hand item into the OFF hand. If the current main hand is a
+        /// 2H weapon it is REMOVED (a 2H takes both hands) and the main hand falls back to the best
+        /// 1H for the class (never left unarmed when a 1H starter exists). Persists per class so the
+        /// off-hand sticks across loads. No-op (with a Warn) when the id isn't in the catalog or
+        /// isn't an off-hand item.
+        /// </summary>
+        public void EquipOffHandById(string id)
+        {
+            var w = GearCatalog.FindWeapon(id);
+            if (w == null)
+            {
+                FlowTrace.Warn("Gear", $"EquipOffHandById('{id}') — no WeaponDef in catalog; equip skipped.");
+                return;
+            }
+            if (!w.IsOffHandItem)
+            {
+                FlowTrace.Warn("Gear", $"EquipOffHandById('{id}') — '{id}' is not an off-hand/shield item; equip skipped.");
+                return;
+            }
+
+            int level = _progression != null ? _progression.Level : 1;
+            bool clearedTwoHander = EquippedWeapon != null && EquippedWeapon.IsTwoHanded;
+            SetOffHand(w, CurrentJob(), level);
+
+            PlayerPrefs.SetString(PrefOffHandKey + PrefJobKey(), id);   // persist the off-hand per class
+            // If a 2H was just removed, persist the new main-hand choice (the 1H fallback or "none")
+            // so a later Refresh honours the swap instead of restoring the 2H.
+            if (clearedTwoHander)
+            {
+                PlayerPrefs.SetString(PrefWeaponKey + PrefJobKey(),
+                    EquippedWeapon != null ? EquippedWeapon.id : PrefNoneSentinel);
+            }
+            PlayerPrefs.Save();
+            ApplyStats(CurrentJob());
+            OnGearChanged?.Invoke();
+            TryReapplyVisuals();
+            FlowTrace.Step("Gear", $"EquipOffHandById('{id}') applied — off='{EquippedOffHand?.id ?? "<null>"}' main='{EquippedWeapon?.id ?? "<null>"}'");
+        }
+
+        /// <summary>
+        /// Manually remove the equipped off-hand / shield. Clears the off slot, persists the "none"
+        /// sentinel so a later Refresh doesn't auto-restore it, recomputes + re-applies visuals.
+        /// The main hand is untouched.
+        /// </summary>
+        public void UnequipOffHand()
+        {
+            EquippedOffHand = null;
+            PlayerPrefs.SetString(PrefOffHandKey + PrefJobKey(), PrefNoneSentinel);
+            PlayerPrefs.Save();
+            ApplyStats(CurrentJob());
+            OnGearChanged?.Invoke();
+            TryReapplyVisuals();
+            FlowTrace.Step("Gear", "UnequipOffHand applied — off-hand cleared.");
         }
 
         public void EquipArmorById(string id)

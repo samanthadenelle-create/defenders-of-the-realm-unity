@@ -111,7 +111,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_armor_basic1"
     },
     {
       "id": "blink_armor_basic2",
@@ -137,7 +138,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_armor_basic2"
     },
     {
       "id": "blink_armor_basic3",
@@ -163,7 +165,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_armor_basic3"
     },
     {
       "id": "blink_armor_basic4",
@@ -189,7 +192,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_armor_basic4"
     },
     {
       "id": "blink_armor_basic5",
@@ -215,7 +219,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_armor_basic5"
     },
     {
       "id": "blink_armor_basic6",
@@ -241,7 +246,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_armor_basic6"
     },
     {
       "id": "blink_armor_basic7",
@@ -267,7 +273,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_armor_basic7"
     },
     {
       "id": "blink_armor_basic8",
@@ -293,7 +300,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_armor_basic8"
     },
     {
       "id": "blink_armor_basic9",
@@ -319,7 +327,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_armor_basic9"
     },
     {
       "id": "blink_armor_basic10",
@@ -345,7 +354,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_armor_basic10"
     },
     {
       "id": "blink_armor_bear",
@@ -371,7 +381,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_armor_bear"
     },
     {
       "id": "blink_armor_beasthunter",
@@ -397,7 +408,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_armor_beasthunter"
     },
     {
       "id": "blink_armor_bird",
@@ -423,7 +435,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_armor_bird"
     },
     {
       "id": "blink_armor_boar",
@@ -449,7 +462,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_armor_boar"
     },
     {
       "id": "blink_armor_centurion",
@@ -475,7 +489,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_armor_centurion"
     },
     {
       "id": "blink_armor_demonhunter",
@@ -501,7 +516,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_armor_demonhunter"
     },
     {
       "id": "blink_armor_dragonhunter",
@@ -527,7 +543,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_armor_dragonhunter"
     },
     {
       "id": "blink_armor_dragonic",
@@ -553,7 +570,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_armor_dragonic"
     },
     {
       "id": "blink_armor_engineer",
@@ -579,7 +597,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_armor_engineer"
     },
     {
       "id": "blink_armor_hydra",
@@ -605,7 +624,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_armor_hydra"
     },
     {
       "id": "blink_armor_landwarrior",
@@ -631,7 +651,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_armor_landwarrior"
     },
     {
       "id": "blink_armor_lionguard",
@@ -657,7 +678,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_armor_lionguard"
     },
     {
       "id": "blink_armor_minotaur",
@@ -683,7 +705,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_armor_minotaur"
     },
     {
       "id": "blink_armor_pantherknight",
@@ -709,7 +732,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_armor_pantherknight"
     },
     {
       "id": "blink_armor_savage",
@@ -735,7 +759,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_armor_savage"
     }
   ]
 }

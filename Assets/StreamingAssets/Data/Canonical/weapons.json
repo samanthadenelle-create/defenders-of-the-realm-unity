@@ -307,7 +307,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/tripo_bow_a"
     },
     {
       "id": "tripo_bow_b",
@@ -329,7 +330,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/tripo_bow_b"
     },
     {
       "id": "tripo_bow_c",
@@ -351,7 +353,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/tripo_bow_c"
     },
     {
       "id": "tripo_dagger_a",
@@ -374,7 +377,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/tripo_dagger_a"
     },
     {
       "id": "tripo_hammer_a",
@@ -397,7 +401,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/tripo_hammer_a"
     },
     {
       "id": "tripo_shield_a",
@@ -420,7 +425,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/tripo_shield_a"
     },
     {
       "id": "tripo_staff_a",
@@ -442,7 +448,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/tripo_staff_a"
     },
     {
       "id": "tripo_staff_b",
@@ -464,7 +471,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/tripo_staff_b"
     },
     {
       "id": "tripo_staff_c",
@@ -486,7 +494,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/tripo_staff_c"
     },
     {
       "id": "tripo_staff_d",
@@ -508,7 +517,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/tripo_staff_d"
     },
     {
       "id": "tripo_sword_a",
@@ -531,7 +541,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/tripo_sword_a"
     },
     {
       "id": "tripo_sword_d",
@@ -554,7 +565,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/tripo_sword_d"
     },
     {
       "id": "tripo_sword_f",
@@ -577,7 +589,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/tripo_sword_f"
     },
     {
       "id": "tripo_sword_g",
@@ -600,7 +613,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/tripo_sword_g"
     },
     {
       "id": "tripo_wand_a",
@@ -622,7 +636,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/tripo_wand_a"
     },
     {
       "id": "blink_axe1h_01",
@@ -646,7 +661,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_axe1h_01"
     },
     {
       "id": "blink_axe1h_02",
@@ -670,7 +686,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_axe1h_02"
     },
     {
       "id": "blink_axe1h_03",
@@ -694,7 +711,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_axe1h_03"
     },
     {
       "id": "blink_axe1h_04",
@@ -718,7 +736,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_axe1h_04"
     },
     {
       "id": "blink_axe1h_05",
@@ -742,7 +761,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_axe1h_05"
     },
     {
       "id": "blink_axe1h_06",
@@ -766,7 +786,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_axe1h_06"
     },
     {
       "id": "blink_axe1h_07",
@@ -790,7 +811,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_axe1h_07"
     },
     {
       "id": "blink_axe1h_08",
@@ -814,7 +836,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_axe1h_08"
     },
     {
       "id": "blink_axe1h_09",
@@ -838,7 +861,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_axe1h_09"
     },
     {
       "id": "blink_axe1h_10",
@@ -862,7 +886,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_axe1h_10"
     },
     {
       "id": "blink_axe1h_11",
@@ -886,7 +911,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_axe1h_11"
     },
     {
       "id": "blink_axe1h_12",
@@ -910,7 +936,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_axe1h_12"
     },
     {
       "id": "blink_axe1h_13",
@@ -934,7 +961,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_axe1h_13"
     },
     {
       "id": "blink_axe1h_14",
@@ -958,7 +986,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_axe1h_14"
     },
     {
       "id": "blink_axe1h_15",
@@ -982,7 +1011,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_axe1h_15"
     },
     {
       "id": "blink_axe1h_16",
@@ -1006,7 +1036,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_axe1h_16"
     },
     {
       "id": "blink_axe1h_17",
@@ -1030,7 +1061,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_axe1h_17"
     },
     {
       "id": "blink_axe1h_18",
@@ -1054,7 +1086,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_axe1h_18"
     },
     {
       "id": "blink_axe1h_19",
@@ -1078,7 +1111,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_axe1h_19"
     },
     {
       "id": "blink_axe1h_20",
@@ -1102,7 +1136,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_axe1h_20"
     },
     {
       "id": "blink_axe1h_21",
@@ -1126,7 +1161,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_axe1h_21"
     },
     {
       "id": "blink_axe1h_22",
@@ -1150,7 +1186,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_axe1h_22"
     },
     {
       "id": "blink_axe1h_23",
@@ -1174,7 +1211,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_axe1h_23"
     },
     {
       "id": "blink_axe1h_24",
@@ -1198,7 +1236,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_axe1h_24"
     },
     {
       "id": "blink_axe1h_25",
@@ -1222,7 +1261,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_axe1h_25"
     },
     {
       "id": "blink_axe2h_01",
@@ -1246,7 +1286,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_axe2h_01"
     },
     {
       "id": "blink_axe2h_02",
@@ -1270,7 +1311,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_axe2h_02"
     },
     {
       "id": "blink_axe2h_03",
@@ -1294,7 +1336,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_axe2h_03"
     },
     {
       "id": "blink_axe2h_04",
@@ -1318,7 +1361,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_axe2h_04"
     },
     {
       "id": "blink_axe2h_05",
@@ -1342,7 +1386,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_axe2h_05"
     },
     {
       "id": "blink_axe2h_06",
@@ -1366,7 +1411,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_axe2h_06"
     },
     {
       "id": "blink_axe2h_07",
@@ -1390,7 +1436,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_axe2h_07"
     },
     {
       "id": "blink_axe2h_08",
@@ -1414,7 +1461,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_axe2h_08"
     },
     {
       "id": "blink_axe2h_09",
@@ -1438,7 +1486,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_axe2h_09"
     },
     {
       "id": "blink_axe2h_10",
@@ -1462,7 +1511,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_axe2h_10"
     },
     {
       "id": "blink_axe2h_11",
@@ -1486,7 +1536,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_axe2h_11"
     },
     {
       "id": "blink_axe2h_12",
@@ -1510,7 +1561,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_axe2h_12"
     },
     {
       "id": "blink_axe2h_13",
@@ -1534,7 +1586,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_axe2h_13"
     },
     {
       "id": "blink_axe2h_14",
@@ -1558,7 +1611,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_axe2h_14"
     },
     {
       "id": "blink_axe2h_15",
@@ -1582,7 +1636,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_axe2h_15"
     },
     {
       "id": "blink_axe2h_16",
@@ -1606,7 +1661,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_axe2h_16"
     },
     {
       "id": "blink_axe2h_17",
@@ -1630,7 +1686,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_axe2h_17"
     },
     {
       "id": "blink_axe2h_18",
@@ -1654,7 +1711,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_axe2h_18"
     },
     {
       "id": "blink_axe2h_19",
@@ -1678,7 +1736,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_axe2h_19"
     },
     {
       "id": "blink_axe2h_20",
@@ -1702,7 +1761,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_axe2h_20"
     },
     {
       "id": "blink_axe2h_21",
@@ -1726,7 +1786,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_axe2h_21"
     },
     {
       "id": "blink_axe2h_22",
@@ -1750,7 +1811,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_axe2h_22"
     },
     {
       "id": "blink_axe2h_23",
@@ -1774,7 +1836,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_axe2h_23"
     },
     {
       "id": "blink_axe2h_24",
@@ -1798,7 +1861,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_axe2h_24"
     },
     {
       "id": "blink_axe2h_25",
@@ -1822,7 +1886,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_axe2h_25"
     },
     {
       "id": "blink_bow2h_01",
@@ -1845,7 +1910,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_bow2h_01"
     },
     {
       "id": "blink_bow2h_02",
@@ -1868,7 +1934,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_bow2h_02"
     },
     {
       "id": "blink_bow2h_03",
@@ -1891,7 +1958,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_bow2h_03"
     },
     {
       "id": "blink_bow2h_04",
@@ -1914,7 +1982,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_bow2h_04"
     },
     {
       "id": "blink_bow2h_05",
@@ -1937,7 +2006,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_bow2h_05"
     },
     {
       "id": "blink_bow2h_06",
@@ -1960,7 +2030,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_bow2h_06"
     },
     {
       "id": "blink_bow2h_07",
@@ -1983,7 +2054,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_bow2h_07"
     },
     {
       "id": "blink_bow2h_08",
@@ -2006,7 +2078,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_bow2h_08"
     },
     {
       "id": "blink_bow2h_09",
@@ -2029,7 +2102,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_bow2h_09"
     },
     {
       "id": "blink_bow2h_10",
@@ -2052,7 +2126,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_bow2h_10"
     },
     {
       "id": "blink_bow2h_11",
@@ -2075,7 +2150,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_bow2h_11"
     },
     {
       "id": "blink_bow2h_12",
@@ -2098,7 +2174,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_bow2h_12"
     },
     {
       "id": "blink_bow2h_13",
@@ -2121,7 +2198,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_bow2h_13"
     },
     {
       "id": "blink_bow2h_14",
@@ -2144,7 +2222,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_bow2h_14"
     },
     {
       "id": "blink_bow2h_15",
@@ -2167,7 +2246,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_bow2h_15"
     },
     {
       "id": "blink_bow2h_16",
@@ -2190,7 +2270,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_bow2h_16"
     },
     {
       "id": "blink_bow2h_17",
@@ -2213,7 +2294,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_bow2h_17"
     },
     {
       "id": "blink_bow2h_18",
@@ -2236,7 +2318,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_bow2h_18"
     },
     {
       "id": "blink_bow2h_19",
@@ -2259,7 +2342,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_bow2h_19"
     },
     {
       "id": "blink_bow2h_20",
@@ -2282,7 +2366,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_bow2h_20"
     },
     {
       "id": "blink_bow2h_21",
@@ -2305,7 +2390,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_bow2h_21"
     },
     {
       "id": "blink_bow2h_22",
@@ -2328,7 +2414,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_bow2h_22"
     },
     {
       "id": "blink_bow2h_23",
@@ -2351,7 +2438,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_bow2h_23"
     },
     {
       "id": "blink_bow2h_24",
@@ -2374,7 +2462,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_bow2h_24"
     },
     {
       "id": "blink_bow2h_25",
@@ -2397,7 +2486,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_bow2h_25"
     },
     {
       "id": "blink_claws1h_01",
@@ -2421,7 +2511,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_claws1h_01"
     },
     {
       "id": "blink_claws1h_02",
@@ -2445,7 +2536,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_claws1h_02"
     },
     {
       "id": "blink_claws1h_03",
@@ -2469,7 +2561,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_claws1h_03"
     },
     {
       "id": "blink_claws1h_04",
@@ -2493,7 +2586,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_claws1h_04"
     },
     {
       "id": "blink_claws1h_05",
@@ -2517,7 +2611,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_claws1h_05"
     },
     {
       "id": "blink_claws1h_06",
@@ -2541,7 +2636,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_claws1h_06"
     },
     {
       "id": "blink_claws1h_07",
@@ -2565,7 +2661,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_claws1h_07"
     },
     {
       "id": "blink_claws1h_08",
@@ -2589,7 +2686,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_claws1h_08"
     },
     {
       "id": "blink_claws1h_09",
@@ -2613,7 +2711,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_claws1h_09"
     },
     {
       "id": "blink_claws1h_10",
@@ -2637,7 +2736,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_claws1h_10"
     },
     {
       "id": "blink_claws1h_11",
@@ -2661,7 +2761,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_claws1h_11"
     },
     {
       "id": "blink_claws1h_12",
@@ -2685,7 +2786,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_claws1h_12"
     },
     {
       "id": "blink_claws1h_13",
@@ -2709,7 +2811,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_claws1h_13"
     },
     {
       "id": "blink_claws1h_14",
@@ -2733,7 +2836,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_claws1h_14"
     },
     {
       "id": "blink_claws1h_15",
@@ -2757,7 +2861,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_claws1h_15"
     },
     {
       "id": "blink_claws1h_16",
@@ -2781,7 +2886,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_claws1h_16"
     },
     {
       "id": "blink_claws1h_17",
@@ -2805,7 +2911,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_claws1h_17"
     },
     {
       "id": "blink_claws1h_18",
@@ -2829,7 +2936,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_claws1h_18"
     },
     {
       "id": "blink_claws1h_19",
@@ -2853,7 +2961,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_claws1h_19"
     },
     {
       "id": "blink_claws1h_20",
@@ -2877,7 +2986,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_claws1h_20"
     },
     {
       "id": "blink_claws1h_21",
@@ -2901,7 +3011,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_claws1h_21"
     },
     {
       "id": "blink_claws1h_22",
@@ -2925,7 +3036,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_claws1h_22"
     },
     {
       "id": "blink_claws1h_23",
@@ -2949,7 +3061,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_claws1h_23"
     },
     {
       "id": "blink_claws1h_24",
@@ -2973,7 +3086,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_claws1h_24"
     },
     {
       "id": "blink_claws1h_25",
@@ -2997,7 +3111,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_claws1h_25"
     },
     {
       "id": "blink_crossbow2h_01",
@@ -3020,7 +3135,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_crossbow2h_01"
     },
     {
       "id": "blink_crossbow2h_02",
@@ -3043,7 +3159,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_crossbow2h_02"
     },
     {
       "id": "blink_crossbow2h_03",
@@ -3066,7 +3183,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_crossbow2h_03"
     },
     {
       "id": "blink_crossbow2h_04",
@@ -3089,7 +3207,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_crossbow2h_04"
     },
     {
       "id": "blink_crossbow2h_05",
@@ -3112,7 +3231,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_crossbow2h_05"
     },
     {
       "id": "blink_crossbow2h_06",
@@ -3135,7 +3255,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_crossbow2h_06"
     },
     {
       "id": "blink_crossbow2h_07",
@@ -3158,7 +3279,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_crossbow2h_07"
     },
     {
       "id": "blink_crossbow2h_08",
@@ -3181,7 +3303,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_crossbow2h_08"
     },
     {
       "id": "blink_crossbow2h_09",
@@ -3204,7 +3327,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_crossbow2h_09"
     },
     {
       "id": "blink_crossbow2h_10",
@@ -3227,7 +3351,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_crossbow2h_10"
     },
     {
       "id": "blink_crossbow2h_11",
@@ -3250,7 +3375,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_crossbow2h_11"
     },
     {
       "id": "blink_crossbow2h_12",
@@ -3273,7 +3399,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_crossbow2h_12"
     },
     {
       "id": "blink_crossbow2h_13",
@@ -3296,7 +3423,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_crossbow2h_13"
     },
     {
       "id": "blink_crossbow2h_14",
@@ -3319,7 +3447,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_crossbow2h_14"
     },
     {
       "id": "blink_crossbow2h_15",
@@ -3342,7 +3471,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_crossbow2h_15"
     },
     {
       "id": "blink_crossbow2h_16",
@@ -3365,7 +3495,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_crossbow2h_16"
     },
     {
       "id": "blink_crossbow2h_17",
@@ -3388,7 +3519,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_crossbow2h_17"
     },
     {
       "id": "blink_crossbow2h_18",
@@ -3411,7 +3543,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_crossbow2h_18"
     },
     {
       "id": "blink_crossbow2h_19",
@@ -3434,7 +3567,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_crossbow2h_19"
     },
     {
       "id": "blink_crossbow2h_20",
@@ -3457,7 +3591,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_crossbow2h_20"
     },
     {
       "id": "blink_crossbow2h_21",
@@ -3480,7 +3615,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_crossbow2h_21"
     },
     {
       "id": "blink_crossbow2h_22",
@@ -3503,7 +3639,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_crossbow2h_22"
     },
     {
       "id": "blink_crossbow2h_23",
@@ -3526,7 +3663,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_crossbow2h_23"
     },
     {
       "id": "blink_crossbow2h_24",
@@ -3549,7 +3687,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_crossbow2h_24"
     },
     {
       "id": "blink_crossbow2h_25",
@@ -3572,7 +3711,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_crossbow2h_25"
     },
     {
       "id": "blink_dagger1h_01",
@@ -3596,7 +3736,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_dagger1h_01"
     },
     {
       "id": "blink_dagger1h_02",
@@ -3620,7 +3761,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_dagger1h_02"
     },
     {
       "id": "blink_dagger1h_03",
@@ -3644,7 +3786,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_dagger1h_03"
     },
     {
       "id": "blink_dagger1h_04",
@@ -3668,7 +3811,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_dagger1h_04"
     },
     {
       "id": "blink_dagger1h_05",
@@ -3692,7 +3836,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_dagger1h_05"
     },
     {
       "id": "blink_dagger1h_06",
@@ -3716,7 +3861,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_dagger1h_06"
     },
     {
       "id": "blink_dagger1h_07",
@@ -3740,7 +3886,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_dagger1h_07"
     },
     {
       "id": "blink_dagger1h_08",
@@ -3764,7 +3911,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_dagger1h_08"
     },
     {
       "id": "blink_dagger1h_09",
@@ -3788,7 +3936,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_dagger1h_09"
     },
     {
       "id": "blink_dagger1h_10",
@@ -3812,7 +3961,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_dagger1h_10"
     },
     {
       "id": "blink_dagger1h_11",
@@ -3836,7 +3986,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_dagger1h_11"
     },
     {
       "id": "blink_dagger1h_12",
@@ -3860,7 +4011,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_dagger1h_12"
     },
     {
       "id": "blink_dagger1h_13",
@@ -3884,7 +4036,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_dagger1h_13"
     },
     {
       "id": "blink_dagger1h_14",
@@ -3908,7 +4061,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_dagger1h_14"
     },
     {
       "id": "blink_dagger1h_15",
@@ -3932,7 +4086,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_dagger1h_15"
     },
     {
       "id": "blink_dagger1h_16",
@@ -3956,7 +4111,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_dagger1h_16"
     },
     {
       "id": "blink_dagger1h_17",
@@ -3980,7 +4136,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_dagger1h_17"
     },
     {
       "id": "blink_dagger1h_18",
@@ -4004,7 +4161,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_dagger1h_18"
     },
     {
       "id": "blink_dagger1h_19",
@@ -4028,7 +4186,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_dagger1h_19"
     },
     {
       "id": "blink_dagger1h_20",
@@ -4052,7 +4211,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_dagger1h_20"
     },
     {
       "id": "blink_dagger1h_21",
@@ -4076,7 +4236,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_dagger1h_21"
     },
     {
       "id": "blink_dagger1h_22",
@@ -4100,7 +4261,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_dagger1h_22"
     },
     {
       "id": "blink_dagger1h_23",
@@ -4124,7 +4286,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_dagger1h_23"
     },
     {
       "id": "blink_dagger1h_24",
@@ -4148,7 +4311,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_dagger1h_24"
     },
     {
       "id": "blink_dagger1h_25",
@@ -4172,7 +4336,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_dagger1h_25"
     },
     {
       "id": "blink_hammer2h_01",
@@ -4196,7 +4361,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_hammer2h_01"
     },
     {
       "id": "blink_hammer2h_02",
@@ -4220,7 +4386,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_hammer2h_02"
     },
     {
       "id": "blink_hammer2h_03",
@@ -4244,7 +4411,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_hammer2h_03"
     },
     {
       "id": "blink_hammer2h_04",
@@ -4268,7 +4436,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_hammer2h_04"
     },
     {
       "id": "blink_hammer2h_05",
@@ -4292,7 +4461,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_hammer2h_05"
     },
     {
       "id": "blink_hammer2h_06",
@@ -4316,7 +4486,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_hammer2h_06"
     },
     {
       "id": "blink_hammer2h_07",
@@ -4340,7 +4511,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_hammer2h_07"
     },
     {
       "id": "blink_hammer2h_08",
@@ -4364,7 +4536,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_hammer2h_08"
     },
     {
       "id": "blink_hammer2h_09",
@@ -4388,7 +4561,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_hammer2h_09"
     },
     {
       "id": "blink_hammer2h_10",
@@ -4412,7 +4586,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_hammer2h_10"
     },
     {
       "id": "blink_hammer2h_11",
@@ -4436,7 +4611,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_hammer2h_11"
     },
     {
       "id": "blink_hammer2h_12",
@@ -4460,7 +4636,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_hammer2h_12"
     },
     {
       "id": "blink_hammer2h_13",
@@ -4484,7 +4661,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_hammer2h_13"
     },
     {
       "id": "blink_hammer2h_14",
@@ -4508,7 +4686,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_hammer2h_14"
     },
     {
       "id": "blink_hammer2h_15",
@@ -4532,7 +4711,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_hammer2h_15"
     },
     {
       "id": "blink_hammer2h_16",
@@ -4556,7 +4736,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_hammer2h_16"
     },
     {
       "id": "blink_hammer2h_17",
@@ -4580,7 +4761,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_hammer2h_17"
     },
     {
       "id": "blink_hammer2h_18",
@@ -4604,7 +4786,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_hammer2h_18"
     },
     {
       "id": "blink_hammer2h_19",
@@ -4628,7 +4811,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_hammer2h_19"
     },
     {
       "id": "blink_hammer2h_20",
@@ -4652,7 +4836,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_hammer2h_20"
     },
     {
       "id": "blink_hammer2h_21",
@@ -4676,7 +4861,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_hammer2h_21"
     },
     {
       "id": "blink_hammer2h_22",
@@ -4700,7 +4886,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_hammer2h_22"
     },
     {
       "id": "blink_hammer2h_23",
@@ -4724,7 +4911,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_hammer2h_23"
     },
     {
       "id": "blink_hammer2h_24",
@@ -4748,7 +4936,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_hammer2h_24"
     },
     {
       "id": "blink_hammer2h_25",
@@ -4772,7 +4961,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_hammer2h_25"
     },
     {
       "id": "blink_mace1h_01",
@@ -4796,7 +4986,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_mace1h_01"
     },
     {
       "id": "blink_mace1h_02",
@@ -4820,7 +5011,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_mace1h_02"
     },
     {
       "id": "blink_mace1h_03",
@@ -4844,7 +5036,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_mace1h_03"
     },
     {
       "id": "blink_mace1h_04",
@@ -4868,7 +5061,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_mace1h_04"
     },
     {
       "id": "blink_mace1h_05",
@@ -4892,7 +5086,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_mace1h_05"
     },
     {
       "id": "blink_mace1h_06",
@@ -4916,7 +5111,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_mace1h_06"
     },
     {
       "id": "blink_mace1h_07",
@@ -4940,7 +5136,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_mace1h_07"
     },
     {
       "id": "blink_mace1h_08",
@@ -4964,7 +5161,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_mace1h_08"
     },
     {
       "id": "blink_mace1h_09",
@@ -4988,7 +5186,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_mace1h_09"
     },
     {
       "id": "blink_mace1h_10",
@@ -5012,7 +5211,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_mace1h_10"
     },
     {
       "id": "blink_mace1h_11",
@@ -5036,7 +5236,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_mace1h_11"
     },
     {
       "id": "blink_mace1h_12",
@@ -5060,7 +5261,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_mace1h_12"
     },
     {
       "id": "blink_mace1h_13",
@@ -5084,7 +5286,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_mace1h_13"
     },
     {
       "id": "blink_mace1h_14",
@@ -5108,7 +5311,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_mace1h_14"
     },
     {
       "id": "blink_mace1h_15",
@@ -5132,7 +5336,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_mace1h_15"
     },
     {
       "id": "blink_mace1h_16",
@@ -5156,7 +5361,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_mace1h_16"
     },
     {
       "id": "blink_mace1h_17",
@@ -5180,7 +5386,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_mace1h_17"
     },
     {
       "id": "blink_mace1h_18",
@@ -5204,7 +5411,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_mace1h_18"
     },
     {
       "id": "blink_mace1h_19",
@@ -5228,7 +5436,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_mace1h_19"
     },
     {
       "id": "blink_mace1h_20",
@@ -5252,7 +5461,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_mace1h_20"
     },
     {
       "id": "blink_mace1h_21",
@@ -5276,7 +5486,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_mace1h_21"
     },
     {
       "id": "blink_mace1h_22",
@@ -5300,7 +5511,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_mace1h_22"
     },
     {
       "id": "blink_mace1h_23",
@@ -5324,7 +5536,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_mace1h_23"
     },
     {
       "id": "blink_mace1h_24",
@@ -5348,7 +5561,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_mace1h_24"
     },
     {
       "id": "blink_mace1h_25",
@@ -5372,7 +5586,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_mace1h_25"
     },
     {
       "id": "blink_polearm2h_01",
@@ -5396,7 +5611,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_polearm2h_01"
     },
     {
       "id": "blink_polearm2h_02",
@@ -5420,7 +5636,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_polearm2h_02"
     },
     {
       "id": "blink_polearm2h_03",
@@ -5444,7 +5661,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_polearm2h_03"
     },
     {
       "id": "blink_polearm2h_04",
@@ -5468,7 +5686,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_polearm2h_04"
     },
     {
       "id": "blink_polearm2h_05",
@@ -5492,7 +5711,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_polearm2h_05"
     },
     {
       "id": "blink_polearm2h_06",
@@ -5516,7 +5736,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_polearm2h_06"
     },
     {
       "id": "blink_polearm2h_07",
@@ -5540,7 +5761,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_polearm2h_07"
     },
     {
       "id": "blink_polearm2h_08",
@@ -5564,7 +5786,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_polearm2h_08"
     },
     {
       "id": "blink_polearm2h_09",
@@ -5588,7 +5811,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_polearm2h_09"
     },
     {
       "id": "blink_polearm2h_10",
@@ -5612,7 +5836,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_polearm2h_10"
     },
     {
       "id": "blink_polearm2h_11",
@@ -5636,7 +5861,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_polearm2h_11"
     },
     {
       "id": "blink_polearm2h_12",
@@ -5660,7 +5886,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_polearm2h_12"
     },
     {
       "id": "blink_polearm2h_13",
@@ -5684,7 +5911,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_polearm2h_13"
     },
     {
       "id": "blink_polearm2h_14",
@@ -5708,7 +5936,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_polearm2h_14"
     },
     {
       "id": "blink_polearm2h_15",
@@ -5732,7 +5961,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_polearm2h_15"
     },
     {
       "id": "blink_polearm2h_16",
@@ -5756,7 +5986,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_polearm2h_16"
     },
     {
       "id": "blink_polearm2h_17",
@@ -5780,7 +6011,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_polearm2h_17"
     },
     {
       "id": "blink_polearm2h_18",
@@ -5804,7 +6036,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_polearm2h_18"
     },
     {
       "id": "blink_polearm2h_19",
@@ -5828,7 +6061,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_polearm2h_19"
     },
     {
       "id": "blink_polearm2h_20",
@@ -5852,7 +6086,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_polearm2h_20"
     },
     {
       "id": "blink_polearm2h_21",
@@ -5876,7 +6111,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_polearm2h_21"
     },
     {
       "id": "blink_polearm2h_22",
@@ -5900,7 +6136,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_polearm2h_22"
     },
     {
       "id": "blink_polearm2h_23",
@@ -5924,7 +6161,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_polearm2h_23"
     },
     {
       "id": "blink_polearm2h_24",
@@ -5948,7 +6186,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_polearm2h_24"
     },
     {
       "id": "blink_polearm2h_25",
@@ -5972,7 +6211,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_polearm2h_25"
     },
     {
       "id": "blink_scythe2h_01",
@@ -5996,7 +6236,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_scythe2h_01"
     },
     {
       "id": "blink_scythe2h_02",
@@ -6020,7 +6261,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_scythe2h_02"
     },
     {
       "id": "blink_scythe2h_03",
@@ -6044,7 +6286,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_scythe2h_03"
     },
     {
       "id": "blink_scythe2h_04",
@@ -6068,7 +6311,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_scythe2h_04"
     },
     {
       "id": "blink_scythe2h_05",
@@ -6092,7 +6336,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_scythe2h_05"
     },
     {
       "id": "blink_scythe2h_06",
@@ -6116,7 +6361,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_scythe2h_06"
     },
     {
       "id": "blink_scythe2h_07",
@@ -6140,7 +6386,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_scythe2h_07"
     },
     {
       "id": "blink_scythe2h_08",
@@ -6164,7 +6411,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_scythe2h_08"
     },
     {
       "id": "blink_scythe2h_09",
@@ -6188,7 +6436,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_scythe2h_09"
     },
     {
       "id": "blink_scythe2h_10",
@@ -6212,7 +6461,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_scythe2h_10"
     },
     {
       "id": "blink_scythe2h_11",
@@ -6236,7 +6486,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_scythe2h_11"
     },
     {
       "id": "blink_scythe2h_12",
@@ -6260,7 +6511,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_scythe2h_12"
     },
     {
       "id": "blink_scythe2h_13",
@@ -6284,7 +6536,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_scythe2h_13"
     },
     {
       "id": "blink_scythe2h_14",
@@ -6308,7 +6561,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_scythe2h_14"
     },
     {
       "id": "blink_scythe2h_15",
@@ -6332,7 +6586,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_scythe2h_15"
     },
     {
       "id": "blink_scythe2h_16",
@@ -6356,7 +6611,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_scythe2h_16"
     },
     {
       "id": "blink_scythe2h_17",
@@ -6380,7 +6636,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_scythe2h_17"
     },
     {
       "id": "blink_scythe2h_18",
@@ -6404,7 +6661,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_scythe2h_18"
     },
     {
       "id": "blink_scythe2h_19",
@@ -6428,7 +6686,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_scythe2h_19"
     },
     {
       "id": "blink_scythe2h_20",
@@ -6452,7 +6711,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_scythe2h_20"
     },
     {
       "id": "blink_scythe2h_21",
@@ -6476,7 +6736,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_scythe2h_21"
     },
     {
       "id": "blink_scythe2h_22",
@@ -6500,7 +6761,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_scythe2h_22"
     },
     {
       "id": "blink_scythe2h_23",
@@ -6524,7 +6786,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_scythe2h_23"
     },
     {
       "id": "blink_scythe2h_24",
@@ -6548,7 +6811,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_scythe2h_24"
     },
     {
       "id": "blink_scythe2h_25",
@@ -6572,7 +6836,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_scythe2h_25"
     },
     {
       "id": "blink_shield1h_01",
@@ -6596,7 +6861,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_shield1h_01"
     },
     {
       "id": "blink_shield1h_02",
@@ -6620,7 +6886,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_shield1h_02"
     },
     {
       "id": "blink_shield1h_03",
@@ -6644,7 +6911,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_shield1h_03"
     },
     {
       "id": "blink_shield1h_04",
@@ -6668,7 +6936,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_shield1h_04"
     },
     {
       "id": "blink_shield1h_05",
@@ -6692,7 +6961,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_shield1h_05"
     },
     {
       "id": "blink_shield1h_06",
@@ -6716,7 +6986,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_shield1h_06"
     },
     {
       "id": "blink_shield1h_07",
@@ -6740,7 +7011,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_shield1h_07"
     },
     {
       "id": "blink_shield1h_08",
@@ -6764,7 +7036,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_shield1h_08"
     },
     {
       "id": "blink_shield1h_09",
@@ -6788,7 +7061,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_shield1h_09"
     },
     {
       "id": "blink_shield1h_10",
@@ -6812,7 +7086,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_shield1h_10"
     },
     {
       "id": "blink_shield1h_11",
@@ -6836,7 +7111,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_shield1h_11"
     },
     {
       "id": "blink_shield1h_12",
@@ -6860,7 +7136,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_shield1h_12"
     },
     {
       "id": "blink_shield1h_13",
@@ -6884,7 +7161,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_shield1h_13"
     },
     {
       "id": "blink_shield1h_14",
@@ -6908,7 +7186,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_shield1h_14"
     },
     {
       "id": "blink_shield1h_15",
@@ -6932,7 +7211,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_shield1h_15"
     },
     {
       "id": "blink_shield1h_16",
@@ -6956,7 +7236,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_shield1h_16"
     },
     {
       "id": "blink_shield1h_17",
@@ -6980,7 +7261,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_shield1h_17"
     },
     {
       "id": "blink_shield1h_18",
@@ -7004,7 +7286,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_shield1h_18"
     },
     {
       "id": "blink_shield1h_19",
@@ -7028,7 +7311,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_shield1h_19"
     },
     {
       "id": "blink_shield1h_20",
@@ -7052,7 +7336,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_shield1h_20"
     },
     {
       "id": "blink_shield1h_21",
@@ -7076,7 +7361,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_shield1h_21"
     },
     {
       "id": "blink_shield1h_22",
@@ -7100,7 +7386,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_shield1h_22"
     },
     {
       "id": "blink_shield1h_23",
@@ -7124,7 +7411,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_shield1h_23"
     },
     {
       "id": "blink_shield1h_24",
@@ -7148,7 +7436,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_shield1h_24"
     },
     {
       "id": "blink_shield1h_25",
@@ -7172,7 +7461,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_shield1h_25"
     },
     {
       "id": "blink_spellbook1h_01",
@@ -7195,7 +7485,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_spellbook1h_01"
     },
     {
       "id": "blink_spellbook1h_02",
@@ -7218,7 +7509,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_spellbook1h_02"
     },
     {
       "id": "blink_spellbook1h_03",
@@ -7241,7 +7533,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_spellbook1h_03"
     },
     {
       "id": "blink_spellbook1h_04",
@@ -7264,7 +7557,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_spellbook1h_04"
     },
     {
       "id": "blink_spellbook1h_05",
@@ -7287,7 +7581,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_spellbook1h_05"
     },
     {
       "id": "blink_spellbook1h_06",
@@ -7310,7 +7605,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_spellbook1h_06"
     },
     {
       "id": "blink_spellbook1h_07",
@@ -7333,7 +7629,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_spellbook1h_07"
     },
     {
       "id": "blink_spellbook1h_08",
@@ -7356,7 +7653,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_spellbook1h_08"
     },
     {
       "id": "blink_spellbook1h_09",
@@ -7379,7 +7677,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_spellbook1h_09"
     },
     {
       "id": "blink_spellbook1h_10",
@@ -7402,7 +7701,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_spellbook1h_10"
     },
     {
       "id": "blink_spellbook1h_11",
@@ -7425,7 +7725,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_spellbook1h_11"
     },
     {
       "id": "blink_spellbook1h_12",
@@ -7448,7 +7749,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_spellbook1h_12"
     },
     {
       "id": "blink_spellbook1h_13",
@@ -7471,7 +7773,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_spellbook1h_13"
     },
     {
       "id": "blink_spellbook1h_14",
@@ -7494,7 +7797,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_spellbook1h_14"
     },
     {
       "id": "blink_spellbook1h_15",
@@ -7517,7 +7821,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_spellbook1h_15"
     },
     {
       "id": "blink_spellbook1h_16",
@@ -7540,7 +7845,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_spellbook1h_16"
     },
     {
       "id": "blink_spellbook1h_17",
@@ -7563,7 +7869,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_spellbook1h_17"
     },
     {
       "id": "blink_spellbook1h_18",
@@ -7586,7 +7893,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_spellbook1h_18"
     },
     {
       "id": "blink_spellbook1h_19",
@@ -7609,7 +7917,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_spellbook1h_19"
     },
     {
       "id": "blink_spellbook1h_20",
@@ -7632,7 +7941,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_spellbook1h_20"
     },
     {
       "id": "blink_spellbook1h_21",
@@ -7655,7 +7965,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_spellbook1h_21"
     },
     {
       "id": "blink_spellbook1h_22",
@@ -7678,7 +7989,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_spellbook1h_22"
     },
     {
       "id": "blink_spellbook1h_23",
@@ -7701,7 +8013,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_spellbook1h_23"
     },
     {
       "id": "blink_spellbook1h_24",
@@ -7724,7 +8037,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_spellbook1h_24"
     },
     {
       "id": "blink_spellbook1h_25",
@@ -7747,7 +8061,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_spellbook1h_25"
     },
     {
       "id": "blink_staff2h_01",
@@ -7770,7 +8085,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_staff2h_01"
     },
     {
       "id": "blink_staff2h_02",
@@ -7793,7 +8109,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_staff2h_02"
     },
     {
       "id": "blink_staff2h_03",
@@ -7816,7 +8133,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_staff2h_03"
     },
     {
       "id": "blink_staff2h_04",
@@ -7839,7 +8157,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_staff2h_04"
     },
     {
       "id": "blink_staff2h_05",
@@ -7862,7 +8181,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_staff2h_05"
     },
     {
       "id": "blink_staff2h_06",
@@ -7885,7 +8205,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_staff2h_06"
     },
     {
       "id": "blink_staff2h_07",
@@ -7908,7 +8229,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_staff2h_07"
     },
     {
       "id": "blink_staff2h_08",
@@ -7931,7 +8253,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_staff2h_08"
     },
     {
       "id": "blink_staff2h_09",
@@ -7954,7 +8277,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_staff2h_09"
     },
     {
       "id": "blink_staff2h_10",
@@ -7977,7 +8301,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_staff2h_10"
     },
     {
       "id": "blink_staff2h_11",
@@ -8000,7 +8325,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_staff2h_11"
     },
     {
       "id": "blink_staff2h_12",
@@ -8023,7 +8349,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_staff2h_12"
     },
     {
       "id": "blink_staff2h_13",
@@ -8046,7 +8373,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_staff2h_13"
     },
     {
       "id": "blink_staff2h_14",
@@ -8069,7 +8397,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_staff2h_14"
     },
     {
       "id": "blink_staff2h_15",
@@ -8092,7 +8421,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_staff2h_15"
     },
     {
       "id": "blink_staff2h_16",
@@ -8115,7 +8445,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_staff2h_16"
     },
     {
       "id": "blink_staff2h_17",
@@ -8138,7 +8469,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_staff2h_17"
     },
     {
       "id": "blink_staff2h_18",
@@ -8161,7 +8493,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_staff2h_18"
     },
     {
       "id": "blink_staff2h_19",
@@ -8184,7 +8517,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_staff2h_19"
     },
     {
       "id": "blink_staff2h_20",
@@ -8207,7 +8541,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_staff2h_20"
     },
     {
       "id": "blink_staff2h_21",
@@ -8230,7 +8565,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_staff2h_21"
     },
     {
       "id": "blink_staff2h_22",
@@ -8253,7 +8589,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_staff2h_22"
     },
     {
       "id": "blink_staff2h_23",
@@ -8276,7 +8613,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_staff2h_23"
     },
     {
       "id": "blink_staff2h_24",
@@ -8299,7 +8637,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_staff2h_24"
     },
     {
       "id": "blink_staff2h_25",
@@ -8322,7 +8661,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_staff2h_25"
     },
     {
       "id": "blink_sword1h_01",
@@ -8346,7 +8686,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_sword1h_01"
     },
     {
       "id": "blink_sword1h_02",
@@ -8370,7 +8711,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_sword1h_02"
     },
     {
       "id": "blink_sword1h_03",
@@ -8394,7 +8736,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_sword1h_03"
     },
     {
       "id": "blink_sword1h_04",
@@ -8418,7 +8761,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_sword1h_04"
     },
     {
       "id": "blink_sword1h_05",
@@ -8442,7 +8786,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_sword1h_05"
     },
     {
       "id": "blink_sword1h_06",
@@ -8466,7 +8811,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_sword1h_06"
     },
     {
       "id": "blink_sword1h_07",
@@ -8490,7 +8836,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_sword1h_07"
     },
     {
       "id": "blink_sword1h_08",
@@ -8514,7 +8861,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_sword1h_08"
     },
     {
       "id": "blink_sword1h_09",
@@ -8538,7 +8886,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_sword1h_09"
     },
     {
       "id": "blink_sword1h_10",
@@ -8562,7 +8911,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_sword1h_10"
     },
     {
       "id": "blink_sword1h_11",
@@ -8586,7 +8936,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_sword1h_11"
     },
     {
       "id": "blink_sword1h_12",
@@ -8610,7 +8961,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_sword1h_12"
     },
     {
       "id": "blink_sword1h_13",
@@ -8634,7 +8986,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_sword1h_13"
     },
     {
       "id": "blink_sword1h_14",
@@ -8658,7 +9011,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_sword1h_14"
     },
     {
       "id": "blink_sword1h_15",
@@ -8682,7 +9036,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_sword1h_15"
     },
     {
       "id": "blink_sword1h_16",
@@ -8706,7 +9061,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_sword1h_16"
     },
     {
       "id": "blink_sword1h_17",
@@ -8730,7 +9086,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_sword1h_17"
     },
     {
       "id": "blink_sword1h_18",
@@ -8754,7 +9111,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_sword1h_18"
     },
     {
       "id": "blink_sword1h_19",
@@ -8778,7 +9136,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_sword1h_19"
     },
     {
       "id": "blink_sword1h_20",
@@ -8802,7 +9161,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_sword1h_20"
     },
     {
       "id": "blink_sword1h_21",
@@ -8826,7 +9186,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_sword1h_21"
     },
     {
       "id": "blink_sword1h_22",
@@ -8850,7 +9211,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_sword1h_22"
     },
     {
       "id": "blink_sword1h_23",
@@ -8874,7 +9236,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_sword1h_23"
     },
     {
       "id": "blink_sword1h_24",
@@ -8898,7 +9261,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_sword1h_24"
     },
     {
       "id": "blink_sword1h_25",
@@ -8922,7 +9286,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_sword1h_25"
     },
     {
       "id": "blink_sword2h_01",
@@ -8946,7 +9311,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_sword2h_01"
     },
     {
       "id": "blink_sword2h_02",
@@ -8970,7 +9336,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_sword2h_02"
     },
     {
       "id": "blink_sword2h_03",
@@ -8994,7 +9361,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_sword2h_03"
     },
     {
       "id": "blink_sword2h_04",
@@ -9018,7 +9386,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_sword2h_04"
     },
     {
       "id": "blink_sword2h_05",
@@ -9042,7 +9411,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_sword2h_05"
     },
     {
       "id": "blink_sword2h_06",
@@ -9066,7 +9436,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_sword2h_06"
     },
     {
       "id": "blink_sword2h_07",
@@ -9090,7 +9461,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_sword2h_07"
     },
     {
       "id": "blink_sword2h_08",
@@ -9114,7 +9486,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_sword2h_08"
     },
     {
       "id": "blink_sword2h_09",
@@ -9138,7 +9511,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_sword2h_09"
     },
     {
       "id": "blink_sword2h_10",
@@ -9162,7 +9536,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_sword2h_10"
     },
     {
       "id": "blink_sword2h_11",
@@ -9186,7 +9561,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_sword2h_11"
     },
     {
       "id": "blink_sword2h_12",
@@ -9210,7 +9586,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_sword2h_12"
     },
     {
       "id": "blink_sword2h_13",
@@ -9234,7 +9611,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_sword2h_13"
     },
     {
       "id": "blink_sword2h_14",
@@ -9258,7 +9636,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_sword2h_14"
     },
     {
       "id": "blink_sword2h_15",
@@ -9282,7 +9661,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_sword2h_15"
     },
     {
       "id": "blink_sword2h_16",
@@ -9306,7 +9686,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_sword2h_16"
     },
     {
       "id": "blink_sword2h_17",
@@ -9330,7 +9711,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_sword2h_17"
     },
     {
       "id": "blink_sword2h_18",
@@ -9354,7 +9736,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_sword2h_18"
     },
     {
       "id": "blink_sword2h_19",
@@ -9378,7 +9761,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_sword2h_19"
     },
     {
       "id": "blink_sword2h_20",
@@ -9402,7 +9786,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_sword2h_20"
     },
     {
       "id": "blink_sword2h_21",
@@ -9426,7 +9811,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_sword2h_21"
     },
     {
       "id": "blink_sword2h_22",
@@ -9450,7 +9836,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_sword2h_22"
     },
     {
       "id": "blink_sword2h_23",
@@ -9474,7 +9861,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_sword2h_23"
     },
     {
       "id": "blink_sword2h_24",
@@ -9498,7 +9886,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_sword2h_24"
     },
     {
       "id": "blink_sword2h_25",
@@ -9522,7 +9911,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_sword2h_25"
     },
     {
       "id": "blink_wand1h_01",
@@ -9545,7 +9935,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_wand1h_01"
     },
     {
       "id": "blink_wand1h_02",
@@ -9568,7 +9959,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_wand1h_02"
     },
     {
       "id": "blink_wand1h_03",
@@ -9591,7 +9983,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_wand1h_03"
     },
     {
       "id": "blink_wand1h_04",
@@ -9614,7 +10007,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_wand1h_04"
     },
     {
       "id": "blink_wand1h_05",
@@ -9637,7 +10031,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_wand1h_05"
     },
     {
       "id": "blink_wand1h_06",
@@ -9660,7 +10055,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_wand1h_06"
     },
     {
       "id": "blink_wand1h_07",
@@ -9683,7 +10079,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_wand1h_07"
     },
     {
       "id": "blink_wand1h_08",
@@ -9706,7 +10103,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_wand1h_08"
     },
     {
       "id": "blink_wand1h_09",
@@ -9729,7 +10127,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_wand1h_09"
     },
     {
       "id": "blink_wand1h_10",
@@ -9752,7 +10151,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_wand1h_10"
     },
     {
       "id": "blink_wand1h_11",
@@ -9775,7 +10175,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_wand1h_11"
     },
     {
       "id": "blink_wand1h_12",
@@ -9798,7 +10199,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_wand1h_12"
     },
     {
       "id": "blink_wand1h_13",
@@ -9821,7 +10223,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_wand1h_13"
     },
     {
       "id": "blink_wand1h_14",
@@ -9844,7 +10247,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_wand1h_14"
     },
     {
       "id": "blink_wand1h_15",
@@ -9867,7 +10271,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_wand1h_15"
     },
     {
       "id": "blink_wand1h_16",
@@ -9890,7 +10295,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_wand1h_16"
     },
     {
       "id": "blink_wand1h_17",
@@ -9913,7 +10319,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_wand1h_17"
     },
     {
       "id": "blink_wand1h_18",
@@ -9936,7 +10343,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_wand1h_18"
     },
     {
       "id": "blink_wand1h_19",
@@ -9959,7 +10367,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_wand1h_19"
     },
     {
       "id": "blink_wand1h_20",
@@ -9982,7 +10391,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_wand1h_20"
     },
     {
       "id": "blink_wand1h_21",
@@ -10005,7 +10415,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_wand1h_21"
     },
     {
       "id": "blink_wand1h_22",
@@ -10028,7 +10439,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_wand1h_22"
     },
     {
       "id": "blink_wand1h_23",
@@ -10051,7 +10463,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_wand1h_23"
     },
     {
       "id": "blink_wand1h_24",
@@ -10074,7 +10487,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_wand1h_24"
     },
     {
       "id": "blink_wand1h_25",
@@ -10097,7 +10511,8 @@
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
-      "buyCrystals": 0
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_wand1h_25"
     }
   ]
 }

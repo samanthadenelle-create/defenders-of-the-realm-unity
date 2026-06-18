@@ -130,6 +130,13 @@ namespace DeNelle.Editor
             // equip is non-null AND its prefab reference resolves.
             CheckArmedHeroInvariant(failures, log);
 
+            // --- HAND-SLOT EQUIP RULES (owner 2026-06-18, docs/STORE_EQUIP_SPEC.md) -
+            // Drive the REAL GearLoadout equip flow on a throwaway GameObject and assert the
+            // mutually-exclusive main-hand/off-hand rules hold: a 2H clears the off-hand; an
+            // off-hand clears a 2H main; a 1H + shield coexist; the swap never leaves the hero
+            // unarmed when a 1H exists. Exercises the actual enforcement, not a re-derivation.
+            CheckHandSlotRules(failures, log);
+
             // --- verdict -----------------------------------------------------------
             log.AppendLine("=== verdict ===");
             if (failures.Count == 0)
@@ -506,6 +513,114 @@ namespace DeNelle.Editor
                     }
                 }
             }
+        }
+
+        // =====================================================================
+        //  HAND-SLOT EQUIP RULES — main-hand / off-hand mutual exclusion
+        // -----------------------------------------------------------------------
+        //  Drives the REAL GearLoadout equip methods on a throwaway hero GO and asserts:
+        //   1. equip 1H + shield -> BOTH slots filled (the allowed combo).
+        //   2. equip 2H (over a 1H+shield) -> off-hand CLEARED (2H takes both hands).
+        //   3. equip shield while a 2H is held -> 2H REMOVED, main falls back to a 1H
+        //      (never left unarmed when a 1H exists — armed-hero invariant).
+        //  Discovers test ids from the catalog (knight = the class with both a 1H and a 2H,
+        //  shield = job 'any') so it stays valid as the catalog grows.
+        // =====================================================================
+        private static void CheckHandSlotRules(List<string> failures, StringBuilder log)
+        {
+            GearCatalog.Reload();
+            log.AppendLine("[hand-slot] main-hand / off-hand mutual-exclusion rules:");
+
+            const string Job = "knight";   // has BOTH a 1H main and a 2H in the catalog
+            int level = 99;                // unlock everything for the test
+
+            WeaponDef oneH   = GearCatalog.BestOneHandedWeapon(Job, level);
+            WeaponDef twoH   = FindTwoHanded(Job, level);
+            WeaponDef shield = FindShield(level);
+
+            if (oneH == null)   { failures.Add("[hand-slot] no 1H weapon found for 'knight' — cannot test the rules"); return; }
+            if (twoH == null)   { failures.Add("[hand-slot] no 2H weapon found for 'knight' — cannot test the rules"); return; }
+            if (shield == null) { failures.Add("[hand-slot] no shield/off-hand item found in the catalog — cannot test the rules"); return; }
+
+            log.AppendLine($"  test ids: 1H='{oneH.id}' 2H='{twoH.id}' shield='{shield.id}'");
+
+            // Clear any persisted choices for this class so the test starts from a clean slate
+            // and doesn't write durable state for the real game.
+            string key = Job.ToLowerInvariant();
+            PlayerPrefs.DeleteKey("dotr-equip-weapon-" + key);
+            PlayerPrefs.DeleteKey("dotr-equip-offhand-" + key);
+            PlayerPrefs.DeleteKey("dotr-equip-armor-" + key);
+
+            var go = new GameObject("HandSlotRegressionHero");
+            GearLoadout loadout = null;
+            try
+            {
+                loadout = go.AddComponent<GearLoadout>();
+                loadout.BindOwnerClass(Job);   // sets the class + runs an initial Refresh
+
+                // --- 1. 1H + shield coexist ---
+                loadout.EquipWeaponById(oneH.id);
+                loadout.EquipOffHandById(shield.id);
+                if (loadout.EquippedWeapon == null || loadout.EquippedWeapon.id != oneH.id)
+                    failures.Add($"[hand-slot] 1H+shield: main-hand expected '{oneH.id}' but was '{loadout.EquippedWeapon?.id ?? "<null>"}'");
+                if (loadout.EquippedOffHand == null || loadout.EquippedOffHand.id != shield.id)
+                    failures.Add($"[hand-slot] 1H+shield: off-hand expected '{shield.id}' but was '{loadout.EquippedOffHand?.id ?? "<null>"}'");
+                log.AppendLine($"  R1 1H+shield -> main='{loadout.EquippedWeapon?.id ?? "<null>"}' off='{loadout.EquippedOffHand?.id ?? "<null>"}'");
+
+                // --- 2. equip 2H over 1H+shield -> off-hand cleared ---
+                loadout.EquipWeaponById(twoH.id);
+                if (loadout.EquippedWeapon == null || loadout.EquippedWeapon.id != twoH.id)
+                    failures.Add($"[hand-slot] equip 2H: main-hand expected '{twoH.id}' but was '{loadout.EquippedWeapon?.id ?? "<null>"}'");
+                if (loadout.EquippedOffHand != null)
+                    failures.Add($"[hand-slot] equip 2H: off-hand should be CLEARED but was '{loadout.EquippedOffHand.id}' (2H takes both hands)");
+                log.AppendLine($"  R2 equip 2H -> main='{loadout.EquippedWeapon?.id ?? "<null>"}' off='{loadout.EquippedOffHand?.id ?? "<null>"}'");
+
+                // --- 3. equip shield while 2H held -> 2H removed, main falls back to a 1H ---
+                loadout.EquipOffHandById(shield.id);
+                if (loadout.EquippedOffHand == null || loadout.EquippedOffHand.id != shield.id)
+                    failures.Add($"[hand-slot] shield-over-2H: off-hand expected '{shield.id}' but was '{loadout.EquippedOffHand?.id ?? "<null>"}'");
+                if (loadout.EquippedWeapon != null && loadout.EquippedWeapon.IsTwoHanded)
+                    failures.Add($"[hand-slot] shield-over-2H: 2H '{loadout.EquippedWeapon.id}' should have been REMOVED but is still in the main hand");
+                // Armed-hero invariant: a 1H exists for this class, so the main hand must NOT be empty.
+                if (loadout.EquippedWeapon == null)
+                    failures.Add("[hand-slot] shield-over-2H: main hand left UNARMED though a 1H fallback exists (armed-hero invariant broken)");
+                else if (loadout.EquippedWeapon.IsOffHandItem)
+                    failures.Add($"[hand-slot] shield-over-2H: main hand holds an off-hand item '{loadout.EquippedWeapon.id}' (a shield can never be the main hand)");
+                log.AppendLine($"  R3 shield-over-2H -> main='{loadout.EquippedWeapon?.id ?? "<null>"}' off='{loadout.EquippedOffHand?.id ?? "<null>"}'");
+            }
+            catch (System.Exception ex)
+            {
+                failures.Add($"[hand-slot] rule check threw: {ex.Message}");
+                log.AppendLine($"  hand-slot check EXCEPTION: {ex}");
+            }
+            finally
+            {
+                if (go != null) Object.DestroyImmediate(go);
+                // Leave no durable test state behind.
+                PlayerPrefs.DeleteKey("dotr-equip-weapon-" + key);
+                PlayerPrefs.DeleteKey("dotr-equip-offhand-" + key);
+                PlayerPrefs.DeleteKey("dotr-equip-armor-" + key);
+            }
+        }
+
+        private static WeaponDef FindTwoHanded(string job, int level)
+        {
+            foreach (var w in GearCatalog.AllWeapons())
+            {
+                if (w == null || !w.IsTwoHanded) continue;
+                if (GearCatalog.WeaponFitsClass(w, job) && (w.req == null || level >= w.req.level)) return w;
+            }
+            return null;
+        }
+
+        private static WeaponDef FindShield(int level)
+        {
+            foreach (var w in GearCatalog.AllWeapons())
+            {
+                if (w == null || !w.IsOffHandItem) continue;
+                if (w.req == null || level >= w.req.level) return w;
+            }
+            return null;
         }
 
         // True when <paramref name="key"/> resolves to at least one Addressable resource

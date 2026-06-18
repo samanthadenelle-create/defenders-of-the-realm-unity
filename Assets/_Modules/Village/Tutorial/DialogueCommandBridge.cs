@@ -886,6 +886,20 @@ namespace DeNelle.Village
                 vendor = DialogueService.CurrentStructureId;
 
             Debug.Log($"[DialogueCommandBridge] OpenShop: {vendor}");
+
+            // PartyShop flag (docs/STORE_EQUIP_SPEC.md): when ON, route a WEAPON/ARMOR vendor to the
+            // native code-built MVVM PartyShopPanelMvvm (party selector + tap-filter + unified single-
+            // tap buy/equip/sell + real item images + buff deltas) via PanelRouter, SUPPRESSING the
+            // legacy ShopPanel so the two never double-open. General-goods (potion-only) vendors keep
+            // the legacy path (PartyShop is gear-only). Flag OFF -> the legacy ShopPanel below, unchanged.
+            if (DeNelle.Core.FeatureFlags.PartyShop)
+            {
+                var kinds = DeNelle.Village.VendorStockContract.AllowedFor((vendor ?? "").ToLowerInvariant());
+                bool gearVendor = (kinds & (DeNelle.Village.GearKind.Weapon | DeNelle.Village.GearKind.Armor)) != 0;
+                if (gearVendor && DeNelle.Core.UI.PanelRouter.Open(DeNelle.Core.UI.PanelId.PartyShop, vendor))
+                    yield break;   // PartyShop opened — do NOT also open the legacy ShopPanel.
+            }
+
             var panel = FindObjectOfType<DeNelle.Village.Hero.ShopPanel>();
             if (panel == null)
                 panel = new GameObject("ShopPanelHost").AddComponent<DeNelle.Village.Hero.ShopPanel>();
