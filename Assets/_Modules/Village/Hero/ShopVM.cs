@@ -288,10 +288,15 @@ namespace DeNelle.Village.Hero
             GearKind allowed = VendorStockContract.AllowedFor(ctx);
             allowed &= _buyFilter;
 
+            // WO-429: OFFLINE-FIRST stock. Read BUY stock through StoreStockService, not
+            // GearCatalog directly: it returns the LOCAL catalog as the authoritative
+            // default (always available offline) and MERGES any optional remote refresh on
+            // top. With no remote provider registered (the shipping default) this is exactly
+            // the local catalog — so the BUY tab is never blocked/emptied by network state.
             var allWeapons = new List<WeaponDef>();
             var allArmors  = new List<ArmorDef>();
-            foreach (var w in GearCatalog.AllWeapons()) if (w != null) allWeapons.Add(w);
-            foreach (var a in GearCatalog.AllArmors())  if (a != null) allArmors.Add(a);
+            foreach (var w in StoreStockService.Weapons()) if (w != null) allWeapons.Add(w);
+            foreach (var a in StoreStockService.Armors())  if (a != null) allArmors.Add(a);
 
             var weapons = new List<WeaponDef>();
             var armors  = new List<ArmorDef>();
