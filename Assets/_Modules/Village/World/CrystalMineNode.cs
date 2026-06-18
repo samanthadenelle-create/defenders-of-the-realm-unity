@@ -34,8 +34,10 @@
 // MineNode, OR — later — by build-mode (WO-108) when the player places a mine. The
 // builder sets nothing here; sensible defaults derive the grade from the region.
 // =============================================================================
+using System.Collections;
 using UnityEngine;
 using DeNelle.Core.World;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
 {
@@ -95,8 +97,11 @@ namespace DeNelle.Village
         private Transform _player;
         private bool  _inRange;
         private GameObject _prompt;
+        private GameObject _feedback;     // WO-325: transient in-world "why nothing happened" bubble
+        private Coroutine  _feedbackTimer;
         private float _nextCheck;
         private const float CheckInterval = 0.2f;
+        private const float FeedbackSeconds = 2.0f;   // how long a feedback bubble lingers
 
         /// <summary>The crystal grade this mine yields, gated by its region's danger tier
         /// (WO-144). Read by UI today; by the WO-144 grade ledger later.</summary>
@@ -152,23 +157,84 @@ namespace DeNelle.Village
             {
                 _nextCheck = Time.time + CheckInterval;
                 if (_player == null) ResolvePlayer();
+                // Show the prompt within the WIDER of (upgrade range here, the sibling
+                // MineNode's harvest range) so the bubble advertises BOTH verbs the moment
+                // the player is close enough to do EITHER. Before WO-325 this used only
+                // UpgradeRadius, so a player standing in harvest range (2.5m) but outside
+                // upgrade range (3.5m) — or vice versa — could see no prompt at all, which
+                // read as "nothing happens at the crystal node".
+                float promptRange = PromptRange();
                 bool nowIn = _player != null &&
-                    (_player.position - transform.position).sqrMagnitude <= UpgradeRadius * UpgradeRadius;
+                    (_player.position - transform.position).sqrMagnitude <= promptRange * promptRange;
                 if (nowIn != _inRange)
                 {
                     _inRange = nowIn;
                     if (_inRange) ShowPrompt();
-                    else          HidePrompt();
+                    else          { HidePrompt(); HideFeedback(); }
                 }
             }
 
-            if (_inRange && !IsMaxTier && UnityEngine.Input.GetKeyDown(UpgradeKey))
+            if (_inRange && UnityEngine.Input.GetKeyDown(UpgradeKey))
             {
-                if (TryUpgrade())
-                {
-                    HidePrompt();
-                    ShowPrompt();   // refresh the bubble to the new tier / next cost
-                }
+                FlowTrace.Step("CrystalMine", $"[G] upgrade interact received (tier {Tier}/{MaxTier}).");
+                AttemptUpgrade();
+            }
+        }
+
+        /// <summary>The radius at which the prompt bubble appears — the wider of this
+        /// component's <see cref="UpgradeRadius"/> and the sibling MineNode's harvest
+        /// <c>InteractRadius</c> — so the bubble shows whenever EITHER verb is available.</summary>
+        private float PromptRange()
+        {
+            float harvest = _node != null ? _node.InteractRadius : 0f;
+            return Mathf.Max(UpgradeRadius, harvest);
+        }
+
+        /// <summary>
+        /// WO-325 — drive the [G] upgrade with NON-SILENT feedback for every outcome so the
+        /// player never presses upgrade and sees "nothing happen". Each failure branch now
+        /// raises a transient in-world bubble (reusing the prompt infra) AND a FlowTrace line,
+        /// instead of the old Debug.Log-only paths that were invisible in a build.
+        /// </summary>
+        private void AttemptUpgrade()
+        {
+            if (IsMaxTier)
+            {
+                FlowTrace.Step("CrystalMine", "Upgrade ignored — already at max tier.");
+                ShowFeedback($"✦  Already max tier ({Tier}/{MaxTier})");
+                return;
+            }
+
+            var econ = CrystalEconomy.Instance;
+            if (econ == null)
+            {
+                FlowTrace.Fail("CrystalMine", "Upgrade failed — CrystalEconomy.Instance is null.");
+                ShowFeedback("⚠  Crystal wallet unavailable");
+                return;
+            }
+
+            int cost = NextUpgradeCost();
+            if (cost > 0 && !econ.CanAfford(cost))
+            {
+                FlowTrace.Warn("CrystalMine",
+                    $"Upgrade can't afford — needs {cost}, have {econ.CurrentCrystals}.");
+                ShowFeedback($"Need {cost} ✦  (have {econ.CurrentCrystals})");
+                return;
+            }
+
+            FlowTrace.Step("CrystalMine", $"Upgrade started — spending {cost} ✦ for T{Tier}->{Tier + 1}.");
+            if (TryUpgrade())
+            {
+                FlowTrace.Step("CrystalMine", $"Upgrade succeeded — now tier {Tier}/{MaxTier}.");
+                HideFeedback();
+                HidePrompt();
+                ShowPrompt();   // refresh the bubble to the new tier / next cost
+            }
+            else
+            {
+                // TrySpend race / unexpected refusal — never silent.
+                FlowTrace.Warn("CrystalMine", "Upgrade refused by TryUpgrade after affordability check.");
+                ShowFeedback("Upgrade unavailable right now");
             }
         }
 
@@ -238,9 +304,15 @@ namespace DeNelle.Village
 
         private void ShowPrompt()
         {
-            string label = IsMaxTier
-                ? $"✦  Crystal Mine — {_grade} (Max Tier)"
-                : $"〔 {UpgradeKey} 〕 Upgrade Mine  T{Tier}->{Tier + 1}  ({NextUpgradeCost()} ✦)";
+            // WO-325 — advertise BOTH verbs. The sibling MineNode owns the [F] HARVEST
+            // (extract crystals) and this component owns the [G] UPGRADE. The old prompt
+            // showed ONLY the upgrade line, so a player at a crystal node never learned
+            // they could harvest at all — it read as "nothing happens". Lead with harvest
+            // (the primary verb) and append the upgrade affordance.
+            string upgrade = IsMaxTier
+                ? $"Mine maxed (T{Tier})"
+                : $"〔 {UpgradeKey} 〕 Upgrade  T{Tier}->{Tier + 1} ({NextUpgradeCost()} ✦)";
+            string label = $"〔 F / Tap 〕 Harvest {_grade} ✦      {upgrade}";
             _prompt = BuildBubble(label);
         }
 
@@ -248,6 +320,52 @@ namespace DeNelle.Village
         {
             if (_prompt != null) Destroy(_prompt);
             _prompt = null;
+        }
+
+        // ── WO-325 transient feedback bubble (NON-SILENT failure responses) ────
+        // Reuses the SAME BuildBubble world-space label the prompt uses (no new UI infra,
+        // no UXML) but auto-dismisses after FeedbackSeconds. Every upgrade-failure branch
+        // raises one of these so a press never produces a silent no-op (§12: no silent
+        // failures). Fully self-contained — defines its own timer coroutine; calls only
+        // BuildBubble (defined below) + Unity primitives.
+
+        /// <summary>Raise a short-lived in-world message above the mine (e.g. "Need 25 ✦").
+        /// Replaces any prior feedback bubble and auto-hides after <see cref="FeedbackSeconds"/>.</summary>
+        private void ShowFeedback(string text)
+        {
+            HideFeedback();
+            _feedback = BuildBubble(text);
+            // Float it slightly above the standing prompt so the two never overlap.
+            if (_feedback != null)
+                _feedback.transform.localPosition = Vector3.up * 3.7f;
+            if (isActiveAndEnabled)
+                _feedbackTimer = StartCoroutine(FeedbackTimeout());
+        }
+
+        private IEnumerator FeedbackTimeout()
+        {
+            yield return new WaitForSeconds(FeedbackSeconds);
+            _feedbackTimer = null;
+            HideFeedback();
+        }
+
+        private void HideFeedback()
+        {
+            if (_feedbackTimer != null)
+            {
+                StopCoroutine(_feedbackTimer);
+                _feedbackTimer = null;
+            }
+            if (_feedback != null) Destroy(_feedback);
+            _feedback = null;
+        }
+
+        private void OnDisable()
+        {
+            // Coroutines stop on disable, but the bubble GameObjects must be cleaned up
+            // explicitly so a disabled node leaves no orphaned world labels.
+            HidePrompt();
+            HideFeedback();
         }
 
         // A minimal world-space label above the mine — same shape as the village
