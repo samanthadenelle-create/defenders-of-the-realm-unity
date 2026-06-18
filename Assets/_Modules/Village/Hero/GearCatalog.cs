@@ -21,6 +21,7 @@ using System.Collections.Generic;
 using System.IO;
 using Newtonsoft.Json;
 using UnityEngine;
+using DeNelle.Core.State;
 
 namespace DeNelle.Village
 {
@@ -74,6 +75,24 @@ namespace DeNelle.Village
         public int buyIron;
         public int buyCrystals;
 
+        // WO-Item-1: the catalog⊥repo LOOK half (docs/ITEM_MODEL.md §3). prefabPath =
+        // the equippable model, iconPath = the inventory/store sprite. Both are NULL
+        // for now — WO-Item-2's gear generator populates them per owned asset; do NOT
+        // hand-author them here. The legacy emoji `icon` stays the v1 placeholder.
+        public string prefabPath;
+        public string iconPath;
+
+        // WO-Item-1: OPTIONAL explicit capability override from JSON (null when absent).
+        // When present it wins; when absent the kind default applies (see Capabilities).
+        // Nullable so a row without the field is unchanged (Newtonsoft leaves it null).
+        public ItemCapability? capabilities;
+
+        /// <summary>WO-Item-1: the entry's resolved capability flags. A Weapon defaults to
+        /// Carriable|Equippable (docs/ITEM_MODEL.md §2/§3); an explicit JSON `capabilities`
+        /// override wins when present. Systems read THIS, never the catalog-of-origin.</summary>
+        public ItemCapability Capabilities =>
+            capabilities ?? (ItemCapability.Carriable | ItemCapability.Equippable);
+
         /// <summary>WO-295: part of the legendary Aegis of Elarion set.</summary>
         public bool IsAegis =>
             !string.IsNullOrEmpty(setId) && setId.Equals("aegis", StringComparison.OrdinalIgnoreCase);
@@ -114,6 +133,20 @@ namespace DeNelle.Village
         public int buyFood;
         public int buyIron;
         public int buyCrystals;
+
+        // WO-Item-1: the catalog⊥repo LOOK half (docs/ITEM_MODEL.md §3). See WeaponDef.
+        // NULL for now — WO-Item-2's generator populates them; do NOT hand-author here.
+        public string prefabPath;
+        public string iconPath;
+
+        // WO-Item-1: OPTIONAL explicit capability override from JSON (null when absent).
+        public ItemCapability? capabilities;
+
+        /// <summary>WO-Item-1: the entry's resolved capability flags. Gear/Armor defaults to
+        /// Carriable|Equippable (docs/ITEM_MODEL.md §2/§3); an explicit JSON `capabilities`
+        /// override wins when present. Systems read THIS, never the catalog-of-origin.</summary>
+        public ItemCapability Capabilities =>
+            capabilities ?? (ItemCapability.Carriable | ItemCapability.Equippable);
 
         /// <summary>WO-295: part of the legendary Aegis of Elarion set.</summary>
         public bool IsAegis =>

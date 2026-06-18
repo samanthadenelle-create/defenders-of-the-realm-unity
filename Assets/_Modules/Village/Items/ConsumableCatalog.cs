@@ -34,6 +34,7 @@ using System;
 using System.Collections.Generic;
 using Newtonsoft.Json;
 using UnityEngine;
+using DeNelle.Core.State;
 
 namespace DeNelle.Village.Items
 {
@@ -54,6 +55,23 @@ namespace DeNelle.Village.Items
         [JsonProperty("duration")] public float Duration;   // seconds; 0 = instant
         [JsonProperty("usableInFight")] public bool UsableInFight = true;
         [JsonProperty("glyph")] public string Glyph;
+
+        // WO-Item-1: the catalog⊥repo LOOK half (docs/ITEM_MODEL.md §3). prefabPath =
+        // the world/loot model, iconPath = the inventory/store sprite. Both NULL for now
+        // — WO-Item-2's generator populates them; do NOT hand-author here. The legacy
+        // `glyph` stays the v1 placeholder.
+        [JsonProperty("prefabPath")] public string PrefabPath;
+        [JsonProperty("iconPath")] public string IconPath;
+
+        // WO-Item-1: OPTIONAL explicit capability override from JSON (null when absent);
+        // when absent the Consumable default (Carriable|Usable) applies. See Capabilities.
+        [JsonProperty("capabilities")] public ItemCapability? CapabilitiesRaw;
+
+        /// <summary>WO-Item-1: the entry's resolved capability flags. A Consumable defaults to
+        /// Carriable|Usable (docs/ITEM_MODEL.md §2/§3); an explicit JSON `capabilities`
+        /// override wins when present. Systems read THIS, never the catalog-of-origin.</summary>
+        public ItemCapability Capabilities =>
+            CapabilitiesRaw ?? (ItemCapability.Carriable | ItemCapability.Usable);
 
         public ConsumableKind Kind
         {

@@ -19,6 +19,8 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 using UnityEngine;
 using DeNelle.Village;
+using DeNelle.Village.Items;
+using DeNelle.Core.State;
 using DeNelle.Core.Catalog;
 
 namespace DeNelle.Editor
@@ -108,6 +110,13 @@ namespace DeNelle.Editor
             // build pipeline, never via Resources.Load(Model). So we do NOT assert a path
             // load on Model (that would invent an expectation the catalog doesn't declare).
             CheckBuildings(failures, log);
+
+            // --- ITEM-MODEL CAPABILITY INVARIANTS (WO-Item-1, docs/ITEM_MODEL.md §2c) ---
+            // OWNER-RATIFIED 2026-06-18: the model invariants live in the regression test,
+            // not just the doc — so every change/regen is gated by data, not faith. HARD
+            // asserts on the resolved capability flags + a SOFT prefabPath coverage count
+            // (WO-Item-2's generator fills those — do NOT fail on them yet).
+            CheckItemCapabilities(weapons, armors, failures, log);
 
             // --- verdict -----------------------------------------------------------
             log.AppendLine("=== verdict ===");
@@ -335,6 +344,89 @@ namespace DeNelle.Editor
             }
             if (bad > 0)
                 failures.Add($"{bad} building(s) have null/empty id or displayName");
+        }
+
+        // =====================================================================
+        //  ITEM-MODEL CAPABILITIES — WO-Item-1 invariants (docs/ITEM_MODEL.md §2c)
+        // -----------------------------------------------------------------------
+        //  HARD (fail REGRESSION_FAIL when violated):
+        //   - every Weapon entry resolves Carriable|Equippable
+        //   - every Armor/Gear entry resolves Carriable|Equippable
+        //   - every Consumable entry resolves Carriable|Usable
+        //   - NO entry resolves both Carriable and AI (an item is never an enemy)
+        //  SOFT (report a coverage count, do NOT fail — WO-Item-2's generator fills
+        //  prefabPath; failing now would block the additive foundation):
+        //   - how many Carriable entries resolve a non-null prefabPath
+        // =====================================================================
+        private static void CheckItemCapabilities(
+            List<WeaponDef> weapons, List<ArmorDef> armors,
+            List<string> failures, StringBuilder log)
+        {
+            const ItemCapability EQUIP = ItemCapability.Carriable | ItemCapability.Equippable;
+            const ItemCapability USE   = ItemCapability.Carriable | ItemCapability.Usable;
+
+            // Load consumables through the same real loader the game uses.
+            ConsumableCatalog.Reload();
+            var consumables = new List<ConsumableDef>(ConsumableCatalog.All);
+            log.AppendLine($"consumables.json -> {consumables.Count} ConsumableDef object(s)");
+
+            int carriableTotal = 0;     // SOFT denominator
+            int prefabResolved = 0;     // SOFT numerator (prefabPath non-null on a Carriable)
+
+            // --- Weapons: must resolve Carriable|Equippable, never AI ---
+            foreach (var w in weapons)
+            {
+                if (w == null) continue;
+                var cap = w.Capabilities;
+                if ((cap & EQUIP) != EQUIP)
+                    failures.Add($"weapons.json: '{w.id}' resolves {cap} — must retain Carriable|Equippable");
+                if ((cap & ItemCapability.Carriable) != 0 && (cap & ItemCapability.AI) != 0)
+                    failures.Add($"weapons.json: '{w.id}' resolves BOTH Carriable and AI (an item is never an enemy)");
+                if ((cap & ItemCapability.Carriable) != 0)
+                {
+                    carriableTotal++;
+                    if (!string.IsNullOrEmpty(w.prefabPath)) prefabResolved++;
+                }
+            }
+
+            // --- Armor/Gear: must resolve Carriable|Equippable, never AI ---
+            foreach (var a in armors)
+            {
+                if (a == null) continue;
+                var cap = a.Capabilities;
+                if ((cap & EQUIP) != EQUIP)
+                    failures.Add($"armor.json: '{a.id}' resolves {cap} — must retain Carriable|Equippable");
+                if ((cap & ItemCapability.Carriable) != 0 && (cap & ItemCapability.AI) != 0)
+                    failures.Add($"armor.json: '{a.id}' resolves BOTH Carriable and AI (an item is never an enemy)");
+                if ((cap & ItemCapability.Carriable) != 0)
+                {
+                    carriableTotal++;
+                    if (!string.IsNullOrEmpty(a.prefabPath)) prefabResolved++;
+                }
+            }
+
+            // --- Consumables: must resolve Carriable|Usable, never AI ---
+            foreach (var c in consumables)
+            {
+                if (c == null) continue;
+                var cap = c.Capabilities;
+                if ((cap & USE) != USE)
+                    failures.Add($"consumables.json: '{c.Id}' resolves {cap} — must retain Carriable|Usable");
+                if ((cap & ItemCapability.Carriable) != 0 && (cap & ItemCapability.AI) != 0)
+                    failures.Add($"consumables.json: '{c.Id}' resolves BOTH Carriable and AI (an item is never an enemy)");
+                if ((cap & ItemCapability.Carriable) != 0)
+                {
+                    carriableTotal++;
+                    if (!string.IsNullOrEmpty(c.PrefabPath)) prefabResolved++;
+                }
+            }
+
+            // SOFT coverage line — WO-Item-2's generator populates prefabPath; until then
+            // 0/N is EXPECTED and must NOT fail (the foundation is additive, no behavior change).
+            log.AppendLine($"[item-model] capability invariants checked on " +
+                           $"{weapons.Count}W + {armors.Count}A + {consumables.Count}C entries");
+            log.AppendLine($"[item-model] SOFT prefabPath coverage: {prefabResolved}/{carriableTotal} " +
+                           $"Carriable entries resolve a non-null prefabPath (WO-Item-2 fills the rest)");
         }
 
         private static string CostStr(DeNelle.Village.ResourceCost c)
