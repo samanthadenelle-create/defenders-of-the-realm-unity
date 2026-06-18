@@ -31,6 +31,7 @@
 // =============================================================================
 
 using System.Collections.Generic;
+using DeNelle.Core.Diagnostics;
 using DeNelle.Core.State;
 using UnityEngine;
 
@@ -181,10 +182,36 @@ namespace DeNelle.Village.Buildings.Progression
         // Level 1 ticks every 8s dropping ~1.2s/level to 3.2s at level 5 (2.5x throughput).
         private static readonly float[] HarvestIntervalByLevel = { 8f, 6.8f, 5.6f, 4.4f, 3.2f };
 
-        private static readonly Dictionary<string, ResourceBuildingDef> _byId = Build();
+        // LAZY + GUARDED catalog (WO-453). Previously `_byId = Build()` ran inside the
+        // static .cctor. ANY exception thrown by Build() there raises a TypeInitialization
+        // Exception that PERMANENTLY POISONS the whole `ResourceBuildingProgression` type —
+        // every later member access (Find / IsResourceBuilding / All) then re-throws, which
+        // cascaded into CmdStructureStatus/CmdStructureUpgrade, the harvester, and the dialogue
+        // bridge ("structure upgrade broken / talk doesn't work / no stock"). Hardening one
+        // inner helper (IntervalForLevel) only covered ONE throw path; the real fix is to never
+        // build in the .cctor at all. We build LAZILY on first access, wrapped in Guard.Try, so
+        // a failure logs once (via Guard -> Debug.LogError, [Flow:Progression]) and falls back to
+        // an EMPTY catalog instead of poisoning the type. Consumers then degrade gracefully
+        // (Find returns null) rather than throwing on every call.
+        private static Dictionary<string, ResourceBuildingDef> _byId;
+
+        private static Dictionary<string, ResourceBuildingDef> ById
+        {
+            get
+            {
+                if (_byId == null)
+                {
+                    _byId = Guard.Try(
+                        "Progression", "build resource-building catalog",
+                        Build,
+                        fallback: new Dictionary<string, ResourceBuildingDef>());
+                }
+                return _byId;
+            }
+        }
 
         /// <summary>All three resource-building curves, in display order.</summary>
-        public static IEnumerable<ResourceBuildingDef> All => _byId.Values;
+        public static IEnumerable<ResourceBuildingDef> All => ById.Values;
 
         /// <summary>The ordered building ids (Farm, Lumbermill, Forge).</summary>
         public static readonly string[] OrderedIds = { FarmId, LumbermillId, ForgeId };
@@ -193,7 +220,7 @@ namespace DeNelle.Village.Buildings.Progression
         public static ResourceBuildingDef Find(string buildingId)
         {
             if (string.IsNullOrEmpty(buildingId)) return null;
-            return _byId.TryGetValue(buildingId, out var def) ? def : null;
+            return ById.TryGetValue(buildingId, out var def) ? def : null;
         }
 
         /// <summary>True when <paramref name="buildingId"/> is one of the three resource buildings.</summary>
