@@ -19,6 +19,7 @@ using System.Collections;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using DeNelle.Core.Combat;
+using DeNelle.Core.Diagnostics;   // WO-449 §12: FlowTrace on the melee LoS gate
 
 namespace DeNelle.Village
 {
@@ -69,6 +70,19 @@ namespace DeNelle.Village
 
         [Tooltip("Layer mask covering enemy colliders.")]
         [SerializeField] private LayerMask _enemyLayer;
+
+        // WO-449: line-of-sight gate for the MELEE swing. The swing's damage OverlapSphere
+        // (ResolveAttack) hit EVERY hostile in radius — including one on the far side of a
+        // wall the hero is standing against — because it was a pure radius test, no LoS.
+        // This mask names the blockers that should occlude an attack (wall/structure geometry,
+        // built onto the dedicated "Structure" layer by CastleWallsFromRecipe / CastleHubBuilder.
+        // BuildInnerWallRing). It must NOT include the Enemy or Player layers, or the target's
+        // own collider (or the hero) would self-block the linecast. When unset (value == 0) the
+        // gate degrades OFF (HasLoS returns true) so a misconfigured mask never makes the hero
+        // unable to hit ANYTHING. Mirrors HeroTargetIndicator's proven WO-449 pattern.
+        [Tooltip("WO-449: layers that BLOCK a melee swing's line-of-sight (walls/structures on " +
+                 "the 'Structure' layer). Do NOT include Enemy or Player. Empty disables the gate.")]
+        [SerializeField] private LayerMask _losMask;
 
         [Header("Attack Weight (WO-217: anticipation → impact → recovery)")]
         [Tooltip("When ON, the swing's tempo is shaped via Animator.speed: a brief slow wind-up " +
@@ -184,6 +198,13 @@ namespace DeNelle.Village
             // Default to the Enemy layer, then to Everything — matching HeroHealth/HeroAbilities.
             if (_enemyLayer == 0) _enemyLayer = LayerMask.GetMask("Enemy");
             if (_enemyLayer == 0) _enemyLayer = ~0;
+
+            // WO-449: activate the melee LoS gate out-of-the-box against the dedicated
+            // "Structure" wall layer (same layer HeroTargetIndicator's reticle gate uses, set on
+            // the wall geometry by CastleWallsFromRecipe / CastleHubBuilder.BuildInnerWallRing).
+            // Only seed when unset in the inspector; if "Structure" doesn't exist GetMask returns
+            // 0 and HasLoS's degrade rule (value == 0 → clear) keeps the swing able to hit.
+            if (_losMask.value == 0) _losMask = LayerMask.GetMask("Structure");
         }
 
         private void Update()
@@ -357,11 +378,15 @@ namespace DeNelle.Village
         {
             if (_loco == null) return;
 
-            // 1) reticle-locked target (registry — exactly what the ring shows).
+            // 1) reticle-locked target (registry — exactly what the ring shows). The reticle
+            //    already applies its own WO-449 LoS gate (HeroTargetIndicator.HasLoS), so a
+            //    locked target is guaranteed visible — no wall between hero and it.
             IDamageable target = _targetIndicator != null ? _targetIndicator.CurrentTarget : null;
             if (target != null && !target.IsAlive) target = null;
 
-            // 2) fall back to the nearest hostile inside the swing's reach.
+            // 2) fall back to the nearest hostile inside the swing's reach WITH a clear
+            //    line-of-sight (WO-449) — so the hero never turns to face / swing at a foe
+            //    walled off from them.
             if (target == null)
             {
                 float range = EffectiveRange();
@@ -372,13 +397,34 @@ namespace DeNelle.Village
                     if (col == null) continue;
                     var d = col.GetComponentInParent<IDamageable>();
                     if (d == null || !d.IsAlive || d.Faction != CombatFaction.Hostile) continue;
+                    if (!HasLoS(d)) continue;   // WO-449: skip walled-off foes
                     float sqr = (d.WorldPosition - transform.position).sqrMagnitude;
                     if (sqr < bestSqr) { bestSqr = sqr; target = d; }
                 }
             }
 
             if (target == null) return;   // nothing to face — swing as before
+            FlowTrace.Step("Combat", "PlayerAttack: facing melee target (LoS-cleared, WO-449)");
             _loco.FaceToward(target.WorldPosition);
+        }
+
+        /// <summary>
+        /// WO-449: true when the hero has a clear line-of-sight to <paramref name="target"/>
+        /// (no wall/structure between them) — so a melee swing can't damage an enemy through a
+        /// wall the hero is standing against. Linecasts from an eye point on the hero to a TORSO
+        /// point on the target (not feet) so a slope/curb under either doesn't false-block.
+        /// DEGRADE: an unset mask (value == 0) → treat LoS as always clear (radius-only, legacy
+        /// behaviour) so a misconfigured mask never makes the hero unable to hit anything.
+        /// Mirrors HeroTargetIndicator.HasLoS (the reticle's proven WO-449 gate).
+        /// </summary>
+        private bool HasLoS(IDamageable target)
+        {
+            if (target == null) return false;
+            if (_losMask.value == 0) return true;   // degrade: LoS gate disabled
+            Vector3 eye   = transform.position + Vector3.up * 1.4f;
+            Vector3 torso = target.WorldPosition + Vector3.up * 1.0f;
+            // Clear when the linecast hits NOTHING between eye and torso.
+            return !Physics.Linecast(eye, torso, _losMask, QueryTriggerInteraction.Ignore);
         }
 
         private IEnumerator ResolveAttack()
@@ -414,6 +460,15 @@ namespace DeNelle.Village
                 var damageable = col.GetComponentInParent<IDamageable>();
                 if (damageable == null || !damageable.IsAlive) continue;
                 if (damageable.Faction != CombatFaction.Hostile)      continue;
+
+                // WO-449: reject a hit when a wall/structure blocks the swing's line-of-sight,
+                // so the hero standing against a wall can't damage an enemy on the far side.
+                // Degrades clear when the mask is unset (HasLoS) so a misconfig never no-ops melee.
+                if (!HasLoS(damageable))
+                {
+                    FlowTrace.Warn("Combat", "PlayerAttack: hostile in melee radius REJECTED — wall blocks line-of-sight (WO-449)");
+                    continue;
+                }
 
                 float damage = _baseDamage * weaponMult;
                 if (isPerfect) damage *= _perfectHitMultiplier;
