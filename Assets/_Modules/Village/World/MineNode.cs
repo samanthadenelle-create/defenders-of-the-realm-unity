@@ -481,6 +481,13 @@ namespace DeNelle.Village
             if (amount <= 0) return;
 
             var econ = EconomyService.Instance;
+            // WO-424: trace the harvest-complete SOURCE so a headless run can split
+            // "extract never fired" from "fired but the economy→HUD bridge dropped it".
+            // The economy (EconomyService.NotifyChanged) and HUD (SetResources /
+            // HeartHudBridge.PushResources) ends are already traced [Flow:Eco]; this is
+            // the missing first link — node banked N → did OnChanged → HUD follow?
+            DeNelle.Core.Diagnostics.FlowTrace.Step("Eco",
+                $"MineNode banked +{amount} {Resource} (econ={(econ != null)}) — expect OnChanged → HUD.SetResources next");
             if (econ != null)
             {
                 switch (Resource)

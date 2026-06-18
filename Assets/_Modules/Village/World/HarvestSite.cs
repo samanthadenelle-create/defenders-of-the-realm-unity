@@ -89,6 +89,12 @@ namespace DeNelle.Village.World
             if (amount > 0)
             {
                 var econ = EconomyService.Instance;
+                // WO-424: trace this SECOND harvest source (HarvestSite's own AddResource
+                // path, separate from MineNode.BankYield) so a headless run can confirm the
+                // tick banked → fired OnChanged → reached HUD.SetResources. The economy/HUD
+                // ends are already traced [Flow:Eco]; this is the source link for this path.
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Eco",
+                    $"HarvestSite banked +{amount} {ResourceType} (econ={(econ != null)}) — expect OnChanged → HUD.SetResources next");
                 if (econ != null)
                 {
                     econ.AddResource(ResourceType, amount);
