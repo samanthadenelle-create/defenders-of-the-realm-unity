@@ -184,8 +184,15 @@ namespace DeNelle.Core.Diagnostics
             _inHandler = true;
             try
             {
-                string key = type + "|" + condition;
-                bool firstTime = _seen.Add(key);                     // dedupe identical errors
+                // WO-459: dedupe by condition AND the top of the stack. Every NRE shares the
+                // SAME condition string ("NullReferenceException: Object reference not set..."),
+                // so a condition-only key collapsed ALL distinct NRE call-sites into one record
+                // — hiding every source but the first and defeating "find the root of the spam".
+                // Folding the first stack line into the key lets each distinct throw-site record
+                // its own stack (so a single capture names ALL the dead objects, not just one),
+                // while still deduping the per-frame repeat of the SAME site.
+                string key = type + "|" + condition + "|" + FirstStackLine(stack);
+                bool firstTime = _seen.Add(key);                     // dedupe identical errors at the same site
                 Record(type == LogType.Exception ? "exception" : "error",
                        condition, Truncate(stack, 1200), screenshot: firstTime);
             }
@@ -355,6 +362,17 @@ namespace DeNelle.Core.Diagnostics
 
         static string Truncate(string s, int max)
             => string.IsNullOrEmpty(s) ? "" : (s.Length <= max ? s : s.Substring(0, max) + "...[truncated]");
+
+        // WO-459: the first non-empty line of a stack trace — the throwing frame. Used in the
+        // dedupe key so two DIFFERENT NRE sites (same condition string) don't collapse into one
+        // record. Empty stack (some asserts) falls back to "" so behaviour is unchanged there.
+        static string FirstStackLine(string stack)
+        {
+            if (string.IsNullOrEmpty(stack)) return "";
+            int nl = stack.IndexOf('\n');
+            string line = nl < 0 ? stack : stack.Substring(0, nl);
+            return line.Trim();
+        }
 
         void SafeWarn(Exception e)
         {
