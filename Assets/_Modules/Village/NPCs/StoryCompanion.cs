@@ -36,6 +36,7 @@
 using System.Collections.Generic;
 using DeNelle.Core.State;
 using DeNelle.Core.Combat;
+using DeNelle.Core.Diagnostics;
 using UnityEngine;
 using UnityEngine.AI;
 
@@ -123,6 +124,7 @@ namespace DeNelle.Village
         {
             if (_fallen) return;
             _fallen = true;
+            FlowTrace.Warn("Companion", $"{DisplayName} ({_hero}) FELL at 0 HP -> deactivating (teardown beat)");
             _bubble?.Hide();
             if (_agent != null && _agent.enabled && _agent.isOnNavMesh) _agent.isStopped = true;
             // Deactivate the body so it stops updating + targeting. PartyHudBridge
@@ -376,6 +378,10 @@ namespace DeNelle.Village
             _speakTimer = IntroDelay;
             // Stagger the first cast so a party doesn't fire every ability on frame 1.
             _abilityTimer = _abilityCooldown * 0.5f;
+
+            FlowTrace.Step("Companion", $"Start {DisplayName} ({_hero}): heroResolved={_heroT != null} " +
+                $"agent={(_agent != null ? (_agent.enabled ? "on-navmesh" : "disabled/off-navmesh") : "none")} " +
+                $"bubble={(_bubble != null)} pos={transform.position}");
         }
 
         private void Update()
@@ -732,11 +738,19 @@ namespace DeNelle.Village
         private void ResolveHeroIfNeeded()
         {
             if (_heroT != null) return;
+            // KNOWN SUSPECT (OuterWorld additive seam): the hero rig is torn down/rebuilt
+            // and FindFirstObjectByType<HeroLocomotion>() momentarily returns null, so the
+            // companion strands with _heroT == null. Throttle a Warn while we have no hero
+            // so a capture shows HOW LONG it stays stranded; Once on re-acquire names the fix.
+            FlowTrace.Throttle("Companion", $"hero-null-{GetInstanceID()}", 1f,
+                $"{DisplayName} ({_hero}) has NO hero target — re-resolving (~1Hz). If this repeats forever the hero never re-resolved across the seam.");
             _resolveTimer -= Time.deltaTime;
             if (_resolveTimer <= 0f)
             {
                 _resolveTimer = 1.0f;
                 _heroT = ResolveHeroFallback();
+                if (_heroT != null)
+                    FlowTrace.Step("Companion", $"{DisplayName} ({_hero}) RE-ACQUIRED hero target ({_heroT.name}) — follow resumes");
             }
         }
 
@@ -807,6 +821,8 @@ namespace DeNelle.Village
             // the off-navmesh hero), snap to the hero's shoulder so it never strands.
             if (distHero > TeleportRange)
             {
+                FlowTrace.Throttle("Companion", $"teleport-{GetInstanceID()}", 1f,
+                    $"{DisplayName} ({_hero}) stranded {distHero:F0}m from hero (> {TeleportRange}m) — catch-up WarpTo (likely the OuterWorld seam)");
                 WarpTo(target, self.y);
                 FaceHero();
                 return;
@@ -911,6 +927,7 @@ namespace DeNelle.Village
             if (!_introSpoken)
             {
                 _introSpoken = true;
+                FlowTrace.Step("Companion", $"{DisplayName} ({_hero}) speaks INTRO line (speech beat reached)");
                 ShowLine(CompanionDialogue.IntroFor(_hero));
                 return;
             }
