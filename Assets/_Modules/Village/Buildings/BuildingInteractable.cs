@@ -30,6 +30,7 @@
 // panel is open, and (c) open (never toggle) the one correct panel by id.
 // =============================================================================
 
+using DeNelle.Core.Diagnostics;
 using DeNelle.Core.UI;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -229,6 +230,14 @@ namespace DeNelle.Village
             // $structureCanShop, seeded from BuildingCatalog.IsUpgradable in DialogueCommandBridge) —
             // ONE chokepoint that also covers the castle vendor-NPC path (CastleNpcInteractable).
             string hookId = StructureHookIdFor(_building);
+            // §12 / WO-413: name the routing branch this building takes. The shop-vs-upgrade
+            // split is then decided data-driven INSIDE the StructureMenu Yarn node (gated on
+            // $structureCanShop / $structureCanUpgrade, seeded from BuildingCatalog caps in
+            // CmdStructureStatus) — NOT here. This trace pins which hook id the building used so a
+            // "wrongly offers shop" report maps straight to the catalog entry that gated it.
+            FlowTrace.Step("Village", $"Interact {_building.Type} (id='{_building.BuildingId}') -> " +
+                (hookId != null ? $"structure hook '{hookId}' (StructureMenu gates shop/upgrade)"
+                                : "legacy panel route"));
             if (hookId != null)
             {
                 // Pass the building's OWN sign label so the dialogue title matches the

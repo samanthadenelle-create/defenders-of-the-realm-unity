@@ -29,6 +29,7 @@
 // existing village interaction code does (no reflection, no cross-asmdef ref).
 // =============================================================================
 
+using DeNelle.Core.Diagnostics;
 using DeNelle.Core.UI;
 using UnityEngine;
 using UnityEngine.AI;
@@ -401,6 +402,12 @@ namespace DeNelle.Village
         private void Interact()
         {
             if (string.IsNullOrEmpty(_structureId)) return;
+            // §12 / WO-413: the castle vendor NPCs are the primary live interaction surface (the
+            // home hub is MainCastle_Hall). They open the SAME parameterized StructureMenu, so the
+            // shop-vs-upgrade split is decided data-driven by that node's gates (seeded from
+            // BuildingCatalog caps in CmdStructureStatus) — never here. Trace the id used so a
+            // "wrongly offers shop" report maps to the catalog entry behind it.
+            FlowTrace.Step("Village", $"CastleNpc '{_label}' -> structure '{_structureId}' (StructureMenu gates shop/upgrade)");
             if (DialogueService.PlayStructure(_structureId, _label))
             {
                 _openedStructure = true;

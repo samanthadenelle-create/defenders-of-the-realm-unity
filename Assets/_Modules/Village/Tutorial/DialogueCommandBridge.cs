@@ -432,15 +432,28 @@ namespace DeNelle.Village
             // the Upgrade option on IsUpgradable, and (Phase 2) routes the Upgrade flow by UpgradeType
             // (resource / gear / spells). Forge = shop + upgrade; arcane = upgrade(spells); market = shop.
             var caps = DeNelle.Village.BuildingCatalog.Find(structureId);
-            vs.SetValue("$structureCanShop",    caps != null && caps.IsShoppable);
-            vs.SetValue("$structureCanUpgrade", caps != null && caps.IsUpgradable);
+            // WO-413: a building that is NOT in the catalog (id mismatch) must NEVER fall through
+            // to a Buy/Sell shop — shop is opt-IN only (explicit IsShoppable on a real entry). A
+            // city-upgrade building (in BuildingTierCatalog) is upgradable even with no shop entry,
+            // so it still surfaces its Upgrade option rather than collapsing to Talk/Leave.
+            bool isCityUpgrade  = BuildingTierCatalog.IsUpgradable(structureId);
+            bool canShop        = caps != null && caps.IsShoppable;                  // opt-in only
+            bool canUpgrade     = (caps != null && caps.IsUpgradable) || isCityUpgrade;
+            vs.SetValue("$structureCanShop",    canShop);
+            vs.SetValue("$structureCanUpgrade", canUpgrade);
             vs.SetValue("$upgradeType",         caps != null && caps.UpgradeType != null ? caps.UpgradeType : "");
             // WO-430 — seed the city-upgrade gate var ($<id>_Level) from the saved tier so the
             // *_UpgradeMenu node gates correctly on open (CmdTryUpgradeBuilding updates it after a buy).
             vs.SetValue(LevelVarName(structureId), (float)ModifierService.TierOf(structureId));
             // WO-430 — is this a city-upgrade building? StructureMenu routes its Upgrade option to
             // BuildingUpgradeRouter (the tier tree) when true, and hides the legacy upgrade option.
-            vs.SetValue("$isCityUpgrade", BuildingTierCatalog.IsUpgradable(structureId));
+            vs.SetValue("$isCityUpgrade", isCityUpgrade);
+
+            // §12 / WO-413: capture the ACTUAL menu gating per building so a "wrongly offers shop"
+            // report is decided by data, not theory. catalog-miss => caps null (shop forced false).
+            FlowTrace.Step("Village", $"StructureMenu gates for '{structureId}': " +
+                $"caps={(caps != null ? "hit" : "MISS")} shop={canShop} upgrade={canUpgrade} " +
+                $"cityUpgrade={isCityUpgrade} upgradeType='{(caps != null ? caps.UpgradeType : "")}'");
 
             // NOTE: $structureName is seeded by DialogueService.PlayStructure from the building's sign
             // label and intentionally NOT overwritten here. Resource-upgrade buildings (farm/lumbermill/
