@@ -1113,14 +1113,18 @@ namespace DeNelle.DevTools
             FlowTrace.Step("Auto", $"AttemptExitCastle: walking into '{exit.name}' " +
                 $"(target='{targetScene}'@{warpTarget}, radius={radius:0.0}m, heroStart={heroStart}).");
 
-            // Drive toward the seam. The crossing fires from PROXIMITY (the trigger's
-            // own Update distance-check), so we just need to get within radius; the
-            // seam then WarpTo's the hero to targetPosition.
+            // Drive toward the seam. The seam is now CONFIRM-TO-CROSS only — it no
+            // longer auto-warps on proximity. While the hero is in range the trigger
+            // registers a "Travel to <dest>" prompt on the shared MobileInteractButton
+            // each frame (LateUpdate). So once we reach proximity we TAP that prompt
+            // (MobileInteractButton.InvokeActive) exactly as a real player would; the
+            // seam's tap callback then WarpTo's the hero to targetPosition.
             _hero.SetAutoWalk(exit.transform);
 
             float t0 = Time.realtimeSinceStartup;
             bool warped = false;
             bool reachedProximity = false;
+            bool tapped = false;
             float closestToGate = float.MaxValue;   // closest the hero ever got to the gate
             while (Time.realtimeSinceStartup - t0 < ExitTimeout)
             {
@@ -1141,6 +1145,20 @@ namespace DeNelle.DevTools
                 if (dGate < closestToGate) closestToGate = dGate;
                 if (dGate <= radius + 0.5f) reachedProximity = true;
 
+                // In range + the seam's "Travel to ..." prompt is up this frame ->
+                // TAP it (simulate the on-screen confirm) so the seam crosses. We poll
+                // each frame because the trigger (re)registers the prompt in LateUpdate;
+                // tapping is harmless to repeat (InvokeActive no-ops once cleared) but
+                // we stop driving toward the gate once we've fired the confirm.
+                if (reachedProximity && MobileInteractButton.IsActive)
+                {
+                    if (MobileInteractButton.InvokeActive())
+                    {
+                        tapped = true;
+                        FlowTrace.Step("Auto", $"AttemptExitCastle: bot tapped seam '{gateName}' -> cross (Travel to '{targetScene}').");
+                    }
+                }
+
                 yield return null;
             }
             if (_hero != null) _hero.ClearAutoWalk();
@@ -1158,12 +1176,22 @@ namespace DeNelle.DevTools
                     $"closest {closestToGate:0.0}m of radius {radius:0.0}m within {ExitTimeout:0}s (navmesh edge / blocked).");
                 _lastDetail = $"could not reach gate (closest {closestToGate:0.0}m / radius {radius:0.0}m)";
             }
+            else if (!tapped)
+            {
+                // Real, ticket-worthy: reached proximity but the "Travel to ..." prompt
+                // never went active, so the bot had nothing to tap (seam didn't register
+                // its confirm prompt).
+                FlowTrace.Fail("Auto", $"AttemptExitCastle: no seam prompt to tap — hero reached closest {closestToGate:0.0}m of gate '{gateName}' " +
+                    $"(radius {radius:0.0}m) but the 'Travel to {targetScene}' confirm prompt never went active within {ExitTimeout:0}s.");
+                _lastDetail = $"no seam prompt (reached {closestToGate:0.0}m / radius {radius:0.0}m, nothing to tap)";
+            }
             else
             {
-                // Real, ticket-worthy: reached proximity but the seam never warped us.
-                FlowTrace.Fail("Auto", $"AttemptExitCastle: seam did NOT fire — hero reached closest {closestToGate:0.0}m of gate '{gateName}' " +
-                    $"(radius {radius:0.0}m) but no warp to target {warpTarget} within {ExitTimeout:0}s.");
-                _lastDetail = $"seam did not fire (reached {closestToGate:0.0}m / radius {radius:0.0}m, no warp)";
+                // Real, ticket-worthy: tapped the confirm prompt but the seam never
+                // warped us (the tap callback failed to cross).
+                FlowTrace.Fail("Auto", $"AttemptExitCastle: tapped seam but it did NOT cross — hero reached closest {closestToGate:0.0}m of gate '{gateName}' " +
+                    $"(radius {radius:0.0}m), tapped the 'Travel to {targetScene}' prompt, but no warp to target {warpTarget} within {ExitTimeout:0}s.");
+                _lastDetail = $"tapped but no cross (reached {closestToGate:0.0}m / radius {radius:0.0}m, no warp)";
             }
         }
 

@@ -155,6 +155,31 @@ namespace DeNelle.Village
                                        && _instance._owner != null;
 
         /// <summary>
+        /// Fire the currently-shown prompt's callback exactly as a real tap would
+        /// (mobile-first: this is the SAME clear-then-invoke path <see cref="Update"/>
+        /// runs on a screen touch). Used by both the touch flow and the headless
+        /// AutoPilot bot so the bot crosses seams the way a player does — by TAPPING
+        /// the prompt — instead of relying on any auto-proximity behaviour.
+        /// Returns true if there was an active prompt and its callback was invoked.
+        /// Null-safe; no-op (returns false) when nothing is showing.
+        /// </summary>
+        public static bool InvokeActive()
+        {
+            if (_instance == null) return false;
+            if (!_instance._requestedThisFrame || _instance._onTap == null) return false;
+            var cb = _instance._onTap;
+            // Clear before invoking so a callback that opens a modal + calls Release()
+            // doesn't fight a re-show this same frame (mirrors the tap path in Update).
+            _instance._owner = null;
+            _instance._onTap = null;
+            _instance._requestedThisFrame = false;
+            _instance._priority = 0;
+            _instance.HideButton();
+            cb.Invoke();
+            return true;
+        }
+
+        /// <summary>
         /// Immediately drop any pending request from <paramref name="owner"/> and hide the
         /// button. Callers invoke this when they leave range / open a modal so a stale
         /// button can't linger for one frame. Null-safe; no-op if not the current owner.

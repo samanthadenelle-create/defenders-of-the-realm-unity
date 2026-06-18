@@ -38,11 +38,14 @@ namespace DeNelle.Village
                  "too early before you reach the gate.")]
         public float ProximityRadius = 6f;
 
-        [Tooltip("CONFIRM-TO-CROSS (default ON). When true the seam NEVER auto-teleports on proximity " +
-                 "or trigger-enter; instead it shows an 'Press F to travel to <destination>' prompt while " +
-                 "the hero is in range and only crosses when the interact key (F / on-screen Interact " +
-                 "button) is pressed. This stops accidental warps when walking past a gate. Set false " +
-                 "only for a seam that should auto-cross (legacy behaviour).")]
+        // CONFIRM-TO-CROSS is now the ONLY behaviour (owner directive 2026-06-18, root-cause
+        // fix). The serialized field is RETAINED only so the baked scene components keep
+        // deserializing without a missing-field warning — it is NO LONGER read by the runtime.
+        // A hero walking into range can NEVER auto-teleport: travel ALWAYS requires the
+        // explicit "Travel to <destination>" tap prompt. The old auto-cross code path, the
+        // Awake() runtime guard, and the OutpostConnector name check are all gone.
+        // NOTE: external editor/injector code still writes this field; it is harmless now
+        // (the runtime ignores it) and the field is kept public for that back-compat.
         public bool requireConfirm = true;
 
         private bool _fired;
@@ -77,49 +80,28 @@ namespace DeNelle.Village
         private static int s_collectFrame = -1;
         private float _curDist = float.MaxValue;
 
-        // Effective radius: confirm seams reach to ConfirmMinRadius so the prompt appears at
-        // the navmesh edge; legacy auto-cross keeps the authored (tight) ProximityRadius.
-        private float EffRadius => requireConfirm ? Mathf.Max(ProximityRadius, ConfirmMinRadius) : ProximityRadius;
+        // Effective radius: confirm-to-cross is unconditional, so the seam always reaches to
+        // ConfirmMinRadius — the prompt appears at the navmesh edge where the hero stalls and
+        // he WARPS across (he need not touch the marker). There is no longer an auto-cross mode
+        // that would want the tighter authored ProximityRadius.
+        private float EffRadius => Mathf.Max(ProximityRadius, ConfirmMinRadius);
 
         // =====================================================================
-        // SOURCE-OF-TRUTH confirm enforcement for raid-outpost connectors.
+        // ROOT-CAUSE FIX (owner directive 2026-06-18): auto-cross is GONE.
         // ---------------------------------------------------------------------
-        // ROOT CAUSE (owner Player.log 2026-06-18): the OutpostConnector_* seams are
-        // baked into MainCastle_Hall.unity with requireConfirm:0 (CastleHubBuilder
-        // stamps false at WireOutpostConnectors, owner 2026-06-17 auto-cross intent for
-        // the EXIT seam — but that intent leaked onto the raid connectors too). The
-        // runtime OutpostConnectorConfirmInjector tried to flip them back on
-        // sceneLoaded, but that is an EXTERNAL static racing this component's per-frame
-        // Update(): on the boot/additive-load frame, this trigger's Update() can fire
-        // the proximity AUTO-CROSS (requireConfirm==false branch) BEFORE the injector's
-        // sceneLoaded handler runs — so the hero teleports before the fix lands. The
-        // injector also misses the very-first active scene (sceneLoaded never fires for
-        // the boot scene) on some load paths.
+        // History: the OutpostConnector_* seams were baked with requireConfirm:0, and
+        // prior fixes tried to flip the field back on at runtime (Awake guard +
+        // OutpostConnectorConfirmInjector). Those were field-dependent and unreliable —
+        // the proximity AUTO-CROSS branch could fire on the boot/additive-load frame
+        // BEFORE any guard ran, teleporting the hero with no tap (proven in Player.log).
         //
-        // DURABLE FIX: enforce confirm-to-cross HERE, in Awake(), on this same
-        // component. Awake() is guaranteed to run before this component's first
-        // Update(), so the auto-cross branch can NEVER fire on a raid connector — and
-        // every freshly (additively) loaded instance re-enforces it on its own Awake,
-        // so it survives outpost scene reloads with no external coordination.
-        //
-        // SCOPE GUARD: ONLY GameObjects named "OutpostConnector_*" are forced to
-        // confirm. The castle<->OuterWorld seams (WorldGate_ConnectToOuterWorld_Marker,
-        // ReturnToOuterWorld_Seam) are intentionally left at their authored value.
-        private void Awake()
-        {
-            if (!requireConfirm && NameMarksOutpostConnector(name))
-            {
-                requireConfirm = true;
-                FlowTrace.Step("Seam",
-                    $"OutpostConnector '{name}' -> requireConfirm=true (applied at Awake, source-enforced)");
-            }
-        }
+        // The durable fix is to DELETE the auto-cross code path entirely. There is now
+        // no requireConfirm==false branch anywhere in this component, so no value of the
+        // serialized field — baked false or otherwise — can ever auto-teleport. Travel
+        // is tap-only for EVERY SceneTransitionTrigger. The Awake() guard and the
+        // NameMarksOutpostConnector helper were removed as now-dead code.
 
-        private static bool NameMarksOutpostConnector(string n)
-        {
-            return !string.IsNullOrEmpty(n) &&
-                   n.StartsWith("OutpostConnector", System.StringComparison.OrdinalIgnoreCase);
-        }
+        private bool _confirmAnnounced;   // FlowTrace proof line emitted once per trigger
 
         private void Update()
         {
@@ -127,6 +109,13 @@ namespace DeNelle.Village
             {
                 _announced = true;
                 Debug.Log($"[SeamTrace] '{name}' ONLINE  target={targetSceneName}@{targetPosition}  gatePos={transform.position}  radius={ProximityRadius}m");
+            }
+
+            if (!_confirmAnnounced)
+            {
+                _confirmAnnounced = true;
+                FlowTrace.Step("Seam",
+                    $"'{name}' confirm-to-cross enforced — tap required, no auto-teleport");
             }
 
             if (_fired) return;
@@ -159,37 +148,26 @@ namespace DeNelle.Village
 
             bool inRange = (_hero.position - transform.position).sqrMagnitude <= EffRadius * EffRadius;
 
-            if (requireConfirm)
+            // CONFIRM-TO-CROSS (unconditional): NEVER auto-teleport. We only REGISTER in-range
+            // interest here; the actual prompt + confirmed cross are resolved in LateUpdate for
+            // the single NEAREST in-range seam (so overlapping wide gate spheres never flicker
+            // two prompts or double-fire Cross). The shared frame list is reset on the first
+            // seam to touch it each frame.
+            if (Time.frameCount != s_collectFrame)
             {
-                // CONFIRM-TO-CROSS: never auto-teleport. We only REGISTER in-range interest
-                // here; the actual prompt + F-cross are resolved in LateUpdate for the single
-                // NEAREST in-range confirm seam (so overlapping wide gate spheres never flicker
-                // two prompts or double-fire Cross). The shared frame list is reset on the first
-                // confirm seam to touch it each frame.
-                if (Time.frameCount != s_collectFrame)
-                {
-                    s_collectFrame = Time.frameCount;
-                    s_inRangeConfirm.Clear();
-                }
-                if (inRange)
-                {
-                    _curDist = dist;
-                    if (!s_inRangeConfirm.Contains(this)) s_inRangeConfirm.Add(this);
-                }
-                else if (_promptShown)
-                {
-                    // Left range — drop the prompt immediately (don't wait for LateUpdate).
-                    MobileInteractButton.Release(this);
-                    _promptShown = false;
-                }
-                return;
+                s_collectFrame = Time.frameCount;
+                s_inRangeConfirm.Clear();
             }
-
-            // Legacy AUTO-CROSS (requireConfirm == false): proximity fires the crossing.
             if (inRange)
             {
-                Debug.Log($"[SeamTrace] '{name}' IN RANGE ({dist:F1}m <= {EffRadius}m) -> firing Cross().");
-                Cross(_hero);
+                _curDist = dist;
+                if (!s_inRangeConfirm.Contains(this)) s_inRangeConfirm.Add(this);
+            }
+            else if (_promptShown)
+            {
+                // Left range — drop the prompt immediately (don't wait for LateUpdate).
+                MobileInteractButton.Release(this);
+                _promptShown = false;
             }
         }
 
@@ -200,7 +178,7 @@ namespace DeNelle.Village
         // the hero stands inside more than one gate sphere.
         private void LateUpdate()
         {
-            if (!requireConfirm || _fired) return;
+            if (_fired) return;
 
             // Not in range this frame → ensure our prompt is down.
             if (!s_inRangeConfirm.Contains(this))
@@ -232,25 +210,16 @@ namespace DeNelle.Village
                 Debug.Log($"[SeamTrace] '{name}' NEAREST in-range ({_curDist:F1}m, radius {EffRadius}m) -> showing CONFIRM prompt for '{dest}'.");
                 _promptShown = true;
             }
-            MobileInteractButton.Request(this, $"Press F: Travel to {dest}", () => Cross(_hero));
-            if (Input.GetKeyDown(KeyCode.F))
-            {
-                Debug.Log($"[SeamTrace] '{name}' CONFIRM key (F) pressed (nearest seam) -> firing Cross().");
-                Cross(_hero);
-            }
+            // Mobile-first: the confirmed crossing fires through the shared on-screen
+            // Interact button (requested above). The desktop F-key trigger was removed.
+            MobileInteractButton.Request(this, $"Travel to {dest}", () => Cross(_hero));
         }
 
-        // Box-collider entry still works as a fallback (for movers that DO trip OnTriggerEnter).
-        private void OnTriggerEnter(Collider other)
-        {
-            if (_fired || other == null) return;
-            if (other.tag != "Player" && other.tag != "HeroTarget") return;
-            // Confirm-to-cross: trigger-enter must NOT auto-cross either — the player has
-            // to press F / tap Interact. The Update() proximity loop already shows the
-            // prompt + handles the confirmed crossing while in range.
-            if (requireConfirm) return;
-            Cross(other.transform);
-        }
+        // OnTriggerEnter is intentionally a NO-OP for crossing: confirm-to-cross is now
+        // unconditional, so trigger-enter must NOT auto-cross either. The player always has to
+        // tap the on-screen Interact button. The Update() proximity loop registers in-range
+        // interest and LateUpdate shows the prompt + handles the confirmed crossing. (Method
+        // kept empty-of-cross deliberately — there is no path here that can teleport the hero.)
 
         // Release the shared interact button if this gate is torn down while prompting.
         private void OnDisable()
