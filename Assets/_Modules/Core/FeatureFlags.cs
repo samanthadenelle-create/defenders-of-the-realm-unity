@@ -40,6 +40,15 @@ namespace DeNelle.Core
         /// until a backend endpoint is configured.</summary>
         public static bool WebTrace => Get("webtrace", defaultOn: false);
 
+        /// <summary>When ON, tapping an upgradable building opens the code-built MVVM
+        /// <c>BuildingUpgradePanelMvvm</c> (a big "Upgrade Building" CTA + a tier-ladder grid)
+        /// instead of the legacy Yarn upgrade menu / UIDocument BuildingUpgradePanel. Presentation
+        /// only — the upgrade math (BuildingUpgradeService / ResourceBuildingState) is unchanged.
+        /// Default OFF. PlayerPrefs "ff.buildingupgradepanel". The MVVM bootstrap only spawns when
+        /// ON, and the legacy UIDocument bootstrap suppresses itself when ON, so the two never
+        /// double-register PanelId.BuildingUpgrade.</summary>
+        public static bool BuildingUpgradePanel => Get("buildingupgradepanel", defaultOn: false);
+
         /// <summary>Per-feature resolve: PlayerPrefs override ("ff.&lt;name&gt;" = 0/1) wins, else the default.</summary>
         private static bool Get(string name, bool defaultOn)
         {

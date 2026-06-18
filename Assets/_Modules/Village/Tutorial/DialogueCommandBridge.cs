@@ -510,24 +510,10 @@ namespace DeNelle.Village
         {
             var vs = _runner != null ? _runner.VariableStorage : null;
 
-            bool ok = false;
-            int current = ModifierService.TierOf(buildingId);
-            var def = BuildingTierCatalog.TierOf(buildingId, targetTier);
-            if (def != null && targetTier == current + 1)
-            {
-                var cost = new ResourceCost { Wood = def.CostWood, Food = def.CostFood, Crystals = def.CostCrystal };
-                var econ = EconomyService.Instance;
-                var state = GameStateService.Instance != null ? GameStateService.Instance.State : null;
-                if (econ != null && state != null && econ.TrySpend(cost))
-                {
-                    if (state.BuildingTiers == null)
-                        state.BuildingTiers = new System.Collections.Generic.Dictionary<string, int>();
-                    state.BuildingTiers[buildingId] = targetTier;
-                    GameStateService.Instance.Save();
-                    ModifierService.Recompute();
-                    ok = true;
-                }
-            }
+            // Shared execute (extracted): same spend -> write tier -> save -> recompute the
+            // command used to inline. The MVVM upgrade panel calls the SAME path so they
+            // can never diverge. The Yarn-var bookkeeping below stays here (Yarn-only).
+            bool ok = Prog.BuildingUpgradeService.TryUpgrade(buildingId, targetTier);
 
             int level = ModifierService.TierOf(buildingId);
             if (vs != null)

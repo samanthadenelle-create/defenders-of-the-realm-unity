@@ -238,6 +238,23 @@ namespace DeNelle.Village
             FlowTrace.Step("Village", $"Interact {_building.Type} (id='{_building.BuildingId}') -> " +
                 (hookId != null ? $"structure hook '{hookId}' (StructureMenu gates shop/upgrade)"
                                 : "legacy panel route"));
+            // MVVM upgrade panel (flag-gated, OFF by default): an upgradable building routes
+            // STRAIGHT to the code-built Building Upgrade panel instead of the Yarn upgrade menu.
+            // Decided exactly like the menu's upgrade gate — city tiers (BuildingTierCatalog) OR
+            // legacy resource buildings (ResourceBuildingProgression). Market/shop + Talk-only
+            // buildings fall through to the Yarn structure dialogue unchanged. The contextId is the
+            // canonical structure id (hookId) the panel's VM resolves on.
+            if (DeNelle.Core.FeatureFlags.BuildingUpgradePanel && hookId != null &&
+                (DeNelle.Core.State.BuildingTierCatalog.IsUpgradable(hookId) ||
+                 Buildings.Progression.ResourceBuildingProgression.IsResourceBuilding(hookId)))
+            {
+                if (PanelRouter.Open(PanelId.BuildingUpgrade, hookId))
+                {
+                    FlowTrace.Step("Village", $"Interact {_building.Type} -> MVVM Building Upgrade (focus='{hookId}').");
+                    return;
+                }
+            }
+
             if (hookId != null)
             {
                 // Pass the building's OWN sign label so the dialogue title matches the

@@ -40,6 +40,12 @@ namespace DeNelle.Village.Buildings.Progression
         {
             if (!scene.IsValid()) return;
 
+            // FLAG GATE: when the MVVM building-upgrade panel is ON, the code-built
+            // BuildingUpgradePanelMvvm owns PanelId.BuildingUpgrade. Suppress this legacy
+            // UIDocument panel entirely so the two never double-register the id (last
+            // writer wins — gating here avoids the race). Flag OFF -> this panel owns it.
+            if (DeNelle.Core.FeatureFlags.BuildingUpgradePanel) return;
+
             // GLOBAL dedupe (across ALL loaded scenes) — see HelpMenuBootstrap.
             foreach (var existing in Object.FindObjectsByType<BuildingUpgradePanel>(
                          FindObjectsInactive.Include, FindObjectsSortMode.None))
