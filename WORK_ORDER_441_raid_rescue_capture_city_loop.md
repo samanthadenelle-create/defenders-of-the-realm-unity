@@ -59,8 +59,12 @@ offline accrual). Gives the raid its purpose. Reuse the companion-recruit path. 
 the node entry** (One Model §2b) — `NodeKind.Special`/`Outpostable`+`AutoHarvest`, **set by the camp/
 outpost generator** when it places nodes at a camp (NO manual denotation — origin = the camp). Regular
 world nodes default `InstantHarvest`. On a cleared camp, special nodes become buildable → build an
-`Outpost` on one → it auto-harvests (reuse `OutpostFoundationGenerator`/`Outpost`) while it deters the
-enemy. Persist ownership (PlayerPrefs `dotr-raid-owner-<id>` mirroring the cleared-state key; +SaveSchema
+`Outpost` on one →
+**★ THE FLIP (the payoff beat): the camp's ownership converts ENEMY → PLAYER** — the inverse of the
+existing `SceneOwnership.SetEnemyOwned(true)` (set by `RaidGarrisonSpawner` today) → now `false`/player-
+owned, persisted. Same scene, flipped: the garrison turrets/AI that attacked you now DEFEND you; the
+camp reads as *yours*. It auto-harvests (reuse `OutpostFoundationGenerator`/`Outpost`) while it deters
+re-takers. Persist ownership (PlayerPrefs `dotr-raid-owner-<id>` mirroring the cleared-state key; +SaveSchema
 v24 `OwnedOutposts` with each outpost's node id + harvest rate + **`lastCollectedUtc`**).
 **Offline accrual (unlocked by Grom, Phase B):** on load/return, compute accrued = rate × (now −
 lastCollectedUtc), **capped** (a max-accrual ceiling so it's not unbounded — e.g. 8-12h), present the
