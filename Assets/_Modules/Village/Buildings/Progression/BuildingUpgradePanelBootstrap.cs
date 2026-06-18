@@ -111,16 +111,9 @@ namespace DeNelle.Village.Buildings.Progression
 
         private void Update()
         {
-            // WO-437: the global 'U' open is gated to the editor only (and blocked during
-            // battle). In a build, Building Upgrade opens ONLY via its world interactable
-            // (resource buildings -> PanelRouter.Open(PanelId.BuildingUpgrade)); the stray
-            // global hotkey was the "13 windows" root. Panel battle-locked by PanelManager.
-#if UNITY_EDITOR
-            if (Input.GetKeyDown(KeyCode.U) && _panel != null &&
-                !DeNelle.Core.Combat.BattleLock.IsInBattle())
-                _panel.Toggle();
-#endif
-
+            // Mobile-first: Building Upgrade opens ONLY via its world interactable
+            // (resource buildings -> PanelRouter.Open(PanelId.BuildingUpgrade)); the panel
+            // is battle-locked by PanelManager. The desktop 'U' key trigger was removed.
             MobileInteractButton.Release(this);   // never request the shared button
         }
 

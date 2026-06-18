@@ -100,16 +100,9 @@ namespace DeNelle.Village.Crafting
 
         private void Update()
         {
-            // WO-437: the global 'K' open is gated to the editor only (and blocked during
-            // battle). In a build, Crafting opens ONLY via its world interactable (Workshop
-            // -> PanelRouter.Open(PanelId.Crafting)); the stray global hotkey was the
-            // "13 windows" root. The panel is unchanged + battle-locked by PanelManager.
-#if UNITY_EDITOR
-            if (Input.GetKeyDown(KeyCode.K) && _panel != null &&
-                !DeNelle.Core.Combat.BattleLock.IsInBattle())
-                _panel.Toggle();
-#endif
-
+            // Mobile-first: Crafting opens ONLY via its world interactable (Workshop
+            // -> PanelRouter.Open(PanelId.Crafting)); the panel is battle-locked by
+            // PanelManager. The desktop 'K' key trigger was removed.
             MobileInteractButton.Release(this);   // never request the shared button
         }
 

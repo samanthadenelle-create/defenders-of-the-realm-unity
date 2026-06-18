@@ -143,10 +143,9 @@ namespace DeNelle.Village.Crafting
             _root.style.top = 0;  _root.style.bottom = 0;
             _root.style.alignItems = Align.Center;
             _root.style.justifyContent = Justify.Center;
-            _root.RegisterCallback<KeyDownEvent>(OnRootKey, TrickleDown.TrickleDown);
             // Mobile close affordance: a tap on the dimmed backdrop (i.e. NOT inside
-            // the card) dismisses the panel. ESC is keyboard-only, so without this a
-            // touch player who can't hit the small X has no way out (DEF-218).
+            // the card) dismisses the panel — the canonical touch exit alongside the X
+            // chip. The desktop Escape key trigger was removed (DEF-218).
             _root.RegisterCallback<PointerDownEvent>(OnBackdropPointerDown);
 
             _shell = new VisualElement { name = "CraftingShell" };
@@ -536,15 +535,6 @@ namespace DeNelle.Village.Crafting
             var r = CraftingRecipeCatalog.Find(id);
             if (r != null && !string.IsNullOrEmpty(r.ResultGlyph)) return r.ResultGlyph;
             return null;
-        }
-
-        private void OnRootKey(KeyDownEvent evt)
-        {
-            if (evt.keyCode == KeyCode.Escape && IsOpen)
-            {
-                Close();
-                evt.StopPropagation();
-            }
         }
 
         // Tap-outside-to-close for touch (DEF-218). Fires only when the press

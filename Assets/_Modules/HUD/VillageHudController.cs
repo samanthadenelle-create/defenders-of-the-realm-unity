@@ -638,9 +638,6 @@ namespace DeNelle.HUD
                 ApplyContext(force: false);
             }
 
-            if (Input.GetKeyDown(KeyCode.H))
-                SetCombatHudVisible(!_combatHudVisible);
-
             AnimateMomentumBadge();
             AnimateLookoutBell();
             UpdateTownHud();
@@ -1212,6 +1209,23 @@ namespace DeNelle.HUD
             _compassWidget = AddWidgetIcon("Compass", parent,
                 new Vector2(0.465f, 0.90f), new Vector2(0.535f, 0.955f),
                 IconCompass, "*", 30, LGilt);
+
+            // Mobile-first (keyboard-removal sweep): the Escape key was the SOLE trigger for
+            // BOTH "close the open modal" and "toggle pause". On a phone there is no Escape,
+            // so add an always-on on-screen PAUSE/BACK button (top-LEFT — clear of the
+            // top-right gear cluster and the town-only wave cluster). It routes through the
+            // Core PauseGate: an open modal closes (PanelManager.CloseOpen), else pause
+            // toggles (PauseController, via PauseGate.PauseToggleRequested) — behaviour-
+            // identical to the retired Escape handler, now reachable by TAP. The "||" glyph
+            // fallback shows until a hud_pause sprite is dropped in.
+            var pauseCell = NewRect("PauseBack", parent, new Vector2(0f, 1f), new Vector2(0f, 1f));
+            pauseCell.anchorMin = new Vector2(0f, 1f);
+            pauseCell.anchorMax = new Vector2(0f, 1f);
+            pauseCell.pivot = new Vector2(0f, 1f);
+            pauseCell.anchoredPosition = new Vector2(20f, -20f);
+            pauseCell.sizeDelta = new Vector2(96f, 96f);
+            BuildIconButton(pauseCell, Vector2.zero, Vector2.one,
+                "hud_pause", "||", () => PauseGate.RequestBack());
 
             // Top-right icon cluster — Settings gear + Inventory backpack.
             var cluster = NewRect("TopRightIcons", parent, new Vector2(1f, 1f), new Vector2(1f, 1f));

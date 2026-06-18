@@ -81,15 +81,9 @@ namespace DeNelle.Village
         /// </summary>
         private static AbilitySlot? ReadSlot()
         {
-            var kb = Keyboard.current;
-            if (kb != null)
-            {
-                if (kb.digit1Key.wasPressedThisFrame) return AbilitySlot.Q;
-                if (kb.digit2Key.wasPressedThisFrame) return AbilitySlot.W;
-                if (kb.digit3Key.wasPressedThisFrame) return AbilitySlot.E;
-                if (kb.digit4Key.wasPressedThisFrame) return AbilitySlot.R;
-            }
-
+            // Mobile-first: the keyboard 1/2/3/4 ability-slot hotkeys are REMOVED. Abilities
+            // fire from the on-screen HUD skill buttons (VillageHudController -> HeroAbilities.
+            // TryCast(slot)) and from the gamepad face buttons below.
             var gp = Gamepad.current;
             if (gp != null)
             {
@@ -98,11 +92,6 @@ namespace DeNelle.Village
                 if (gp.buttonWest.wasPressedThisFrame)  return AbilitySlot.E;
                 if (gp.buttonNorth.wasPressedThisFrame) return AbilitySlot.R;
             }
-
-            if (UnityEngine.Input.GetKeyDown(KeyCode.Alpha1)) return AbilitySlot.Q;
-            if (UnityEngine.Input.GetKeyDown(KeyCode.Alpha2)) return AbilitySlot.W;
-            if (UnityEngine.Input.GetKeyDown(KeyCode.Alpha3)) return AbilitySlot.E;
-            if (UnityEngine.Input.GetKeyDown(KeyCode.Alpha4)) return AbilitySlot.R;
 
             return null;
         }

@@ -145,12 +145,8 @@ namespace DeNelle.Village.Buildings.Progression
             // Arbiter closes any other open panel first (DEF-212).
             PanelManager.NotifyOpened(_panelHandle);
             Repaint();
-            // T-026: grab keyboard focus so Escape (OnRootKey) reliably fires — without
-            // a focused element UI Toolkit drops key events and the panel could only be
-            // closed by the X chip (softlock if it's ever unhittable). Deferred one frame
-            // so the element is laid out / attached before Focus().
-            if (_shell != null)
-                _shell.schedule.Execute(() => { if (_shell != null) _shell.Focus(); }).StartingIn(0);
+            // Mobile-first dismiss: the scrim/backdrop pointer-down close + the ✕ chip
+            // are the reliable exits. The desktop Escape/Menu key triggers were removed.
         }
 
         public void Close()
@@ -186,7 +182,6 @@ namespace DeNelle.Village.Buildings.Progression
             // CLOSED panel never darkens / eats clicks on the HUD (DEF-212).
             _root.style.backgroundColor = new StyleColor(new Color(0f, 0f, 0f, 0f));
             _root.pickingMode = PickingMode.Ignore;
-            _root.RegisterCallback<KeyDownEvent>(OnRootKey, TrickleDown.TrickleDown);
             // T-026: backdrop (scrim) click closes the modal — a reliable dismiss path
             // even if the X chip is ever obscured/off-screen (anti-softlock). Only the
             // bare scrim (clicks that miss the shell) reaches here; shell clicks are
@@ -691,17 +686,6 @@ namespace DeNelle.Village.Buildings.Progression
         private void HideToast()
         {
             if (_toast != null) _toast.style.display = DisplayStyle.None;
-        }
-
-        private void OnRootKey(KeyDownEvent evt)
-        {
-            // T-026: Escape OR the mobile Back/Menu key dismisses — both common "get me
-            // out" inputs, so the modal can never trap the player.
-            if (IsOpen && (evt.keyCode == KeyCode.Escape || evt.keyCode == KeyCode.Menu))
-            {
-                Close();
-                evt.StopPropagation();
-            }
         }
 
         /// <summary>

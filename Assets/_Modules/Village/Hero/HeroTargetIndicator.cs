@@ -221,11 +221,11 @@ namespace DeNelle.Village
 
         private bool CyclePressed()
         {
-            var kb = Keyboard.current;
-            if (kb != null && kb.tabKey.wasPressedThisFrame) return true;
+            // Mobile-first: the keyboard Tab target-cycle is REMOVED. Target cycling is
+            // reached by the gamepad right shoulder (below); on touch the reticle auto-
+            // tracks the nearest hostile.
             var gp = Gamepad.current;
             if (gp != null && gp.rightShoulder.wasPressedThisFrame) return true;
-            if (UnityEngine.Input.GetKeyDown(KeyCode.Tab)) return true;
             return false;
         }
 

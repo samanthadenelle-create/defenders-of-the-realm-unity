@@ -73,17 +73,8 @@ namespace DeNelle.HUD
                 LeaderboardService.Instance.Changed -= Repaint;
         }
 
-        private void Update()
-        {
-            // WO-437: the global 'L' open is gated to the editor only (and blocked during
-            // battle) so it no longer spams the "13 windows" in a build. The text-field
-            // guard stays so typing 'l' in a field never toggles the panel.
-#if UNITY_EDITOR
-            if (Input.GetKeyDown(KeyCode.L) && !IsTextFieldFocused() &&
-                !DeNelle.Core.Combat.BattleLock.IsInBattle())
-                Toggle();
-#endif
-        }
+        // Mobile-first: the 'L' keyboard open is REMOVED. The panel opens via Toggle()
+        // (public), reached by its on-screen / world-interactable path. No Update key poll.
 
         public void Toggle() => SetVisible(!_visible);
 
@@ -358,13 +349,6 @@ namespace DeNelle.HUD
             ve.style.borderTopWidth = w; ve.style.borderBottomWidth = w;
             ve.style.borderLeftColor = new StyleColor(c); ve.style.borderRightColor = new StyleColor(c);
             ve.style.borderTopColor = new StyleColor(c); ve.style.borderBottomColor = new StyleColor(c);
-        }
-
-        private bool IsTextFieldFocused()
-        {
-            if (_root == null) return false;
-            var focused = _root.focusController?.focusedElement;
-            return focused is TextField;
         }
     }
 }

@@ -81,12 +81,18 @@ namespace DeNelle.Village
         public int[] UpgradeCosts = { 25, 60 };
 
         [Header("Interaction")]
-        [Tooltip("How close the player must be to see the upgrade prompt / press [G].")]
+        [Tooltip("How close the player must be to see the upgrade prompt / tap Upgrade.")]
         [Min(0.5f)] public float UpgradeRadius = 3.5f;
 
-        [Tooltip("Key that upgrades the mine when in range (distinct from MineNode's [F] " +
-                 "extract so the two verbs never collide on one node).")]
-        public KeyCode UpgradeKey = KeyCode.G;
+        // Mobile-first (keyboard-removal sweep): the UPGRADE verb is offered through the
+        // shared on-screen MobileInteractButton so it is reachable by TAP (no keyboard on a
+        // phone). It registers at a HIGHER priority than the sibling MineNode's harvest
+        // (priority 0) so, while the player is in range AND the mine isn't maxed, the single
+        // shared button advertises UPGRADE (a distinct prompt from harvest — the two never
+        // fight for the same frame). Once maxed (or out of range) this releases its claim, so
+        // the sibling's priority-0 harvest request wins the button again and harvest stays
+        // tap-reachable. The legacy [G] keyboard trigger was removed in the strip sweep.
+        private const int UpgradeButtonPriority = 5;
 
         // ── Runtime ──────────────────────────────────────────────────────────
         private MineNode _node;
@@ -174,11 +180,21 @@ namespace DeNelle.Village
                 }
             }
 
-            if (_inRange && UnityEngine.Input.GetKeyDown(UpgradeKey))
-            {
-                FlowTrace.Step("CrystalMine", $"[G] upgrade interact received (tier {Tier}/{MaxTier}).");
-                AttemptUpgrade();
-            }
+            // Mobile-first: offer the UPGRADE verb through the shared on-screen Interact
+            // button so it is reachable by TAP. Request every frame the player is in range
+            // AND the mine can still upgrade, at a priority ABOVE the sibling MineNode's
+            // harvest (0) so the single shared button shows this distinct "Upgrade…" prompt
+            // instead of flickering against harvest. Release the claim when maxed / out of
+            // range so the sibling's harvest request reclaims the button (harvest stays
+            // tappable). The old [G] keyboard trigger was removed in the strip sweep.
+            if (_inRange && !IsMaxTier)
+                MobileInteractButton.Request(
+                    this,
+                    $"Upgrade Mine T{Tier}->{Tier + 1}  ({NextUpgradeCost()} ✦)",
+                    AttemptUpgrade,
+                    UpgradeButtonPriority);
+            else
+                MobileInteractButton.Release(this);
         }
 
         /// <summary>The radius at which the prompt bubble appears — the wider of this
@@ -311,8 +327,8 @@ namespace DeNelle.Village
             // (the primary verb) and append the upgrade affordance.
             string upgrade = IsMaxTier
                 ? $"Mine maxed (T{Tier})"
-                : $"〔 {UpgradeKey} 〕 Upgrade  T{Tier}->{Tier + 1} ({NextUpgradeCost()} ✦)";
-            string label = $"〔 F / Tap 〕 Harvest {_grade} ✦      {upgrade}";
+                : $"〔 Tap 〕 Upgrade  T{Tier}->{Tier + 1} ({NextUpgradeCost()} ✦)";
+            string label = $"〔 Tap 〕 Harvest {_grade} ✦      {upgrade}";
             _prompt = BuildBubble(label);
         }
 
@@ -363,9 +379,11 @@ namespace DeNelle.Village
         private void OnDisable()
         {
             // Coroutines stop on disable, but the bubble GameObjects must be cleaned up
-            // explicitly so a disabled node leaves no orphaned world labels.
+            // explicitly so a disabled node leaves no orphaned world labels. Also drop any
+            // shared Interact-button claim so a disabled mine can't keep the touch button up.
             HidePrompt();
             HideFeedback();
+            MobileInteractButton.Release(this);
         }
 
         // A minimal world-space label above the mine — same shape as the village

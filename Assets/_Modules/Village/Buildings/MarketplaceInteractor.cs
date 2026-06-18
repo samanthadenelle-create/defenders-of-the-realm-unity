@@ -83,12 +83,12 @@ namespace DeNelle.Village
             if (!_heroFound) { ResolveHero(); return; }
             if (_hero == null) { _heroFound = false; return; }
 
-            // Store open: its own close button + Escape handle it (kept in case the
-            // monetization Realm Store is opened from another entry point).
+            // Store open: its own ✕ close button handles dismissal (kept in case the
+            // monetization Realm Store is opened from another entry point). The desktop
+            // Escape key trigger was removed — close stays reachable via the panel button.
             if (_storeOpen)
             {
                 MobileInteractButton.Release(this);
-                if (Input.GetKeyDown(KeyCode.Escape)) CloseStore();
                 return;
             }
 

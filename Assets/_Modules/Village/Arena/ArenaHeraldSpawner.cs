@@ -179,9 +179,8 @@ namespace DeNelle.Village.Arena
             // mode + while a modal is open). Tapping it opens the Arena.
             MobileInteractButton.Request(this, "Enter Arena", OpenArena);
 
-            // Desktop path: [F]. Skip while build mode suppresses interaction.
-            if (!MobileInteractButton.Suppressed && Input.GetKeyDown(KeyCode.F))
-                OpenArena();
+            // Mobile-first: opening the Arena fires through the shared on-screen Interact
+            // button (requested above). The desktop F-key trigger was removed.
         }
 
         // =====================================================================

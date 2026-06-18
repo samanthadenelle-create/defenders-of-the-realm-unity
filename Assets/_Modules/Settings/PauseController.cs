@@ -59,9 +59,9 @@ namespace DeNelle.Settings
         [SerializeField] private SettingsController _settings;
 
         [Header("Input")]
-        [Tooltip("Toggle pause when the Esc key is pressed (new Input System).")]
-        [SerializeField] private bool _escapeTogglesPause = true;
-
+        // Mobile-first (keyboard-removal sweep): the Esc-to-pause field + Update() poll were
+        // removed — Escape is gone on touch hardware. Pause/back is driven by the HUD's
+        // on-screen PAUSE/BACK button via PauseGate.PauseToggleRequested (see OnEnable).
         [Tooltip("Auto-pause when the app is backgrounded (incoming call / task switch). " +
                  "Platform-compliance behaviour — recommended on for mobile builds.")]
         [SerializeField] private bool _pauseOnApplicationPause = true;
@@ -107,6 +107,14 @@ namespace DeNelle.Settings
         {
             BindElements();
             SetOverlayVisible(false); // start un-paused.
+
+            // Mobile-first (keyboard-removal sweep): Escape is gone. The HUD's on-screen
+            // PAUSE/BACK button now drives the back/pause decision through the Core
+            // PauseGate — when no modal is open the gate raises PauseToggleRequested, which
+            // we handle here exactly as the old Escape "else → TogglePause()" branch did.
+            // (The modal-close branch is handled inside PauseGate via PanelManager.)
+            PauseGate.PauseToggleRequested -= OnPauseToggleRequested;
+            PauseGate.PauseToggleRequested += OnPauseToggleRequested;
         }
 
         private void OnDisable()
@@ -115,7 +123,18 @@ namespace DeNelle.Settings
             if (_settingsButton != null) _settingsButton.clicked -= OnSettingsClicked;
             if (_quitButton != null) _quitButton.clicked -= OnQuitClicked;
             if (_settings != null) _settings.SettingsClosed.RemoveListener(OnSettingsClosed);
+            PauseGate.PauseToggleRequested -= OnPauseToggleRequested;
             _bound = false;
+        }
+
+        /// <summary>
+        /// Handles the Core <see cref="PauseGate.PauseToggleRequested"/> seam — raised by
+        /// the HUD PAUSE/BACK button when no modal is open. Toggles pause, the touch-path
+        /// equivalent of the removed Escape "else → TogglePause()" branch.
+        /// </summary>
+        private void OnPauseToggleRequested()
+        {
+            TogglePause();
         }
 
         private void OnDestroy()
@@ -125,26 +144,13 @@ namespace DeNelle.Settings
             if (_paused) Time.timeScale = _timeScaleBeforePause;
         }
 
-        private void Update()
-        {
-            if (!_escapeTogglesPause) return;
-
-            // Legacy Input Manager (the project's active input handler). On
-            // keyboard-less hardware (a phone) the Escape key never fires, so
-            // touch hardware uses the HUD pause button instead.
-            if (!Input.GetKeyDown(KeyCode.Escape)) return;
-
-            // WO-437: ONE owner for ESC. If a registered modal panel is open, ESC
-            // closes it (and does NOT also toggle pause — no double-fire). Otherwise
-            // ESC toggles pause. This replaces the per-panel ESC polling that raced.
-            if (!_paused && PanelManager.AnyOpen)
-            {
-                PanelManager.CloseOpen();
-                return;
-            }
-
-            TogglePause();
-        }
+        // Mobile-first (keyboard-removal sweep): the Esc-key Update() poll was REMOVED.
+        // The single owner of the back/pause decision (close the open modal, else toggle
+        // pause) now lives in Core's PauseGate.RequestBack(), invoked by the HUD's on-screen
+        // PAUSE/BACK button. When no modal is open the gate raises PauseToggleRequested,
+        // which this controller handles in OnPauseToggleRequested (→ TogglePause). The
+        // modal-close half is handled by PauseGate via PanelManager. Behaviour-identical to
+        // the retired Escape handler; reachable by TAP on keyboard-less hardware.
 
         /// <summary>
         /// Auto-pauses when the OS backgrounds the app (incoming call, task
