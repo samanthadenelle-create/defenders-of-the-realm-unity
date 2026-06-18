@@ -25,6 +25,7 @@
 
 using System.Collections.Generic;
 using UnityEngine;
+using DeNelle.Core.Diagnostics;   // WO-219: FlowTrace on feedback-spawned
 
 namespace DeNelle.Village
 {
@@ -99,6 +100,10 @@ namespace DeNelle.Village
             // shape as VfxPool — SetActive cycle under a DontDestroyOnLoad root.
             var num = Acquire(worldPos);
             num.Build(amount, cam);
+            // WO-219 §12: confirm the visual-feedback layer spawned a damage number.
+            // Throttled — a busy wave pops many per second; the trend is enough.
+            FlowTrace.Throttle("Feedback", "dmg-num", 1f,
+                $"damage number spawned amount={Mathf.RoundToInt(amount)}");
             return num;
         }
 
