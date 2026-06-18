@@ -76,6 +76,7 @@ namespace DeNelle.Editor
             "Assets/Spells Pack",
             "Assets/Lana Studio",
             "Assets/Quaternius",   // WO-408: gitignored pack — its texture metas drift / never got the WebGL override; scan it too (missing root is skipped with a warning)
+            "Assets/Mirza Beig",   // WO-408: Ultimate VFX spritesheets are 8192² — the scariest single-texture payload. Was never in a scanned root, so the cap never reached them; add the root and cap the sheets to 2048 (see SizeTable).
         };
 
         private const string ModulesRoot = "Assets/_Modules";
@@ -89,6 +90,21 @@ namespace DeNelle.Editor
         // put the most specific / smallest buckets FIRST. Default applies on no match.
         private static readonly (string fragment, int maxSize)[] SizeTable =
         {
+            // ── HUD icon FOLDER -> 512 (WO-408 §A) ──────────────────────────────
+            // The shipped HUD icons (Resources/HudIcons/hud_quest.png, Elarion.png)
+            // are authored at 1254² — overkill. WO-408 caps them to 512, NOT 128:
+            // they render at HUD resolution where 128 would visibly soften the
+            // medallion/clock chrome. This rule is listed BEFORE the generic
+            // "hudicon" 128 bucket so the folder match wins (first match wins).
+            ("/hudicons/",     512),
+
+            // ── Mirza Beig Ultimate VFX spritesheets -> 2048 (WO-408 §B) ────────
+            // 8192² sheets (explosion/smokeWisps/solarFlare/blob/liquid…) — one is
+            // ~21 MB even ASTC. WO-408 caps them to 2048 (16× fewer pixels). The
+            // whole pack lives under "Mirza Beig/" so a single path fragment
+            // covers every sprite + spritesheet uniformly.
+            ("/mirza beig/",   2048),
+
             // ── tiny icons -> 128 ───────────────────────────────────────────────
             ("/icons/",        128),
             ("icon_",          128),

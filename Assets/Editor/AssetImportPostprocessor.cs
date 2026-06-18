@@ -58,6 +58,7 @@
 
 using System;
 using UnityEditor;
+using UnityEditor.Build;   // WO-408: NamedBuildTarget — version-safe WebGL platform token
 using UnityEngine;
 
 namespace DeNelle.Editor
@@ -73,6 +74,28 @@ namespace DeNelle.Editor
         // Only assets under this folder get the KayKit treatment. Forward
         // slashes — Unity asset paths are always '/' regardless of platform.
         private const string KayKitRoot = "Assets/Models/KayKit/";
+
+        // WO-408: a SECOND, narrower texture-only scope. KayKit gets the full
+        // mobile (ASTC) treatment above; everything else that SHIPS still needs a
+        // WebGL maxTextureSize cap on IMPORT so a freshly-added 4096²/8192² texture
+        // never re-bloats the build between optimizer runs. TextureBatchOptimizer
+        // is the batch sweep; this keeps NEW textures held down automatically.
+        // These are the shipping art roots from WO-408 (Resources + the heavy
+        // gitignored packs). NOTE: forward slashes, case-insensitive match.
+        private static readonly string[] ShipTextureRoots =
+        {
+            "Assets/Resources/",
+            "Assets/Mirza Beig/",
+            "Assets/Quaternius/",
+            "Assets/Art/",
+            "Assets/Spells Pack/",
+        };
+
+        // Per-role WebGL cap for the ShipTextureRoots (mirrors WO-408 / the
+        // TextureBatchOptimizer SizeTable intent). First match wins.
+        private const int HudIconCap     = 512;   // Resources/HudIcons (1254² source)
+        private const int VfxSheetCap    = 2048;  // Mirza Beig 8192² spritesheets
+        private const int Generic3DCap   = 1024;  // base-color / normal / world atlas
 
         // ── Model settings (spec Part 7) ─────────────────────────────────────
         private const ModelImporterMeshCompression MeshCompression =
@@ -197,8 +220,18 @@ namespace DeNelle.Editor
         /// </summary>
         private void OnPreprocessTexture()
         {
-            if (!IsKayKitAsset(assetPath)) return;
-            if (assetImporter is not TextureImporter texture) return;
+            if (assetImporter is not TextureImporter tex0) return;
+
+            // WO-408: non-KayKit shipping textures get only a WebGL maxTextureSize
+            // override on import (no ASTC/sRGB rewrite — those packs author their
+            // own settings). This holds NEW textures down between optimizer sweeps.
+            if (!IsKayKitAsset(assetPath))
+            {
+                ApplyShipWebGLCap(tex0);
+                return;
+            }
+
+            var texture = tex0;
 
             string lowerPath = assetPath.ToLowerInvariant();
             bool isNormalOrMask = IsNormalOrMaskMap(lowerPath);
@@ -249,6 +282,57 @@ namespace DeNelle.Editor
         {
             return !string.IsNullOrEmpty(path)
                 && path.StartsWith(KayKitRoot, StringComparison.OrdinalIgnoreCase);
+        }
+
+        // ── WO-408: WebGL-only cap for non-KayKit shipping textures ────────────
+
+        /// <summary>
+        /// True when the asset lives under one of the WO-408 shipping art roots
+        /// (Resources + the heavy packs) — these get a WebGL maxTextureSize cap on
+        /// import so a fresh 4096²/8192² texture cannot re-bloat the build.
+        /// </summary>
+        private static bool IsShipTexture(string path)
+        {
+            if (string.IsNullOrEmpty(path)) return false;
+            foreach (var root in ShipTextureRoots)
+                if (path.StartsWith(root, StringComparison.OrdinalIgnoreCase)) return true;
+            return false;
+        }
+
+        /// <summary>
+        /// WO-408 per-role WebGL cap for a shipping texture path. Mirrors the
+        /// TextureBatchOptimizer SizeTable intent: HUD icons 512, Mirza Beig VFX
+        /// sheets 2048, everything else (base-color / normal / world atlas) 1024.
+        /// </summary>
+        private static int ResolveShipCap(string lowerPath)
+        {
+            if (lowerPath.Contains("/hudicons/")) return HudIconCap;
+            if (lowerPath.Contains("/mirza beig/")) return VfxSheetCap;
+            return Generic3DCap;
+        }
+
+        /// <summary>
+        /// Applies ONLY a WebGL platform maxTextureSize override (Default/source
+        /// settings untouched) to a non-KayKit shipping texture, capping it per
+        /// <see cref="ResolveShipCap"/>. Idempotent: if the WebGL override already
+        /// caps at or below the role cap, nothing changes.
+        /// </summary>
+        private static void ApplyShipWebGLCap(TextureImporter texture)
+        {
+            string path = texture.assetPath;
+            if (!IsShipTexture(path)) return;
+
+            int cap = ResolveShipCap(path.ToLowerInvariant());
+            string webGL = NamedBuildTarget.WebGL.TargetName;
+
+            var settings = texture.GetPlatformTextureSettings(webGL);
+            // Already capped tightly enough — don't churn the import.
+            if (settings.overridden && settings.maxTextureSize <= cap) return;
+
+            settings.name = webGL;
+            settings.overridden = true;
+            settings.maxTextureSize = cap;
+            texture.SetPlatformTextureSettings(settings);
         }
 
         /// <summary>
