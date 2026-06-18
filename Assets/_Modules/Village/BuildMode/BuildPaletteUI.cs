@@ -21,6 +21,7 @@ using UnityEngine.UIElements;
 using DeNelle.Core.Catalog;
 using DeNelle.Core.State;
 using DeNelle.Core.UI;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
 {
@@ -119,9 +120,11 @@ namespace DeNelle.Village
             {
                 _document.panelSettings = src.panelSettings;
                 _document.sortingOrder = src.sortingOrder + 6;   // above HUD + BuildMenu
+                FlowTrace.Step("BuildPalette", $"adopted PanelSettings from '{src.gameObject.name}' (sort={_document.sortingOrder})");
             }
             else
             {
+                FlowTrace.Warn("BuildPalette", "no sibling PanelSettings found — palette will NOT render (palette doc has no panel)");
                 Debug.LogWarning("[BuildPaletteUI] No sibling PanelSettings found — palette will not render.");
             }
         }
@@ -159,7 +162,14 @@ namespace DeNelle.Village
         {
             if (_root != null) return;
             var docRoot = _document != null ? _document.rootVisualElement : null;
-            if (docRoot == null) return;
+            if (docRoot == null)
+            {
+                // WebGL silent-blank cause #1: doc has no panel/root yet → nothing builds.
+                FlowTrace.Warn("BuildPalette", _document == null
+                    ? "EnsureBuilt: no UIDocument — palette cannot build"
+                    : "EnsureBuilt: UIDocument.rootVisualElement is null (no PanelSettings?) — palette cannot build");
+                return;
+            }
 
             _root = new VisualElement { name = "build-palette-root" };
             _root.style.position = Position.Absolute;
@@ -222,14 +232,24 @@ namespace DeNelle.Village
 
         public void Render()
         {
+            FlowTrace.Step("BuildPalette", "palette-build-start");
             EnsureBuilt();
-            if (_strip == null) return;
+            if (_strip == null)
+            {
+                // built-but-no-strip → the doc root never resolved (see EnsureBuilt warn).
+                FlowTrace.Warn("BuildPalette", "Render aborted: _strip is null (palette never built)");
+                return;
+            }
 
             _strip.Clear();
             UpdateBalance();
             UpdateOrientButton();
 
-            int cards = 0;
+            // Gather every candidate entry across the configured types FIRST so the
+            // catalog-count is logged even if a card later throws. CatalogRegistry is
+            // populated at BeforeSceneLoad (CatalogBootstrap) and is WebGL-safe — an
+            // empty count here means the JSON/fallback load failed, not a render bug.
+            var candidates = new List<CatalogEntry>();
             foreach (var type in _types)
             {
                 var entries = CatalogRegistry.OfType(type);
@@ -238,14 +258,23 @@ namespace DeNelle.Village
                 {
                     if (e == null) continue;
                     if (e.id != null && NotYetUnlockable.Contains(e.id)) continue;   // unlock-gated — see NotYetUnlockable
-                    _strip.Add(BuildCard(e));
-                    cards++;
+                    candidates.Add(e);
                 }
             }
+            FlowTrace.Step("BuildPalette", $"catalog-count: registry={CatalogRegistry.Count} candidates={candidates.Count} (types={_types.Length})");
 
-            if (cards == 0)
+            // §12: guard EACH card build so one bad entry (missing field / service throw /
+            // ElarionUi quirk) is logged + skipped instead of blanking the whole palette —
+            // the WebGL "shows nothing, no error" silent-failure class becomes a logged line.
+            var built = Guard.TryEach("BuildPalette", "build card", candidates,
+                e => _strip.Add(BuildCard(e)));
+            FlowTrace.Step("BuildPalette", $"rows-added: built={built.built} failed={built.failed}");
+
+            if (built.built == 0)
             {
-                var none = new Label("No buildables registered.");
+                var none = new Label(candidates.Count == 0
+                    ? "No buildables registered."
+                    : "Buildables failed to load.");
                 none.style.color = Color.white;
                 none.style.paddingLeft = 12; none.style.paddingTop = 12;
                 _strip.Add(none);
